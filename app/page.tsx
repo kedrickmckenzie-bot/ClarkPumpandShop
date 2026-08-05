@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { PlatformOverview } from "@/components/platform-overview";
 
 export const metadata: Metadata = {
-  title: "Portfolio Overview",
-  description: "Maintenance cost, reporting, and accountability across the operating portfolio.",
+  title: "Overview",
+  description: "What needs attention, what it costs, and who acts next.",
 };
 
 export default function Home() {

@@ -59,14 +59,14 @@ const adminSections: Array<{
   label: string;
   icon: typeof Settings2;
 }> = [
-  { key: "overview", label: "Configuration overview", icon: Gauge },
-  { key: "organization", label: "Organization & stores", icon: Building2 },
-  { key: "people", label: "People, roles & scope", icon: UsersRound },
-  { key: "taxonomy", label: "Taxonomy & labels", icon: Tags },
-  { key: "routing", label: "Service routing & SLAs", icon: Wrench },
-  { key: "financial", label: "Financial controls", icon: Landmark },
-  { key: "imports", label: "Imports & data tools", icon: FileSpreadsheet },
-  { key: "audit", label: "Audit & security", icon: ShieldCheck },
+  { key: "overview", label: "Overview", icon: Gauge },
+  { key: "organization", label: "Company & stores", icon: Building2 },
+  { key: "people", label: "People & access", icon: UsersRound },
+  { key: "taxonomy", label: "Names & categories", icon: Tags },
+  { key: "routing", label: "Teams & vendors", icon: Wrench },
+  { key: "financial", label: "Spending rules", icon: Landmark },
+  { key: "imports", label: "Import data", icon: FileSpreadsheet },
+  { key: "audit", label: "History & security", icon: ShieldCheck },
 ];
 
 export function AdministrationCenter({
@@ -82,17 +82,17 @@ export function AdministrationCenter({
     <AppShell>
       <div className="pf-page admin-page">
         <PlatformPageHeader
-          eyebrow="Administration · organization scoped"
-          title="Configure the operating model without changing the product’s integrity."
-          description="Customer-specific language, routing, approvals, permissions, and imports sit on stable tenant-isolated records."
+          eyebrow="Settings & setup"
+          title="Set up how your company works."
+          description="Manage stores, people, teams, vendors, spending rules, names, and imports."
         >
           <Link className="pf-secondary-button" href="/vendor-portal">
             <KeyRound />
-            Preview vendor access
+            View vendor access
           </Link>
           <Link className="pf-primary-button" href="/stores/new">
             <Plus />
-            Commission store
+            Add a store
           </Link>
         </PlatformPageHeader>
         <div className="admin-layout">
@@ -130,73 +130,73 @@ function AdminOverview() {
   const modules = [
     {
       icon: Building2,
-      title: "Organization hierarchy",
+      title: "Company and stores",
       value: `${platformData.regions.length} regions · ${new Set(platformData.stores.map((store) => store.district)).size} districts · ${platformData.stores.length} showcase stores`,
       status: "Configured",
-      note: "Regions remain optional for smaller operators.",
+      note: "Regions are optional. A single store works just as well.",
     },
     {
       icon: Tags,
-      title: "Service taxonomy",
+      title: "Maintenance categories",
       value: `${platformData.categories.length} categories · 4 hierarchy levels`,
       status: "Configured",
-      note: "Local labels and aliases preserve clean reporting.",
+      note: "Use the names your company already knows.",
     },
     {
       icon: Wrench,
-      title: "Provider routing",
+      title: "Teams and vendors",
       value: `${platformData.vendors.length} outside vendors · 1 internal team`,
       status: "Review",
-      note: "Primary, backup, store and trade rules.",
+      note: "Choose who handles each type of work.",
     },
     {
       icon: Landmark,
-      title: "Maintenance accounting",
-      value: `${glAccounts.length} GL accounts · ${approvalPolicies.length} approval policies`,
+      title: "Spending and bills",
+      value: `${glAccounts.length} accounts · ${approvalPolicies.length} approval rules`,
       status: "Configured",
-      note: "Budgets, POs, invoices, allocations, payments.",
+      note: "Budgets, purchase orders, bills, and payments.",
     },
     {
       icon: UsersRound,
       title: "People and access",
-      value: "7 role templates · store and region scope",
+      value: "7 access options · store and region access",
       status: "Review",
-      note: "One person may hold multiple roles.",
+      note: "Give each person only the access they need.",
     },
     {
       icon: ShieldCheck,
-      title: "Audit and retention",
-      value: "Append-only control events",
+      title: "History and security",
+      value: "Every important change is recorded",
       status: "Configured",
-      note: "Original reports, approvals and classifications preserved.",
+      note: "Important changes keep a permanent history.",
     },
   ];
   return (
     <>
       <section className="pf-stat-grid admin-stat-grid">
         <PlatformStat
-          label="Store readiness"
+          label="Stores ready"
           value="94%"
           note={`11 of ${platformData.stores.length} fully configured`}
           icon={Store}
           tone="positive"
         />
         <PlatformStat
-          label="Provider coverage"
+          label="Work types covered"
           value="97%"
-          note="2 store/category gaps"
+          note="2 stores need a work type assigned"
           icon={Wrench}
           tone="warning"
         />
         <PlatformStat
-          label="Financial coding"
+          label="Costs assigned"
           value="99%"
-          note="3 allocation lines need review"
+          note="3 cost items need review"
           icon={CircleDollarSign}
           tone="positive"
         />
         <PlatformStat
-          label="User access review"
+          label="Next access review"
           value="14 days"
           note="Next quarterly certification"
           icon={KeyRound}
@@ -901,11 +901,11 @@ export function StoreCommissioningWizard({
   const [financialEnabled, setFinancialEnabled] = useState(true);
   const enabledCenters = centers.filter((center) => center.enabled);
   const steps = [
-    "Store identity",
-    "Service blueprint",
+    "Store basics",
+    "Work types",
     "Equipment",
-    "Coverage & policies",
-    "Review & activate",
+    "Teams & rules",
+    "Review",
   ];
 
   useEffect(() => {
@@ -1025,7 +1025,7 @@ export function StoreCommissioningWizard({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Unable to finish commissioning.",
+          : "Unable to finish store setup.",
       );
       setBusy(false);
     }
@@ -1037,13 +1037,13 @@ export function StoreCommissioningWizard({
         <PlatformBreadcrumbs
           items={[
             { label: "Stores", href: "/stores" },
-            { label: "Commission new store" },
+            { label: "Add a store" },
           ]}
         />
         <PlatformPageHeader
-          eyebrow="Guided store commissioning"
-          title="Create the store once, then build its operating context smoothly."
-          description="Every later stage is optional and resumable. The store can accept requests immediately after its identity is saved."
+          eyebrow="Store setup"
+          title="Add a store now. Finish the details when you are ready."
+          description="Save the basics first so the store is searchable and ready for work. Everything after that is optional and can be resumed later."
         />
         <div className="commissioning-stepper">
           {steps.map((label, index) => (
@@ -1062,10 +1062,10 @@ export function StoreCommissioningWizard({
               <header>
                 <Store />
                 <div>
-                  <h2>Store identity</h2>
+                  <h2>Store basics</h2>
                   <p>
-                    Searchable canonical identity, address, operating scope, and
-                    primary contact.
+                    Add the store number, address, and main contact people will
+                    use to find this location.
                   </p>
                 </div>
               </header>
@@ -1164,10 +1164,10 @@ export function StoreCommissioningWizard({
               <header>
                 <Layers3 />
                 <div>
-                  <h2>Choose a service blueprint</h2>
+                  <h2>Choose the work this store needs</h2>
                   <p>
-                    Create useful service groups and reporting categories
-                    without inventing individual equipment.
+                    Start with a common set of work types, or choose only the
+                    ones that fit this store.
                   </p>
                 </div>
               </header>
@@ -1266,10 +1266,10 @@ export function StoreCommissioningWizard({
               <header>
                 <Boxes />
                 <div>
-                  <h2>Equipment onboarding depth</h2>
+                  <h2>How do you want to add equipment?</h2>
                   <p>
-                    Known assets can be added now, imported later, or identified
-                    during service.
+                    Add what you know now, import a list later, or identify
+                    equipment as work happens.
                   </p>
                 </div>
               </header>
@@ -1280,9 +1280,9 @@ export function StoreCommissioningWizard({
                 >
                   <CheckCircle2 />
                   <span>
-                    <strong>Create expected-equipment checklist</strong>
+                    <strong>Start with an equipment checklist</strong>
                     <small>
-                      Recommended · no fake asset records are created
+                      Recommended · add each real item when it is confirmed
                     </small>
                   </span>
                 </button>
@@ -1292,8 +1292,8 @@ export function StoreCommissioningWizard({
                 >
                   <FileSpreadsheet />
                   <span>
-                    <strong>Import known equipment after activation</strong>
-                    <small>Mapping, preview, row errors, and rollback</small>
+                    <strong>Import an equipment list later</strong>
+                    <small>Review the file and fix any errors before saving</small>
                   </span>
                 </button>
                 <button
@@ -1302,9 +1302,9 @@ export function StoreCommissioningWizard({
                 >
                   <Clock3 />
                   <span>
-                    <strong>Identify equipment through future work</strong>
+                    <strong>Add equipment as work happens</strong>
                     <small>
-                      Store + service category remains completely valid
+                      A work order only needs a store to get started
                     </small>
                   </span>
                 </button>
@@ -1312,10 +1312,10 @@ export function StoreCommissioningWizard({
               <div className="progressive-rule">
                 <ShieldCheck />
                 <div>
-                  <strong>Progressive classification is a product rule</strong>
+                  <strong>You do not need every equipment detail today</strong>
                   <p>
-                    No placeholder asset will ever be created to satisfy a form.
-                    Classification coverage appears beside every deeper report.
+                    The platform will never create fake equipment just to finish
+                    setup. You can add or correct details later.
                   </p>
                 </div>
               </div>
@@ -1326,26 +1326,26 @@ export function StoreCommissioningWizard({
               <header>
                 <Settings2 />
                 <div>
-                  <h2>Coverage and policy defaults</h2>
+                  <h2>Choose teams and spending rules</h2>
                   <p>
-                    Inherit the organization playbook or create store-specific
-                    exceptions.
+                    Use your company defaults or make an exception for this
+                    store.
                   </p>
                 </div>
               </header>
               <div className="policy-card-grid">
                 <article>
                   <UsersRound />
-                  <h3>Service provider coverage</h3>
+                  <h3>Who handles the work?</h3>
                   <select
                     value={providerMode}
                     onChange={(event) => setProviderMode(event.target.value)}
                   >
                     <option value="regional">
-                      Inherit regional primary + backup providers
+                      Use the regional teams and vendors
                     </option>
                     <option value="store">
-                      Configure store-specific coverage
+                      Choose teams and vendors for this store
                     </option>
                     <option value="internal">
                       Internal maintenance first, vendor fallback
@@ -1353,23 +1353,23 @@ export function StoreCommissioningWizard({
                   </select>
                   <p>
                     {providerMode === "regional"
-                      ? "The store inherits current regional coverage for every enabled service category."
-                      : "Coverage exceptions will be added to the activation follow-up."}
+                      ? "This store will use the current regional choices for each work type."
+                      : "Any store-specific choices can be finished after setup."}
                   </p>
                 </article>
                 <article>
                   <CircleDollarSign />
-                  <h3>Maintenance accounting</h3>
+                  <h3>Spending and bills</h3>
                   <div className="toggle-row">
                     <span>
-                      <strong>Activate budgets and GL defaults</strong>
+                      <strong>Use budgets and accounting defaults</strong>
                       <small>
-                        NTE, approval, PO, invoice and allocation controls
+                        Spending limits, approvals, purchase orders, and bills
                       </small>
                     </span>
                     <input
                       id="commission-financial-controls"
-                      aria-label="Activate budgets and GL defaults"
+                      aria-label="Use budgets and accounting defaults"
                       type="checkbox"
                       checked={financialEnabled}
                       onChange={(event) =>
@@ -1380,17 +1380,17 @@ export function StoreCommissioningWizard({
                 </article>
                 <article>
                   <ShieldCheck />
-                  <h3>Preventive maintenance</h3>
+                  <h3>Planned maintenance</h3>
                   <div className="toggle-row">
                     <span>
-                      <strong>Apply matching PM templates</strong>
+                      <strong>Use matching maintenance schedules</strong>
                       <small>
-                        Only applicable templates generate occurrences
+                        Only schedules that fit this store will be added
                       </small>
                     </span>
                     <input
                       id="commission-pm-templates"
-                      aria-label="Apply matching preventive maintenance templates"
+                      aria-label="Use matching planned maintenance schedules"
                       type="checkbox"
                       checked={pmEnabled}
                       onChange={(event) => setPmEnabled(event.target.checked)}
@@ -1405,10 +1405,10 @@ export function StoreCommissioningWizard({
               <header>
                 <ClipboardCheck />
                 <div>
-                  <h2>Review and activate</h2>
+                  <h2>Review the store</h2>
                   <p>
-                    The store becomes fully searchable and ready for requests as
-                    soon as activation completes.
+                    Check the choices below, then finish setup. You can change
+                    them later from the store page.
                   </p>
                 </div>
               </header>
@@ -1429,7 +1429,7 @@ export function StoreCommissioningWizard({
                 <article>
                   <span>{enabledCenters.length}</span>
                   <div>
-                    <strong>Service categories</strong>
+                    <strong>Work types</strong>
                     <small>
                       {enabledCenters.map((center) => center.name).join(", ")}
                     </small>
@@ -1440,13 +1440,13 @@ export function StoreCommissioningWizard({
                     <Boxes />
                   </span>
                   <div>
-                    <strong>Equipment onboarding</strong>
+                    <strong>Equipment setup</strong>
                     <small>
                       {assetMode === "starter"
-                        ? "Expected-equipment checklist"
+                        ? "Equipment checklist"
                         : assetMode === "import"
-                          ? "Import after activation"
-                          : "Progressive identification"}
+                          ? "Import after setup"
+                          : "Add during future work"}
                     </small>
                   </div>
                 </article>
@@ -1455,7 +1455,7 @@ export function StoreCommissioningWizard({
                     <UsersRound />
                   </span>
                   <div>
-                    <strong>Provider coverage</strong>
+                    <strong>Teams and vendors</strong>
                     <small>{providerMode.replaceAll("_", " ")}</small>
                   </div>
                 </article>
@@ -1464,11 +1464,11 @@ export function StoreCommissioningWizard({
                     <CircleDollarSign />
                   </span>
                   <div>
-                    <strong>Financial controls</strong>
+                    <strong>Spending rules</strong>
                     <small>
                       {financialEnabled
-                        ? "Regional budget, GL, NTE and approvals"
-                        : "Activate later"}
+                        ? "Budgets, accounting defaults, and approvals"
+                        : "Set up later"}
                     </small>
                   </div>
                 </article>
@@ -1477,11 +1477,11 @@ export function StoreCommissioningWizard({
                     <ShieldCheck />
                   </span>
                   <div>
-                    <strong>Preventive maintenance</strong>
+                    <strong>Planned maintenance</strong>
                     <small>
                       {pmEnabled
                         ? "Matching templates enabled"
-                        : "Activate later"}
+                        : "Set up later"}
                     </small>
                   </div>
                 </article>
@@ -1507,8 +1507,8 @@ export function StoreCommissioningWizard({
             )}
             <span>
               {step === 0
-                ? "Identity is saved before optional commissioning."
-                : "Progress can be resumed from the store dashboard."}
+                ? "Store basics are saved before the optional steps."
+                : "You can resume setup from the store page."}
             </span>
             {step === 0 ? (
               <button
@@ -1533,7 +1533,7 @@ export function StoreCommissioningWizard({
                 onClick={() => void activate()}
                 disabled={busy}
               >
-                {busy ? "Activating…" : "Activate store"}
+                {busy ? "Finishing…" : "Finish store setup"}
                 <Check />
               </button>
             )}
@@ -1642,10 +1642,10 @@ export function EquipmentSetupForm({
   }, [assetId, initialAssetId, initialStoreId, initialSystemId, seededInitialAsset, seededInitialSystem, storeId, systemId]);
   const title =
     entity === "cost-center"
-      ? "Create system / equipment group"
+      ? "Add equipment group"
       : entity === "asset"
         ? "Add equipment"
-        : "Add serviceable component";
+        : "Add component";
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -1710,17 +1710,17 @@ export function EquipmentSetupForm({
           items={[{ label: "Equipment", href: "/equipment" }, { label: title }]}
         />
         <PlatformPageHeader
-          eyebrow="Progressive equipment setup"
+          eyebrow="Add equipment"
           title={title}
-          description="Create only records that are known. Work can remain at store, category, or system level."
+          description="Add only what you know. You can save work at the store level and fill in equipment details later."
         />
         <form
           className="pf-panel setup-entity-form"
           onSubmit={(event) => void submit(event)}
         >
           <PlatformSectionHeader
-            title="Placement and identity"
-            description="Physical hierarchy and financial coding remain separate."
+            title="Where it is and what it is"
+            description="Choose its physical location first. Accounting details stay separate."
           />
           <div className="form-grid">
             <label className="wide">
@@ -1745,7 +1745,7 @@ export function EquipmentSetupForm({
             </label>
             {entity !== "cost-center" && (
               <label className="wide">
-                <span>System / equipment group</span>
+                <span>Equipment group</span>
                 <select
                   value={systemId}
                   onChange={(event) => {

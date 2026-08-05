@@ -8,7 +8,6 @@ import {
   CalendarClock,
   CircleDollarSign,
   ClipboardList,
-  Download,
   Filter,
   Gauge,
   LineChart,
@@ -65,47 +64,47 @@ const reports: Array<{
 }> = [
   {
     key: "portfolio",
-    name: "Portfolio operating review",
+    name: "Maintenance activity",
     description:
-      "Cost, work, PM, exceptions, and store outliers in one management view.",
+      "See open work, urgent issues, planned maintenance, and costs across all stores.",
     icon: Gauge,
     audience: "Executive · Facilities",
   },
   {
     key: "store-cost",
-    name: "Store cost comparison",
+    name: "Store costs",
     description:
-      "Compare actual, change, PM, reactive ratio, and repeat visits across locations.",
+      "Compare last-12-month maintenance costs and open work by store.",
     icon: Store,
     audience: "Regional · Facilities",
   },
   {
     key: "category-cost",
-    name: "Service category cost",
+    name: "Costs by type of work",
     description:
-      "Drill from trade to system, equipment, component, work order, and allocation.",
+      "Start with HVAC, refrigeration, plumbing, or another category, then open the details.",
     icon: PieChart,
     audience: "Facilities · Finance",
   },
   {
     key: "providers",
-    name: "Provider accountability",
+    name: "Team and vendor performance",
     description:
-      "Internal and external response, completion, repeat visits, and open obligations.",
+      "See open assignments, late work, response time, and repeat visits.",
     icon: UsersRound,
     audience: "Facilities · Procurement",
   },
   {
     key: "pm",
-    name: "Preventive maintenance compliance",
+    name: "Planned maintenance",
     description:
-      "Plan, store, equipment, provider, due window, and verification performance.",
+      "See what was completed on time, what is coming up, and what was missed.",
     icon: ShieldCheck,
     audience: "Facilities · Regional",
   },
   {
     key: "equipment",
-    name: "Equipment cost and replacement",
+    name: "Equipment cost and repair-or-replace review",
     description:
       "Asset cost, age, failures, components, warranty, and explainable watchlist rules.",
     icon: Wrench,
@@ -113,7 +112,7 @@ const reports: Array<{
   },
   {
     key: "financial",
-    name: "Maintenance financial position",
+    name: "Detailed cost stages",
     description:
       "Requested, quoted, approved, committed, accrued, invoiced, credited, and paid.",
     icon: CircleDollarSign,
@@ -121,7 +120,7 @@ const reports: Array<{
   },
   {
     key: "data-quality",
-    name: "Classification and coding quality",
+    name: "Missing equipment and accounting details",
     description:
       "Coverage, unclassified cost, missing dimensions, and records needing enrichment.",
     icon: Boxes,
@@ -159,53 +158,30 @@ export function ReportingSuite({ initialReport, initialRegion, initialCategory }
     <AppShell>
       <div className="pf-page reporting-page">
         <PlatformPageHeader
-          eyebrow="Insights · explainable and reversible"
-          title="Reporting that always opens the records behind the number."
-          description="Use the standard management library or build a view from operational, equipment, provider, and maintenance-financial dimensions."
-        >
-          <button className="pf-secondary-button" type="button">
-            <Download />
-            Export current view
-          </button>
-          <button
-            className="pf-primary-button"
-            type="button"
-            onClick={() => setMode("builder")}
-          >
-            <Plus />
-            Build report
-          </button>
-        </PlatformPageHeader>
+          eyebrow="Reports"
+          title="What do you want to understand?"
+          description="Choose a report, then open any store, cost, team, vendor, or work order behind the number."
+        />
         <nav className="reporting-nav">
           <button
             className={mode === "library" ? "active" : ""}
             onClick={() => setMode("library")}
           >
             <Bookmark />
-            Report library
+            Choose a report
           </button>
           <button
             className={mode === "report" ? "active" : ""}
             onClick={() => setMode("report")}
           >
             <BarChart3 />
-            Open report
-          </button>
-          <button
-            className={mode === "builder" ? "active" : ""}
-            onClick={() => setMode("builder")}
-          >
-            <Filter />
-            Report builder
-          </button>
-          <button
-            className={mode === "scheduled" ? "active" : ""}
-            onClick={() => setMode("scheduled")}
-          >
-            <CalendarClock />
-            Scheduled delivery
+            Current report
           </button>
         </nav>
+        <details className="report-more-tools" open={mode === "builder" || mode === "scheduled" || undefined}>
+          <summary>More reporting tools</summary>
+          <div><button className={mode === "builder" ? "active" : ""} onClick={() => setMode("builder")}><Filter />Build a custom report</button><button className={mode === "scheduled" ? "active" : ""} onClick={() => setMode("scheduled")}><CalendarClock />Scheduled reports</button></div>
+        </details>
         {mode === "library" && <ReportLibrary onOpen={openReport} />}
         {mode === "report" && (
           <>
@@ -285,62 +261,39 @@ export function ReportingSuite({ initialReport, initialRegion, initialCategory }
 }
 
 function ReportLibrary({ onOpen }: { onOpen: (report: ReportKey) => void }) {
+  const primaryReportKeys: ReportKey[] = ["store-cost", "portfolio", "providers", "pm"];
+  const primaryReports = reports.filter((report) => primaryReportKeys.includes(report.key));
+  const additionalReports = reports.filter((report) => !primaryReportKeys.includes(report.key));
   return (
     <>
-      <section className="report-library-feature">
-        <div>
-          <PlatformBadge tone="info">Management standard</PlatformBadge>
-          <h2>Monthly portfolio operating review</h2>
-          <p>
-            A connected management pack for actual and committed cost, open
-            exposure, exceptions, PM, provider accountability, and store
-            outliers.
-          </p>
-          <button
-            className="pf-primary-button"
-            type="button"
-            onClick={() => onOpen("portfolio")}
-          >
-            Open management report
-            <ArrowRight />
-          </button>
-        </div>
-        <div className="report-feature-metrics">
-          <span>
-            <small>Report sections</small>
-            <strong>8</strong>
-          </span>
-          <span>
-            <small>Drill-through paths</small>
-            <strong>24</strong>
-          </span>
-          <span>
-            <small>Scheduled recipients</small>
-            <strong>6</strong>
-          </span>
-        </div>
-      </section>
       <section className="report-library-grid">
-        {reports.map(({ key, name, description, icon: Icon, audience }) => (
+        {primaryReports.map(({ key, name, description, icon: Icon }) => (
           <article key={key}>
-            <header>
-              <span>
-                <Icon />
-              </span>
-              <PlatformBadge tone="neutral">{audience}</PlatformBadge>
-            </header>
+            <header><span><Icon /></span></header>
             <h3>{name}</h3>
             <p>{description}</p>
             <footer>
-              <span>Updated with live operational records</span>
               <button type="button" onClick={() => onOpen(key)}>
-                Open
+                Open report
                 <ArrowRight />
               </button>
             </footer>
           </article>
         ))}
       </section>
+      <details className="report-additional-library">
+        <summary>More detailed reports</summary>
+        <section className="report-library-grid">
+          {additionalReports.map(({ key, name, description, icon: Icon }) => (
+            <article key={key}>
+              <header><span><Icon /></span></header>
+              <h3>{name}</h3>
+              <p>{description}</p>
+              <footer><button type="button" onClick={() => onOpen(key)}>Open report<ArrowRight /></button></footer>
+            </article>
+          ))}
+        </section>
+      </details>
     </>
   );
 }
@@ -416,27 +369,27 @@ function StoreReport({
     <>
       <section className="pf-stat-grid report-stat-grid">
         <PlatformStat
-          label="Selected actual"
+          label="Cost shown"
           value={formatCurrency(spend, true)}
-          note="Paid less posted credits"
+          note="Paid bills less credits"
           icon={CircleDollarSign}
         />
         <PlatformStat
           label="Open work"
           value={String(open)}
-          note="Supporting records available"
+          note="Open the list for details"
           icon={ClipboardList}
         />
         <PlatformStat
-          label="Average PM"
+          label="Planned work on time"
           value={formatPercent(pm)}
-          note="Selected store cohort"
+          note="Average for these stores"
           icon={ShieldCheck}
         />
         <PlatformStat
-          label="Cost outliers"
+          label="Higher-cost stores"
           value={String(comparison.filter((row) => row.isOutlier).length)}
-          note="Rule-based and explainable"
+          note="Compared with similar stores"
           icon={Gauge}
           tone="warning"
         />
@@ -446,17 +399,16 @@ function StoreReport({
           <div>
             <LineChart />
             <span>
-              <strong>Management interpretation</strong>
+              <strong>What this means</strong>
               <p>
-                {comparison.filter((row) => row.isOutlier).length} stores meet
-                the current outlier rule. Store 45 remains the leading
-                refrigeration driver because repeated Beer Cave repairs are
-                classified to the same equipment history.
+                {comparison.filter((row) => row.isOutlier).length} stores cost
+                more than similar locations. Store 45 leads refrigeration cost
+                because its Beer Cave has needed several repairs.
               </p>
             </span>
           </div>
           <Link href="/stores/store-45">
-            Open Store 45 evidence
+            Open Store 45 details
             <ArrowRight />
           </Link>
         </section>
@@ -464,22 +416,19 @@ function StoreReport({
       <section className="pf-panel">
         <PlatformSectionHeader
           title={
-            portfolio ? "Portfolio store performance" : "Store cost comparison"
+            portfolio ? "Store comparison" : "Store costs"
           }
-          description="Sorted by selected actual cost. Select any row to open its management dashboard."
+          description="Highest cost first. Open any store for its work, equipment, bills, and full history."
         />
         <div className="pf-table-scroll">
           <table className="pf-table">
             <thead>
               <tr>
-                <th>Rank / store</th>
-                <th>Selected actual</th>
-                <th>Vs prior</th>
+                <th>Store</th>
+                <th>Cost</th>
+                <th>Change</th>
                 <th>Open work</th>
-                <th>PM</th>
-                <th>Repeat visits</th>
-                <th>Replacement</th>
-                <th>Signal</th>
+                <th>Needs attention</th>
               </tr>
             </thead>
             <tbody>
@@ -512,28 +461,19 @@ function StoreReport({
                   </td>
                   <td>
                     <strong>{row.openCount}</strong>
-                    <small>{row.criticalCount} critical</small>
-                  </td>
-                  <td>
-                    <PlatformProgress
-                      value={row.pm.value}
-                      tone={row.pm.value >= 0.9 ? "teal" : "amber"}
-                      label={formatPercent(row.pm.value)}
-                    />
-                  </td>
-                  <td>
-                    <strong>{row.repeatVisits}</strong>
-                  </td>
-                  <td>
-                    <strong>{row.replacementCandidates}</strong>
+                    <small>{row.criticalCount} urgent</small>
                   </td>
                   <td>
                     {row.isOutlier ? (
                       <PlatformBadge tone="critical">
-                        Cost outlier
+                        Costs are unusually high
                       </PlatformBadge>
+                    ) : row.replacementCandidates ? (
+                      <PlatformBadge tone="warning">Equipment needs review</PlatformBadge>
+                    ) : row.criticalCount ? (
+                      <PlatformBadge tone="warning">Urgent work is open</PlatformBadge>
                     ) : (
-                      <PlatformBadge tone="good">Within range</PlatformBadge>
+                      <PlatformBadge tone="good">No major concerns</PlatformBadge>
                     )}
                   </td>
                 </tr>
@@ -644,20 +584,20 @@ function ProviderReport() {
   return (
     <section className="pf-panel">
       <PlatformSectionHeader
-        title="Outside-provider accountability"
-        description="Only directly observable behavior is measured; internal teams use the same work-order milestones."
+        title="Vendor performance and open work"
+        description="Compare recorded responses, visits, repeat visits, and estimated open cost."
         href="/providers"
       />
       <table className="pf-table">
         <thead>
           <tr>
-            <th>Provider</th>
-            <th>Recorded work</th>
+            <th>Vendor</th>
+            <th>Work orders</th>
             <th>Open</th>
-            <th>Acceptance</th>
+            <th>Accepted or declined</th>
             <th>Visits</th>
             <th>Repeat visits</th>
-            <th>Open exposure</th>
+            <th>Estimated open cost</th>
           </tr>
         </thead>
         <tbody>
@@ -724,47 +664,47 @@ function PmReport() {
     <>
       <section className="pf-stat-grid report-stat-grid">
         <PlatformStat
-          label="Company compliance"
+          label="Planned work on time"
           value={formatPercent(overall.value)}
-          note={`${overall.numerator} of ${overall.denominator} verified on time`}
+          note={`${overall.numerator} of ${overall.denominator} due visits completed and checked on time`}
           icon={ShieldCheck}
         />
         <PlatformStat
-          label="Missed occurrences"
+          label="Missed visits"
           value={String(
             platformData.pmOccurrences.filter(
               (item) => item.status === "missed",
             ).length,
           )}
-          note="Each links to its source work"
+          note="Open each one for the linked work order"
           icon={CalendarClock}
           tone="critical"
         />
         <PlatformStat
-          label="Documentation pending"
+          label="Proof still needed"
           value={String(
             platformData.pmOccurrences.filter(
               (item) => item.status === "documentation_pending",
             ).length,
           )}
-          note="Cannot close as compliant"
+          note="Not counted as complete yet"
           icon={ClipboardList}
           tone="warning"
         />
       </section>
       <section className="pf-panel">
         <PlatformSectionHeader
-          title="PM compliance by region"
-          description="Waived and not-applicable occurrences are excluded from the denominator."
+          title="Planned maintenance by region"
+          description="Shows completed-on-time visits, missed visits, and proof still needed."
         />
         <table className="pf-table">
           <thead>
             <tr>
               <th>Region</th>
-              <th>Compliance</th>
+              <th>Completed on time</th>
               <th>Missed</th>
-              <th>Pending evidence</th>
-              <th>Drill-through</th>
+              <th>Proof still needed</th>
+              <th>Open details</th>
             </tr>
           </thead>
           <tbody>
@@ -828,14 +768,14 @@ function EquipmentReport() {
     <section className="pf-panel">
       <PlatformSectionHeader
         title="Highest-cost equipment"
-        description="Cost totals show classification coverage and open the exact work and allocations."
+        description="Open any piece of equipment for its work orders, service history, parts, and bills."
       />
       <table className="pf-table">
         <thead>
           <tr>
             <th>Equipment</th>
             <th>Store</th>
-            <th>TTM cost</th>
+            <th>Cost · last 12 months</th>
             <th>Open work</th>
             <th>Condition</th>
             <th>Warranty</th>

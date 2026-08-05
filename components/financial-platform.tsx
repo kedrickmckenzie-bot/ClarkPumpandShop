@@ -87,15 +87,15 @@ const VALID_TABS = new Set<FinanceTab>([
   "dimensions",
 ]);
 
-const TAB_DEFINITIONS: Array<{ id: FinanceTab; label: string }> = [
+const TAB_DEFINITIONS: Array<{ id: FinanceTab; label: string; advanced?: boolean }> = [
   { id: "overview", label: "Overview" },
-  { id: "budgets", label: "Budgets" },
-  { id: "approvals", label: "Approvals & quotes" },
+  { id: "approvals", label: "Approvals" },
   { id: "purchase-orders", label: "Purchase orders" },
-  { id: "invoices", label: "Invoices" },
+  { id: "invoices", label: "Bills to review" },
   { id: "payments", label: "Payments" },
-  { id: "accruals", label: "Accruals" },
-  { id: "dimensions", label: "GL & cost centers" },
+  { id: "budgets", label: "Budgets", advanced: true },
+  { id: "accruals", label: "Work done, not billed", advanced: true },
+  { id: "dimensions", label: "Accounting setup", advanced: true },
 ];
 
 const DEFAULT_CONTROLS: FinanceControls = {
@@ -664,7 +664,7 @@ function OverviewView({
   );
   const actionRows = [
     {
-      label: "Quotes or approvals need action",
+      label: "Quotes and approvals waiting",
       count: scopedQuotes.filter((record) =>
         ["requested", "submitted", "under_review"].includes(record.status),
       ).length,
@@ -673,22 +673,22 @@ function OverviewView({
           .filter((record) => ["requested", "submitted", "under_review"].includes(record.status))
           .map(quoteAmount),
       ),
-      note: "Requested or quoted value; not committed",
+      note: "A manager still needs to review or approve these",
       tab: "approvals" as const,
       status: "action_required",
       icon: FileWarning,
     },
     {
-      label: "Open purchase-order commitment",
+      label: "Purchase orders not yet billed",
       count: scopedPurchaseOrders.filter((record) => record.remainingCommitmentCents > 0).length,
       amount: openCommitmentCents,
-      note: "Committed balance not yet invoiced",
+      note: "Approved work with no matching bill yet",
       tab: "purchase-orders" as const,
       status: "open_commitment",
       icon: FileStack,
     },
     {
-      label: "Invoice reconciliation exception",
+      label: "Bills that need checking",
       count: invoiceReconciliations.filter(
         ({ invoice, reconciliation }) =>
           invoice.status === "received" ||
@@ -697,27 +697,27 @@ function OverviewView({
           reconciliation.overallocatedCents > 0,
       ).length,
       amount: unallocatedCents,
-      note: "Unallocated invoice balance only",
+      note: "Some bill dollars are not tied to the right work yet",
       tab: "invoices" as const,
       status: "reconciliation_exception",
       icon: AlertCircle,
     },
     {
-      label: "Active maintenance accrual",
+      label: "Work completed, bill not received",
       count: scopedAccruals.filter((record) => record.status === "open").length,
       amount: openAccrualCents,
-      note: "Recognized service awaiting reversal/match",
+      note: "The work is recorded while accounting waits for the bill",
       tab: "accruals" as const,
       status: "open",
       icon: CalendarClock,
     },
     {
-      label: "Observed payment outstanding",
+      label: "Unpaid bills",
       count: invoiceReconciliations.filter(
         ({ reconciliation }) => reconciliation.paymentOutstandingCents > 0,
       ).length,
       amount: paymentOutstandingCents,
-      note: "Net invoice less observed payments",
+      note: "Bill total remaining after recorded payments",
       tab: "payments" as const,
       status: "outstanding",
       icon: Banknote,
@@ -756,42 +756,40 @@ function OverviewView({
     <div className="finance-view finance-overview-view">
       <section className="pf-stat-grid finance-reconciliation-stats">
         <PlatformStat
-          label="Open PO commitment"
+          label="Purchase orders not yet billed"
           value={formatCurrency(openCommitmentCents, true)}
-          note="Committed, not yet invoiced"
+          note="Approved work with no matching bill yet"
           icon={FileStack}
           tone={openCommitmentCents > 0 ? "info" : "positive"}
         />
         <PlatformStat
-          label="Unallocated invoices"
+          label="Bill dollars not assigned yet"
           value={formatCurrency(unallocatedCents, true)}
-          note={`${invoiceReconciliations.filter(({ reconciliation }) => reconciliation.unallocatedCents > 0).length} records need coding`}
+          note={`${invoiceReconciliations.filter(({ reconciliation }) => reconciliation.unallocatedCents > 0).length} bills need work or store details`}
           icon={AlertCircle}
           tone={unallocatedCents > 0 ? "warning" : "positive"}
         />
         <PlatformStat
-          label="Active accruals"
+          label="Work done, bill pending"
           value={formatCurrency(openAccrualCents, true)}
-          note="Separate from invoiced actual"
+          note="Completed work waiting for a vendor bill"
           icon={CalendarClock}
           tone="info"
         />
         <PlatformStat
-          label="Payment outstanding"
+          label="Unpaid bills"
           value={formatCurrency(paymentOutstandingCents, true)}
-          note="Tracking only - no payment execution"
+          note="Based on the payments recorded here"
           icon={Banknote}
           tone={paymentOutstandingCents > 0 ? "warning" : "positive"}
         />
       </section>
 
-      <FinancialStageStrip position={position} onSelect={onOpenTab} />
-
       <div className="pf-dashboard-grid finance-overview-grid">
         <section className="pf-panel finance-action-panel">
           <PlatformSectionHeader
-            title="Financial action queue"
-            description="Exceptions are kept separate so the amount always has one clear meaning."
+            title="What needs attention"
+            description="Choose a row to see the individual quotes, purchase orders, bills, or payments behind it."
           />
           <div className="finance-action-list">
             {actionRows.map((item) => {
@@ -816,27 +814,27 @@ function OverviewView({
           </div>
         </section>
 
-        <section className="pf-panel finance-basis-panel">
-          <PlatformSectionHeader title="Reporting basis" description="Current selections stay visible through drill-down." />
+      </div>
+
+      <details className="pf-panel finance-advanced-detail">
+        <summary>See the full cost journey and accounting details</summary>
+        <div className="finance-advanced-detail-body">
+          <p>Follow money from a request or quote through approval, purchase order, completed work, bill, credit, and payment.</p>
+          <FinancialStageStrip position={position} onSelect={onOpenTab} />
           <dl className="finance-definition-list">
             <div><dt>As of</dt><dd>{formatDate(financeData.asOf, true)}</dd></div>
-            <div><dt>Currency</dt><dd>{financeData.currency}</dd></div>
-            <div><dt>Organization</dt><dd>Clark&apos;s Stores demo</dd></div>
             <div><dt>Region</dt><dd>{regionById.get(scope.regionId)?.name ?? "All regions"}</dd></div>
             <div><dt>Store</dt><dd>{storeById.get(scope.storeId) ? `Store ${storeById.get(scope.storeId)?.code}` : "All stores"}</dd></div>
             <div><dt>Provider</dt><dd>{vendorById.get(scope.vendorId)?.shortName ?? "All providers"}</dd></div>
           </dl>
-          <p className="finance-boundary-note">
-            This workspace is a maintenance subledger and control surface. It prepares traceable
-            accounting data but does not replace the general ledger, accounts payable or banking.
-          </p>
-        </section>
-      </div>
+        </div>
+      </details>
 
-      <section className="pf-panel finance-breakdown-panel">
+      <details className="pf-panel finance-breakdown-panel finance-advanced-detail">
+        <summary>{scope.storeId ? "Compare individual work orders" : scope.regionId ? "Compare stores" : "Compare regions"}</summary>
         <PlatformSectionHeader
-          title={scope.storeId ? "Work-order position" : scope.regionId ? "Store position" : "Regional position"}
-          description="Each stage is displayed independently; select a record to continue to operational evidence."
+          title={scope.storeId ? "Costs by work order" : scope.regionId ? "Costs by store" : "Costs by region"}
+          description="Open a row to continue to the work or store behind the number."
         />
         <div className="pf-table-scroll">
           <table className="pf-table finance-position-table">
@@ -864,7 +862,7 @@ function OverviewView({
         {!breakdownRows.length && (
           <PlatformEmpty icon={Search} title="No position rows match" description="Change the scope or search text to see financial records." />
         )}
-      </section>
+      </details>
     </div>
   );
 }
@@ -1141,28 +1139,28 @@ function InvoiceInspector({ invoice }: { invoice: MaintenanceInvoice }) {
   return (
     <section className="pf-panel finance-invoice-inspector">
       <PlatformSectionHeader
-        title={`${invoice.number} reconciliation`}
-        description="Gross, allocated, credits, net invoice and observed payment remain separately traceable."
+        title={`${invoice.number} bill check`}
+        description="See the full bill, where its dollars were assigned, any credits, and what has been paid."
       >
         <Link href={`/work-orders/${invoice.workOrderId}`}>Open work order <ArrowRight /></Link>
       </PlatformSectionHeader>
       <div className="finance-reconciliation-grid">
-        <article><span>Gross invoice</span><strong>{formatCurrency(reconciliation.grossAmountCents)}</strong></article>
-        <article><span>Allocated</span><strong>{formatCurrency(reconciliation.allocatedCents)}</strong></article>
-        <article className={reconciliation.unallocatedCents > 0 ? "finance-exception-card" : undefined}><span>Unallocated</span><strong>{formatCurrency(reconciliation.unallocatedCents)}</strong></article>
-        <article><span>Posted recoveries</span><strong>{formatCurrency(reconciliation.postedCreditCents)}</strong></article>
-        <article><span>Net invoiced</span><strong>{formatCurrency(reconciliation.netInvoicedCents)}</strong></article>
-        <article><span>Observed paid</span><strong>{formatCurrency(reconciliation.paidCents)}</strong></article>
-        <article className={reconciliation.paymentOutstandingCents > 0 ? "finance-exception-card" : undefined}><span>Payment outstanding</span><strong>{formatCurrency(reconciliation.paymentOutstandingCents)}</strong></article>
+        <article><span>Full bill</span><strong>{formatCurrency(reconciliation.grossAmountCents)}</strong></article>
+        <article><span>Assigned</span><strong>{formatCurrency(reconciliation.allocatedCents)}</strong></article>
+        <article className={reconciliation.unallocatedCents > 0 ? "finance-exception-card" : undefined}><span>Not assigned yet</span><strong>{formatCurrency(reconciliation.unallocatedCents)}</strong></article>
+        <article><span>Credits</span><strong>{formatCurrency(reconciliation.postedCreditCents)}</strong></article>
+        <article><span>After credits</span><strong>{formatCurrency(reconciliation.netInvoicedCents)}</strong></article>
+        <article><span>Paid</span><strong>{formatCurrency(reconciliation.paidCents)}</strong></article>
+        <article className={reconciliation.paymentOutstandingCents > 0 ? "finance-exception-card" : undefined}><span>Still unpaid</span><strong>{formatCurrency(reconciliation.paymentOutstandingCents)}</strong></article>
       </div>
       <PlatformProgress
         value={reconciliation.grossAmountCents > 0 ? reconciliation.allocatedCents / reconciliation.grossAmountCents : 0}
         tone={reconciliation.unallocatedCents > 0 || reconciliation.overallocatedCents > 0 ? "amber" : "teal"}
-        label={`${formatPercent(reconciliation.grossAmountCents > 0 ? reconciliation.allocatedCents / reconciliation.grossAmountCents : 0)} allocated`}
+        label={`${formatPercent(reconciliation.grossAmountCents > 0 ? reconciliation.allocatedCents / reconciliation.grossAmountCents : 0)} assigned`}
       />
       <div className="pf-table-scroll">
         <table className="pf-table finance-allocation-table">
-          <thead><tr><th>Allocation</th><th>Work / store</th><th>Physical target</th><th>Accounting coding</th><th>Cost type</th><th>Amount</th></tr></thead>
+          <thead><tr><th>Bill line</th><th>Work / store</th><th>Equipment or area</th><th>Accounting code</th><th>Cost type</th><th>Amount</th></tr></thead>
           <tbody>
             {invoice.allocations.map((allocation) => {
               const category = allocation.categoryId ? categoryById.get(allocation.categoryId) : undefined;
@@ -1172,9 +1170,9 @@ function InvoiceInspector({ invoice }: { invoice: MaintenanceInvoice }) {
               const costCenter = allocation.costCenterId ? costCenterById.get(allocation.costCenterId) : undefined;
               return (
                 <tr key={allocation.id}>
-                  <td><strong>{allocation.id}</strong><small>{category?.name ?? "Category unclassified"}</small></td>
+                  <td><strong>{allocation.id}</strong><small>{category?.name ?? "Type of work not assigned"}</small></td>
                   <td><WorkStoreCell workOrderId={allocation.workOrderId ?? invoice.workOrderId} /></td>
-                  <td><strong>{asset?.name ?? system?.name ?? "Store/category level"}</strong><small>{asset?.assetTag ?? (allocation.componentId ? `Component ${allocation.componentId}` : "No deeper classification")}</small></td>
+                  <td><strong>{asset?.name ?? system?.name ?? "Store or type of work"}</strong><small>{asset?.assetTag ?? (allocation.componentId ? `Component ${allocation.componentId}` : "No individual equipment selected")}</small></td>
                   <td><strong>{glAccount ? `${glAccount.code} - ${glAccount.name}` : "GL mapping missing"}</strong><small>{costCenter ? `${costCenter.code} - ${costCenter.name}` : "Cost center missing"}</small></td>
                   <td><strong>{titleCase(allocation.costCategory ?? "other")}</strong><small>{titleCase(allocation.workClass ?? "unclassified")}</small></td>
                   <td><strong>{formatCurrency(allocation.amountCents)}</strong></td>
@@ -1243,16 +1241,16 @@ function InvoicesView({
   return (
     <div className="finance-view finance-invoice-view">
       <section className="pf-stat-grid finance-tab-stats">
-        <PlatformStat label="Gross invoiced" value={formatCurrency(sumCents(records.map((record) => record.grossAmountCents)), true)} note="Before posted credits" icon={ReceiptText} />
-        <PlatformStat label="Unallocated" value={formatCurrency(totalUnallocated, true)} note="Must reconcile before clean export" icon={AlertCircle} tone={totalUnallocated ? "warning" : "positive"} />
-        <PlatformStat label="Posted recoveries" value={formatCurrency(totalPostedRecoveries, true)} note="Vendor credit and warranty records" icon={CheckCircle2} tone="positive" />
-        <PlatformStat label="Payment outstanding" value={formatCurrency(totalOutstanding, true)} note="Based on observed payment records" icon={Banknote} tone={totalOutstanding ? "warning" : "positive"} />
+        <PlatformStat label="Total billed" value={formatCurrency(sumCents(records.map((record) => record.grossAmountCents)), true)} note="Before credits" icon={ReceiptText} />
+        <PlatformStat label="Not assigned yet" value={formatCurrency(totalUnallocated, true)} note="Choose the store, work, or equipment for these dollars" icon={AlertCircle} tone={totalUnallocated ? "warning" : "positive"} />
+        <PlatformStat label="Credits" value={formatCurrency(totalPostedRecoveries, true)} note="Vendor and warranty credits" icon={CheckCircle2} tone="positive" />
+        <PlatformStat label="Still unpaid" value={formatCurrency(totalOutstanding, true)} note="Based on recorded payments" icon={Banknote} tone={totalOutstanding ? "warning" : "positive"} />
       </section>
       <section className="pf-panel finance-invoice-panel">
-        <PlatformSectionHeader title="Invoices and allocation reconciliation" description="No unallocated balance is hidden; select an invoice to inspect every allocation and linked source." />
+        <PlatformSectionHeader title="Bills to review" description="Open a bill to see where every dollar was assigned and what still needs attention." />
         <div className="pf-table-scroll">
           <table className="pf-table finance-invoice-table">
-            <thead><tr><th>Invoice</th><th>Work / store</th><th>Provider</th><th>Gross</th><th>Allocated</th><th>Unallocated</th><th>Recoveries</th><th>Net</th><th>Paid</th><th>Due</th><th>Status</th><th /></tr></thead>
+            <thead><tr><th>Bill</th><th>Work / store</th><th>Vendor</th><th>Total</th><th>Assigned</th><th>Not assigned</th><th>Credits</th><th>After credits</th><th>Paid</th><th>Due</th><th>Status</th><th /></tr></thead>
             <tbody>
               {visible.map(({ invoice, reconciliation }) => (
                 <tr key={invoice.id} className={selected?.id === invoice.id ? "finance-selected-row" : undefined}>
@@ -1267,14 +1265,14 @@ function InvoicesView({
                   <td><strong>{formatCurrency(reconciliation.paidCents)}</strong></td>
                   <td><strong>{formatDate(invoice.dueAt)}</strong></td>
                   <td><PlatformBadge tone={toneForStatus(invoice.status)}>{titleCase(invoice.status)}</PlatformBadge></td>
-                  <td><button className="finance-inline-button" type="button" onClick={() => onSelectRecord(invoice.id)}>Inspect</button></td>
+                  <td><button className="finance-inline-button" type="button" onClick={() => onSelectRecord(invoice.id)}>Open</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <FinancePagination total={filtered.length} page={page} onPageChange={onPageChange} />
-        {!filtered.length && <PlatformEmpty icon={ReceiptText} title="No invoices match" description="Change the filters or search to inspect invoice records." />}
+        {!filtered.length && <PlatformEmpty icon={ReceiptText} title="No bills match" description="Change the filters or search to see more bills." />}
       </section>
       {selected && <InvoiceInspector invoice={selected} />}
     </div>
@@ -1726,51 +1724,63 @@ export function FinancialSuite({ initialView = "overview" }: { initialView?: Fin
     dimensions: financeData.glAccounts.length + financeData.accountingCostCenters.length,
   };
 
+  const renderTabLink = (tab: (typeof TAB_DEFINITIONS)[number]) => {
+    const parameters = new URLSearchParams();
+    parameters.set("view", tab.id);
+    if (controls.regionId) parameters.set("region", controls.regionId);
+    if (controls.storeId) parameters.set("store", controls.storeId);
+    if (controls.vendorId) parameters.set("provider", controls.vendorId);
+    const count = tabCounts[tab.id];
+    return (
+      <Link
+        href={`/financials?${parameters.toString()}`}
+        className={controls.tab === tab.id ? "active" : undefined}
+        aria-current={controls.tab === tab.id ? "page" : undefined}
+        key={tab.id}
+        onClick={(event) => {
+          event.preventDefault();
+          openTab(tab.id);
+        }}
+      >
+        <span>{tab.label}</span>
+        {count !== undefined && <em>{count}</em>}
+      </Link>
+    );
+  };
+
+  const filtersOpen = Boolean(controls.query || controls.regionId || controls.storeId || controls.vendorId || controls.status !== "all");
+
   return (
     <AppShell>
       <div className="pf-page finance-suite">
-        <PlatformBreadcrumbs items={[{ label: "Portfolio", href: "/" }, { label: "Maintenance accounting" }]} />
+        <PlatformBreadcrumbs items={[{ label: "Overview", href: "/" }, { label: "Spending & bills" }]} />
         <PlatformPageHeader
-          eyebrow="Financial control - maintenance subledger"
-          title="Maintenance accounting"
-          description="Budget, authorize, commit, reconcile and export maintenance cost without losing its work, store, equipment or provider context."
+          eyebrow="Spending & bills"
+          title="Understand maintenance costs"
+          description="Start with what needs attention. Then open an approval, purchase order, bill, payment, store, or work order for the full detail."
         >
-          <Link className="pf-secondary-button" href="/reports">Open reports</Link>
-          <a className="pf-primary-button finance-header-export" download="maintenance-ledger-review.csv" href={exportHref}><Download aria-hidden="true" />Export filtered ledger</a>
+          <Link className="pf-secondary-button" href="/reports">View reports</Link>
+          <a className="pf-primary-button finance-header-export" download="maintenance-costs.csv" href={exportHref}><Download aria-hidden="true" />Download costs</a>
         </PlatformPageHeader>
 
         <nav className="pf-tabs finance-tabs" aria-label="Maintenance accounting sections">
-          {TAB_DEFINITIONS.map((tab) => {
-            const parameters = new URLSearchParams();
-            parameters.set("view", tab.id);
-            if (controls.regionId) parameters.set("region", controls.regionId);
-            if (controls.storeId) parameters.set("store", controls.storeId);
-            if (controls.vendorId) parameters.set("provider", controls.vendorId);
-            const count = tabCounts[tab.id];
-            return (
-              <Link
-                href={`/financials?${parameters.toString()}`}
-                className={controls.tab === tab.id ? "active" : undefined}
-                aria-current={controls.tab === tab.id ? "page" : undefined}
-                key={tab.id}
-                onClick={(event) => {
-                  event.preventDefault();
-                  openTab(tab.id);
-                }}
-              >
-                <span>{tab.label}</span>
-                {count !== undefined && <em>{count}</em>}
-              </Link>
-            );
-          })}
+          {TAB_DEFINITIONS.filter((tab) => !tab.advanced).map(renderTabLink)}
         </nav>
 
-        <FinanceFilterBar
-          controls={controls}
-          statusOptions={statusOptionsFor(controls.tab)}
-          onChange={(patch) => updateControls(patch)}
-          onClear={clearFilters}
-        />
+        <details className="finance-more-tabs" open={TAB_DEFINITIONS.some((tab) => tab.id === controls.tab && tab.advanced) || undefined}>
+          <summary>More accounting tools</summary>
+          <nav className="pf-tabs" aria-label="More accounting sections">{TAB_DEFINITIONS.filter((tab) => tab.advanced).map(renderTabLink)}</nav>
+        </details>
+
+        <details className="finance-filter-disclosure" open={filtersOpen || undefined}>
+          <summary>Filter this view</summary>
+          <FinanceFilterBar
+            controls={controls}
+            statusOptions={statusOptionsFor(controls.tab)}
+            onChange={(patch) => updateControls(patch)}
+            onClear={clearFilters}
+          />
+        </details>
 
         {controls.tab === "overview" && (
           <OverviewView

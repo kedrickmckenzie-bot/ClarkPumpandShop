@@ -4,7 +4,7 @@ import {
   type FinancialView,
 } from "@/components/financial-platform";
 
-export const metadata: Metadata = { title: "Maintenance Accounting" };
+export const metadata: Metadata = { title: "Spending & bills" };
 
 const views: FinancialView[] = [
   "overview",

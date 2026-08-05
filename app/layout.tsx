@@ -6,25 +6,25 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "R&M Control", template: "%s · R&M Control" },
-  description: "Maintenance intelligence, financial control, and provider accountability for multi-site operators.",
+  title: { default: "Clark's Maintenance", template: "%s · Clark's Maintenance" },
+  description: "Maintenance work, store costs, equipment, teams, and vendors in one place.",
   openGraph: {
-    title: "R&M Control",
-    description: "See the money, the work, and who owns what next.",
+    title: "Clark's Maintenance",
+    description: "See the work, the cost, and who acts next.",
     type: "website",
     images: [
       {
         url: "/og.png",
         width: 1733,
         height: 909,
-        alt: "R&M Control — see the money, the work, and who owns what next.",
+        alt: "Clark's Maintenance — see the work, the cost, and who acts next.",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "R&M Control",
-    description: "See the money, the work, and who owns what next.",
+    title: "Clark's Maintenance",
+    description: "See the work, the cost, and who acts next.",
     images: ["/og.png"],
   },
   icons: { icon: "/favicon.svg" },

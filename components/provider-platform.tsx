@@ -202,7 +202,7 @@ function classificationLabel(workOrder: WorkOrder) {
   const asset = platformData.assets.find((candidate) => candidate.id === workOrder.assetId);
   return {
     primary: asset?.name ?? system?.name ?? category?.name ?? "Store only",
-    depth: asset ? "Asset classified" : system ? "Cost center classified" : category ? "Category classified" : "Store only",
+    depth: asset ? "Individual equipment" : system ? "Equipment group" : category ? "Type of work" : "Store only",
   };
 }
 
@@ -223,52 +223,42 @@ export function ProviderDirectory() {
   return (
     <AppShell>
       <div className="pf-page provider-page">
-        <PlatformBreadcrumbs items={[{ label: "Operations", href: "/" }, { label: "Providers" }]} />
+        <PlatformBreadcrumbs items={[{ label: "Overview", href: "/" }, { label: "Teams & vendors" }]} />
         <PlatformPageHeader
-          eyebrow="Service network"
-          title="Providers"
-          description="Run internal maintenance and outside service partners from one accountable work-order network without forcing vendors into a new dispatch system."
+          eyebrow="Teams & vendors"
+          title="Who handles the work?"
+          description="See your internal maintenance team and outside vendors in one place. Open anyone to review their work and performance."
         >
-          <Link className="pf-button pf-button-primary" href="/work-orders/new"><Plus />Create work order</Link>
-          <Link className="pf-button" href="/accountability"><AlertTriangle />Open accountability</Link>
+          <Link className="pf-button pf-button-primary" href="/work-orders/new"><Plus />Start a work order</Link>
+          <Link className="pf-button" href="/accountability"><AlertTriangle />See work needing attention</Link>
         </PlatformPageHeader>
 
         <section className="provider-stat-grid" aria-label="Provider network summary">
-          <PlatformStat label="Service sources" value={String(providerCatalog.length)} note={`${platformData.vendors.length} outside firms + 1 internal team`} icon={Building2} href="#provider-directory" />
-          <PlatformStat label="Internal maintainers" value={String(platformData.technicians.length)} note={`${platformData.technicians.filter((technician) => technician.status === "available").length} currently marked available`} icon={Wrench} href={`/providers/${INTERNAL_PROVIDER_ID}`} tone="info" />
-          <PlatformStat label="Open assigned work" value={String(assignedOpen.length)} note={`${new Set(assignedOpen.map((workOrder) => workOrder.storeId)).size} stores represented`} icon={Inbox} href="#provider-open-work" />
-          <PlatformStat label="Response needed" value={String(pendingAcceptance.length)} note="Accept, decline or clarification is still due" icon={MessageSquareText} href="/accountability#provider-queue-response" tone={pendingAcceptance.length ? "warning" : "positive"} />
-        </section>
-
-        <section className="provider-channel-model" aria-labelledby="provider-channel-title">
-          <PlatformSectionHeader title="Meet each service partner where they work" description="The Clark's work order remains the permanent record while every participant gets the lightest useful interaction." />
-          <div className="provider-channel-steps" id="provider-channel-title">
-            <article className="provider-channel-step"><span><Mail /></span><div><strong>Email + secure response link</strong><p>Outside vendor offices can accept, decline or request clarification without creating an account.</p></div></article>
-            <article className="provider-channel-step"><span><ShieldCheck /></span><div><strong>Optional vendor workspace</strong><p>Frequent partners can see only their assigned Clark&apos;s work orders, shared files and required responses.</p></div></article>
-            <article className="provider-channel-step"><span><MapPin /></span><div><strong>Store QR for field evidence</strong><p>A technician enters a name, checks in, records one outcome and checks out. No roster or route management is added.</p></div></article>
-          </div>
+          <PlatformStat label="Teams and vendors" value={String(providerCatalog.length)} note={`${platformData.vendors.length} outside vendors and 1 internal team`} icon={Building2} href="#provider-directory" />
+          <PlatformStat label="Internal technicians" value={String(platformData.technicians.length)} note={`${platformData.technicians.filter((technician) => technician.status === "available").length} available now`} icon={Wrench} href={`/providers/${INTERNAL_PROVIDER_ID}`} tone="info" />
+          <PlatformStat label="Open assigned work" value={String(assignedOpen.length)} note={`Across ${new Set(assignedOpen.map((workOrder) => workOrder.storeId)).size} stores`} icon={Inbox} href="#provider-open-work" />
+          <PlatformStat label="Waiting for a vendor" value={String(pendingAcceptance.length)} note="A vendor needs to respond" icon={MessageSquareText} href="/accountability#provider-queue-response" tone={pendingAcceptance.length ? "warning" : "positive"} />
         </section>
 
         <section className="provider-directory-panel" id="provider-directory">
-          <PlatformSectionHeader title="Provider directory" description="Search internal capability and approved outside firms by name, trade or contact." />
+          <PlatformSectionHeader title="Find a team or vendor" description="Search by name, type of work, email, or technician." />
           <div className="provider-filter-bar">
-            <label className="provider-search-field"><span>Search providers</span><div><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, trade, email or internal technician" /></div></label>
-            <label className="provider-select-field"><span>Provider type</span><select value={kind} onChange={(event) => setKind(event.target.value as "all" | ProviderKind)}><option value="all">All service sources</option><option value="internal">Internal maintenance</option><option value="vendor">Outside vendors</option></select></label>
-            <span className="provider-filter-result">{visibleProviders.length} of {providerCatalog.length} providers</span>
+            <label className="provider-search-field"><span>Search</span><div><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, work type, email, or technician" /></div></label>
+            <label className="provider-select-field"><span>Type</span><select value={kind} onChange={(event) => setKind(event.target.value as "all" | ProviderKind)}><option value="all">All teams and vendors</option><option value="internal">Internal team</option><option value="vendor">Outside vendors</option></select></label>
+            <span className="provider-filter-result">{visibleProviders.length} shown</span>
           </div>
           <div className="provider-table-wrap">
             <table className="provider-table">
-              <thead><tr><th>Provider</th><th>Operating channel</th><th>Coverage</th><th>Current accountability</th><th>Observed response</th><th aria-label="Open provider" /></tr></thead>
+              <thead><tr><th>Team or vendor</th><th>Type</th><th>Open work</th><th>Response or availability</th><th aria-label="Open team or vendor" /></tr></thead>
               <tbody>
                 {visibleProviders.map((provider) => {
                   const metrics = providerMetrics(provider);
                   return (
                     <tr key={provider.id}>
                       <td><div className="provider-identity"><i style={{ backgroundColor: provider.accent }}>{provider.shortName.slice(0, 2).toUpperCase()}</i><span><Link href={`/providers/${provider.id}`}>{provider.name}</Link><small>{provider.trade}</small></span></div></td>
-                      <td><PlatformBadge tone={provider.kind === "internal" ? "info" : "purple"}>{provider.kind === "internal" ? "Internal team" : "Outside vendor"}</PlatformBadge><span className="provider-table-note">{provider.kind === "internal" ? "Assigned work queue" : "Email + secure link"}</span></td>
-                      <td><strong>{metrics.stores.size} stores</strong><span className="provider-table-note">{metrics.workOrders.length} work orders on record</span></td>
-                      <td><Link className="provider-accountability-link" href={`/providers/${provider.id}#provider-open-work`}><strong>{metrics.openWork.length} open</strong><span>{metrics.overdue.length} past due · {metrics.pendingAcceptance.length} awaiting response</span></Link></td>
-                      <td>{provider.kind === "vendor" && metrics.responseMedianHours !== undefined ? <><strong>{formatDuration(metrics.responseMedianHours)}</strong><span className="provider-table-note">median · {metrics.responseObservationCount} recorded responses</span></> : <><strong>{provider.technicians.length} people</strong><span className="provider-table-note">{provider.technicians.filter((technician) => technician.status === "available").length} available</span></>}</td>
+                      <td><PlatformBadge tone={provider.kind === "internal" ? "info" : "purple"}>{provider.kind === "internal" ? "Internal team" : "Outside vendor"}</PlatformBadge><span className="provider-table-note">Works at {metrics.stores.size} stores</span></td>
+                      <td><Link className="provider-accountability-link" href={`/providers/${provider.id}#provider-open-work`}><strong>{metrics.openWork.length} open</strong><span>{metrics.overdue.length} past due · {metrics.pendingAcceptance.length} waiting for response</span></Link></td>
+                      <td>{provider.kind === "vendor" && metrics.responseMedianHours !== undefined ? <><strong>{formatDuration(metrics.responseMedianHours)}</strong><span className="provider-table-note">typical response · {metrics.responseObservationCount} recorded</span></> : <><strong>{provider.technicians.filter((technician) => technician.status === "available").length} available</strong><span className="provider-table-note">{provider.technicians.length} people total</span></>}</td>
                       <td><Link className="provider-row-open" href={`/providers/${provider.id}`} aria-label={`Open ${provider.name}`}><ArrowRight /></Link></td>
                     </tr>
                   );
@@ -280,7 +270,7 @@ export function ProviderDirectory() {
         </section>
 
         <section className="provider-directory-panel" id="provider-open-work">
-          <PlatformSectionHeader title="Network work requiring attention" description="The most urgent open provider work, linked back to Clark's internal maintenance record." href="/accountability" linkLabel="Open every exception" />
+          <PlatformSectionHeader title="Work needing attention" description="Open the work order to see the full history, owner, costs, and next step." href="/accountability" linkLabel="See all" />
           <ProviderWorkRows workOrders={assignedOpen.sort(providerWorkSort).slice(0, 12)} />
         </section>
       </div>
@@ -317,7 +307,7 @@ export function ProviderDetail({ providerId }: { providerId: string }) {
         <section className="provider-profile-band">
           <div className="provider-profile-identity"><i style={{ backgroundColor: provider.accent }}>{provider.shortName.slice(0, 2).toUpperCase()}</i><div><PlatformBadge tone={provider.kind === "internal" ? "info" : "purple"}>{provider.kind === "internal" ? "Internal maintenance" : "Approved vendor"}</PlatformBadge><h2>{provider.shortName}</h2><p>{provider.trade}</p></div></div>
           <div className="provider-profile-facts">
-            <span><small>Primary channel</small><strong>{provider.kind === "internal" ? "Assigned work queue" : provider.email}</strong></span>
+            <span><small>Best contact method</small><strong>{provider.kind === "internal" ? "Assigned work list" : provider.email}</strong></span>
             <span><small>Stores with recorded work</small><strong>{metrics.stores.size}</strong></span>
             <span><small>Latest work-order activity</small><strong>{latestWork ? formatDate(latestWork.createdAt) : "No activity"}</strong></span>
           </div>
@@ -328,31 +318,31 @@ export function ProviderDetail({ providerId }: { providerId: string }) {
 
         <section className="provider-stat-grid" aria-label={`${provider.name} summary`}>
           <PlatformStat label="Open work orders" value={String(metrics.openWork.length)} note={`${metrics.stores.size} stores across the full record`} icon={Inbox} href="#provider-open-work" />
-          <PlatformStat label="Past target" value={String(metrics.overdue.length)} note={`${metrics.pendingAcceptance.length} also await a provider response`} icon={AlertTriangle} href="#provider-exceptions" tone={metrics.overdue.length ? "critical" : "positive"} />
-          <PlatformStat label="Open exposure" value={formatCurrency(metrics.exposure, true)} note={`${formatCurrency(metrics.invoiceValue, true)} invoiced value on linked work`} icon={CircleDollarSign} href="#provider-open-work" tone="info" />
-          <PlatformStat label="Asset classification" value={formatPercent(metrics.assetCoverage)} note={`${metrics.assetClassified} of ${metrics.workOrders.length} work orders reach asset level`} icon={Wrench} href="#provider-open-work" />
+          <PlatformStat label="Past due" value={String(metrics.overdue.length)} note={`${metrics.pendingAcceptance.length} also wait for a vendor response`} icon={AlertTriangle} href="#provider-exceptions" tone={metrics.overdue.length ? "critical" : "positive"} />
+          <PlatformStat label="Estimated open cost" value={formatCurrency(metrics.exposure, true)} note={`${formatCurrency(metrics.invoiceValue, true)} billed on linked work`} icon={CircleDollarSign} href="#provider-open-work" tone="info" />
+          <PlatformStat label="Work tied to equipment" value={formatPercent(metrics.assetCoverage)} note={`${metrics.assetClassified} of ${metrics.workOrders.length} work orders name individual equipment`} icon={Wrench} href="#provider-open-work" />
         </section>
 
         <div className="provider-detail-grid">
           <section className="provider-panel provider-performance-panel">
-            <PlatformSectionHeader title="Observable service measures" description="No dispatch, en-route or inferred technician metrics are used." />
+            <PlatformSectionHeader title="Performance we can verify" description="These measures use recorded responses, visits, outcomes, and planned work." />
             <div className="provider-measure-list">
               {provider.kind === "vendor" && <ProviderMeasure label="Response time" value={metrics.responseMedianHours === undefined ? "No observations" : formatDuration(metrics.responseMedianHours)} detail={`Median from ${metrics.responseObservationCount} issued and responded timestamps`} href="#provider-open-work" />}
-              {provider.kind === "vendor" && <ProviderMeasure label="Recorded acceptance" value={metrics.acceptanceRate === undefined ? "No decisions" : formatPercent(metrics.acceptanceRate)} detail={`${metrics.acceptanceObservationCount} accept or decline response events`} href="#provider-open-work" />}
-              <ProviderMeasure label="Check-in by response target" value={metrics.checkInTargetRate === undefined ? "No paired records" : formatPercent(metrics.checkInTargetRate)} detail={`${metrics.checkInTargetCount} work orders with both target and first check-in`} href="#provider-open-work" />
-              <ProviderMeasure label="Verified location evidence" value={metrics.evidenceRate === undefined ? "No visit evidence" : formatPercent(metrics.evidenceRate)} detail={`${metrics.evidenceObservationCount} check-in and checkout evidence points`} href="#provider-open-work" />
-              <ProviderMeasure label="Resolved visit outcomes" value={metrics.resolvedOutcomeRate === undefined ? "No visit outcomes" : formatPercent(metrics.resolvedOutcomeRate)} detail={`${metrics.outcomeObservationCount} completed visit outcomes`} href="#provider-open-work" />
-              {metrics.providerPm && <ProviderMeasure label="Verified PM compliance" value={formatPercent(metrics.providerPm.value)} detail={`${metrics.providerPm.numerator} on-time verified occurrences of ${metrics.providerPm.denominator} due`} href={`/pm?provider=${provider.id}`} />}
+              {provider.kind === "vendor" && <ProviderMeasure label="Accepted or declined" value={metrics.acceptanceRate === undefined ? "No decisions" : formatPercent(metrics.acceptanceRate)} detail={`${metrics.acceptanceObservationCount} recorded vendor decisions`} href="#provider-open-work" />}
+              <ProviderMeasure label="Arrived by target time" value={metrics.checkInTargetRate === undefined ? "No matching records" : formatPercent(metrics.checkInTargetRate)} detail={`${metrics.checkInTargetCount} work orders had both a target and first check-in`} href="#provider-open-work" />
+              <ProviderMeasure label="Visit proof recorded" value={metrics.evidenceRate === undefined ? "No visit proof" : formatPercent(metrics.evidenceRate)} detail={`${metrics.evidenceObservationCount} check-in and checkout records`} href="#provider-open-work" />
+              <ProviderMeasure label="Visits that resolved the problem" value={metrics.resolvedOutcomeRate === undefined ? "No visit results" : formatPercent(metrics.resolvedOutcomeRate)} detail={`${metrics.outcomeObservationCount} completed visit results`} href="#provider-open-work" />
+              {metrics.providerPm && <ProviderMeasure label="Planned maintenance completed on time" value={formatPercent(metrics.providerPm.value)} detail={`${metrics.providerPm.numerator} of ${metrics.providerPm.denominator} due visits were completed and checked on time`} href={`/pm?provider=${provider.id}`} />}
             </div>
           </section>
 
           <section className="provider-panel" id="provider-exceptions">
-            <PlatformSectionHeader title="Exceptions requiring action" description="Each item retains its accountable party, next action, due date and escalation path." />
+            <PlatformSectionHeader title="Work needing action" description="See who owns the next step, when it is due, and who to notify if it stays late." />
             <div className="provider-exception-list">
               {exceptions.slice(0, 8).map((item) => <ProviderExceptionRow item={item} key={item.id} />)}
-              {!exceptions.length && <PlatformEmpty icon={CheckCircle2} title="No open provider exceptions" description="There are no overdue, response, follow-up, verification, evidence or invoice-review records for this provider." />}
+              {!exceptions.length && <PlatformEmpty icon={CheckCircle2} title="Nothing needs attention" description="This team or vendor has no late responses, follow-up, proof, or bill reviews waiting." />}
             </div>
-            {exceptions.length > 8 && <Link className="provider-panel-link" href={`/accountability?providerId=${provider.id}`}>View all {exceptions.length} supporting exceptions<ArrowRight /></Link>}
+            {exceptions.length > 8 && <Link className="provider-panel-link" href={`/accountability?providerId=${provider.id}`}>View all {exceptions.length} items<ArrowRight /></Link>}
           </section>
 
           {provider.kind === "internal" ? (
@@ -364,7 +354,7 @@ export function ProviderDetail({ providerId }: { providerId: string }) {
             </section>
           ) : (
             <section className="provider-panel provider-access-panel">
-              <PlatformSectionHeader title="Low-friction access" description="The vendor can use one channel or combine them; Clark's still retains the canonical record." />
+              <PlatformSectionHeader title="How the vendor can respond" description="The vendor may use email, the optional portal, or a store check-in. Clark's keeps the full work history either way." />
               <div className="provider-access-list">
                 <a href={`mailto:${provider.email}`}><span><Mail /></span><div><strong>Email dispatch</strong><small>{provider.email}</small></div><ArrowRight /></a>
                 <Link href="/vendor-portal"><span><ShieldCheck /></span><div><strong>Optional vendor workspace</strong><small>Only this firm&apos;s assigned work and shared records</small></div><ArrowRight /></Link>
@@ -375,7 +365,7 @@ export function ProviderDetail({ providerId }: { providerId: string }) {
         </div>
 
         <section className="provider-directory-panel" id="provider-open-work">
-          <PlatformSectionHeader title="Linked work-order record" description="Current work and history remain on Clark's internal work order; this table is the support for the measures above." />
+          <PlatformSectionHeader title="Work orders handled by this team or vendor" description="Open a work order for the problem, equipment, next action, visits, files, and costs." />
           <ProviderWorkTable provider={provider} workOrders={metrics.workOrders} />
         </section>
       </div>
@@ -459,7 +449,7 @@ function ProviderWorkRows({ workOrders }: { workOrders: WorkOrder[] }) {
   return (
     <div className="provider-table-wrap">
       <table className="provider-table provider-work-table">
-        <thead><tr><th>Work order</th><th>Store</th><th>Classification</th><th>Priority / status</th><th>Accountable next action</th><th>Due</th><th>Exposure</th></tr></thead>
+        <thead><tr><th>Work order</th><th>Store</th><th>Equipment detail</th><th>Priority / status</th><th>Who acts next</th><th>Due</th><th>Estimated open cost</th></tr></thead>
         <tbody>
           {workOrders.map((workOrder) => {
             const store = platformData.stores.find((candidate) => candidate.id === workOrder.storeId);
@@ -470,9 +460,9 @@ function ProviderWorkRows({ workOrders }: { workOrders: WorkOrder[] }) {
                 <td><Link className="provider-work-link" href={`/stores/${workOrder.storeId}`}>{storeLabel(workOrder)}</Link><span className="provider-table-note">{store?.address1}</span></td>
                 <td><strong>{classification.primary}</strong><span className="provider-table-note">{classification.depth}</span></td>
                 <td><div className="provider-badge-stack"><PlatformBadge tone={providerTone(workOrder)}>{priorityLabel[workOrder.priority]}</PlatformBadge><PlatformBadge tone={statusTone(workOrder.status) === "exception" ? "critical" : statusTone(workOrder.status) === "pending" ? "warning" : statusTone(workOrder.status) === "active" ? "info" : statusTone(workOrder.status) === "closed" ? "good" : "neutral"}>{workOrderStatusLabel[workOrder.status]}</PlatformBadge></div></td>
-                <td><strong>{workOrder.accountableParty}</strong><span className="provider-table-note">{workOrder.nextAction} · escalate to {workOrder.escalation}</span></td>
+                <td><strong>{workOrder.accountableParty}</strong><span className="provider-table-note">{workOrder.nextAction} · notify {workOrder.escalation} if late</span></td>
                 <td>{workOrder.dueAt ? <><strong>{formatDate(workOrder.dueAt, true)}</strong>{isOpenWorkOrder(workOrder) && new Date(workOrder.dueAt) < new Date(PLATFORM_NOW) && <span className="provider-overdue-note">Past due</span>}</> : <span className="provider-table-note">No due date</span>}</td>
-                <td><strong>{formatCurrency(workOrder.costExposureCents)}</strong><span className="provider-table-note">NTE {formatCurrency(workOrder.nteCents)}</span></td>
+                <td><strong>{formatCurrency(workOrder.costExposureCents)}</strong><span className="provider-table-note">Spending limit {formatCurrency(workOrder.nteCents)}</span></td>
               </tr>
             );
           })}
@@ -547,39 +537,47 @@ export function AccountabilityCenter({ initialStoreScope = "", initialQueueScope
   const scopedProvider = providerForId(providerScope);
   const actionableWorkOrders = new Set(Object.values(queues).flat().map((item) => item.workOrder.id));
   const criticalWorkOrders = new Set(Object.values(queues).flat().filter((item) => item.workOrder.priority === "critical").map((item) => item.workOrder.id));
+  const moreReviewCount = queueKey === "financial"
+    ? queues.financial.length
+    : queueKey === "controlGaps"
+      ? queues.controlGaps.length
+      : queues.financial.length + queues.controlGaps.length;
 
   return (
     <AppShell>
       <div className="pf-page provider-page">
-        <PlatformBreadcrumbs items={[{ label: "Operations", href: "/" }, { label: "Accountability" }]} />
-        <PlatformPageHeader eyebrow="Exception control" title="Accountability center" description="Recover unresolved work through named ownership, an explicit next action, a retained due date and a visible escalation path.">
-          <Link className="pf-button" href="/providers"><UsersRound />Provider network</Link>
-          <Link className="pf-button pf-button-primary" href="/work-orders/new"><Plus />Create work order</Link>
+        <PlatformBreadcrumbs items={[{ label: "Overview", href: "/" }, { label: "Who needs to act?" }]} />
+        <PlatformPageHeader eyebrow="Work needing attention" title="Who needs to act?" description="See what is waiting, who owns the next step, and when it is due.">
+          <Link className="pf-button" href="/providers"><UsersRound />Teams & vendors</Link>
+          <Link className="pf-button pf-button-primary" href="/work-orders/new"><Plus />Start a work order</Link>
         </PlatformPageHeader>
 
-        {(storeScope || queueKey || providerScope) && <section className="work-scope-filter"><span>Accountability scope</span>{scopedStore && <strong>Store {scopedStore.code} · {scopedStore.city}</strong>}{scopedProvider && <strong>{scopedProvider.shortName}</strong>}{queueKey && <strong>{queueScope.replaceAll("-", " ")}</strong>}<Link href="/accountability">Clear scope</Link></section>}
+        {(storeScope || queueKey || providerScope) && <section className="work-scope-filter"><span>Showing</span>{scopedStore && <strong>Store {scopedStore.code} · {scopedStore.city}</strong>}{scopedProvider && <strong>{scopedProvider.shortName}</strong>}{queueKey && <strong>{queueScope.replaceAll("-", " ")}</strong>}<Link href="/accountability">Clear filters</Link></section>}
 
         <section className="provider-accountability-brief">
-          <div><span className="provider-live-label"><span />As of {formatDate(PLATFORM_NOW, true)}</span><h2>{actionableWorkOrders.size} work orders have at least one open control exception.</h2><p>Queues may overlap because one work order can be overdue and also need a provider response, follow-up, verification or financial action.</p></div>
-          <div className="provider-accountability-signal"><strong>{criticalWorkOrders.size}</strong><span>critical-priority work orders represented</span></div>
+          <div><span className="provider-live-label"><span />As of {formatDate(PLATFORM_NOW, true)}</span><h2>{actionableWorkOrders.size} work orders need someone to act.</h2><p>A work order may appear in more than one list when several next steps are waiting.</p></div>
+          <div className="provider-accountability-signal"><strong>{criticalWorkOrders.size}</strong><span>critical work orders</span></div>
         </section>
 
         <section className="provider-stat-grid" aria-label="Accountability queue summary">
-          <PlatformStat label="Past target" value={String(queues.overdue.length)} note="Open work beyond its retained due date" icon={Clock3} href="#provider-queue-overdue" tone={queues.overdue.length ? "critical" : "positive"} />
-          <PlatformStat label="Provider response" value={String(queues.providerResponse.length)} note="Accept, decline or clarification remains due" icon={MessageSquareText} href="#provider-queue-response" tone={queues.providerResponse.length ? "warning" : "positive"} />
-          <PlatformStat label="Open follow-ups" value={String(queues.followUp.length)} note="Required unresolved-outcome controls" icon={FileQuestion} href="#provider-queue-followup" tone={queues.followUp.length ? "warning" : "positive"} />
-          <PlatformStat label="Verification / evidence" value={String(queues.verification.length)} note="Completion or location evidence needs review" icon={ShieldCheck} href="#provider-queue-verification" tone={queues.verification.length ? "warning" : "positive"} />
-          <PlatformStat label="Quote / invoice control" value={String(queues.financial.length)} note="Financial stage requires the next action" icon={CircleDollarSign} href="#provider-queue-financial" />
-          <PlatformStat label="Missing control fields" value={String(queues.controlGaps.length)} note="Accountability, action, due date or escalation" icon={AlertTriangle} href="#provider-queue-control" tone={queues.controlGaps.length ? "critical" : "positive"} />
+          <PlatformStat label="Past due" value={String(queues.overdue.length)} note="Open work past its due date" icon={Clock3} href="#provider-queue-overdue" tone={queues.overdue.length ? "critical" : "positive"} />
+          <PlatformStat label="Waiting for vendor" value={String(queues.providerResponse.length)} note="The vendor needs to respond" icon={MessageSquareText} href="#provider-queue-response" tone={queues.providerResponse.length ? "warning" : "positive"} />
+          <PlatformStat label="Follow-up needed" value={String(queues.followUp.length)} note="A visit did not fully resolve the problem" icon={FileQuestion} href="#provider-queue-followup" tone={queues.followUp.length ? "warning" : "positive"} />
+          <PlatformStat label="Ready to review" value={String(queues.verification.length)} note="Completion details or evidence need checking" icon={ShieldCheck} href="#provider-queue-verification" tone={queues.verification.length ? "warning" : "positive"} />
         </section>
 
         <div className="provider-queue-stack">
-          {showQueue("overdue") && <AccountabilityQueue id="provider-queue-overdue" title="Past target" description="Overdue work remains visible until resolved; the original due date is preserved here." rows={queues.overdue} />}
-          {showQueue("providerResponse") && <AccountabilityQueue id="provider-queue-response" title="Provider response required" description="Outside vendor office action is limited to accept, decline or request clarification." rows={queues.providerResponse} />}
-          {showQueue("followUp") && <AccountabilityQueue id="provider-queue-followup" title="Unresolved outcome follow-up" description="A non-terminal technician outcome creates follow-through on the same internal work order." rows={queues.followUp} />}
-          {showQueue("verification") && <AccountabilityQueue id="provider-queue-verification" title="Completion and location evidence review" description="Exceptions stay visibly unverified; captured accuracy, distance and timestamps remain attached to the visit." rows={queues.verification} />}
-          {showQueue("financial") && <AccountabilityQueue id="provider-queue-financial" title="Quote, approval and invoice control" description="Quote, approved, committed and invoice stages remain distinct and tied to the work order." rows={queues.financial} />}
-          {showQueue("controlGaps") && <AccountabilityQueue id="provider-queue-control" title="Missing accountability controls" description="Every non-terminal record must identify the accountable party, next action, due date and escalation destination." rows={queues.controlGaps} />}
+          {showQueue("overdue") && <AccountabilityQueue id="provider-queue-overdue" title="Past due" description="These work orders are still open after their due date." rows={queues.overdue} />}
+          {showQueue("providerResponse") && <AccountabilityQueue id="provider-queue-response" title="Waiting for a vendor" description="The vendor needs to accept, decline, or ask a question." rows={queues.providerResponse} />}
+          {showQueue("followUp") && <AccountabilityQueue id="provider-queue-followup" title="Follow-up needed" description="A technician visit found more work or did not fully resolve the problem." rows={queues.followUp} />}
+          {showQueue("verification") && <AccountabilityQueue id="provider-queue-verification" title="Ready to review" description="Check the completion details and any visit evidence." rows={queues.verification} />}
+          {(!queueKey || queueKey === "financial" || queueKey === "controlGaps") && (
+            <details className="provider-more-queues" open={queueKey === "financial" || queueKey === "controlGaps"}>
+              <summary>More work to review ({moreReviewCount})</summary>
+              {showQueue("financial") && <AccountabilityQueue id="provider-queue-financial" title="Costs and bills need action" description="A quote, approval, purchase order, or bill is waiting for the next step." rows={queues.financial} />}
+              {showQueue("controlGaps") && <AccountabilityQueue id="provider-queue-control" title="Owner or due date missing" description="Add the person responsible, next step, due date, or escalation contact." rows={queues.controlGaps} />}
+            </details>
+          )}
         </div>
       </div>
     </AppShell>
@@ -593,8 +591,8 @@ function AccountabilityQueue({ id, title, description, rows }: { id: string; tit
       {rows.length ? (
         <div className="provider-table-wrap">
           <table className="provider-table provider-accountability-table">
-            <thead><tr><th>Work order / reason</th><th>Store</th><th>Service source</th><th>Accountable next action</th><th>Due</th><th>Escalation</th></tr></thead>
-            <tbody>{rows.map((item) => { const source = providerForWorkOrder(item.workOrder); return <tr key={item.id}><td><Link className="provider-work-link" href={`/work-orders/${item.workOrder.id}`}>{item.workOrder.number}</Link><span className="provider-table-note">{item.reason} · {item.workOrder.title}</span></td><td><Link className="provider-work-link" href={`/stores/${item.workOrder.storeId}`}>{storeLabel(item.workOrder)}</Link></td><td>{source ? <Link className="provider-work-link" href={`/providers/${source.id}`}>{source.shortName}</Link> : <span className="provider-table-note">Unassigned</span>}<span className="provider-table-note">{item.workOrder.assignmentType?.replaceAll("_", " ") ?? "assignment not set"}</span></td><td><strong>{item.accountableParty}</strong><span className="provider-table-note">{item.action}</span></td><td>{item.dueAt ? <strong>{formatDate(item.dueAt, true)}</strong> : <span className="provider-overdue-note">Missing</span>}</td><td>{item.escalation}</td></tr>; })}</tbody>
+            <thead><tr><th>Work order</th><th>Store</th><th>Who acts next</th><th>Due</th></tr></thead>
+            <tbody>{rows.map((item) => { const source = providerForWorkOrder(item.workOrder); return <tr key={item.id}><td><Link className="provider-work-link" href={`/work-orders/${item.workOrder.id}`}>{item.workOrder.number}</Link><span className="provider-table-note">{item.reason} · {item.workOrder.title}</span></td><td><Link className="provider-work-link" href={`/stores/${item.workOrder.storeId}`}>{storeLabel(item.workOrder)}</Link></td><td><strong>{item.accountableParty}</strong><span className="provider-table-note">{item.action}</span><span className="provider-table-note">{source?.shortName ?? "Unassigned"} · escalates to {item.escalation}</span></td><td>{item.dueAt ? <strong>{formatDate(item.dueAt, true)}</strong> : <span className="provider-overdue-note">Missing</span>}</td></tr>; })}</tbody>
           </table>
         </div>
       ) : <PlatformEmpty icon={CheckCircle2} title="Queue is clear" description="No work orders currently meet this exception rule." />}
