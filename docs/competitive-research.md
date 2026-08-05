@@ -1,244 +1,398 @@
-# Competitive Research: Multi-Site Maintenance Operations and Asset Intelligence
+# Competitive Research and Product Decisions
 
-**Prepared for:** Clark's Operations  
-**Research date / source access date:** August 5, 2026  
-**Method:** Current public web research using official product pages, help centers, developer documentation, and official product announcements. A small number of current Capterra and G2 reviews are called out separately as user-reported evidence. Vendor claims are not treated as independently verified outcomes.
+**Research date:** August 5, 2026
+**Scope:** Multi-site facilities and CMMS platforms relevant to a 65-store convenience-retail operator and independent stores
+**Source policy:** Official product, help, developer and customer-story sources only
 
-## Executive summary
+## 1. Research question
 
-The market validates nearly every individual capability in the Clark's product thesis, but it distributes the full workflow across four product categories:
+The clean rebuild is not trying to reproduce every feature of an enterprise CMMS. The research asks a narrower question:
 
-1. **Multi-site facilities platforms** such as ServiceChannel and Fexa come closest to the complete chain. They centralize work orders, providers, proposals, invoices, assets, PM, check-in/out, and reporting. Their breadth is valuable, but their mature provider processes, status taxonomies, compliance programs, marketplaces, and field apps can create more adoption and implementation work than Clark's needs for a focused owner-controlled system.
-2. **CMMS/EAM products** such as MaintainX, Limble, UpKeep, Fiix, eMaint, FMX, Corrigo, and IBM Maximo are strong at work execution, asset history, PM, and maintenance analytics. Most are organized around the company that performs maintenance and therefore emphasize technician assignment, procedures, parts, labor, scheduling, or inventory rather than a light customer-to-independent-vendor handshake.
-3. **Convenience-retail and frontline platforms** understand Clark's operating context. PDI and Petrosoft centralize store, fuel, inventory, sales, invoice, and margin data; WorkJam and Zipline simplify targeted frontline communication and task execution. The sources reviewed do not position these tools as a complete maintenance, vendor-visit, asset-cost, and repair-versus-replace system.
-4. **Vendor field-service systems** such as ServiceTitan, FieldEdge, and ServiceTrade are intentionally vendor-centric. They manage the contractor's customers, dispatch, technicians, jobs, estimates, parts, invoices, and payments. Clark's should exchange only the minimum customer-side signals with these systems, not attempt to replace them.
+> What operating patterns make multi-site maintenance coherent from store request through provider work, follow-up, cost and asset history, and which patterns can remain simple enough for a one-store operator and low-friction vendors?
 
-The proposed differentiation is therefore credible but narrower than “a better CMMS”: **a customer-side maintenance control plane for a multi-location c-store operator**. Its defensible workflow is an immutable frontline signal becoming a Clark's-owned work order; a vendor accepts without rebuilding dispatch; a technician proves arrival and departure with a short browser flow; unresolved work always receives ownership and a due date; and every downstream document, financial event, asset association, and management conclusion remains explainable from the source record.
+The strongest comparisons are ServiceChannel, Fexa, Corrigo, FMX and Ecotrak. MaintainX, Limble and Fiix provide useful evidence for progressive asset classification, location hierarchy and smaller-team usability. Vendor claims are self-reported and features may depend on plan or configuration.
 
-ServiceChannel and Fexa are the strongest competitive warnings. Clark's should not claim that vendor accountability, GPS validation, or repair-versus-replace insight are novel. The differentiators must be the specific combination of progressive asset onboarding, low vendor burden, employee-to-executive traceability, and presentation of transparent operational evidence without requiring an enterprise-scale implementation.
+## 2. Market consensus
 
-## Products researched
+Mature products converge on this lifecycle:
 
-### Multi-site facilities, CMMS, and EAM
+```text
+Simple location request
+→ triage and authorization
+→ canonical work order
+→ internal or provider assignment
+→ acceptance and visit
+→ completion, follow-up or proposal
+→ verification
+→ invoice review
+→ cost and asset history
+```
 
-- ServiceChannel
-- Fexa
-- Corrigo
-- MaintainX
-- Limble
-- UpKeep
-- FMX
-- Fiix
-- eMaint
-- IBM Maximo Application Suite
+The important shared patterns are:
 
-### Convenience-store and frontline retail operations
+- The work order is the operational spine. Visits, messages, proposals, invoices and asset history attach to it.
+- Store intake is simpler than the final work record. Triage adds trade/category, priority, provider, SLA, NTE and equipment context.
+- Internal and external fulfillment can share one work-order history.
+- Provider routing is usually driven by location, trade/category and priority, with fallback after decline or missed response.
+- Check-in/out records time and location evidence; it is not proof of repair quality.
+- NTE, proposal, authorization, invoice, credit and payment are different stages.
+- Asset and PM value grows from connected work history, not from a standalone asset registry.
+- Portfolio dashboards are useful only when users can reach the exact work orders and costs underneath them.
+- Successful rollout separates location commissioning, workflow configuration, data import and role-specific training.
 
-- PDI Technologies
-- Petrosoft CStoreOffice
-- WorkJam
-- Zipline
+## 3. Platform findings
 
-### Vendor field-service systems
+### ServiceChannel
 
-- ServiceTitan
-- FieldEdge
-- ServiceTrade
+ServiceChannel is the clearest enterprise example of a multi-location owner/provider operating model.
 
-## Comparative matrix
+#### What it does
 
-Legend: **Strong** means the reviewed official source presents it as a material capability; **Partial** means adjacent or narrower capability was evidenced; **Not evidenced** means it was not found in the reviewed official sources and does not prove the capability is absent.
+- Puts internal and external work orders in one system.
+- Lets location staff describe issues, attach media, use guided troubleshooting and track provider arrival.
+- Routes work to an internal or external provider based on location and trade and can reassign after a decline.
+- Supports provider app, GPS, IVR, badge and API check-in/out methods.
+- Connects problem-code NTE controls, proposals, RFPs, multi-level approvals, invoice validation and disputes to work.
+- Generates PM work and can bundle multiple asset tasks at a location.
+- Imports assets in bulk and lets authorized providers validate equipment onsite.
+- Reports spend by asset, provider, location, district, region and category, with drill-down to work-order detail.
+- Offers provider APIs and webhooks so a service company can continue using its own system.
 
-| Product | Target and category | Work order / issue intake | Multi-site and hierarchy | PM and assets | Vendor model and onboarding burden | Technician / QR / verification | Documents, invoices, and cost | Executive / replace insight | Product lesson for Clark's |
-|---|---|---|---|---|---|---|---|---|---|
-| [ServiceChannel](https://servicechannel.com/platform/) | Large multi-location retail and facilities teams; FM platform | Strong: location requests, internal/external WOs, proposals, approvals | Strong: global locations, trades, assets, providers | Strong: PM, asset history, warranty, lifecycle data | Strong managed network and provider workflow; acceptance, updates, closeout, scorecards add provider obligations | Strong: Provider app, IVR/GPS/badge, geo-radius check-in/out | Strong: proposals, invoices, photos, spend and approvals | Strong: benchmarking, provider performance, repair/replace support | Closest benchmark. Borrow source-of-truth records and evidence-backed spend; avoid recreating a full provider operating network in v1. |
-| [Fexa](https://fexa.io/fexa-cmms/) | Multi-site brands, roughly 50–5,000+ locations; flexible FM/CMMS | Strong: configurable intake, triage, workflows and multi-provider WOs | Strong: multi-location asset and provider reporting | Strong: TCO, useful life, PM, multi-asset WOs | Relatively flexible: providers need not join a network; browser access and APIs are offered, but provider workflow is still substantial | Strong: automated/geofenced GPS, IVR, or manual check-in/out | Strong: proposals, invoices, NTEs, budgets and consolidated finance data | Strong: asset/vendor outliers and lifecycle signals | Most relevant positioning threat. Borrow configurable guardrails and provider choice; differentiate on progressive classification and much smaller required vendor action. |
-| [Corrigo](https://help.corrigo.com/Content/how_do_I.htm) | Enterprise facilities and property operations; IWMS/CMMS | Strong: WO creation through completion | Strong portfolios, customer groups, work zones | Strong: PM/RM schedules, asset inventory, models and warranty | Strong vendor management; likely higher configuration burden | Partial in source reviewed | Strong: contracts, invoice items, invoices, payments and credits | Partial; enterprise reporting is adjacent | Demonstrates how quickly scope expands into contracts, billing and workforce administration. Keep Clark's AP and vendor setup intentionally bounded. |
-| [MaintainX](https://www.getmaintainx.com/use-cases/multi-site-maintenance-management) | Industrial and operational maintenance teams; mobile-first CMMS | Strong: standard, parent/sub, request and external WOs | Strong global reporting by site, asset type and category | Strong PM, procedures and assets | Primarily assigns work to users/maintenance teams; external WO exists, but customer-vendor handshake is not its primary positioning | Mobile-first; location/asset selection; QR not central in source reviewed | Photos, parts and reporting; contractor invoice chain not primary | Strong operational reporting; replacement reasoning not central | Borrow clarity, adoption focus and multi-site filters. Avoid making every request a technician task or checklist. |
-| [Limble](https://help.limblecmms.com/en/articles/2982723-work-requests-overview) | Maintenance teams; approachable CMMS | Strong: public work-request portals by location or asset, then tasks/WOs | Multiple locations and asset hierarchy | Strong PM, WOs, assets, parts | Primarily internal maintenance users; account required to create WOs | Strong QR intake at location and asset; mobile scan | Attachments and purchase orders exist; multi-vendor financial control not primary | Maintenance reporting; capital insight not primary | Borrow no-account request intake and location-level QR. Preserve the report as its own immutable record instead of collapsing it into a task. |
-| [UpKeep](https://upkeep.com/product/cmms-software/) | Maintenance and reliability teams; mobile-first CMMS | Strong: requests and real-time WOs | Multi-location support; asset-centric | Strong lifecycle, PM, depreciation, warranty, condition and inventory | Technician/team assignment is central; not a light customer-to-vendor layer | Strong asset/part QR with no-login safety reporting; QR opens history and creates requests | Parts, purchase orders and cost history | Official QR material explicitly discusses repair/replace using downtime, depreciation and history | Borrow scan-to-context and simple requests. Do not require asset inventory before a store can report a symptom. |
-| [FMX](https://www.gofmx.com/maintenance-management-software/) | Schools, government, facilities, property and manufacturing; CMMS/FM | Strong public/staff requests, routing and WOs | Strong multi-site/map views | Strong PM, asset, parts, capital planning | Auto-assignment by technician skill/location is internal-workforce oriented | Asset QR gives open work, PM and history; mobile app | Labor/cost reports; purchasing adjacent | Strong capital forecasts, condition assessments and high-maintenance-cost assets | Borrow transparent capital-planning inputs and friendly intake; avoid internal technician scheduling as Clark's core. |
-| [Fiix](https://fiixsoftware.com/cmms/work-orders/) | Industrial maintenance teams; CMMS | Strong WO, inspection, corrective and emergency work | Strong site/location/facility and asset hierarchy | Strong PM, repair history, parts and asset analytics | Primarily maintenance workforce execution | Mobile; QR not central in primary source reviewed | Time, parts, files and costs | Strong trends and asset insights; replacement-specific workflow not evidenced | Borrow physical hierarchy and maintenance-category discipline. Keep Clark's classification taxonomy separate from physical instances. |
-| [eMaint](https://www.emaint.com/cmms/emaint-cmms-software/) | Reliability and maintenance organizations; configurable CMMS/EAM | Strong requests, multi-asset WOs, inspections and custom workflows | Strong multi-site, asset hierarchies and global operations | Strong PM, condition triggers, downtime and asset criticality | Vendor portal exists as an add-on; workforce and inventory depth increase setup | Strong mobile/offline, asset QR, signatures and location verification | Strong labor/cost, procurement, files and billing features | Strong reliability and asset insight | Borrow append-only auditability, hierarchy, and QR context. Avoid importing its calibration, condition monitoring, inventory, and resource-planning breadth. |
-| [IBM Maximo](https://www.ibm.com/products/maximo) | Asset-intensive global enterprises; EAM/APM/AIP suite | Strong integrated work management and inspections | Very strong enterprise/site/location/asset scope | Very strong lifecycle, reliability, condition, investment planning | Contractor, safety, workforce and field-service capabilities are extensive; high implementation burden | Strong mobile field execution; scan/geofence detail not central in source reviewed | Broad enterprise integration and asset/work registry | Very strong asset investment and AI-assisted reliability | Sets the ceiling for depth, not the v1 target. Borrow explainability and registry discipline; avoid suite-level complexity and opaque AI recommendations. |
-| [PDI Technologies](https://pditechnologies.com/increase-productivity/erp-back-office/enterprise-retail-software/) | Convenience retailers and petroleum marketers; ERP/back office/store operations | Maintenance WO chain not evidenced | Strong multi-site retail operations | Maintenance hierarchy/PM not evidenced | Supplier and operational integrations, not maintenance dispatch in reviewed sources | Store/mobile operations; technician verification not evidenced | Strong retail invoices, inventory, pricebook, daily reporting and financial core | Strong store profitability and c-store analytics | Integrate eventually; do not compete with POS, inventory, fuel, or retail ERP. Reuse its store master and financial dimensions when production integrations arrive. |
-| [Petrosoft CStoreOffice](https://petrosoftinc.com/c-store-office/) | Single- and multi-site c-store/gas operators; back office/POS ecosystem | Maintenance WO chain not evidenced | Strong multi-store P&L and operational reporting | Maintenance hierarchy/PM not evidenced | Retail vendor invoices, not service-vendor execution | No maintenance technician workflow evidenced | Strong POS-to-financials, invoice scan/match, inventory and margin | Strong store/category P&L; no repair/replace evidence | Confirms owner appetite for one operating view but leaves maintenance as a separate domain. Avoid duplicating its retail/accounting functions. |
-| [WorkJam](https://www.workjam.com/) | Enterprise frontline workforces; workforce orchestration | Strong tasks, audits, corrective actions, communications | Strong role/location/shift targeting | Maintenance assets and PM not evidenced | Employee-centric, not service-vendor-centric | Photo/video/digital sign-off; no maintenance visit proof evidenced | Audit evidence; invoice/cost rollup not primary | Strong execution and adoption analytics | Borrow targeted, shift-aware simplicity and photo proof. Avoid building scheduling, payroll, training, or a frontline super-app. |
-| [Zipline](https://getzipline.com/platform/task-management/) | Multi-location retail HQ, managers and associates; retail execution | Strong targeted/recurring tasks, priorities and photo approvals | Strong HQ-to-region/store hierarchy and status reporting | Maintenance assets and PM not evidenced | Employee-centric | Mobile-friendly task execution; no service technician chain evidenced | Task attachments; maintenance invoice control not evidenced | Strong store execution reporting | Borrow the Day Sheet principle: a short, role-specific action queue. Maintenance reporting should feel equally simple to a cashier. |
-| [ServiceTitan](https://help.servicetitan.com/commercial) | HVAC, plumbing, electrical and commercial service contractors; FSM | Strong contractor-side customer, job, WO and service agreement system | Multiple customer locations, business units and installed equipment | Strong recurring service, installed equipment, history and warranty | This is the vendor's operating system: office configuration, dispatchers, technicians, pricebook and accounting are core | Strong technician mobile, dispatch, job/GPS updates and equipment barcode flow | Strong estimates, POs, invoices, payments and accounting | Replacement opportunities serve contractor sales and service workflows | Never reproduce this inside Clark's. The [ServiceChannel integration](https://www.servicetitan.com/press/servicetitan-unlocks-new-levels-of-efficiency-for-commercial-contractors) is direct market evidence that duplicate entry between customer FM and vendor FSM is a real problem. |
-| [FieldEdge](https://fieldedge.com/field-service-software/) | SMB and mid-market home/commercial service contractors; FSM | Strong contractor work orders and customer history | Multi-business-unit/territory operations | Equipment history and service agreements | Dispatch, truck/technician matching, mobile CRM and field selling are central | Strong technician mobile and real-time traveling/working statuses | Strong quotes, onsite invoices, payments and QuickBooks | Contractor performance and sales focus | Treat as a system Clark's vendors may already use. Ask only for acceptance and evidence that Clark's can reliably observe. |
-| [ServiceTrade](https://servicetrade.com/) | Commercial mechanical, HVAC, fire and life-safety contractors; FSM | Strong customer service requests, jobs and appointments | Customer locations and asset lifecycle | Strong asset history, recurring service and deficiencies | Contractor scheduling and technician productivity are central | Strong technician mobile; location proof not evidenced in source reviewed | Quotes, reports, invoices/payments through customer experience | Asset lifecycle and contractor revenue focus | Its [Service Portal](https://servicetrade.com/products/servicetrade-platform/features/service-portal/) shows the useful boundary: customers can see appointments, history, reports and quotes while the contractor retains its operating system. |
+#### Relevant evidence
 
-## Workflow-chain assessment
+- [Work orders, internal/external fulfillment, routing, NTE and PM](https://servicechannel.com/products/work-orders/)
+- [Asset history, import, field validation and cost dimensions](https://servicechannel.com/products/assets/)
+- [Location and requester mobile experience](https://servicechannel.com/products/servicechannel-mobile/)
+- [Provider integrations](https://servicechannel.com/tools/integrate-your-systems-with-servicechannel/)
+- [Webhook events](https://developer.servicechannel.com/guides/wh/about-webhooks/)
+- [Provider response, SLA and status guidance](https://servicechannel.com/services-providers/trade-partner-guide/)
+- [Proposal and RFP lifecycle](https://developer.servicechannel.com/guides/proposals/about-proposals-and-RFPs/)
+- [One-click work-order links from email](https://servicechannel.com/learning-channel/just-released-new-features/)
 
-### Who comes closest
+#### Decision for Clark's
 
-ServiceChannel and Fexa most clearly connect multi-location intake, work orders, service providers, verified site presence, PM, documents, invoices, asset records, and reporting. ServiceChannel explicitly presents GPS-radius check-in/out, proposals and invoice approvals, location feedback, assets, work history, and provider scorecards. Fexa presents configurable work workflows, location feedback, provider check-in/out, proposals, invoices, asset TCO/useful life, and provider reporting.
+Adopt the owner-side canonical work order, exception management, fallback assignment, distinct financial states and cost drill-through. Do not copy the full provider scoring burden, workforce administration, marketplace or parts/time requirements. A provider must be able to participate without adopting a new daily operating system.
 
-Neither validates the claim that the exact Clark's chain is unsolved. Instead, the opportunity is a **better-fit operating model**:
+### Fexa
 
-- Clark's retains its own work-order number and internal lifecycle.
-- The provider is required only to accept or decline; everything else can be observed from a technician's minimal visit event, internal follow-up, uploaded artifacts, or future integration.
-- A work order can remain useful at store/category depth and become more specific after diagnosis.
-- A cashier's original symptom report remains visible independently of management's later interpretation.
-- Owner dashboards show the supporting work, invoices, PM occurrences, and classification history behind every number.
+Fexa's strongest pattern is configurable workflow and channel-flexible provider exchange.
 
-### Where the chain commonly breaks
+#### What it does
 
-1. **Request becomes task, not durable evidence.** Frontline systems are optimized to complete or dismiss a task; Clark's needs an immutable report plus review history.
-2. **Asset completeness is assumed too early.** Asset-centric CMMS onboarding encourages a full hierarchy before useful analytics. Clark's should tolerate store-only and category-only records, then measure coverage rather than block work.
-3. **Customer and vendor systems both demand operational ownership.** Facilities platforms want provider status data; FSM platforms already manage that same dispatch and closeout. ServiceTitan's ServiceChannel integration exists specifically to remove duplicate entry.
-4. **Technician proof becomes technician administration.** Mature products may add rosters, assignments, travel states, root-cause codes, parts, labor, signatures, and compliance. Clark's only needs identity as entered, work order, two location snapshots, time span, and a basic outcome.
-5. **Completion masks unresolved work.** A visit can end while the work order remains unresolved. Clark's must treat “diagnosed—unresolved” as a control event that creates accountable follow-up rather than as a weak status note.
-6. **Analytics become detached from data quality.** Deep asset analytics are attractive but misleading when classification coverage is low. Clark's should expose coverage and let users drill to the exact records used.
+- Centralizes intake, triage, dispatch, communication, visits, proposals and invoices.
+- Assigns by trade, priority and location, with alternate-provider and SLA behavior.
+- Supports internal teams and service providers on the same work-order lifecycle.
+- Uses configurable workflows and custom fields rather than a fixed universal process.
+- Supports geofenced/IVR check-in/out, completion evidence and customer verification.
+- Routes proposal and invoice approvals using configurable conditions.
+- Connects vendor rate/compliance/NTE rules to invoice validation.
+- Lets vendors work through a Fexa login or integrate through the provider API.
+- Sends email/text notifications and collects responses and attachments.
+- Provides 360 reporting across locations, work orders, providers, invoices and assets.
 
-## Table-stakes features
+#### Relevant evidence
 
-The following are expected, not differentiating:
+- [Work-order lifecycle and internal/external support](https://fexa.io/work-order-management/)
+- [Rules, alternate assignments, SLA alerts and approval automation](https://fexa.io/automation-workflow-optimization/)
+- [Provider channels and directly recorded performance](https://fexa.io/integrated-vendor-operations/)
+- [Provider API objects and synchronization](https://fexa.io/cmms-api-providers/)
+- [Open provider relationships and check-in options](https://fexa.io/provider-management/)
+- [Smart email/text communications](https://fexa.io/fexa-cmms/)
+- [Location, asset, work-order and invoice analytics](https://fexa.io/data-analytics/)
+- [Retail implementation example](https://fexa.io/customer-stories/tecovas-case-study/)
+- [Multi-brand standardization example](https://fexa.io/customer-stories/med-tail-retailer/)
 
-- Responsive request intake with photos.
-- Work-order status, priority, assignment, comments, files and audit history.
-- Multi-location filtering and dashboards.
-- Preventive-maintenance schedules and generated occurrences/work orders.
-- Asset records, warranties, manuals and maintenance history.
-- QR or barcode access to a location or asset.
-- Vendor/provider records, notifications and performance measures.
-- Quotes, approvals, invoices, credits, NTEs and cost reporting.
-- Mobile field access and check-in/out.
-- Reporting for open/overdue work, cost and PM compliance.
-- Replacement or capital-planning support based on age, condition and maintenance cost.
+#### Decision for Clark's
 
-Clark's must execute these basics credibly while differentiating through how little data each external participant must enter and how well internal evidence stays connected.
+Treat SLA, priority, NTE, approval authority, escalation, provider coverage, landlord/warranty responsibility and notifications as organization-owned configuration. Use one domain command set behind web, email, portal and API adapters. Avoid a generic no-code workflow builder in v1; expose the few policies the pilot actually needs.
 
-## Common enterprise over-complexity
+### Corrigo
 
-- Full technician resource planning, dispatch boards, routes, skills and schedules.
-- Parts catalogs, truck stock, purchase orders and replenishment.
-- Vendor marketplaces, credential programs, insurance administration and network fees.
-- Calibration, IoT/condition monitoring, safety permitting and complex inspection suites.
-- Enterprise asset-investment planning and predictive/AI layers before reliable source data exists.
-- Highly configurable status, role, approval, form and reporting frameworks that require dedicated administrators.
-- Full accounting, payments, receivables, payroll or contract billing.
+Corrigo provides strong examples of explicit states, hierarchical configuration and provider-system integration.
 
-IBM Maximo demonstrates the power and cost of breadth. Current G2 review summaries describe a strong but complex product with a meaningful learning curve and skilled implementation needs. That user-reported evidence supports a narrow Clark's v1, not a claim that Maximo is unsuitable for its intended enterprise market.
+#### What it does
 
-## Vendor-friction risks
+- Uses Work Zones and Portfolios to group locations and inherit or override business hours, SLA and assignment rules.
+- Requires provider integrations to support work-order receipt and accept/reject.
+- Allows providers to continue in their existing CMMS through CorrigoPro Direct.
+- Models requested, submitted, approved and rejected quote states; approved quotes update NTE.
+- Models invoice draft, submitted, disputed, authorized, pending verification and paid states.
+- Distinguishes reactive requests from PM/routine work.
+- Provides operational dashboards with links to work-order detail by property, region, specialty and assignee.
 
-The leading facilities platforms demonstrate both the value and the risk of provider accountability. ServiceChannel's provider guidance asks technicians to use accepted check-in/out methods, enter resolution/root-cause information, attach evidence, update work, and close out correctly because provider scores depend on the data. Current Capterra reviews include vendor-side reports that technician sign-in/out can be difficult and that checkout instructions could be simpler. These are individual user reports, not universal findings, but they align with the thesis that every required field is an adoption tax.
+#### Relevant evidence
 
-The Clark's design response is:
+- [CorrigoPro integration scope](https://developer.corrigopro.com/docs/scope-your-integration)
+- [API versus portal/mobile usage scenarios](https://developer.corrigopro.com/docs/usage-scenarios)
+- [Quote and NTE states](https://developer.corrigopro.com/docs/submitting-a-quote)
+- [Invoice verification, dispute and authorization](https://developer.corrigopro.com/docs/retrieving-invoices)
+- [Work Zone SLA and routing configuration](https://securecontent.corrigo.com/docs/HelpCE918/html/14d5d7cd-f175-78cd-5375-ccca12d1b3ab.htm)
+- [Operational reporting and detail drill-down](https://www.jllt.com/blog/business-intelligence-for-work-order-management/)
+- [Jack in the Box/Qdoba facilities example](https://www.jllt.com/customer-story/jack-in-the-box-saves-millions-with-service-call-avoidance-warranty-tracking/)
 
-- No required technician account or roster in v1.
-- No Clark's-side dispatch assignment.
-- No travel, en-route, break, labor-line, part-line or detailed diagnosis entry.
-- Acceptance by a vendor-office secure link.
-- Store QR plus vendor/work-order selection and technician-entered name.
-- A six-option checkout outcome with no required narrative.
-- Files and invoices accepted in the vendor's normal document format.
-- Future APIs/email ingestion to exchange data with vendor FSM products.
+#### Decision for Clark's
 
-## Frontline-adoption risks
+Use named state transitions and append-only events, not a freely editable status field. Support inheritance from organization policy with store-level overrides only where necessary. Keep the hierarchy understandable: optional brand/region grouping does not own the store or its history.
 
-WorkJam and Zipline position their success around role-specific, mobile-friendly, targeted work. Limble allows no-account requests through location or asset QR links. These products reinforce three choices:
+### FMX
 
-- Ask cashiers for observable symptoms, store/area, urgency, and an optional photo—not equipment diagnosis.
-- Confirm immediately that the report is permanently recorded and show its reference number.
-- Keep the employee surface separate from the facilities command center; do not expose enterprise navigation to a frontline reporter.
+FMX is the useful simplicity benchmark for smaller organizations and internal/external collaboration.
 
-The principal risk is trying to turn maintenance intake into a generic employee app. That would broaden authentication, communications, training, scheduling, and task features and dilute the maintenance evidence chain.
+#### What it does
 
-## Market gaps
+- Organizes organization → building → resource/location → equipment.
+- Creates the building first, then adds service locations and equipment.
+- Requires building and exact location on a maintenance request while equipment is optional.
+- Allows assignment during creation or later from a manager queue.
+- Supports approval rules at organization, request-type and building levels.
+- Imports buildings, locations, users, equipment and PM through guided templates.
+- Exposes filters for overdue, pending assignment, pending approval, pending resolution and pending finalization.
+- Supports outside vendor users and documents email-based submission without login.
+- Reports cost by building, request type, equipment type and equipment tag.
 
-The reviewed market leaves room for the following combination:
+#### Relevant evidence
 
-1. **Progressive asset intelligence:** value at store/category level on day one, with later reclassification and measured coverage.
-2. **Customer-side record ownership:** Clark's number, lifecycle, evidence, follow-up, cost and audit history remain authoritative even when the vendor uses another FSM.
-3. **Minimal verified field proof:** browser-based QR/geofence arrival/departure without a mandatory vendor workforce rollout.
-4. **Report permanence across management layers:** store managers can contextualize but cannot erase or rewrite the original report.
-5. **Unresolved-work control:** every unresolved record has accountable party, next action, due date and escalation.
-6. **Explainable cross-level analytics:** company → category → region → store → system → asset → optional component, with every number opening its source records.
-7. **Owner-oriented repair burden:** a rule-based watchlist presents age, reactive cost trend, repeat failures, visits, PM and replacement-cost ratio without claiming causation or automatic replacement.
+- [Guided implementation and imports](https://help.gofmx.com/hc/en-us/articles/204688159-How-is-FMX-implemented-for-new-customers)
+- [Adding resources and service locations](https://help.gofmx.com/hc/en-us/articles/203368129-Adding-Resources-Locations)
+- [Maintenance request with optional equipment](https://help.gofmx.com/hc/en-us/articles/204100375-Creating-a-Maintenance-Request)
+- [Assignment after creation](https://help.gofmx.com/hc/en-us/articles/203386369-Assigning-Maintenance-Requests)
+- [Layered approval policy](https://help.gofmx.com/hc/en-us/articles/203710519-Set-Up-a-Maintenance-Technology-or-Custom-Work-Request-Approval-Process)
+- [Manager grid and exception filters](https://help.gofmx.com/hc/en-us/articles/207487356-How-to-filter-your-calendar-grid-view)
+- [External vendors and email-without-login example](https://www.gofmx.com/resources/case-studies/rocketship-education/)
+- [Equipment cost reporting](https://www.gofmx.com/features/equipment-maintenance-summary-report/)
 
-## Keep / Adapt / Avoid
+#### Decision for Clark's
 
-| Keep | Adapt for Clark's | Avoid in the first version |
-|---|---|---|
-| A single work-order record connecting requests, providers, visits, files, money and history | Provider scorecards → only measures supported by Clark's observed events | Vendor marketplace and credential administration |
-| Multi-site exception dashboards and drill-down | CMMS asset hierarchy → progressive optional depth plus separate classification taxonomy | Technician dispatch, scheduling and route optimization |
-| PM plans producing traceable occurrences and work | Asset QR → store QR first; asset/component links remain optional | Full parts, truck inventory and procurement |
-| GPS-radius check-in/out and visible exception states | Detailed technician closeout → six plain outcomes, no required prose | Root-cause AI, predictive maintenance and opaque health scores |
-| Photos, service tickets, quotes, invoices and approvals on the WO | Invoice line entry → upload normal PDF and allocate internally | POS, pricebook, store inventory, payroll and full AP |
-| Cost, downtime, age and PM evidence for capital review | Repair/replace result → recommendation with reasons and management disposition | Forcing complete asset inventory before launch |
-| Frontline role-specific simplicity | Retail task → immutable report with append-only review | A generic employee communications/scheduling super-app |
+Make the single-store experience a simplified presentation of the same domain model. Store creation should launch a commissioning checklist rather than force the user into unrelated setup screens. Equipment completeness must not block useful request and work-order control.
 
-## Proposed differentiation
+### Ecotrak
 
-**Positioning statement:** Clark's Operations is the owner-side maintenance control plane for multi-location convenience retail. It makes every issue permanently visible, every unresolved job accountable, every vendor visit provable, and every maintenance dollar traceable—from company totals to the asset or component when known—without asking service vendors to abandon their own operating systems.
+Ecotrak is the most directly relevant convenience-store comparison.
 
-The product demonstration should make four points visually obvious:
+#### What it does
 
-1. The owner sees exceptions and money before seeing charts.
-2. Store 45's refrigeration outlier is a drill-down path, not an unexplained score.
-3. CU-1 appears on the watchlist because visible evidence crosses thresholds; the system recommends review, not replacement.
-4. The work-order timeline proves that a cashier report, vendor acceptance, verified visits, unresolved follow-up, reclassification, documents, invoice and cost rollup are one connected story.
+- Targets convenience, fuel retail, restaurant, grocery and car-wash equipment.
+- Connects work orders, assets, PM, vendors, proposals, invoices and reporting.
+- Positions intake as a sub-minute store workflow.
+- Supports internal maintenance teams and external service providers in one environment.
+- Offers an entry tier for small operators and larger tiers on the same platform model.
+- Uses asset-level repair history and spend for repair-versus-replace review.
+- Documents a 75+ location convenience operator rollout involving store visits, service-issue modeling, provider onboarding and GL collaboration.
 
-## Honest risks to the thesis
+#### Relevant evidence
 
-- **Competitive overlap is high.** ServiceChannel and Fexa already market most core capabilities. Differentiation depends on workflow fit and implementation simplicity, not feature novelty.
-- **Low vendor burden can reduce data richness.** If vendors only accept and technicians only check in/out, Clark's may lack diagnosis, parts and scheduling detail. Files, internal follow-up, selective history sharing and later integrations must compensate without quietly expanding mandatory inputs.
-- **Progressive onboarding can preserve ambiguity.** Category-level costs are useful, but asset-level replacement logic becomes trustworthy only after classification coverage improves. Coverage must be visible next to analytics.
-- **Geolocation is evidence, not proof of work quality.** Accuracy, denied permissions, GPS spoofing and shared devices limit certainty. The product must show verified/unverified states and pair visit data with store verification and documents.
-- **Rule thresholds require governance.** Replacement and outlier rules can create false urgency. Thresholds, source periods, exclusions and reasons must be visible and editable by authorized managers in production.
-- **Deterministic demo data can look more complete than launch data.** The presentation must state that production value begins with work-order control and grows as asset and cost coverage improve.
-- **C-store integration will matter.** Store masters, organizational changes and financial reconciliation may ultimately need PDI/Petrosoft/accounting integration. The demo should preserve identifiers and abstractions without building those integrations now.
-- **Workflow discipline remains necessary.** Software can surface missing next actions, but Clark's management must own escalation policies and keep due dates meaningful.
+- [Convenience-store facilities product](https://www.ecotrak.com/industry/convenience)
+- [Platform modules](https://www.ecotrak.com/product/ecotrak-platform)
+- [Work-order intake and asset history](https://www.ecotrak.com/feature/work-order-management)
+- [Small and multi-location packaging](https://www.ecotrak.com/pricing)
+- [Holiday Oil 75+ store implementation](https://www.ecotrak.com/case-studies/holiday-oil-powers-their-convenience-stores-with-ecotrak)
+- [Internal/external fulfillment at roughly 50 locations](https://www.ecotrak.com/case-studies/case-study/l5-capital-manages-more-work-orders)
+- [Internal/external work-order API representation](https://api-docs.ecotrak.com/)
 
-## August 2026 implementation update: interconnected CMMS workflow
+#### Decision for Clark's
 
-The platform direction was expanded after reviewing the pilot requirement as maintenance software for internal technicians, regional operators, and independent stores. The earlier recommendation to defer scheduling and inventory breadth no longer fits the requested product scope. Those capabilities are now treated as first-class maintenance surfaces, while reporting remains downstream of execution.
+Borrow convenience-retail terminology, asset context and one-product packaging. Do not adopt mandatory asset-first intake. Clark's receives value at store or category level and shows asset-classification coverage until deeper records are known.
 
-The additional official-product research supports six concrete decisions:
+### MaintainX, Limble and Fiix
 
-1. **Creating a store begins commissioning; it does not end at a saved location record.** Fiix's setup guidance walks from users to assets, work orders, and scheduled maintenance, and recommends deciding the single-site versus multi-site model before setup. Clark's now uses one guided store flow: profile → cost centers → assets → components → PM and coverage → readiness. [Fiix basic setup](https://helpdesk.fiixsoftware.com/hc/en-us/articles/360044584571-Basic-setup-Overview)
-2. **The hierarchy should mirror the physical world.** Fiix explicitly organizes region → site → facility → equipment → child equipment/parts. Clark's preserves region → store → cost center → asset → component, with cost center carrying the operating and financial rollup. [Fiix asset hierarchy](https://helpdesk.fiixsoftware.com/hc/en-us/articles/211193203-About-the-asset-hierarchy)
-3. **Locations define responsibility and access as well as geography.** Limble separates locations, which govern role access, from parent assets, which organize equipment. Clark's likewise keeps store/region scope separate from the physical equipment tree. [Limble locations versus parent assets](https://help.limblecmms.com/en/articles/8828169-locations-vs-parent-assets)
-4. **Reusable blueprints and copy/import paths are essential at 65 stores.** Limble supports copying an existing asset and bulk import; MaintainX supports location-specific work-order templates. Clark's new-store wizard applies a reusable full-store, shop-only, fuel-only, or blank blueprint and keeps each proposed record editable. [Limble asset setup](https://help.limblecmms.com/en/articles/6666246-how-to-add-assets), [MaintainX locations and templates](https://help.getmaintainx.com/about-locations)
-5. **Asset assignment must remain optional.** MaintainX documents blank sub-work orders that can receive assets later, while Limble's default work-order flow includes “Don't Assign an Asset.” Clark's now requires Store + Category only; cost center, asset, and component each have an explicit defer state. [MaintainX sub-work orders](https://help.getmaintainx.com/create-and-manage-sub-work-orders), [Limble default work-order template](https://help.limblecmms.com/en/articles/3231863-default-work-order-template)
-6. **The asset record should connect all maintenance context.** Limble's asset card unifies PM, work orders, parts, vendors, activity and reporting, including child data. Clark's created store and asset workspaces now preserve drill-down continuity and carry context into new work orders. [Limble asset library and asset card](https://help.limblecmms.com/en/articles/6666246-how-to-add-assets)
+These products reinforce hierarchy and progressive setup choices.
 
-This leads to a two-lane product model:
+- MaintainX documents location-specific templates and work that may receive an asset later. [Locations](https://help.getmaintainx.com/about-locations), [sub-work orders](https://help.getmaintainx.com/create-and-manage-sub-work-orders)
+- Limble distinguishes access-governing locations from equipment-parent relationships and provides a no-asset option in its default work-order flow. [Locations versus parent assets](https://help.limblecmms.com/en/articles/8828169-locations-vs-parent-assets), [default work-order template](https://help.limblecmms.com/en/articles/3231863-default-work-order-template)
+- Fiix describes a physical hierarchy of sites/facilities/equipment/child equipment and recommends deciding the site model during setup. [Asset hierarchy](https://helpdesk.fiixsoftware.com/hc/en-us/articles/211193203-About-the-asset-hierarchy), [basic setup](https://helpdesk.fiixsoftware.com/hc/en-us/articles/360044584571-Basic-setup-Overview)
 
-- **Fast maintenance lane:** store request → triage → work order → dispatch/schedule → technician execution → parts/time/proof → verification/closeout.
-- **Commissioning lane:** organization/region → store blueprint → cost centers → assets → components/parts → PM → team/vendor coverage → readiness.
+#### Decision for Clark's
 
-Both lanes share the same durable hierarchy. A single-store operator can use the same model without regions or a complete asset register; a 65-store operator can standardize it through blueprints and manage exceptions across the portfolio.
+Keep organizational scope, physical hierarchy and financial coding separate. Provide reusable commissioning blueprints, but never create placeholder assets to satisfy a template or foreign key.
 
-## Sources
+## 4. Decision synthesis for the clean rebuild
 
-All sources below were accessed August 5, 2026.
+### Decision 1: Clark's owns the canonical maintenance record
 
-### Official vendor sources
+Provider FSM products may own technician dispatch and labor administration. Clark's owns its work-order number, store issue, classification history, responsible assignment, visit evidence, unresolved follow-up, proposal/approval, invoice allocation and audit history.
 
-- ServiceChannel: [platform overview](https://servicechannel.com/platform/), [work orders and GPS-radius verification](https://servicechannel.com/products/work-orders/), [2026 trade partner guide](https://servicechannel.com/services-providers/trade-partner-guide/), [GPS check-in/out developer guide](https://developer.servicechannel.com/guides/checkin/gps-check-in-out/), [ServiceTitan integration announcement](https://www.servicetitan.com/press/servicetitan-unlocks-new-levels-of-efficiency-for-commercial-contractors).
-- Fexa: [CMMS overview](https://fexa.io/fexa-cmms/), [work-order management](https://fexa.io/work-order-management/), [provider management](https://fexa.io/provider-management/), [asset management](https://fexa.io/asset-management/).
-- Corrigo: [official help index](https://help.corrigo.com/Content/how_do_I.htm).
-- MaintainX: [product overview](https://www.getmaintainx.com/), [work-order help](https://help.getmaintainx.com/about-work-orders), [multi-site maintenance](https://www.getmaintainx.com/use-cases/multi-site-maintenance-management).
-- Limble: [products](https://limble.com/products), [work requests and QR portals](https://help.limblecmms.com/en/articles/2982723-work-requests-overview).
-- UpKeep: [CMMS product](https://upkeep.com/product/cmms-software/), [QR codes](https://upkeep.com/qr-codes/).
-- FMX: [maintenance management](https://www.gofmx.com/maintenance-management-software/), [equipment maintenance and capital planning](https://www.gofmx.com/equipment-maintenance-software/).
-- Fiix: [work-order management](https://fiixsoftware.com/cmms/work-orders/), [asset hierarchy help](https://helpdesk.fiixsoftware.com/hc/en-us/articles/211193203-About-the-asset-hierarchy).
-- eMaint: [CMMS overview](https://www.emaint.com/cmms/emaint-cmms-software/), [work-order management](https://www.emaint.com/work-order-management), [current feature/pricing table](https://www.emaint.com/pricing).
-- IBM: [Maximo Application Suite](https://www.ibm.com/products/maximo), [Maximo 9.2 announcement](https://www.ibm.com/new/announcements/introducing-maximo-application-suite-9-2).
-- PDI Technologies: [convenience-retail operations](https://pditechnologies.com/convenience-retail/simplify-operations/), [PDI Enterprise for Retailers](https://pditechnologies.com/increase-productivity/erp-back-office/enterprise-retail-software/).
-- Petrosoft: [CStoreOffice](https://petrosoftinc.com/c-store-office/), [CStoreOffice mobile](https://petrosoftinc.com/cso-mobile/).
-- WorkJam: [frontline platform](https://www.workjam.com/), [grocery operations](https://www.workjam.com/solutions/grocery/).
-- Zipline: [retail task management](https://getzipline.com/platform/task-management/), [retail software evaluation guidance](https://getzipline.com/blog/12-questions-to-consider-before-buying-a-communications-and-task-management-solution/).
-- ServiceTitan: [commercial documentation](https://help.servicetitan.com/commercial), [installed equipment](https://help.servicetitan.com/commercial/docs/installed-equipment-home), [customer portal](https://help.servicetitan.com/v1/docs/customer-portal-overview).
-- FieldEdge: [field-service platform](https://fieldedge.com/field-service-software/).
-- ServiceTrade: [platform overview](https://servicetrade.com/), [customer Service Portal](https://servicetrade.com/products/servicetrade-platform/features/service-portal/).
+This prevents the owner record from becoming a shallow mirror of whichever vendor happens to serve a store.
 
-### Independent user-reported sources
+### Decision 2: A vendor portal is optional
 
-- Capterra: [ServiceChannel reviews](https://www.capterra.com/p/38574/ServiceChannel/reviews/) — current review excerpts include praise for centralization and reports of mobile/check-out or technician adoption friction. Individual reports should not be generalized to all deployments.
-- Capterra: [MaintainX reviews](https://www.capterra.com/p/179296/GetMaintainx/reviews/) and [Limble reviews](https://www.capterra.com/p/162600/Limble-CMMS/reviews/) — current excerpts emphasize usability while also noting setup effort or smaller reporting/layout limitations.
-- G2: [IBM Maximo Application Suite reviews](https://www.g2.com/products/ibm-maximo-application-suite/reviews) — current review summaries describe power and integration depth alongside a complex learning curve and implementation demands.
+Vendors may respond through:
+
+- one-click email action
+- purpose-bound deep link
+- optional portal
+- API/webhook integration
+- a phone response recorded by a manager
+
+Technicians use the store/accepted-work QR flow and do not need accounts. Every channel produces the same assignment and audit events. Structured decisions use explicit actions; email reply text may add notes or files but does not silently infer status.
+
+### Decision 3: Internal and external fulfillment have equal owner visibility
+
+Both modes use the same work-order lifecycle, next-action control, SLA clock, evidence, follow-up, cost and reporting contracts. They receive audience-specific interfaces. Internal teams need usable queues, due-date schedules, checklists, labor-cost and material-use records; those features stop short of route optimization, employee rostering, payroll and inventory accounting.
+
+### Decision 4: Classification is progressive
+
+A store is sufficient to create a work order. Category, system, asset and component are optional. Later classification is auditable and validates physical belonging. Analytics show coverage and an unclassified bucket instead of inventing placeholder equipment.
+
+### Decision 5: Physical and accounting hierarchies are separate
+
+Physical drill path:
+
+`store → area → system → asset → component`
+
+Financial dimensions:
+
+`financial cost center → GL → budget → fiscal period`
+
+Explicit allocations connect them. A cost center is not used as an equipment parent.
+
+### Decision 6: Taxonomy has stable concepts and local language
+
+Organization-owned canonical keys support cross-store comparison. Labels and aliases let an operator use its preferred terminology, store nicknames or imported codes without splitting analytics. Activated taxonomy remains tenant-scoped; only non-operational templates are shared.
+
+### Decision 7: The primary owner surface is a management control center
+
+The default experience combines maintenance financial position, store/category reporting and internal/provider accountability, then prioritizes:
+
+- intake needing review
+- assignments awaiting response
+- missed service targets
+- clarification
+- proposal/approval work
+- unresolved follow-up
+- verification
+- invoice/allocation exceptions
+
+Reporting and accounting are first-class manager workflows built from execution records. Every number opens a filtered list and every row shows accountable party, next action, due time and escalation.
+
+### Decision 8: Search is an operating tool
+
+Managers must be able to find a store by code, name or address; a work order by number; equipment by tag, serial or alias; and money by proposal/invoice number. Search is organization-scoped, server-filtered and paginated.
+
+### Decision 9: Store creation begins commissioning
+
+The smooth flow is:
+
+1. Core store identity
+2. Contacts, hours, access and escalation
+3. Optional areas and systems
+4. Known assets/components
+5. Internal/provider coverage
+6. SLA, NTE and approval policy
+7. Applicable PM
+8. Readiness review
+
+The store may accept reports before asset commissioning is complete. Readiness exposes gaps; it does not create fake data.
+
+### Decision 10: Reporting is reversible
+
+The canonical cost drill is:
+
+`organization → store → category → system → asset → component → work orders → invoice allocations`
+
+Each view shows selected financial stage, record count, period, cohort and classification coverage. Quoted, approved, committed, invoiced, credited and paid amounts remain separate.
+
+### Decision 11: One product serves one and 65 stores
+
+Organization, store, work-order and policy records are the same. Single-store UI hides region and comparison controls and defaults store scope. A regional operator gains optional brand/region groupings, server-side filters, bulk import and standardized blueprints. No separate schema or product fork is needed.
+
+### Decision 12: The platform is all-trades; the pilot goes deepest in HVAC/R
+
+The active product supports any maintenance trade through governed taxonomy and local labels. The demo proves landscaping, snow, janitorial, pest, signage, waste, plumbing, electrical, fuel, building, life safety and foodservice while concentrating the richest systems, equipment, components, PM and failure histories in HVAC and refrigeration. The maintenance accounting suite includes budgets, proposals, approvals, POs, invoices, credits, accruals, allocations, payment status and GL/export. Exclusions are POS and retail inventory, inventory valuation, vendor marketplace administration, payroll, tax, banking/payment execution, accounts receivable, general-ledger replacement, predictive maintenance, continuous tracking and route optimization.
+
+## 5. Differentiation
+
+Clark's is not differentiated by possessing work orders, assets or dashboards; every serious competitor has them. The defendable combination is:
+
+1. **Owner-side record permanence** even when vendors use other systems.
+2. **Progressive equipment intelligence** without blocking work or faking asset precision.
+3. **Low-friction provider accountability** without mandatory portal adoption.
+4. **Automatic unresolved-work control** after an incomplete visit.
+5. **Canonical analytics with local operator language.**
+6. **Two-axis cost traceability** through both physical equipment and maintenance accounting.
+7. **One-store simplicity and 65-store control from one model.**
+
+### Positioning statement
+
+> Clark's Facilities is the owner-side maintenance control plane for multi-location and independent convenience retailers. It makes every issue permanent, every unresolved job accountable and every maintenance dollar traceable—from company totals to the asset or component when known—without forcing service vendors to abandon the tools they already use.
+
+## 6. 65-store rollout implications
+
+Official implementation guidance across Fexa, FMX, Corrigo, ServiceChannel and Ecotrak consistently emphasizes clean location data, workflow decisions, provider onboarding, role-specific training and phased adoption.
+
+Recommended rollout:
+
+1. Configure the organization taxonomy, priority/SLA matrix, NTE/approval policy and provider coverage.
+2. Import all 65 core stores and validate exact identifiers, addresses, contacts and financial references.
+3. Launch a small representative wave covering different volumes, geography and vendor arrangements.
+4. Stabilize request → work order → response → visit → follow-up → verification before broad expansion.
+5. Activate all maintenance categories, then add reliable HVAC/R equipment depth without delaying store- or category-level work control.
+6. Expand in waves with a defined hypercare queue and role-specific training.
+7. Measure adoption from source records: triage time, response time, overdue unresolved work, proposal turnaround, invoice exceptions and classification coverage.
+
+The pilot should never seed or display a summary that cannot be reproduced from its supporting operational records.
+
+## 7. Risks and responses
+
+| Risk | Product response |
+|---|---|
+| Competitive feature overlap | Compete on workflow fit, adoption and record integrity, not checklist novelty |
+| Low vendor burden reduces detail | Preserve documents, store verification, internal follow-up and optional API enrichment |
+| Progressive classification leaves ambiguity | Show coverage and unclassified buckets next to asset analytics |
+| Email/deep links weaken identity assurance | Purpose-bound expiring tokens, actor/channel audit and step-up confirmation for money |
+| Geolocation is imperfect | Store accuracy/distance/result and show verified or exception state; never claim continuous proof |
+| Financial stages can be double-counted | Separate stage measures and explicit append-only allocations/ledger entries |
+| Regional UI overwhelms one-store owners | Hide optional hierarchy and portfolio comparison without changing the data model |
+| Demo data looks unrealistically complete | Seed incomplete classification and exception cases; calculate all totals from records |
+| Configuration becomes enterprise software | Expose a governed policy set, not an unlimited workflow-builder surface in v1 |
+
+## 8. Official source index
+
+All sources were accessed August 5, 2026.
+
+### ServiceChannel
+
+- [Platform overview](https://servicechannel.com/platform/)
+- [Work orders](https://servicechannel.com/products/work-orders/)
+- [Assets](https://servicechannel.com/products/assets/)
+- [Mobile](https://servicechannel.com/products/servicechannel-mobile/)
+- [Provider integration](https://servicechannel.com/tools/integrate-your-systems-with-servicechannel/)
+- [Developer guides](https://developer.servicechannel.com/guides/)
+
+### Fexa
+
+- [CMMS overview](https://fexa.io/fexa-cmms/)
+- [Work orders](https://fexa.io/work-order-management/)
+- [Provider management](https://fexa.io/provider-management/)
+- [Provider API](https://fexa.io/cmms-api-providers/)
+- [Data and analytics](https://fexa.io/data-analytics/)
+- [Facility software buyer's guide](https://fexa.io/guide/facility-maintenance-software-buyer-guide/)
+
+### Corrigo/JLL Technologies
+
+- [CorrigoPro Direct introduction](https://developer.corrigopro.com/docs/intro)
+- [Integration scope](https://developer.corrigopro.com/docs/scope-your-integration)
+- [Usage scenarios](https://developer.corrigopro.com/docs/usage-scenarios)
+- [Quote submission](https://developer.corrigopro.com/docs/submitting-a-quote)
+- [Invoices](https://developer.corrigopro.com/docs/retrieving-invoices)
+
+### FMX
+
+- [Maintenance management](https://www.gofmx.com/maintenance-management-software/)
+- [Work Manager](https://www.gofmx.com/work-manager/)
+- [Implementation](https://help.gofmx.com/hc/en-us/articles/204688159-How-is-FMX-implemented-for-new-customers)
+- [Maintenance request creation](https://help.gofmx.com/hc/en-us/articles/204100375-Creating-a-Maintenance-Request)
+- [User and scope permissions](https://help.gofmx.com/hc/en-us/articles/203406679-How-to-Customize-User-Access-on-your-FMX-site)
+
+### Ecotrak
+
+- [Platform](https://www.ecotrak.com/product/ecotrak-platform)
+- [Convenience stores](https://www.ecotrak.com/industry/convenience)
+- [Work orders](https://www.ecotrak.com/feature/work-order-management)
+- [Pricing and product tiers](https://www.ecotrak.com/pricing)
+- [Holiday Oil case study](https://www.ecotrak.com/case-studies/holiday-oil-powers-their-convenience-stores-with-ecotrak)
+
+### Additional CMMS hierarchy sources
+
+- MaintainX: [locations](https://help.getmaintainx.com/about-locations), [work orders](https://help.getmaintainx.com/about-work-orders)
+- Limble: [work requests](https://help.limblecmms.com/en/articles/2982723-work-requests-overview), [locations versus parent assets](https://help.limblecmms.com/en/articles/8828169-locations-vs-parent-assets)
+- Fiix: [asset hierarchy](https://helpdesk.fiixsoftware.com/hc/en-us/articles/211193203-About-the-asset-hierarchy), [basic setup](https://helpdesk.fiixsoftware.com/hc/en-us/articles/360044584571-Basic-setup-Overview)

@@ -1,3 +1,2 @@
-import { VendorsPage } from "@/components/operations-pages";
-export default function Page() { return <VendorsPage />; }
-
+import { ProviderDirectory } from "@/components/provider-platform";
+export default function Page() { return <ProviderDirectory />; }

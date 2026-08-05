@@ -1,2 +1,6 @@
-import { MaintenanceWorkspace } from "@/components/maintenance-workspace";
-export default function Page() { return <MaintenanceWorkspace />; }
+import type { Metadata } from "next";
+import { InternalWorkQueue } from "@/components/maintenance-platform";
+
+export const metadata: Metadata = { title: "My Work" };
+
+export default function Page() { return <InternalWorkQueue />; }

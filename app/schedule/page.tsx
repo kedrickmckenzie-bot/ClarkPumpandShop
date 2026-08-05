@@ -1,4 +1,4 @@
 import type { Metadata } from "next";
-import { SchedulePage } from "@/components/maintenance-pages";
-export const metadata: Metadata = { title: "Schedule & Dispatch" };
-export default function Page() { return <SchedulePage />; }
+import { ScheduleCenter } from "@/components/maintenance-platform";
+export const metadata: Metadata = { title: "Due-date Schedule" };
+export default function Page() { return <ScheduleCenter />; }

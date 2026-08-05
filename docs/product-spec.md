@@ -1,352 +1,708 @@
 # Clark's Operations Product Specification
 
-**Version:** Demonstration v1  
-**Date:** August 5, 2026  
-**Status:** Approved implementation baseline for this repository
+**Version:** Clean rebuild 1.0
+**Date:** August 5, 2026
+**Status:** Approved product and implementation baseline
 
-## Product thesis
+## Product definition
 
-Clark's Operations is a web-first maintenance operations and asset-intelligence platform for convenience-store operators ranging from a single independent location to regional chains. The first pilot is expected to include approximately 65 stores. Its source of truth is the **operator's internal work order**, not the vendor's dispatch job, an employee task, an invoice, or a dashboard summary.
+Clark's Operations is a multi-tenant, multi-site maintenance intelligence platform for operators ranging from one independent store to regional and national portfolios. It connects portfolio reporting, maintenance execution, maintenance-financial accounting and internal/vendor accountability in one system.
 
-The platform gives Clark's a durable chain from frontline symptom to management decision:
+The product is not a lightweight work-order demo and it is not an accounting-system replacement. Its job is to answer, with supporting records:
 
-> Report or planned maintenance → internal review → Clark's work order → vendor acceptance → verified visit(s) → accountable follow-up → completion verification → documents and invoices → asset/component history → cost and performance analytics → capital review.
+- What maintenance requires attention now?
+- Who owns the next action, when is it due and where does it escalate?
+- What has each store, trade, system, asset, vendor and team cost?
+- What is requested, approved, committed, accrued, invoiced, credited and paid?
+- Which records explain a variance, outlier, repeat failure or budget risk?
+- What work should management plan, approve, verify or investigate next?
 
-The platform controls Clark's side of that chain while asking independent vendors to change as little as possible about how they run their businesses.
+The operator's work order is the primary maintenance record. Requests, PM occurrences, assignments, visits, follow-ups, documents and financial records connect to that work order rather than creating disconnected narratives.
+
+The main operating chain is:
+
+> Request, inspection or PM -> triage -> work order -> internal and/or vendor assignment -> work and evidence -> unresolved follow-up or completion -> verification -> quote/approval/PO/invoice/credit/payment -> allocation and accrual -> reporting and capital review.
+
+## Product pillars
+
+### Portfolio intelligence
+
+Managers see portfolio condition, exceptions, trends and outliers across stores, trades, equipment, internal teams, vendors and periods. Every value drills to its supporting records.
+
+### Connected maintenance
+
+Requests, reactive work, projects and preventive maintenance share a coherent work-order model. Classification can deepen later without blocking service.
+
+### Maintenance-financial accounting
+
+Budgets, estimates, quotes, approvals, purchase orders, commitments, invoices, credits, allocations, payment status, accruals and GL dimensions form a traceable maintenance subledger.
+
+### Low-friction accountability
+
+Every unresolved item identifies an accountable party, next action, due timestamp and escalation destination. Internal teams and external vendors use the same accountability semantics even when their interaction channels differ.
+
+## Product principles
+
+1. **Manager first.** Default navigation and home views prioritize search, decisions, financial position, exceptions and drill-down.
+2. **Source-record truth.** No dashboard has independent summary numbers. All totals are derived from persisted operational and financial facts.
+3. **Progressive depth.** A store-level work order is valid. Category, equipment group, asset and component may be added when known.
+4. **Canonical meaning, familiar language.** Stable taxonomy concepts support organization-specific labels and aliases.
+5. **One work model, multiple fulfillment modes.** Internal, external and blended work remain comparable without forcing identical authentication or dispatch tools.
+6. **Financial stages are not synonyms.** Requested, approved, committed, accrued, invoiced, credited and paid amounts remain distinct.
+7. **Exceptions remain visible.** Missing ownership, overdue action, unallocated money and incomplete classification are shown rather than hidden.
+8. **Every important number is explainable.** Users can see formula, period, filters, classification coverage and underlying records.
+9. **Single-store dignity, multi-site scale.** Independent operators receive a complete product without enterprise clutter; a 65-store portfolio remains fast and navigable.
+10. **All trades, focused seed.** The platform supports configurable maintenance trades while the demonstration provides its deepest data and workflows for HVAC and Refrigeration.
 
 ## Customer and tenancy model
 
-The product is a multi-tenant SaaS application. Each customer operator is an isolated **organization** with its own stores, members, roles, work-order numbering, vendors, policies, documents, financial records, controlled names and analytics. Clark's is the seeded pilot organization, not a hardcoded tenant.
+Each customer operator is an isolated **organization** with its own:
 
-Supported operating shapes:
+- Stores and optional regions.
+- Members, teams, roles and scopes.
+- Work-order numbering and workflow policies.
+- Maintenance taxonomy, aliases and preferred labels.
+- Internal service groups and external vendors.
+- Equipment, PM templates and checklists.
+- Budgets, approval rules, accounting dimensions and external accounting mappings.
+- Documents, audit history, saved views and reports.
 
-- **Independent store:** one organization and one store; region is absent, and one person may hold owner, facilities and store-manager permissions.
-- **Small operator:** several stores with no regional layer; owner/facilities users compare stores directly.
-- **Regional operator:** stores grouped into optional regions with regional-manager scope.
-- **Pilot / growing chain:** approximately 65 stores with bulk filters, exception queues, saved scope, pagination and controlled taxonomy.
+Clark's is the fictional demonstration organization, never a product assumption.
 
-Region is optional. The organization-to-store relationship is always authoritative; a region is a grouping layer, not a required placeholder. The UI removes region controls and peer-store panels when they add no value. Single-store operators receive historical, category, system, asset, PM and vendor comparisons rather than an empty store-ranking experience.
+Supported customer shapes:
 
-No customer data is used for cross-operator benchmarks by default. Future anonymized benchmarking requires an explicit product/privacy decision and customer consent.
+| Shape | Expected experience |
+|---|---|
+| Independent store | No required region; one person may hold owner, manager, finance and maintenance roles; landing view is the store's operating command center. |
+| Small operator | Direct store comparison, shared vendors and lightweight central controls without forced regional hierarchy. |
+| Regional operator | Optional regions, regional scopes, portfolio comparisons, shared teams/vendors and accounting dimensions. |
+| 65-store pilot | Indexed global search, saved scopes, exception queues, server aggregates, stable pagination, bulk setup and import. |
 
-## Demonstration outcomes
-
-The demonstration succeeds when an owner can:
-
-1. Start with company exceptions and drill into Refrigeration, Store 45, Beer Cave Refrigeration, CU-1, and its fan motor.
-2. See why Store 45 is an outlier and open the exact work orders and financial records behind each driver.
-3. Follow one cashier report through review, Clark's work order creation, vendor acceptance, two verified visits, unresolved follow-up, later asset classification, invoice allocation, completion, and rollup.
-4. See actual PM occurrences produce company/store/system compliance and exceptions.
-5. Understand why CU-1 is recommended for capital review without seeing an opaque score or automatic replacement claim.
-6. Switch roles and demonstrate the cashier, manager, vendor-office, and technician experiences without separate demo credentials.
+A store belongs directly to its organization. Region is an optional grouping that can change without changing store identity or history. Cross-organization comparison is prohibited by default and requires a future privacy-reviewed opt-in product decision.
 
 ## Primary users and permissions
 
-| Persona | Default scope | May do | May not do |
-|---|---|---|---|
-| Owner / Executive | Entire organization | View all operational and financial data; compare; drill down; set watchlist disposition | Alter original reports; act as vendor without switching demo role |
-| Facilities Manager | Entire organization | Create/manage/close WOs; issue to vendor; approve; classify; allocate; manage PM, files and follow-ups | Rewrite original report; see outside tenant |
-| Regional Manager | Assigned region/stores | See reports immediately; review/escalate; compare stores; monitor overdue work | Delete/hide employee reports; access unrelated regions in production |
-| Store Manager | Assigned store | Review reports; append context/photo; confirm/dispute; recommend escalation; verify completion | Delete or rewrite original report; hide it from region/facilities |
-| Frontline Employee | Assigned store and own submissions | Submit symptom, area, urgency and photo; see receipt/status | Diagnose assets; edit submitted report; browse company analytics |
-| Vendor Office | Its vendor and issued WOs | Open secure link; accept, decline or request clarification; upload allowed files; view allowed history | Assign technicians in Clark's; see other vendors' pricing, internal evaluations or unrelated stores |
-| Vendor Technician | Store QR and current session | Select vendor/accepted WO; enter name; check in/out; choose basic outcome | Browse confidential history; manage dispatch; enter invoices; see unrelated work |
+One person may hold multiple roles. Production authorization is server enforced and scope aware.
 
-The demo role switcher changes presentation scope only and is visibly labeled. Production authorization remains server-enforced.
+| Persona | Primary jobs |
+|---|---|
+| Owner / Executive | Review portfolio risk, financial position, store/vendor/team comparisons, budgets and capital-review evidence. |
+| Facilities / Maintenance Leader | Triage work, assign internal or external fulfillment, manage PM, enforce accountability, approve work and inspect performance. |
+| Regional Manager | Monitor assigned stores, resolve escalations, compare performance and verify significant work. |
+| Store Manager | Submit and review requests, add context, coordinate access, verify completion and see store-level history/cost. |
+| Frontline Employee | Submit an observable issue with location, urgency and optional media; see receipt and permitted status. |
+| Internal Technician | Work an assigned/team queue, acknowledge, check in, review useful context, record work/evidence/cost and produce a completion or unresolved outcome. |
+| Finance / Accounting Reviewer | Manage budget views, approvals, POs, invoice/credit review, allocations, payment status, accruals and GL exports. |
+| Vendor Office | Accept, decline or clarify issued work; manage allowed work, quotes, documents, invoices and status through a deep link, optional portal or future API. |
+| Vendor Technician | Open assigned work through an allowed mobile link/QR, check in, perform work, add permitted evidence and check out. |
+| Organization Administrator | Configure roles, terms, taxonomy, templates, accounting dimensions, integrations and policies. |
+
+Demo role switching is clearly labeled presentation tooling. It does not model production authentication.
 
 ## Information architecture
 
-### Executive and facilities navigation
+### Manager navigation
 
-- **Command Center:** company exceptions, spend, PM, commitments and drill-down.
-- **Work Orders:** operational command table and internal work-order detail.
-- **Preventive Maintenance:** compliance, upcoming/due/late/missed occurrences and generated WOs.
-- **Stores:** store comparison, store detail and store-system detail.
-- **Systems & Assets:** company category explorer, asset and optional component detail.
-- **Vendors:** observed provider performance and allowed work history.
-- **Files & Invoices:** searchable records, review queues and allocation status.
-- **Demo Journeys:** report intake, email outbox, acceptance, QR technician flow and simulation states.
+- **Portfolio**
+  - Overview
+  - Stores
+  - Spend and financial position
+  - Exceptions and outliers
+- **Accountability**
+  - My actions
+  - Internal actions
+  - Vendor actions
+  - Approvals
+  - Follow-ups and verification
+- **Work**
+  - Requests
+  - Work orders
+  - Preventive maintenance
+  - Calendar and assignment windows
+- **Equipment**
+  - Equipment groups/systems
+  - Assets and components
+  - Classification coverage
+  - Capital review
+- **Financials**
+  - Budgets
+  - Quotes and approvals
+  - Purchase orders and commitments
+  - Invoices, credits and allocations
+  - Payments and accruals
+  - GL exports
+- **People and Providers**
+  - Internal teams
+  - Vendors
+  - Observable performance
+- **Insights**
+  - Saved reports
+  - Comparisons
+  - Exports
+- **Admin**
+  - Stores and templates
+  - Taxonomy and labels
+  - Roles and scopes
+  - Workflow and finance settings
 
-Frontline, vendor-office and technician pages use focused shells rather than the executive navigation.
+Frontline, internal-technician and vendor-technician experiences use focused responsive shells. The vendor portal is optional, not a prerequisite for accountability.
 
-Navigation adapts to customer size:
+### Adaptive navigation
 
-- One store: default landing is that store's command view; “Stores” becomes “My Store,” region controls disappear, and company/category metrics remain useful as store-level history.
-- Two to nineteen stores: company command center plus direct store comparison.
-- Twenty or more stores: region/saved-scope controls, exception-first tables, bulk PM/vendor issuance and paginated store/work-order lists become prominent.
-- The 65-store pilot must not require loading every work order into the browser; filtering, sorting, pagination and aggregate calculation are server-side in persistent mode.
+- A one-store organization lands on that store's command view; region controls and empty store rankings disappear.
+- A small operator compares stores directly.
+- A larger operator receives region/saved-scope selectors, bulk actions, pagination and exception-first lists.
+- The active organization, scope, period and financial basis remain visible when navigating or drilling down.
 
-## Entity and hierarchy model
+## Manager-first universal search
+
+A persistent command/search control is available from every manager page. Search is organization scoped and server executed.
+
+Minimum searchable fields:
+
+- Store number, store name, normalized street/city/state/postal address, aliases and legacy/external IDs.
+- Work-order number, title and exact reference.
+- Asset/equipment code, name, serial number, model and alias.
+- Vendor name and external vendor ID.
+- Request, PM occurrence, PO, invoice, quote, credit, payment and document reference.
+
+Results group by record type and show identifying context. Example:
+
+> Store #1427 - 2505 Palomar Airport Rd - Carlsbad, CA
+
+Selecting a result opens its primary detail or a clearly labeled filtered list. Search supports exact identifiers, prefixes and forgiving text matching while preserving deterministic ordering and stable pagination. Previous store numbers and aliases resolve to the canonical record. No cross-tenant search index is allowed.
+
+## Organizational and store model
 
 ### Organizational hierarchy
 
-`Organization → optional Region → Store → optional Area/Zone`
+`Organization -> optional Region -> Store -> optional Area/Zone`
 
-### Maintenance hierarchy
+Each store has:
 
-`Service Category → Store System → Asset → optional Component`
+- Stable internal ID.
+- Organization-unique store number.
+- Display name.
+- Structured and normalized address.
+- Time zone, status and operating dates.
+- Optional region and local contacts.
+- Aliases, prior store numbers and external-system IDs.
+- Coordinates only when needed for map or policy-controlled visit verification.
+- Store-level policies, accounting mappings and template provenance.
 
-### Classification taxonomy
+Closing, selling or renumbering a store never destroys its history.
 
-Physical instances remain separate from comparison categories:
+## Physical equipment and taxonomy model
 
-- Physical: `Store 45 → Beer Cave Refrigeration → CU-1 → Condenser Fan Motor`
-- Classification: `Refrigeration → Condensing Unit → Fan Motor`
+### Physical hierarchy
 
-This separation allows comparison of unlike physical layouts using controlled types.
+`Store -> optional Area -> optional Equipment Group/System -> Asset -> optional Component`
 
-### Core records
+Examples:
 
-The domain includes organizations, regions, stores, areas, service categories, system types, store systems, asset classes, assets, component types, components, vendors, people/role assignments, employee reports, review steps, work orders, work-order associations, vendor responses, visits, follow-ups, PM plans, PM occurrences, quotes, authorizations, invoices, credits, cost allocations, documents, communications, demo emails, audit events and token records.
+- `Store 45 -> Sales Floor -> Comfort HVAC -> RTU-3 -> Compressor`
+- `Store 45 -> Beer Cave -> Refrigeration Rack -> Condensing Unit CU-1 -> Fan Motor`
+- `Store 12 -> Kitchen -> Cooking Equipment -> Oven 2 -> Igniter`
 
-Required cardinalities include:
+The physical equipment-group concept may be displayed to a customer as **System**, **Equipment Group**, **Cost Center** or another preferred term. It remains semantically distinct from an accounting cost center.
 
-- Many employee reports may link to one work order.
-- A work order may exist without an employee report or originate from PM.
-- A work order has one current store and category but optional system/asset/component.
-- A work order may have many visits, follow-ups, files, communications and financial events.
-- One invoice may allocate to several systems/assets/components; allocation sum cannot exceed invoice total.
-- Assets and components inherit related work and allocated cost through explicit associations, not text matching.
+### Canonical taxonomy
 
-## Progressive asset onboarding
+Physical instances and comparison concepts are separate:
 
-Work never waits for inventory completeness. A valid work order may be attached at any of these depths:
+- Physical instance: the actual equipment at one store.
+- Canonical concept: a stable trade, class or component type used for reporting.
+- Preferred label: the organization's chosen visible name for a concept.
+- Alias: an alternate or legacy term that resolves to the same concept.
+
+For example, “Roof AC,” “Rooftop Unit” and “RTU” may map to canonical equipment class `ROOFTOP_UNIT`. Renaming a label never changes semantic identity or breaks history, templates or reports.
+
+The starter taxonomy covers common maintenance trades, including HVAC, Refrigeration, Electrical, Plumbing, General Building, Foodservice Equipment, Fire/Life Safety, Fuel/Forecourt, Security, Grounds and other organization-defined categories. Organizations can extend it without exposing their terms to other tenants.
+
+Imports may suggest alias or concept matches but require confirmation before merging. Reclassification is effective dated and audited.
+
+### Progressive classification
+
+A work order may be saved at any depth:
 
 1. Store only.
-2. Store + category.
-3. Store + category + store system.
-4. Store + category + system + asset.
-5. Store + category + system + asset + component.
+2. Store plus category/trade.
+3. Store, category and equipment group/system.
+4. Store, category, group/system and asset.
+5. Store, category, group/system, asset and component.
 
-Association rules:
+“Decide later” is a first-class work-order creation choice for optional classification. The platform never creates fake “Unknown Asset” objects to satisfy relationships. When a deeper node is selected, physical belonging is validated.
 
-- System must belong to the selected store and category.
-- Asset must belong to the selected system.
-- Component must belong to the selected asset.
-- A later reclassification appends an audit event with prior and new IDs, actor, reason and timestamp.
-- Historical financial records are reprojected through their current explicit allocation targets; the audit log preserves what changed and when.
-- General work retains store/category value. Unknown deeper fields are null, never fake “unassigned asset” instances.
+Analytics display coverage for each depth and retain explicit unclassified buckets. Reclassification appends prior/new associations, actor, timestamp and reason so historical understanding remains reconstructable.
 
-Coverage indicators shown with analytics:
+## Accounting dimensions are separate from physical hierarchy
 
-- Percent of WOs categorized to service category.
-- Percent mapped to a store system.
-- Percent of invoiced spend mapped to an asset.
-- Percent mapped to a component.
+Maintenance may roll up by both physical and accounting views, but those dimensions are not interchangeable.
 
-## Employee report and review lifecycle
+Physical rollups include store, area, trade, equipment group/system, asset and component. Accounting dimensions include account/GL code, accounting cost center or department, project, budget line and organization-defined segments.
 
-Default demo policy is **required store-manager review with immediate regional visibility**. Configurable modes are required review, optional input, notification only, and bypass.
+An oven may be an asset inside a physical “Cooking Equipment” group that the customer labels “Cost Center.” Its expenses may simultaneously allocate to accounting cost center `STORE_OPS`, GL account `REPAIRS_MAINTENANCE` and project `KITCHEN_REFRESH_2027`.
 
-Lifecycle:
+Every dimension has a stable ID, display label, effective dates and optional external-system mapping. Reports group through explicit IDs, never free-text names.
 
-1. Employee submits observable symptom, store area, urgency and optional photo.
-2. Server creates an immutable report and audit event immediately; UI returns a reference number.
-3. Store manager and regional manager can see it; store manager receives a review requirement under the demo policy.
-4. Store manager appends confirmation, context, photo/reading and recommendation.
-5. Regional or facilities authority approves escalation or records duplicate/no-action/internal handling.
-6. Escalation creates or links an internal work order without deleting the report.
+## Core records
 
-Original reporter, timestamp, description, store, area and submitted media are immutable. Reviews and decisions are separate append-only records.
+The connected domain includes:
 
-## Internal work-order lifecycle
+- Organizations, regions, stores, areas and store aliases.
+- Canonical taxonomy concepts, preferred labels, aliases and mappings.
+- Equipment groups/systems, assets, components and meters.
+- People, roles, scopes, internal teams and vendors.
+- Requests/reports, reviews, inspections and decisions.
+- Work orders, assignments, schedules/windows, work logs, visits, checklists and outcomes.
+- Follow-ups, verification requirements and escalation events.
+- PM plans, rounds, occurrences and generated work orders.
+- Budgets, estimates, quotes, approvals, purchase orders, commitments and change authorizations.
+- Invoices, credits, warranty recoveries, allocations, payment records and accruals.
+- Accounting dimensions, mappings and export batches.
+- Files, communications, tokens and append-only audit events.
 
-### Origins
+Important relationships:
 
-Employee report, manager issue, facilities issue, PM occurrence, inspection, warranty callback, capital replacement, or emergency response.
+- Many requests may link to one work order.
+- A work order may exist without a request and may originate from PM, inspection, project or management.
+- A work order has one store and progressively optional classification.
+- A work order may have multiple sequential or concurrent assignments, but unresolved work has one explicit current accountable party.
+- Work may be internal, external or blended.
+- A work order may have many visits, logs, outcomes, files, follow-ups and financial records.
+- A quote or PO may cover one or more work orders when policy permits.
+- An invoice or credit may allocate across multiple work orders, stores, equipment nodes and accounting dimensions.
 
-### Core fields
+## Store creation and onboarding
 
-Number, title, description, origin, store, category, optional system/asset/component, priority, work type, status, accountable party, next required action, due date, escalation destination, vendor, vendor response, requested window, NTE, related reports, visits, follow-ups, files, quotes, invoices, allocations, verification and audit timeline.
+Store setup is a guided, resumable workflow rather than a single shallow modal:
 
-### State groups
+1. **Identity:** store number, name, address, time zone, operating status and optional region.
+2. **Contacts and access:** managers, internal teams and escalation destinations.
+3. **Terminology and trades:** organization defaults plus any store-specific applicability.
+4. **Equipment structure:** create manually, import, copy a template or copy from a similar store; review equipment groups, assets and components.
+5. **Preventive maintenance:** apply store opening templates and confirm responsible parties.
+6. **Financial setup:** accounting dimensions, budget ownership, approval routing and external mappings.
+7. **Vendors and coverage:** preferred providers, service categories, contacts and allowed interaction channel.
+8. **Readiness review:** missing recommended setup is visible but does not prevent legitimate reactive work.
 
-- **Intake:** draft, pending review, approved.
-- **Vendor initiation:** issued, awaiting acceptance, accepted/declined/clarification requested.
-- **Service:** visit active, follow-up required, waiting on vendor update/quote/approval/parts, return visit scheduled.
-- **Completion:** pending store verification, pending invoice, closed.
-- **Exceptions:** reopened, cancelled.
+The store detail becomes available immediately after identity is saved. Users can leave and resume setup. Imports provide row-level validation, duplicate detection and a downloadable error report. Template application records provenance so later edits do not silently rewrite the store.
 
-Most transitions are inferred from recorded events. Vendors do not maintain Clark's internal state list.
+## Request and intake workflow
 
-### Invariant
+Employees and managers describe observable symptoms rather than being forced to diagnose equipment. A request requires store and description; area, urgency, category and media may be added.
 
-Every non-terminal unresolved work order must have current accountable party, next action, due date and escalation destination. A command-center exception explicitly identifies any record that violates this invariant.
+The original submission is immutable. Reviews, clarifications, corrections and triage decisions append separately.
 
-## Vendor workflow
+Triage may:
 
-When Facilities issues a WO:
+- Create a new work order.
+- Link to an existing work order.
+- Request clarification.
+- Mark duplicate with a referenced source.
+- Record no-action or local resolution with reason.
+- Escalate immediately under policy.
 
-1. The email service creates a message containing Clark's WO number, store, symptom/summary, priority, requested date, instructions and opaque secure link.
-2. Development writes it to the demo outbox; production adapters may send through a configured provider.
-3. Vendor office opens the link and may accept, decline or request clarification.
-4. The response records identity/email, timestamp, token ID and audit event.
-5. Acceptance does not require a technician selection. Vendor dispatch continues in the vendor's own system.
+Visibility and review policy are organization configurable without changing the underlying audit model.
 
-Optional vendor pages show only its issued/accepted WOs, allowed files, invoice state and permission-filtered technical history.
+## Work-order creation
 
-## Technician store-QR workflow
+The creation workflow is useful for both a quick emergency and detailed planned work.
 
-### Arrival
+### Minimum valid record
 
-1. Store QR contains a signed opaque token, never a plain store ID.
-2. Page lists vendors and accepted Clark's WOs at the token's store.
-3. Technician selects vendor/WO, enters name and requests check-in.
-4. Browser requests a fresh geolocation reading.
-5. Server computes Haversine distance to store and classifies the reading as verified, outside radius, inaccurate or unavailable/denied.
-6. Visit stores minimized point/accuracy/distance/time/token/session evidence. There is no continuous tracking.
+- Store.
+- Problem/title or linked source that supplies it.
+- Work type and priority, with sensible defaults.
 
-### Departure
+### Progressive optional context
 
-On rescan, the same browser/session sees “Your active visits at this store.” It chooses a visit without re-entering vendor, name, store, WO or arrival data, selects one outcome, and provides a fresh location reading.
+- Category/trade.
+- Area.
+- Equipment group/system.
+- Asset.
+- Component.
+- Requested/scheduled window.
+- Internal team/person and/or external vendor.
+- Estimated/NTE amount, budget and accounting dimensions.
+- Checklist, files, related requests, PM or warranty.
 
-Required outcomes and resulting control events:
+Asset selection offers **Decide later** and never blocks submission. Policy may create a classification follow-up with an owner and due date.
 
-| Outcome | Internal effect |
-|---|---|
-| Completed — issue resolved | Pending store/management verification |
-| Temporary resolution | Keep open; create follow-up |
-| Diagnosed — unresolved | Create Facilities-owned repair-plan follow-up due the same business day |
-| Unable to diagnose | Create vendor escalation/alternative-vendor decision |
-| No issue found | Require store confirmation before closure |
-| Unable to perform service | Create access/authorization/reschedule follow-up |
+The creation flow supports save-and-continue, templates and copy-from-similar work while still creating one canonical work order.
 
-The technician never has to write a detailed diagnosis. Exception check-in after denied/inaccurate/outside state is possible only after clear warning and remains unverified.
+## Work-order detail
 
-### Demo simulation
+A work order must contain enough information for an internal maintenance person or external provider to act without reconstructing the story elsewhere.
 
-A visible “Demo Mode” control may supply inside-geofence, outside-geofence, permission-denied or inaccurate readings and deterministic acceptance/email states. Simulation adapters use the same domain functions and response types as real behavior and never label simulated visits as production verified without the Demo Mode badge.
+The detail view includes:
 
-## Follow-up control
+- Number, status, priority, work type and origin.
+- Current accountable party, next action, due time and escalation.
+- Store identity, access context and equipment hierarchy.
+- Problem statement, request history and permitted prior equipment history.
+- Internal/vendor assignments, acknowledgements and scheduled/requested windows.
+- Visits, check-in/out, work log, labor, materials, miscellaneous costs and outcomes.
+- Checklists, readings, photos, service tickets and other evidence.
+- Open follow-ups, blockers and completion verification.
+- PM, project, warranty and related-work context.
+- Estimate, quote, approval, PO, invoice, credit, payment and allocation chain.
+- Communications, files and append-only audit timeline.
 
-Follow-ups contain owner type and ID, action, due timestamp, escalation destination, status, source event, completion note and audit timestamps.
+Tabs and summary panels may organize this information, but no core workflow should terminate at a non-functional control.
 
-Rules:
+## Work-order lifecycle
 
-- Unresolved technician outcomes create a follow-up in the same transaction as checkout.
-- Open follow-up is overdue when `now > dueAt`; the original due date is immutable after escalation. Rescheduling appends a new due-date event with reason.
-- Completing a follow-up must set the WO's next state or create the next follow-up; it cannot silently leave unresolved work with no action.
-- Overdue follow-ups generate exception and reminder events and appear in the accountable manager's queue.
-- Closing a WO is rejected while any required follow-up remains open or store verification is outstanding.
+Operational status and financial status are orthogonal. A repair can be operationally complete while an invoice remains pending; an approved PO can exist before work begins.
 
-## Preventive-maintenance lifecycle
+Typical operational states:
 
-A PM plan defines scope, category, selected stores/systems/asset class/assets, frequency, start, early/late window, vendor, required evidence, authorization policy, escalation and active state.
+- Draft / intake.
+- Pending triage or approval.
+- Ready to assign.
+- Assigned / issued.
+- Awaiting acceptance or acknowledgement.
+- Planned / scheduled.
+- In progress.
+- Follow-up required / blocked / waiting on quote, approval, material, access or return visit.
+- Work complete, pending verification.
+- Verified.
+- Closed or cancelled with reason.
 
-The scheduler materializes occurrences for the horizon. Each occurrence may create a Clark's PM work order and moves among scheduled, due soon, acceptance pending, accepted, completed early/on-time/late, documentation pending, missed, rescheduled, waived-with-reason and not-applicable.
+Transitions are domain commands backed by events, not arbitrary status edits. Every non-terminal unresolved record has an accountable party, next action, due timestamp and escalation destination. Closing is rejected while required follow-up, evidence or verification remains open. Financial completion may continue after operational closure according to policy.
 
-Eligible compliance denominator excludes not-applicable and properly waived occurrences. Numerator contains verified occurrences completed from `dueAt - earlyWindow` through `dueAt + lateWindow`, inclusive. “Completed late” remains visible but does not count on time. The UI displays numerator and denominator alongside the percent.
+## Internal execution
 
-## Files, communications and financial model
+Internal maintenance is a first-class fulfillment mode.
 
-### Files
+An internal technician can:
 
-Accepted classes: quote, service ticket, invoice, credit, proof of work, correspondence, warranty, equipment record, manual and other. File metadata may link to WO, store, system, asset, component, visit, vendor and/or financial record. Blob access is permission-checked; the database stores metadata while a storage adapter stores bytes.
+1. Open a personal or team queue on mobile or desktop.
+2. See priority, store, address, access notes, symptom, equipment context, safety instructions, checklist and allowed history.
+3. Acknowledge or request clarification.
+4. Start travel/work states only when the organization uses them; check-in is policy controlled.
+5. Record concise work performed, readings, checklist results, photos, labor time, materials and miscellaneous costs.
+6. Choose completed or a structured unresolved outcome.
+7. Create or trigger the next required follow-up in the same action.
+8. Submit for verification and see permitted return-work context.
 
-The seeded story includes employee photo, vendor acceptance message, service ticket, proof photo, quote, approval, invoice and allocation evidence.
+Maintenance assignment, requested/scheduled windows, queues and workload visibility are in scope. Payroll, employee shift management, route optimization and continuous location tracking are not.
 
-### Communications
+## External vendor workflow
 
-Email, clarification, internal note and vendor communication records are append-only with visibility class: internal, vendor-shared, or store-shared.
+External vendors use the same work-order and accountability model without being forced to adopt the operator's software as their own dispatch system.
 
-### Finance
+Supported interaction channels:
 
-Financial stages remain distinct: estimate, diagnostic authorization, quote, approved, committed, change authorization, invoice, credit, warranty adjustment and paid amount.
+- Purpose-bound email/deep links for accept, decline or request clarification.
+- Optional vendor portal for recurring providers who want a queue and document/financial history.
+- Purpose-bound technician mobile link or store QR for permitted check-in/work/checkout.
+- Future API/webhook integration for high-volume providers using their own system.
+- Authorized manager-recorded phone response, permanently labeled with recorder and channel.
 
-Invoices accept normal vendor PDFs. Internal allocation lines target store/category and optionally system/asset/component with work classification and optional cost category. The system displays allocated total and unallocated balance and rejects allocations exceeding invoice total. Credits are separate negative financial events linked to an invoice.
+All channels execute the same domain commands and write the same audit events.
 
-Dashboards distinguish paid spend, invoices pending review, approved-but-uninvoiced, quotes awaiting approval, potential credits and warranty recovery.
+Vendor office actions may include acceptance, decline, clarification, proposed timing, quote/proposal, allowed status updates, service documents and invoice submission. The allowed actions depend on policy and work state. Acceptance does not require the vendor to expose or maintain its full technician roster.
 
-## Dashboard metrics
+Vendor access excludes other vendors' information, internal evaluations/notes, confidential approvals, unrelated stores and financial information outside the vendor's engagement.
 
-Every metric is computed from work orders, visits, occurrences, follow-ups, financial events, allocations and assets for the active filters. No summary constants exist separately.
+## Visits and technician interaction
+
+Internal and vendor visits share visit, evidence and outcome semantics. Authentication differs by actor type.
+
+Where check-in verification is enabled:
+
+- A fresh location reading is requested only at check-in and checkout.
+- Accuracy, distance, timestamp, consent/result and verification state are preserved.
+- Denied, inaccurate or outside-radius states have a reviewable exception path and remain visibly unverified.
+- Continuous tracking is prohibited.
+
+Minimum outcome choices include resolved, temporary resolution, diagnosed/unresolved, unable to diagnose, no issue found and unable to perform work. Organization policy controls which additional fields or checklist evidence are required by trade/work type. An unresolved outcome atomically creates the next follow-up.
+
+## Accountability and exception control
+
+Every non-terminal unresolved work order has:
+
+- Accountable party.
+- Next required action.
+- Due timestamp.
+- Escalation destination.
+
+These fields may be fulfilled by a linked assignment, approval, follow-up, verification or vendor response, but they must be queryable as a common accountability projection.
+
+Manager queues include:
+
+- Needs triage.
+- Ready to assign.
+- Awaiting internal acknowledgement.
+- Awaiting vendor acceptance or clarification.
+- Response, arrival or work overdue.
+- Quote or approval needed.
+- PO or budget exception.
+- Unresolved follow-up overdue.
+- Work complete, awaiting verification.
+- Invoice or allocation exception.
+- Accrual or payment-status review.
+- Missing classification.
+
+Completing one action must either resolve the work or create/set the next action. Rescheduling requires a reason and preserves the original/missed due date. Counts open directly to the responsible filtered queue.
+
+## Preventive maintenance
+
+A PM plan defines:
+
+- Trade and progressively optional equipment scope.
+- Included stores or store template.
+- Calendar, meter or seasonal frequency.
+- Early/late completion window.
+- Internal team and/or vendor fulfillment rule.
+- Checklist/evidence and qualification policy.
+- Estimated budget, approval/PO behavior and accounting defaults.
+- Escalation and active dates.
+
+The scheduler materializes occurrences with stable identity. An occurrence may generate a canonical work order and moves through scheduled, due soon, issued/assigned, accepted/acknowledged, completed early/on-time/late, documentation pending, missed, rescheduled, waived-with-reason or not applicable.
+
+Compliance shows its numerator, denominator and allowed window. Waived and not-applicable occurrences are reported separately. PM cost and completion drill to occurrences, work orders, visits and allocations.
+
+## Maintenance-financial accounting
+
+### Purpose and boundary
+
+Clark's Operations is the operational maintenance subledger: it connects money to work, location, equipment, responsibility and evidence. It does not calculate tax, move money, connect bank accounts, run payroll, manage accounts receivable or replace the customer's general ledger.
+
+All money is stored in integer minor units with currency. The initial demonstration uses one organization base currency; the model retains currency on every financial record.
+
+### Financial chain
+
+`Budget -> estimate/request -> quote -> approval -> purchase order/commitment -> work receipt -> invoice -> credit/warranty recovery -> allocation -> payment status -> GL export`
+
+Accruals represent period-specific recognized maintenance expense that has not yet reached the selected actual basis. They have their own creation, posting and reversal history.
+
+Stages remain distinct. Reports never add overlapping stages without an explicit non-overlap formula.
+
+### Budgets
+
+Budgets support fiscal period and organization-defined dimension combinations such as region, store, trade, accounting cost center, GL account, project or vendor. Budgets have versions, owners, notes, status and append-only revisions.
+
+Views show:
+
+- Original and revised budget.
+- Approved actual basis.
+- Open commitments.
+- Active accruals.
+- Forecast according to a visible formula.
+- Remaining or over-budget amount.
+- Supporting source records.
+
+### Quotes, approvals and purchase orders
+
+Quotes preserve vendor, scope, version, expiration, attachments, line/subtotal/total and linked work. A revised quote does not overwrite a prior version.
+
+Approval policies may consider amount, store, trade, work type, budget, emergency flag and accounting dimensions. Decisions record actor, timestamp, reason and authorized amount. Approval and rejection are immutable decisions; changes use a new decision or change authorization.
+
+Purchase orders include organization-scoped number, vendor, approved amount, currency, status, accounting dimensions, linked work/quote, issued date and external accounting ID. PO revisions and change authorizations remain auditable. A PO represents commitment, not payment.
+
+### Invoices, credits and allocations
+
+Invoices preserve vendor invoice number, dates, amount, currency, files, review state, linked work/PO and duplicate-detection evidence. Credits and warranty recoveries are separate records tied to their sources; they never silently reduce an invoice.
+
+Allocation lines are the financial reporting grain. A line may target:
+
+- Store and work order.
+- Trade/category.
+- Equipment group/system, asset and component when known.
+- Vendor.
+- GL account, accounting cost center/department, project and budget line.
+- Cost type such as internal labor, vendor labor, materials, travel or miscellaneous.
+
+Allocations must reconcile to the financial record. Unallocated balance remains visible and over-allocation is rejected. Split invoices across stores, assets or accounting dimensions are supported. Rollups use allocation IDs, never description matching.
+
+### Payment tracking
+
+Payment tracking records observed status, amount, date, method label and external payment/reference ID. It supports unpaid, partially paid, paid, disputed, voided and other organization-configured states. It never initiates a bank or card payment.
+
+### Accruals
+
+Accruals may be suggested from accepted work, received service, approved commitments or other configured evidence, but posting requires an accountable rule or user decision. Each accrual records period, amount, source, dimensions, rationale and expected reversal. Invoice matching or period close produces explicit reversal/adjustment events rather than editing history.
+
+### GL dimensions and exports
+
+Organizations configure accounts and additional dimensions with effective dates and external IDs. Export batches contain exact allocation/accrual/payment-status source references, period, mappings, currency, debit/credit representation where required, creation actor and export status.
+
+Re-export and correction use versioned batches or reversal entries. A “sent” flag is not proof of posting; acknowledgement from a future integration is recorded separately. CSV and integration-ready exports are in scope; general-ledger posting logic remains owned by the accounting system.
+
+## Documents and communications
+
+Files may include request photos, quote/proposal, service ticket, inspection/checklist, proof of work, invoice, credit, warranty, PO, manual, equipment record, correspondence and other organization-defined classes.
+
+Metadata links files to permitted stores, work orders, equipment, visits, vendors and financial records. Blobs remain private and are served through permission-checked routes or short-lived URLs.
+
+Communications are append-only and have an audience such as internal, store-shared or vendor-shared. Structured decisions use explicit commands; free-form email text is not silently interpreted as an approval or state transition.
+
+## Portfolio and reporting experience
+
+### Portfolio home
+
+The default manager home answers “what needs attention and why?” It includes:
+
+- Open critical and high-priority work.
+- Overdue accountable actions and missing next-action controls.
+- Work awaiting internal acknowledgement, vendor acceptance, approval or verification.
+- Budget, actual, open commitment, accrual and forecast position with a clearly selected basis.
+- Invoices awaiting review, unallocated balance, credits/recoveries and payment exceptions.
+- PM due/missed/compliance.
+- Stores, trades, equipment and vendors driving exceptions or variance.
+- Classification and documentation coverage.
+
+Cards prioritize actionable exceptions over decorative KPIs. Every card, chart segment and count opens a filtered supporting list.
+
+### Drill path
+
+The standard physical drill is:
+
+`Portfolio -> optional region -> store -> trade -> equipment group/system -> asset -> component -> work orders and allocation lines`
+
+Additional dimensions include internal team/person, vendor, work type, financial stage, accounting dimension, PM/reactive, priority and period.
+
+At each physical depth, show:
+
+- Selected financial basis and amount.
+- Work-order and visit count.
+- Open/unresolved work and accountable actions.
+- Median and percentile context where useful.
+- PM compliance.
+- Classification coverage and explicit unclassified amount/count.
+- Links to exact records.
+
+### Financial position language
+
+Avoid ambiguous “spend posture” presentation. Use plain stage labels:
+
+- Budget.
+- Approved.
+- Open commitments.
+- Active accruals.
+- Invoiced net of posted credits.
+- Paid.
+- Forecast, with formula shown.
+- Remaining or variance.
+
+The user selects date period, accounting basis and whether credits/warranty recoveries are netted. These choices remain visible through drill-down and export.
+
+### Principal metric definitions
 
 | Metric | Definition |
 |---|---|
-| Open critical WOs | Non-terminal WOs with critical priority |
-| Overdue follow-ups | Open required follow-ups whose due timestamp has passed |
-| Missing next action | Non-terminal unresolved WOs missing accountable party, action, due date or escalation |
-| Awaiting vendor acceptance | Issued WOs with no accepted/declined response |
-| PM compliance | Eligible verified occurrences completed within their allowed windows / eligible occurrences |
-| TTM maintenance spend | Posted invoice allocations less posted credits in the trailing 12 months |
-| Current vs prior | Calendar-year or selected period totals compared with the immediately preceding equal period |
-| Approved not invoiced | Approved/committed authorizations less linked posted invoice amount |
-| Invoices awaiting review | Submitted invoices in review state |
-| Reactive/planned ratio | Reactive + emergency posted spend / planned PM posted spend |
-| Repeat visit count | Visits after the first on a WO, plus repeat WOs for same asset/failure window where classified |
-| Verified visit rate | Visits with both accepted check-in and checkout verification / completed visits |
-| Documentation completeness | Closed/ready-to-invoice WOs meeting type-specific required file rules |
+| Open critical work | Non-terminal work orders with critical priority in active scope. |
+| Overdue accountable action | Current required action whose due timestamp has passed. |
+| Missing control | Non-terminal unresolved work missing accountable party, action, due time or escalation. |
+| Awaiting acknowledgement/acceptance | Assigned internal or issued external work lacking the required response. |
+| PM compliance | Eligible occurrences completed within the configured window / eligible occurrences; numerator and denominator shown. |
+| Invoiced maintenance cost | Posted invoice allocations less posted credit/warranty allocations for the selected period/basis. |
+| Open commitment | Approved/PO allocation not yet relieved by matched invoice allocation. |
+| Active accrual | Posted accrual allocation not yet reversed in the selected period. |
+| Paid amount | Recorded payment allocations for the selected period; not inferred from invoice status. |
+| Unallocated balance | Financial-record total less valid allocations, shown by record and in aggregate. |
+| Budget variance | Selected non-overlapping actual/forecast basis less revised budget. |
+| Repeat work | Transparently defined repeat visits or work orders for the same classified target/window; coverage shown. |
+| Verification rate | Completed work satisfying configured verification evidence / eligible completed work. |
 
-Metric cards and table counts link to the filtered supporting records.
+### Comparisons and outliers
 
-## Comparative and outlier logic
+Supported comparisons include current vs prior equal period, same-store periods, store vs organization median, trade across stores, equipment class across stores, internal vs external fulfillment, vendor/team observable performance, reactive vs planned work and budget vs actual/forecast.
 
-Supported views include calendar year vs prior year, TTM vs prior TTM, same-store periods, store vs company median, category across stores, asset class across stores, reactive vs planned, emergency rate, PM compliance and repeat-repair rate.
+Cohorts remain inside one organization and state their scope, period and eligibility. Prefer medians and percentiles where skew makes averages misleading. When a one-store organization lacks a peer cohort, substitute same-store period, trade, system and asset comparisons.
 
-Store cohorts use the same organization, category and similar installed-asset count when at least five peers have sufficient data. Data never crosses organizations. If five peers are unavailable, the UI labels the comparison “organization store median” or suppresses it. A single-store organization substitutes same-store period, system and asset-class comparisons and does not render a meaningless store median.
+Outlier rules show threshold, source period, cohort, coverage and record-level drivers. Wording describes association, not unproven causation.
 
-An outlier flag requires:
+## Capital review
 
-- At least $5,000 of TTM posted category spend, and
-- Spend per installed category asset at or above 1.75× cohort median or the 90th percentile, and
-- At least one visible driver such as a high-cost asset, repeat visits, emergency premium, or missed PM.
+Capital-review recommendations are transparent management aids, not automatic replacement decisions. Reasons may include age/service-life position, repeated reactive work, maintenance cost relative to replacement estimate, downtime, PM history, warranty, safety/criticality or energy/operating evidence when provided.
 
-Store 45 Refrigeration is seeded at approximately 2.1× its valid peer median. Driver links apply filters; descriptions use “associated with” or “driven in the records by,” not unproven causal language.
+Every reason shows input, threshold, period and source records. Management may monitor, defer with reason, add to capital plan, approve replacement or record replacement complete. Decisions are audited and do not erase maintenance history.
 
-## Replacement watchlist
+## Vendor and internal-team performance
 
-The watchlist is rule based. It displays reasons, inputs, source period and threshold—never a hidden health score.
+Only observed measures are reported, including:
 
-Possible reasons:
+- Assignment/issue to acknowledgement or acceptance.
+- First recorded visit/check-in.
+- Completion and unresolved-outcome rates.
+- Return visits and callbacks according to visible rules.
+- Overdue actions owned by the party.
+- Documentation and verification completeness.
+- Quote, commitment, invoice, credit and allocation amounts.
+- Quote-to-invoice variance.
+- PM completion for assigned occurrences.
 
-- Age ≥ 80% of expected service life.
-- TTM reactive repairs ≥ 40% of estimated replacement cost.
-- TTM reactive repairs increased ≥ 35% vs prior TTM with at least $2,500 absolute increase.
-- At least three reactive WOs or five verified visits in TTM.
-- At least two repeat failures/callbacks.
-- PM compliance below 80% for applicable asset/system occurrences.
-- Meaningful downtime or expired warranty on a critical asset.
-
-“Capital review recommended” appears when at least three reasons are true and one reason is repair burden, age, or cost trend. The displayed recommendation is narrative assembled from triggered reasons; it never says the asset must be replaced.
-
-Management dispositions: add to capital plan, monitor, defer with required reason, approve replacement, and record replacement complete. Every disposition is audited.
-
-## Vendor accountability
-
-Only observed data is reported: issue-to-accept duration/rate, issue-to-first-verified-visit, verified visits, unresolved outcome rate, return visits, vendor-owned overdue work, documentation completeness, completed-awaiting-invoice, invoice amount, quote-to-invoice variance, repeat issues and PM performance.
-
-The product does not infer dispatch efficiency, en-route time or internal vendor scheduling. Vendor technical-history projection excludes other-vendor pricing, internal notes/evaluations, confidential approvals and unrelated data.
+The platform never infers dispatch efficiency, en-route performance, employee productivity or causation it cannot observe. Comparisons show volume and coverage so small samples are not presented as certainty.
 
 ## Deterministic demonstration data
 
-The seed uses fictional identities and reconciled records:
+The primary presentation seed is clearly fictional and represents the pilot shape directly:
 
-- One organization, three regions and fifteen stores.
-- HVAC and Refrigeration categories.
-- Four vendors, thirty store systems, forty-eight assets and selected components.
-- 536 WOs over approximately twenty-four months with internal assignments, vendor visits, checklists, labor, parts, follow-ups, quotes, invoices, credits, allocations and audit events.
-- Eight PM plans with materialized occurrences.
+- One Clark's demonstration organization.
+- Exactly 12 story-rich showcase stores with synthetic store numbers, names, structured addresses and optional regions.
+- A separate 65-store automated scale fixture proving indexed search, pagination and aggregate behavior without cluttering the presentation demo.
+- Organization roles, regional scopes, store managers, finance users, internal maintenance teams and external vendors.
+- Configurable all-trades taxonomy, with the deepest and most numerous histories in HVAC and Refrigeration and smaller examples in other common trades.
+- Equipment groups/systems, assets and selected components at intentionally mixed classification depth.
+- At least 24 months of coherent requests, WOs, assignments, visits, follow-ups, PM occurrences, files and audit events.
+- Reconciled budgets, quotes, approvals, POs, invoices, credits, allocations, payment-status records, accrual/reversal events and GL export batches.
 
-Intentional stories include Store 45 Refrigeration outlier; progressive classification of WO `CWO-0245`; first unresolved and later resolved verified visits; a complete document/invoice chain; a missed PM; CU-1 capital-review evidence; and believable vendor differences.
+Seeded journeys include:
 
-The presentation seed represents the full 65-store pilot directly and verifies that list/query boundaries, aggregate services, pagination and tenant scoping also work for a one-store independent operator.
+1. Search for a store by number and address, then drill through its work and financial position.
+2. Create a store, resume its guided setup, apply templates and add equipment progressively.
+3. Create a work order while deferring asset selection, assign it and classify it later with audit history.
+4. Complete useful internal-technician work from queue through verification and cost capture.
+5. Issue external work through a deep link, optionally continue in the vendor portal and capture a vendor-technician visit.
+6. Demonstrate blended internal/vendor responsibility on one work order.
+7. Follow PM occurrence through work, evidence, compliance and cost.
+8. Follow quote -> approval -> PO -> work -> invoice -> split allocation -> credit -> payment status -> GL export.
+9. Show an accrued received service, later invoice match and explicit accrual reversal.
+10. Drill a portfolio/store/equipment outlier to exact work orders and financial allocations.
 
-## Demo scenarios
+All totals and narratives derive from seeded source records. No independent presentation constants may contradict them. Simulated actions and identities are visibly marked Demo Mode. Separate automated fixtures prove the same application with one organization and one store.
 
-1. **Company visibility:** Command Center → Refrigeration → Store 45 → Beer Cave system → CU-1 → fan motor.
-2. **Work-order lifecycle:** cashier report → reviews → `CWO-0245` → vendor email/acceptance → unresolved visit/follow-up → reclassification → return visit → invoice/allocation → rollups.
-3. **PM:** company compliance → missed occurrence → generated PM WO → vendor/visit → affected store/system.
-4. **Vendor and technician:** email outbox → secure acceptance → store QR → real/demo geofence states → active visit checkout → follow-up result.
+## Non-functional expectations
+
+- Responsive desktop and mobile web experiences for each persona's principal workflow.
+- Server-side filtering, search, sorting, aggregates and stable pagination at and beyond 65 stores.
+- Organization-first authorization on reads, writes, search, files, exports, jobs and tokens.
+- Idempotent and transactional domain commands for money, audit, follow-up and state transitions.
+- Accessible keyboard navigation, labels, focus handling and status communication.
+- Store-local time presentation with preserved UTC event timestamps and organization fiscal-period rules.
+- Clear loading, empty, partial-data, error and permission-denied states.
+- Import/export jobs with progress, row-level errors and immutable batch history.
 
 ## Explicit non-goals
 
-Payroll, employee scheduling, POS, retail inventory, full accounting/AP, payments, banking, vendor credential management, vendor dispatch or technician roster, native apps, continuous tracking, routes, parts inventory, predictive AI, full email ingestion, production accounting integration, SSO, vendor marketplace, and broad trade coverage. The data model may admit future categories, but the demo UI focuses on HVAC and Refrigeration.
+The clean rebuild does not include:
 
-## Product risks and safeguards
+- Payroll, employee timekeeping administration or shift scheduling.
+- Tax calculation, filing or compliance determination.
+- Banking, payment execution or card/ACH processing.
+- Accounts receivable or customer billing.
+- General-ledger replacement or authoritative financial statements.
+- POS, retail merchandising or retail inventory.
+- Full warehouse purchasing, stock replenishment or route optimization.
+- Continuous technician location tracking.
+- A vendor marketplace or vendor credentialing network.
 
-- **Incomplete classification:** display coverage and keep claims at the deepest supported level.
-- **Vendor adoption:** minimize required steps and support later integration rather than duplicate entry.
-- **False location confidence:** show accuracy/distance/evidence type; keep exception path and review.
-- **Metric mistrust:** expose formulas, date ranges, numerator/denominator and supporting rows.
-- **Capital overreach:** provide rule reasons and management disposition, not automatic decisions.
-- **Workflow decay:** surface missing/overdue next actions as first-class exceptions.
+Work-order labor/material cost capture, maintenance assignment windows, POs, invoice review, payment-status tracking, accruals and GL exports are explicitly in scope and must not be removed under these exclusions.
+
+## Release quality bar
+
+The rebuild is ready for demonstration only when:
+
+1. The manager can search and drill from a principal metric to source records with no dead end.
+2. The 12-store showcase remains easy to navigate, while separate 65-store and one-store fixtures render appropriate navigation and results.
+3. Store creation connects to equipment, PM, financial mappings and responsibility setup.
+4. Work-order creation permits deferred classification and later audited enrichment.
+5. Internal, external and blended workflows reach completion or an accountable unresolved state.
+6. Financial stages remain distinct, allocations reconcile, unallocated balances remain visible and GL export traces back to sources.
+7. Tenant, role, file, token and vendor-projection boundaries are server enforced.
+8. Type checking, lint, unit/integration/end-to-end tests and production build pass.
+9. Principal owner/manager, store setup, internal technician, vendor deep-link/portal, finance and mobile journeys are inspected in a browser.
+10. The experience feels like one interconnected platform, not a collection of static demo pages.

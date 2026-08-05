@@ -1,288 +1,508 @@
-# Clark's Operations Architecture
+# Clark's Facilities Platform Architecture
 
-**Decision date:** August 5, 2026  
-**Architecture:** Production-shaped full-stack web monolith with deterministic demo adapters
+**Decision date:** August 5, 2026
+**Status:** Clean-rebuild target architecture
+**Pilot shape:** One approximately 65-store operator, with the same product serving a one-store operator
 
-## Decision summary
+## 1. Product and architecture decision
 
-The repository uses a multi-tenant TypeScript application deployed as one monolith rather than microservices. React renders responsive executive, manager, vendor and technician experiences; framework route handlers expose mutations and integration boundaries; framework-independent domain services compute metrics and enforce workflow invariants; SQLite-compatible relational storage holds operational records; object storage holds files. The first pilot target is approximately 65 stores, while the same tenant model must remain comfortable for one-store and other regional operators.
+Clark's Facilities is an owner-side maintenance intelligence, accounting and accountability platform for every maintenance trade. HVAC and refrigeration receive the deepest pilot data and workflows, but the domain model also supports foodservice, electrical, plumbing, fuel, building, life safety, landscaping, snow, janitorial, pest, signage, waste and organization-defined categories. The internal Clark's work order is the operational spine: requests, classification, assignments, provider responses, visits, follow-ups, PM occurrences, proposals, approvals, purchase orders, invoices, credits, payments, allocations, files and audit events attach to it or lead to it.
 
-The application is optimized for a deterministic owner demonstration but keeps external effects—database, files, email, tokens and geolocation—behind explicit adapters. Native applications can later call the same HTTP/domain layer.
+The rebuild will be a multi-tenant TypeScript web monolith deployed to a Cloudflare-compatible runtime. It will use D1 for relational operational data and R2 for private file objects. Framework-independent domain services will own workflow rules; route handlers and channel adapters will translate HTTP, email links, QR visits and provider APIs into the same domain commands.
 
-## Technology stack
+The product includes manager dispatch, internal work queues, schedules, checklists, service evidence, labor-cost records and material-use records so internal maintenance teams can execute work. It deliberately stops short of route optimization, employee rostering, payroll, inventory valuation, vendor marketplace administration, bank/payment execution, tax, accounts receivable, general-ledger replacement, predictive AI and continuous location tracking.
 
-- **Language:** TypeScript 5.9 in strict mode.
-- **UI:** React 19.2, Next App Router-compatible routing and server rendering.
-- **Runtime/build:** vinext 1.0 beta, Vite 8 and a Cloudflare Worker-compatible ESM output.
-- **Styling:** Tailwind CSS 4 plus a small product-specific CSS token layer; accessible native controls and Lucide icons.
-- **Validation:** Zod at request and form boundaries.
-- **Relational data:** Cloudflare D1/SQLite with Drizzle ORM and committed SQL migrations.
-- **Blob data:** Cloudflare R2 behind a `FileStore` interface.
-- **Testing:** Vitest for pure domain/integration/render checks plus an end-to-end domain journey; browser-driven QA for principal pages and responsive states.
-- **Deployment:** Sites/Cloudflare with logical D1 and R2 bindings declared in `.openai/hosting.json`.
+### Non-negotiable product rules
 
-### Why this stack
+- Every tenant-owned operation begins with `organization_id`.
+- A store belongs directly to an organization. Brand and region are optional groupings.
+- A work order is valid with a store only; category, system, asset and component may be added later.
+- Original employee-report content and audit history are append-only.
+- Every unresolved, non-terminal work order has an accountable party, next required action, due time and escalation destination.
+- Internal and external fulfillment use one work-order lifecycle and one evidence model.
+- A vendor portal is optional. Email/deep links, phone-recorded responses, QR and APIs are first-class channels.
+- Money is stored in integer cents. Quote, approved, committed, invoice, credit, warranty and paid stages remain distinct.
+- Every metric and outlier links to its filtered supporting records.
 
-- One deployable unit is appropriate for a small product team and avoids distributed transactions across a tightly connected work-order graph.
-- TypeScript supports shared domain and validation contracts across UI, routes and future native/API clients.
-- A relational database is the correct source of truth for hierarchies, many-to-many links, financial allocation reconciliation and audit history.
-- SQLite/D1 gives a simple demonstration path while preserving standard SQL and Drizzle migrations for a later PostgreSQL move.
-- R2 separates file bytes from transactional metadata and has an S3-like object-storage migration path.
-- Server rendering provides fast, linkable owner drill-downs while client islands handle filters, role switching, uploads and geolocation.
+## 2. Technology shape
 
-## Repository structure
+- **Language:** TypeScript in strict mode.
+- **UI/runtime:** React and the current Next-compatible App Router/vinext stack.
+- **Validation:** Zod at every external boundary.
+- **Relational store:** Cloudflare D1/SQLite through Drizzle ORM and committed SQL migrations.
+- **Object store:** Private Cloudflare R2 through a `FileStore` interface.
+- **Async delivery:** D1 outbox plus scheduled/background delivery adapters for email and integrations.
+- **Tests:** Vitest for domain, repository and rendered integration tests; browser automation for principal owner, requester, provider and technician journeys.
+- **Deployment:** One worker-compatible application with `DB` and `FILES` bindings declared in `.openai/hosting.json`.
+
+A modular monolith is the right starting point because a work-order transition frequently updates assignments, follow-ups, finance, outbox and audit together. Keeping that operation within one database boundary is safer and simpler than coordinating microservices. D1 is sufficient for the pilot when tenant-first indexes, keyset pagination and bounded aggregates are used. Repository contracts keep a later PostgreSQL move possible without designing for it prematurely.
+
+## 3. Bounded modules
 
 ```text
-app/                         Route pages, layouts and HTTP handlers
-  api/                       Vendor, visit, upload and demo mutation endpoints
-  assets/[assetId]/          Asset detail
-  components/[componentId]/  Component detail
-  email-outbox/              Development email preview
-  pm/                        PM dashboard
-  reports/new/               Frontline intake
-  stores/[storeId]/          Store and store-system drill-down
-  systems/[categoryId]/      Company category explorer
-  technician/[token]/        Store QR flow
-  vendor/accept/[token]/     Secure vendor response
-  work-orders/[workOrderId]/ Internal work-order detail
-components/                  Shells and reusable product UI
-db/                          Drizzle schema, migration helpers and adapters
-drizzle/                     Generated SQL migrations
-lib/domain/                  Pure rules, calculations and workflow services
-lib/demo/                    Deterministic fixture generator and scenario IDs
-lib/server/                  Repositories, permissions, email, files and tokens
-public/demo-files/           Fictional seeded document previews
-scripts/                     Seed/verification utilities
-tests/                       Unit, integration, rendered and end-to-end tests
-docs/                        Research and product/architecture decisions
+Identity & tenancy      Organizations, memberships, roles, scope
+Location commissioning Stores, brands, regions, areas, readiness
+Taxonomy                Canonical concepts, local labels and aliases
+Equipment               Systems, assets, components, warranties
+Request intake          Immutable employee reports and reviews
+Work control            Work orders, classification, assignments, follow-ups
+Provider exchange       Email links, portal, API/webhooks, phone recording
+Visit evidence          QR sessions, check-in/out and one basic outcome
+Preventive maintenance  Plans, targets, occurrences and linked work orders
+Maintenance finance     Proposals, approvals, commitments, invoices and ledger
+Files & communication   Private files, links, messages and outbox
+Analytics               Exception queues, rollups, coverage and drill-through
+Audit                   Append-only domain and security events
 ```
 
-## Execution and data modes
+Domain modules accept typed records and an injected clock. They do not import React, D1, R2 or environment state. HTTP handlers authorize and validate, call one domain operation, persist its batch, and return a projection.
 
-### Deterministic demo mode
+## 4. Tenant and organizational model
 
-The fixture generator uses a fixed seed and clock to produce all organizations, locations, systems, assets, work orders, visits, PM occurrences, financial records and audit events. The same generated records feed pages and calculation services; dashboard summaries are never separate constants.
+### Core hierarchy
 
-The demo can be reset to that fixture. Browser-only presentation mutations may be held in the demo session to keep scripted flows repeatable. The UI labels all simulated location/email states as Demo Mode.
+```text
+Organization
+├── Brand (optional)
+├── Region (optional grouping)
+└── Store
+```
 
-### Persistent mode
+`stores.organization_id` is mandatory. `brand_id` and `region_id` are nullable. Assigning or changing a region never changes a store's identity or history. A one-store organization needs neither a placeholder brand nor a placeholder region.
 
-D1 is the operational source of truth. The seed command writes the deterministic fixture through repository adapters using stable IDs and is idempotent. Route handlers validate and authorize mutations, append audit events and then return updated projections. R2 stores upload bytes; D1 stores object keys and metadata. Every repository method requires an organization context; there is no unscoped default query.
+One person may hold several roles. Authorization is expressed through organization membership plus zero or more scope grants at organization, brand, region or store level. A vendor relationship is organization-private even if the same real-world company serves another customer.
 
-The production path must not depend on the fixture repository. During demo development a fixture projection may be used as a fallback if the local D1 binding is absent; that fallback is visible in environment documentation and is a deferred production limitation, not silently treated as durable data.
+### Tenant isolation
 
-## Database model
+D1 does not provide row-level security, so isolation is enforced structurally and in repositories:
 
-All tenant-owned tables include `organization_id`. IDs are stable text ULIDs/UUIDs in the demo; timestamps are ISO-8601 UTC text. Money is integer cents. Coordinates are decimal degrees; distances and accuracy are integer meters.
+- Every tenant table contains `organization_id`.
+- Unique constraints are tenant-relative, for example `(organization_id, work_order_number)`.
+- Relationships use organization-aware validation; no repository infers tenant only through a joined parent.
+- Repository methods require a non-optional `OrganizationContext` as their first argument.
+- Queries place `organization_id = ?` before role, region, store, vendor or status filters.
+- API detail routes return not-found for out-of-scope records to avoid enumeration.
+- Automated tests attempt cross-tenant reads, writes, token reuse and file access.
 
-### Identity and organization
+Platform-provided taxonomy and store blueprints are non-operational templates. Provisioning copies selected definitions into an organization; runtime work never shares tenant operational rows.
 
-- `organizations(work_order_prefix, time_zone, review_policy, settings_json)`
-- `memberships(organization_id, person_id, status)`
-- `regions(organization_id)`
-- `stores(organization_id, region_id?, code, latitude, longitude, geofence_radius_m)`
-- `store_areas(store_id)`
-- `people(organization_id, kind)`
-- `role_assignments(person_id, role, region_id?, store_id?, vendor_id?)`
-- `vendors(organization_id)`
-- `vendor_contacts(vendor_id)`
+### Single-store adaptation
 
-### Maintenance hierarchy and taxonomy
+Single-store customers use the same schema and routes. The UI adapts by hiding region/brand navigation, removing meaningless store comparison, defaulting the store scope and allowing one person to hold owner, requester, reviewer and approver roles. The product does not maintain separate “small business” code paths.
 
-- `service_categories(organization_id)`
-- `system_types(service_category_id)`
-- `store_systems(store_id, service_category_id, system_type_id)`
-- `asset_classes(service_category_id)`
-- `assets(store_system_id, asset_class_id)`
-- `component_types(service_category_id)`
-- `components(asset_id, component_type_id)`
+## 5. Physical hierarchy is not the accounting hierarchy
 
-Physical foreign keys enforce belonging; taxonomy keys enable cross-store comparison.
+The physical model describes where equipment exists and how it is assembled:
 
-`region_id` is nullable by design. Queries always begin with `organization_id`; they never infer tenant through a region. Vendor records are tenant-owned in v1 so pricing, evaluations and contracts cannot leak across customers, even when the same real-world vendor serves multiple operators. A future shared vendor directory would be a separate global identity joined through organization-private vendor relationships.
+```text
+Store
+└── Area or space (optional)
+    └── System (optional, e.g. sales-floor HVAC or walk-in refrigeration)
+        └── Asset (optional, e.g. RTU-3 or condensing unit CU-1)
+            └── Component (optional, e.g. compressor or contactor)
+```
 
-### Intake and work control
+The financial model describes how maintenance cost is coded:
 
-- `employee_reports(store_id, reporter_id, original_description, immutable fields...)`
-- `report_reviews(report_id, reviewer_id, decision, context)`
-- `work_orders(store_id, service_category_id, store_system_id?, asset_id?, component_id?, current control fields...)`
-- `work_order_reports(work_order_id, report_id)`
-- `work_order_classification_events(work_order_id, prior/new association fields, actor, reason)`
-- `vendor_responses(work_order_id, vendor_id, response, identity, token_id)`
-- `service_visits(work_order_id, vendor_id, technician_entered_name, session_hash, arrival/departure evidence, outcome)`
-- `follow_ups(work_order_id, source_visit_id?, accountable kind/id, action, due_at, escalation, status)`
-- `comments(work_order_id, visibility, author_id, body)`
+```text
+Financial cost center
+GL account
+Budget code
+Department or responsibility code
+Fiscal period
+```
 
-The original employee-report columns are never updated after insert. Application authorization and database triggers protect them in production migrations. Classification changes occur through a domain service that updates the current projection and appends a classification/audit event together.
+These dimensions are parallel. “HVAC,” “ovens” or “walk-in cooler” must not become financial cost-center parents merely to make the UI hierarchy work. A work order or ledger allocation may reference both a physical target and financial dimensions.
 
-### PM
+### Physical tables
 
-- `pm_plans(organization_id, scope/frequency/window/vendor/evidence fields)`
-- `pm_plan_targets(pm_plan_id, target_type, target_id)`
-- `pm_occurrences(pm_plan_id, due_at, window_start/end, status, work_order_id?, completed_at?, waiver fields?)`
+- `store_areas(organization_id, store_id, canonical_type_id?, local_name)`
+- `store_systems(organization_id, store_id, area_id?, system_type_id, local_name, status)`
+- `assets(organization_id, store_id, system_id?, asset_type_id, tag?, serial_number?, lifecycle fields)`
+- `components(organization_id, store_id, asset_id, component_type_id, local_name?, lifecycle fields)`
+- `warranties(organization_id, asset_id?, component_id?, provider_relationship_id?, terms)`
 
-Unique `(pm_plan_id, due_at, target_type, target_id)` prevents duplicate materialization.
+An asset can be created directly under a store when its system is unknown. A later move into a system preserves the asset ID and appends a hierarchy event. A component always belongs to an asset. Deeper work-order associations are optional, but when supplied the domain service validates that all selected records belong to the same organization and store and that component → asset → system associations are physically valid.
 
-### Finance and files
+## 6. Canonical taxonomy with local language
 
-- `quotes(work_order_id, vendor_id, amount_cents, status)`
-- `authorizations(work_order_id, quote_id?, type, amount_cents, status)`
-- `invoices(work_order_id, vendor_id, number, total_cents, status)`
-- `credits(invoice_id, amount_cents, status)`
-- `cost_allocations(financial_type, financial_id, store/category/system/asset/component targets, amount_cents, work_class, cost_category)`
-- `documents(organization_id, object_key, safe filename, mime, bytes, classification, uploader, visibility)`
-- `document_links(document_id, entity_type, entity_id)`
-- `communications(work_order_id, channel, direction, visibility, delivery_state)`
-- `outbox_messages(organization_id, work_order_id?, recipient, subject, html/text, delivery_state)`
+Analytics requires stable concepts; store teams and regional operators require familiar labels. The rebuild separates those concerns.
 
-Application validation and a transaction/batch guard require invoice allocation totals to be between zero and the invoice total. Credits remain separate; reports subtract posted credit allocations.
+### Model
 
-### Security and audit
+- `taxonomy_concepts(organization_id, id, kind, canonical_key, parent_concept_id?, status)`
+- `taxonomy_labels(organization_id, concept_id, locale, display_label, is_primary)`
+- `taxonomy_aliases(organization_id, concept_id, store_id?, normalized_alias, display_alias, source)`
+- `taxonomy_mappings(organization_id, source_system, source_code, concept_id)`
 
-- `public_tokens(organization_id, purpose, token_hash, record_type/id, expires_at, used_at?, revoked_at?)`
-- `audit_events(organization_id, entity_type/id, event_type, actor_type/id, occurred_at, immutable JSON details)`
+Kinds include `category`, `area_type`, `system_type`, `asset_type`, `component_type`, `problem_code`, `outcome_code` and `cost_class`.
 
-Indexes follow actual queues and drill-downs: open WOs by org/status/due, store/category/time, vendor/acceptance, open follow-ups/due, occurrence/status/due, allocation targets/posted date, visits/work order and audit entity/time. Migrations run `PRAGMA optimize` after index creation. List endpoints use cursor pagination and a stable secondary ID sort; company aggregates execute in SQL or bounded projection queries rather than shipping every record to the client.
+`canonical_key` is stable and drives rules and reporting. Labels may change without rewriting history. Aliases support terms such as “roof unit,” “RTU,” a local nickname or an imported vendor code. Store-specific aliases are allowed, but they resolve to an organization-owned canonical concept. Search indexes canonical labels and aliases; saved records retain the concept ID plus the label snapshot shown when the event occurred.
 
-### Pilot scale and customer-size adaptation
+The initial product activates an all-trades maintenance taxonomy. HVAC and refrigeration receive the deepest system, asset, component, PM, work-history and cost examples; the other common trades remain fully active at store, category, system and work-order levels.
 
-The initial capacity target is one 65-store organization with roughly 8,000–12,000 work orders, 5,000 PM occurrences and tens of thousands of audit/file metadata records per year. That volume is within the chosen monolith and D1 model when indexes, pagination and bounded aggregates are used. A synthetic 65-store scale fixture verifies assumptions during test runs.
+### Progressive classification
 
-Customer shape is configuration, not a separate product edition:
+`work_orders.store_id` is required. `category_id`, `system_id`, `asset_id` and `component_id` are nullable. Classification occurs through a domain command that:
 
-- Single-store organizations have no required region row; owners may hold several roles through assignments.
-- Multi-store organizations can add regions later without changing store/work-order IDs or history.
-- Navigation derives from enabled modules, store count and permissions; it does not hardcode Clark's regions or store codes.
-- Work-order numbers are unique per organization using an organization prefix/sequence.
-- Taxonomy defaults can be copied from platform templates, then governed per organization without sharing operational data.
-- Cross-organization aggregation is prohibited in customer-facing services. Future benchmarking requires a separately reviewed anonymization/consent pipeline.
+1. Validates tenant and physical belonging.
+2. Appends `work_order_classification_events` with prior/new associations, actor, channel and reason.
+3. Updates the work order's current classification projection.
+4. Recomputes no historical financial allocation silently.
 
-## Service and repository boundaries
+Reporting always shows classification coverage. Asset-level reports include an explicit unclassified bucket and a denominator such as “64% of invoiced HVAC/R work is classified to an asset.”
 
-Pure domain modules accept records and a supplied clock. They do not import React, D1, R2 or environment state.
+## 7. Request, work order and unresolved-work control
 
-- `work-order-service`: lifecycle transition guards, progressive classification and unresolved-work invariant.
-- `follow-up-service`: outcome mapping, creation, completion and overdue logic.
-- `pm-service`: occurrence generation, due-window classification and compliance.
-- `finance-service`: allocation validation, spend classification and hierarchical rollups.
-- `analytics-service`: periods, medians, percentiles, cohorts, outlier drivers and reconciliation.
-- `replacement-service`: threshold reasons and recommendation narrative.
-- `geofence-service`: Haversine distance and verification state.
-- `permission-service`: role/scope/field-level projections including vendor history restrictions.
+### Immutable request intake
 
-Server adapters implement `OperationsRepository`, `FileStore`, `EmailDelivery`, `TokenService` and `Clock`. This keeps route handlers thin and supports D1→PostgreSQL, R2→S3, and outbox→email-provider changes.
+`employee_reports` stores the original reporter identity, store, observed symptoms, impact, optional photo links and submission timestamp. Those columns are immutable after insert. Management interpretation lives in `report_reviews`; corrections and decisions append records rather than editing the report.
 
-## Authentication and role-based access
+A review may merge a duplicate, close as no work required, or create/link an internal work order. The link preserves the source report permanently.
+
+### Canonical work order
+
+The work order contains current control fields rather than every historical fact:
+
+- organization and work-order number
+- store and optional classification
+- priority and service target
+- lifecycle status
+- accountable assignment
+- next required action
+- next-action due time
+- escalation destination
+- current NTE/authorization projection
+- opened, resolved, verified and closed timestamps
+
+Status is changed only through named domain commands. Original due dates, provider responses, classifications, approvals and visit outcomes are retained in append-only events.
+
+### Closure rule
+
+A work order cannot close while it has an open required follow-up, unresolved verification, pending proposal decision or unreconciled required invoice allocation. An unresolved visit outcome creates its follow-up in the same database batch. Rescheduling requires a reason and retains the missed date.
+
+## 8. Unified internal and external assignment
+
+Internal and vendor work share one assignment abstraction:
+
+`work_order_assignments(organization_id, work_order_id, assignee_type, person_id?, provider_relationship_id?, status, response_due_at, accepted_at?, ended_at?, next_action, due_at, escalation_target)`
+
+A constraint requires exactly one target. `assignee_type` is `internal` or `provider`. A work order may have sequential assignments and, when explicitly justified, concurrent assignments, but only one assignment owns the next required action at a time.
+
+Equal product support means both modes provide the same owner visibility, SLA clock, evidence, unresolved-work controls and cost linkage. Internal teams additionally receive a practical assignment queue, schedule, checklist, labor-cost and material-use workflow. These records support maintenance execution and costing, not payroll, employee scheduling or inventory accounting.
+
+### Provider-office action in v1
+
+The required provider response is intentionally narrow:
+
+- Accept
+- Decline with a reason
+- Request clarification
+
+The platform records who responded, when, through which channel and on whose behalf. Declines return the work order to the manager queue or the configured fallback provider; they do not silently disappear.
+
+### Channel adapters
+
+All channels call the same domain commands and append the same audit event:
+
+| Channel | Intended use |
+|---|---|
+| Internal web app | Managers and internal accountable owners |
+| Email action link | One-click provider accept/decline/clarification without an account |
+| Purpose-bound deep link | Limited work-order view, proposal or invoice action |
+| Optional provider portal | Recurring vendors who want queues and document history |
+| Provider API/webhook | High-volume vendors staying in their own FSM/CMMS |
+| Phone-recorded response | Manager records a vendor response with recorder attribution |
+| Technician QR | Accepted work order, entered name, check-in/out and one outcome |
+
+`interaction_events` records `actor_type`, asserted identity, verified identity when available, channel, purpose, timestamp, payload snapshot and recorder. Email replies may append messages and attachments; structured state changes require explicit action links rather than natural-language interpretation.
+
+Provider projections exclude other vendors' pricing, internal notes, confidential approvals and unrelated stores.
+
+## 9. Visit evidence and public tokens
+
+Public links never contain an editable bare record ID. `public_tokens` stores organization, purpose, record binding, token hash, expiry, use/revocation state and version. Raw token material is never stored.
+
+- Vendor response tokens are short-lived and can be single-use.
+- Technician work-order links are issued only after provider acceptance.
+- Store QR tokens are purpose-bound, rotatable entry points and reveal no unrestricted store data.
+- Production secrets are environment-managed with no source fallback.
+
+The technician journey is limited to:
+
+`store QR → vendor/accepted WO → entered technician name → check-in → rescan/active visit → one outcome → checkout`
+
+Location is collected only at check-in and checkout. D1 stores timestamp, submitted coordinates, browser accuracy, derived distance and verification result. No background tracking or route history exists. Demo simulations are visibly labeled “Demo Mode” in both UI and audit timeline.
+
+## 10. Preventive maintenance
+
+- `pm_plans(organization_id, canonical task, cadence, window, evidence policy, status)`
+- `pm_plan_targets(organization_id, pm_plan_id, target_type, target_id)`
+- `pm_occurrences(organization_id, pm_plan_id, target_id, due/window fields, status, work_order_id?)`
+
+Plans target known stores, systems or assets. Blueprints may propose PM coverage but never create fake assets. Materialization is idempotent through a unique plan/target/due key. Missed, waived and rescheduled occurrences preserve the original due window and reason. Any generated work uses the canonical work-order lifecycle.
+
+## 11. Maintenance finance and accounting ledger
+
+Finance is a complete maintenance-focused accounting and AP-control suite. It owns budgets, quotes/proposals, approvals, purchase orders, invoice review, credits, allocations, accruals, payment status and maintenance-ledger exports while retaining the work, store, provider and equipment evidence behind every amount. It does not move money, calculate or file tax, run accounts receivable, connect bank accounts or replace the customer's general ledger.
+
+### Source records
+
+- `proposals` and `proposal_lines`
+- `approvals` with amount, decision, actor, reason and authority level
+- `commitments` for authorized spend
+- `invoices` and `invoice_lines`
+- `credits`
+- `payments` or ERP payment-status references when imported
+- `financial_allocations`
+- `maintenance_ledger_entries`
+
+All money is integer cents with explicit currency. Proposal, approved, committed, invoiced, credited, warranty-recovered and paid values are separate stages; dashboards never add stages together as if they were one total.
+
+### Financial dimensions
+
+- `financial_cost_centers`
+- `gl_accounts`
+- `budget_codes`
+- `departments`
+- `fiscal_periods`
+
+An allocation links a source line explicitly to a store and optional category/system/asset/component plus financial dimensions. No cost is assigned from free-text matching. Asset and component rollups use only explicit associations.
+
+Draft invoices may show an unallocated balance. Approval/export is blocked until required allocations reconcile exactly to the invoice total. Credits and corrections append reversal and replacement ledger entries; posted facts are never overwritten. Ledger entries retain the source document, source line, allocation, financial stage, posting time and audit event.
+
+The reporting layer can answer the same amount along two independent paths:
+
+- Physical: organization → store → category → system → asset → component
+- Accounting: cost center → GL → budget → fiscal period
+
+Both end at supporting work orders, source documents and allocation lines.
+
+## 12. Manager-first information architecture
+
+The default application surface is a manager control center that combines maintenance financial position, reporting, provider/internal accountability and prioritized operating exceptions. Maintenance execution remains a connected primary section rather than consuming the entire product.
+
+### Primary navigation
+
+1. **Overview** — financial position, accountability, exceptions and store/category signals
+2. **Stores** — global store search, dashboards, commissioning and cost drill-down
+3. **Accountability** — owner, next action, deadline and escalation across internal and vendor work
+4. **Maintenance** — requests, work orders, due-date schedules, PM and internal execution
+5. **Equipment** — systems, assets, components, history and replacement evidence
+6. **Accounting** — budgets, approvals, POs, invoices, credits, payments, accruals and GL/export
+7. **Providers** — coverage, assignments, optional portal and directly observed performance
+8. **Reports** — standard management library, custom builder, schedules and reversible drill-through
+9. **Administration** — organization, roles, taxonomy, routing, financial controls, imports and audit
+
+Single-store users see the same order with store scope preselected and portfolio-only comparisons removed.
+
+### Action Center queues
+
+- Needs triage
+- Awaiting internal/provider response
+- Response or service target overdue
+- Clarification requested
+- Proposal required or awaiting approval
+- Unresolved follow-up overdue
+- Completion awaiting verification
+- Invoice or allocation exception
+
+Each count is calculated from source records and opens the exact filtered list. Every row shows accountable party, next action, due time, escalation destination and blocker.
+
+### Global search
+
+One search box supports exact and prefix lookup for:
+
+- work-order number
+- store code, name and normalized address
+- asset tag, serial number and local alias
+- provider name
+- proposal/invoice number
+
+Results are tenant-scoped before matching and grouped by entity. Search never loads an organization's full dataset into the browser. Descriptions and notes may use a tenant-scoped FTS index; exact operational identifiers use normalized indexed columns.
+
+## 13. Reporting and drill-through contracts
+
+The canonical cost path is:
+
+`organization → store → category → system → asset → component → work orders → financial allocations`
+
+Every aggregate response includes:
+
+- period and timezone
+- selected financial stage
+- cohort/filter definition
+- value and record count
+- classification coverage where relevant
+- a serializable supporting-record filter
+
+The UI constructs the next drill level from that filter rather than from an unrelated dashboard dataset. Unclassified work remains visible at every optional level. Medians and percentiles are preferred for skewed cost and resolution measures. Replacement review shows explicit rules, reasons, thresholds and source records; it never emits an opaque health score or automatic replacement order.
+
+## 14. D1 implementation path
+
+### Clean schema and migrations
+
+The rebuild starts with a new baseline migration organized by bounded module. Drizzle defines types and migrations; hand-reviewed SQL adds checks, compound tenant indexes, FTS tables and immutable-row triggers where required.
+
+Write operations that must remain atomic use a D1 batch:
+
+- report review + work-order creation + source link + audit
+- classification projection + classification event + audit
+- provider response + assignment transition + fallback/outbox + audit
+- unresolved checkout + visit evidence + follow-up + work-order control + audit
+- financial approval/allocation + ledger entries + audit
+
+External side effects use an outbox. A transaction commits the domain change and outbox row; a scheduled worker delivers email/webhooks and records attempts idempotently. Incoming provider callbacks require an organization-scoped idempotency key.
+
+### Repository rules
+
+Repositories expose task-oriented methods, not generic unscoped table access. Lists require a page size, stable sort and cursor. Aggregates execute in SQL. The browser receives only the requested page or bounded drill projection.
+
+### Environment path
+
+1. Local/test D1 database and local R2-compatible bucket.
+2. Deterministic seed applied through the same repositories.
+3. Preview environment with isolated D1/R2 bindings and migrations.
+4. Production D1/R2 with migration gate, backup/export procedure and environment-owned secrets.
+5. Move to PostgreSQL only after measured concurrency, integration or reporting pressure justifies it.
+
+## 15. R2 file path
+
+R2 stores bytes; D1 stores private metadata and links:
+
+- `documents(organization_id, object_key, display_name, mime, bytes, hash, classification, uploader, created_at)`
+- `document_links(organization_id, document_id, entity_type, entity_id, visibility)`
+
+Upload flow validates tenant scope, target ownership, size, MIME and extension; generates an opaque server key; writes the object; records metadata/link; and appends an audit event. Downloads pass through an authorized route or a short-lived permission-checked link. Buckets are never public. Production adds malware scanning, retention and legal-hold policy before accepting real customer documents.
+
+## 16. Authentication: demo versus production
 
 ### Demo
 
-No production credentials are required. A visible role switcher selects one of seven fixed fictional personas. Server mutations also receive/derive a demo persona and run the same permission checks; the switcher is not represented as production security.
+- A visible, fixed persona switcher is presentation tooling only.
+- The active persona is stored in a signed demo session and still passes through the production permission service.
+- Simulated email, vendor response and geolocation states are labeled Demo Mode.
+- Demo tokens are deterministic only within a demo-specific secret/version so scripted URLs are stable.
+- Tenant-switch scenarios are explicit and never imply production authentication.
 
-### Production path
+### Production
 
-- Company users authenticate through enterprise OIDC/SSO; stable external subject maps to `people` and assignments.
-- A person may be a member of more than one customer organization, but every request selects one active membership and receives a tenant-scoped session context.
-- Vendor office uses account authentication or short-lived, single-purpose emailed tokens for initial response.
-- Technician QR flow uses a store-purpose token plus ephemeral, same-browser session identifier; it is not a general account.
-- Server authorization first restricts `organization_id`, then role/scope, then record field projection.
-- Denial occurs before existence-sensitive detail is returned to reduce cross-tenant enumeration.
+- Operator users authenticate through OIDC/SSO where available; a passwordless option may serve independent operators.
+- External subject maps to a person and one or more organization memberships.
+- Each request selects one active organization context before role/scope checks.
+- Vendor portal accounts are optional. Accountless email/deep-link actions use short-lived purpose-bound tokens.
+- Internal technicians may use authenticated work queues. Outside technicians can use purpose-bound QR/deep-link flows without accounts; recurring providers may optionally use portal accounts.
+- Sessions, CSRF protection, rate limits, token rotation, audit and secret management are production requirements, not demo toggles.
 
-## Audit-event strategy
+## 17. Deterministic seed and demo narrative
 
-Audit events are append-only facts, not a mutable activity note. Event types include report submitted/reviewed, WO created/issued/status changed/reclassified, email created/delivered/opened, vendor response, visit check-in/out, location exception, follow-up created/overdue/completed/rescheduled, document uploaded, quote/authorization/invoice/credit/allocation, verification, PM status and watchlist disposition.
+The fixture generator uses a fixed PRNG seed, fixed clock and stable IDs. It writes through repository interfaces and is idempotent.
 
-Each event contains actor, timestamp, entity, visibility and structured before/after or source IDs. UI timelines merge domain events in timestamp order but permission-filter details.
+### Required fixture shapes
 
-## File-storage abstraction
+- One concise 12-store showcase portfolio across three regions, selected from a 65-store-capable operator model.
+- A separate automated 65-store scale fixture and one isolated one-store fixture.
+- One isolated one-store operator proving no placeholder region or comparison UI is required.
+- Active all-trades taxonomy with organization-specific labels and aliases, plus especially deep HVAC and refrigeration examples.
+- Credible store systems, assets and components, intentionally incomplete enough to exercise coverage.
+- Employee reports at store-only, category and fully classified depths.
+- Internal and external assignments using email, phone-recorded, portal/API and QR channels.
+- Accepted, declined, clarification, overdue, unresolved follow-up and verification scenarios.
+- PM due, completed, missed, waived and linked-work scenarios.
+- Proposal, approval, commitment, invoice, credit and allocation examples in integer cents.
+- Private file metadata and append-only audit histories.
 
-`FileStore.put`, `get`, `delete` and `signedDownload` operate on opaque keys. Upload flow:
+Named scenario IDs remain stable for demos and tests, including a high-cost refrigeration store, an asset watchlist case, an unclassified work-order case, a no-portal vendor acceptance and an unresolved visit that produces a follow-up.
 
-1. Validate authenticated scope, entity ownership, declared class, MIME, extension and maximum bytes.
-2. Sanitize display filename; generate server-owned object key.
-3. Stream bytes to R2 and record metadata/link in D1.
-4. Append audit event.
-5. Serve through an authorized route or short-lived signed link; never expose the bucket publicly.
+Dashboard values are never seeded separately. They are calculated from these records. The generator asserts referential integrity, financial reconciliation, tenant isolation and the unresolved-work invariant before completing.
 
-Demo accepts common images, PDF, text/CSV and office formats up to 10 MB. Malware scanning, document OCR and production retention/legal-hold policies are deferred.
+## 18. Index, query and pagination strategy
 
-## Email abstraction
+Representative indexes:
 
-`EmailDelivery.send(message)` returns provider message ID and state. `OutboxEmailDelivery` writes previewable messages and is the default. A future adapter may call a transactional provider when `EMAIL_PROVIDER` and credentials are configured. Templates are versioned and render both text and HTML. Secrets live only in environment configuration.
+```text
+work_orders(organization_id, status, next_action_due_at, id)
+work_orders(organization_id, store_id, created_at, id)
+work_orders(organization_id, category_id, created_at, id)
+work_orders(organization_id, asset_id, created_at, id)
+employee_reports(organization_id, review_status, submitted_at, id)
+work_order_assignments(organization_id, assignee_type, status, response_due_at, id)
+work_order_assignments(organization_id, provider_relationship_id, status, id)
+follow_ups(organization_id, status, due_at, id)
+pm_occurrences(organization_id, status, due_at, id)
+proposals(organization_id, status, decision_due_at, id)
+invoices(organization_id, status, submitted_at, id)
+financial_allocations(organization_id, store_id, financial_stage, posted_at, id)
+financial_allocations(organization_id, asset_id, financial_stage, posted_at, id)
+audit_events(organization_id, entity_type, entity_id, occurred_at, id)
+stores(organization_id, normalized_code)
+assets(organization_id, normalized_tag)
+assets(organization_id, normalized_serial_number)
+```
 
-## QR and public-token design
+Lists use keyset pagination with a deterministic secondary `id` sort. Filters are URL-serializable and accepted by both aggregate and detail endpoints. High-cardinality free text uses an FTS table keyed by organization and entity; exact identifiers do not rely on FTS. The 65-store pilot should use live indexed aggregates. Cached or materialized summaries are introduced only after query profiling, and every cache key includes organization, period, filter and data version.
 
-Store QR and vendor acceptance URLs use high-entropy opaque token material. D1 stores only a SHA-256 token hash plus purpose, record mapping, expiration and revocation/usage state. A token is useless for another purpose. Vendor response tokens expire and can be single-use; store QR tokens are long-lived, rotatable and reveal only the limited technician page after lookup.
+Query-plan tests use `EXPLAIN QUERY PLAN` for the principal queues, global identifier search and physical/financial drill paths. Performance tests assert bounded response sizes and stable pagination under concurrent inserts.
 
-The demonstration may use deterministic signed tokens generated from a local secret so QR links remain stable. Production secrets have no fallback, are rotated through environment management, and tokens carry version identifiers for migration.
+## 19. Test strategy
 
-## Geofence calculation and privacy
+### Domain unit tests
 
-The server runs the Haversine formula over store and reported coordinates. Evidence classification order is:
+- Store-only work order and every progressive-classification depth.
+- Physical belonging validation and append-only reclassification.
+- Immutable report and audit behavior.
+- Work-order transition guards and closure rejection.
+- Unresolved visit creating a follow-up in the same operation.
+- SLA, overdue, reschedule-reason and escalation logic.
+- PM materialization, uniqueness, completion, waiver and missed windows.
+- Proposal/NTE/approval transitions.
+- Invoice allocation equality, credits/reversals and dual-axis rollups.
+- Classification coverage, medians, percentiles and explainable watchlist rules.
+- Geofence distance and verified/unverified states.
 
-1. No coordinates/error → denied or unavailable.
-2. Reported accuracy above configured threshold → inaccurate.
-3. Distance above store radius → outside geofence.
-4. Otherwise → verified.
+### Repository and security integration tests
 
-The default store radius is 200 m and default acceptable accuracy is 150 m, both configurable. Stored evidence is limited to the two submitted points, accuracy, derived distance, timestamp, token/session hashes and result. No background watcher, route or continuous location is collected. UI copy accurately explains that browser permission denial must be fixed in browser settings; rescanning cannot reset it.
+- Organization scoping on every repository method.
+- Cross-tenant ID, token, search and file-access denial.
+- Organization-relative uniqueness and stable sequences.
+- Atomic domain batch plus outbox creation.
+- Idempotent provider callbacks and seed reruns.
+- Cursor pagination with deterministic ordering.
+- FTS and exact-search tenant isolation.
 
-## Demo-mode design
+### End-to-end domain journeys
 
-`VerificationProvider` has `BrowserGeolocationProvider` and `DemoGeolocationProvider`. Demo states produce typed readings that flow through the same geofence classifier where coordinates exist or the same exception mapping where they do not. The page and resulting timeline show an amber “Demo simulation” badge. Email delivery, vendor acceptance and reset use the same visible pattern.
+1. Report → review → store-only WO → later classification → internal completion → verification → close.
+2. WO → email provider acceptance without portal → QR check-in → unresolved checkout → automatic follow-up → return visit → verification.
+3. WO → provider API acceptance → proposal → approval/NTE → invoice → allocations → export status.
+4. Store commissioning → systems/assets → PM targets → readiness with intentional gaps.
+5. One-store organization completing the same workflows without region records.
 
-## UI architecture and accessibility
+### Browser QA
 
-- Desktop shell uses a compact left rail, global scope/date controls and clear breadcrumbs.
-- First viewport leads with an exception brief and evidence-based next action, not generic welcome cards.
-- Cards are links to filtered tables. Tables have semantic headers, visible focus, keyboard-accessible rows/links and responsive overflow.
-- Mobile technician and employee flows use one-column steps, minimum 44 px targets and no executive chrome.
-- Color supplements text labels/icons and meets accessible contrast. Motion is limited and respects reduced-motion preference.
-- Definitions and active periods sit next to metrics; data-coverage badges prevent false precision.
+Inspect desktop manager and mobile requester/technician paths in a real browser:
 
-## Testing approach
+- Action Center queue to supporting records.
+- Global search by store number, address, WO number, asset tag and invoice.
+- New-store commissioning continuity.
+- Work-order creation with system/asset/component deferred.
+- Internal and external assignment parity.
+- Provider email/deep-link flow with no account.
+- Technician QR check-in/out and visible location exception.
+- Store → category → system → asset → source-work drill-through.
+- Single-store IA with portfolio-only controls removed.
 
-### Unit
+Before release run type checking, lint, all unit/integration/end-to-end tests, production build, accessibility checks and principal browser journeys. No seeded or UI-only total may bypass domain calculations.
 
-- Work orders at store-only depth and later valid/invalid classification.
-- Haversine and verification states.
-- PM generation/window/compliance.
-- Follow-up creation, overdue and closure guards.
-- Allocation equality and hierarchical rollups.
-- Period comparisons, median/percentile outliers and drivers.
-- Replacement reasons and recommendation guard.
-- Vendor field-level permission projections.
+## 20. Delivery sequence
 
-### Integration/end-to-end domain journey
+1. Establish clean schema, tenant context, taxonomy and deterministic seed.
+2. Build store commissioning, immutable requests and canonical work orders.
+3. Add progressive classification, internal/provider assignments and Action Center.
+4. Add email/deep-link provider response and minimal technician QR visits.
+5. Add unresolved follow-up control and PM occurrences.
+6. Add proposals, approvals, invoices, allocation ledger and R2 files.
+7. Add global search, server pagination, drill-through reporting and coverage.
+8. Add provider API/webhooks, production auth, outbox delivery and operational hardening.
 
-A test executes report → review → WO → issue → vendor acceptance → check-in → unresolved checkout → follow-up → reclassification → return visit → store verification → invoice/allocation → close and asserts rollups/audit events.
-
-### Rendering and browser QA
-
-Server-render principal routes and assert product metadata, no starter artifacts, accessible landmarks and core scenario links. Use browser automation to inspect Command Center, Store 45, CU-1, `CWO-0245`, PM, vendor acceptance and mobile technician flows at desktop and mobile widths. Verify no dead controls in the principal narrative and correct overflow/focus states.
-
-## Path from demo to production
-
-1. Make D1 the only repository mode; add deployment-time migrations, backup/restore and environment isolation.
-2. Add OIDC SSO, SCIM/role provisioning, vendor accounts and production session protection.
-3. Add antivirus scanning, signed download expiry, retention, DLP and document OCR/classification review.
-4. Add transactional email with webhook delivery/open/bounce events and token rotation.
-5. Add background jobs for PM materialization, reminders, escalations and overdue snapshots.
-6. Integrate store masters and financial references with PDI/Petrosoft/accounting; add ServiceTitan/ServiceChannel-style vendor exchange only where vendors support it.
-7. Add rule governance, cohort configuration, accounting close/reconciliation and data-quality stewardship.
-8. Load/performance, accessibility, security and disaster-recovery testing; production observability and support playbooks.
-9. Move to PostgreSQL when concurrency, data volume, integration workloads or reporting justify it. Drizzle repository boundaries and standard relational keys minimize the change.
-
-The 65-store pilot does not itself require microservices or PostgreSQL. Migration should be driven by measured write contention, reporting/query needs, multi-region requirements or customer count—not store count alone.
-
-## Path to future native applications
-
-Native apps should not share database access. They authenticate to versioned HTTP endpoints that expose the same validated commands and permission-filtered projections. The responsive PWA remains the first-class employee/vendor entry point. A native technician app becomes reasonable only if offline service, managed-device camera behavior, push notifications or richer evidence capture proves necessary.
-
-## Known demonstration limitations
-
-- The demo role switcher is not authentication.
-- Location simulation is visibly synthetic; real browser geolocation depends on device/browser permissions and accurate configured store coordinates.
-- Fixture documents are fictional; production malware scanning/OCR is not included.
-- Email defaults to the local outbox.
-- Accounting, POS, vendor FSM and SSO integrations are architectural seams only.
-- Replacement and outlier thresholds are illustrative governance defaults, not validated Clark's capital policy.
+The 65-store pilot is a scale and workflow target, not a reason to fork the product or introduce distributed architecture.

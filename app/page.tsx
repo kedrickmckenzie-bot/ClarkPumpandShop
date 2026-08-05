@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { MaintenanceDashboard } from "@/components/maintenance-dashboard";
+import { PlatformOverview } from "@/components/platform-overview";
 
 export const metadata: Metadata = {
-  title: "Maintenance Home",
-  description: "Dispatch, schedule, technician work, PM and parts control across the maintenance portfolio.",
+  title: "Portfolio Overview",
+  description: "Maintenance cost, reporting, and accountability across the operating portfolio.",
 };
 
 export default function Home() {
-  return <MaintenanceDashboard />;
+  return <PlatformOverview />;
 }

@@ -15,6 +15,13 @@
       "when": 1785940160729,
       "tag": "0001_normal_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785947304851,
+      "tag": "0002_fine_freak",
+      "breakpoints": true
     }
   ]
 }

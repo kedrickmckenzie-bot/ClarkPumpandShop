@@ -1,4 +1,4 @@
 import type { Metadata } from "next";
-import { RequestsPage } from "@/components/maintenance-pages";
+import { RequestsCenter } from "@/components/maintenance-platform";
 export const metadata: Metadata = { title: "Service Requests" };
-export default function Page() { return <RequestsPage />; }
+export default function Page() { return <RequestsCenter />; }

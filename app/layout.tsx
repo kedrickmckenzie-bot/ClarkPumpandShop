@@ -2,42 +2,34 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: {
-    default: "Clark's Operations",
-    template: "%s · Clark's Operations",
-  },
-  description: "Maintenance operations and asset intelligence for convenience-store operators.",
+  title: { default: "R&M Control", template: "%s · R&M Control" },
+  description: "Maintenance intelligence, financial control, and provider accountability for multi-site operators.",
   openGraph: {
-    title: "Clark's Operations",
-    description: "Internal work-order control and asset intelligence for convenience-store operators.",
+    title: "R&M Control",
+    description: "See the money, the work, and who owns what next.",
     type: "website",
-    images: [{ url: "/og-card.png", width: 1733, height: 909, alt: "Modern convenience store connected to maintenance, refrigeration and verification signals" }],
+    images: [
+      {
+        url: "/og.png",
+        width: 1733,
+        height: 909,
+        alt: "R&M Control — see the money, the work, and who owns what next.",
+      },
+    ],
   },
-  twitter: { card: "summary_large_image", images: ["/og-card.png"] },
+  twitter: {
+    card: "summary_large_image",
+    title: "R&M Control",
+    description: "See the money, the work, and who owns what next.",
+    images: ["/og.png"],
+  },
   icons: { icon: "/favicon.svg" },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        {children}
-      </body>
-    </html>
-  );
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="en"><body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body></html>;
 }
