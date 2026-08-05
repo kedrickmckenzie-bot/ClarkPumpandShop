@@ -1,0 +1,5 @@
+NORTHSTAR MECHANICAL — DEMO SERVICE TICKET NS-44312
+Clark work order: CWO-0245
+Visit 1 outcome: Diagnosed — unresolved
+Finding: Condensing Unit CU-1 condenser fan motor intermittently stalls.
+Next action requested: quote replacement motor and return visit.

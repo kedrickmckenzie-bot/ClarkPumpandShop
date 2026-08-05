@@ -1,0 +1,5 @@
+DEMO ARTIFACT — employee photo placeholder
+Record: RPT-0671 / CWO-0245
+Captured: 2026-05-18 07:42 ET
+Description: Beer cave thermometer displaying 49°F.
+The production system stores the original image object in R2 and its metadata in D1.

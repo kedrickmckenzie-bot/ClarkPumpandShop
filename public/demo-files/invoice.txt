@@ -1,0 +1,6 @@
+DEMO INVOICE NS-88421
+Clark work order: CWO-0245
+Labor allocation: $3,100
+Parts allocation — Condenser Fan Motor: $1,850
+Total: $4,950
+Status: Paid 2026-06-12
