@@ -208,6 +208,11 @@ export function storeComparison(data: DemoData, nowValue = "2026-08-05T14:00:00.
   const refrigerationSpends = data.stores.map((store) => spendForPeriod(data, ttmStart, now, { storeId: store.id, categoryId: "refrigeration" }));
   const companyMedian = median(refrigerationSpends.filter((value) => value > 0));
   const p90 = percentile(refrigerationSpends.filter((value) => value > 0), 0.9);
+  const replacementCounts = new Map<string, number>();
+  replacementWatchlist(data, nowValue).forEach(({ asset }) => {
+    const storeId = data.systems.find((system) => system.id === asset.storeSystemId)?.storeId;
+    if (storeId) replacementCounts.set(storeId, (replacementCounts.get(storeId) ?? 0) + 1);
+  });
 
   return data.stores.map((store) => {
     const open = data.workOrders.filter((workOrder) => workOrder.storeId === store.id && isOpenWorkOrder(workOrder));
@@ -218,7 +223,7 @@ export function storeComparison(data: DemoData, nowValue = "2026-08-05T14:00:00.
     const planned = spendForPeriod(data, ttmStart, now, { storeId: store.id, classes: ["planned_pm"] });
     const workOrderIds = new Set(data.workOrders.filter((workOrder) => workOrder.storeId === store.id).map((workOrder) => workOrder.id));
     const repeatVisits = data.visits.filter((visit) => workOrderIds.has(visit.workOrderId)).length - new Set(data.visits.filter((visit) => workOrderIds.has(visit.workOrderId)).map((visit) => visit.workOrderId)).size;
-    const replacementCandidates = replacementWatchlist(data, nowValue).filter(({ asset }) => data.systems.find((system) => system.id === asset.storeSystemId)?.storeId === store.id).length;
+    const replacementCandidates = replacementCounts.get(store.id) ?? 0;
     const ratio = companyMedian > 0 ? refrigerationSpend / companyMedian : 0;
     return {
       store,
@@ -282,8 +287,6 @@ export function commandCenterMetrics(data: DemoData, nowValue = "2026-08-05T14:0
     yearChange: priorYear > 0 ? (currentYear - priorYear) / priorYear : 0,
     approvedNotInvoiced,
     invoicesReview: data.invoices.filter((invoice) => invoice.status === "review" || invoice.status === "submitted").length,
-    replacementCandidates: replacementWatchlist(data, nowValue).length,
-    outlierStores: storeComparison(data, nowValue).filter((row) => row.isOutlier).length,
   };
 }
 

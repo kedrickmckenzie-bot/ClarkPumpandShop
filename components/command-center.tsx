@@ -97,7 +97,7 @@ export function CommandCenter() {
         <PageHeader
           eyebrow="Owner command center"
           title="Operational control, not activity noise."
-          description="Exceptions, commitments and asset signals derived from 128 internal work orders across the demonstration period. Every number opens the records behind it."
+          description="Exceptions, commitments and asset signals derived from 536 work orders across the 65-store operating portfolio. Every number opens the records behind it."
         >
           <span className="period-chip"><CalendarCheck2 size={14} />Trailing 12 months · Aug 5, 2026</span>
         </PageHeader>
@@ -144,8 +144,8 @@ export function CommandCenter() {
           <MetricCard label="Awaiting vendor" value={String(metrics.awaitingVendor)} note="issued, no acceptance yet" icon={Wrench} href="/work-orders?acceptance=pending" tone="warning" />
           <MetricCard label="TTM maintenance spend" value={formatCurrency(metrics.ttmSpend, true)} note={`prior ${formatCurrency(metrics.priorTtmSpend, true)}`} icon={CircleDollarSign} href="/files" trend={{ label: `${metrics.ttmSpend >= metrics.priorTtmSpend ? "+" : ""}${formatPercent(metrics.priorTtmSpend ? (metrics.ttmSpend - metrics.priorTtmSpend) / metrics.priorTtmSpend : 0)}`, direction: metrics.ttmSpend >= metrics.priorTtmSpend ? "up" : "down" }} />
           <MetricCard label="Invoices in review" value={String(metrics.invoicesReview)} note="not included in paid spend" icon={ReceiptText} href="/files?status=review" />
-          <MetricCard label="Replacement watchlist" value={String(metrics.replacementCandidates)} note="rule-based capital review" icon={Gauge} href={`/assets/${STORY_ASSET_ID}`} tone="warning" />
-          <MetricCard label="Store cost outliers" value={String(metrics.outlierStores)} note="median / percentile rule" icon={TrendingUp} href="/stores" tone="critical" />
+          <MetricCard label="Replacement watchlist" value={String(watchlist.length)} note="rule-based capital review" icon={Gauge} href={`/assets/${STORY_ASSET_ID}`} tone="warning" />
+          <MetricCard label="Store cost outliers" value={String(stores.filter((row) => row.isOutlier).length)} note="median / percentile rule" icon={TrendingUp} href="/stores" tone="critical" />
         </section>
 
         <section className="split-grid">

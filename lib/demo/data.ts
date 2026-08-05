@@ -19,9 +19,14 @@ import type {
   ServiceVisit,
   Store,
   StoreSystem,
+  Technician,
   Vendor,
   VendorResponse,
   WorkOrder,
+  WorkOrderChecklistItem,
+  WorkOrderNote,
+  LaborEntry,
+  PartUsage,
   WorkOrderStatus,
   WorkType,
 } from "@/lib/domain/types";
@@ -42,7 +47,7 @@ const regions: Region[] = [
   { id: "region-west", name: "Western Region" },
 ];
 
-const storeSeeds = [
+const baseStoreSeeds = [
   ["12", "Pine Valley", "region-east"],
   ["18", "Riverbend", "region-east"],
   ["23", "Oak Crossing", "region-east"],
@@ -60,13 +65,32 @@ const storeSeeds = [
   ["91", "Valley View", "region-west"],
 ] as const;
 
+const expansionCities = [
+  "Allegheny Heights", "Beaver Falls", "Butler Junction", "Canonsburg", "Carnegie", "Clarion", "Connellsville", "Cranberry", "Delmont", "DuBois",
+  "East Liberty", "Ellwood City", "Erie South", "Franklin", "Greensburg", "Grove City", "Harmony", "Indiana", "Johnstown", "Kittanning",
+  "Latrobe", "McKees Rocks", "Mercer", "Monroeville", "Murrysville", "New Castle", "Oil City", "Penn Hills", "Punxsutawney", "Robinson",
+  "Sewickley", "Sharon", "Slippery Rock", "Somerset", "Tarentum", "Titusville", "Uniontown", "Vandergrift", "Warren", "Washington",
+  "Waynesburg", "Wexford", "White Oak", "Wilkinsburg", "Zelienople", "Brookville", "Chambersburg", "Gettysburg", "Harrisburg West", "York North",
+] as const;
+const generatedStoreSeeds = expansionCities.map((city, index) => [String(101 + index), city, ["region-east", "region-central", "region-west"][index % 3]] as const);
+const storeSeeds = [...baseStoreSeeds, ...generatedStoreSeeds];
+const streetNames = ["Liberty Avenue", "Market Street", "State Route 8", "Main Street", "Commerce Drive", "Washington Pike", "Butler Road", "Broad Street"];
+
 const stores: Store[] = storeSeeds.map(([code, city, regionId], index) => ({
   id: `store-${code}`,
   regionId,
   code,
-  name: `Store ${code} · ${city}`,
+  name: `Store ${code} - ${city}`,
   city,
   state: "PA",
+  address1: `${110 + index * 17} ${streetNames[index % streetNames.length]}`,
+  postalCode: String(15001 + ((index * 137) % 4998)).padStart(5, "0"),
+  phone: `(724) 555-${String(1100 + index).slice(-4)}`,
+  managerName: ["Jordan Lee", "Casey Wright", "Morgan Price", "Avery Scott", "Renee Foster", "Dylan Brooks"][index % 6],
+  district: `District ${Math.floor(index / 8) + 1}`,
+  status: index === 63 ? "opening" : "active",
+  openedAt: `${2002 + (index % 23)}-${String((index % 9) + 1).padStart(2, "0")}-15`,
+  squareFeet: 3_600 + (index % 7) * 450,
   latitude: 40.76 + index * 0.018,
   longitude: -80.18 + (index % 5) * 0.072,
   geofenceRadiusM: 200,
@@ -75,6 +99,12 @@ const stores: Store[] = storeSeeds.map(([code, city, regionId], index) => ({
 const categories: ServiceCategory[] = [
   { id: "refrigeration", name: "Refrigeration", color: "#187c6d" },
   { id: "hvac", name: "HVAC", color: "#4e6f8e" },
+  { id: "foodservice", name: "Foodservice Equipment", color: "#a96116" },
+  { id: "plumbing", name: "Plumbing", color: "#2f6f9f" },
+  { id: "electrical", name: "Electrical", color: "#8a6a12" },
+  { id: "fuel", name: "Fuel & Forecourt", color: "#6d5d87" },
+  { id: "building", name: "Building & Site", color: "#6f665e" },
+  { id: "life-safety", name: "Life Safety", color: "#a33d32" },
 ];
 
 const vendors: Vendor[] = [
@@ -82,6 +112,11 @@ const vendors: Vendor[] = [
   { id: "vendor-keystone", name: "Keystone Climate Partners", shortName: "Keystone", trade: "HVAC", dispatchEmail: "service@keystone-demo.example", accent: "#496b8a" },
   { id: "vendor-valley", name: "Valley Refrigeration Group", shortName: "Valley", trade: "Refrigeration", dispatchEmail: "dispatch@valley-demo.example", accent: "#8c5c2e" },
   { id: "vendor-summit", name: "Summit Facility Service", shortName: "Summit", trade: "General facilities", dispatchEmail: "workorders@summit-demo.example", accent: "#685b86" },
+  { id: "vendor-apex", name: "Apex Food Equipment Service", shortName: "Apex", trade: "Ovens, fryers & hot food", dispatchEmail: "dispatch@apex-demo.example", accent: "#a96116" },
+  { id: "vendor-flowrite", name: "FlowRite Plumbing", shortName: "FlowRite", trade: "Plumbing", dispatchEmail: "service@flowrite-demo.example", accent: "#2f6f9f" },
+  { id: "vendor-brightline", name: "BrightLine Electrical", shortName: "BrightLine", trade: "Electrical & controls", dispatchEmail: "dispatch@brightline-demo.example", accent: "#8a6a12" },
+  { id: "vendor-forecourt", name: "Forecourt Systems Group", shortName: "FSG", trade: "Fuel systems", dispatchEmail: "service@forecourt-demo.example", accent: "#6d5d87" },
+  { id: "vendor-safeguard", name: "SafeGuard Fire & Security", shortName: "SafeGuard", trade: "Fire and life safety", dispatchEmail: "dispatch@safeguard-demo.example", accent: "#a33d32" },
 ];
 
 const systems: StoreSystem[] = stores.flatMap((store) => [
@@ -91,6 +126,13 @@ const systems: StoreSystem[] = stores.flatMap((store) => [
     categoryId: "hvac",
     name: "Store HVAC",
     type: "Comfort HVAC",
+    code: `${store.code}-HVAC`,
+    description: "Comfort heating, cooling and ventilation cost center.",
+    location: "Roof and sales floor",
+    glCode: "6100",
+    annualBudgetCents: 1_800_000,
+    ownerName: store.managerName,
+    maintenanceStrategy: "preventive",
     state: store.code === "31" ? "watch" : "normal",
   },
   {
@@ -99,6 +141,13 @@ const systems: StoreSystem[] = stores.flatMap((store) => [
     categoryId: "refrigeration",
     name: store.code === "45" ? "Beer Cave Refrigeration" : "Cold Beverage Refrigeration",
     type: store.code === "45" ? "Beer Cave" : "Walk-In & Display",
+    code: `${store.code}-REF`,
+    description: "Cold storage, walk-in and beverage refrigeration cost center.",
+    location: "Back room and sales floor",
+    glCode: "6110",
+    annualBudgetCents: 2_250_000,
+    ownerName: store.managerName,
+    maintenanceStrategy: "preventive",
     state: store.code === "45" ? "exception" : store.code === "57" ? "watch" : "normal",
   },
 ]);
@@ -113,6 +162,7 @@ const assets: Asset[] = stores.flatMap((store, index) => {
       manufacturer: index % 2 ? "Trane" : "Carrier",
       model: `RT-${40 + index}A`,
       serial: `D-${store.code}-RTU1-${2017 + (index % 5)}`,
+      assetTag: `${store.code}-RTU1`, location: "Roof", condition: store.code === "31" ? "fair" : "good", purchaseCostCents: 1_420_000, lastServiceAt: "2026-06-12", maintenanceStrategy: "preventive", meterType: "runtime_hours", meterReading: 9_200 + index * 110,
       installedAt: `${2017 + (index % 5)}-04-12`,
       expectedLifeYears: 15,
       replacementCostCents: 2_250_000,
@@ -128,6 +178,7 @@ const assets: Asset[] = stores.flatMap((store, index) => {
       manufacturer: store.code === "45" ? "Heatcraft" : index % 2 ? "Copeland" : "Russell",
       model: store.code === "45" ? "HCU-060L6" : `CU-${50 + index}R`,
       serial: store.code === "45" ? "HC15-45-7712" : `D-${store.code}-CU1-${2018 + (index % 4)}`,
+      assetTag: `${store.code}-CU1`, location: "Exterior equipment pad", condition: store.code === "45" ? "poor" : "good", purchaseCostCents: 1_050_000, lastServiceAt: "2026-05-22", maintenanceStrategy: "preventive", meterType: "runtime_hours", meterReading: 10_450 + index * 120,
       installedAt: store.code === "45" ? "2015-05-18" : `${2018 + (index % 4)}-06-15`,
       expectedLifeYears: 13,
       replacementCostCents: store.code === "45" ? 1_750_000 : 1_620_000,
@@ -143,6 +194,7 @@ const assets: Asset[] = stores.flatMap((store, index) => {
       manufacturer: "Bohn",
       model: `EV-${30 + index}L`,
       serial: `D-${store.code}-EV1-${2019 + (index % 3)}`,
+      assetTag: `${store.code}-EV1`, location: "Walk-in cooler", condition: "good", purchaseCostCents: 510_000, lastServiceAt: "2026-04-15", maintenanceStrategy: "preventive", meterType: "runtime_hours", meterReading: 8_200 + index * 90,
       installedAt: `${2019 + (index % 3)}-03-20`,
       expectedLifeYears: 15,
       replacementCostCents: 820_000,
@@ -160,6 +212,7 @@ const assets: Asset[] = stores.flatMap((store, index) => {
       manufacturer: "Lennox",
       model: `LGA-${store.code}`,
       serial: `D-${store.code}-RTU2-2020`,
+      assetTag: `${store.code}-RTU2`, location: "Roof", condition: "good", purchaseCostCents: 1_360_000, lastServiceAt: "2026-06-12", maintenanceStrategy: "preventive", meterType: "runtime_hours", meterReading: 6_900 + index * 80,
       installedAt: "2020-08-14",
       expectedLifeYears: 15,
       replacementCostCents: 2_180_000,
@@ -172,15 +225,95 @@ const assets: Asset[] = stores.flatMap((store, index) => {
 });
 
 const components: Component[] = [
-  { id: STORY_COMPONENT_ID, assetId: STORY_ASSET_ID, type: "Fan Motor", name: "Condenser Fan Motor", partNumber: "MTR-PSC-825", installedAt: "2026-05-22", warrantyEndsAt: "2027-05-22", vendorId: "vendor-northstar" },
-  { id: "component-45-compressor", assetId: STORY_ASSET_ID, type: "Scroll Compressor", name: "Compressor 1", partNumber: "ZB45KCE", installedAt: "2021-08-04", warrantyEndsAt: "2026-08-04", vendorId: "vendor-valley" },
-  { id: "component-31-belt", assetId: "asset-31-hvac-rtu1", type: "Drive Belt", name: "Supply Fan Belt", partNumber: "BX-52", installedAt: "2026-03-16", warrantyEndsAt: "2026-09-16", vendorId: "vendor-keystone" },
-  { id: "component-57-controller", assetId: "asset-57-ref-cu1", type: "Controller", name: "Digital Temperature Controller", partNumber: "DTC-220", installedAt: "2025-11-08", warrantyEndsAt: "2027-11-08", vendorId: "vendor-valley" },
-  { id: "component-72-contactor", assetId: "asset-72-hvac-rtu1", type: "Contactor", name: "Compressor Contactor", partNumber: "CTR-3P-40", installedAt: "2025-09-12", warrantyEndsAt: "2026-09-12", vendorId: "vendor-keystone" },
-  { id: "component-18-valve", assetId: "asset-18-ref-ev1", type: "Expansion Valve", name: "Thermostatic Expansion Valve", partNumber: "TXV-8", installedAt: "2025-04-03", warrantyEndsAt: "2026-10-03", vendorId: "vendor-northstar" },
-  { id: "component-84-motor", assetId: "asset-84-hvac-rtu1", type: "Blower Motor", name: "Supply Blower Motor", partNumber: "BLW-5HP", installedAt: "2024-12-11", warrantyEndsAt: "2026-12-11", vendorId: "vendor-keystone" },
-  { id: "component-23-sensor", assetId: "asset-23-ref-cu1", type: "Temperature Sensor", name: "Discharge Temperature Sensor", partNumber: "SNS-DT-14", installedAt: "2026-02-09", warrantyEndsAt: "2027-02-09", vendorId: "vendor-valley" },
+  { id: STORY_COMPONENT_ID, assetId: STORY_ASSET_ID, type: "Fan Motor", name: "Condenser Fan Motor", partNumber: "MTR-PSC-825", serial: "FM-45-260522", quantity: 1, unitCostCents: 185_000, criticalSpare: true, installedAt: "2026-05-22", warrantyEndsAt: "2027-05-22", vendorId: "vendor-northstar" },
+  { id: "component-45-compressor", assetId: STORY_ASSET_ID, type: "Scroll Compressor", name: "Compressor 1", partNumber: "ZB45KCE", serial: "ZB45-210804", quantity: 1, unitCostCents: 520_000, criticalSpare: false, installedAt: "2021-08-04", warrantyEndsAt: "2026-08-04", vendorId: "vendor-valley" },
+  { id: "component-31-belt", assetId: "asset-31-hvac-rtu1", type: "Drive Belt", name: "Supply Fan Belt", partNumber: "BX-52", quantity: 1, unitCostCents: 8_500, criticalSpare: true, installedAt: "2026-03-16", warrantyEndsAt: "2026-09-16", vendorId: "vendor-keystone" },
+  { id: "component-57-controller", assetId: "asset-57-ref-cu1", type: "Controller", name: "Digital Temperature Controller", partNumber: "DTC-220", quantity: 1, unitCostCents: 46_000, criticalSpare: true, installedAt: "2025-11-08", warrantyEndsAt: "2027-11-08", vendorId: "vendor-valley" },
+  { id: "component-72-contactor", assetId: "asset-72-hvac-rtu1", type: "Contactor", name: "Compressor Contactor", partNumber: "CTR-3P-40", quantity: 1, unitCostCents: 12_500, criticalSpare: true, installedAt: "2025-09-12", warrantyEndsAt: "2026-09-12", vendorId: "vendor-keystone" },
+  { id: "component-18-valve", assetId: "asset-18-ref-ev1", type: "Expansion Valve", name: "Thermostatic Expansion Valve", partNumber: "TXV-8", quantity: 1, unitCostCents: 22_000, criticalSpare: true, installedAt: "2025-04-03", warrantyEndsAt: "2026-10-03", vendorId: "vendor-northstar" },
+  { id: "component-84-motor", assetId: "asset-84-hvac-rtu1", type: "Blower Motor", name: "Supply Blower Motor", partNumber: "BLW-5HP", quantity: 1, unitCostCents: 145_000, criticalSpare: false, installedAt: "2024-12-11", warrantyEndsAt: "2026-12-11", vendorId: "vendor-keystone" },
+  { id: "component-23-sensor", assetId: "asset-23-ref-cu1", type: "Temperature Sensor", name: "Discharge Temperature Sensor", partNumber: "SNS-DT-14", quantity: 1, unitCostCents: 9_800, criticalSpare: true, installedAt: "2026-02-09", warrantyEndsAt: "2027-02-09", vendorId: "vendor-valley" },
 ];
+
+const additionalCostCenters = [
+  ["foodservice", "food", "Hot Food & Bakery", "Ovens, fryers & holding", "Foodservice line", "6120", 1_600_000],
+  ["plumbing", "plumb", "Plumbing & Restrooms", "Domestic water & sanitary", "Restrooms and utility", "6130", 720_000],
+  ["electrical", "elec", "Electrical Distribution", "Service, panels & lighting", "Electrical room", "6140", 880_000],
+  ["fuel", "fuel", "Fuel & Forecourt", "Dispensers, canopy & containment", "Forecourt", "6150", 1_950_000],
+  ["building", "site", "Building & Site", "Envelope, doors & parking", "Interior and exterior", "6160", 960_000],
+  ["life-safety", "safety", "Life Safety", "Fire alarm, suppression & security", "Whole store", "6170", 650_000],
+] as const;
+
+systems.push(...stores.flatMap((store, storeIndex) => additionalCostCenters.map(([categoryId, suffix, name, type, location, glCode, budget], categoryIndex) => ({
+  id: `sys-${store.code}-${suffix}`,
+  storeId: store.id,
+  categoryId,
+  name,
+  type,
+  code: `${store.code}-${suffix.toUpperCase()}`,
+  description: `${name} operating cost center for ${store.name}.`,
+  location,
+  glCode,
+  annualBudgetCents: budget + (storeIndex % 5) * 55_000,
+  ownerName: store.managerName,
+  maintenanceStrategy: categoryId === "life-safety" ? "statutory" as const : (["foodservice", "fuel"].includes(categoryId) ? "preventive" as const : "condition_based" as const),
+  state: (storeIndex + categoryIndex) % 23 === 0 ? "watch" as const : "normal" as const,
+}))));
+
+const additionalAssetTemplates: Record<string, [string, string, string, string, number, number]> = {
+  foodservice: ["oven1", "Combi Oven", "Combi Oven OVEN-1", "Rational", 10, 1_480_000],
+  plumbing: ["wh1", "Water Heater", "Domestic Water Heater WH-1", "A.O. Smith", 12, 640_000],
+  electrical: ["panel1", "Electrical Panel", "Main Distribution Panel MDP-1", "Square D", 30, 1_250_000],
+  fuel: ["disp1", "Fuel Dispenser", "Dispenser Bank DISP-1", "Gilbarco", 12, 2_900_000],
+  building: ["door1", "Automatic Door", "Main Entry Door DOOR-1", "Stanley", 15, 780_000],
+  "life-safety": ["fire1", "Fire Alarm Panel", "Fire Alarm Control Panel FACP-1", "Notifier", 15, 920_000],
+};
+
+assets.push(...systems.filter((system) => additionalAssetTemplates[system.categoryId]).map((system, index) => {
+  const store = stores.find((item) => item.id === system.storeId)!;
+  const [suffix, assetClass, name, manufacturer, expectedLifeYears, replacementCostCents] = additionalAssetTemplates[system.categoryId];
+  const installedYear = 2016 + (index % 8);
+  return {
+    id: `asset-${store.code}-${system.id.split("-").at(-1)}-${suffix}`,
+    storeSystemId: system.id,
+    assetClass,
+    name,
+    manufacturer,
+    model: `${manufacturer.slice(0, 3).toUpperCase()}-${store.code}`,
+    serial: `SN-${store.code}-${suffix.toUpperCase()}-${installedYear}`,
+    assetTag: `${store.code}-${suffix.toUpperCase()}`,
+    location: system.location,
+    condition: index % 21 === 0 ? "fair" as const : "good" as const,
+    purchaseCostCents: Math.round(replacementCostCents * 0.62),
+    lastServiceAt: `2026-${String((index % 7) + 1).padStart(2, "0")}-12`,
+    maintenanceStrategy: system.maintenanceStrategy,
+    meterType: ["foodservice", "fuel"].includes(system.categoryId) ? "runtime_hours" : undefined,
+    meterReading: ["foodservice", "fuel"].includes(system.categoryId) ? 5_800 + index * 43 : undefined,
+    installedAt: `${installedYear}-05-18`,
+    expectedLifeYears,
+    replacementCostCents,
+    warrantyEndsAt: `${installedYear + Math.min(expectedLifeYears, 10)}-05-18`,
+    criticality: ["fuel", "life-safety"].includes(system.categoryId) ? "critical" as const : "high" as const,
+    state: system.state === "watch" ? "service_due" as const : "operational" as const,
+  };
+}));
+
+assets.forEach((asset, assetIndex) => {
+  if (components.some((item) => item.assetId === asset.id)) return;
+  const labels = asset.assetClass.includes("Oven") ? [["Heating Element", "ELM-480-12"], ["Control Board", "PCB-OVN-22"]] : asset.assetClass.includes("Panel") ? [["Main Breaker", "BRK-400A"], ["Surge Protector", "SPD-3P"]] : [["Controller", "CTRL-24V"], ["Motor / Drive", "MTR-VFD-2"]];
+  components.push(...labels.map(([name, partNumber], index) => ({ id: `component-${asset.id}-${index + 1}`, assetId: asset.id, type: name, name, partNumber, serial: `CP-${assetIndex}-${index + 1}`, quantity: 1, unitCostCents: 18_500 + index * 42_000, criticalSpare: index === 0 && asset.criticality === "critical", installedAt: asset.installedAt, warrantyEndsAt: asset.warrantyEndsAt, vendorId: "vendor-summit" })));
+});
+
+const technicians: Technician[] = [
+  ["tech-sam", "Sam Rivera", "Senior Maintenance Technician", "region-east", ["HVAC", "Electrical"]],
+  ["tech-devon", "Devon Hayes", "Maintenance Technician", "region-east", ["Foodservice", "Plumbing"]],
+  ["tech-marcus", "Marcus Bell", "Senior Maintenance Technician", "region-central", ["Refrigeration", "HVAC"]],
+  ["tech-tia", "Tia Bennett", "Maintenance Technician", "region-central", ["Electrical", "Life Safety"]],
+  ["tech-eli", "Eli Turner", "Maintenance Technician", "region-central", ["Building", "Plumbing"]],
+  ["tech-noah", "Noah Grant", "Senior Maintenance Technician", "region-west", ["Fuel", "Electrical"]],
+  ["tech-lena", "Lena Price", "Maintenance Technician", "region-west", ["Foodservice", "Refrigeration"]],
+  ["tech-jules", "Jules Carter", "Maintenance Planner", "region-west", ["PM", "Asset management"]],
+] .map(([id, name, title, regionId, trades], index) => ({ id: id as string, name: name as string, title: title as string, email: `${String(name).toLowerCase().replace(" ", ".")}@clarks-demo.example`, phone: `(724) 555-${2200 + index}`, regionIds: [regionId as string], trades: trades as string[], certifications: index % 2 ? ["OSHA 10", "EPA 608"] : ["OSHA 30", "NFPA 70E"], employmentType: "internal", status: index % 3 === 0 ? "assigned" : "available", weeklyCapacityHours: 40 }));
 
 const reports: EmployeeReport[] = [
   {
@@ -228,6 +361,10 @@ const allocations: CostAllocation[] = [];
 const quotes: Quote[] = [];
 const authorizations: Authorization[] = [];
 const credits: Credit[] = [];
+const checklistItems: WorkOrderChecklistItem[] = [];
+const laborEntries: LaborEntry[] = [];
+const partsUsed: PartUsage[] = [];
+const workOrderNotes: WorkOrderNote[] = [];
 
 const createdDates = [
   "2024-09-12T13:00:00.000Z",
@@ -257,27 +394,38 @@ function workClass(type: WorkType): CostAllocation["workClass"] {
 }
 
 let runningNumber = 1100;
+const workCategorySequence = ["refrigeration", "hvac", "foodservice", "plumbing", "electrical", "fuel", "building", "life-safety"];
+const systemSuffix: Record<string, string> = { refrigeration: "ref", hvac: "hvac", foodservice: "food", plumbing: "plumb", electrical: "elec", fuel: "fuel", building: "site", "life-safety": "safety" };
+const workTitles: Record<string, string[]> = {
+  refrigeration: ["Walk-in temperature alarm", "Case temperature drifting"],
+  hvac: ["Sales floor warm", "Supply fan vibration"],
+  foodservice: ["Combi oven not reaching setpoint", "Fryer recovery time slow"],
+  plumbing: ["Restroom fixture leaking", "Low hot-water temperature"],
+  electrical: ["Exterior lighting circuit fault", "Panel breaker nuisance trip"],
+  fuel: ["Dispenser offline", "Sump sensor alarm"],
+  building: ["Entry door not closing", "Parking lot trip hazard"],
+  "life-safety": ["Fire panel supervisory signal", "Kitchen suppression inspection due"],
+};
+const categoryVendor: Record<string, string> = { refrigeration: "vendor-northstar", hvac: "vendor-keystone", foodservice: "vendor-apex", plumbing: "vendor-flowrite", electrical: "vendor-brightline", fuel: "vendor-forecourt", building: "vendor-summit", "life-safety": "vendor-safeguard" };
 stores.filter((store) => store.id !== STORY_STORE_ID).forEach((store, storeIndex) => {
   for (let itemIndex = 0; itemIndex < 8; itemIndex += 1) {
     runningNumber += 1;
-    const isRefrigeration = itemIndex % 2 === 0;
-    const categoryId = isRefrigeration ? "refrigeration" : "hvac";
-    const systemId = `sys-${store.code}-${isRefrigeration ? "ref" : "hvac"}`;
-    const assetId = isRefrigeration ? `asset-${store.code}-ref-${itemIndex % 4 === 0 ? "cu1" : "ev1"}` : `asset-${store.code}-hvac-rtu1`;
+    const categoryId = workCategorySequence[itemIndex];
+    const isRefrigeration = categoryId === "refrigeration";
+    const systemId = `sys-${store.code}-${systemSuffix[categoryId]}`;
+    const assetId = assets.find((asset) => asset.storeSystemId === systemId)?.id;
     const classificationDepth = (storeIndex + itemIndex) % 5;
     const component = components.find((candidate) => candidate.assetId === assetId);
-    const status = itemIndex === 7 ? openStatus(storeIndex) : "closed";
-    const vendor = isRefrigeration ? vendors[(storeIndex + 2) % 3] : vendors[(storeIndex + 1) % 2];
+    const status = itemIndex >= 6 ? openStatus(storeIndex + itemIndex) : "closed";
+    const vendor = vendors.find((item) => item.id === categoryVendor[categoryId])!;
     const createdAt = createdDates[itemIndex];
-    const type: WorkType = itemIndex === 3 ? "preventive" : itemIndex === 6 && storeIndex % 4 === 0 ? "emergency" : "reactive";
+    const type: WorkType = itemIndex === 3 ? "preventive" : itemIndex === 7 && storeIndex % 4 === 0 ? "emergency" : "reactive";
     const isOpen = status !== "closed";
     const workOrder: WorkOrder = {
       id: `wo-${store.code}-${itemIndex + 1}`,
       number: `CWO-${runningNumber}`,
-      title: isRefrigeration
-        ? ["Case temperature drifting", "Evaporator fan noise", "Walk-in temperature alarm", "Condensate near cooler"][itemIndex % 4]
-        : ["Sales floor warm", "RTU filter service", "Intermittent cooling", "Supply fan vibration"][itemIndex % 4],
-      description: isRefrigeration ? "Store reported a refrigeration symptom requiring assessment." : "Store reported an HVAC comfort or equipment exception.",
+      title: workTitles[categoryId][(storeIndex + itemIndex) % 2],
+      description: `Store reported a ${categories.find((item) => item.id === categoryId)?.name.toLowerCase()} exception requiring diagnosis, a safe work plan and documented resolution.`,
       origin: itemIndex === 3 ? "pm" : itemIndex % 3 === 0 ? "employee_report" : "manager",
       storeId: store.id,
       categoryId,
@@ -622,6 +770,91 @@ authorizations.push(
   { id: "auth-45-hvac", workOrderId: "wo-45-hvac-open", amountCents: 680_000, status: "committed", approvedAt: "2026-07-30T15:35:00.000Z" },
 );
 
+technicians.forEach((technician, index) => {
+  const store = stores[(index * 7 + 3) % stores.length];
+  const categoryId = ["hvac", "foodservice", "electrical", "plumbing", "building", "fuel", "refrigeration", "life-safety"][index];
+  const system = systems.find((item) => item.storeId === store.id && item.categoryId === categoryId)!;
+  const asset = assets.find((item) => item.storeSystemId === system.id)!;
+  const component = components.find((item) => item.assetId === asset.id);
+  const workOrder: WorkOrder = {
+    id: `wo-internal-${index + 1}`,
+    number: `CWO-${1701 + index}`,
+    title: ["RTU belt and sheave inspection", "Oven door seal replacement", "Parking lot pole light repair", "Restroom flush valve rebuild", "Entry door closer adjustment", "Dispenser printer repair", "Evaporator drain clearing", "Exit light battery replacement"][index],
+    description: "Internal maintenance assignment with a defined scope, safety review, checklist, labor capture, parts usage and completion evidence.",
+    location: system.location,
+    problemCode: `${categoryId.toUpperCase()}-SERVICE`,
+    requestedBy: store.managerName,
+    origin: "facilities",
+    storeId: store.id,
+    categoryId,
+    systemId: system.id,
+    assetId: asset.id,
+    componentId: component?.id,
+    priority: index % 4 === 0 ? "high" : "routine",
+    workType: "internal",
+    status: index < 3 ? "visit_active" : index < 6 ? "approved" : "waiting_on_parts",
+    accountableParty: technician.name,
+    assignmentType: "internal",
+    assignedToId: technician.id,
+    assignedToName: technician.name,
+    nextAction: index < 3 ? "Complete work plan and record outcome" : index < 6 ? "Start scheduled assignment" : "Receive required part",
+    dueAt: addDays(DEMO_NOW, index - 2),
+    escalation: "Maintenance Supervisor",
+    vendorAcceptance: "not_issued",
+    createdAt: addDays("2026-07-28T13:00:00.000Z", index),
+    requestedServiceAt: addDays("2026-07-29T13:00:00.000Z", index),
+    targetResponseAt: addHours(addDays("2026-07-28T13:00:00.000Z", index), 4),
+    targetCompletionAt: addDays(DEMO_NOW, index - 2),
+    scheduledStartAt: addHours(DEMO_NOW, index * 3),
+    estimatedHours: 2 + (index % 3),
+    actualHours: index < 3 ? 1.25 + index * 0.5 : 0,
+    downtimeMinutes: index % 3 === 0 ? 45 : 0,
+    safetyRisk: ["moderate", "low", "high", "low"][index % 4] as WorkOrder["safetyRisk"],
+    accessInstructions: `Check in with ${store.managerName}. Lockout/tagout where energized work is involved.`,
+    laborCostCents: index < 3 ? 8_500 + index * 4_200 : 0,
+    partsCostCents: index < 3 ? 4_800 + index * 6_400 : 0,
+    travelCostCents: 0,
+    tags: ["internal-maintenance", store.district.toLowerCase().replace(" ", "-")],
+    nteCents: 95_000,
+    costExposureCents: 24_000 + index * 3_500,
+    reportIds: [],
+  };
+  workOrders.push(workOrder);
+});
+
+workOrders.forEach((workOrder, index) => {
+  const store = stores.find((item) => item.id === workOrder.storeId)!;
+  const system = systems.find((item) => item.id === workOrder.systemId);
+  workOrder.location ??= system?.location ?? "Store - location to be confirmed";
+  workOrder.problemCode ??= `${workOrder.categoryId.toUpperCase()}-${workOrder.workType.toUpperCase()}`;
+  workOrder.requestedBy ??= index % 3 === 0 ? store.managerName : "Facilities Service Desk";
+  workOrder.assignmentType ??= workOrder.vendorId ? "vendor" : "unassigned";
+  workOrder.assignedToName ??= workOrder.vendorId ? vendors.find((item) => item.id === workOrder.vendorId)?.name : undefined;
+  workOrder.targetResponseAt ??= addHours(workOrder.createdAt, workOrder.priority === "critical" ? 1 : workOrder.priority === "high" ? 4 : 24);
+  workOrder.targetCompletionAt ??= workOrder.dueAt ?? addDays(workOrder.createdAt, workOrder.priority === "critical" ? 1 : 5);
+  workOrder.estimatedHours ??= workOrder.priority === "critical" ? 4 : 2;
+  workOrder.actualHours ??= workOrder.closedAt ? 1.5 + (index % 5) * 0.4 : 0;
+  workOrder.downtimeMinutes ??= workOrder.priority === "critical" ? 120 + (index % 6) * 30 : index % 4 === 0 ? 30 : 0;
+  workOrder.safetyRisk ??= ["electrical", "fuel", "life-safety"].includes(workOrder.categoryId) ? "high" : workOrder.priority === "critical" ? "moderate" : "low";
+  workOrder.accessInstructions ??= `Check in with ${store.managerName}; use the service entrance and follow store lockout/tagout procedures.`;
+  workOrder.laborCostCents ??= Math.round((workOrder.actualHours ?? 0) * 9_500);
+  workOrder.partsCostCents ??= workOrder.closedAt && index % 3 === 0 ? 42_000 + index * 120 : 0;
+  workOrder.travelCostCents ??= workOrder.vendorId ? 12_500 : 0;
+  workOrder.tags ??= [workOrder.categoryId, workOrder.workType, store.district.toLowerCase().replace(" ", "-")];
+  const checklist = ["Review scope, hazards and store access", "Verify equipment identity and isolate energy", "Complete diagnosis and corrective work", "Test operation and clean the work area", "Record outcome, parts, labor and photos"];
+  checklistItems.push(...checklist.map((label, sequence) => ({ id: `check-${workOrder.id}-${sequence + 1}`, workOrderId: workOrder.id, sequence: sequence + 1, label, required: sequence !== 1, completed: workOrder.status === "closed" || (workOrder.status === "visit_active" && sequence < 2), completedAt: workOrder.status === "closed" ? workOrder.closedAt : undefined, completedBy: workOrder.status === "closed" ? (workOrder.assignedToName ?? workOrder.accountableParty) : undefined })));
+  workOrderNotes.push({ id: `note-${workOrder.id}-1`, workOrderId: workOrder.id, author: workOrder.requestedBy, authorRole: workOrder.origin === "employee_report" ? "Store team" : "Operations", body: workOrder.description, visibility: "internal", createdAt: workOrder.createdAt });
+});
+
+workOrders.filter((item) => item.assignmentType === "internal").forEach((workOrder, index) => {
+  const technician = technicians.find((item) => item.id === workOrder.assignedToId)!;
+  workOrderNotes.push({ id: `note-${workOrder.id}-tech`, workOrderId: workOrder.id, author: technician.name, authorRole: technician.title, body: index < 3 ? "Arrived onsite, reviewed hazards and began diagnosis. Store contact has been notified." : "Assignment reviewed; parts and access requirements confirmed.", visibility: "store", createdAt: addHours(workOrder.createdAt, 5) });
+  if (index < 3) {
+    laborEntries.push({ id: `labor-${workOrder.id}-1`, workOrderId: workOrder.id, technicianId: technician.id, technicianName: technician.name, startedAt: addHours(workOrder.createdAt, 5), endedAt: addHours(workOrder.createdAt, 6.25 + index * 0.5), regularHours: 1.25 + index * 0.5, overtimeHours: 0, hourlyRateCents: 6_800, notes: "Diagnosis, corrective work and operational test." });
+    partsUsed.push({ id: `part-${workOrder.id}-1`, workOrderId: workOrder.id, partNumber: `STK-${400 + index}`, description: ["Belt and fastener kit", "High-temperature door gasket", "LED driver assembly"][index], quantity: 1, unitCostCents: 4_800 + index * 6_400, source: "truck_stock", recordedBy: technician.name, recordedAt: addHours(workOrder.createdAt, 6) });
+  }
+});
+
 const planSeeds = [
   ["pm-beer-cave", "Quarterly Beer Cave Refrigeration PM", "refrigeration", "Store 45 · Beer Cave Refrigeration", "system", STORY_SYSTEM_ID, STORY_STORE_ID, "vendor-northstar"],
   ["pm-31-hvac", "Quarterly RTU Inspection", "hvac", "Store 31 · Store HVAC", "system", "sys-31-hvac", "store-31", "vendor-keystone"],
@@ -715,9 +948,14 @@ export const demoData: DemoData = {
   assets,
   components,
   vendors,
+  technicians,
   reports,
   reportReviews,
   workOrders,
+  checklistItems,
+  laborEntries,
+  partsUsed,
+  workOrderNotes,
   vendorResponses,
   visits,
   followUps,
@@ -732,6 +970,6 @@ export const demoData: DemoData = {
   auditEvents,
 };
 
-if (demoData.workOrders.length !== 128) {
-  throw new Error(`Deterministic seed expected 128 work orders, received ${demoData.workOrders.length}`);
+if (demoData.stores.length !== 65 || demoData.workOrders.length !== 536) {
+  throw new Error(`Deterministic seed expected 65 stores and 536 work orders; received ${demoData.stores.length} stores and ${demoData.workOrders.length} work orders`);
 }

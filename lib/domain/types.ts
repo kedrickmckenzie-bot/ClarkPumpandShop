@@ -60,6 +60,14 @@ export interface Store {
   name: string;
   city: string;
   state: string;
+  address1: string;
+  postalCode: string;
+  phone: string;
+  managerName: string;
+  district: string;
+  status: "active" | "opening" | "temporarily_closed" | "inactive";
+  openedAt: string;
+  squareFeet: number;
   latitude: number;
   longitude: number;
   geofenceRadiusM: number;
@@ -77,6 +85,13 @@ export interface StoreSystem {
   categoryId: string;
   name: string;
   type: string;
+  code: string;
+  description: string;
+  location: string;
+  glCode: string;
+  annualBudgetCents: number;
+  ownerName: string;
+  maintenanceStrategy: "run_to_failure" | "preventive" | "condition_based" | "statutory";
   state: "normal" | "watch" | "exception";
 }
 
@@ -88,6 +103,14 @@ export interface Asset {
   manufacturer: string;
   model: string;
   serial: string;
+  assetTag: string;
+  location: string;
+  condition: "excellent" | "good" | "fair" | "poor" | "failed";
+  purchaseCostCents: number;
+  lastServiceAt?: string;
+  maintenanceStrategy: "run_to_failure" | "preventive" | "condition_based" | "statutory";
+  meterType?: string;
+  meterReading?: number;
   installedAt: string;
   expectedLifeYears: number;
   replacementCostCents: number;
@@ -102,6 +125,10 @@ export interface Component {
   type: string;
   name: string;
   partNumber: string;
+  serial?: string;
+  quantity: number;
+  unitCostCents: number;
+  criticalSpare: boolean;
   installedAt: string;
   warrantyEndsAt: string;
   vendorId: string;
@@ -145,6 +172,10 @@ export interface WorkOrder {
   number: string;
   title: string;
   description: string;
+  location?: string;
+  problemCode?: string;
+  failureCode?: string;
+  requestedBy?: string;
   origin: "employee_report" | "manager" | "facilities" | "pm" | "inspection" | "warranty" | "capital" | "emergency";
   storeId: string;
   categoryId: string;
@@ -155,6 +186,9 @@ export interface WorkOrder {
   workType: WorkType;
   status: WorkOrderStatus;
   accountableParty: string;
+  assignmentType?: "internal" | "vendor" | "blended" | "unassigned";
+  assignedToId?: string;
+  assignedToName?: string;
   nextAction: string;
   dueAt?: string;
   escalation: string;
@@ -162,11 +196,86 @@ export interface WorkOrder {
   vendorAcceptance: "not_issued" | "pending" | "accepted" | "declined" | "clarification";
   createdAt: string;
   requestedServiceAt?: string;
+  targetResponseAt?: string;
+  targetCompletionAt?: string;
+  scheduledStartAt?: string;
+  estimatedHours?: number;
+  actualHours?: number;
+  downtimeMinutes?: number;
+  safetyRisk?: "none" | "low" | "moderate" | "high";
+  accessInstructions?: string;
+  resolutionSummary?: string;
+  laborCostCents?: number;
+  partsCostCents?: number;
+  travelCostCents?: number;
+  purchaseOrderNumber?: string;
+  tags?: string[];
   closedAt?: string;
   nteCents: number;
   costExposureCents: number;
   reportIds: string[];
   demoStory?: boolean;
+}
+
+export interface Technician {
+  id: string;
+  name: string;
+  title: string;
+  email: string;
+  phone: string;
+  regionIds: string[];
+  trades: string[];
+  certifications: string[];
+  employmentType: "internal" | "vendor";
+  vendorId?: string;
+  status: "available" | "assigned" | "off_duty" | "leave";
+  weeklyCapacityHours: number;
+}
+
+export interface WorkOrderChecklistItem {
+  id: string;
+  workOrderId: string;
+  sequence: number;
+  label: string;
+  required: boolean;
+  completed: boolean;
+  completedAt?: string;
+  completedBy?: string;
+}
+
+export interface LaborEntry {
+  id: string;
+  workOrderId: string;
+  technicianId: string;
+  technicianName: string;
+  startedAt: string;
+  endedAt: string;
+  regularHours: number;
+  overtimeHours: number;
+  hourlyRateCents: number;
+  notes: string;
+}
+
+export interface PartUsage {
+  id: string;
+  workOrderId: string;
+  partNumber: string;
+  description: string;
+  quantity: number;
+  unitCostCents: number;
+  source: "truck_stock" | "storeroom" | "purchased" | "vendor_supplied";
+  recordedBy: string;
+  recordedAt: string;
+}
+
+export interface WorkOrderNote {
+  id: string;
+  workOrderId: string;
+  author: string;
+  authorRole: string;
+  body: string;
+  visibility: "internal" | "store" | "vendor";
+  createdAt: string;
 }
 
 export interface VendorResponse {
@@ -353,9 +462,14 @@ export interface DemoData {
   assets: Asset[];
   components: Component[];
   vendors: Vendor[];
+  technicians: Technician[];
   reports: EmployeeReport[];
   reportReviews: ReportReview[];
   workOrders: WorkOrder[];
+  checklistItems: WorkOrderChecklistItem[];
+  laborEntries: LaborEntry[];
+  partsUsed: PartUsage[];
+  workOrderNotes: WorkOrderNote[];
   vendorResponses: VendorResponse[];
   visits: ServiceVisit[];
   followUps: FollowUp[];

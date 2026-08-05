@@ -8,6 +8,13 @@
       "when": 1785935481558,
       "tag": "0000_special_bromley",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785940160729,
+      "tag": "0001_normal_the_hunter",
+      "breakpoints": true
     }
   ]
 }

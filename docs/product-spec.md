@@ -324,12 +324,12 @@ The seed uses fictional identities and reconciled records:
 - One organization, three regions and fifteen stores.
 - HVAC and Refrigeration categories.
 - Four vendors, thirty store systems, forty-eight assets and selected components.
-- 128 WOs over approximately twenty-four months with visits, follow-ups, quotes, invoices, credits, allocations and audit events.
+- 536 WOs over approximately twenty-four months with internal assignments, vendor visits, checklists, labor, parts, follow-ups, quotes, invoices, credits, allocations and audit events.
 - Eight PM plans with materialized occurrences.
 
 Intentional stories include Store 45 Refrigeration outlier; progressive classification of WO `CWO-0245`; first unresolved and later resolved verified visits; a complete document/invoice chain; a missed PM; CU-1 capital-review evidence; and believable vendor differences.
 
-The presentation seed remains intentionally compact for owner storytelling. A separate scale fixture/test represents a 65-store pilot and verifies that list/query boundaries, aggregate services, pagination and tenant scoping do not assume the 15-store demo size.
+The presentation seed represents the full 65-store pilot directly and verifies that list/query boundaries, aggregate services, pagination and tenant scoping also work for a one-store independent operator.
 
 ## Demo scenarios
 

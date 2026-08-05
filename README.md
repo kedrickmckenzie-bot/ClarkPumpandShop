@@ -36,7 +36,7 @@ See [DEMO.md](./DEMO.md) for the scripted walkthrough.
 
 ## Data modes
 
-The local UI uses a deterministic TypeScript fixture with 15 fictional stores, 128 work orders, 64 PM occurrences and linked operational/financial evidence. Dashboard values are calculated from those records; summary cards are not independent hardcoded totals.
+The local UI uses a deterministic TypeScript fixture with 65 fictional stores, 536 work orders, 520 cost centers, hundreds of tagged assets and components, 64 PM occurrences, an internal maintenance roster, and linked operational/financial evidence. Dashboard and reporting values are calculated from those records; summary cards are not independent hardcoded totals.
 
 The committed Drizzle schema and SQL migration define the persistent Cloudflare D1 model. Every tenant-owned table carries `organization_id`; region is optional. R2 is declared for private file bytes. The upload route stores to R2 when its binding is available and clearly returns session-only mode locally. Run the fixture integrity check with:
 
@@ -78,4 +78,3 @@ The first version focuses on HVAC and Refrigeration. It intentionally does not r
 - Real geolocation depends on browser permission and the fictional Store 45 coordinates; visible demo states cover inside, outside, denied and inaccurate readings.
 - Seeded “documents” are safe fictional text placeholders, not real service records.
 - Rule thresholds are illustrative defaults and require customer governance before operational use.
-

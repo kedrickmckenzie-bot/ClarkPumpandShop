@@ -8,10 +8,10 @@ import { demoData, DEMO_NOW, STORY_ASSET_ID, STORY_STORE_ID, STORY_WORK_ORDER_ID
 
 describe("deterministic fixture", () => {
   it("contains a production-shaped, relational demo portfolio", () => {
-    expect(demoData.stores).toHaveLength(15);
-    expect(demoData.workOrders).toHaveLength(128);
+    expect(demoData.stores).toHaveLength(65);
+    expect(demoData.workOrders).toHaveLength(536);
     expect(demoData.pmOccurrences).toHaveLength(64);
-    expect(new Set(demoData.workOrders.map((item) => item.number)).size).toBe(128);
+    expect(new Set(demoData.workOrders.map((item) => item.number)).size).toBe(536);
     expect(demoData.workOrders.every((item) => demoData.stores.some((store) => store.id === item.storeId))).toBe(true);
   });
 

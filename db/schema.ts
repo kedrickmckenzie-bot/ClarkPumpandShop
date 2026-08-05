@@ -27,8 +27,8 @@ export const regions = sqliteTable("regions", {
 }, (table) => [index("idx_regions_org").on(table.organizationId)]);
 
 export const stores = sqliteTable("stores", {
-  id: id(), organizationId: tenantId(), regionId: text("region_id"), code: text("code").notNull(), name: text("name").notNull(), city: text("city"), state: text("state"), latitude: integer("latitude_e6"), longitude: integer("longitude_e6"), geofenceRadiusM: integer("geofence_radius_m").notNull().default(200), active: integer("active", { mode: "boolean" }).notNull().default(true), createdAt: timestamp("created_at"),
-}, (table) => [uniqueIndex("uidx_stores_org_code").on(table.organizationId, table.code), index("idx_stores_org_region").on(table.organizationId, table.regionId)]);
+  id: id(), organizationId: tenantId(), regionId: text("region_id"), code: text("code").notNull(), name: text("name").notNull(), address1: text("address_1"), address2: text("address_2"), city: text("city"), state: text("state"), postalCode: text("postal_code"), phone: text("phone"), managerName: text("manager_name"), district: text("district"), status: text("status").notNull().default("active"), openedAt: text("opened_at"), squareFeet: integer("square_feet"), latitude: integer("latitude_e6"), longitude: integer("longitude_e6"), geofenceRadiusM: integer("geofence_radius_m").notNull().default(200), active: integer("active", { mode: "boolean" }).notNull().default(true), createdAt: timestamp("created_at"),
+}, (table) => [uniqueIndex("uidx_stores_org_code").on(table.organizationId, table.code), index("idx_stores_org_region").on(table.organizationId, table.regionId), index("idx_stores_org_address").on(table.organizationId, table.city, table.postalCode)]);
 
 export const storeAreas = sqliteTable("store_areas", {
   id: id(), organizationId: tenantId(), storeId: text("store_id").notNull(), name: text("name").notNull(), active: integer("active", { mode: "boolean" }).notNull().default(true),
@@ -55,7 +55,7 @@ export const systemTypes = sqliteTable("system_types", {
 }, (table) => [index("idx_system_types_org_category").on(table.organizationId, table.serviceCategoryId)]);
 
 export const storeSystems = sqliteTable("store_systems", {
-  id: id(), organizationId: tenantId(), storeId: text("store_id").notNull(), serviceCategoryId: text("service_category_id").notNull(), systemTypeId: text("system_type_id"), name: text("name").notNull(), state: text("state").notNull().default("normal"), createdAt: timestamp("created_at"),
+  id: id(), organizationId: tenantId(), storeId: text("store_id").notNull(), serviceCategoryId: text("service_category_id").notNull(), systemTypeId: text("system_type_id"), code: text("code"), name: text("name").notNull(), description: text("description"), location: text("location"), glCode: text("gl_code"), annualBudgetCents: integer("annual_budget_cents"), ownerName: text("owner_name"), maintenanceStrategy: text("maintenance_strategy"), state: text("state").notNull().default("normal"), createdAt: timestamp("created_at"),
 }, (table) => [index("idx_store_systems_org_store_category").on(table.organizationId, table.storeId, table.serviceCategoryId)]);
 
 export const assetClasses = sqliteTable("asset_classes", {
@@ -63,7 +63,7 @@ export const assetClasses = sqliteTable("asset_classes", {
 }, (table) => [index("idx_asset_classes_org_category").on(table.organizationId, table.serviceCategoryId)]);
 
 export const assets = sqliteTable("assets", {
-  id: id(), organizationId: tenantId(), storeSystemId: text("store_system_id").notNull(), assetClassId: text("asset_class_id").notNull(), name: text("name").notNull(), manufacturer: text("manufacturer"), model: text("model"), serial: text("serial"), installedAt: text("installed_at"), expectedLifeYears: integer("expected_life_years"), replacementCostCents: integer("replacement_cost_cents"), warrantyEndsAt: text("warranty_ends_at"), criticality: text("criticality").notNull().default("standard"), state: text("state").notNull().default("operational"), createdAt: timestamp("created_at"),
+  id: id(), organizationId: tenantId(), storeSystemId: text("store_system_id").notNull(), assetClassId: text("asset_class_id").notNull(), assetTag: text("asset_tag"), name: text("name").notNull(), manufacturer: text("manufacturer"), model: text("model"), serial: text("serial"), location: text("location"), condition: text("condition"), purchaseCostCents: integer("purchase_cost_cents"), installedAt: text("installed_at"), lastServiceAt: text("last_service_at"), maintenanceStrategy: text("maintenance_strategy"), meterType: text("meter_type"), meterReading: integer("meter_reading"), expectedLifeYears: integer("expected_life_years"), replacementCostCents: integer("replacement_cost_cents"), warrantyEndsAt: text("warranty_ends_at"), criticality: text("criticality").notNull().default("standard"), state: text("state").notNull().default("operational"), createdAt: timestamp("created_at"),
 }, (table) => [index("idx_assets_org_system").on(table.organizationId, table.storeSystemId), index("idx_assets_org_class").on(table.organizationId, table.assetClassId)]);
 
 export const componentTypes = sqliteTable("component_types", {
@@ -71,7 +71,7 @@ export const componentTypes = sqliteTable("component_types", {
 }, (table) => [index("idx_component_types_org_category").on(table.organizationId, table.serviceCategoryId)]);
 
 export const components = sqliteTable("components", {
-  id: id(), organizationId: tenantId(), assetId: text("asset_id").notNull(), componentTypeId: text("component_type_id").notNull(), name: text("name").notNull(), partNumber: text("part_number"), installedAt: text("installed_at"), warrantyEndsAt: text("warranty_ends_at"), vendorId: text("vendor_id"), createdAt: timestamp("created_at"),
+  id: id(), organizationId: tenantId(), assetId: text("asset_id").notNull(), componentTypeId: text("component_type_id").notNull(), name: text("name").notNull(), partNumber: text("part_number"), serial: text("serial"), quantity: integer("quantity").notNull().default(1), unitCostCents: integer("unit_cost_cents").notNull().default(0), criticalSpare: integer("critical_spare", { mode: "boolean" }).notNull().default(false), installedAt: text("installed_at"), warrantyEndsAt: text("warranty_ends_at"), vendorId: text("vendor_id"), createdAt: timestamp("created_at"),
 }, (table) => [index("idx_components_org_asset").on(table.organizationId, table.assetId)]);
 
 export const employeeReports = sqliteTable("employee_reports", {
@@ -83,8 +83,28 @@ export const reportReviews = sqliteTable("report_reviews", {
 }, (table) => [index("idx_report_reviews_org_report").on(table.organizationId, table.reportId, table.createdAt)]);
 
 export const workOrders = sqliteTable("work_orders", {
-  id: id(), organizationId: tenantId(), number: text("number").notNull(), title: text("title").notNull(), description: text("description").notNull(), origin: text("origin").notNull(), storeId: text("store_id").notNull(), serviceCategoryId: text("service_category_id").notNull(), storeSystemId: text("store_system_id"), assetId: text("asset_id"), componentId: text("component_id"), priority: text("priority").notNull(), workType: text("work_type").notNull(), status: text("status").notNull(), accountableParty: text("accountable_party").notNull(), nextAction: text("next_action").notNull(), dueAt: text("due_at"), escalation: text("escalation").notNull(), vendorId: text("vendor_id"), vendorAcceptance: text("vendor_acceptance").notNull(), requestedServiceAt: text("requested_service_at"), nteCents: integer("nte_cents").notNull().default(0), costExposureCents: integer("cost_exposure_cents").notNull().default(0), createdAt: timestamp("created_at"), closedAt: text("closed_at"),
+  id: id(), organizationId: tenantId(), number: text("number").notNull(), title: text("title").notNull(), description: text("description").notNull(), location: text("location"), problemCode: text("problem_code"), failureCode: text("failure_code"), requestedBy: text("requested_by"), origin: text("origin").notNull(), storeId: text("store_id").notNull(), serviceCategoryId: text("service_category_id").notNull(), storeSystemId: text("store_system_id"), assetId: text("asset_id"), componentId: text("component_id"), priority: text("priority").notNull(), workType: text("work_type").notNull(), status: text("status").notNull(), accountableParty: text("accountable_party").notNull(), assignmentType: text("assignment_type").notNull().default("unassigned"), assignedToId: text("assigned_to_id"), assignedToName: text("assigned_to_name"), nextAction: text("next_action").notNull(), dueAt: text("due_at"), targetResponseAt: text("target_response_at"), targetCompletionAt: text("target_completion_at"), scheduledStartAt: text("scheduled_start_at"), estimatedMinutes: integer("estimated_minutes"), actualMinutes: integer("actual_minutes"), downtimeMinutes: integer("downtime_minutes"), safetyRisk: text("safety_risk"), accessInstructions: text("access_instructions"), resolutionSummary: text("resolution_summary"), escalation: text("escalation").notNull(), vendorId: text("vendor_id"), vendorAcceptance: text("vendor_acceptance").notNull(), requestedServiceAt: text("requested_service_at"), laborCostCents: integer("labor_cost_cents").notNull().default(0), partsCostCents: integer("parts_cost_cents").notNull().default(0), travelCostCents: integer("travel_cost_cents").notNull().default(0), purchaseOrderNumber: text("purchase_order_number"), tagsJson: text("tags_json").notNull().default("[]"), nteCents: integer("nte_cents").notNull().default(0), costExposureCents: integer("cost_exposure_cents").notNull().default(0), createdAt: timestamp("created_at"), closedAt: text("closed_at"),
 }, (table) => [uniqueIndex("uidx_work_orders_org_number").on(table.organizationId, table.number), index("idx_wo_org_status_due").on(table.organizationId, table.status, table.dueAt), index("idx_wo_org_store_category_created").on(table.organizationId, table.storeId, table.serviceCategoryId, table.createdAt), index("idx_wo_org_vendor_acceptance").on(table.organizationId, table.vendorId, table.vendorAcceptance)]);
+
+export const workOrderNotes = sqliteTable("work_order_notes", {
+  id: id(), organizationId: tenantId(), workOrderId: text("work_order_id").notNull(), authorId: text("author_id"), authorName: text("author_name").notNull(), authorRole: text("author_role"), body: text("body").notNull(), visibility: text("visibility").notNull().default("internal"), createdAt: timestamp("created_at"),
+}, (table) => [index("idx_wo_notes_org_work_created").on(table.organizationId, table.workOrderId, table.createdAt)]);
+
+export const workOrderChecklistItems = sqliteTable("work_order_checklist_items", {
+  id: id(), organizationId: tenantId(), workOrderId: text("work_order_id").notNull(), sequence: integer("sequence").notNull(), label: text("label").notNull(), required: integer("required", { mode: "boolean" }).notNull().default(true), completed: integer("completed", { mode: "boolean" }).notNull().default(false), completedAt: text("completed_at"), completedById: text("completed_by_id"), completedByName: text("completed_by_name"),
+}, (table) => [index("idx_wo_checklist_org_work_sequence").on(table.organizationId, table.workOrderId, table.sequence)]);
+
+export const laborEntries = sqliteTable("labor_entries", {
+  id: id(), organizationId: tenantId(), workOrderId: text("work_order_id").notNull(), technicianId: text("technician_id").notNull(), technicianName: text("technician_name").notNull(), startedAt: timestamp("started_at"), endedAt: timestamp("ended_at"), regularMinutes: integer("regular_minutes").notNull().default(0), overtimeMinutes: integer("overtime_minutes").notNull().default(0), hourlyRateCents: integer("hourly_rate_cents").notNull().default(0), notes: text("notes"), createdAt: timestamp("created_at"),
+}, (table) => [index("idx_labor_org_work_started").on(table.organizationId, table.workOrderId, table.startedAt), index("idx_labor_org_tech_started").on(table.organizationId, table.technicianId, table.startedAt)]);
+
+export const partsUsed = sqliteTable("parts_used", {
+  id: id(), organizationId: tenantId(), workOrderId: text("work_order_id").notNull(), partNumber: text("part_number"), description: text("description").notNull(), quantityMilli: integer("quantity_milli").notNull().default(1000), unitCostCents: integer("unit_cost_cents").notNull().default(0), source: text("source").notNull(), recordedById: text("recorded_by_id"), recordedByName: text("recorded_by_name").notNull(), recordedAt: timestamp("recorded_at"),
+}, (table) => [index("idx_parts_used_org_work_recorded").on(table.organizationId, table.workOrderId, table.recordedAt), index("idx_parts_used_org_part").on(table.organizationId, table.partNumber)]);
+
+export const workOrderStatusEvents = sqliteTable("work_order_status_events", {
+  id: id(), organizationId: tenantId(), workOrderId: text("work_order_id").notNull(), priorStatus: text("prior_status"), newStatus: text("new_status").notNull(), reason: text("reason"), actorId: text("actor_id"), actorName: text("actor_name").notNull(), occurredAt: timestamp("occurred_at"),
+}, (table) => [index("idx_wo_status_events_org_work_occurred").on(table.organizationId, table.workOrderId, table.occurredAt)]);
 
 export const workOrderReports = sqliteTable("work_order_reports", {
   organizationId: tenantId(), workOrderId: text("work_order_id").notNull(), reportId: text("report_id").notNull(),

@@ -8,10 +8,13 @@ import {
   FileStack,
   Gauge,
   Menu,
+  Plus,
   QrCode,
+  Settings2,
   ShieldCheck,
   Store,
   Truck,
+  UserRound,
   Wrench,
   X,
 } from "lucide-react";
@@ -22,11 +25,14 @@ import { useEffect, useState } from "react";
 const navItems = [
   { href: "/", label: "Command Center", icon: Gauge },
   { href: "/work-orders", label: "Work Orders", icon: ClipboardList },
+  { href: "/my-work", label: "My Maintenance Work", icon: UserRound },
   { href: "/pm", label: "Preventive Maintenance", icon: ShieldCheck },
   { href: "/stores", label: "Stores", icon: Store },
-  { href: "/systems/refrigeration", label: "Systems & Assets", icon: Wrench },
+  { href: "/systems/refrigeration", label: "Cost Centers & Assets", icon: Wrench },
   { href: "/vendors", label: "Vendors", icon: Truck },
   { href: "/files", label: "Files & Invoices", icon: FileStack },
+  { href: "/reports", label: "Reporting Center", icon: BarChart3 },
+  { href: "/setup", label: "Setup & Creation", icon: Settings2 },
 ];
 
 const demoItems = [
@@ -100,9 +106,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="scope-control">
             <button className="icon-button mobile-menu" aria-label={menuOpen ? "Close navigation" : "Open navigation"} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={17} /> : <Menu size={17} />}</button>
             <div className="scope-icon"><Building2 size={15} /></div>
-            <div><strong>Clark&apos;s Operations</strong><span>All 15 demo stores · 3 regions</span></div>
+            <div><strong>Clark&apos;s Operations</strong><span>All 65 stores · 3 regions</span></div>
           </div>
           <div className="top-actions">
+            <Link className="button primary small top-create" href="/work-orders/new"><Plus size={14} />Create work order</Link>
             <span className="demo-badge top-demo"><BarChart3 size={12} />Demo data · Aug 5, 2026</span>
             <button className="icon-button notifications" aria-label="Notifications"><Bell size={16} /></button>
             <label className="sr-only" htmlFor="demo-role">Preview role</label>
