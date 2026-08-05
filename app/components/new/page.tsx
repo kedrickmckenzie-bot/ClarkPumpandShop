@@ -1,2 +1,2 @@
 import { RegistryConsole } from "@/components/registry-console";
-export default function Page() { return <RegistryConsole initialEntity="components" />; }
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) { const query = await searchParams; return <RegistryConsole initialEntity="components" initialStoreId={typeof query.storeId === "string" ? query.storeId : ""} initialSystemId={typeof query.systemId === "string" ? query.systemId : ""} initialAssetId={typeof query.assetId === "string" ? query.assetId : ""} />; }

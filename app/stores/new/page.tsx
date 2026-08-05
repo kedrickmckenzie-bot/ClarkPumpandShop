@@ -1,2 +1,4 @@
-import { RegistryConsole } from "@/components/registry-console";
-export default function Page() { return <RegistryConsole initialEntity="stores" />; }
+import type { Metadata } from "next";
+import { StoreOnboardingWizard } from "@/components/store-onboarding-wizard";
+export const metadata: Metadata = { title: "Add Store" };
+export default function Page() { return <StoreOnboardingWizard />; }

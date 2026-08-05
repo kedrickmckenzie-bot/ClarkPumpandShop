@@ -193,6 +193,26 @@ The product demonstration should make four points visually obvious:
 - **C-store integration will matter.** Store masters, organizational changes and financial reconciliation may ultimately need PDI/Petrosoft/accounting integration. The demo should preserve identifiers and abstractions without building those integrations now.
 - **Workflow discipline remains necessary.** Software can surface missing next actions, but Clark's management must own escalation policies and keep due dates meaningful.
 
+## August 2026 implementation update: interconnected CMMS workflow
+
+The platform direction was expanded after reviewing the pilot requirement as maintenance software for internal technicians, regional operators, and independent stores. The earlier recommendation to defer scheduling and inventory breadth no longer fits the requested product scope. Those capabilities are now treated as first-class maintenance surfaces, while reporting remains downstream of execution.
+
+The additional official-product research supports six concrete decisions:
+
+1. **Creating a store begins commissioning; it does not end at a saved location record.** Fiix's setup guidance walks from users to assets, work orders, and scheduled maintenance, and recommends deciding the single-site versus multi-site model before setup. Clark's now uses one guided store flow: profile → cost centers → assets → components → PM and coverage → readiness. [Fiix basic setup](https://helpdesk.fiixsoftware.com/hc/en-us/articles/360044584571-Basic-setup-Overview)
+2. **The hierarchy should mirror the physical world.** Fiix explicitly organizes region → site → facility → equipment → child equipment/parts. Clark's preserves region → store → cost center → asset → component, with cost center carrying the operating and financial rollup. [Fiix asset hierarchy](https://helpdesk.fiixsoftware.com/hc/en-us/articles/211193203-About-the-asset-hierarchy)
+3. **Locations define responsibility and access as well as geography.** Limble separates locations, which govern role access, from parent assets, which organize equipment. Clark's likewise keeps store/region scope separate from the physical equipment tree. [Limble locations versus parent assets](https://help.limblecmms.com/en/articles/8828169-locations-vs-parent-assets)
+4. **Reusable blueprints and copy/import paths are essential at 65 stores.** Limble supports copying an existing asset and bulk import; MaintainX supports location-specific work-order templates. Clark's new-store wizard applies a reusable full-store, shop-only, fuel-only, or blank blueprint and keeps each proposed record editable. [Limble asset setup](https://help.limblecmms.com/en/articles/6666246-how-to-add-assets), [MaintainX locations and templates](https://help.getmaintainx.com/about-locations)
+5. **Asset assignment must remain optional.** MaintainX documents blank sub-work orders that can receive assets later, while Limble's default work-order flow includes “Don't Assign an Asset.” Clark's now requires Store + Category only; cost center, asset, and component each have an explicit defer state. [MaintainX sub-work orders](https://help.getmaintainx.com/create-and-manage-sub-work-orders), [Limble default work-order template](https://help.limblecmms.com/en/articles/3231863-default-work-order-template)
+6. **The asset record should connect all maintenance context.** Limble's asset card unifies PM, work orders, parts, vendors, activity and reporting, including child data. Clark's created store and asset workspaces now preserve drill-down continuity and carry context into new work orders. [Limble asset library and asset card](https://help.limblecmms.com/en/articles/6666246-how-to-add-assets)
+
+This leads to a two-lane product model:
+
+- **Fast maintenance lane:** store request → triage → work order → dispatch/schedule → technician execution → parts/time/proof → verification/closeout.
+- **Commissioning lane:** organization/region → store blueprint → cost centers → assets → components/parts → PM → team/vendor coverage → readiness.
+
+Both lanes share the same durable hierarchy. A single-store operator can use the same model without regions or a complete asset register; a 65-store operator can standardize it through blueprints and manage exceptions across the portfolio.
+
 ## Sources
 
 All sources below were accessed August 5, 2026.
@@ -222,4 +242,3 @@ All sources below were accessed August 5, 2026.
 - Capterra: [ServiceChannel reviews](https://www.capterra.com/p/38574/ServiceChannel/reviews/) — current review excerpts include praise for centralization and reports of mobile/check-out or technician adoption friction. Individual reports should not be generalized to all deployments.
 - Capterra: [MaintainX reviews](https://www.capterra.com/p/179296/GetMaintainx/reviews/) and [Limble reviews](https://www.capterra.com/p/162600/Limble-CMMS/reviews/) — current excerpts emphasize usability while also noting setup effort or smaller reporting/layout limitations.
 - G2: [IBM Maximo Application Suite reviews](https://www.g2.com/products/ibm-maximo-application-suite/reviews) — current review summaries describe power and integration depth alongside a complex learning curve and implementation demands.
-

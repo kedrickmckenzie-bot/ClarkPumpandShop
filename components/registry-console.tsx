@@ -20,13 +20,16 @@ const entityMeta: Record<Entity, { label: string; singular: string; icon: typeof
 function field(form: FormData, name: string) { return String(form.get(name) ?? "").trim(); }
 function cents(form: FormData, name: string) { return Math.round(Number(field(form, name) || 0) * 100); }
 
-export function RegistryConsole({ initialEntity = "stores" }: { initialEntity?: Entity }) {
+export function RegistryConsole({ initialEntity = "stores", initialStoreId = "", initialSystemId = "", initialAssetId = "" }: { initialEntity?: Entity; initialStoreId?: string; initialSystemId?: string; initialAssetId?: string }) {
+  const initialSystem = demoData.systems.find((item) => item.id === initialSystemId);
+  const initialAsset = demoData.assets.find((item) => item.id === initialAssetId);
+  const resolvedSystem = initialSystem ?? demoData.systems.find((item) => item.id === initialAsset?.storeSystemId);
   const [entity, setEntity] = useState<Entity>(initialEntity);
   const [records, setRecords] = useState<ApiRecord[]>([]);
-  const [selectedStore, setSelectedStore] = useState(demoData.stores[0].id);
-  const [selectedCategory, setSelectedCategory] = useState(demoData.categories[0].id);
-  const [selectedSystem, setSelectedSystem] = useState(demoData.systems[0].id);
-  const [selectedAsset, setSelectedAsset] = useState(demoData.assets[0].id);
+  const [selectedStore, setSelectedStore] = useState(initialStoreId || resolvedSystem?.storeId || demoData.stores[0].id);
+  const [selectedCategory, setSelectedCategory] = useState(resolvedSystem?.categoryId || demoData.categories[0].id);
+  const [selectedSystem, setSelectedSystem] = useState(resolvedSystem?.id || demoData.systems[0].id);
+  const [selectedAsset, setSelectedAsset] = useState(initialAsset?.id || demoData.assets[0].id);
   const [assignmentType, setAssignmentType] = useState("internal");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -35,7 +38,7 @@ export function RegistryConsole({ initialEntity = "stores" }: { initialEntity?: 
   const availableSystems = useMemo(() => demoData.systems.filter((item) => item.storeId === selectedStore && (!selectedCategory || item.categoryId === selectedCategory)), [selectedStore, selectedCategory]);
   const availableAssets = useMemo(() => demoData.assets.filter((item) => item.storeSystemId === selectedSystem), [selectedSystem]);
   useEffect(() => { const timer = window.setTimeout(() => { const next = availableSystems[0]; if (next && !availableSystems.some((item) => item.id === selectedSystem)) setSelectedSystem(next.id); }, 0); return () => window.clearTimeout(timer); }, [availableSystems, selectedSystem]);
-  useEffect(() => { const timer = window.setTimeout(() => { const next = availableAssets[0]; if (next && !availableAssets.some((item) => item.id === selectedAsset)) setSelectedAsset(next.id); }, 0); return () => window.clearTimeout(timer); }, [availableAssets, selectedAsset]);
+  useEffect(() => { const timer = window.setTimeout(() => { if (entity === "work-orders" && selectedAsset === "") return; const next = availableAssets[0]; if (next && !availableAssets.some((item) => item.id === selectedAsset)) setSelectedAsset(next.id); }, 0); return () => window.clearTimeout(timer); }, [availableAssets, selectedAsset, entity]);
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/registry?entity=${entity}`).then((response) => response.json()).then((raw) => { const result = raw as { ok: boolean; records?: ApiRecord[] }; if (!cancelled && result.ok) setRecords(result.records ?? []); }).catch(() => undefined);

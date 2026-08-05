@@ -11,14 +11,22 @@ import { demoData } from "@/lib/demo/data";
 import { priorityLabel, statusTone, verificationLabel, visitOutcomeLabel, workOrderStatusLabel } from "@/lib/presentation";
 import { WorkOrderExecution } from "@/components/work-order-execution";
 
-export function WorkOrderDetail({ workOrder }: { workOrder: WorkOrder }) {
+type WorkOrderContext = {
+  store?: { id: string; code: string; name: string; city: string };
+  category?: { id: string; name: string };
+  system?: { id: string; name: string };
+  asset?: { id: string; name: string };
+  component?: { id: string; name: string };
+};
+
+export function WorkOrderDetail({ workOrder, context }: { workOrder: WorkOrder; context?: WorkOrderContext }) {
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
-  const store = demoData.stores.find((item) => item.id === workOrder.storeId)!;
-  const category = demoData.categories.find((item) => item.id === workOrder.categoryId)!;
-  const system = demoData.systems.find((item) => item.id === workOrder.systemId);
-  const asset = demoData.assets.find((item) => item.id === workOrder.assetId);
-  const component = demoData.components.find((item) => item.id === workOrder.componentId);
+  const store = context?.store ?? demoData.stores.find((item) => item.id === workOrder.storeId) ?? { id: workOrder.storeId, code: "—", name: "Created store", city: "" };
+  const category = context?.category ?? demoData.categories.find((item) => item.id === workOrder.categoryId) ?? { id: workOrder.categoryId, name: workOrder.categoryId };
+  const system = context?.system ?? demoData.systems.find((item) => item.id === workOrder.systemId);
+  const asset = context?.asset ?? demoData.assets.find((item) => item.id === workOrder.assetId);
+  const component = context?.component ?? demoData.components.find((item) => item.id === workOrder.componentId);
   const vendor = demoData.vendors.find((item) => item.id === workOrder.vendorId);
   const reports = demoData.reports.filter((item) => workOrder.reportIds.includes(item.id));
   const reviews = demoData.reportReviews.filter((review) => reports.some((report) => report.id === review.reportId));
@@ -37,11 +45,11 @@ export function WorkOrderDetail({ workOrder }: { workOrder: WorkOrder }) {
       </section>
       <aside className="control-card"><span className="label">Control owner</span><h3>{workOrder.accountableParty}</h3><p>{workOrder.nextAction}</p><div className="due"><strong>Due:</strong> {workOrder.dueAt ? formatDate(workOrder.dueAt, true) : "Complete"}<br /><strong>Escalates to:</strong> {workOrder.escalation}</div></aside>
     </div>
+    <WorkOrderExecution workOrder={workOrder} />
     <section className="panel panel-pad" style={{ marginBottom: 14 }}><PanelTitle title="Progressive classification" description="A report can start at Store + Category. Confirmed detail is added without rewriting history." />
       <div className="record-meta" style={{ marginTop: 0, paddingTop: 0, borderTop: 0 }}><div className="meta-item"><span>Store</span><strong>{store.name}</strong></div><div className="meta-item"><span>Category</span><strong>{category.name}</strong></div><div className="meta-item"><span>System</span><strong>{system ? <Link href={`/stores/${store.id}/systems/${system.id}`}>{system.name}</Link> : "Not yet identified"}</strong></div><div className="meta-item"><span>Asset / component</span><strong>{asset ? <Link href={`/assets/${asset.id}`}>{asset.name}</Link> : "Not yet identified"}{component ? ` · ${component.name}` : ""}</strong></div></div>
       {editing ? <div className="callout" style={{ marginTop: 14 }}><strong>Demo reclassification control</strong><p>Change reason: diagnostic visit or vendor documentation. Saving appends an audit event; it never alters the original employee report.</p><button className="button primary small" style={{ marginTop: 9 }} onClick={() => { setEditing(false); setSaved(true); }}>Append audited update</button></div> : <button className="button small" style={{ marginTop: 14 }} onClick={() => setEditing(true)}><PencilLine />Refine classification</button>}{saved && <StatusBadge tone="good">Audit event appended in demo session</StatusBadge>}
     </section>
-    <WorkOrderExecution workOrder={workOrder} />
     <div className="split-grid">
       <div className="stack">
         {reports.map((report) => <section className="panel panel-pad" key={report.id}><PanelTitle title={`Original employee report · ${report.reference}`} description="Immutable source record" /><div className="callout"><strong><LockKeyhole size={13} style={{ marginRight: 6, verticalAlign: "middle" }} />Original wording</strong><p>“{report.originalDescription}”</p></div><div className="record-meta"><div className="meta-item"><span>Reported by</span><strong>{report.reporterName} · {report.reporterRole}</strong></div><div className="meta-item"><span>Area</span><strong>{report.area}</strong></div><div className="meta-item"><span>Submitted</span><strong>{formatDate(report.submittedAt, true)}</strong></div><div className="meta-item"><span>Status</span><strong>{report.status}</strong></div></div>{reviews.map((review) => <div className="record-line" key={review.id} style={{ marginTop: 14 }}><StatusBadge tone="good">{review.decision}</StatusBadge><span className="subtext">{review.reviewerName} · {review.context}</span></div>)}</section>)}
