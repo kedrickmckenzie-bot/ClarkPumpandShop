@@ -1,11 +1,17 @@
+export const SHOWCASE_DATASET_NAMESPACE = "showcase-v2";
+
+export function showcaseIdPrefix(prefix: string) {
+  return `${prefix}-${SHOWCASE_DATASET_NAMESPACE}`;
+}
+
 export const registryEntityPrefixes = {
-  requests: "report",
-  stores: "store",
-  "cost-centers": "cost-center",
-  assets: "asset",
-  components: "component",
-  "pm-plans": "pm",
-  "work-orders": "wo",
+  requests: showcaseIdPrefix("report"),
+  stores: showcaseIdPrefix("store"),
+  "cost-centers": showcaseIdPrefix("cost-center"),
+  assets: showcaseIdPrefix("asset"),
+  components: showcaseIdPrefix("component"),
+  "pm-plans": showcaseIdPrefix("pm"),
+  "work-orders": showcaseIdPrefix("wo"),
 } as const;
 
 export type RegistryEntity = keyof typeof registryEntityPrefixes;

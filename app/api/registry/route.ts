@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isRuntimeRegistryRecord } from "@/lib/platform/registry";
+import { platformData } from "@/lib/platform/data";
+import {
+  isRuntimeCreatedId,
+  isRuntimeRegistryRecord,
+  registryEntityPrefixes,
+  showcaseIdPrefix,
+  type RegistryEntity,
+} from "@/lib/platform/registry";
 import { getD1, newId, ORGANIZATION_ID } from "@/lib/server/d1";
 
 const entitySchema = z.enum(["requests", "stores", "cost-centers", "assets", "components", "pm-plans", "work-orders"]);
@@ -11,6 +18,35 @@ const assetSchema = z.object({ storeSystemId: z.string().min(1), assetClass: z.s
 const componentSchema = z.object({ assetId: z.string().min(1), type: z.string().trim().min(2).max(100), name: z.string().trim().min(2).max(120), partNumber: z.string().max(100).optional().default(""), serial: z.string().max(100).optional().default(""), quantity: z.coerce.number().positive().max(10000).default(1), unitCostCents: z.coerce.number().int().min(0).optional().default(0), criticalSpare: z.boolean().optional().default(false), installedAt: z.string().optional().default(""), warrantyEndsAt: z.string().optional().default("") });
 const pmPlanSchema = z.object({ name: z.string().trim().min(3).max(160), description: z.string().max(1000).optional().default(""), categoryId: z.string().min(1), targetType: z.enum(["system", "asset"]), targetId: z.string().min(1), storeId: z.string().min(1), frequency: z.enum(["monthly", "quarterly", "semiannual", "annual"]), startAt: z.string().min(1), vendorId: z.string().optional(), requiredDocument: z.string().max(120).optional().default("Completed checklist and service evidence") });
 const workOrderSchema = z.object({ reportId: z.string().optional(), storeId: z.string().min(1), categoryId: z.string().min(1), systemId: z.string().optional(), assetId: z.string().optional(), componentId: z.string().optional(), title: z.string().trim().min(3).max(160), description: z.string().trim().min(5).max(4000), location: z.string().max(160).optional().default(""), problemCode: z.string().max(80).optional().default(""), requestedBy: z.string().trim().min(2).max(100), priority: z.enum(["critical", "high", "routine", "low"]), workType: z.enum(["reactive", "preventive", "inspection", "emergency", "warranty", "capital", "internal"]), status: z.enum(["draft", "approved"]).optional().default("approved"), assignmentType: z.enum(["internal", "vendor", "blended", "unassigned"]), assignedToId: z.string().optional(), assignedToName: z.string().optional(), vendorId: z.string().optional(), dueAt: z.string().optional(), estimatedHours: z.coerce.number().min(0).max(999).optional().default(0), safetyRisk: z.enum(["none", "low", "moderate", "high"]).default("low"), accessInstructions: z.string().max(2000).optional().default(""), nteCents: z.coerce.number().int().min(0).optional().default(0) });
+
+class ShowcaseReferenceError extends Error {}
+
+const seededRegistryIds: Record<RegistryEntity, Set<string>> = {
+  requests: new Set(platformData.reports.map((record) => record.id)),
+  stores: new Set(platformData.stores.map((record) => record.id)),
+  "cost-centers": new Set(platformData.systems.map((record) => record.id)),
+  assets: new Set(platformData.assets.map((record) => record.id)),
+  components: new Set(platformData.components.map((record) => record.id)),
+  "pm-plans": new Set(platformData.pmPlans.map((record) => record.id)),
+  "work-orders": new Set(platformData.workOrders.map((record) => record.id)),
+};
+
+const categoryIds = new Set(platformData.categories.map((record) => record.id));
+const vendorIds = new Set(platformData.vendors.map((record) => record.id));
+
+function assertShowcaseReference(entity: RegistryEntity, value: string | undefined, label: string) {
+  if (!value) return;
+  if (seededRegistryIds[entity].has(value) || isRuntimeCreatedId(value, registryEntityPrefixes[entity])) return;
+  throw new ShowcaseReferenceError(`${label} is not available in this showcase`);
+}
+
+function assertCategory(value: string) {
+  if (!categoryIds.has(value)) throw new ShowcaseReferenceError("Service category is not available in this showcase");
+}
+
+function assertVendor(value: string | undefined) {
+  if (value && !vendorIds.has(value)) throw new ShowcaseReferenceError("Provider is not available in this showcase");
+}
 
 const selectSql: Record<z.infer<typeof entitySchema>, string> = {
   requests: `SELECT id, reference, store_id AS storeId, store_area_id AS area, reporter_name AS reporterName, original_description AS originalDescription, urgency, status, submitted_at AS submittedAt FROM employee_reports WHERE organization_id = ? ORDER BY submitted_at DESC`,
@@ -46,32 +82,37 @@ export async function POST(request: Request) {
   const db = getD1();
   try {
     if (entity.data === "requests") {
-      const data = requestSchema.parse(body?.data); const id = newId("report"); const reference = `RPT-${String(Date.now()).slice(-7)}`;
+      const data = requestSchema.parse(body?.data); assertShowcaseReference("stores", data.storeId, "Store"); const id = newId(showcaseIdPrefix("report")); const reference = `RPT-${String(Date.now()).slice(-7)}`;
       await db.prepare(`INSERT INTO employee_reports (id, organization_id, reference, store_id, store_area_id, reporter_name, original_description, urgency, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?)`).bind(id, ORGANIZATION_ID, reference, data.storeId, data.area, data.reporterName, data.description, data.urgency, now).run();
       return NextResponse.json({ ok: true, entity: entity.data, id, reference, createdAt: now }, { status: 201 });
     }
     if (entity.data === "stores") {
-      const data = storeSchema.parse(body?.data); const id = newId("store");
+      const data = storeSchema.parse(body?.data); const id = newId(showcaseIdPrefix("store"));
       await db.prepare(`INSERT INTO stores (id, organization_id, region_id, code, name, address_1, city, state, postal_code, phone, manager_name, district, status, square_feet, geofence_radius_m, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, 200, 1, ?)`).bind(id, ORGANIZATION_ID, data.regionId || null, data.code, data.name, data.address1, data.city, data.state.toUpperCase(), data.postalCode, data.phone, data.managerName, data.district, data.squareFeet, now).run();
       return NextResponse.json({ ok: true, entity: entity.data, id, createdAt: now }, { status: 201 });
     }
     if (entity.data === "cost-centers") {
-      const data = costCenterSchema.parse(body?.data); const id = newId("cost-center");
+      const data = costCenterSchema.parse(body?.data); assertShowcaseReference("stores", data.storeId, "Store"); assertCategory(data.categoryId); const id = newId(showcaseIdPrefix("cost-center"));
       await db.prepare(`INSERT INTO store_systems (id, organization_id, store_id, service_category_id, code, name, description, location, gl_code, annual_budget_cents, owner_name, maintenance_strategy, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal', ?)`).bind(id, ORGANIZATION_ID, data.storeId, data.categoryId, data.code, data.name, data.description, data.location, data.glCode, data.annualBudgetCents, data.ownerName, data.maintenanceStrategy, now).run();
       return NextResponse.json({ ok: true, entity: entity.data, id, createdAt: now }, { status: 201 });
     }
     if (entity.data === "assets") {
-      const data = assetSchema.parse(body?.data); const id = newId("asset");
+      const data = assetSchema.parse(body?.data); assertShowcaseReference("cost-centers", data.storeSystemId, "Equipment group"); const id = newId(showcaseIdPrefix("asset"));
       await db.prepare(`INSERT INTO assets (id, organization_id, store_system_id, asset_class_id, asset_tag, name, manufacturer, model, serial, location, condition, installed_at, replacement_cost_cents, criticality, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'good', ?, ?, ?, 'operational', ?)`).bind(id, ORGANIZATION_ID, data.storeSystemId, data.assetClass, data.assetTag, data.name, data.manufacturer, data.model, data.serial, data.location, data.installedAt || null, data.replacementCostCents, data.criticality, now).run();
       return NextResponse.json({ ok: true, entity: entity.data, id, createdAt: now }, { status: 201 });
     }
     if (entity.data === "components") {
-      const data = componentSchema.parse(body?.data); const id = newId("component");
+      const data = componentSchema.parse(body?.data); assertShowcaseReference("assets", data.assetId, "Asset"); const id = newId(showcaseIdPrefix("component"));
       await db.prepare(`INSERT INTO components (id, organization_id, asset_id, component_type_id, name, part_number, serial, quantity, unit_cost_cents, critical_spare, installed_at, warranty_ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, ORGANIZATION_ID, data.assetId, data.type, data.name, data.partNumber, data.serial, Math.round(data.quantity), data.unitCostCents, data.criticalSpare ? 1 : 0, data.installedAt || null, data.warrantyEndsAt || null, now).run();
       return NextResponse.json({ ok: true, entity: entity.data, id, createdAt: now }, { status: 201 });
     }
     if (entity.data === "pm-plans") {
-      const data = pmPlanSchema.parse(body?.data); const id = newId("pm"); const occurrenceId = newId("pm-occurrence");
+      const data = pmPlanSchema.parse(body?.data);
+      assertShowcaseReference("stores", data.storeId, "Store");
+      assertCategory(data.categoryId);
+      assertShowcaseReference(data.targetType === "asset" ? "assets" : "cost-centers", data.targetId, "Maintenance target");
+      assertVendor(data.vendorId);
+      const id = newId(showcaseIdPrefix("pm")); const occurrenceId = newId(showcaseIdPrefix("pm-occurrence"));
       const due = new Date(data.startAt); const windowStart = new Date(due.getTime() - 15 * 86_400_000).toISOString(); const windowEnd = new Date(due.getTime() + 15 * 86_400_000).toISOString();
       await db.batch([
         db.prepare(`INSERT INTO pm_plans (id, organization_id, name, description, service_category_id, scope_type, frequency, start_at, early_window_days, late_window_days, vendor_id, required_document, authorization_policy, escalation_rule, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 15, 15, ?, ?, 'standard', 'Maintenance Supervisor', 1)`).bind(id, ORGANIZATION_ID, data.name, data.description, data.categoryId, data.targetType, data.frequency, data.startAt, data.vendorId || null, data.requiredDocument),
@@ -80,7 +121,15 @@ export async function POST(request: Request) {
       ]);
       return NextResponse.json({ ok: true, entity: entity.data, id, occurrenceId, createdAt: now }, { status: 201 });
     }
-    const data = workOrderSchema.parse(body?.data); const id = newId("wo"); const number = `CWO-${String(Date.now()).slice(-7)}`;
+    const data = workOrderSchema.parse(body?.data);
+    assertShowcaseReference("stores", data.storeId, "Store");
+    assertCategory(data.categoryId);
+    assertShowcaseReference("cost-centers", data.systemId, "Equipment group");
+    assertShowcaseReference("assets", data.assetId, "Asset");
+    assertShowcaseReference("components", data.componentId, "Component");
+    assertShowcaseReference("requests", data.reportId, "Source report");
+    assertVendor(data.vendorId);
+    const id = newId(showcaseIdPrefix("wo")); const number = `CWO-${String(Date.now()).slice(-7)}`;
     const accountableParty = data.assignmentType === "unassigned" ? "Maintenance Dispatch" : data.assignedToName || (data.assignmentType === "vendor" ? "Vendor Dispatch" : "Maintenance Supervisor");
     const nextAction = data.status === "draft" ? "Review scope and issue work order" : data.assignmentType === "unassigned" ? "Assign maintenance owner" : "Begin assignment and document progress";
     const statusReason = data.status === "draft" ? "Work order draft saved" : "Work order issued";
@@ -98,6 +147,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, entity: entity.data, id, number, createdAt: now }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: "Invalid fields", issues: error.issues }, { status: 400 });
+    if (error instanceof ShowcaseReferenceError) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Unable to create record" }, { status: 500 });
   }
 }

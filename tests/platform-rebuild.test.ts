@@ -20,11 +20,12 @@ describe("regional and independent operating model", () => {
   });
 
   it("keeps the larger legacy D1 seed out of the public showcase", () => {
-    const createdStoreId = "store-06d81347-d654-4f77-98d9-31323abcdbca";
-    expect(isRuntimeCreatedId(createdStoreId, "store")).toBe(true);
+    const createdStoreId = "store-showcase-v2-06d81347-d654-4f77-98d9-31323abcdbca";
+    expect(isRuntimeCreatedId(createdStoreId, "store-showcase-v2")).toBe(true);
     expect(isRuntimeRegistryRecord("stores", { id: createdStoreId })).toBe(true);
     expect(isRuntimeRegistryRecord("stores", { id: "store-45" })).toBe(false);
     expect(isRuntimeRegistryRecord("stores", { id: "store-13" })).toBe(false);
+    expect(isRuntimeRegistryRecord("stores", { id: "store-06d81347-d654-4f77-98d9-31323abcdbca" })).toBe(false);
     expect(isRuntimeRegistryRecord("work-orders", { id: createdStoreId })).toBe(false);
   });
 

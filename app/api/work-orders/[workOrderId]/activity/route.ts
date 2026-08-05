@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { platformData } from "@/lib/platform/data";
+import { isRuntimeCreatedId, registryEntityPrefixes } from "@/lib/platform/registry";
 import { getD1, newId, ORGANIZATION_ID } from "@/lib/server/d1";
 
 const activitySchema = z.discriminatedUnion("type", [
@@ -10,8 +12,16 @@ const activitySchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("checklist"), itemId: z.string().min(1), completed: z.boolean(), completedBy: z.string().min(2).max(100) }),
 ]);
 
+const seededWorkOrderIds = new Set(platformData.workOrders.map((workOrder) => workOrder.id));
+
+function isShowcaseWorkOrder(workOrderId: string) {
+  return seededWorkOrderIds.has(workOrderId)
+    || isRuntimeCreatedId(workOrderId, registryEntityPrefixes["work-orders"]);
+}
+
 export async function GET(_: Request, { params }: { params: Promise<{ workOrderId: string }> }) {
   const { workOrderId } = await params;
+  if (!isShowcaseWorkOrder(workOrderId)) return NextResponse.json({ ok: false, error: "Work order not found" }, { status: 404 });
   try {
     const db = getD1();
     const [notes, labor, parts, checklist, statuses] = await Promise.all([
@@ -29,6 +39,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ workOrderI
 
 export async function POST(request: Request, { params }: { params: Promise<{ workOrderId: string }> }) {
   const { workOrderId } = await params;
+  if (!isShowcaseWorkOrder(workOrderId)) return NextResponse.json({ ok: false, error: "Work order not found" }, { status: 404 });
   const parsed = activitySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Invalid activity", issues: parsed.error.issues }, { status: 400 });
   const db = getD1(); const now = new Date().toISOString(); const data = parsed.data;
