@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, Camera, CheckCircle2, LockKeyhole } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import { useState } from "react";
 import { demoData, STORY_WORK_ORDER_ID } from "@/lib/demo/data";
 

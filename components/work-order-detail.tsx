@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, FileText, LockKeyhole, MapPin, PencilLine, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Breadcrumbs, PanelTitle, StatusBadge } from "@/components/ui";

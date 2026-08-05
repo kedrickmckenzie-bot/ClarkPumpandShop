@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, Plus, Search } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Breadcrumbs, PageHeader, StatusBadge } from "@/components/ui";
@@ -65,4 +65,3 @@ export function WorkOrderList() {
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}><button className="button small" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</button><button className="button small" disabled={page === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Next</button></div>
   </div></AppShell>;
 }
-

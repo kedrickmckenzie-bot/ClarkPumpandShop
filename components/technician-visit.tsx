@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, LocateFixed, MapPin, ShieldAlert, WifiOff, Wrench } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import { useState } from "react";
 import { demoData, STORE_QR_TOKEN, STORY_STORE_ID, STORY_WORK_ORDER_ID } from "@/lib/demo/data";
 import type { VerificationState, VisitOutcome } from "@/lib/domain/types";

@@ -2,7 +2,7 @@
 
 import { CheckCircle2, ExternalLink, Mail, QrCode as QrIcon, Send } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";

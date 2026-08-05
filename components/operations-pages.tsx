@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, CircleDollarSign, FileText, Inbox, ShieldCheck, UploadCloud, Wrench } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import { type DragEvent, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Breadcrumbs, MetricCard, PageHeader, PanelTitle, StatusBadge } from "@/components/ui";

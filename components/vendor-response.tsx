@@ -1,7 +1,7 @@
 "use client";
 
 import { Building2, CheckCircle2, HelpCircle, XCircle } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import { useState } from "react";
 import { demoData, STORY_WORK_ORDER_ID, VENDOR_ACCEPT_TOKEN } from "@/lib/demo/data";
 
@@ -30,4 +30,3 @@ export function VendorResponsePage({ token }: { token: string }) {
       </div></>}
   </div></div></div>;
 }
-

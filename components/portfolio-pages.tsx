@@ -1,5 +1,5 @@
 import { ArrowRight, Check, CircleDollarSign, Factory, MapPin, ShieldAlert, Store as StoreIcon, Wrench } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import { AppShell } from "@/components/app-shell";
 import { Breadcrumbs, MetricCard, PageHeader, PanelTitle, StatusBadge } from "@/components/ui";
 import { formatCurrency, formatDate, formatPercent, pmCompliance, replacementAnalysis, replacementWatchlist, spendForPeriod, storeComparison, trailingPeriods } from "@/lib/domain/analytics";
@@ -78,4 +78,3 @@ export function ComponentDetail({ component }: { component: Component }) {
     <section className="panel table-wrap"><PanelTitle title="Component-linked costs" description="Only costs explicitly attributed to this component appear here." /><table className="data-table"><thead><tr><th>Work order</th><th>Invoice</th><th>Work class</th><th>Cost category</th><th className="numeric">Amount</th></tr></thead><tbody>{allocations.map((item) => <tr key={item.id}><td><Link className="row-link mono" href={`/work-orders/${item.workOrderId}`}>{demoData.workOrders.find((workOrder) => workOrder.id === item.workOrderId)?.number}</Link></td><td>{demoData.invoices.find((invoice) => invoice.id === item.invoiceId)?.number}</td><td>{item.workClass}</td><td>{item.costCategory}</td><td className="numeric"><strong>{formatCurrency(item.amountCents)}</strong></td></tr>)}</tbody></table></section>
   </div></AppShell>;
 }
-

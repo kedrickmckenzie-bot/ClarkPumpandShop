@@ -12,7 +12,7 @@ import {
   TrendingUp,
   Wrench,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Breadcrumbs, MetricCard, PageHeader, PanelTitle, StatusBadge } from "@/components/ui";
@@ -122,13 +122,18 @@ export function CommandCenter() {
               <Link className="brief-action" href="/work-orders?queue=missing-action"><strong>{metrics.missingNextAction}</strong> without a next action <ArrowRight size={13} /></Link>
             </div>
           </div>
-          <div className="panel panel-pad">
-            <PanelTitle title="Spend posture" description="Posted invoice allocations; credits net when posted." />
-            <div style={{ display: "grid", gap: 15 }}>
-              <div><span className="subtext">Trailing 12 months</span><strong style={{ display: "block", marginTop: 4, fontSize: 28, letterSpacing: "-.04em" }}>{formatCurrency(metrics.ttmSpend)}</strong></div>
-              <div className="progress-row" style={{ gridTemplateColumns: "92px 1fr 45px", margin: 0 }}><span>Current year</span><div className="progress-track"><div className="progress-fill" style={{ width: `${Math.min(100, Math.max(8, (metrics.currentYear / Math.max(metrics.priorYear, 1)) * 72))}%` }} /></div><strong className={metrics.yearChange > 0 ? "trend-up" : "trend-down"}>{metrics.yearChange >= 0 ? "+" : ""}{formatPercent(metrics.yearChange)}</strong></div>
-              <div className="callout warning"><strong>{formatCurrency(metrics.approvedNotInvoiced)} approved but not invoiced</strong><p>{metrics.invoicesReview} submitted invoices are waiting for review. These are commitments, not paid spend.</p></div>
+          <div className="panel panel-pad spend-panel">
+            <PanelTitle title="Maintenance spend" description="Paid cost and open commitments, kept distinct." />
+            <div className="spend-total">
+              <span className="spend-label">Trailing 12 months · paid</span>
+              <strong>{formatCurrency(metrics.ttmSpend)}</strong>
+              <div className="spend-delta"><StatusBadge tone={metrics.ttmSpend >= metrics.priorTtmSpend ? "warning" : "good"}>{metrics.ttmSpend >= metrics.priorTtmSpend ? "+" : ""}{formatPercent(metrics.priorTtmSpend ? (metrics.ttmSpend - metrics.priorTtmSpend) / metrics.priorTtmSpend : 0)}</StatusBadge><span>vs {formatCurrency(metrics.priorTtmSpend)} prior TTM</span></div>
             </div>
+            <div className="spend-breakdown">
+              <div className="spend-item"><span>Year to date</span><strong>{formatCurrency(metrics.currentYear)}</strong><small className={metrics.yearChange > 0 ? "trend-up" : "trend-down"}>{metrics.yearChange >= 0 ? "+" : ""}{formatPercent(metrics.yearChange)} vs prior YTD</small></div>
+              <div className="spend-item commitment"><span>Approved, not invoiced</span><strong>{formatCurrency(metrics.approvedNotInvoiced)}</strong><small>Commitment · excluded from paid spend</small></div>
+            </div>
+            <Link className="spend-footer" href="/files">Review {metrics.invoicesReview} invoices waiting for review <ArrowRight size={13} /></Link>
           </div>
         </section>
 

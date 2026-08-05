@@ -15,7 +15,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/site-link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 

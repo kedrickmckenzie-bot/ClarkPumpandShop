@@ -25,6 +25,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og-card.png", width: 1733, height: 909, alt: "Modern convenience store connected to maintenance, refrigeration and verification signals" }],
   },
   twitter: { card: "summary_large_image", images: ["/og-card.png"] },
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({
