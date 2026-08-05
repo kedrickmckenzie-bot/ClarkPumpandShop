@@ -18,7 +18,7 @@ import { AppShell } from "@/components/app-shell";
 import { CreatedAssetDetail, CreatedComponentDetail, CreatedSystemDetail } from "@/components/created-portfolio-detail";
 import { PlatformBadge, PlatformBreadcrumbs, PlatformPageHeader, PlatformProgress, PlatformSectionHeader, PlatformStat } from "@/components/platform-ui";
 import Link from "@/components/site-link";
-import { formatCurrency, formatDate, formatPercent, isOpenWorkOrder, pmCompliance, replacementAnalysis, replacementWatchlist, spendForPeriod } from "@/lib/domain/analytics";
+import { formatCurrency, formatDate, formatPercent, isOpenWorkOrder, median, pmCompliance, replacementAnalysis, replacementWatchlist, spendForPeriod } from "@/lib/domain/analytics";
 import { platformData, PLATFORM_NOW } from "@/lib/platform/data";
 import { useMemo, useState } from "react";
 
@@ -101,6 +101,110 @@ export function SystemRecord({ storeId, systemId }: { storeId: string; systemId:
 }
 
 export function AssetRecord({ assetId }: { assetId: string }) {
+  const asset = platformData.assets.find((item) => item.id === assetId);
+  if (!asset) return <CreatedAssetDetail assetId={assetId} />;
+  const system = platformData.systems.find((item) => item.id === asset.storeSystemId)!;
+  const store = platformData.stores.find((item) => item.id === system.storeId)!;
+  const category = platformData.categories.find((item) => item.id === system.categoryId)!;
+  const components = platformData.components.filter((item) => item.assetId === asset.id);
+  const work = platformData.workOrders.filter((item) => item.assetId === asset.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const analysis = replacementAnalysis(platformData, asset, PLATFORM_NOW);
+  const spend = spendForPeriod(platformData, ttmStart, now, { assetId: asset.id });
+  const componentSpend = components.reduce((sum, component) => sum + spendForPeriod(platformData, ttmStart, now, { componentId: component.id }), 0);
+  const peerSpend = platformData.assets
+    .filter((candidate) => candidate.assetClass === asset.assetClass)
+    .map((candidate) => spendForPeriod(platformData, ttmStart, now, { assetId: candidate.id }));
+  const peerMedian = median(peerSpend);
+  const peerRatio = peerMedian > 0 ? spend / peerMedian : 0;
+  const lifeUsed = asset.expectedLifeYears > 0 ? Math.min(1, analysis.ageYears / asset.expectedLifeYears) : 0;
+  const decision = analysis.recommended
+    ? "Capital review"
+    : lifeUsed >= 0.8 || analysis.reasons.length >= 2
+      ? "Plan replacement"
+      : "Monitor";
+
+  return (
+    <AppShell>
+      <div className="pf-page asset-record-page asset-intelligence-page">
+        <PlatformBreadcrumbs items={[{ label: "Stores", href: "/stores" }, { label: `Store ${store.code}`, href: `/stores/${store.id}` }, { label: system.name, href: `/stores/${store.id}/systems/${system.id}` }, { label: asset.name }]} />
+        <div className="record-title-block asset-title-block">
+          <div className="record-title-icon"><Boxes /></div>
+          <div>
+            <p>{category.name} / {groupLabel(asset.assetClass)} / {asset.assetTag}</p>
+            <h1>{asset.name}</h1>
+            <span>{asset.manufacturer} {asset.model} / Serial {asset.serial}</span>
+          </div>
+          <div>
+            <PlatformBadge tone={assetTone(asset.state)}>{asset.state.replaceAll("_", " ")}</PlatformBadge>
+            <Link className="pf-primary-button" href={`/work-orders/new?storeId=${store.id}&categoryId=${category.id}&systemId=${system.id}&assetId=${asset.id}`}><Plus />New work order</Link>
+          </div>
+        </div>
+
+        <section className="record-facts asset-key-facts">
+          <div><small>Store / location</small><strong>#{store.code} / {asset.location}</strong></div>
+          <div><small>Installed</small><strong>{formatDate(asset.installedAt)}</strong></div>
+          <div><small>Condition</small><strong>{asset.condition}</strong></div>
+          <div><small>Criticality</small><strong>{asset.criticality}</strong></div>
+          <div><small>Warranty through</small><strong>{formatDate(asset.warrantyEndsAt)}</strong></div>
+          <div><small>Replacement estimate</small><strong>{formatCurrency(asset.replacementCostCents)}</strong></div>
+        </section>
+
+        <section className="pf-stat-grid asset-stat-grid asset-stat-grid-simple">
+          <PlatformStat label="Repair cost / last 12 months" value={formatCurrency(analysis.currentReactive, true)} note={`${formatPercent(analysis.burden)} of replacement estimate`} icon={CircleDollarSign} tone={analysis.burden >= .4 ? "critical" : "default"} />
+          <PlatformStat label="Compared with similar equipment" value={peerRatio ? `${peerRatio.toFixed(1)}x` : "No peer cost"} note={`Median ${formatCurrency(peerMedian)} for ${asset.assetClass}`} icon={Gauge} tone={peerRatio >= 1.75 ? "warning" : "default"} />
+          <PlatformStat label="Work / verified visits" value={`${work.length} / ${analysis.visitCount}`} note={`${work.filter(isOpenWorkOrder).length} open / ${analysis.repeatFailures} repeat visits`} icon={History} />
+          <PlatformStat label="Service life used" value={formatPercent(lifeUsed)} note={`${analysis.ageYears.toFixed(1)} of ${asset.expectedLifeYears || "unavailable"} years`} icon={CalendarCheck} />
+        </section>
+
+        <div className="asset-decision-grid">
+          <section className={`pf-panel asset-decision-card ${analysis.recommended ? "candidate" : ""}`}>
+            <PlatformSectionHeader title="Lifecycle decision" description="A transparent recommendation built from this equipment's history." />
+            <div className="asset-decision-summary">
+              <span>{analysis.recommended ? <AlertTriangle /> : <ShieldCheck />}</span>
+              <div><small>Recommended next step</small><strong>{decision}</strong><p>No automatic replacement decision is made.</p></div>
+            </div>
+            <div className="asset-life-progress"><span><i style={{ width: `${lifeUsed * 100}%` }} /></span><small>{analysis.ageYears.toFixed(1)} years old / {asset.expectedLifeYears}-year expected life</small></div>
+            <div className="replacement-reasons">
+              {analysis.reasons.map((reason) => <p key={reason.key}><span><strong>{reason.label}</strong><small>Rule: {reason.threshold}</small></span><b>{reason.value}</b></p>)}
+              {!analysis.reasons.length && <p><span><strong>No review rules triggered</strong><small>Age, cost, failures, warranty, and PM remain visible.</small></span></p>}
+            </div>
+          </section>
+
+          <section className="pf-panel asset-profile-card">
+            <PlatformSectionHeader title="Equipment, supplier, and warranty" description="Everything needed to identify, service, and replace this asset." />
+            <dl className="asset-profile-list">
+              <div><dt>Manufacturer / model</dt><dd>{asset.manufacturer} {asset.model}</dd></div>
+              <div><dt>Serial / asset tag</dt><dd>{asset.serial} / {asset.assetTag}</dd></div>
+              <div><dt>Supplier</dt><dd>{asset.supplierName || "Not recorded"}</dd></div>
+              <div><dt>Supplier contact</dt><dd>{asset.supplierContact || "Not recorded"}</dd></div>
+              <div><dt>Purchased</dt><dd>{asset.purchaseDate ? formatDate(asset.purchaseDate) : "Not recorded"} / {formatCurrency(asset.purchaseCostCents)}</dd></div>
+              <div><dt>Maintenance approach</dt><dd>{asset.maintenanceStrategy.replaceAll("_", " ")}</dd></div>
+              <div><dt>Warranty provider</dt><dd>{asset.warrantyProvider || asset.manufacturer || "Not recorded"}</dd></div>
+              <div><dt>Warranty reference</dt><dd>{asset.warrantyReference || "Not recorded"}</dd></div>
+              <div className="wide"><dt>Coverage notes</dt><dd>{asset.warrantySummary || "No warranty notes have been added."}</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <section className="pf-panel asset-components-panel">
+          <PlatformSectionHeader title="Components" description="Optional depth for recurring failures, component warranties, and part-level cost."><Link className="pf-secondary-button" href={`/components/new?assetId=${asset.id}`}><Plus />Add component</Link></PlatformSectionHeader>
+          <div className="component-grid">
+            {components.map((component) => <Link href={`/components/${component.id}`} key={component.id}><header><span><Wrench /></span><PlatformBadge tone={component.criticalSpare ? "warning" : "neutral"}>{component.criticalSpare ? "critical spare" : component.type}</PlatformBadge></header><strong>{component.name}</strong><small>{component.partNumber} / {component.serial ?? "No serial"}</small><footer><span>12-month cost <b>{formatCurrency(spendForPeriod(platformData, ttmStart, now, { componentId: component.id }))}</b></span><span>Warranty <b>{formatDate(component.warrantyEndsAt)}</b></span></footer></Link>)}
+            {!components.length && <div className="simple-empty">No components are tracked. This does not block work or cost history.</div>}
+          </div>
+          <footer className="asset-classification-note">{formatCurrency(componentSpend)} of this asset&apos;s {formatCurrency(spend)} cost is classified to individual components.</footer>
+        </section>
+
+        <section className="pf-panel asset-work-history">
+          <PlatformSectionHeader title="Work, visits, and cost history" description="Every cost opens its source work order and supporting activity." href={`/work-orders?asset=${asset.id}`} />
+          <div className="pf-table-scroll"><table className="pf-table"><thead><tr><th>Work order</th><th>Problem / outcome</th><th>Provider</th><th>Created</th><th>Cost</th><th>Status</th></tr></thead><tbody>{work.map((item) => <tr key={item.id}><td><Link href={`/work-orders/${item.id}`}><strong>{item.number}</strong><small>{item.workType}</small></Link></td><td><strong>{item.title}</strong><small>{item.resolutionSummary ?? item.nextAction}</small></td><td><strong>{item.assignedToName ?? platformData.vendors.find((vendor) => vendor.id === item.vendorId)?.shortName ?? "Unassigned"}</strong><small>{item.assignmentType ?? "outside provider"}</small></td><td><strong>{formatDate(item.createdAt)}</strong></td><td><strong>{formatCurrency(platformData.allocations.filter((allocation) => allocation.workOrderId === item.id).reduce((sum, allocation) => sum + allocation.amountCents, 0))}</strong></td><td><PlatformBadge tone={item.status === "closed" ? "good" : item.priority === "critical" ? "critical" : "warning"}>{item.status.replaceAll("_", " ")}</PlatformBadge></td></tr>)}</tbody></table></div>
+        </section>
+      </div>
+    </AppShell>
+  );
+}
+
+export function LegacyAssetRecord({ assetId }: { assetId: string }) {
   const asset = platformData.assets.find((item) => item.id === assetId);
   if (!asset) return <CreatedAssetDetail assetId={assetId} />;
   const system = platformData.systems.find((item) => item.id === asset.storeSystemId)!;

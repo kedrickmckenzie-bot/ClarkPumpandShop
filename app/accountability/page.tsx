@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
-import { AccountabilityCenter } from "@/components/provider-platform";
+import { AppShell } from "@/components/app-shell";
+import { VendorVisibilityDashboard } from "@/components/vendor-visibility-dashboard";
 
-export const metadata: Metadata = { title: "Work needing attention", description: "See what is waiting, who acts next, and when it is due." };
-export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const query = await searchParams;
-  const value = (key: string) => typeof query[key] === "string" ? query[key] as string : "";
-  return <AccountabilityCenter initialStoreScope={value("store")} initialQueueScope={value("queue")} initialProviderScope={value("providerId")} />;
+export const metadata: Metadata = { title: "Vendor Accountability", description: "See accepted work, store visits, outcomes, and optional supporting evidence." };
+export default function Page() {
+  return (
+    <AppShell>
+      <div className="pf-page visibility-dashboard-page">
+        <VendorVisibilityDashboard />
+      </div>
+    </AppShell>
+  );
 }

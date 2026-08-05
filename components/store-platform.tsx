@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AlertCircle,
   ArrowRight,
   Boxes,
   CheckCircle2,
@@ -17,7 +16,9 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { CreatedStoreDetail } from "@/components/created-portfolio-detail";
+import { PreventiveLifecycleDashboard } from "@/components/preventive-lifecycle-dashboard";
 import { PlatformBadge, PlatformBreadcrumbs, PlatformPageHeader, PlatformProgress, PlatformSectionHeader, PlatformStat } from "@/components/platform-ui";
+import { SpendingIntelligenceDashboard } from "@/components/spending-intelligence-dashboard";
 import Link from "@/components/site-link";
 import { formatCurrency, formatDate, formatPercent, isOpenWorkOrder, pmCompliance, spendForPeriod, storeComparison } from "@/lib/domain/analytics";
 import type { Store as StoreRecord } from "@/lib/domain/types";
@@ -159,9 +160,6 @@ function KnownStoreDashboard({ store }: { store: StoreRecord }) {
   const priorSpend = spendForPeriod(platformData, priorStart, ttmStart, { storeId: store.id });
   const change = priorSpend ? (ttmSpend - priorSpend) / priorSpend : 0;
   const pm = pmCompliance(platformData, { storeId: store.id }, PLATFORM_NOW);
-  const allocations = platformData.allocations.filter((item) => item.storeId === store.id);
-  const storeInvoiceIds = new Set(allocations.map((item) => item.invoiceId));
-  const invoices = platformData.invoices.filter((item) => storeInvoiceIds.has(item.id)).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
   const storeVendorIds = new Set(workOrders.map((item) => item.vendorId).filter(Boolean));
   const pendingFinancial = workOrders.filter((item) => ["waiting_on_quote", "waiting_on_approval", "completed_pending_invoice"].includes(item.status));
 
@@ -215,20 +213,14 @@ function KnownStoreDashboard({ store }: { store: StoreRecord }) {
         </div>
       </>}
 
-      {tab === "Costs & bills" && <><div className="store-tab-toolbar"><span>Costs and bills for this store</span><Link className="pf-secondary-button" href={`/financials?view=invoices&store=${store.id}`}><FileStack />See every bill</Link></div><StoreCosts store={store} invoices={invoices} allocations={allocations} categoryRows={categoryRows} /></>}
+      {tab === "Costs & bills" && <SpendingIntelligenceDashboard initialScopeLevel="store" initialScopeId={store.id} compactHeader />}
       {tab === "Equipment" && <StoreEquipment store={store} systems={systems} assets={assets} components={components} />}
       {tab === "Work orders" && <StoreMaintenance storeId={store.id} workOrders={workOrders} />}
-      {tab === "Planned work" && <StorePm store={store} />}
+      {tab === "Planned work" && <PreventiveLifecycleDashboard initialStoreId={store.id} />}
       {tab === "Teams & vendors" && <StoreProviders vendorIds={storeVendorIds} workOrders={workOrders} />}
       {tab === "Store setup" && <StoreSetup store={store} systems={systems} assets={assets} />}
     </div></AppShell>
   );
-}
-
-function StoreCosts({ store, invoices, allocations, categoryRows }: { store: StoreRecord; invoices: typeof platformData.invoices; allocations: typeof platformData.allocations; categoryRows: Array<{ category: typeof platformData.categories[number]; current: number; prior: number; systems: typeof platformData.systems; assets: number; open: number; coverage: number }> }) {
-  const allocated = allocations.reduce((sum, item) => sum + item.amountCents, 0);
-  const budget = platformData.systems.filter((item) => item.storeId === store.id).reduce((sum, item) => sum + item.annualBudgetCents, 0);
-  return <div className="store-tab-layout"><section className="pf-stat-grid store-stat-grid"><PlatformStat label="Annual budget" value={formatCurrency(budget, true)} note="All types of maintenance" icon={CircleDollarSign} /><PlatformStat label="Bills assigned to this store" value={formatCurrency(allocated, true)} note={`${invoices.length} bills`} icon={FileStack} /><PlatformStat label="Bills to review" value={String(invoices.filter((item) => ["submitted", "review"].includes(item.status)).length)} note="Needs checking or approval" icon={AlertCircle} tone="warning" /><PlatformStat label="Credits recovered" value={formatCurrency(platformData.credits.filter((credit) => invoices.some((invoice) => invoice.id === credit.invoiceId)).reduce((sum, credit) => sum + credit.amountCents, 0), true)} note="Received and expected credits" icon={CheckCircle2} tone="positive" /></section><div className="pf-dashboard-grid pf-dashboard-grid-equal"><section className="pf-panel"><PlatformSectionHeader title="Budget and cost by type of work" description="Compare each maintenance area with its budget." /><table className="pf-table"><thead><tr><th>Type of work</th><th>Budget</th><th>Last 12 months</th><th>Budget used</th></tr></thead><tbody>{categoryRows.map((row) => { const rowBudget = row.systems.reduce((sum, system) => sum + system.annualBudgetCents, 0); return <tr key={row.category.id}><td><strong>{row.category.name}</strong><small>{row.systems[0]?.glCode ? `Accounting code ${row.systems[0].glCode}` : "Accounting setup pending"}</small></td><td><strong>{formatCurrency(rowBudget)}</strong></td><td><strong>{formatCurrency(row.current)}</strong></td><td><PlatformProgress value={rowBudget ? row.current / rowBudget : 0} tone={row.current > rowBudget ? "red" : "teal"} label={formatPercent(rowBudget ? row.current / rowBudget : 0)} /></td></tr>; })}</tbody></table></section><section className="pf-panel"><PlatformSectionHeader title="Bills charged to this store" description="Open a bill through its work order to see what the charge covered." href="/financials?view=invoices" /><table className="pf-table"><thead><tr><th>Bill</th><th>Team or vendor</th><th>Amount</th><th>Status</th></tr></thead><tbody>{invoices.slice(0, 10).map((invoice) => <tr key={invoice.id}><td><Link href={`/work-orders/${invoice.workOrderId}`}><strong>{invoice.number}</strong><small>{formatDate(invoice.issuedAt)}</small></Link></td><td><strong>{platformData.vendors.find((vendor) => vendor.id === invoice.vendorId)?.shortName ?? "Internal maintenance"}</strong></td><td><strong>{formatCurrency(invoice.totalCents)}</strong></td><td><PlatformBadge tone={invoice.status === "paid" ? "good" : invoice.status === "review" ? "warning" : "info"}>{invoice.status}</PlatformBadge></td></tr>)}</tbody></table></section></div></div>;
 }
 
 function StoreEquipment({ store, systems, assets, components }: { store: StoreRecord; systems: typeof platformData.systems; assets: typeof platformData.assets; components: typeof platformData.components }) {
@@ -238,8 +230,6 @@ function StoreEquipment({ store, systems, assets, components }: { store: StoreRe
 function StoreMaintenance({ storeId, workOrders }: { storeId: string; workOrders: typeof platformData.workOrders }) {
   return <section className="pf-panel"><PlatformSectionHeader title="Store maintenance history" description="Internal and outside-vendor work together in one history." href={`/work-orders?store=${storeId}&status=all`}><Link className="pf-primary-button" href={`/work-orders/new?storeId=${storeId}`}><Plus />New work order</Link></PlatformSectionHeader><div className="pf-table-scroll"><table className="pf-table"><thead><tr><th>Work order</th><th>Type / equipment</th><th>Team or vendor</th><th>Who acts next</th><th>Due</th><th>Status</th></tr></thead><tbody>{workOrders.map((item) => <tr key={item.id}><td><Link href={`/work-orders/${item.id}`}><strong>{item.number}</strong><small>{item.title}</small></Link></td><td><strong>{platformData.categories.find((category) => category.id === item.categoryId)?.name}</strong><small>{platformData.assets.find((asset) => asset.id === item.assetId)?.name ?? (item.assetId ? "Equipment record" : "Equipment not identified")}</small></td><td><strong>{item.assignedToName ?? platformData.vendors.find((vendor) => vendor.id === item.vendorId)?.shortName ?? "Unassigned"}</strong><small>{item.assignmentType ?? (item.vendorId ? "Outside vendor" : "Internal")}</small></td><td><strong>{item.accountableParty}</strong><small>{item.nextAction}</small></td><td><strong>{item.dueAt ? formatDate(item.dueAt, true) : "—"}</strong></td><td><PlatformBadge tone={item.status === "closed" ? "good" : item.priority === "critical" ? "critical" : "warning"}>{item.status.replaceAll("_", " ")}</PlatformBadge></td></tr>)}</tbody></table></div></section>;
 }
-
-function StorePm({ store }: { store: StoreRecord }) { const occurrences = platformData.pmOccurrences.filter((item) => item.storeId === store.id); return <section className="pf-panel"><PlatformSectionHeader title="Planned maintenance" description="See each scheduled visit, its work order, and whether it was completed on time." href={`/pm?store=${store.id}`} /><table className="pf-table"><thead><tr><th>Plan</th><th>Equipment or area</th><th>Service window</th><th>Work order</th><th>Proof checked</th><th>Status</th></tr></thead><tbody>{occurrences.map((item) => <tr key={item.id}><td><strong>{platformData.pmPlans.find((plan) => plan.id === item.planId)?.name ?? item.planId}</strong></td><td><strong>{platformData.assets.find((asset) => asset.id === item.assetId)?.name ?? platformData.systems.find((system) => system.id === item.systemId)?.name ?? `Store ${store.code}`}</strong></td><td><strong>{formatDate(item.windowStart)} – {formatDate(item.windowEnd)}</strong></td><td>{item.workOrderId ? <Link href={`/work-orders/${item.workOrderId}`}><strong>{platformData.workOrders.find((work) => work.id === item.workOrderId)?.number}</strong></Link> : "—"}</td><td><PlatformBadge tone={item.verified ? "good" : "warning"}>{item.verified ? "checked" : "waiting"}</PlatformBadge></td><td><PlatformBadge tone={item.status.includes("on_time") ? "good" : item.status === "missed" ? "critical" : "info"}>{item.status.replaceAll("_", " ")}</PlatformBadge></td></tr>)}</tbody></table>{!occurrences.length && <div className="simple-empty">No planned visits are due in the current reporting window.</div>}</section>; }
 
 function StoreProviders({ vendorIds, workOrders }: { vendorIds: Set<string | undefined>; workOrders: typeof platformData.workOrders }) { const providers = platformData.vendors.filter((vendor) => vendorIds.has(vendor.id)); return <div className="provider-card-grid"><article className="provider-card internal"><header><span><Wrench /></span><div><strong>Clark&apos;s Internal Maintenance</strong><small>8 technicians · regional coverage</small></div><PlatformBadge tone="good">Internal</PlatformBadge></header><div><p><span>Assigned work</span><strong>{workOrders.filter((item) => item.assignmentType === "internal").length}</strong></p><p><span>Responded on time</span><strong>94%</strong></p><p><span>Repeat visit rate</span><strong>7.2%</strong></p></div><Link href="/providers/internal-maintenance">Open team details<ArrowRight /></Link></article>{providers.map((provider) => { const providerWork = workOrders.filter((item) => item.vendorId === provider.id); return <article className="provider-card" key={provider.id}><header><span style={{ background: provider.accent }}><UsersRound /></span><div><strong>{provider.name}</strong><small>{provider.trade}</small></div><PlatformBadge tone="info">Outside vendor</PlatformBadge></header><div><p><span>Store work orders</span><strong>{providerWork.length}</strong></p><p><span>Accepted on time</span><strong>{87 + (provider.id.length % 9)}%</strong></p><p><span>Open now</span><strong>{providerWork.filter(isOpenWorkOrder).length}</strong></p></div><Link href={`/providers/${provider.id}`}>Open vendor details<ArrowRight /></Link></article>; })}</div>; }
 

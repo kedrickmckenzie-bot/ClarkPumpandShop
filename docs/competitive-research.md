@@ -3,12 +3,13 @@
 **Research date:** August 5, 2026
 **Scope:** Multi-site facilities and CMMS platforms relevant to a 65-store convenience-retail operator and independent stores
 **Source policy:** Official product, help, developer and customer-story sources only
+**Naming note:** “Maintenance Intelligence” is a temporary, changeable product label. Clark's is only the fictional pilot/demo tenant.
 
 ## 1. Research question
 
 The clean rebuild is not trying to reproduce every feature of an enterprise CMMS. The research asks a narrower question:
 
-> What operating patterns make multi-site maintenance coherent from store request through provider work, follow-up, cost and asset history, and which patterns can remain simple enough for a one-store operator and low-friction vendors?
+> What patterns make maintenance spending, PM, lifecycle and vendor evidence understandable from portfolio dashboard to exact source record, while keeping store and vendor workflows simple enough to adopt?
 
 The strongest comparisons are ServiceChannel, Fexa, Corrigo, FMX and Ecotrak. MaintainX, Limble and Fiix provide useful evidence for progressive asset classification, location hierarchy and smaller-team usability. Vendor claims are self-reported and features may depend on plan or configuration.
 
@@ -40,6 +41,8 @@ The important shared patterns are:
 - Portfolio dashboards are useful only when users can reach the exact work orders and costs underneath them.
 - Successful rollout separates location commissioning, workflow configuration, data import and role-specific training.
 
+The competitors often extend this chain into purchasing, AP and provider dispatch. That validates the importance of connected source records, but it does not make those full suites the right boundary for Maintenance Intelligence. The product adopts the evidence and drill-through patterns while keeping invoice review optional and execution lightweight.
+
 ## 3. Platform findings
 
 ### ServiceChannel
@@ -69,9 +72,9 @@ ServiceChannel is the clearest enterprise example of a multi-location owner/prov
 - [Proposal and RFP lifecycle](https://developer.servicechannel.com/guides/proposals/about-proposals-and-RFPs/)
 - [One-click work-order links from email](https://servicechannel.com/learning-channel/just-released-new-features/)
 
-#### Decision for Clark's
+#### Decision for Maintenance Intelligence
 
-Adopt the owner-side canonical work order, exception management, fallback assignment, distinct financial states and cost drill-through. Do not copy the full provider scoring burden, workforce administration, marketplace or parts/time requirements. A provider must be able to participate without adopting a new daily operating system.
+Adopt the owner-side canonical work order, exception visibility, fallback assignment, explicit cost bases and cost drill-through. Do not copy the full provider scoring burden, workforce administration, marketplace, dispatch console or accounting chain. A provider must be able to participate without adopting a new daily operating system.
 
 ### Fexa
 
@@ -102,7 +105,7 @@ Fexa's strongest pattern is configurable workflow and channel-flexible provider 
 - [Retail implementation example](https://fexa.io/customer-stories/tecovas-case-study/)
 - [Multi-brand standardization example](https://fexa.io/customer-stories/med-tail-retailer/)
 
-#### Decision for Clark's
+#### Decision for Maintenance Intelligence
 
 Treat SLA, priority, NTE, approval authority, escalation, provider coverage, landlord/warranty responsibility and notifications as organization-owned configuration. Use one domain command set behind web, email, portal and API adapters. Avoid a generic no-code workflow builder in v1; expose the few policies the pilot actually needs.
 
@@ -130,9 +133,9 @@ Corrigo provides strong examples of explicit states, hierarchical configuration 
 - [Operational reporting and detail drill-down](https://www.jllt.com/blog/business-intelligence-for-work-order-management/)
 - [Jack in the Box/Qdoba facilities example](https://www.jllt.com/customer-story/jack-in-the-box-saves-millions-with-service-call-avoidance-warranty-tracking/)
 
-#### Decision for Clark's
+#### Decision for Maintenance Intelligence
 
-Use named state transitions and append-only events, not a freely editable status field. Support inheritance from organization policy with store-level overrides only where necessary. Keep the hierarchy understandable: optional brand/region grouping does not own the store or its history.
+Use named state transitions and append-only events, not a freely editable status field. Support inheritance from organization policy with store-level overrides only where necessary. Keep the hierarchy understandable: optional division/region scope does not own the store or its history, and it remains independent from maintenance taxonomy.
 
 ### FMX
 
@@ -161,7 +164,7 @@ FMX is the useful simplicity benchmark for smaller organizations and internal/ex
 - [External vendors and email-without-login example](https://www.gofmx.com/resources/case-studies/rocketship-education/)
 - [Equipment cost reporting](https://www.gofmx.com/features/equipment-maintenance-summary-report/)
 
-#### Decision for Clark's
+#### Decision for Maintenance Intelligence
 
 Make the single-store experience a simplified presentation of the same domain model. Store creation should launch a commissioning checklist rather than force the user into unrelated setup screens. Equipment completeness must not block useful request and work-order control.
 
@@ -189,9 +192,9 @@ Ecotrak is the most directly relevant convenience-store comparison.
 - [Internal/external fulfillment at roughly 50 locations](https://www.ecotrak.com/case-studies/case-study/l5-capital-manages-more-work-orders)
 - [Internal/external work-order API representation](https://api-docs.ecotrak.com/)
 
-#### Decision for Clark's
+#### Decision for Maintenance Intelligence
 
-Borrow convenience-retail terminology, asset context and one-product packaging. Do not adopt mandatory asset-first intake. Clark's receives value at store or category level and shows asset-classification coverage until deeper records are known.
+Borrow convenience-retail terminology, asset context and one-product packaging. Do not adopt mandatory asset-first intake. Maintenance Intelligence provides value at store or category level and shows asset-classification coverage until deeper records are known.
 
 ### MaintainX, Limble and Fiix
 
@@ -201,15 +204,15 @@ These products reinforce hierarchy and progressive setup choices.
 - Limble distinguishes access-governing locations from equipment-parent relationships and provides a no-asset option in its default work-order flow. [Locations versus parent assets](https://help.limblecmms.com/en/articles/8828169-locations-vs-parent-assets), [default work-order template](https://help.limblecmms.com/en/articles/3231863-default-work-order-template)
 - Fiix describes a physical hierarchy of sites/facilities/equipment/child equipment and recommends deciding the site model during setup. [Asset hierarchy](https://helpdesk.fiixsoftware.com/hc/en-us/articles/211193203-About-the-asset-hierarchy), [basic setup](https://helpdesk.fiixsoftware.com/hc/en-us/articles/360044584571-Basic-setup-Overview)
 
-#### Decision for Clark's
+#### Decision for Maintenance Intelligence
 
-Keep organizational scope, physical hierarchy and financial coding separate. Provide reusable commissioning blueprints, but never create placeholder assets to satisfy a template or foreign key.
+Keep organization scope, company-owned maintenance taxonomy and optional external cost references separate. Provide reusable commissioning blueprints, but never create placeholder assets to satisfy a template or foreign key.
 
 ## 4. Decision synthesis for the clean rebuild
 
-### Decision 1: Clark's owns the canonical maintenance record
+### Decision 1: The operator owns the canonical maintenance record
 
-Provider FSM products may own technician dispatch and labor administration. Clark's owns its work-order number, store issue, classification history, responsible assignment, visit evidence, unresolved follow-up, proposal/approval, invoice allocation and audit history.
+Provider FSM products may own technician dispatch and labor administration. Maintenance Intelligence preserves the operator's work-order number, store issue, classification history, responsible assignment, observed visits, unresolved follow-up, costs, optional invoice links and audit history.
 
 This prevents the owner record from becoming a shallow mirror of whichever vendor happens to serve a store.
 
@@ -223,50 +226,49 @@ Vendors may respond through:
 - API/webhook integration
 - a phone response recorded by a manager
 
-Technicians use the store/accepted-work QR flow and do not need accounts. Every channel produces the same assignment and audit events. Structured decisions use explicit actions; email reply text may add notes or files but does not silently infer status.
+Technicians use the permanent store QR flow and do not need accounts. They enter a name/vendor and select the work order when visible; “I don't see it / no work order provided” creates a reviewable unmatched visit instead of blocking entry. Notes/photos are optional by default and signatures are not globally required. Every channel produces the same assignment, visit and audit events. Structured decisions use explicit actions; email reply text may add notes or files but does not silently infer status.
 
 ### Decision 3: Internal and external fulfillment have equal owner visibility
 
-Both modes use the same work-order lifecycle, next-action control, SLA clock, evidence, follow-up, cost and reporting contracts. They receive audience-specific interfaces. Internal teams need usable queues, due-date schedules, checklists, labor-cost and material-use records; those features stop short of route optimization, employee rostering, payroll and inventory accounting.
+Both modes use the same work-order lifecycle, next-action control, observed evidence, follow-up, cost and reporting contracts. They receive audience-specific interfaces. Internal teams need usable queues, requested/scheduled windows, concise checklists and cost records; those features stop short of dispatch optimization, route planning, employee rostering, payroll and inventory accounting.
 
 ### Decision 4: Classification is progressive
 
-A store is sufficient to create a work order. Category, system, asset and component are optional. Later classification is auditable and validates physical belonging. Analytics show coverage and an unclassified bucket instead of inventing placeholder equipment.
+A store is sufficient to create a work order. Category, any nested taxonomy depth, asset and component are optional. Later classification is auditable and validates organization/store belonging. Analytics show coverage and an unclassified bucket instead of inventing placeholder equipment.
 
-### Decision 5: Physical and accounting hierarchies are separate
+### Decision 5: Organization scope and maintenance taxonomy are separate
 
-Physical drill path:
+Organization-scope path:
 
-`store → area → system → asset → component`
+`company/organization → optional division → optional region → store`
 
-Financial dimensions:
+Maintenance-taxonomy path:
 
-`financial cost center → GL → budget → fiscal period`
+`category/department → zero or more nested company groups → store asset → optional component tree`
 
-Explicit allocations connect them. A cost center is not used as an equipment parent.
+The user may filter either axis and combine them. Branches may have different depths, each store activates only relevant company-owned branches and optional imported accounting references remain a separate attribution dimension.
 
 ### Decision 6: Taxonomy has stable concepts and local language
 
-Organization-owned canonical keys support cross-store comparison. Labels and aliases let an operator use its preferred terminology, store nicknames or imported codes without splitting analytics. Activated taxonomy remains tenant-scoped; only non-operational templates are shared.
+Organization-owned canonical keys and parent IDs support cross-store comparison at uneven, effectively unlimited grouping depth. Labels and aliases let an operator use its preferred terminology, store nicknames or imported codes without splitting analytics. Activated taxonomy remains tenant-scoped; only non-operational templates are shared.
 
 ### Decision 7: The primary owner surface is a management control center
 
-The default experience combines maintenance financial position, store/category reporting and internal/provider accountability, then prioritizes:
+The default experience is a visual spending dashboard that can switch company/division/region/store scope and independently traverse the maintenance taxonomy. It prioritizes:
 
-- intake needing review
-- assignments awaiting response
-- missed service targets
-- clarification
-- proposal/approval work
-- unresolved follow-up
-- verification
-- invoice/allocation exceptions
+- spend distribution and period trend
+- cost outliers with exact drivers
+- PM due/missed/compliance
+- lifecycle and replacement-review evidence
+- vendor response, visits, outcomes and captured evidence
+- open accountable exceptions
+- optional invoice/work mismatches
 
-Reporting and accounting are first-class manager workflows built from execution records. Every number opens a filtered list and every row shows accountable party, next action, due time and escalation.
+Dashboards are interactive exploration surfaces built from source records. Generated reports are named, versioned snapshots for management handoff and archive. Every number opens a filtered supporting list; no report becomes an opaque dead-end summary.
 
 ### Decision 8: Search is an operating tool
 
-Managers must be able to find a store by code, name or address; a work order by number; equipment by tag, serial or alias; and money by proposal/invoice number. Search is organization-scoped, server-filtered and paginated.
+Managers must be able to find a store by code, name or address; a work order by number; equipment by tag, serial or alias; a vendor by name; and an optional quote/invoice by reference. Search is organization-scoped, server-filtered and paginated.
 
 ### Decision 9: Store creation begins commissioning
 
@@ -274,60 +276,60 @@ The smooth flow is:
 
 1. Core store identity
 2. Contacts, hours, access and escalation
-3. Optional areas and systems
-4. Known assets/components
+3. Activate applicable company taxonomy branches
+4. Add known assets/components and lifecycle details
 5. Internal/provider coverage
-6. SLA, NTE and approval policy
+6. Response targets, optional NTE and approval policy
 7. Applicable PM
 8. Readiness review
 
 The store may accept reports before asset commissioning is complete. Readiness exposes gaps; it does not create fake data.
 
-### Decision 10: Reporting is reversible
+### Decision 10: Dashboard exploration is reversible and reports are records
 
-The canonical cost drill is:
+The combined cost drill is:
 
-`organization → store → category → system → asset → component → work orders → invoice allocations`
+`company/division/region/store × category/arbitrary groups/asset/component → work, visits, PM, costs and optional invoices`
 
-Each view shows selected financial stage, record count, period, cohort and classification coverage. Quoted, approved, committed, invoiced, credited and paid amounts remain separate.
+Each view shows selected cost basis, record count, period, cohort and classification coverage. Recorded work cost, approved amount and linked invoice amount remain separate. Generating a report freezes those definitions and source filters into a versioned handoff/archive record.
 
 ### Decision 11: One product serves one and 65 stores
 
-Organization, store, work-order and policy records are the same. Single-store UI hides region and comparison controls and defaults store scope. A regional operator gains optional brand/region groupings, server-side filters, bulk import and standardized blueprints. No separate schema or product fork is needed.
+Organization, store, work-order and policy records are the same. Single-store UI hides division/region and meaningless peer controls and defaults store scope. A regional operator gains optional division/region groupings, server-side filters, bulk import and standardized blueprints. The 12-store presentation showcases the model; a separate automated fixture proves approximately 65-store scale. No separate schema or product fork is needed.
 
 ### Decision 12: The platform is all-trades; the pilot goes deepest in HVAC/R
 
-The active product supports any maintenance trade through governed taxonomy and local labels. The demo proves landscaping, snow, janitorial, pest, signage, waste, plumbing, electrical, fuel, building, life safety and foodservice while concentrating the richest systems, equipment, components, PM and failure histories in HVAC and refrigeration. The maintenance accounting suite includes budgets, proposals, approvals, POs, invoices, credits, accruals, allocations, payment status and GL/export. Exclusions are POS and retail inventory, inventory valuation, vendor marketplace administration, payroll, tax, banking/payment execution, accounts receivable, general-ledger replacement, predictive maintenance, continuous tracking and route optimization.
+The active product supports any maintenance trade through governed taxonomy and local labels. The 12-store demo proves landscaping, snow, janitorial, pest, signage, waste, plumbing, electrical, fuel, building, life safety and foodservice while concentrating the richest equipment, components, PM and failure histories in HVAC and refrigeration. Optional invoice-to-work review is an evidence safeguard, not an accounting suite. Exclusions include full AP/accounting, purchase-order administration, accruals, payment tracking/execution, POS and retail inventory, inventory valuation, vendor marketplace administration, payroll, tax, banking, accounts receivable, general-ledger replacement, predictive maintenance, continuous tracking and route optimization.
 
 ## 5. Differentiation
 
-Clark's is not differentiated by possessing work orders, assets or dashboards; every serious competitor has them. The defendable combination is:
+Maintenance Intelligence is not differentiated by merely possessing work orders, assets or charts; every serious competitor has them. The defendable combination is:
 
-1. **Owner-side record permanence** even when vendors use other systems.
-2. **Progressive equipment intelligence** without blocking work or faking asset precision.
-3. **Low-friction provider accountability** without mandatory portal adoption.
-4. **Automatic unresolved-work control** after an incomplete visit.
-5. **Canonical analytics with local operator language.**
-6. **Two-axis cost traceability** through both physical equipment and maintenance accounting.
-7. **One-store simplicity and 65-store control from one model.**
+1. **Visual spending intelligence** that switches organization scope and independently drills any taxonomy depth to source records.
+2. **PM and lifecycle intelligence** connected to asset identity, warranty, peer cost and transparent replacement-review rules.
+3. **Low-friction vendor evidence** through email/deep links, flexible QR visits and an optional—not mandatory—portal.
+4. **Owner-side record permanence** even when vendors use other systems.
+5. **Progressive equipment intelligence** without blocking work or faking asset precision.
+6. **Generated report records** that preserve scope, basis, definitions and source links for handoff/archive.
+7. **One-store simplicity and approximately 65-store control from one model.**
 
 ### Positioning statement
 
-> Clark's Facilities is the owner-side maintenance control plane for multi-location and independent convenience retailers. It makes every issue permanent, every unresolved job accountable and every maintenance dollar traceable—from company totals to the asset or component when known—without forcing service vendors to abandon the tools they already use.
+> Maintenance Intelligence (temporary product label) is the owner-side visibility layer for multi-location and independent operators. It makes maintenance spending understandable from company totals to any configured asset depth, connects PM and lifecycle decisions to source records and captures vendor evidence without forcing service companies into a new daily system.
 
-## 6. 65-store rollout implications
+## 6. Approximately 65-store rollout implications
 
 Official implementation guidance across Fexa, FMX, Corrigo, ServiceChannel and Ecotrak consistently emphasizes clean location data, workflow decisions, provider onboarding, role-specific training and phased adoption.
 
 Recommended rollout:
 
-1. Configure the organization taxonomy, priority/SLA matrix, NTE/approval policy and provider coverage.
-2. Import all 65 core stores and validate exact identifiers, addresses, contacts and financial references.
+1. Configure company/division/region scope, the organization-owned maintenance taxonomy, response/approval policies and provider coverage.
+2. Import the real pilot stores and validate exact identifiers, addresses, contacts and optional external cost references. This rollout dataset is separate from the concise 12-store presentation demo.
 3. Launch a small representative wave covering different volumes, geography and vendor arrangements.
 4. Stabilize request → work order → response → visit → follow-up → verification before broad expansion.
-5. Activate all maintenance categories, then add reliable HVAC/R equipment depth without delaying store- or category-level work control.
+5. Activate all maintenance categories, then add reliable HVAC/R equipment/lifecycle depth without delaying store- or category-level visibility.
 6. Expand in waves with a defined hypercare queue and role-specific training.
-7. Measure adoption from source records: triage time, response time, overdue unresolved work, proposal turnaround, invoice exceptions and classification coverage.
+7. Measure adoption from source records: dashboard drill-through, PM compliance, lifecycle review, response time, observed visits, overdue unresolved work, optional invoice exceptions and classification coverage.
 
 The pilot should never seed or display a summary that cannot be reproduced from its supporting operational records.
 
@@ -340,7 +342,7 @@ The pilot should never seed or display a summary that cannot be reproduced from 
 | Progressive classification leaves ambiguity | Show coverage and unclassified buckets next to asset analytics |
 | Email/deep links weaken identity assurance | Purpose-bound expiring tokens, actor/channel audit and step-up confirmation for money |
 | Geolocation is imperfect | Store accuracy/distance/result and show verified or exception state; never claim continuous proof |
-| Financial stages can be double-counted | Separate stage measures and explicit append-only allocations/ledger entries |
+| Cost bases can be double-counted | Name the selected basis, use explicit source attribution and never combine overlapping work/approved/invoice amounts |
 | Regional UI overwhelms one-store owners | Hide optional hierarchy and portfolio comparison without changing the data model |
 | Demo data looks unrealistically complete | Seed incomplete classification and exception cases; calculate all totals from records |
 | Configuration becomes enterprise software | Expose a governed policy set, not an unlimited workflow-builder surface in v1 |

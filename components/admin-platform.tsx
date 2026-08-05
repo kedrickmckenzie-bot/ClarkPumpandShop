@@ -4,7 +4,6 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  BookOpen,
   Boxes,
   Building2,
   Check,
@@ -40,7 +39,8 @@ import {
 } from "@/components/platform-ui";
 import Link from "@/components/site-link";
 import { formatCurrency, formatDate } from "@/lib/domain/analytics";
-import { platformData, taxonomyConfiguration } from "@/lib/platform/data";
+import { CompanyTaxonomyBuilder } from "@/components/company-taxonomy-builder";
+import { platformData } from "@/lib/platform/data";
 import { approvalPolicies, budgets, glAccounts } from "@/lib/platform/finance";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -391,103 +391,7 @@ function PeopleAdmin() {
 }
 
 function TaxonomyAdmin() {
-  return (
-    <>
-      <section className="taxonomy-explainer">
-        <div>
-          <Layers3 />
-          <span>
-            <strong>Stable semantics underneath</strong>
-            <p>
-              Canonical concepts preserve reporting and history even when the
-              customer changes labels.
-            </p>
-          </span>
-        </div>
-        <div>
-          <BookOpen />
-          <span>
-            <strong>Familiar vocabulary on top</strong>
-            <p>
-              Clark&apos;s can display “Cost center” while another operator uses
-              “Equipment group.”
-            </p>
-          </span>
-        </div>
-      </section>
-      <section className="pf-panel">
-        <PlatformSectionHeader
-          title="Hierarchy labels"
-          description="Changing a display label never changes record identity or historical classification."
-        >
-          <button className="pf-secondary-button">
-            <Save />
-            Save labels
-          </button>
-        </PlatformSectionHeader>
-        <table className="pf-table taxonomy-table">
-          <thead>
-            <tr>
-              <th>Canonical level</th>
-              <th>Clark&apos;s label</th>
-              <th>Example</th>
-              <th>Required?</th>
-            </tr>
-          </thead>
-          <tbody>
-            {taxonomyConfiguration.levelLabels.map((item, index) => (
-              <tr key={item.key}>
-                <td>
-                  <strong>{item.defaultLabel}</strong>
-                  <small>Stable key: {item.key}</small>
-                </td>
-                <td>
-                  <input defaultValue={item.organizationLabel} />
-                </td>
-                <td>
-                  <strong>{item.example}</strong>
-                </td>
-                <td>
-                  <PlatformBadge tone={index === 0 ? "info" : "neutral"}>
-                    {index === 0 ? "Expected at triage" : "Optional depth"}
-                  </PlatformBadge>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-      <section className="pf-panel taxonomy-alias-panel">
-        <PlatformSectionHeader
-          title="Canonical concepts and aliases"
-          description="Search and import recognize local, legacy, and vendor terminology."
-        >
-          <button className="pf-primary-button">
-            <Plus />
-            Add concept
-          </button>
-        </PlatformSectionHeader>
-        <div>
-          {taxonomyConfiguration.aliases.map((item) => (
-            <article key={item.canonical}>
-              <span>
-                <Tags />
-              </span>
-              <div>
-                <strong>{item.canonical}</strong>
-                <small>
-                  {item.aliases.map((alias) => (
-                    <em key={alias}>{alias}</em>
-                  ))}
-                </small>
-              </div>
-              <button>Edit mapping</button>
-            </article>
-          ))}
-        </div>
-      </section>
-    </>
-  );
+  return <CompanyTaxonomyBuilder />;
 }
 
 function RoutingAdmin() {
@@ -1664,19 +1568,22 @@ export function EquipmentSetupForm({
         ? {
             ...data,
             storeId,
-            annualBudgetCents: Number(data.annualBudget ?? 0) * 100,
+            annualBudgetCents: Math.round(Number(data.annualBudget ?? 0) * 100),
           }
         : entity === "asset"
           ? {
               ...data,
               storeSystemId: systemId,
-              replacementCostCents: Number(data.replacementCost ?? 0) * 100,
+              purchaseCostCents: Math.round(Number(data.purchaseCost ?? 0) * 100),
+              meterReading: Number(data.meterReading ?? 0),
+              expectedLifeYears: Number(data.expectedLifeYears ?? 0),
+              replacementCostCents: Math.round(Number(data.replacementCost ?? 0) * 100),
             }
           : {
               ...data,
               assetId,
               quantity: Number(data.quantity ?? 1),
-              unitCostCents: Number(data.unitCost ?? 0) * 100,
+              unitCostCents: Math.round(Number(data.unitCost ?? 0) * 100),
               criticalSpare: data.criticalSpare === "on",
             };
     try {
@@ -1862,13 +1769,53 @@ export function EquipmentSetupForm({
                 <FieldInput label="Serial number" name="serial" />
                 <FieldInput label="Physical location" name="location" />
                 <FieldInput
+                  label="Purchase date"
+                  name="purchaseDate"
+                  type="date"
+                />
+                <FieldInput
+                  label="Purchase cost ($)"
+                  name="purchaseCost"
+                  type="number"
+                />
+                <FieldInput label="Supplier" name="supplierName" />
+                <FieldInput
+                  label="Supplier contact"
+                  name="supplierContact"
+                  placeholder="Contact name, phone, or email"
+                />
+                <FieldInput
                   label="Installed date"
                   name="installedAt"
                   type="date"
                 />
                 <FieldInput
+                  label="Expected service life (years)"
+                  name="expectedLifeYears"
+                  type="number"
+                />
+                <FieldInput
                   label="Replacement estimate ($)"
                   name="replacementCost"
+                  type="number"
+                />
+                <label>
+                  <span>Maintenance approach</span>
+                  <select name="maintenanceStrategy" defaultValue="preventive">
+                    <option value="preventive">Preventive maintenance</option>
+                    <option value="condition_based">Condition based</option>
+                    <option value="run_to_failure">Repair when it fails</option>
+                    <option value="statutory">Required inspection</option>
+                  </select>
+                </label>
+                <FieldInput
+                  label="Meter type"
+                  name="meterType"
+                  placeholder="Runtime hours, cycles, mileage"
+                />
+                <FieldInput
+                  label="Current meter reading"
+                  name="meterReading"
                   type="number"
                 />
                 <label>
@@ -1878,6 +1825,23 @@ export function EquipmentSetupForm({
                     <option value="high">High</option>
                     <option value="critical">Critical</option>
                   </select>
+                </label>
+                <FieldInput label="Warranty provider" name="warrantyProvider" />
+                <FieldInput
+                  label="Warranty or contract number"
+                  name="warrantyReference"
+                />
+                <FieldInput
+                  label="Warranty end"
+                  name="warrantyEndsAt"
+                  type="date"
+                />
+                <label className="wide">
+                  <span>Warranty coverage and notes</span>
+                  <textarea
+                    name="warrantySummary"
+                    placeholder="Parts covered, labor exclusions, claim contact, and anything the manager should know"
+                  />
                 </label>
               </>
             )}

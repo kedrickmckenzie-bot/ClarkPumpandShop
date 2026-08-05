@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Archive,
   ArrowRight,
   BarChart3,
   Bookmark,
@@ -13,6 +14,7 @@ import {
   LineChart,
   PieChart,
   Plus,
+  RotateCcw,
   Save,
   Search,
   Send,
@@ -55,6 +57,147 @@ type ReportKey =
   | "equipment"
   | "financial"
   | "data-quality";
+
+type ReportRecordStatus = "ready" | "handoff" | "archived";
+
+type ReportRecord = {
+  id: string;
+  report: ReportKey;
+  title: string;
+  scope: string;
+  period: string;
+  asOf: string;
+  preparedBy: string;
+  audience: string;
+  status: ReportRecordStatus;
+  region: string;
+  category: string;
+  query: string;
+};
+
+const reportTypeCards: Array<{
+  report: ReportKey;
+  title: string;
+  description: string;
+  icon: typeof BarChart3;
+}> = [
+  {
+    report: "store-cost",
+    title: "Store Costs",
+    description:
+      "Hand leadership a fixed cost comparison by company, region, store, and type of work.",
+    icon: Store,
+  },
+  {
+    report: "pm",
+    title: "Preventive Maintenance",
+    description:
+      "Record what was due, completed on time, missed, or still waiting for proof.",
+    icon: ShieldCheck,
+  },
+  {
+    report: "providers",
+    title: "Vendor Activity",
+    description:
+      "Summarize assigned work, recorded responses, service visits, repeat visits, and open cost.",
+    icon: UsersRound,
+  },
+  {
+    report: "equipment",
+    title: "Lifecycle Planning",
+    description:
+      "Prepare an explainable equipment review using repair cost, age, failures, warranty, and service history.",
+    icon: Wrench,
+  },
+];
+
+const seededReportRecords: ReportRecord[] = [
+  {
+    id: "report-record-store-costs",
+    report: "store-cost",
+    title: "Portfolio Store Cost Review",
+    scope: "Company · 12-store showcase · All maintenance categories",
+    period: "Paid bills less credits · Trailing 12 months",
+    asOf: "Aug 5, 2026 · 10:00 AM ET",
+    preparedBy: "Jordan Bell · Facilities",
+    audience: "Regional managers",
+    status: "handoff",
+    region: "all",
+    category: "all",
+    query: "",
+  },
+  {
+    id: "report-record-pm",
+    report: "pm",
+    title: "Preventive Maintenance Exceptions",
+    scope: "Company · All active PM plans",
+    period: "Program status through the as-of date",
+    asOf: "Aug 5, 2026 · 10:00 AM ET",
+    preparedBy: "Jordan Bell · Facilities",
+    audience: "Regional operations",
+    status: "ready",
+    region: "all",
+    category: "all",
+    query: "",
+  },
+  {
+    id: "report-record-vendors",
+    report: "providers",
+    title: "Vendor Activity Review",
+    scope: "Company · All recorded vendor work",
+    period: "Open work and recorded visits through the as-of date",
+    asOf: "Aug 5, 2026 · 9:45 AM ET",
+    preparedBy: "Sam Rivera · Maintenance",
+    audience: "Facilities and accounts payable",
+    status: "ready",
+    region: "all",
+    category: "all",
+    query: "",
+  },
+  {
+    id: "report-record-lifecycle",
+    report: "equipment",
+    title: "Equipment Lifecycle Planning Review",
+    scope: "Company · All tracked equipment",
+    period: "Repair history · Trailing 12 months",
+    asOf: "Aug 5, 2026 · 9:30 AM ET",
+    preparedBy: "Jordan Bell · Facilities",
+    audience: "Operations and capital planning",
+    status: "ready",
+    region: "all",
+    category: "all",
+    query: "",
+  },
+  {
+    id: "report-record-store-45",
+    report: "store-cost",
+    title: "Store 45 Cost Review",
+    scope: "Store 45 · Lexington",
+    period: "Paid bills less credits · Trailing 12 months",
+    asOf: "Jul 31, 2026 · 4:00 PM ET",
+    preparedBy: "Jordan Bell · Facilities",
+    audience: "VP of Operations",
+    status: "archived",
+    region: "all",
+    category: "all",
+    query: "45",
+  },
+];
+
+function audienceForReport(report: ReportKey) {
+  const audiences: Record<ReportKey, string> = {
+    portfolio: "Executives and facilities",
+    "store-cost": "Regional managers and facilities",
+    "category-cost": "Facilities and finance",
+    providers: "Facilities and accounts payable",
+    pm: "Facilities and regional operations",
+    equipment: "Facilities and capital planning",
+    financial: "Finance and facilities",
+    "data-quality": "Administrators and finance",
+  };
+  return audiences[report];
+}
+
 const reports: Array<{
   key: ReportKey;
   name: string;
@@ -148,10 +291,82 @@ export function ReportingSuite({ initialReport, initialRegion, initialCategory }
   const [region, setRegion] = useState(platformData.regions.some((item) => item.id === initialRegion) ? initialRegion! : "all");
   const [category, setCategory] = useState(platformData.categories.some((item) => item.id === initialCategory) ? initialCategory! : "all");
   const [query, setQuery] = useState("");
+  const [records, setRecords] = useState<ReportRecord[]>(seededReportRecords);
+  const [openedRecordId, setOpenedRecordId] = useState<string | null>(null);
+  const [recordNotice, setRecordNotice] = useState("");
+  const openedRecord = records.find((record) => record.id === openedRecordId);
 
-  function openReport(report: ReportKey) {
+  function openReport(report: ReportKey, recordId?: string) {
     setSelected(report);
+    setOpenedRecordId(recordId ?? null);
+    if (recordId) {
+      const record = records.find((candidate) => candidate.id === recordId);
+      if (record) {
+        setRegion(record.region);
+        setCategory(record.category);
+        setQuery(record.query);
+      }
+    }
     setMode("report");
+  }
+
+  function updateRecordStatus(id: string, status: ReportRecordStatus) {
+    const record = records.find((candidate) => candidate.id === id);
+    setRecords((current) =>
+      current.map((candidate) =>
+        candidate.id === id ? { ...candidate, status } : candidate,
+      ),
+    );
+    if (!record) return;
+    setRecordNotice(
+      status === "handoff"
+        ? `${record.title} is ready to hand off. Its scope, reporting period, and as-of date stay with the record.`
+        : status === "archived"
+          ? `${record.title} was moved to archived records.`
+          : `${record.title} was restored to current records.`,
+    );
+  }
+
+  function generateRecord() {
+    const report = reports.find((candidate) => candidate.key === selected)!;
+    const reportTitle =
+      reportTypeCards.find((candidate) => candidate.report === selected)?.title ??
+      report.name;
+    const regionLabel =
+      region === "all"
+        ? "All regions"
+        : platformData.regions.find((candidate) => candidate.id === region)?.name ?? region;
+    const categoryLabel =
+      category === "all"
+        ? "All maintenance categories"
+        : platformData.categories.find((candidate) => candidate.id === category)?.name ?? category;
+    const period =
+      selected === "pm"
+        ? "Program status through the as-of date"
+        : selected === "providers"
+          ? "Open work and recorded visits through the as-of date"
+          : selected === "financial"
+            ? "Financial position through the as-of date"
+            : selected === "data-quality"
+              ? "Current classification coverage"
+              : "Paid bills less credits · Trailing 12 months";
+    const record: ReportRecord = {
+      id: `report-record-session-${records.length + 1}`,
+      report: selected,
+      title: `${reportTitle} · ${regionLabel}`,
+      scope: `${regionLabel} · ${categoryLabel}${query ? ` · Matching “${query}”` : ""}`,
+      period,
+      asOf: "Aug 5, 2026 · 10:00 AM ET",
+      preparedBy: "Demo user",
+      audience: audienceForReport(selected),
+      status: "ready",
+      region,
+      category,
+      query,
+    };
+    setRecords((current) => [record, ...current]);
+    setOpenedRecordId(record.id);
+    setRecordNotice(`${record.title} was generated and saved as a report record.`);
   }
 
   return (
@@ -159,8 +374,8 @@ export function ReportingSuite({ initialReport, initialRegion, initialCategory }
       <div className="pf-page reporting-page">
         <PlatformPageHeader
           eyebrow="Reports"
-          title="What do you want to understand?"
-          description="Choose a report, then open any store, cost, team, vendor, or work order behind the number."
+          title="Reports to share and keep"
+          description="Generate a fixed record for a reporting period, prepare it for handoff, or archive it. Every reported value still opens its supporting records."
         />
         <nav className="reporting-nav">
           <button
@@ -168,24 +383,60 @@ export function ReportingSuite({ initialReport, initialRegion, initialCategory }
             onClick={() => setMode("library")}
           >
             <Bookmark />
-            Choose a report
+            Report records
           </button>
           <button
             className={mode === "report" ? "active" : ""}
-            onClick={() => setMode("report")}
+            onClick={() => {
+              setOpenedRecordId(null);
+              setMode("report");
+            }}
           >
             <BarChart3 />
-            Current report
+            Prepare a report
           </button>
         </nav>
         <details className="report-more-tools" open={mode === "builder" || mode === "scheduled" || undefined}>
           <summary>More reporting tools</summary>
           <div><button className={mode === "builder" ? "active" : ""} onClick={() => setMode("builder")}><Filter />Build a custom report</button><button className={mode === "scheduled" ? "active" : ""} onClick={() => setMode("scheduled")}><CalendarClock />Scheduled reports</button></div>
         </details>
-        {mode === "library" && <ReportLibrary onOpen={openReport} />}
+        {recordNotice && (
+          <p className="report-record-notice" role="status">
+            {recordNotice}
+          </p>
+        )}
+        {mode === "library" && (
+          <ReportLibrary
+            records={records}
+            onOpen={openReport}
+            onStatusChange={updateRecordStatus}
+          />
+        )}
         {mode === "report" && (
           <>
-            <div className="report-control-bar">
+            {openedRecord ? (
+              <ReportRecordHeader
+                record={openedRecord}
+                onBack={() => setMode("library")}
+                onStatusChange={updateRecordStatus}
+              />
+            ) : (
+              <section
+                className="report-record-preparation"
+                aria-labelledby="report-record-preparation-title"
+              >
+                <header>
+                  <div>
+                    <p>New report record</p>
+                    <h2 id="report-record-preparation-title">
+                      Choose the scope, then generate a snapshot
+                    </h2>
+                    <span>
+                      The preview below is not saved until you generate the report record.
+                    </span>
+                  </div>
+                </header>
+            <div className="report-control-bar report-record-controls">
               <label>
                 <span>Report</span>
                 <select
@@ -240,11 +491,13 @@ export function ReportingSuite({ initialReport, initialRegion, initialCategory }
                   />
                 </div>
               </label>
-              <button type="button">
+              <button type="button" onClick={generateRecord}>
                 <Save />
-                Save view
+                Generate report record
               </button>
             </div>
+              </section>
+            )}
             <ReportView
               report={selected}
               region={region}
@@ -260,41 +513,216 @@ export function ReportingSuite({ initialReport, initialRegion, initialCategory }
   );
 }
 
-function ReportLibrary({ onOpen }: { onOpen: (report: ReportKey) => void }) {
-  const primaryReportKeys: ReportKey[] = ["store-cost", "portfolio", "providers", "pm"];
-  const primaryReports = reports.filter((report) => primaryReportKeys.includes(report.key));
-  const additionalReports = reports.filter((report) => !primaryReportKeys.includes(report.key));
+function ReportLibrary({
+  records,
+  onOpen,
+  onStatusChange,
+}: {
+  records: ReportRecord[];
+  onOpen: (report: ReportKey, recordId?: string) => void;
+  onStatusChange: (id: string, status: ReportRecordStatus) => void;
+}) {
+  const [showArchived, setShowArchived] = useState(false);
+  const currentRecords = records.filter((record) => record.status !== "archived");
+  const archivedRecords = records.filter((record) => record.status === "archived");
+  const visibleRecords = showArchived ? archivedRecords : currentRecords;
+  const primaryKeys = new Set(reportTypeCards.map((card) => card.report));
+  const additionalReports = reports.filter((report) => !primaryKeys.has(report.key));
   return (
     <>
-      <section className="report-library-grid">
-        {primaryReports.map(({ key, name, description, icon: Icon }) => (
-          <article key={key}>
+      <section className="report-record-types" aria-labelledby="report-record-types-title">
+        <header className="report-record-section-heading">
+          <div>
+            <p>Start a report</p>
+            <h2 id="report-record-types-title">Choose a plain-language report type</h2>
+            <span>Set the scope, review the supporting records, then generate a fixed snapshot.</span>
+          </div>
+        </header>
+        <div className="report-record-type-grid">
+        {reportTypeCards.map(({ report, title, description, icon: Icon }) => (
+          <article className="report-record-type-card" key={report}>
             <header><span><Icon /></span></header>
-            <h3>{name}</h3>
+            <h3>{title}</h3>
             <p>{description}</p>
             <footer>
-              <button type="button" onClick={() => onOpen(key)}>
-                Open report
+              <button type="button" onClick={() => onOpen(report)}>
+                Prepare this report
                 <ArrowRight />
               </button>
             </footer>
           </article>
         ))}
+        </div>
       </section>
+
+      <section className="report-record-library" aria-labelledby="report-record-library-title">
+        <header className="report-record-section-heading">
+          <div>
+            <p>Saved records</p>
+            <h2 id="report-record-library-title">Generated reports</h2>
+            <span>Each snapshot keeps its scope, reporting period, as-of date, owner, and intended audience.</span>
+          </div>
+          <div className="report-record-tabs" role="group" aria-label="Report record status">
+            <button
+              type="button"
+              className={!showArchived ? "active" : ""}
+              aria-pressed={!showArchived}
+              onClick={() => setShowArchived(false)}
+            >
+              Current <span>{currentRecords.length}</span>
+            </button>
+            <button
+              type="button"
+              className={showArchived ? "active" : ""}
+              aria-pressed={showArchived}
+              onClick={() => setShowArchived(true)}
+            >
+              Archived <span>{archivedRecords.length}</span>
+            </button>
+          </div>
+        </header>
+        <div className="report-record-list">
+          {visibleRecords.map((record) => (
+            <article className="report-record-card" key={record.id}>
+              <header>
+                <div>
+                  <span>
+                    {reportTypeCards.find((card) => card.report === record.report)?.title ??
+                      reports.find((report) => report.key === record.report)?.name ??
+                      "Report"}
+                  </span>
+                  <h3>{record.title}</h3>
+                </div>
+                <PlatformBadge
+                  tone={
+                    record.status === "handoff"
+                      ? "good"
+                      : record.status === "archived"
+                        ? "neutral"
+                        : "info"
+                  }
+                >
+                  {record.status === "handoff"
+                    ? "Handoff ready"
+                    : record.status === "archived"
+                      ? "Archived"
+                      : "Ready for review"}
+                </PlatformBadge>
+              </header>
+              <dl className="report-record-facts">
+                <div><dt>Scope</dt><dd>{record.scope}</dd></div>
+                <div><dt>Reporting period</dt><dd>{record.period}</dd></div>
+                <div><dt>As of</dt><dd>{record.asOf}</dd></div>
+                <div><dt>Prepared by</dt><dd>{record.preparedBy}</dd></div>
+                <div><dt>Audience</dt><dd>{record.audience}</dd></div>
+              </dl>
+              <footer className="report-record-actions">
+                <button type="button" onClick={() => onOpen(record.report, record.id)}>
+                  Open snapshot <ArrowRight />
+                </button>
+                {record.status !== "archived" ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={record.status === "handoff"}
+                      onClick={() => onStatusChange(record.id, "handoff")}
+                    >
+                      <Send />
+                      {record.status === "handoff" ? "Handoff ready" : "Prepare handoff"}
+                    </button>
+                    <button type="button" onClick={() => onStatusChange(record.id, "archived")}>
+                      <Archive /> Archive
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => onStatusChange(record.id, "ready")}>
+                    <RotateCcw /> Restore
+                  </button>
+                )}
+              </footer>
+            </article>
+          ))}
+          {!visibleRecords.length && (
+            <div className="report-record-empty">
+              <Bookmark />
+              <strong>No {showArchived ? "archived" : "current"} report records</strong>
+              <p>{showArchived ? "Archived snapshots will remain available here." : "Choose a report type above to generate the first record."}</p>
+            </div>
+          )}
+        </div>
+      </section>
+
       <details className="report-additional-library">
-        <summary>More detailed reports</summary>
+        <summary>More report types</summary>
         <section className="report-library-grid">
           {additionalReports.map(({ key, name, description, icon: Icon }) => (
             <article key={key}>
               <header><span><Icon /></span></header>
               <h3>{name}</h3>
               <p>{description}</p>
-              <footer><button type="button" onClick={() => onOpen(key)}>Open report<ArrowRight /></button></footer>
+              <footer><button type="button" onClick={() => onOpen(key)}>Prepare report<ArrowRight /></button></footer>
             </article>
           ))}
         </section>
       </details>
     </>
+  );
+}
+
+function ReportRecordHeader({
+  record,
+  onBack,
+  onStatusChange,
+}: {
+  record: ReportRecord;
+  onBack: () => void;
+  onStatusChange: (id: string, status: ReportRecordStatus) => void;
+}) {
+  return (
+    <section className="report-record-snapshot" aria-labelledby="report-record-snapshot-title">
+      <header>
+        <div>
+          <button type="button" onClick={onBack}>← Back to report records</button>
+          <p>Saved snapshot</p>
+          <h2 id="report-record-snapshot-title">{record.title}</h2>
+          <span>
+            The scope and definitions below are locked to this report record. Open any row to inspect its supporting source records.
+          </span>
+        </div>
+        <PlatformBadge
+          tone={record.status === "handoff" ? "good" : record.status === "archived" ? "neutral" : "info"}
+        >
+          {record.status === "handoff" ? "Handoff ready" : record.status === "archived" ? "Archived" : "Ready for review"}
+        </PlatformBadge>
+      </header>
+      <dl className="report-record-snapshot-facts">
+        <div><dt>Scope</dt><dd>{record.scope}</dd></div>
+        <div><dt>Reporting period</dt><dd>{record.period}</dd></div>
+        <div><dt>As of</dt><dd>{record.asOf}</dd></div>
+        <div><dt>Prepared by</dt><dd>{record.preparedBy}</dd></div>
+        <div><dt>Audience</dt><dd>{record.audience}</dd></div>
+      </dl>
+      <footer className="report-record-actions">
+        {record.status === "archived" ? (
+          <button type="button" onClick={() => onStatusChange(record.id, "ready")}>
+            <RotateCcw /> Restore
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={record.status === "handoff"}
+              onClick={() => onStatusChange(record.id, "handoff")}
+            >
+              <Send /> {record.status === "handoff" ? "Handoff ready" : "Prepare handoff"}
+            </button>
+            <button type="button" onClick={() => onStatusChange(record.id, "archived")}>
+              <Archive /> Archive
+            </button>
+          </>
+        )}
+      </footer>
+    </section>
   );
 }
 
@@ -309,10 +737,10 @@ function ReportView({
   category: string;
   query: string;
 }) {
-  if (report === "financial") return <FinancialPositionReport />;
-  if (report === "providers") return <ProviderReport />;
-  if (report === "pm") return <PmReport />;
-  if (report === "equipment") return <EquipmentReport />;
+  if (report === "financial") return <FinancialPositionReport region={region} category={category} />;
+  if (report === "providers") return <ProviderReport region={region} category={category} />;
+  if (report === "pm") return <PmReport region={region} category={category} />;
+  if (report === "equipment") return <EquipmentReport region={region} category={category} />;
   if (report === "data-quality") return <DataQualityReport />;
   if (report === "category-cost") return <CategoryCostReport region={region} category={category} />;
   return (
@@ -548,18 +976,27 @@ function CategoryCostReport({ region, category: categoryScope = "all" }: { regio
   );
 }
 
-function ProviderReport() {
+function ProviderReport({ region, category }: { region: string; category: string }) {
+  const storeIds = new Set(
+    platformData.stores
+      .filter((store) => region === "all" || store.regionId === region)
+      .map((store) => store.id),
+  );
   const rows = platformData.vendors
     .map((vendor) => {
       const work = platformData.workOrders.filter(
-        (item) => item.vendorId === vendor.id,
+        (item) =>
+          item.vendorId === vendor.id &&
+          storeIds.has(item.storeId) &&
+          (category === "all" || item.categoryId === category),
       );
       const ids = new Set(work.map((item) => item.id));
       const visits = platformData.visits.filter((visit) =>
         ids.has(visit.workOrderId),
       );
       const responses = platformData.vendorResponses.filter(
-        (response) => response.vendorId === vendor.id,
+        (response) =>
+          response.vendorId === vendor.id && ids.has(response.workOrderId),
       );
       const accepted = responses.filter(
         (response) => response.response === "accepted",
@@ -580,6 +1017,7 @@ function ProviderReport() {
           .reduce((sum, item) => sum + item.costExposureCents, 0),
       };
     })
+    .filter((row) => row.work.length > 0)
     .sort((a, b) => b.open - a.open);
   return (
     <section className="pf-panel">
@@ -638,28 +1076,59 @@ function ProviderReport() {
   );
 }
 
-function PmReport() {
-  const overall = pmCompliance(platformData, {}, PLATFORM_NOW);
-  const rows = platformData.regions.map((region) => {
+function PmReport({ region: regionScope, category }: { region: string; category: string }) {
+  const selectedRegions = platformData.regions.filter(
+    (region) => regionScope === "all" || region.id === regionScope,
+  );
+  const planIds = new Set(
+    platformData.pmPlans
+      .filter((plan) => category === "all" || plan.categoryId === category)
+      .map((plan) => plan.id),
+  );
+  const selectedStoreIds = new Set(
+    platformData.stores
+      .filter((store) => regionScope === "all" || store.regionId === regionScope)
+      .map((store) => store.id),
+  );
+  const scopedOccurrences = platformData.pmOccurrences.filter(
+    (occurrence) =>
+      selectedStoreIds.has(occurrence.storeId) && planIds.has(occurrence.planId),
+  );
+  const rows = selectedRegions.map((region) => {
     const storeIds = platformData.stores
       .filter((store) => store.regionId === region.id)
       .map((store) => store.id);
-    const values = storeIds.map(
-      (storeId) => pmCompliance(platformData, { storeId }, PLATFORM_NOW).value,
+    const results = storeIds.map((storeId) =>
+      pmCompliance(
+        platformData,
+        { storeId, ...(category === "all" ? {} : { categoryId: category }) },
+        PLATFORM_NOW,
+      ),
     );
+    const numerator = results.reduce((sum, result) => sum + result.numerator, 0);
+    const denominator = results.reduce((sum, result) => sum + result.denominator, 0);
     return {
       region,
-      compliance: values.reduce((sum, value) => sum + value, 0) / values.length,
-      missed: platformData.pmOccurrences.filter(
+      numerator,
+      denominator,
+      compliance: denominator ? numerator / denominator : 1,
+      missed: scopedOccurrences.filter(
         (item) => storeIds.includes(item.storeId) && item.status === "missed",
       ).length,
-      pending: platformData.pmOccurrences.filter(
+      pending: scopedOccurrences.filter(
         (item) =>
           storeIds.includes(item.storeId) &&
           ["documentation_pending", "acceptance_pending"].includes(item.status),
       ).length,
     };
   });
+  const overallNumerator = rows.reduce((sum, row) => sum + row.numerator, 0);
+  const overallDenominator = rows.reduce((sum, row) => sum + row.denominator, 0);
+  const overall = {
+    numerator: overallNumerator,
+    denominator: overallDenominator,
+    value: overallDenominator ? overallNumerator / overallDenominator : 1,
+  };
   return (
     <>
       <section className="pf-stat-grid report-stat-grid">
@@ -672,7 +1141,7 @@ function PmReport() {
         <PlatformStat
           label="Missed visits"
           value={String(
-            platformData.pmOccurrences.filter(
+            scopedOccurrences.filter(
               (item) => item.status === "missed",
             ).length,
           )}
@@ -683,7 +1152,7 @@ function PmReport() {
         <PlatformStat
           label="Proof still needed"
           value={String(
-            platformData.pmOccurrences.filter(
+            scopedOccurrences.filter(
               (item) => item.status === "documentation_pending",
             ).length,
           )}
@@ -727,7 +1196,7 @@ function PmReport() {
                   <strong>{row.pending}</strong>
                 </td>
                 <td>
-                  <Link href={`/pm?region=${row.region.id}`}>
+                  <Link href={`/pm?region=${row.region.id}${category === "all" ? "" : `&category=${category}`}`}>
                     Open occurrences
                     <ArrowRight />
                   </Link>
@@ -741,8 +1210,21 @@ function PmReport() {
   );
 }
 
-function EquipmentReport() {
+function EquipmentReport({ region, category }: { region: string; category: string }) {
   const watch = platformData.assets
+    .filter((asset) => {
+      const system = platformData.systems.find(
+        (item) => item.id === asset.storeSystemId,
+      );
+      const store = platformData.stores.find(
+        (item) => item.id === system?.storeId,
+      );
+      if (!system || !store) return false;
+      return (
+        (category === "all" || system.categoryId === category) &&
+        (region === "all" || store.regionId === region)
+      );
+    })
     .map((asset) => {
       const cost = spendForPeriod(platformData, ttmStart, now, {
         assetId: asset.id,
@@ -833,10 +1315,15 @@ function EquipmentReport() {
   );
 }
 
-function FinancialPositionReport() {
-  const position = rollupFinancialPosition({ organizationId: "org-clarks" });
+function FinancialPositionReport({ region, category }: { region: string; category: string }) {
+  const filter = {
+    organizationId: "org-clarks",
+    ...(region === "all" ? {} : { regionId: region }),
+    ...(category === "all" ? {} : { categoryId: category }),
+  };
+  const position = rollupFinancialPosition(filter);
   const rows = rollupFinancialPositionBy(
-    { organizationId: "org-clarks" },
+    filter,
     "regionId",
   );
   const stages = [

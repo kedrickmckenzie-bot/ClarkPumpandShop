@@ -22,6 +22,13 @@
       "when": 1785947304851,
       "tag": "0002_fine_freak",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785958198391,
+      "tag": "0003_freezing_vance_astro",
+      "breakpoints": true
     }
   ]
 }

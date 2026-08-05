@@ -6,26 +6,27 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Clark's Maintenance", template: "%s · Clark's Maintenance" },
-  description: "Maintenance work, store costs, equipment, teams, and vendors in one place.",
+  metadataBase: new URL("https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site"),
+  title: { default: "Maintenance Intelligence", template: "%s · Maintenance Intelligence" },
+  description: "Maintenance spending visibility, preventive maintenance, lifecycle planning, and vendor accountability.",
   openGraph: {
-    title: "Clark's Maintenance",
-    description: "See the work, the cost, and who acts next.",
+    title: "Maintenance Intelligence",
+    description: "Follow maintenance spending from the portfolio to the work, equipment, and evidence behind it.",
     type: "website",
     images: [
       {
-        url: "/og.png",
-        width: 1733,
-        height: 909,
-        alt: "Clark's Maintenance — see the work, the cost, and who acts next.",
+        url: "/og-maintenance-intelligence.png",
+        width: 1734,
+        height: 907,
+        alt: "Maintenance Intelligence dashboard showing spending, lifecycle, and equipment drill-downs.",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Clark's Maintenance",
-    description: "See the work, the cost, and who acts next.",
-    images: ["/og.png"],
+    title: "Maintenance Intelligence",
+    description: "Follow maintenance spending from the portfolio to the work, equipment, and evidence behind it.",
+    images: ["/og-maintenance-intelligence.png"],
   },
   icons: { icon: "/favicon.svg" },
 };

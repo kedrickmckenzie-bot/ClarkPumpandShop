@@ -27,7 +27,7 @@ The baseline is viable and should be extended rather than replaced. It supports 
 
 The following starter gaps must be addressed during implementation:
 
-1. Enable D1 and R2 bindings and replace the empty schema with the Clark's Operations domain model.
+1. Enable D1 and R2 bindings and replace the empty schema with the Maintenance Intelligence domain model. Clark's remains demo-tenant data, not the software brand.
 2. Remove the starter preview component, preview metadata, starter icons, and `react-loading-skeleton` dependency.
 3. Replace the starter smoke test with domain, integration, and rendered-journey coverage.
 4. Add deterministic seed data; the starter has no seed pipeline.
@@ -38,4 +38,3 @@ The following starter gaps must be addressed during implementation:
 ## Architecture direction pending research
 
 The research phase will determine feature emphasis and interaction design. Unless research exposes a material conflict, the implementation should retain the initialized monolith, use D1/SQLite for deterministic demo persistence, keep files behind an R2-compatible storage abstraction, and organize business calculations as framework-independent TypeScript domain services so they can be tested without rendering the UI.
-

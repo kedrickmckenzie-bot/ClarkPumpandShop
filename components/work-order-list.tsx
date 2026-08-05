@@ -37,7 +37,7 @@ export function WorkOrderList() {
 
   return <AppShell><div className="page">
     <Breadcrumbs items={[{ label: "Operations", href: "/" }, { label: "Work Orders" }]} />
-    <PageHeader eyebrow="Internal source of truth" title="Work orders" description="Every request, vendor touch, visit, document, control action and cost remains tied to Clark’s work order.">
+    <PageHeader eyebrow="Internal source of truth" title="Work orders" description="Every request, vendor touch, visit, document, control action and cost remains tied to the customer work order.">
       <Link className="button primary" href="/work-orders/new"><Plus />Create work order</Link>
       <button className="button" onClick={() => window.print()}><Download />Export view</button>
     </PageHeader>

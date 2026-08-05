@@ -33,23 +33,23 @@ type SearchResult = {
 };
 
 const primaryNavItems = [
-  { href: "/", label: "Overview", icon: Gauge },
+  { href: "/", label: "Portfolio dashboard", icon: Gauge },
   { href: "/stores", label: "Stores", icon: Store },
-  { href: "/maintenance", label: "Maintenance", icon: ClipboardList },
-  { href: "/financials", label: "Spending & bills", icon: Landmark },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/pm", label: "PM & lifecycle", icon: ClipboardList },
+  { href: "/accountability", label: "Vendor accountability", icon: UsersRound },
+  { href: "/reports", label: "Reports & records", icon: BarChart3 },
 ];
 
 const moreNavItems = [
-  { href: "/accountability", label: "What needs attention", icon: AlertTriangle },
+  { href: "/maintenance", label: "Maintenance workspace", icon: ClipboardList },
+  { href: "/equipment", label: "Equipment registry", icon: Wrench },
+  { href: "/financials", label: "Invoices & optional safeguards", icon: Landmark },
   { href: "/work-orders", label: "All work orders", icon: ClipboardList },
   { href: "/requests", label: "Problems reported", icon: AlertTriangle },
-  { href: "/pm", label: "Scheduled maintenance", icon: Wrench },
   { href: "/my-work", label: "My assigned work", icon: HardHat },
   { href: "/schedule", label: "Work calendar", icon: ClipboardList },
-  { href: "/equipment", label: "Equipment", icon: Wrench },
   { href: "/providers", label: "Service companies", icon: UsersRound },
-  { href: "/vendor-portal", label: "What vendors see", icon: Building2 },
+  { href: "/vendor-portal", label: "Optional vendor workspace", icon: Building2 },
   { href: "/setup", label: "Settings & setup", icon: Settings2 },
 ];
 
@@ -188,11 +188,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className={`platform-sidebar ${menuOpen ? "open" : ""}`} aria-label="Primary navigation">
         <div className="platform-brand">
           <div className="platform-brand-mark" aria-hidden="true"><Wrench /></div>
-          <div><strong>Clark&apos;s Maintenance</strong><span>Demo workspace</span></div>
+          <div><strong>Maintenance Intelligence</strong><span>Temporary product label</span></div>
         </div>
         <div className="scope-card">
           <span className="scope-card-icon"><Building2 /></span>
-          <span><small>Demo company</small><strong>Clark&apos;s Stores</strong><em>{platformSummary.stores} example locations</em></span>
+          <span><small>Pilot customer</small><strong>Clark&apos;s Stores</strong><em>{platformSummary.stores} example locations</em></span>
         </div>
         <div className="platform-nav-group">
           <p>Main menu</p>
@@ -232,7 +232,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Search /><span>Search stores, work orders, or equipment</span><kbd>Ctrl K</kbd>
           </button>
           <div className="topbar-actions">
-            <Link className="primary-action" href="/work-orders/new"><Plus />Create work order</Link>
+            <Link className="primary-action" href="/requests/new"><Plus />Report a problem</Link>
           </div>
         </header>
         <main className="platform-main">{children}</main>

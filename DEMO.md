@@ -1,69 +1,83 @@
-# Clark's Operations demo script
+# Maintenance Intelligence demo script
 
-Use the fixed “Aug 5, 2026” demo period. The core walkthrough takes about 12–15 minutes.
+**Maintenance Intelligence** is a temporary, changeable product label. Clark's is the fictional 12-store demo tenant, not the software brand. The core walkthrough takes about 12-15 minutes.
 
-## 1. Begin at company control
+## 1. Start with the product star: spending visibility
 
 Open `/`.
 
-1. Explain that the command center is exception-first: critical work, overdue follow-up, vendor acceptance, PM, spend exposure, invoice review and replacement candidates.
-2. Use Region, Store, Category and Vendor filters. Point out that metrics recalculate from the same underlying records.
-3. Open the Store 45 outlier. The claim is deliberately narrow: refrigeration spend is statistically unusual. Repeat visits, missed PM and emergency work are correlated evidence, not asserted causes.
+1. Switch the organization scope between company, division, region and store. Explain that these are reporting scopes, not equipment parents.
+2. Change the period and selected cost basis. The definition remains visible so a number never silently changes from recorded work cost to approved or linked-invoice cost.
+3. Use the trend, category distribution, vendor ranking and cost-outlier visuals. Click a segment or outlier to reach its exact source records.
+4. Point out classification coverage and the unclassified bucket. Store-only or category-only work remains in the total instead of disappearing.
 
-## 2. Drill down without losing context
+## 2. Drill the independent maintenance taxonomy
 
-Open `/stores/store-45` → Beer Cave Refrigeration → CU-1 → Condenser Fan Motor.
+From the portfolio dashboard, drill `Refrigeration -> Coolers/Freezers -> a specific store asset -> optional component`.
 
-1. Store 45 shows company-relative spend, open work, PM compliance and systems.
-2. Beer Cave Refrigeration is the durable system that owns PM and groups physical assets.
-3. CU-1 exposes the capital-review logic: age, TTM burden, prior-period increase, failures, visits, repeats, PM and warranty. Each threshold is visible; there is no opaque health score.
-4. The fan motor shows the optional component-level allocation. General work remains useful even when component detail is absent.
+1. The company owns the category names, aliases and nested grouping tree so stores use consistent language.
+2. Branch depth is flexible. Refrigeration can be deep while landscaping can stop after one category.
+3. Switch to Store 45 and traverse the same taxonomy in store scope.
+4. End on supporting work orders, visits and cost records. The dashboard never ends at an unexplained summary.
 
-## 3. Follow the complete work-order story
+Open `/stores`, search by store number and then by address, and open `/stores/store-45` to reinforce that the store dashboard is the regional-manager view for that location.
 
-Open `/work-orders/wo-0245`.
+## 3. Show PM and lifecycle intelligence
 
-1. The original cashier report RPT-0671 is immutable. Manager/regional context is appended, never substituted.
-2. CWO-0245 is Clark’s source of truth. The right-hand control card always names the accountable party, next action, due date and escalation.
-3. Progressive classification shows that the record began at Store + Refrigeration and later gained system, asset and component associations from diagnosis and quote evidence.
-4. Visit 1 is geofence verified and ends “Diagnosed — unresolved,” which automatically creates a Facilities-owned follow-up.
-5. Visit 2 is resolved. Quote, authorization, two allocation lines and $4,950 invoice all reconcile.
-6. The audit timeline proves the sequence and preserves classification changes.
+Open `/pm`, then open a refrigeration asset from the lifecycle/outlier area.
 
-## 4. Demonstrate low-burden users
+1. Show due, overdue and completed PM occurrences plus the compliance numerator, denominator and allowed window.
+2. Compare same-class assets using age, expected life, warranty, reactive cost, repeat work and replacement-cost relationship.
+3. Open the asset record to show manufacturer, model, serial, supplier, purchase/installation, warranty, components, PM and source work/cost history.
+4. Explain that replacement review exposes reasons and thresholds. It is a human decision aid, never an opaque health score or automatic replacement order.
 
-Open `/reports/new` on a narrow/mobile viewport.
+## 4. Demonstrate low-friction vendor accountability
 
-1. An employee reports an observable symptom in plain language; no asset knowledge is required.
-2. Submit and show that the receipt explains permanence and next steps.
+Open `/accountability`, then `/email-outbox`.
 
-Open `/email-outbox`.
+1. Open the accountless vendor link and accept or decline the job. The vendor may propose a date without creating a portal account.
+2. Explain that `/vendor-portal` is optional for recurring vendors who want job and permitted asset/service history.
+3. Open the store technician QR. Enter technician name and vendor, then select the work order.
+4. Also show **I don't see my work order / no work order provided**. It creates a reviewable unmatched visit instead of blocking the technician.
+5. Check in, rescan/select the active visit, optionally add notes/photos, choose resolved, waiting on parts or unresolved, and check out.
+6. The platform records observed visit count and approximate onsite duration. It does not claim dispatch visibility, certified labor time or repair quality. Accounts, signatures and photos are not globally required.
 
-1. Send the fictional vendor email.
-2. Open the secure response and choose Accept. Emphasize that NorthStar keeps dispatch and technician assignment in its own system.
-3. Scan or open the technician QR. Run inside, outside, denied and inaccurate demo states; then try actual browser location if appropriate.
-4. Select “Diagnosed — unresolved” to show automatic follow-up. Repeat with “Completed — issue resolved” to show the terminal path.
+## 5. Show the intentionally simple maintenance workflow
 
-## 5. Show PM, vendor and finance control
+Open `/reports/new` or `/requests/new`, then `/work-orders/wo-0245`.
 
-1. `/pm`: Store 45’s missed April occurrence remains missed even though a recovery work order exists. Documentation-pending work does not count as compliant.
-2. `/vendors`: observed performance and response state only—no duplicate dispatch board.
-3. `/files`: drag in a safe PDF/image/text file, then review invoice states and financial-control copy. Local mode labels the upload as a session preview; hosting activates R2.
+1. A cashier reports an observable problem with name/ID and optional photos; no equipment expertise is required.
+2. The manager reviews the permanent request. Approval can follow configured amount/category authority without turning intake into a burdensome corporate process.
+3. Create or open a work order. Store and problem are enough; taxonomy, asset and component can be classified later.
+4. Show useful operator context, assignment, requested/scheduled window, visits, outcome, follow-up, costs and audit history.
+5. An unresolved checkout creates the next accountable follow-up instead of letting the issue disappear.
 
-## 6. Explain customer-size fit
+## 6. Show the optional invoice safeguard and report records
 
-- One independent store: organization → store directly; no fake region, one person may hold several roles, comparison panels adapt to history/categories.
-- Regional operator: optional regions scope managers and filters.
-- 65-store pilot: stable pagination, exception queues, tenant-scoped indexes and server-persistence design. The product does not need a different hierarchy or microservices at that store count.
-- Other operators: every operational table is organization scoped and no cross-customer benchmarking is enabled by default.
+Return to `/accountability` for the invoice-review preview, then open `/reports`.
+
+1. Upload/import an invoice and link it to one or more work orders/visits.
+2. Review vendor/amount differences, duplicate reference, visit count, approximate onsite time and captured evidence.
+3. Emphasize that this is a human-review safeguard. It does not approve or execute payment and does not replace AP, ERP or the general ledger. Customers can ignore this feature and still use every dashboard, PM, lifecycle and vendor-accountability feature.
+4. Generate a report from the current dashboard scope. The saved record preserves scope, taxonomy path, period, cost basis, definitions and source links for handoff or archive.
+5. Regenerating creates a new version rather than silently rewriting a report already handed up the chain.
+
+## 7. Explain customer-size fit
+
+- Independent store: store scope is default; no fake division/region or meaningless peer-store UI is required.
+- 12-store presentation: enough story-rich data to demonstrate each workflow without overwhelming the audience.
+- Approximately 65-store pilot: the same tenant/store/taxonomy/query model, server filtering, stable pagination and bulk setup; a separate automated fixture proves scale.
+- Other operators: all maintenance trades use configurable organization-owned taxonomy; HVAC/R is the deepest demo focus, not a hardcoded restriction.
 
 ## Reset and verification
 
-Restart the development process to reset browser-only demo state. Fixture records are deterministic.
+Restart the development process to reset browser-only preview state. Fixture records are deterministic.
 
 ```bash
 npm run db:seed
+npm run typecheck
+npm run lint
 npm test
+npm run test:e2e
 npm run build
 ```
-

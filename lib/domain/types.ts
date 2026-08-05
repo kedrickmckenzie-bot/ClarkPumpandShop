@@ -107,6 +107,9 @@ export interface Asset {
   location: string;
   condition: "excellent" | "good" | "fair" | "poor" | "failed";
   purchaseCostCents: number;
+  purchaseDate?: string;
+  supplierName?: string;
+  supplierContact?: string;
   lastServiceAt?: string;
   maintenanceStrategy: "run_to_failure" | "preventive" | "condition_based" | "statutory";
   meterType?: string;
@@ -114,6 +117,9 @@ export interface Asset {
   installedAt: string;
   expectedLifeYears: number;
   replacementCostCents: number;
+  warrantyProvider?: string;
+  warrantyReference?: string;
+  warrantySummary?: string;
   warrantyEndsAt: string;
   criticality: "critical" | "high" | "standard";
   state: "operational" | "watch" | "service_due" | "offline";

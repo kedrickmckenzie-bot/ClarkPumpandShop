@@ -1327,7 +1327,7 @@ function PaymentsView({
         <PlatformStat label="Unallocated payments" value={formatCurrency(sumCents(payments.map((record) => record.unallocatedCents)), true)} note="Payment-to-invoice allocation" icon={AlertCircle} tone={payments.some((record) => record.unallocatedCents > 0) ? "warning" : "positive"} />
       </section>
       <section className="pf-panel finance-payment-boundary">
-        <p><Landmark aria-hidden="true" /><span><strong>Payment tracking, not payment execution</strong><small>These records observe AP status and external references. Clark&apos;s Operations does not move money, connect bank accounts or replace accounts payable.</small></span></p>
+        <p><Landmark aria-hidden="true" /><span><strong>Payment tracking, not payment execution</strong><small>These records observe AP status and external references. Maintenance Intelligence does not move money, connect bank accounts or replace accounts payable.</small></span></p>
       </section>
       <section className="pf-panel finance-payment-panel">
         <PlatformSectionHeader title="Payments and outstanding invoices" description="Observed payments and invoice balances remain linked to their work, store, provider and allocation trail." />
