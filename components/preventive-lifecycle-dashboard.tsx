@@ -74,12 +74,6 @@ function pmStatusLabel(status: string) {
   return labels[status] ?? status.replaceAll("_", " ");
 }
 
-function hoursLabel(minutes: number) {
-  if (minutes === 0) return "None recorded";
-  const hours = minutes / 60;
-  return `${hours.toFixed(Number.isInteger(hours) ? 0 : 1)} hr`;
-}
-
 export function PreventiveLifecycleDashboard({
   initialStoreId,
   initialCategoryId,
@@ -250,10 +244,6 @@ export function PreventiveLifecycleDashboard({
             new Date(workOrder.createdAt) >= ttmStart &&
             new Date(workOrder.createdAt) < now,
         );
-        const downtimeMinutes = workOrders.reduce(
-          (sum, workOrder) => sum + (workOrder.downtimeMinutes ?? 0),
-          0,
-        );
         const ageRatio =
           asset.expectedLifeYears > 0
             ? analysis.ageYears / asset.expectedLifeYears
@@ -263,8 +253,7 @@ export function PreventiveLifecycleDashboard({
           : analysis.reasons.length >= 2 ||
               ageRatio >= 0.7 ||
               analysis.burden >= 0.25 ||
-              peerOutlier ||
-              downtimeMinutes >= 240
+              peerOutlier
             ? "plan"
             : "monitor";
         const reasons = analysis.reasons.map((reason) => ({
@@ -300,14 +289,6 @@ export function PreventiveLifecycleDashboard({
             threshold: "At least 1.5× peer median and $2,500 above it",
           });
         }
-        if (downtimeMinutes >= 240) {
-          reasons.push({
-            key: "downtime",
-            label: "Recorded downtime merits review",
-            value: hoursLabel(downtimeMinutes),
-            threshold: "At least 4 hours in the trailing 12 months",
-          });
-        }
         return {
           asset,
           system,
@@ -317,7 +298,6 @@ export function PreventiveLifecycleDashboard({
           peerMedian,
           peerCount: peerValues.length,
           peerOutlier,
-          downtimeMinutes,
           openWork: workOrders.filter(isOpenWorkOrder).length,
           ageRatio,
           band,
@@ -377,8 +357,8 @@ export function PreventiveLifecycleDashboard({
           <p className="pl-eyebrow">Preventive maintenance + lifecycle</p>
           <h2 id="pl-title">Keep equipment reliable. Plan replacements before they become emergencies.</h2>
           <p>
-            Preventive work, repair history, downtime, age, warranty, and paid
-            cost stay connected to the equipment and work records behind them.
+            Preventive work, repair history, age, warranty, and paid cost stay
+            connected to the equipment and work records behind them.
           </p>
         </div>
         <Link className="pl-heading-link" href={pmScopeHref}>
@@ -688,9 +668,13 @@ export function PreventiveLifecycleDashboard({
                   </article>
                   <article>
                     <Clock3 aria-hidden="true" />
-                    <span>Recorded downtime</span>
-                    <strong>{hoursLabel(selectedLifecycle.downtimeMinutes)}</strong>
-                    <small>Trailing 12 months</small>
+                    <span>Last service</span>
+                    <strong>
+                      {selectedLifecycle.asset.lastServiceAt
+                        ? formatDate(selectedLifecycle.asset.lastServiceAt)
+                        : "Not recorded"}
+                    </strong>
+                    <small>Equipment service record</small>
                   </article>
                 </div>
                 <section className="pl-reasons">
@@ -706,7 +690,7 @@ export function PreventiveLifecycleDashboard({
                     </article>
                   ))}
                   {!selectedLifecycle.reasons.length && (
-                    <p>No planning threshold is currently triggered. Continue recording work, cost, PM, and downtime.</p>
+                    <p>No planning threshold is currently triggered. Continue recording work, cost, and PM evidence.</p>
                   )}
                 </section>
                 <footer>

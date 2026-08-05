@@ -450,7 +450,7 @@ An asset can be useful with only a store, taxonomy path and local name. Optional
 - Expected useful life, maintenance strategy, criticality and meter details.
 - Photos, manuals, components, PM plans and full work/visit/cost history.
 
-Lifecycle views compare same-class assets inside the organization and show age/service-life position, reactive cost, repeat work, downtime when recorded, PM history, warranty and replacement-cost relationship. Missing data remains visible. Rules show inputs and thresholds and can recommend human review, never automatically order replacement.
+Lifecycle views compare same-class assets inside the organization and show age/service-life position, reactive cost, repeat work, verified service visits, PM history, warranty and replacement-cost relationship. Missing data remains visible. Rules show inputs and thresholds and can recommend human review, never automatically order replacement. Downtime is not inferred or used as a lifecycle score because ordinary work records cannot establish it reliably.
 
 ## Spending visibility and optional invoice safeguard
 
@@ -565,7 +565,7 @@ Dashboards are for exploration and decision-making. A report is generated from t
 
 ## Capital review
 
-Capital-review recommendations are transparent management aids, not automatic replacement decisions. Reasons may include age/service-life position, repeated reactive work, maintenance cost relative to replacement estimate, downtime, PM history, warranty, safety/criticality or energy/operating evidence when provided.
+Capital-review recommendations are transparent management aids, not automatic replacement decisions. Reasons may include age/service-life position, repeated reactive work, verified visit or callback history, maintenance cost relative to replacement estimate, PM history, warranty, safety/criticality or energy/operating evidence when provided.
 
 Every reason shows input, threshold, period and source records. Management may monitor, defer with reason, add to capital plan, approve replacement or record replacement complete. Decisions are audited and do not erase maintenance history.
 

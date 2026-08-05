@@ -561,7 +561,7 @@ export function CreatedAssetDetail({ assetId }: { assetId: string }) {
             <span className="label">Maintenance record</span>
             <h3>{work.length} linked work orders</h3>
             <p>
-              This asset’s work, PM, components, documents, downtime and cost
+              This asset’s work, PM, components, documents, service and cost
               history accumulate here.
             </p>
           </aside>
