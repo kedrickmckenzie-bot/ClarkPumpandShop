@@ -20,12 +20,13 @@ import {
 } from "lucide-react";
 import Link from "@/components/site-link";
 import { platformData, platformSummary } from "@/lib/platform/data";
+import { vendorDirectoryProfile, vendorSearchText } from "@/lib/vendor-directory";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type SearchResult = {
   id: string;
-  kind: "Store" | "Work order" | "Equipment" | "Provider";
+  kind: "Store" | "Work order" | "Equipment" | "Vendor";
   title: string;
   detail: string;
   href: string;
@@ -48,13 +49,14 @@ const moreNavItems = [
   { href: "/requests", label: "Problems reported", icon: AlertTriangle },
   { href: "/my-work", label: "My assigned work", icon: HardHat },
   { href: "/schedule", label: "Work calendar", icon: ClipboardList },
-  { href: "/providers", label: "Service companies", icon: UsersRound },
+  { href: "/vendors", label: "Approved vendors", icon: UsersRound },
   { href: "/vendor-portal", label: "Optional vendor workspace", icon: Building2 },
   { href: "/setup", label: "Settings & setup", icon: Settings2 },
 ];
 
 const moreRoutePrefixes = [
   ...moreNavItems.map((item) => item.href),
+  "/providers",
   "/systems",
   "/assets",
   "/components",
@@ -106,11 +108,11 @@ function buildSearchIndex(extraStores: Array<Record<string, unknown>>): SearchRe
   });
   const providers: SearchResult[] = platformData.vendors.map((vendor) => ({
     id: vendor.id,
-    kind: "Provider",
+    kind: "Vendor",
     title: vendor.name,
-    detail: `${vendor.trade} - ${vendor.dispatchEmail}`,
+    detail: `${vendor.trade} - ${vendorDirectoryProfile(vendor).summary}`,
     href: `/providers/${vendor.id}`,
-    search: `${vendor.name} ${vendor.shortName} ${vendor.trade} ${vendor.dispatchEmail}`.toLowerCase(),
+    search: vendorSearchText(vendor),
   }));
   return [...stores, ...workOrders, ...assets, ...providers];
 }
@@ -171,7 +173,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (href === "/") return pathname === "/";
     if (href === "/maintenance") return pathname.startsWith("/maintenance");
     if (href === "/equipment") return pathname.startsWith("/equipment") || pathname.startsWith("/systems") || pathname.startsWith("/assets") || pathname.startsWith("/components");
-    if (href === "/providers") return pathname.startsWith("/providers") || pathname.startsWith("/vendors");
+    if (href === "/vendors") return pathname.startsWith("/providers") || pathname.startsWith("/vendors");
     return pathname.startsWith(href);
   }
 
@@ -244,17 +246,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="search-overlay" role="dialog" aria-modal="true" aria-label="Search stores and maintenance records">
           <button className="search-backdrop" type="button" aria-label="Close search" onClick={() => setSearchOpen(false)} />
           <section className="search-panel">
-            <div className="search-input-row"><Search /><input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Type a store number, street, work order number, or equipment name" /><button type="button" onClick={() => setSearchOpen(false)}>Close</button></div>
-            <div className="search-panel-head"><span>{query ? `${results.length} results` : "Demo stores"}</span><small>Start with a store number or address</small></div>
+            <div className="search-input-row"><Search /><input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Store, address, work order, equipment, vendor, or service" /><button type="button" onClick={() => setSearchOpen(false)}>Close</button></div>
+            <div className="search-panel-head"><span>{query ? `${results.length} results` : "Demo stores"}</span><small>Search a store or type a need such as plumber or refrigeration</small></div>
             <div className="search-results">
               {results.map((result) => (
                 <button type="button" key={`${result.kind}-${result.id}`} onClick={() => chooseResult(result)}>
                   <span className={`search-kind ${result.kind.toLowerCase().replace(" ", "-")}`}>{result.kind === "Store" ? <Store /> : result.kind === "Work order" ? <ClipboardList /> : result.kind === "Equipment" ? <Wrench /> : <HardHat />}</span>
                   <span><strong>{result.title}</strong><small>{result.detail}</small></span>
-                  <em>{result.kind === "Provider" ? "Service company" : result.kind}</em>
+                  <em>{result.kind}</em>
                 </button>
               ))}
-              {!results.length && <div className="search-empty"><Search /><strong>Nothing matched that search</strong><span>Try a store number, city, street, work order number, or equipment name.</span></div>}
+              {!results.length && <div className="search-empty"><Search /><strong>Nothing matched that search</strong><span>Try a store number, street, work order, equipment name, vendor, or service such as plumber.</span></div>}
             </div>
             <footer><span>Select a result to open it</span><span><kbd>Esc</kbd> closes search</span></footer>
           </section>

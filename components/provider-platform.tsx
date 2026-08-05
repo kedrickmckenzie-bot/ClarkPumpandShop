@@ -293,7 +293,7 @@ export function ProviderDetail({ providerId }: { providerId: string }) {
   return (
     <AppShell>
       <div className="pf-page provider-page">
-        <PlatformBreadcrumbs items={[{ label: "Providers", href: "/providers" }, { label: provider.name }]} />
+        <PlatformBreadcrumbs items={[{ label: provider.kind === "vendor" ? "Approved vendors" : "Teams & vendors", href: provider.kind === "vendor" ? "/vendors" : "/providers" }, { label: provider.name }]} />
         <PlatformPageHeader
           eyebrow={provider.kind === "internal" ? "Internal service team" : "Outside service partner"}
           title={provider.name}
@@ -548,7 +548,7 @@ export function AccountabilityCenter({ initialStoreScope = "", initialQueueScope
       <div className="pf-page provider-page">
         <PlatformBreadcrumbs items={[{ label: "Overview", href: "/" }, { label: "Who needs to act?" }]} />
         <PlatformPageHeader eyebrow="Work needing attention" title="Who needs to act?" description="See what is waiting, who owns the next step, and when it is due.">
-          <Link className="pf-button" href="/providers"><UsersRound />Teams & vendors</Link>
+          <Link className="pf-button" href="/vendors"><UsersRound />Approved vendors</Link>
           <Link className="pf-button pf-button-primary" href="/work-orders/new"><Plus />Start a work order</Link>
         </PlatformPageHeader>
 

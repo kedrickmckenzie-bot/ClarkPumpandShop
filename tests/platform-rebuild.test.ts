@@ -9,6 +9,7 @@ import {
   rollupFinancialPositionBy,
 } from "@/lib/platform/finance";
 import { isRuntimeCreatedId, isRuntimeRegistryRecord } from "@/lib/platform/registry";
+import { vendorDirectoryProfile, vendorSearchText } from "@/lib/vendor-directory";
 
 describe("regional and independent operating model", () => {
   it("keeps the showcase concise while retaining the 65-store product target", () => {
@@ -168,6 +169,18 @@ describe("regional and independent operating model", () => {
   it("keeps canonical taxonomy labels beneath customer-specific naming", () => {
     expect(taxonomyConfiguration.levelLabels.find((level) => level.key === "system")?.organizationLabel).toBe("Cost center");
     expect(taxonomyConfiguration.aliases.find((alias) => alias.canonical === "Walk-In Cooler")?.aliases).toContain("Beer Cave");
+  });
+
+  it("finds approved vendors by formal trade and plain-language service terms", () => {
+    const plumber = platformData.vendors.find((vendor) => vendor.id === "vendor-flowrite")!;
+    const refrigeration = platformData.vendors.find(
+      (vendor) => vendor.id === "vendor-northstar",
+    )!;
+
+    expect(vendorSearchText(plumber)).toContain("plumber");
+    expect(vendorSearchText(plumber)).toContain("drain");
+    expect(vendorSearchText(refrigeration)).toContain("beer cave");
+    expect(vendorDirectoryProfile(plumber).serviceGroup).toBe("Plumbing");
   });
 });
 

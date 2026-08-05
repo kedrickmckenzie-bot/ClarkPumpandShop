@@ -569,6 +569,12 @@ Capital-review recommendations are transparent management aids, not automatic re
 
 Every reason shows input, threshold, period and source records. Management may monitor, defer with reason, add to capital plan, approve replacement or record replacement complete. Decisions are audited and do not erase maintenance history.
 
+## Approved vendor directory
+
+Managers can browse an approved-only vendor directory and search by company name, formal trade, service description, contact, coverage, or common language such as **plumber**, **drain**, **freezer**, **electrician**, **snow removal**, or **fire alarm**. Each result shows the vendor's approved status, service scope, coverage, dispatch contact, customer work history and current open work, with direct paths to the vendor record and a preassigned work order.
+
+Approval status is an administrative decision and remains separate from observed performance. A vendor does not become approved or disapproved automatically because of a score, invoice exception or small sample of work.
+
 ## Vendor and internal-team performance
 
 Only observed measures are reported, including:

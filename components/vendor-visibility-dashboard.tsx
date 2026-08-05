@@ -25,6 +25,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Upload,
+  UsersRound,
   Wrench,
 } from "lucide-react";
 import Link from "@/components/site-link";
@@ -261,6 +262,9 @@ export function VendorVisibilityDashboard() {
             <FileCheck2 /> Optional AP safeguard
           </button>
         </div>
+        <Link className="vv-directory-link" href="/vendors">
+          <UsersRound aria-hidden="true" /> Approved vendors
+        </Link>
         <label className="vv-vendor-filter">
           <span>Service partner</span>
           <select
