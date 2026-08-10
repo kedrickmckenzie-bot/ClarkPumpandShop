@@ -181,6 +181,16 @@
   gap: 16px;
 }
 
+.equipmentGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--cstore-line);
+  border-radius: 12px;
+  background: #f8faf9;
+}
+
 .field,
 .stackedField {
   display: grid;
@@ -721,6 +731,157 @@
   gap: 0;
 }
 
+.lifecycleReview {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 18px 26px;
+  border-bottom: 1px solid #e2c78c;
+  background: linear-gradient(135deg, #fff8e9, #fffdf7);
+}
+
+.lifecycleUnclassified {
+  border-bottom-color: var(--cstore-line);
+  background: #f7faf8;
+}
+
+.lifecycleIcon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #f7dfae;
+  color: #7e510f;
+}
+
+.lifecycleUnclassified .lifecycleIcon {
+  background: var(--cstore-brand-pale);
+  color: var(--cstore-brand);
+}
+
+.lifecycleIcon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.lifecycleCopy {
+  min-width: 0;
+}
+
+.lifecycleEyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: #855611;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+
+.lifecycleUnclassified .lifecycleEyebrow {
+  color: var(--cstore-brand);
+}
+
+.lifecycleCopy h3 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -.02em;
+}
+
+.lifecycleCopy p {
+  margin: 5px 0 0;
+  color: var(--cstore-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.lifecycleFacts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(105px, 1fr));
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.lifecycleFacts > span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(126, 81, 15, .14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .72);
+}
+
+.lifecycleFacts small,
+.lifecycleFacts strong {
+  display: block;
+}
+
+.lifecycleFacts small {
+  color: var(--cstore-faint);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.lifecycleFacts strong {
+  margin-top: 5px;
+  font-size: 14px;
+}
+
+.lifecycleReasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.lifecycleReasons span {
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: rgba(126, 81, 15, .09);
+  color: #69440d;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.lifecycleActions {
+  display: grid;
+  gap: 7px;
+  min-width: 155px;
+}
+
+.lifecycleActions button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid #d3b36f;
+  border-radius: 9px;
+  background: #fff;
+  color: #70470f;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.lifecycleUnclassified .lifecycleActions button {
+  border-color: var(--cstore-line-strong);
+  color: var(--cstore-brand);
+}
+
+.lifecycleActions button:disabled {
+  cursor: default;
+  opacity: .58;
+}
+
+.lifecycleActions svg {
+  width: 15px;
+  height: 15px;
+}
+
 .authorizationDocument {
   padding: 25px 26px 28px;
   border-right: 1px solid var(--cstore-line);
@@ -1253,6 +1414,19 @@
 }
 
 @media (max-width: 900px) {
+  .lifecycleReview {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .lifecycleActions {
+    grid-column: 2;
+    display: flex;
+  }
+
+  .lifecycleFacts {
+    grid-template-columns: repeat(3, minmax(105px, 1fr));
+  }
+
   .authorizationLayout {
     grid-template-columns: 1fr;
   }
@@ -1293,6 +1467,7 @@
   .section,
   .visitHero,
   .visitForm,
+  .lifecycleReview,
   .authorizationDocument,
   .authorizationAside {
     padding-left: 18px;
@@ -1300,6 +1475,7 @@
   }
 
   .fieldGrid,
+  .equipmentGrid,
   .visitTypeGrid,
   .documentFacts {
     grid-template-columns: 1fr;
@@ -1336,6 +1512,24 @@
 
   .workOrderNumber {
     justify-items: start;
+  }
+
+  .lifecycleReview {
+    grid-template-columns: 1fr;
+  }
+
+  .lifecycleIcon,
+  .lifecycleActions {
+    grid-column: auto;
+  }
+
+  .lifecycleFacts {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .lifecycleActions {
+    display: grid;
+    width: 100%;
   }
 
   .activeVisitStrip {

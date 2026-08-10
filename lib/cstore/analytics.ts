@@ -152,6 +152,218 @@ export interface LifecycleCandidate {
   workOrderIds: EntityId[];
 }
 
+/**
+ * Organization policy used only to surface factual lifecycle review reasons.
+ * It is intentionally not a score and never produces a repair/replace decision.
+ */
+export interface LifecycleAnalyticsPolicy {
+  nearExpectedLifePercentage: number;
+  reactiveWorkOrders12Months: number;
+  confirmedComponentWorkOrders12Months: number;
+  cleanCostShare12MonthsPercentage: number;
+  cleanCostShare24MonthsPercentage: number;
+}
+
+export interface LifecycleAnalyticsOptions {
+  policy?: Partial<LifecycleAnalyticsPolicy>;
+}
+
+export type LifecycleWarrantyStatus = "active" | "expired" | "not_started" | "not_recorded" | "unknown";
+
+export interface LifecycleWarrantyFacts {
+  status: LifecycleWarrantyStatus;
+  provider?: string;
+  startsOn?: string;
+  endsOn?: string;
+  coverage?: string;
+  reference?: string;
+  sourceRecordIds: EntityId[];
+}
+
+export interface LifecycleCostWindow {
+  months: 12 | 24;
+  from: string;
+  to: string;
+  /** Current authorization/NTE evidence. This is not actual maintenance cost. */
+  authorizedMinor: MinorUnits;
+  authorizedSourceRecordIds: EntityId[];
+  /** Finalized cost entered directly against the work order. */
+  recordedMinor: MinorUnits;
+  recordedSourceRecordIds: EntityId[];
+  /** Matched invoice allocation with no open invoice-review fact. */
+  cleanInvoiceMinor: MinorUnits;
+  cleanInvoiceSourceRecordIds: EntityId[];
+  /** Invoice allocation whose match, invoice, or open exception still needs review. */
+  needsReviewInvoiceMinor: MinorUnits;
+  needsReviewInvoiceSourceRecordIds: EntityId[];
+  /**
+   * De-duplicated actual-cost evidence: recorded cost for a work order when
+   * present, otherwise its clean invoice allocation. Authorizations are never
+   * silently treated as actual cost.
+   */
+  confirmedActualMinor: MinorUnits;
+  confirmedActualSourceRecordIds: EntityId[];
+  confirmedActualShareOfReplacementPercentage?: number;
+}
+
+export interface LifecycleActivityWindow {
+  months: 12 | 24;
+  from: string;
+  to: string;
+  distinctWorkOrderCount: number;
+  workOrderIds: EntityId[];
+  distinctVisitCount: number;
+  visitIds: EntityId[];
+  temporaryOrUnresolvedWorkOrderIds: EntityId[];
+}
+
+export interface LifecyclePmWindow {
+  months: 12 | 24;
+  from: string;
+  to: string;
+  occurrenceCount: number;
+  completedCount: number;
+  skippedCount: number;
+  overdueCount: number;
+  dueCount: number;
+  sourceRecordIds: EntityId[];
+}
+
+export interface LifecyclePmFacts {
+  planCount: number;
+  activePlanCount: number;
+  planIds: EntityId[];
+  trailing12Months: LifecyclePmWindow;
+  trailing24Months: LifecyclePmWindow;
+}
+
+/**
+ * A recurrence means the same explicitly tracked component is present on at
+ * least two distinct completed reactive work orders. It does not claim that
+ * the problem, cause, or failure mode was the same because the current source
+ * model does not yet capture those codes.
+ */
+export interface ConfirmedComponentRecurrence {
+  componentId: EntityId;
+  componentCode: string;
+  componentName: string;
+  windowMonths: 12 | 24;
+  distinctWorkOrderCount: number;
+  workOrderIds: EntityId[];
+  distinctVisitCount: number;
+  visitIds: EntityId[];
+  firstWorkAt: string;
+  latestWorkAt: string;
+  sourceRecordIds: EntityId[];
+}
+
+export type LifecycleReviewReasonCode =
+  | "expected_life_reference_near"
+  | "expected_life_reference_reached"
+  | "reactive_work_order_volume"
+  | "confirmed_component_recurrence"
+  | "clean_cost_share_12_months"
+  | "clean_cost_share_24_months"
+  | "invoice_cost_needs_review"
+  | "temporary_or_unresolved_work"
+  | "pm_overdue";
+
+export interface LifecycleReviewReason {
+  code: LifecycleReviewReasonCode;
+  category: "service_life" | "activity" | "component" | "cost" | "invoice_evidence" | "pm";
+  label: string;
+  detail: string;
+  observedValue?: number;
+  thresholdValue?: number;
+  unit?: "count" | "percentage" | "minor_units";
+  sourceRecordIds: EntityId[];
+}
+
+export interface AssetLifecycleDecisionFacts {
+  asset: Asset;
+  asOf: string;
+  assetAgeYears?: number;
+  expectedLifeYears: number;
+  expectedLifePercentage?: number;
+  expectedReplacementOn?: string;
+  expectedReplacementYear?: number;
+  currentReplacementEstimateMinor: MinorUnits;
+  currency: "USD";
+  warranty: LifecycleWarrantyFacts;
+  costs: {
+    trailing12Months: LifecycleCostWindow;
+    trailing24Months: LifecycleCostWindow;
+  };
+  reactiveActivity: {
+    trailing12Months: LifecycleActivityWindow;
+    trailing24Months: LifecycleActivityWindow;
+  };
+  pm: LifecyclePmFacts;
+  confirmedComponentRecurrences: {
+    trailing12Months: ConfirmedComponentRecurrence[];
+    trailing24Months: ConfirmedComponentRecurrence[];
+  };
+  reviewReasons: LifecycleReviewReason[];
+  sourceRecordIds: EntityId[];
+}
+
+export interface LifecycleCapexProjectionOptions extends RecordScope {
+  startYear?: number;
+  endYear?: number;
+  includeRetired?: boolean;
+}
+
+/** Defaults for a future editable planning surface; returned values are never persisted. */
+export interface LifecycleCapexPlanDraft {
+  include: boolean;
+  targetYear: number;
+  amountMinor: MinorUnits;
+  note: string;
+}
+
+export interface LifecycleCapexProjectionRow {
+  rowId: string;
+  assetId: EntityId;
+  storeId: EntityId;
+  regionId?: EntityId;
+  categoryId: EntityId;
+  assetCode: string;
+  assetName: string;
+  expectedReplacementOn: string;
+  expectedReplacementYear: number;
+  currentReplacementEstimateMinor: MinorUnits;
+  currency: "USD";
+  draft: LifecycleCapexPlanDraft;
+  sourceRecordIds: EntityId[];
+}
+
+export interface LifecycleCapexYearBucket {
+  year: number;
+  projectedAmountMinor: MinorUnits;
+  assetCount: number;
+  rows: LifecycleCapexProjectionRow[];
+}
+
+export interface LifecycleCapexProjection {
+  asOf: string;
+  startYear: number;
+  endYear: number;
+  currency: "USD";
+  overdueRows: LifecycleCapexProjectionRow[];
+  yearBuckets: LifecycleCapexYearBucket[];
+  projectedAmountMinor: MinorUnits;
+  unprojectableAssetIds: EntityId[];
+  definition: string;
+}
+
+export const DEFAULT_LIFECYCLE_ANALYTICS_POLICY: Readonly<LifecycleAnalyticsPolicy> = Object.freeze({
+  nearExpectedLifePercentage: 80,
+  reactiveWorkOrders12Months: 3,
+  confirmedComponentWorkOrders12Months: 2,
+  cleanCostShare12MonthsPercentage: 35,
+  cleanCostShare24MonthsPercentage: 50,
+});
+
 export interface VendorPerformanceRow {
   vendor: Vendor;
   workOrdersIssued: number;
@@ -758,6 +970,600 @@ export function findLifecycleCandidates(
       } satisfies LifecycleCandidate];
     })
     .sort((a, b) => b.repairToReplacementPercentage - a.repairToReplacementPercentage || b.correctiveWorkOrderCount - a.correctiveWorkOrderCount);
+}
+
+const LIFECYCLE_COMPLETED_WORK_STATUSES = new Set<WorkOrder["status"]>([
+  "completed",
+  "awaiting_invoice",
+  "invoice_received",
+  "closed",
+]);
+
+const LIFECYCLE_INVOICE_EXCEPTION_TYPES = new Set<ExceptionRecord["type"]>([
+  "invoice_over_nte",
+  "invoice_missing_work_order",
+  "duplicate_invoice_reference",
+]);
+
+function lifecyclePolicy(options: LifecycleAnalyticsOptions): LifecycleAnalyticsPolicy {
+  return { ...DEFAULT_LIFECYCLE_ANALYTICS_POLICY, ...options.policy };
+}
+
+function monthsBefore(timestamp: string, months: 12 | 24): string {
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return timestamp;
+  date.setUTCMonth(date.getUTCMonth() - months);
+  return date.toISOString();
+}
+
+function roundedPercentage(numerator: number, denominator: number): number | undefined {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return undefined;
+  return Math.round((numerator / denominator) * 1_000) / 10;
+}
+
+function assetAgeYears(installedOn: string, asOf: string): number | undefined {
+  const installed = Date.parse(installedOn);
+  const current = Date.parse(asOf);
+  if (!Number.isFinite(installed) || !Number.isFinite(current) || current < installed) return undefined;
+  return Math.round(((current - installed) / (365.25 * 86_400_000)) * 10) / 10;
+}
+
+function expectedReplacementDate(installedOn: string, expectedLifeYears: number): string | undefined {
+  const installed = new Date(installedOn);
+  if (!Number.isFinite(installed.getTime()) || !Number.isFinite(expectedLifeYears) || expectedLifeYears <= 0) return undefined;
+  const wholeYears = Math.trunc(expectedLifeYears);
+  const remainingMonths = Math.round((expectedLifeYears - wholeYears) * 12);
+  installed.setUTCFullYear(installed.getUTCFullYear() + wholeYears);
+  installed.setUTCMonth(installed.getUTCMonth() + remainingMonths);
+  return installed.toISOString().slice(0, 10);
+}
+
+function isReactiveLifecycleWork(workOrder: WorkOrder): boolean {
+  return workOrder.source !== "pm" && workOrder.status !== "cancelled" && workOrder.status !== "draft";
+}
+
+function lifecycleWorkAt(workOrder: WorkOrder): string {
+  return workOrder.completedAt ?? workOrder.closedAt ?? workOrder.createdAt;
+}
+
+function reactiveWorkForAsset(dataset: DemoDataset, organizationId: string, assetId: string): WorkOrder[] {
+  return dataset.workOrders.filter((workOrder) =>
+    workOrder.organizationId === organizationId && workOrder.assetId === assetId && isReactiveLifecycleWork(workOrder),
+  );
+}
+
+function workInLifecycleWindow(workOrders: WorkOrder[], from: string, to: string): WorkOrder[] {
+  return workOrders.filter((workOrder) => between(lifecycleWorkAt(workOrder), from, to));
+}
+
+function buildLifecycleActivityWindow(
+  dataset: DemoDataset,
+  organizationId: string,
+  assetId: string,
+  months: 12 | 24,
+): LifecycleActivityWindow {
+  const to = dataset.asOf;
+  const from = monthsBefore(to, months);
+  const allReactiveWork = reactiveWorkForAsset(dataset, organizationId, assetId);
+  const windowWork = workInLifecycleWindow(allReactiveWork, from, to);
+  const allWorkIds = new Set(allReactiveWork.map((workOrder) => workOrder.id));
+  const visits = dataset.visits.filter((visit) =>
+    visit.organizationId === organizationId &&
+    Boolean(visit.workOrderId && allWorkIds.has(visit.workOrderId)) &&
+    between(visit.checkedInAt, from, to),
+  );
+  const temporaryOrUnresolvedWorkOrderIds = windowWork
+    .filter((workOrder) =>
+      workOrder.outcome === "temporary_repair" ||
+      workOrder.outcome === "unresolved" ||
+      workOrder.outcome === "diagnosed_waiting_parts" ||
+      workOrder.status === "unresolved" ||
+      workOrder.status === "waiting_parts",
+    )
+    .map((workOrder) => workOrder.id);
+  return {
+    months,
+    from,
+    to,
+    distinctWorkOrderCount: windowWork.length,
+    workOrderIds: windowWork.map((workOrder) => workOrder.id),
+    distinctVisitCount: visits.length,
+    visitIds: visits.map((visit) => visit.id),
+    temporaryOrUnresolvedWorkOrderIds,
+  };
+}
+
+function invoiceLinkNeedsLifecycleReview(
+  dataset: DemoDataset,
+  organizationId: string,
+  link: InvoiceWorkLink,
+): boolean {
+  const invoice = dataset.invoices.find((candidate) => candidate.organizationId === organizationId && candidate.id === link.invoiceId);
+  if (!invoice || invoice.status === "needs_review" || link.matchStatus === "review_needed") return true;
+  return dataset.exceptions.some((exception) =>
+    exception.organizationId === organizationId &&
+    exception.status !== "resolved" &&
+    LIFECYCLE_INVOICE_EXCEPTION_TYPES.has(exception.type) &&
+    (exception.invoiceId === invoice.id || exception.sourceRecordIds.includes(invoice.id)),
+  );
+}
+
+function buildLifecycleCostWindow(
+  dataset: DemoDataset,
+  organizationId: string,
+  asset: Asset,
+  months: 12 | 24,
+): LifecycleCostWindow {
+  const to = dataset.asOf;
+  const from = monthsBefore(to, months);
+  const windowWork = workInLifecycleWindow(reactiveWorkForAsset(dataset, organizationId, asset.id), from, to);
+  const windowWorkIds = new Set(windowWork.map((workOrder) => workOrder.id));
+  const costLines = dataset.costLines.filter((line) =>
+    line.organizationId === organizationId && line.assetId === asset.id && windowWorkIds.has(line.workOrderId),
+  );
+  const authorizedLines = costLines.filter((line) => line.basis === "approved");
+  const recordedLines = costLines.filter((line) => line.basis === "recorded");
+  const invoiceLinks = dataset.invoiceWorkLinks.filter((link) =>
+    link.organizationId === organizationId && link.assetId === asset.id && windowWorkIds.has(link.workOrderId),
+  );
+  const cleanInvoiceLinks = invoiceLinks.filter((link) => !invoiceLinkNeedsLifecycleReview(dataset, organizationId, link));
+  const needsReviewInvoiceLinks = invoiceLinks.filter((link) => invoiceLinkNeedsLifecycleReview(dataset, organizationId, link));
+  const confirmedActualSourceRecordIds: EntityId[] = [];
+  let confirmedActualMinor = 0;
+
+  for (const workOrder of windowWork) {
+    const workRecordedLines = recordedLines.filter((line) => line.workOrderId === workOrder.id);
+    if (workRecordedLines.length > 0) {
+      confirmedActualMinor += workRecordedLines.reduce((sum, line) => sum + line.amountMinor, 0);
+      confirmedActualSourceRecordIds.push(...workRecordedLines.map((line) => line.id));
+      continue;
+    }
+    const workInvoiceLinks = cleanInvoiceLinks.filter((link) => link.workOrderId === workOrder.id);
+    confirmedActualMinor += workInvoiceLinks.reduce((sum, link) => sum + link.attributedAmountMinor, 0);
+    confirmedActualSourceRecordIds.push(...workInvoiceLinks.map((link) => link.id));
+  }
+
+  return {
+    months,
+    from,
+    to,
+    authorizedMinor: authorizedLines.reduce((sum, line) => sum + line.amountMinor, 0),
+    authorizedSourceRecordIds: authorizedLines.map((line) => line.id),
+    recordedMinor: recordedLines.reduce((sum, line) => sum + line.amountMinor, 0),
+    recordedSourceRecordIds: recordedLines.map((line) => line.id),
+    cleanInvoiceMinor: cleanInvoiceLinks.reduce((sum, link) => sum + link.attributedAmountMinor, 0),
+    cleanInvoiceSourceRecordIds: cleanInvoiceLinks.map((link) => link.id),
+    needsReviewInvoiceMinor: needsReviewInvoiceLinks.reduce((sum, link) => sum + link.attributedAmountMinor, 0),
+    needsReviewInvoiceSourceRecordIds: needsReviewInvoiceLinks.map((link) => link.id),
+    confirmedActualMinor,
+    confirmedActualSourceRecordIds: unique(confirmedActualSourceRecordIds),
+    confirmedActualShareOfReplacementPercentage: roundedPercentage(confirmedActualMinor, asset.replacementEstimateMinor),
+  };
+}
+
+function buildLifecyclePmWindow(
+  occurrences: DemoDataset["pmOccurrences"],
+  asOf: string,
+  months: 12 | 24,
+): LifecyclePmWindow {
+  const from = monthsBefore(asOf, months);
+  const windowOccurrences = occurrences.filter((occurrence) => between(occurrence.dueAt, from, asOf));
+  return {
+    months,
+    from,
+    to: asOf,
+    occurrenceCount: windowOccurrences.length,
+    completedCount: windowOccurrences.filter((occurrence) => occurrence.status === "completed").length,
+    skippedCount: windowOccurrences.filter((occurrence) => occurrence.status === "skipped").length,
+    overdueCount: windowOccurrences.filter((occurrence) => occurrence.status === "overdue").length,
+    dueCount: windowOccurrences.filter((occurrence) => occurrence.status === "due").length,
+    sourceRecordIds: windowOccurrences.map((occurrence) => occurrence.id),
+  };
+}
+
+function buildLifecyclePmFacts(
+  dataset: DemoDataset,
+  organizationId: string,
+  assetId: string,
+): LifecyclePmFacts {
+  const plans = dataset.pmPlans.filter((plan) => plan.organizationId === organizationId && plan.assetId === assetId);
+  const planIds = new Set(plans.map((plan) => plan.id));
+  const occurrences = dataset.pmOccurrences.filter((occurrence) =>
+    occurrence.organizationId === organizationId && planIds.has(occurrence.pmPlanId),
+  );
+  return {
+    planCount: plans.length,
+    activePlanCount: plans.filter((plan) => plan.active).length,
+    planIds: plans.map((plan) => plan.id),
+    trailing12Months: buildLifecyclePmWindow(occurrences, dataset.asOf, 12),
+    trailing24Months: buildLifecyclePmWindow(occurrences, dataset.asOf, 24),
+  };
+}
+
+function buildWarrantyFacts(asset: Asset, asOf: string): LifecycleWarrantyFacts {
+  if (!asset.warranty) return { status: "not_recorded", sourceRecordIds: [] };
+  const asOfDate = asOf.slice(0, 10);
+  const { startsOn, endsOn } = asset.warranty;
+  const validDates = /^\d{4}-\d{2}-\d{2}$/.test(startsOn) && /^\d{4}-\d{2}-\d{2}$/.test(endsOn);
+  const status: LifecycleWarrantyStatus = !validDates
+    ? "unknown"
+    : asOfDate < startsOn
+      ? "not_started"
+      : asOfDate <= endsOn
+        ? "active"
+        : "expired";
+  return {
+    status,
+    provider: asset.warranty.provider,
+    startsOn,
+    endsOn,
+    coverage: asset.warranty.coverage,
+    reference: asset.warranty.reference,
+    sourceRecordIds: [asset.id],
+  };
+}
+
+function buildConfirmedComponentRecurrences(
+  dataset: DemoDataset,
+  organizationId: string,
+  assetId: string,
+  months: 12 | 24,
+): ConfirmedComponentRecurrence[] {
+  const to = dataset.asOf;
+  const from = monthsBefore(to, months);
+  const validComponentIds = new Set(
+    dataset.assetComponents
+      .filter((component) => component.organizationId === organizationId && component.assetId === assetId)
+      .map((component) => component.id),
+  );
+  const completedWork = workInLifecycleWindow(reactiveWorkForAsset(dataset, organizationId, assetId), from, to)
+    .filter((workOrder) =>
+      Boolean(workOrder.componentId && validComponentIds.has(workOrder.componentId)) &&
+      (Boolean(workOrder.completedAt) || LIFECYCLE_COMPLETED_WORK_STATUSES.has(workOrder.status)),
+    );
+  const byComponent = new Map<EntityId, WorkOrder[]>();
+  for (const workOrder of completedWork) {
+    const componentId = workOrder.componentId!;
+    byComponent.set(componentId, [...(byComponent.get(componentId) ?? []), workOrder]);
+  }
+  return [...byComponent.entries()]
+    .filter(([, workOrders]) => workOrders.length >= 2)
+    .map(([componentId, workOrders]) => {
+      const component = dataset.assetComponents.find((candidate) => candidate.id === componentId)!;
+      const sortedWork = [...workOrders].sort((left, right) => lifecycleWorkAt(left).localeCompare(lifecycleWorkAt(right)));
+      const workOrderIds = new Set(sortedWork.map((workOrder) => workOrder.id));
+      const visits = dataset.visits.filter((visit) =>
+        visit.organizationId === organizationId &&
+        Boolean(visit.workOrderId && workOrderIds.has(visit.workOrderId)) &&
+        between(visit.checkedInAt, from, to),
+      );
+      return {
+        componentId,
+        componentCode: component.componentCode,
+        componentName: component.name,
+        windowMonths: months,
+        distinctWorkOrderCount: sortedWork.length,
+        workOrderIds: sortedWork.map((workOrder) => workOrder.id),
+        distinctVisitCount: visits.length,
+        visitIds: visits.map((visit) => visit.id),
+        firstWorkAt: lifecycleWorkAt(sortedWork[0]),
+        latestWorkAt: lifecycleWorkAt(sortedWork.at(-1)!),
+        sourceRecordIds: unique([componentId, ...sortedWork.map((workOrder) => workOrder.id), ...visits.map((visit) => visit.id)]),
+      } satisfies ConfirmedComponentRecurrence;
+    })
+    .sort((left, right) => right.distinctWorkOrderCount - left.distinctWorkOrderCount || left.componentCode.localeCompare(right.componentCode));
+}
+
+function lifecycleReviewReasons(
+  facts: Omit<AssetLifecycleDecisionFacts, "reviewReasons" | "sourceRecordIds">,
+  policy: LifecycleAnalyticsPolicy,
+): LifecycleReviewReason[] {
+  const reasons: LifecycleReviewReason[] = [];
+  const lifePercentage = facts.expectedLifePercentage;
+  if (lifePercentage !== undefined && lifePercentage >= 100) {
+    reasons.push({
+      code: "expected_life_reference_reached",
+      category: "service_life",
+      label: "Expected-life reference reached",
+      detail: `Chronological age is ${lifePercentage}% of the recorded ${facts.expectedLifeYears}-year expected-life reference.`,
+      observedValue: lifePercentage,
+      thresholdValue: 100,
+      unit: "percentage",
+      sourceRecordIds: [facts.asset.id],
+    });
+  } else if (lifePercentage !== undefined && lifePercentage >= policy.nearExpectedLifePercentage) {
+    reasons.push({
+      code: "expected_life_reference_near",
+      category: "service_life",
+      label: "Near expected-life reference",
+      detail: `Chronological age is ${lifePercentage}% of the recorded ${facts.expectedLifeYears}-year expected-life reference.`,
+      observedValue: lifePercentage,
+      thresholdValue: policy.nearExpectedLifePercentage,
+      unit: "percentage",
+      sourceRecordIds: [facts.asset.id],
+    });
+  }
+
+  const activity12 = facts.reactiveActivity.trailing12Months;
+  if (activity12.distinctWorkOrderCount >= policy.reactiveWorkOrders12Months) {
+    reasons.push({
+      code: "reactive_work_order_volume",
+      category: "activity",
+      label: "Multiple reactive work orders",
+      detail: `${activity12.distinctWorkOrderCount} distinct reactive work orders and ${activity12.distinctVisitCount} distinct visits are recorded in the trailing 12 months.`,
+      observedValue: activity12.distinctWorkOrderCount,
+      thresholdValue: policy.reactiveWorkOrders12Months,
+      unit: "count",
+      sourceRecordIds: unique([...activity12.workOrderIds, ...activity12.visitIds]),
+    });
+  }
+
+  for (const recurrence of facts.confirmedComponentRecurrences.trailing12Months) {
+    if (recurrence.distinctWorkOrderCount < policy.confirmedComponentWorkOrders12Months) continue;
+    reasons.push({
+      code: "confirmed_component_recurrence",
+      category: "component",
+      label: "Same tracked component on multiple work orders",
+      detail: `${recurrence.componentName} is explicitly linked to ${recurrence.distinctWorkOrderCount} distinct completed reactive work orders in the trailing 12 months. No common failure mode or cause is inferred.`,
+      observedValue: recurrence.distinctWorkOrderCount,
+      thresholdValue: policy.confirmedComponentWorkOrders12Months,
+      unit: "count",
+      sourceRecordIds: recurrence.sourceRecordIds,
+    });
+  }
+
+  const cost12 = facts.costs.trailing12Months;
+  if (
+    cost12.confirmedActualShareOfReplacementPercentage !== undefined &&
+    cost12.confirmedActualShareOfReplacementPercentage >= policy.cleanCostShare12MonthsPercentage
+  ) {
+    reasons.push({
+      code: "clean_cost_share_12_months",
+      category: "cost",
+      label: "Trailing-12-month supported cost share",
+      detail: `Recorded cost or clean matched invoice cost is ${cost12.confirmedActualShareOfReplacementPercentage}% of the current replacement estimate in the trailing 12 months.`,
+      observedValue: cost12.confirmedActualShareOfReplacementPercentage,
+      thresholdValue: policy.cleanCostShare12MonthsPercentage,
+      unit: "percentage",
+      sourceRecordIds: cost12.confirmedActualSourceRecordIds,
+    });
+  } else {
+    const cost24 = facts.costs.trailing24Months;
+    if (
+      cost24.confirmedActualShareOfReplacementPercentage !== undefined &&
+      cost24.confirmedActualShareOfReplacementPercentage >= policy.cleanCostShare24MonthsPercentage
+    ) {
+      reasons.push({
+        code: "clean_cost_share_24_months",
+        category: "cost",
+        label: "Trailing-24-month supported cost share",
+        detail: `Recorded cost or clean matched invoice cost is ${cost24.confirmedActualShareOfReplacementPercentage}% of the current replacement estimate in the trailing 24 months.`,
+        observedValue: cost24.confirmedActualShareOfReplacementPercentage,
+        thresholdValue: policy.cleanCostShare24MonthsPercentage,
+        unit: "percentage",
+        sourceRecordIds: cost24.confirmedActualSourceRecordIds,
+      });
+    }
+  }
+
+  const needsReviewCost = facts.costs.trailing24Months.needsReviewInvoiceMinor;
+  if (needsReviewCost > 0) {
+    reasons.push({
+      code: "invoice_cost_needs_review",
+      category: "invoice_evidence",
+      label: "Invoice-linked amount remains under review",
+      detail: `${formatMoney(needsReviewCost)} of trailing-24-month invoice allocation is shown separately because its match or an invoice exception still needs review.`,
+      observedValue: needsReviewCost,
+      unit: "minor_units",
+      sourceRecordIds: facts.costs.trailing24Months.needsReviewInvoiceSourceRecordIds,
+    });
+  }
+
+  if (activity12.temporaryOrUnresolvedWorkOrderIds.length > 0) {
+    reasons.push({
+      code: "temporary_or_unresolved_work",
+      category: "activity",
+      label: "Temporary or unresolved outcomes recorded",
+      detail: `${activity12.temporaryOrUnresolvedWorkOrderIds.length} trailing-12-month work order(s) have a temporary, waiting-parts, or unresolved outcome.`,
+      observedValue: activity12.temporaryOrUnresolvedWorkOrderIds.length,
+      unit: "count",
+      sourceRecordIds: activity12.temporaryOrUnresolvedWorkOrderIds,
+    });
+  }
+
+  if (facts.pm.trailing12Months.overdueCount > 0) {
+    reasons.push({
+      code: "pm_overdue",
+      category: "pm",
+      label: "Overdue PM occurrence recorded",
+      detail: `${facts.pm.trailing12Months.overdueCount} PM occurrence(s) are recorded as overdue in the trailing 12 months. This is context, not a claimed cause of reactive work.`,
+      observedValue: facts.pm.trailing12Months.overdueCount,
+      thresholdValue: 1,
+      unit: "count",
+      sourceRecordIds: facts.pm.trailing12Months.sourceRecordIds,
+    });
+  }
+
+  return reasons;
+}
+
+export function getAssetLifecycleDecisionFacts(
+  dataset: DemoDataset,
+  organizationId: string,
+  assetId: string,
+  options: LifecycleAnalyticsOptions = {},
+): AssetLifecycleDecisionFacts | undefined {
+  assertOrganization(dataset, organizationId);
+  const asset = dataset.assets.find((candidate) => candidate.organizationId === organizationId && candidate.id === assetId);
+  if (!asset) return undefined;
+  const ageYears = assetAgeYears(asset.installedOn, dataset.asOf);
+  const expectedLifePercentage = ageYears === undefined ? undefined : roundedPercentage(ageYears, asset.expectedLifeYears);
+  const replacementOn = expectedReplacementDate(asset.installedOn, asset.expectedLifeYears);
+  const costs12 = buildLifecycleCostWindow(dataset, organizationId, asset, 12);
+  const costs24 = buildLifecycleCostWindow(dataset, organizationId, asset, 24);
+  const activity12 = buildLifecycleActivityWindow(dataset, organizationId, asset.id, 12);
+  const activity24 = buildLifecycleActivityWindow(dataset, organizationId, asset.id, 24);
+  const pm = buildLifecyclePmFacts(dataset, organizationId, asset.id);
+  const recurrences12 = buildConfirmedComponentRecurrences(dataset, organizationId, asset.id, 12);
+  const recurrences24 = buildConfirmedComponentRecurrences(dataset, organizationId, asset.id, 24);
+  const factsWithoutReasons: Omit<AssetLifecycleDecisionFacts, "reviewReasons" | "sourceRecordIds"> = {
+    asset,
+    asOf: dataset.asOf,
+    assetAgeYears: ageYears,
+    expectedLifeYears: asset.expectedLifeYears,
+    expectedLifePercentage,
+    expectedReplacementOn: replacementOn,
+    expectedReplacementYear: replacementOn ? Number(replacementOn.slice(0, 4)) : undefined,
+    currentReplacementEstimateMinor: asset.replacementEstimateMinor,
+    currency: asset.currency,
+    warranty: buildWarrantyFacts(asset, dataset.asOf),
+    costs: { trailing12Months: costs12, trailing24Months: costs24 },
+    reactiveActivity: { trailing12Months: activity12, trailing24Months: activity24 },
+    pm,
+    confirmedComponentRecurrences: { trailing12Months: recurrences12, trailing24Months: recurrences24 },
+  };
+  const reviewReasons = lifecycleReviewReasons(factsWithoutReasons, lifecyclePolicy(options));
+  return {
+    ...factsWithoutReasons,
+    reviewReasons,
+    sourceRecordIds: unique([
+      asset.id,
+      ...activity24.workOrderIds,
+      ...activity24.visitIds,
+      ...costs24.authorizedSourceRecordIds,
+      ...costs24.recordedSourceRecordIds,
+      ...costs24.cleanInvoiceSourceRecordIds,
+      ...costs24.needsReviewInvoiceSourceRecordIds,
+      ...pm.planIds,
+      ...pm.trailing24Months.sourceRecordIds,
+      ...recurrences24.flatMap((recurrence) => recurrence.sourceRecordIds),
+    ]),
+  };
+}
+
+function assetMatchesLifecycleScope(dataset: DemoDataset, asset: Asset, scope: RecordScope): boolean {
+  const store = dataset.stores.find((candidate) => candidate.id === asset.storeId);
+  if (scope.regionId && store?.regionId !== scope.regionId) return false;
+  if (scope.storeId && asset.storeId !== scope.storeId) return false;
+  if (scope.categoryId && asset.categoryId !== scope.categoryId) return false;
+  if (scope.assetId && asset.id !== scope.assetId) return false;
+  if (scope.vendorId && asset.supplierVendorId !== scope.vendorId) return false;
+  return true;
+}
+
+export function listAssetLifecycleDecisionFacts(
+  dataset: DemoDataset,
+  organizationId: string,
+  scope: RecordScope = {},
+  options: LifecycleAnalyticsOptions = {},
+): AssetLifecycleDecisionFacts[] {
+  assertOrganization(dataset, organizationId);
+  return dataset.assets
+    .filter((asset) => asset.organizationId === organizationId && assetMatchesLifecycleScope(dataset, asset, scope))
+    .map((asset) => getAssetLifecycleDecisionFacts(dataset, organizationId, asset.id, options)!)
+    .sort((left, right) => {
+      const leftStore = dataset.stores.find((store) => store.id === left.asset.storeId)?.storeNumber ?? "";
+      const rightStore = dataset.stores.find((store) => store.id === right.asset.storeId)?.storeNumber ?? "";
+      return leftStore.localeCompare(rightStore, undefined, { numeric: true }) || left.asset.assetCode.localeCompare(right.asset.assetCode);
+    });
+}
+
+function lifecycleCapexRow(
+  dataset: DemoDataset,
+  asset: Asset,
+  startYear: number,
+): LifecycleCapexProjectionRow | undefined {
+  const replacementOn = expectedReplacementDate(asset.installedOn, asset.expectedLifeYears);
+  if (!replacementOn || !Number.isInteger(asset.replacementEstimateMinor) || asset.replacementEstimateMinor <= 0) return undefined;
+  const expectedYear = Number(replacementOn.slice(0, 4));
+  const store = dataset.stores.find((candidate) => candidate.id === asset.storeId);
+  return {
+    rowId: `lifecycle-capex-${asset.id}`,
+    assetId: asset.id,
+    storeId: asset.storeId,
+    regionId: store?.regionId,
+    categoryId: asset.categoryId,
+    assetCode: asset.assetCode,
+    assetName: asset.name,
+    expectedReplacementOn: replacementOn,
+    expectedReplacementYear: expectedYear,
+    currentReplacementEstimateMinor: asset.replacementEstimateMinor,
+    currency: asset.currency,
+    draft: {
+      include: true,
+      targetYear: Math.max(startYear, expectedYear),
+      amountMinor: asset.replacementEstimateMinor,
+      note: "",
+    },
+    sourceRecordIds: [asset.id],
+  };
+}
+
+export function getUpcomingLifecycleCapexProjection(
+  dataset: DemoDataset,
+  organizationId: string,
+  options: LifecycleCapexProjectionOptions = {},
+): LifecycleCapexProjection {
+  assertOrganization(dataset, organizationId);
+  const asOfYear = new Date(dataset.asOf).getUTCFullYear();
+  const startYear = options.startYear ?? asOfYear;
+  const endYear = options.endYear ?? startYear + 5;
+  if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || endYear < startYear) {
+    throw new Error("Lifecycle CapEx projection requires integer years with endYear at or after startYear.");
+  }
+  const scope: RecordScope = {
+    regionId: options.regionId,
+    storeId: options.storeId,
+    categoryId: options.categoryId,
+    vendorId: options.vendorId,
+    assetId: options.assetId,
+  };
+  const scopedAssets = dataset.assets.filter((asset) =>
+    asset.organizationId === organizationId &&
+    (options.includeRetired || asset.status !== "retired") &&
+    assetMatchesLifecycleScope(dataset, asset, scope),
+  );
+  const unprojectableAssetIds: EntityId[] = [];
+  const rows = scopedAssets.flatMap((asset) => {
+    const row = lifecycleCapexRow(dataset, asset, startYear);
+    if (!row) {
+      unprojectableAssetIds.push(asset.id);
+      return [];
+    }
+    return [row];
+  });
+  const asOfDate = dataset.asOf.slice(0, 10);
+  const overdueRows = rows
+    .filter((row) => row.expectedReplacementOn < asOfDate || row.expectedReplacementYear < startYear)
+    .sort((left, right) => left.expectedReplacementOn.localeCompare(right.expectedReplacementOn) || left.assetCode.localeCompare(right.assetCode));
+  const upcomingRows = rows.filter((row) =>
+    row.expectedReplacementOn >= asOfDate && row.expectedReplacementYear >= startYear && row.expectedReplacementYear <= endYear,
+  );
+  const yearBuckets: LifecycleCapexYearBucket[] = [];
+  for (let year = startYear; year <= endYear; year += 1) {
+    const yearRows = upcomingRows
+      .filter((row) => row.expectedReplacementYear === year)
+      .sort((left, right) => left.expectedReplacementOn.localeCompare(right.expectedReplacementOn) || left.assetCode.localeCompare(right.assetCode));
+    yearBuckets.push({
+      year,
+      projectedAmountMinor: yearRows.reduce((sum, row) => sum + row.draft.amountMinor, 0),
+      assetCount: yearRows.length,
+      rows: yearRows,
+    });
+  }
+  const projectedAmountMinor = overdueRows.reduce((sum, row) => sum + row.draft.amountMinor, 0) +
+    yearBuckets.reduce((sum, bucket) => sum + bucket.projectedAmountMinor, 0);
+  return {
+    asOf: dataset.asOf,
+    startYear,
+    endYear,
+    currency: "USD",
+    overdueRows,
+    yearBuckets,
+    projectedAmountMinor,
+    unprojectableAssetIds,
+    definition: "Planning projection based only on recorded installation date, expected-life reference, and current replacement estimate. Draft plan fields are editable values returned in memory; this is not a failure prediction, replacement decision, or persisted capital plan.",
+  };
 }
 
 export function getVendorPerformance(

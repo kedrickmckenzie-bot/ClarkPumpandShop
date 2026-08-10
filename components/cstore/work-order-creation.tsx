@@ -13,6 +13,8 @@ import {
 
 import styles from "./cstore-workflows.module.css";
 import type {
+  EquipmentComponentOption,
+  EquipmentOption,
   InternalTeamOption,
   StoreOption,
   VendorOption,
@@ -24,6 +26,8 @@ import { VendorPicker } from "./vendor-picker";
 
 export interface WorkOrderCreationProps {
   stores: StoreOption[];
+  equipmentOptions?: EquipmentOption[];
+  componentOptions?: EquipmentComponentOption[];
   internalTeams: InternalTeamOption[];
   vendors: VendorOption[];
   onCreate: (value: WorkOrderCreationValue) => void | Promise<void>;
@@ -67,6 +71,8 @@ const handlerOptions: Array<{
 
 export function WorkOrderCreation({
   stores,
+  equipmentOptions = [],
+  componentOptions = [],
   internalTeams,
   vendors,
   onCreate,
@@ -77,6 +83,8 @@ export function WorkOrderCreation({
   const formId = useId();
   const [storeId, setStoreId] = useState(initialValue?.storeId ?? "");
   const [storeQuery, setStoreQuery] = useState("");
+  const [assetId, setAssetId] = useState(initialValue?.assetId ?? "");
+  const [componentId, setComponentId] = useState(initialValue?.componentId ?? "");
   const [problem, setProblem] = useState(initialValue?.problem ?? "");
   const [priority, setPriority] = useState<WorkPriority>(
     initialValue?.priority ?? "soon",
@@ -117,6 +125,8 @@ export function WorkOrderCreation({
       problem: problem.trim(),
       priority,
       fulfillmentMode,
+      ...(assetId ? { assetId } : {}),
+      ...(assetId && componentId ? { componentId } : {}),
       ...(fulfillmentMode === "internal" && internalTeamId ? { internalTeamId } : {}),
       ...(fulfillmentMode === "external" && vendorId ? { vendorId } : {}),
     };
@@ -146,6 +156,8 @@ export function WorkOrderCreation({
       .toLowerCase()
       .includes(normalizedStoreQuery),
   );
+  const storeEquipment = equipmentOptions.filter((item) => item.storeId === storeId);
+  const equipmentComponents = componentOptions.filter((item) => item.assetId === assetId);
 
   return (
     <form
@@ -194,7 +206,20 @@ export function WorkOrderCreation({
                 id={`${formId}-store`}
                 className={styles.select}
                 value={storeId}
-                onChange={(event) => setStoreId(event.target.value)}
+                onChange={(event) => {
+                  const nextStoreId = event.target.value;
+                  setStoreId(nextStoreId);
+
+                  if (
+                    assetId &&
+                    !equipmentOptions.some(
+                      (item) => item.id === assetId && item.storeId === nextStoreId,
+                    )
+                  ) {
+                    setAssetId("");
+                    setComponentId("");
+                  }
+                }}
                 required
               >
                 <option value="">Choose a store</option>
@@ -222,6 +247,67 @@ export function WorkOrderCreation({
               />
               <span className={styles.fieldHint}>
                 Include what people can see, hear, smell, or measure. Classification remains optional.
+              </span>
+            </div>
+          </div>
+
+          <div className={styles.equipmentGrid}>
+            <div className={styles.field}>
+              <label htmlFor={`${formId}-equipment`}>Equipment, if known</label>
+              <select
+                id={`${formId}-equipment`}
+                className={styles.select}
+                value={assetId}
+                onChange={(event) => {
+                  const nextAssetId = event.target.value;
+                  setAssetId(nextAssetId);
+
+                  if (
+                    componentId &&
+                    !componentOptions.some(
+                      (item) => item.id === componentId && item.assetId === nextAssetId,
+                    )
+                  ) {
+                    setComponentId("");
+                  }
+                }}
+                disabled={!storeId}
+              >
+                <option value="">
+                  {storeId ? "Not known / choose later" : "Choose a store first"}
+                </option>
+                {storeEquipment.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.assetCode} · {item.name}
+                    {item.locationDetail ? ` — ${item.locationDetail}` : ""}
+                  </option>
+                ))}
+              </select>
+              <span className={styles.fieldHint}>
+                Leave this blank when the exact equipment has not been identified.
+              </span>
+            </div>
+
+            <div className={styles.field}>
+              <label htmlFor={`${formId}-component`}>Component, if known</label>
+              <select
+                id={`${formId}-component`}
+                className={styles.select}
+                value={componentId}
+                onChange={(event) => setComponentId(event.target.value)}
+                disabled={!assetId}
+              >
+                <option value="">
+                  {assetId ? "No component / choose later" : "Choose equipment first (optional)"}
+                </option>
+                {equipmentComponents.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.componentCode} · {item.name}
+                  </option>
+                ))}
+              </select>
+              <span className={styles.fieldHint}>
+                Components add repair-history detail but never block the work order.
               </span>
             </div>
           </div>

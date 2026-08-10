@@ -601,7 +601,7 @@ const componentsByTemplate: Record<string, Array<[string, string, string]>> = {
 export const demoAssetComponents: AssetComponent[] = demoAssets.flatMap((asset) => {
   const baseCode = asset.assetCode.slice(4);
   const templates = componentsByTemplate[baseCode] ?? [];
-  return templates.map(([componentCode, name, componentType], index) => ({
+  const components = templates.map(([componentCode, name, componentType], index) => ({
     id: `component-${asset.id.slice(6)}-${componentCode.toLowerCase()}`,
     organizationId: DEMO_ORGANIZATION_ID,
     assetId: asset.id,
@@ -613,11 +613,43 @@ export const demoAssetComponents: AssetComponent[] = demoAssets.flatMap((asset) 
     serialNumber: `${asset.serialNumber}-C${index + 1}`,
     installedOn: asset.installedOn,
     status: "active",
-  }));
+  } satisfies AssetComponent));
+
+  if (asset.id !== "asset-104-beer-cave") return components;
+
+  const originalCompressorId = "component-104-beer-cave-comp-1";
+  return [
+    ...components.map((component) => component.id === originalCompressorId
+      ? {
+          ...component,
+          name: "Primary Compressor (original)",
+          manufacturer: "Copeland",
+          model: "3DA3-0750-TFC",
+          status: "replaced" as const,
+        }
+      : component),
+    {
+      id: "component-104-beer-cave-comp-2",
+      organizationId: DEMO_ORGANIZATION_ID,
+      assetId: asset.id,
+      componentCode: "104-REF-BC-1-COMP-2",
+      name: "Primary Compressor (replacement)",
+      componentType: "Semi-hermetic compressor",
+      manufacturer: "Copeland",
+      model: "3DA3-0750-TFC",
+      serialNumber: "CP20260509NLM104",
+      installedOn: "2026-05-09",
+      status: "active",
+    },
+  ];
 });
 
 function assetId(store: Store, slug: string): string {
   return `asset-${store.storeNumber}-${slug}`;
+}
+
+function assetComponentId(store: Store, assetSlug: string, componentSlug: string): string {
+  return `component-${store.storeNumber}-${assetSlug}-${componentSlug.toLowerCase()}`;
 }
 
 const pmLinkedStoreNumbers = new Set(["101", "108", "201", "207", "301", "308"]);
@@ -699,6 +731,7 @@ interface WorkSeedSpec {
   categoryKey?: MaintenanceCategoryKey;
   taxonomyNodeId?: string;
   assetSlug?: string;
+  componentSlug?: string;
   title: string;
   problem: string;
   scope: string;
@@ -791,17 +824,20 @@ const baseWorkSpecs: WorkSeedSpec[] = demoStores.flatMap((store, index) => {
       categoryKey: "refrigeration",
       taxonomyNodeId: refrigerationTaxonomy,
       assetSlug: refrigerationAsset,
-      title: refrigerationTitles[index % refrigerationTitles.length],
+      componentSlug: index === 1 ? "comp-1" : undefined,
+      title: index === 1 ? "Beer cave compressor tripping intermittently" : refrigerationTitles[index % refrigerationTitles.length],
       problem: index === 1
         ? "Beer cave reached 47°F overnight. Staff reset the controller once, but the compressor tripped again."
         : `${refrigerationTitles[index % refrigerationTitles.length]}. Store staff confirmed product temperature is being monitored.`,
-      scope: "Diagnose the refrigeration system, restore safe operation and document readings and work performed.",
+      scope: index === 1
+        ? "Diagnose the original beer cave compressor, restore safe operation if possible, and document electrical and temperature readings."
+        : "Diagnose the refrigeration system, restore safe operation and document readings and work performed.",
       priority: index === 1 || index === 13 ? "emergency" : index % 4 === 0 ? "urgent" : "soon",
       source: "employee_request",
       fulfillmentMode: "external",
       vendorId: "vendor-summit-refrigeration",
       status: refrigerationStatus,
-      ageDays: ageForStatus(refrigerationStatus, index),
+      ageDays: index === 1 ? 117 : ageForStatus(refrigerationStatus, index),
       spendMinor: refrigerationSpend[index],
       nteMinor: index === 1 ? 250_000 : undefined,
       invoice: invoiceForStatus(refrigerationStatus),
@@ -894,9 +930,10 @@ const specialWorkSpecs: WorkSeedSpec[] = [
     categoryKey: "refrigeration",
     taxonomyNodeId: "tax-refrigeration-beer-cave",
     assetSlug: "beer-cave",
-    title: "Beer cave temporary repair callback",
-    problem: "Beer cave temperature rose again six days after the prior service visit.",
-    scope: "Recheck prior repair, identify recurring failure and stabilize operation pending permanent repair.",
+    componentSlug: "comp-1",
+    title: "Original beer cave compressor callback",
+    problem: "The original beer cave compressor tripped again six days after the prior service visit and the temperature began rising.",
+    scope: "Recheck the original compressor, document the recurring electrical failure and stabilize operation pending permanent replacement.",
     priority: "emergency",
     source: "manager_direct",
     fulfillmentMode: "external",
@@ -915,7 +952,8 @@ const specialWorkSpecs: WorkSeedSpec[] = [
     categoryKey: "refrigeration",
     taxonomyNodeId: "tax-refrigeration-beer-cave",
     assetSlug: "beer-cave",
-    title: "Beer cave compressor replacement",
+    componentSlug: "comp-1",
+    title: "Original beer cave compressor replacement",
     problem: "Compressor failed megohm test after two prior service calls and can no longer be returned to reliable operation.",
     scope: "Replace the primary compressor, filter-drier and contactor; evacuate, charge and document final temperatures.",
     priority: "emergency",
@@ -1008,6 +1046,9 @@ export const demoWorkOrders: WorkOrder[] = workSpecs.map((spec, index) => {
   const isClosed = spec.status === "closed";
   const categoryId = spec.categoryKey ? categoryIdByKey[spec.categoryKey] : undefined;
   const deepAssetId = spec.assetSlug ? assetId(spec.store, spec.assetSlug) : undefined;
+  const deepComponentId = spec.assetSlug && spec.componentSlug
+    ? assetComponentId(spec.store, spec.assetSlug, spec.componentSlug)
+    : undefined;
   const expectedPartyType = spec.vendorId ? "vendor" : spec.internalPartyId?.startsWith("team-") ? "team" : "person";
   const expectedPartyId = spec.vendorId ?? spec.internalPartyId ?? "team-facilities-coordination";
   const defaultNte = spec.nteMinor ?? (spec.vendorId ? Math.ceil((spec.spendMinor * 1.2) / 10_000) * 10_000 : undefined);
@@ -1021,6 +1062,7 @@ export const demoWorkOrders: WorkOrder[] = workSpecs.map((spec, index) => {
     categoryId,
     taxonomyNodeId: spec.taxonomyNodeId,
     assetId: deepAssetId,
+    componentId: deepComponentId,
     title: spec.title,
     problemDescription: spec.problem,
     scopeOfWork: spec.scope,
@@ -1356,7 +1398,10 @@ export const demoCostLines: CostLine[] = workSpecs.flatMap((spec) => {
       source: "manager_authorization",
     });
   }
-  if (!spec.invoice && completedStatuses.has(spec.status)) {
+  if (completedStatuses.has(spec.status)) {
+    const latestCompletedVisit = demoVisits
+      .filter((visit) => visit.workOrderId === workOrderId && visit.checkedOutAt)
+      .sort((left, right) => right.checkedOutAt!.localeCompare(left.checkedOutAt!))[0];
     lines.push({
       id: `cost-${spec.slug}-recorded`,
       organizationId: DEMO_ORGANIZATION_ID,
@@ -1367,10 +1412,12 @@ export const demoCostLines: CostLine[] = workSpecs.flatMap((spec) => {
       vendorId: spec.vendorId,
       basis: "recorded",
       costType: spec.fulfillmentMode === "internal" ? "labor" : "miscellaneous",
-      description: spec.fulfillmentMode === "internal" ? "Internal labor and materials recorded on work order" : "Vendor-reported completion cost awaiting invoice",
+      description: spec.fulfillmentMode === "internal"
+        ? "Manager-recorded internal labor and materials for completed work"
+        : "Manager-recorded completed-work cost from the vendor service record",
       amountMinor: spec.spendMinor,
       currency: "USD",
-      recordedAt: shiftHours(createdAt, 36),
+      recordedAt: latestCompletedVisit?.checkedOutAt ?? shiftHours(createdAt, 36),
       source: "internal_entry",
     });
   }
@@ -1496,7 +1543,7 @@ export const demoExceptions: ExceptionRecord[] = [
     severity: "critical",
     status: "open",
     title: "Duplicate vendor invoice reference",
-    description: "Two Summit Refrigeration invoice records use SUM-260187. This is a review fact, not a payment decision.",
+    description: "Summit Refrigeration used SUM-260187 on both the initial compressor service and its callback invoice. Review whether the vendor reused the reference or a duplicate was entered; this is not a payment decision.",
     vendorId: "vendor-summit-refrigeration",
     sourceRecordIds: duplicateInvoices.map((invoice) => invoice.id),
     assignedPersonId: "person-evan-rhodes",
@@ -1509,8 +1556,8 @@ export const demoExceptions: ExceptionRecord[] = [
     type: "repeat_repair",
     severity: "critical",
     status: "acknowledged",
-    title: "Store 104 beer cave has repeat repair activity",
-    description: "Three corrective work orders and multiple visits affected the same refrigeration asset within the review window.",
+    title: "Store 104 original beer cave compressor had repeat failures",
+    description: "Three corrective work orders in a 21-day service sequence were classified to the original Primary Compressor: initial service, a six-day callback, and permanent replacement.",
     storeId: "store-104",
     assetId: "asset-104-beer-cave",
     vendorId: "vendor-summit-refrigeration",
@@ -1635,7 +1682,14 @@ for (const workOrder of demoWorkOrders) {
     channel: "manager_web",
     occurredAt: workOrder.createdAt,
     summary: `${workOrder.number} created in Demo Mode`,
-    payloadSnapshot: { number: workOrder.number, status: workOrder.status, storeId: workOrder.storeId, classificationDeferred: workOrder.classificationDeferred },
+    payloadSnapshot: {
+      number: workOrder.number,
+      status: workOrder.status,
+      storeId: workOrder.storeId,
+      assetId: workOrder.assetId ?? null,
+      componentId: workOrder.componentId ?? null,
+      classificationDeferred: workOrder.classificationDeferred,
+    },
     demoMode: true,
   });
 }
@@ -1721,6 +1775,30 @@ for (const exception of demoExceptions) {
     demoMode: true,
   });
 }
+
+const store104CompressorReplacementVisit = demoVisits
+  .filter((visit) => visit.workOrderId === "wo-104-refrigeration-compressor-replacement" && visit.checkedOutAt)
+  .sort((left, right) => right.checkedOutAt!.localeCompare(left.checkedOutAt!))[0];
+
+auditEvents.push({
+  id: "audit-asset-104-beer-cave-original-compressor-replaced",
+  organizationId: DEMO_ORGANIZATION_ID,
+  entityType: "asset",
+  entityId: "asset-104-beer-cave",
+  eventType: "asset.component_replaced",
+  actorType: "person",
+  actorId: "person-dana-brooks",
+  channel: "manager_web",
+  occurredAt: store104CompressorReplacementVisit?.checkedOutAt ?? shiftHours(daysAgo(96), 72),
+  summary: "Original beer cave compressor replaced and successor component installed",
+  payloadSnapshot: {
+    workOrderId: "wo-104-refrigeration-compressor-replacement",
+    replacedComponentId: "component-104-beer-cave-comp-1",
+    replacementComponentId: "component-104-beer-cave-comp-2",
+    installedOn: "2026-05-09",
+  },
+  demoMode: true,
+});
 
 export const demoAuditEvents = auditEvents;
 

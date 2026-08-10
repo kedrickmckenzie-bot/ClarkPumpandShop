@@ -36,7 +36,11 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { demoData } from "@/lib/cstore/demo-data";
-import { findLifecycleCandidates } from "@/lib/cstore/analytics";
+import {
+  findLifecycleCandidates,
+  getAssetLifecycleDecisionFacts,
+  type LifecycleCapexPlanDraft,
+} from "@/lib/cstore/analytics";
 import {
   demoRolePolicies,
   getDemoRolePolicy,
@@ -103,7 +107,10 @@ import { GuidedStoreSetup } from "./guided-store-setup";
 import { WorkClassificationEditor } from "./work-classification-editor";
 import { WorkOrderCreation } from "./work-order-creation";
 import type { GuidedStoreSetupValue, WorkClassificationValue } from "./setup-workflows";
-import { VendorServiceAuthorization } from "./vendor-service-authorization";
+import {
+  VendorServiceAuthorization,
+  type ServiceAuthorizationLifecycleReview,
+} from "./vendor-service-authorization";
 import { VendorPicker } from "./vendor-picker";
 import {
   InvoiceEvidenceDetail,
@@ -116,6 +123,7 @@ import {
   maintenanceSpendWorkOrderIds,
   type MaintenanceSpendState,
 } from "./maintenance-spend-workspace";
+import { LifecyclePlanning } from "./lifecycle-planning";
 import {
   ActiveVisitWorkspace,
   ExceptionQueue,
@@ -266,7 +274,7 @@ const navItems: Array<{ view: View; label: string; icon: typeof LayoutDashboard 
   { view: "work", label: "Work", icon: ClipboardList },
   { view: "vendors", label: "Vendors", icon: Truck },
   { view: "spend", label: "Spend", icon: CircleDollarSign },
-  { view: "equipment", label: "Equipment", icon: Gauge },
+  { view: "equipment", label: "Lifecycle & CapEx", icon: Gauge },
   { view: "pm", label: "Preventive maintenance", icon: CalendarCheck },
   { view: "reports", label: "Reports", icon: FileBarChart },
 ];
@@ -347,13 +355,14 @@ function invoiceTotal(dataset: DemoDataset, invoiceId: string) {
 }
 
 function workOrderCost(dataset: DemoDataset, workOrderId: string) {
+  const recorded = dataset.costLines
+    .filter((line) => line.workOrderId === workOrderId && line.basis === "recorded")
+    .reduce((sum, line) => sum + line.amountMinor, 0);
+  if (recorded) return recorded;
   const linked = dataset.invoiceWorkLinks
     .filter((link) => link.workOrderId === workOrderId)
     .reduce((sum, link) => sum + link.attributedAmountMinor, 0);
-  if (linked) return linked;
-  return dataset.costLines
-    .filter((line) => line.workOrderId === workOrderId && line.basis === "recorded")
-    .reduce((sum, line) => sum + line.amountMinor, 0);
+  return linked;
 }
 
 function recordedMaintenanceCost(dataset: DemoDataset, workOrderId: string) {
@@ -612,6 +621,8 @@ export function TraceOpsApp() {
   const [guidedDemo, setGuidedDemo] = useState<GuidedDemoState>(initialGuidedDemoState);
   const [spendPreset, setSpendPreset] = useState<SpendPreset | null>(null);
   const [maintenanceSpendState, setMaintenanceSpendState] = useState<MaintenanceSpendState>(defaultMaintenanceSpendState);
+  const [lifecycleTab, setLifecycleTab] = useState<"review" | "capex" | "equipment">("review");
+  const [capexDrafts, setCapexDrafts] = useState<Record<string, LifecycleCapexPlanDraft>>({});
   const [invoiceEvidenceQueueValue, setInvoiceEvidenceQueueValue] = useState<InvoiceEvidenceQueueValue>({ filter: "needs_review", query: "" });
   const [invoiceDetailReturn, setInvoiceDetailReturn] = useState<"spend" | "evidence" | "exceptions">("evidence");
   const [capabilities, setCapabilities] = useState<CapabilityConfig>({
@@ -2859,6 +2870,12 @@ export function TraceOpsApp() {
     if (!store) return;
     const creator = activePerson;
     if (!creator) return;
+    const selectedAsset = value.assetId
+      ? dataset.assets.find((asset) => asset.id === value.assetId && asset.storeId === store.id)
+      : undefined;
+    const selectedComponent = selectedAsset && value.componentId
+      ? dataset.assetComponents.find((component) => component.id === value.componentId && component.assetId === selectedAsset.id)
+      : undefined;
     const sequence = String(300 + workOrders.length + 1).padStart(6, "0");
     const now = new Date(dataset.asOf);
     const due = new Date(now);
@@ -2868,6 +2885,10 @@ export function TraceOpsApp() {
       organizationId: dataset.organization.id,
       number: `${dataset.organization.workOrderPrefix}-${store.storeNumber}-${sequence}`,
       storeId: store.id,
+      categoryId: selectedAsset?.categoryId,
+      taxonomyNodeId: selectedAsset?.taxonomyPathIds.at(-1),
+      assetId: selectedAsset?.id,
+      componentId: selectedComponent?.id,
       title: value.problem.length > 56 ? `${value.problem.slice(0, 53)}…` : value.problem,
       problemDescription: value.problem,
       scopeOfWork: "Diagnose the reported condition and restore safe, normal operation. Call before exceeding authorization.",
@@ -2895,7 +2916,7 @@ export function TraceOpsApp() {
       },
       notToExceedMinor: value.fulfillmentMode === "external" ? 75000 : undefined,
       currency: "USD",
-      classificationDeferred: true,
+      classificationDeferred: !selectedAsset,
       tags: ["created-in-demo"],
     };
     setWorkOrders((current) => [newWork, ...current]);
@@ -2904,6 +2925,8 @@ export function TraceOpsApp() {
       storeId: newWork.storeId,
       fulfillmentMode: newWork.fulfillmentMode,
       status: newWork.status,
+      assetId: newWork.assetId ?? null,
+      componentId: newWork.componentId ?? null,
     });
 
     if (value.fulfillmentMode === "external" && value.vendorId) {
@@ -2993,6 +3016,35 @@ export function TraceOpsApp() {
       currency: work.currency,
     });
     setDrawer("issue-vendor");
+  }
+
+  function openLifecycleHistory(assetId: string) {
+    setPendingAuthorization(null);
+    setDrawer(null);
+    setLifecycleTab("review");
+    setView("equipment");
+    setDetail({ kind: "asset", id: assetId });
+  }
+
+  function addAssetToCapexPlan(assetId: string) {
+    const facts = getAssetLifecycleDecisionFacts(dataset, dataset.organization.id, assetId);
+    if (!facts) return;
+    const currentYear = new Date(dataset.asOf).getUTCFullYear();
+    setCapexDrafts((current) => ({
+      ...current,
+      [assetId]: current[assetId] ?? {
+        include: true,
+        targetYear: Math.max(currentYear, facts.expectedReplacementYear ?? currentYear),
+        amountMinor: facts.currentReplacementEstimateMinor,
+        note: "",
+      },
+    }));
+    setPendingAuthorization(null);
+    setDrawer(null);
+    setDetail(null);
+    setLifecycleTab("capex");
+    setView("equipment");
+    setNotice(`${facts.asset.name} added to the editable upcoming CapEx plan. The vendor work order remains saved and unsent.`);
   }
 
   function issueAuthorization(value: {
@@ -3320,6 +3372,55 @@ export function TraceOpsApp() {
   const selectedPmPlan = selectedPmOccurrence
     ? dataset.pmPlans.find((record) => record.id === selectedPmOccurrence.pmPlanId)
     : undefined;
+  const pendingAuthorizationWork = pendingAuthorization
+    ? dataset.workOrders.find((record) => record.id === pendingAuthorization.workOrderId)
+    : undefined;
+  const pendingLifecycleFacts = pendingAuthorizationWork?.assetId
+    ? getAssetLifecycleDecisionFacts(
+        dataset,
+        dataset.organization.id,
+        pendingAuthorizationWork.assetId,
+      )
+    : undefined;
+  const pendingLifecycleReview: ServiceAuthorizationLifecycleReview | undefined = pendingLifecycleFacts &&
+    pendingLifecycleFacts.reviewReasons.some((reason) => reason.category !== "invoice_evidence")
+    ? (() => {
+        const facts: string[] = [];
+        const activity = pendingLifecycleFacts.reactiveActivity.trailing12Months;
+        const recurrence = pendingLifecycleFacts.confirmedComponentRecurrences.trailing12Months[0];
+        const completedCost = pendingLifecycleFacts.costs.trailing24Months.recordedMinor;
+        if (completedCost > 0) {
+          facts.push(`${money(completedCost)} in completed-work cost is recorded over the last 24 months.`);
+        }
+        if (recurrence) {
+          facts.push(`${recurrence.componentName} appears on ${recurrence.distinctWorkOrderCount} completed corrective work orders.`);
+        }
+        if (activity.distinctWorkOrderCount > 0) {
+          facts.push(`${activity.distinctWorkOrderCount} corrective work orders and ${activity.distinctVisitCount} recorded visits in the last 12 months.`);
+        }
+        if ((pendingLifecycleFacts.expectedLifePercentage ?? 0) >= 80) {
+          facts.push(`${pendingLifecycleFacts.assetAgeYears ?? "Unknown"} years old compared with the entered ${pendingLifecycleFacts.expectedLifeYears}-year typical life.`);
+        }
+        if (activity.temporaryOrUnresolvedWorkOrderIds.length > 0) {
+          const count = activity.temporaryOrUnresolvedWorkOrderIds.length;
+          facts.push(`${count} recent ${count === 1 ? "work order has" : "work orders have"} a temporary, waiting-parts, or unresolved outcome.`);
+        }
+        return {
+          kind: "review",
+          assetName: pendingLifecycleFacts.asset.name,
+          assetCode: pendingLifecycleFacts.asset.assetCode,
+          repairCostMinor: completedCost,
+          replacementEstimateMinor: pendingLifecycleFacts.currentReplacementEstimateMinor,
+          reactiveWorkOrderCount: activity.distinctWorkOrderCount,
+          ageYears: pendingLifecycleFacts.assetAgeYears,
+          expectedLifeYears: pendingLifecycleFacts.expectedLifeYears,
+          facts,
+          alreadyPlanned: Boolean(capexDrafts[pendingLifecycleFacts.asset.id]?.include),
+        } satisfies ServiceAuthorizationLifecycleReview;
+      })()
+    : pendingAuthorizationWork && !pendingAuthorizationWork.assetId
+      ? { kind: "equipment_not_selected" }
+      : undefined;
 
   const rendered = selectedInvoice ? (
     <>
@@ -3599,13 +3700,24 @@ export function TraceOpsApp() {
       )}
     </>
   ) : view === "equipment" ? (
-    <EquipmentView
-      dataset={dataset}
-      onOpenWork={(id) => setDetail({ kind: "work", id })}
-      onOpenAsset={(id) => setDetail({ kind: "asset", id })}
-      onNewAsset={() => { setWorkflowStoreId(null); setDrawer("new-asset"); }}
-      canManage={hasPermission("manageSuite")}
-    />
+    <>
+      <PageHead
+        eyebrow="Equipment lifecycle"
+        title="See the history. Decide what to repair or replace."
+        description="Completed-work cost, corrective history, component activity, equipment age, warranty, PM, and editable capital planning stay useful even when no invoice is entered."
+      >
+        {hasPermission("manageSuite") ? <button className="to-button primary" type="button" onClick={() => { setWorkflowStoreId(null); setDrawer("new-asset"); }}><Plus /> Add equipment</button> : null}
+      </PageHead>
+      <LifecyclePlanning
+        dataset={dataset}
+        tab={lifecycleTab}
+        onTabChange={setLifecycleTab}
+        capexDrafts={capexDrafts}
+        onCapexDraftsChange={setCapexDrafts}
+        onOpenAsset={(id) => setDetail({ kind: "asset", id })}
+        canManage={hasPermission("manageSuite") || hasPermission("createWork")}
+      />
+    </>
   ) : view === "pm" ? (
     <PmView
       dataset={dataset}
@@ -3767,6 +3879,22 @@ export function TraceOpsApp() {
             <WorkOrderCreation
               stores={storeOptions}
               vendors={vendorOptions}
+              equipmentOptions={dataset.assets.map((asset) => ({
+                id: asset.id,
+                storeId: asset.storeId,
+                assetCode: asset.assetCode,
+                name: asset.name,
+                assetType: asset.assetType,
+                locationDetail: asset.locationDetail,
+              }))}
+              componentOptions={dataset.assetComponents.map((component) => ({
+                id: component.id,
+                assetId: component.assetId,
+                componentCode: component.componentCode,
+                name: component.name,
+                componentType: component.componentType,
+                parentComponentId: component.parentComponentId,
+              }))}
               internalTeams={dataset.teams.map((team) => ({ id: team.id, name: team.name, description: team.description, coverageLabel: "Internal regional coverage" }))}
               onCreate={createWorkOrder}
               initialValue={workInitialStoreId ? { storeId: workInitialStoreId } : undefined}
@@ -3830,7 +3958,32 @@ export function TraceOpsApp() {
               </button>
             </div>
           ) : drawer === "issue-vendor" && pendingAuthorization ? (
-            <VendorServiceAuthorization authorization={pendingAuthorization} onIssue={issueAuthorization} onSaveDraft={(draft) => { setWorkOrders((current) => current.map((work) => work.id === draft.workOrderId ? { ...work, notToExceedMinor: draft.nteMinorUnits } : work)); setDraftAcceptanceByWork((current) => ({ ...current, [draft.workOrderId]: draft.acceptanceRequested })); setDrawer(null); setNotice(`${pendingAuthorization.customerWorkOrderNumber} authorization settings saved without sending. Reopen it from the work-order record.`); }} defaultAcceptanceRequested={draftAcceptanceByWork[pendingAuthorization.workOrderId] ?? capabilities.vendorAcceptance} />
+            <VendorServiceAuthorization
+              authorization={pendingAuthorization}
+              lifecycleReview={pendingLifecycleReview}
+              onOpenEquipmentHistory={pendingAuthorizationWork?.assetId
+                ? () => openLifecycleHistory(pendingAuthorizationWork.assetId!)
+                : undefined}
+              onAddToCapexPlan={pendingAuthorizationWork?.assetId
+                ? () => addAssetToCapexPlan(pendingAuthorizationWork.assetId!)
+                : undefined}
+              onSelectEquipment={pendingAuthorizationWork && !pendingAuthorizationWork.assetId
+                ? () => {
+                    setClassificationWorkId(pendingAuthorizationWork.id);
+                    setPendingAuthorization(null);
+                    setDrawer("classify-work");
+                    setNotice("Select equipment if it is known. The work order remains saved and nothing has been sent.");
+                  }
+                : undefined}
+              onIssue={issueAuthorization}
+              onSaveDraft={(draft) => {
+                setWorkOrders((current) => current.map((work) => work.id === draft.workOrderId ? { ...work, notToExceedMinor: draft.nteMinorUnits } : work));
+                setDraftAcceptanceByWork((current) => ({ ...current, [draft.workOrderId]: draft.acceptanceRequested }));
+                setDrawer(null);
+                setNotice(`${pendingAuthorization.customerWorkOrderNumber} authorization settings saved without sending. Reopen it from the work-order record.`);
+              }}
+              defaultAcceptanceRequested={draftAcceptanceByWork[pendingAuthorization.workOrderId] ?? capabilities.vendorAcceptance}
+            />
           ) : drawer === "record-invoice" && invoiceWork && invoiceVendor ? (
             <InvoiceEntryForm work={invoiceWork} vendor={invoiceVendor} onSubmit={recordInvoiceForWork} />
           ) : drawer === "record-cost" && costWork ? (
@@ -4207,7 +4360,7 @@ export function LegacyScopedSpendView({ dataset, onOpenWork, onOpenStore, onOpen
   return <><PageHead eyebrow="Invoice-linked cost basis · trailing 12 months" title="Move from the company total to the source record." description="Change operating scope and maintenance depth independently. Every amount below is calculated from the same invoice-to-work-order allocations."><button className="to-button" type="button" onClick={() => onNavigate("reports")}><FileBarChart /> Generate report</button></PageHead><div className="to-toolbar"><div className="to-field"><label htmlFor="spend-region">Region</label><select id="spend-region" value={regionId} onChange={(event) => { setRegionId(event.target.value); setStoreId("all"); }}><option value="all">All regions</option>{dataset.regions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}</select></div><div className="to-field"><label htmlFor="spend-store">Store</label><select id="spend-store" value={storeId} onChange={(event) => setStoreId(event.target.value)}><option value="all">All stores in scope</option>{availableStores.map((store) => <option key={store.id} value={store.id}>#{store.storeNumber} · {store.address.city}</option>)}</select></div><div className="to-field"><label htmlFor="spend-category">Service area</label><select id="spend-category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="all">All service areas</option>{dataset.categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}</select></div><button className="to-button ghost" type="button" onClick={() => { setRegionId("all"); setStoreId("all"); setCategoryId("all"); }}>Reset scope</button></div><div className="to-scope-trail"><span>Company</span><ChevronRight />{selectedRegion ? <><span>{selectedRegion.name}</span><ChevronRight /></> : <span>All regions</span>}{selectedStore ? <><span>Store {selectedStore.storeNumber}</span><ChevronRight /></> : null}<strong>{selectedCategory?.label ?? "All service areas"}</strong></div><section className="to-kpi-grid"><div className="to-kpi"><div className="to-kpi-top"><span>Selected spend</span><span className="to-kpi-icon"><CircleDollarSign /></span></div><strong>{money(total)}</strong><span>{links.length} source-linked allocations · invoice basis</span></div><button className="to-kpi" data-tone="coral" type="button" onClick={() => storeRows[0] && onOpenStore(storeRows[0].store.id)}><div className="to-kpi-top"><span>Highest-cost store</span><span className="to-kpi-icon"><StoreIcon /></span></div><strong>{storeRows[0] ? `#${storeRows[0].store.storeNumber}` : "—"}</strong><span>{money(storeRows[0]?.spend ?? 0)} · click for store record</span></button><button className="to-kpi" data-tone="amber" type="button" onClick={() => assetRows[0] && onOpenAsset(assetRows[0].asset.id)}><div className="to-kpi-top"><span>Highest-cost asset</span><span className="to-kpi-icon"><Gauge /></span></div><strong>{assetRows[0]?.asset.assetCode ?? "Unclassified"}</strong><span>{money(assetRows[0]?.spend ?? 0)} · click for lifecycle history</span></button><div className="to-kpi" data-tone="blue"><div className="to-kpi-top"><span>Mapped to an asset</span><span className="to-kpi-icon"><PackageSearch /></span></div><strong>{total ? Math.round((assetClassified / total) * 100) : 0}%</strong><span>Unclassified spend stays in the selected total</span></div></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Service-area drilldown</h2><p>Choose a category without changing operating scope.</p></div></header><div className="to-panel-body"><div className="to-bar-list">{categoryRows.map((row) => <button className="to-bar-row to-link-row" type="button" key={row.category.id} onClick={() => setCategoryId(row.category.id)}><span className="to-bar-label"><strong>{row.category.label}</strong><span>{row.links.length} source allocations</span></span><span className="to-bar-track"><i style={{ width: `${Math.max(4, (row.spend / maxCategory) * 100)}%`, background: row.category.color }} /></span><b>{money(row.spend)}</b></button>)}</div></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Store drilldown</h2><p>Open a store to see work, visits, equipment, and PM.</p></div></header><div className="to-panel-body"><div className="to-bar-list">{storeRows.slice(0, 8).map((row) => <button className="to-bar-row to-link-row" type="button" key={row.store.id} onClick={() => onOpenStore(row.store.id)}><span className="to-bar-label"><strong>Store {row.store.storeNumber}</strong><span>{row.store.address.city} · {row.links.length} allocations</span></span><span className="to-bar-track"><i style={{ width: `${Math.max(4, (row.spend / maxStore) * 100)}%` }} /></span><b>{money(row.spend)}</b></button>)}</div></div></article></section>{assetRows.length ? <article className="to-panel to-spend-assets"><header className="to-panel-head"><div><h2>Equipment drivers</h2><p>{selectedCategory ? `${selectedCategory.label} · ` : ""}only classified spend appears here.</p></div><span className="to-filter-count">{assetRows.length} assets</span></header><div className="to-record-list">{assetRows.slice(0, 8).map((row) => { const store = dataset.stores.find((record) => record.id === row.asset.storeId); return <button className="to-record-row to-spend-asset-row" type="button" key={row.asset.id} onClick={() => onOpenAsset(row.asset.id)}><span className="to-exception-icon" data-tone="blue"><Gauge /></span><span className="to-record-primary"><strong>{row.asset.name}</strong><span>Store {store?.storeNumber} · {row.asset.assetCode} · {row.asset.manufacturer} {row.asset.model}</span></span><span className="to-record-meta">{row.links.length} allocations</span><strong className="to-money">{money(row.spend)}</strong><ChevronRight /></button>; })}</div></article> : null}<article className="to-panel"><header className="to-panel-head"><div><h2>Supporting source records</h2><p>Open the customer work order behind any selected amount.</p></div><span className="to-filter-count">{links.length} allocations</span></header><div className="to-table-wrap"><table className="to-table"><thead><tr><th>Customer WO</th><th>Store</th><th>Service area</th><th>Vendor invoice</th><th>Match</th><th>Attributed amount</th></tr></thead><tbody>{links.slice(0, 18).map((link) => { const work = dataset.workOrders.find((record) => record.id === link.workOrderId); const store = dataset.stores.find((record) => record.id === link.storeId); const category = dataset.categories.find((record) => record.id === link.categoryId); const invoice = dataset.invoices.find((record) => record.id === link.invoiceId); return <tr key={link.id}><td><button className="to-link-button to-cell-link" type="button" onClick={() => onOpenWork(link.workOrderId)}><span><strong>{work?.number}</strong><small>{work?.title}</small></span><ChevronRight /></button></td><td>#{store?.storeNumber}<small>{store?.address.city}</small></td><td>{category?.label ?? "Unclassified"}</td><td>{invoice?.invoiceNumber}<small>{invoice?.customerWorkOrderReferences.join(", ") || "WO reference missing"}</small></td><td><Badge value={link.matchStatus} /></td><td className="to-money">{money(link.attributedAmountMinor)}</td></tr>; })}</tbody></table></div></article></>;
 }
 
-function EquipmentView({ dataset, onOpenWork, onOpenAsset, onNewAsset, canManage }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void; onNewAsset: () => void; canManage: boolean }) {
+export function EquipmentView({ dataset, onOpenWork, onOpenAsset, onNewAsset, canManage }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void; onNewAsset: () => void; canManage: boolean }) {
   const assets = [...dataset.assets].sort((left, right) => {
     const leftCost = dataset.workOrders
       .filter((work) => work.assetId === left.id)
@@ -4440,6 +4593,95 @@ function AssetDetailRecord({ dataset, asset, onBack, onOpenWork }: { dataset: De
   const components = dataset.assetComponents.filter((record) => record.assetId === asset.id);
   const work = dataset.workOrders
     .filter((record) => record.assetId === asset.id)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const pmPlans = dataset.pmPlans.filter((record) => record.assetId === asset.id);
+  const lifecycle = getAssetLifecycleDecisionFacts(dataset, dataset.organization.id, asset.id);
+  const activity = lifecycle?.reactiveActivity.trailing12Months;
+  const cost = lifecycle?.costs.trailing24Months;
+  const recurrence = lifecycle?.confirmedComponentRecurrences.trailing12Months[0];
+  const followUpCount = activity?.temporaryOrUnresolvedWorkOrderIds.length ?? 0;
+  const pmWindow = lifecycle?.pm.trailing12Months;
+  const recordedCostForWork = (workOrderId: string) => dataset.costLines
+    .filter((line) => line.workOrderId === workOrderId && line.basis === "recorded")
+    .reduce((sum, line) => sum + line.amountMinor, 0);
+
+  return <>
+    <section className="to-detail-hero">
+      <div className="to-detail-copy">
+        <button type="button" onClick={onBack}><ArrowLeft /> Back to Lifecycle &amp; CapEx</button>
+        <p className="to-eyebrow">Store {store?.storeNumber} · {category?.label}</p>
+        <h1>{asset.name}</h1>
+        <p>{asset.assetCode} · {taxonomyPath} · {asset.locationDetail}</p>
+      </div>
+      <div className="to-detail-summary">
+        <div><span>Completed-work cost</span><strong>{money(cost?.recordedMinor ?? 0)}</strong></div>
+        <div><span>Replacement estimate</span><strong>{money(asset.replacementEstimateMinor)}</strong></div>
+        <div><span>Equipment age</span><strong>{lifecycle?.assetAgeYears === undefined ? "Not entered" : `${lifecycle.assetAgeYears} years`}</strong></div>
+        <div><span>Corrective work</span><strong>{activity?.distinctWorkOrderCount ?? 0}</strong></div>
+      </div>
+    </section>
+
+    <section className="to-grid two">
+      <article className="to-panel">
+        <header className="to-panel-head"><div><h2>Equipment record</h2><p>Identity, location, supplier, and warranty</p></div><Badge value={asset.status} /></header>
+        <div className="to-panel-body">
+          <dl className="to-mini-dl">
+            <div><dt>Manufacturer / model</dt><dd>{asset.manufacturer} {asset.model}</dd></div>
+            <div><dt>Serial number</dt><dd>{asset.serialNumber}</dd></div>
+            <div><dt>Installed</dt><dd>{dateLabel(asset.installedOn)}</dd></div>
+            <div><dt>Entered typical life</dt><dd>{asset.expectedLifeYears} years{lifecycle?.expectedReplacementOn ? ` · date ${dateLabel(lifecycle.expectedReplacementOn)}` : ""}</dd></div>
+            <div><dt>Criticality</dt><dd>{words(asset.criticality)}</dd></div>
+            <div><dt>Warranty</dt><dd>{asset.warranty ? `${asset.warranty.provider} through ${dateLabel(asset.warranty.endsOn)} · ${asset.warranty.coverage}` : "No warranty entered"}</dd></div>
+          </dl>
+        </div>
+      </article>
+
+      <article className="to-panel">
+        <header className="to-panel-head"><div><h2>Repair or replace</h2><p>The facts are assembled here; the manager makes the decision.</p></div></header>
+        <div className="to-panel-body">
+          <dl className="to-mini-dl">
+            <div><dt>Completed-work cost · 24 months</dt><dd>{money(cost?.recordedMinor ?? 0)}</dd></div>
+            <div><dt>Current replacement estimate</dt><dd>{money(asset.replacementEstimateMinor)}</dd></div>
+            <div><dt>Corrective activity · 12 months</dt><dd>{activity?.distinctWorkOrderCount ?? 0} work orders · {activity?.distinctVisitCount ?? 0} recorded visits</dd></div>
+            <div><dt>Same-component history</dt><dd>{recurrence ? `${recurrence.componentName} appears on ${recurrence.distinctWorkOrderCount} completed work orders; no common cause is assumed.` : "No tracked component appears on multiple completed work orders."}</dd></div>
+            <div><dt>Open follow-up context</dt><dd>{followUpCount ? `${followUpCount} recent ${followUpCount === 1 ? "work order has" : "work orders have"} a temporary, waiting-parts, or unresolved outcome.` : "No temporary, waiting-parts, or unresolved outcome in the last 12 months."}</dd></div>
+            <div><dt>Preventive maintenance</dt><dd>{lifecycle?.pm.planCount ? `${pmWindow?.completedCount ?? 0} completed · ${pmWindow?.overdueCount ?? 0} overdue in the last 12 months` : "No equipment-specific PM plan entered"}</dd></div>
+            {cost?.authorizedMinor ? <div><dt>Authorized amount · not actual cost</dt><dd>{money(cost.authorizedMinor)}</dd></div> : null}
+          </dl>
+          {cost?.needsReviewInvoiceMinor ? <details className="to-method"><summary>Optional invoice reconciliation</summary><p>{money(cost.needsReviewInvoiceMinor)} in manually entered invoice allocations still needs review. It is not included in the completed-work cost above and is not required for this lifecycle history.</p></details> : null}
+          <p className="to-callout"><ShieldCheck /> Continue the repair, request another quote, or move the estimate into CapEx planning. TraceOps keeps the history visible without making the choice for you.</p>
+        </div>
+      </article>
+    </section>
+
+    <section className="to-grid equal">
+      <article className="to-panel">
+        <header className="to-panel-head"><div><h2>Components</h2><p>Optional depth for serviceable parts</p></div><span className="to-filter-count">{components.length} tracked</span></header>
+        {components.length ? <div className="to-record-list">{components.map((component) => <div className="to-record-row to-component-row" key={component.id}><span className="to-exception-icon" data-tone="blue"><PackageSearch /></span><span className="to-record-primary"><strong>{component.name}</strong><span>{component.componentCode} · {component.componentType}{component.manufacturer ? ` · ${component.manufacturer}` : ""}</span></span><Badge value={component.status} /></div>)}</div> : <div className="to-panel-body"><div className="to-empty"><PackageSearch /><strong>No components entered</strong><p>The equipment history remains useful without component-level setup.</p></div></div>}
+      </article>
+      <article className="to-panel">
+        <header className="to-panel-head"><div><h2>Preventive maintenance</h2><p>Plans use the same work and visit history.</p></div></header>
+        <div className="to-panel-body">{pmPlans.length ? pmPlans.map((plan) => <dl className="to-mini-dl" key={plan.id}><div><dt>Plan</dt><dd>{plan.name}</dd></div><div><dt>Cadence</dt><dd>{words(plan.cadence)}</dd></div><div><dt>Next due</dt><dd>{dateLabel(plan.nextDueAt)}</dd></div><div><dt>Evidence</dt><dd>{plan.requiredEvidence.map(words).join(" · ")}</dd></div></dl>) : <div className="to-empty"><CalendarCheck /><strong>No equipment-specific PM plan</strong><p>Store- or service-area-level PM may still cover this equipment.</p></div>}</div>
+      </article>
+    </section>
+
+    <article className="to-panel">
+      <header className="to-panel-head"><div><h2>Service history</h2><p>Completed-work costs and visits stay useful without invoice entry.</p></div></header>
+      <div className="to-table-wrap"><table className="to-table"><thead><tr><th>Customer WO</th><th>Date</th><th>Problem</th><th>Status</th><th>Visits</th><th>Completed-work cost</th></tr></thead><tbody>{work.map((record) => <tr key={record.id}><td><button className="to-link-button to-cell-link" type="button" onClick={() => onOpenWork(record.id)}><strong>{record.number}</strong><ChevronRight /></button></td><td>{dateLabel(record.createdAt)}</td><td>{record.title}</td><td><Badge value={record.status} /></td><td>{dataset.visits.filter((visit) => visit.workOrderId === record.id).length}</td><td className="to-money">{money(recordedCostForWork(record.id))}</td></tr>)}</tbody></table></div>
+    </article>
+  </>;
+}
+
+export function LegacyAssetDetailRecord({ dataset, asset, onBack, onOpenWork }: { dataset: DemoDataset; asset: Asset; onBack: () => void; onOpenWork: (id: string) => void }) {
+  const store = dataset.stores.find((record) => record.id === asset.storeId);
+  const category = dataset.categories.find((record) => record.id === asset.categoryId);
+  const taxonomyPath = asset.taxonomyPathIds
+    .map((id) => dataset.taxonomyNodes.find((record) => record.id === id)?.label)
+    .filter(Boolean)
+    .join(" → ");
+  const components = dataset.assetComponents.filter((record) => record.assetId === asset.id);
+  const work = dataset.workOrders
+    .filter((record) => record.assetId === asset.id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const workIds = new Set(work.map((record) => record.id));
   const visits = dataset.visits.filter((record) => record.workOrderId && workIds.has(record.workOrderId));
@@ -4466,9 +4708,9 @@ function CapabilitySettings({ value, onChange }: { value: CapabilityConfig; onCh
   const options: Array<{ key: keyof CapabilityConfig; title: string; description: string }> = [
     { key: "vendorAcceptance", title: "Vendor response link", description: "Ask vendors to accept, decline, or propose a date. Turn it off when email issuance alone is enough." },
     { key: "locationEvidence", title: "Visit location evidence", description: "Use event-based location for QR/app activity while allowing the trusted store computer path." },
-    { key: "invoiceSafeguard", title: "Invoice safeguard", description: "Match uploaded invoices to customer work orders, NTE limits, visits, and supporting evidence." },
+    { key: "invoiceSafeguard", title: "Optional invoice safeguard", description: "Manually add an invoice when useful and compare it with the work order, NTE limit, visits, and evidence. No other workflow depends on it." },
     { key: "preventiveMaintenance", title: "Preventive maintenance", description: "Expose plans, due occurrences, vendor issuance, evidence, and compliance reporting." },
-    { key: "equipmentLifecycle", title: "Equipment and lifecycle", description: "Track assets, components, warranties, repair history, and transparent capital-review rules." },
+    { key: "equipmentLifecycle", title: "Equipment lifecycle and CapEx", description: "Track assets, components, warranties, completed-work history, and an editable capital plan without requiring invoice entry." },
   ];
   return <div className="to-settings"><div className="to-callout"><Settings2 /><span><strong>One product, flexible adoption</strong><small>These are capability switches—not separate products or duplicate data models.</small></span></div><div className="to-setting-list">{options.map((option) => { const inputId = `capability-${option.key}`; return <label key={option.key} htmlFor={inputId}><span><strong>{option.title}</strong><small>{option.description}</small></span><input id={inputId} aria-label={option.title} type="checkbox" checked={value[option.key]} onChange={(event) => onChange({ ...value, [option.key]: event.target.checked })} /><i aria-hidden="true" /></label>; })}</div><p className="to-setting-foot">Demo changes are session-scoped. Existing records remain valid when a capability is hidden.</p></div>;
 }

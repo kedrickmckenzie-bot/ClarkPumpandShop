@@ -31,11 +31,31 @@ export interface VendorOption {
   afterHoursLabel?: string;
 }
 
+export interface EquipmentOption {
+  id: string;
+  storeId: string;
+  assetCode: string;
+  name: string;
+  assetType?: string;
+  locationDetail?: string;
+}
+
+export interface EquipmentComponentOption {
+  id: string;
+  assetId: string;
+  componentCode: string;
+  name: string;
+  componentType?: string;
+  parentComponentId?: string;
+}
+
 export interface WorkOrderCreationValue {
   storeId: string;
   problem: string;
   priority: WorkPriority;
   fulfillmentMode: WorkFulfillmentMode;
+  assetId?: string;
+  componentId?: string;
   internalTeamId?: string;
   vendorId?: string;
 }

@@ -2,12 +2,16 @@
 
 import { type FormEvent, useId, useState } from "react";
 import {
+  CalendarPlus,
   CheckCircle2,
   Copy,
   DollarSign,
   FileText,
+  Gauge,
+  History,
   Mail,
   MessageSquareText,
+  PackageSearch,
   Send,
   ShieldCheck,
 } from "lucide-react";
@@ -23,9 +27,31 @@ export interface VendorServiceAuthorizationProps {
   onIssue: (value: ServiceAuthorizationIssueValue) => void | Promise<void>;
   onSaveDraft?: (value: ServiceAuthorizationIssueValue) => void | Promise<void>;
   defaultAcceptanceRequested?: boolean;
+  lifecycleReview?: ServiceAuthorizationLifecycleReview;
+  onOpenEquipmentHistory?: () => void;
+  onAddToCapexPlan?: () => void;
+  onSelectEquipment?: () => void;
   className?: string;
   isIssuing?: boolean;
 }
+
+export type ServiceAuthorizationLifecycleReview =
+  | {
+      kind: "review";
+      assetName: string;
+      assetCode: string;
+      repairCostMinor: number;
+      optionalInvoiceAmountMinor?: number;
+      replacementEstimateMinor: number;
+      reactiveWorkOrderCount: number;
+      ageYears?: number;
+      expectedLifeYears: number;
+      facts: string[];
+      alreadyPlanned?: boolean;
+    }
+  | {
+      kind: "equipment_not_selected";
+    };
 
 function formatMoney(minorUnits: number | undefined, currency: string) {
   if (minorUnits === undefined) return "Not set";
@@ -57,6 +83,10 @@ export function VendorServiceAuthorization({
   onIssue,
   onSaveDraft,
   defaultAcceptanceRequested = false,
+  lifecycleReview,
+  onOpenEquipmentHistory,
+  onAddToCapexPlan,
+  onSelectEquipment,
   className,
   isIssuing: issuingFromParent = false,
 }: VendorServiceAuthorizationProps) {
@@ -169,6 +199,57 @@ export function VendorServiceAuthorization({
           Ready to issue
         </span>
       </header>
+
+      {lifecycleReview?.kind === "review" ? (
+        <section className={styles.lifecycleReview} aria-label="Repair or replacement review">
+          <span className={styles.lifecycleIcon}><Gauge aria-hidden="true" /></span>
+          <div className={styles.lifecycleCopy}>
+            <span className={styles.lifecycleEyebrow}>Before this work is sent</span>
+            <h3>Review repair or replacement</h3>
+            <p>
+              {lifecycleReview.assetCode} · {lifecycleReview.assetName}. This does not block the
+              work order; it puts the useful history beside the send decision.
+            </p>
+            <div className={styles.lifecycleFacts}>
+              <span><small>Completed-work cost</small><strong>{formatMoney(lifecycleReview.repairCostMinor, authorization.currency)}</strong></span>
+              <span><small>Corrective work</small><strong>{lifecycleReview.reactiveWorkOrderCount} work orders</strong></span>
+              <span><small>Equipment age</small><strong>{lifecycleReview.ageYears === undefined ? "Not recorded" : `${lifecycleReview.ageYears.toFixed(1)} of ${lifecycleReview.expectedLifeYears} years`}</strong></span>
+              <span><small>Replace estimate</small><strong>{formatMoney(lifecycleReview.replacementEstimateMinor, authorization.currency)}</strong></span>
+              {lifecycleReview.optionalInvoiceAmountMinor ? <span><small>Optional invoice check</small><strong>{formatMoney(lifecycleReview.optionalInvoiceAmountMinor, authorization.currency)}</strong></span> : null}
+            </div>
+            <div className={styles.lifecycleReasons}>
+              {lifecycleReview.facts.slice(0, 3).map((fact) => <span key={fact}>{fact}</span>)}
+            </div>
+          </div>
+          <div className={styles.lifecycleActions}>
+            {onOpenEquipmentHistory ? (
+              <button type="button" onClick={onOpenEquipmentHistory}>
+                <History aria-hidden="true" /> Open full history
+              </button>
+            ) : null}
+            {onAddToCapexPlan ? (
+              <button type="button" onClick={onAddToCapexPlan} disabled={lifecycleReview.alreadyPlanned}>
+                <CalendarPlus aria-hidden="true" />
+                {lifecycleReview.alreadyPlanned ? "Already in CapEx plan" : "Add to CapEx plan"}
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : lifecycleReview?.kind === "equipment_not_selected" ? (
+        <section className={`${styles.lifecycleReview} ${styles.lifecycleUnclassified}`} aria-label="Equipment not selected">
+          <span className={styles.lifecycleIcon}><PackageSearch aria-hidden="true" /></span>
+          <div className={styles.lifecycleCopy}>
+            <span className={styles.lifecycleEyebrow}>Optional before sending</span>
+            <h3>No equipment is selected</h3>
+            <p>Select the equipment if you want to compare its repair history and replacement estimate. You can still issue this work order without it.</p>
+          </div>
+          {onSelectEquipment ? (
+            <div className={styles.lifecycleActions}>
+              <button type="button" onClick={onSelectEquipment}><PackageSearch aria-hidden="true" /> Select equipment</button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className={styles.authorizationLayout}>
         <section
