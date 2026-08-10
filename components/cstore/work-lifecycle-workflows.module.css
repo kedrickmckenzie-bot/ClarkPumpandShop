@@ -1,0 +1,1034 @@
+.root {
+  --flow-ink: #173633;
+  --flow-muted: #61736f;
+  --flow-faint: #7d8d89;
+  --flow-line: #d7e1dd;
+  --flow-line-strong: #bdcec9;
+  --flow-surface: #ffffff;
+  --flow-soft: #f5f8f6;
+  --flow-brand: #126d5d;
+  --flow-brand-dark: #0b5146;
+  --flow-brand-pale: #e7f4ef;
+  --flow-blue: #39729c;
+  --flow-blue-pale: #edf5fb;
+  --flow-amber: #93611b;
+  --flow-amber-pale: #fff3dd;
+  --flow-red: #a8463c;
+  --flow-red-pale: #fdecea;
+  min-width: 0;
+  color: var(--flow-ink);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.root,
+.root * {
+  box-sizing: border-box;
+}
+
+.root button,
+.root input,
+.root textarea,
+.root select {
+  font: inherit;
+}
+
+.root button,
+.root label {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.root button,
+.root label:has(input[type="radio"]) {
+  cursor: pointer;
+}
+
+.root button:disabled,
+.root label[data-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.workflowHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--flow-brand);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.workflowHeader h2 {
+  margin: 0;
+  color: var(--flow-ink);
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 840;
+  letter-spacing: -0.045em;
+  line-height: 1.06;
+}
+
+.workflowHeader p {
+  max-width: 800px;
+  margin: 9px 0 0;
+  color: var(--flow-muted);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.statusBadge {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 11px;
+  border: 1px solid #c7d8d3;
+  border-radius: 999px;
+  background: var(--flow-brand-pale);
+  color: var(--flow-brand-dark);
+  font-size: 11px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.boundaryCallout {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid #bdd8d0;
+  border-radius: 14px;
+  background: linear-gradient(105deg, var(--flow-brand-pale), #f8fbfa 78%);
+}
+
+.boundaryCallout > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--flow-brand);
+  color: #fff;
+}
+
+.boundaryCallout svg {
+  width: 19px;
+  height: 19px;
+}
+
+.boundaryCallout strong {
+  display: block;
+  color: var(--flow-brand-dark);
+  font-size: 13px;
+}
+
+.boundaryCallout p {
+  margin: 2px 0 0;
+  color: var(--flow-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.costSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 17px;
+}
+
+.costSummary > article {
+  min-width: 0;
+  padding: 15px 16px;
+  border: 1px solid var(--flow-line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(20, 57, 52, 0.045);
+}
+
+.costSummary > article[data-tone="entry"] {
+  border-color: #b9d8d0;
+  background: #f7fbf9;
+}
+
+.costSummary span,
+.costSummary strong,
+.costSummary small {
+  display: block;
+}
+
+.costSummary span {
+  color: var(--flow-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.costSummary strong {
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--flow-ink);
+  font-size: 25px;
+  font-weight: 840;
+  letter-spacing: -0.035em;
+  text-overflow: ellipsis;
+}
+
+.costSummary small {
+  margin-top: 3px;
+  color: var(--flow-faint);
+  font-size: 11px;
+}
+
+.existingLines {
+  margin-bottom: 17px;
+  overflow: hidden;
+  border: 1px solid var(--flow-line);
+  border-radius: 13px;
+  background: #fff;
+}
+
+.existingLines summary {
+  display: flex;
+  min-height: 45px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  color: var(--flow-brand-dark);
+  font-size: 12px;
+  font-weight: 800;
+  list-style: none;
+}
+
+.existingLines summary::-webkit-details-marker {
+  display: none;
+}
+
+.existingLines summary svg {
+  width: 17px;
+  height: 17px;
+}
+
+.existingLines[open] summary {
+  border-bottom: 1px solid var(--flow-line);
+  background: var(--flow-soft);
+}
+
+.existingLines > div {
+  padding: 5px 14px 10px;
+}
+
+.existingLines > div > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #edf1ef;
+}
+
+.existingLines > div > div:last-child {
+  border-bottom: 0;
+}
+
+.existingLines strong,
+.existingLines small {
+  display: block;
+}
+
+.existingLines strong {
+  color: var(--flow-ink);
+  font-size: 12px;
+}
+
+.existingLines small {
+  margin-top: 2px;
+  color: var(--flow-faint);
+  font-size: 10px;
+}
+
+.formSection {
+  margin-bottom: 17px;
+  overflow: hidden;
+  border: 1px solid var(--flow-line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.sectionHeader {
+  display: flex;
+  min-height: 61px;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 15px;
+  border-bottom: 1px solid var(--flow-line);
+  background: #fafcfb;
+}
+
+.sectionHeader > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--flow-brand-pale);
+  color: var(--flow-brand);
+}
+
+.sectionHeader svg {
+  width: 18px;
+  height: 18px;
+}
+
+.sectionHeader h3 {
+  margin: 0;
+  color: var(--flow-ink);
+  font-size: 14px;
+}
+
+.sectionHeader p {
+  margin: 2px 0 0;
+  color: var(--flow-muted);
+  font-size: 11px;
+}
+
+.moneyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 15px;
+}
+
+.moneyField,
+.inputField,
+.textField {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 6px;
+}
+
+.moneyField {
+  padding: 13px;
+  border: 1px solid var(--flow-line);
+  border-radius: 11px;
+  background: var(--flow-soft);
+}
+
+.moneyField > span:first-child,
+.inputField > span:first-child,
+.textField > span:first-child {
+  color: var(--flow-ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.moneyField > small,
+.inputField > small {
+  color: var(--flow-faint);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.moneyInput {
+  position: relative;
+  display: block;
+}
+
+.moneyInput > span {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: var(--flow-brand-dark);
+  font-size: 14px;
+  font-weight: 800;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.moneyInput input,
+.inputField input,
+.inputField select,
+.textField textarea {
+  width: 100%;
+  border: 1px solid var(--flow-line-strong);
+  border-radius: 9px;
+  outline: 0;
+  background: #fff;
+  color: var(--flow-ink);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.moneyInput input,
+.inputField input,
+.inputField select {
+  min-height: 42px;
+  padding: 0 11px;
+  font-size: 13px;
+}
+
+.moneyInput input {
+  padding-left: 28px;
+  font-weight: 750;
+}
+
+.moneyInput input:focus,
+.inputField input:focus,
+.inputField select:focus,
+.textField textarea:focus {
+  border-color: var(--flow-brand);
+  box-shadow: 0 0 0 3px rgba(18, 109, 93, 0.13);
+}
+
+.textField {
+  padding: 15px;
+}
+
+.textField > span,
+.inputField > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.textField b,
+.inputField em {
+  color: var(--flow-brand);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.textField textarea {
+  min-height: 102px;
+  resize: vertical;
+  padding: 11px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.errorMessage {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 11px 13px;
+  border: 1px solid #edc0bb;
+  border-radius: 10px;
+  background: var(--flow-red-pale);
+  color: var(--flow-red);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.errorMessage svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.actionFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 15px;
+  border: 1px solid var(--flow-line);
+  border-radius: 13px;
+  background: var(--flow-soft);
+}
+
+.actionFooter > span {
+  display: flex;
+  max-width: 680px;
+  align-items: center;
+  gap: 8px;
+  color: var(--flow-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.actionFooter > span svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  color: var(--flow-brand);
+}
+
+.primaryButton {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--flow-brand-dark);
+  border-radius: 10px;
+  background: var(--flow-brand-dark);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: #073e36;
+}
+
+.primaryButton:disabled {
+  opacity: 0.62;
+}
+
+.primaryButton svg {
+  width: 17px;
+  height: 17px;
+}
+
+.completionContext {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 0.72fr;
+  gap: 11px;
+  margin-bottom: 16px;
+}
+
+.completionContext > article {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 13px;
+  border: 1px solid var(--flow-line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.completionContext > article > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--flow-brand-pale);
+  color: var(--flow-brand);
+}
+
+.completionContext svg {
+  width: 17px;
+  height: 17px;
+}
+
+.completionContext small,
+.completionContext strong,
+.completionContext p {
+  display: block;
+}
+
+.completionContext small {
+  color: var(--flow-faint);
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.completionContext strong {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--flow-ink);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.completionContext p {
+  margin: 3px 0 0;
+  color: var(--flow-muted);
+  font-size: 10px;
+}
+
+.attentionCallout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 11px 13px;
+  border: 1px solid #e5cb9c;
+  border-radius: 11px;
+  background: var(--flow-amber-pale);
+  color: var(--flow-amber);
+}
+
+.attentionCallout > svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.attentionCallout strong,
+.attentionCallout small {
+  display: block;
+}
+
+.attentionCallout strong {
+  font-size: 12px;
+}
+
+.attentionCallout small {
+  margin-top: 2px;
+  color: #72531f;
+  font-size: 10px;
+}
+
+.choiceFieldset {
+  min-width: 0;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+}
+
+.choiceFieldset legend {
+  width: 100%;
+  margin-bottom: 9px;
+  color: var(--flow-ink);
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.decisionGrid,
+.proposalChoiceGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.decisionGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.decisionCard,
+.proposalChoice {
+  position: relative;
+  display: grid;
+  grid-template-columns: 39px minmax(0, 1fr) 18px;
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--flow-line);
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.decisionCard:hover,
+.proposalChoice:hover:not([data-disabled="true"]) {
+  border-color: #acc8c0;
+}
+
+.decisionCard[data-selected="true"],
+.proposalChoice[data-selected="true"] {
+  border-color: var(--flow-brand);
+  background: #f5fbf8;
+  box-shadow: 0 0 0 3px rgba(18, 109, 93, 0.1);
+}
+
+.decisionCard[data-selected="true"][data-tone="followup"] {
+  border-color: #c18a38;
+  background: #fffaf1;
+  box-shadow: 0 0 0 3px rgba(193, 138, 56, 0.1);
+}
+
+.decisionCard[data-selected="true"][data-tone="reopen"] {
+  border-color: #c86b61;
+  background: #fff8f7;
+  box-shadow: 0 0 0 3px rgba(200, 107, 97, 0.1);
+}
+
+.decisionCard input,
+.proposalChoice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.decisionCard:has(input:focus-visible),
+.proposalChoice:has(input:focus-visible),
+.channelPicker button:focus-visible,
+.primaryButton:focus-visible {
+  outline: 3px solid rgba(18, 109, 93, 0.24);
+  outline-offset: 2px;
+}
+
+.decisionIcon {
+  display: grid;
+  width: 37px;
+  height: 37px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--flow-brand-pale);
+  color: var(--flow-brand);
+}
+
+.decisionCard[data-tone="followup"] .decisionIcon {
+  background: var(--flow-amber-pale);
+  color: var(--flow-amber);
+}
+
+.decisionCard[data-tone="reopen"] .decisionIcon {
+  background: var(--flow-red-pale);
+  color: var(--flow-red);
+}
+
+.decisionIcon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.decisionCard strong,
+.decisionCard small,
+.proposalChoice strong,
+.proposalChoice small {
+  display: block;
+}
+
+.decisionCard strong,
+.proposalChoice strong {
+  color: var(--flow-ink);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.decisionCard small,
+.proposalChoice small {
+  margin-top: 4px;
+  color: var(--flow-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.radioMark {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid var(--flow-line-strong);
+  border-radius: 50%;
+  background: #fff;
+}
+
+[data-selected="true"] > .radioMark {
+  border: 5px solid var(--flow-brand);
+}
+
+.proposalSummary {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.15fr);
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.proposedWindow,
+.proposalSummary > dl {
+  margin: 0;
+  border: 1px solid var(--flow-line);
+  border-radius: 13px;
+  background: #fff;
+}
+
+.proposedWindow {
+  display: grid;
+  grid-template-columns: 43px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 15px;
+  border-color: #b9d7cf;
+  background: #f6fbf9;
+}
+
+.proposedWindow[data-missing="true"] {
+  border-color: #e4ca9b;
+  background: #fffaf2;
+}
+
+.proposedWindow > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--flow-brand);
+  color: #fff;
+}
+
+.proposedWindow[data-missing="true"] > span {
+  background: var(--flow-amber);
+}
+
+.proposedWindow svg {
+  width: 21px;
+  height: 21px;
+}
+
+.proposedWindow small,
+.proposedWindow strong {
+  display: block;
+}
+
+.proposedWindow small {
+  color: var(--flow-muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.proposedWindow strong {
+  margin-top: 3px;
+  color: var(--flow-ink);
+  font-size: 16px;
+}
+
+.proposedWindow p {
+  margin: 3px 0 0;
+  color: var(--flow-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.proposalSummary > dl {
+  padding: 6px 14px 9px;
+}
+
+.proposalSummary dl > div {
+  display: grid;
+  grid-template-columns: 115px minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #edf1ef;
+}
+
+.proposalSummary dl > div:last-child {
+  border-bottom: 0;
+}
+
+.proposalSummary dt {
+  color: var(--flow-faint);
+  font-size: 10px;
+}
+
+.proposalSummary dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--flow-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.proposalChoiceGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.proposalChoice[data-disabled="true"] {
+  background: var(--flow-soft);
+  opacity: 0.55;
+}
+
+.conditionalPanel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #c0d8d2;
+  border-radius: 13px;
+  background: #f7fbf9;
+}
+
+.conditionalPanel > header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.conditionalPanel > header > svg {
+  width: 19px;
+  height: 19px;
+  color: var(--flow-brand);
+}
+
+.conditionalPanel > header strong,
+.conditionalPanel > header small {
+  display: block;
+}
+
+.conditionalPanel > header strong {
+  color: var(--flow-ink);
+  font-size: 12px;
+}
+
+.conditionalPanel > header small {
+  margin-top: 1px;
+  color: var(--flow-muted);
+  font-size: 10px;
+}
+
+.twoFieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.inputField {
+  padding: 0;
+}
+
+.inputField > small {
+  margin-top: -2px;
+}
+
+.channelPicker {
+  display: inline-flex;
+  justify-self: start;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--flow-line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.channelPicker button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--flow-muted);
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.channelPicker button[data-active="true"] {
+  background: var(--flow-brand-dark);
+  color: #fff;
+}
+
+.channelPicker svg {
+  width: 15px;
+  height: 15px;
+}
+
+.conditionalPanel .textField {
+  padding: 0;
+}
+
+.root > .inputField {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--flow-line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+@media (max-width: 980px) {
+  .completionContext,
+  .decisionGrid,
+  .proposalChoiceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .completionContext {
+    gap: 8px;
+  }
+
+  .proposalSummary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .costSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .moneyGrid,
+  .twoFieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .actionFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .primaryButton {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .root {
+    font-size: 15px;
+  }
+
+  .workflowHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .workflowHeader h2 {
+    font-size: 29px;
+  }
+
+  .workflowHeader p {
+    font-size: 13px;
+  }
+
+  .boundaryCallout {
+    align-items: start;
+  }
+
+  .decisionCard,
+  .proposalChoice {
+    grid-template-columns: 36px minmax(0, 1fr) 17px;
+    padding: 11px;
+  }
+
+  .decisionIcon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .proposalSummary dl > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .channelPicker {
+    width: 100%;
+  }
+
+  .channelPicker button {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decisionCard,
+  .proposalChoice,
+  .moneyInput input,
+  .inputField input,
+  .inputField select,
+  .textField textarea {
+    transition: none;
+  }
+}

@@ -15,7 +15,8 @@ export type MaintenanceCategoryKey =
   | "building_exterior"
   | "grounds"
   | "fire_life_safety"
-  | "security";
+  | "security"
+  | `custom_${string}`;
 
 export type WorkPriority = "routine" | "soon" | "urgent" | "emergency";
 
@@ -143,6 +144,7 @@ export interface MaintenanceCategory {
   aliases: string[];
   color: string;
   sortOrder: number;
+  active?: boolean;
 }
 
 export interface TaxonomyNode {
@@ -155,6 +157,7 @@ export interface TaxonomyNode {
   aliases: string[];
   kind: "group" | "system" | "equipment_type";
   sortOrder: number;
+  active?: boolean;
 }
 
 export interface WarrantyDetails {
@@ -268,7 +271,7 @@ export interface Vendor {
   contacts: VendorContact[];
   afterHoursAvailable: boolean;
   status: "approved" | "preferred" | "inactive";
-  insuranceExpiresOn: IsoDate;
+  insuranceExpiresOn?: IsoDate;
   portalEnabled: boolean;
 }
 
@@ -499,6 +502,16 @@ export interface PmOccurrence {
   completedAt?: IsoTimestamp;
   completedByPartyId?: EntityId;
   completionNote?: string;
+  evidenceRecords?: Array<{
+    id: EntityId;
+    requirement: PreventiveMaintenancePlan["requiredEvidence"][number];
+    status: "satisfied" | "overridden";
+    source: "visit" | "document" | "manager_confirmation" | "manager_override";
+    sourceRecordIds: EntityId[];
+    value?: string;
+    recordedAt: IsoTimestamp;
+    recordedByPersonId: EntityId;
+  }>;
 }
 
 export interface EvidenceDocument {
@@ -562,7 +575,12 @@ export interface AuditEvent {
     | "invoice"
     | "invoice_work_link"
     | "pm_occurrence"
-    | "exception";
+    | "exception"
+    | "report"
+    | "store"
+    | "vendor"
+    | "asset"
+    | "taxonomy";
   entityId: EntityId;
   eventType: string;
   actorType: "person" | "vendor_contact" | "technician" | "system";

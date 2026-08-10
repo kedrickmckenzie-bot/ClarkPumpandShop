@@ -16,6 +16,7 @@ import {
   FileText,
   Gauge,
   Inbox,
+  Layers3,
   LayoutDashboard,
   Mail,
   MapPin,
@@ -47,14 +48,20 @@ import {
 } from "@/lib/cstore/role-policy";
 import type {
   Asset,
+  AssetComponent,
   AuditEvent,
+  CostLine,
   DemoDataset,
   EvidenceDocument,
   ExceptionRecord,
   Invoice,
   InvoiceWorkLink,
+  MaintenanceCategory,
+  PmOccurrence,
+  PreventiveMaintenancePlan,
   ServiceRequest,
   Store,
+  TaxonomyNode,
   Vendor,
   VendorIssuance,
   Visit,
@@ -98,6 +105,52 @@ import { WorkOrderCreation } from "./work-order-creation";
 import type { GuidedStoreSetupValue, WorkClassificationValue } from "./setup-workflows";
 import { VendorServiceAuthorization } from "./vendor-service-authorization";
 import { VendorPicker } from "./vendor-picker";
+import {
+  InvoiceEvidenceDetail,
+  InvoiceEvidenceQueue,
+  type InvoiceEvidenceQueueValue,
+} from "./maintenance-cost-review";
+import {
+  MaintenanceSpendWorkspace,
+  defaultMaintenanceSpendState,
+  maintenanceSpendWorkOrderIds,
+  type MaintenanceSpendState,
+} from "./maintenance-spend-workspace";
+import {
+  ActiveVisitWorkspace,
+  ExceptionQueue,
+  type OperationsSourceReference,
+} from "./operations-drilldowns";
+import {
+  AssetSetupForm,
+  ComponentSetupForm,
+  PmOccurrenceDetail,
+  PmPlanForm,
+  StoreServiceAreasForm,
+  VendorOnboardingForm,
+  type AssetSetupValue,
+  type ComponentSetupValue,
+  type PmOccurrenceCompletionValue,
+  type PmOccurrenceWaiverValue,
+  type PmPlanSetupValue,
+  type StoreServiceAreasValue,
+  type VendorOnboardingValue,
+} from "./platform-setup-workflows";
+import {
+  MaintenanceCostEntryForm,
+  VendorProposalReview,
+  WorkCompletionReview,
+  type MaintenanceCostEntryValue,
+  type VendorProposalReviewValue,
+  type WorkCompletionReviewValue,
+} from "./work-lifecycle-workflows";
+import {
+  TaxonomyManager,
+  type TaxonomyCategoryCreateValue,
+  type TaxonomyCategoryUpdateValue,
+  type TaxonomyNodeCreateValue,
+  type TaxonomyNodeUpdateValue,
+} from "./taxonomy-manager";
 import type {
   ActiveVisit,
   ServiceAuthorizationRecord,
@@ -111,8 +164,8 @@ import type {
 } from "./types";
 
 type View = RoleView;
-type Drawer = "create-work" | "request-form" | "assign-vendor" | "issue-vendor" | "record-invoice" | "store-portal" | "visit" | "capabilities" | "new-store" | "classify-work" | null;
-type Detail = { kind: "store" | "work" | "vendor" | "asset"; id: string } | null;
+type Drawer = "create-work" | "request-form" | "assign-vendor" | "issue-vendor" | "record-invoice" | "record-cost" | "completion-review" | "vendor-proposal" | "store-portal" | "visit" | "capabilities" | "taxonomy" | "new-store" | "classify-work" | "new-vendor" | "new-asset" | "new-component" | "store-services" | "new-pm" | "pm-update" | "internal-update" | "report-builder" | null;
+type Detail = { kind: "store" | "work" | "vendor" | "asset" | "invoice" | "pm" | "visit" | "report"; id: string } | null;
 interface CapabilityConfig {
   vendorAcceptance: boolean;
   locationEvidence: boolean;
@@ -136,6 +189,7 @@ interface SpendPreset {
   regionId: string;
   storeId: string;
   categoryId: string;
+  mode?: "overview" | "evidence_review";
 }
 
 interface InvoiceEntryValue {
@@ -144,6 +198,43 @@ interface InvoiceEntryValue {
   materialsMinor: number;
   tripMinor: number;
   file: File | null;
+}
+
+interface SavedReportRecord {
+  id: string;
+  title: string;
+  template: "operating_review" | "vendor_accountability" | "lifecycle_review";
+  scopeLabel: string;
+  periodLabel: string;
+  costBasis: "recorded" | "authorized" | "invoice_linked";
+  createdAt: string;
+  version: number;
+  sourceWorkOrderIds: string[];
+  sourceSnapshots: SavedReportSourceSnapshot[];
+}
+
+interface SavedReportSourceSnapshot {
+  workOrderId: string;
+  number: string;
+  title: string;
+  storeNumber: string;
+  storeCity: string;
+  status: WorkStatus;
+  categoryLabel: string;
+  amountMinor: number;
+}
+
+interface InternalWorkUpdateValue {
+  action: "acknowledge" | "start" | "complete";
+  outcome?: "resolved" | "diagnosed_waiting_parts" | "temporary_repair" | "unresolved";
+  note?: string;
+  recordedCostMinor?: number;
+}
+
+interface ReportBuilderValue {
+  title: string;
+  periodLabel: string;
+  costBasis: SavedReportRecord["costBasis"];
 }
 
 const initialGuidedDemoState: GuidedDemoState = {
@@ -182,12 +273,34 @@ const navItems: Array<{ view: View; label: string; icon: typeof LayoutDashboard 
 
 const terminalStatuses = new Set<WorkStatus>(["closed", "cancelled"]);
 
+function nowMilliseconds() {
+  return new Date().getTime();
+}
+
 function money(minor: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(minor / 100);
+}
+
+function costDonutBackground(rows: Array<{ cost: number; color: string }>, total: number) {
+  if (!total || !rows.length) return "#e5ecea";
+  const result = rows.reduce(
+    (current, row) => {
+      const nextCursor = current.cursor + (row.cost / total) * 100;
+      return {
+        cursor: nextCursor,
+        stops: [...current.stops, `${row.color} ${current.cursor}% ${nextCursor}%`],
+      };
+    },
+    { cursor: 0, stops: [] as string[] },
+  );
+  const stops = result.cursor < 100
+    ? [...result.stops, `#e5ecea ${result.cursor}% 100%`]
+    : result.stops;
+  return `conic-gradient(${stops.join(", ")})`;
 }
 
 function dateLabel(value?: string) {
@@ -243,23 +356,34 @@ function workOrderCost(dataset: DemoDataset, workOrderId: string) {
     .reduce((sum, line) => sum + line.amountMinor, 0);
 }
 
-function storeSpend(dataset: DemoDataset, storeId: string) {
-  return dataset.invoiceWorkLinks
-    .filter((link) => link.storeId === storeId)
+function recordedMaintenanceCost(dataset: DemoDataset, workOrderId: string) {
+  const recorded = dataset.costLines
+    .filter((line) => line.workOrderId === workOrderId && line.basis === "recorded")
+    .reduce((sum, line) => sum + line.amountMinor, 0);
+  return recorded || dataset.invoiceWorkLinks
+    .filter((link) => link.workOrderId === workOrderId)
     .reduce((sum, link) => sum + link.attributedAmountMinor, 0);
+}
+
+function storeSpend(dataset: DemoDataset, storeId: string) {
+  return dataset.workOrders
+    .filter((work) => work.storeId === storeId)
+    .reduce((sum, work) => sum + recordedMaintenanceCost(dataset, work.id), 0);
 }
 
 function categorySpend(dataset: DemoDataset, categoryId: string) {
-  return dataset.invoiceWorkLinks
-    .filter((link) => link.categoryId === categoryId)
-    .reduce((sum, link) => sum + link.attributedAmountMinor, 0);
+  return dataset.workOrders
+    .filter((work) => work.categoryId === categoryId)
+    .reduce((sum, work) => sum + recordedMaintenanceCost(dataset, work.id), 0);
 }
 
 function vendorSpend(dataset: DemoDataset, vendorId: string) {
-  const invoiceIds = new Set(dataset.invoices.filter((invoice) => invoice.vendorId === vendorId).map((invoice) => invoice.id));
-  return dataset.invoiceWorkLinks
-    .filter((link) => invoiceIds.has(link.invoiceId))
-    .reduce((sum, link) => sum + link.attributedAmountMinor, 0);
+  const workIds = new Set(dataset.assignments
+    .filter((assignment) => assignment.partyType === "vendor" && assignment.partyId === vendorId)
+    .map((assignment) => assignment.workOrderId));
+  return dataset.workOrders
+    .filter((work) => workIds.has(work.id))
+    .reduce((sum, work) => sum + recordedMaintenanceCost(dataset, work.id), 0);
 }
 
 function workForStore(dataset: DemoDataset, storeId: string) {
@@ -268,6 +392,99 @@ function workForStore(dataset: DemoDataset, storeId: string) {
 
 function facilitiesOwner(dataset: DemoDataset) {
   return dataset.people.find((person) => person.roles.includes("facilities_manager")) ?? dataset.people[0];
+}
+
+function isInvoiceException(record: ExceptionRecord) {
+  return Boolean(record.invoiceId) || record.type.startsWith("invoice_") || record.type === "duplicate_invoice_reference";
+}
+
+function reportPeriodFromLabel(periodLabel: string): MaintenanceSpendState["period"] | "last_quarter" {
+  const normalized = periodLabel.toLowerCase();
+  if (normalized.includes("last completed quarter")) return "last_quarter";
+  if (normalized.includes("month to date")) return "month";
+  if (normalized.includes("year to date")) return "ytd";
+  return "trailing_12";
+}
+
+function reportPeriodRange(periodLabel: string, asOf: string) {
+  const parsedAsOf = Date.parse(asOf);
+  const end = new Date(Math.max(Number.isFinite(parsedAsOf) ? parsedAsOf : 0, nowMilliseconds()));
+  const period = reportPeriodFromLabel(periodLabel);
+  const start = new Date(end);
+  if (period === "trailing_12") start.setUTCFullYear(start.getUTCFullYear() - 1);
+  if (period === "ytd") {
+    start.setUTCMonth(0, 1);
+    start.setUTCHours(0, 0, 0, 0);
+  }
+  if (period === "month") {
+    start.setUTCDate(1);
+    start.setUTCHours(0, 0, 0, 0);
+  }
+  if (period === "last_quarter") {
+    const quarterStartMonth = Math.floor(end.getUTCMonth() / 3) * 3;
+    end.setUTCMonth(quarterStartMonth, 1);
+    end.setUTCHours(0, 0, 0, 0);
+    end.setUTCMilliseconds(-1);
+    start.setTime(end.getTime());
+    start.setUTCMonth(end.getUTCMonth() - 2, 1);
+    start.setUTCHours(0, 0, 0, 0);
+  }
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function reportWorkMatchesSpendScope(dataset: DemoDataset, work: WorkOrder, state: MaintenanceSpendState) {
+  const store = dataset.stores.find((record) => record.id === work.storeId);
+  const vendorId = dataset.assignments
+    .filter((assignment) => assignment.workOrderId === work.id && assignment.partyType === "vendor" && assignment.status !== "declined")
+    .sort((left, right) => right.assignedAt.localeCompare(left.assignedAt))[0]?.partyId;
+  return Boolean(
+    store &&
+    (state.regionId === "all" || store.regionId === state.regionId) &&
+    (state.storeId === "all" || store.id === state.storeId) &&
+    (state.categoryId === "all" || (state.categoryId === "unclassified" ? !work.categoryId : work.categoryId === state.categoryId)) &&
+    (state.vendorId === "all" || (state.vendorId === "no_vendor" ? !vendorId : vendorId === state.vendorId))
+  );
+}
+
+function createReportSourceSnapshot(
+  dataset: DemoDataset,
+  workOrderId: string,
+  costBasis: SavedReportRecord["costBasis"],
+): SavedReportSourceSnapshot | null {
+  const work = dataset.workOrders.find((record) => record.id === workOrderId);
+  if (!work) return null;
+  const store = dataset.stores.find((record) => record.id === work.storeId);
+  const category = dataset.categories.find((record) => record.id === work.categoryId);
+  const approvedLine = dataset.costLines
+    .filter((line) => line.workOrderId === work.id && line.basis === "approved")
+    .sort((left, right) => right.recordedAt.localeCompare(left.recordedAt))[0];
+  const latestIssuance = dataset.vendorIssuances
+    .filter((issuance) => issuance.workOrderId === work.id && issuance.notToExceedMinor != null)
+    .sort((left, right) => right.version - left.version)[0];
+  const amountMinor = costBasis === "authorized"
+    ? approvedLine?.amountMinor ?? latestIssuance?.notToExceedMinor ?? work.notToExceedMinor ?? 0
+    : costBasis === "invoice_linked"
+      ? dataset.invoiceWorkLinks
+          .filter((link) => link.workOrderId === work.id)
+          .reduce((sum, link) => sum + link.attributedAmountMinor, 0)
+      : recordedMaintenanceCost(dataset, work.id);
+  return {
+    workOrderId: work.id,
+    number: work.number,
+    title: work.title,
+    storeNumber: store?.storeNumber ?? "Unknown",
+    storeCity: store?.address.city ?? "Unknown location",
+    status: work.status,
+    categoryLabel: category?.label ?? "Unclassified",
+    amountMinor,
+  };
+}
+
+function nextPmDueAt(dueAt: string, cadence: PreventiveMaintenancePlan["cadence"]) {
+  const next = new Date(dueAt);
+  const months = cadence === "monthly" ? 1 : cadence === "quarterly" ? 3 : cadence === "semiannual" ? 6 : 12;
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next.toISOString();
 }
 
 function domainVisitChannel(channel: WorkflowVisitChannel): Visit["channelStarted"] {
@@ -340,13 +557,25 @@ export function TraceOpsApp() {
   const [roleId, setRoleId] = useState<DemoRoleId>("facilities_manager");
   const [globalQuery, setGlobalQuery] = useState("");
   const [stores, setStores] = useState<Store[]>(demoData.stores);
+  const [categories, setCategories] = useState<MaintenanceCategory[]>(demoData.categories);
+  const [taxonomyNodes, setTaxonomyNodes] = useState<TaxonomyNode[]>(demoData.taxonomyNodes);
+  const [vendors, setVendors] = useState<Vendor[]>(demoData.vendors);
+  const [assets, setAssets] = useState<Asset[]>(demoData.assets);
+  const [assetComponents, setAssetComponents] = useState<AssetComponent[]>(demoData.assetComponents);
+  const [pmPlans, setPmPlans] = useState<PreventiveMaintenancePlan[]>(demoData.pmPlans);
+  const [pmOccurrences, setPmOccurrences] = useState<PmOccurrence[]>(demoData.pmOccurrences);
   const [requests, setRequests] = useState<ServiceRequest[]>(demoData.requests);
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>(demoData.workOrders);
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>(() => demoData.workOrders.map((work) =>
+    work.status === "awaiting_invoice" || work.status === "invoice_received"
+      ? { ...work, status: "completed" as const }
+      : work,
+  ));
   const [assignments, setAssignments] = useState<WorkAssignment[]>(demoData.assignments);
   const [issuances, setIssuances] = useState<VendorIssuance[]>(demoData.vendorIssuances);
   const [visits, setVisits] = useState<Visit[]>(demoData.visits);
   const [exceptions, setExceptions] = useState<ExceptionRecord[]>(demoData.exceptions);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(demoData.auditEvents);
+  const [costLines, setCostLines] = useState<CostLine[]>(demoData.costLines);
   const [invoices, setInvoices] = useState<Invoice[]>(demoData.invoices);
   const [invoiceWorkLinks, setInvoiceWorkLinks] = useState<InvoiceWorkLink[]>(demoData.invoiceWorkLinks);
   const [documents, setDocuments] = useState<EvidenceDocument[]>(demoData.documents);
@@ -354,11 +583,23 @@ export function TraceOpsApp() {
   const [visitStoreId, setVisitStoreId] = useState<string | null>(null);
   const [visitVendorId, setVisitVendorId] = useState<string | null>(null);
   const [visitWorkOrderId, setVisitWorkOrderId] = useState<string | null>(null);
+  const [visitWorkspaceInitialId, setVisitWorkspaceInitialId] = useState<string | null>(null);
   const [storePortalStoreId, setStorePortalStoreId] = useState<string>(GUIDED_DEMO_IDS.store);
   const [requestStoreId, setRequestStoreId] = useState<string>(GUIDED_DEMO_IDS.store);
   const [assignmentWorkId, setAssignmentWorkId] = useState<string | null>(null);
   const [assignmentVendorId, setAssignmentVendorId] = useState<string>(GUIDED_DEMO_IDS.preferredVendor);
+  const [assignmentTeamId, setAssignmentTeamId] = useState<string>(demoData.teams[0]?.id ?? "");
+  const [assignmentMode, setAssignmentMode] = useState<"internal" | "external">("internal");
   const [invoiceWorkId, setInvoiceWorkId] = useState<string | null>(null);
+  const [costWorkId, setCostWorkId] = useState<string | null>(null);
+  const [completionWorkId, setCompletionWorkId] = useState<string | null>(null);
+  const [proposalWorkId, setProposalWorkId] = useState<string | null>(null);
+  const [workflowStoreId, setWorkflowStoreId] = useState<string | null>(null);
+  const [workflowAssetId, setWorkflowAssetId] = useState<string | null>(null);
+  const [internalWorkId, setInternalWorkId] = useState<string | null>(null);
+  const [reportTemplate, setReportTemplate] = useState<SavedReportRecord["template"] | null>(null);
+  const [reportCostBasisPreset, setReportCostBasisPreset] = useState<SavedReportRecord["costBasis"]>("recorded");
+  const [reportSpendPreset, setReportSpendPreset] = useState<MaintenanceSpendState | null>(null);
   const [employeeIssueDraft, setEmployeeIssueDraft] = useState<EmployeeIssueDraft>(initialEmployeeIssueDraft);
   const [requestReceipt, setRequestReceipt] = useState<SubmittedRequestReceipt | null>(null);
   const [requestInboxValue, setRequestInboxValue] = useState<RequestInboxValue>(initialRequestInboxValue);
@@ -366,10 +607,13 @@ export function TraceOpsApp() {
   const [workInitialStoreId, setWorkInitialStoreId] = useState<string | null>(null);
   const [classificationWorkId, setClassificationWorkId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [savedReports, setSavedReports] = useState<string[]>([]);
+  const [savedReports, setSavedReports] = useState<SavedReportRecord[]>([]);
   const [draftAcceptanceByWork, setDraftAcceptanceByWork] = useState<Record<string, boolean>>({});
   const [guidedDemo, setGuidedDemo] = useState<GuidedDemoState>(initialGuidedDemoState);
   const [spendPreset, setSpendPreset] = useState<SpendPreset | null>(null);
+  const [maintenanceSpendState, setMaintenanceSpendState] = useState<MaintenanceSpendState>(defaultMaintenanceSpendState);
+  const [invoiceEvidenceQueueValue, setInvoiceEvidenceQueueValue] = useState<InvoiceEvidenceQueueValue>({ filter: "needs_review", query: "" });
+  const [invoiceDetailReturn, setInvoiceDetailReturn] = useState<"spend" | "evidence" | "exceptions">("evidence");
   const [capabilities, setCapabilities] = useState<CapabilityConfig>({
     vendorAcceptance: true,
     locationEvidence: true,
@@ -382,6 +626,13 @@ export function TraceOpsApp() {
     () => ({
       ...demoData,
       stores,
+      categories,
+      taxonomyNodes,
+      vendors,
+      assets,
+      assetComponents,
+      pmPlans,
+      pmOccurrences,
       requests,
       workOrders,
       assignments,
@@ -389,11 +640,12 @@ export function TraceOpsApp() {
       visits,
       exceptions,
       auditEvents,
+      costLines,
       invoices,
       invoiceWorkLinks,
       documents,
     }),
-    [assignments, auditEvents, documents, exceptions, invoiceWorkLinks, invoices, issuances, requests, stores, visits, workOrders],
+    [assetComponents, assets, assignments, auditEvents, categories, costLines, documents, exceptions, invoiceWorkLinks, invoices, issuances, pmOccurrences, pmPlans, requests, stores, taxonomyNodes, vendors, visits, workOrders],
   );
 
   const rolePolicy = getDemoRolePolicy(roleId);
@@ -403,6 +655,16 @@ export function TraceOpsApp() {
   );
   const activePerson = fullDataset.people.find((person) => person.id === rolePolicy.personId) ?? fullDataset.people[0];
   const scopeLabel = roleScopeLabel(fullDataset, rolePolicy);
+  function maintenanceScopeLabel(state: MaintenanceSpendState) {
+    return [
+      scopeLabel,
+      state.regionId !== "all" ? dataset.regions.find((region) => region.id === state.regionId)?.name : undefined,
+      state.storeId !== "all" ? `Store ${dataset.stores.find((store) => store.id === state.storeId)?.storeNumber}` : undefined,
+      state.categoryId !== "all" ? dataset.categories.find((category) => category.id === state.categoryId)?.label ?? (state.categoryId === "unclassified" ? "Unclassified" : undefined) : undefined,
+      state.vendorId !== "all" ? dataset.vendors.find((vendor) => vendor.id === state.vendorId)?.displayName ?? (state.vendorId === "no_vendor" ? "Internal / no outside vendor" : undefined) : undefined,
+    ].filter(Boolean).join(" · ");
+  }
+  const maintenanceSpendScopeLabel = maintenanceScopeLabel(maintenanceSpendState);
 
   useEffect(() => {
     function handleGuidedVendorResponse(event: MessageEvent) {
@@ -422,7 +684,7 @@ export function TraceOpsApp() {
       const proposedArrivalAt = response === "date_proposed"
         ? message?.payload?.proposedDate
           ? new Date(`${message.payload.proposedDate}T${message.payload.proposedTime || "12:00"}:00`).toISOString()
-          : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          : new Date(nowMilliseconds() + 24 * 60 * 60 * 1000).toISOString()
         : undefined;
 
       if (scenarioId === GUIDED_DEMO_IDS.workOrder) {
@@ -454,13 +716,8 @@ export function TraceOpsApp() {
       setWorkOrders((current) => current.map((work) => work.id === scenarioId ? {
         ...work,
         fulfillmentMode: response === "declined" ? "unassigned" : "external",
-        status: response === "accepted" ? "accepted" : response === "declined" ? "draft" : "scheduled",
-        scheduledWindow: response === "date_proposed" && proposedArrivalAt
-          ? {
-              startsAt: proposedArrivalAt,
-              endsAt: new Date(Date.parse(proposedArrivalAt) + 2 * 60 * 60 * 1000).toISOString(),
-            }
-          : work.scheduledWindow,
+        status: response === "accepted" ? "accepted" : response === "declined" ? "draft" : "awaiting_vendor_response",
+        scheduledWindow: work.scheduledWindow,
         accountable: work.accountable ? {
           ...work.accountable,
           nextAction: response === "accepted"
@@ -471,7 +728,7 @@ export function TraceOpsApp() {
         } : work.accountable,
       } : work));
       setAuditEvents((current) => [{
-        id: `audit-vendor-response-${scenarioId}-${Date.now()}`,
+        id: `audit-vendor-response-${scenarioId}-${nowMilliseconds()}`,
         organizationId: demoData.organization.id,
         entityType: "work_order",
         entityId: scenarioId,
@@ -492,7 +749,9 @@ export function TraceOpsApp() {
 
   const activeVisits = dataset.visits.filter((visit) => !visit.checkedOutAt);
   const openExceptions = dataset.exceptions.filter((record) => record.status !== "resolved");
-  const invoicedSpend = dataset.invoiceWorkLinks.reduce((sum, link) => sum + link.attributedAmountMinor, 0);
+  const visibleOpenExceptions = capabilities.invoiceSafeguard
+    ? openExceptions
+    : openExceptions.filter((record) => !isInvoiceException(record));
   const classificationWork = classificationWorkId
     ? dataset.workOrders.find((record) => record.id === classificationWorkId)
     : undefined;
@@ -511,6 +770,32 @@ export function TraceOpsApp() {
     : undefined;
   const invoiceVendor = invoiceAssignment
     ? dataset.vendors.find((record) => record.id === invoiceAssignment.partyId)
+    : undefined;
+  const costWork = costWorkId
+    ? dataset.workOrders.find((record) => record.id === costWorkId)
+    : undefined;
+  const completionWork = completionWorkId
+    ? dataset.workOrders.find((record) => record.id === completionWorkId)
+    : undefined;
+  const proposalWork = proposalWorkId
+    ? dataset.workOrders.find((record) => record.id === proposalWorkId)
+    : undefined;
+  const proposalIssuance = proposalWork
+    ? dataset.vendorIssuances
+      .filter((record) => record.workOrderId === proposalWork.id)
+      .sort((left, right) => right.version - left.version)[0]
+    : undefined;
+  const proposalVendor = proposalIssuance
+    ? dataset.vendors.find((record) => record.id === proposalIssuance.vendorId)
+    : undefined;
+  const internalWork = internalWorkId
+    ? dataset.workOrders.find((record) => record.id === internalWorkId)
+    : undefined;
+  const internalAssignment = internalWork
+    ? dataset.assignments.find((record) => record.workOrderId === internalWork.id && record.partyType === "team")
+    : undefined;
+  const internalTeam = internalAssignment
+    ? dataset.teams.find((record) => record.id === internalAssignment.partyId)
     : undefined;
   const roleNavItems = navItems.filter((item) => rolePolicy.allowedViews.includes(item.view));
   const intelligenceNavItems = roleNavItems.slice().filter((item) => ["spend", "equipment", "pm", "reports"].includes(item.view)).filter((item) =>
@@ -819,7 +1104,7 @@ export function TraceOpsApp() {
     actorType: AuditEvent["actorType"] = "person",
   ) {
     const event: AuditEvent = {
-      id: `audit-session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: `audit-session-${nowMilliseconds()}`,
       organizationId: dataset.organization.id,
       entityType,
       entityId,
@@ -873,7 +1158,7 @@ export function TraceOpsApp() {
       setNotice("Enter a store employee name and ID that can be matched to this location.");
       return;
     }
-    const requestId = `request-session-${Date.now()}`;
+    const requestId = `request-session-${nowMilliseconds()}`;
     const requestNumber = `REQ-${store.storeNumber}-DEMO-${String(Object.keys(requestNumbers).length + 1).padStart(3, "0")}`;
     const documentId = value.photo ? `document-${requestId}-photo` : undefined;
     const request: ServiceRequest = {
@@ -947,7 +1232,7 @@ export function TraceOpsApp() {
     const taxonomy = asset
       ? fullDataset.taxonomyNodes.find((record) => record.id === asset.taxonomyNodeId)
       : undefined;
-    const workId = `work-session-${Date.now()}`;
+    const workId = `work-session-${nowMilliseconds()}`;
     const requestNumber = requestNumbers[request.id] ?? `REQ-${store.storeNumber}`;
     const workNumber = `NLM-${store.storeNumber}-DEMO-${String(fullDataset.workOrders.filter((work) => work.number.includes("-DEMO-")).length + 1).padStart(3, "0")}`;
     const work: WorkOrder = {
@@ -1007,7 +1292,7 @@ export function TraceOpsApp() {
   }
 
   function openVendorAssignment(workOrderId: string) {
-    if (!guardPermission("issueVendorWork", "assign outside vendors")) return;
+    if (!guardPermission("createWork", "assign maintenance work")) return;
     const work = dataset.workOrders.find((record) => record.id === workOrderId);
     if (!work) return;
     const preferredVendor = dataset.vendors.find((vendor) =>
@@ -1015,45 +1300,55 @@ export function TraceOpsApp() {
       (!work.categoryId || vendor.specialties.some((specialty) => specialty.categoryId === work.categoryId)),
     );
     setAssignmentWorkId(work.id);
+    setAssignmentMode(dataset.teams.length ? "internal" : "external");
+    setAssignmentTeamId(dataset.teams[0]?.id ?? "");
     setAssignmentVendorId(preferredVendor?.id ?? dataset.vendors[0]?.id ?? "");
     setDrawer("assign-vendor");
   }
 
-  function assignVendorToWork() {
+  function assignHandlerToWork() {
     const work = fullDataset.workOrders.find((record) => record.id === assignmentWorkId);
-    const vendor = fullDataset.vendors.find((record) => record.id === assignmentVendorId);
-    if (!work || !vendor) return;
+    const vendor = assignmentMode === "external" ? fullDataset.vendors.find((record) => record.id === assignmentVendorId) : undefined;
+    const team = assignmentMode === "internal" ? fullDataset.teams.find((record) => record.id === assignmentTeamId) : undefined;
+    if (!work || (assignmentMode === "external" ? !vendor : !team)) return;
     const now = new Date().toISOString();
     const assignment: WorkAssignment = {
-      id: `assignment-session-${Date.now()}`,
+      id: `assignment-session-${nowMilliseconds()}`,
       organizationId: fullDataset.organization.id,
       workOrderId: work.id,
-      partyType: "vendor",
-      partyId: vendor.id,
+      partyType: assignmentMode === "external" ? "vendor" : "team",
+      partyId: vendor?.id ?? team!.id,
       status: "offered",
       assignedAt: now,
-      assignmentNote: "Approved outside vendor selected; customer service authorization is ready to review.",
+      assignmentNote: assignmentMode === "external"
+        ? "Approved outside vendor selected; customer service authorization is ready to review."
+        : "Assigned to the internal maintenance queue.",
     };
-    setAssignments((current) => [assignment, ...current.filter((record) => record.workOrderId !== work.id || record.partyType !== "vendor")]);
+    setAssignments((current) => [assignment, ...current.filter((record) => record.workOrderId !== work.id)]);
     setWorkOrders((current) => current.map((record) => record.id === work.id ? {
       ...record,
-      fulfillmentMode: "external",
-      status: "ready_to_issue",
+      fulfillmentMode: assignmentMode,
+      status: assignmentMode === "external" ? "ready_to_issue" : "draft",
       accountable: {
-        partyType: "person",
-        partyId: activePerson.id,
-        nextAction: `Review and send the customer work order to ${vendor.displayName}`,
+        partyType: assignmentMode === "external" ? "person" : "team",
+        partyId: assignmentMode === "external" ? activePerson.id : team!.id,
+        nextAction: assignmentMode === "external"
+          ? `Review and send the customer work order to ${vendor!.displayName}`
+          : `${team!.name} acknowledges and assesses the work`,
         dueAt: record.requestedWindow.endsAt,
         escalationPartyId: activePerson.id,
       },
     } : record));
-    appendAuditEvent("assignment", assignment.id, "Outside vendor selected", {
+    appendAuditEvent("assignment", assignment.id, assignmentMode === "external" ? "Outside vendor selected" : "Internal maintenance team selected", {
       workOrderId: work.id,
-      vendorId: vendor.id,
+      partyType: assignment.partyType,
+      partyId: assignment.partyId,
     });
     setDrawer(null);
     setAssignmentWorkId(null);
-    setNotice(`${vendor.displayName} selected. Review and send the service authorization from this work order.`);
+    setNotice(assignmentMode === "external"
+      ? `${vendor!.displayName} selected. Review and send the service authorization from this work order.`
+      : `${team!.name} selected. The work is now in the internal maintenance queue.`);
   }
 
   function openVisitForWork(workOrderId: string) {
@@ -1078,12 +1373,165 @@ export function TraceOpsApp() {
       regionId: store.regionId ?? "all",
       storeId: store.id,
       categoryId: work.categoryId ?? "all",
+      mode: "overview",
+    });
+    setMaintenanceSpendState({
+      ...defaultMaintenanceSpendState,
+      regionId: store.regionId ?? "all",
+      storeId: store.id,
+      categoryId: work.categoryId ?? "all",
     });
     navigate("spend");
   }
 
+  function openMaintenanceSpend(resetScope = false) {
+    if (resetScope) {
+      setMaintenanceSpendState(defaultMaintenanceSpendState);
+      setSpendPreset({ regionId: "all", storeId: "all", categoryId: "all", mode: "overview" });
+    } else {
+      setSpendPreset((current) => ({
+        regionId: current?.regionId ?? "all",
+        storeId: current?.storeId ?? "all",
+        categoryId: current?.categoryId ?? "all",
+        mode: "overview",
+      }));
+    }
+    navigate("spend");
+  }
+
+  function openInvoiceEvidenceReview(resetScope = false) {
+    if (!capabilities.invoiceSafeguard) {
+      setNotice("Invoice evidence review is hidden while the optional invoice safeguard is off.");
+      return;
+    }
+    if (resetScope) {
+      setMaintenanceSpendState(defaultMaintenanceSpendState);
+      setInvoiceEvidenceQueueValue({ filter: "needs_review", query: "" });
+      setSpendPreset({ regionId: "all", storeId: "all", categoryId: "all", mode: "evidence_review" });
+    } else {
+      setSpendPreset((current) => ({
+        regionId: current?.regionId ?? "all",
+        storeId: current?.storeId ?? "all",
+        categoryId: current?.categoryId ?? "all",
+        mode: "evidence_review",
+      }));
+    }
+    navigate("spend");
+  }
+
+  function openSpendCategory(categoryId: string) {
+    setSpendPreset({ regionId: "all", storeId: "all", categoryId, mode: "overview" });
+    setMaintenanceSpendState({
+      ...defaultMaintenanceSpendState,
+      regionId: "all",
+      storeId: "all",
+      categoryId,
+    });
+    navigate("spend");
+  }
+
+  function openOperationsSource(source: OperationsSourceReference) {
+    if (source.kind === "visit") {
+      setVisitWorkspaceInitialId(source.id);
+      navigate("visits");
+      return;
+    }
+    if (source.kind === "invoice") setInvoiceDetailReturn("exceptions");
+    setView(
+      source.kind === "store"
+        ? "stores"
+        : source.kind === "vendor"
+          ? "vendors"
+          : source.kind === "asset"
+            ? "equipment"
+            : source.kind === "pm"
+              ? "pm"
+              : source.kind === "invoice"
+                ? "spend"
+                : "work",
+    );
+    setDetail({ kind: source.kind, id: source.id });
+  }
+
+  function resolveInvoiceEvidence(invoiceId: string) {
+    if (!guardPermission("reviewInvoiceEvidence", "resolve invoice evidence review")) return;
+    const invoice = fullDataset.invoices.find((record) => record.id === invoiceId);
+    if (!invoice) return;
+    appendAuditEvent("invoice", invoiceId, "Maintenance invoice evidence reviewed", {
+      invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      accountingDecisionMade: false,
+      sourceFactsChanged: false,
+    });
+    setDetail({ kind: "invoice", id: invoiceId });
+    setNotice(`${invoice.invoiceNumber} review recorded. Match states and exceptions were preserved; payment and accounting decisions remain in the accounting system.`);
+  }
+
+  function openReportBuilder(template: SavedReportRecord["template"], costBasis: SavedReportRecord["costBasis"] = "recorded", spendState: MaintenanceSpendState | null = null) {
+    if (!guardPermission("generateReports", "generate reports")) return;
+    setReportTemplate(template);
+    setReportCostBasisPreset(costBasis);
+    setReportSpendPreset(spendState);
+    setDrawer("report-builder");
+  }
+
+  function generateReport(value: ReportBuilderValue) {
+    if (!reportTemplate) return;
+    const createdAt = new Date().toISOString();
+    const version = savedReports.filter((report) => report.template === reportTemplate).length + 1;
+    const selectedPeriod = reportPeriodFromLabel(value.periodLabel);
+    const finalSpendState = reportSpendPreset
+      ? {
+          ...reportSpendPreset,
+          basis: value.costBasis === "invoice_linked" ? "linked_invoice" as const : value.costBasis,
+          period: selectedPeriod === "last_quarter" ? reportSpendPreset.period : selectedPeriod,
+          sourcePage: 1,
+        }
+      : null;
+    const sourceWorkOrderIds = finalSpendState && selectedPeriod !== "last_quarter"
+      ? maintenanceSpendWorkOrderIds(dataset, finalSpendState)
+      : dataset.workOrders
+          .filter((work) => {
+            const range = reportPeriodRange(value.periodLabel, dataset.asOf);
+            return work.createdAt >= range.start && work.createdAt <= range.end;
+          })
+          .filter((work) => !reportSpendPreset || reportWorkMatchesSpendScope(dataset, work, reportSpendPreset))
+          .map((work) => work.id);
+    const sourceSnapshots = sourceWorkOrderIds
+      .map((workOrderId) => createReportSourceSnapshot(dataset, workOrderId, value.costBasis))
+      .filter((snapshot): snapshot is SavedReportSourceSnapshot => Boolean(snapshot));
+    const report: SavedReportRecord = {
+      id: `report-session-${nowMilliseconds()}`,
+      title: value.title.trim(),
+      template: reportTemplate,
+      scopeLabel: reportSpendPreset ? maintenanceScopeLabel(reportSpendPreset) : scopeLabel,
+      periodLabel: value.periodLabel,
+      costBasis: value.costBasis,
+      createdAt,
+      version,
+      sourceWorkOrderIds,
+      sourceSnapshots,
+    };
+    setSavedReports((current) => [report, ...current]);
+    appendAuditEvent("report", report.id, "Management report generated", {
+      reportId: report.id,
+      template: report.template,
+      scopeLabel: report.scopeLabel,
+      periodLabel: report.periodLabel,
+      costBasis: report.costBasis,
+      sourceCount: report.sourceSnapshots.length,
+    });
+    setDrawer(null);
+    setReportTemplate(null);
+    setReportCostBasisPreset("recorded");
+    setReportSpendPreset(null);
+    setView("reports");
+    setDetail({ kind: "report", id: report.id });
+    setNotice(`${report.title} · Version ${report.version} generated with ${report.sourceSnapshots.length} frozen source records.`);
+  }
+
   function openInvoiceForWork(workOrderId: string) {
-    if (!guardPermission("createWork", "record invoices")) return;
+    if (!guardPermission("createWork", "attach vendor invoices")) return;
     const work = dataset.workOrders.find((record) => record.id === workOrderId);
     const assignment = dataset.assignments.find((record) => record.workOrderId === workOrderId && record.partyType === "vendor" && record.status !== "declined");
     if (!work || !assignment) {
@@ -1092,6 +1540,282 @@ export function TraceOpsApp() {
     }
     setInvoiceWorkId(work.id);
     setDrawer("record-invoice");
+  }
+
+  function openInternalWorkUpdate(workOrderId: string) {
+    if (!guardPermission("createWork", "update internal maintenance work")) return;
+    const work = dataset.workOrders.find((record) => record.id === workOrderId);
+    const assignment = dataset.assignments.find((record) => record.workOrderId === workOrderId && record.partyType === "team");
+    if (!work || !assignment) return;
+    setInternalWorkId(work.id);
+    setDrawer("internal-update");
+  }
+
+  function openMaintenanceCostEntry(workOrderId: string) {
+    if (!guardPermission("createWork", "record maintenance cost")) return;
+    if (!dataset.workOrders.some((work) => work.id === workOrderId)) return;
+    setCostWorkId(workOrderId);
+    setDrawer("record-cost");
+  }
+
+  function recordMaintenanceCost(value: MaintenanceCostEntryValue) {
+    const work = fullDataset.workOrders.find((record) => record.id === costWorkId);
+    if (!work) return;
+    const entries = ([
+      { costType: "labor", amountMinor: value.laborMinor, label: "Labor" },
+      { costType: "materials", amountMinor: value.materialsMinor, label: "Materials" },
+      { costType: "trip", amountMinor: value.tripMinor, label: "Trip / dispatch" },
+      { costType: "miscellaneous", amountMinor: value.miscellaneousMinor, label: "Other maintenance cost" },
+    ] satisfies Array<{ costType: CostLine["costType"]; amountMinor: number; label: string }>).filter((entry) => entry.amountMinor > 0);
+    if (!entries.length) {
+      setNotice("Enter at least one maintenance cost amount.");
+      return;
+    }
+    const recordedAt = new Date().toISOString();
+    const assignment = fullDataset.assignments.find((record) => record.workOrderId === work.id && record.partyType === "vendor" && record.status !== "declined");
+    const lines: CostLine[] = entries.map((entry, index) => ({
+      id: `cost-session-${nowMilliseconds()}-${index + 1}`,
+      organizationId: fullDataset.organization.id,
+      workOrderId: work.id,
+      storeId: work.storeId,
+      categoryId: work.categoryId,
+      assetId: work.assetId,
+      vendorId: assignment?.partyId,
+      basis: "recorded",
+      costType: entry.costType,
+      description: value.note.trim() ? `${entry.label} · ${value.note.trim()}` : entry.label,
+      amountMinor: entry.amountMinor,
+      currency: work.currency,
+      recordedAt,
+      source: "internal_entry",
+    }));
+    setCostLines((current) => [...lines, ...current]);
+    appendAuditEvent("work_order", work.id, "Recorded maintenance cost added", {
+      workOrderId: work.id,
+      amountMinor: lines.reduce((sum, line) => sum + line.amountMinor, 0),
+      lineCount: lines.length,
+      invoiceCreated: false,
+    });
+    setDrawer(null);
+    setCostWorkId(null);
+    setDetail({ kind: "work", id: work.id });
+    setNotice(`${money(lines.reduce((sum, line) => sum + line.amountMinor, 0))} recorded on ${work.number} without creating an invoice or accounting entry.`);
+  }
+
+  function openCompletionReview(workOrderId: string) {
+    if (!guardPermission("createWork", "review completed work")) return;
+    const work = dataset.workOrders.find((record) => record.id === workOrderId);
+    if (!work || work.status !== "completed") return;
+    setCompletionWorkId(work.id);
+    setDrawer("completion-review");
+  }
+
+  function reviewWorkCompletion(value: WorkCompletionReviewValue) {
+    const work = fullDataset.workOrders.find((record) => record.id === completionWorkId);
+    if (!work || !value.decision) return;
+    const linkedPmOccurrence = work.pmOccurrenceId
+      ? fullDataset.pmOccurrences.find((occurrence) => occurrence.id === work.pmOccurrenceId)
+      : undefined;
+    if (value.decision === "verified_resolved_close" && linkedPmOccurrence && linkedPmOccurrence.status !== "completed") {
+      setDrawer(null);
+      setCompletionWorkId(null);
+      setView("pm");
+      setDetail({ kind: "pm", id: linkedPmOccurrence.id });
+      setNotice("Complete the linked PM evidence review before closing this preventive-maintenance work order.");
+      return;
+    }
+    const occurredAt = new Date().toISOString();
+    setWorkOrders((current) => current.map((record) => {
+      if (record.id !== work.id) return record;
+      if (value.decision === "verified_resolved_close") return {
+        ...record,
+        status: "closed",
+        closedAt: occurredAt,
+        accountable: record.accountable ? { ...record.accountable, nextAction: "Closed after manager verification" } : record.accountable,
+      };
+      return {
+        ...record,
+        status: "unresolved",
+        outcome: "unresolved",
+        completedAt: undefined,
+        closedAt: undefined,
+        accountable: record.accountable ? {
+          ...record.accountable,
+          nextAction: value.decision === "needs_follow_up" ? "Assign the documented follow-up action" : "Reassess and assign the reopened work",
+          dueAt: new Date(Date.parse(occurredAt) + 24 * 60 * 60 * 1000).toISOString(),
+        } : record.accountable,
+      };
+    }));
+    appendAuditEvent("work_order", work.id, value.decision === "verified_resolved_close" ? "Completed work verified and closed" : value.decision === "needs_follow_up" ? "Completed work returned for follow-up" : "Completed work reopened", {
+      workOrderId: work.id,
+      decision: value.decision,
+      note: value.note.trim(),
+    });
+    setDrawer(null);
+    setCompletionWorkId(null);
+    setDetail({ kind: "work", id: work.id });
+    setNotice(value.decision === "verified_resolved_close" ? `${work.number} verified and closed.` : `${work.number} returned to active follow-up with the manager note preserved.`);
+  }
+
+  function openVendorProposalReview(workOrderId: string) {
+    if (!guardPermission("issueVendorWork", "review vendor scheduling")) return;
+    const issuance = dataset.vendorIssuances
+      .filter((record) => record.workOrderId === workOrderId)
+      .sort((left, right) => right.version - left.version)[0];
+    if (!issuance) return;
+    setProposalWorkId(workOrderId);
+    setDrawer("vendor-proposal");
+  }
+
+  function reviewVendorProposal(value: VendorProposalReviewValue) {
+    if (!proposalWork || !proposalIssuance || !value.decision) return;
+    const occurredAt = new Date().toISOString();
+    const toTimestamp = (date: string, time: string) => date ? new Date(`${date}T${time || "12:00"}:00`).toISOString() : undefined;
+    const requestedArrivalAt = value.decision === "request_different_date"
+      ? toTimestamp(value.requestedDate, value.requestedTime)
+      : undefined;
+    const manualProposedArrivalAt = value.decision === "record_manual_response"
+      ? toTimestamp(value.manualProposedDate, value.manualProposedTime)
+      : undefined;
+    const operationalResponse = value.decision === "record_manual_response"
+      ? value.manualResponse
+      : value.decision === "accept_proposed_window"
+        ? "accepted"
+        : "question";
+    const persistedVendorResponse = value.decision === "record_manual_response" && !proposalIssuance.response
+      ? value.manualResponse
+      : proposalIssuance.response;
+    setIssuances((current) => current.map((record) => record.id === proposalIssuance.id ? {
+      ...record,
+      response: persistedVendorResponse,
+      respondedAt: record.respondedAt ?? occurredAt,
+      proposedArrivalAt: record.proposedArrivalAt ?? manualProposedArrivalAt,
+      vendorReference: value.vendorTicket.trim() || record.vendorReference,
+    } : record));
+    setAssignments((current) => current.map((record) => record.id === proposalIssuance.assignmentId ? {
+      ...record,
+      status: operationalResponse === "accepted" ? "accepted" : operationalResponse === "declined" ? "declined" : "acknowledged",
+      acknowledgedAt: occurredAt,
+    } : record));
+    setWorkOrders((current) => current.map((record) => record.id === proposalWork.id ? {
+      ...record,
+      fulfillmentMode: operationalResponse === "declined" ? "unassigned" : record.fulfillmentMode,
+      status: value.decision === "accept_proposed_window"
+        ? "scheduled"
+        : operationalResponse === "accepted"
+          ? "accepted"
+          : operationalResponse === "declined"
+            ? "draft"
+            : "awaiting_vendor_response",
+      requestedWindow: requestedArrivalAt ? {
+        startsAt: requestedArrivalAt,
+        endsAt: new Date(Date.parse(requestedArrivalAt) + 2 * 60 * 60 * 1000).toISOString(),
+      } : record.requestedWindow,
+      scheduledWindow: value.decision === "accept_proposed_window" && proposalIssuance.proposedArrivalAt ? {
+        startsAt: proposalIssuance.proposedArrivalAt,
+        endsAt: new Date(Date.parse(proposalIssuance.proposedArrivalAt) + 2 * 60 * 60 * 1000).toISOString(),
+      } : record.scheduledWindow,
+      accountable: record.accountable ? {
+        ...record.accountable,
+        nextAction: value.decision === "accept_proposed_window"
+          ? "Vendor technician checks in at the scheduled store"
+          : operationalResponse === "accepted"
+            ? "Vendor schedules service and records the onsite visit"
+            : operationalResponse === "declined"
+              ? "Choose another approved vendor"
+              : requestedArrivalAt
+                ? `Vendor confirms the requested ${dateLabel(requestedArrivalAt)} service window`
+                : "Review the vendor's proposed window or question",
+      } : record.accountable,
+    } : record));
+    appendAuditEvent("vendor_issuance", proposalIssuance.id, value.decision === "record_manual_response" ? "Vendor response recorded manually" : value.decision === "accept_proposed_window" ? "Vendor proposed window accepted" : "Different service date requested", {
+      workOrderId: proposalWork.id,
+      issuanceId: proposalIssuance.id,
+      originalVendorResponse: proposalIssuance.response ?? null,
+      operatorDecision: value.decision,
+      recordedVendorResponse: value.decision === "record_manual_response" ? value.manualResponse : null,
+      requestedArrivalAt: requestedArrivalAt ?? null,
+      manualChannel: value.decision === "record_manual_response" ? value.manualChannel : null,
+      note: value.manualNote.trim() || null,
+    });
+    setDrawer(null);
+    setProposalWorkId(null);
+    setDetail({ kind: "work", id: proposalWork.id });
+    setNotice(value.decision === "accept_proposed_window"
+      ? `${proposalWork.number} scheduled from the reviewed vendor proposal.`
+      : operationalResponse === "accepted"
+        ? `${proposalWork.number} accepted; the vendor still controls its final dispatch schedule.`
+        : operationalResponse === "declined"
+          ? `${proposalWork.number} returned for reassignment.`
+          : `${proposalWork.number} is awaiting the next scheduling decision.`);
+  }
+
+  function updateInternalWork(value: InternalWorkUpdateValue) {
+    const work = fullDataset.workOrders.find((record) => record.id === internalWorkId);
+    const assignment = work
+      ? fullDataset.assignments.find((record) => record.workOrderId === work.id && record.partyType === "team")
+      : undefined;
+    if (!work || !assignment) return;
+    const now = new Date().toISOString();
+    const resolved = value.action === "complete" && value.outcome === "resolved";
+    setAssignments((current) => current.map((record) => record.id === assignment.id ? {
+      ...record,
+      status: value.action === "acknowledge" ? "accepted" : value.action === "start" ? "active" : resolved ? "completed" : "active",
+      acknowledgedAt: value.action === "acknowledge" ? now : record.acknowledgedAt,
+      completedAt: resolved ? now : record.completedAt,
+    } : record));
+    setWorkOrders((current) => current.map((record) => {
+      if (record.id !== work.id) return record;
+      if (value.action === "acknowledge") return {
+        ...record,
+        status: "accepted",
+        accountable: record.accountable ? { ...record.accountable, nextAction: "Internal maintenance starts and records the work" } : record.accountable,
+      };
+      if (value.action === "start") return {
+        ...record,
+        status: "onsite",
+        accountable: record.accountable ? { ...record.accountable, nextAction: "Internal technician records the outcome and maintenance cost" } : record.accountable,
+      };
+      const outcome = value.outcome ?? "resolved";
+      return {
+        ...record,
+        outcome,
+        status: outcome === "resolved" ? "completed" : outcome === "diagnosed_waiting_parts" ? "waiting_parts" : "unresolved",
+        completedAt: outcome === "resolved" ? now : undefined,
+        accountable: record.accountable ? {
+          ...record.accountable,
+          nextAction: outcome === "resolved" ? "Manager verifies the result and closes the work order" : outcome === "diagnosed_waiting_parts" ? "Internal team records parts availability and return plan" : "Facilities manager reviews the follow-up plan",
+        } : record.accountable,
+      };
+    }));
+    if (value.action === "complete" && (value.recordedCostMinor ?? 0) > 0) {
+      const cost: CostLine = {
+        id: `cost-internal-session-${nowMilliseconds()}`,
+        organizationId: fullDataset.organization.id,
+        workOrderId: work.id,
+        storeId: work.storeId,
+        categoryId: work.categoryId,
+        assetId: work.assetId,
+        basis: "recorded",
+        costType: "labor",
+        description: value.note?.trim() || "Internal labor and materials recorded at completion",
+        amountMinor: value.recordedCostMinor ?? 0,
+        currency: work.currency,
+        recordedAt: now,
+        source: "internal_entry",
+      };
+      setCostLines((current) => [cost, ...current]);
+    }
+    appendAuditEvent("work_order", work.id, `Internal work ${value.action}`, {
+      workOrderId: work.id,
+      assignmentId: assignment.id,
+      outcome: value.outcome ?? null,
+      recordedCostMinor: value.recordedCostMinor ?? 0,
+    });
+    setDrawer(null);
+    setInternalWorkId(null);
+    setDetail({ kind: "work", id: work.id });
+    setNotice(value.action === "acknowledge" ? `${work.number} acknowledged by the internal team.` : value.action === "start" ? `${work.number} is now in progress.` : `${work.number} updated with the internal outcome and recorded maintenance cost.`);
   }
 
   function recordInvoiceForWork(value: InvoiceEntryValue) {
@@ -1109,7 +1833,7 @@ export function TraceOpsApp() {
       return;
     }
     const now = new Date().toISOString();
-    const invoiceId = `invoice-session-${Date.now()}`;
+    const invoiceId = `invoice-session-${nowMilliseconds()}`;
     const documentId = `document-${invoiceId}`;
     const lineItems: Invoice["lineItems"] = [];
     if (value.laborMinor > 0) lineItems.push({ id: `${invoiceId}-labor`, workOrderId: work.id, description: "Onsite labor", costType: "labor", quantity: 1, unitAmountMinor: value.laborMinor, amountMinor: value.laborMinor });
@@ -1133,7 +1857,7 @@ export function TraceOpsApp() {
       documentId,
     };
     const link: InvoiceWorkLink = {
-      id: `invoice-link-session-${Date.now()}`,
+      id: `invoice-link-session-${nowMilliseconds()}`,
       organizationId: fullDataset.organization.id,
       invoiceId,
       workOrderId: work.id,
@@ -1163,16 +1887,6 @@ export function TraceOpsApp() {
     setInvoices((current) => [invoice, ...current]);
     setInvoiceWorkLinks((current) => [link, ...current]);
     setDocuments((current) => [document, ...current]);
-    setWorkOrders((current) => current.map((record) => record.id === work.id ? {
-      ...record,
-      status: "invoice_received",
-      accountable: record.accountable ? {
-        ...record.accountable,
-        partyType: "person",
-        partyId: activePerson.id,
-        nextAction: overNte ? "Review the invoice amount above the authorization limit" : "Review the matched invoice and close the work order",
-      } : record.accountable,
-    } : record));
     if (overNte) {
       setExceptions((current) => [{
         id: `exception-${invoiceId}-nte`,
@@ -1181,7 +1895,7 @@ export function TraceOpsApp() {
         severity: "warning",
         status: "open",
         title: `${invoice.invoiceNumber} exceeds the work-order limit`,
-        description: `${money(totalMinor)} invoiced against ${money(work.notToExceedMinor ?? 0)} authorized. Review before AP handoff.`,
+        description: `${money(totalMinor)} invoiced against ${money(work.notToExceedMinor ?? 0)} authorized. Review the supporting maintenance records, then continue in the accounting system.`,
         storeId: work.storeId,
         workOrderId: work.id,
         invoiceId,
@@ -1204,7 +1918,7 @@ export function TraceOpsApp() {
     setDetail({ kind: "work", id: work.id });
     setNotice(overNte
       ? `${invoice.invoiceNumber} matched to ${work.number} and flagged above the authorization limit.`
-      : `${invoice.invoiceNumber} matched to ${work.number}. The amount now appears in spending.`);
+      : `${invoice.invoiceNumber} linked to ${work.number}. The maintenance-cost evidence is ready to review.`);
   }
 
   function resetGuidedDemo() {
@@ -1499,13 +2213,106 @@ export function TraceOpsApp() {
     else openGuidedDestination("asset");
   }
 
+  function createTaxonomyCategory(value: TaxonomyCategoryCreateValue) {
+    if (!guardPermission("manageSuite", "manage company naming")) return;
+    if (fullDataset.categories.some((category) => category.label.trim().toLowerCase() === value.label.trim().toLowerCase())) {
+      setNotice(`A service area named ${value.label} already exists.`);
+      return;
+    }
+    const createdAt = nowMilliseconds();
+    const slug = value.label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || String(createdAt);
+    const palette = ["#0b7568", "#df6d50", "#376f9e", "#d59a47", "#7560a8", "#4b7d51"];
+    const category: MaintenanceCategory = {
+      id: `category-session-${createdAt}`,
+      organizationId: fullDataset.organization.id,
+      key: `custom_${slug}`,
+      label: value.label.trim(),
+      description: value.description.trim() || `Company-defined maintenance service area for ${value.label.trim()}.`,
+      aliases: [],
+      color: palette[fullDataset.categories.length % palette.length],
+      sortOrder: Math.max(0, ...fullDataset.categories.map((record) => record.sortOrder)) + 1,
+      active: true,
+    };
+    setCategories((current) => [...current, category]);
+    appendAuditEvent("taxonomy", category.id, "Company service area created", { categoryId: category.id, label: category.label });
+    setNotice(`${category.label} added to the company naming structure. Activate it only at stores that use it.`);
+  }
+
+  function updateTaxonomyCategory(value: TaxonomyCategoryUpdateValue) {
+    if (!guardPermission("manageSuite", "manage company naming")) return;
+    const category = fullDataset.categories.find((record) => record.id === value.id);
+    if (!category) return;
+    if (fullDataset.categories.some((record) => record.id !== value.id && record.label.trim().toLowerCase() === value.label.trim().toLowerCase())) {
+      setNotice(`A service area named ${value.label} already exists.`);
+      return;
+    }
+    setCategories((current) => current.map((record) => record.id === value.id ? { ...record, label: value.label, active: value.active } : record));
+    appendAuditEvent("taxonomy", value.id, "Company service area updated", { categoryId: value.id, previousLabel: category.label, label: value.label, active: value.active });
+    setNotice(`${value.label} ${value.active ? "is active" : "was retired for new setup"}. Existing records keep their original classification.`);
+  }
+
+  function createTaxonomyNode(value: TaxonomyNodeCreateValue) {
+    if (!guardPermission("manageSuite", "manage company naming")) return;
+    const category = fullDataset.categories.find((record) => record.id === value.categoryId);
+    const parent = value.parentId ? fullDataset.taxonomyNodes.find((record) => record.id === value.parentId) : undefined;
+    if (!category || (value.parentId && (!parent || parent.categoryId !== category.id))) {
+      setNotice("Choose a valid parent within the selected service area.");
+      return;
+    }
+    const siblings = fullDataset.taxonomyNodes.filter((record) => record.categoryId === category.id && record.parentId === value.parentId);
+    if (siblings.some((record) => record.label.trim().toLowerCase() === value.label.trim().toLowerCase())) {
+      setNotice(`${value.label} already exists at that level.`);
+      return;
+    }
+    const createdAt = nowMilliseconds();
+    const node: TaxonomyNode = {
+      id: `taxonomy-session-${createdAt}`,
+      organizationId: fullDataset.organization.id,
+      categoryId: category.id,
+      parentId: value.parentId,
+      canonicalKey: `${category.key}_${value.label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`,
+      label: value.label.trim(),
+      aliases: [],
+      kind: value.kind,
+      sortOrder: Math.max(0, ...siblings.map((record) => record.sortOrder)) + 1,
+      active: true,
+    };
+    setTaxonomyNodes((current) => [...current, node]);
+    appendAuditEvent("taxonomy", node.id, "Company taxonomy node created", { nodeId: node.id, categoryId: category.id, parentId: node.parentId ?? null, label: node.label, kind: node.kind });
+    setNotice(`${node.label} added beneath ${parent?.label ?? category.label}.`);
+  }
+
+  function updateTaxonomyNode(value: TaxonomyNodeUpdateValue) {
+    if (!guardPermission("manageSuite", "manage company naming")) return;
+    const node = fullDataset.taxonomyNodes.find((record) => record.id === value.id);
+    if (!node) return;
+    const duplicate = fullDataset.taxonomyNodes.some((record) => record.id !== value.id && record.categoryId === node.categoryId && record.parentId === node.parentId && record.label.trim().toLowerCase() === value.label.trim().toLowerCase());
+    if (duplicate) {
+      setNotice(`${value.label} already exists at that level.`);
+      return;
+    }
+    setTaxonomyNodes((current) => current.map((record) => record.id === value.id ? { ...record, label: value.label, active: value.active } : record));
+    appendAuditEvent("taxonomy", value.id, "Company taxonomy node updated", { nodeId: value.id, previousLabel: node.label, label: value.label, active: value.active });
+    setNotice(`${value.label} ${value.active ? "is available for setup" : "was retired for new setup"}. Existing assets keep their recorded path.`);
+  }
+
   function createStore(value: GuidedStoreSetupValue) {
     if (!guardPermission("createStore", "create stores")) return;
-    const manager = dataset.people.find((person) => person.roles.includes("store_manager")) ?? dataset.people[0];
+    const normalizedStoreNumber = value.storeNumber.trim().toLowerCase();
+    const normalizedAddress = `${value.address.line1}, ${value.address.city}, ${value.address.state} ${value.address.postalCode}`.trim().toLowerCase();
+    if (fullDataset.stores.some((store) => store.storeNumber.trim().toLowerCase() === normalizedStoreNumber)) {
+      setNotice(`Store number ${value.storeNumber} already exists.`);
+      return;
+    }
+    if (fullDataset.stores.some((store) => store.normalizedAddress.trim().toLowerCase() === normalizedAddress)) {
+      setNotice("A store with that address already exists.");
+      return;
+    }
+    const manager = fullDataset.people.find((person) => person.roles.includes("store_manager")) ?? fullDataset.people[0];
     if (!manager) return;
-    const regionStore = dataset.stores.find((record) => record.regionId === value.regionId);
+    const regionStore = fullDataset.stores.find((record) => record.regionId === value.regionId);
     const store: Store = {
-      id: `store-session-${Date.now()}`,
+      id: `store-session-${nowMilliseconds()}`,
       organizationId: dataset.organization.id,
       divisionId: dataset.divisions[0]?.id,
       regionId: value.regionId,
@@ -1514,7 +2321,7 @@ export function TraceOpsApp() {
       normalizedAddress: `${value.address.line1}, ${value.address.city}, ${value.address.state} ${value.address.postalCode}`,
       address: value.address,
       coordinates: regionStore?.coordinates ?? { latitude: 39.5, longitude: -84.5 },
-      externalIdentifiers: { demo_setup: `NEW-${value.storeNumber}` },
+      externalIdentifiers: { demo_setup: `NEW-${value.storeNumber}`, coordinate_status: "unverified_demo_estimate" },
       aliases: [],
       phone: "(555) 010-0199",
       managerPersonId: manager.id,
@@ -1527,10 +2334,489 @@ export function TraceOpsApp() {
       searchTerms: [value.storeNumber, value.name, value.address.line1, value.address.city],
     };
     setStores((current) => [store, ...current]);
+    appendAuditEvent("store", store.id, "Store created", { storeId: store.id, storeNumber: store.storeNumber, regionId: store.regionId ?? null, starterServiceAreaCount: store.activeCategoryIds.length, coordinateStatus: "unverified_demo_estimate" });
     setDrawer(null);
     setView("stores");
     setDetail({ kind: "store", id: store.id });
     setNotice(`Store ${store.storeNumber} created with ${store.activeCategoryIds.length} starter service areas. Equipment and PM can be added when useful.`);
+  }
+
+  function onboardVendor(value: VendorOnboardingValue) {
+    if (!guardPermission("manageSuite", "onboard vendors")) return;
+    if (fullDataset.vendors.some((vendor) => [vendor.legalName, vendor.displayName, ...vendor.aliases].some((name) => name.trim().toLowerCase() === value.name.trim().toLowerCase()))) {
+      setNotice(`${value.name} is already in the vendor directory.`);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.dispatchContact.email.trim())) {
+      setNotice("Enter a valid dispatch email address.");
+      return;
+    }
+    if (value.dispatchContact.phone.replace(/\D/g, "").length < 10) {
+      setNotice("Enter a dispatch phone number with at least 10 digits.");
+      return;
+    }
+    if (!value.categoryIds.every((categoryId) => fullDataset.categories.some((category) => category.id === categoryId && category.active !== false)) || !value.regionIds.every((regionId) => fullDataset.regions.some((region) => region.id === regionId))) {
+      setNotice("Choose active service specialties and valid coverage regions.");
+      return;
+    }
+    const createdAt = nowMilliseconds();
+    const vendor: Vendor = {
+      id: `vendor-session-${createdAt}`,
+      organizationId: fullDataset.organization.id,
+      legalName: value.name.trim(),
+      displayName: value.name.trim(),
+      customerVendorNumber: `V-${String(fullDataset.vendors.length + 1).padStart(4, "0")}`,
+      description: value.description.trim(),
+      aliases: value.aliases,
+      specialties: value.categoryIds.map((categoryId) => {
+        const category = fullDataset.categories.find((record) => record.id === categoryId);
+        return {
+          categoryId,
+          label: category?.label ?? "General maintenance",
+          aliases: category ? category.aliases : [],
+          equipmentTypes: fullDataset.taxonomyNodes
+            .filter((node) => node.categoryId === categoryId && node.kind === "equipment_type")
+            .map((node) => node.label),
+        };
+      }),
+      searchTerms: [value.name, value.description, ...value.aliases],
+      coverageRegionIds: value.regionIds,
+      preferredStoreIds: [],
+      contacts: [{
+        id: `vendor-contact-session-${createdAt}`,
+        name: value.dispatchContact.name.trim(),
+        role: "dispatch",
+        email: value.dispatchContact.email.trim(),
+        phone: value.dispatchContact.phone.trim(),
+        preferredChannel: value.dispatchContact.preferredChannel,
+      }],
+      afterHoursAvailable: value.afterHoursAvailable,
+      status: value.status,
+      portalEnabled: value.portalEnabled,
+    };
+    setVendors((current) => [vendor, ...current]);
+    appendAuditEvent("vendor", vendor.id, "Approved vendor onboarded", {
+      vendorId: vendor.id,
+      categoryIds: value.categoryIds.join(","),
+      regionIds: value.regionIds.join(","),
+      portalEnabled: value.portalEnabled,
+    });
+    setDrawer(null);
+    setView("vendors");
+    setDetail({ kind: "vendor", id: vendor.id });
+    setNotice(`${vendor.displayName} added to the approved vendor directory.`);
+  }
+
+  function updateStoreServiceAreas(value: StoreServiceAreasValue) {
+    if (!guardPermission("manageSuite", "configure store service areas")) return;
+    const store = fullDataset.stores.find((record) => record.id === value.storeId);
+    if (!store) return;
+    const removedCategoryIds = store.activeCategoryIds.filter((categoryId) => !value.activeCategoryIds.includes(categoryId));
+    const blockedCategoryId = removedCategoryIds.find((categoryId) =>
+      fullDataset.assets.some((asset) => asset.storeId === value.storeId && asset.categoryId === categoryId && asset.status !== "retired") ||
+      fullDataset.pmPlans.some((plan) => plan.storeId === value.storeId && plan.categoryId === categoryId && plan.active),
+    );
+    if (blockedCategoryId) {
+      const category = fullDataset.categories.find((record) => record.id === blockedCategoryId);
+      setNotice(`${category?.label ?? "That service area"} still has active equipment or preventive-maintenance plans. Retire or reclassify those records first.`);
+      return;
+    }
+    setStores((current) => current.map((store) => store.id === value.storeId ? {
+      ...store,
+      activeCategoryIds: value.activeCategoryIds,
+    } : store));
+    appendAuditEvent("store", value.storeId, "Store service areas updated", {
+      storeId: value.storeId,
+      activeCategoryIds: value.activeCategoryIds.join(","),
+    });
+    setDrawer(null);
+    setWorkflowStoreId(null);
+    setView("stores");
+    setDetail({ kind: "store", id: value.storeId });
+    setNotice(`${value.activeCategoryIds.length} service areas are now active for this store.`);
+  }
+
+  function createAsset(value: AssetSetupValue) {
+    if (!guardPermission("manageSuite", "add equipment")) return;
+    const store = fullDataset.stores.find((record) => record.id === value.storeId);
+    const selectedNode = fullDataset.taxonomyNodes.find((node) => node.id === value.taxonomyNodeId);
+    if (!store || !selectedNode || selectedNode.active === false || selectedNode.categoryId !== value.categoryId || !store.activeCategoryIds.includes(value.categoryId)) {
+      setNotice("Choose an active store service area and a valid company equipment type within it.");
+      return;
+    }
+    if (fullDataset.assets.some((asset) => asset.storeId === value.storeId && asset.assetCode.trim().toLowerCase() === value.assetCode.trim().toLowerCase())) {
+      setNotice(`${value.assetCode} is already used at Store ${store.storeNumber}.`);
+      return;
+    }
+    if (value.serialNumber.trim() && fullDataset.assets.some((asset) => asset.serialNumber.trim().toLowerCase() === value.serialNumber.trim().toLowerCase())) {
+      setNotice(`Serial number ${value.serialNumber} is already assigned to another asset.`);
+      return;
+    }
+    if (value.supplierVendorId && !fullDataset.vendors.some((vendor) => vendor.id === value.supplierVendorId && vendor.status !== "inactive")) {
+      setNotice("Choose an active supplier from the approved vendor directory.");
+      return;
+    }
+    if (value.warranty && Date.parse(value.warranty.endsOn) < Date.parse(value.warranty.startsOn)) {
+      setNotice("Warranty end date must be on or after its start date.");
+      return;
+    }
+    const taxonomyPathIds = [selectedNode.id];
+    let parentId = selectedNode.parentId;
+    while (parentId) {
+      const parent = fullDataset.taxonomyNodes.find((node) => node.id === parentId);
+      if (!parent || taxonomyPathIds.includes(parent.id)) break;
+      taxonomyPathIds.unshift(parent.id);
+      parentId = parent.parentId;
+    }
+    const asset: Asset = {
+      id: `asset-session-${nowMilliseconds()}`,
+      organizationId: fullDataset.organization.id,
+      storeId: value.storeId,
+      categoryId: value.categoryId,
+      taxonomyNodeId: value.taxonomyNodeId,
+      taxonomyPathIds,
+      assetCode: value.assetCode.trim(),
+      name: value.name.trim(),
+      assetType: value.assetType.trim(),
+      locationDetail: value.locationDetail.trim(),
+      manufacturer: value.manufacturer.trim(),
+      model: value.model.trim(),
+      serialNumber: value.serialNumber.trim(),
+      installedOn: value.installedOn,
+      expectedLifeYears: value.expectedLifeYears,
+      replacementEstimateMinor: value.replacementEstimateMinor,
+      currency: "USD",
+      supplierVendorId: value.supplierVendorId,
+      warranty: value.warranty,
+      status: "active",
+      criticality: value.criticality,
+      searchTerms: [value.assetCode, value.name, value.assetType, value.manufacturer, value.model, value.serialNumber].filter(Boolean),
+    };
+    setAssets((current) => [asset, ...current]);
+    appendAuditEvent("asset", asset.id, "Equipment record created", {
+      assetId: asset.id,
+      storeId: asset.storeId,
+      categoryId: asset.categoryId,
+      taxonomyNodeId: asset.taxonomyNodeId,
+    });
+    setDrawer(null);
+    setWorkflowStoreId(null);
+    setView("equipment");
+    setDetail({ kind: "asset", id: asset.id });
+    setNotice(`${asset.assetCode} created. Components and preventive maintenance can be added when useful.`);
+  }
+
+  function createAssetComponent(value: ComponentSetupValue) {
+    if (!guardPermission("manageSuite", "add equipment components")) return;
+    const asset = fullDataset.assets.find((record) => record.id === value.assetId);
+    if (!asset) return;
+    if (value.parentComponentId && !fullDataset.assetComponents.some((component) => component.id === value.parentComponentId && component.assetId === asset.id)) {
+      setNotice("Choose a parent component from the same asset.");
+      return;
+    }
+    if (fullDataset.assetComponents.some((component) => component.assetId === asset.id && component.componentCode.trim().toLowerCase() === value.componentCode.trim().toLowerCase())) {
+      setNotice(`${value.componentCode} is already used beneath ${asset.name}.`);
+      return;
+    }
+    if (value.serialNumber?.trim() && fullDataset.assetComponents.some((component) => component.serialNumber?.trim().toLowerCase() === value.serialNumber?.trim().toLowerCase())) {
+      setNotice(`Serial number ${value.serialNumber} is already assigned to another component.`);
+      return;
+    }
+    const component: AssetComponent = {
+      id: `component-session-${nowMilliseconds()}`,
+      organizationId: fullDataset.organization.id,
+      assetId: value.assetId,
+      parentComponentId: value.parentComponentId,
+      componentCode: value.componentCode.trim(),
+      name: value.name.trim(),
+      componentType: value.componentType.trim(),
+      manufacturer: value.manufacturer?.trim() || undefined,
+      model: value.model?.trim() || undefined,
+      serialNumber: value.serialNumber?.trim() || undefined,
+      installedOn: value.installedOn || undefined,
+      status: value.status,
+    };
+    setAssetComponents((current) => [component, ...current]);
+    appendAuditEvent("asset", asset.id, "Equipment component added", {
+      assetId: asset.id,
+      componentId: component.id,
+      parentComponentId: component.parentComponentId ?? null,
+    });
+    setDrawer(null);
+    setWorkflowAssetId(null);
+    setView("equipment");
+    setDetail({ kind: "asset", id: asset.id });
+    setNotice(`${component.name} added beneath ${asset.name}.`);
+  }
+
+  function createPmPlan(value: PmPlanSetupValue) {
+    if (!guardPermission("manageSuite", "create preventive-maintenance plans")) return;
+    const store = fullDataset.stores.find((record) => record.id === value.storeId);
+    const asset = value.assetId ? fullDataset.assets.find((record) => record.id === value.assetId) : undefined;
+    if (!store || !store.activeCategoryIds.includes(value.categoryId) || (value.assetId && (!asset || asset.storeId !== store.id || asset.categoryId !== value.categoryId))) {
+      setNotice("Choose a valid store service area and an asset from that same classification.");
+      return;
+    }
+    const assignmentValid = value.assignedPartyType === "vendor"
+      ? fullDataset.vendors.some((vendor) => vendor.id === value.assignedPartyId && vendor.status !== "inactive" && vendor.specialties.some((specialty) => specialty.categoryId === value.categoryId) && (!store.regionId || vendor.coverageRegionIds.includes(store.regionId)))
+      : fullDataset.teams.some((team) => team.id === value.assignedPartyId && team.categoryIds.includes(value.categoryId) && (!store.regionId || team.regionIds.includes(store.regionId)));
+    if (!assignmentValid) {
+      setNotice("Choose an internal team or approved vendor that covers this store and service area.");
+      return;
+    }
+    if (fullDataset.pmPlans.some((plan) => plan.active && plan.storeId === value.storeId && plan.categoryId === value.categoryId && plan.assetId === value.assetId && plan.name.trim().toLowerCase() === value.name.trim().toLowerCase())) {
+      setNotice(`An active PM plan named ${value.name} already covers this scope.`);
+      return;
+    }
+    const createdAt = nowMilliseconds();
+    const plan: PreventiveMaintenancePlan = {
+      id: `pm-plan-session-${createdAt}`,
+      organizationId: fullDataset.organization.id,
+      storeId: value.storeId,
+      categoryId: value.categoryId,
+      assetId: value.assetId,
+      name: value.name.trim(),
+      description: value.description.trim(),
+      cadence: value.cadence,
+      fulfillmentMode: value.fulfillmentMode,
+      assignedPartyType: value.assignedPartyType,
+      assignedPartyId: value.assignedPartyId,
+      active: true,
+      nextDueAt: new Date(value.nextDueAt).toISOString(),
+      requiredEvidence: value.requiredEvidence,
+    };
+    const occurrence: PmOccurrence = {
+      id: `pm-occurrence-session-${createdAt}`,
+      organizationId: fullDataset.organization.id,
+      pmPlanId: plan.id,
+      storeId: plan.storeId,
+      dueAt: plan.nextDueAt,
+      status: Date.parse(plan.nextDueAt) < Date.parse(fullDataset.asOf) ? "overdue" : "upcoming",
+    };
+    setPmPlans((current) => [plan, ...current]);
+    setPmOccurrences((current) => [occurrence, ...current]);
+    appendAuditEvent("pm_occurrence", occurrence.id, "Preventive-maintenance plan created", {
+      pmPlanId: plan.id,
+      occurrenceId: occurrence.id,
+      storeId: plan.storeId,
+      assignedPartyType: plan.assignedPartyType,
+      assignedPartyId: plan.assignedPartyId,
+    });
+    setDrawer(null);
+    setWorkflowStoreId(null);
+    setWorkflowAssetId(null);
+    setView("pm");
+    setDetail({ kind: "pm", id: occurrence.id });
+    setNotice(`${plan.name} created with its first occurrence due ${dateLabel(plan.nextDueAt)}.`);
+  }
+
+  function createWorkFromPmOccurrence(occurrenceId: string) {
+    if (!guardPermission("createWork", "create preventive-maintenance work")) return;
+    const occurrence = dataset.pmOccurrences.find((record) => record.id === occurrenceId);
+    const plan = occurrence ? dataset.pmPlans.find((record) => record.id === occurrence.pmPlanId) : undefined;
+    const store = plan ? dataset.stores.find((record) => record.id === plan.storeId) : undefined;
+    if (!occurrence || !plan || !store) return;
+    if (occurrence.workOrderId) {
+      setView("work");
+      setDetail({ kind: "work", id: occurrence.workOrderId });
+      return;
+    }
+    const now = new Date().toISOString();
+    const requestedEndsAt = Date.parse(occurrence.dueAt) > Date.parse(now)
+      ? occurrence.dueAt
+      : new Date(Date.parse(now) + 24 * 60 * 60 * 1000).toISOString();
+    const work: WorkOrder = {
+      id: `work-pm-session-${nowMilliseconds()}`,
+      organizationId: fullDataset.organization.id,
+      number: `${fullDataset.organization.workOrderPrefix}-${store.storeNumber}-PM-${String(fullDataset.workOrders.length + 1).padStart(4, "0")}`,
+      storeId: plan.storeId,
+      pmOccurrenceId: occurrence.id,
+      categoryId: plan.categoryId,
+      assetId: plan.assetId,
+      taxonomyNodeId: plan.assetId ? fullDataset.assets.find((asset) => asset.id === plan.assetId)?.taxonomyNodeId : undefined,
+      title: plan.name,
+      problemDescription: plan.description,
+      scopeOfWork: `${plan.description} Record ${plan.requiredEvidence.map(words).join(", ")} before completion.`,
+      priority: "routine",
+      source: "pm",
+      fulfillmentMode: plan.fulfillmentMode,
+      status: plan.fulfillmentMode === "external" ? "ready_to_issue" : "draft",
+      createdByPersonId: activePerson.id,
+      createdAt: now,
+      requestedWindow: { startsAt: now, endsAt: requestedEndsAt },
+      accountable: {
+        partyType: plan.assignedPartyType,
+        partyId: plan.assignedPartyId,
+        nextAction: plan.fulfillmentMode === "external" ? "Issue the PM work order to the assigned vendor" : "Acknowledge and perform preventive maintenance",
+        dueAt: requestedEndsAt,
+        escalationPartyId: activePerson.id,
+      },
+      currency: "USD",
+      classificationDeferred: !plan.assetId,
+      tags: ["preventive-maintenance", plan.cadence],
+    };
+    const assignment: WorkAssignment = {
+      id: `assignment-pm-session-${nowMilliseconds()}`,
+      organizationId: fullDataset.organization.id,
+      workOrderId: work.id,
+      partyType: plan.assignedPartyType,
+      partyId: plan.assignedPartyId,
+      status: "offered",
+      assignedAt: now,
+      assignmentNote: "Created from the linked preventive-maintenance occurrence.",
+    };
+    setWorkOrders((current) => [work, ...current]);
+    setAssignments((current) => [assignment, ...current]);
+    setPmOccurrences((current) => current.map((record) => record.id === occurrence.id ? {
+      ...record,
+      workOrderId: work.id,
+      status: "due",
+    } : record));
+    appendAuditEvent("pm_occurrence", occurrence.id, "Preventive-maintenance work order created", {
+      pmOccurrenceId: occurrence.id,
+      workOrderId: work.id,
+      assignmentId: assignment.id,
+    });
+    setView("work");
+    setDetail({ kind: "work", id: work.id });
+    setNotice(`${work.number} created from ${plan.name}.`);
+  }
+
+  function completePmOccurrence(value: PmOccurrenceCompletionValue) {
+    if (!guardPermission("createWork", "complete preventive maintenance")) return;
+    const occurrence = dataset.pmOccurrences.find((record) => record.id === value.occurrenceId);
+    const plan = occurrence ? dataset.pmPlans.find((record) => record.id === occurrence.pmPlanId) : undefined;
+    if (!occurrence || !plan || ["completed", "skipped"].includes(occurrence.status)) return;
+    const linkedWork = occurrence.workOrderId ? dataset.workOrders.find((work) => work.id === occurrence.workOrderId) : undefined;
+    if (linkedWork && !["completed", "closed"].includes(linkedWork.status)) {
+      throw new Error("Complete the linked work order before completing this PM occurrence.");
+    }
+    const visits = linkedWork ? dataset.visits.filter((visit) => visit.workOrderId === linkedWork.id && visit.checkedOutAt) : [];
+    const visitIds = new Set(visits.map((visit) => visit.id));
+    const photoDocuments = linkedWork ? dataset.documents.filter((document) =>
+      (document.workOrderId === linkedWork.id || (document.visitId && visitIds.has(document.visitId))) &&
+      (document.kind === "before_photo" || document.kind === "after_photo" || document.mediaType.startsWith("image/")),
+    ) : [];
+    const missingRequirements = plan.requiredEvidence.filter((requirement) =>
+      requirement === "visit"
+        ? !visits.length
+        : requirement === "photo"
+          ? !photoDocuments.length
+          : requirement === "checklist"
+            ? !value.checklistConfirmed
+            : !value.reading?.trim(),
+    );
+    if (missingRequirements.length && (value.overrideReason?.trim().length ?? 0) < 8) {
+      throw new Error(`Missing ${missingRequirements.map(words).join(", ")}; record an override reason to continue.`);
+    }
+    const completedAt = new Date().toISOString();
+    const nextDueAt = nextPmDueAt(occurrence.dueAt, plan.cadence);
+    const evidenceRecords: NonNullable<PmOccurrence["evidenceRecords"]> = plan.requiredEvidence.map((requirement, index) => {
+      const missing = missingRequirements.includes(requirement);
+      const sourceRecordIds = requirement === "visit"
+        ? visits.map((visit) => visit.id)
+        : requirement === "photo"
+          ? photoDocuments.map((document) => document.id)
+          : [];
+      return {
+        id: `pm-evidence-${occurrence.id}-${nowMilliseconds()}-${index + 1}`,
+        requirement,
+        status: missing ? "overridden" : "satisfied",
+        source: missing
+          ? "manager_override"
+          : requirement === "visit"
+            ? "visit"
+            : requirement === "photo"
+              ? "document"
+              : "manager_confirmation",
+        sourceRecordIds,
+        value: missing ? value.overrideReason?.trim() : requirement === "reading" ? value.reading?.trim() : requirement === "checklist" ? "Required checklist confirmed" : undefined,
+        recordedAt: completedAt,
+        recordedByPersonId: activePerson.id,
+      };
+    });
+    const nextOccurrence: PmOccurrence = {
+      id: `pm-occurrence-session-${nowMilliseconds()}`,
+      organizationId: fullDataset.organization.id,
+      pmPlanId: plan.id,
+      storeId: plan.storeId,
+      dueAt: nextDueAt,
+      status: Date.parse(nextDueAt) < Date.parse(fullDataset.asOf) ? "overdue" : "upcoming",
+    };
+    setPmOccurrences((current) => {
+      const completed = current.map((record) => record.id === occurrence.id ? {
+        ...record,
+        status: "completed" as const,
+        completedAt,
+        completedByPartyId: activePerson.id,
+        completionNote: value.note?.trim() || "Preventive maintenance completed.",
+        evidenceRecords,
+      } : record);
+      return completed.some((record) => record.pmPlanId === plan.id && record.dueAt === nextDueAt)
+        ? completed
+        : [nextOccurrence, ...completed];
+    });
+    setPmPlans((current) => current.map((record) => record.id === plan.id ? { ...record, nextDueAt } : record));
+    setExceptions((current) => current.map((record) =>
+      record.type === "pm_overdue" && (record.sourceRecordIds.includes(occurrence.id) || record.sourceRecordIds.includes(plan.id))
+        ? { ...record, status: "resolved", resolvedAt: completedAt }
+        : record,
+    ));
+    appendAuditEvent("pm_occurrence", occurrence.id, "Preventive maintenance completed", {
+      pmOccurrenceId: occurrence.id,
+      workOrderId: occurrence.workOrderId ?? null,
+      note: value.note ?? null,
+      evidenceCount: evidenceRecords.length,
+      overrideCount: evidenceRecords.filter((record) => record.status === "overridden").length,
+      nextDueAt,
+    });
+    setDetail({ kind: "pm", id: occurrence.id });
+    setNotice(`Preventive-maintenance completion recorded. The next occurrence is due ${dateLabel(nextDueAt)}.`);
+  }
+
+  function waivePmOccurrence(value: PmOccurrenceWaiverValue) {
+    if (!guardPermission("manageSuite", "waive preventive maintenance")) return;
+    const occurrence = dataset.pmOccurrences.find((record) => record.id === value.occurrenceId);
+    const plan = occurrence ? dataset.pmPlans.find((record) => record.id === occurrence.pmPlanId) : undefined;
+    if (!occurrence || !plan || ["completed", "skipped"].includes(occurrence.status)) return;
+    const linkedWork = occurrence.workOrderId ? dataset.workOrders.find((work) => work.id === occurrence.workOrderId) : undefined;
+    if (linkedWork && !["closed", "cancelled"].includes(linkedWork.status)) {
+      throw new Error("Cancel or close the linked work order before waiving this PM occurrence.");
+    }
+    const waivedAt = new Date().toISOString();
+    const nextDueAt = nextPmDueAt(occurrence.dueAt, plan.cadence);
+    const nextOccurrence: PmOccurrence = {
+      id: `pm-occurrence-session-${nowMilliseconds()}`,
+      organizationId: fullDataset.organization.id,
+      pmPlanId: plan.id,
+      storeId: plan.storeId,
+      dueAt: nextDueAt,
+      status: Date.parse(nextDueAt) < Date.parse(fullDataset.asOf) ? "overdue" : "upcoming",
+    };
+    setPmOccurrences((current) => {
+      const waived = current.map((record) => record.id === occurrence.id ? {
+        ...record,
+        status: "skipped" as const,
+        completionNote: `Waived: ${value.reason.trim()}`,
+        completedByPartyId: activePerson.id,
+      } : record);
+      return waived.some((record) => record.pmPlanId === plan.id && record.dueAt === nextDueAt)
+        ? waived
+        : [nextOccurrence, ...waived];
+    });
+    setPmPlans((current) => current.map((record) => record.id === plan.id ? { ...record, nextDueAt } : record));
+    setExceptions((current) => current.map((record) =>
+      record.type === "pm_overdue" && (record.sourceRecordIds.includes(occurrence.id) || record.sourceRecordIds.includes(plan.id))
+        ? { ...record, status: "resolved", resolvedAt: waivedAt }
+        : record,
+    ));
+    appendAuditEvent("pm_occurrence", occurrence.id, "Preventive maintenance waived", {
+      pmOccurrenceId: occurrence.id,
+      reason: value.reason.trim(),
+      nextDueAt,
+    });
+    setDetail({ kind: "pm", id: occurrence.id });
+    setNotice(`The PM occurrence was waived with a permanent reason. The next occurrence is due ${dateLabel(nextDueAt)}.`);
   }
 
   function saveWorkClassification(value: WorkClassificationValue) {
@@ -1794,7 +3080,7 @@ export function TraceOpsApp() {
     const work = dataset.workOrders.find((record) => record.id === workOrderId);
     if (!latest || !work) return;
     const now = new Date().toISOString();
-    const proposedArrivalAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+    const proposedArrivalAt = new Date(nowMilliseconds() + 2 * 24 * 60 * 60 * 1000).toISOString();
     const facilitiesOwner = dataset.people.find((person) => person.roles.includes("facilities_manager")) ?? dataset.people[0];
 
     setIssuances((current) =>
@@ -1830,7 +3116,7 @@ export function TraceOpsApp() {
                   partyType: "person",
                   partyId: facilitiesOwner.id,
                   nextAction: "Choose another internal team or approved vendor",
-                  dueAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+                  dueAt: new Date(nowMilliseconds() + 4 * 60 * 60 * 1000).toISOString(),
                   escalationPartyId: facilitiesOwner.id,
                 }
               : record.accountable,
@@ -1838,11 +3124,8 @@ export function TraceOpsApp() {
         }
         return {
           ...record,
-          status: response === "date_proposed" ? "scheduled" : "accepted",
-          scheduledWindow:
-            response === "date_proposed"
-              ? { startsAt: proposedArrivalAt, endsAt: new Date(Date.parse(proposedArrivalAt) + 2 * 60 * 60 * 1000).toISOString() }
-              : record.scheduledWindow,
+          status: response === "date_proposed" ? "awaiting_vendor_response" : "accepted",
+          scheduledWindow: record.scheduledWindow,
           accountable: record.accountable
             ? {
                 ...record.accountable,
@@ -1876,7 +3159,7 @@ export function TraceOpsApp() {
       return;
     }
     const vendor = dataset.vendors.find((record) => record.displayName === value.vendorName);
-    const id = `visit-session-${Date.now()}`;
+    const id = `visit-session-${nowMilliseconds()}`;
     const evidence = domainVisitEvidence(value.evidence);
     const visit: Visit = {
       id,
@@ -1911,7 +3194,7 @@ export function TraceOpsApp() {
       const owner = facilitiesOwner(dataset)!;
       setExceptions((current) => [
         {
-          id: `exception-session-${Date.now()}`,
+          id: `exception-session-${nowMilliseconds()}`,
           organizationId: dataset.organization.id,
           type: "visit_without_work_order",
           severity: "warning",
@@ -1955,6 +3238,20 @@ export function TraceOpsApp() {
     const outcome = domainVisitOutcome(value.outcome);
     const freshEvidence = { ...value.evidence, capturedAt: value.recordedAt };
     const checkoutEvidence = domainVisitEvidence(freshEvidence);
+    const checkoutDocuments: EvidenceDocument[] = value.files.map((file, index) => ({
+      id: `document-visit-${value.visitId}-${nowMilliseconds()}-${index + 1}`,
+      organizationId: fullDataset.organization.id,
+      storeId: activeVisit.storeId,
+      workOrderId: activeVisit.workOrderId,
+      visitId: activeVisit.id,
+      kind: file.type.startsWith("image/") ? "after_photo" : "service_ticket",
+      fileName: file.name,
+      mediaType: file.type || "application/octet-stream",
+      createdAt: value.recordedAt,
+      createdByLabel: `${activeVisit.technicianName} · Visit checkout`,
+      visibility: "engagement_parties",
+    }));
+    if (checkoutDocuments.length) setDocuments((current) => [...checkoutDocuments, ...current]);
     setVisits((current) =>
       current.map((record) =>
         record.id === value.visitId
@@ -1969,6 +3266,7 @@ export function TraceOpsApp() {
                   ? "location_verified"
                   : checkoutEvidence.evidenceStrength,
               locationEvidence: checkoutEvidence.locationEvidence,
+              documentIds: [...record.documentIds, ...checkoutDocuments.map((document) => document.id)],
             }
           : record,
       ),
@@ -2009,7 +3307,80 @@ export function TraceOpsApp() {
     setNotice("Visit checkout saved. The work order and next accountable action were updated.");
   }
 
-  const rendered = detail ? (
+  const selectedInvoice = detail?.kind === "invoice"
+    ? dataset.invoices.find((record) => record.id === detail.id)
+    : undefined;
+  const selectedReport = detail?.kind === "report"
+    ? savedReports.find((record) => record.id === detail.id)
+    : undefined;
+  const selectedPmOccurrence = detail?.kind === "pm"
+    ? dataset.pmOccurrences.find((record) => record.id === detail.id) ??
+      dataset.pmOccurrences.find((record) => record.pmPlanId === detail.id)
+    : undefined;
+  const selectedPmPlan = selectedPmOccurrence
+    ? dataset.pmPlans.find((record) => record.id === selectedPmOccurrence.pmPlanId)
+    : undefined;
+
+  const rendered = selectedInvoice ? (
+    <>
+      <div className="to-detail-tools"><button className="to-button" type="button" onClick={() => {
+        setDetail(null);
+        if (invoiceDetailReturn === "exceptions") {
+          setView("exceptions");
+          return;
+        }
+        setView("spend");
+        setSpendPreset((current) => ({
+          regionId: current?.regionId ?? "all",
+          storeId: current?.storeId ?? "all",
+          categoryId: current?.categoryId ?? "all",
+          mode: invoiceDetailReturn === "spend" ? "overview" : "evidence_review",
+        }));
+      }}><ArrowLeft /> Back to {invoiceDetailReturn === "exceptions" ? "exceptions" : invoiceDetailReturn === "spend" ? "maintenance costs" : "invoice evidence"}</button></div>
+      <InvoiceEvidenceDetail
+        dataset={dataset}
+        invoice={selectedInvoice}
+        onOpenWork={(id) => setDetail({ kind: "work", id })}
+        onOpenStore={(id) => setDetail({ kind: "store", id })}
+        onOpenVendor={(id) => setDetail({ kind: "vendor", id })}
+        onResolveReview={resolveInvoiceEvidence}
+        canResolve={hasPermission("reviewInvoiceEvidence")}
+      />
+    </>
+  ) : selectedReport ? (
+    <ReportDetail
+      dataset={dataset}
+      report={selectedReport}
+      onBack={() => { setDetail(null); setView("reports"); }}
+      onOpenWork={(id) => { setView("work"); setDetail({ kind: "work", id }); }}
+    />
+  ) : selectedPmOccurrence && selectedPmPlan ? (
+    <>
+      <div className="to-detail-tools"><button className="to-button" type="button" onClick={() => { setDetail(null); setView("pm"); }}><ArrowLeft /> Back to PM schedule</button></div>
+      <PmOccurrenceDetail
+        dataset={dataset}
+        occurrence={selectedPmOccurrence}
+        plan={selectedPmPlan}
+        onOpenLinkedWorkOrder={(id) => { setView("work"); setDetail({ kind: "work", id }); }}
+        onCreateWorkOrder={hasPermission("createWork") ? createWorkFromPmOccurrence : undefined}
+        onMarkComplete={hasPermission("createWork") ? completePmOccurrence : undefined}
+        onWaive={hasPermission("manageSuite") ? waivePmOccurrence : undefined}
+      />
+    </>
+  ) : detail ? (
+    <>
+      {detail.kind === "work" ? (() => {
+        const work = dataset.workOrders.find((record) => record.id === detail.id);
+        const issuance = work ? dataset.vendorIssuances.filter((record) => record.workOrderId === work.id).sort((left, right) => right.version - left.version)[0] : undefined;
+        const assignment = work ? dataset.assignments.find((record) => record.workOrderId === work.id && record.status !== "declined") : undefined;
+        if (!work) return null;
+        return <div className="to-detail-tools">
+          {hasPermission("createWork") && !assignment && !terminalStatuses.has(work.status) ? <button className="to-button primary" type="button" onClick={() => openVendorAssignment(work.id)}><Users /> Choose internal team or vendor</button> : null}
+          {hasPermission("createWork") && work.status !== "cancelled" ? <button className="to-button" type="button" onClick={() => openMaintenanceCostEntry(work.id)}><CircleDollarSign /> Record maintenance cost</button> : null}
+          {hasPermission("createWork") && work.status === "completed" ? <button className="to-button primary" type="button" onClick={() => openCompletionReview(work.id)}><CheckCircle2 /> Verify completion</button> : null}
+          {hasPermission("issueVendorWork") && issuance && issuance.response !== "accepted" && issuance.response !== "declined" ? <button className="to-button" type="button" onClick={() => openVendorProposalReview(work.id)}><CalendarCheck /> Review vendor response</button> : null}
+        </div>;
+      })() : null}
     <DetailView
       dataset={dataset}
       detail={detail}
@@ -2024,13 +3395,39 @@ export function TraceOpsApp() {
       onAssignVendor={openVendorAssignment}
       onOpenExternal={openExternalWorkOrder}
       onStartVisit={openVisitForWork}
+      onInternalUpdate={openInternalWorkUpdate}
       onRecordInvoice={openInvoiceForWork}
       onOpenSpend={openWorkInSpend}
+      onCreateWorkForStore={openWorkOrderDrawer}
+      onConfigureStore={(storeId) => { setWorkflowStoreId(storeId); setDrawer("store-services"); }}
+      onAddAssetForStore={(storeId) => { setWorkflowStoreId(storeId); setDrawer("new-asset"); }}
+      onAddComponent={(assetId) => { setWorkflowAssetId(assetId); setDrawer("new-component"); }}
+      onCreatePmForAsset={(assetId, storeId) => { setWorkflowAssetId(assetId); setWorkflowStoreId(storeId); setDrawer("new-pm"); }}
       canClassify={hasPermission("classifyWork")}
-      canIssueVendorWork={hasPermission("issueVendorWork")}
+      canIssueVendorWork={hasPermission("issueVendorWork") && (detail.kind !== "work" || dataset.assignments.some((assignment) => assignment.workOrderId === detail.id && assignment.status !== "declined"))}
       canRecordVisits={hasPermission("recordVisits")}
       canRecordInvoice={hasPermission("createWork") && capabilities.invoiceSafeguard}
       canSimulateVendorResponse={hasPermission("simulateVendorResponse")}
+      canManage={hasPermission("manageSuite")}
+    />
+    </>
+  ) : view === "exceptions" ? (
+    <ExceptionQueue
+      dataset={dataset}
+      exceptions={capabilities.invoiceSafeguard ? dataset.exceptions : dataset.exceptions.filter((record) => !isInvoiceException(record))}
+      scopeLabel={scopeLabel}
+      onOpenSource={openOperationsSource}
+    />
+  ) : view === "visits" ? (
+    <ActiveVisitWorkspace
+      key={visitWorkspaceInitialId ?? "visit-workspace"}
+      dataset={dataset}
+      visits={dataset.visits}
+      scopeLabel={scopeLabel}
+      initialVisitId={visitWorkspaceInitialId ?? undefined}
+      onOpenWork={(id) => { setView("work"); setDetail({ kind: "work", id }); }}
+      onOpenStore={(id) => { setView("stores"); setDetail({ kind: "store", id }); }}
+      onOpenVendor={(id) => { setView("vendors"); setDetail({ kind: "vendor", id }); }}
     />
   ) : view === "requests" ? (
     <RequestWorkspace
@@ -2113,47 +3510,112 @@ export function TraceOpsApp() {
     <TodayView
       dataset={dataset}
       activeVisits={activeVisits}
-      exceptions={openExceptions}
-      invoicedSpend={invoicedSpend}
+      exceptions={visibleOpenExceptions}
       onNavigate={navigate}
-      onOpen={setDetail}
+      onOpenSource={openOperationsSource}
       onCreate={() => openWorkOrderDrawer()}
       onStorePortal={() => openStorePortal(GUIDED_DEMO_IDS.store)}
       onVisit={() => { if (!guardPermission("recordVisits", "record vendor visits")) return; setVisitStoreId(null); setVisitVendorId(null); setVisitWorkOrderId(null); setDrawer("visit"); }}
+      onInvoiceReview={() => openInvoiceEvidenceReview(true)}
+      onOpenSpend={() => openMaintenanceSpend(true)}
+      onOpenExceptions={() => navigate("exceptions")}
+      onOpenVisits={() => { setVisitWorkspaceInitialId(null); navigate("visits"); }}
+      onOpenSpendCategory={openSpendCategory}
       scopeLabel={scopeLabel}
       roleLabel={rolePolicy.label}
       canCreateWork={hasPermission("createWork")}
       canUseStorePortal={hasPermission("recordVisits")}
       canRecordVisits={hasPermission("recordVisits")}
+      invoiceSafeguardEnabled={capabilities.invoiceSafeguard}
     />
   ) : view === "stores" ? (
     <StoresView dataset={dataset} onOpen={(id) => setDetail({ kind: "store", id })} onCreate={() => openWorkOrderDrawer()} onNewStore={() => setDrawer("new-store")} canCreateWork={hasPermission("createWork")} canCreateStore={hasPermission("createStore")} />
   ) : view === "work" ? (
     <WorkView dataset={dataset} onOpen={(id) => setDetail({ kind: "work", id })} onCreate={() => openWorkOrderDrawer()} canCreateWork={hasPermission("createWork")} />
   ) : view === "vendors" ? (
-    <VendorsView dataset={dataset} onOpen={(id) => setDetail({ kind: "vendor", id })} />
-  ) : view === "spend" ? (
-    <SpendView
-      key={`${spendPreset?.regionId ?? "all"}-${spendPreset?.storeId ?? "all"}-${spendPreset?.categoryId ?? "all"}`}
+    <VendorsView
       dataset={dataset}
-      onOpenWork={(id) => setDetail({ kind: "work", id })}
-      onOpenStore={(id) => setDetail({ kind: "store", id })}
-      onOpenAsset={(id) => setDetail({ kind: "asset", id })}
-      onNavigate={navigate}
-      initialRegionId={spendPreset?.regionId}
-      initialStoreId={spendPreset?.storeId}
-      initialCategoryId={spendPreset?.categoryId}
+      onOpen={(id) => setDetail({ kind: "vendor", id })}
+      onNewVendor={() => setDrawer("new-vendor")}
+      canManage={hasPermission("manageSuite")}
     />
+  ) : view === "spend" ? (
+    <>
+      <div className="to-detail-tools" role="tablist" aria-label="Maintenance cost views">
+        <button
+          className={`to-button ${!capabilities.invoiceSafeguard || spendPreset?.mode !== "evidence_review" ? "primary" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={!capabilities.invoiceSafeguard || spendPreset?.mode !== "evidence_review"}
+          onClick={() => setSpendPreset((current) => ({
+            regionId: current?.regionId ?? "all",
+            storeId: current?.storeId ?? "all",
+            categoryId: current?.categoryId ?? "all",
+            mode: "overview",
+          }))}
+        >
+          <CircleDollarSign /> Maintenance costs
+        </button>
+        {capabilities.invoiceSafeguard ? <button
+          className={`to-button ${spendPreset?.mode === "evidence_review" ? "primary" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={spendPreset?.mode === "evidence_review"}
+          onClick={() => openInvoiceEvidenceReview(false)}
+        >
+          <ReceiptText /> Invoice evidence review
+        </button> : null}
+      </div>
+      {capabilities.invoiceSafeguard && spendPreset?.mode === "evidence_review" ? (
+        <InvoiceEvidenceQueue
+          dataset={dataset}
+          scopeLabel={maintenanceSpendScopeLabel}
+          scope={maintenanceSpendState}
+          initialFilter="needs_review"
+          value={invoiceEvidenceQueueValue}
+          onChange={setInvoiceEvidenceQueueValue}
+          onOpenInvoice={(id) => { setInvoiceDetailReturn("evidence"); setDetail({ kind: "invoice", id }); }}
+          onOpenWork={(id) => setDetail({ kind: "work", id })}
+        />
+      ) : (
+        <MaintenanceSpendWorkspace
+          dataset={dataset}
+          scopeLabel={scopeLabel}
+          value={maintenanceSpendState}
+          onChange={setMaintenanceSpendState}
+          onOpenWork={(id) => setDetail({ kind: "work", id })}
+          onOpenStore={(id) => setDetail({ kind: "store", id })}
+          onOpenAsset={(id) => setDetail({ kind: "asset", id })}
+          onOpenVendor={(id) => setDetail({ kind: "vendor", id })}
+          onOpenInvoice={(id) => { setInvoiceDetailReturn("spend"); setDetail({ kind: "invoice", id }); }}
+          onGenerateReport={(state) => openReportBuilder(
+            "operating_review",
+            state.basis === "linked_invoice" ? "invoice_linked" : state.basis,
+            state,
+          )}
+          canGenerate={hasPermission("generateReports")}
+          invoiceEvidenceEnabled={capabilities.invoiceSafeguard}
+        />
+      )}
+    </>
   ) : view === "equipment" ? (
     <EquipmentView
       dataset={dataset}
       onOpenWork={(id) => setDetail({ kind: "work", id })}
       onOpenAsset={(id) => setDetail({ kind: "asset", id })}
+      onNewAsset={() => { setWorkflowStoreId(null); setDrawer("new-asset"); }}
+      canManage={hasPermission("manageSuite")}
     />
   ) : view === "pm" ? (
-    <PmView dataset={dataset} onOpenWork={(id) => setDetail({ kind: "work", id })} />
+    <PmView
+      dataset={dataset}
+      onOpenWork={(id) => setDetail({ kind: "work", id })}
+      onOpenOccurrence={(id) => setDetail({ kind: "pm", id })}
+      onNewPlan={() => { setWorkflowStoreId(null); setWorkflowAssetId(null); setDrawer("new-pm"); }}
+      canManage={hasPermission("manageSuite")}
+    />
   ) : (
-    <ReportsView dataset={dataset} savedReports={savedReports} onSave={(title) => setSavedReports((current) => [title, ...current])} canGenerate={hasPermission("generateReports")} scopeLabel={scopeLabel} />
+    <ReportsView dataset={dataset} savedReports={savedReports} onBuild={openReportBuilder} onOpenReport={(id) => setDetail({ kind: "report", id })} canGenerate={hasPermission("generateReports")} scopeLabel={scopeLabel} />
   );
 
   const drawerTitle =
@@ -2162,35 +3624,79 @@ export function TraceOpsApp() {
       : drawer === "request-form"
         ? "Report a store issue"
         : drawer === "assign-vendor"
-          ? "Choose an outside vendor"
+          ? "Choose who handles the work"
       : drawer === "issue-vendor"
         ? "Issue to outside vendor"
         : drawer === "record-invoice"
-          ? "Record and match invoice"
+          ? "Attach and link vendor invoice"
+        : drawer === "record-cost"
+          ? "Record maintenance cost"
+        : drawer === "completion-review"
+          ? "Verify completed work"
+        : drawer === "vendor-proposal"
+          ? "Review vendor scheduling"
+        : drawer === "internal-update"
+          ? "Update internal maintenance work"
+        : drawer === "report-builder"
+          ? "Generate management report"
         : drawer === "store-portal"
           ? "Store portal"
           : drawer === "capabilities"
             ? "Suite settings"
+            : drawer === "taxonomy"
+              ? "Company naming structure"
             : drawer === "new-store"
               ? "Create a store"
+              : drawer === "new-vendor"
+                ? "Add an approved vendor"
+                : drawer === "store-services"
+                  ? "Configure store service areas"
+                  : drawer === "new-asset"
+                    ? "Add equipment"
+                    : drawer === "new-component"
+                      ? "Add equipment component"
+                      : drawer === "new-pm"
+                        ? "Create preventive-maintenance plan"
               : drawer === "classify-work"
                 ? "Update equipment classification"
                 : "Vendor check-in";
   const drawerSubtitle =
     drawer === "create-work"
-      ? "Start simple. Equipment and financial controls can be added later."
+      ? "Start simple. Equipment, cost detail, and safeguards can be added later."
       : drawer === "request-form"
         ? "A quick employee report becomes a permanent manager-review record."
         : drawer === "assign-vendor"
-          ? "Search approved providers by name, specialty, equipment, or common language."
+          ? "Use an internal maintenance team or search the approved vendor network. Nothing is sent until you review it."
       : drawer === "issue-vendor"
         ? "This customer work order becomes the vendor’s authorization and invoice reference."
         : drawer === "record-invoice"
-          ? "Keep vendor billing separate from visit evidence, then connect it through the customer work-order number."
+          ? "Link supporting vendor billing to maintenance records without replacing the accounting system."
+        : drawer === "record-cost"
+          ? "Capture operational work cost without creating an invoice, payable, or accounting entry."
+        : drawer === "completion-review"
+          ? "Close, return for follow-up, or reopen the work independently of invoice review."
+        : drawer === "vendor-proposal"
+          ? "Accept a proposed window, request another date, or attribute a response received by phone or email."
+        : drawer === "internal-update"
+          ? "Move internal work through accountable states and record the maintenance outcome."
+        : drawer === "report-builder"
+          ? "Freeze the selected scope, period, definitions, and source records into a reusable management record."
         : drawer === "capabilities"
           ? "Use only the controls that create value for this operator."
+          : drawer === "taxonomy"
+            ? "Create shared service areas and optional drill-down levels without forcing every store to use the same depth."
           : drawer === "new-store"
             ? "Create the location first, then add service structure only where it helps."
+            : drawer === "new-vendor"
+              ? "Make the provider searchable by name, plain-language specialty, equipment, and coverage."
+              : drawer === "store-services"
+                ? "Choose the shared company categories this location actually uses."
+                : drawer === "new-asset"
+                  ? "Start with the useful identity and lifecycle facts; deeper detail remains optional."
+                  : drawer === "new-component"
+                    ? "Add a replaceable or diagnostically useful part beneath the selected asset."
+                    : drawer === "new-pm"
+                      ? "Create the plan and its first actionable occurrence in one workflow."
             : drawer === "classify-work"
               ? "Move from store-level work to category, system, asset, or component at any time."
               : "Focused store experience · Demo mode";
@@ -2211,8 +3717,8 @@ export function TraceOpsApp() {
         <nav className="to-nav" aria-label="Intelligence navigation">
           {intelligenceNavItems.map((item) => <NavButton key={item.view} item={item} active={view === item.view && !detail} onClick={() => navigate(item.view)} />)}
         </nav>
-        {hasPermission("manageSuite") ? <><p className="to-nav-label">Configure</p><nav className="to-nav"><button type="button" onClick={() => setDrawer("capabilities")}><Settings2 /> Suite settings</button></nav></> : null}
-        <div className="to-sidebar-foot"><span className="to-demo-pill">Demo mode</span><br />{scopeLabel}<br />{dataset.vendors.length} approved vendors · source-linked financials.</div>
+        {hasPermission("manageSuite") ? <><p className="to-nav-label">Configure</p><nav className="to-nav"><button type="button" onClick={() => setDrawer("taxonomy")}><Layers3 /> Naming structure</button><button type="button" onClick={() => setDrawer("capabilities")}><Settings2 /> Suite settings</button></nav></> : null}
+        <div className="to-sidebar-foot"><span className="to-demo-pill">Demo mode</span><br />{scopeLabel}<br />{dataset.vendors.length} approved vendors · source-linked maintenance records.</div>
       </aside>
 
       <main className="to-main">
@@ -2232,7 +3738,7 @@ export function TraceOpsApp() {
             ) : null}
           </div>
           <div className="to-top-actions">
-            <button className="to-icon-button" type="button" aria-label="Notifications" onClick={() => setNotice(`${openExceptions.length} open exceptions are included in the Today queue.`)}><Bell /></button>
+            <button className="to-icon-button" type="button" aria-label={`Open ${visibleOpenExceptions.length} exceptions`} onClick={() => navigate("exceptions")}><Bell /></button>
             <select className="to-role" value={roleId} onChange={(event) => changeRole(event.target.value as DemoRoleId)} aria-label="Demo role">
               {demoRolePolicies.map((policy) => <option value={policy.id} key={policy.id}>{policy.label}</option>)}
             </select>
@@ -2256,7 +3762,7 @@ export function TraceOpsApp() {
       </nav>
 
       {drawer ? (
-        <DrawerShell title={drawerTitle} subtitle={drawerSubtitle} onClose={() => { setDrawer(null); setPendingAuthorization(null); setClassificationWorkId(null); setWorkInitialStoreId(null); setAssignmentWorkId(null); setInvoiceWorkId(null); setVisitVendorId(null); setVisitWorkOrderId(null); }}>
+        <DrawerShell title={drawerTitle} subtitle={drawerSubtitle} onClose={() => { setDrawer(null); setPendingAuthorization(null); setClassificationWorkId(null); setWorkInitialStoreId(null); setAssignmentWorkId(null); setInvoiceWorkId(null); setCostWorkId(null); setCompletionWorkId(null); setProposalWorkId(null); setInternalWorkId(null); setReportTemplate(null); setReportCostBasisPreset("recorded"); setReportSpendPreset(null); setVisitVendorId(null); setVisitWorkOrderId(null); setWorkflowStoreId(null); setWorkflowAssetId(null); }}>
           {drawer === "create-work" ? (
             <WorkOrderCreation
               stores={storeOptions}
@@ -2295,41 +3801,149 @@ export function TraceOpsApp() {
                 <ClipboardList />
                 <span>
                   <strong>{assignmentWork.number} · {assignmentWork.title}</strong>
-                  <small>Selecting a vendor does not send anything yet. You will review the authorization next.</small>
+                  <small>Assignment only chooses responsibility. Outside-vendor work is reviewed before anything is sent.</small>
                 </span>
               </div>
-              <VendorPicker
-                vendors={vendorOptions}
-                storeId={assignmentWork.storeId}
-                value={assignmentVendorId}
-                onChange={setAssignmentVendorId}
-              />
-              <button className="to-button primary to-full" type="button" disabled={!assignmentVendorId} onClick={assignVendorToWork}>
-                <ArrowRight /> Assign selected vendor
+              <div className="to-response-actions" role="group" aria-label="Assignment type">
+                <button className={`to-button ${assignmentMode === "internal" ? "primary" : ""}`} type="button" onClick={() => setAssignmentMode("internal")}><Wrench /> Internal maintenance</button>
+                <button className={`to-button ${assignmentMode === "external" ? "primary" : ""}`} type="button" onClick={() => setAssignmentMode("external")}><Truck /> Outside vendor</button>
+              </div>
+              {assignmentMode === "internal" ? (
+                <div className="to-field">
+                  <label htmlFor="assignment-team">Internal maintenance team</label>
+                  <select id="assignment-team" value={assignmentTeamId} onChange={(event) => setAssignmentTeamId(event.target.value)}>
+                    <option value="">Choose a team</option>
+                    {dataset.teams.map((team) => <option key={team.id} value={team.id}>{team.name} · {team.description}</option>)}
+                  </select>
+                  <small>The team receives the same accountable work record without vendor issuance or invoice requirements.</small>
+                </div>
+              ) : (
+                <VendorPicker
+                  vendors={vendorOptions}
+                  storeId={assignmentWork.storeId}
+                  value={assignmentVendorId}
+                  onChange={setAssignmentVendorId}
+                />
+              )}
+              <button className="to-button primary to-full" type="button" disabled={assignmentMode === "internal" ? !assignmentTeamId : !assignmentVendorId} onClick={assignHandlerToWork}>
+                <ArrowRight /> Assign {assignmentMode === "internal" ? "internal team" : "selected vendor"}
               </button>
             </div>
           ) : drawer === "issue-vendor" && pendingAuthorization ? (
             <VendorServiceAuthorization authorization={pendingAuthorization} onIssue={issueAuthorization} onSaveDraft={(draft) => { setWorkOrders((current) => current.map((work) => work.id === draft.workOrderId ? { ...work, notToExceedMinor: draft.nteMinorUnits } : work)); setDraftAcceptanceByWork((current) => ({ ...current, [draft.workOrderId]: draft.acceptanceRequested })); setDrawer(null); setNotice(`${pendingAuthorization.customerWorkOrderNumber} authorization settings saved without sending. Reopen it from the work-order record.`); }} defaultAcceptanceRequested={draftAcceptanceByWork[pendingAuthorization.workOrderId] ?? capabilities.vendorAcceptance} />
           ) : drawer === "record-invoice" && invoiceWork && invoiceVendor ? (
             <InvoiceEntryForm work={invoiceWork} vendor={invoiceVendor} onSubmit={recordInvoiceForWork} />
+          ) : drawer === "record-cost" && costWork ? (
+            <MaintenanceCostEntryForm
+              workOrder={costWork}
+              existingRecordedLines={dataset.costLines.filter((line) => line.workOrderId === costWork.id && line.basis === "recorded")}
+              onSubmit={recordMaintenanceCost}
+            />
+          ) : drawer === "completion-review" && completionWork ? (
+            <WorkCompletionReview
+              workOrder={completionWork}
+              visits={dataset.visits.filter((visit) => visit.workOrderId === completionWork.id)}
+              onSubmit={reviewWorkCompletion}
+            />
+          ) : drawer === "vendor-proposal" && proposalWork && proposalIssuance ? (
+            <VendorProposalReview
+              workOrder={proposalWork}
+              issuance={proposalIssuance}
+              vendorName={proposalVendor?.displayName}
+              onSubmit={reviewVendorProposal}
+            />
+          ) : drawer === "internal-update" && internalWork && internalTeam ? (
+            <InternalWorkUpdateForm work={internalWork} teamName={internalTeam.name} onSubmit={updateInternalWork} />
+          ) : drawer === "report-builder" && reportTemplate ? (
+            <ReportBuilderForm
+              template={reportTemplate}
+              scopeLabel={reportSpendPreset ? maintenanceScopeLabel(reportSpendPreset) : scopeLabel}
+              initialCostBasis={reportCostBasisPreset}
+              initialPeriodLabel={reportSpendPreset?.period === "month" ? "August 2026 month to date" : reportSpendPreset?.period === "ytd" ? "2026 year to date" : "Trailing 12 months through August 10, 2026"}
+              invoiceEvidenceEnabled={capabilities.invoiceSafeguard}
+              onSubmit={generateReport}
+            />
           ) : drawer === "store-portal" ? (
             <StorePortal
               dataset={dataset}
               storeId={storePortalStoreId}
               onWork={openEmployeeRequestForm}
               onVisit={(storeId) => { setVisitStoreId(storeId); setVisitVendorId(null); setVisitWorkOrderId(null); setDrawer("visit"); }}
-              onOpenIssues={() => { setDrawer(null); navigate("requests"); }}
+              onOpenIssues={() => {
+                const portalStore = dataset.stores.find((store) => store.id === storePortalStoreId);
+                const firstStoreRequest = requestInboxItems.find((request) => request.store.id === storePortalStoreId);
+                setRequestInboxValue({
+                  query: portalStore?.storeNumber ?? "",
+                  filter: "all",
+                  selectedRequestId: firstStoreRequest?.id ?? null,
+                });
+                setDrawer(null);
+                navigate("requests");
+              }}
             />
           ) : drawer === "capabilities" ? (
             <CapabilitySettings value={capabilities} onChange={setCapabilities} />
+          ) : drawer === "taxonomy" ? (
+            <TaxonomyManager
+              categories={fullDataset.categories}
+              nodes={fullDataset.taxonomyNodes}
+              onCreateCategory={createTaxonomyCategory}
+              onUpdateCategory={updateTaxonomyCategory}
+              onCreateNode={createTaxonomyNode}
+              onUpdateNode={updateTaxonomyNode}
+            />
           ) : drawer === "new-store" ? (
-            <GuidedStoreSetup regions={dataset.regions} categories={dataset.categories} onCreate={createStore} />
+            <GuidedStoreSetup regions={dataset.regions} categories={dataset.categories.filter((category) => category.active !== false)} onCreate={createStore} />
+          ) : drawer === "new-vendor" ? (
+            <VendorOnboardingForm
+              categories={dataset.categories.filter((category) => category.active !== false)}
+              regions={dataset.regions}
+              onSubmit={onboardVendor}
+            />
+          ) : drawer === "store-services" ? (
+            <StoreServiceAreasForm
+              stores={dataset.stores}
+              categories={dataset.categories.filter((category) => category.active !== false)}
+              initialStoreId={workflowStoreId ?? dataset.stores[0]?.id}
+              initialCategoryIds={dataset.stores.find((store) => store.id === workflowStoreId)?.activeCategoryIds}
+              onSubmit={updateStoreServiceAreas}
+            />
+          ) : drawer === "new-asset" ? (
+            <AssetSetupForm
+              stores={dataset.stores}
+              categories={dataset.categories.filter((category) => category.active !== false)}
+              taxonomyNodes={dataset.taxonomyNodes.filter((node) => node.active !== false)}
+              vendors={dataset.vendors}
+              initialStoreId={workflowStoreId ?? dataset.stores[0]?.id}
+              onSubmit={createAsset}
+            />
+          ) : drawer === "new-component" ? (
+            <ComponentSetupForm
+              assets={dataset.assets}
+              components={dataset.assetComponents}
+              initialAssetId={workflowAssetId ?? dataset.assets[0]?.id}
+              onSubmit={createAssetComponent}
+            />
+          ) : drawer === "new-pm" ? (
+            <PmPlanForm
+              stores={dataset.stores}
+              categories={dataset.categories.filter((category) => category.active !== false)}
+              assets={dataset.assets}
+              internalTeams={dataset.teams}
+              vendors={dataset.vendors}
+              initialStoreId={workflowAssetId ? dataset.assets.find((asset) => asset.id === workflowAssetId)?.storeId : workflowStoreId ?? dataset.stores[0]?.id}
+              initialValue={workflowAssetId ? (() => {
+                const asset = dataset.assets.find((record) => record.id === workflowAssetId);
+                return asset ? { storeId: asset.storeId, categoryId: asset.categoryId, assetId: asset.id } : undefined;
+              })() : undefined}
+              onSubmit={createPmPlan}
+            />
           ) : drawer === "classify-work" && classificationWork && classificationStore ? (
             <WorkClassificationEditor
               workOrder={classificationWork}
               store={classificationStore}
-              categories={dataset.categories}
-              taxonomyNodes={dataset.taxonomyNodes}
+              categories={dataset.categories.filter((category) => category.active !== false)}
+              taxonomyNodes={dataset.taxonomyNodes.filter((node) => node.active !== false)}
               assets={dataset.assets}
               components={dataset.assetComponents}
               onSave={saveWorkClassification}
@@ -2377,7 +3991,123 @@ function InvoiceEntryForm({ work, vendor, onSubmit }: { work: WorkOrder; vendor:
   return <form onSubmit={(event) => { event.preventDefault(); onSubmit({ invoiceNumber, laborMinor: toMinor(labor), materialsMinor: toMinor(materials), tripMinor: toMinor(trip), file }); }}><div className="to-callout"><ReceiptText /><span><strong>{vendor.displayName} · {work.number}</strong><small>The customer work-order reference creates the match. Visit duration remains supporting context, not certified billable labor.</small></span></div><div className="to-grid equal"><div className="to-field"><label htmlFor="invoice-number">Vendor invoice number</label><input id="invoice-number" required value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} /></div><div className="to-field"><label htmlFor="invoice-file">Invoice file <small>(optional in Demo Mode)</small></label><input id="invoice-file" type="file" accept="application/pdf,image/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></div></div><div className="to-grid equal"><div className="to-field"><label htmlFor="invoice-labor">Labor</label><input id="invoice-labor" type="number" min="0" step="0.01" value={labor} onChange={(event) => setLabor(event.target.value)} /></div><div className="to-field"><label htmlFor="invoice-materials">Parts and materials</label><input id="invoice-materials" type="number" min="0" step="0.01" value={materials} onChange={(event) => setMaterials(event.target.value)} /></div><div className="to-field"><label htmlFor="invoice-trip">Trip charge</label><input id="invoice-trip" type="number" min="0" step="0.01" value={trip} onChange={(event) => setTrip(event.target.value)} /></div></div><div className="to-definition-list"><dl><div><dt>Invoice total</dt><dd><strong>{money(totalMinor)}</strong></dd></div><div><dt>Authorization limit</dt><dd>{work.notToExceedMinor ? money(work.notToExceedMinor) : "No NTE used"}</dd></div><div><dt>Safeguard result</dt><dd><Badge value={overNte ? "warning" : "matched"} label={overNte ? "Review · above NTE" : "WO reference matched"} /></dd></div></dl></div><button className="to-button primary to-full" type="submit" disabled={!invoiceNumber.trim() || totalMinor <= 0}><ArrowRight /> Record invoice and update spending</button></form>;
 }
 
-function TodayView({ dataset, activeVisits, exceptions, invoicedSpend, onNavigate, onOpen, onCreate, onStorePortal, onVisit, scopeLabel, roleLabel, canCreateWork, canUseStorePortal, canRecordVisits }: { dataset: DemoDataset; activeVisits: Visit[]; exceptions: ExceptionRecord[]; invoicedSpend: number; onNavigate: (view: View) => void; onOpen: (detail: Detail) => void; onCreate: () => void; onStorePortal: () => void; onVisit: () => void; scopeLabel: string; roleLabel: string; canCreateWork: boolean; canUseStorePortal: boolean; canRecordVisits: boolean }) {
+function InternalWorkUpdateForm({ work, teamName, onSubmit }: { work: WorkOrder; teamName: string; onSubmit: (value: InternalWorkUpdateValue) => void }) {
+  const action: InternalWorkUpdateValue["action"] = ["draft", "ready_to_issue"].includes(work.status) ? "acknowledge" : work.status === "accepted" ? "start" : "complete";
+  const [outcome, setOutcome] = useState<NonNullable<InternalWorkUpdateValue["outcome"]>>("resolved");
+  const [note, setNote] = useState("Inspected the reported condition and completed the required maintenance.");
+  const [cost, setCost] = useState("185.00");
+  const recordedCostMinor = Math.max(0, Math.round((Number(cost) || 0) * 100));
+  return <form onSubmit={(event) => { event.preventDefault(); onSubmit({ action, outcome: action === "complete" ? outcome : undefined, note: action === "complete" ? note : undefined, recordedCostMinor: action === "complete" ? recordedCostMinor : undefined }); }}><div className="to-callout"><Wrench /><span><strong>{teamName} · {work.number}</strong><small>Internal work follows the same accountable state changes as outside work without pretending an outside vendor visit occurred.</small></span></div>{action === "complete" ? <><div className="to-field"><label htmlFor="internal-outcome">Work outcome</label><select id="internal-outcome" value={outcome} onChange={(event) => setOutcome(event.target.value as NonNullable<InternalWorkUpdateValue["outcome"]>)}><option value="resolved">Resolved</option><option value="diagnosed_waiting_parts">Diagnosed · waiting on parts</option><option value="temporary_repair">Temporary repair</option><option value="unresolved">Unresolved</option></select></div><div className="to-field"><label htmlFor="internal-note">Work performed and next context</label><textarea id="internal-note" rows={5} value={note} onChange={(event) => setNote(event.target.value)} /></div><div className="to-field"><label htmlFor="internal-cost">Recorded maintenance cost</label><input id="internal-cost" type="number" min="0" step="0.01" value={cost} onChange={(event) => setCost(event.target.value)} /><small>Internal entry for maintenance visibility—not payroll or accounting.</small></div></> : <div className="to-definition-list"><dl><div><dt>Current status</dt><dd>{words(work.status)}</dd></div><div><dt>Next state</dt><dd>{action === "acknowledge" ? "Accepted by internal maintenance" : "Work in progress"}</dd></div></dl></div>}<button className="to-button primary to-full" type="submit"><ArrowRight /> {action === "acknowledge" ? "Acknowledge internal work" : action === "start" ? "Start internal work" : "Save outcome and maintenance cost"}</button></form>;
+}
+
+function ReportBuilderForm({ template, scopeLabel, initialCostBasis, initialPeriodLabel, invoiceEvidenceEnabled, onSubmit }: { template: SavedReportRecord["template"]; scopeLabel: string; initialCostBasis: SavedReportRecord["costBasis"]; initialPeriodLabel: string; invoiceEvidenceEnabled: boolean; onSubmit: (value: ReportBuilderValue) => void }) {
+  const templateTitle = template === "operating_review" ? "Monthly operating review" : template === "vendor_accountability" ? "Vendor accountability review" : "Equipment lifecycle review";
+  const [title, setTitle] = useState(templateTitle);
+  const [periodLabel, setPeriodLabel] = useState(initialPeriodLabel);
+  const [costBasis, setCostBasis] = useState<SavedReportRecord["costBasis"]>(invoiceEvidenceEnabled ? initialCostBasis : "recorded");
+  return <form onSubmit={(event) => { event.preventDefault(); onSubmit({ title, periodLabel, costBasis }); }}><div className="to-callout"><FileBarChart /><span><strong>{templateTitle}</strong><small>The generated record preserves scope, definitions, cost basis, and clickable source records. It does not create an accounting report.</small></span></div><div className="to-field"><label htmlFor="report-title">Report title</label><input id="report-title" required value={title} onChange={(event) => setTitle(event.target.value)} /></div><div className="to-field"><label htmlFor="report-scope">Operating scope</label><input id="report-scope" value={scopeLabel} disabled /></div><div className="to-field"><label htmlFor="report-period">Review period</label><select id="report-period" value={periodLabel} onChange={(event) => setPeriodLabel(event.target.value)}><option>Trailing 12 months through August 10, 2026</option><option>August 2026 month to date</option><option>2026 year to date</option><option>Last completed quarter</option></select></div><div className="to-field"><label htmlFor="report-basis">Maintenance cost basis</label><select id="report-basis" value={costBasis} onChange={(event) => setCostBasis(event.target.value as SavedReportRecord["costBasis"])}><option value="recorded">Recorded maintenance cost</option><option value="authorized">Current authorization / NTE</option><option value="invoice_linked">Linked vendor invoice amount</option></select><small>Invoice-linked amounts are optional supporting evidence, not the default platform basis.</small></div><button className="to-button primary to-full" type="submit" disabled={!title.trim()}><ArrowRight /> Generate source-linked report</button></form>;
+}
+
+function TodayView({ dataset, activeVisits, exceptions, onNavigate, onOpenSource, onCreate, onStorePortal, onVisit, onInvoiceReview, onOpenSpend, onOpenExceptions, onOpenVisits, onOpenSpendCategory, scopeLabel, roleLabel, canCreateWork, canUseStorePortal, canRecordVisits, invoiceSafeguardEnabled }: { dataset: DemoDataset; activeVisits: Visit[]; exceptions: ExceptionRecord[]; onNavigate: (view: View) => void; onOpenSource: (source: OperationsSourceReference) => void; onCreate: () => void; onStorePortal: () => void; onVisit: () => void; onInvoiceReview: () => void; onOpenSpend: () => void; onOpenExceptions: () => void; onOpenVisits: () => void; onOpenSpendCategory: (categoryId: string) => void; scopeLabel: string; roleLabel: string; canCreateWork: boolean; canUseStorePortal: boolean; canRecordVisits: boolean; invoiceSafeguardEnabled: boolean }) {
+  const pendingRequests = dataset.requests.filter((request) => request.reviewStatus === "new");
+  const reviewInvoiceIds = new Set<string>();
+  dataset.invoices.filter((invoice) => invoice.status === "needs_review").forEach((invoice) => reviewInvoiceIds.add(invoice.id));
+  dataset.invoiceWorkLinks.filter((link) => link.matchStatus === "review_needed").forEach((link) => reviewInvoiceIds.add(link.invoiceId));
+  exceptions.forEach((exception) => {
+    if (exception.invoiceId) reviewInvoiceIds.add(exception.invoiceId);
+    exception.sourceRecordIds.forEach((sourceId) => {
+      if (dataset.invoices.some((invoice) => invoice.id === sourceId)) reviewInvoiceIds.add(sourceId);
+    });
+  });
+  dataset.auditEvents
+    .filter((event) => event.entityType === "invoice" && event.eventType === "maintenance_invoice_evidence_reviewed")
+    .forEach((event) => reviewInvoiceIds.delete(event.entityId));
+  const recordedCost = dataset.workOrders.reduce((sum, work) => sum + recordedMaintenanceCost(dataset, work.id), 0);
+  const categoryRows = dataset.categories
+    .map((category) => ({
+      category,
+      cost: dataset.workOrders
+        .filter((work) => work.categoryId === category.id)
+        .reduce((sum, work) => sum + recordedMaintenanceCost(dataset, work.id), 0),
+    }))
+    .filter((row) => row.cost > 0)
+    .sort((left, right) => right.cost - left.cost)
+    .slice(0, 6);
+  const priorityExceptions = exceptions
+    .slice()
+    .sort((left, right) => {
+      const severityOrder = { critical: 0, warning: 1, info: 2 };
+      return severityOrder[left.severity] - severityOrder[right.severity] || left.dueAt.localeCompare(right.dueAt);
+    });
+  const todayDonutBackground = costDonutBackground(
+    categoryRows.map((row) => ({ cost: row.cost, color: row.category.color })),
+    recordedCost,
+  );
+
+  return <>
+    <PageHead eyebrow={`${roleLabel} · ${scopeLabel}`} title="What needs attention today?" description="Start with the signal. Every number opens the exact queue or source record behind it.">
+      {canUseStorePortal ? <button className="to-button" type="button" onClick={onStorePortal}><StoreIcon /> Store portal</button> : null}
+      {canRecordVisits ? <button className="to-button" type="button" onClick={onVisit}><MapPin /> Vendor check-in</button> : null}
+      {canCreateWork ? <button className="to-button primary" type="button" onClick={onCreate}><Plus /> New work order</button> : null}
+    </PageHead>
+    <section className="to-kpi-grid">
+      <button className="to-kpi" type="button" onClick={onOpenVisits}><div className="to-kpi-top"><span>Active vendor visits</span><span className="to-kpi-icon"><MapPin /></span></div><strong>{activeVisits.length}</strong><span>Open the onsite workspace and exact visit records</span></button>
+      <button className="to-kpi" data-tone="coral" type="button" onClick={() => onNavigate("requests")}><div className="to-kpi-top"><span>Requests awaiting review</span><span className="to-kpi-icon"><Inbox /></span></div><strong>{pendingRequests.length}</strong><span>Employee reports requiring a manager decision</span></button>
+      <button className="to-kpi" data-tone="blue" type="button" onClick={onOpenSpend}><div className="to-kpi-top"><span>Recorded maintenance cost</span><span className="to-kpi-icon"><CircleDollarSign /></span></div><strong>{money(recordedCost)}</strong><span>Recorded work cost, with invoice evidence only as fallback</span></button>
+      {invoiceSafeguardEnabled ? <button className="to-kpi" data-tone="amber" type="button" onClick={onInvoiceReview}><div className="to-kpi-top"><span>Invoice evidence review</span><span className="to-kpi-icon"><ReceiptText /></span></div><strong>{reviewInvoiceIds.size}</strong><span>Distinct invoices with factual safeguards to review</span></button> : null}
+    </section>
+    <section className="to-grid two">
+      <article className="to-panel">
+        <header className="to-panel-head"><div><h2>Priority exceptions</h2><p>Each signal resolves to its underlying record.</p></div><button className="to-link-button" type="button" onClick={onOpenExceptions}>Open exception queue <ArrowRight /></button></header>
+        <div className="to-exception-list">
+          {priorityExceptions.slice(0, 6).map((exception) => {
+            const pmOccurrenceId = exception.type === "pm_overdue"
+              ? exception.sourceRecordIds.find((id) => dataset.pmOccurrences.some((occurrence) => occurrence.id === id))
+              : undefined;
+            const source: OperationsSourceReference | undefined = exception.invoiceId
+              ? { kind: "invoice", id: exception.invoiceId }
+              : exception.visitId
+                ? { kind: "visit", id: exception.visitId }
+                : exception.workOrderId
+                  ? { kind: "work", id: exception.workOrderId }
+                  : pmOccurrenceId
+                    ? { kind: "pm", id: pmOccurrenceId }
+                    : exception.assetId
+                      ? { kind: "asset", id: exception.assetId }
+                      : exception.storeId
+                        ? { kind: "store", id: exception.storeId }
+                        : undefined;
+            return <button className="to-exception" type="button" key={exception.id} onClick={() => source ? onOpenSource(source) : onOpenExceptions()}>
+              <span className="to-exception-icon" data-tone={exception.severity === "critical" ? "red" : exception.invoiceId ? "blue" : undefined}>{exception.invoiceId ? <ReceiptText /> : exception.visitId ? <MapPin /> : <AlertTriangle />}</span>
+              <span className="to-record-primary"><strong>{exception.title}</strong><span>{exception.description}</span></span>
+              <span className="to-record-meta">{exception.storeId ? `Store ${dataset.stores.find((store) => store.id === exception.storeId)?.storeNumber}` : "Portfolio"}<br />Due {dateLabel(exception.dueAt)}</span>
+              <Badge value={exception.severity} />
+            </button>;
+          })}
+        </div>
+      </article>
+      <article className="to-panel">
+        <header className="to-panel-head"><div><h2>Onsite now</h2><p>QR, secure link, store device, and app feed one record.</p></div><button className="to-link-button" type="button" onClick={onOpenVisits}>Open visits <ArrowRight /></button></header>
+        <div className="to-panel-body"><div className="to-visit-list">
+          {activeVisits.length ? activeVisits.map((visit) => {
+            const store = dataset.stores.find((record) => record.id === visit.storeId);
+            const vendor = dataset.vendors.find((record) => record.id === visit.vendorId);
+            return <button className="to-visit" type="button" key={visit.id} onClick={() => onOpenSource({ kind: "visit", id: visit.id })}><span className="to-avatar">{initials(visit.technicianName)}</span><span><strong>{visit.technicianName}</strong><span>{vendor?.displayName ?? "Internal maintenance"} · Store {store?.storeNumber}</span></span><time>{timeLabel(visit.checkedInAt)}</time></button>;
+          }) : <div className="to-empty"><MapPin /><strong>No technicians onsite</strong><p>New check-ins will appear here immediately.</p></div>}
+        </div></div>
+      </article>
+    </section>
+    <section className="to-grid two">
+      <article className="to-panel">
+        <header className="to-panel-head"><div><h2>Where maintenance cost is concentrated</h2><p>Recorded maintenance cost by service area.</p></div><button className="to-link-button" type="button" onClick={onOpenSpend}>Explore all costs <ArrowRight /></button></header>
+        <div className="to-chart"><div className="to-donut" style={{ background: todayDonutBackground }}><div className="to-donut-center"><strong>{money(recordedCost)}</strong><span>selected cost</span></div></div><div className="to-legend">{categoryRows.map((row, index) => <button type="button" onClick={() => onOpenSpendCategory(row.category.id)} key={row.category.id}><i style={{ background: row.category.color || ["#0b7568", "#df6d50", "#376f9e", "#d59a47"][index % 4] }} /><strong>{row.category.label}</strong><span>{recordedCost ? Math.round((row.cost / recordedCost) * 100) : 0}%</span><em>{money(row.cost)}</em></button>)}</div></div>
+      </article>
+      <StoreOutliers dataset={dataset} onOpen={(id) => onOpenSource({ kind: "store", id })} />
+    </section>
+  </>;
+}
+
+export function LegacyTodayView({ dataset, activeVisits, exceptions, invoicedSpend, onNavigate, onOpen, onCreate, onStorePortal, onVisit, scopeLabel, roleLabel, canCreateWork, canUseStorePortal, canRecordVisits }: { dataset: DemoDataset; activeVisits: Visit[]; exceptions: ExceptionRecord[]; invoicedSpend: number; onNavigate: (view: View) => void; onOpen: (detail: Detail) => void; onCreate: () => void; onStorePortal: () => void; onVisit: () => void; scopeLabel: string; roleLabel: string; canCreateWork: boolean; canUseStorePortal: boolean; canRecordVisits: boolean }) {
   const pendingRequests = dataset.requests.filter((request) => request.reviewStatus === "new");
   const invoiceExceptions = exceptions.filter((record) => record.invoiceId);
   const heading = roleLabel === "Store manager"
@@ -2431,10 +4161,10 @@ function WorkView({ dataset, onOpen, onCreate, canCreateWork }: { dataset: DemoD
   return <><PageHead eyebrow="Customer work orders" title="One record from authorization to invoice." description="Internal and outside work stays connected. Every result below is limited to the current role’s assigned stores.">{canCreateWork ? <button className="to-button primary" type="button" onClick={onCreate}><Plus /> Create work order</button> : null}</PageHead><div className="to-toolbar"><div className="to-field grow"><label htmlFor="work-search">Search work</label><input id="work-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Work-order number, store, or problem…" /></div><div className="to-field"><label htmlFor="work-status">Status</label><select id="work-status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="open">All active</option><option value="awaiting_vendor_response">Awaiting vendor</option><option value="onsite">Onsite</option><option value="waiting_parts">Waiting on parts</option><option value="completed">Completed</option><option value="all">Everything</option></select></div><span className="to-filter-count">{rows.length} work orders</span></div><article className="to-panel to-table-wrap"><table className="to-table"><thead><tr><th>Work order</th><th>Store</th><th>Who handles it</th><th>Status</th><th>Next action</th><th>Cost</th></tr></thead><tbody>{rows.map((work) => { const store = dataset.stores.find((record) => record.id === work.storeId); const assignment = dataset.assignments.find((record) => record.workOrderId === work.id); const vendor = assignment?.partyType === "vendor" ? dataset.vendors.find((record) => record.id === assignment.partyId) : undefined; const team = assignment?.partyType === "team" ? dataset.teams.find((record) => record.id === assignment.partyId) : undefined; return <tr key={work.id} onClick={() => onOpen(work.id)}><td><strong>{work.number}</strong><small>{work.title}</small></td><td><strong>#{store?.storeNumber}</strong><small>{store?.address.city}</small></td><td>{vendor?.displayName ?? team?.name ?? (work.fulfillmentMode === "unassigned" ? "Choose later" : words(work.fulfillmentMode))}</td><td><Badge value={work.status} /></td><td>{work.accountable?.nextAction ?? "Review history"}<small>{work.accountable ? `Due ${dateLabel(work.accountable.dueAt)}` : ""}</small></td><td className="to-money">{money(workOrderCost(dataset, work.id))}</td></tr>; })}</tbody></table></article></>;
 }
 
-function VendorsView({ dataset, onOpen }: { dataset: DemoDataset; onOpen: (id: string) => void }) {
+function VendorsView({ dataset, onOpen, onNewVendor, canManage }: { dataset: DemoDataset; onOpen: (id: string) => void; onNewVendor: () => void; canManage: boolean }) {
   const [query, setQuery] = useState("");
   const rows = dataset.vendors.filter((vendor) => [vendor.displayName, vendor.description, ...vendor.aliases, ...vendor.searchTerms, ...vendor.specialties.flatMap((specialty) => [specialty.label, ...specialty.aliases, ...specialty.equipmentTypes])].join(" ").toLowerCase().includes(query.toLowerCase()));
-  return <><PageHead eyebrow="Approved vendor network" title="Find the right vendor by name or what they do." description="Search plain-language needs such as plumber, beer cave, fuel pump, parking-lot lights, or snow removal. Results explain coverage and preference."></PageHead><div className="to-toolbar"><div className="to-field grow"><label htmlFor="vendor-search">Search vendors and specialties</label><input id="vendor-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try refrigeration, plumber, beer cave, or a company name…" /></div><span className="to-filter-count">{rows.length} approved vendors</span></div><div className="to-vendor-grid">{rows.map((vendor) => { const workIds = new Set(dataset.assignments.filter((assignment) => assignment.partyType === "vendor" && assignment.partyId === vendor.id).map((assignment) => assignment.workOrderId)); const active = dataset.workOrders.filter((work) => workIds.has(work.id) && !terminalStatuses.has(work.status)).length; const visits = dataset.visits.filter((visit) => visit.vendorId === vendor.id).length; return <button className="to-card" type="button" key={vendor.id} onClick={() => onOpen(vendor.id)}><header className="to-card-head"><div><h3>{vendor.displayName}</h3><p>{vendor.description}</p></div><Badge value={vendor.status} /></header><div className="to-card-body"><div className="to-tags">{vendor.specialties.slice(0, 4).map((specialty) => <span className="to-tag" key={specialty.label}>{specialty.label}</span>)}</div></div><footer className="to-card-facts"><div><span>Active work</span><strong>{active}</strong></div><div><span>Visits</span><strong>{visits}</strong></div><div><span>Linked spend</span><strong>{money(vendorSpend(dataset, vendor.id))}</strong></div></footer></button>; })}</div></>;
+  return <><PageHead eyebrow="Approved vendor network" title="Find the right vendor by name or what they do." description="Search plain-language needs such as plumber, beer cave, fuel pump, parking-lot lights, or snow removal. Results explain coverage and preference.">{canManage ? <button className="to-button primary" type="button" onClick={onNewVendor}><Plus /> Add approved vendor</button> : null}</PageHead><div className="to-toolbar"><div className="to-field grow"><label htmlFor="vendor-search">Search vendors and specialties</label><input id="vendor-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try refrigeration, plumber, beer cave, or a company name…" /></div><span className="to-filter-count">{rows.length} approved vendors</span></div><div className="to-vendor-grid">{rows.map((vendor) => { const workIds = new Set(dataset.assignments.filter((assignment) => assignment.partyType === "vendor" && assignment.partyId === vendor.id).map((assignment) => assignment.workOrderId)); const active = dataset.workOrders.filter((work) => workIds.has(work.id) && !terminalStatuses.has(work.status)).length; const visits = dataset.visits.filter((visit) => visit.vendorId === vendor.id).length; return <button className="to-card" type="button" key={vendor.id} onClick={() => onOpen(vendor.id)}><header className="to-card-head"><div><h3>{vendor.displayName}</h3><p>{vendor.description}</p></div><Badge value={vendor.status} /></header><div className="to-card-body"><div className="to-tags">{vendor.specialties.slice(0, 4).map((specialty) => <span className="to-tag" key={specialty.label}>{specialty.label}</span>)}</div></div><footer className="to-card-facts"><div><span>Active work</span><strong>{active}</strong></div><div><span>Visits</span><strong>{visits}</strong></div><div><span>Linked spend</span><strong>{money(vendorSpend(dataset, vendor.id))}</strong></div></footer></button>; })}</div></>;
 }
 
 export function LegacySpendView({ dataset, onOpenWork, onNavigate }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onNavigate: (view: View) => void }) {
@@ -2442,7 +4172,7 @@ export function LegacySpendView({ dataset, onOpenWork, onNavigate }: { dataset: 
   return <><PageHead eyebrow="Invoice-linked cost basis · trailing 12 months" title="Every maintenance dollar has a source story." description="Move from company totals to a store, category, asset, work order, visit, and invoice without changing the selected cost basis."><button className="to-button" type="button" onClick={() => onNavigate("reports")}><FileBarChart /> Generate report</button></PageHead><section className="to-kpi-grid"><div className="to-kpi"><div className="to-kpi-top"><span>Selected spend</span><span className="to-kpi-icon"><CircleDollarSign /></span></div><strong>{money(total)}</strong><span>{dataset.invoiceWorkLinks.length} linked cost allocations</span></div><div className="to-kpi" data-tone="coral"><div className="to-kpi-top"><span>Highest category</span><span className="to-kpi-icon"><Gauge /></span></div><strong>{rows[0]?.category.label}</strong><span>{money(rows[0]?.spend ?? 0)} from source invoices</span></div><div className="to-kpi" data-tone="amber"><div className="to-kpi-top"><span>Invoice exceptions</span><span className="to-kpi-icon"><ReceiptText /></span></div><strong>{invoiceReview.length}</strong><span>Human review required before AP handoff</span></div><div className="to-kpi" data-tone="blue"><div className="to-kpi-top"><span>Classified to asset</span><span className="to-kpi-icon"><PackageSearch /></span></div><strong>{Math.round((dataset.invoiceWorkLinks.filter((link) => link.assetId).length / Math.max(1, dataset.invoiceWorkLinks.length)) * 100)}%</strong><span>Unclassified work remains visible in totals</span></div></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Spend by service area</h2><p>Click through to supporting work.</p></div></header><div className="to-panel-body"><div className="to-bar-list">{rows.map((row) => <div className="to-bar-row" key={row.category.id}><span className="to-bar-label"><strong>{row.category.label}</strong><span>{Math.round((row.spend / total) * 100)}% of selected spend</span></span><span className="to-bar-track"><i style={{ width: `${(row.spend / max) * 100}%` }} /></span><b>{money(row.spend)}</b></div>)}</div></div></article><StoreOutliers dataset={dataset} onOpen={(storeId) => { const work = dataset.workOrders.find((record) => record.storeId === storeId); if (work) onOpenWork(work.id); }} /></section><article className="to-panel"><header className="to-panel-head"><div><h2>Invoices needing review</h2><p>Exceptions are facts to review—not automatic accusations.</p></div></header><div className="to-table-wrap"><table className="to-table"><thead><tr><th>Invoice</th><th>Vendor</th><th>Customer WO reference</th><th>Amount</th><th>Status</th></tr></thead><tbody>{invoiceReview.map((invoice) => { const vendor = dataset.vendors.find((record) => record.id === invoice.vendorId); const link = dataset.invoiceWorkLinks.find((record) => record.invoiceId === invoice.id); return <tr key={invoice.id} onClick={() => link ? onOpenWork(link.workOrderId) : undefined}><td><strong>{invoice.invoiceNumber}</strong><small>Received {dateLabel(invoice.receivedAt)}</small></td><td>{vendor?.displayName}</td><td>{invoice.customerWorkOrderReferences.join(", ") || "Missing"}</td><td className="to-money">{money(invoiceTotal(dataset, invoice.id))}</td><td><Badge value={invoice.status} /></td></tr>; })}</tbody></table></div></article></>;
 }
 
-function SpendView({ dataset, onOpenWork, onOpenStore, onOpenAsset, onNavigate, initialRegionId, initialStoreId, initialCategoryId }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenStore: (id: string) => void; onOpenAsset: (id: string) => void; onNavigate: (view: View) => void; initialRegionId?: string; initialStoreId?: string; initialCategoryId?: string }) {
+export function LegacyScopedSpendView({ dataset, onOpenWork, onOpenStore, onOpenAsset, onNavigate, initialRegionId, initialStoreId, initialCategoryId }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenStore: (id: string) => void; onOpenAsset: (id: string) => void; onNavigate: (view: View) => void; initialRegionId?: string; initialStoreId?: string; initialCategoryId?: string }) {
   const [regionId, setRegionId] = useState(initialRegionId ?? "all");
   const [storeId, setStoreId] = useState(initialStoreId ?? "all");
   const [categoryId, setCategoryId] = useState(initialCategoryId ?? "all");
@@ -2477,40 +4207,230 @@ function SpendView({ dataset, onOpenWork, onOpenStore, onOpenAsset, onNavigate, 
   return <><PageHead eyebrow="Invoice-linked cost basis · trailing 12 months" title="Move from the company total to the source record." description="Change operating scope and maintenance depth independently. Every amount below is calculated from the same invoice-to-work-order allocations."><button className="to-button" type="button" onClick={() => onNavigate("reports")}><FileBarChart /> Generate report</button></PageHead><div className="to-toolbar"><div className="to-field"><label htmlFor="spend-region">Region</label><select id="spend-region" value={regionId} onChange={(event) => { setRegionId(event.target.value); setStoreId("all"); }}><option value="all">All regions</option>{dataset.regions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}</select></div><div className="to-field"><label htmlFor="spend-store">Store</label><select id="spend-store" value={storeId} onChange={(event) => setStoreId(event.target.value)}><option value="all">All stores in scope</option>{availableStores.map((store) => <option key={store.id} value={store.id}>#{store.storeNumber} · {store.address.city}</option>)}</select></div><div className="to-field"><label htmlFor="spend-category">Service area</label><select id="spend-category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="all">All service areas</option>{dataset.categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}</select></div><button className="to-button ghost" type="button" onClick={() => { setRegionId("all"); setStoreId("all"); setCategoryId("all"); }}>Reset scope</button></div><div className="to-scope-trail"><span>Company</span><ChevronRight />{selectedRegion ? <><span>{selectedRegion.name}</span><ChevronRight /></> : <span>All regions</span>}{selectedStore ? <><span>Store {selectedStore.storeNumber}</span><ChevronRight /></> : null}<strong>{selectedCategory?.label ?? "All service areas"}</strong></div><section className="to-kpi-grid"><div className="to-kpi"><div className="to-kpi-top"><span>Selected spend</span><span className="to-kpi-icon"><CircleDollarSign /></span></div><strong>{money(total)}</strong><span>{links.length} source-linked allocations · invoice basis</span></div><button className="to-kpi" data-tone="coral" type="button" onClick={() => storeRows[0] && onOpenStore(storeRows[0].store.id)}><div className="to-kpi-top"><span>Highest-cost store</span><span className="to-kpi-icon"><StoreIcon /></span></div><strong>{storeRows[0] ? `#${storeRows[0].store.storeNumber}` : "—"}</strong><span>{money(storeRows[0]?.spend ?? 0)} · click for store record</span></button><button className="to-kpi" data-tone="amber" type="button" onClick={() => assetRows[0] && onOpenAsset(assetRows[0].asset.id)}><div className="to-kpi-top"><span>Highest-cost asset</span><span className="to-kpi-icon"><Gauge /></span></div><strong>{assetRows[0]?.asset.assetCode ?? "Unclassified"}</strong><span>{money(assetRows[0]?.spend ?? 0)} · click for lifecycle history</span></button><div className="to-kpi" data-tone="blue"><div className="to-kpi-top"><span>Mapped to an asset</span><span className="to-kpi-icon"><PackageSearch /></span></div><strong>{total ? Math.round((assetClassified / total) * 100) : 0}%</strong><span>Unclassified spend stays in the selected total</span></div></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Service-area drilldown</h2><p>Choose a category without changing operating scope.</p></div></header><div className="to-panel-body"><div className="to-bar-list">{categoryRows.map((row) => <button className="to-bar-row to-link-row" type="button" key={row.category.id} onClick={() => setCategoryId(row.category.id)}><span className="to-bar-label"><strong>{row.category.label}</strong><span>{row.links.length} source allocations</span></span><span className="to-bar-track"><i style={{ width: `${Math.max(4, (row.spend / maxCategory) * 100)}%`, background: row.category.color }} /></span><b>{money(row.spend)}</b></button>)}</div></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Store drilldown</h2><p>Open a store to see work, visits, equipment, and PM.</p></div></header><div className="to-panel-body"><div className="to-bar-list">{storeRows.slice(0, 8).map((row) => <button className="to-bar-row to-link-row" type="button" key={row.store.id} onClick={() => onOpenStore(row.store.id)}><span className="to-bar-label"><strong>Store {row.store.storeNumber}</strong><span>{row.store.address.city} · {row.links.length} allocations</span></span><span className="to-bar-track"><i style={{ width: `${Math.max(4, (row.spend / maxStore) * 100)}%` }} /></span><b>{money(row.spend)}</b></button>)}</div></div></article></section>{assetRows.length ? <article className="to-panel to-spend-assets"><header className="to-panel-head"><div><h2>Equipment drivers</h2><p>{selectedCategory ? `${selectedCategory.label} · ` : ""}only classified spend appears here.</p></div><span className="to-filter-count">{assetRows.length} assets</span></header><div className="to-record-list">{assetRows.slice(0, 8).map((row) => { const store = dataset.stores.find((record) => record.id === row.asset.storeId); return <button className="to-record-row to-spend-asset-row" type="button" key={row.asset.id} onClick={() => onOpenAsset(row.asset.id)}><span className="to-exception-icon" data-tone="blue"><Gauge /></span><span className="to-record-primary"><strong>{row.asset.name}</strong><span>Store {store?.storeNumber} · {row.asset.assetCode} · {row.asset.manufacturer} {row.asset.model}</span></span><span className="to-record-meta">{row.links.length} allocations</span><strong className="to-money">{money(row.spend)}</strong><ChevronRight /></button>; })}</div></article> : null}<article className="to-panel"><header className="to-panel-head"><div><h2>Supporting source records</h2><p>Open the customer work order behind any selected amount.</p></div><span className="to-filter-count">{links.length} allocations</span></header><div className="to-table-wrap"><table className="to-table"><thead><tr><th>Customer WO</th><th>Store</th><th>Service area</th><th>Vendor invoice</th><th>Match</th><th>Attributed amount</th></tr></thead><tbody>{links.slice(0, 18).map((link) => { const work = dataset.workOrders.find((record) => record.id === link.workOrderId); const store = dataset.stores.find((record) => record.id === link.storeId); const category = dataset.categories.find((record) => record.id === link.categoryId); const invoice = dataset.invoices.find((record) => record.id === link.invoiceId); return <tr key={link.id}><td><button className="to-link-button to-cell-link" type="button" onClick={() => onOpenWork(link.workOrderId)}><span><strong>{work?.number}</strong><small>{work?.title}</small></span><ChevronRight /></button></td><td>#{store?.storeNumber}<small>{store?.address.city}</small></td><td>{category?.label ?? "Unclassified"}</td><td>{invoice?.invoiceNumber}<small>{invoice?.customerWorkOrderReferences.join(", ") || "WO reference missing"}</small></td><td><Badge value={link.matchStatus} /></td><td className="to-money">{money(link.attributedAmountMinor)}</td></tr>; })}</tbody></table></div></article></>;
 }
 
-function EquipmentView({ dataset, onOpenWork, onOpenAsset }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void }) {
+function EquipmentView({ dataset, onOpenWork, onOpenAsset, onNewAsset, canManage }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void; onNewAsset: () => void; canManage: boolean }) {
+  const assets = [...dataset.assets].sort((left, right) => {
+    const leftCost = dataset.workOrders
+      .filter((work) => work.assetId === left.id)
+      .reduce((sum, work) => sum + recordedMaintenanceCost(dataset, work.id), 0);
+    const rightCost = dataset.workOrders
+      .filter((work) => work.assetId === right.id)
+      .reduce((sum, work) => sum + recordedMaintenanceCost(dataset, work.id), 0);
+    return rightCost - leftCost;
+  });
+
+  return <>
+    <PageHead
+      eyebrow={`${dataset.assets.length} tracked assets`}
+      title="Equipment history that earns its setup."
+      description="Start at store and service area. Add model, serial, warranty, components, and lifecycle depth only where it improves a decision."
+    >
+      {canManage ? <button className="to-button primary" type="button" onClick={onNewAsset}><Plus /> Add equipment</button> : null}
+    </PageHead>
+    <div className="to-asset-grid">
+      {assets.slice(0, 24).map((asset) => {
+        const store = dataset.stores.find((record) => record.id === asset.storeId);
+        const work = dataset.workOrders.filter((record) => record.assetId === asset.id);
+        const cost = work.reduce((sum, record) => sum + recordedMaintenanceCost(dataset, record.id), 0);
+        const age = Math.max(0, new Date(dataset.asOf).getUTCFullYear() - Number(asset.installedOn.slice(0, 4)));
+        const review = cost > asset.replacementEstimateMinor * 0.35 || age >= asset.expectedLifeYears;
+        return <article className="to-card" key={asset.id}>
+          <header className="to-card-head">
+            <div><h3>{asset.name}</h3><p>Store {store?.storeNumber} · {asset.locationDetail}<br />{asset.manufacturer} {asset.model}</p></div>
+            {review ? <Badge value="warning" label="Capital review" /> : <Badge value={asset.status} />}
+          </header>
+          <div className="to-card-body">
+            <div className="to-tags">
+              <span className="to-tag">{asset.assetType}</span>
+              <span className="to-tag">{age} years old</span>
+              {asset.warranty ? <span className="to-tag">Warranty to {dateLabel(asset.warranty.endsOn)}</span> : null}
+            </div>
+          </div>
+          <footer className="to-card-facts">
+            <div><span>Recorded cost</span><strong>{money(cost)}</strong></div>
+            <div><span>Work orders</span><strong>{work.length}</strong></div>
+            <div><span>Replace est.</span><strong>{money(asset.replacementEstimateMinor)}</strong></div>
+          </footer>
+          <div className="to-card-actions">
+            <button className="to-card-action" type="button" onClick={() => onOpenAsset(asset.id)}>Open equipment record <ChevronRight /></button>
+            {work[0] ? <button className="to-card-action secondary" type="button" onClick={() => onOpenWork(work[0].id)}>Latest work order <ArrowRight /></button> : null}
+          </div>
+        </article>;
+      })}
+    </div>
+  </>;
+}
+
+export function LegacyEquipmentView({ dataset, onOpenWork, onOpenAsset }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void }) {
   const assets = [...dataset.assets].sort((a, b) => { const aCost = dataset.invoiceWorkLinks.filter((link) => link.assetId === a.id).reduce((sum, link) => sum + link.attributedAmountMinor, 0); const bCost = dataset.invoiceWorkLinks.filter((link) => link.assetId === b.id).reduce((sum, link) => sum + link.attributedAmountMinor, 0); return bCost - aCost; });
   return <><PageHead eyebrow={`${dataset.assets.length} tracked assets`} title="Equipment history that earns its setup." description="Start with store and category. Add model, serial, warranty, components, and lifecycle depth only where it improves decisions."></PageHead><div className="to-asset-grid">{assets.slice(0, 18).map((asset) => { const store = dataset.stores.find((record) => record.id === asset.storeId); const cost = dataset.invoiceWorkLinks.filter((link) => link.assetId === asset.id).reduce((sum, link) => sum + link.attributedAmountMinor, 0); const work = dataset.workOrders.filter((record) => record.assetId === asset.id); const age = Math.max(0, new Date(dataset.asOf).getUTCFullYear() - Number(asset.installedOn.slice(0, 4))); const review = cost > asset.replacementEstimateMinor * .35 || age >= asset.expectedLifeYears; return <article className="to-card" key={asset.id}><header className="to-card-head"><div><h3>{asset.name}</h3><p>Store {store?.storeNumber} · {asset.locationDetail}<br />{asset.manufacturer} {asset.model}</p></div>{review ? <Badge value="warning" label="Capital review" /> : <Badge value={asset.status} />}</header><div className="to-card-body"><div className="to-tags"><span className="to-tag">{asset.assetType}</span><span className="to-tag">{age} years old</span>{asset.warranty ? <span className="to-tag">Warranty to {dateLabel(asset.warranty.endsOn)}</span> : null}</div></div><footer className="to-card-facts"><div><span>Linked spend</span><strong>{money(cost)}</strong></div><div><span>Work orders</span><strong>{work.length}</strong></div><div><span>Replace est.</span><strong>{money(asset.replacementEstimateMinor)}</strong></div></footer><div className="to-card-actions"><button className="to-card-action" type="button" onClick={() => onOpenAsset(asset.id)}>Open equipment record <ChevronRight /></button>{work[0] ? <button className="to-card-action secondary" type="button" onClick={() => onOpenWork(work[0].id)}>Latest work order <ArrowRight /></button> : null}</div></article>; })}</div></>;
 }
 
-function PmView({ dataset, onOpenWork }: { dataset: DemoDataset; onOpenWork: (id: string) => void }) {
+function PmView({ dataset, onOpenWork, onOpenOccurrence, onNewPlan, canManage }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenOccurrence: (id: string) => void; onNewPlan: () => void; canManage: boolean }) {
+  const completed = dataset.pmOccurrences.filter((record) => record.status === "completed").length;
+  const denominator = dataset.pmOccurrences.filter((record) => record.status !== "upcoming").length;
+  const compliance = denominator ? Math.round((completed / denominator) * 100) : 100;
+  const open = dataset.pmOccurrences.filter((record) => !["completed", "skipped"].includes(record.status));
+
+  return <>
+    <PageHead
+      eyebrow="Preventive maintenance"
+      title="See what is due, missed, and actually completed."
+      description="Every occurrence is actionable, whether or not a work order has been created yet. Completion and waivers remain explicit and auditable."
+    >
+      {canManage ? <button className="to-button primary" type="button" onClick={onNewPlan}><Plus /> New PM plan</button> : null}
+    </PageHead>
+    <section className="to-kpi-grid">
+      <div className="to-kpi"><div className="to-kpi-top"><span>PM compliance</span><span className="to-kpi-icon"><CalendarCheck /></span></div><strong>{compliance}%</strong><span>{completed} completed of {denominator} due in the selected window</span></div>
+      <div className="to-kpi" data-tone="amber"><div className="to-kpi-top"><span>Due and upcoming</span><span className="to-kpi-icon"><Clock3 /></span></div><strong>{open.filter((record) => record.status === "due" || record.status === "upcoming").length}</strong><span>Open the occurrence to create or view its work</span></div>
+      <div className="to-kpi" data-tone="coral"><div className="to-kpi-top"><span>Overdue</span><span className="to-kpi-icon"><AlertTriangle /></span></div><strong>{open.filter((record) => record.status === "overdue").length}</strong><span>Visible until completed or waived with a reason</span></div>
+      <div className="to-kpi" data-tone="blue"><div className="to-kpi-top"><span>Active plans</span><span className="to-kpi-icon"><ClipboardList /></span></div><strong>{dataset.pmPlans.filter((record) => record.active).length}</strong><span>Store, category, and equipment schedules</span></div>
+    </section>
+    <article className="to-panel">
+      <header className="to-panel-head"><div><h2>PM schedule</h2><p>Open any row for the occurrence actions and source trail.</p></div></header>
+      <div className="to-table-wrap"><table className="to-table">
+        <thead><tr><th>Plan</th><th>Store</th><th>Due</th><th>Assigned to</th><th>Status</th><th>Evidence</th></tr></thead>
+        <tbody>{[...dataset.pmOccurrences].sort((a, b) => a.dueAt.localeCompare(b.dueAt)).map((occurrence) => {
+          const plan = dataset.pmPlans.find((record) => record.id === occurrence.pmPlanId);
+          const store = dataset.stores.find((record) => record.id === occurrence.storeId);
+          const vendor = plan?.assignedPartyType === "vendor" ? dataset.vendors.find((record) => record.id === plan.assignedPartyId) : undefined;
+          const team = plan?.assignedPartyType === "team" ? dataset.teams.find((record) => record.id === plan.assignedPartyId) : undefined;
+          return <tr key={occurrence.id} onClick={() => onOpenOccurrence(occurrence.id)}>
+            <td><strong>{plan?.name}</strong><small>{plan?.cadence ? words(plan.cadence) : ""}</small></td>
+            <td>#{store?.storeNumber}<small>{store?.address.city}</small></td>
+            <td>{dateLabel(occurrence.dueAt)}</td>
+            <td>{vendor?.displayName ?? team?.name ?? "Unassigned"}</td>
+            <td><Badge value={occurrence.status} /></td>
+            <td>{plan?.requiredEvidence.map(words).join(" · ")}{occurrence.workOrderId ? <button className="to-link-button" type="button" onClick={(event) => { event.stopPropagation(); onOpenWork(occurrence.workOrderId!); }}>Open work</button> : null}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>
+    </article>
+  </>;
+}
+
+export function LegacyPmView({ dataset, onOpenWork }: { dataset: DemoDataset; onOpenWork: (id: string) => void }) {
   const completed = dataset.pmOccurrences.filter((record) => record.status === "completed").length; const denominator = dataset.pmOccurrences.filter((record) => record.status !== "upcoming").length; const compliance = denominator ? Math.round((completed / denominator) * 100) : 100; const open = dataset.pmOccurrences.filter((record) => record.status !== "completed");
   return <><PageHead eyebrow="Preventive maintenance" title="See what is due, missed, and actually completed." description="PM uses the same customer work order, vendor issuance, visit evidence, cost, and audit trail as reactive maintenance."></PageHead><section className="to-kpi-grid"><div className="to-kpi"><div className="to-kpi-top"><span>PM compliance</span><span className="to-kpi-icon"><CalendarCheck /></span></div><strong>{compliance}%</strong><span>{completed} completed of {denominator} due in the selected window</span></div><div className="to-kpi" data-tone="amber"><div className="to-kpi-top"><span>Due and upcoming</span><span className="to-kpi-icon"><Clock3 /></span></div><strong>{open.filter((record) => record.status === "due" || record.status === "upcoming").length}</strong><span>Across HVAC, refrigeration, and exterior service</span></div><div className="to-kpi" data-tone="coral"><div className="to-kpi-top"><span>Overdue</span><span className="to-kpi-icon"><AlertTriangle /></span></div><strong>{open.filter((record) => record.status === "overdue").length}</strong><span>Visible until resolved or waived with reason</span></div><div className="to-kpi" data-tone="blue"><div className="to-kpi-top"><span>Active plans</span><span className="to-kpi-icon"><ClipboardList /></span></div><strong>{dataset.pmPlans.filter((record) => record.active).length}</strong><span>Store, asset, and category schedules</span></div></section><article className="to-panel"><header className="to-panel-head"><div><h2>PM schedule</h2><p>Every row links to the occurrence and customer work order.</p></div></header><div className="to-table-wrap"><table className="to-table"><thead><tr><th>Plan</th><th>Store</th><th>Due</th><th>Assigned to</th><th>Status</th><th>Evidence</th></tr></thead><tbody>{dataset.pmOccurrences.sort((a, b) => a.dueAt.localeCompare(b.dueAt)).map((occurrence) => { const plan = dataset.pmPlans.find((record) => record.id === occurrence.pmPlanId); const store = dataset.stores.find((record) => record.id === occurrence.storeId); const vendor = plan?.assignedPartyType === "vendor" ? dataset.vendors.find((record) => record.id === plan.assignedPartyId) : undefined; const team = plan?.assignedPartyType === "team" ? dataset.teams.find((record) => record.id === plan.assignedPartyId) : undefined; return <tr key={occurrence.id} onClick={() => occurrence.workOrderId ? onOpenWork(occurrence.workOrderId) : undefined}><td><strong>{plan?.name}</strong><small>{plan?.cadence ? words(plan.cadence) : ""}</small></td><td>#{store?.storeNumber}<small>{store?.address.city}</small></td><td>{dateLabel(occurrence.dueAt)}</td><td>{vendor?.displayName ?? team?.name ?? "Unassigned"}</td><td><Badge value={occurrence.status} /></td><td>{plan?.requiredEvidence.map(words).join(" · ")}</td></tr>; })}</tbody></table></div></article></>;
 }
 
-function ReportsView({ dataset, savedReports, onSave, canGenerate, scopeLabel }: { dataset: DemoDataset; savedReports: string[]; onSave: (title: string) => void; canGenerate: boolean; scopeLabel: string }) {
-  const templates = [{ title: "Monthly owner operating review", description: `Spend, critical work, vendor exceptions, PM, and capital review across ${dataset.stores.length} ${dataset.stores.length === 1 ? "store" : "stores"}.` }, { title: "Vendor accountability review", description: "Acceptance, observed visits, unresolved outcomes, return trips, and invoice evidence by provider." }, { title: "Refrigeration lifecycle review", description: "Store and asset outliers, repeat repairs, warranties, PM history, and source work orders." }];
-  return <><PageHead eyebrow={`Management records · ${scopeLabel}`} title="Explore live. Generate when it needs to be handed off." description="Dashboards remain interactive; generated reports preserve the current role’s scope, period, cost basis, definitions, and source links."></PageHead><div className="to-store-grid">{templates.map((template) => <article className="to-card to-report-card" key={template.title}><header className="to-card-head"><div><h3>{template.title}</h3><p>{template.description}</p></div><FileText /></header><div className="to-card-body"><div className="to-tags"><span className="to-tag">{scopeLabel}</span><span className="to-tag">Invoice-linked</span><span className="to-tag">Source records included</span></div></div>{canGenerate ? <button className="to-card-action" type="button" onClick={() => onSave(`${template.title} · ${scopeLabel} · ${dateLabel(dataset.asOf)}`)}>Generate report <ArrowRight /></button> : null}</article>)}</div>{savedReports.length ? <article className="to-panel to-saved-reports"><header className="to-panel-head"><div><h2>Generated in this demo</h2><p>Each is a new immutable version.</p></div></header><div className="to-record-list">{savedReports.map((report, index) => <div className="to-record-row to-generated-report" key={`${report}-${index}`}><span className="to-exception-icon" data-tone="blue"><FileBarChart /></span><span className="to-record-primary"><strong>{report}</strong><span>{dataset.organization.displayName} · {scopeLabel} · invoice-linked basis</span></span><Badge value="completed" label="Version 1" /></div>)}</div></article> : null}</>;
+function ReportsView({ dataset, savedReports, onBuild, onOpenReport, canGenerate, scopeLabel }: { dataset: DemoDataset; savedReports: SavedReportRecord[]; onBuild: (template: SavedReportRecord["template"]) => void; onOpenReport: (id: string) => void; canGenerate: boolean; scopeLabel: string }) {
+  const templates: Array<{ id: SavedReportRecord["template"]; title: string; description: string }> = [
+    { id: "operating_review", title: "Monthly operating review", description: `Maintenance cost, critical work, vendor exceptions, PM, and capital review across ${dataset.stores.length} ${dataset.stores.length === 1 ? "store" : "stores"}.` },
+    { id: "vendor_accountability", title: "Vendor accountability review", description: "Acceptance, observed visits, unresolved outcomes, return trips, and supporting invoice evidence by provider." },
+    { id: "lifecycle_review", title: "Equipment lifecycle review", description: "Store and asset outliers, repeat repairs, warranties, PM history, and source work orders." },
+  ];
+  return <><PageHead eyebrow={`Management records · ${scopeLabel}`} title="Explore live. Generate when it needs to be handed off." description="Each generated report preserves its operating scope, period, maintenance-cost basis, definitions, and source records."></PageHead><div className="to-store-grid">{templates.map((template) => <article className="to-card to-report-card" key={template.id}><header className="to-card-head"><div><h3>{template.title}</h3><p>{template.description}</p></div><FileText /></header><div className="to-card-body"><div className="to-tags"><span className="to-tag">{scopeLabel}</span><span className="to-tag">Recorded cost default</span><span className="to-tag">Source records included</span></div></div>{canGenerate ? <button className="to-card-action" type="button" onClick={() => onBuild(template.id)}>Configure and generate <ArrowRight /></button> : null}</article>)}</div>{savedReports.length ? <article className="to-panel to-saved-reports"><header className="to-panel-head"><div><h2>Generated management records</h2><p>Open a report to see its frozen definitions and exact sources.</p></div></header><div className="to-record-list">{savedReports.map((report) => <button className="to-record-row to-generated-report" type="button" key={report.id} onClick={() => onOpenReport(report.id)}><span className="to-exception-icon" data-tone="blue"><FileBarChart /></span><span className="to-record-primary"><strong>{report.title}</strong><span>{report.scopeLabel} · {report.periodLabel} · {words(report.costBasis)}</span></span><Badge value="completed" label={`Version ${report.version}`} /><ChevronRight /></button>)}</div></article> : null}</>;
 }
 
-function DetailView({ dataset, detail, onBack, onVendorRespond, onIssue, onOpenWork, onOpenAsset, onOpenStore, onOpenVendor, onClassify, onAssignVendor, onOpenExternal, onStartVisit, onRecordInvoice, onOpenSpend, canClassify, canIssueVendorWork, canRecordVisits, canRecordInvoice, canSimulateVendorResponse }: { dataset: DemoDataset; detail: NonNullable<Detail>; onBack: () => void; onVendorRespond: (workOrderId: string, response: "accepted" | "declined" | "date_proposed") => void; onIssue: (workOrderId: string) => void; onOpenWork: (workOrderId: string) => void; onOpenAsset: (assetId: string) => void; onOpenStore: (storeId: string) => void; onOpenVendor: (vendorId: string) => void; onClassify: (workOrderId: string) => void; onAssignVendor: (workOrderId: string) => void; onOpenExternal: (workOrderId: string) => void; onStartVisit: (workOrderId: string) => void; onRecordInvoice: (workOrderId: string) => void; onOpenSpend: (workOrderId: string) => void; canClassify: boolean; canIssueVendorWork: boolean; canRecordVisits: boolean; canRecordInvoice: boolean; canSimulateVendorResponse: boolean }) {
-  if (detail.kind === "store") { const store = dataset.stores.find((record) => record.id === detail.id); if (!store) return null; return <StoreDetail dataset={dataset} store={store} onBack={onBack} onOpenWork={onOpenWork} onOpenAsset={onOpenAsset} />; }
+function ReportDetail({ dataset, report, onBack, onOpenWork }: { dataset: DemoDataset; report: SavedReportRecord; onBack: () => void; onOpenWork: (id: string) => void }) {
+  const selectedCost = report.sourceSnapshots.reduce((sum, source) => sum + source.amountMinor, 0);
+  const currentWorkIds = new Set(dataset.workOrders.map((work) => work.id));
+  return <>
+    <section className="to-detail-hero">
+      <div className="to-detail-copy">
+        <button type="button" onClick={onBack}><ArrowLeft /> Back to reports</button>
+        <p className="to-eyebrow">Generated management record · Version {report.version}</p>
+        <h1>{report.title}</h1>
+        <p>{report.scopeLabel} · {report.periodLabel}</p>
+      </div>
+      <div className="to-detail-summary">
+        <div><span>Cost basis</span><strong>{words(report.costBasis)}</strong></div>
+        <div><span>Frozen sources</span><strong>{report.sourceSnapshots.length}</strong></div>
+        <div><span>Selected cost</span><strong>{money(selectedCost)}</strong></div>
+        <div><span>Generated</span><strong>{dateLabel(report.createdAt)}</strong></div>
+      </div>
+    </section>
+    <section className="to-grid equal">
+      <article className="to-panel">
+        <header className="to-panel-head"><div><h2>Frozen definitions</h2><p>This version does not silently change when live records change.</p></div></header>
+        <div className="to-panel-body to-definition-list"><dl>
+          <div><dt>Operating scope</dt><dd>{report.scopeLabel}</dd></div>
+          <div><dt>Review period</dt><dd>{report.periodLabel}</dd></div>
+          <div><dt>Maintenance-cost basis</dt><dd>{words(report.costBasis)}</dd></div>
+          <div><dt>Product boundary</dt><dd>Operational maintenance record; accounting and payment remain in the customer&apos;s existing system.</dd></div>
+        </dl></div>
+      </article>
+      <article className="to-panel">
+        <header className="to-panel-head"><div><h2>Report purpose</h2><p>{report.template === "operating_review" ? "Operating visibility and exception management." : report.template === "vendor_accountability" ? "Vendor response, presence, outcomes, and supporting cost evidence." : "Repair history, lifecycle signals, warranties, and capital-review sources."}</p></div></header>
+        <div className="to-panel-body"><p className="to-callout"><ShieldCheck /> Every amount and label below is the value captured when this report version was generated.</p></div>
+      </article>
+    </section>
+    <article className="to-panel">
+      <header className="to-panel-head"><div><h2>Frozen source work records</h2><p>Open a row when the live source still exists; the report values remain unchanged.</p></div><span className="to-filter-count">{report.sourceSnapshots.length} records</span></header>
+      <div className="to-table-wrap"><table className="to-table">
+        <thead><tr><th>Work order</th><th>Store</th><th>Status at generation</th><th>Service area</th><th>Selected cost</th></tr></thead>
+        <tbody>{report.sourceSnapshots.map((source) => {
+          const available = currentWorkIds.has(source.workOrderId);
+          return <tr key={source.workOrderId} onClick={() => available ? onOpenWork(source.workOrderId) : undefined}>
+            <td><strong>{source.number}</strong><small>{source.title}{available ? "" : " · source no longer in current scope"}</small></td>
+            <td>#{source.storeNumber}<small>{source.storeCity}</small></td>
+            <td><Badge value={source.status} /></td>
+            <td>{source.categoryLabel}</td>
+            <td className="to-money">{money(source.amountMinor)}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>
+    </article>
+  </>;
+}
+
+export function LegacyReportDetail({ dataset, report, onBack, onOpenWork }: { dataset: DemoDataset; report: SavedReportRecord; onBack: () => void; onOpenWork: (id: string) => void }) {
+  const sourceWork = report.sourceWorkOrderIds.map((id) => dataset.workOrders.find((work) => work.id === id)).filter((work): work is WorkOrder => Boolean(work));
+  const linkedCost = sourceWork.reduce((sum, work) => {
+    if (report.costBasis === "authorized") return sum + (work.notToExceedMinor ?? 0);
+    if (report.costBasis === "invoice_linked") return sum + workOrderCost(dataset, work.id);
+    const recorded = dataset.costLines.filter((line) => line.workOrderId === work.id && line.basis === "recorded").reduce((lineSum, line) => lineSum + line.amountMinor, 0);
+    return sum + (recorded || workOrderCost(dataset, work.id));
+  }, 0);
+  return <><section className="to-detail-hero"><div className="to-detail-copy"><button type="button" onClick={onBack}><ArrowLeft /> Back to reports</button><p className="to-eyebrow">Generated management record · Version {report.version}</p><h1>{report.title}</h1><p>{report.scopeLabel} · {report.periodLabel}</p></div><div className="to-detail-summary"><div><span>Cost basis</span><strong>{words(report.costBasis)}</strong></div><div><span>Source work</span><strong>{sourceWork.length}</strong></div><div><span>Selected cost</span><strong>{money(linkedCost)}</strong></div><div><span>Generated</span><strong>{dateLabel(report.createdAt)}</strong></div></div></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Frozen definitions</h2><p>This version does not silently change when the live dashboard changes.</p></div></header><div className="to-panel-body to-definition-list"><dl><div><dt>Operating scope</dt><dd>{report.scopeLabel}</dd></div><div><dt>Review period</dt><dd>{report.periodLabel}</dd></div><div><dt>Maintenance-cost basis</dt><dd>{words(report.costBasis)}</dd></div><div><dt>Product boundary</dt><dd>Operational maintenance record; accounting and payment remain in the customer’s existing system.</dd></div></dl></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Report purpose</h2><p>{report.template === "operating_review" ? "Operating visibility and exception management." : report.template === "vendor_accountability" ? "Vendor response, presence, outcomes, and supporting cost evidence." : "Repair history, lifecycle signals, warranties, and capital-review sources."}</p></div></header><div className="to-panel-body"><p className="to-callout"><ShieldCheck /> Every metric below remains connected to the customer work order that produced it.</p></div></article></section><article className="to-panel"><header className="to-panel-head"><div><h2>Source work records</h2><p>Open any row to verify the underlying work, visits, equipment, and cost.</p></div><span className="to-filter-count">{sourceWork.length} records</span></header><div className="to-table-wrap"><table className="to-table"><thead><tr><th>Work order</th><th>Store</th><th>Status</th><th>Service area</th><th>Selected cost</th></tr></thead><tbody>{sourceWork.slice(0, 24).map((work) => { const store = dataset.stores.find((record) => record.id === work.storeId); const category = dataset.categories.find((record) => record.id === work.categoryId); const recorded = dataset.costLines.filter((line) => line.workOrderId === work.id && line.basis === "recorded").reduce((sum, line) => sum + line.amountMinor, 0); const amount = report.costBasis === "authorized" ? work.notToExceedMinor ?? 0 : report.costBasis === "invoice_linked" ? workOrderCost(dataset, work.id) : recorded || workOrderCost(dataset, work.id); return <tr key={work.id} onClick={() => onOpenWork(work.id)}><td><strong>{work.number}</strong><small>{work.title}</small></td><td>#{store?.storeNumber}<small>{store?.address.city}</small></td><td><Badge value={work.status} /></td><td>{category?.label ?? "Unclassified"}</td><td className="to-money">{money(amount)}</td></tr>; })}</tbody></table></div></article></>;
+}
+
+function DetailView({ dataset, detail, onBack, onVendorRespond, onIssue, onOpenWork, onOpenAsset, onOpenStore, onOpenVendor, onClassify, onAssignVendor, onOpenExternal, onStartVisit, onInternalUpdate, onRecordInvoice, onOpenSpend, onCreateWorkForStore, onConfigureStore, onAddAssetForStore, onAddComponent, onCreatePmForAsset, canClassify, canIssueVendorWork, canRecordVisits, canRecordInvoice, canSimulateVendorResponse, canManage }: { dataset: DemoDataset; detail: NonNullable<Detail>; onBack: () => void; onVendorRespond: (workOrderId: string, response: "accepted" | "declined" | "date_proposed") => void; onIssue: (workOrderId: string) => void; onOpenWork: (workOrderId: string) => void; onOpenAsset: (assetId: string) => void; onOpenStore: (storeId: string) => void; onOpenVendor: (vendorId: string) => void; onClassify: (workOrderId: string) => void; onAssignVendor: (workOrderId: string) => void; onOpenExternal: (workOrderId: string) => void; onStartVisit: (workOrderId: string) => void; onInternalUpdate: (workOrderId: string) => void; onRecordInvoice: (workOrderId: string) => void; onOpenSpend: (workOrderId: string) => void; onCreateWorkForStore: (storeId: string) => void; onConfigureStore: (storeId: string) => void; onAddAssetForStore: (storeId: string) => void; onAddComponent: (assetId: string) => void; onCreatePmForAsset: (assetId: string, storeId: string) => void; canClassify: boolean; canIssueVendorWork: boolean; canRecordVisits: boolean; canRecordInvoice: boolean; canSimulateVendorResponse: boolean; canManage: boolean }) {
+  if (detail.kind === "store") { const store = dataset.stores.find((record) => record.id === detail.id); if (!store) return null; return <StoreDetail dataset={dataset} store={store} onBack={onBack} onOpenWork={onOpenWork} onOpenAsset={onOpenAsset} onCreateWork={onCreateWorkForStore} onConfigure={onConfigureStore} onAddAsset={onAddAssetForStore} canManage={canManage} />; }
   if (detail.kind === "vendor") { const vendor = dataset.vendors.find((record) => record.id === detail.id); if (!vendor) return null; return <VendorDetail dataset={dataset} vendor={vendor} onBack={onBack} onOpenWork={onOpenWork} />; }
-  if (detail.kind === "asset") { const asset = dataset.assets.find((record) => record.id === detail.id); if (!asset) return null; return <AssetDetail dataset={dataset} asset={asset} onBack={onBack} onOpenWork={onOpenWork} />; }
+  if (detail.kind === "asset") { const asset = dataset.assets.find((record) => record.id === detail.id); if (!asset) return null; return <AssetDetail dataset={dataset} asset={asset} onBack={onBack} onOpenWork={onOpenWork} onAddComponent={onAddComponent} onCreatePm={onCreatePmForAsset} canManage={canManage} />; }
   const work = dataset.workOrders.find((record) => record.id === detail.id);
   if (!work) return null;
   const assignment = dataset.assignments.find((record) => record.workOrderId === work.id && record.partyType === "vendor" && record.status !== "declined");
+  const internalAssignment = dataset.assignments.find((record) => record.workOrderId === work.id && record.partyType === "team");
   const issuance = dataset.vendorIssuances.filter((record) => record.workOrderId === work.id).sort((left, right) => right.version - left.version)[0];
-  const visitReady = Boolean(assignment && issuance && (issuance.acceptanceRequested === false || issuance.response === "accepted" || issuance.response === "date_proposed"));
-  const canAddInvoice = Boolean(assignment && canRecordInvoice && ["completed", "awaiting_invoice"].includes(work.status) && !dataset.invoiceWorkLinks.some((link) => link.workOrderId === work.id));
-  return <><div className="to-detail-tools">{!assignment && canIssueVendorWork ? <button className="to-button primary" type="button" onClick={() => onAssignVendor(work.id)}><Truck /> Choose outside vendor</button> : null}{issuance ? <button className="to-button primary" type="button" onClick={() => onOpenExternal(work.id)}><FileText /> Open vendor work order</button> : null}{visitReady && canRecordVisits ? <button className="to-button" type="button" onClick={() => onStartVisit(work.id)}><MapPin /> Vendor sign in or out</button> : null}{canAddInvoice ? <button className="to-button primary" type="button" onClick={() => onRecordInvoice(work.id)}><ReceiptText /> Record invoice</button> : null}{canClassify ? <button className="to-button" type="button" onClick={() => onClassify(work.id)}><PackageSearch /> Update equipment classification</button> : null}<button className="to-button" type="button" onClick={() => onOpenStore(work.storeId)}><StoreIcon /> Store dashboard</button>{assignment ? <button className="to-button" type="button" onClick={() => onOpenVendor(assignment.partyId)}><Truck /> Vendor performance</button> : null}<button className="to-button" type="button" onClick={() => onOpenSpend(work.id)}><CircleDollarSign /> View in spending</button></div><WorkDetail dataset={dataset} work={work} onBack={onBack} onVendorRespond={onVendorRespond} onIssue={onIssue} onOpenAsset={onOpenAsset} canIssueVendorWork={canIssueVendorWork} canSimulateVendorResponse={canSimulateVendorResponse} /></>;
+  const visitReady = Boolean(assignment && issuance && (
+    issuance.acceptanceRequested === false ||
+    issuance.response === "accepted" ||
+    work.status === "accepted" ||
+    work.status === "scheduled"
+  ));
+  const canAddInvoice = Boolean(assignment && canRecordInvoice && ["completed", "closed", "awaiting_invoice", "invoice_received"].includes(work.status) && !dataset.invoiceWorkLinks.some((link) => link.workOrderId === work.id));
+  return <><div className="to-detail-tools">{!assignment && !internalAssignment && canIssueVendorWork ? <button className="to-button primary" type="button" onClick={() => onAssignVendor(work.id)}><Truck /> Choose outside vendor</button> : null}{internalAssignment && !terminalStatuses.has(work.status) ? <button className="to-button primary" type="button" onClick={() => onInternalUpdate(work.id)}><Wrench /> Update internal work</button> : null}{issuance ? <button className="to-button primary" type="button" onClick={() => onOpenExternal(work.id)}><FileText /> Open vendor work order</button> : null}{visitReady && canRecordVisits ? <button className="to-button" type="button" onClick={() => onStartVisit(work.id)}><MapPin /> Vendor sign in or out</button> : null}{canAddInvoice ? <button className="to-button primary" type="button" onClick={() => onRecordInvoice(work.id)}><ReceiptText /> Attach vendor invoice</button> : null}{canClassify ? <button className="to-button" type="button" onClick={() => onClassify(work.id)}><PackageSearch /> Update equipment classification</button> : null}<button className="to-button" type="button" onClick={() => onOpenStore(work.storeId)}><StoreIcon /> Store dashboard</button>{assignment ? <button className="to-button" type="button" onClick={() => onOpenVendor(assignment.partyId)}><Truck /> Vendor performance</button> : null}<button className="to-button" type="button" onClick={() => onOpenSpend(work.id)}><CircleDollarSign /> View maintenance costs</button></div><WorkDetail dataset={dataset} work={work} onBack={onBack} onVendorRespond={onVendorRespond} onIssue={onIssue} onOpenAsset={onOpenAsset} canIssueVendorWork={canIssueVendorWork} canSimulateVendorResponse={canSimulateVendorResponse} /></>;
 }
 
-function StoreDetail({ dataset, store, onBack, onOpenWork, onOpenAsset }: { dataset: DemoDataset; store: Store; onBack: () => void; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void }) {
+function StoreDetail({ dataset, store, onBack, onOpenWork, onOpenAsset, onCreateWork, onConfigure, onAddAsset, canManage }: { dataset: DemoDataset; store: Store; onBack: () => void; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void; onCreateWork: (storeId: string) => void; onConfigure: (storeId: string) => void; onAddAsset: (storeId: string) => void; canManage: boolean }) {
+  return <>
+    <div className="to-detail-tools">
+      <button className="to-button primary" type="button" onClick={() => onCreateWork(store.id)}><Plus /> Create work for this store</button>
+      {canManage ? <button className="to-button" type="button" onClick={() => onConfigure(store.id)}><Settings2 /> Service areas</button> : null}
+      {canManage ? <button className="to-button" type="button" onClick={() => onAddAsset(store.id)}><Gauge /> Add equipment</button> : null}
+    </div>
+    <StoreDetailRecord dataset={dataset} store={store} onBack={onBack} onOpenWork={onOpenWork} onOpenAsset={onOpenAsset} />
+  </>;
+}
+
+function StoreDetailRecord({ dataset, store, onBack, onOpenWork, onOpenAsset }: { dataset: DemoDataset; store: Store; onBack: () => void; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void }) {
   const work = workForStore(dataset, store.id); const open = work.filter((record) => !terminalStatuses.has(record.status)); const spend = storeSpend(dataset, store.id); const assets = dataset.assets.filter((asset) => asset.storeId === store.id); const visits = dataset.visits.filter((visit) => visit.storeId === store.id); const exceptions = dataset.exceptions.filter((record) => record.storeId === store.id && record.status !== "resolved");
   return <><section className="to-detail-hero"><div className="to-detail-copy"><button type="button" onClick={onBack}><ArrowLeft /> Back to all stores</button><p className="to-eyebrow">{dataset.regions.find((region) => region.id === store.regionId)?.name}</p><h1>Store {store.storeNumber} · {store.name}</h1><p>{store.address.line1}, {store.address.city}, {store.address.state} {store.address.postalCode} · {store.phone}</p></div><div className="to-detail-summary"><div><span>Linked spend</span><strong>{money(spend)}</strong></div><div><span>Open work</span><strong>{open.length}</strong></div><div><span>Tracked assets</span><strong>{assets.length}</strong></div><div><span>Exceptions</span><strong>{exceptions.length}</strong></div></div></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Store attention</h2><p>Current work and accountable next actions</p></div></header><div className="to-exception-list">{open.slice(0, 6).map((record) => <button className="to-exception" type="button" key={record.id} onClick={() => onOpenWork(record.id)}><span className="to-exception-icon"><Wrench /></span><span className="to-record-primary"><strong>{record.number} · {record.title}</strong><span>{record.accountable?.nextAction}</span></span><span className="to-record-meta">{dateLabel(record.accountable?.dueAt)}</span><Badge value={record.status} /></button>)}</div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Visit history</h2><p>{visits.length} observed visits at this store</p></div></header><div className="to-panel-body"><div className="to-visit-list">{visits.slice(0, 6).map((visit) => { const vendor = dataset.vendors.find((record) => record.id === visit.vendorId); return <div className="to-visit" key={visit.id}><span className="to-avatar">{initials(visit.technicianName)}</span><span><strong>{visit.technicianName}</strong><span>{vendor?.displayName ?? "Internal"} · {visit.outcome ? words(visit.outcome) : "Active now"}</span></span><time>{dateLabel(visit.checkedInAt)}</time></div>; })}</div></div></article></section><article className="to-panel"><header className="to-panel-head"><div><h2>Equipment and service structure</h2><p>Progressive depth—only the known assets are tracked.</p></div></header><div className="to-table-wrap"><table className="to-table"><thead><tr><th>Asset</th><th>Category</th><th>Location</th><th>Model / serial</th><th>Warranty</th></tr></thead><tbody>{assets.map((asset) => <tr key={asset.id}><td><button className="to-link-button to-cell-link" type="button" onClick={() => onOpenAsset(asset.id)}><span><strong>{asset.assetCode}</strong><small>{asset.name}</small></span><ChevronRight /></button></td><td>{dataset.categories.find((category) => category.id === asset.categoryId)?.label}</td><td>{asset.locationDetail}</td><td>{asset.manufacturer} {asset.model}<small>{asset.serialNumber}</small></td><td>{asset.warranty ? dateLabel(asset.warranty.endsOn) : "Not recorded"}</td></tr>)}</tbody></table></div></article></>;
 }
 
-function AssetDetail({ dataset, asset, onBack, onOpenWork }: { dataset: DemoDataset; asset: Asset; onBack: () => void; onOpenWork: (id: string) => void }) {
+function AssetDetail({ dataset, asset, onBack, onOpenWork, onAddComponent, onCreatePm, canManage }: { dataset: DemoDataset; asset: Asset; onBack: () => void; onOpenWork: (id: string) => void; onAddComponent: (assetId: string) => void; onCreatePm: (assetId: string, storeId: string) => void; canManage: boolean }) {
+  return <>
+    {canManage ? <div className="to-detail-tools">
+      <button className="to-button primary" type="button" onClick={() => onAddComponent(asset.id)}><Plus /> Add component</button>
+      <button className="to-button" type="button" onClick={() => onCreatePm(asset.id, asset.storeId)}><CalendarCheck /> Create PM plan</button>
+    </div> : null}
+    <AssetDetailRecord dataset={dataset} asset={asset} onBack={onBack} onOpenWork={onOpenWork} />
+  </>;
+}
+
+function AssetDetailRecord({ dataset, asset, onBack, onOpenWork }: { dataset: DemoDataset; asset: Asset; onBack: () => void; onOpenWork: (id: string) => void }) {
   const store = dataset.stores.find((record) => record.id === asset.storeId);
   const category = dataset.categories.find((record) => record.id === asset.categoryId);
   const taxonomyPath = asset.taxonomyPathIds

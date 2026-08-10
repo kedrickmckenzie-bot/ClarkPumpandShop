@@ -7,7 +7,7 @@ export type DemoRoleId =
   | "store_manager"
   | "finance_reviewer";
 
-export type RoleView = "story" | "today" | "requests" | "stores" | "work" | "vendors" | "spend" | "equipment" | "pm" | "reports";
+export type RoleView = "story" | "today" | "requests" | "exceptions" | "visits" | "stores" | "work" | "vendors" | "spend" | "equipment" | "pm" | "reports";
 
 export type RolePermission =
   | "createWork"
@@ -17,7 +17,8 @@ export type RolePermission =
   | "createStore"
   | "manageSuite"
   | "classifyWork"
-  | "generateReports";
+  | "generateReports"
+  | "reviewInvoiceEvidence";
 
 export interface DemoRolePolicy {
   id: DemoRoleId;
@@ -39,6 +40,7 @@ const noMutationPermissions: Record<RolePermission, boolean> = {
   manageSuite: false,
   classifyWork: false,
   generateReports: true,
+  reviewInvoiceEvidence: false,
 };
 
 export const demoRolePolicies: DemoRolePolicy[] = [
@@ -48,7 +50,7 @@ export const demoRolePolicies: DemoRolePolicy[] = [
     personId: "person-dana-brooks",
     scope: { kind: "organization" },
     defaultView: "today",
-    allowedViews: ["today", "requests", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
+    allowedViews: ["today", "requests", "exceptions", "visits", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
     permissions: {
       createWork: true,
       issueVendorWork: true,
@@ -58,6 +60,7 @@ export const demoRolePolicies: DemoRolePolicy[] = [
       manageSuite: true,
       classifyWork: true,
       generateReports: true,
+      reviewInvoiceEvidence: true,
     },
     accessSummary: "Full operational control",
   },
@@ -67,7 +70,7 @@ export const demoRolePolicies: DemoRolePolicy[] = [
     personId: "person-alex-morgan",
     scope: { kind: "organization" },
     defaultView: "spend",
-    allowedViews: ["today", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
+    allowedViews: ["today", "requests", "exceptions", "visits", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
     permissions: noMutationPermissions,
     accessSummary: "Portfolio intelligence · read only",
   },
@@ -77,7 +80,7 @@ export const demoRolePolicies: DemoRolePolicy[] = [
     personId: "person-maya-chen",
     scope: { kind: "region", id: "region-central-ohio" },
     defaultView: "today",
-    allowedViews: ["today", "requests", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
+    allowedViews: ["today", "requests", "exceptions", "visits", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
     permissions: {
       createWork: true,
       issueVendorWork: true,
@@ -87,6 +90,7 @@ export const demoRolePolicies: DemoRolePolicy[] = [
       manageSuite: false,
       classifyWork: true,
       generateReports: true,
+      reviewInvoiceEvidence: true,
     },
     accessSummary: "Regional operations",
   },
@@ -96,7 +100,7 @@ export const demoRolePolicies: DemoRolePolicy[] = [
     personId: "person-manager-101",
     scope: { kind: "store", id: "store-101" },
     defaultView: "today",
-    allowedViews: ["today", "requests", "stores", "work", "vendors", "spend", "equipment", "pm"],
+    allowedViews: ["today", "requests", "exceptions", "visits", "stores", "work", "vendors", "spend", "equipment", "pm"],
     permissions: {
       createWork: true,
       issueVendorWork: true,
@@ -106,18 +110,22 @@ export const demoRolePolicies: DemoRolePolicy[] = [
       manageSuite: false,
       classifyWork: true,
       generateReports: false,
+      reviewInvoiceEvidence: false,
     },
     accessSummary: "Store workflow access",
   },
   {
     id: "finance_reviewer",
-    label: "Finance reviewer",
+    label: "Invoice reviewer",
     personId: "person-evan-rhodes",
     scope: { kind: "organization" },
     defaultView: "spend",
     allowedViews: ["stores", "work", "vendors", "spend", "reports"],
-    permissions: noMutationPermissions,
-    accessSummary: "Financial controls · read only",
+    permissions: {
+      ...noMutationPermissions,
+      reviewInvoiceEvidence: true,
+    },
+    accessSummary: "Maintenance invoice evidence",
   },
 ];
 
@@ -159,6 +167,17 @@ export function scopeDatasetForRole(dataset: DemoDataset, policy: DemoRolePolicy
   const costLines = dataset.costLines.filter((line) => storeIds.has(line.storeId) && workOrderIds.has(line.workOrderId));
   const invoiceWorkLinks = dataset.invoiceWorkLinks.filter((link) => storeIds.has(link.storeId) && workOrderIds.has(link.workOrderId));
   const invoiceIds = new Set(invoiceWorkLinks.map((link) => link.invoiceId));
+  dataset.documents.forEach((document) => {
+    if (document.invoiceId && document.storeId && storeIds.has(document.storeId)) invoiceIds.add(document.invoiceId);
+  });
+  dataset.exceptions.forEach((exception) => {
+    if (exception.invoiceId && exception.storeId && storeIds.has(exception.storeId)) invoiceIds.add(exception.invoiceId);
+    if ((exception.storeId && storeIds.has(exception.storeId)) || (exception.workOrderId && workOrderIds.has(exception.workOrderId))) {
+      exception.sourceRecordIds.forEach((sourceId) => {
+        if (dataset.invoices.some((invoice) => invoice.id === sourceId)) invoiceIds.add(sourceId);
+      });
+    }
+  });
   const invoices = dataset.invoices
     .filter((invoice) => invoiceIds.has(invoice.id))
     .map((invoice) => {
@@ -187,7 +206,14 @@ export function scopeDatasetForRole(dataset: DemoDataset, policy: DemoRolePolicy
       (exception.workOrderId && workOrderIds.has(exception.workOrderId)) ||
       (exception.visitId && visitIds.has(exception.visitId)) ||
       (exception.invoiceId && invoiceIds.has(exception.invoiceId)) ||
-      (exception.assetId && assetIds.has(exception.assetId)),
+      (exception.assetId && assetIds.has(exception.assetId)) ||
+      exception.sourceRecordIds.some((sourceId) =>
+        workOrderIds.has(sourceId) ||
+        visitIds.has(sourceId) ||
+        invoiceIds.has(sourceId) ||
+        assetIds.has(sourceId) ||
+        occurrenceIds.has(sourceId),
+      ),
     ),
   );
   const exceptionIds = new Set(exceptions.map((exception) => exception.id));

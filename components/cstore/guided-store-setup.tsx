@@ -126,11 +126,6 @@ export function GuidedStoreSetup({
       setError("Enter the store's opening and closing times.");
       return;
     }
-    if (starterCategoryIds.length === 0) {
-      setError("Select at least one starter service category.");
-      return;
-    }
-
     const hours: StoreHoursInput =
       hoursMode === "open_24_hours"
         ? { mode: "open_24_hours" }
@@ -444,8 +439,9 @@ export function GuidedStoreSetup({
         <div className={styles.footerSummary}>
           <MapPin aria-hidden="true" />
           <span>
-            {starterCategoryIds.length} service {starterCategoryIds.length === 1 ? "category" : "categories"}{" "}
-            active at launch
+            {starterCategoryIds.length
+              ? `${starterCategoryIds.length} service ${starterCategoryIds.length === 1 ? "category" : "categories"} active at launch`
+              : "Create the store first; service areas can be assigned next"}
           </span>
         </div>
         <div className={styles.footerActions}>
