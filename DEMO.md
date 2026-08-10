@@ -1,77 +1,154 @@
-# Maintenance Intelligence demo script
+# TraceOps Convenience Suite Demo
 
-**Maintenance Intelligence** is a temporary, changeable product label. Clark's is the fictional 12-store demo tenant, not the software brand. The core walkthrough takes about 12-15 minutes.
+This is a 10-12 minute walkthrough of the clean-slate TraceOps c-store suite.
 
-## 1. Start with the product star: spending visibility
+## Demo truth
 
-Open `/`.
+- **Northline Fuel & Market** is fictional and has exactly **15 stores**, **five approved outside vendors** and a two-person internal maintenance team.
+- The current hosted project uses deterministic static seed records plus session-scoped interactions.
+- Creating, accepting, checking in/out and matching records demonstrates the connected product during the current session; it is not production-durable persistence.
+- Demo actions and role changes are visibly labeled **Demo Mode** and may reset on refresh or a new session.
+- Every displayed metric derives from seeded source records plus current session events. Do not present an independently hardcoded total as live operational data.
 
-1. Switch the organization scope between company, division, region and store. Explain that these are reporting scopes, not equipment parents.
-2. Change the period and selected cost basis. The definition remains visible so a number never silently changes from recorded work cost to approved or linked-invoice cost.
-3. Use the trend, category distribution, vendor ranking and cost-outlier visuals. Click a segment or outlier to reach its exact source records.
-4. Point out classification coverage and the unclassified bucket. Store-only or category-only work remains in the total instead of disappearing.
+## 1. Open with the immediate problem: who is onsite?
 
-## 2. Drill the independent maintenance taxonomy
+Start on **Today** or the active-visit panel.
 
-From the portfolio dashboard, drill `Refrigeration -> Coolers/Freezers -> a specific store asset -> optional component`.
+1. Show who is currently checked in, the store, vendor, operator WO and check-in evidence channel.
+2. Explain that QR/mobile web, secure work-order link and a trusted store device all create the same visit.
+3. Emphasize that TraceOps records approximate observed presence, not certified labor or continuous location tracking.
 
-1. The company owns the category names, aliases and nested grouping tree so stores use consistent language.
-2. Branch depth is flexible. Refrigeration can be deep while landscaping can stop after one category.
-3. Switch to Store 45 and traverse the same taxonomy in store scope.
-4. End on supporting work orders, visits and cost records. The dashboard never ends at an unexplained summary.
+Position the concept:
 
-Open `/stores`, search by store number and then by address, and open `/stores/store-45` to reinforce that the store dashboard is the regional-manager view for that location.
+> Vendor check-in is the easy starting point. The same visit becomes useful evidence for the work order, invoice review, store cost and equipment history.
 
-## 3. Show PM and lifecycle intelligence
+## 2. Show the manager star: trace a refrigeration dollar
 
-Open `/pm`, then open a refrigeration asset from the lifecycle/outlier area.
+Open **Overview / Spend**.
 
-1. Show due, overdue and completed PM occurrences plus the compliance numerator, denominator and allowed window.
-2. Compare same-class assets using age, expected life, warranty, reactive cost, repeat work and replacement-cost relationship.
-3. Open the asset record to show manufacturer, model, serial, supplier, purchase/installation, warranty, components, PM and source work/cost history.
-4. Explain that replacement review exposes reasons and thresholds. It is a human decision aid, never an opaque health score or automatic replacement order.
+1. Start at all 15 stores and identify the refrigeration outlier.
+2. Drill `Metro Region -> Store 104 -> Refrigeration -> Walk-ins -> Beer Cave -> Beer Cave Refrigeration System`.
+3. Continue into the supporting work orders, two visits and linked invoice allocation.
+4. Keep the selected period, cost basis and classification coverage visible.
+5. Point out **Unclassified below this level** so shallow work remains in the total instead of disappearing.
 
-## 4. Demonstrate low-friction vendor accountability
+The key claim is not the chart itself; it is that the user can open the exact source records explaining the number.
 
-Open `/accountability`, then `/email-outbox`.
+## 3. Create and issue outside work
 
-1. Open the accountless vendor link and accept or decline the job. The vendor may propose a date without creating a portal account.
-2. Explain that `/vendor-portal` is optional for recurring vendors who want job and permitted asset/service history.
-3. Open the store technician QR. Enter technician name and vendor, then select the work order.
-4. Also show **I don't see my work order / no work order provided**. It creates a reviewable unmatched visit instead of blocking the technician.
-5. Check in, rescan/select the active visit, optionally add notes/photos, choose resolved, waiting on parts or unresolved, and check out.
-6. The platform records observed visit count and approximate onsite duration. It does not claim dispatch visibility, certified labor time or repair quality. Accounts, signatures and photos are not globally required.
+Create a work order for a warm beer cave.
 
-## 5. Show the intentionally simple maintenance workflow
+1. Enter store, observable problem, priority and requested timing. Leave the exact asset deferred to prove that service is not blocked by incomplete classification.
+2. At **Who should handle this?**, show all three choices:
+   - Internal maintenance
+   - Outside vendor
+   - Choose later
+3. Select **Outside vendor** and search `beer cave`.
+4. Show why Summit Refrigeration ranks first: approved, covers the store and is preferred for refrigeration.
+5. Issue the versioned **Work Order / Service Authorization** by demo email/link.
+6. Point out the billing instruction requiring the operator work-order number on service documents and invoices.
 
-Open `/reports/new` or `/requests/new`, then `/work-orders/wo-0245`.
+Keep the identifiers distinct:
 
-1. A cashier reports an observable problem with name/ID and optional photos; no equipment expertise is required.
-2. The manager reviews the permanent request. Approval can follow configured amount/category authority without turning intake into a burdensome corporate process.
-3. Create or open a work order. Store and problem are enough; taxonomy, asset and component can be classified later.
-4. Show useful operator context, assignment, requested/scheduled window, visits, outcome, follow-up, costs and audit history.
-5. An unresolved checkout creates the next accountable follow-up instead of letting the issue disappear.
+```text
+Operator work order: NLM-2026-0004
+Vendor service ticket: SUM-26-0704
+Vendor invoice: SUM-260187
+External accounting PO: optional and separate
+```
 
-## 6. Show the optional invoice safeguard and report records
+Explain that the vendor may continue using its own dispatch and invoice software. TraceOps does not require the vendor to recreate that workflow.
 
-Return to `/accountability` for the invoice-review preview, then open `/reports`.
+## 4. Respond without forcing a portal
 
-1. Upload/import an invoice and link it to one or more work orders/visits.
-2. Review vendor/amount differences, duplicate reference, visit count, approximate onsite time and captured evidence.
-3. Emphasize that this is a human-review safeguard. It does not approve or execute payment and does not replace AP, ERP or the general ledger. Customers can ignore this feature and still use every dashboard, PM, lifecycle and vendor-accountability feature.
-4. Generate a report from the current dashboard scope. The saved record preserves scope, taxonomy path, period, cost basis, definitions and source links for handoff or archive.
-5. Regenerating creates a new version rather than silently rewriting a report already handed up the chain.
+Open the secure vendor action link.
 
-## 7. Explain customer-size fit
+1. Show **Accept**, **Decline**, **Propose date** and **Ask a question**.
+2. Accept the assignment and add the vendor's own ticket number.
+3. Return to the work order and show delivery/view/acceptance plus the audit timeline.
+4. Mention that recurring vendors may use the optional portal, but an account is never required for this action.
 
-- Independent store: store scope is default; no fake division/region or meaningless peer-store UI is required.
-- 12-store presentation: enough story-rich data to demonstrate each workflow without overwhelming the audience.
-- Approximately 65-store pilot: the same tenant/store/taxonomy/query model, server filtering, stable pagination and bulk setup; a separate automated fixture proves scale.
-- Other operators: all maintenance trades use configurable organization-owned taxonomy; HVAC/R is the deepest demo focus, not a hardcoded restriction.
+If a vendor responds by phone or email instead, the operator can record that response with actor, channel and timestamp. It never masquerades as a digital acceptance.
+
+## 5. Complete a cross-channel visit
+
+Open the Store 104 QR/mobile flow as a Summit Refrigeration technician.
+
+1. Confirm the store context and technician/vendor identity.
+2. Show that only Summit Refrigeration's eligible work orders appear.
+3. Select the issued warm-beer-cave work order and check in.
+4. Return to the manager view to show the visit live.
+5. Open the trusted store-device flow, locate the same active visit and check out through that different channel.
+6. Choose **Waiting on parts**, optionally add a note/photo and finish.
+7. Show that the unresolved outcome created the next accountable follow-up, owner and due time in the same action.
+
+Location evidence, when enabled, is requested only at check-in/out. Denied, inaccurate or outside-radius results remain visible exceptions; they do not block legitimate service by default.
+
+## 6. Show the no-work-order safety valve
+
+Use the Cedar Mechanical plumbing story.
+
+1. Start a visit for an emergency drain backup.
+2. Choose **I don't see my work order / No work order provided** and record why the technician is there.
+3. Show the unmatched visit in the facilities queue.
+4. Create or link the operator work order after review.
+5. Preserve that the visit occurred before the work order; never rewrite history to imply prior authorization.
+
+This path keeps vendor participation low-friction without sacrificing accountability.
+
+## 7. Demonstrate optional invoice protection
+
+Open **Invoice Review**.
+
+1. Show an invoice that contains the correct operator WO and matches directly.
+2. Show another invoice with a missing/mistyped WO reference and amount above NTE.
+3. Review the suggested work match, vendor/store/date facts, visit count, approximate observed duration, outcome and available evidence.
+4. Confirm the link manually and show the reconciled allocation/unmatched balance.
+5. Generate or preview the evidence packet that AP can use in its existing accounting process.
+
+State the boundary clearly: TraceOps flags factual differences for a person. It does not prove labor, reject the invoice, approve payment or replace AP/the general ledger.
+
+## 8. Show PM and lifecycle expansion
+
+Open **PM & Lifecycle**.
+
+1. Follow a seasonal RTU PM occurrence through issuance, vendor visit and completion.
+2. Show the compliance numerator, denominator and allowed window, then open the supporting occurrences.
+3. Open an older refrigeration asset and inspect manufacturer, model, serial, supplier, install date, warranty, PM and repair/cost history.
+4. Review the capital-review reasons: age versus expected life, repeated reactive work, selected maintenance cost versus replacement estimate, warranty and PM history.
+
+Lifecycle is transparent decision support. TraceOps never infers downtime or issues an automatic replacement command.
+
+## 9. Close on fit and expansion
+
+Show how capability configuration keeps the suite approachable:
+
+- **Essential:** work orders, vendor issuance and basic outcomes.
+- **Accountable:** adds check-in/out, follow-ups and exception queues.
+- **Controlled:** adds NTE/authorization, evidence policy and invoice safeguard.
+- **Complete:** adds equipment depth, PM, lifecycle and expanded analytics.
+
+These use one connected record model. A customer can begin with vendor accountability and activate the broader suite without migrating to a different product.
+
+Close with:
+
+> TraceOps tells a c-store operator what happened, who owns the next action, what the work cost and which records support every dollar.
+
+## Seeded cast
+
+The presentation must contain exactly these five approved vendors:
+
+1. Summit Refrigeration - refrigeration, HVAC, walk-ins, beer caves and ice machines.
+2. Cedar Mechanical - HVAC, plumbing and foodservice equipment.
+3. Forecourt Systems Group - dispensers, payment terminals and fuel systems.
+4. BrightPath Electrical - electrical, canopy lighting, signs and low-voltage security.
+5. Four Seasons Site Services - landscaping, snow, parking lots and exterior facilities.
+
+The 15 stores are split across Metro, Lakes and Interstate regions, five stores each. HVAC and Refrigeration have the deepest histories; forecourt, plumbing and exterior work prove that the taxonomy supports other c-store trades.
 
 ## Reset and verification
 
-Restart the development process to reset browser-only preview state. Fixture records are deterministic.
+Start a new session or restart the local process to clear session-only demo interactions. The deterministic baseline should return unchanged.
 
 ```bash
 npm run db:seed
@@ -81,3 +158,5 @@ npm test
 npm run test:e2e
 npm run build
 ```
+
+Before presenting, inspect manager dashboard/search, store detail, work-order creation, vendor action link, technician mobile flow, store-device checkout, no-WO queue, invoice review and PM/lifecycle views at desktop and mobile widths.

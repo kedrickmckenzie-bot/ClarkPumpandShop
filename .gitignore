@@ -40,4 +40,5 @@ yarn-error.log*
 /outputs/
 /work/
 .sites-dev.log
+.sites-dev.err.log
 *.tsbuildinfo

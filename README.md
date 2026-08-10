@@ -1,10 +1,44 @@
-# Maintenance Intelligence
+# TraceOps Convenience Suite
 
-**Maintenance Intelligence** is a temporary, changeable product label. Clark's is only the fictional pilot/demo tenant; it is not the software brand.
+TraceOps is a clean-slate, purpose-built convenience-retail maintenance intelligence suite. It connects store issues, operator work orders, internal teams, outside vendors, onsite visits, costs, preventive maintenance, equipment history and optional invoice evidence so managers can trace every dashboard number to its source records.
 
-This repository demonstrates a dashboard-first maintenance spending, preventive-maintenance, lifecycle and vendor-accountability platform for convenience-store operators and other multi-site or independent businesses. The main experience is visual visibility: switch company, division, region or store scope, traverse the organization's configurable maintenance taxonomy, and open the exact work, visit, PM, cost or optional invoice records behind a number.
+The c-store suite is intentionally specific: store and region visibility, refrigeration/HVAC depth, forecourt and foodservice context, outsourced service, simple employee intake and low-friction vendor participation. The umbrella name can later support other purpose-built industry suites and a master portfolio product.
 
-The operator's work order is the connected source record, not the product's center of gravity. Maintenance workflows stay deliberately simple so they create trustworthy cost and accountability data without becoming a dispatch system.
+> The legacy screens are not the product foundation. New work follows [the clean-slate suite plan](./docs/CSTORE_SUITE_PLAN.md), not the previous application's navigation, components or assumptions.
+
+## Demo contract
+
+The fictional demo operator, **Northline Fuel & Market**, has exactly:
+
+- **15 stores** across three regions.
+- **5 approved outside vendors**.
+- A two-person internal maintenance team.
+- Approximately 24 months of coherent HVAC, Refrigeration and supporting all-trades source records.
+
+The five vendors are Summit Refrigeration, Cedar Mechanical, Forecourt Systems Group, BrightPath Electrical and Four Seasons Site Services.
+
+The current hosted demo uses a deterministic static seed plus session-scoped interactions. Creating a work order, accepting a vendor assignment, checking in or reviewing an invoice demonstrates the connected experience during that session; it is not production-durable storage. Demo interactions are visibly labeled **Demo Mode** and may reset on refresh or a new session.
+
+All charts, counts and narrative claims must derive from the static source records and current session state. Summary numbers are never independently hardcoded.
+
+## Product shape
+
+The principal evidence chain is:
+
+> Issue or PM occurrence -> operator work order -> internal/outside assignment -> vendor issuance -> visit -> outcome/follow-up -> cost or invoice link -> dashboard/lifecycle/report drill-through
+
+The operator work-order number is the customer's service-authorization and billing reference. Vendors can keep using their own dispatch and invoicing tools, but should include the TraceOps operator WO number on service documents and invoices. Operator WO, vendor ticket, vendor invoice and optional external PO remain separate identifiers.
+
+Primary suite areas:
+
+- **Overview and Spend** - company, region and store trends, outliers and exact source-record drill-through.
+- **Stores** - search by number, name, address or alias; inspect work, visits, equipment, PM and cost.
+- **Work** - simple issue intake, internal/outside/blended routing, vendor issuance and accountable follow-up.
+- **Vendors and Visits** - searchable specialties/coverage, accountless response, QR/mobile/store-device check-in and no-WO exceptions.
+- **Equipment, PM and Lifecycle** - flexible c-store taxonomy, assets/components, warranties, PM compliance and transparent capital review.
+- **Invoices and Reports** - optional evidence review plus immutable/versioned management snapshots; never payment execution.
+
+Customers may activate only the capabilities they need. Assets, PM, approvals/NTE, geofence evidence, store verification, vendor acceptance, invoice safeguard and vendor portal access are optional enrichments, not barriers to recording work.
 
 ## Run locally
 
@@ -15,81 +49,54 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). No credentials are required. The role selector previews fictional personas and is visibly Demo Mode. Vendor email/deep-link and technician QR paths do not require an account; the vendor portal is optional.
+Open [http://localhost:3000](http://localhost:3000). No production credentials are required for the demo.
 
-## Principal demo routes
-
-- `/` - interactive company/division/region/store spending dashboard and source-record drill-down
-- `/stores` - search stores by number, name or address
-- `/stores/store-45` - Store 45 dashboard and taxonomy/equipment depth
-- `/pm` - PM compliance, due/missed work and lifecycle intelligence
-- `/accountability` - vendor response, visits, evidence and optional invoice-safeguard preview
-- `/reports` - generated management reports, handoff and archive records
-- `/maintenance` - intentionally simple maintenance workspace
-- `/work-orders/wo-0245` - useful work-order detail and linked evidence
-- `/equipment` - company taxonomy, assets, components and lifecycle records
-- `/setup` - organization/store/taxonomy setup
-- `/email-outbox` - vendor email, acceptance link and store QR
-- `/vendor/accept/accept_demo_0245_K3p9nQ7w` - accountless vendor response
-- `/technician/store_demo_45_Y8m4xB2p` - store QR check-in/out flow
-- `/vendor-portal` - optional recurring-vendor workspace
-
-See [DEMO.md](./DEMO.md) for the scripted walkthrough.
-
-## Product shape
-
-The presentation is a story-rich 12-store Clark's showcase. A separate automated approximately 65-store fixture proves search, pagination and aggregate behavior without cluttering the demo, and a one-store fixture proves that divisions, regions and enterprise-only comparisons are never required.
-
-Two independent axes drive dashboards and reporting:
-
-- Organization scope: company -> optional division -> optional region -> store.
-- Maintenance taxonomy: category/department -> any number of organization-defined nested groups -> store asset -> optional component tree.
-
-Each store activates only the company taxonomy branches it uses. Work remains valid at store or category level, and unclassified amounts remain visible.
-
-The optional invoice safeguard can upload/import an invoice, link it to work orders and observed visits, and show evidence or mismatch exceptions for human review. It is not a full accounting/AP suite, ERP, purchase-order system, general ledger or payment product.
-
-## Data modes
-
-Dashboard and report values are calculated from deterministic source records; summary cards are not separately hardcoded. The committed Drizzle schema and SQL migrations define the persistent Cloudflare D1 model. R2 is declared for private file bytes. The upload route uses R2 when its binding is available and clearly reports session-only preview behavior locally.
-
-Run the fixture integrity check with:
+Useful commands:
 
 ```bash
 npm run db:seed
-```
-
-Production authentication, durable command repositories, email delivery, ERP/API integrations and private download authorization remain explicit later phases.
-
-## Quality checks
-
-```bash
 npm run typecheck
 npm run lint
 npm test
 npm run test:e2e
 npm run build
+npm run start
 ```
 
-The quality bar covers tenant isolation, optional organization scopes, progressive and uneven-depth classification, store search, one-store adaptation, approximately 65-store pagination, QR visit states, PM compliance, unresolved follow-up, invoice attribution and metric-to-record drill-down.
+`npm run db:seed` validates/generates the deterministic demo fixture. See [DEMO.md](./DEMO.md) for the presentation flow.
 
-## Product and architecture decisions
+## Current hosting
 
-- [Competitive research](./docs/competitive-research.md) - sourced market patterns and Keep/Adapt/Avoid decisions
-- [Product specification](./docs/product-spec.md) - roles, information architecture, workflows, metrics and scope
-- [Architecture](./docs/architecture.md) - tenancy, taxonomy, storage, security, queries, testing and production path
-- [Repository assessment](./docs/repository-assessment.md) - starting condition and stack decision
-- [Engineering invariants](./AGENTS.md) - rules future contributors must preserve
+The current preview is a Vinext/React application hosted through Sites. [`.openai/hosting.json`](./.openai/hosting.json) declares:
 
-## Scope boundaries
+- Cloudflare D1 binding `DB`.
+- Cloudflare R2 binding `FILES`.
 
-The deepest demo data is HVAC and Refrigeration, while the taxonomy supports any maintenance trade. The product intentionally does not recreate vendor dispatch/FSM, full accounting or AP automation, purchase-order administration, accruals, payment tracking/execution, POS, retail inventory, payroll/scheduling, parts inventory, a vendor marketplace, continuous tracking or predictive AI. Lifecycle guidance recommends transparent human review and exposes every reason and threshold.
+These bindings remain available for the hosted preview, but the current demo experience should still be described accurately as static seed data plus session interactions. Local/session behavior is not a claim of production persistence, authentication, email delivery or accounting integration.
 
-## Known demo limitations
+Never commit secrets. Production token, email, storage and database settings belong in environment variables.
 
-- The role selector is presentation tooling, not authentication.
-- Local changes may be session previews where a persistent route is not yet connected.
-- Email uses an on-screen outbox.
-- Real geolocation depends on browser permission and fictional coordinates; demo states cover inside, outside, denied and inaccurate readings.
-- Seeded documents are safe fictional placeholders, not real service records.
-- Rule thresholds are illustrative defaults and require customer governance before operational use.
+## Render and PostgreSQL path
+
+TraceOps is being kept portable for a future Render project:
+
+- Keep persistence behind repository adapters rather than importing Cloudflare APIs throughout domain code.
+- Target PostgreSQL through `DATABASE_URL` and repeatable migrations.
+- Use S3-compatible private object storage rather than ephemeral local disk.
+- Bind the server to the host-provided `PORT` and `0.0.0.0`.
+- Separate web, release/migration and idempotent worker/cron entry points.
+- Add liveness/readiness endpoints before production deployment.
+
+A `render.yaml` should be created only when the new Render project is intentionally provisioned.
+
+## Product boundaries
+
+TraceOps is not a full accounting/AP suite, ERP, general ledger, payment system, POS, merchandising platform, inventory/warehouse system, payroll/timekeeping product, route optimizer, vendor dispatch replacement or continuous tracking product. Invoice review surfaces evidence and differences for a human; it never declares fraud or executes payment.
+
+## Documentation
+
+- [Clean-slate product/build plan](./docs/CSTORE_SUITE_PLAN.md) - primary product and implementation source of truth.
+- [Demo walkthrough](./DEMO.md) - concise presentation sequence and demo truth statements.
+- [Engineering guide](./AGENTS.md) - invariants and contributor rules for the rebuild.
+
+Older product and architecture documents may provide research context, but they do not override the clean-slate TraceOps plan.

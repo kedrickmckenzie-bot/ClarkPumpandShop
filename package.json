@@ -1,5 +1,5 @@
 {
-  "name": "maintenance-intelligence-demo",
+  "name": "traceops-convenience-demo",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -15,7 +15,7 @@
     "test:e2e": "vitest run tests/workflow.e2e.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "db:seed": "tsx scripts/seed-demo.ts"
+    "db:seed": "tsx scripts/seed-cstore-demo.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
