@@ -11,6 +11,9 @@
 .to-app,.to-app button,.to-app input,.to-app select,.to-app textarea{font-family:var(--font-geist-sans),Arial,sans-serif}
 .to-app{min-height:100vh;display:grid;grid-template-columns:252px minmax(0,1fr);background:var(--to-canvas);color:var(--to-ink)}
 .to-app button,.to-app input,.to-app select,.to-app textarea{font:inherit}
+.to-kpi[data-active=true]{border-color:var(--to-teal);box-shadow:0 0 0 3px rgba(11,117,104,.12),0 8px 22px rgba(25,45,52,.06)}
+.to-kpi[data-active=true] .to-kpi-top>span:first-child{color:var(--to-teal-dark)}
+button.to-kpi:focus-visible{outline:3px solid rgba(11,117,104,.24);outline-offset:2px}
 .to-sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;overflow-y:auto;padding:20px 15px;background:linear-gradient(180deg,var(--to-sidebar),#102027 88%);color:#edf6f3}
 .to-brand{display:flex;align-items:center;gap:11px;min-height:50px;padding:0 8px 18px;border-bottom:1px solid rgba(255,255,255,.09)}
 .to-brand-mark{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:var(--to-coral);color:#fff;font-size:17px;font-weight:850;letter-spacing:-.06em;box-shadow:inset 0 0 0 1px rgba(255,255,255,.24)}

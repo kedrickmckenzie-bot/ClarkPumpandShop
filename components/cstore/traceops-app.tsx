@@ -174,6 +174,8 @@ import type {
 type View = RoleView;
 type Drawer = "create-work" | "request-form" | "assign-vendor" | "issue-vendor" | "record-invoice" | "record-cost" | "completion-review" | "vendor-proposal" | "store-portal" | "visit" | "capabilities" | "taxonomy" | "new-store" | "classify-work" | "new-vendor" | "new-asset" | "new-component" | "store-services" | "new-pm" | "pm-update" | "internal-update" | "report-builder" | null;
 type Detail = { kind: "store" | "work" | "vendor" | "asset" | "invoice" | "pm" | "visit" | "report"; id: string } | null;
+type PmScheduleFilter = "all" | "compliance_window" | "due_upcoming" | "overdue" | "due" | "upcoming" | "completed" | "waived" | "active_plans";
+type PmScheduleSort = "due_asc" | "due_desc" | "status";
 interface CapabilityConfig {
   vendorAcceptance: boolean;
   locationEvidence: boolean;
@@ -623,6 +625,8 @@ export function TraceOpsApp() {
   const [maintenanceSpendState, setMaintenanceSpendState] = useState<MaintenanceSpendState>(defaultMaintenanceSpendState);
   const [lifecycleTab, setLifecycleTab] = useState<"review" | "capex" | "equipment">("review");
   const [capexDrafts, setCapexDrafts] = useState<Record<string, LifecycleCapexPlanDraft>>({});
+  const [pmScheduleFilter, setPmScheduleFilter] = useState<PmScheduleFilter>("all");
+  const [pmScheduleSort, setPmScheduleSort] = useState<PmScheduleSort>("due_asc");
   const [invoiceEvidenceQueueValue, setInvoiceEvidenceQueueValue] = useState<InvoiceEvidenceQueueValue>({ filter: "needs_review", query: "" });
   const [invoiceDetailReturn, setInvoiceDetailReturn] = useState<"spend" | "evidence" | "exceptions">("evidence");
   const [capabilities, setCapabilities] = useState<CapabilityConfig>({
@@ -3721,6 +3725,10 @@ export function TraceOpsApp() {
   ) : view === "pm" ? (
     <PmView
       dataset={dataset}
+      filter={pmScheduleFilter}
+      onFilterChange={setPmScheduleFilter}
+      sort={pmScheduleSort}
+      onSortChange={setPmScheduleSort}
       onOpenWork={(id) => setDetail({ kind: "work", id })}
       onOpenOccurrence={(id) => setDetail({ kind: "pm", id })}
       onNewPlan={() => { setWorkflowStoreId(null); setWorkflowAssetId(null); setDrawer("new-pm"); }}
@@ -4418,11 +4426,43 @@ export function LegacyEquipmentView({ dataset, onOpenWork, onOpenAsset }: { data
   return <><PageHead eyebrow={`${dataset.assets.length} tracked assets`} title="Equipment history that earns its setup." description="Start with store and category. Add model, serial, warranty, components, and lifecycle depth only where it improves decisions."></PageHead><div className="to-asset-grid">{assets.slice(0, 18).map((asset) => { const store = dataset.stores.find((record) => record.id === asset.storeId); const cost = dataset.invoiceWorkLinks.filter((link) => link.assetId === asset.id).reduce((sum, link) => sum + link.attributedAmountMinor, 0); const work = dataset.workOrders.filter((record) => record.assetId === asset.id); const age = Math.max(0, new Date(dataset.asOf).getUTCFullYear() - Number(asset.installedOn.slice(0, 4))); const review = cost > asset.replacementEstimateMinor * .35 || age >= asset.expectedLifeYears; return <article className="to-card" key={asset.id}><header className="to-card-head"><div><h3>{asset.name}</h3><p>Store {store?.storeNumber} · {asset.locationDetail}<br />{asset.manufacturer} {asset.model}</p></div>{review ? <Badge value="warning" label="Capital review" /> : <Badge value={asset.status} />}</header><div className="to-card-body"><div className="to-tags"><span className="to-tag">{asset.assetType}</span><span className="to-tag">{age} years old</span>{asset.warranty ? <span className="to-tag">Warranty to {dateLabel(asset.warranty.endsOn)}</span> : null}</div></div><footer className="to-card-facts"><div><span>Linked spend</span><strong>{money(cost)}</strong></div><div><span>Work orders</span><strong>{work.length}</strong></div><div><span>Replace est.</span><strong>{money(asset.replacementEstimateMinor)}</strong></div></footer><div className="to-card-actions"><button className="to-card-action" type="button" onClick={() => onOpenAsset(asset.id)}>Open equipment record <ChevronRight /></button>{work[0] ? <button className="to-card-action secondary" type="button" onClick={() => onOpenWork(work[0].id)}>Latest work order <ArrowRight /></button> : null}</div></article>; })}</div></>;
 }
 
-function PmView({ dataset, onOpenWork, onOpenOccurrence, onNewPlan, canManage }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenOccurrence: (id: string) => void; onNewPlan: () => void; canManage: boolean }) {
+function PmView({ dataset, filter, onFilterChange, sort, onSortChange, onOpenWork, onOpenOccurrence, onNewPlan, canManage }: { dataset: DemoDataset; filter: PmScheduleFilter; onFilterChange: (filter: PmScheduleFilter) => void; sort: PmScheduleSort; onSortChange: (sort: PmScheduleSort) => void; onOpenWork: (id: string) => void; onOpenOccurrence: (id: string) => void; onNewPlan: () => void; canManage: boolean }) {
   const completed = dataset.pmOccurrences.filter((record) => record.status === "completed").length;
   const denominator = dataset.pmOccurrences.filter((record) => record.status !== "upcoming").length;
   const compliance = denominator ? Math.round((completed / denominator) * 100) : 100;
   const open = dataset.pmOccurrences.filter((record) => !["completed", "skipped"].includes(record.status));
+  const dueAndUpcoming = open.filter((record) => record.status === "due" || record.status === "upcoming").length;
+  const overdue = open.filter((record) => record.status === "overdue").length;
+  const activePlanIds = new Set(dataset.pmPlans.filter((plan) => plan.active).map((plan) => plan.id));
+  const activePlanOccurrenceCount = dataset.pmOccurrences.filter((occurrence) => activePlanIds.has(occurrence.pmPlanId)).length;
+  const statusOrder: Record<PmOccurrence["status"], number> = {
+    overdue: 0,
+    due: 1,
+    upcoming: 2,
+    completed: 3,
+    skipped: 4,
+  };
+  const visibleOccurrences = dataset.pmOccurrences
+    .filter((occurrence) => {
+      if (filter === "all") return true;
+      if (filter === "compliance_window") return occurrence.status !== "upcoming";
+      if (filter === "due_upcoming") return occurrence.status === "due" || occurrence.status === "upcoming";
+      if (filter === "active_plans") return activePlanIds.has(occurrence.pmPlanId);
+      if (filter === "waived") return occurrence.status === "skipped";
+      return occurrence.status === filter;
+    })
+    .sort((left, right) => {
+      const result = sort === "status"
+        ? statusOrder[left.status] - statusOrder[right.status] || left.dueAt.localeCompare(right.dueAt)
+        : sort === "due_desc"
+          ? right.dueAt.localeCompare(left.dueAt)
+          : left.dueAt.localeCompare(right.dueAt);
+      return result || left.id.localeCompare(right.id);
+    });
+
+  function toggleTile(next: PmScheduleFilter) {
+    onFilterChange(filter === next ? "all" : next);
+  }
 
   return <>
     <PageHead
@@ -4432,30 +4472,56 @@ function PmView({ dataset, onOpenWork, onOpenOccurrence, onNewPlan, canManage }:
     >
       {canManage ? <button className="to-button primary" type="button" onClick={onNewPlan}><Plus /> New PM plan</button> : null}
     </PageHead>
-    <section className="to-kpi-grid">
-      <div className="to-kpi"><div className="to-kpi-top"><span>PM compliance</span><span className="to-kpi-icon"><CalendarCheck /></span></div><strong>{compliance}%</strong><span>{completed} completed of {denominator} due in the selected window</span></div>
-      <div className="to-kpi" data-tone="amber"><div className="to-kpi-top"><span>Due and upcoming</span><span className="to-kpi-icon"><Clock3 /></span></div><strong>{open.filter((record) => record.status === "due" || record.status === "upcoming").length}</strong><span>Open the occurrence to create or view its work</span></div>
-      <div className="to-kpi" data-tone="coral"><div className="to-kpi-top"><span>Overdue</span><span className="to-kpi-icon"><AlertTriangle /></span></div><strong>{open.filter((record) => record.status === "overdue").length}</strong><span>Visible until completed or waived with a reason</span></div>
-      <div className="to-kpi" data-tone="blue"><div className="to-kpi-top"><span>Active plans</span><span className="to-kpi-icon"><ClipboardList /></span></div><strong>{dataset.pmPlans.filter((record) => record.active).length}</strong><span>Store, category, and equipment schedules</span></div>
+    <section className="to-kpi-grid" aria-label="Filter preventive maintenance by status">
+      <button className="to-kpi" type="button" data-active={filter === "compliance_window"} aria-pressed={filter === "compliance_window"} aria-label={`Show ${denominator} PM occurrences in the compliance window`} aria-controls="pm-schedule-table" onClick={() => toggleTile("compliance_window")}><div className="to-kpi-top"><span>PM compliance</span><span className="to-kpi-icon"><CalendarCheck /></span></div><strong>{compliance}%</strong><span>{completed} completed of {denominator} due · click to filter</span></button>
+      <button className="to-kpi" type="button" data-tone="amber" data-active={filter === "due_upcoming"} aria-pressed={filter === "due_upcoming"} aria-label={`Show ${dueAndUpcoming} due and upcoming PM occurrences`} aria-controls="pm-schedule-table" onClick={() => toggleTile("due_upcoming")}><div className="to-kpi-top"><span>Due and upcoming</span><span className="to-kpi-icon"><Clock3 /></span></div><strong>{dueAndUpcoming}</strong><span>Click to show work that is due or coming next</span></button>
+      <button className="to-kpi" type="button" data-tone="coral" data-active={filter === "overdue"} aria-pressed={filter === "overdue"} aria-label={`Show ${overdue} overdue PM occurrences`} aria-controls="pm-schedule-table" onClick={() => toggleTile("overdue")}><div className="to-kpi-top"><span>Overdue</span><span className="to-kpi-icon"><AlertTriangle /></span></div><strong>{overdue}</strong><span>Click to show only overdue occurrences</span></button>
+      <button className="to-kpi" type="button" data-tone="blue" data-active={filter === "active_plans"} aria-pressed={filter === "active_plans"} aria-label={`Show ${activePlanOccurrenceCount} occurrences on active PM plans`} aria-controls="pm-schedule-table" onClick={() => toggleTile("active_plans")}><div className="to-kpi-top"><span>Active plans</span><span className="to-kpi-icon"><ClipboardList /></span></div><strong>{dataset.pmPlans.filter((record) => record.active).length}</strong><span>{activePlanOccurrenceCount} scheduled occurrences · click to filter</span></button>
     </section>
+    <div className="to-toolbar" aria-label="Preventive maintenance table controls">
+      <div className="to-field">
+        <label htmlFor="pm-status-filter">Show</label>
+        <select id="pm-status-filter" value={filter} onChange={(event) => onFilterChange(event.target.value as PmScheduleFilter)}>
+          <option value="all">All occurrences</option>
+          <option value="compliance_window">Compliance window</option>
+          <option value="due_upcoming">Due and upcoming</option>
+          <option value="overdue">Overdue</option>
+          <option value="due">Due now</option>
+          <option value="upcoming">Upcoming</option>
+          <option value="completed">Completed</option>
+          <option value="waived">Waived</option>
+          <option value="active_plans">Active-plan occurrences</option>
+        </select>
+      </div>
+      <div className="to-field">
+        <label htmlFor="pm-sort">Sort by</label>
+        <select id="pm-sort" value={sort} onChange={(event) => onSortChange(event.target.value as PmScheduleSort)}>
+          <option value="due_asc">Due date · soonest first</option>
+          <option value="due_desc">Due date · latest first</option>
+          <option value="status">Status · attention first</option>
+        </select>
+      </div>
+      {filter !== "all" || sort !== "due_asc" ? <button className="to-button ghost" type="button" onClick={() => { onFilterChange("all"); onSortChange("due_asc"); }}><X /> Reset</button> : null}
+      <span className="to-filter-count" aria-live="polite">Showing {visibleOccurrences.length} of {dataset.pmOccurrences.length}</span>
+    </div>
     <article className="to-panel">
       <header className="to-panel-head"><div><h2>PM schedule</h2><p>Open any row for the occurrence actions and source trail.</p></div></header>
-      <div className="to-table-wrap"><table className="to-table">
+      <div className="to-table-wrap"><table className="to-table" id="pm-schedule-table">
         <thead><tr><th>Plan</th><th>Store</th><th>Due</th><th>Assigned to</th><th>Status</th><th>Evidence</th></tr></thead>
-        <tbody>{[...dataset.pmOccurrences].sort((a, b) => a.dueAt.localeCompare(b.dueAt)).map((occurrence) => {
+        <tbody>{visibleOccurrences.map((occurrence) => {
           const plan = dataset.pmPlans.find((record) => record.id === occurrence.pmPlanId);
           const store = dataset.stores.find((record) => record.id === occurrence.storeId);
           const vendor = plan?.assignedPartyType === "vendor" ? dataset.vendors.find((record) => record.id === plan.assignedPartyId) : undefined;
           const team = plan?.assignedPartyType === "team" ? dataset.teams.find((record) => record.id === plan.assignedPartyId) : undefined;
           return <tr key={occurrence.id} onClick={() => onOpenOccurrence(occurrence.id)}>
-            <td><strong>{plan?.name}</strong><small>{plan?.cadence ? words(plan.cadence) : ""}</small></td>
+            <td><button className="to-link-button to-cell-link" type="button" onClick={(event) => { event.stopPropagation(); onOpenOccurrence(occurrence.id); }}><span><strong>{plan?.name}</strong><small>{plan?.cadence ? words(plan.cadence) : ""}</small></span><ChevronRight /></button></td>
             <td>#{store?.storeNumber}<small>{store?.address.city}</small></td>
             <td>{dateLabel(occurrence.dueAt)}</td>
             <td>{vendor?.displayName ?? team?.name ?? "Unassigned"}</td>
-            <td><Badge value={occurrence.status} /></td>
+            <td>{occurrence.status === "skipped" ? <Badge value="skipped" label="Waived" /> : <Badge value={occurrence.status} />}</td>
             <td>{plan?.requiredEvidence.map(words).join(" · ")}{occurrence.workOrderId ? <button className="to-link-button" type="button" onClick={(event) => { event.stopPropagation(); onOpenWork(occurrence.workOrderId!); }}>Open work</button> : null}</td>
           </tr>;
-        })}</tbody>
+        })}{visibleOccurrences.length === 0 ? <tr><td colSpan={6}><div className="to-empty"><CalendarCheck /><strong>No PM occurrences match this status</strong><p>Choose another status or clear the filter to see the full schedule.</p><button className="to-button ghost" type="button" onClick={() => onFilterChange("all")}>Show all occurrences</button></div></td></tr> : null}</tbody>
       </table></div>
     </article>
   </>;
