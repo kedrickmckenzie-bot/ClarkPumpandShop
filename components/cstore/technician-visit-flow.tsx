@@ -40,6 +40,7 @@ export interface TechnicianVisitFlowProps {
   initialActiveVisit?: ActiveVisit;
   initialCompleted?: boolean;
   defaultTechnicianName?: string;
+  defaultWorkOrderId?: string;
   requireVerifiedEvidence?: boolean;
   className?: string;
 }
@@ -167,6 +168,7 @@ export function TechnicianVisitFlow({
   initialActiveVisit,
   initialCompleted = false,
   defaultTechnicianName = "",
+  defaultWorkOrderId = "",
   requireVerifiedEvidence = false,
   className,
 }: TechnicianVisitFlowProps) {
@@ -179,7 +181,7 @@ export function TechnicianVisitFlow({
   const [visitType, setVisitType] = useState<"work_order" | "no_work_order">(
     storeWorkOrders.length > 0 ? "work_order" : "no_work_order",
   );
-  const [workOrderId, setWorkOrderId] = useState("");
+  const [workOrderId, setWorkOrderId] = useState(defaultWorkOrderId);
   const [noWorkOrderReason, setNoWorkOrderReason] = useState("");
   const [activeVisit, setActiveVisit] = useState<ActiveVisit | undefined>(initialActiveVisit);
   const [outcome, setOutcome] = useState<VisitOutcome>("resolved");

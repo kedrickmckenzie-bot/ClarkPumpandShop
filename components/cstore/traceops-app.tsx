@@ -15,11 +15,11 @@ import {
   FileBarChart,
   FileText,
   Gauge,
+  Inbox,
   LayoutDashboard,
   Mail,
   MapPin,
   PackageSearch,
-  PlayCircle,
   Plus,
   ReceiptText,
   Search,
@@ -85,11 +85,19 @@ import {
   type GuidedDemoStepId,
 } from "./guided-demo-story";
 import { TechnicianVisitFlow } from "./technician-visit-flow";
+import {
+  RequestWorkspace,
+  type EmployeeIssueDraft,
+  type RequestInboxItem,
+  type RequestInboxValue,
+  type SubmittedRequestReceipt,
+} from "./request-workspace";
 import { GuidedStoreSetup } from "./guided-store-setup";
 import { WorkClassificationEditor } from "./work-classification-editor";
 import { WorkOrderCreation } from "./work-order-creation";
 import type { GuidedStoreSetupValue, WorkClassificationValue } from "./setup-workflows";
 import { VendorServiceAuthorization } from "./vendor-service-authorization";
+import { VendorPicker } from "./vendor-picker";
 import type {
   ActiveVisit,
   ServiceAuthorizationRecord,
@@ -103,7 +111,7 @@ import type {
 } from "./types";
 
 type View = RoleView;
-type Drawer = "create-work" | "issue-vendor" | "store-portal" | "visit" | "capabilities" | "new-store" | "classify-work" | null;
+type Drawer = "create-work" | "request-form" | "assign-vendor" | "issue-vendor" | "record-invoice" | "store-portal" | "visit" | "capabilities" | "new-store" | "classify-work" | null;
 type Detail = { kind: "store" | "work" | "vendor" | "asset"; id: string } | null;
 interface CapabilityConfig {
   vendorAcceptance: boolean;
@@ -130,6 +138,14 @@ interface SpendPreset {
   categoryId: string;
 }
 
+interface InvoiceEntryValue {
+  invoiceNumber: string;
+  laborMinor: number;
+  materialsMinor: number;
+  tripMinor: number;
+  file: File | null;
+}
+
 const initialGuidedDemoState: GuidedDemoState = {
   stage: "request",
   selectedVendorId: GUIDED_DEMO_IDS.preferredVendor,
@@ -137,9 +153,24 @@ const initialGuidedDemoState: GuidedDemoState = {
   invoiceLinked: false,
 };
 
+const initialEmployeeIssueDraft: EmployeeIssueDraft = {
+  employeeName: "Lee Bryant",
+  employeeId: "E2104",
+  problem: "The beer cave is warm. The display reads 48°F and the product feels warmer than normal.",
+  reportedLocation: "Rear sales floor · Beer cave entrance",
+  urgency: "urgent",
+  photo: null,
+};
+
+const initialRequestInboxValue: RequestInboxValue = {
+  query: "",
+  filter: "needs_review",
+  selectedRequestId: null,
+};
+
 const navItems: Array<{ view: View; label: string; icon: typeof LayoutDashboard }> = [
-  { view: "story", label: "Guided demo", icon: PlayCircle },
   { view: "today", label: "Today", icon: LayoutDashboard },
+  { view: "requests", label: "Requests", icon: Inbox },
   { view: "stores", label: "Stores", icon: StoreIcon },
   { view: "work", label: "Work", icon: ClipboardList },
   { view: "vendors", label: "Vendors", icon: Truck },
@@ -303,7 +334,7 @@ function PageHead({
 }
 
 export function TraceOpsApp() {
-  const [view, setView] = useState<View>("story");
+  const [view, setView] = useState<View>("today");
   const [detail, setDetail] = useState<Detail>(null);
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [roleId, setRoleId] = useState<DemoRoleId>("facilities_manager");
@@ -321,6 +352,17 @@ export function TraceOpsApp() {
   const [documents, setDocuments] = useState<EvidenceDocument[]>(demoData.documents);
   const [pendingAuthorization, setPendingAuthorization] = useState<ServiceAuthorizationRecord | null>(null);
   const [visitStoreId, setVisitStoreId] = useState<string | null>(null);
+  const [visitVendorId, setVisitVendorId] = useState<string | null>(null);
+  const [visitWorkOrderId, setVisitWorkOrderId] = useState<string | null>(null);
+  const [storePortalStoreId, setStorePortalStoreId] = useState<string>(GUIDED_DEMO_IDS.store);
+  const [requestStoreId, setRequestStoreId] = useState<string>(GUIDED_DEMO_IDS.store);
+  const [assignmentWorkId, setAssignmentWorkId] = useState<string | null>(null);
+  const [assignmentVendorId, setAssignmentVendorId] = useState<string>(GUIDED_DEMO_IDS.preferredVendor);
+  const [invoiceWorkId, setInvoiceWorkId] = useState<string | null>(null);
+  const [employeeIssueDraft, setEmployeeIssueDraft] = useState<EmployeeIssueDraft>(initialEmployeeIssueDraft);
+  const [requestReceipt, setRequestReceipt] = useState<SubmittedRequestReceipt | null>(null);
+  const [requestInboxValue, setRequestInboxValue] = useState<RequestInboxValue>(initialRequestInboxValue);
+  const [requestNumbers, setRequestNumbers] = useState<Record<string, string>>({});
   const [workInitialStoreId, setWorkInitialStoreId] = useState<string | null>(null);
   const [classificationWorkId, setClassificationWorkId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -373,55 +415,75 @@ export function TraceOpsApp() {
       } | null;
       const scenarioId = message?.payload?.scenarioId ?? message?.scenarioId;
       const rawResponse = message?.payload?.response ?? message?.response;
-      if (message?.type !== "traceops:guided-vendor-response" || scenarioId !== GUIDED_DEMO_IDS.workOrder) return;
+      if (message?.type !== "traceops:guided-vendor-response" || !scenarioId) return;
       if (!rawResponse || !["accepted", "declined", "date_proposed"].includes(rawResponse)) return;
       const response = rawResponse as "accepted" | "declined" | "date_proposed";
       const occurredAt = new Date().toISOString();
+      const proposedArrivalAt = response === "date_proposed"
+        ? message?.payload?.proposedDate
+          ? new Date(`${message.payload.proposedDate}T${message.payload.proposedTime || "12:00"}:00`).toISOString()
+          : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        : undefined;
 
-      setGuidedDemo((current) => ({
-        ...current,
-        stage: response === "accepted" ? "visit" : response === "declined" ? "vendor" : "authorization",
-        vendorResponse: response,
-      }));
-      setIssuances((current) => current.map((issuance) => issuance.id === GUIDED_DEMO_IDS.issuance ? {
-        ...issuance,
-        response,
-        respondedAt: occurredAt,
-        vendorReference: response === "declined" ? undefined : GUIDED_VENDOR_REFERENCE,
-        proposedArrivalAt: response === "date_proposed" ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : undefined,
-      } : issuance));
-      setAssignments((current) => current.map((assignment) => assignment.id === GUIDED_DEMO_IDS.assignment ? {
+      if (scenarioId === GUIDED_DEMO_IDS.workOrder) {
+        setGuidedDemo((current) => ({
+          ...current,
+          stage: response === "accepted" ? "visit" : response === "declined" ? "vendor" : "authorization",
+          vendorResponse: response,
+        }));
+      }
+      setIssuances((current) => {
+        const latest = current
+          .filter((issuance) => issuance.workOrderId === scenarioId)
+          .sort((left, right) => right.version - left.version)[0];
+        return current.map((issuance) => issuance.id === latest?.id ? {
+          ...issuance,
+          response,
+          respondedAt: occurredAt,
+          vendorReference: scenarioId === GUIDED_DEMO_IDS.workOrder && response !== "declined"
+            ? GUIDED_VENDOR_REFERENCE
+            : issuance.vendorReference,
+          proposedArrivalAt,
+        } : issuance);
+      });
+      setAssignments((current) => current.map((assignment) => assignment.workOrderId === scenarioId && assignment.partyType === "vendor" ? {
         ...assignment,
         status: response === "accepted" ? "accepted" : response === "declined" ? "declined" : "acknowledged",
         acknowledgedAt: occurredAt,
       } : assignment));
-      setWorkOrders((current) => current.map((work) => work.id === GUIDED_DEMO_IDS.workOrder ? {
+      setWorkOrders((current) => current.map((work) => work.id === scenarioId ? {
         ...work,
         fulfillmentMode: response === "declined" ? "unassigned" : "external",
-        status: response === "accepted" ? "scheduled" : response === "declined" ? "draft" : "awaiting_vendor_response",
+        status: response === "accepted" ? "accepted" : response === "declined" ? "draft" : "scheduled",
+        scheduledWindow: response === "date_proposed" && proposedArrivalAt
+          ? {
+              startsAt: proposedArrivalAt,
+              endsAt: new Date(Date.parse(proposedArrivalAt) + 2 * 60 * 60 * 1000).toISOString(),
+            }
+          : work.scheduledWindow,
         accountable: work.accountable ? {
           ...work.accountable,
           nextAction: response === "accepted"
-            ? "Vendor technician checks in at Store 104"
+            ? "Vendor technician checks in at the assigned store"
             : response === "declined"
               ? "Store manager chooses another approved vendor"
               : "Store manager reviews the proposed service date",
         } : work.accountable,
       } : work));
       setAuditEvents((current) => [{
-        id: `audit-guided-vendor-${Date.now()}`,
+        id: `audit-vendor-response-${scenarioId}-${Date.now()}`,
         organizationId: demoData.organization.id,
-        entityType: "vendor_issuance",
-        entityId: GUIDED_DEMO_IDS.issuance,
+        entityType: "work_order",
+        entityId: scenarioId,
         eventType: `vendor_${response}`,
         actorType: "vendor_contact",
         channel: "vendor_link",
         occurredAt,
         summary: `Vendor ${response.replaceAll("_", " ")}`,
-        payloadSnapshot: { workOrderId: GUIDED_DEMO_IDS.workOrder, response },
+        payloadSnapshot: { workOrderId: scenarioId, response },
         demoMode: true,
       }, ...current]);
-      setNotice(response === "accepted" ? "Vendor acceptance received from the external work-order window. Continue to technician check-in." : response === "declined" ? "Vendor declined. The work returned to vendor selection without losing the request history." : "Vendor proposed a date. The proposal is recorded for manager review.");
+      setNotice(response === "accepted" ? "Vendor acceptance received from the external work-order window. The work order is ready for technician check-in." : response === "declined" ? "Vendor declined. The work returned for reassignment without losing its request history." : "Vendor proposed a date. The proposal is recorded on the work order for manager review.");
     }
 
     window.addEventListener("message", handleGuidedVendorResponse);
@@ -429,7 +491,6 @@ export function TraceOpsApp() {
   }, []);
 
   const activeVisits = dataset.visits.filter((visit) => !visit.checkedOutAt);
-  const openWork = dataset.workOrders.filter((work) => !terminalStatuses.has(work.status));
   const openExceptions = dataset.exceptions.filter((record) => record.status !== "resolved");
   const invoicedSpend = dataset.invoiceWorkLinks.reduce((sum, link) => sum + link.attributedAmountMinor, 0);
   const classificationWork = classificationWorkId
@@ -437,6 +498,19 @@ export function TraceOpsApp() {
     : undefined;
   const classificationStore = classificationWork
     ? dataset.stores.find((record) => record.id === classificationWork.storeId)
+    : undefined;
+  const requestStore = dataset.stores.find((record) => record.id === requestStoreId) ?? dataset.stores[0];
+  const assignmentWork = assignmentWorkId
+    ? dataset.workOrders.find((record) => record.id === assignmentWorkId)
+    : undefined;
+  const invoiceWork = invoiceWorkId
+    ? dataset.workOrders.find((record) => record.id === invoiceWorkId)
+    : undefined;
+  const invoiceAssignment = invoiceWork
+    ? dataset.assignments.find((record) => record.workOrderId === invoiceWork.id && record.partyType === "vendor" && record.status !== "declined")
+    : undefined;
+  const invoiceVendor = invoiceAssignment
+    ? dataset.vendors.find((record) => record.id === invoiceAssignment.partyId)
     : undefined;
   const roleNavItems = navItems.filter((item) => rolePolicy.allowedViews.includes(item.view));
   const intelligenceNavItems = roleNavItems.slice().filter((item) => ["spend", "equipment", "pm", "reports"].includes(item.view)).filter((item) =>
@@ -602,6 +676,39 @@ export function TraceOpsApp() {
       }
     : undefined;
 
+  const requestInboxItems: RequestInboxItem[] = dataset.requests
+    .map((request, index) => {
+      const store = dataset.stores.find((record) => record.id === request.storeId);
+      const submitter = dataset.people.find((record) => record.id === request.submittedByPersonId);
+      const linkedWork = request.workOrderId
+        ? dataset.workOrders.find((record) => record.id === request.workOrderId)
+        : undefined;
+      if (!store) return null;
+      return {
+        id: request.id,
+        requestNumber: requestNumbers[request.id] ?? `REQ-${store.storeNumber}-${String(index + 1).padStart(4, "0")}`,
+        store: {
+          id: store.id,
+          storeNumber: store.storeNumber,
+          name: store.name,
+          address: `${store.address.line1}, ${store.address.city}, ${store.address.state} ${store.address.postalCode}`,
+        },
+        submittedByName: submitter?.displayName ?? "Store employee",
+        submittedByEmployeeId: submitter?.employeeNumber ?? "Not recorded",
+        submittedAt: request.submittedAt,
+        immutableDescription: request.immutableDescription,
+        reportedLocation: request.reportedLocation,
+        urgency: request.urgency,
+        categoryHint: request.categoryHint,
+        attachmentCount: request.attachmentDocumentIds.length,
+        reviewStatus: request.reviewStatus,
+        linkedWorkOrderId: linkedWork?.id,
+        linkedWorkOrderNumber: linkedWork?.number,
+      } satisfies RequestInboxItem;
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((left, right) => right.submittedAt.localeCompare(left.submittedAt));
+
   const searchResults = useMemo(() => {
     const query = globalQuery.trim().toLowerCase();
     if (query.length < 2) return [];
@@ -726,6 +833,378 @@ export function TraceOpsApp() {
       demoMode: true,
     };
     setAuditEvents((current) => [event, ...current]);
+  }
+
+  function openStorePortal(storeId = GUIDED_DEMO_IDS.store) {
+    if (!guardPermission("recordVisits", "open the store portal")) return;
+    const store = dataset.stores.find((record) => record.id === storeId) ?? dataset.stores[0];
+    if (!store) return;
+    setStorePortalStoreId(store.id);
+    setDrawer("store-portal");
+  }
+
+  function openEmployeeRequestForm(storeId: string) {
+    const store = dataset.stores.find((record) => record.id === storeId);
+    if (!store) return;
+    const storeEmployee = dataset.people.find((person) =>
+      person.roles.includes("store_employee") && person.scopeIds.includes(store.id),
+    );
+    setRequestStoreId(store.id);
+    setRequestReceipt(null);
+    setEmployeeIssueDraft({
+      ...initialEmployeeIssueDraft,
+      employeeName: storeEmployee?.displayName ?? "",
+      employeeId: storeEmployee?.employeeNumber ?? "",
+      problem: store.id === GUIDED_DEMO_IDS.store ? initialEmployeeIssueDraft.problem : "",
+      reportedLocation: store.id === GUIDED_DEMO_IDS.store ? initialEmployeeIssueDraft.reportedLocation : "",
+    });
+    setDrawer("request-form");
+  }
+
+  async function submitEmployeeRequest(value: EmployeeIssueDraft) {
+    const store = fullDataset.stores.find((record) => record.id === requestStoreId);
+    if (!store) return;
+    const submittedAt = new Date().toISOString();
+    const submitter = fullDataset.people.find((person) =>
+      person.employeeNumber.toLowerCase() === value.employeeId.trim().toLowerCase() ||
+      person.displayName.toLowerCase() === value.employeeName.trim().toLowerCase(),
+    ) ?? fullDataset.people.find((person) => person.roles.includes("store_employee") && person.scopeIds.includes(store.id));
+    if (!submitter) {
+      setNotice("Enter a store employee name and ID that can be matched to this location.");
+      return;
+    }
+    const requestId = `request-session-${Date.now()}`;
+    const requestNumber = `REQ-${store.storeNumber}-DEMO-${String(Object.keys(requestNumbers).length + 1).padStart(3, "0")}`;
+    const documentId = value.photo ? `document-${requestId}-photo` : undefined;
+    const request: ServiceRequest = {
+      id: requestId,
+      organizationId: fullDataset.organization.id,
+      storeId: store.id,
+      submittedByPersonId: submitter.id,
+      submittedAt,
+      immutableDescription: value.problem.trim(),
+      reportedLocation: value.reportedLocation.trim(),
+      urgency: value.urgency,
+      categoryHint: /beer|cooler|freezer|refriger/i.test(value.problem) ? "Refrigeration" : undefined,
+      attachmentDocumentIds: documentId ? [documentId] : [],
+      reviewStatus: "new",
+    };
+    setRequests((current) => [request, ...current]);
+    setRequestNumbers((current) => ({ ...current, [request.id]: requestNumber }));
+    if (value.photo && documentId) {
+      const document: EvidenceDocument = {
+        id: documentId,
+        organizationId: fullDataset.organization.id,
+        storeId: store.id,
+        kind: "request_photo",
+        fileName: value.photo.name,
+        mediaType: value.photo.type || "application/octet-stream",
+        createdAt: submittedAt,
+        createdByLabel: `${submitter.displayName} · Store ${store.storeNumber}`,
+        visibility: "operator_only",
+      };
+      setDocuments((current) => [document, ...current]);
+    }
+    setAuditEvents((current) => [{
+      id: `audit-${requestId}-submitted`,
+      organizationId: fullDataset.organization.id,
+      entityType: "request",
+      entityId: request.id,
+      eventType: "store_employee_request_submitted",
+      actorType: "person",
+      actorId: submitter.id,
+      channel: "store_portal",
+      occurredAt: submittedAt,
+      summary: `Store ${store.storeNumber} employee submitted an issue`,
+      payloadSnapshot: { storeId: store.id, urgency: request.urgency, attachmentCount: request.attachmentDocumentIds.length },
+      demoMode: true,
+    }, ...current]);
+    setRequestReceipt({ requestId, requestNumber, submittedAtLabel: timeLabel(submittedAt) });
+    setRequestInboxValue({ query: "", filter: "needs_review", selectedRequestId: request.id });
+    setNotice(`${requestNumber} submitted. It is now visible in the manager Requests queue.`);
+  }
+
+  function approveAndCreateRequestWorkOrder(requestId: string) {
+    if (!guardPermission("createWork", "approve requests and create work orders")) return;
+    const request = fullDataset.requests.find((record) => record.id === requestId);
+    const store = request ? fullDataset.stores.find((record) => record.id === request.storeId) : undefined;
+    if (!request || !store) return;
+    if (request.workOrderId) {
+      setView("work");
+      setDetail({ kind: "work", id: request.workOrderId });
+      return;
+    }
+    const now = new Date().toISOString();
+    const due = new Date(Date.parse(now) + (request.urgency === "emergency" ? 6 : request.urgency === "urgent" ? 24 : 72) * 60 * 60 * 1000).toISOString();
+    const looksLikeRefrigeration = /beer|cooler|freezer|refriger|warm product/i.test(`${request.immutableDescription} ${request.categoryHint ?? ""}`);
+    const category = looksLikeRefrigeration
+      ? fullDataset.categories.find((record) => record.id === GUIDED_DEMO_IDS.category)
+      : fullDataset.categories.find((record) => request.categoryHint && record.label.toLowerCase() === request.categoryHint.toLowerCase());
+    const asset = looksLikeRefrigeration
+      ? fullDataset.assets.find((record) => record.storeId === store.id && record.id === GUIDED_DEMO_IDS.asset) ??
+        fullDataset.assets.find((record) => record.storeId === store.id && record.categoryId === category?.id)
+      : undefined;
+    const taxonomy = asset
+      ? fullDataset.taxonomyNodes.find((record) => record.id === asset.taxonomyNodeId)
+      : undefined;
+    const workId = `work-session-${Date.now()}`;
+    const requestNumber = requestNumbers[request.id] ?? `REQ-${store.storeNumber}`;
+    const workNumber = `NLM-${store.storeNumber}-DEMO-${String(fullDataset.workOrders.filter((work) => work.number.includes("-DEMO-")).length + 1).padStart(3, "0")}`;
+    const work: WorkOrder = {
+      id: workId,
+      organizationId: fullDataset.organization.id,
+      number: workNumber,
+      storeId: store.id,
+      requestId: request.id,
+      categoryId: category?.id,
+      taxonomyNodeId: taxonomy?.id,
+      assetId: asset?.id,
+      title: request.immutableDescription.length > 62 ? `${request.immutableDescription.slice(0, 59)}…` : request.immutableDescription,
+      problemDescription: request.immutableDescription,
+      scopeOfWork: "Diagnose the reported condition, document findings, and restore safe normal operation. Contact the customer before exceeding authorization.",
+      priority: request.urgency,
+      source: "employee_request",
+      fulfillmentMode: "unassigned",
+      status: "draft",
+      createdByPersonId: activePerson.id,
+      createdAt: now,
+      requestedWindow: { startsAt: now, endsAt: due },
+      accountable: {
+        partyType: "person",
+        partyId: activePerson.id,
+        nextAction: "Choose an internal team or approved outside vendor",
+        dueAt: due,
+        escalationPartyId: activePerson.id,
+      },
+      currency: "USD",
+      classificationDeferred: !asset,
+      tags: ["employee-request", "manager-approved", requestNumber],
+    };
+    setRequests((current) => current.map((record) => record.id === request.id ? {
+      ...record,
+      workOrderId: work.id,
+      reviewStatus: "converted",
+    } : record));
+    setWorkOrders((current) => [work, ...current]);
+    setAuditEvents((current) => [{
+      id: `audit-${request.id}-approved`,
+      organizationId: fullDataset.organization.id,
+      entityType: "work_order",
+      entityId: work.id,
+      eventType: "request_approved_and_converted",
+      actorType: "person",
+      actorId: activePerson.id,
+      channel: "manager_web",
+      occurredAt: now,
+      summary: `${requestNumber} approved and converted to ${work.number}`,
+      payloadSnapshot: { requestId: request.id, workOrderId: work.id, storeId: store.id },
+      demoMode: true,
+    }, ...current]);
+    setRequestInboxValue((current) => ({ ...current, selectedRequestId: request.id }));
+    setView("work");
+    setDetail({ kind: "work", id: work.id });
+    setNotice(`${work.number} created from the original employee request. Choose who will handle it next.`);
+  }
+
+  function openVendorAssignment(workOrderId: string) {
+    if (!guardPermission("issueVendorWork", "assign outside vendors")) return;
+    const work = dataset.workOrders.find((record) => record.id === workOrderId);
+    if (!work) return;
+    const preferredVendor = dataset.vendors.find((vendor) =>
+      vendor.preferredStoreIds.includes(work.storeId) &&
+      (!work.categoryId || vendor.specialties.some((specialty) => specialty.categoryId === work.categoryId)),
+    );
+    setAssignmentWorkId(work.id);
+    setAssignmentVendorId(preferredVendor?.id ?? dataset.vendors[0]?.id ?? "");
+    setDrawer("assign-vendor");
+  }
+
+  function assignVendorToWork() {
+    const work = fullDataset.workOrders.find((record) => record.id === assignmentWorkId);
+    const vendor = fullDataset.vendors.find((record) => record.id === assignmentVendorId);
+    if (!work || !vendor) return;
+    const now = new Date().toISOString();
+    const assignment: WorkAssignment = {
+      id: `assignment-session-${Date.now()}`,
+      organizationId: fullDataset.organization.id,
+      workOrderId: work.id,
+      partyType: "vendor",
+      partyId: vendor.id,
+      status: "offered",
+      assignedAt: now,
+      assignmentNote: "Approved outside vendor selected; customer service authorization is ready to review.",
+    };
+    setAssignments((current) => [assignment, ...current.filter((record) => record.workOrderId !== work.id || record.partyType !== "vendor")]);
+    setWorkOrders((current) => current.map((record) => record.id === work.id ? {
+      ...record,
+      fulfillmentMode: "external",
+      status: "ready_to_issue",
+      accountable: {
+        partyType: "person",
+        partyId: activePerson.id,
+        nextAction: `Review and send the customer work order to ${vendor.displayName}`,
+        dueAt: record.requestedWindow.endsAt,
+        escalationPartyId: activePerson.id,
+      },
+    } : record));
+    appendAuditEvent("assignment", assignment.id, "Outside vendor selected", {
+      workOrderId: work.id,
+      vendorId: vendor.id,
+    });
+    setDrawer(null);
+    setAssignmentWorkId(null);
+    setNotice(`${vendor.displayName} selected. Review and send the service authorization from this work order.`);
+  }
+
+  function openVisitForWork(workOrderId: string) {
+    if (!guardPermission("recordVisits", "record vendor visits")) return;
+    const work = dataset.workOrders.find((record) => record.id === workOrderId);
+    const assignment = dataset.assignments.find((record) => record.workOrderId === workOrderId && record.partyType === "vendor" && record.status !== "declined");
+    if (!work || !assignment) {
+      setNotice("Assign an outside vendor before opening this visit.");
+      return;
+    }
+    setVisitStoreId(work.storeId);
+    setVisitVendorId(assignment.partyId);
+    setVisitWorkOrderId(work.id);
+    setDrawer("visit");
+  }
+
+  function openWorkInSpend(workOrderId: string) {
+    const work = fullDataset.workOrders.find((record) => record.id === workOrderId);
+    const store = work ? fullDataset.stores.find((record) => record.id === work.storeId) : undefined;
+    if (!work || !store) return;
+    setSpendPreset({
+      regionId: store.regionId ?? "all",
+      storeId: store.id,
+      categoryId: work.categoryId ?? "all",
+    });
+    navigate("spend");
+  }
+
+  function openInvoiceForWork(workOrderId: string) {
+    if (!guardPermission("createWork", "record invoices")) return;
+    const work = dataset.workOrders.find((record) => record.id === workOrderId);
+    const assignment = dataset.assignments.find((record) => record.workOrderId === workOrderId && record.partyType === "vendor" && record.status !== "declined");
+    if (!work || !assignment) {
+      setNotice("An outside vendor must be connected before an invoice can be matched to this work order.");
+      return;
+    }
+    setInvoiceWorkId(work.id);
+    setDrawer("record-invoice");
+  }
+
+  function recordInvoiceForWork(value: InvoiceEntryValue) {
+    const work = fullDataset.workOrders.find((record) => record.id === invoiceWorkId);
+    const assignment = work
+      ? fullDataset.assignments.find((record) => record.workOrderId === work.id && record.partyType === "vendor" && record.status !== "declined")
+      : undefined;
+    const vendor = assignment
+      ? fullDataset.vendors.find((record) => record.id === assignment.partyId)
+      : undefined;
+    if (!work || !vendor) return;
+    const totalMinor = value.laborMinor + value.materialsMinor + value.tripMinor;
+    if (totalMinor <= 0) {
+      setNotice("Enter at least one invoice amount before recording it.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const invoiceId = `invoice-session-${Date.now()}`;
+    const documentId = `document-${invoiceId}`;
+    const lineItems: Invoice["lineItems"] = [];
+    if (value.laborMinor > 0) lineItems.push({ id: `${invoiceId}-labor`, workOrderId: work.id, description: "Onsite labor", costType: "labor", quantity: 1, unitAmountMinor: value.laborMinor, amountMinor: value.laborMinor });
+    if (value.materialsMinor > 0) lineItems.push({ id: `${invoiceId}-materials`, workOrderId: work.id, description: "Parts and materials", costType: "materials", quantity: 1, unitAmountMinor: value.materialsMinor, amountMinor: value.materialsMinor });
+    if (value.tripMinor > 0) lineItems.push({ id: `${invoiceId}-trip`, workOrderId: work.id, description: "Dispatch / trip charge", costType: "trip", quantity: 1, unitAmountMinor: value.tripMinor, amountMinor: value.tripMinor });
+    const overNte = Boolean(work.notToExceedMinor && totalMinor > work.notToExceedMinor);
+    const invoice: Invoice = {
+      id: invoiceId,
+      organizationId: fullDataset.organization.id,
+      vendorId: vendor.id,
+      invoiceNumber: value.invoiceNumber.trim(),
+      customerWorkOrderReferences: [work.number],
+      vendorServiceReferences: fullDataset.vendorIssuances.find((record) => record.workOrderId === work.id)?.vendorReference
+        ? [fullDataset.vendorIssuances.find((record) => record.workOrderId === work.id)!.vendorReference!]
+        : [],
+      invoiceDate: now.slice(0, 10),
+      receivedAt: now,
+      status: overNte ? "needs_review" : "received",
+      currency: work.currency,
+      lineItems,
+      documentId,
+    };
+    const link: InvoiceWorkLink = {
+      id: `invoice-link-session-${Date.now()}`,
+      organizationId: fullDataset.organization.id,
+      invoiceId,
+      workOrderId: work.id,
+      storeId: work.storeId,
+      categoryId: work.categoryId,
+      assetId: work.assetId,
+      attributedAmountMinor: totalMinor,
+      currency: work.currency,
+      matchMethod: "work_order_reference",
+      matchStatus: overNte ? "review_needed" : "matched",
+      linkedAt: now,
+      linkedByPersonId: activePerson.id,
+    };
+    const document: EvidenceDocument = {
+      id: documentId,
+      organizationId: fullDataset.organization.id,
+      storeId: work.storeId,
+      workOrderId: work.id,
+      invoiceId,
+      kind: "invoice",
+      fileName: value.file?.name ?? `${value.invoiceNumber.trim()}-manual-entry.pdf`,
+      mediaType: value.file?.type || "application/pdf",
+      createdAt: now,
+      createdByLabel: `${activePerson.displayName} · Demo Mode`,
+      visibility: "operator_only",
+    };
+    setInvoices((current) => [invoice, ...current]);
+    setInvoiceWorkLinks((current) => [link, ...current]);
+    setDocuments((current) => [document, ...current]);
+    setWorkOrders((current) => current.map((record) => record.id === work.id ? {
+      ...record,
+      status: "invoice_received",
+      accountable: record.accountable ? {
+        ...record.accountable,
+        partyType: "person",
+        partyId: activePerson.id,
+        nextAction: overNte ? "Review the invoice amount above the authorization limit" : "Review the matched invoice and close the work order",
+      } : record.accountable,
+    } : record));
+    if (overNte) {
+      setExceptions((current) => [{
+        id: `exception-${invoiceId}-nte`,
+        organizationId: fullDataset.organization.id,
+        type: "invoice_over_nte",
+        severity: "warning",
+        status: "open",
+        title: `${invoice.invoiceNumber} exceeds the work-order limit`,
+        description: `${money(totalMinor)} invoiced against ${money(work.notToExceedMinor ?? 0)} authorized. Review before AP handoff.`,
+        storeId: work.storeId,
+        workOrderId: work.id,
+        invoiceId,
+        vendorId: vendor.id,
+        sourceRecordIds: [invoiceId, work.id],
+        assignedPersonId: activePerson.id,
+        openedAt: now,
+        dueAt: new Date(Date.parse(now) + 24 * 60 * 60 * 1000).toISOString(),
+      }, ...current]);
+    }
+    appendAuditEvent("invoice", invoice.id, "Invoice uploaded and matched to customer work order", {
+      invoiceId,
+      workOrderId: work.id,
+      vendorId: vendor.id,
+      amountMinor: totalMinor,
+      matchStatus: link.matchStatus,
+    });
+    setDrawer(null);
+    setInvoiceWorkId(null);
+    setDetail({ kind: "work", id: work.id });
+    setNotice(overNte
+      ? `${invoice.invoiceNumber} matched to ${work.number} and flagged above the authorization limit.`
+      : `${invoice.invoiceNumber} matched to ${work.number}. The amount now appears in spending.`);
   }
 
   function resetGuidedDemo() {
@@ -879,29 +1358,42 @@ export function TraceOpsApp() {
     setNotice(`${GUIDED_WORK_ORDER_NUMBER} issued to ${vendor.displayName}. Open the external version next.`);
   }
 
-  function openGuidedExternalWorkOrder() {
-    const vendor = fullDataset.vendors.find((record) => record.id === guidedDemo.selectedVendorId);
-    const store = fullDataset.stores.find((record) => record.id === GUIDED_DEMO_IDS.store);
-    const work = fullDataset.workOrders.find((record) => record.id === GUIDED_DEMO_IDS.workOrder) ?? createGuidedWorkOrder(fullDataset);
-    const asset = fullDataset.assets.find((record) => record.id === GUIDED_DEMO_IDS.asset);
-    if (!vendor || !store) return;
+  function openExternalWorkOrder(workOrderId: string) {
+    const work = fullDataset.workOrders.find((record) => record.id === workOrderId);
+    const assignment = fullDataset.assignments.find((record) =>
+      record.workOrderId === workOrderId && record.partyType === "vendor" && record.status !== "declined",
+    );
+    const vendor = assignment ? fullDataset.vendors.find((record) => record.id === assignment.partyId) : undefined;
+    const store = work ? fullDataset.stores.find((record) => record.id === work.storeId) : undefined;
+    const asset = work?.assetId ? fullDataset.assets.find((record) => record.id === work.assetId) : undefined;
+    const issuance = fullDataset.vendorIssuances.find((record) => record.workOrderId === workOrderId);
+    if (!work || !vendor || !store || !issuance) {
+      setNotice("Select a vendor and send the service authorization before opening the vendor-facing work order.");
+      return;
+    }
     const url = new URL("/external-work-order", window.location.origin);
-    url.searchParams.set("scenarioId", GUIDED_DEMO_IDS.workOrder);
+    url.searchParams.set("scenarioId", work.id);
     url.searchParams.set("wo", work.number);
     url.searchParams.set("store", `Store ${store.storeNumber} · ${store.name}`);
     url.searchParams.set("address", `${store.address.line1}, ${store.address.city}, ${store.address.state} ${store.address.postalCode}`);
     url.searchParams.set("vendor", vendor.displayName);
     url.searchParams.set("problem", work.problemDescription);
     url.searchParams.set("scope", work.scopeOfWork);
-    url.searchParams.set("nteMinor", String(GUIDED_NTE_MINOR));
-    url.searchParams.set("requestedWindow", "Service requested today, before 2:00 PM");
+    if (issuance.notToExceedMinor !== undefined) url.searchParams.set("nteMinor", String(issuance.notToExceedMinor));
+    url.searchParams.set("requestedWindow", `${dateLabel(work.requestedWindow.startsAt)} – ${dateLabel(work.requestedWindow.endsAt)}`);
     url.searchParams.set("access", `Check in at Store ${store.storeNumber} by QR, vendor app, or store device. Select ${work.number} when you arrive. ${asset ? `Service asset: ${asset.assetCode} · ${asset.name}.` : ""}`);
-    const opened = window.open(url.toString(), "traceops-external-work-order", "width=1120,height=860,resizable=yes,scrollbars=yes");
+    const opened = window.open(url.toString(), `traceops-external-${work.id}`, "width=1120,height=860,resizable=yes,scrollbars=yes");
     opened?.focus();
-    setGuidedDemo((current) => ({ ...current, externalWindowOpened: Boolean(opened) }));
+    if (work.id === GUIDED_DEMO_IDS.workOrder) {
+      setGuidedDemo((current) => ({ ...current, externalWindowOpened: Boolean(opened) }));
+    }
     setNotice(opened
-      ? "External vendor authorization opened in a separate window. Accept it there to continue automatically."
-      : "The browser blocked the external window. Allow pop-ups or use the demo fallback below.");
+      ? `${work.number} opened in the vendor-facing window. Respond there, then return here to continue.`
+      : "The browser blocked the vendor-facing window. Allow pop-ups and try again.");
+  }
+
+  function openGuidedExternalWorkOrder() {
+    openExternalWorkOrder(GUIDED_DEMO_IDS.workOrder);
   }
 
   function mockGuidedVendorResponse(response: "accepted" | "declined" | "date_proposed") {
@@ -1526,10 +2018,32 @@ export function TraceOpsApp() {
       onIssue={openAuthorizationForWork}
       onOpenWork={(id) => setDetail({ kind: "work", id })}
       onOpenAsset={(id) => setDetail({ kind: "asset", id })}
+      onOpenStore={(id) => setDetail({ kind: "store", id })}
+      onOpenVendor={(id) => setDetail({ kind: "vendor", id })}
       onClassify={(id) => { setClassificationWorkId(id); setDrawer("classify-work"); }}
+      onAssignVendor={openVendorAssignment}
+      onOpenExternal={openExternalWorkOrder}
+      onStartVisit={openVisitForWork}
+      onRecordInvoice={openInvoiceForWork}
+      onOpenSpend={openWorkInSpend}
       canClassify={hasPermission("classifyWork")}
       canIssueVendorWork={hasPermission("issueVendorWork")}
+      canRecordVisits={hasPermission("recordVisits")}
+      canRecordInvoice={hasPermission("createWork") && capabilities.invoiceSafeguard}
       canSimulateVendorResponse={hasPermission("simulateVendorResponse")}
+    />
+  ) : view === "requests" ? (
+    <RequestWorkspace
+      mode="manager"
+      scopeLabel={scopeLabel}
+      requests={requestInboxItems}
+      value={requestInboxValue}
+      onChange={setRequestInboxValue}
+      onApproveAndCreateWorkOrder={approveAndCreateRequestWorkOrder}
+      onOpenWorkOrder={(id) => {
+        setView("work");
+        setDetail({ kind: "work", id });
+      }}
     />
   ) : view === "story" ? (
     <GuidedDemoStory
@@ -1599,14 +2113,13 @@ export function TraceOpsApp() {
     <TodayView
       dataset={dataset}
       activeVisits={activeVisits}
-      openWork={openWork}
       exceptions={openExceptions}
       invoicedSpend={invoicedSpend}
       onNavigate={navigate}
       onOpen={setDetail}
       onCreate={() => openWorkOrderDrawer()}
-      onStorePortal={() => { if (guardPermission("recordVisits", "open the store portal")) setDrawer("store-portal"); }}
-      onVisit={() => { if (!guardPermission("recordVisits", "record vendor visits")) return; setVisitStoreId(null); setDrawer("visit"); }}
+      onStorePortal={() => openStorePortal(GUIDED_DEMO_IDS.store)}
+      onVisit={() => { if (!guardPermission("recordVisits", "record vendor visits")) return; setVisitStoreId(null); setVisitVendorId(null); setVisitWorkOrderId(null); setDrawer("visit"); }}
       scopeLabel={scopeLabel}
       roleLabel={rolePolicy.label}
       canCreateWork={hasPermission("createWork")}
@@ -1646,8 +2159,14 @@ export function TraceOpsApp() {
   const drawerTitle =
     drawer === "create-work"
       ? "Create work order"
+      : drawer === "request-form"
+        ? "Report a store issue"
+        : drawer === "assign-vendor"
+          ? "Choose an outside vendor"
       : drawer === "issue-vendor"
         ? "Issue to outside vendor"
+        : drawer === "record-invoice"
+          ? "Record and match invoice"
         : drawer === "store-portal"
           ? "Store portal"
           : drawer === "capabilities"
@@ -1660,8 +2179,14 @@ export function TraceOpsApp() {
   const drawerSubtitle =
     drawer === "create-work"
       ? "Start simple. Equipment and financial controls can be added later."
+      : drawer === "request-form"
+        ? "A quick employee report becomes a permanent manager-review record."
+        : drawer === "assign-vendor"
+          ? "Search approved providers by name, specialty, equipment, or common language."
       : drawer === "issue-vendor"
         ? "This customer work order becomes the vendor’s authorization and invoice reference."
+        : drawer === "record-invoice"
+          ? "Keep vendor billing separate from visit evidence, then connect it through the customer work-order number."
         : drawer === "capabilities"
           ? "Use only the controls that create value for this operator."
           : drawer === "new-store"
@@ -1680,7 +2205,7 @@ export function TraceOpsApp() {
         <div className="to-org-switcher"><small>Demo organization</small><strong>{dataset.organization.displayName}</strong></div>
         <p className="to-nav-label">Operate</p>
         <nav className="to-nav" aria-label="Main navigation">
-          {roleNavItems.filter((item) => ["story", "today", "stores", "work", "vendors"].includes(item.view)).map((item) => <NavButton key={item.view} item={item} active={view === item.view && !detail} onClick={() => navigate(item.view)} />)}
+          {roleNavItems.filter((item) => ["today", "requests", "stores", "work", "vendors"].includes(item.view)).map((item) => <NavButton key={item.view} item={item} active={view === item.view && !detail} onClick={() => navigate(item.view)} />)}
         </nav>
         <p className="to-nav-label">Understand</p>
         <nav className="to-nav" aria-label="Intelligence navigation">
@@ -1731,7 +2256,7 @@ export function TraceOpsApp() {
       </nav>
 
       {drawer ? (
-        <DrawerShell title={drawerTitle} subtitle={drawerSubtitle} onClose={() => { setDrawer(null); setPendingAuthorization(null); setClassificationWorkId(null); setWorkInitialStoreId(null); }}>
+        <DrawerShell title={drawerTitle} subtitle={drawerSubtitle} onClose={() => { setDrawer(null); setPendingAuthorization(null); setClassificationWorkId(null); setWorkInitialStoreId(null); setAssignmentWorkId(null); setInvoiceWorkId(null); setVisitVendorId(null); setVisitWorkOrderId(null); }}>
           {drawer === "create-work" ? (
             <WorkOrderCreation
               stores={storeOptions}
@@ -1740,10 +2265,61 @@ export function TraceOpsApp() {
               onCreate={createWorkOrder}
               initialValue={workInitialStoreId ? { storeId: workInitialStoreId } : undefined}
             />
+          ) : drawer === "request-form" && requestStore ? (
+            <RequestWorkspace
+              mode="employee"
+              store={{
+                id: requestStore.id,
+                storeNumber: requestStore.storeNumber,
+                name: requestStore.name,
+                address: requestStore.normalizedAddress,
+              }}
+              value={employeeIssueDraft}
+              onChange={setEmployeeIssueDraft}
+              onSubmit={submitEmployeeRequest}
+              receipt={requestReceipt}
+              onReportAnother={() => {
+                setRequestReceipt(null);
+                setEmployeeIssueDraft((current) => ({
+                  ...initialEmployeeIssueDraft,
+                  employeeName: current.employeeName,
+                  employeeId: current.employeeId,
+                  problem: "",
+                  reportedLocation: "",
+                }));
+              }}
+            />
+          ) : drawer === "assign-vendor" && assignmentWork ? (
+            <div>
+              <div className="to-callout">
+                <ClipboardList />
+                <span>
+                  <strong>{assignmentWork.number} · {assignmentWork.title}</strong>
+                  <small>Selecting a vendor does not send anything yet. You will review the authorization next.</small>
+                </span>
+              </div>
+              <VendorPicker
+                vendors={vendorOptions}
+                storeId={assignmentWork.storeId}
+                value={assignmentVendorId}
+                onChange={setAssignmentVendorId}
+              />
+              <button className="to-button primary to-full" type="button" disabled={!assignmentVendorId} onClick={assignVendorToWork}>
+                <ArrowRight /> Assign selected vendor
+              </button>
+            </div>
           ) : drawer === "issue-vendor" && pendingAuthorization ? (
             <VendorServiceAuthorization authorization={pendingAuthorization} onIssue={issueAuthorization} onSaveDraft={(draft) => { setWorkOrders((current) => current.map((work) => work.id === draft.workOrderId ? { ...work, notToExceedMinor: draft.nteMinorUnits } : work)); setDraftAcceptanceByWork((current) => ({ ...current, [draft.workOrderId]: draft.acceptanceRequested })); setDrawer(null); setNotice(`${pendingAuthorization.customerWorkOrderNumber} authorization settings saved without sending. Reopen it from the work-order record.`); }} defaultAcceptanceRequested={draftAcceptanceByWork[pendingAuthorization.workOrderId] ?? capabilities.vendorAcceptance} />
+          ) : drawer === "record-invoice" && invoiceWork && invoiceVendor ? (
+            <InvoiceEntryForm work={invoiceWork} vendor={invoiceVendor} onSubmit={recordInvoiceForWork} />
           ) : drawer === "store-portal" ? (
-            <StorePortal dataset={dataset} onWork={() => openWorkOrderDrawer(dataset.stores[0]?.id)} onVisit={(storeId) => { setVisitStoreId(storeId); setDrawer("visit"); }} onOpenIssues={() => { setDrawer(null); navigate("work"); }} />
+            <StorePortal
+              dataset={dataset}
+              storeId={storePortalStoreId}
+              onWork={openEmployeeRequestForm}
+              onVisit={(storeId) => { setVisitStoreId(storeId); setVisitVendorId(null); setVisitWorkOrderId(null); setDrawer("visit"); }}
+              onOpenIssues={() => { setDrawer(null); navigate("requests"); }}
+            />
           ) : drawer === "capabilities" ? (
             <CapabilitySettings value={capabilities} onChange={setCapabilities} />
           ) : drawer === "new-store" ? (
@@ -1759,7 +2335,7 @@ export function TraceOpsApp() {
               onSave={saveWorkClassification}
             />
           ) : (
-            <VisitDemo dataset={dataset} activeVisits={activeVisits} fixedStoreId={visitStoreId ?? undefined} requireLocationEvidence={capabilities.locationEvidence} onCheckIn={recordVisitCheckIn} onCheckOut={recordVisitCheckOut} />
+            <VisitDemo dataset={dataset} activeVisits={activeVisits} fixedStoreId={visitStoreId ?? undefined} fixedVendorId={visitVendorId ?? undefined} fixedWorkOrderId={visitWorkOrderId ?? undefined} requireLocationEvidence={capabilities.locationEvidence} onCheckIn={recordVisitCheckIn} onCheckOut={recordVisitCheckOut} />
           )}
         </DrawerShell>
       ) : null}
@@ -1789,8 +2365,20 @@ function DrawerShell({ title, subtitle, onClose, children }: { title: string; su
   return <div className="to-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><aside ref={dialogRef} tabIndex={-1} className="to-drawer" role="dialog" aria-modal="true" aria-label={title}><header className="to-drawer-head"><div><h2>{title}</h2><p>{subtitle}</p></div><button className="to-close" type="button" onClick={onClose} aria-label="Close"><X /></button></header><div className="to-drawer-body">{children}</div></aside></div>;
 }
 
-function TodayView({ dataset, activeVisits, openWork, exceptions, invoicedSpend, onNavigate, onOpen, onCreate, onStorePortal, onVisit, scopeLabel, roleLabel, canCreateWork, canUseStorePortal, canRecordVisits }: { dataset: DemoDataset; activeVisits: Visit[]; openWork: WorkOrder[]; exceptions: ExceptionRecord[]; invoicedSpend: number; onNavigate: (view: View) => void; onOpen: (detail: Detail) => void; onCreate: () => void; onStorePortal: () => void; onVisit: () => void; scopeLabel: string; roleLabel: string; canCreateWork: boolean; canUseStorePortal: boolean; canRecordVisits: boolean }) {
-  const critical = openWork.filter((work) => work.priority === "emergency" || work.priority === "urgent");
+function InvoiceEntryForm({ work, vendor, onSubmit }: { work: WorkOrder; vendor: Vendor; onSubmit: (value: InvoiceEntryValue) => void }) {
+  const [invoiceNumber, setInvoiceNumber] = useState(`INV-DEMO-${work.number.split("-").at(-1) ?? "001"}`);
+  const [labor, setLabor] = useState("420.00");
+  const [materials, setMaterials] = useState("218.40");
+  const [trip, setTrip] = useState("65.00");
+  const [file, setFile] = useState<File | null>(null);
+  const toMinor = (value: string) => Math.max(0, Math.round((Number(value) || 0) * 100));
+  const totalMinor = toMinor(labor) + toMinor(materials) + toMinor(trip);
+  const overNte = Boolean(work.notToExceedMinor && totalMinor > work.notToExceedMinor);
+  return <form onSubmit={(event) => { event.preventDefault(); onSubmit({ invoiceNumber, laborMinor: toMinor(labor), materialsMinor: toMinor(materials), tripMinor: toMinor(trip), file }); }}><div className="to-callout"><ReceiptText /><span><strong>{vendor.displayName} · {work.number}</strong><small>The customer work-order reference creates the match. Visit duration remains supporting context, not certified billable labor.</small></span></div><div className="to-grid equal"><div className="to-field"><label htmlFor="invoice-number">Vendor invoice number</label><input id="invoice-number" required value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} /></div><div className="to-field"><label htmlFor="invoice-file">Invoice file <small>(optional in Demo Mode)</small></label><input id="invoice-file" type="file" accept="application/pdf,image/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></div></div><div className="to-grid equal"><div className="to-field"><label htmlFor="invoice-labor">Labor</label><input id="invoice-labor" type="number" min="0" step="0.01" value={labor} onChange={(event) => setLabor(event.target.value)} /></div><div className="to-field"><label htmlFor="invoice-materials">Parts and materials</label><input id="invoice-materials" type="number" min="0" step="0.01" value={materials} onChange={(event) => setMaterials(event.target.value)} /></div><div className="to-field"><label htmlFor="invoice-trip">Trip charge</label><input id="invoice-trip" type="number" min="0" step="0.01" value={trip} onChange={(event) => setTrip(event.target.value)} /></div></div><div className="to-definition-list"><dl><div><dt>Invoice total</dt><dd><strong>{money(totalMinor)}</strong></dd></div><div><dt>Authorization limit</dt><dd>{work.notToExceedMinor ? money(work.notToExceedMinor) : "No NTE used"}</dd></div><div><dt>Safeguard result</dt><dd><Badge value={overNte ? "warning" : "matched"} label={overNte ? "Review · above NTE" : "WO reference matched"} /></dd></div></dl></div><button className="to-button primary to-full" type="submit" disabled={!invoiceNumber.trim() || totalMinor <= 0}><ArrowRight /> Record invoice and update spending</button></form>;
+}
+
+function TodayView({ dataset, activeVisits, exceptions, invoicedSpend, onNavigate, onOpen, onCreate, onStorePortal, onVisit, scopeLabel, roleLabel, canCreateWork, canUseStorePortal, canRecordVisits }: { dataset: DemoDataset; activeVisits: Visit[]; exceptions: ExceptionRecord[]; invoicedSpend: number; onNavigate: (view: View) => void; onOpen: (detail: Detail) => void; onCreate: () => void; onStorePortal: () => void; onVisit: () => void; scopeLabel: string; roleLabel: string; canCreateWork: boolean; canUseStorePortal: boolean; canRecordVisits: boolean }) {
+  const pendingRequests = dataset.requests.filter((request) => request.reviewStatus === "new");
   const invoiceExceptions = exceptions.filter((record) => record.invoiceId);
   const heading = roleLabel === "Store manager"
     ? `${scopeLabel.split(" · ")[0]} needs attention today.`
@@ -1807,7 +2395,7 @@ function TodayView({ dataset, activeVisits, openWork, exceptions, invoicedSpend,
     </PageHead>
     <section className="to-kpi-grid">
       <button className="to-kpi" type="button" onClick={() => onNavigate("work")}><div className="to-kpi-top"><span>Active vendor visits</span><span className="to-kpi-icon"><MapPin /></span></div><strong>{activeVisits.length}</strong><span>Across {new Set(activeVisits.map((visit) => visit.storeId)).size} stores right now</span></button>
-      <button className="to-kpi" data-tone="coral" type="button" onClick={() => onNavigate("work")}><div className="to-kpi-top"><span>Critical and urgent</span><span className="to-kpi-icon"><AlertTriangle /></span></div><strong>{critical.length}</strong><span>{critical.filter((work) => work.status === "unresolved").length} unresolved after a visit</span></button>
+      <button className="to-kpi" data-tone="coral" type="button" onClick={() => onNavigate("requests")}><div className="to-kpi-top"><span>Requests awaiting review</span><span className="to-kpi-icon"><Inbox /></span></div><strong>{pendingRequests.length}</strong><span>Employee reports that still need a manager decision</span></button>
       <button className="to-kpi" data-tone="blue" type="button" onClick={() => onNavigate("spend")}><div className="to-kpi-top"><span>Linked maintenance spend</span><span className="to-kpi-icon"><CircleDollarSign /></span></div><strong>{money(invoicedSpend)}</strong><span>Invoice-linked source records · trailing 12 months</span></button>
       <button className="to-kpi" data-tone="amber" type="button" onClick={() => onNavigate("spend")}><div className="to-kpi-top"><span>Invoice review</span><span className="to-kpi-icon"><ReceiptText /></span></div><strong>{invoiceExceptions.length}</strong><span>Missing WO, NTE, or evidence exceptions</span></button>
     </section>
@@ -1904,13 +2492,17 @@ function ReportsView({ dataset, savedReports, onSave, canGenerate, scopeLabel }:
   return <><PageHead eyebrow={`Management records · ${scopeLabel}`} title="Explore live. Generate when it needs to be handed off." description="Dashboards remain interactive; generated reports preserve the current role’s scope, period, cost basis, definitions, and source links."></PageHead><div className="to-store-grid">{templates.map((template) => <article className="to-card to-report-card" key={template.title}><header className="to-card-head"><div><h3>{template.title}</h3><p>{template.description}</p></div><FileText /></header><div className="to-card-body"><div className="to-tags"><span className="to-tag">{scopeLabel}</span><span className="to-tag">Invoice-linked</span><span className="to-tag">Source records included</span></div></div>{canGenerate ? <button className="to-card-action" type="button" onClick={() => onSave(`${template.title} · ${scopeLabel} · ${dateLabel(dataset.asOf)}`)}>Generate report <ArrowRight /></button> : null}</article>)}</div>{savedReports.length ? <article className="to-panel to-saved-reports"><header className="to-panel-head"><div><h2>Generated in this demo</h2><p>Each is a new immutable version.</p></div></header><div className="to-record-list">{savedReports.map((report, index) => <div className="to-record-row to-generated-report" key={`${report}-${index}`}><span className="to-exception-icon" data-tone="blue"><FileBarChart /></span><span className="to-record-primary"><strong>{report}</strong><span>{dataset.organization.displayName} · {scopeLabel} · invoice-linked basis</span></span><Badge value="completed" label="Version 1" /></div>)}</div></article> : null}</>;
 }
 
-function DetailView({ dataset, detail, onBack, onVendorRespond, onIssue, onOpenWork, onOpenAsset, onClassify, canClassify, canIssueVendorWork, canSimulateVendorResponse }: { dataset: DemoDataset; detail: NonNullable<Detail>; onBack: () => void; onVendorRespond: (workOrderId: string, response: "accepted" | "declined" | "date_proposed") => void; onIssue: (workOrderId: string) => void; onOpenWork: (workOrderId: string) => void; onOpenAsset: (assetId: string) => void; onClassify: (workOrderId: string) => void; canClassify: boolean; canIssueVendorWork: boolean; canSimulateVendorResponse: boolean }) {
+function DetailView({ dataset, detail, onBack, onVendorRespond, onIssue, onOpenWork, onOpenAsset, onOpenStore, onOpenVendor, onClassify, onAssignVendor, onOpenExternal, onStartVisit, onRecordInvoice, onOpenSpend, canClassify, canIssueVendorWork, canRecordVisits, canRecordInvoice, canSimulateVendorResponse }: { dataset: DemoDataset; detail: NonNullable<Detail>; onBack: () => void; onVendorRespond: (workOrderId: string, response: "accepted" | "declined" | "date_proposed") => void; onIssue: (workOrderId: string) => void; onOpenWork: (workOrderId: string) => void; onOpenAsset: (assetId: string) => void; onOpenStore: (storeId: string) => void; onOpenVendor: (vendorId: string) => void; onClassify: (workOrderId: string) => void; onAssignVendor: (workOrderId: string) => void; onOpenExternal: (workOrderId: string) => void; onStartVisit: (workOrderId: string) => void; onRecordInvoice: (workOrderId: string) => void; onOpenSpend: (workOrderId: string) => void; canClassify: boolean; canIssueVendorWork: boolean; canRecordVisits: boolean; canRecordInvoice: boolean; canSimulateVendorResponse: boolean }) {
   if (detail.kind === "store") { const store = dataset.stores.find((record) => record.id === detail.id); if (!store) return null; return <StoreDetail dataset={dataset} store={store} onBack={onBack} onOpenWork={onOpenWork} onOpenAsset={onOpenAsset} />; }
   if (detail.kind === "vendor") { const vendor = dataset.vendors.find((record) => record.id === detail.id); if (!vendor) return null; return <VendorDetail dataset={dataset} vendor={vendor} onBack={onBack} onOpenWork={onOpenWork} />; }
   if (detail.kind === "asset") { const asset = dataset.assets.find((record) => record.id === detail.id); if (!asset) return null; return <AssetDetail dataset={dataset} asset={asset} onBack={onBack} onOpenWork={onOpenWork} />; }
   const work = dataset.workOrders.find((record) => record.id === detail.id);
   if (!work) return null;
-  return <>{canClassify ? <div className="to-detail-tools"><button className="to-button" type="button" onClick={() => onClassify(work.id)}><PackageSearch /> Update equipment classification</button></div> : null}<WorkDetail dataset={dataset} work={work} onBack={onBack} onVendorRespond={onVendorRespond} onIssue={onIssue} onOpenAsset={onOpenAsset} canIssueVendorWork={canIssueVendorWork} canSimulateVendorResponse={canSimulateVendorResponse} /></>;
+  const assignment = dataset.assignments.find((record) => record.workOrderId === work.id && record.partyType === "vendor" && record.status !== "declined");
+  const issuance = dataset.vendorIssuances.filter((record) => record.workOrderId === work.id).sort((left, right) => right.version - left.version)[0];
+  const visitReady = Boolean(assignment && issuance && (issuance.acceptanceRequested === false || issuance.response === "accepted" || issuance.response === "date_proposed"));
+  const canAddInvoice = Boolean(assignment && canRecordInvoice && ["completed", "awaiting_invoice"].includes(work.status) && !dataset.invoiceWorkLinks.some((link) => link.workOrderId === work.id));
+  return <><div className="to-detail-tools">{!assignment && canIssueVendorWork ? <button className="to-button primary" type="button" onClick={() => onAssignVendor(work.id)}><Truck /> Choose outside vendor</button> : null}{issuance ? <button className="to-button primary" type="button" onClick={() => onOpenExternal(work.id)}><FileText /> Open vendor work order</button> : null}{visitReady && canRecordVisits ? <button className="to-button" type="button" onClick={() => onStartVisit(work.id)}><MapPin /> Vendor sign in or out</button> : null}{canAddInvoice ? <button className="to-button primary" type="button" onClick={() => onRecordInvoice(work.id)}><ReceiptText /> Record invoice</button> : null}{canClassify ? <button className="to-button" type="button" onClick={() => onClassify(work.id)}><PackageSearch /> Update equipment classification</button> : null}<button className="to-button" type="button" onClick={() => onOpenStore(work.storeId)}><StoreIcon /> Store dashboard</button>{assignment ? <button className="to-button" type="button" onClick={() => onOpenVendor(assignment.partyId)}><Truck /> Vendor performance</button> : null}<button className="to-button" type="button" onClick={() => onOpenSpend(work.id)}><CircleDollarSign /> View in spending</button></div><WorkDetail dataset={dataset} work={work} onBack={onBack} onVendorRespond={onVendorRespond} onIssue={onIssue} onOpenAsset={onOpenAsset} canIssueVendorWork={canIssueVendorWork} canSimulateVendorResponse={canSimulateVendorResponse} /></>;
 }
 
 function StoreDetail({ dataset, store, onBack, onOpenWork, onOpenAsset }: { dataset: DemoDataset; store: Store; onBack: () => void; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void }) {
@@ -1941,7 +2533,7 @@ function AssetDetail({ dataset, asset, onBack, onOpenWork }: { dataset: DemoData
 }
 
 function WorkDetail({ dataset, work, onBack, onVendorRespond, onIssue, onOpenAsset, canIssueVendorWork, canSimulateVendorResponse }: { dataset: DemoDataset; work: WorkOrder; onBack: () => void; onVendorRespond: (id: string, response: "accepted" | "declined" | "date_proposed") => void; onIssue: (id: string) => void; onOpenAsset: (id: string) => void; canIssueVendorWork: boolean; canSimulateVendorResponse: boolean }) {
-  const store = dataset.stores.find((record) => record.id === work.storeId); const assignment = dataset.assignments.find((record) => record.workOrderId === work.id); const vendor = assignment?.partyType === "vendor" ? dataset.vendors.find((record) => record.id === assignment.partyId) : undefined; const issuance = dataset.vendorIssuances.find((record) => record.workOrderId === work.id); const visits = dataset.visits.filter((record) => record.workOrderId === work.id); const invoiceLinks = dataset.invoiceWorkLinks.filter((record) => record.workOrderId === work.id); const invoices = invoiceLinks.map((link) => dataset.invoices.find((record) => record.id === link.invoiceId)).filter(Boolean); const events = dataset.auditEvents.filter((event) => event.entityId === work.id || event.payloadSnapshot.workOrderId === work.id).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+  const store = dataset.stores.find((record) => record.id === work.storeId); const assignment = dataset.assignments.find((record) => record.workOrderId === work.id); const vendor = assignment?.partyType === "vendor" ? dataset.vendors.find((record) => record.id === assignment.partyId) : undefined; const issuance = dataset.vendorIssuances.filter((record) => record.workOrderId === work.id).sort((left, right) => right.version - left.version)[0]; const visits = dataset.visits.filter((record) => record.workOrderId === work.id); const invoiceLinks = dataset.invoiceWorkLinks.filter((record) => record.workOrderId === work.id); const invoices = invoiceLinks.map((link) => dataset.invoices.find((record) => record.id === link.invoiceId)).filter(Boolean); const events = dataset.auditEvents.filter((event) => event.entityId === work.id || event.payloadSnapshot.workOrderId === work.id).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   return <><section className="to-detail-hero"><div className="to-detail-copy"><button type="button" onClick={onBack}><ArrowLeft /> Back to work orders</button><p className="to-eyebrow">{work.number}</p><h1>{work.title}</h1><p>Store {store?.storeNumber} · {work.problemDescription}</p></div><div className="to-detail-summary"><div><span>Status</span><strong>{words(work.status)}</strong></div><div><span>Handler</span><strong>{vendor?.displayName ?? words(work.fulfillmentMode)}</strong></div><div><span>NTE</span><strong>{work.notToExceedMinor ? money(work.notToExceedMinor) : "Not used"}</strong></div><div><span>Linked cost</span><strong>{money(workOrderCost(dataset, work.id))}</strong></div></div></section><section className="to-grid two"><article className="to-panel"><header className="to-panel-head"><div><h2>Customer work order</h2><p>Operator source record and vendor billing reference</p></div><Badge value={work.status} /></header><div className="to-panel-body to-definition-list"><dl><div><dt>Store</dt><dd>#{store?.storeNumber} · {store?.normalizedAddress}</dd></div><div><dt>Requested work</dt><dd>{work.scopeOfWork}</dd></div><div><dt>Priority</dt><dd>{words(work.priority)}</dd></div><div><dt>Requested window</dt><dd>{dateLabel(work.requestedWindow.startsAt)} – {dateLabel(work.requestedWindow.endsAt)}</dd></div><div><dt>Classification</dt><dd>{work.classificationDeferred ? "Store-level now · equipment can be added later" : dataset.categories.find((category) => category.id === work.categoryId)?.label}{work.assetId ? <button className="to-link-button" type="button" onClick={() => onOpenAsset(work.assetId!)}>View linked asset <ChevronRight /></button> : null}</dd></div><div><dt>Next accountable action</dt><dd>{work.accountable?.nextAction ?? "Review and close"}</dd></div></dl></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Vendor issuance</h2><p>Versioned authorization sent outside the company</p></div>{issuance ? <Badge value={issuance.response ?? issuance.deliveryStatus} /> : <Badge value="ready_to_issue" />}</header><div className="to-panel-body">{vendor ? <><div className="to-vendor-summary"><span className="to-avatar">{initials(vendor.displayName)}</span><div><strong>{vendor.displayName}</strong><span>{vendor.specialties.map((specialty) => specialty.label).join(" · ")}</span></div></div>{issuance ? <dl className="to-mini-dl"><div><dt>Issued</dt><dd>{dateLabel(issuance.issuedAt)} · Version {issuance.version}</dd></div><div><dt>Delivery</dt><dd>{words(issuance.deliveryStatus)} by {issuance.channels.join(" + ")}</dd></div><div><dt>Vendor ticket</dt><dd>{issuance.vendorReference ?? "Not provided"}</dd></div><div><dt>Invoice instruction</dt><dd>{issuance.customerBillingInstruction}</dd></div></dl> : <><p className="to-callout">Vendor selected, but the customer work order has not been sent.</p>{canIssueVendorWork ? <button className="to-button primary to-full" type="button" onClick={() => onIssue(work.id)}><ArrowRight /> Review and send authorization</button> : <p className="to-permission-note"><ShieldCheck /> Read-only role · authorization controls are hidden.</p>}</>}{issuance && !issuance.response && issuance.acceptanceRequested !== false && canSimulateVendorResponse ? <div className="to-response-actions"><button className="to-button primary" type="button" onClick={() => onVendorRespond(work.id, "accepted")}><CheckCircle2 /> Accept</button><button className="to-button" type="button" onClick={() => onVendorRespond(work.id, "date_proposed")}><CalendarCheck /> Propose date</button><button className="to-button ghost" type="button" onClick={() => onVendorRespond(work.id, "declined")}>Decline</button></div> : null}</> : <div className="to-empty"><Users /><strong>{work.fulfillmentMode === "unassigned" ? "Handler not chosen" : "Internal work"}</strong><p>{work.accountable?.nextAction}</p></div>}</div></article></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Visit evidence</h2><p>Approximate presence context—not certified labor.</p></div></header><div className="to-panel-body"><div className="to-visit-list">{visits.length ? visits.map((visit) => <div className="to-visit" key={visit.id}><span className="to-avatar">{initials(visit.technicianName)}</span><span><strong>{visit.technicianName}</strong><span>{words(visit.evidenceStrength)} · {visit.outcome ? words(visit.outcome) : "Onsite now"}</span></span><time>{timeLabel(visit.checkedInAt)}–{visit.checkedOutAt ? timeLabel(visit.checkedOutAt) : "now"}</time></div>) : <div className="to-empty"><MapPin /><strong>No recorded visits</strong><p>A QR, secure-link, or kiosk check-in will appear here.</p></div>}</div></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Invoice and cost</h2><p>References remain separate and auditable.</p></div></header><div className="to-panel-body">{invoices.length ? invoices.map((invoice) => invoice ? <dl className="to-mini-dl" key={invoice.id}><div><dt>Vendor invoice</dt><dd>{invoice.invoiceNumber}</dd></div><div><dt>Customer WO reference</dt><dd>{invoice.customerWorkOrderReferences.join(", ") || "Missing"}</dd></div><div><dt>Amount</dt><dd>{money(invoiceTotal(dataset, invoice.id))}</dd></div><div><dt>Review state</dt><dd><Badge value={invoice.status} /></dd></div></dl> : null) : <div className="to-empty"><ReceiptText /><strong>No invoice linked yet</strong><p>The work order remains valid even when the customer does not use invoice safeguards.</p></div>}</div></article></section><article className="to-panel"><header className="to-panel-head"><div><h2>Permanent timeline</h2><p>Original events and later corrections remain visible.</p></div></header><div className="to-timeline">{events.slice(0, 10).map((event) => <div key={event.id}><i /><span><strong>{event.summary}</strong><small>{dateLabel(event.occurredAt)} · {words(event.channel)}</small></span></div>)}</div></article></>;
 }
 
@@ -1961,21 +2553,25 @@ function CapabilitySettings({ value, onChange }: { value: CapabilityConfig; onCh
   return <div className="to-settings"><div className="to-callout"><Settings2 /><span><strong>One product, flexible adoption</strong><small>These are capability switches—not separate products or duplicate data models.</small></span></div><div className="to-setting-list">{options.map((option) => { const inputId = `capability-${option.key}`; return <label key={option.key} htmlFor={inputId}><span><strong>{option.title}</strong><small>{option.description}</small></span><input id={inputId} aria-label={option.title} type="checkbox" checked={value[option.key]} onChange={(event) => onChange({ ...value, [option.key]: event.target.checked })} /><i aria-hidden="true" /></label>; })}</div><p className="to-setting-foot">Demo changes are session-scoped. Existing records remain valid when a capability is hidden.</p></div>;
 }
 
-function StorePortal({ dataset, onWork, onVisit, onOpenIssues }: { dataset: DemoDataset; onWork: () => void; onVisit: (storeId: string) => void; onOpenIssues: () => void }) {
-  const store = dataset.stores[0]; const open = dataset.workOrders.filter((record) => record.storeId === store.id && !terminalStatuses.has(record.status));
-  return <div className="to-storefront"><header><span className="to-demo-pill">Store device demo</span><p>Store {store.storeNumber}</p><h3>What do you need?</h3><span>{store.address.line1}, {store.address.city}</span></header><div className="to-storefront-actions"><button type="button" onClick={onWork}><span><AlertTriangle /></span><strong>Report an issue</strong><small>Tell us what you see. No equipment knowledge required.</small><ChevronRight /></button><button type="button" onClick={() => onVisit(store.id)}><span><MapPin /></span><strong>Vendor sign in or out</strong><small>Technician self-service from this store computer.</small><ChevronRight /></button><button type="button" onClick={onOpenIssues}><span><ClipboardList /></span><strong>View open store issues</strong><small>{open.length} current items at this store.</small><ChevronRight /></button></div></div>;
+function StorePortal({ dataset, storeId, onWork, onVisit, onOpenIssues }: { dataset: DemoDataset; storeId: string; onWork: (storeId: string) => void; onVisit: (storeId: string) => void; onOpenIssues: () => void }) {
+  const store = dataset.stores.find((record) => record.id === storeId) ?? dataset.stores[0];
+  if (!store) return null;
+  const openWork = dataset.workOrders.filter((record) => record.storeId === store.id && !terminalStatuses.has(record.status));
+  const pendingRequests = dataset.requests.filter((record) => record.storeId === store.id && record.reviewStatus === "new");
+  const openCount = openWork.length + pendingRequests.length;
+  return <div className="to-storefront"><header><span className="to-demo-pill">Store device demo</span><p>Store {store.storeNumber}</p><h3>What do you need?</h3><span>{store.address.line1}, {store.address.city}</span></header><div className="to-storefront-actions"><button type="button" onClick={() => onWork(store.id)}><span><AlertTriangle /></span><strong>Report an issue</strong><small>Tell us what you see. No equipment knowledge required.</small><ChevronRight /></button><button type="button" onClick={() => onVisit(store.id)}><span><MapPin /></span><strong>Vendor sign in or out</strong><small>Technician self-service from this store computer.</small><ChevronRight /></button><button type="button" onClick={onOpenIssues}><span><ClipboardList /></span><strong>View open store issues</strong><small>{openCount} current {openCount === 1 ? "item" : "items"} at this store.</small><ChevronRight /></button></div></div>;
 }
 
-function VisitDemo({ dataset, activeVisits, fixedStoreId, requireLocationEvidence, onCheckIn, onCheckOut }: { dataset: DemoDataset; activeVisits: Visit[]; fixedStoreId?: string; requireLocationEvidence: boolean; onCheckIn: (value: VisitCheckInValue) => ActiveVisit | void; onCheckOut: (value: VisitCheckOutValue) => void }) {
+function VisitDemo({ dataset, activeVisits, fixedStoreId, fixedVendorId, fixedWorkOrderId, requireLocationEvidence, onCheckIn, onCheckOut }: { dataset: DemoDataset; activeVisits: Visit[]; fixedStoreId?: string; fixedVendorId?: string; fixedWorkOrderId?: string; requireLocationEvidence: boolean; onCheckIn: (value: VisitCheckInValue) => ActiveVisit | void; onCheckOut: (value: VisitCheckOutValue) => void }) {
   const [storeId, setStoreId] = useState(fixedStoreId ?? dataset.stores[0]?.id ?? "");
-  const [vendorId, setVendorId] = useState(dataset.vendors[0]?.id ?? "");
+  const [vendorId, setVendorId] = useState(fixedVendorId ?? dataset.vendors[0]?.id ?? "");
   const [channel, setChannel] = useState<WorkflowVisitChannel>(fixedStoreId ? "store_kiosk" : "qr");
   const [evidenceState, setEvidenceState] = useState<VisitEvidence["state"]>(fixedStoreId ? "store_kiosk_recorded" : "location_verified");
   const [activeVisitId, setActiveVisitId] = useState("new");
   const selectedActive = activeVisits.find((record) => record.id === activeVisitId);
   const activeVendor = selectedActive?.vendorId ? dataset.vendors.find((record) => record.id === selectedActive.vendorId) : undefined;
   const selectedStoreId = selectedActive?.storeId ?? fixedStoreId ?? storeId;
-  const selectedVendorId = activeVendor?.id ?? vendorId;
+  const selectedVendorId = activeVendor?.id ?? fixedVendorId ?? vendorId;
   const store = dataset.stores.find((record) => record.id === selectedStoreId) ?? dataset.stores[0];
   const vendor = dataset.vendors.find((record) => record.id === selectedVendorId) ?? dataset.vendors[0];
   if (!store || !vendor) return null;
@@ -2018,5 +2614,5 @@ function VisitDemo({ dataset, activeVisits, fixedStoreId, requireLocationEvidenc
     .filter((work) => work.storeId === store.id && dataset.assignments.some((assignment) => assignment.workOrderId === work.id && assignment.partyType === "vendor" && assignment.partyId === vendor.id && assignment.status !== "declined"))
     .map((work) => ({ id: work.id, number: work.number, title: work.title, storeId: work.storeId, assetLabel: work.assetId ? dataset.assets.find((asset) => asset.id === work.assetId)?.name : undefined, requestedService: work.scopeOfWork }));
 
-  return <div className="to-visit-wrapper"><div className="to-callout"><MapPin /><span><strong>Evidence is event-based, not continuous tracking</strong><small>Demo Mode can show verified, outside-boundary, denied-permission, and trusted store-kiosk records.</small></span></div>{activeVisits.length ? <div className="to-field"><label htmlFor="active-visit">Start or end a visit</label><select id="active-visit" value={activeVisitId} onChange={(event) => setActiveVisitId(event.target.value)}><option value="new">Start a new visit</option>{activeVisits.map((visit) => { const activeStore = dataset.stores.find((record) => record.id === visit.storeId); return <option key={visit.id} value={visit.id}>Check out {visit.technicianName} · Store {activeStore?.storeNumber}</option>; })}</select></div> : null}<div className="to-visit-context"><div className="to-field"><label htmlFor="visit-channel">This event is using</label><select id="visit-channel" value={effectiveChannel} onChange={(event) => { const next = event.target.value as WorkflowVisitChannel; setChannel(next); if (next === "store_kiosk") setEvidenceState("store_kiosk_recorded"); else if (evidenceState === "store_kiosk_recorded") setEvidenceState("location_verified"); }}><option value="qr">Store QR link</option><option value="app">Vendor app</option><option value="store_kiosk">Store computer</option><option value="secure_link">Secure work-order link</option></select></div><div className="to-field"><label htmlFor="visit-store-context">Store</label><select id="visit-store-context" value={store.id} disabled={Boolean(fixedStoreId || selectedActive)} onChange={(event) => setStoreId(event.target.value)}>{dataset.stores.map((record) => <option key={record.id} value={record.id}>Store {record.storeNumber} · {record.address.city}</option>)}</select></div><div className="to-field"><label htmlFor="visit-vendor-context">Vendor</label><select id="visit-vendor-context" value={vendor.id} disabled={Boolean(selectedActive)} onChange={(event) => setVendorId(event.target.value)}>{dataset.vendors.map((record) => <option key={record.id} value={record.id}>{record.displayName}</option>)}</select></div>{effectiveChannel !== "store_kiosk" ? <div className="to-field"><label htmlFor="visit-evidence">Demo evidence result</label><select id="visit-evidence" value={evidenceState} onChange={(event) => setEvidenceState(event.target.value as VisitEvidence["state"])}><option value="location_verified">Inside store boundary</option><option value="outside_geofence">Outside store boundary</option><option value="location_not_shared">Permission denied</option><option value="manual_exception">Inaccurate / manual exception</option></select></div> : null}</div><TechnicianVisitFlow key={`${activeVisitId}-${store.id}-${vendor.id}-${effectiveChannel}-${evidence.state}`} store={{ id: store.id, storeNumber: store.storeNumber, name: store.name, address: store.normalizedAddress, regionName: dataset.regions.find((record) => record.id === store.regionId)?.name }} vendorName={vendor.displayName} workOrders={workOrders} channel={effectiveChannel} evidence={evidence} initialActiveVisit={initialActiveVisit} requireVerifiedEvidence={requireLocationEvidence && effectiveChannel !== "store_kiosk"} onCheckIn={onCheckIn} onCheckOut={onCheckOut} /></div>;
+  return <div className="to-visit-wrapper"><div className="to-callout"><MapPin /><span><strong>Evidence is event-based, not continuous tracking</strong><small>Demo Mode can show verified, outside-boundary, denied-permission, and trusted store-kiosk records.</small></span></div>{activeVisits.length ? <div className="to-field"><label htmlFor="active-visit">Start or end a visit</label><select id="active-visit" value={activeVisitId} onChange={(event) => setActiveVisitId(event.target.value)}><option value="new">Start a new visit</option>{activeVisits.map((visit) => { const activeStore = dataset.stores.find((record) => record.id === visit.storeId); return <option key={visit.id} value={visit.id}>Check out {visit.technicianName} · Store {activeStore?.storeNumber}</option>; })}</select></div> : null}<div className="to-visit-context"><div className="to-field"><label htmlFor="visit-channel">This event is using</label><select id="visit-channel" value={effectiveChannel} onChange={(event) => { const next = event.target.value as WorkflowVisitChannel; setChannel(next); if (next === "store_kiosk") setEvidenceState("store_kiosk_recorded"); else if (evidenceState === "store_kiosk_recorded") setEvidenceState("location_verified"); }}><option value="qr">Store QR link</option><option value="app">Vendor app</option><option value="store_kiosk">Store computer</option><option value="secure_link">Secure work-order link</option></select></div><div className="to-field"><label htmlFor="visit-store-context">Store</label><select id="visit-store-context" value={store.id} disabled={Boolean(fixedStoreId || selectedActive)} onChange={(event) => setStoreId(event.target.value)}>{dataset.stores.map((record) => <option key={record.id} value={record.id}>Store {record.storeNumber} · {record.address.city}</option>)}</select></div><div className="to-field"><label htmlFor="visit-vendor-context">Vendor</label><select id="visit-vendor-context" value={vendor.id} disabled={Boolean(selectedActive || fixedVendorId)} onChange={(event) => setVendorId(event.target.value)}>{dataset.vendors.map((record) => <option key={record.id} value={record.id}>{record.displayName}</option>)}</select></div>{effectiveChannel !== "store_kiosk" ? <div className="to-field"><label htmlFor="visit-evidence">Demo evidence result</label><select id="visit-evidence" value={evidenceState} onChange={(event) => setEvidenceState(event.target.value as VisitEvidence["state"])}><option value="location_verified">Inside store boundary</option><option value="outside_geofence">Outside store boundary</option><option value="location_not_shared">Permission denied</option><option value="manual_exception">Inaccurate / manual exception</option></select></div> : null}</div><TechnicianVisitFlow key={`${activeVisitId}-${store.id}-${vendor.id}-${effectiveChannel}-${evidence.state}`} store={{ id: store.id, storeNumber: store.storeNumber, name: store.name, address: store.normalizedAddress, regionName: dataset.regions.find((record) => record.id === store.regionId)?.name }} vendorName={vendor.displayName} workOrders={workOrders} channel={effectiveChannel} evidence={evidence} initialActiveVisit={initialActiveVisit} defaultWorkOrderId={fixedWorkOrderId} requireVerifiedEvidence={requireLocationEvidence && effectiveChannel !== "store_kiosk"} onCheckIn={onCheckIn} onCheckOut={onCheckOut} /></div>;
 }

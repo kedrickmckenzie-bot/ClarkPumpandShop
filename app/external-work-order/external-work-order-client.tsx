@@ -195,10 +195,24 @@ export function ExternalWorkOrderClient({ authorization }: ExternalWorkOrderClie
             <button className={styles.primaryButton} type="button" onClick={() => window.close()}>
               Close this tab
             </button>
-            <Link className={styles.secondaryButton} href="/">
-              <ArrowLeft aria-hidden="true" />
-              Return to TraceOps demo
-            </Link>
+            {receipt.openerNotified ? (
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                onClick={() => {
+                  window.opener?.focus();
+                  window.close();
+                }}
+              >
+                <ArrowLeft aria-hidden="true" />
+                Return to operator screen
+              </button>
+            ) : (
+              <Link className={styles.secondaryButton} href="/">
+                <ArrowLeft aria-hidden="true" />
+                Open TraceOps demo
+              </Link>
+            )}
           </div>
         </section>
       </main>

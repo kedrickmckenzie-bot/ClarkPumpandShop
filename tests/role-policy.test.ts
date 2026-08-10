@@ -23,8 +23,13 @@ describe("TraceOps demo role policy", () => {
     }
     expect(getDemoRolePolicy("owner_executive").defaultView).toBe("spend");
     expect(getDemoRolePolicy("finance_reviewer").defaultView).toBe("spend");
-    expect(getDemoRolePolicy("facilities_manager").defaultView).toBe("story");
-    expect(demoRolePolicies.filter((policy) => policy.allowedViews.includes("story")).map((policy) => policy.id)).toEqual(["facilities_manager"]);
+    expect(getDemoRolePolicy("facilities_manager").defaultView).toBe("today");
+    expect(demoRolePolicies.every((policy) => !policy.allowedViews.includes("story"))).toBe(true);
+
+    for (const roleId of ["facilities_manager", "regional_manager", "store_manager"] as const) {
+      expect(getDemoRolePolicy(roleId).allowedViews).toContain("requests");
+    }
+    expect(getDemoRolePolicy("finance_reviewer").allowedViews).not.toContain("requests");
   });
 
   it("limits the regional manager to Central Ohio records", () => {
@@ -34,6 +39,7 @@ describe("TraceOps demo role policy", () => {
 
     expect(scoped.stores).toHaveLength(5);
     expect(scoped.stores.every((store) => store.regionId === "region-central-ohio")).toBe(true);
+    expect(scoped.requests.every((request) => storeIds.has(request.storeId))).toBe(true);
     expect(scoped.workOrders.every((work) => storeIds.has(work.storeId))).toBe(true);
     expect(scoped.assets.every((asset) => storeIds.has(asset.storeId))).toBe(true);
     expect(scoped.invoiceWorkLinks.every((link) => storeIds.has(link.storeId))).toBe(true);
@@ -47,6 +53,7 @@ describe("TraceOps demo role policy", () => {
     const invoiceIds = new Set(scoped.invoices.map((invoice) => invoice.id));
 
     expect(scoped.stores.map((store) => store.storeNumber)).toEqual(["101"]);
+    expect(scoped.requests.every((request) => request.storeId === "store-101")).toBe(true);
     expect(scoped.workOrders.every((work) => work.storeId === "store-101")).toBe(true);
     expect(scoped.visits.every((visit) => visit.storeId === "store-101")).toBe(true);
     expect(scoped.invoiceWorkLinks.every((link) => workIds.has(link.workOrderId) && invoiceIds.has(link.invoiceId))).toBe(true);

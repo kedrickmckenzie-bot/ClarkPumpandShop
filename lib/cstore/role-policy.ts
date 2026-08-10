@@ -7,7 +7,7 @@ export type DemoRoleId =
   | "store_manager"
   | "finance_reviewer";
 
-export type RoleView = "story" | "today" | "stores" | "work" | "vendors" | "spend" | "equipment" | "pm" | "reports";
+export type RoleView = "story" | "today" | "requests" | "stores" | "work" | "vendors" | "spend" | "equipment" | "pm" | "reports";
 
 export type RolePermission =
   | "createWork"
@@ -47,8 +47,8 @@ export const demoRolePolicies: DemoRolePolicy[] = [
     label: "Facilities manager",
     personId: "person-dana-brooks",
     scope: { kind: "organization" },
-    defaultView: "story",
-    allowedViews: ["story", "today", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
+    defaultView: "today",
+    allowedViews: ["today", "requests", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
     permissions: {
       createWork: true,
       issueVendorWork: true,
@@ -77,7 +77,7 @@ export const demoRolePolicies: DemoRolePolicy[] = [
     personId: "person-maya-chen",
     scope: { kind: "region", id: "region-central-ohio" },
     defaultView: "today",
-    allowedViews: ["today", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
+    allowedViews: ["today", "requests", "stores", "work", "vendors", "spend", "equipment", "pm", "reports"],
     permissions: {
       createWork: true,
       issueVendorWork: true,
@@ -96,7 +96,7 @@ export const demoRolePolicies: DemoRolePolicy[] = [
     personId: "person-manager-101",
     scope: { kind: "store", id: "store-101" },
     defaultView: "today",
-    allowedViews: ["today", "stores", "work", "vendors", "spend", "equipment", "pm"],
+    allowedViews: ["today", "requests", "stores", "work", "vendors", "spend", "equipment", "pm"],
     permissions: {
       createWork: true,
       issueVendorWork: true,
