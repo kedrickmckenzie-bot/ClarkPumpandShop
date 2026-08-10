@@ -16,8 +16,10 @@ import {
   FileText,
   Gauge,
   LayoutDashboard,
+  Mail,
   MapPin,
   PackageSearch,
+  PlayCircle,
   Plus,
   ReceiptText,
   Search,
@@ -47,7 +49,11 @@ import type {
   Asset,
   AuditEvent,
   DemoDataset,
+  EvidenceDocument,
   ExceptionRecord,
+  Invoice,
+  InvoiceWorkLink,
+  ServiceRequest,
   Store,
   Vendor,
   VendorIssuance,
@@ -56,6 +62,28 @@ import type {
   WorkOrder,
   WorkStatus,
 } from "@/lib/cstore/types";
+import {
+  createGuidedAssignment,
+  createGuidedInvoice,
+  createGuidedInvoiceDocument,
+  createGuidedInvoiceLink,
+  createGuidedIssuance,
+  createGuidedRequest,
+  createGuidedWorkOrder,
+  GUIDED_DEMO_IDS,
+  GUIDED_INVOICE_TOTAL_MINOR,
+  GUIDED_NTE_MINOR,
+  GUIDED_REQUEST_NUMBER,
+  GUIDED_VENDOR_REFERENCE,
+  GUIDED_WORK_ORDER_NUMBER,
+} from "@/lib/cstore/guided-demo";
+import {
+  GuidedDemoStory,
+  type GuidedDemoAction,
+  type GuidedDemoAnalyticsDestination,
+  type GuidedDemoScenario,
+  type GuidedDemoStepId,
+} from "./guided-demo-story";
 import { TechnicianVisitFlow } from "./technician-visit-flow";
 import { GuidedStoreSetup } from "./guided-store-setup";
 import { WorkClassificationEditor } from "./work-classification-editor";
@@ -85,7 +113,32 @@ interface CapabilityConfig {
   equipmentLifecycle: boolean;
 }
 
+type GuidedDemoStage = "request" | "review" | "vendor" | "authorization" | "visit" | "analytics";
+
+interface GuidedDemoState {
+  stage: GuidedDemoStage;
+  selectedVendorId: string;
+  externalWindowOpened: boolean;
+  vendorResponse?: "accepted" | "declined" | "date_proposed";
+  activeVisitId?: string;
+  invoiceLinked: boolean;
+}
+
+interface SpendPreset {
+  regionId: string;
+  storeId: string;
+  categoryId: string;
+}
+
+const initialGuidedDemoState: GuidedDemoState = {
+  stage: "request",
+  selectedVendorId: GUIDED_DEMO_IDS.preferredVendor,
+  externalWindowOpened: false,
+  invoiceLinked: false,
+};
+
 const navItems: Array<{ view: View; label: string; icon: typeof LayoutDashboard }> = [
+  { view: "story", label: "Guided demo", icon: PlayCircle },
   { view: "today", label: "Today", icon: LayoutDashboard },
   { view: "stores", label: "Stores", icon: StoreIcon },
   { view: "work", label: "Work", icon: ClipboardList },
@@ -250,18 +303,22 @@ function PageHead({
 }
 
 export function TraceOpsApp() {
-  const [view, setView] = useState<View>("today");
+  const [view, setView] = useState<View>("story");
   const [detail, setDetail] = useState<Detail>(null);
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [roleId, setRoleId] = useState<DemoRoleId>("facilities_manager");
   const [globalQuery, setGlobalQuery] = useState("");
   const [stores, setStores] = useState<Store[]>(demoData.stores);
+  const [requests, setRequests] = useState<ServiceRequest[]>(demoData.requests);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>(demoData.workOrders);
   const [assignments, setAssignments] = useState<WorkAssignment[]>(demoData.assignments);
   const [issuances, setIssuances] = useState<VendorIssuance[]>(demoData.vendorIssuances);
   const [visits, setVisits] = useState<Visit[]>(demoData.visits);
   const [exceptions, setExceptions] = useState<ExceptionRecord[]>(demoData.exceptions);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(demoData.auditEvents);
+  const [invoices, setInvoices] = useState<Invoice[]>(demoData.invoices);
+  const [invoiceWorkLinks, setInvoiceWorkLinks] = useState<InvoiceWorkLink[]>(demoData.invoiceWorkLinks);
+  const [documents, setDocuments] = useState<EvidenceDocument[]>(demoData.documents);
   const [pendingAuthorization, setPendingAuthorization] = useState<ServiceAuthorizationRecord | null>(null);
   const [visitStoreId, setVisitStoreId] = useState<string | null>(null);
   const [workInitialStoreId, setWorkInitialStoreId] = useState<string | null>(null);
@@ -269,6 +326,8 @@ export function TraceOpsApp() {
   const [notice, setNotice] = useState<string | null>(null);
   const [savedReports, setSavedReports] = useState<string[]>([]);
   const [draftAcceptanceByWork, setDraftAcceptanceByWork] = useState<Record<string, boolean>>({});
+  const [guidedDemo, setGuidedDemo] = useState<GuidedDemoState>(initialGuidedDemoState);
+  const [spendPreset, setSpendPreset] = useState<SpendPreset | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilityConfig>({
     vendorAcceptance: true,
     locationEvidence: true,
@@ -281,14 +340,18 @@ export function TraceOpsApp() {
     () => ({
       ...demoData,
       stores,
+      requests,
       workOrders,
       assignments,
       vendorIssuances: issuances,
       visits,
       exceptions,
       auditEvents,
+      invoices,
+      invoiceWorkLinks,
+      documents,
     }),
-    [assignments, auditEvents, exceptions, issuances, stores, visits, workOrders],
+    [assignments, auditEvents, documents, exceptions, invoiceWorkLinks, invoices, issuances, requests, stores, visits, workOrders],
   );
 
   const rolePolicy = getDemoRolePolicy(roleId);
@@ -298,6 +361,72 @@ export function TraceOpsApp() {
   );
   const activePerson = fullDataset.people.find((person) => person.id === rolePolicy.personId) ?? fullDataset.people[0];
   const scopeLabel = roleScopeLabel(fullDataset, rolePolicy);
+
+  useEffect(() => {
+    function handleGuidedVendorResponse(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      const message = event.data as {
+        type?: string;
+        scenarioId?: string;
+        response?: string;
+        payload?: { scenarioId?: string; response?: string; proposedDate?: string; proposedTime?: string };
+      } | null;
+      const scenarioId = message?.payload?.scenarioId ?? message?.scenarioId;
+      const rawResponse = message?.payload?.response ?? message?.response;
+      if (message?.type !== "traceops:guided-vendor-response" || scenarioId !== GUIDED_DEMO_IDS.workOrder) return;
+      if (!rawResponse || !["accepted", "declined", "date_proposed"].includes(rawResponse)) return;
+      const response = rawResponse as "accepted" | "declined" | "date_proposed";
+      const occurredAt = new Date().toISOString();
+
+      setGuidedDemo((current) => ({
+        ...current,
+        stage: response === "accepted" ? "visit" : response === "declined" ? "vendor" : "authorization",
+        vendorResponse: response,
+      }));
+      setIssuances((current) => current.map((issuance) => issuance.id === GUIDED_DEMO_IDS.issuance ? {
+        ...issuance,
+        response,
+        respondedAt: occurredAt,
+        vendorReference: response === "declined" ? undefined : GUIDED_VENDOR_REFERENCE,
+        proposedArrivalAt: response === "date_proposed" ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : undefined,
+      } : issuance));
+      setAssignments((current) => current.map((assignment) => assignment.id === GUIDED_DEMO_IDS.assignment ? {
+        ...assignment,
+        status: response === "accepted" ? "accepted" : response === "declined" ? "declined" : "acknowledged",
+        acknowledgedAt: occurredAt,
+      } : assignment));
+      setWorkOrders((current) => current.map((work) => work.id === GUIDED_DEMO_IDS.workOrder ? {
+        ...work,
+        fulfillmentMode: response === "declined" ? "unassigned" : "external",
+        status: response === "accepted" ? "scheduled" : response === "declined" ? "draft" : "awaiting_vendor_response",
+        accountable: work.accountable ? {
+          ...work.accountable,
+          nextAction: response === "accepted"
+            ? "Vendor technician checks in at Store 104"
+            : response === "declined"
+              ? "Store manager chooses another approved vendor"
+              : "Store manager reviews the proposed service date",
+        } : work.accountable,
+      } : work));
+      setAuditEvents((current) => [{
+        id: `audit-guided-vendor-${Date.now()}`,
+        organizationId: demoData.organization.id,
+        entityType: "vendor_issuance",
+        entityId: GUIDED_DEMO_IDS.issuance,
+        eventType: `vendor_${response}`,
+        actorType: "vendor_contact",
+        channel: "vendor_link",
+        occurredAt,
+        summary: `Vendor ${response.replaceAll("_", " ")}`,
+        payloadSnapshot: { workOrderId: GUIDED_DEMO_IDS.workOrder, response },
+        demoMode: true,
+      }, ...current]);
+      setNotice(response === "accepted" ? "Vendor acceptance received from the external work-order window. Continue to technician check-in." : response === "declined" ? "Vendor declined. The work returned to vendor selection without losing the request history." : "Vendor proposed a date. The proposal is recorded for manager review.");
+    }
+
+    window.addEventListener("message", handleGuidedVendorResponse);
+    return () => window.removeEventListener("message", handleGuidedVendorResponse);
+  }, []);
 
   const activeVisits = dataset.visits.filter((visit) => !visit.checkedOutAt);
   const openWork = dataset.workOrders.filter((work) => !terminalStatuses.has(work.status));
@@ -347,6 +476,131 @@ export function TraceOpsApp() {
     dispatchPhone: vendor.contacts.find((contact) => contact.role === "dispatch")?.phone,
     afterHoursLabel: vendor.afterHoursAvailable ? "24/7 emergency dispatch" : "Standard dispatch hours",
   }));
+
+  const guidedStore = fullDataset.stores.find((record) => record.id === GUIDED_DEMO_IDS.store);
+  const guidedRegion = fullDataset.regions.find((record) => record.id === guidedStore?.regionId);
+  const guidedEmployee = fullDataset.people.find((record) => record.id === GUIDED_DEMO_IDS.employee);
+  const guidedManager = fullDataset.people.find((record) => record.id === GUIDED_DEMO_IDS.manager);
+  const guidedVendor = fullDataset.vendors.find((record) => record.id === guidedDemo.selectedVendorId);
+  const guidedAsset = fullDataset.assets.find((record) => record.id === GUIDED_DEMO_IDS.asset);
+  const guidedCategory = fullDataset.categories.find((record) => record.id === GUIDED_DEMO_IDS.category);
+  const guidedTaxonomy = fullDataset.taxonomyNodes.find((record) => record.id === GUIDED_DEMO_IDS.taxonomy);
+  const guidedRequest = fullDataset.requests.find((record) => record.id === GUIDED_DEMO_IDS.request);
+  const guidedWork = fullDataset.workOrders.find((record) => record.id === GUIDED_DEMO_IDS.workOrder);
+  const guidedAssignment = fullDataset.assignments.find((record) => record.id === GUIDED_DEMO_IDS.assignment);
+  const guidedIssuance = fullDataset.vendorIssuances.find((record) => record.id === GUIDED_DEMO_IDS.issuance);
+  const guidedDomainVisit = fullDataset.visits.find((record) => record.workOrderId === GUIDED_DEMO_IDS.workOrder);
+  const guidedInvoiceLink = fullDataset.invoiceWorkLinks.find((record) => record.id === GUIDED_DEMO_IDS.invoiceLink);
+  const guidedInvoice = fullDataset.invoices.find((record) => record.id === GUIDED_DEMO_IDS.invoice);
+  const guidedStoreOption = storeOptions.find((record) => record.id === GUIDED_DEMO_IDS.store);
+
+  const guidedStepByStage: Record<GuidedDemoStage, GuidedDemoStepId> = {
+    request: "employee_request",
+    review: "manager_review",
+    vendor: "vendor_selection",
+    authorization: "external_work_order",
+    visit: "technician_visit",
+    analytics: "analytics_handoff",
+  };
+  const guidedStageByStep: Record<GuidedDemoStepId, GuidedDemoStage> = {
+    employee_request: "request",
+    manager_review: "review",
+    vendor_selection: "vendor",
+    external_work_order: "authorization",
+    technician_visit: "visit",
+    analytics_handoff: "analytics",
+  };
+  const guidedCompletedSteps: GuidedDemoStepId[] = [
+    ...(guidedRequest ? ["employee_request" as const] : []),
+    ...(guidedWork ? ["manager_review" as const] : []),
+    ...(guidedAssignment ? ["vendor_selection" as const] : []),
+    ...(guidedIssuance?.response === "accepted" || guidedDomainVisit || guidedInvoiceLink
+      ? ["external_work_order" as const]
+      : []),
+    ...(guidedDomainVisit?.checkedOutAt || guidedInvoiceLink ? ["technician_visit" as const] : []),
+  ];
+  const guidedUnlockedSteps: GuidedDemoStepId[] = [
+    "employee_request",
+    ...(guidedRequest ? ["manager_review" as const] : []),
+    ...(guidedWork ? ["vendor_selection" as const] : []),
+    ...(guidedAssignment ? ["external_work_order" as const] : []),
+    ...(guidedIssuance?.response === "accepted" || guidedDomainVisit || guidedInvoiceLink
+      ? ["technician_visit" as const]
+      : []),
+    ...(guidedInvoiceLink ? ["analytics_handoff" as const] : []),
+  ];
+  const guidedScenario: GuidedDemoScenario = {
+    store: {
+      id: guidedStore?.id ?? GUIDED_DEMO_IDS.store,
+      number: guidedStore?.storeNumber ?? "104",
+      name: guidedStore?.name ?? "Northline West Broad",
+      address: guidedStore
+        ? `${guidedStore.address.line1}, ${guidedStore.address.city}, ${guidedStore.address.state} ${guidedStore.address.postalCode}`
+        : "2875 West Broad Street, Columbus, OH 43204",
+      region: guidedRegion?.name ?? "Central Ohio",
+    },
+    employee: { name: guidedEmployee?.displayName ?? "Lee Bryant", role: "Store associate" },
+    manager: { name: guidedManager?.displayName ?? "Robin Flores", approvalLimitLabel: "$1,500 store approval limit" },
+    request: {
+      number: GUIDED_REQUEST_NUMBER,
+      submittedAtLabel: "Today · 9:12 AM",
+      problem: guidedRequest?.immutableDescription ?? "The beer cave is warm. The display reads 48°F and the product feels warmer than normal.",
+      reportedLocation: guidedRequest?.reportedLocation ?? "Rear sales floor · Beer cave entrance",
+      priority: guidedRequest?.urgency ?? "urgent",
+      photoCount: 2,
+    },
+    vendor: {
+      id: guidedVendor?.id ?? GUIDED_DEMO_IDS.preferredVendor,
+      name: guidedVendor?.displayName ?? "Summit Refrigeration",
+      specialty: guidedVendor?.specialties.flatMap((specialty) => [specialty.label, ...specialty.equipmentTypes.slice(0, 2)]).join(" · ") ?? "Commercial refrigeration · Beer caves",
+      coverageLabel: guidedRegion ? `Covers Store 104 and ${guidedRegion.name}` : "Covers Store 104 and Central Ohio",
+      relationshipLabel: guidedVendor?.status === "preferred" ? "Preferred refrigeration partner" : "Approved service partner",
+    },
+    workOrder: {
+      number: guidedWork?.number ?? GUIDED_WORK_ORDER_NUMBER,
+      title: guidedWork?.title ?? "Beer cave holding at 48°F",
+      categoryLabel: guidedCategory?.label ?? "Refrigeration",
+      taxonomyLabel: `Walk-in refrigeration › ${guidedTaxonomy?.label ?? "Beer cave"}`,
+      assetLabel: guidedAsset ? `${guidedAsset.name} · ${guidedAsset.assetCode}` : "Beer Cave Refrigeration System · 104-REF-BC-1",
+      nteLabel: `${money(guidedWork?.notToExceedMinor ?? GUIDED_NTE_MINOR)} not to exceed`,
+      requestedWindowLabel: "Service requested today, before 2:00 PM",
+    },
+    visit: {
+      technicianName: guidedDomainVisit?.technicianName ?? "Marcus Hill",
+      channelLabel: "Store QR mobile web",
+      checkInLabel: guidedDomainVisit ? timeLabel(guidedDomainVisit.checkedInAt) : "10:03 AM",
+      checkOutLabel: guidedDomainVisit?.checkedOutAt ? timeLabel(guidedDomainVisit.checkedOutAt) : "11:24 AM",
+      observedDurationLabel: "1 hr 21 min observed onsite",
+      evidenceState: "location_verified",
+      evidenceLabel: "Location verified · 24 m from Store 104",
+      outcome: "resolved",
+      outcomeLabel: "Resolved · final temperature 37°F and falling",
+      photoCount: 4,
+    },
+    analytics: {
+      recordedCostLabel: `${money(guidedInvoiceLink?.attributedAmountMinor ?? GUIDED_INVOICE_TOTAL_MINOR)} linked invoice`,
+      linkedInvoiceLabel: `${guidedInvoice?.invoiceNumber ?? "SUM-DEMO-685"} · matched`,
+      visitCount: guidedDomainVisit ? 1 : 1,
+      workStatusLabel: guidedInvoiceLink ? "Invoice received" : "Ready for source-linked reporting",
+    },
+  };
+  const guidedInitialActiveVisit: ActiveVisit | undefined = guidedDomainVisit && !guidedDomainVisit.checkedOutAt && guidedVendor
+    ? {
+        id: guidedDomainVisit.id,
+        storeId: guidedDomainVisit.storeId,
+        technicianName: guidedDomainVisit.technicianName,
+        vendorName: guidedVendor.displayName,
+        workOrderId: guidedDomainVisit.workOrderId,
+        channel: "qr",
+        evidence: {
+          state: guidedDomainVisit.evidenceStrength === "location_verified" ? "location_verified" : "manual_exception",
+          capturedAt: guidedDomainVisit.locationEvidence.capturedAt,
+          accuracyMeters: guidedDomainVisit.locationEvidence.accuracyMeters,
+          distanceMeters: guidedDomainVisit.locationEvidence.distanceFromStoreMeters,
+        },
+        startedAt: guidedDomainVisit.checkedInAt,
+      }
+    : undefined;
 
   const searchResults = useMemo(() => {
     const query = globalQuery.trim().toLowerCase();
@@ -472,6 +726,285 @@ export function TraceOpsApp() {
       demoMode: true,
     };
     setAuditEvents((current) => [event, ...current]);
+  }
+
+  function resetGuidedDemo() {
+    setRequests((current) => current.filter((request) => request.id !== GUIDED_DEMO_IDS.request));
+    setWorkOrders((current) => current.filter((work) => work.id !== GUIDED_DEMO_IDS.workOrder));
+    setAssignments((current) => current.filter((assignment) => assignment.id !== GUIDED_DEMO_IDS.assignment));
+    setIssuances((current) => current.filter((issuance) => issuance.id !== GUIDED_DEMO_IDS.issuance));
+    setVisits((current) => current.filter((visit) => visit.workOrderId !== GUIDED_DEMO_IDS.workOrder));
+    setInvoices((current) => current.filter((invoice) => invoice.id !== GUIDED_DEMO_IDS.invoice));
+    setInvoiceWorkLinks((current) => current.filter((link) => link.id !== GUIDED_DEMO_IDS.invoiceLink));
+    setDocuments((current) => current.filter((document) => document.id !== GUIDED_DEMO_IDS.invoiceDocument));
+    setAuditEvents((current) => current.filter((event) =>
+      event.entityId !== GUIDED_DEMO_IDS.request &&
+      event.entityId !== GUIDED_DEMO_IDS.workOrder &&
+      event.entityId !== GUIDED_DEMO_IDS.assignment &&
+      event.entityId !== GUIDED_DEMO_IDS.issuance &&
+      event.entityId !== GUIDED_DEMO_IDS.invoice &&
+      event.entityId !== GUIDED_DEMO_IDS.invoiceLink &&
+      event.payloadSnapshot.workOrderId !== GUIDED_DEMO_IDS.workOrder,
+    ));
+    setGuidedDemo(initialGuidedDemoState);
+    setDetail(null);
+    setNotice("Guided demo reset. Start again from the store employee request.");
+  }
+
+  function submitGuidedRequest() {
+    const request = createGuidedRequest(fullDataset);
+    setRequests((current) => [request, ...current.filter((record) => record.id !== request.id)]);
+    setAuditEvents((current) => [{
+      id: "audit-guided-request-submitted",
+      organizationId: fullDataset.organization.id,
+      entityType: "request",
+      entityId: request.id,
+      eventType: "store_employee_request_submitted",
+      actorType: "person",
+      actorId: GUIDED_DEMO_IDS.employee,
+      channel: "store_portal",
+      occurredAt: request.submittedAt,
+      summary: "Store employee submitted an immutable issue request",
+      payloadSnapshot: { storeId: request.storeId, urgency: request.urgency },
+      demoMode: true,
+    }, ...current.filter((event) => event.id !== "audit-guided-request-submitted")]);
+    setGuidedDemo((current) => ({ ...current, stage: "review" }));
+    setNotice("Request submitted from Store 104. The original description is now preserved for manager review.");
+  }
+
+  function approveGuidedRequest() {
+    const work = createGuidedWorkOrder(fullDataset);
+    setRequests((current) => current.map((request) => request.id === GUIDED_DEMO_IDS.request ? {
+      ...request,
+      workOrderId: work.id,
+      reviewStatus: "converted",
+    } : request));
+    setWorkOrders((current) => [work, ...current.filter((record) => record.id !== work.id)]);
+    setAuditEvents((current) => [{
+      id: "audit-guided-work-approved",
+      organizationId: fullDataset.organization.id,
+      entityType: "work_order",
+      entityId: work.id,
+      eventType: "request_approved_and_converted",
+      actorType: "person",
+      actorId: GUIDED_DEMO_IDS.manager,
+      channel: "manager_web",
+      occurredAt: fullDataset.asOf,
+      summary: "Store manager approved the request and created a customer work order",
+      payloadSnapshot: { workOrderId: work.id, storeId: work.storeId, requestId: GUIDED_DEMO_IDS.request },
+      demoMode: true,
+    }, ...current.filter((event) => event.id !== "audit-guided-work-approved")]);
+    setGuidedDemo((current) => ({ ...current, stage: "vendor" }));
+    setNotice(`${GUIDED_WORK_ORDER_NUMBER} created and linked to the employee’s original request.`);
+  }
+
+  function confirmGuidedVendorSelection() {
+    const vendor = fullDataset.vendors.find((record) => record.id === guidedDemo.selectedVendorId);
+    const work = fullDataset.workOrders.find((record) => record.id === GUIDED_DEMO_IDS.workOrder);
+    if (!vendor || !work) {
+      setNotice("Create the customer work order before choosing a service partner.");
+      return;
+    }
+    const assignment = createGuidedAssignment(fullDataset, vendor.id);
+    setAssignments((current) => [assignment, ...current.filter((record) => record.id !== assignment.id)]);
+    setWorkOrders((current) => current.map((record) => record.id === work.id ? {
+      ...record,
+      fulfillmentMode: "external",
+      status: "ready_to_issue",
+      accountable: {
+        partyType: "person",
+        partyId: GUIDED_DEMO_IDS.manager,
+        nextAction: `Send ${GUIDED_WORK_ORDER_NUMBER} to ${vendor.displayName}`,
+        dueAt: record.requestedWindow.endsAt,
+        escalationPartyId: GUIDED_DEMO_IDS.manager,
+      },
+    } : record));
+    setAuditEvents((current) => [{
+      id: "audit-guided-vendor-selected",
+      organizationId: fullDataset.organization.id,
+      entityType: "assignment",
+      entityId: assignment.id,
+      eventType: "approved_vendor_selected",
+      actorType: "person",
+      actorId: GUIDED_DEMO_IDS.manager,
+      channel: "manager_web",
+      occurredAt: assignment.assignedAt,
+      summary: `${vendor.displayName} selected for the approved work`,
+      payloadSnapshot: { workOrderId: work.id, vendorId: vendor.id },
+      demoMode: true,
+    }, ...current.filter((event) => event.id !== "audit-guided-vendor-selected")]);
+    setGuidedDemo((current) => ({ ...current, stage: "authorization", vendorResponse: undefined }));
+    setNotice(`${vendor.displayName} selected. Review and send the external service authorization next.`);
+  }
+
+  function issueGuidedVendorWork() {
+    const vendor = fullDataset.vendors.find((record) => record.id === guidedDemo.selectedVendorId);
+    const work = fullDataset.workOrders.find((record) => record.id === GUIDED_DEMO_IDS.workOrder) ?? createGuidedWorkOrder(fullDataset);
+    if (!vendor) {
+      setNotice("Choose an approved vendor before issuing the customer work order.");
+      return;
+    }
+    const assignment = createGuidedAssignment(fullDataset, vendor.id);
+    const issuance = createGuidedIssuance(fullDataset, vendor.id);
+    setAssignments((current) => [assignment, ...current.filter((record) => record.id !== assignment.id)]);
+    setIssuances((current) => [issuance, ...current.filter((record) => record.id !== issuance.id)]);
+    setWorkOrders((current) => current.map((record) => record.id === work.id ? {
+      ...record,
+      fulfillmentMode: "external",
+      status: "awaiting_vendor_response",
+      notToExceedMinor: GUIDED_NTE_MINOR,
+      accountable: {
+        partyType: "vendor",
+        partyId: vendor.id,
+        nextAction: "Vendor accepts, declines, or proposes a service date",
+        dueAt: record.requestedWindow.endsAt,
+        escalationPartyId: GUIDED_DEMO_IDS.manager,
+      },
+    } : record));
+    setAuditEvents((current) => [{
+      id: "audit-guided-issued",
+      organizationId: fullDataset.organization.id,
+      entityType: "vendor_issuance",
+      entityId: issuance.id,
+      eventType: "customer_work_order_issued",
+      actorType: "person",
+      actorId: GUIDED_DEMO_IDS.manager,
+      channel: "manager_web",
+      occurredAt: issuance.issuedAt,
+      summary: `Customer work order issued to ${vendor.displayName}`,
+      payloadSnapshot: { workOrderId: work.id, vendorId: vendor.id, nteMinor: GUIDED_NTE_MINOR },
+      demoMode: true,
+    }, ...current.filter((event) => event.id !== "audit-guided-issued")]);
+    setGuidedDemo((current) => ({ ...current, stage: "authorization", externalWindowOpened: false }));
+    setNotice(`${GUIDED_WORK_ORDER_NUMBER} issued to ${vendor.displayName}. Open the external version next.`);
+  }
+
+  function openGuidedExternalWorkOrder() {
+    const vendor = fullDataset.vendors.find((record) => record.id === guidedDemo.selectedVendorId);
+    const store = fullDataset.stores.find((record) => record.id === GUIDED_DEMO_IDS.store);
+    const work = fullDataset.workOrders.find((record) => record.id === GUIDED_DEMO_IDS.workOrder) ?? createGuidedWorkOrder(fullDataset);
+    const asset = fullDataset.assets.find((record) => record.id === GUIDED_DEMO_IDS.asset);
+    if (!vendor || !store) return;
+    const url = new URL("/external-work-order", window.location.origin);
+    url.searchParams.set("scenarioId", GUIDED_DEMO_IDS.workOrder);
+    url.searchParams.set("wo", work.number);
+    url.searchParams.set("store", `Store ${store.storeNumber} · ${store.name}`);
+    url.searchParams.set("address", `${store.address.line1}, ${store.address.city}, ${store.address.state} ${store.address.postalCode}`);
+    url.searchParams.set("vendor", vendor.displayName);
+    url.searchParams.set("problem", work.problemDescription);
+    url.searchParams.set("scope", work.scopeOfWork);
+    url.searchParams.set("nteMinor", String(GUIDED_NTE_MINOR));
+    url.searchParams.set("requestedWindow", "Service requested today, before 2:00 PM");
+    url.searchParams.set("access", `Check in at Store ${store.storeNumber} by QR, vendor app, or store device. Select ${work.number} when you arrive. ${asset ? `Service asset: ${asset.assetCode} · ${asset.name}.` : ""}`);
+    const opened = window.open(url.toString(), "traceops-external-work-order", "width=1120,height=860,resizable=yes,scrollbars=yes");
+    opened?.focus();
+    setGuidedDemo((current) => ({ ...current, externalWindowOpened: Boolean(opened) }));
+    setNotice(opened
+      ? "External vendor authorization opened in a separate window. Accept it there to continue automatically."
+      : "The browser blocked the external window. Allow pop-ups or use the demo fallback below.");
+  }
+
+  function mockGuidedVendorResponse(response: "accepted" | "declined" | "date_proposed") {
+    window.postMessage({ type: "traceops:guided-vendor-response", scenarioId: GUIDED_DEMO_IDS.workOrder, response }, window.location.origin);
+  }
+
+  function guidedVisitCheckIn(value: VisitCheckInValue): ActiveVisit | void {
+    const activeVisit = recordVisitCheckIn(value);
+    if (activeVisit) setGuidedDemo((current) => ({ ...current, activeVisitId: activeVisit.id }));
+    return activeVisit;
+  }
+
+  function guidedVisitCheckOut(value: VisitCheckOutValue) {
+    recordVisitCheckOut(value);
+    const vendorId = guidedDemo.selectedVendorId;
+    const invoice = createGuidedInvoice(fullDataset, vendorId);
+    const link = createGuidedInvoiceLink(fullDataset);
+    const document = createGuidedInvoiceDocument(fullDataset);
+    setInvoices((current) => [invoice, ...current.filter((record) => record.id !== invoice.id)]);
+    setInvoiceWorkLinks((current) => [link, ...current.filter((record) => record.id !== link.id)]);
+    setDocuments((current) => [document, ...current.filter((record) => record.id !== document.id)]);
+    setAssignments((current) => current.map((assignment) => assignment.id === GUIDED_DEMO_IDS.assignment ? {
+      ...assignment,
+      status: "completed",
+      completedAt: value.recordedAt,
+    } : assignment));
+    setWorkOrders((current) => current.map((work) => work.id === GUIDED_DEMO_IDS.workOrder ? {
+      ...work,
+      status: "invoice_received",
+      outcome: "resolved",
+      completedAt: value.recordedAt,
+      accountable: {
+        partyType: "person",
+        partyId: "person-evan-rhodes",
+        nextAction: "Review the matched evidence packet before AP handoff",
+        dueAt: new Date(Date.parse(value.recordedAt) + 24 * 60 * 60 * 1000).toISOString(),
+        escalationPartyId: "person-dana-brooks",
+      },
+    } : work));
+    setAuditEvents((current) => [{
+      id: "audit-guided-invoice-linked",
+      organizationId: fullDataset.organization.id,
+      entityType: "invoice_work_link",
+      entityId: link.id,
+      eventType: "invoice_matched_by_customer_work_order",
+      actorType: "system",
+      channel: "system",
+      occurredAt: fullDataset.asOf,
+      summary: "Invoice matched to the customer work order and attributed to Store 104",
+      payloadSnapshot: { workOrderId: GUIDED_DEMO_IDS.workOrder, invoiceId: invoice.id, amountMinor: link.attributedAmountMinor },
+      demoMode: true,
+    }, ...current.filter((event) => event.id !== "audit-guided-invoice-linked")]);
+    setGuidedDemo((current) => ({ ...current, stage: "analytics", invoiceLinked: true, activeVisitId: undefined }));
+    setNotice("Checkout saved, the mock invoice matched by customer WO number, and every dashboard now has the same source chain.");
+  }
+
+  function openGuidedDestination(destination: "store" | "work" | "vendor" | "asset" | "spend") {
+    if (destination === "spend") {
+      setSpendPreset({
+        regionId: guidedStore?.regionId ?? "region-central-ohio",
+        storeId: GUIDED_DEMO_IDS.store,
+        categoryId: GUIDED_DEMO_IDS.category,
+      });
+      navigate("spend");
+      return;
+    }
+    setView(destination === "store" ? "stores" : destination === "vendor" ? "vendors" : destination === "asset" ? "equipment" : "work");
+    setDetail({
+      kind: destination,
+      id: destination === "store"
+        ? GUIDED_DEMO_IDS.store
+        : destination === "vendor"
+          ? guidedDemo.selectedVendorId
+          : destination === "asset"
+            ? GUIDED_DEMO_IDS.asset
+            : GUIDED_DEMO_IDS.workOrder,
+    });
+  }
+
+  function handleGuidedAction(action: GuidedDemoAction) {
+    if (action === "submit_employee_request") {
+      submitGuidedRequest();
+      return;
+    }
+    if (action === "approve_and_create_work_order") {
+      approveGuidedRequest();
+      return;
+    }
+    if (action === "select_outside_vendor") {
+      confirmGuidedVendorSelection();
+      return;
+    }
+    if (action === "issue_service_authorization") {
+      if (guidedIssuance) openGuidedExternalWorkOrder();
+      else issueGuidedVendorWork();
+    }
+  }
+
+  function handleGuidedAnalyticsNavigate(destination: GuidedDemoAnalyticsDestination) {
+    if (destination === "store_spend") openGuidedDestination("store");
+    else if (destination === "refrigeration_drilldown") openGuidedDestination("spend");
+    else if (destination === "vendor_accountability") openGuidedDestination("vendor");
+    else openGuidedDestination("asset");
   }
 
   function createStore(value: GuidedStoreSetupValue) {
@@ -998,6 +1531,70 @@ export function TraceOpsApp() {
       canIssueVendorWork={hasPermission("issueVendorWork")}
       canSimulateVendorResponse={hasPermission("simulateVendorResponse")}
     />
+  ) : view === "story" ? (
+    <GuidedDemoStory
+      activeStep={guidedStepByStage[guidedDemo.stage]}
+      onStepChange={(step) => setGuidedDemo((current) => ({ ...current, stage: guidedStageByStep[step] }))}
+      onReset={resetGuidedDemo}
+      onAction={handleGuidedAction}
+      onAnalyticsNavigate={handleGuidedAnalyticsNavigate}
+      completedSteps={guidedCompletedSteps}
+      unlockedSteps={guidedUnlockedSteps}
+      activeActionLabel={guidedStepByStage[guidedDemo.stage] === "external_work_order" && guidedIssuance
+        ? "Open external vendor work order"
+        : undefined}
+      scenario={guidedScenario}
+      authorizationContent={(
+        <div className="to-guided-auth-state" data-ready={guidedIssuance ? "true" : "false"}>
+          <span className="to-guided-auth-icon">
+            {guidedIssuance ? <CheckCircle2 aria-hidden="true" /> : <Mail aria-hidden="true" />}
+          </span>
+          <div>
+            <strong>{guidedIssuance ? "Authorization delivered to Summit Dispatch" : "Ready to create the vendor-facing record"}</strong>
+            <p>
+              {guidedIssuance
+                ? `${GUIDED_WORK_ORDER_NUMBER} is now the vendor's billing reference. Open the separate window to see exactly what Summit receives.`
+                : "Sending creates the versioned authorization, preserves the $750 limit, and keeps the vendor's own dispatch process optional."}
+            </p>
+            {guidedIssuance ? (
+              <span className="to-guided-auth-meta">
+                Email delivered · acceptance requested · {money(GUIDED_NTE_MINOR)} NTE
+              </span>
+            ) : null}
+          </div>
+          {guidedIssuance && !guidedDemo.vendorResponse ? (
+            <button className="to-button ghost" type="button" onClick={() => mockGuidedVendorResponse("accepted")}>
+              Demo fallback: record acceptance here
+            </button>
+          ) : null}
+        </div>
+      )}
+      visitContent={guidedStoreOption && guidedVendor && guidedWork ? (
+        <TechnicianVisitFlow
+          key={`guided-visit-${guidedDomainVisit?.id ?? "new"}-${guidedDomainVisit?.checkedOutAt ? "complete" : "active"}`}
+          store={guidedStoreOption}
+          vendorName={guidedVendor.displayName}
+          workOrders={[{
+            id: guidedWork.id,
+            number: guidedWork.number,
+            title: guidedWork.title,
+            storeId: guidedWork.storeId,
+            assetLabel: guidedAsset ? `${guidedAsset.assetCode} · ${guidedAsset.name}` : undefined,
+            requestedService: guidedWork.scopeOfWork,
+          }]}
+          channel="qr"
+          evidence={{ state: "location_verified", accuracyMeters: 18, distanceMeters: 24 }}
+          initialActiveVisit={guidedInitialActiveVisit}
+          initialCompleted={Boolean(guidedDomainVisit?.checkedOutAt)}
+          defaultTechnicianName="Marcus Hill"
+          requireVerifiedEvidence
+          onCheckIn={guidedVisitCheckIn}
+          onCheckOut={guidedVisitCheckOut}
+        />
+      ) : (
+        <div className="to-callout"><AlertTriangle /> Accept the external work order before starting the visit.</div>
+      )}
+    />
   ) : view === "today" ? (
     <TodayView
       dataset={dataset}
@@ -1024,11 +1621,15 @@ export function TraceOpsApp() {
     <VendorsView dataset={dataset} onOpen={(id) => setDetail({ kind: "vendor", id })} />
   ) : view === "spend" ? (
     <SpendView
+      key={`${spendPreset?.regionId ?? "all"}-${spendPreset?.storeId ?? "all"}-${spendPreset?.categoryId ?? "all"}`}
       dataset={dataset}
       onOpenWork={(id) => setDetail({ kind: "work", id })}
       onOpenStore={(id) => setDetail({ kind: "store", id })}
       onOpenAsset={(id) => setDetail({ kind: "asset", id })}
       onNavigate={navigate}
+      initialRegionId={spendPreset?.regionId}
+      initialStoreId={spendPreset?.storeId}
+      initialCategoryId={spendPreset?.categoryId}
     />
   ) : view === "equipment" ? (
     <EquipmentView
@@ -1079,7 +1680,7 @@ export function TraceOpsApp() {
         <div className="to-org-switcher"><small>Demo organization</small><strong>{dataset.organization.displayName}</strong></div>
         <p className="to-nav-label">Operate</p>
         <nav className="to-nav" aria-label="Main navigation">
-          {roleNavItems.filter((item) => ["today", "stores", "work", "vendors"].includes(item.view)).map((item) => <NavButton key={item.view} item={item} active={view === item.view && !detail} onClick={() => navigate(item.view)} />)}
+          {roleNavItems.filter((item) => ["story", "today", "stores", "work", "vendors"].includes(item.view)).map((item) => <NavButton key={item.view} item={item} active={view === item.view && !detail} onClick={() => navigate(item.view)} />)}
         </nav>
         <p className="to-nav-label">Understand</p>
         <nav className="to-nav" aria-label="Intelligence navigation">
@@ -1253,10 +1854,10 @@ export function LegacySpendView({ dataset, onOpenWork, onNavigate }: { dataset: 
   return <><PageHead eyebrow="Invoice-linked cost basis · trailing 12 months" title="Every maintenance dollar has a source story." description="Move from company totals to a store, category, asset, work order, visit, and invoice without changing the selected cost basis."><button className="to-button" type="button" onClick={() => onNavigate("reports")}><FileBarChart /> Generate report</button></PageHead><section className="to-kpi-grid"><div className="to-kpi"><div className="to-kpi-top"><span>Selected spend</span><span className="to-kpi-icon"><CircleDollarSign /></span></div><strong>{money(total)}</strong><span>{dataset.invoiceWorkLinks.length} linked cost allocations</span></div><div className="to-kpi" data-tone="coral"><div className="to-kpi-top"><span>Highest category</span><span className="to-kpi-icon"><Gauge /></span></div><strong>{rows[0]?.category.label}</strong><span>{money(rows[0]?.spend ?? 0)} from source invoices</span></div><div className="to-kpi" data-tone="amber"><div className="to-kpi-top"><span>Invoice exceptions</span><span className="to-kpi-icon"><ReceiptText /></span></div><strong>{invoiceReview.length}</strong><span>Human review required before AP handoff</span></div><div className="to-kpi" data-tone="blue"><div className="to-kpi-top"><span>Classified to asset</span><span className="to-kpi-icon"><PackageSearch /></span></div><strong>{Math.round((dataset.invoiceWorkLinks.filter((link) => link.assetId).length / Math.max(1, dataset.invoiceWorkLinks.length)) * 100)}%</strong><span>Unclassified work remains visible in totals</span></div></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Spend by service area</h2><p>Click through to supporting work.</p></div></header><div className="to-panel-body"><div className="to-bar-list">{rows.map((row) => <div className="to-bar-row" key={row.category.id}><span className="to-bar-label"><strong>{row.category.label}</strong><span>{Math.round((row.spend / total) * 100)}% of selected spend</span></span><span className="to-bar-track"><i style={{ width: `${(row.spend / max) * 100}%` }} /></span><b>{money(row.spend)}</b></div>)}</div></div></article><StoreOutliers dataset={dataset} onOpen={(storeId) => { const work = dataset.workOrders.find((record) => record.storeId === storeId); if (work) onOpenWork(work.id); }} /></section><article className="to-panel"><header className="to-panel-head"><div><h2>Invoices needing review</h2><p>Exceptions are facts to review—not automatic accusations.</p></div></header><div className="to-table-wrap"><table className="to-table"><thead><tr><th>Invoice</th><th>Vendor</th><th>Customer WO reference</th><th>Amount</th><th>Status</th></tr></thead><tbody>{invoiceReview.map((invoice) => { const vendor = dataset.vendors.find((record) => record.id === invoice.vendorId); const link = dataset.invoiceWorkLinks.find((record) => record.invoiceId === invoice.id); return <tr key={invoice.id} onClick={() => link ? onOpenWork(link.workOrderId) : undefined}><td><strong>{invoice.invoiceNumber}</strong><small>Received {dateLabel(invoice.receivedAt)}</small></td><td>{vendor?.displayName}</td><td>{invoice.customerWorkOrderReferences.join(", ") || "Missing"}</td><td className="to-money">{money(invoiceTotal(dataset, invoice.id))}</td><td><Badge value={invoice.status} /></td></tr>; })}</tbody></table></div></article></>;
 }
 
-function SpendView({ dataset, onOpenWork, onOpenStore, onOpenAsset, onNavigate }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenStore: (id: string) => void; onOpenAsset: (id: string) => void; onNavigate: (view: View) => void }) {
-  const [regionId, setRegionId] = useState("all");
-  const [storeId, setStoreId] = useState("all");
-  const [categoryId, setCategoryId] = useState("all");
+function SpendView({ dataset, onOpenWork, onOpenStore, onOpenAsset, onNavigate, initialRegionId, initialStoreId, initialCategoryId }: { dataset: DemoDataset; onOpenWork: (id: string) => void; onOpenStore: (id: string) => void; onOpenAsset: (id: string) => void; onNavigate: (view: View) => void; initialRegionId?: string; initialStoreId?: string; initialCategoryId?: string }) {
+  const [regionId, setRegionId] = useState(initialRegionId ?? "all");
+  const [storeId, setStoreId] = useState(initialStoreId ?? "all");
+  const [categoryId, setCategoryId] = useState(initialCategoryId ?? "all");
   const availableStores = dataset.stores.filter((store) => regionId === "all" || store.regionId === regionId);
   const scopedStoreIds = new Set(availableStores.filter((store) => storeId === "all" || store.id === storeId).map((store) => store.id));
   const links = dataset.invoiceWorkLinks.filter((link) => scopedStoreIds.has(link.storeId) && (categoryId === "all" || link.categoryId === categoryId));

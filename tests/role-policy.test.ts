@@ -23,6 +23,8 @@ describe("TraceOps demo role policy", () => {
     }
     expect(getDemoRolePolicy("owner_executive").defaultView).toBe("spend");
     expect(getDemoRolePolicy("finance_reviewer").defaultView).toBe("spend");
+    expect(getDemoRolePolicy("facilities_manager").defaultView).toBe("story");
+    expect(demoRolePolicies.filter((policy) => policy.allowedViews.includes("story")).map((policy) => policy.id)).toEqual(["facilities_manager"]);
   });
 
   it("limits the regional manager to Central Ohio records", () => {

@@ -38,6 +38,7 @@ export interface TechnicianVisitFlowProps {
   onCheckIn?: (value: VisitCheckInValue) => ActiveVisit | void | Promise<ActiveVisit | void>;
   onCheckOut?: (value: VisitCheckOutValue) => void | Promise<void>;
   initialActiveVisit?: ActiveVisit;
+  initialCompleted?: boolean;
   defaultTechnicianName?: string;
   requireVerifiedEvidence?: boolean;
   className?: string;
@@ -164,6 +165,7 @@ export function TechnicianVisitFlow({
   onCheckIn,
   onCheckOut,
   initialActiveVisit,
+  initialCompleted = false,
   defaultTechnicianName = "",
   requireVerifiedEvidence = false,
   className,
@@ -184,7 +186,7 @@ export function TechnicianVisitFlow({
   const [notes, setNotes] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [completed, setCompleted] = useState(false);
+  const [completed, setCompleted] = useState(initialCompleted);
   const [error, setError] = useState<string | null>(null);
 
   const selectedWorkOrder = storeWorkOrders.find(
