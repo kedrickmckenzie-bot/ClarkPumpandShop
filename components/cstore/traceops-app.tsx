@@ -34,6 +34,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { demoData } from "@/lib/cstore/demo-data";
 import { findLifecycleCandidates } from "@/lib/cstore/analytics";
+import {
+  demoRolePolicies,
+  getDemoRolePolicy,
+  roleScopeLabel,
+  scopeDatasetForRole,
+  type DemoRoleId,
+  type RolePermission,
+  type RoleView,
+} from "@/lib/cstore/role-policy";
 import type {
   Asset,
   AuditEvent,
@@ -65,7 +74,7 @@ import type {
   WorkOrderCreationValue,
 } from "./types";
 
-type View = "today" | "stores" | "work" | "vendors" | "spend" | "equipment" | "pm" | "reports";
+type View = RoleView;
 type Drawer = "create-work" | "issue-vendor" | "store-portal" | "visit" | "capabilities" | "new-store" | "classify-work" | null;
 type Detail = { kind: "store" | "work" | "vendor" | "asset"; id: string } | null;
 interface CapabilityConfig {
@@ -244,7 +253,7 @@ export function TraceOpsApp() {
   const [view, setView] = useState<View>("today");
   const [detail, setDetail] = useState<Detail>(null);
   const [drawer, setDrawer] = useState<Drawer>(null);
-  const [role, setRole] = useState("Facilities manager");
+  const [roleId, setRoleId] = useState<DemoRoleId>("facilities_manager");
   const [globalQuery, setGlobalQuery] = useState("");
   const [stores, setStores] = useState<Store[]>(demoData.stores);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>(demoData.workOrders);
@@ -268,7 +277,7 @@ export function TraceOpsApp() {
     equipmentLifecycle: true,
   });
 
-  const dataset = useMemo<DemoDataset>(
+  const fullDataset = useMemo<DemoDataset>(
     () => ({
       ...demoData,
       stores,
@@ -282,8 +291,16 @@ export function TraceOpsApp() {
     [assignments, auditEvents, exceptions, issuances, stores, visits, workOrders],
   );
 
-  const activeVisits = visits.filter((visit) => !visit.checkedOutAt);
-  const openWork = workOrders.filter((work) => !terminalStatuses.has(work.status));
+  const rolePolicy = getDemoRolePolicy(roleId);
+  const dataset = useMemo(
+    () => scopeDatasetForRole(fullDataset, rolePolicy),
+    [fullDataset, rolePolicy],
+  );
+  const activePerson = fullDataset.people.find((person) => person.id === rolePolicy.personId) ?? fullDataset.people[0];
+  const scopeLabel = roleScopeLabel(fullDataset, rolePolicy);
+
+  const activeVisits = dataset.visits.filter((visit) => !visit.checkedOutAt);
+  const openWork = dataset.workOrders.filter((work) => !terminalStatuses.has(work.status));
   const openExceptions = dataset.exceptions.filter((record) => record.status !== "resolved");
   const invoicedSpend = dataset.invoiceWorkLinks.reduce((sum, link) => sum + link.attributedAmountMinor, 0);
   const classificationWork = classificationWorkId
@@ -292,14 +309,15 @@ export function TraceOpsApp() {
   const classificationStore = classificationWork
     ? dataset.stores.find((record) => record.id === classificationWork.storeId)
     : undefined;
-  const intelligenceNavItems = navItems.slice(4).filter((item) =>
+  const roleNavItems = navItems.filter((item) => rolePolicy.allowedViews.includes(item.view));
+  const intelligenceNavItems = roleNavItems.slice().filter((item) => ["spend", "equipment", "pm", "reports"].includes(item.view)).filter((item) =>
     item.view === "equipment"
       ? capabilities.equipmentLifecycle
       : item.view === "pm"
         ? capabilities.preventiveMaintenance
         : true,
   );
-  const mobileNavItems = navItems
+  const mobileNavItems = roleNavItems
     .filter((item) => item.view !== "equipment" || capabilities.equipmentLifecycle)
     .filter((item) => item.view !== "pm" || capabilities.preventiveMaintenance)
     .slice(0, 5);
@@ -342,7 +360,7 @@ export function TraceOpsApp() {
       )
       .slice(0, 4)
       .map((store) => ({ kind: "store" as const, id: store.id, title: `Store ${store.storeNumber}`, meta: store.normalizedAddress }));
-    const vendors = dataset.vendors
+    const vendors = rolePolicy.allowedViews.includes("vendors") ? dataset.vendors
       .filter((vendor) =>
         [vendor.displayName, vendor.description, ...vendor.aliases, ...vendor.searchTerms]
           .join(" ")
@@ -350,12 +368,12 @@ export function TraceOpsApp() {
           .includes(query),
       )
       .slice(0, 3)
-      .map((vendor) => ({ kind: "vendor" as const, id: vendor.id, title: vendor.displayName, meta: vendor.specialties.map((s) => s.label).join(" · ") }));
-    const work = workOrders
+      .map((vendor) => ({ kind: "vendor" as const, id: vendor.id, title: vendor.displayName, meta: vendor.specialties.map((s) => s.label).join(" · ") })) : [];
+    const work = rolePolicy.allowedViews.includes("work") ? dataset.workOrders
       .filter((record) => [record.number, record.title, record.problemDescription].join(" ").toLowerCase().includes(query))
       .slice(0, 4)
-      .map((record) => ({ kind: "work" as const, id: record.id, title: record.number, meta: record.title }));
-    const assets = dataset.assets
+      .map((record) => ({ kind: "work" as const, id: record.id, title: record.number, meta: record.title })) : [];
+    const assets = rolePolicy.allowedViews.includes("equipment") ? dataset.assets
       .filter((asset) =>
         [asset.assetCode, asset.name, asset.manufacturer, asset.model, asset.serialNumber, ...asset.searchTerms]
           .join(" ")
@@ -368,17 +386,51 @@ export function TraceOpsApp() {
         id: asset.id,
         title: asset.name,
         meta: `${asset.assetCode} · ${asset.manufacturer} ${asset.model}`,
-      }));
+      })) : [];
     return [...stores, ...vendors, ...work, ...assets].slice(0, 8);
-  }, [dataset.assets, dataset.stores, dataset.vendors, globalQuery, workOrders]);
+  }, [dataset.assets, dataset.stores, dataset.vendors, dataset.workOrders, globalQuery, rolePolicy]);
 
   function navigate(next: View) {
+    if (!rolePolicy.allowedViews.includes(next)) {
+      setNotice(`${rolePolicy.label} does not have access to ${navItems.find((item) => item.view === next)?.label ?? next}.`);
+      return;
+    }
     setView(next);
     setDetail(null);
     setGlobalQuery("");
   }
 
+  function hasPermission(permission: RolePermission) {
+    return rolePolicy.permissions[permission];
+  }
+
+  function guardPermission(permission: RolePermission, action: string) {
+    if (hasPermission(permission)) return true;
+    setNotice(`${rolePolicy.label} has read-only access here and cannot ${action}.`);
+    return false;
+  }
+
+  function changeRole(nextRoleId: DemoRoleId) {
+    const nextPolicy = getDemoRolePolicy(nextRoleId);
+    setRoleId(nextRoleId);
+    setView(nextPolicy.defaultView);
+    setDetail(null);
+    setDrawer(null);
+    setPendingAuthorization(null);
+    setClassificationWorkId(null);
+    setWorkInitialStoreId(null);
+    setVisitStoreId(null);
+    setGlobalQuery("");
+    const nextPerson = fullDataset.people.find((person) => person.id === nextPolicy.personId);
+    setNotice(`Now viewing as ${nextPerson?.displayName ?? nextPolicy.label} · ${roleScopeLabel(fullDataset, nextPolicy)}.`);
+  }
+
   function openWorkOrderDrawer(storeId?: string) {
+    if (!guardPermission("createWork", "create work orders")) return;
+    if (storeId && !dataset.stores.some((store) => store.id === storeId)) {
+      setNotice("That store is outside this role’s assigned scope.");
+      return;
+    }
     setWorkInitialStoreId(storeId ?? null);
     setDrawer("create-work");
   }
@@ -412,7 +464,7 @@ export function TraceOpsApp() {
       entityId,
       eventType: summary.toLowerCase().replaceAll(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""),
       actorType,
-      actorId: actorType === "person" ? dataset.people[0]?.id : undefined,
+      actorId: actorType === "person" ? activePerson?.id : undefined,
       channel,
       occurredAt: new Date().toISOString(),
       summary,
@@ -423,6 +475,7 @@ export function TraceOpsApp() {
   }
 
   function createStore(value: GuidedStoreSetupValue) {
+    if (!guardPermission("createStore", "create stores")) return;
     const manager = dataset.people.find((person) => person.roles.includes("store_manager")) ?? dataset.people[0];
     if (!manager) return;
     const regionStore = dataset.stores.find((record) => record.regionId === value.regionId);
@@ -456,6 +509,11 @@ export function TraceOpsApp() {
   }
 
   function saveWorkClassification(value: WorkClassificationValue) {
+    if (!guardPermission("classifyWork", "change equipment classification")) return;
+    if (!dataset.workOrders.some((work) => work.id === value.workOrderId)) {
+      setNotice("That work order is outside this role’s assigned scope.");
+      return;
+    }
     setWorkOrders((current) =>
       current.map((record) =>
         record.id === value.workOrderId
@@ -485,9 +543,11 @@ export function TraceOpsApp() {
   }
 
   function createWorkOrder(value: WorkOrderCreationValue) {
+    if (!guardPermission("createWork", "create work orders")) return;
     const store = dataset.stores.find((record) => record.id === value.storeId);
     if (!store) return;
-    const creator = dataset.people.find((person) => person.roles.includes("facilities_manager")) ?? dataset.people[0];
+    const creator = activePerson;
+    if (!creator) return;
     const sequence = String(300 + workOrders.length + 1).padStart(6, "0");
     const now = new Date(dataset.asOf);
     const due = new Date(now);
@@ -597,8 +657,9 @@ export function TraceOpsApp() {
   }
 
   function openAuthorizationForWork(workOrderId: string) {
-    const work = workOrders.find((record) => record.id === workOrderId);
-    const assignment = assignments.find(
+    if (!guardPermission("issueVendorWork", "issue work to vendors")) return;
+    const work = dataset.workOrders.find((record) => record.id === workOrderId);
+    const assignment = dataset.assignments.find(
       (record) => record.workOrderId === workOrderId && record.partyType === "vendor" && record.status !== "declined",
     );
     const store = work ? storeOptions.find((record) => record.id === work.storeId) : undefined;
@@ -635,10 +696,15 @@ export function TraceOpsApp() {
     acceptanceRequested: boolean;
     vendorNote?: string;
   }) {
+    if (!guardPermission("issueVendorWork", "issue work to vendors")) return;
     if (!pendingAuthorization) return;
-    const assignment = assignments.find((record) => record.workOrderId === value.workOrderId && record.partyType === "vendor");
-    const creator = dataset.people.find((person) => person.roles.includes("facilities_manager")) ?? dataset.people[0];
-    if (!assignment) return;
+    if (!dataset.workOrders.some((work) => work.id === value.workOrderId)) {
+      setNotice("That work order is outside this role’s assigned scope.");
+      return;
+    }
+    const assignment = dataset.assignments.find((record) => record.workOrderId === value.workOrderId && record.partyType === "vendor");
+    const creator = activePerson;
+    if (!assignment || !creator) return;
     const issuance: VendorIssuance = {
       id: `issuance-created-${issuances.length + 1}`,
       organizationId: dataset.organization.id,
@@ -696,10 +762,11 @@ export function TraceOpsApp() {
     workOrderId: string,
     response: "accepted" | "declined" | "date_proposed",
   ) {
-    const latest = issuances
+    if (!guardPermission("simulateVendorResponse", "record a vendor response")) return;
+    const latest = dataset.vendorIssuances
       .filter((record) => record.workOrderId === workOrderId)
       .sort((a, b) => b.version - a.version)[0];
-    const work = workOrders.find((record) => record.id === workOrderId);
+    const work = dataset.workOrders.find((record) => record.id === workOrderId);
     if (!latest || !work) return;
     const now = new Date().toISOString();
     const proposedArrivalAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
@@ -777,7 +844,12 @@ export function TraceOpsApp() {
     );
   }
 
-  function recordVisitCheckIn(value: VisitCheckInValue): ActiveVisit {
+  function recordVisitCheckIn(value: VisitCheckInValue): ActiveVisit | void {
+    if (!guardPermission("recordVisits", "record vendor visits")) return;
+    if (!dataset.stores.some((store) => store.id === value.storeId)) {
+      setNotice("That store is outside this role’s assigned scope.");
+      return;
+    }
     const vendor = dataset.vendors.find((record) => record.displayName === value.vendorName);
     const id = `visit-session-${Date.now()}`;
     const evidence = domainVisitEvidence(value.evidence);
@@ -852,7 +924,8 @@ export function TraceOpsApp() {
   }
 
   function recordVisitCheckOut(value: VisitCheckOutValue) {
-    const activeVisit = visits.find((record) => record.id === value.visitId);
+    if (!guardPermission("recordVisits", "record vendor visits")) return;
+    const activeVisit = dataset.visits.find((record) => record.id === value.visitId);
     if (!activeVisit) return;
     const outcome = domainVisitOutcome(value.outcome);
     const freshEvidence = { ...value.evidence, capturedAt: value.recordedAt };
@@ -921,6 +994,9 @@ export function TraceOpsApp() {
       onOpenWork={(id) => setDetail({ kind: "work", id })}
       onOpenAsset={(id) => setDetail({ kind: "asset", id })}
       onClassify={(id) => { setClassificationWorkId(id); setDrawer("classify-work"); }}
+      canClassify={hasPermission("classifyWork")}
+      canIssueVendorWork={hasPermission("issueVendorWork")}
+      canSimulateVendorResponse={hasPermission("simulateVendorResponse")}
     />
   ) : view === "today" ? (
     <TodayView
@@ -932,13 +1008,18 @@ export function TraceOpsApp() {
       onNavigate={navigate}
       onOpen={setDetail}
       onCreate={() => openWorkOrderDrawer()}
-      onStorePortal={() => setDrawer("store-portal")}
-      onVisit={() => { setVisitStoreId(null); setDrawer("visit"); }}
+      onStorePortal={() => { if (guardPermission("recordVisits", "open the store portal")) setDrawer("store-portal"); }}
+      onVisit={() => { if (!guardPermission("recordVisits", "record vendor visits")) return; setVisitStoreId(null); setDrawer("visit"); }}
+      scopeLabel={scopeLabel}
+      roleLabel={rolePolicy.label}
+      canCreateWork={hasPermission("createWork")}
+      canUseStorePortal={hasPermission("recordVisits")}
+      canRecordVisits={hasPermission("recordVisits")}
     />
   ) : view === "stores" ? (
-    <StoresView dataset={dataset} onOpen={(id) => setDetail({ kind: "store", id })} onCreate={() => openWorkOrderDrawer()} onNewStore={() => setDrawer("new-store")} />
+    <StoresView dataset={dataset} onOpen={(id) => setDetail({ kind: "store", id })} onCreate={() => openWorkOrderDrawer()} onNewStore={() => setDrawer("new-store")} canCreateWork={hasPermission("createWork")} canCreateStore={hasPermission("createStore")} />
   ) : view === "work" ? (
-    <WorkView dataset={dataset} onOpen={(id) => setDetail({ kind: "work", id })} onCreate={() => openWorkOrderDrawer()} />
+    <WorkView dataset={dataset} onOpen={(id) => setDetail({ kind: "work", id })} onCreate={() => openWorkOrderDrawer()} canCreateWork={hasPermission("createWork")} />
   ) : view === "vendors" ? (
     <VendorsView dataset={dataset} onOpen={(id) => setDetail({ kind: "vendor", id })} />
   ) : view === "spend" ? (
@@ -958,7 +1039,7 @@ export function TraceOpsApp() {
   ) : view === "pm" ? (
     <PmView dataset={dataset} onOpenWork={(id) => setDetail({ kind: "work", id })} />
   ) : (
-    <ReportsView dataset={dataset} savedReports={savedReports} onSave={(title) => setSavedReports((current) => [title, ...current])} />
+    <ReportsView dataset={dataset} savedReports={savedReports} onSave={(title) => setSavedReports((current) => [title, ...current])} canGenerate={hasPermission("generateReports")} scopeLabel={scopeLabel} />
   );
 
   const drawerTitle =
@@ -998,15 +1079,14 @@ export function TraceOpsApp() {
         <div className="to-org-switcher"><small>Demo organization</small><strong>{dataset.organization.displayName}</strong></div>
         <p className="to-nav-label">Operate</p>
         <nav className="to-nav" aria-label="Main navigation">
-          {navItems.slice(0, 4).map((item) => <NavButton key={item.view} item={item} active={view === item.view && !detail} onClick={() => navigate(item.view)} />)}
+          {roleNavItems.filter((item) => ["today", "stores", "work", "vendors"].includes(item.view)).map((item) => <NavButton key={item.view} item={item} active={view === item.view && !detail} onClick={() => navigate(item.view)} />)}
         </nav>
         <p className="to-nav-label">Understand</p>
         <nav className="to-nav" aria-label="Intelligence navigation">
           {intelligenceNavItems.map((item) => <NavButton key={item.view} item={item} active={view === item.view && !detail} onClick={() => navigate(item.view)} />)}
         </nav>
-        <p className="to-nav-label">Configure</p>
-        <nav className="to-nav"><button type="button" onClick={() => setDrawer("capabilities")}><Settings2 /> Suite settings</button></nav>
-        <div className="to-sidebar-foot"><span className="to-demo-pill">Demo mode</span><br />15 fictional stores · 5 approved vendors<br />All financials derive from source records.</div>
+        {hasPermission("manageSuite") ? <><p className="to-nav-label">Configure</p><nav className="to-nav"><button type="button" onClick={() => setDrawer("capabilities")}><Settings2 /> Suite settings</button></nav></> : null}
+        <div className="to-sidebar-foot"><span className="to-demo-pill">Demo mode</span><br />{scopeLabel}<br />{dataset.vendors.length} approved vendors · source-linked financials.</div>
       </aside>
 
       <main className="to-main">
@@ -1027,14 +1107,19 @@ export function TraceOpsApp() {
           </div>
           <div className="to-top-actions">
             <button className="to-icon-button" type="button" aria-label="Notifications" onClick={() => setNotice(`${openExceptions.length} open exceptions are included in the Today queue.`)}><Bell /></button>
-            <select className="to-role" value={role} onChange={(event) => setRole(event.target.value)} aria-label="Demo role">
-              <option>Facilities manager</option><option>Owner / executive</option><option>Regional manager</option><option>Store manager</option><option>Finance reviewer</option>
+            <select className="to-role" value={roleId} onChange={(event) => changeRole(event.target.value as DemoRoleId)} aria-label="Demo role">
+              {demoRolePolicies.map((policy) => <option value={policy.id} key={policy.id}>{policy.label}</option>)}
             </select>
-            <button className="to-icon-button" type="button" aria-label="User profile" onClick={() => setNotice(`Viewing Demo Mode as ${role}. No separate login is required.`)}><UserRound /></button>
+            <button className="to-icon-button" type="button" aria-label="User profile" onClick={() => setNotice(`Viewing Demo Mode as ${activePerson?.displayName ?? rolePolicy.label} · ${scopeLabel}.`)}><UserRound /></button>
           </div>
         </header>
 
         <div className="to-page">
+          <div className="to-role-context" data-readonly={!Object.entries(rolePolicy.permissions).some(([key, allowed]) => key !== "generateReports" && allowed)}>
+            <span className="to-avatar">{initials(activePerson?.displayName ?? rolePolicy.label)}</span>
+            <span><small>Current demo perspective</small><strong>{activePerson?.displayName ?? rolePolicy.label} · {rolePolicy.label}</strong></span>
+            <span className="to-role-scope"><strong>{scopeLabel}</strong><small>{rolePolicy.accessSummary}</small></span>
+          </div>
           {notice ? <div className="to-notice"><CheckCircle2 /><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label="Dismiss"><X /></button></div> : null}
           {rendered}
         </div>
@@ -1103,14 +1188,21 @@ function DrawerShell({ title, subtitle, onClose, children }: { title: string; su
   return <div className="to-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><aside ref={dialogRef} tabIndex={-1} className="to-drawer" role="dialog" aria-modal="true" aria-label={title}><header className="to-drawer-head"><div><h2>{title}</h2><p>{subtitle}</p></div><button className="to-close" type="button" onClick={onClose} aria-label="Close"><X /></button></header><div className="to-drawer-body">{children}</div></aside></div>;
 }
 
-function TodayView({ dataset, activeVisits, openWork, exceptions, invoicedSpend, onNavigate, onOpen, onCreate, onStorePortal, onVisit }: { dataset: DemoDataset; activeVisits: Visit[]; openWork: WorkOrder[]; exceptions: ExceptionRecord[]; invoicedSpend: number; onNavigate: (view: View) => void; onOpen: (detail: Detail) => void; onCreate: () => void; onStorePortal: () => void; onVisit: () => void }) {
+function TodayView({ dataset, activeVisits, openWork, exceptions, invoicedSpend, onNavigate, onOpen, onCreate, onStorePortal, onVisit, scopeLabel, roleLabel, canCreateWork, canUseStorePortal, canRecordVisits }: { dataset: DemoDataset; activeVisits: Visit[]; openWork: WorkOrder[]; exceptions: ExceptionRecord[]; invoicedSpend: number; onNavigate: (view: View) => void; onOpen: (detail: Detail) => void; onCreate: () => void; onStorePortal: () => void; onVisit: () => void; scopeLabel: string; roleLabel: string; canCreateWork: boolean; canUseStorePortal: boolean; canRecordVisits: boolean }) {
   const critical = openWork.filter((work) => work.priority === "emergency" || work.priority === "urgent");
   const invoiceExceptions = exceptions.filter((record) => record.invoiceId);
+  const heading = roleLabel === "Store manager"
+    ? `${scopeLabel.split(" · ")[0]} needs attention today.`
+    : roleLabel === "Regional manager"
+      ? `${scopeLabel.split(" · ")[0]} needs attention today.`
+      : roleLabel === "Owner / executive"
+        ? "Portfolio signals worth your attention."
+        : "Here’s what needs attention today.";
   return <>
-    <PageHead eyebrow="Monday, August 10 · All stores" title="Here’s what needs attention today." description="Start with active vendor visits and exceptions. Every operational signal connects to the work, evidence, cost, and store behind it.">
-      <button className="to-button" type="button" onClick={onStorePortal}><StoreIcon /> Store portal</button>
-      <button className="to-button" type="button" onClick={onVisit}><MapPin /> Vendor check-in</button>
-      <button className="to-button primary" type="button" onClick={onCreate}><Plus /> New work order</button>
+    <PageHead eyebrow={`Monday, August 10 · ${scopeLabel}`} title={heading} description="Every signal below is limited to this role’s assigned scope and connects to its work, evidence, cost, and store source records.">
+      {canUseStorePortal ? <button className="to-button" type="button" onClick={onStorePortal}><StoreIcon /> Store portal</button> : null}
+      {canRecordVisits ? <button className="to-button" type="button" onClick={onVisit}><MapPin /> Vendor check-in</button> : null}
+      {canCreateWork ? <button className="to-button primary" type="button" onClick={onCreate}><Plus /> New work order</button> : null}
     </PageHead>
     <section className="to-kpi-grid">
       <button className="to-kpi" type="button" onClick={() => onNavigate("work")}><div className="to-kpi-top"><span>Active vendor visits</span><span className="to-kpi-icon"><MapPin /></span></div><strong>{activeVisits.length}</strong><span>Across {new Set(activeVisits.map((visit) => visit.storeId)).size} stores right now</span></button>
@@ -1120,7 +1212,7 @@ function TodayView({ dataset, activeVisits, openWork, exceptions, invoicedSpend,
     </section>
     <section className="to-grid two">
       <article className="to-panel"><header className="to-panel-head"><div><h2>Priority exceptions</h2><p>Manage the exceptions, not every routine job.</p></div><button className="to-link-button" type="button" onClick={() => onNavigate("work")}>View all <ArrowRight /></button></header><div className="to-exception-list">{exceptions.slice(0, 6).map((exception) => <button className="to-exception" type="button" key={exception.id} onClick={() => exception.workOrderId ? onOpen({ kind: "work", id: exception.workOrderId }) : exception.storeId ? onOpen({ kind: "store", id: exception.storeId }) : undefined}><span className="to-exception-icon" data-tone={exception.severity === "critical" ? "red" : exception.invoiceId ? "blue" : undefined}>{exception.invoiceId ? <ReceiptText /> : exception.type === "visit_without_work_order" ? <MapPin /> : <AlertTriangle />}</span><span className="to-record-primary"><strong>{exception.title}</strong><span>{exception.description}</span></span><span className="to-record-meta">{exception.storeId ? `Store ${dataset.stores.find((store) => store.id === exception.storeId)?.storeNumber}` : "Portfolio"}<br />Due {dateLabel(exception.dueAt)}</span><Badge value={exception.severity} /></button>)}</div></article>
-      <article className="to-panel"><header className="to-panel-head"><div><h2>Onsite now</h2><p>One visit record across QR, link, kiosk, and app.</p></div><button className="to-link-button" type="button" onClick={onVisit}>Check in <ArrowRight /></button></header><div className="to-panel-body"><div className="to-visit-list">{activeVisits.length ? activeVisits.map((visit) => { const store = dataset.stores.find((record) => record.id === visit.storeId); const vendor = dataset.vendors.find((record) => record.id === visit.vendorId); return <div className="to-visit" key={visit.id}><span className="to-avatar">{initials(visit.technicianName)}</span><span><strong>{visit.technicianName}</strong><span>{vendor?.displayName ?? "Internal maintenance"} · Store {store?.storeNumber}</span></span><time>{timeLabel(visit.checkedInAt)}</time></div>; }) : <div className="to-empty"><MapPin /><strong>No technicians onsite</strong><p>New check-ins will appear here immediately.</p></div>}</div></div></article>
+      <article className="to-panel"><header className="to-panel-head"><div><h2>Onsite now</h2><p>One visit record across QR, link, kiosk, and app.</p></div>{canRecordVisits ? <button className="to-link-button" type="button" onClick={onVisit}>Check in <ArrowRight /></button> : null}</header><div className="to-panel-body"><div className="to-visit-list">{activeVisits.length ? activeVisits.map((visit) => { const store = dataset.stores.find((record) => record.id === visit.storeId); const vendor = dataset.vendors.find((record) => record.id === visit.vendorId); return <div className="to-visit" key={visit.id}><span className="to-avatar">{initials(visit.technicianName)}</span><span><strong>{visit.technicianName}</strong><span>{vendor?.displayName ?? "Internal maintenance"} · Store {store?.storeNumber}</span></span><time>{timeLabel(visit.checkedInAt)}</time></div>; }) : <div className="to-empty"><MapPin /><strong>No technicians onsite</strong><p>New check-ins will appear here immediately.</p></div>}</div></div></article>
     </section>
     <section className="to-grid two"><SpendSnapshot dataset={dataset} onNavigate={onNavigate} /><StoreOutliers dataset={dataset} onOpen={(id) => onOpen({ kind: "store", id })} /></section>
   </>;
@@ -1138,16 +1230,16 @@ function StoreOutliers({ dataset, onOpen }: { dataset: DemoDataset; onOpen: (id:
   return <article className="to-panel"><header className="to-panel-head"><div><h2>Highest-cost stores</h2><p>Click a store to see the exact drivers.</p></div></header><div className="to-panel-body"><div className="to-bar-list">{rows.map((row) => <button className="to-bar-row to-link-row" type="button" key={row.store.id} onClick={() => onOpen(row.store.id)}><span className="to-bar-label"><strong>Store {row.store.storeNumber}</strong><span>{row.open} open work orders</span></span><span className="to-bar-track"><i style={{ width: `${Math.max(8, (row.spend / max) * 100)}%` }} /></span><b>{money(row.spend)}</b></button>)}</div></div></article>;
 }
 
-function StoresView({ dataset, onOpen, onCreate, onNewStore }: { dataset: DemoDataset; onOpen: (id: string) => void; onCreate: () => void; onNewStore: () => void }) {
+function StoresView({ dataset, onOpen, onCreate, onNewStore, canCreateWork, canCreateStore }: { dataset: DemoDataset; onOpen: (id: string) => void; onCreate: () => void; onNewStore: () => void; canCreateWork: boolean; canCreateStore: boolean }) {
   const [query, setQuery] = useState(""); const [regionId, setRegionId] = useState("all");
   const rows = dataset.stores.filter((store) => (regionId === "all" || store.regionId === regionId) && [store.storeNumber, store.name, store.normalizedAddress, ...store.searchTerms].join(" ").toLowerCase().includes(query.toLowerCase()));
-  return <><PageHead eyebrow={`${dataset.stores.length} active stores`} title="Find a store and understand it fast." description="Search by store number, name, address, city, or legacy identifier. Every store has one connected maintenance history."><button className="to-button" type="button" onClick={onNewStore}><Building2 /> New store</button><button className="to-button primary" type="button" onClick={onCreate}><Plus /> New work order</button></PageHead><div className="to-toolbar"><div className="to-field grow"><label htmlFor="store-search">Search stores</label><input id="store-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try 1042, Ridge Road, or Lakeside…" /></div><div className="to-field"><label htmlFor="region-filter">Region</label><select id="region-filter" value={regionId} onChange={(event) => setRegionId(event.target.value)}><option value="all">All regions</option>{dataset.regions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}</select></div><span className="to-filter-count">{rows.length} stores</span></div><div className="to-store-grid">{rows.map((store) => { const open = workForStore(dataset, store.id).filter((work) => !terminalStatuses.has(work.status)); const spend = storeSpend(dataset, store.id); const exceptions = dataset.exceptions.filter((record) => record.storeId === store.id && record.status !== "resolved"); return <button className="to-card" type="button" key={store.id} onClick={() => onOpen(store.id)}><header className="to-card-head"><div><h3>Store {store.storeNumber}</h3><p>{store.name}<br />{store.address.line1}, {store.address.city}, {store.address.state}</p></div>{exceptions.some((record) => record.severity === "critical") ? <Badge value="critical" /> : <Badge value="open" label="Operating" />}</header><div className="to-card-body"><div className="to-tags"><span className="to-tag">{words(store.format)}</span><span className="to-tag">{store.open24Hours ? "Open 24 hours" : "Extended hours"}</span></div></div><footer className="to-card-facts"><div><span>Open work</span><strong>{open.length}</strong></div><div><span>Linked spend</span><strong>{money(spend)}</strong></div><div><span>Exceptions</span><strong>{exceptions.length}</strong></div></footer></button>; })}</div></>;
+  return <><PageHead eyebrow={`${dataset.stores.length} active ${dataset.stores.length === 1 ? "store" : "stores"}`} title={dataset.stores.length === 1 ? "Your assigned store and its connected history." : "Find a store and understand it fast."} description="Search by store number, name, address, city, or legacy identifier. Results are limited to the current role’s scope.">{canCreateStore ? <button className="to-button" type="button" onClick={onNewStore}><Building2 /> New store</button> : null}{canCreateWork ? <button className="to-button primary" type="button" onClick={onCreate}><Plus /> New work order</button> : null}</PageHead><div className="to-toolbar"><div className="to-field grow"><label htmlFor="store-search">Search stores</label><input id="store-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try 104, West Broad, or Columbus…" /></div>{dataset.regions.length > 1 ? <div className="to-field"><label htmlFor="region-filter">Region</label><select id="region-filter" value={regionId} onChange={(event) => setRegionId(event.target.value)}><option value="all">All regions</option>{dataset.regions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}</select></div> : null}<span className="to-filter-count">{rows.length} {rows.length === 1 ? "store" : "stores"}</span></div><div className="to-store-grid">{rows.map((store) => { const open = workForStore(dataset, store.id).filter((work) => !terminalStatuses.has(work.status)); const spend = storeSpend(dataset, store.id); const exceptions = dataset.exceptions.filter((record) => record.storeId === store.id && record.status !== "resolved"); return <button className="to-card" type="button" key={store.id} onClick={() => onOpen(store.id)}><header className="to-card-head"><div><h3>Store {store.storeNumber}</h3><p>{store.name}<br />{store.address.line1}, {store.address.city}, {store.address.state}</p></div>{exceptions.some((record) => record.severity === "critical") ? <Badge value="critical" /> : <Badge value="open" label="Operating" />}</header><div className="to-card-body"><div className="to-tags"><span className="to-tag">{words(store.format)}</span><span className="to-tag">{store.open24Hours ? "Open 24 hours" : "Extended hours"}</span></div></div><footer className="to-card-facts"><div><span>Open work</span><strong>{open.length}</strong></div><div><span>Linked spend</span><strong>{money(spend)}</strong></div><div><span>Exceptions</span><strong>{exceptions.length}</strong></div></footer></button>; })}</div></>;
 }
 
-function WorkView({ dataset, onOpen, onCreate }: { dataset: DemoDataset; onOpen: (id: string) => void; onCreate: () => void }) {
+function WorkView({ dataset, onOpen, onCreate, canCreateWork }: { dataset: DemoDataset; onOpen: (id: string) => void; onCreate: () => void; canCreateWork: boolean }) {
   const [query, setQuery] = useState(""); const [status, setStatus] = useState("open");
   const rows = dataset.workOrders.filter((work) => (status === "all" || (status === "open" ? !terminalStatuses.has(work.status) : work.status === status)) && [work.number, work.title, work.problemDescription].join(" ").toLowerCase().includes(query.toLowerCase())).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return <><PageHead eyebrow="Customer work orders" title="One record from authorization to invoice." description="Internal and outside work stays connected. Vendor-issued work orders become the billing reference without replacing the vendor’s own dispatch system."><button className="to-button primary" type="button" onClick={onCreate}><Plus /> Create work order</button></PageHead><div className="to-toolbar"><div className="to-field grow"><label htmlFor="work-search">Search work</label><input id="work-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Work-order number, store, or problem…" /></div><div className="to-field"><label htmlFor="work-status">Status</label><select id="work-status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="open">All active</option><option value="awaiting_vendor_response">Awaiting vendor</option><option value="onsite">Onsite</option><option value="waiting_parts">Waiting on parts</option><option value="completed">Completed</option><option value="all">Everything</option></select></div><span className="to-filter-count">{rows.length} work orders</span></div><article className="to-panel to-table-wrap"><table className="to-table"><thead><tr><th>Work order</th><th>Store</th><th>Who handles it</th><th>Status</th><th>Next action</th><th>Cost</th></tr></thead><tbody>{rows.map((work) => { const store = dataset.stores.find((record) => record.id === work.storeId); const assignment = dataset.assignments.find((record) => record.workOrderId === work.id); const vendor = assignment?.partyType === "vendor" ? dataset.vendors.find((record) => record.id === assignment.partyId) : undefined; const team = assignment?.partyType === "team" ? dataset.teams.find((record) => record.id === assignment.partyId) : undefined; return <tr key={work.id} onClick={() => onOpen(work.id)}><td><strong>{work.number}</strong><small>{work.title}</small></td><td><strong>#{store?.storeNumber}</strong><small>{store?.address.city}</small></td><td>{vendor?.displayName ?? team?.name ?? (work.fulfillmentMode === "unassigned" ? "Choose later" : words(work.fulfillmentMode))}</td><td><Badge value={work.status} /></td><td>{work.accountable?.nextAction ?? "Review history"}<small>{work.accountable ? `Due ${dateLabel(work.accountable.dueAt)}` : ""}</small></td><td className="to-money">{money(workOrderCost(dataset, work.id))}</td></tr>; })}</tbody></table></article></>;
+  return <><PageHead eyebrow="Customer work orders" title="One record from authorization to invoice." description="Internal and outside work stays connected. Every result below is limited to the current role’s assigned stores.">{canCreateWork ? <button className="to-button primary" type="button" onClick={onCreate}><Plus /> Create work order</button> : null}</PageHead><div className="to-toolbar"><div className="to-field grow"><label htmlFor="work-search">Search work</label><input id="work-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Work-order number, store, or problem…" /></div><div className="to-field"><label htmlFor="work-status">Status</label><select id="work-status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="open">All active</option><option value="awaiting_vendor_response">Awaiting vendor</option><option value="onsite">Onsite</option><option value="waiting_parts">Waiting on parts</option><option value="completed">Completed</option><option value="all">Everything</option></select></div><span className="to-filter-count">{rows.length} work orders</span></div><article className="to-panel to-table-wrap"><table className="to-table"><thead><tr><th>Work order</th><th>Store</th><th>Who handles it</th><th>Status</th><th>Next action</th><th>Cost</th></tr></thead><tbody>{rows.map((work) => { const store = dataset.stores.find((record) => record.id === work.storeId); const assignment = dataset.assignments.find((record) => record.workOrderId === work.id); const vendor = assignment?.partyType === "vendor" ? dataset.vendors.find((record) => record.id === assignment.partyId) : undefined; const team = assignment?.partyType === "team" ? dataset.teams.find((record) => record.id === assignment.partyId) : undefined; return <tr key={work.id} onClick={() => onOpen(work.id)}><td><strong>{work.number}</strong><small>{work.title}</small></td><td><strong>#{store?.storeNumber}</strong><small>{store?.address.city}</small></td><td>{vendor?.displayName ?? team?.name ?? (work.fulfillmentMode === "unassigned" ? "Choose later" : words(work.fulfillmentMode))}</td><td><Badge value={work.status} /></td><td>{work.accountable?.nextAction ?? "Review history"}<small>{work.accountable ? `Due ${dateLabel(work.accountable.dueAt)}` : ""}</small></td><td className="to-money">{money(workOrderCost(dataset, work.id))}</td></tr>; })}</tbody></table></article></>;
 }
 
 function VendorsView({ dataset, onOpen }: { dataset: DemoDataset; onOpen: (id: string) => void }) {
@@ -1206,18 +1298,18 @@ function PmView({ dataset, onOpenWork }: { dataset: DemoDataset; onOpenWork: (id
   return <><PageHead eyebrow="Preventive maintenance" title="See what is due, missed, and actually completed." description="PM uses the same customer work order, vendor issuance, visit evidence, cost, and audit trail as reactive maintenance."></PageHead><section className="to-kpi-grid"><div className="to-kpi"><div className="to-kpi-top"><span>PM compliance</span><span className="to-kpi-icon"><CalendarCheck /></span></div><strong>{compliance}%</strong><span>{completed} completed of {denominator} due in the selected window</span></div><div className="to-kpi" data-tone="amber"><div className="to-kpi-top"><span>Due and upcoming</span><span className="to-kpi-icon"><Clock3 /></span></div><strong>{open.filter((record) => record.status === "due" || record.status === "upcoming").length}</strong><span>Across HVAC, refrigeration, and exterior service</span></div><div className="to-kpi" data-tone="coral"><div className="to-kpi-top"><span>Overdue</span><span className="to-kpi-icon"><AlertTriangle /></span></div><strong>{open.filter((record) => record.status === "overdue").length}</strong><span>Visible until resolved or waived with reason</span></div><div className="to-kpi" data-tone="blue"><div className="to-kpi-top"><span>Active plans</span><span className="to-kpi-icon"><ClipboardList /></span></div><strong>{dataset.pmPlans.filter((record) => record.active).length}</strong><span>Store, asset, and category schedules</span></div></section><article className="to-panel"><header className="to-panel-head"><div><h2>PM schedule</h2><p>Every row links to the occurrence and customer work order.</p></div></header><div className="to-table-wrap"><table className="to-table"><thead><tr><th>Plan</th><th>Store</th><th>Due</th><th>Assigned to</th><th>Status</th><th>Evidence</th></tr></thead><tbody>{dataset.pmOccurrences.sort((a, b) => a.dueAt.localeCompare(b.dueAt)).map((occurrence) => { const plan = dataset.pmPlans.find((record) => record.id === occurrence.pmPlanId); const store = dataset.stores.find((record) => record.id === occurrence.storeId); const vendor = plan?.assignedPartyType === "vendor" ? dataset.vendors.find((record) => record.id === plan.assignedPartyId) : undefined; const team = plan?.assignedPartyType === "team" ? dataset.teams.find((record) => record.id === plan.assignedPartyId) : undefined; return <tr key={occurrence.id} onClick={() => occurrence.workOrderId ? onOpenWork(occurrence.workOrderId) : undefined}><td><strong>{plan?.name}</strong><small>{plan?.cadence ? words(plan.cadence) : ""}</small></td><td>#{store?.storeNumber}<small>{store?.address.city}</small></td><td>{dateLabel(occurrence.dueAt)}</td><td>{vendor?.displayName ?? team?.name ?? "Unassigned"}</td><td><Badge value={occurrence.status} /></td><td>{plan?.requiredEvidence.map(words).join(" · ")}</td></tr>; })}</tbody></table></div></article></>;
 }
 
-function ReportsView({ dataset, savedReports, onSave }: { dataset: DemoDataset; savedReports: string[]; onSave: (title: string) => void }) {
-  const templates = [{ title: "Monthly owner operating review", description: "Spend, critical work, vendor exceptions, PM, and capital review across all 15 stores." }, { title: "Vendor accountability review", description: "Acceptance, observed visits, unresolved outcomes, return trips, and invoice evidence by provider." }, { title: "Refrigeration lifecycle review", description: "Store and asset outliers, repeat repairs, warranties, PM history, and source work orders." }];
-  return <><PageHead eyebrow="Management records" title="Explore live. Generate when it needs to be handed off." description="Dashboards remain interactive; generated reports preserve period, scope, cost basis, definitions, and source links."></PageHead><div className="to-store-grid">{templates.map((template) => <article className="to-card to-report-card" key={template.title}><header className="to-card-head"><div><h3>{template.title}</h3><p>{template.description}</p></div><FileText /></header><div className="to-card-body"><div className="to-tags"><span className="to-tag">All stores</span><span className="to-tag">Invoice-linked</span><span className="to-tag">Source records included</span></div></div><button className="to-card-action" type="button" onClick={() => onSave(`${template.title} · ${dateLabel(dataset.asOf)}`)}>Generate report <ArrowRight /></button></article>)}</div>{savedReports.length ? <article className="to-panel to-saved-reports"><header className="to-panel-head"><div><h2>Generated in this demo</h2><p>Each is a new immutable version.</p></div></header><div className="to-record-list">{savedReports.map((report, index) => <div className="to-record-row to-generated-report" key={`${report}-${index}`}><span className="to-exception-icon" data-tone="blue"><FileBarChart /></span><span className="to-record-primary"><strong>{report}</strong><span>{dataset.organization.displayName} · all stores · invoice-linked basis</span></span><Badge value="completed" label="Version 1" /></div>)}</div></article> : null}</>;
+function ReportsView({ dataset, savedReports, onSave, canGenerate, scopeLabel }: { dataset: DemoDataset; savedReports: string[]; onSave: (title: string) => void; canGenerate: boolean; scopeLabel: string }) {
+  const templates = [{ title: "Monthly owner operating review", description: `Spend, critical work, vendor exceptions, PM, and capital review across ${dataset.stores.length} ${dataset.stores.length === 1 ? "store" : "stores"}.` }, { title: "Vendor accountability review", description: "Acceptance, observed visits, unresolved outcomes, return trips, and invoice evidence by provider." }, { title: "Refrigeration lifecycle review", description: "Store and asset outliers, repeat repairs, warranties, PM history, and source work orders." }];
+  return <><PageHead eyebrow={`Management records · ${scopeLabel}`} title="Explore live. Generate when it needs to be handed off." description="Dashboards remain interactive; generated reports preserve the current role’s scope, period, cost basis, definitions, and source links."></PageHead><div className="to-store-grid">{templates.map((template) => <article className="to-card to-report-card" key={template.title}><header className="to-card-head"><div><h3>{template.title}</h3><p>{template.description}</p></div><FileText /></header><div className="to-card-body"><div className="to-tags"><span className="to-tag">{scopeLabel}</span><span className="to-tag">Invoice-linked</span><span className="to-tag">Source records included</span></div></div>{canGenerate ? <button className="to-card-action" type="button" onClick={() => onSave(`${template.title} · ${scopeLabel} · ${dateLabel(dataset.asOf)}`)}>Generate report <ArrowRight /></button> : null}</article>)}</div>{savedReports.length ? <article className="to-panel to-saved-reports"><header className="to-panel-head"><div><h2>Generated in this demo</h2><p>Each is a new immutable version.</p></div></header><div className="to-record-list">{savedReports.map((report, index) => <div className="to-record-row to-generated-report" key={`${report}-${index}`}><span className="to-exception-icon" data-tone="blue"><FileBarChart /></span><span className="to-record-primary"><strong>{report}</strong><span>{dataset.organization.displayName} · {scopeLabel} · invoice-linked basis</span></span><Badge value="completed" label="Version 1" /></div>)}</div></article> : null}</>;
 }
 
-function DetailView({ dataset, detail, onBack, onVendorRespond, onIssue, onOpenWork, onOpenAsset, onClassify }: { dataset: DemoDataset; detail: NonNullable<Detail>; onBack: () => void; onVendorRespond: (workOrderId: string, response: "accepted" | "declined" | "date_proposed") => void; onIssue: (workOrderId: string) => void; onOpenWork: (workOrderId: string) => void; onOpenAsset: (assetId: string) => void; onClassify: (workOrderId: string) => void }) {
+function DetailView({ dataset, detail, onBack, onVendorRespond, onIssue, onOpenWork, onOpenAsset, onClassify, canClassify, canIssueVendorWork, canSimulateVendorResponse }: { dataset: DemoDataset; detail: NonNullable<Detail>; onBack: () => void; onVendorRespond: (workOrderId: string, response: "accepted" | "declined" | "date_proposed") => void; onIssue: (workOrderId: string) => void; onOpenWork: (workOrderId: string) => void; onOpenAsset: (assetId: string) => void; onClassify: (workOrderId: string) => void; canClassify: boolean; canIssueVendorWork: boolean; canSimulateVendorResponse: boolean }) {
   if (detail.kind === "store") { const store = dataset.stores.find((record) => record.id === detail.id); if (!store) return null; return <StoreDetail dataset={dataset} store={store} onBack={onBack} onOpenWork={onOpenWork} onOpenAsset={onOpenAsset} />; }
   if (detail.kind === "vendor") { const vendor = dataset.vendors.find((record) => record.id === detail.id); if (!vendor) return null; return <VendorDetail dataset={dataset} vendor={vendor} onBack={onBack} onOpenWork={onOpenWork} />; }
   if (detail.kind === "asset") { const asset = dataset.assets.find((record) => record.id === detail.id); if (!asset) return null; return <AssetDetail dataset={dataset} asset={asset} onBack={onBack} onOpenWork={onOpenWork} />; }
   const work = dataset.workOrders.find((record) => record.id === detail.id);
   if (!work) return null;
-  return <><div className="to-detail-tools"><button className="to-button" type="button" onClick={() => onClassify(work.id)}><PackageSearch /> Update equipment classification</button></div><WorkDetail dataset={dataset} work={work} onBack={onBack} onVendorRespond={onVendorRespond} onIssue={onIssue} onOpenAsset={onOpenAsset} /></>;
+  return <>{canClassify ? <div className="to-detail-tools"><button className="to-button" type="button" onClick={() => onClassify(work.id)}><PackageSearch /> Update equipment classification</button></div> : null}<WorkDetail dataset={dataset} work={work} onBack={onBack} onVendorRespond={onVendorRespond} onIssue={onIssue} onOpenAsset={onOpenAsset} canIssueVendorWork={canIssueVendorWork} canSimulateVendorResponse={canSimulateVendorResponse} /></>;
 }
 
 function StoreDetail({ dataset, store, onBack, onOpenWork, onOpenAsset }: { dataset: DemoDataset; store: Store; onBack: () => void; onOpenWork: (id: string) => void; onOpenAsset: (id: string) => void }) {
@@ -1247,9 +1339,9 @@ function AssetDetail({ dataset, asset, onBack, onOpenWork }: { dataset: DemoData
   return <><section className="to-detail-hero"><div className="to-detail-copy"><button type="button" onClick={onBack}><ArrowLeft /> Back to equipment</button><p className="to-eyebrow">Store {store?.storeNumber} · {category?.label}</p><h1>{asset.name}</h1><p>{asset.assetCode} · {taxonomyPath} · {asset.locationDetail}</p></div><div className="to-detail-summary"><div><span>Linked repair spend</span><strong>{money(spend)}</strong></div><div><span>Replacement estimate</span><strong>{money(asset.replacementEstimateMinor)}</strong></div><div><span>Age</span><strong>{age} years</strong></div><div><span>Observed visits</span><strong>{visits.length}</strong></div></div></section><section className="to-grid two"><article className="to-panel"><header className="to-panel-head"><div><h2>Equipment record</h2><p>Identity, location, supplier, and warranty context</p></div><Badge value={asset.status} /></header><div className="to-panel-body"><dl className="to-mini-dl"><div><dt>Manufacturer / model</dt><dd>{asset.manufacturer} {asset.model}</dd></div><div><dt>Serial number</dt><dd>{asset.serialNumber}</dd></div><div><dt>Installed</dt><dd>{dateLabel(asset.installedOn)} · expected life {asset.expectedLifeYears} years</dd></div><div><dt>Criticality</dt><dd>{words(asset.criticality)}</dd></div><div><dt>Warranty</dt><dd>{asset.warranty ? `${asset.warranty.provider} through ${dateLabel(asset.warranty.endsOn)} · ${asset.warranty.coverage}` : "No warranty recorded"}</dd></div></dl></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Lifecycle review</h2><p>Transparent rules, not an opaque health score</p></div>{candidate ? <Badge value="warning" label="Capital review" /> : <Badge value="active" label="Monitor" />}</header><div className="to-panel-body">{candidate ? <><div className="to-lifecycle-metric"><strong>{candidate.repairToReplacementPercentage}%</strong><span>documented repair spend versus replacement estimate</span></div><ul className="to-reason-list">{candidate.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul><details className="to-method"><summary>Why this record qualifies</summary><ul>{candidate.thresholds.map((threshold) => <li key={threshold}>{threshold}</li>)}</ul></details><p className="to-callout"><ShieldCheck /> Capital review is recommended. TraceOps does not automatically claim this asset must be replaced.</p></> : <div className="to-empty"><ShieldCheck /><strong>No capital-review rule is triggered</strong><p>Cost, repeat work, and service-life thresholds remain visible and source-linked.</p></div>}</div></article></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Components</h2><p>Optional depth for serviceable parts</p></div><span className="to-filter-count">{components.length} tracked</span></header><div className="to-record-list">{components.map((component) => <div className="to-record-row to-component-row" key={component.id}><span className="to-exception-icon" data-tone="blue"><PackageSearch /></span><span className="to-record-primary"><strong>{component.name}</strong><span>{component.componentCode} · {component.componentType}{component.manufacturer ? ` · ${component.manufacturer}` : ""}</span></span><Badge value={component.status} /></div>)}</div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Preventive maintenance</h2><p>The same work, visit, and evidence chain</p></div></header><div className="to-panel-body">{pmPlans.length ? pmPlans.map((plan) => <dl className="to-mini-dl" key={plan.id}><div><dt>Plan</dt><dd>{plan.name}</dd></div><div><dt>Cadence</dt><dd>{words(plan.cadence)}</dd></div><div><dt>Next due</dt><dd>{dateLabel(plan.nextDueAt)}</dd></div><div><dt>Evidence</dt><dd>{plan.requiredEvidence.map(words).join(" · ")}</dd></div></dl>) : <div className="to-empty"><CalendarCheck /><strong>No asset-specific PM plan</strong><p>Category or store-level PM may still cover this equipment.</p></div>}</div></article></section><article className="to-panel"><header className="to-panel-head"><div><h2>Service history</h2><p>Open any customer work order to see visits, invoice references, and audit events.</p></div></header><div className="to-table-wrap"><table className="to-table"><thead><tr><th>Customer WO</th><th>Date</th><th>Problem</th><th>Status</th><th>Visits</th><th>Linked cost</th></tr></thead><tbody>{work.map((record) => <tr key={record.id}><td><button className="to-link-button to-cell-link" type="button" onClick={() => onOpenWork(record.id)}><strong>{record.number}</strong><ChevronRight /></button></td><td>{dateLabel(record.createdAt)}</td><td>{record.title}</td><td><Badge value={record.status} /></td><td>{dataset.visits.filter((visit) => visit.workOrderId === record.id).length}</td><td className="to-money">{money(workOrderCost(dataset, record.id))}</td></tr>)}</tbody></table></div></article></>;
 }
 
-function WorkDetail({ dataset, work, onBack, onVendorRespond, onIssue, onOpenAsset }: { dataset: DemoDataset; work: WorkOrder; onBack: () => void; onVendorRespond: (id: string, response: "accepted" | "declined" | "date_proposed") => void; onIssue: (id: string) => void; onOpenAsset: (id: string) => void }) {
+function WorkDetail({ dataset, work, onBack, onVendorRespond, onIssue, onOpenAsset, canIssueVendorWork, canSimulateVendorResponse }: { dataset: DemoDataset; work: WorkOrder; onBack: () => void; onVendorRespond: (id: string, response: "accepted" | "declined" | "date_proposed") => void; onIssue: (id: string) => void; onOpenAsset: (id: string) => void; canIssueVendorWork: boolean; canSimulateVendorResponse: boolean }) {
   const store = dataset.stores.find((record) => record.id === work.storeId); const assignment = dataset.assignments.find((record) => record.workOrderId === work.id); const vendor = assignment?.partyType === "vendor" ? dataset.vendors.find((record) => record.id === assignment.partyId) : undefined; const issuance = dataset.vendorIssuances.find((record) => record.workOrderId === work.id); const visits = dataset.visits.filter((record) => record.workOrderId === work.id); const invoiceLinks = dataset.invoiceWorkLinks.filter((record) => record.workOrderId === work.id); const invoices = invoiceLinks.map((link) => dataset.invoices.find((record) => record.id === link.invoiceId)).filter(Boolean); const events = dataset.auditEvents.filter((event) => event.entityId === work.id || event.payloadSnapshot.workOrderId === work.id).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
-  return <><section className="to-detail-hero"><div className="to-detail-copy"><button type="button" onClick={onBack}><ArrowLeft /> Back to work orders</button><p className="to-eyebrow">{work.number}</p><h1>{work.title}</h1><p>Store {store?.storeNumber} · {work.problemDescription}</p></div><div className="to-detail-summary"><div><span>Status</span><strong>{words(work.status)}</strong></div><div><span>Handler</span><strong>{vendor?.displayName ?? words(work.fulfillmentMode)}</strong></div><div><span>NTE</span><strong>{work.notToExceedMinor ? money(work.notToExceedMinor) : "Not used"}</strong></div><div><span>Linked cost</span><strong>{money(workOrderCost(dataset, work.id))}</strong></div></div></section><section className="to-grid two"><article className="to-panel"><header className="to-panel-head"><div><h2>Customer work order</h2><p>Operator source record and vendor billing reference</p></div><Badge value={work.status} /></header><div className="to-panel-body to-definition-list"><dl><div><dt>Store</dt><dd>#{store?.storeNumber} · {store?.normalizedAddress}</dd></div><div><dt>Requested work</dt><dd>{work.scopeOfWork}</dd></div><div><dt>Priority</dt><dd>{words(work.priority)}</dd></div><div><dt>Requested window</dt><dd>{dateLabel(work.requestedWindow.startsAt)} – {dateLabel(work.requestedWindow.endsAt)}</dd></div><div><dt>Classification</dt><dd>{work.classificationDeferred ? "Store-level now · equipment can be added later" : dataset.categories.find((category) => category.id === work.categoryId)?.label}{work.assetId ? <button className="to-link-button" type="button" onClick={() => onOpenAsset(work.assetId!)}>View linked asset <ChevronRight /></button> : null}</dd></div><div><dt>Next accountable action</dt><dd>{work.accountable?.nextAction ?? "Review and close"}</dd></div></dl></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Vendor issuance</h2><p>Versioned authorization sent outside the company</p></div>{issuance ? <Badge value={issuance.response ?? issuance.deliveryStatus} /> : <Badge value="ready_to_issue" />}</header><div className="to-panel-body">{vendor ? <><div className="to-vendor-summary"><span className="to-avatar">{initials(vendor.displayName)}</span><div><strong>{vendor.displayName}</strong><span>{vendor.specialties.map((specialty) => specialty.label).join(" · ")}</span></div></div>{issuance ? <dl className="to-mini-dl"><div><dt>Issued</dt><dd>{dateLabel(issuance.issuedAt)} · Version {issuance.version}</dd></div><div><dt>Delivery</dt><dd>{words(issuance.deliveryStatus)} by {issuance.channels.join(" + ")}</dd></div><div><dt>Vendor ticket</dt><dd>{issuance.vendorReference ?? "Not provided"}</dd></div><div><dt>Invoice instruction</dt><dd>{issuance.customerBillingInstruction}</dd></div></dl> : <><p className="to-callout">Vendor selected, but the customer work order has not been sent.</p><button className="to-button primary to-full" type="button" onClick={() => onIssue(work.id)}><ArrowRight /> Review and send authorization</button></>}{issuance && !issuance.response && issuance.acceptanceRequested !== false ? <div className="to-response-actions"><button className="to-button primary" type="button" onClick={() => onVendorRespond(work.id, "accepted")}><CheckCircle2 /> Accept</button><button className="to-button" type="button" onClick={() => onVendorRespond(work.id, "date_proposed")}><CalendarCheck /> Propose date</button><button className="to-button ghost" type="button" onClick={() => onVendorRespond(work.id, "declined")}>Decline</button></div> : null}</> : <div className="to-empty"><Users /><strong>{work.fulfillmentMode === "unassigned" ? "Handler not chosen" : "Internal work"}</strong><p>{work.accountable?.nextAction}</p></div>}</div></article></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Visit evidence</h2><p>Approximate presence context—not certified labor.</p></div></header><div className="to-panel-body"><div className="to-visit-list">{visits.length ? visits.map((visit) => <div className="to-visit" key={visit.id}><span className="to-avatar">{initials(visit.technicianName)}</span><span><strong>{visit.technicianName}</strong><span>{words(visit.evidenceStrength)} · {visit.outcome ? words(visit.outcome) : "Onsite now"}</span></span><time>{timeLabel(visit.checkedInAt)}–{visit.checkedOutAt ? timeLabel(visit.checkedOutAt) : "now"}</time></div>) : <div className="to-empty"><MapPin /><strong>No recorded visits</strong><p>A QR, secure-link, or kiosk check-in will appear here.</p></div>}</div></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Invoice and cost</h2><p>References remain separate and auditable.</p></div></header><div className="to-panel-body">{invoices.length ? invoices.map((invoice) => invoice ? <dl className="to-mini-dl" key={invoice.id}><div><dt>Vendor invoice</dt><dd>{invoice.invoiceNumber}</dd></div><div><dt>Customer WO reference</dt><dd>{invoice.customerWorkOrderReferences.join(", ") || "Missing"}</dd></div><div><dt>Amount</dt><dd>{money(invoiceTotal(dataset, invoice.id))}</dd></div><div><dt>Review state</dt><dd><Badge value={invoice.status} /></dd></div></dl> : null) : <div className="to-empty"><ReceiptText /><strong>No invoice linked yet</strong><p>The work order remains valid even when the customer does not use invoice safeguards.</p></div>}</div></article></section><article className="to-panel"><header className="to-panel-head"><div><h2>Permanent timeline</h2><p>Original events and later corrections remain visible.</p></div></header><div className="to-timeline">{events.slice(0, 10).map((event) => <div key={event.id}><i /><span><strong>{event.summary}</strong><small>{dateLabel(event.occurredAt)} · {words(event.channel)}</small></span></div>)}</div></article></>;
+  return <><section className="to-detail-hero"><div className="to-detail-copy"><button type="button" onClick={onBack}><ArrowLeft /> Back to work orders</button><p className="to-eyebrow">{work.number}</p><h1>{work.title}</h1><p>Store {store?.storeNumber} · {work.problemDescription}</p></div><div className="to-detail-summary"><div><span>Status</span><strong>{words(work.status)}</strong></div><div><span>Handler</span><strong>{vendor?.displayName ?? words(work.fulfillmentMode)}</strong></div><div><span>NTE</span><strong>{work.notToExceedMinor ? money(work.notToExceedMinor) : "Not used"}</strong></div><div><span>Linked cost</span><strong>{money(workOrderCost(dataset, work.id))}</strong></div></div></section><section className="to-grid two"><article className="to-panel"><header className="to-panel-head"><div><h2>Customer work order</h2><p>Operator source record and vendor billing reference</p></div><Badge value={work.status} /></header><div className="to-panel-body to-definition-list"><dl><div><dt>Store</dt><dd>#{store?.storeNumber} · {store?.normalizedAddress}</dd></div><div><dt>Requested work</dt><dd>{work.scopeOfWork}</dd></div><div><dt>Priority</dt><dd>{words(work.priority)}</dd></div><div><dt>Requested window</dt><dd>{dateLabel(work.requestedWindow.startsAt)} – {dateLabel(work.requestedWindow.endsAt)}</dd></div><div><dt>Classification</dt><dd>{work.classificationDeferred ? "Store-level now · equipment can be added later" : dataset.categories.find((category) => category.id === work.categoryId)?.label}{work.assetId ? <button className="to-link-button" type="button" onClick={() => onOpenAsset(work.assetId!)}>View linked asset <ChevronRight /></button> : null}</dd></div><div><dt>Next accountable action</dt><dd>{work.accountable?.nextAction ?? "Review and close"}</dd></div></dl></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Vendor issuance</h2><p>Versioned authorization sent outside the company</p></div>{issuance ? <Badge value={issuance.response ?? issuance.deliveryStatus} /> : <Badge value="ready_to_issue" />}</header><div className="to-panel-body">{vendor ? <><div className="to-vendor-summary"><span className="to-avatar">{initials(vendor.displayName)}</span><div><strong>{vendor.displayName}</strong><span>{vendor.specialties.map((specialty) => specialty.label).join(" · ")}</span></div></div>{issuance ? <dl className="to-mini-dl"><div><dt>Issued</dt><dd>{dateLabel(issuance.issuedAt)} · Version {issuance.version}</dd></div><div><dt>Delivery</dt><dd>{words(issuance.deliveryStatus)} by {issuance.channels.join(" + ")}</dd></div><div><dt>Vendor ticket</dt><dd>{issuance.vendorReference ?? "Not provided"}</dd></div><div><dt>Invoice instruction</dt><dd>{issuance.customerBillingInstruction}</dd></div></dl> : <><p className="to-callout">Vendor selected, but the customer work order has not been sent.</p>{canIssueVendorWork ? <button className="to-button primary to-full" type="button" onClick={() => onIssue(work.id)}><ArrowRight /> Review and send authorization</button> : <p className="to-permission-note"><ShieldCheck /> Read-only role · authorization controls are hidden.</p>}</>}{issuance && !issuance.response && issuance.acceptanceRequested !== false && canSimulateVendorResponse ? <div className="to-response-actions"><button className="to-button primary" type="button" onClick={() => onVendorRespond(work.id, "accepted")}><CheckCircle2 /> Accept</button><button className="to-button" type="button" onClick={() => onVendorRespond(work.id, "date_proposed")}><CalendarCheck /> Propose date</button><button className="to-button ghost" type="button" onClick={() => onVendorRespond(work.id, "declined")}>Decline</button></div> : null}</> : <div className="to-empty"><Users /><strong>{work.fulfillmentMode === "unassigned" ? "Handler not chosen" : "Internal work"}</strong><p>{work.accountable?.nextAction}</p></div>}</div></article></section><section className="to-grid equal"><article className="to-panel"><header className="to-panel-head"><div><h2>Visit evidence</h2><p>Approximate presence context—not certified labor.</p></div></header><div className="to-panel-body"><div className="to-visit-list">{visits.length ? visits.map((visit) => <div className="to-visit" key={visit.id}><span className="to-avatar">{initials(visit.technicianName)}</span><span><strong>{visit.technicianName}</strong><span>{words(visit.evidenceStrength)} · {visit.outcome ? words(visit.outcome) : "Onsite now"}</span></span><time>{timeLabel(visit.checkedInAt)}–{visit.checkedOutAt ? timeLabel(visit.checkedOutAt) : "now"}</time></div>) : <div className="to-empty"><MapPin /><strong>No recorded visits</strong><p>A QR, secure-link, or kiosk check-in will appear here.</p></div>}</div></div></article><article className="to-panel"><header className="to-panel-head"><div><h2>Invoice and cost</h2><p>References remain separate and auditable.</p></div></header><div className="to-panel-body">{invoices.length ? invoices.map((invoice) => invoice ? <dl className="to-mini-dl" key={invoice.id}><div><dt>Vendor invoice</dt><dd>{invoice.invoiceNumber}</dd></div><div><dt>Customer WO reference</dt><dd>{invoice.customerWorkOrderReferences.join(", ") || "Missing"}</dd></div><div><dt>Amount</dt><dd>{money(invoiceTotal(dataset, invoice.id))}</dd></div><div><dt>Review state</dt><dd><Badge value={invoice.status} /></dd></div></dl> : null) : <div className="to-empty"><ReceiptText /><strong>No invoice linked yet</strong><p>The work order remains valid even when the customer does not use invoice safeguards.</p></div>}</div></article></section><article className="to-panel"><header className="to-panel-head"><div><h2>Permanent timeline</h2><p>Original events and later corrections remain visible.</p></div></header><div className="to-timeline">{events.slice(0, 10).map((event) => <div key={event.id}><i /><span><strong>{event.summary}</strong><small>{dateLabel(event.occurredAt)} · {words(event.channel)}</small></span></div>)}</div></article></>;
 }
 
 function VendorDetail({ dataset, vendor, onBack, onOpenWork }: { dataset: DemoDataset; vendor: Vendor; onBack: () => void; onOpenWork: (id: string) => void }) {
@@ -1273,7 +1365,7 @@ function StorePortal({ dataset, onWork, onVisit, onOpenIssues }: { dataset: Demo
   return <div className="to-storefront"><header><span className="to-demo-pill">Store device demo</span><p>Store {store.storeNumber}</p><h3>What do you need?</h3><span>{store.address.line1}, {store.address.city}</span></header><div className="to-storefront-actions"><button type="button" onClick={onWork}><span><AlertTriangle /></span><strong>Report an issue</strong><small>Tell us what you see. No equipment knowledge required.</small><ChevronRight /></button><button type="button" onClick={() => onVisit(store.id)}><span><MapPin /></span><strong>Vendor sign in or out</strong><small>Technician self-service from this store computer.</small><ChevronRight /></button><button type="button" onClick={onOpenIssues}><span><ClipboardList /></span><strong>View open store issues</strong><small>{open.length} current items at this store.</small><ChevronRight /></button></div></div>;
 }
 
-function VisitDemo({ dataset, activeVisits, fixedStoreId, requireLocationEvidence, onCheckIn, onCheckOut }: { dataset: DemoDataset; activeVisits: Visit[]; fixedStoreId?: string; requireLocationEvidence: boolean; onCheckIn: (value: VisitCheckInValue) => ActiveVisit; onCheckOut: (value: VisitCheckOutValue) => void }) {
+function VisitDemo({ dataset, activeVisits, fixedStoreId, requireLocationEvidence, onCheckIn, onCheckOut }: { dataset: DemoDataset; activeVisits: Visit[]; fixedStoreId?: string; requireLocationEvidence: boolean; onCheckIn: (value: VisitCheckInValue) => ActiveVisit | void; onCheckOut: (value: VisitCheckOutValue) => void }) {
   const [storeId, setStoreId] = useState(fixedStoreId ?? dataset.stores[0]?.id ?? "");
   const [vendorId, setVendorId] = useState(dataset.vendors[0]?.id ?? "");
   const [channel, setChannel] = useState<WorkflowVisitChannel>(fixedStoreId ? "store_kiosk" : "qr");
