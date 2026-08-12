@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import {
+  NORTHLINE_DEMO_ENTRY_TOKENS,
   NORTHLINE_DEMO_HANDLES,
   NORTHLINE_ORGANIZATION_ID,
   buildNorthlinePresentationFixture,
@@ -241,5 +242,19 @@ describe("operator presenter drill-through contracts", () => {
 
     const create = buildCreateWorkOrderModel(fixture, session, { store: asset.storeId, asset: asset.id });
     expect(create.defaults).toEqual({ storeId: asset.storeId, assetId: asset.id, categoryKey: asset.categoryKey });
+  });
+
+  it("exposes working Store 104 QR, trusted-device, and vendor entry points", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const detail = buildDetailModel(fixture, executiveSession(), "store", NORTHLINE_DEMO_HANDLES.storyStoreId);
+    const section = detail.sections.find((candidate) => candidate.id === "demo-entry-points");
+
+    expect(section?.facts).toHaveLength(3);
+    expect(section?.facts?.map((fact) => fact.link?.href)).toEqual([
+      `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}`,
+      `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.trustedStore104}`,
+      `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}`,
+    ]);
+    expect(section?.facts?.every((fact) => Boolean(fact.link?.label))).toBe(true);
   });
 });

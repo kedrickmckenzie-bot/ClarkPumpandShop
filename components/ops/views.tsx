@@ -355,7 +355,12 @@ export function DetailView({ model, after }: { model: DetailPageViewModel; after
             {model.sections.map((section) => (
               <section className={styles.detailSection} id={section.id} key={section.id}>
                 <div className={styles.cardHeading}><div><h2>{section.title}</h2>{section.description ? <p>{section.description}</p> : null}</div>{section.action ? <Link className={styles.textLink} href={section.action.href}>{section.action.label}<ArrowRight aria-hidden="true" size={16} /></Link> : null}</div>
-                {section.facts ? <div className={styles.compactFacts}>{section.facts.map((fact) => <div key={fact.label}><span>{fact.label}</span><strong>{fact.value}</strong>{fact.helperText ? <small>{fact.helperText}</small> : null}</div>)}</div> : null}
+                {section.facts ? <div className={styles.compactFacts}>{section.facts.map((fact) => {
+                  const content = <><span>{fact.label}</span><strong>{fact.value}</strong>{fact.helperText ? <small>{fact.helperText}</small> : null}</>;
+                  return fact.link
+                    ? <Link className={styles.compactFactLink} href={fact.link.href} key={fact.label}>{content}<small>{fact.link.label} <ChevronRight aria-hidden="true" size={15} /></small></Link>
+                    : <div key={fact.label}>{content}</div>;
+                })}</div> : null}
                 {section.table ? <DataTable table={section.table} /> : null}
                 {section.timeline ? <ol className={styles.timeline}>{section.timeline.map((event) => <li key={event.id}><span className={`${styles.timelineDot} ${toneClass(event.tone)}`} aria-hidden="true" /><div><strong>{event.title}</strong>{event.description ? <p>{event.description}</p> : null}<small>{event.timestampLabel} · {event.actorLabel}</small>{event.link ? <Link className={styles.textLink} href={event.link.href}>{event.link.label}<ChevronRight aria-hidden="true" size={15} /></Link> : null}</div></li>)}</ol> : null}
               </section>

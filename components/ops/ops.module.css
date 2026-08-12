@@ -256,8 +256,12 @@ a.factCard { padding-right: 38px; }
 .detailSections > :first-child { grid-row: span 2; }
 .compactFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 17px; }
 .compactFacts > div { display: flex; flex-direction: column; padding: 13px; border-radius: 9px; background: var(--ops-soft); }
+.compactFactLink { display: flex; flex-direction: column; padding: 13px; border: 1px solid #cbd9d1; border-radius: 9px; color: inherit; background: var(--ops-soft); transition: border-color .15s ease, background .15s ease; }
+.compactFactLink:hover { border-color: #78a98f; background: var(--ops-brand-soft); }
+.compactFactLink > small:last-child { display: flex; align-items: center; gap: 3px; margin-top: 8px; color: var(--ops-brand-dark); font-weight: 760; }
 .compactFacts span, .compactFacts small { color: var(--ops-muted); font-size: 14px; }
 .compactFacts strong { margin-top: 4px; font-size: 15px; }
+.compactFactLink > small:last-child { color: var(--ops-brand-dark); }
 .detailSection .tableScroller { margin: 17px -22px -22px; width: calc(100% + 44px); }
 .timeline { margin: 20px 0 0; padding: 0; list-style: none; }
 .timeline li { position: relative; display: grid; grid-template-columns: 14px 1fr; gap: 12px; padding-bottom: 20px; }
