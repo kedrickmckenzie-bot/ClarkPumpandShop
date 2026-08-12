@@ -1,5 +1,0 @@
-DEMO EQUIPMENT MANUAL PLACEHOLDER
-Asset: Beer Cave Condensing Unit CU-1
-Model: HCU-060L6
-Classification: Equipment manual
-Visibility: Vendor shared

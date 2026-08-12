@@ -1,5 +1,5 @@
 {
-  "name": "traceops-convenience-demo",
+  "name": "traceops-convenience-suite",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -12,10 +12,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run tests/workflow.e2e.test.ts",
+    "test:e2e": "vitest run tests/ops-workflow.e2e.test.ts tests/ops-public-boundary.test.ts tests/ops-presenter-contract.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "db:seed": "tsx scripts/seed-cstore-demo.ts"
+    "db:seed": "tsx scripts/seed-ops-platform.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

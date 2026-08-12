@@ -17,9 +17,11 @@ The fictional demo operator, **Northline Fuel & Market**, has exactly:
 
 The five vendors are Summit Refrigeration, Cedar Mechanical, Forecourt Systems Group, BrightPath Electrical and Four Seasons Site Services.
 
-The current hosted demo uses a deterministic static seed plus session-scoped interactions. Creating a work order, accepting a vendor assignment, checking in or reviewing an invoice demonstrates the connected experience during that session; it is not production-durable storage. Demo interactions are visibly labeled **Demo Mode** and may reset on refresh or a new session.
+The hosted showcase seeds the fictional tenant into Cloudflare D1 and writes workflow changes back through the same tenant-scoped repositories and domain commands. Uploaded evidence uses the private R2 binding. Local development uses the same deterministic fixture through an in-memory repository and resets when the local process restarts.
 
-All charts, counts and narrative claims must derive from the static source records and current session state. Summary numbers are never independently hardcoded.
+The presentation fixture currently contains **106 work orders across 20 months, 107 visits, 45 assets and 60 PM occurrences**. It includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
+
+All charts, counts and narrative claims derive from source records. Summary numbers are never independently hardcoded.
 
 ## Product shape
 
@@ -72,7 +74,7 @@ The current preview is a Vinext/React application hosted through Sites. [`.opena
 - Cloudflare D1 binding `DB`.
 - Cloudflare R2 binding `FILES`.
 
-These bindings remain available for the hosted preview, but the current demo experience should still be described accurately as static seed data plus session interactions. Local/session behavior is not a claim of production persistence, authentication, email delivery or accounting integration.
+The hosted app requires D1 in production and does not silently fall back to fixtures. The local repository is a development fallback only. The preview role switcher is not a production identity provider, outbound messages currently stop in the outbox, and no accounting API is connected.
 
 Never commit secrets. Production token, email, storage and database settings belong in environment variables.
 
@@ -91,7 +93,7 @@ A `render.yaml` should be created only when the new Render project is intentiona
 
 ## Product boundaries
 
-TraceOps is not a full accounting/AP suite, ERP, general ledger, payment system, POS, merchandising platform, inventory/warehouse system, payroll/timekeeping product, route optimizer, vendor dispatch replacement or continuous tracking product. Invoice review surfaces evidence and differences for a human; it never declares fraud or executes payment.
+TraceOps is not a full accounting/AP suite, ERP, general ledger, payment system, POS, merchandising platform, inventory/warehouse system, payroll/timekeeping product, route optimizer, vendor dispatch replacement or continuous tracking product. Optional invoice-reference review surfaces evidence and differences for a human; it never declares fraud or executes payment.
 
 ## Documentation
 

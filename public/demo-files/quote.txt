@@ -1,6 +1,0 @@
-DEMO QUOTE Q-NS-4418
-Clark work order: CWO-0245
-Labor: $3,100
-Condenser fan motor: $1,850
-Total: $4,950
-Status: Approved 2026-05-19

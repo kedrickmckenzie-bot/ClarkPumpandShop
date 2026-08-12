@@ -1,11 +1,13 @@
 # TraceOps Convenience Suite Engineering Guide
 
-These rules govern the clean-slate TraceOps Convenience Suite rebuild. The primary product and build source of truth is [`docs/CSTORE_SUITE_PLAN.md`](docs/CSTORE_SUITE_PLAN.md).
+These rules govern the clean-slate TraceOps Convenience Suite rebuild. The primary product, operating, and build source of truth is [`docs/CSTORE_PLATFORM_REBUILD_BLUEPRINT.md`](docs/CSTORE_PLATFORM_REBUILD_BLUEPRINT.md). [`docs/CSTORE_SUITE_PLAN.md`](docs/CSTORE_SUITE_PLAN.md) is retained as earlier product history where it does not conflict with the newer blueprint.
 
 ## Rebuild boundary
 
 - TraceOps is a purpose-built convenience-retail suite. It is not a reskin of the previous application.
-- Legacy screens, routes, components, seed assumptions and information architecture are not the product foundation. Rebuild from the approved suite plan; do not patch legacy UI merely because it already exists.
+- Legacy screens, routes, components, seed assumptions and information architecture are not the product foundation. The current c-store prototype is also not a production state container or authorization layer. Rebuild from the approved platform blueprint; do not patch a session-scoped UI merely because it already exists.
+- A convincing guided story is only one acceptance test. Product decisions must support durable multi-user operation, real external vendors, server-enforced scopes, support, recovery, and operators at approximately 63-store scale without the creator manually holding the workflow together.
+- The 63-store reference is a customer-caliber and engineering-scale benchmark, not the presentation dataset. Keep the showcase completely fictional with exactly 15 stores and five vendors; prove larger scale with a separate synthetic fixture and production architecture.
 - The umbrella name can later serve other industry suites, but this edition should use c-store language, workflows, taxonomy and demo stories without exposing hypothetical industrial complexity.
 - Build a modular monolith for V0. Share domain commands and infrastructure, not one giant configurable interface for every possible industry.
 
@@ -75,9 +77,10 @@ Out of scope: full accounting/AP, general ledger, payments, tax, formal purchasi
 - The presentation tenant is fictional Northline Fuel & Market with **exactly 15 stores and exactly five approved outside vendors**. It also has a two-person internal maintenance team.
 - Use three regions with five stores each and realistic HVAC/Refrigeration depth plus smaller forecourt, plumbing and exterior-service stories.
 - Every demo total must derive from source seed records. Provide explicit unclassified buckets rather than hiding shallow records.
-- The current hosted demo uses deterministic static seed data plus session-scoped interactions. Simulated creates and updates must be labeled Demo Mode and must not be described as durable production persistence.
-- A refresh/new session may reset interactive changes. The seeded baseline must remain deterministic.
+- The hosted showcase seeds deterministic source records into D1 and persists mutations through the tenant-scoped repository. R2 stores uploaded evidence. Local development uses an in-memory fixture and resets when the local process restarts.
+- The visible role picker remains a preview control over fictional data, not production authentication. Outbox delivery, production identity, accounting integrations and native apps must never be implied.
 - Separate automated fixtures must prove a one-store operator and approximately 65 stores without changing the 15-store presentation.
+- The 15-store presentation tenant is never a substitute for production import, persistence, authorization, reliability, or operational-readiness requirements. It also must never be presented as the prospect's real company or store network.
 
 The five seeded vendors are:
 

@@ -1,18 +1,17 @@
 # TraceOps Convenience Suite Demo
 
-This is a 10-12 minute walkthrough of the clean-slate TraceOps c-store suite.
+This is a 12-15 minute guided walkthrough of the clean-slate TraceOps c-store suite.
 
 ## Demo truth
 
 - **Northline Fuel & Market** is fictional and has exactly **15 stores**, **five approved outside vendors** and a two-person internal maintenance team.
-- The current hosted project uses deterministic static seed records plus session-scoped interactions.
-- Creating, accepting, checking in/out and matching records demonstrates the connected product during the current session; it is not production-durable persistence.
-- Demo actions and role changes are visibly labeled **Demo Mode** and may reset on refresh or a new session.
-- Every displayed metric derives from seeded source records plus current session events. Do not present an independently hardcoded total as live operational data.
+- The hosted project seeds deterministic source records into Cloudflare D1; creates, vendor responses, check-in/out and setup changes are durable hosted writes. Local development resets when its in-memory process restarts.
+- The fixture has 106 work orders across 20 months, 107 visits, 45 assets and 60 PM occurrences. Every displayed metric derives from these source records and later workflow events.
+- The role picker is a visible preview control, not production authentication. Outbound email/SMS delivery and accounting APIs are not connected.
 
 ## 1. Open with the immediate problem: who is onsite?
 
-Start on **Today** or the active-visit panel.
+Start on **Overview** and open the active-visit or visit-exception source queue.
 
 1. Show who is currently checked in, the store, vendor, operator WO and check-in evidence channel.
 2. Explain that QR/mobile web, secure work-order link and a trusted store device all create the same visit.
@@ -20,7 +19,7 @@ Start on **Today** or the active-visit panel.
 
 Position the concept:
 
-> Vendor check-in is the easy starting point. The same visit becomes useful evidence for the work order, invoice review, store cost and equipment history.
+> Vendor check-in is the easy starting point. The same visit becomes useful evidence for the work order, optional invoice reference, store cost and equipment history.
 
 ## 2. Show the manager star: trace a refrigeration dollar
 
@@ -51,7 +50,7 @@ Create a work order for a warm beer cave.
 Keep the identifiers distinct:
 
 ```text
-Operator work order: NLM-2026-0004
+Operator work order: NL-2026-0116
 Vendor service ticket: SUM-26-0704
 Vendor invoice: SUM-260187
 External accounting PO: optional and separate
@@ -96,9 +95,9 @@ Use the Cedar Mechanical plumbing story.
 
 This path keeps vendor participation low-friction without sacrificing accountability.
 
-## 7. Demonstrate optional invoice protection
+## 7. Demonstrate optional invoice-reference protection
 
-Open **Invoice Review**.
+Open **Invoice references**.
 
 1. Show an invoice that contains the correct operator WO and matches directly.
 2. Show another invoice with a missing/mistyped WO reference and amount above NTE.
@@ -146,9 +145,9 @@ The presentation must contain exactly these five approved vendors:
 
 The 15 stores are split across Metro, Lakes and Interstate regions, five stores each. HVAC and Refrigeration have the deepest histories; forecourt, plumbing and exterior work prove that the taxonomy supports other c-store trades.
 
-## Reset and verification
+## Verification
 
-Start a new session or restart the local process to clear session-only demo interactions. The deterministic baseline should return unchanged.
+Hosted changes persist in D1. Restart the local process to reset local in-memory interactions to the deterministic baseline.
 
 ```bash
 npm run db:seed
@@ -159,4 +158,4 @@ npm run test:e2e
 npm run build
 ```
 
-Before presenting, inspect manager dashboard/search, store detail, work-order creation, vendor action link, technician mobile flow, store-device checkout, no-WO queue, invoice review and PM/lifecycle views at desktop and mobile widths.
+Before presenting, inspect manager dashboard/search, Store 104 detail, work-order creation, vendor action link, technician mobile flow, trusted store-device checkout, no-WO queue, invoice references and PM/lifecycle views at desktop and mobile widths.

@@ -1,5 +1,0 @@
-DEMO REPAIR AUTHORIZATION
-Clark work order: CWO-0245
-Approved amount: $4,950
-Approved by: Samira Patel, Facilities
-Approval timestamp: 2026-05-19 10:05 ET

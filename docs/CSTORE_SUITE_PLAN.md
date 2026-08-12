@@ -1,4 +1,6 @@
-# Convenience Retail Suite — Clean-Slate Product and Build Plan
+# Convenience Retail Suite — Earlier Clean-Slate Product and Build Plan
+
+> **Superseded for implementation:** The current product, operating, production-readiness, and rebuild source of truth is [`CSTORE_PLATFORM_REBUILD_BLUEPRINT.md`](CSTORE_PLATFORM_REBUILD_BLUEPRINT.md). This file remains useful product history only where it does not conflict with that blueprint.
 
 **Status:** Build blueprint  
 **Product label:** Temporary; the eventual umbrella brand must remain industry-neutral  
