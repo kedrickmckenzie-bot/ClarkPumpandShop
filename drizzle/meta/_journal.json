@@ -43,6 +43,13 @@
       "when": 1786500000000,
       "tag": "0005_reset_northline_demo_fixture",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786665600000,
+      "tag": "0006_repair_northline_issuance_history",
+      "breakpoints": true
     }
   ]
 }

@@ -322,9 +322,24 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
 export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtureRepository { return new FixtureOpsRepository(clone(fixture)); }
 export function createNorthlineFixtureRepository(): MutableOpsFixtureRepository { return createOpsFixtureRepository(buildNorthlinePresentationFixture()); }
 
-let northlineRuntimeRepository: MutableOpsFixtureRepository | undefined;
-export function getNorthlineFixtureRepository(): MutableOpsFixtureRepository { northlineRuntimeRepository ??= createNorthlineFixtureRepository(); return northlineRuntimeRepository; }
-export function resetNorthlineFixtureRepository() { northlineRuntimeRepository = createNorthlineFixtureRepository(); return northlineRuntimeRepository; }
+const fixtureGlobal = globalThis as typeof globalThis & {
+  __traceOpsNorthlineRuntimeRepository?: MutableOpsFixtureRepository;
+};
+
+// Next compiles API routes and React Server Components into separate module
+// graphs. Process-global storage keeps the local development fixture coherent
+// across those graphs, so a mutation made by an API route is immediately
+// visible to the redirected detail page. Production Render never uses this
+// fallback; it requires PostgreSQL.
+export function getNorthlineFixtureRepository(): MutableOpsFixtureRepository {
+  fixtureGlobal.__traceOpsNorthlineRuntimeRepository ??= createNorthlineFixtureRepository();
+  return fixtureGlobal.__traceOpsNorthlineRuntimeRepository;
+}
+
+export function resetNorthlineFixtureRepository() {
+  fixtureGlobal.__traceOpsNorthlineRuntimeRepository = createNorthlineFixtureRepository();
+  return fixtureGlobal.__traceOpsNorthlineRuntimeRepository;
+}
 
 export function getNorthlineDemoRuntime() {
   return {

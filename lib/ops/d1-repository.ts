@@ -46,11 +46,21 @@ import type {
 
 type Row = Record<string, unknown>;
 
-function text(row: Row, key: string) { return String(row[key] ?? ""); }
-function maybeText(row: Row, key: string) { return row[key] == null ? undefined : String(row[key]); }
+function scalarText(value: unknown) {
+  if (value == null) return "";
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+function text(row: Row, key: string) { return scalarText(row[key]); }
+function maybeText(row: Row, key: string) { return row[key] == null ? undefined : scalarText(row[key]); }
 function maybeNumber(row: Row, key: string) { return row[key] == null ? undefined : Number(row[key]); }
 function bool(row: Row, key: string) { return Boolean(Number(row[key] ?? 0)); }
-function jsonArray(row: Row, key: string) { try { return JSON.parse(text(row, key) || "[]") as string[]; } catch { return []; } }
+function jsonArray(row: Row, key: string) {
+  const value = row[key];
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  try { return JSON.parse(text(row, key) || "[]") as string[]; } catch { return []; }
+}
 function limit(input?: number) { return Math.max(1, Math.min(100, input ?? 25)); }
 function formatAddress(row: Pick<Store, "address1" | "address2" | "city" | "state" | "postalCode">) { return [row.address1, row.address2, `${row.city}, ${row.state} ${row.postalCode}`].filter(Boolean).join(", "); }
 
@@ -147,8 +157,10 @@ function scopeWhere(scope: OrganizationScope, alias: string, params: unknown[]) 
 }
 
 class D1OpsRepository implements OpsRepository {
-  readonly kind = "d1" as const;
-  constructor(private readonly db: D1Database) {}
+  constructor(
+    private readonly db: D1Database,
+    readonly kind: "d1" | "postgres" = "d1",
+  ) {}
 
   private async first(sql: string, params: readonly unknown[] = []) { return await this.db.prepare(sql).bind(...params).first<Row>(); }
   private async all(sql: string, params: readonly unknown[] = []) { const result = await this.db.prepare(sql).bind(...params).all<Row>(); return result.results ?? []; }
@@ -318,7 +330,7 @@ class D1OpsRepository implements OpsRepository {
     return { items, nextCursor: rows.length > max && last ? encodeCursor(text(last, "name"), text(last, "id")) : undefined };
   }
 
-  async getStoreDetail(scope: OrganizationScope, storeId: OpsId): Promise<StoreDetailView | null> { const store = await this.getStore(scope.organizationId, storeId); if (!store || !storeAllowed(scope, store)) return null; const base = (await this.searchStores({ ...scope, storeIds: [store.id] }, store.storeNumber, { limit: 1 })).items[0]; if (!base) return null; const openWorkOrders = (await this.listWorkOrders({ ...scope, storeIds: [store.id] }, { statuses: ["draft","awaiting_approval","approved","issued","accepted","scheduled","in_progress","waiting_on_vendor","waiting_on_parts","completed_pending_review"], limit: 100 })).items; const activeVisits = (await this.listVisits({ ...scope, storeIds: [store.id] }, { status: "active", limit: 100 })).items; const assets = await this.all("SELECT a.id, a.asset_tag, a.name, a.category_key, a.status, COALESCE(SUM(c.amount_minor),0) AS recorded_cost_minor FROM ops_assets a LEFT JOIN ops_work_orders w ON w.organization_id = a.organization_id AND w.asset_id = a.id LEFT JOIN ops_cost_lines c ON c.organization_id = w.organization_id AND c.work_order_id = w.id WHERE a.organization_id = ? AND a.store_id = ? GROUP BY a.id ORDER BY a.name", [scope.organizationId, store.id]); return { ...base, regionId: store.regionId, status: store.status, activeVisits, openWorkOrders, assets: assets.map((row) => ({ id: text(row,"id"), assetTag: text(row,"asset_tag"), name: text(row,"name"), categoryKey: text(row,"category_key"), status: text(row,"status"), recordedCostMinor: Number(row.recorded_cost_minor ?? 0) })) }; }
+  async getStoreDetail(scope: OrganizationScope, storeId: OpsId): Promise<StoreDetailView | null> { const store = await this.getStore(scope.organizationId, storeId); if (!store || !storeAllowed(scope, store)) return null; const base = (await this.searchStores({ ...scope, storeIds: [store.id] }, store.storeNumber, { limit: 1 })).items[0]; if (!base) return null; const openWorkOrders = (await this.listWorkOrders({ ...scope, storeIds: [store.id] }, { statuses: ["draft","awaiting_approval","approved","issued","accepted","scheduled","in_progress","waiting_on_vendor","waiting_on_parts","completed_pending_review"], limit: 100 })).items; const activeVisits = (await this.listVisits({ ...scope, storeIds: [store.id] }, { status: "active", limit: 100 })).items; const assets = await this.all("SELECT a.id, a.asset_tag, a.name, a.category_key, a.status, COALESCE(SUM(c.amount_minor),0) AS recorded_cost_minor FROM ops_assets a LEFT JOIN ops_work_orders w ON w.organization_id = a.organization_id AND w.asset_id = a.id LEFT JOIN ops_cost_lines c ON c.organization_id = w.organization_id AND c.work_order_id = w.id WHERE a.organization_id = ? AND a.store_id = ? GROUP BY a.id, a.asset_tag, a.name, a.category_key, a.status ORDER BY a.name", [scope.organizationId, store.id]); return { ...base, regionId: store.regionId, status: store.status, activeVisits, openWorkOrders, assets: assets.map((row) => ({ id: text(row,"id"), assetTag: text(row,"asset_tag"), name: text(row,"name"), categoryKey: text(row,"category_key"), status: text(row,"status"), recordedCostMinor: Number(row.recorded_cost_minor ?? 0) })) }; }
 
   async getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null> {
     const workOrder = await this.getWorkOrder(scope.organizationId, workOrderId);
@@ -376,4 +388,13 @@ class D1OpsRepository implements OpsRepository {
   async atomicWrite(statements: readonly OpsStatement[]) { await this.db.batch(statements.map((statement) => this.db.prepare(statement.sql).bind(...statement.params))); }
 }
 
-export function createOpsD1Repository(db: D1Database): OpsRepository { return new D1OpsRepository(db); }
+export function createOpsSqlRepository(
+  db: D1Database,
+  kind: "d1" | "postgres",
+): OpsRepository {
+  return new D1OpsRepository(db, kind);
+}
+
+export function createOpsD1Repository(db: D1Database): OpsRepository {
+  return createOpsSqlRepository(db, "d1");
+}

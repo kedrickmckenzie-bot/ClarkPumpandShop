@@ -59,8 +59,12 @@ export function buildOpsSeedStatements(fixture: OpsFixture): OpsStatement[] {
   return statements;
 }
 
-export async function seedOpsRepository(repository: OpsRepository, fixture: OpsFixture) {
-  const statements = buildOpsSeedStatements(fixture);
+export async function seedOpsRepository(
+  repository: OpsRepository,
+  fixture: OpsFixture,
+  finalStatements: readonly OpsStatement[] = [],
+) {
+  const statements = [...buildOpsSeedStatements(fixture), ...finalStatements];
   const chunkSize = repository.kind === "d1" ? 75 : statements.length;
   for (let index = 0; index < statements.length; index += chunkSize) await repository.atomicWrite(statements.slice(index, index + chunkSize));
   return { statements: statements.length, organizations: fixture.organizations.length, stores: fixture.stores.length, vendors: fixture.vendors.length };

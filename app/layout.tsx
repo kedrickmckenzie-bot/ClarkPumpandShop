@@ -8,7 +8,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ??
-      "https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site",
+      "http://localhost:3000",
   ),
   title: { default: "TraceOps Convenience Suite", template: "%s | TraceOps" },
   description:

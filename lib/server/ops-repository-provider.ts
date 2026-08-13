@@ -1,6 +1,5 @@
 import "server-only";
 
-import { getD1Binding } from "@/db";
 import { createOpsD1Repository } from "@/lib/ops/d1-repository";
 import { loadOpsFixtureSnapshotFromD1 } from "@/lib/ops/d1-snapshot";
 import { getNorthlineFixtureRepository } from "@/lib/ops/fixture-repository";
@@ -9,13 +8,40 @@ import {
   NORTHLINE_AS_OF,
   NORTHLINE_ORGANIZATION_ID,
 } from "@/lib/ops/fixtures";
+import { ensureNorthlinePostgresSeed } from "@/lib/ops/northline-postgres-bootstrap";
+import { createOpsPostgresRepository } from "@/lib/ops/postgres-repository";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { seedOpsRepository } from "@/lib/ops/seed";
 import type { OpsFixture, OpsId } from "@/lib/ops/types";
+import { getPostgresPool } from "@/lib/server/postgres-pool";
+import {
+  isLocalRenderDevelopment,
+  isRenderNodeRuntime,
+} from "@/lib/server/persistence-runtime";
 
-const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-10-v2";
+const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-13-v3";
 let durableRepository: Promise<OpsRepository> | undefined;
 let repositoryProxy: OpsRepository | undefined;
+
+export type OpsRepositoryBackend = "postgres" | "d1" | "fixture";
+
+export function selectOpsRepositoryBackend(input: {
+  databaseUrl?: string;
+  d1Available: boolean;
+  nodeEnv?: string;
+}): OpsRepositoryBackend {
+  if (input.databaseUrl?.trim()) return "postgres";
+  if (input.d1Available) return "d1";
+  if (input.nodeEnv !== "production") return "fixture";
+  throw new Error("TraceOps production requires PostgreSQL DATABASE_URL or the Cloudflare D1 `DB` binding.");
+}
+
+async function getD1BindingLazily(): Promise<D1Database | undefined> {
+  // Import the Cloudflare-only module only on the Sites/D1 path. Render starts
+  // with DATABASE_URL and never evaluates `cloudflare:workers`.
+  const d1Module = await import("@/db");
+  return d1Module.getD1Binding();
+}
 
 async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepository) {
   let marker: Record<string, unknown> | null;
@@ -51,15 +77,43 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
   }]);
 }
 
+function initializeDurableRepository(factory: () => Promise<OpsRepository>) {
+  if (!durableRepository) {
+    const attempt = factory();
+    const recoverable = attempt.catch((error) => {
+      // A transient database/bootstrap failure must not poison this process for
+      // its remaining lifetime. Preserve one shared in-flight initialization,
+      // then allow the next request to retry after a rejection.
+      if (durableRepository === recoverable) durableRepository = undefined;
+      throw error;
+    });
+    durableRepository = recoverable;
+  }
+  return durableRepository;
+}
+
 export async function getServerOpsRepository(): Promise<OpsRepository> {
-  const binding = getD1Binding();
+  if (process.env.DATABASE_URL?.trim()) {
+    return initializeDurableRepository(async () => {
+      const pool = await getPostgresPool();
+      const repository = createOpsPostgresRepository(pool);
+      await ensureNorthlinePostgresSeed(pool);
+      return repository;
+    });
+  }
+
+  if (isRenderNodeRuntime()) {
+    if (isLocalRenderDevelopment()) return getNorthlineFixtureRepository();
+    throw new Error("TraceOps Render runtime requires DATABASE_URL; fixture and D1 fallbacks are disabled.");
+  }
+
+  const binding = await getD1BindingLazily();
   if (binding) {
-    durableRepository ??= (async () => {
+    return initializeDurableRepository(async () => {
       const repository = createOpsD1Repository(binding);
       await ensureNorthlineSeed(binding, repository);
       return repository;
-    })();
-    return durableRepository;
+    });
   }
 
   if (process.env.NODE_ENV === "production") {
@@ -70,8 +124,13 @@ export async function getServerOpsRepository(): Promise<OpsRepository> {
 
 /** A lazy server proxy for modules whose public contract is created eagerly. */
 export function getServerOpsRepositoryProxy(): OpsRepository {
+  const proxyKind: OpsRepository["kind"] = process.env.DATABASE_URL?.trim()
+    ? "postgres"
+    : isRenderNodeRuntime()
+      ? isLocalRenderDevelopment() ? "fixture" : "postgres"
+      : "d1";
   repositoryProxy ??= new Proxy(
-    { kind: getD1Binding() ? "d1" : "fixture" } as OpsRepository,
+    { kind: proxyKind } as OpsRepository,
     {
       get(target, property) {
         if (property === "kind") return target.kind;
@@ -89,7 +148,19 @@ export function getServerOpsRepositoryProxy(): OpsRepository {
 export async function getServerOpsFixtureSnapshot(
   organizationId: OpsId = NORTHLINE_ORGANIZATION_ID,
 ): Promise<OpsFixture> {
-  const binding = getD1Binding();
+  if (process.env.DATABASE_URL?.trim()) {
+    const pool = await getPostgresPool();
+    await getServerOpsRepository();
+    const { loadOpsFixtureSnapshotFromPostgres } = await import("@/lib/ops/postgres-snapshot");
+    return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, NORTHLINE_AS_OF);
+  }
+
+  if (isRenderNodeRuntime()) {
+    if (isLocalRenderDevelopment()) return getNorthlineFixtureRepository().snapshot();
+    throw new Error("TraceOps Render runtime requires DATABASE_URL; operator data cannot use a fallback.");
+  }
+
+  const binding = await getD1BindingLazily();
   if (!binding) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("TraceOps cannot load operator data without the Cloudflare D1 `DB` binding.");

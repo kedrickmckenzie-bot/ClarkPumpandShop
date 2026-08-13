@@ -74,7 +74,7 @@ export interface OpsStatement {
 }
 
 export interface OpsRepository {
-  readonly kind: "d1" | "fixture";
+  readonly kind: "d1" | "postgres" | "fixture";
 
   // Internal record lookups used by domain commands. Organization is always
   // the first filter and is never inferred from a record id.
@@ -126,8 +126,8 @@ export interface OpsRepository {
   getActiveVisitByToken(input: PublicTokenLookup): Promise<ActiveVisitView | null>;
   getTrustedStoreDeviceByToken(input: PublicTokenLookup): Promise<TrustedStoreDeviceView | null>;
 
-  // D1 batch is transactional. Fixture repositories apply the same statement
-  // list atomically to a cloned fixture before committing it.
+  // Durable adapters execute the statement list in one database transaction.
+  // Fixture repositories apply it to a cloned fixture before committing it.
   atomicWrite(statements: readonly OpsStatement[]): Promise<void>;
 }
 

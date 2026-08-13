@@ -4,7 +4,7 @@ TraceOps is a clean-slate, purpose-built convenience-retail maintenance intellig
 
 The c-store suite is intentionally specific: store and region visibility, refrigeration/HVAC depth, forecourt and foodservice context, outsourced service, simple employee intake and low-friction vendor participation. The umbrella name can later support other purpose-built industry suites and a master portfolio product.
 
-> The legacy screens are not the product foundation. New work follows [the clean-slate suite plan](./docs/CSTORE_SUITE_PLAN.md), not the previous application's navigation, components or assumptions.
+> The legacy screens are not the product foundation. New work follows [the rebuild blueprint](./docs/CSTORE_PLATFORM_REBUILD_BLUEPRINT.md), not the previous application's navigation, components or assumptions.
 
 ## Demo contract
 
@@ -65,6 +65,20 @@ npm run build
 npm run start
 ```
 
+The commands above preserve the Cloudflare/Sites preview. The portable Node
+runtime intended for Render is separate:
+
+```bash
+npm run dev:render
+npm run build:render
+HOSTNAME=0.0.0.0 PORT=3000 npm run start:render
+```
+
+`npm run dev:render` uses the deterministic in-memory fixture locally. A deployed
+Render process fails closed unless `DATABASE_URL` points to PostgreSQL. See the
+[isolated Render deployment guide](./docs/RENDER_DEPLOYMENT.md) for the service,
+database, migration, private-object-storage and health-check settings.
+
 `npm run db:seed` validates/generates the deterministic demo fixture. See [DEMO.md](./DEMO.md) for the presentation flow.
 
 ## Current hosting
@@ -78,18 +92,21 @@ The hosted app requires D1 in production and does not silently fall back to fixt
 
 Never commit secrets. Production token, email, storage and database settings belong in environment variables.
 
-## Render and PostgreSQL path
+## Render and PostgreSQL runtime
 
-TraceOps is being kept portable for a future Render project:
+The separate Render runtime now provides:
 
-- Keep persistence behind repository adapters rather than importing Cloudflare APIs throughout domain code.
-- Target PostgreSQL through `DATABASE_URL` and repeatable migrations.
-- Use S3-compatible private object storage rather than ephemeral local disk.
-- Bind the server to the host-provided `PORT` and `0.0.0.0`.
-- Separate web, release/migration and idempotent worker/cron entry points.
-- Add liveness/readiness endpoints before production deployment.
+- A tenant-scoped PostgreSQL repository selected through `DATABASE_URL`.
+- Repeatable migrations plus idempotent, advisory-locked demo seeding.
+- S3-compatible private object storage behind the same file-store boundary as R2.
+- A standard Next Node server bound to `0.0.0.0` and Render's injected `PORT`.
+- `/api/health` liveness and sanitized `/api/ready` persistence checks.
+- CI gates for fixture validation, typecheck, lint, tests and both hosting builds.
 
-A `render.yaml` should be created only when the new Render project is intentionally provisioned.
+The Sites/D1/R2 preview remains intact. TraceOps must use its own Render project,
+PostgreSQL database, object-storage bucket and credentials; never reuse DockSafe
+resources. No `render.yaml` is included, so infrastructure cannot be provisioned
+into the wrong Render project by an accidental Blueprint sync.
 
 ## Product boundaries
 
@@ -97,7 +114,9 @@ TraceOps is not a full accounting/AP suite, ERP, general ledger, payment system,
 
 ## Documentation
 
-- [Clean-slate product/build plan](./docs/CSTORE_SUITE_PLAN.md) - primary product and implementation source of truth.
+- [Rebuild blueprint](./docs/CSTORE_PLATFORM_REBUILD_BLUEPRINT.md) - primary product and implementation source of truth.
+- [Earlier suite plan](./docs/CSTORE_SUITE_PLAN.md) - retained product history where it does not conflict with the blueprint.
+- [Render deployment guide](./docs/RENDER_DEPLOYMENT.md) - isolated PostgreSQL/S3 web-service setup and verification.
 - [Demo walkthrough](./DEMO.md) - concise presentation sequence and demo truth statements.
 - [Engineering guide](./AGENTS.md) - invariants and contributor rules for the rebuild.
 
