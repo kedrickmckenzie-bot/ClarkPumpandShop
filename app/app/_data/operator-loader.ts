@@ -18,6 +18,7 @@ import {
   buildDetailModel,
   buildListModel,
   buildProgramModel,
+  buildSearchModel,
   buildVendorIssuanceModel,
   type OperatorDetailRoute,
   type OperatorListRoute,
@@ -151,6 +152,11 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
 export async function loadDashboardModel() {
   const context = await sessionAndFixture();
   return buildDashboardModel(context.fixture, context.session);
+}
+
+export async function loadSearchModel(searchParams: OperatorSearchParameters = {}) {
+  const context = await sessionAndFixture();
+  return buildSearchModel(context.fixture, context.session, searchParams);
 }
 
 export async function loadProgramModel(route: ProgramRouteId, searchParams: OperatorSearchParameters = {}) {

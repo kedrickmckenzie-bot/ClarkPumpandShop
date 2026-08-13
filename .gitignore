@@ -43,3 +43,4 @@ yarn-error.log*
 .sites-dev.log
 .sites-dev.err.log
 *.tsbuildinfo
+.codex-*.log

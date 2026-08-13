@@ -5,58 +5,80 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Building2,
-  CalendarCheck2,
-  ClipboardCheck,
-  ClipboardList,
+  ChevronDown,
   FileBarChart,
-  Gauge,
   LayoutDashboard,
-  LifeBuoy,
   Menu,
-  PackageSearch,
-  ReceiptText,
+  Plus,
   Search,
   Settings2,
-  ShieldCheck,
   Store,
   Truck,
   UsersRound,
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { OperatorSession } from "./data-contract";
-import { navigationForRole, roleLabel, type NavigationItem } from "./navigation";
+import type { OperatorRole, OperatorSession } from "./data-contract";
+import {
+  contextualNavigationForPath,
+  navigationForRole,
+  navigationItemIsActive,
+  pathMatches,
+  roleLabel,
+  type NavigationItem,
+} from "./navigation";
 import { PreviewRoleSwitcher } from "./preview-role-switcher";
 import styles from "./ops.module.css";
 
-const iconByNavigationId: Record<string, LucideIcon> = {
-  overview: LayoutDashboard,
-  actions: ClipboardCheck,
-  requests: ClipboardList,
+const iconByNavigationId: Record<NavigationItem["id"], LucideIcon> = {
+  home: LayoutDashboard,
   work: Wrench,
-  visits: ShieldCheck,
   stores: Store,
   vendors: Truck,
-  spend: ReceiptText,
-  equipment: PackageSearch,
-  pm: CalendarCheck2,
-  lifecycle: Gauge,
+  insights: BarChart3,
   reports: FileBarChart,
-  admin: Settings2,
 };
+
+const createActions: Array<{
+  label: string;
+  description: string;
+  href: string;
+  roles: OperatorRole[];
+}> = [
+  {
+    label: "Report an issue",
+    description: "Capture a store problem",
+    href: "/app/requests/new",
+    roles: ["facilities", "regional", "store_manager"],
+  },
+  {
+    label: "Create work order",
+    description: "Authorize internal or vendor work",
+    href: "/app/work-orders/new",
+    roles: ["facilities", "regional"],
+  },
+  {
+    label: "Add store",
+    description: "Create a new location",
+    href: "/app/stores/new",
+    roles: ["facilities"],
+  },
+  {
+    label: "Add vendor",
+    description: "Onboard an approved provider",
+    href: "/app/vendors/new",
+    roles: ["facilities"],
+  },
+];
 
 interface PlatformShellProps {
   session: OperatorSession;
   children: React.ReactNode;
 }
 
-function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
 function NavigationLink({ item, pathname }: { item: NavigationItem; pathname: string }) {
-  const Icon = iconByNavigationId[item.id] ?? BarChart3;
-  const active = isActive(pathname, item.href);
+  const Icon = iconByNavigationId[item.id];
+  const active = navigationItemIsActive(item, pathname);
 
   return (
     <Link
@@ -70,29 +92,38 @@ function NavigationLink({ item, pathname }: { item: NavigationItem; pathname: st
   );
 }
 
-function NavigationGroups({ session, pathname }: { session: OperatorSession; pathname: string }) {
-  const navigation = navigationForRole(session.role);
-  const groups: Array<{ id: NavigationItem["section"]; label: string }> = [
-    { id: "workspace", label: "Operate" },
-    { id: "intelligence", label: "Understand" },
-    { id: "manage", label: "Manage" },
-  ];
+function PrimaryNavigation({ session, pathname }: { session: OperatorSession; pathname: string }) {
+  return (
+    <nav aria-label="Primary navigation" className={styles.navGroups}>
+      {navigationForRole(session.role).map((item) => (
+        <NavigationLink item={item} pathname={pathname} key={item.id} />
+      ))}
+    </nav>
+  );
+}
+
+function ContextualNavigation({ session, pathname }: { session: OperatorSession; pathname: string }) {
+  const group = contextualNavigationForPath(session.role, pathname);
+  if (!group) return null;
 
   return (
-    <nav aria-label="Operator navigation" className={styles.navGroups}>
-      {groups.map((group) => {
-        const items = navigation.filter((item) => item.section === group.id);
-        if (items.length === 0) return null;
-        return (
-          <div className={styles.navGroup} key={group.id}>
-            <p className={styles.navGroupLabel}>{group.label}</p>
-            {items.map((item) => (
-              <NavigationLink item={item} pathname={pathname} key={item.id} />
-            ))}
-          </div>
-        );
-      })}
-    </nav>
+    <div className={styles.contextNavBar}>
+      <nav aria-label={`${group.label} sections`} className={styles.contextNav}>
+        {group.items.map((item) => {
+          const active = pathMatches(pathname, item.href);
+          return (
+            <Link
+              className={`${styles.contextNavLink} ${active ? styles.contextNavLinkActive : ""}`}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              key={item.id}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
 
@@ -115,6 +146,45 @@ function UserSummary({ session }: { session: OperatorSession }) {
   );
 }
 
+function ProfileFooter({ session }: { session: OperatorSession }) {
+  return (
+    <div className={styles.sidebarFooter}>
+      {session.role === "facilities" ? (
+        <Link className={styles.supportLink} href="/app/admin">
+          <Settings2 aria-hidden="true" size={18} /> Administration
+        </Link>
+      ) : null}
+      <div className={styles.profilePanel}>
+        <UserSummary session={session} />
+        <PreviewRoleSwitcher role={session.role} />
+      </div>
+    </div>
+  );
+}
+
+function CreateMenu({ role }: { role: OperatorRole }) {
+  const actions = createActions.filter((action) => action.roles.includes(role));
+  if (!actions.length) return null;
+
+  return (
+    <details className={styles.createMenu}>
+      <summary>
+        <Plus aria-hidden="true" size={18} />
+        <span>Create</span>
+        <ChevronDown aria-hidden="true" size={16} className={styles.createMenuChevron} />
+      </summary>
+      <nav aria-label="Create a record" className={styles.createMenuPanel}>
+        {actions.map((action) => (
+          <Link href={action.href} key={action.href}>
+            <strong>{action.label}</strong>
+            <small>{action.description}</small>
+          </Link>
+        ))}
+      </nav>
+    </details>
+  );
+}
+
 export function PlatformShell({ session, children }: PlatformShellProps) {
   const pathname = usePathname();
 
@@ -123,7 +193,7 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
       <a className={styles.skipLink} href="#main-content">Skip to main content</a>
 
       <aside className={styles.sidebar}>
-        <Link className={styles.brand} href="/app/overview" aria-label="TraceOps overview">
+        <Link className={styles.brand} href="/app/overview" aria-label="TraceOps home">
           <span className={styles.brandMark}><Building2 aria-hidden="true" size={21} /></span>
           <span><strong>TraceOps</strong><small>Convenience Suite</small></span>
         </Link>
@@ -134,48 +204,45 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
           <small>{session.scopeLabel}</small>
         </div>
 
-        <NavigationGroups session={session} pathname={pathname} />
-
-        <div className={styles.sidebarFooter}>
-          <Link className={styles.supportLink} href="/app/action-center?view=help">
-            <LifeBuoy aria-hidden="true" size={18} /> Support & guidance
-          </Link>
-          <UserSummary session={session} />
-        </div>
+        <PrimaryNavigation session={session} pathname={pathname} />
+        <ProfileFooter session={session} />
       </aside>
 
       <div className={styles.contentColumn}>
-        <header className={styles.topbar}>
-          <details className={styles.mobileMenu} key={pathname}>
-            <summary aria-label="Toggle navigation menu"><Menu aria-hidden="true" size={22} /> Menu</summary>
-            <div className={styles.mobileMenuPanel}>
-              <div className={styles.mobileMenuHeading}>
-                <span><strong>{session.organizationName}</strong><small>{session.scopeLabel}</small></span>
+        <div className={styles.topbarFrame}>
+          <header className={styles.topbar}>
+            <details className={styles.mobileMenu} key={pathname}>
+              <summary aria-label="Toggle navigation menu"><Menu aria-hidden="true" size={22} /> Menu</summary>
+              <div className={styles.mobileMenuPanel}>
+                <div className={styles.mobileMenuHeading}>
+                  <span><strong>{session.organizationName}</strong><small>{session.scopeLabel}</small></span>
+                </div>
+                <PrimaryNavigation session={session} pathname={pathname} />
+                <ProfileFooter session={session} />
               </div>
-              <NavigationGroups session={session} pathname={pathname} />
-              <UserSummary session={session} />
+            </details>
+
+            <form className={styles.globalSearch} action="/app/search" method="get" role="search">
+              <Search aria-hidden="true" size={19} />
+              <label className={styles.visuallyHidden} htmlFor="global-platform-search">Search TraceOps</label>
+              <input
+                id="global-platform-search"
+                name="q"
+                type="search"
+                placeholder="Search stores, work orders, vendors, or equipment"
+                autoComplete="off"
+              />
+              <button type="submit">Search</button>
+            </form>
+
+            <div className={styles.topbarContext} aria-label="Current access scope">
+              <UsersRound aria-hidden="true" size={18} />
+              <span><strong>{roleLabel(session.role)}</strong><small>{session.scopeLabel}</small></span>
             </div>
-          </details>
-
-          <form className={styles.globalSearch} action="/app/stores" method="get" role="search">
-            <Search aria-hidden="true" size={19} />
-            <label className={styles.visuallyHidden} htmlFor="global-store-search">Search stores</label>
-            <input
-              id="global-store-search"
-              name="q"
-              type="search"
-              placeholder="Search store number, name, or address"
-              autoComplete="off"
-            />
-            <button type="submit">Search</button>
-          </form>
-
-          <div className={styles.topbarContext} aria-label="Current access scope">
-            <UsersRound aria-hidden="true" size={18} />
-            <span><strong>{roleLabel(session.role)}</strong><small>{session.scopeLabel}</small></span>
-          </div>
-          <PreviewRoleSwitcher role={session.role} />
-        </header>
+            <CreateMenu role={session.role} />
+          </header>
+          <ContextualNavigation session={session} pathname={pathname} />
+        </div>
 
         <main className={styles.main} id="main-content" tabIndex={-1}>{children}</main>
       </div>

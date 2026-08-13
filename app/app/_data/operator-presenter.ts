@@ -13,6 +13,7 @@ import type {
   MetricViewModel,
   OperatorSession,
   ProgramPageViewModel,
+  SearchPageViewModel,
   TableColumnViewModel,
   TableRowViewModel,
   Tone,
@@ -337,8 +338,15 @@ function actions(fixture: OpsFixture, scoped: ScopedFixture, limit = 6): ActionI
         ? `Review ${workById.get(exception.workOrderId)?.number ?? "linked work"}.`
         : "Review the evidence and decide whether follow-up is needed.",
       categoryLabel: sentence(exception.kind),
+      storeLabel: exception.storeId ? storeLabel(storeById.get(exception.storeId)) : "Companywide",
+      recordLabel: exception.workOrderId
+        ? workById.get(exception.workOrderId)?.number ?? "Linked work"
+        : exception.visitId
+          ? "Service visit"
+          : sentence(exception.kind),
       dueLabel: exception.severity === "urgent" ? "Review now" : "Needs review",
       ownerLabel: "Facilities coordinator",
+      priorityLabel: exception.severity === "urgent" ? "Urgent" : "Attention",
       tone: exception.severity === "urgent" ? "critical" : "warning",
       link: exception.workOrderId
         ? { href: `/app/work-orders/${exception.workOrderId}`, label: "Review work order" }
@@ -362,8 +370,11 @@ function actions(fixture: OpsFixture, scoped: ScopedFixture, limit = 6): ActionI
         title: followUp.nextAction,
         description: `${work.number} · ${storeLabel(storeById.get(work.storeId))}`,
         categoryLabel: "Open follow-up",
+        storeLabel: storeLabel(storeById.get(work.storeId)),
+        recordLabel: work.number,
         dueLabel: `Due ${date(followUp.dueAt)}`,
         ownerLabel: followUp.accountableParty,
+        priorityLabel: Date.parse(followUp.dueAt) < Date.parse(fixture.asOf) ? "Overdue" : "Due soon",
         tone: Date.parse(followUp.dueAt) < Date.parse(fixture.asOf) ? "critical" : "warning",
         link: { href: `/app/work-orders/${work.id}`, label: "Open work order" },
       };
@@ -485,6 +496,22 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
   const recordedCost = costForWorkIds(costByWork, scoped.workOrders.map((workOrder) => workOrder.id));
   const openWork = scoped.workOrders.filter((workOrder) => !["closed", "cancelled"].includes(workOrder.status));
   const activeVisits = scoped.visits.filter((visit) => visit.status === "active");
+  const completedVisits = scoped.visits.filter((visit) => visit.status !== "active");
+  const pendingRequests = fixture.requests.filter(
+    (request) =>
+      request.organizationId === scoped.organizationId &&
+      scoped.storeIds.has(request.storeId) &&
+      ["submitted", "under_review"].includes(request.status),
+  );
+  const awaitingVendor = scoped.workOrders.filter((workOrder) =>
+    ["approved", "issued", "waiting_on_vendor"].includes(workOrder.status),
+  );
+  const followUps = fixture.followUps.filter(
+    (followUp) =>
+      followUp.organizationId === scoped.organizationId &&
+      followUp.status === "open" &&
+      scoped.workOrders.some((workOrder) => workOrder.id === followUp.workOrderId),
+  );
   const openExceptions = fixture.exceptions.filter(
     (exception) =>
       exception.organizationId === scoped.organizationId &&
@@ -501,15 +528,15 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
   const metrics: MetricViewModel[] = [
     {
       id: "active-visits",
-      label: "Onsite now",
+      label: "Vendors onsite now",
       value: String(activeVisits.length),
-      supportingText: "Observed active service visits",
+      supportingText: `${activeVisits.length} onsite now · ${scoped.visits.length} visits in scope`,
       tone: activeVisits.length ? "info" : "neutral",
       link: { href: "/app/visits?status=active", label: "Open live visits" },
     },
     {
       id: "open-exceptions",
-      label: "Accountability exceptions",
+      label: "Needs attention",
       value: String(openExceptions.length),
       supportingText: "No-WO, location, checkout, and review facts",
       tone: openExceptions.length ? "warning" : "positive",
@@ -534,17 +561,59 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
   return {
     state: { kind: "ready" },
     page: {
-      title: session.role === "executive" ? "Executive control tower" : "Operations overview",
-      eyebrow: "What changed · What matters · What is next",
-      description: "Service presence, unresolved work, vendor accountability, and maintenance cost—each connected to its source records.",
+      title: session.role === "executive" ? "Your company at a glance" : "Here’s what needs attention",
+      eyebrow: session.role === "executive" ? "Executive home" : "Manager home",
+      description: "Start with the decisions that need you, then follow every number into the store, work order, visit, or cost record behind it.",
       scopeLabel: session.scopeLabel,
       periodLabel: `Rolling 12 months from ${date(periodStart)}`,
       updatedLabel: `Source data through ${date(fixture.asOf)}`,
-      primaryAction: { label: "Open action center", href: "/app/action-center" },
+      primaryAction: { label: "Review what needs attention", href: "/app/action-center" },
       secondaryAction: session.role === "facilities" || session.role === "regional"
         ? { label: "Create work order", href: "/app/work-orders/new" }
         : undefined,
     },
+    journey: [
+      {
+        id: "intake",
+        label: "New requests",
+        value: String(pendingRequests.length),
+        supportingText: "Waiting for review",
+        tone: pendingRequests.length ? "warning" : "neutral",
+        link: { href: "/app/requests", label: "Review requests" },
+      },
+      {
+        id: "authorization",
+        label: "Vendor response",
+        value: String(awaitingVendor.length),
+        supportingText: "Approved, issued, or waiting",
+        tone: awaitingVendor.length ? "warning" : "neutral",
+        link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" },
+      },
+      {
+        id: "onsite",
+        label: "Onsite now",
+        value: String(activeVisits.length),
+        supportingText: `${scoped.visits.length} total visits in scope`,
+        tone: activeVisits.length ? "info" : "neutral",
+        link: { href: "/app/visits?status=active", label: "Open live visits" },
+      },
+      {
+        id: "follow-up",
+        label: "Follow-up",
+        value: String(followUps.length),
+        supportingText: "Outcome still needs action",
+        tone: followUps.length ? "critical" : "positive",
+        link: { href: "/app/action-center?type=follow-up", label: "Open follow-ups" },
+      },
+      {
+        id: "history",
+        label: "Completed visits",
+        value: String(completedVisits.length),
+        supportingText: "Observed service history",
+        tone: "positive",
+        link: { href: "/app/visits?status=checked_out", label: "Open visit history" },
+      },
+    ],
     metrics,
     priorityActions: actions(fixture, scoped),
     breakdowns: [
@@ -576,11 +645,12 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
 
 const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
   "action-center": [
-    { key: "item", label: "Action" },
+    { key: "item", label: "What needs review" },
     { key: "store", label: "Store" },
-    { key: "owner", label: "Accountable party" },
+    { key: "record", label: "Related record" },
+    { key: "owner", label: "Owner" },
     { key: "due", label: "Due" },
-    { key: "status", label: "Status" },
+    { key: "priority", label: "Priority" },
   ],
   requests: [
     { key: "request", label: "Request" },
@@ -657,6 +727,69 @@ const listMeta: Record<OperatorListRoute, { title: string; eyebrow: string; desc
   admin: { title: "Administration", eyebrow: "Organization setup", description: "Manage stores, vendors, roles, taxonomy, and evidence policy without rewriting source history.", placeholder: "Search settings, stores, vendors, roles, or policy" },
 };
 
+const filterLabels: Record<string, string> = {
+  active: "Onsite now",
+  checked_out: "Completed visits",
+  amended: "Amended visits",
+  open: "Open",
+  refrigeration: "Refrigeration",
+  hvac: "HVAC",
+  forecourt: "Forecourt",
+  plumbing: "Plumbing",
+  electrical: "Electrical",
+  exterior: "Exterior services",
+  exception: "Exceptions",
+  "follow-up": "Follow-ups",
+  true: "With recorded cost",
+};
+
+function routePath(route: OperatorListRoute): string {
+  return `/app/${route}`;
+}
+
+function queryEntries(query: OperatorSearchParameters): Array<[string, string]> {
+  return Object.entries(query).flatMap(([key, raw]) => {
+    const value = first(raw);
+    return value ? [[key, value] as [string, string]] : [];
+  });
+}
+
+function hrefWithoutQueryKey(route: OperatorListRoute, query: OperatorSearchParameters, keyToRemove: string): string {
+  const params = new URLSearchParams(queryEntries(query).filter(([key]) => key !== keyToRemove));
+  const serialized = params.toString();
+  return serialized ? `${routePath(route)}?${serialized}` : routePath(route);
+}
+
+function appliedFilters(
+  fixture: OpsFixture,
+  scoped: ScopedFixture,
+  route: OperatorListRoute,
+  query: OperatorSearchParameters,
+) {
+  const stores = new Map(scoped.stores.map((store) => [store.id, store]));
+  const vendors = new Map(
+    fixture.vendors
+      .filter((vendor) => vendor.organizationId === scoped.organizationId)
+      .map((vendor) => [vendor.id, vendor]),
+  );
+  const assets = new Map(scoped.assets.map((asset) => [asset.id, asset]));
+  const ignored = new Set(["q"]);
+  return queryEntries(query)
+    .filter(([key]) => !ignored.has(key))
+    .map(([key, value]) => {
+      let label = filterLabels[value] ?? sentence(value);
+      if (key === "store") label = storeLabel(stores.get(value));
+      else if (key === "vendor") label = vendors.get(value)?.name ?? "Selected vendor";
+      else if (key === "asset") label = assets.get(value)?.name ?? (value === "unlinked" ? "No equipment linked" : "Selected equipment");
+      else if (key === "costFrom") label = `Cost from ${date(value)}`;
+      else if (key === "costMonth") label = `Cost month ${monthLabel(value)}`;
+      else if (key === "path") label = value.split("|").at(-1) ?? value;
+      else if (key === "exception") label = "Selected exception";
+      else if (key === "visit") label = "Selected visit";
+      return { id: key, label, removeHref: hrefWithoutQueryKey(route, query, key) };
+    });
+}
+
 function searchable(...values: Array<string | undefined>): string {
   return values.filter(Boolean).join(" ").toLocaleLowerCase("en-US");
 }
@@ -678,6 +811,7 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
   const q = cleanSearch(first(query.q));
   const category = first(query.category);
   const status = first(query.status);
+  const stage = first(query.stage);
   const storeId = first(query.store);
   const regionId = first(query.region);
   const hasCost = first(query.hasCost) === "true";
@@ -705,6 +839,7 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
     .filter((work) => !component || (component === "unlinked" ? !work.componentId : work.componentId === component))
     .filter((work) => path.length === 0 || assetMatchesPath(work.assetId ? assetById.get(work.assetId) : undefined, path))
     .filter((work) => !status || (status === "open" ? !["closed", "cancelled"].includes(work.status) : work.status === status))
+    .filter((work) => !stage || (stage === "vendor-response" && ["approved", "issued", "waiting_on_vendor"].includes(work.status)))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((work) => {
       const assignment = assignmentForWork(fixture, scoped.organizationId, work.id);
@@ -768,6 +903,43 @@ function visitRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
         ],
       };
     });
+}
+
+function visitMetrics(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSearchParameters): MetricViewModel[] {
+  const selectedStore = first(query.store);
+  const selectedVendor = first(query.vendor);
+  const base = scoped.visits
+    .filter((visit) => !selectedStore || visit.storeId === selectedStore)
+    .filter((visit) => !selectedVendor || visit.vendorId === selectedVendor);
+  const openExceptionVisitIds = new Set(
+    fixture.exceptions
+      .filter(
+        (exception) =>
+          exception.organizationId === scoped.organizationId &&
+          exception.status !== "resolved" &&
+          Boolean(exception.visitId),
+      )
+      .map((exception) => exception.visitId!),
+  );
+  const withContext = (status?: string) => hrefWithQuery("/app/visits", {
+    store: selectedStore,
+    vendor: selectedVendor,
+    status,
+  });
+  const active = base.filter((visit) => visit.status === "active").length;
+  const completed = base.filter((visit) => visit.status !== "active").length;
+  const noWorkOrder = base.filter((visit) => !visit.workOrderId).length;
+  const needsReviewIds = new Set(
+    base
+      .filter((visit) => openExceptionVisitIds.has(visit.id) || !visit.workOrderId)
+      .map((visit) => visit.id),
+  );
+  return [
+    { id: "all-visits", label: "All visits", value: String(base.length), supportingText: "Every observed visit in scope", link: { href: withContext(), label: "Show all visits" } },
+    { id: "active-visits", label: "Onsite now", value: String(active), supportingText: "Active check-ins", tone: active ? "info" : "neutral", link: { href: withContext("active"), label: "Show onsite" } },
+    { id: "completed-visits", label: "Completed", value: String(completed), supportingText: "Checked-out visit history", tone: "positive", link: { href: withContext("checked_out"), label: "Show history" } },
+    { id: "visit-review", label: "Needs review", value: String(needsReviewIds.size), supportingText: `${noWorkOrder} without a work order`, tone: needsReviewIds.size ? "warning" : "positive", link: { href: hrefWithQuery("/app/action-center", { type: "exception" }), label: "Review exceptions" } },
+  ];
 }
 
 function storeRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSearchParameters): TableRowViewModel[] {
@@ -944,10 +1116,11 @@ export function buildListModel(
         href: action.link.href,
         cells: [
           { key: "item", value: action.title, secondary: action.description },
-          { key: "store", value: action.categoryLabel },
+          { key: "store", value: action.storeLabel ?? "Companywide" },
+          { key: "record", value: action.recordLabel ?? action.categoryLabel, secondary: action.categoryLabel },
           { key: "owner", value: action.ownerLabel },
           { key: "due", value: action.dueLabel },
-          { key: "status", value: action.tone === "critical" ? "Escalated" : "Needs review", tone: action.tone },
+          { key: "priority", value: action.priorityLabel ?? (action.tone === "critical" ? "Urgent" : "Attention"), tone: action.tone },
         ],
       }));
   } else if (route === "reports") {
@@ -981,6 +1154,22 @@ export function buildListModel(
   }
 
   const meta = listMeta[route];
+  const activeFilters = appliedFilters(fixture, scopeFixture(fixture, session), route, query);
+  const visitStatus = route === "visits" ? first(query.status) : undefined;
+  const visitTotal = route === "visits"
+    ? scoped.visits.filter((visit) => !first(query.vendor) || visit.vendorId === first(query.vendor)).length
+    : undefined;
+  const visitFilters = route === "visits"
+    ? [{
+        id: "visit-status",
+        label: "Show",
+        options: [
+          { value: "all", label: `All (${visitTotal})`, href: hrefWithoutQueryKey(route, query, "status"), selected: !visitStatus },
+          { value: "active", label: `Onsite (${scoped.visits.filter((visit) => visit.status === "active").length})`, href: hrefWithQuery(routePath(route), { store: first(query.store), vendor: first(query.vendor), status: "active" }), selected: visitStatus === "active" },
+          { value: "checked_out", label: `Completed (${scoped.visits.filter((visit) => visit.status === "checked_out").length})`, href: hrefWithQuery(routePath(route), { store: first(query.store), vendor: first(query.vendor), status: "checked_out" }), selected: visitStatus === "checked_out" },
+        ],
+      }]
+    : undefined;
   const canCreate = session.role === "facilities" || session.role === "regional" || session.role === "store_manager";
   const primaryAction = route === "requests" && canCreate
     ? { label: "Report an issue", href: "/app/requests/new" }
@@ -995,17 +1184,116 @@ export function buildListModel(
   return {
     state: rows.length || !q ? { kind: "ready" } : { kind: "empty", title: "No matching records", message: "Try another store number, address, vendor, or keyword." },
     page: {
-      title: meta.title,
+      title: route === "visits" && visitStatus === "active" ? "Vendors onsite now" : meta.title,
       eyebrow: meta.eyebrow,
-      description: meta.description,
+      description: route === "visits" && visitStatus === "active"
+        ? `${rows.length} active visit${rows.length === 1 ? "" : "s"} · ${visitTotal} total visits in scope. Location and time are presence evidence, not certified labor.`
+        : meta.description,
       scopeLabel: activeScopeLabel,
       updatedLabel: `Source data through ${date(fixture.asOf)}`,
       primaryAction,
     },
+    metrics: route === "visits" ? visitMetrics(fixture, scoped, query) : undefined,
+    filters: visitFilters,
+    appliedFilters: activeFilters,
+    clearFiltersHref: activeFilters.length ? routePath(route) : undefined,
     table: { id: route, caption: meta.title, columns: columns[route], rows },
-    resultSummary: `${rows.length} source record${rows.length === 1 ? "" : "s"}`,
-    search: meta.placeholder ? { label: `Search ${meta.title}`, placeholder: meta.placeholder, value: first(query.q), action: `/app/${route}` } : undefined,
+    resultSummary: route === "visits" && visitTotal !== undefined && rows.length !== visitTotal
+      ? `Showing ${rows.length} of ${visitTotal} visits`
+      : `${rows.length} source record${rows.length === 1 ? "" : "s"}`,
+    search: meta.placeholder ? {
+      label: `Search ${meta.title}`,
+      placeholder: meta.placeholder,
+      value: first(query.q),
+      action: routePath(route),
+      preservedParameters: queryEntries(query)
+        .filter(([key]) => key !== "q")
+        .map(([name, value]) => ({ name, value })),
+    } : undefined,
     pagination: rows.length ? { summary: `Showing 1–${rows.length} of ${rows.length}` } : undefined,
+  };
+}
+
+export function buildSearchModel(
+  fixture: OpsFixture,
+  session: OperatorSession,
+  query: OperatorSearchParameters = {},
+): SearchPageViewModel {
+  const scoped = scopeFixture(fixture, session);
+  const q = cleanSearch(first(query.q));
+  const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
+
+  const equipmentRows = q
+    ? scoped.assets
+        .filter((asset) => searchable(
+          asset.assetTag,
+          asset.name,
+          asset.manufacturer,
+          asset.model,
+          asset.serialNumber,
+          asset.categoryKey,
+          ...asset.groupPath,
+          storeLabel(storeById.get(asset.storeId)),
+        ).includes(q))
+        .sort((a, b) => a.assetTag.localeCompare(b.assetTag))
+        .map<TableRowViewModel>((asset) => ({
+          id: asset.id,
+          label: asset.name,
+          href: `/app/equipment/${asset.id}`,
+          cells: [
+            { key: "result", value: asset.name, secondary: `${asset.assetTag} · ${asset.manufacturer ?? "Manufacturer not entered"} ${asset.model ?? ""}`.trim() },
+            { key: "context", value: storeLabel(storeById.get(asset.storeId)), secondary: `${sentence(asset.categoryKey)} · ${asset.groupPath.join(" › ")}` },
+          ],
+        }))
+    : [];
+
+  const groups = q
+    ? [
+        { id: "stores", label: "Stores", rows: storeRows(fixture, scoped, { q }) },
+        { id: "work", label: "Work orders", rows: workRows(fixture, scoped, { q }) },
+        { id: "vendors", label: "Vendors", rows: vendorRows(fixture, scoped, { q }) },
+        { id: "equipment", label: "Equipment", rows: equipmentRows },
+        ...(session.role === "finance" ? [] : [
+          { id: "visits", label: "Service visits", rows: visitRows(fixture, scoped, { q }) },
+          {
+            id: "requests",
+            label: "Requests",
+            rows: fixture.requests
+              .filter((request) => request.organizationId === scoped.organizationId && scoped.storeIds.has(request.storeId))
+              .filter((request) => searchable(request.reference, request.problem, request.reporterName, storeLabel(storeById.get(request.storeId))).includes(q))
+              .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+              .map<TableRowViewModel>((request) => ({
+                id: request.id,
+                label: request.reference,
+                href: `/app/requests/${request.id}`,
+                cells: [
+                  { key: "result", value: request.reference, secondary: request.problem },
+                  { key: "context", value: storeLabel(storeById.get(request.storeId)), secondary: request.reporterName },
+                ],
+              })),
+          },
+        ]),
+      ].map((group) => ({ ...group, resultCount: group.rows.length, rows: group.rows.slice(0, 8) }))
+        .filter((group) => group.resultCount > 0)
+    : [];
+  const total = groups.reduce((sum, group) => sum + group.resultCount, 0);
+
+  return {
+    state: !q
+      ? { kind: "empty", title: "Search the whole operation", message: "Try a store number, address, work order, vendor specialty, equipment tag, serial number, technician, or request." }
+      : total
+        ? { kind: "ready" }
+        : { kind: "empty", title: "No matches found", message: `Nothing in your access scope matched “${first(query.q)?.trim()}”. Try a shorter name, number, address, or equipment term.` },
+    page: {
+      title: q ? `Search results for “${first(query.q)?.trim()}”` : "Search TraceOps",
+      eyebrow: "One search · Your full scope",
+      description: "Find a store, work order, request, vendor, service visit, or piece of equipment without deciding which module to open first.",
+      scopeLabel: session.scopeLabel,
+      updatedLabel: `Source data through ${date(fixture.asOf)}`,
+    },
+    query: first(query.q)?.trim() ?? "",
+    resultSummary: `${total} match${total === 1 ? "" : "es"} across ${groups.length} record type${groups.length === 1 ? "" : "s"}`,
+    groups,
   };
 }
 

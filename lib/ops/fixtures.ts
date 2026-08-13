@@ -509,6 +509,94 @@ function buildFixture(): OpsFixture {
   visitEvidence.push({ id: "evidence-visit-northline-109-stale-in", organizationId: organization.id, visitId: "visit-northline-109-stale", kind: "check_in", channel: "store_device", observedAt: staleStart, location: { result: "trusted_store_device", capturedAt: staleStart }, payloadJson: "{}" });
   exceptions.push({ id: "exception-northline-109-missing-checkout", organizationId: organization.id, kind: "missing_checkout", storeId: "store-northline-109", workOrderId: "wo-northline-109", visitId: "visit-northline-109-stale", vendorId: "vendor-northline-forecourt", severity: "attention", status: "open", summary: "Visit remains open more than 24 hours after check-in", detectedAt: at(8, 10, 13, 40) });
 
+  // Recent checked-out visits keep the live-visit exception story in context:
+  // three technicians are currently onsite, while the same workspace also has
+  // a believable service history across every provider, both internal techs,
+  // multiple channels, and outcomes that do not all pretend the first trip
+  // solved the problem. Unresolved outcomes create accountable follow-ups.
+  type RecentServiceStory = {
+    key: string;
+    storeNumber: string;
+    categoryKey: string;
+    problem: string;
+    providerKind: VisitSession["providerKind"];
+    vendorId?: string;
+    internalMembershipId?: string;
+    technicianName: string;
+    providerName: string;
+    priority: WorkOrder["priority"];
+    submittedAt: string;
+    checkedInAt: string;
+    durationMinutes: number;
+    startedChannel: VisitSession["startedChannel"];
+    endedChannel: NonNullable<VisitSession["endedChannel"]>;
+    locationResult: NonNullable<VisitEvidence["location"]>["result"];
+    outcome: NonNullable<VisitSession["outcome"]>;
+    outcomeNotes: string;
+    workStatus: WorkOrder["status"];
+    nteAmountMinor: number;
+    laborAmountMinor: number;
+    materialsAmountMinor: number;
+    followUpAction?: string;
+    followUpDueAt?: string;
+  };
+  const recentServiceStories: RecentServiceStory[] = [
+    { key: "aug-101-refrigeration", storeNumber: "101", categoryKey: "refrigeration", problem: "Beer cave temperature climbed to 44°F during the afternoon rush", providerKind: "outside_vendor", vendorId: "vendor-northline-summit", technicianName: "Chris Walker", providerName: "Summit Refrigeration", priority: "urgent", submittedAt: at(8, 1, 19, 20), checkedInAt: at(8, 2, 13, 10), durationMinutes: 112, startedChannel: "qr", endedChannel: "secure_link", locationResult: "verified", outcome: "resolved", outcomeNotes: "Cleared a blocked condensate path, replaced the failed controller probe, and documented a stable 36°F box temperature.", workStatus: "closed", nteAmountMinor: 185_000, laborAmountMinor: 46_000, materialsAmountMinor: 31_500 },
+    { key: "aug-102-hvac", storeNumber: "102", categoryKey: "hvac", problem: "Sales floor rooftop unit runs continuously but cannot hold setpoint", providerKind: "outside_vendor", vendorId: "vendor-northline-cedar", technicianName: "Sam Patel", providerName: "Cedar Mechanical", priority: "urgent", submittedAt: at(8, 2, 21, 5), checkedInAt: at(8, 3, 14, 35), durationMinutes: 86, startedChannel: "secure_link", endedChannel: "qr", locationResult: "verified", outcome: "diagnosed_waiting_parts", outcomeNotes: "Confirmed a failed condenser-fan motor. The unit is safe to remain off until the approved motor arrives.", workStatus: "waiting_on_parts", nteAmountMinor: 240_000, laborAmountMinor: 39_500, materialsAmountMinor: 0, followUpAction: "Confirm motor availability and schedule the approved return visit", followUpDueAt: at(8, 12, 16) },
+    { key: "aug-103-electrical", storeNumber: "103", categoryKey: "electrical", problem: "Manager reported intermittent power loss at the stockroom receptacles", providerKind: "internal", internalMembershipId: "membership-northline-tech-1", technicianName: "Maria Santos", providerName: "Northline Internal Maintenance", priority: "routine", submittedAt: at(8, 4, 11), checkedInAt: at(8, 4, 14, 5), durationMinutes: 54, startedChannel: "store_device", endedChannel: "store_device", locationResult: "trusted_store_device", outcome: "no_issue_found", outcomeNotes: "Tested the receptacles under load and checked the panel; no fault recurred. Store will monitor and photograph the next event.", workStatus: "closed", nteAmountMinor: 60_000, laborAmountMinor: 21_500, materialsAmountMinor: 0 },
+    { key: "aug-105-forecourt", storeNumber: "105", categoryKey: "forecourt", problem: "Dispenser 4 card reader reboots during some contactless transactions", providerKind: "outside_vendor", vendorId: "vendor-northline-forecourt", technicianName: "Dana Ruiz", providerName: "Forecourt Systems Group", priority: "urgent", submittedAt: at(8, 4, 18, 40), checkedInAt: at(8, 5, 12, 50), durationMinutes: 74, startedChannel: "qr", endedChannel: "store_device", locationResult: "verified", outcome: "return_required", outcomeNotes: "Isolated the fault to the payment-terminal communication board. Dispenser remains available for chip transactions pending replacement.", workStatus: "waiting_on_vendor", nteAmountMinor: 275_000, laborAmountMinor: 48_000, materialsAmountMinor: 0, followUpAction: "Provide board availability and a return-service date", followUpDueAt: at(8, 11, 18) },
+    { key: "aug-106-exterior", storeNumber: "106", categoryKey: "exterior", problem: "Standing water is forming beside the west parking-lot drain", providerKind: "outside_vendor", vendorId: "vendor-northline-four-seasons", technicianName: "Lena Brooks", providerName: "Four Seasons Site Services", priority: "routine", submittedAt: at(8, 5, 15, 25), checkedInAt: at(8, 6, 13, 20), durationMinutes: 63, startedChannel: "vendor_portal", endedChannel: "qr", locationResult: "verified", outcome: "inspection_complete", outcomeNotes: "Cleared surface debris, photographed settled pavement, and submitted measurements for a separate repair estimate.", workStatus: "closed", nteAmountMinor: 95_000, laborAmountMinor: 32_000, materialsAmountMinor: 7_500 },
+    { key: "aug-108-electrical", storeNumber: "108", categoryKey: "electrical", problem: "Two canopy-lighting circuits remain dark after lamp replacement", providerKind: "outside_vendor", vendorId: "vendor-northline-brightpath", technicianName: "Nolan Reed", providerName: "BrightPath Electrical", priority: "routine", submittedAt: at(8, 6, 20, 10), checkedInAt: at(8, 7, 15, 15), durationMinutes: 91, startedChannel: "secure_link", endedChannel: "store_device", locationResult: "low_accuracy", outcome: "unable_to_complete", outcomeNotes: "Confirmed an underground-feed fault. A lift and utility locate are required before repair can proceed safely.", workStatus: "waiting_on_vendor", nteAmountMinor: 225_000, laborAmountMinor: 44_500, materialsAmountMinor: 0, followUpAction: "Submit the lift plan, utility-locate confirmation, and revised estimate", followUpDueAt: at(8, 12, 20) },
+    { key: "aug-110-refrigeration", storeNumber: "110", categoryKey: "refrigeration", problem: "Walk-in cooler evaporator is icing and airflow is dropping", providerKind: "outside_vendor", vendorId: "vendor-northline-summit", technicianName: "Drew Miller", providerName: "Summit Refrigeration", priority: "urgent", submittedAt: at(8, 7, 22, 15), checkedInAt: at(8, 8, 11, 40), durationMinutes: 128, startedChannel: "qr", endedChannel: "vendor_portal", locationResult: "permission_denied", outcome: "temporary_repair", outcomeNotes: "Defrosted the coil and restored airflow. A failed defrost-termination control requires an approved return repair.", workStatus: "waiting_on_parts", nteAmountMinor: 210_000, laborAmountMinor: 53_000, materialsAmountMinor: 12_500, followUpAction: "Price the defrost control and schedule the permanent repair", followUpDueAt: at(8, 13, 16) },
+    { key: "aug-111-plumbing", storeNumber: "111", categoryKey: "plumbing", problem: "Restroom hand-sink supply connection is leaking into the cabinet", providerKind: "outside_vendor", vendorId: "vendor-northline-cedar", technicianName: "Imani Lewis", providerName: "Cedar Mechanical", priority: "routine", submittedAt: at(8, 9, 16, 45), checkedInAt: at(8, 10, 12, 15), durationMinutes: 82, startedChannel: "vendor_portal", endedChannel: "store_device", locationResult: "verified", outcome: "resolved", outcomeNotes: "Replaced the supply stop and flex connector, dried the cabinet, and verified no leakage under repeated use.", workStatus: "closed", nteAmountMinor: 125_000, laborAmountMinor: 37_500, materialsAmountMinor: 18_900 },
+  ];
+
+  recentServiceStories.forEach((story, index) => {
+    const store = stores.find((candidate) => candidate.storeNumber === story.storeNumber)!;
+    const vendor = story.vendorId ? vendors.find((candidate) => candidate.id === story.vendorId) : undefined;
+    const workOrderId = `wo-recent-${story.key}`;
+    const requestId = `request-recent-${story.key}`;
+    const assignmentId = `assignment-recent-${story.key}`;
+    const issuanceId = `issuance-recent-${story.key}-r1`;
+    const visitId = `visit-recent-${story.key}`;
+    const createdAt = new Date(Date.parse(story.submittedAt) + 30 * 60_000).toISOString();
+    const assignedAt = new Date(Date.parse(createdAt) + 20 * 60_000).toISOString();
+    const issuedAt = new Date(Date.parse(assignedAt) + 15 * 60_000).toISOString();
+    const checkedOutAt = new Date(Date.parse(story.checkedInAt) + story.durationMinutes * 60_000).toISOString();
+    const assetId = story.categoryKey === "refrigeration"
+      ? `asset-${story.storeNumber}-beer-cave`
+      : story.categoryKey === "hvac"
+        ? `asset-${story.storeNumber}-rtu-1`
+        : story.categoryKey === "forecourt"
+          ? `asset-${story.storeNumber}-dispenser-4`
+          : undefined;
+    const asset = assetId ? assets.find((candidate) => candidate.id === assetId) : undefined;
+    const workOrderNumber = `NL-2026-${String(201 + index).padStart(4, "0")}`;
+    const nte = { amountMinor: story.nteAmountMinor, currency: "USD" };
+    const open = !["closed", "cancelled"].includes(story.workStatus);
+
+    requests.push({ id: requestId, organizationId: organization.id, reference: `REQ-26-AUG-${story.storeNumber}-${index + 1}`, storeId: store.id, reporterName: ["Taylor Kim", "Morgan Wells", "Avery Johnson", "Jamie Cole"][index % 4], reporterEmployeeId: `E${5200 + index}`, problem: story.problem, priority: story.priority, status: "converted", submittedAt: story.submittedAt, convertedWorkOrderId: workOrderId });
+    workOrders.push({ id: workOrderId, organizationId: organization.id, number: workOrderNumber, storeId: store.id, requestId, problem: story.problem, authorizedScope: `Diagnose the reported ${story.categoryKey} issue, complete authorized work, and record the observed outcome.`, categoryKey: story.categoryKey, taxonomyNodeId: taxonomyByCategory[story.categoryKey], assetId, priority: story.priority, status: story.workStatus, accountableParty: story.providerName, nextAction: open ? story.followUpAction! : "No action required", dueAt: open ? story.followUpDueAt : undefined, escalationTo: open ? "Northline Facilities" : undefined, nte, vendorServiceTicketNumber: vendor ? `${vendor.code.toUpperCase()}-AUG-${story.storeNumber}-${index + 1}` : undefined, createdAt, closedAt: open ? undefined : checkedOutAt });
+    assignments.push({ id: assignmentId, organizationId: organization.id, workOrderId, kind: story.providerKind === "internal" ? "internal" : "outside_vendor", vendorId: story.vendorId, internalMembershipId: story.internalMembershipId, status: open ? "accepted" : "completed", assignedAt });
+    issuances.push({ id: issuanceId, organizationId: organization.id, workOrderId, assignmentId, revision: 1, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber, store: { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: [store.address1, `${store.city}, ${store.state} ${store.postalCode}`].join(", ") }, vendor: story.providerKind === "internal" ? { id: story.internalMembershipId, name: story.providerName } : { id: vendor!.id, name: vendor!.name }, problem: story.problem, priority: story.priority, authorizedScope: `Diagnose the reported ${story.categoryKey} issue, complete authorized work, and record the observed outcome.`, categoryKey: story.categoryKey, asset: asset ? { id: asset.id, name: asset.name, assetTag: asset.assetTag } : undefined, requestedTiming: story.checkedInAt, nte, billingInstruction: `Reference operator work order ${workOrderNumber} on all service paperwork and invoices.` }), channel: story.providerKind === "internal" ? "manual" : "email", issuedAt });
+    if (vendor) vendorResponses.push({ id: `response-recent-${story.key}`, organizationId: organization.id, workOrderId, assignmentId, issuanceId, response: "accepted", responderName: `${vendor.name} dispatch`, proposedAt: story.checkedInAt, respondedAt: new Date(Date.parse(issuedAt) + 20 * 60_000).toISOString() });
+    visits.push({ id: visitId, organizationId: organization.id, storeId: store.id, providerKind: story.providerKind, vendorId: story.vendorId, internalMembershipId: story.internalMembershipId, workOrderId, technicianName: story.technicianName, providerName: story.providerName, purpose: story.problem, status: "checked_out", startedChannel: story.startedChannel, endedChannel: story.endedChannel, checkedInAt: story.checkedInAt, checkedOutAt, outcome: story.outcome, outcomeNotes: story.outcomeNotes, observedDurationSeconds: durationSeconds(story.checkedInAt, checkedOutAt) });
+    const location = story.locationResult === "verified"
+      ? { result: story.locationResult, accuracyM: 13 + index * 2, distanceM: 16 + index * 3, capturedAt: story.checkedInAt }
+      : story.locationResult === "low_accuracy"
+        ? { result: story.locationResult, accuracyM: 146, distanceM: 58, capturedAt: story.checkedInAt }
+        : { result: story.locationResult, capturedAt: story.checkedInAt };
+    visitEvidence.push(
+      { id: `evidence-${visitId}-in`, organizationId: organization.id, visitId, kind: "check_in", channel: story.startedChannel, observedAt: story.checkedInAt, location, payloadJson: JSON.stringify({ workOrderNumber }) },
+      { id: `evidence-${visitId}-out`, organizationId: organization.id, visitId, kind: "check_out", channel: story.endedChannel, observedAt: checkedOutAt, location: story.endedChannel === "store_device" ? { result: "trusted_store_device", capturedAt: checkedOutAt } : { ...location, capturedAt: checkedOutAt }, payloadJson: JSON.stringify({ outcome: story.outcome }) },
+    );
+    if (story.key === "aug-111-plumbing") visitEvidence.push({ id: `evidence-${visitId}-store-confirmation`, organizationId: organization.id, visitId, kind: "store_confirmation", channel: "store_device", observedAt: new Date(Date.parse(checkedOutAt) + 5 * 60_000).toISOString(), location: { result: "trusted_store_device", capturedAt: new Date(Date.parse(checkedOutAt) + 5 * 60_000).toISOString() }, payloadJson: JSON.stringify({ confirmer: "Store shift lead", confirmation: "Technician departed and sink is dry" }) });
+    costLines.push({ id: `cost-recent-${story.key}-labor`, organizationId: organization.id, workOrderId, kind: "labor", description: `${story.providerName} observed service visit`, amount: { amountMinor: story.laborAmountMinor, currency: "USD" }, serviceDate: checkedOutAt.slice(0, 10), recordedAt: new Date(Date.parse(checkedOutAt) + 30 * 60_000).toISOString() });
+    if (story.materialsAmountMinor) costLines.push({ id: `cost-recent-${story.key}-materials`, organizationId: organization.id, workOrderId, kind: assetId ? "parts" : "materials", description: "Recorded repair parts and materials", amount: { amountMinor: story.materialsAmountMinor, currency: "USD" }, serviceDate: checkedOutAt.slice(0, 10), recordedAt: new Date(Date.parse(checkedOutAt) + 30 * 60_000).toISOString() });
+    if (open) followUps.push({ id: `follow-up-recent-${story.key}`, organizationId: organization.id, workOrderId, sourceVisitId: visitId, accountableParty: story.providerName, nextAction: story.followUpAction!, dueAt: story.followUpDueAt!, escalationTo: "Northline Facilities", status: "open", createdAt: checkedOutAt });
+    if (story.locationResult === "low_accuracy") exceptions.push({ id: `exception-recent-${story.key}-location`, organizationId: organization.id, kind: "low_accuracy_location", storeId: store.id, workOrderId, visitId, vendorId: story.vendorId, severity: "attention", status: "acknowledged", summary: "Technician check-in location was captured with low GPS accuracy", detectedAt: story.checkedInAt });
+  });
+
   const pmPlans: PmPlan[] = stores.map((store) => ({ id: `pm-plan-${store.storeNumber}-refrigeration`, organizationId: organization.id, name: "Quarterly refrigeration inspection", storeId: store.id, assetId: `asset-${store.storeNumber}-beer-cave`, categoryKey: "refrigeration", cadenceDays: 90, completionWindowDays: 7, active: true, createdAt: at(1, 6, 14) }));
   const pmOccurrences: PmOccurrence[] = [];
   const pmPeriods = [

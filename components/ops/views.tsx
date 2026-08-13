@@ -23,6 +23,7 @@ import type {
   ListPageViewModel,
   MetricViewModel,
   ProgramPageViewModel,
+  SearchPageViewModel,
   SupportingLink,
   TableViewModel,
   Tone,
@@ -205,12 +206,41 @@ function ActionList({ actions }: { actions: ActionItemViewModel[] }) {
   );
 }
 
+function ServiceJourney({ stages }: { stages: NonNullable<DashboardPageViewModel["journey"]> }) {
+  if (!stages.length) return null;
+  return (
+    <section className={styles.journeyCard} aria-labelledby="service-journey-heading">
+      <div className={styles.cardHeading}>
+        <div>
+          <p className={styles.eyebrow}>One connected service record</p>
+          <h2 id="service-journey-heading">From reported issue to accountable outcome</h2>
+          <p>Each step opens the exact queue or source records behind the count.</p>
+        </div>
+      </div>
+      <div className={styles.journeyTrack}>
+        {stages.map((stage, index) => (
+          <Link className={`${styles.journeyStage} ${toneClass(stage.tone)}`} href={stage.link.href} key={stage.id}>
+            <span className={styles.journeyIndex}>{index + 1}</span>
+            <span className={styles.journeyCopy}>
+              <small>{stage.label}</small>
+              <strong>{stage.value}</strong>
+              <span>{stage.supportingText}</span>
+            </span>
+            <ChevronRight aria-hidden="true" size={17} />
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function DashboardView({ model }: { model: DashboardPageViewModel }) {
   return (
     <div className={styles.pageStack}>
       <PageHeader page={model.page} />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
+          {model.journey ? <ServiceJourney stages={model.journey} /> : null}
           <MetricGrid metrics={model.metrics} />
           <ActionList actions={model.priorityActions} />
           <section className={styles.visualGrid} aria-label="Operational intelligence">
@@ -295,10 +325,26 @@ export function ListView({ model }: { model: ListPageViewModel }) {
                 <Search aria-hidden="true" size={19} />
                 <label className={styles.visuallyHidden} htmlFor={`${model.table.id}-search`}>{model.search.label}</label>
                 <input id={`${model.table.id}-search`} name="q" type="search" defaultValue={model.search.value} placeholder={model.search.placeholder} />
+                {model.search.preservedParameters?.map((parameter) => (
+                  <input key={parameter.name} name={parameter.name} type="hidden" value={parameter.value} />
+                ))}
                 <button type="submit">Search</button>
               </form>
             ) : null}
             <FilterGroups filters={model.filters} />
+            {model.appliedFilters?.length ? (
+              <div className={styles.appliedFilters} aria-label="Applied filters">
+                <span>Filtered by</span>
+                <div>
+                  {model.appliedFilters.map((filter) => (
+                    <Link href={filter.removeHref} key={filter.id} aria-label={`Remove ${filter.label} filter`}>
+                      {filter.label}<span aria-hidden="true">×</span>
+                    </Link>
+                  ))}
+                </div>
+                {model.clearFiltersHref ? <Link className={styles.clearFilters} href={model.clearFiltersHref}>Clear all</Link> : null}
+              </div>
+            ) : null}
             <div className={styles.resultHeader}><strong>{model.resultSummary}</strong></div>
             {model.table.rows.length ? <DataTable table={model.table} /> : <p className={styles.inlineEmpty}>No records match these filters.</p>}
             {model.pagination ? (
@@ -311,6 +357,54 @@ export function ListView({ model }: { model: ListPageViewModel }) {
               </nav>
             ) : null}
           </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function SearchView({ model }: { model: SearchPageViewModel }) {
+  return (
+    <div className={styles.pageStack}>
+      <PageHeader page={model.page} />
+      <form className={styles.universalSearch} action="/app/search" method="get" role="search">
+        <Search aria-hidden="true" size={22} />
+        <label className={styles.visuallyHidden} htmlFor="universal-search">Search TraceOps</label>
+        <input
+          id="universal-search"
+          name="q"
+          type="search"
+          defaultValue={model.query}
+          placeholder="Store, address, work order, vendor, equipment, serial number…"
+        />
+        <button type="submit">Search</button>
+      </form>
+      {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
+        <>
+          <div className={styles.searchSummary}><strong>{model.resultSummary}</strong><span>Only records inside your current role and location scope are shown.</span></div>
+          <div className={styles.searchGroups}>
+            {model.groups.map((group) => (
+              <section className={styles.searchGroup} key={group.id}>
+                <div className={styles.cardHeading}>
+                  <div><h2>{group.label}</h2><p>{group.resultCount} match{group.resultCount === 1 ? "" : "es"}</p></div>
+                  {group.resultCount > group.rows.length ? <span>Top {group.rows.length}</span> : null}
+                </div>
+                <div className={styles.searchResultList}>
+                  {group.rows.map((row) => {
+                    const primary = row.cells[0];
+                    const context = row.cells[1];
+                    return (
+                      <Link href={row.href} className={styles.searchResult} key={row.id}>
+                        <span><strong>{primary?.value ?? row.label}</strong>{primary?.secondary ? <small>{primary.secondary}</small> : null}</span>
+                        {context ? <span className={styles.searchContext}><strong>{context.value}</strong>{context.secondary ? <small>{context.secondary}</small> : null}</span> : null}
+                        <ChevronRight aria-hidden="true" size={18} />
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
         </>
       )}
     </div>

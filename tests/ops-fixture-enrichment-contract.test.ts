@@ -201,6 +201,40 @@ describe("Northline enriched presentation fixture contract", () => {
     }
   });
 
+  it("shows a believable recent visit history instead of three identical onsite rows", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const active = fixture.visits.filter((visit) => visit.status === "active");
+    const completed = fixture.visits.filter((visit) => visit.status === "checked_out");
+    const recentCompleted = completed.filter((visit) => visit.checkedOutAt?.startsWith("2026-08"));
+
+    expect(active).toHaveLength(3);
+    expect(completed.length).toBeGreaterThan(active.length * 20);
+    expect(recentCompleted.length).toBeGreaterThanOrEqual(8);
+    expect(new Set(recentCompleted.map((visit) => visit.vendorId).filter(Boolean))).toEqual(
+      new Set(fixture.vendors.map((vendor) => vendor.id)),
+    );
+    expect(recentCompleted.some((visit) => visit.providerKind === "internal")).toBe(true);
+    expect(recentCompleted.filter((visit) => visit.startedChannel !== visit.endedChannel).length).toBeGreaterThanOrEqual(6);
+    const recentOutcomes = new Set(recentCompleted.map((visit) => visit.outcome));
+    for (const outcome of ["resolved", "diagnosed_waiting_parts", "return_required", "unable_to_complete", "temporary_repair", "no_issue_found", "inspection_complete"] as const) {
+      expect(recentOutcomes.has(outcome), `Recent visit history is missing ${outcome}`).toBe(true);
+    }
+
+    const unresolvedOutcomes = new Set(["diagnosed_waiting_parts", "return_required", "unable_to_complete", "temporary_repair"]);
+    for (const visit of recentCompleted.filter((candidate) => candidate.outcome && unresolvedOutcomes.has(candidate.outcome))) {
+      const followUp = fixture.followUps.find((candidate) => candidate.sourceVisitId === visit.id);
+      expect(followUp, `${visit.id} needs an accountable follow-up`).toMatchObject({
+        workOrderId: visit.workOrderId,
+        status: "open",
+        escalationTo: "Northline Facilities",
+      });
+    }
+
+    expect(fixture.visits.some((visit) => !visit.workOrderId && visit.unmatchedReason)).toBe(true);
+    expect(fixture.exceptions.some((exception) => exception.kind === "missing_checkout" && exception.status === "open")).toBe(true);
+    expect(fixture.exceptions.some((exception) => exception.kind === "low_accuracy_location")).toBe(true);
+  });
+
   it("includes attributable evidence, notifications, and invoice review states", () => {
     const fixture = buildNorthlinePresentationFixture();
     expect(fixture.files.length).toBeGreaterThan(0);

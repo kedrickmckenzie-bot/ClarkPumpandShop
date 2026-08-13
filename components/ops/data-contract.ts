@@ -93,9 +93,21 @@ export interface ActionItemViewModel {
   title: string;
   description: string;
   categoryLabel: string;
+  storeLabel?: string;
+  recordLabel?: string;
   dueLabel: string;
   ownerLabel: string;
+  priorityLabel?: string;
   tone: Tone;
+  link: SupportingLink;
+}
+
+export interface JourneyStageViewModel {
+  id: string;
+  label: string;
+  value: string;
+  supportingText: string;
+  tone?: Tone;
   link: SupportingLink;
 }
 
@@ -127,6 +139,12 @@ export interface FilterGroupViewModel {
   id: string;
   label: string;
   options: FilterOptionViewModel[];
+}
+
+export interface AppliedFilterViewModel {
+  id: string;
+  label: string;
+  removeHref: string;
 }
 
 export interface TableColumnViewModel {
@@ -161,6 +179,8 @@ export interface ListPageViewModel {
   page: PageContext;
   metrics?: MetricViewModel[];
   filters?: FilterGroupViewModel[];
+  appliedFilters?: AppliedFilterViewModel[];
+  clearFiltersHref?: string;
   table: TableViewModel;
   resultSummary: string;
   search?: {
@@ -168,6 +188,7 @@ export interface ListPageViewModel {
     placeholder: string;
     value?: string;
     action: string;
+    preservedParameters?: Array<{ name: string; value: string }>;
   };
   pagination?: {
     summary: string;
@@ -179,6 +200,7 @@ export interface ListPageViewModel {
 export interface DashboardPageViewModel {
   state: DataState;
   page: PageContext;
+  journey?: JourneyStageViewModel[];
   metrics: MetricViewModel[];
   priorityActions: ActionItemViewModel[];
   breakdowns: BreakdownViewModel[];
@@ -231,6 +253,21 @@ export interface OperatorPageModels {
   lifecycle: ProgramPageViewModel;
   reports: ListPageViewModel;
   admin: ListPageViewModel;
+}
+
+export interface SearchResultGroupViewModel {
+  id: string;
+  label: string;
+  resultCount: number;
+  rows: TableRowViewModel[];
+}
+
+export interface SearchPageViewModel {
+  state: DataState;
+  page: PageContext;
+  query: string;
+  resultSummary: string;
+  groups: SearchResultGroupViewModel[];
 }
 
 export interface SelectOptionViewModel {

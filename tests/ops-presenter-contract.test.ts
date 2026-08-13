@@ -13,9 +13,11 @@ let buildListModel: typeof import("@/app/app/_data/operator-presenter").buildLis
 let buildProgramModel: typeof import("@/app/app/_data/operator-presenter").buildProgramModel;
 let buildDetailModel: typeof import("@/app/app/_data/operator-presenter").buildDetailModel;
 let buildCreateWorkOrderModel: typeof import("@/app/app/_data/operator-presenter").buildCreateWorkOrderModel;
+let buildDashboardModel: typeof import("@/app/app/_data/operator-presenter").buildDashboardModel;
+let buildSearchModel: typeof import("@/app/app/_data/operator-presenter").buildSearchModel;
 
 beforeAll(async () => {
-  ({ buildListModel, buildProgramModel, buildDetailModel, buildCreateWorkOrderModel } = await import("@/app/app/_data/operator-presenter"));
+  ({ buildListModel, buildProgramModel, buildDetailModel, buildCreateWorkOrderModel, buildDashboardModel, buildSearchModel } = await import("@/app/app/_data/operator-presenter"));
 });
 
 function executiveSession(): OperatorSession {
@@ -37,6 +39,40 @@ function queryValue(href: string, key: string) {
 }
 
 describe("operator presenter drill-through contracts", () => {
+  it("makes visit history visible and explains active-only drill-downs", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const session = executiveSession();
+    const allVisits = buildListModel(fixture, session, "visits");
+    const onsite = buildListModel(fixture, session, "visits", { status: "active" });
+    const activeCount = fixture.visits.filter((visit) => visit.status === "active").length;
+
+    expect(allVisits.table.rows).toHaveLength(fixture.visits.length);
+    expect(onsite.table.rows).toHaveLength(activeCount);
+    expect(onsite.page.title).toBe("Vendors onsite now");
+    expect(onsite.resultSummary).toBe(`Showing ${activeCount} of ${fixture.visits.length} visits`);
+    expect(onsite.appliedFilters?.map((filter) => filter.label)).toContain("Onsite now");
+    expect(onsite.clearFiltersHref).toBe("/app/visits");
+    expect(onsite.metrics?.find((metric) => metric.id === "completed-visits")?.value).toBe(
+      String(fixture.visits.filter((visit) => visit.status !== "active").length),
+    );
+  });
+
+  it("connects the manager home and searches across operational records", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const session = executiveSession();
+    const dashboard = buildDashboardModel(fixture, session);
+    const search = buildSearchModel(fixture, session, { q: "Ridgeview" });
+
+    expect(dashboard.journey?.map((stage) => stage.id)).toEqual(
+      expect.arrayContaining(["intake", "authorization", "onsite", "follow-up", "history"]),
+    );
+    expect(dashboard.metrics.find((metric) => metric.id === "active-visits")?.supportingText).toContain(
+      `${fixture.visits.length} visits in scope`,
+    );
+    expect(search.groups.find((group) => group.id === "stores")?.rows.some((row) => row.id === NORTHLINE_DEMO_HANDLES.storyStoreId)).toBe(true);
+    expect(search.resultSummary).toMatch(/matches across/i);
+  });
+
   it("keeps the selected store scope on spend context, totals, and source links", () => {
     const fixture = buildNorthlinePresentationFixture();
     const storeId = NORTHLINE_DEMO_HANDLES.storyStoreId;
