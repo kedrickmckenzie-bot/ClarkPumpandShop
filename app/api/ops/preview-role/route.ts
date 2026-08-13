@@ -34,11 +34,22 @@ export async function POST(request: Request) {
     return Response.json({ error: "Choose a supported preview role." }, { status: 422 });
   }
 
-  const response = NextResponse.redirect(new URL(returnTo, request.url), 303);
+  // Keep the redirect relative. Hosted reverse proxies can expose an internal
+  // origin through request.url; using it here would send the browser to an
+  // unreachable upstream host instead of the public TraceOps site.
+  const response = new NextResponse(null, {
+    status: 303,
+    headers: { Location: returnTo },
+  });
+  const forwardedProtocol = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim()
+    .toLowerCase();
   response.cookies.set(PREVIEW_ROLE_COOKIE, requestedRole, {
     httpOnly: true,
     sameSite: "lax",
-    secure: new URL(request.url).protocol === "https:",
+    secure: forwardedProtocol ? forwardedProtocol === "https" : new URL(request.url).protocol === "https:",
     path: "/app",
     maxAge: 60 * 60 * 8,
   });
