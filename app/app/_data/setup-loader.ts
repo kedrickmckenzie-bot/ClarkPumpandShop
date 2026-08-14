@@ -1,7 +1,12 @@
 import "server-only";
 
 import { notFound } from "next/navigation";
-import type { DetailPageViewModel, OperatorRole, OperatorSession, TableRowViewModel, Tone } from "@/components/ops/data-contract";
+import type { DetailPageViewModel, OperatorSession, TableRowViewModel, Tone } from "@/components/ops/data-contract";
+import {
+  roleCan,
+  roleCanAccessDetailRoute,
+  type OperatorCapability,
+} from "@/components/ops/role-policy";
 import type {
   AddComponentSetupModel,
   CreateAssetSetupModel,
@@ -13,14 +18,9 @@ import type { OpsFixture, Store, TaxonomyNode } from "@/lib/ops/types";
 import { loadOperatorSession } from "./operator-loader";
 
 type Query = Record<string, string | string[] | undefined>;
-const setupRoles: readonly OperatorRole[] = ["facilities", "regional", "store_manager"];
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function requireRole(session: OperatorSession, allowed: readonly OperatorRole[]) {
-  if (!allowed.includes(session.role)) notFound();
 }
 
 function storeAllowed(session: OperatorSession, store: Store) {
@@ -32,9 +32,16 @@ function storeAllowed(session: OperatorSession, store: Store) {
   return true;
 }
 
-async function setupContext(allowed: readonly OperatorRole[] = setupRoles) {
+async function setupContext(capability: OperatorCapability) {
   const session = await loadOperatorSession();
-  requireRole(session, allowed);
+  if (!roleCan(session.role, capability)) notFound();
+  const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
+  return { session, fixture };
+}
+
+async function equipmentDetailContext() {
+  const session = await loadOperatorSession();
+  if (!roleCanAccessDetailRoute(session.role, "equipment")) notFound();
   const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
   return { session, fixture };
 }
@@ -93,7 +100,7 @@ function groupPathOptions(fixture: OpsFixture, organizationId: string): SetupOpt
 }
 
 export async function loadCreateAssetSetupModel(query: Query = {}): Promise<CreateAssetSetupModel> {
-  const { session, fixture } = await setupContext();
+  const { session, fixture } = await setupContext("setup_equipment");
   const stores = storeOptions(fixture, session);
   const requestedStoreId = first(query.store);
   return {
@@ -121,7 +128,7 @@ export async function loadAddComponentSetupModel(
   assetId: string,
   query: Query = {},
 ): Promise<AddComponentSetupModel> {
-  const { session, fixture } = await setupContext();
+  const { session, fixture } = await setupContext("setup_equipment");
   const asset = fixture.assets.find(
     (item) => item.organizationId === session.organizationId && item.id === assetId,
   );
@@ -157,7 +164,7 @@ export async function loadAddComponentSetupModel(
 }
 
 export async function loadCreatePmSetupModel(query: Query = {}): Promise<CreatePmSetupModel> {
-  const { session, fixture } = await setupContext();
+  const { session, fixture } = await setupContext("setup_pm");
   const stores = fixture.stores.filter((store) => storeAllowed(session, store) && store.status === "active");
   const visibleStoreIds = new Set(stores.map((store) => store.id));
   const assets = fixture.assets
@@ -236,7 +243,7 @@ export async function loadComponentDetailModel(
   assetId: string,
   componentId: string,
 ): Promise<DetailPageViewModel> {
-  const { session, fixture } = await setupContext(["executive", "facilities", "regional", "store_manager", "finance"]);
+  const { session, fixture } = await equipmentDetailContext();
   const asset = fixture.assets.find(
     (item) => item.organizationId === session.organizationId && item.id === assetId,
   );
@@ -265,8 +272,8 @@ export async function loadComponentDetailModel(
   const recordedCostMinor = fixture.costLines
     .filter((cost) => cost.organizationId === session.organizationId && workIds.has(cost.workOrderId))
     .reduce((sum, cost) => sum + cost.amount.amountMinor, 0);
-  const canSetup = setupRoles.includes(session.role);
-  const canCreateWork = session.role === "facilities" || session.role === "regional";
+  const canSetup = roleCan(session.role, "setup_equipment");
+  const canCreateWork = roleCan(session.role, "create_work_order");
   const childRows: TableRowViewModel[] = children.map((child) => ({
     id: child.id,
     label: child.name,

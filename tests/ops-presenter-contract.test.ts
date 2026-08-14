@@ -57,17 +57,16 @@ describe("operator presenter drill-through contracts", () => {
     );
   });
 
-  it("connects the manager home and searches across operational records", () => {
+  it("keeps the executive home strategic and searches across operational records", () => {
     const fixture = buildNorthlinePresentationFixture();
     const session = executiveSession();
     const dashboard = buildDashboardModel(fixture, session);
     const search = buildSearchModel(fixture, session, { q: "Ridgeview" });
 
-    expect(dashboard.journey?.map((stage) => stage.id)).toEqual(
-      expect.arrayContaining(["intake", "authorization", "onsite", "follow-up", "history"]),
-    );
-    expect(dashboard.metrics.find((metric) => metric.id === "active-visits")?.supportingText).toContain(
-      `${fixture.visits.length} visits in scope`,
+    expect(dashboard.page.title).toBe("Your company at a glance");
+    expect(dashboard.journey).toBeUndefined();
+    expect(dashboard.metrics.map((metric) => metric.id)).toEqual(
+      expect.arrayContaining(["recorded-cost", "open-work", "open-exceptions", "watch-assets"]),
     );
     expect(search.groups.find((group) => group.id === "stores")?.rows.some((row) => row.id === NORTHLINE_DEMO_HANDLES.storyStoreId)).toBe(true);
     expect(search.resultSummary).toMatch(/matches across/i);
@@ -200,14 +199,18 @@ describe("operator presenter drill-through contracts", () => {
     expect(model.breakdowns[0].description).toContain(`${completed} completed / ${closedOccurrences.length} eligible occurrences`);
   });
 
-  it("opens the exact CapEx year assets and explains Store 104 return-visit evidence", () => {
+  it("keeps Store 104's repair economics separate from visit history and opens exact planning-year assets", () => {
     const fixture = buildNorthlinePresentationFixture();
     const session = executiveSession();
     const store104 = buildProgramModel(fixture, session, "lifecycle", {
       asset: NORTHLINE_DEMO_HANDLES.storyAssetId,
     });
     const evidence = store104.table!.rows[0]?.cells.find((cell) => cell.key === "evidence")?.value;
-    expect(evidence).toMatch(/return visit/i);
+    const proposal = store104.table!.rows[0]?.cells.find((cell) => cell.key === "work");
+    expect(evidence).toMatch(/small repair; not flagged/i);
+    expect(evidence).not.toMatch(/return visit|recorded work cost|percent of replacement/i);
+    expect(proposal?.value).toContain("$1,250");
+    expect(proposal?.secondary).toMatch(/1 year.*replacement estimate/i);
 
     const storyAsset = fixture.assets.find((asset) => asset.id === NORTHLINE_DEMO_HANDLES.storyAssetId)!;
     const replacementYear = String(new Date(storyAsset.installedAt!).getUTCFullYear() + storyAsset.expectedLifeYears!);
@@ -278,6 +281,27 @@ describe("operator presenter drill-through contracts", () => {
 
     const create = buildCreateWorkOrderModel(fixture, session, { store: asset.storeId, asset: asset.id });
     expect(create.defaults).toEqual({ storeId: asset.storeId, assetId: asset.id, categoryKey: asset.categoryKey });
+    expect(create.lifecycleAsOf).toBe(fixture.asOf);
+    expect(create.assetLifecycleInputs.find((input) => input.id === asset.id)).toMatchObject({
+      installedAt: asset.installedAt,
+      expectedLifeYears: asset.expectedLifeYears,
+      replacementEstimate: asset.replacementEstimate,
+    });
+  });
+
+  it("promotes a current large repair comparison instead of accumulated historical spend", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const dashboard = buildDashboardModel(fixture, executiveSession());
+
+    expect(dashboard.spotlight?.title).toContain("NL-2026-0115");
+    expect(dashboard.spotlight?.description).toMatch(/current repair estimate/i);
+    expect(dashboard.spotlight?.description).toMatch(/historical work.*do not change/i);
+    expect(dashboard.spotlight?.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Current repair", value: "$18,000" }),
+      expect.objectContaining({ label: "Expected service from repair", value: "5 years" }),
+      expect.objectContaining({ label: "Replacement estimate", value: "$29,150" }),
+    ]));
+    expect(JSON.stringify(dashboard.spotlight)).not.toMatch(/recorded work cost|break-even/i);
   });
 
   it("exposes working Store 104 QR, trusted-device, and vendor entry points", () => {

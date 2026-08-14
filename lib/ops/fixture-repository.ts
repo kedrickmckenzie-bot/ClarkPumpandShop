@@ -136,7 +136,14 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_stores") { row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.locationPolicyEnabled = Boolean(row.locationPolicyEnabled); delete row.aliasesJson; delete row.searchText; }
   if (table === "ops_vendors") { row.preferred = Boolean(row.preferred); delete row.searchText; }
   if (table === "ops_vendor_specialties") { row.searchAliases = JSON.parse(String(row.searchAliasesJson ?? "[]")); delete row.searchAliasesJson; }
-  if (table === "ops_work_orders" && row.nteAmountMinor !== undefined) { row.nte = { amountMinor: row.nteAmountMinor, currency: row.nteCurrency ?? "USD" }; delete row.nteAmountMinor; delete row.nteCurrency; }
+  if (table === "ops_work_orders") {
+    if (row.nteAmountMinor !== undefined) row.nte = { amountMinor: row.nteAmountMinor, currency: row.nteCurrency ?? "USD" };
+    if (row.repairEstimateAmountMinor !== undefined) row.repairEstimate = { amountMinor: row.repairEstimateAmountMinor, currency: row.repairEstimateCurrency ?? "USD" };
+    delete row.nteAmountMinor;
+    delete row.nteCurrency;
+    delete row.repairEstimateAmountMinor;
+    delete row.repairEstimateCurrency;
+  }
   if (table === "ops_visit_evidence") { row.location = { result: row.locationResult ?? "not_requested", latitudeE6: row.latitudeE6, longitudeE6: row.longitudeE6, accuracyM: row.accuracyM, distanceM: row.distanceM, capturedAt: row.observedAt }; delete row.locationResult; delete row.latitudeE6; delete row.longitudeE6; delete row.accuracyM; delete row.distanceM; }
   if (table === "ops_cost_lines") { row.amount = { amountMinor: row.amountMinor, currency: row.currency }; delete row.amountMinor; delete row.currency; }
   if (table === "ops_invoice_references") { row.grossAmount = { amountMinor: row.grossAmountMinor, currency: row.currency }; delete row.grossAmountMinor; delete row.currency; }

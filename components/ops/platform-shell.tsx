@@ -28,6 +28,7 @@ import {
   type NavigationItem,
 } from "./navigation";
 import { PreviewRoleSwitcher } from "./preview-role-switcher";
+import { roleCan, type OperatorCapability } from "./role-policy";
 import styles from "./ops.module.css";
 
 const iconByNavigationId: Record<NavigationItem["id"], LucideIcon> = {
@@ -43,31 +44,31 @@ const createActions: Array<{
   label: string;
   description: string;
   href: string;
-  roles: OperatorRole[];
+  capability: OperatorCapability;
 }> = [
   {
     label: "Report an issue",
     description: "Capture a store problem",
     href: "/app/requests/new",
-    roles: ["facilities", "regional", "store_manager"],
+    capability: "create_request",
   },
   {
     label: "Create work order",
     description: "Authorize internal or vendor work",
     href: "/app/work-orders/new",
-    roles: ["facilities", "regional"],
+    capability: "create_work_order",
   },
   {
     label: "Add store",
     description: "Create a new location",
     href: "/app/stores/new",
-    roles: ["facilities"],
+    capability: "create_store",
   },
   {
     label: "Add vendor",
     description: "Onboard an approved provider",
     href: "/app/vendors/new",
-    roles: ["facilities"],
+    capability: "onboard_vendor",
   },
 ];
 
@@ -149,7 +150,7 @@ function UserSummary({ session }: { session: OperatorSession }) {
 function ProfileFooter({ session }: { session: OperatorSession }) {
   return (
     <div className={styles.sidebarFooter}>
-      {session.role === "facilities" ? (
+      {roleCan(session.role, "administer") ? (
         <Link className={styles.supportLink} href="/app/admin">
           <Settings2 aria-hidden="true" size={18} /> Administration
         </Link>
@@ -163,7 +164,7 @@ function ProfileFooter({ session }: { session: OperatorSession }) {
 }
 
 function CreateMenu({ role }: { role: OperatorRole }) {
-  const actions = createActions.filter((action) => action.roles.includes(role));
+  const actions = createActions.filter((action) => roleCan(role, action.capability));
   if (!actions.length) return null;
 
   return (

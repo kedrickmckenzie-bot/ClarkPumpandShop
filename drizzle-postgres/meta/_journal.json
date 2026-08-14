@@ -8,6 +8,13 @@
       "when": 1786643573921,
       "tag": "0000_ops_platform_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786653856740,
+      "tag": "0001_flawless_archangel",
+      "breakpoints": true
     }
   ]
 }

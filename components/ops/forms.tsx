@@ -10,6 +10,7 @@ import type {
   VendorIssuanceViewModel,
 } from "./data-contract";
 import { DataStatePanel } from "./views";
+import { WorkOrderLifecycleFields } from "./work-order-lifecycle-fields";
 import styles from "./ops.module.css";
 
 function PageIntro({ model }: { model: CreateRequestPageViewModel | CreateWorkOrderPageViewModel | CreateStorePageViewModel | CreateVendorPageViewModel }) {
@@ -132,12 +133,7 @@ export function CreateWorkOrderForm({ model, componentId }: { model: CreateWorkO
                 <Datalist id="work-category-options" options={model.categories} />
               </label>
             </div>
-            <label className={styles.field} htmlFor="work-asset">
-              <span>Equipment or asset <small>Optional — can be deferred</small></span>
-              <input id="work-asset" name="assetId" list="work-asset-options" placeholder="Search an asset, or leave blank when unknown" autoComplete="off" defaultValue={model.defaults?.assetId} />
-              <Datalist id="work-asset-options" options={model.assets} />
-              <small>Leaving this blank will not create a placeholder asset. It can be linked after diagnosis.</small>
-            </label>
+            <WorkOrderLifecycleFields assets={model.assetLifecycleInputs} asOf={model.lifecycleAsOf} defaultAssetId={model.defaults?.assetId} />
           </section>
 
           <section className={styles.formSection}>

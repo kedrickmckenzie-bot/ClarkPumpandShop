@@ -251,6 +251,10 @@ export interface WorkOrder {
   dueAt?: IsoDateTime;
   escalationTo?: string;
   nte?: Money;
+  /** Optional current repair proposal used for capital planning; never an authorization limit. */
+  repairEstimate?: Money;
+  /** Optional planning estimate of how much useful service the proposed repair is expected to buy. */
+  estimatedServiceExtensionMonths?: number;
   vendorServiceTicketNumber?: string;
   vendorInvoiceNumber?: string;
   externalAccountingPo?: string;

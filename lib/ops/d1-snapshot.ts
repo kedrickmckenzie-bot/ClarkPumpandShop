@@ -180,6 +180,8 @@ export async function loadOpsFixtureSnapshotFromD1(
       dueAt: optional(row.dueAt),
       escalationTo: optional(row.escalationTo),
       nte: row.nteAmountMinor == null ? undefined : { amountMinor: row.nteAmountMinor, currency: row.nteCurrency ?? "USD" },
+      repairEstimate: row.repairEstimateAmountMinor == null ? undefined : { amountMinor: row.repairEstimateAmountMinor, currency: row.repairEstimateCurrency ?? "USD" },
+      estimatedServiceExtensionMonths: optional(row.estimatedServiceExtensionMonths),
       vendorServiceTicketNumber: optional(row.vendorServiceTicketNumber),
       vendorInvoiceNumber: optional(row.vendorInvoiceNumber),
       externalAccountingPo: optional(row.externalAccountingPo),

@@ -374,6 +374,26 @@ a.factCard { padding-right: 38px; }
 .formNotice { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; border: 1px solid #c9dce8; border-radius: 10px; color: #355c71; background: #f0f7fb; }
 .formNotice svg { flex: 0 0 auto; margin-top: 2px; }
 .formNotice p { margin: 0; font-size: 14px; line-height: 1.5; }
+.lifecyclePlanningPanel { margin-top: 18px; padding: 18px; border: 1px solid #cddbd3; border-radius: 12px; background: #f8fbf9; }
+.lifecyclePlanningHeading { display: flex; align-items: flex-start; gap: 10px; color: var(--ops-brand-dark); }
+.lifecyclePlanningHeading svg { flex: 0 0 auto; margin-top: 2px; }
+.lifecyclePlanningHeading strong { display: block; font-size: 15px; }
+.lifecyclePlanningHeading p { margin: 3px 0 0; color: var(--ops-muted); font-size: 13px; line-height: 1.45; }
+.lifecyclePlanningResult { display: flex; align-items: flex-start; gap: 10px; margin-top: 17px; padding: 14px; border: 1px solid var(--ops-border); border-radius: 10px; background: #fff; }
+.lifecyclePlanningResult > svg { flex: 0 0 auto; margin-top: 2px; color: var(--ops-info); }
+.lifecyclePlanningResult > div { min-width: 0; flex: 1; }
+.lifecyclePlanningResult strong { font-size: 14px; }
+.lifecyclePlanningResult p { margin: 4px 0 0; color: var(--ops-muted); font-size: 13px; line-height: 1.5; }
+.lifecyclePlanningResult[data-state="compare_alternatives"] { border-color: #e6c77f; background: var(--ops-warning-soft); }
+.lifecyclePlanningResult[data-state="compare_alternatives"] > svg { color: var(--ops-warning); }
+.lifecyclePlanningResult[data-state="below_materiality"],
+.lifecyclePlanningResult[data-state="below_economic_review"] { border-color: #afd1be; background: var(--ops-brand-soft); }
+.lifecyclePlanningResult[data-state="below_materiality"] > svg,
+.lifecyclePlanningResult[data-state="below_economic_review"] > svg { color: var(--ops-brand); }
+.lifecyclePlanningResult dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin: 13px 0 0; }
+.lifecyclePlanningResult dl div { min-width: 0; }
+.lifecyclePlanningResult dt { color: var(--ops-muted); font-size: 11px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.lifecyclePlanningResult dd { margin: 2px 0 0; font-size: 13px; font-weight: 720; }
 .formFooter { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 5px; }
 .formFooter button { border: 0; cursor: pointer; }
 .formMeta { margin-right: auto; color: var(--ops-muted); font-size: 14px; }
@@ -465,6 +485,7 @@ a.factCard { padding-right: 38px; }
   .pagination { align-items: flex-start; gap: 12px; flex-direction: column; }
   .formSection, .issuancePanel { padding: 18px; }
   .fieldGrid, .addressGrid, .assignmentChoices { grid-template-columns: 1fr; }
+  .lifecyclePlanningResult dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .assignmentChoices label { min-height: 82px; }
   .formFooter { align-items: stretch; flex-direction: column-reverse; }
   .formFooter > a, .formFooter > button { width: 100%; }

@@ -69,7 +69,7 @@ export const opsRequests = sqliteTable("ops_requests", {
 export const opsWorkOrders = sqliteTable("ops_work_orders", {
   id: id(), organizationId: organizationId(), number: text("number").notNull(), storeId: text("store_id").notNull(), requestId: text("request_id"), problem: text("problem").notNull(), authorizedScope: text("authorized_scope"), categoryKey: text("category_key"), taxonomyNodeId: text("taxonomy_node_id"), assetId: text("asset_id"), componentId: text("component_id"),
   priority: text("priority").notNull(), status: text("status").notNull(), accountableParty: text("accountable_party").notNull(), nextAction: text("next_action").notNull(), dueAt: text("due_at"), escalationTo: text("escalation_to"),
-  nteAmountMinor: integer("nte_amount_minor"), nteCurrency: text("nte_currency"), vendorServiceTicketNumber: text("vendor_service_ticket_number"), vendorInvoiceNumber: text("vendor_invoice_number"), externalAccountingPo: text("external_accounting_po"), createdAt: createdAt(), closedAt: text("closed_at"),
+  nteAmountMinor: integer("nte_amount_minor"), nteCurrency: text("nte_currency"), repairEstimateAmountMinor: integer("repair_estimate_amount_minor"), repairEstimateCurrency: text("repair_estimate_currency"), estimatedServiceExtensionMonths: integer("estimated_service_extension_months"), vendorServiceTicketNumber: text("vendor_service_ticket_number"), vendorInvoiceNumber: text("vendor_invoice_number"), externalAccountingPo: text("external_accounting_po"), createdAt: createdAt(), closedAt: text("closed_at"),
 }, (table) => [
   uniqueIndex("uidx_ops_work_orders_org_number").on(table.organizationId, table.number),
   index("idx_ops_work_orders_org_status_due").on(table.organizationId, table.status, table.dueAt),

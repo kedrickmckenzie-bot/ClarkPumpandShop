@@ -183,12 +183,21 @@ function TrendCard({ trend }: { trend: TrendViewModel }) {
   );
 }
 
-function ActionList({ actions }: { actions: ActionItemViewModel[] }) {
+function ActionList({
+  actions,
+  section,
+}: {
+  actions: ActionItemViewModel[];
+  section?: DashboardPageViewModel["prioritySection"];
+}) {
+  const title = section?.title ?? "What needs attention";
+  const description = section?.description ?? "Exceptions and decisions assigned within your scope.";
+  const link = section?.link ?? { href: "/app/action-center", label: "Open action center" };
   return (
     <section className={styles.actionCard} aria-labelledby="priority-actions-heading">
       <div className={styles.cardHeading}>
-        <div><h2 id="priority-actions-heading">What needs attention</h2><p>Exceptions and decisions assigned within your scope.</p></div>
-        <Link className={styles.textLink} href="/app/action-center">Open action center<ArrowRight aria-hidden="true" size={16} /></Link>
+        <div><h2 id="priority-actions-heading">{title}</h2><p>{description}</p></div>
+        <Link className={styles.textLink} href={link.href}>{link.label}<ArrowRight aria-hidden="true" size={16} /></Link>
       </div>
       {actions.length > 0 ? (
         <div className={styles.actionList}>
@@ -242,7 +251,7 @@ export function DashboardView({ model }: { model: DashboardPageViewModel }) {
         <>
           {model.journey ? <ServiceJourney stages={model.journey} /> : null}
           <MetricGrid metrics={model.metrics} />
-          <ActionList actions={model.priorityActions} />
+          <ActionList actions={model.priorityActions} section={model.prioritySection} />
           <section className={styles.visualGrid} aria-label="Operational intelligence">
             {model.breakdowns.map((breakdown) => <BreakdownCard breakdown={breakdown} key={breakdown.id} />)}
             {model.trends.map((trend) => <TrendCard trend={trend} key={trend.id} />)}
@@ -250,7 +259,7 @@ export function DashboardView({ model }: { model: DashboardPageViewModel }) {
           {model.spotlight ? (
             <Link className={styles.spotlight} href={model.spotlight.link.href}>
               <span><BarChart3 aria-hidden="true" size={24} /></span>
-              <span><small>Review opportunity</small><strong>{model.spotlight.title}</strong><p>{model.spotlight.description}</p></span>
+              <span><small>{model.spotlight.eyebrow ?? "Review opportunity"}</small><strong>{model.spotlight.title}</strong><p>{model.spotlight.description}</p></span>
               <span className={styles.spotlightFacts}>{model.spotlight.facts.map((fact) => <span key={fact.label}><small>{fact.label}</small><strong>{fact.value}</strong></span>)}</span>
               <span className={styles.spotlightLink}>{model.spotlight.link.label}<ArrowRight aria-hidden="true" size={18} /></span>
             </Link>

@@ -61,6 +61,12 @@ describe("operations fixtures", () => {
     const publicWork = fixture.workOrders.find((row) => row.id === NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId)!;
     expect(publicWork.status).toBe("issued");
     expect(publicWork.componentId).toBe("component-104-evaporator-fan");
+    expect(publicWork.repairEstimate).toEqual({ amountMinor: 125_000, currency: "USD" });
+    expect(publicWork.estimatedServiceExtensionMonths).toBe(12);
+    const capitalReview = fixture.workOrders.find((row) => row.id === "wo-northline-115")!;
+    expect(capitalReview.nte).toBeUndefined();
+    expect(capitalReview.repairEstimate).toEqual({ amountMinor: 1_800_000, currency: "USD" });
+    expect(capitalReview.estimatedServiceExtensionMonths).toBe(60);
     expect(fixture.vendorResponses.some((row) => row.workOrderId === publicWork.id)).toBe(false);
   });
 
@@ -92,6 +98,41 @@ describe("canonical work and provider commands", () => {
     await expect(createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", requestId: request.id, problem: request.problem, categoryKey: "refrigeration", assetId: "asset-104-beer-cave", accountableParty: "Facilities", nextAction: "Review", actor })).rejects.toMatchObject({ code: "VALIDATION" });
     await createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", requestId: request.id, problem: request.problem, accountableParty: "Facilities", nextAction: "Review", actor });
     await expect(createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", requestId: request.id, problem: request.problem, accountableParty: "Facilities", nextAction: "Review", actor })).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("persists optional repair planning separately from the authorization limit", async () => {
+    const svc = commandServices();
+    const workOrder = await createWorkOrder(svc, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-101",
+      problem: "Beer cave repair proposal needs review",
+      categoryKey: "refrigeration",
+      assetId: "asset-101-beer-cave",
+      accountableParty: "Facilities",
+      nextAction: "Review repair proposal",
+      nteAmountMinor: 250_000,
+      repairEstimateAmountMinor: 180_000,
+      estimatedServiceExtensionMonths: 24,
+      actor,
+    });
+    expect(workOrder.nte).toEqual({ amountMinor: 250_000, currency: "USD" });
+    expect(workOrder.repairEstimate).toEqual({ amountMinor: 180_000, currency: "USD" });
+    expect(workOrder.estimatedServiceExtensionMonths).toBe(24);
+    expect(await svc.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id)).toMatchObject({
+      nte: { amountMinor: 250_000 },
+      repairEstimate: { amountMinor: 180_000 },
+      estimatedServiceExtensionMonths: 24,
+    });
+    await expect(createWorkOrder(svc, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-101",
+      problem: "Unclassified repair proposal",
+      accountableParty: "Facilities",
+      nextAction: "Classify asset",
+      repairEstimateAmountMinor: 100_000,
+      estimatedServiceExtensionMonths: 12,
+      actor,
+    })).rejects.toMatchObject({ code: "VALIDATION" });
   });
 
   it("binds issued links to one immutable revision and keeps proposed dates pending facilities review", async () => {

@@ -423,6 +423,9 @@ export const opsWorkOrders = pgTable("ops_work_orders", {
   escalationTo: text("escalation_to"),
   nteAmountMinor: bigint("nte_amount_minor", { mode: "number" }),
   nteCurrency: text("nte_currency"),
+  repairEstimateAmountMinor: bigint("repair_estimate_amount_minor", { mode: "number" }),
+  repairEstimateCurrency: text("repair_estimate_currency"),
+  estimatedServiceExtensionMonths: integer("estimated_service_extension_months"),
   vendorServiceTicketNumber: text("vendor_service_ticket_number"),
   vendorInvoiceNumber: text("vendor_invoice_number"),
   externalAccountingPo: text("external_accounting_po"),
@@ -468,6 +471,9 @@ export const opsWorkOrders = pgTable("ops_work_orders", {
   check("chk_ops_work_orders_status", sql`${table.status} IN ('draft', 'awaiting_approval', 'approved', 'issued', 'accepted', 'scheduled', 'in_progress', 'waiting_on_vendor', 'waiting_on_parts', 'completed_pending_review', 'closed', 'cancelled')`),
   check("chk_ops_work_orders_nte", sql`${table.nteAmountMinor} IS NULL OR ${table.nteAmountMinor} BETWEEN 0 AND 9007199254740991`),
   check("chk_ops_work_orders_nte_money", sql`(${table.nteAmountMinor} IS NULL) = (${table.nteCurrency} IS NULL)`),
+  check("chk_ops_work_orders_repair_estimate", sql`${table.repairEstimateAmountMinor} IS NULL OR ${table.repairEstimateAmountMinor} BETWEEN 0 AND 9007199254740991`),
+  check("chk_ops_work_orders_repair_estimate_money", sql`(${table.repairEstimateAmountMinor} IS NULL) = (${table.repairEstimateCurrency} IS NULL)`),
+  check("chk_ops_work_orders_service_extension", sql`${table.estimatedServiceExtensionMonths} IS NULL OR ${table.estimatedServiceExtensionMonths} BETWEEN 1 AND 1200`),
 ]);
 
 export const opsWorkOrderAssignments = pgTable("ops_work_order_assignments", {

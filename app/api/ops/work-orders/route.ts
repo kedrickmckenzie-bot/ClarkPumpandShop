@@ -12,6 +12,15 @@ import {
 const priorities = new Set(["routine", "urgent", "emergency", "planned"]);
 const assignmentKinds = new Set(["internal", "outside_vendor", "choose_later"]);
 
+function optionalPositiveInteger(value: string) {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new OpsDomainError("VALIDATION", "Expected service gained must be a positive whole number of months.");
+  }
+  return parsed;
+}
+
 export async function POST(request: Request) {
   try {
     const context = await getOpsRequestContext(["facilities", "regional"]);
@@ -55,6 +64,9 @@ export async function POST(request: Request) {
         escalationTo: "Facilities director",
         nteAmountMinor: optionalMoneyMinor(formText(formData, "nteAmount", { max: 30 })),
         currency: "USD",
+        repairEstimateAmountMinor: optionalMoneyMinor(formText(formData, "repairEstimateAmount", { max: 30 })),
+        repairEstimateCurrency: "USD",
+        estimatedServiceExtensionMonths: optionalPositiveInteger(formText(formData, "estimatedServiceExtensionMonths", { max: 5 })),
         actor: context.actor,
       },
     );

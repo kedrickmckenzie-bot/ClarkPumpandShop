@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
@@ -61,17 +61,16 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
   beforeAll(async () => {
     database = new PGlite();
     pool = new PGlitePool(database);
-    const migration = await readFile(
-      "drizzle-postgres/0000_ops_platform_baseline.sql",
-      "utf8",
-    );
-    const statements = migration
-      .split("--> statement-breakpoint")
+    const migrationFiles = (await readdir("drizzle-postgres"))
+      .filter((name) => /^\d+.*\.sql$/.test(name))
+      .sort();
+    const statements = (await Promise.all(migrationFiles.map((name) => readFile(`drizzle-postgres/${name}`, "utf8"))))
+      .flatMap((migration) => migration.split("--> statement-breakpoint"))
       .map((statement) => statement.trim())
       .filter(Boolean)
       // PGlite intentionally ships without pg_trgm. Render PostgreSQL supports
-      // it; this embedded-engine check exercises the schema, constraints, seed,
-      // and repository while skipping only the two extension-backed indexes.
+      // it; this embedded-engine check exercises every other migration,
+      // constraint, seed, and repository path.
       .filter((statement) => !/pg_trgm|gin_trgm_ops/i.test(statement));
     await database.transaction(async (transaction) => {
       for (const statement of statements) await transaction.exec(statement);

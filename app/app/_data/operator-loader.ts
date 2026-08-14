@@ -3,7 +3,21 @@ import "server-only";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
-import type { OperatorRole, OperatorSession } from "@/components/ops/data-contract";
+import type {
+  DashboardPageViewModel,
+  DetailPageViewModel,
+  ListPageViewModel,
+  OperatorRole,
+  OperatorSession,
+} from "@/components/ops/data-contract";
+import {
+  roleCan,
+  roleCanAccessDetailRoute,
+  roleCanAccessListRoute,
+  roleCanAccessProgramRoute,
+  roleCanOpenOperatorHref,
+  type OperatorCapability,
+} from "@/components/ops/role-policy";
 import {
   NORTHLINE_ORGANIZATION_ID,
 } from "@/lib/ops/fixtures";
@@ -128,30 +142,112 @@ export type ListRouteId = OperatorListRoute;
 export type ProgramRouteId = OperatorProgramRoute;
 export type DetailRouteId = OperatorDetailRoute;
 
-function requireRole(role: OperatorRole, allowed: readonly OperatorRole[]) {
-  if (!allowed.includes(role)) notFound();
+function requireCapability(role: OperatorRole, capability: OperatorCapability) {
+  if (!roleCan(role, capability)) notFound();
+}
+
+type ModelWithPageActions = {
+  page: {
+    primaryAction?: { href: string; label: string };
+    secondaryAction?: { href: string; label: string };
+  };
+};
+
+function roleCanUseAction(role: OperatorRole, href: string) {
+  if (href === "#issue-work") return roleCan(role, "issue_work_order");
+  return roleCanOpenOperatorHref(role, href);
+}
+
+function enforceVisibleActionPolicy<T extends ModelWithPageActions>(model: T, role: OperatorRole): T {
+  if (model.page.primaryAction && !roleCanUseAction(role, model.page.primaryAction.href)) {
+    model.page.primaryAction = undefined;
+  }
+  if (model.page.secondaryAction && !roleCanUseAction(role, model.page.secondaryAction.href)) {
+    model.page.secondaryAction = undefined;
+  }
+  return model;
+}
+
+function enforceListLinkPolicy<T extends ListPageViewModel>(model: T, role: OperatorRole): T {
+  enforceVisibleActionPolicy(model, role);
+  model.metrics = model.metrics?.filter((metric) => roleCanOpenOperatorHref(role, metric.link.href));
+  const rowCount = model.table.rows.length;
+  model.table.rows = model.table.rows.filter((row) => roleCanOpenOperatorHref(role, row.href));
+  if (model.table.rows.length !== rowCount) {
+    model.resultSummary = `${model.table.rows.length} source record${model.table.rows.length === 1 ? "" : "s"}`;
+    model.pagination = model.table.rows.length
+      ? { summary: `Showing 1–${model.table.rows.length} of ${model.table.rows.length}` }
+      : undefined;
+  }
+  return model;
+}
+
+function enforceDashboardLinkPolicy<T extends DashboardPageViewModel>(model: T, role: OperatorRole): T {
+  enforceVisibleActionPolicy(model, role);
+  model.metrics = model.metrics.filter((metric) => roleCanOpenOperatorHref(role, metric.link.href));
+  model.journey = model.journey?.filter((stage) => roleCanOpenOperatorHref(role, stage.link.href));
+  model.priorityActions = model.priorityActions.filter((action) => roleCanOpenOperatorHref(role, action.link.href));
+  if (model.prioritySection && !roleCanOpenOperatorHref(role, model.prioritySection.link.href)) {
+    model.prioritySection = undefined;
+  }
+  model.breakdowns = model.breakdowns
+    .map((breakdown) => ({
+      ...breakdown,
+      segments: breakdown.segments.filter((segment) => roleCanOpenOperatorHref(role, segment.link.href)),
+    }))
+    .filter((breakdown) => roleCanOpenOperatorHref(role, breakdown.sourceLink.href));
+  model.trends = model.trends
+    .map((trend) => ({
+      ...trend,
+      points: trend.points.filter((point) => roleCanOpenOperatorHref(role, point.link.href)),
+    }))
+    .filter((trend) => roleCanOpenOperatorHref(role, trend.sourceLink.href));
+  if (model.spotlight && !roleCanOpenOperatorHref(role, model.spotlight.link.href)) {
+    model.spotlight = undefined;
+  }
+  return model;
+}
+
+function enforceDetailLinkPolicy<T extends DetailPageViewModel>(model: T, role: OperatorRole): T {
+  enforceVisibleActionPolicy(model, role);
+  model.facts = model.facts.filter((fact) => !fact.link || roleCanOpenOperatorHref(role, fact.link.href));
+  model.sections = model.sections
+    .filter((section) => {
+      const sectionId = section.id.toLocaleLowerCase("en-US");
+      if (!roleCanAccessListRoute(role, "visits") && sectionId.includes("visit")) return false;
+      if (!roleCanAccessProgramRoute(role, "pm") && (sectionId === "pm" || sectionId.includes("preventive"))) return false;
+      if (!roleCanAccessProgramRoute(role, "lifecycle") && sectionId.includes("lifecycle")) return false;
+      return true;
+    })
+    .map((section) => ({
+      ...section,
+      action: section.action && roleCanOpenOperatorHref(role, section.action.href) ? section.action : undefined,
+      facts: section.facts?.filter((fact) => !fact.link || roleCanOpenOperatorHref(role, fact.link.href)),
+      table: section.table
+        ? { ...section.table, rows: section.table.rows.filter((row) => roleCanOpenOperatorHref(role, row.href)) }
+        : undefined,
+      timeline: section.timeline?.map((event) => event.link && !roleCanOpenOperatorHref(role, event.link.href)
+        ? { ...event, link: undefined }
+        : event),
+    }));
+  return model;
 }
 
 export async function loadListModel(route: ListRouteId, searchParams: OperatorSearchParameters = {}) {
   const context = await sessionAndFixture();
-  const allowed: Record<ListRouteId, readonly OperatorRole[]> = {
-    "action-center": ["executive", "facilities", "regional", "store_manager", "finance"],
-    requests: ["executive", "facilities", "regional", "store_manager"],
-    "work-orders": ["executive", "facilities", "regional", "store_manager", "finance"],
-    visits: ["executive", "facilities", "regional", "store_manager"],
-    stores: ["executive", "facilities", "regional", "store_manager", "finance"],
-    vendors: ["executive", "facilities", "regional", "store_manager", "finance"],
-    invoices: ["executive", "facilities", "regional", "store_manager", "finance"],
-    reports: ["executive", "facilities", "regional", "store_manager", "finance"],
-    admin: ["facilities"],
-  };
-  requireRole(context.session.role, allowed[route]);
-  return buildListModel(context.fixture, context.session, route, searchParams);
+  if (!roleCanAccessListRoute(context.session.role, route)) notFound();
+  return enforceListLinkPolicy(
+    buildListModel(context.fixture, context.session, route, searchParams),
+    context.session.role,
+  );
 }
 
 export async function loadDashboardModel() {
   const context = await sessionAndFixture();
-  return buildDashboardModel(context.fixture, context.session);
+  return enforceDashboardLinkPolicy(
+    buildDashboardModel(context.fixture, context.session),
+    context.session.role,
+  );
 }
 
 export async function loadSearchModel(searchParams: OperatorSearchParameters = {}) {
@@ -161,55 +257,59 @@ export async function loadSearchModel(searchParams: OperatorSearchParameters = {
 
 export async function loadProgramModel(route: ProgramRouteId, searchParams: OperatorSearchParameters = {}) {
   const context = await sessionAndFixture();
-  const allowed: Record<ProgramRouteId, readonly OperatorRole[]> = {
-    spend: ["executive", "facilities", "regional", "store_manager", "finance"],
-    equipment: ["executive", "facilities", "regional", "store_manager", "finance"],
-    pm: ["executive", "facilities", "regional", "store_manager"],
-    lifecycle: ["executive", "facilities", "regional", "finance"],
-  };
-  requireRole(context.session.role, allowed[route]);
-  return buildProgramModel(context.fixture, context.session, route, searchParams);
+  if (!roleCanAccessProgramRoute(context.session.role, route)) notFound();
+  return enforceDashboardLinkPolicy(
+    buildProgramModel(context.fixture, context.session, route, searchParams),
+    context.session.role,
+  );
 }
 
 export async function loadDetailModel(route: DetailRouteId, id: string) {
   const context = await sessionAndFixture();
-  const allowed: Record<DetailRouteId, readonly OperatorRole[]> = {
-    request: ["executive", "facilities", "regional", "store_manager"],
-    "work-order": ["executive", "facilities", "regional", "store_manager", "finance"],
-    store: ["executive", "facilities", "regional", "store_manager", "finance"],
-    vendor: ["executive", "facilities", "regional", "store_manager", "finance"],
-    equipment: ["executive", "facilities", "regional", "store_manager", "finance"],
-    invoice: ["executive", "facilities", "regional", "store_manager", "finance"],
-  };
-  requireRole(context.session.role, allowed[route]);
-  return buildDetailModel(context.fixture, context.session, route, id);
+  if (!roleCanAccessDetailRoute(context.session.role, route)) notFound();
+  const model = buildDetailModel(context.fixture, context.session, route, id);
+  if (route === "work-order" && roleCan(context.session.role, "issue_work_order")) {
+    const issuance = buildVendorIssuanceModel(context.fixture, context.session, id);
+    if (issuance.available) {
+      model.page.primaryAction = {
+        label: issuance.assignmentKind === "choose_later" ? "Choose vendor & issue" : "Issue to vendor",
+        href: "#issue-work",
+      };
+    }
+  }
+  return enforceDetailLinkPolicy(
+    model,
+    context.session.role,
+  );
 }
 
 export async function loadCreateRequestModel() {
   const context = await sessionAndFixture();
-  requireRole(context.session.role, ["facilities", "regional", "store_manager"]);
+  requireCapability(context.session.role, "create_request");
   return buildCreateRequestModel(context.fixture, context.session);
 }
 
 export async function loadCreateWorkOrderModel(searchParams: OperatorSearchParameters = {}) {
   const context = await sessionAndFixture();
-  requireRole(context.session.role, ["facilities", "regional"]);
+  requireCapability(context.session.role, "create_work_order");
   return buildCreateWorkOrderModel(context.fixture, context.session, searchParams);
 }
 
 export async function loadCreateStoreModel() {
   const context = await sessionAndFixture();
-  requireRole(context.session.role, ["facilities"]);
+  requireCapability(context.session.role, "create_store");
   return buildCreateStoreModel(context.fixture, context.session);
 }
 
 export async function loadCreateVendorModel() {
   const context = await sessionAndFixture();
-  requireRole(context.session.role, ["facilities"]);
+  requireCapability(context.session.role, "onboard_vendor");
   return buildCreateVendorModel(context.fixture, context.session);
 }
 
 export async function loadVendorIssuanceModel(workOrderId: string) {
   const context = await sessionAndFixture();
-  return buildVendorIssuanceModel(context.fixture, context.session, workOrderId);
+  const model = buildVendorIssuanceModel(context.fixture, context.session, workOrderId);
+  model.permitted = model.available && roleCan(context.session.role, "issue_work_order");
+  return model;
 }

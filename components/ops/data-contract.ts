@@ -203,9 +203,15 @@ export interface DashboardPageViewModel {
   journey?: JourneyStageViewModel[];
   metrics: MetricViewModel[];
   priorityActions: ActionItemViewModel[];
+  prioritySection?: {
+    title: string;
+    description: string;
+    link: SupportingLink;
+  };
   breakdowns: BreakdownViewModel[];
   trends: TrendViewModel[];
   spotlight?: {
+    eyebrow?: string;
     title: string;
     description: string;
     facts: DetailFactViewModel[];
@@ -276,6 +282,20 @@ export interface SelectOptionViewModel {
   description?: string;
 }
 
+export interface AssetLifecycleInputViewModel {
+  id: string;
+  organizationId: string;
+  storeId: string;
+  label: string;
+  description?: string;
+  installedAt?: string;
+  expectedLifeYears?: number;
+  replacementEstimate?: {
+    amountMinor: number;
+    currency: string;
+  };
+}
+
 export interface CreateRequestPageViewModel {
   state: DataState;
   page: PageContext;
@@ -295,7 +315,8 @@ export interface CreateWorkOrderPageViewModel {
   internalAssignees: SelectOptionViewModel[];
   priorityOptions: SelectOptionViewModel[];
   categories: SelectOptionViewModel[];
-  assets: SelectOptionViewModel[];
+  assetLifecycleInputs: AssetLifecycleInputViewModel[];
+  lifecycleAsOf: string;
   defaults?: {
     storeId?: string;
     assetId?: string;
