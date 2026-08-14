@@ -6,7 +6,7 @@ This is a 12-15 minute guided walkthrough of the clean-slate TraceOps c-store su
 
 - **Northline Fuel & Market** is fictional and has exactly **15 stores**, **five approved outside vendors** and a two-person internal maintenance team.
 - The hosted project seeds deterministic source records into Cloudflare D1; creates, vendor responses, check-in/out and setup changes are durable hosted writes. Local development resets when its in-memory process restarts.
-- The fixture has 106 work orders across 20 months, 107 visits, 45 assets and 60 PM occurrences. Every displayed metric derives from these source records and later workflow events.
+- The fixture has 115 work orders across 20 months, 115 visits, 45 assets and 60 PM occurrences. Every displayed metric derives from these source records and later workflow events.
 - The role picker is a visible preview control, not production authentication. Outbound email/SMS delivery and accounting APIs are not connected.
 
 ## 1. Open with the immediate problem: who is onsite?

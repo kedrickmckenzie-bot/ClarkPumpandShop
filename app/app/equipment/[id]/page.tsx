@@ -32,7 +32,7 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
   return (
     <DetailView
       model={model}
-      after={canSetupEquipment || canSetupPm ? (
+      beforeSections={canSetupEquipment || canSetupPm ? (
         <SetupActions
           title="Build out this equipment record"
           description="Add component depth or schedule preventive work. Both features stay optional and connect back to this equipment history."

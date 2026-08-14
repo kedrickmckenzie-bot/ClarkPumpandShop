@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { OpsDomainError } from "@/lib/ops/commands";
 import { addAssetComponent } from "@/lib/ops/setup-commands";
 import {
@@ -8,6 +7,7 @@ import {
   opsApiError,
   optionalIsoDate,
 } from "@/lib/server/ops-request-context";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 export async function POST(
   request: Request,
@@ -34,10 +34,7 @@ export async function POST(
         actor: context.actor,
       },
     );
-    return NextResponse.redirect(
-      new URL(`/app/equipment/${encodeURIComponent(asset.id)}?componentAdded=true#components`, request.url),
-      303,
-    );
+    return relativeRedirect303(`/app/equipment/${encodeURIComponent(asset.id)}?componentAdded=true#components`);
   } catch (error) {
     return opsApiError(error);
   }

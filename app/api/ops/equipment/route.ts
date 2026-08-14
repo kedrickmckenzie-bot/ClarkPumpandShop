@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { OpsDomainError } from "@/lib/ops/commands";
 import { createAsset } from "@/lib/ops/setup-commands";
 import {
@@ -9,6 +8,7 @@ import {
   optionalIsoDate,
   optionalMoneyMinor,
 } from "@/lib/server/ops-request-context";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 function optionalWholeNumber(value: string, label: string) {
   if (!value) return undefined;
@@ -58,10 +58,7 @@ export async function POST(request: Request) {
         actor: context.actor,
       },
     );
-    return NextResponse.redirect(
-      new URL(`/app/equipment/${encodeURIComponent(result.id)}?created=true`, request.url),
-      303,
-    );
+    return relativeRedirect303(`/app/equipment/${encodeURIComponent(result.id)}?created=true`);
   } catch (error) {
     return opsApiError(error);
   }

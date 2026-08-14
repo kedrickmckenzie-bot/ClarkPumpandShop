@@ -248,8 +248,19 @@ Employee report, call, email, PM, or direct coordinator entry
 - Status changes occur through named domain commands, not arbitrary field edits.
 - Optional approval/NTE rules do not burden customers that do not use them.
 
+An outside-vendor work order has two deliberately separate commercial paths:
+
+1. **Send service work:** the operator chooses one known vendor and issues a versioned Work Order / Service Authorization. This is the only path that assigns the vendor, enables acceptance and scheduling, and makes the work order eligible for technician check-in.
+2. **Request bids first:** the operator asks one or more vendors for pricing against a shared scope and required response deadline. A bid request is not an assignment, service authorization, site-visit request, billable record, cost, invoice, or second work order.
+
+Only one path may be active at a time. Selecting a bid closes the competing requests and identifies the intended provider, but service still requires a separate Work Order / Service Authorization on the same canonical operator work order. Changing paths preserves every prior bid, issuance, response, and visit as historical evidence; it never silently turns a bid into authorized work.
+
 ### 6.3 Vendor issuance rules
 
+- Label vendor-facing records unmistakably as either **Vendor Bid Request** or **Work Order / Service Authorization**.
+- A Vendor Bid Request shows the pricing scope, response deadline, operator work-order reference, and a clear instruction not to travel, check in, begin work, or bill against the request.
+- Vendors may submit, revise, or decline a bid without an account. A bid response records proposed amount, scope, exclusions, lead time, validity, and immutable revisions.
+- Bid status and service status remain separate. Bid states may include request created, opened, bid received, declined, selected, not selected, withdrawn, and expired. Service states may include ready to send, issued, opened, accepted, declined, and scheduled.
 - Issue a versioned service authorization by real email, SMS, or print.
 - Show store, problem, authorized scope, requested timing, contacts, access notes, NTE when used, and billing-reference instructions.
 - Delivery success, bounce, failure, resend, and revocation remain visible.

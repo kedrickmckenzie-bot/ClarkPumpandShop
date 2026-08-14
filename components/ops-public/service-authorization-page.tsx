@@ -11,11 +11,11 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
     <PublicFrame organizationName={authorization.organizationName} context="Work Order / Service Authorization" mode={authorization.mode}>
       <div className={styles.hero}>
         <div>
-          <span className={styles.eyebrow}>Issued to {authorization.vendorName}</span>
+          <span className={styles.eyebrow}>Authorized work issued to {authorization.vendorName}</span>
           <h1 className={styles.title}>{authorization.operatorWorkOrderNumber}</h1>
           <p className={styles.lede}>{authorization.store.name} · Store {authorization.store.number}</p>
         </div>
-        <span className={styles.priority}>{authorization.priority} priority</span>
+        <span className={styles.priority}>{authorization.priority}</span>
       </div>
 
       <div className={styles.layout}>
@@ -23,10 +23,14 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
           <section className={styles.card} aria-labelledby="service-request-title">
             <div className={styles.cardHeader}>
               <div>
-                <span className={styles.eyebrow}>Requested service</span>
-                <h2 className={styles.cardTitle} id="service-request-title">What Northline needs addressed</h2>
+                <span className={styles.eyebrow}>Customer-authorized service</span>
+                <h2 className={styles.cardTitle} id="service-request-title">This is a work order, not a bid request</h2>
               </div>
               <FileCheck2 aria-hidden="true" color="#0d6b62" size={24} />
+            </div>
+            <div className={styles.callout}>
+              <strong>Your company was selected for this work</strong>
+              <p>Review and accept the service authorization before scheduling or beginning work. Technician visit and check-in tools are available for this authorized service.</p>
             </div>
             <p className={styles.problem}>{authorization.service.problem}</p>
             <div className={styles.callout} style={{ marginTop: "1rem" }}>
@@ -47,7 +51,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
               <p className={styles.helper}>Received {formatPublicDateTime(authorization.priorResponse.receivedAt)}{authorization.priorResponse.detail ? ` · ${authorization.priorResponse.detail}` : ""}</p>
             </section>
           ) : null}
-          <VendorResponseForm disabled={hasFinalResponse} token={token} />
+          <VendorResponseForm disabled={hasFinalResponse} opened={authorization.opened} token={token} />
         </div>
 
         <aside className={styles.stack} aria-label="Service authorization details">
@@ -72,9 +76,9 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
           {authorization.technicianVisitUrl ? (
             <section className={styles.card}>
               <CalendarDays aria-hidden="true" color="#0d6b62" size={24} />
-              <h2 className={styles.cardTitle} style={{ marginTop: "0.65rem" }}>Technician arriving onsite?</h2>
-              <p className={styles.muted} style={{ marginTop: "0.35rem" }}>Start or finish the store visit from any phone. No vendor account is required.</p>
-              <Link className={styles.textLink} href={authorization.technicianVisitUrl} style={{ marginTop: "0.85rem" }}>Open technician visit <ArrowRight aria-hidden="true" size={16} /></Link>
+              <h2 className={styles.cardTitle} style={{ marginTop: "0.65rem" }}>Technician check-in and checkout</h2>
+              <p className={styles.muted} style={{ marginTop: "0.35rem" }}>This visit action is available because the separate work order authorizes onsite service. Start or finish the store visit from any phone; no vendor account is required.</p>
+              <Link className={styles.textLink} href={authorization.technicianVisitUrl} style={{ marginTop: "0.85rem" }}>Open technician check-in / checkout <ArrowRight aria-hidden="true" size={16} /></Link>
             </section>
           ) : null}
 

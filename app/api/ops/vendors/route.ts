@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { onboardVendor, OpsDomainError } from "@/lib/ops/commands";
 import { formText, getOpsRequestContext, opsApiError } from "@/lib/server/ops-request-context";
 import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 function vendorCode(name: string) {
   return name.toLocaleUpperCase("en-US").replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "VENDOR";
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         actor: context.actor,
       },
     );
-    return NextResponse.redirect(new URL(`/app/vendors/${encodeURIComponent(result.id)}?created=true`, request.url), 303);
+    return relativeRedirect303(`/app/vendors/${encodeURIComponent(result.id)}?created=true`);
   } catch (error) {
     return opsApiError(error);
   }

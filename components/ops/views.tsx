@@ -295,6 +295,9 @@ function FilterGroups({ filters }: { filters?: FilterGroupViewModel[] }) {
 }
 
 function DataTable({ table }: { table: TableViewModel }) {
+  if (!table.rows.length) {
+    return <p className={styles.inlineEmpty}>No source records are linked to this section yet.</p>;
+  }
   return (
     <div className={styles.tableScroller}>
       <table className={styles.dataTable}>
@@ -440,7 +443,7 @@ export function ProgramView({ model }: { model: ProgramPageViewModel }) {
   );
 }
 
-export function DetailView({ model, after }: { model: DetailPageViewModel; after?: React.ReactNode }) {
+export function DetailView({ model, beforeSections, after }: { model: DetailPageViewModel; beforeSections?: React.ReactNode; after?: React.ReactNode }) {
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={17} />{model.backLink.label}</Link>
@@ -454,6 +457,7 @@ export function DetailView({ model, after }: { model: DetailPageViewModel; after
               return fact.link ? <Link className={styles.factCard} href={fact.link.href} key={fact.label}>{content}<ChevronRight aria-hidden="true" size={17} /></Link> : <div className={styles.factCard} key={fact.label}>{content}</div>;
             })}
           </section>
+          {beforeSections}
           <div className={styles.detailSections}>
             {model.sections.map((section) => (
               <section className={styles.detailSection} id={section.id} key={section.id}>

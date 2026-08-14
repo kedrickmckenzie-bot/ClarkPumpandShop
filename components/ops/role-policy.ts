@@ -2,11 +2,18 @@ import type { OperatorRole } from "./data-contract";
 
 export type OperatorCapability =
   | "create_request"
+  | "review_request"
   | "create_work_order"
+  | "control_work_order"
+  | "classify_work_order"
+  | "record_work_cost"
+  | "review_attention"
   | "create_store"
   | "onboard_vendor"
   | "setup_equipment"
   | "setup_pm"
+  | "request_estimate"
+  | "select_estimate"
   | "issue_work_order"
   | "administer";
 
@@ -25,6 +32,7 @@ export type OperatorProgramRoutePolicyId = "spend" | "equipment" | "pm" | "lifec
 export type OperatorDetailRoutePolicyId =
   | "request"
   | "work-order"
+  | "visit"
   | "store"
   | "vendor"
   | "equipment"
@@ -55,35 +63,42 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
   facilities: {
     capabilities: [
       "create_request",
+      "review_request",
       "create_work_order",
+      "control_work_order",
+      "classify_work_order",
+      "record_work_cost",
+      "review_attention",
       "create_store",
       "onboard_vendor",
       "setup_equipment",
       "setup_pm",
+      "request_estimate",
+      "select_estimate",
       "issue_work_order",
       "administer",
     ],
     listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "invoices", "reports", "admin"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
-    detailRoutes: ["request", "work-order", "store", "vendor", "equipment", "invoice"],
+    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
     workNavigation: ["needs-attention", "requests", "work-orders", "visits", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   regional: {
-    capabilities: ["create_request", "create_work_order", "setup_equipment", "setup_pm", "issue_work_order"],
+    capabilities: ["create_request", "review_request", "create_work_order", "control_work_order", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "request_estimate", "select_estimate", "issue_work_order"],
     listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
-    detailRoutes: ["request", "work-order", "store", "vendor", "equipment", "invoice"],
+    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
     workNavigation: ["needs-attention", "requests", "work-orders", "visits", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   store_manager: {
-    capabilities: ["create_request", "setup_equipment", "setup_pm"],
+    capabilities: ["create_request", "review_request", "setup_equipment", "setup_pm"],
     listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "reports"],
     programRoutes: ["spend", "equipment", "pm"],
-    detailRoutes: ["request", "work-order", "store", "vendor", "equipment"],
+    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
     workNavigation: ["requests", "work-orders", "visits"],
     insightsNavigation: ["spend", "equipment", "pm"],
@@ -92,16 +107,16 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     capabilities: [],
     listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
-    detailRoutes: ["request", "work-order", "store", "vendor", "equipment", "invoice"],
+    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],
     primaryNavigation: ["home", "stores", "vendors", "insights", "reports"],
     workNavigation: [],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   finance: {
-    capabilities: [],
+    capabilities: ["record_work_cost"],
     listRoutes: ["action-center", "work-orders", "stores", "vendors", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "lifecycle"],
-    detailRoutes: ["work-order", "store", "vendor", "equipment", "invoice"],
+    detailRoutes: ["work-order", "visit", "store", "vendor", "equipment", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
     workNavigation: ["needs-attention", "work-orders", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "lifecycle"],
@@ -154,7 +169,7 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
     if (record === "new") return roleCan(role, "create_work_order");
     return record ? roleCanAccessDetailRoute(role, "work-order") : roleCanAccessListRoute(role, "work-orders");
   }
-  if (area === "visits") return roleCanAccessListRoute(role, "visits");
+  if (area === "visits") return record ? roleCanAccessDetailRoute(role, "visit") : roleCanAccessListRoute(role, "visits");
   if (area === "stores") {
     if (record === "new") return roleCan(role, "create_store");
     return record ? roleCanAccessDetailRoute(role, "store") : roleCanAccessListRoute(role, "stores");

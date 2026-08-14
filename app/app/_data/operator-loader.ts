@@ -30,10 +30,15 @@ import {
   buildCreateWorkOrderModel,
   buildDashboardModel,
   buildDetailModel,
+  buildEstimateComparisonModel,
+  buildAttentionItemModel,
   buildListModel,
   buildProgramModel,
+  buildRequestReviewModel,
   buildSearchModel,
   buildVendorIssuanceModel,
+  buildWorkOrderControlModel,
+  buildWorkOrderRecordingModel,
   type OperatorDetailRoute,
   type OperatorListRoute,
   type OperatorProgramRoute,
@@ -272,7 +277,11 @@ export async function loadDetailModel(route: DetailRouteId, id: string) {
     const issuance = buildVendorIssuanceModel(context.fixture, context.session, id);
     if (issuance.available) {
       model.page.primaryAction = {
-        label: issuance.assignmentKind === "choose_later" ? "Choose vendor & issue" : "Issue to vendor",
+        label: issuance.assignmentKind === "choose_later"
+          ? "Choose vendor & create handoff"
+          : issuance.selectedVendorId
+            ? "Create vendor handoff"
+            : "Choose another vendor",
         href: "#issue-work",
       };
     }
@@ -311,5 +320,44 @@ export async function loadVendorIssuanceModel(workOrderId: string) {
   const context = await sessionAndFixture();
   const model = buildVendorIssuanceModel(context.fixture, context.session, workOrderId);
   model.permitted = model.available && roleCan(context.session.role, "issue_work_order");
+  return model;
+}
+
+export async function loadEstimateComparisonModel(workOrderId: string) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
+  const model = buildEstimateComparisonModel(context.fixture, context.session, workOrderId);
+  if (!model.available) notFound();
+  return model;
+}
+
+export async function loadWorkOrderControlModel(workOrderId: string) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
+  const model = buildWorkOrderControlModel(context.fixture, context.session, workOrderId);
+  if (!model.available) notFound();
+  return model;
+}
+
+export async function loadWorkOrderRecordingModel(workOrderId: string) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
+  const model = buildWorkOrderRecordingModel(context.fixture, context.session, workOrderId);
+  if (!model.available) notFound();
+  return model;
+}
+
+export async function loadRequestReviewModel(requestId: string) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessDetailRoute(context.session.role, "request")) notFound();
+  return buildRequestReviewModel(context.fixture, context.session, requestId);
+}
+
+export async function loadAttentionItemModel(itemId: string) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessListRoute(context.session.role, "action-center")) notFound();
+  const model = buildAttentionItemModel(context.fixture, context.session, itemId);
+  if (!model.control.available) notFound();
+  model.detail = enforceDetailLinkPolicy(model.detail, context.session.role);
   return model;
 }

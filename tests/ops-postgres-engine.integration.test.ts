@@ -114,6 +114,25 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
       aliases: fixture.stores[0].aliases,
     });
 
+    const estimateRequests = await repository.listEstimateRequestsForWorkOrder(
+      fixture.organizations[0].id,
+      "wo-northline-105-price-check",
+    );
+    expect(estimateRequests).toHaveLength(2);
+    await expect(repository.getLatestEstimateProposal(
+      fixture.organizations[0].id,
+      "estimate-request-105-cedar",
+    )).resolves.toMatchObject({
+      workOrderId: "wo-northline-105-price-check",
+      vendorId: "vendor-northline-cedar",
+      revision: 1,
+      amount: { amountMinor: 178_000, currency: "USD" },
+    });
+    await expect(repository.getEstimateRequest(
+      "org-other",
+      "estimate-request-105-cedar",
+    )).resolves.toBeNull();
+
     // The seed is restartable and must not duplicate source facts.
     await seedOpsRepository(repository, fixture);
     const workOrderCount = await database.query<{ count: number }>(

@@ -335,15 +335,194 @@ export interface CreateWorkOrderPageViewModel {
 export interface VendorIssuanceViewModel {
   available: boolean;
   permitted: boolean;
+  rolePermitted: boolean;
+  workflowBlocked: boolean;
+  workflowBlockMessage?: string;
   submitAction: string;
   workOrderId: string;
   workOrderNumber: string;
   assignmentKind: "internal" | "outside_vendor" | "choose_later";
   selectedVendorId?: string;
+  vendorSelectionLocked: boolean;
   vendors: SelectOptionViewModel[];
   channels: SelectOptionViewModel[];
   currentRevision?: number;
   helperText: string;
+}
+
+export type EstimateRequestStatusViewModel =
+  | "requested"
+  | "opened"
+  | "submitted"
+  | "declined"
+  | "expired"
+  | "withdrawn"
+  | "selected"
+  | "not_selected";
+
+export interface EstimateProposalViewModel {
+  id: string;
+  revision: number;
+  amountLabel: string;
+  scope: string;
+  exclusions?: string;
+  leadTimeLabel?: string;
+  validUntilLabel?: string;
+  submittedLabel: string;
+}
+
+export interface EstimateRequestComparisonViewModel {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  kindLabel: string;
+  requestedScope: string;
+  status: EstimateRequestStatusViewModel;
+  statusLabel: string;
+  requestedLabel: string;
+  dueLabel?: string;
+  openedLabel?: string;
+  respondedLabel?: string;
+  decisionLabel?: string;
+  latestProposal?: EstimateProposalViewModel;
+  canSelect: boolean;
+  canWithdraw: boolean;
+  canReopen: boolean;
+  decisionAction: string;
+}
+
+export interface EstimateComparisonViewModel {
+  available: boolean;
+  permitted: boolean;
+  rolePermitted: boolean;
+  workflowBlocked: boolean;
+  workflowBlockMessage?: string;
+  workOrderId: string;
+  workOrderNumber: string;
+  submitAction: string;
+  defaultRequestedScope: string;
+  vendors: SelectOptionViewModel[];
+  requests: EstimateRequestComparisonViewModel[];
+  selectedVendorName?: string;
+  comparisonClosed: boolean;
+  activeRequestCount: number;
+  proposalCount: number;
+}
+
+export type WorkflowStageState = "complete" | "current" | "upcoming" | "blocked";
+
+export interface WorkflowStageViewModel {
+  id: string;
+  label: string;
+  state: WorkflowStageState;
+  detail: string;
+  timestampLabel?: string;
+}
+
+export interface WorkOrderControlViewModel {
+  available: boolean;
+  permitted: boolean;
+  submitAction: string;
+  manualResponseAction: string;
+  workOrderId: string;
+  workOrderNumber: string;
+  expectedStatus: string;
+  status: string;
+  statusOptions: SelectOptionViewModel[];
+  priority: string;
+  priorityOptions: SelectOptionViewModel[];
+  accountableParty: string;
+  nextAction: string;
+  dueAt?: string;
+  escalationTo?: string;
+  isTerminal: boolean;
+  stages: WorkflowStageViewModel[];
+  assignment?: {
+    kind: "internal" | "outside_vendor" | "choose_later";
+    status: string;
+    providerLabel: string;
+    assignedLabel: string;
+  };
+  latestIssuance?: {
+    id: string;
+    revision: number;
+    channelLabel: string;
+    issuedLabel: string;
+    deliveryStateLabel: string;
+    deliveryStateDetail: string;
+  };
+  latestVendorResponse?: {
+    response: string;
+    responderName: string;
+    respondedLabel: string;
+    proposedAt?: string;
+    message?: string;
+  };
+  followUps: Array<{
+    id: string;
+    status: string;
+    accountableParty: string;
+    nextAction: string;
+    dueAt: string;
+    dueLabel: string;
+    escalationTo: string;
+  }>;
+  canRecordManualVendorResponse: boolean;
+  manualVendorResponseTarget?: {
+    expectedAssignmentId: string;
+    expectedIssuanceId: string;
+    expectedIssuanceRevision: number;
+  };
+  vendorResponseOptions: SelectOptionViewModel[];
+}
+
+export interface WorkOrderRecordingViewModel {
+  available: boolean;
+  canClassify: boolean;
+  canRecordCost: boolean;
+  submitAction: string;
+  workOrderId: string;
+  workOrderNumber: string;
+  currentCategory?: string;
+  currentAssetId?: string;
+  currentComponentId?: string;
+  classificationSubmissionKey: string;
+  costSubmissionKey: string;
+  categories: SelectOptionViewModel[];
+  assets: Array<SelectOptionViewModel & { categoryKey: string }>;
+  components: Array<SelectOptionViewModel & { assetId: string }>;
+  costKinds: SelectOptionViewModel[];
+  defaultServiceDate: string;
+  recordedCostLabel: string;
+  recordedCostLineCount: number;
+}
+
+export interface RequestReviewViewModel {
+  available: boolean;
+  permitted: boolean;
+  submitAction: string;
+  requestId: string;
+  reference: string;
+  expectedStatus: "submitted" | "under_review";
+  statusLabel: string;
+  canCreateWorkOrder: boolean;
+  createWorkOrderHref?: string;
+}
+
+export interface AttentionItemControlViewModel {
+  available: boolean;
+  permitted: boolean;
+  submitAction: string;
+  id: string;
+  kind: "exception" | "follow_up";
+  status: string;
+  title: string;
+  description: string;
+  accountableParty?: string;
+  nextAction?: string;
+  dueAt?: string;
+  escalationTo?: string;
+  reconciliationOptions?: SelectOptionViewModel[];
 }
 
 export interface CreateStorePageViewModel {

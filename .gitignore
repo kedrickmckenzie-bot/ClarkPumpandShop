@@ -46,3 +46,4 @@ yarn-error.log*
 .sites-package-stage-*/
 *.tsbuildinfo
 .codex-*.log
+.codex-runtime/

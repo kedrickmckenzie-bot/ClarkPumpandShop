@@ -14,7 +14,7 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
   return (
     <DetailView
       model={model}
-      after={canSetupEquipment || canSetupPm ? (
+      beforeSections={canSetupEquipment || canSetupPm ? (
         <SetupActions
           title="Continue store setup"
           description="Add equipment and preventive maintenance when it creates useful visibility; neither is required to report or authorize service."

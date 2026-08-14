@@ -15,9 +15,10 @@ let buildDetailModel: typeof import("@/app/app/_data/operator-presenter").buildD
 let buildCreateWorkOrderModel: typeof import("@/app/app/_data/operator-presenter").buildCreateWorkOrderModel;
 let buildDashboardModel: typeof import("@/app/app/_data/operator-presenter").buildDashboardModel;
 let buildSearchModel: typeof import("@/app/app/_data/operator-presenter").buildSearchModel;
+let buildEstimateComparisonModel: typeof import("@/app/app/_data/operator-presenter").buildEstimateComparisonModel;
 
 beforeAll(async () => {
-  ({ buildListModel, buildProgramModel, buildDetailModel, buildCreateWorkOrderModel, buildDashboardModel, buildSearchModel } = await import("@/app/app/_data/operator-presenter"));
+  ({ buildListModel, buildProgramModel, buildDetailModel, buildCreateWorkOrderModel, buildDashboardModel, buildSearchModel, buildEstimateComparisonModel } = await import("@/app/app/_data/operator-presenter"));
 });
 
 function executiveSession(): OperatorSession {
@@ -46,10 +47,11 @@ describe("operator presenter drill-through contracts", () => {
     const onsite = buildListModel(fixture, session, "visits", { status: "active" });
     const activeCount = fixture.visits.filter((visit) => visit.status === "active").length;
 
-    expect(allVisits.table.rows).toHaveLength(fixture.visits.length);
+    expect(allVisits.table.rows).toHaveLength(Math.min(25, fixture.visits.length));
+    expect(allVisits.pagination?.summary).toBe(`Showing 1–${Math.min(25, fixture.visits.length)} of ${fixture.visits.length}`);
     expect(onsite.table.rows).toHaveLength(activeCount);
     expect(onsite.page.title).toBe("Vendors onsite now");
-    expect(onsite.resultSummary).toBe(`Showing ${activeCount} of ${fixture.visits.length} visits`);
+    expect(onsite.resultSummary).toBe(`${activeCount} matching of ${fixture.visits.length} visits`);
     expect(onsite.appliedFilters?.map((filter) => filter.label)).toContain("Onsite now");
     expect(onsite.clearFiltersHref).toBe("/app/visits");
     expect(onsite.metrics?.find((metric) => metric.id === "completed-visits")?.value).toBe(
@@ -316,5 +318,45 @@ describe("operator presenter drill-through contracts", () => {
       `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}`,
     ]);
     expect(section?.facts?.every((fact) => Boolean(fact.link?.label))).toBe(true);
+  });
+
+  it("compares multiple vendor bids on one canonical work order without creating spend", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const session = { ...executiveSession(), role: "facilities" as const };
+    const workOrderId = "wo-northline-105-price-check";
+    const model = buildEstimateComparisonModel(fixture, session, workOrderId);
+
+    expect(model).toMatchObject({
+      available: true,
+      permitted: true,
+      workOrderNumber: "NL-2026-0117",
+      activeRequestCount: 2,
+      proposalCount: 2,
+    });
+    expect(model.requests.map((request) => [request.vendorName, request.latestProposal?.amountLabel])).toEqual([
+      ["Cedar Mechanical", "$1,780.00"],
+      ["Summit Refrigeration", "$2,450.00"],
+    ]);
+    expect(model.requests.every((request) => request.kindLabel === "Bid request - pricing only")).toBe(true);
+    expect(model.requests.every((request) => request.canSelect)).toBe(true);
+    expect(fixture.workOrders.filter((workOrder) => workOrder.id === workOrderId)).toHaveLength(1);
+    expect(fixture.costLines.filter((line) => line.workOrderId === workOrderId)).toHaveLength(0);
+    expect(fixture.invoiceAllocations.filter((allocation) => allocation.workOrderId === workOrderId)).toHaveLength(0);
+  });
+
+  it("presents elapsed vendor estimates as expired while preserving withdrawal cleanup", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    fixture.asOf = "2026-09-10T00:00:00.000Z";
+    const session = { ...executiveSession(), role: "facilities" as const };
+    const model = buildEstimateComparisonModel(fixture, session, "wo-northline-105-price-check");
+
+    expect(model.activeRequestCount).toBe(0);
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests.every((request) => (
+      request.status === "expired"
+      && request.statusLabel === "Expired"
+      && request.canSelect === false
+      && request.canWithdraw === true
+    ))).toBe(true);
   });
 });

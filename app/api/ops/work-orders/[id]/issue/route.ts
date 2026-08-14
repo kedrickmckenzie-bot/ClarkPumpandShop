@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
-import { assignWorkOrder, issueWorkOrder, OpsDomainError } from "@/lib/ops/commands";
+import { routeAndIssueWorkOrder, OpsDomainError } from "@/lib/ops/commands";
 import {
   assertStoreInSessionScope,
   formText,
   getOpsRequestContext,
   opsApiError,
 } from "@/lib/server/ops-request-context";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 const channels = new Set(["email", "sms", "print", "manual"]);
 
@@ -49,38 +49,12 @@ export async function POST(
     );
     if (!covered) throw new OpsDomainError("FORBIDDEN", "This vendor is not approved for the selected store.");
 
-    const currentAssignment = await context.repository.getActiveAssignment(
-      context.session.organizationId,
-      workOrder.id,
-    );
-    if (currentAssignment?.kind === "internal") {
-      throw new OpsDomainError("CONFLICT", "Internal work must be reassigned before it can be issued to a vendor.");
-    }
-
-    let assignment = currentAssignment;
-    if (!assignment || assignment.kind === "choose_later" || assignment.vendorId !== vendor.id) {
-      assignment = await assignWorkOrder(
-        { repository: context.repository },
-        {
-          organizationId: context.session.organizationId,
-          workOrderId: workOrder.id,
-          kind: "outside_vendor",
-          vendorId: vendor.id,
-          actor: context.actor,
-        },
-      );
-    }
-
     const channel = formText(formData, "channel", { required: true, max: 20 });
     if (!channels.has(channel)) throw new OpsDomainError("VALIDATION", "Choose a supported delivery method.");
-    const latestIssuance = await context.repository.getLatestIssuanceForWorkOrder(
-      context.session.organizationId,
-      workOrder.id,
-    );
-    const currentRevision = latestIssuance?.revision ?? 0;
-    const expectedRevisionText = formText(formData, "expectedRevision", { max: 12 });
-    if (expectedRevisionText && Number(expectedRevisionText) !== currentRevision) {
-      throw new OpsDomainError("CONFLICT", "This work order changed. Refresh before issuing a new revision.");
+    const expectedRevisionText = formText(formData, "expectedRevision", { required: true, max: 12 });
+    const expectedRevision = Number(expectedRevisionText);
+    if (!Number.isInteger(expectedRevision) || expectedRevision < 0) {
+      throw new OpsDomainError("VALIDATION", "Expected issuance revision is invalid.");
     }
 
     const rawToken = createRawToken();
@@ -89,13 +63,13 @@ export async function POST(
     const asset = workOrder.assetId
       ? await context.repository.getAsset(context.session.organizationId, workOrder.assetId)
       : null;
-    await issueWorkOrder(
+    await routeAndIssueWorkOrder(
       { repository: context.repository },
       {
         organizationId: context.session.organizationId,
         workOrderId: workOrder.id,
-        assignmentId: assignment.id,
-        revision: currentRevision + 1,
+        vendorId: vendor.id,
+        expectedRevision,
         channel: channel as "email" | "sms" | "print" | "manual",
         authorizationSnapshot: {
           organizationName: context.session.organizationName,
@@ -122,10 +96,7 @@ export async function POST(
       },
     );
 
-    return NextResponse.redirect(
-      new URL(`/public/service/${encodeURIComponent(rawToken)}`, request.url),
-      303,
-    );
+    return relativeRedirect303(`/public/service/${encodeURIComponent(rawToken)}`);
   } catch (error) {
     return opsApiError(error);
   }

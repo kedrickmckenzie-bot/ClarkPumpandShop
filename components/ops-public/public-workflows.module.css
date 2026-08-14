@@ -553,6 +553,10 @@
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
   cursor: pointer;
   border: 0;
   background: transparent;

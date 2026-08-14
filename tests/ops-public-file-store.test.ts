@@ -10,6 +10,31 @@ const upload = {
 };
 
 describe("public evidence private object storage", () => {
+  it("uses a stable opaque object key when an idempotent checkout upload is retried", async () => {
+    const put = vi.fn(async () => undefined);
+    const store = createPublicUploadStore({
+      environment: { TRACEOPS_OBJECT_STORAGE_PROVIDER: "r2" },
+      r2Bucket: { put },
+    });
+    const input = {
+      organizationId: "organization-secret-id",
+      subjectType: "visit" as const,
+      subjectId: "visit-secret-id",
+      uploads: [upload],
+      idempotencyKey: "checkout-browser-submit-0001",
+    };
+
+    const [first] = await store.store(input);
+    const [retry] = await store.store(input);
+    const [differentAction] = await store.store({ ...input, idempotencyKey: "checkout-browser-submit-0002" });
+
+    expect(retry?.key).toBe(first?.key);
+    expect(differentAction?.key).not.toBe(first?.key);
+    expect(first?.key).toMatch(/^ops-private\/v1\/[a-f0-9]{32}\/visit\/[a-f0-9]{32}\/retry-[a-f0-9]{48}$/);
+    expect(first?.key).not.toContain(input.idempotencyKey);
+    expect(put).toHaveBeenCalledTimes(3);
+  });
+
   it("preserves the Sites R2 binding while using opaque tenant-scoped keys and private metadata", async () => {
     const put = vi.fn(async () => undefined);
     const store = createPublicUploadStore({

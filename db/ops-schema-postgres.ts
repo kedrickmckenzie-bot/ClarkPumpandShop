@@ -417,6 +417,7 @@ export const opsWorkOrders = pgTable("ops_work_orders", {
   componentId: text("component_id"),
   priority: text("priority").notNull(),
   status: text("status").notNull(),
+  version: integer("version").notNull().default(0),
   accountableParty: text("accountable_party").notNull(),
   nextAction: text("next_action").notNull(),
   dueAt: instant("due_at"),
@@ -488,6 +489,7 @@ export const opsWorkOrderAssignments = pgTable("ops_work_order_assignments", {
   supersedesAssignmentId: text("supersedes_assignment_id"),
 }, (table): PgTableExtraConfigValue[] => [
   unique("uq_ops_assignments_org_id").on(table.organizationId, table.id),
+  uniqueIndex("uidx_ops_assignments_org_work_active").on(table.organizationId, table.workOrderId).where(sql`${table.status} IN ('pending', 'issued', 'opened', 'accepted')`),
   index("idx_ops_assignments_org_work_status").on(table.organizationId, table.workOrderId, table.status),
   index("idx_ops_assignments_org_vendor_status").on(table.organizationId, table.vendorId, table.status),
   foreignKey({
@@ -516,7 +518,7 @@ export const opsWorkOrderAssignments = pgTable("ops_work_order_assignments", {
     foreignColumns: [opsWorkOrderAssignments.organizationId, opsWorkOrderAssignments.id],
   }),
   check("chk_ops_assignments_kind", sql`${table.kind} IN ('internal', 'outside_vendor', 'choose_later')`),
-  check("chk_ops_assignments_status", sql`${table.status} IN ('pending', 'issued', 'accepted', 'declined', 'completed', 'cancelled', 'superseded')`),
+  check("chk_ops_assignments_status", sql`${table.status} IN ('pending', 'issued', 'opened', 'accepted', 'declined', 'completed', 'cancelled', 'superseded')`),
   check("chk_ops_assignments_provider", sql`
     (${table.kind} = 'outside_vendor' AND ${table.vendorId} IS NOT NULL AND ${table.internalMembershipId} IS NULL)
     OR (${table.kind} = 'internal' AND ${table.vendorId} IS NULL AND ${table.internalMembershipId} IS NOT NULL)
@@ -595,6 +597,100 @@ export const opsVendorResponses = pgTable("ops_vendor_responses", {
   check("chk_ops_vendor_responses_proposal", sql`${table.response} <> 'proposed_date' OR ${table.proposedAt} IS NOT NULL`),
 ]);
 
+export const opsWorkOrderEstimateRequests = pgTable("ops_work_order_estimate_requests", {
+  id: id(),
+  organizationId: organizationId(),
+  workOrderId: text("work_order_id").notNull(),
+  vendorId: text("vendor_id").notNull(),
+  kind: text("kind").notNull(),
+  requestedScope: text("requested_scope").notNull(),
+  status: text("status").notNull(),
+  channel: text("channel").notNull(),
+  requestedAt: instant("requested_at").notNull(),
+  dueAt: instant("due_at"),
+  openedAt: instant("opened_at"),
+  respondedAt: instant("responded_at"),
+  decisionAt: instant("decision_at"),
+}, (table): PgTableExtraConfigValue[] => [
+  unique("uq_ops_estimate_requests_org_id").on(table.organizationId, table.id),
+  unique("uq_ops_estimate_requests_org_context").on(table.organizationId, table.id, table.workOrderId, table.vendorId),
+  uniqueIndex("uidx_ops_estimate_requests_org_work_vendor_active").on(table.organizationId, table.workOrderId, table.vendorId).where(sql`${table.status} IN ('requested', 'opened', 'submitted')`),
+  uniqueIndex("uidx_ops_estimate_requests_org_work_selected").on(table.organizationId, table.workOrderId).where(sql`${table.status} = 'selected'`),
+  index("idx_ops_estimate_requests_org_work_status_requested").on(table.organizationId, table.workOrderId, table.status, table.requestedAt),
+  index("idx_ops_estimate_requests_org_vendor_status_due").on(table.organizationId, table.vendorId, table.status, table.dueAt),
+  index("idx_ops_estimate_requests_org_status_due").on(table.organizationId, table.status, table.dueAt),
+  foreignKey({
+    name: "fk_ops_estimate_requests_org",
+    columns: [table.organizationId],
+    foreignColumns: [opsOrganizations.id],
+  }),
+  foreignKey({
+    name: "fk_ops_estimate_requests_work",
+    columns: [table.organizationId, table.workOrderId],
+    foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id],
+  }),
+  foreignKey({
+    name: "fk_ops_estimate_requests_vendor",
+    columns: [table.organizationId, table.vendorId],
+    foreignColumns: [opsVendors.organizationId, opsVendors.id],
+  }),
+  check("chk_ops_estimate_requests_kind", sql`${table.kind} IN ('estimate_only', 'diagnostic_and_estimate')`),
+  check("chk_ops_estimate_requests_status", sql`${table.status} IN ('requested', 'opened', 'submitted', 'declined', 'expired', 'withdrawn', 'selected', 'not_selected')`),
+  check("chk_ops_estimate_requests_channel", sql`${table.channel} IN ('email', 'sms', 'manual')`),
+  check("chk_ops_estimate_requests_scope", sql`nullif(btrim(${table.requestedScope}), '') IS NOT NULL`),
+  check("chk_ops_estimate_requests_due", sql`${table.dueAt} IS NULL OR ${table.dueAt} >= ${table.requestedAt}`),
+  check("chk_ops_estimate_requests_opened", sql`${table.openedAt} IS NULL OR ${table.openedAt} >= ${table.requestedAt}`),
+  check("chk_ops_estimate_requests_responded", sql`${table.respondedAt} IS NULL OR ${table.respondedAt} >= ${table.requestedAt}`),
+  check("chk_ops_estimate_requests_decision", sql`${table.decisionAt} IS NULL OR ${table.decisionAt} >= ${table.requestedAt}`),
+]);
+
+export const opsVendorEstimateProposals = pgTable("ops_vendor_estimate_proposals", {
+  id: id(),
+  organizationId: organizationId(),
+  requestId: text("request_id").notNull(),
+  workOrderId: text("work_order_id").notNull(),
+  vendorId: text("vendor_id").notNull(),
+  revision: integer("revision").notNull(),
+  amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+  currency: text("currency").notNull(),
+  scope: text("scope").notNull(),
+  exclusions: text("exclusions"),
+  leadTimeDays: integer("lead_time_days"),
+  validUntil: instant("valid_until"),
+  submittedAt: instant("submitted_at").notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+  unique("uq_ops_estimate_proposals_org_id").on(table.organizationId, table.id),
+  unique("uq_ops_estimate_proposals_org_request_revision").on(table.organizationId, table.requestId, table.revision),
+  index("idx_ops_estimate_proposals_org_work_submitted").on(table.organizationId, table.workOrderId, table.submittedAt),
+  index("idx_ops_estimate_proposals_org_vendor_submitted").on(table.organizationId, table.vendorId, table.submittedAt),
+  foreignKey({
+    name: "fk_ops_estimate_proposals_org",
+    columns: [table.organizationId],
+    foreignColumns: [opsOrganizations.id],
+  }),
+  foreignKey({
+    name: "fk_ops_estimate_proposals_work",
+    columns: [table.organizationId, table.workOrderId],
+    foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id],
+  }),
+  foreignKey({
+    name: "fk_ops_estimate_proposals_vendor",
+    columns: [table.organizationId, table.vendorId],
+    foreignColumns: [opsVendors.organizationId, opsVendors.id],
+  }),
+  foreignKey({
+    name: "fk_ops_estimate_proposals_request_context",
+    columns: [table.organizationId, table.requestId, table.workOrderId, table.vendorId],
+    foreignColumns: [opsWorkOrderEstimateRequests.organizationId, opsWorkOrderEstimateRequests.id, opsWorkOrderEstimateRequests.workOrderId, opsWorkOrderEstimateRequests.vendorId],
+  }),
+  check("chk_ops_estimate_proposals_revision", sql`${table.revision} > 0`),
+  check("chk_ops_estimate_proposals_amount", sql`${table.amountMinor} BETWEEN 0 AND 9007199254740991`),
+  check("chk_ops_estimate_proposals_currency", sql`nullif(btrim(${table.currency}), '') IS NOT NULL`),
+  check("chk_ops_estimate_proposals_scope", sql`nullif(btrim(${table.scope}), '') IS NOT NULL`),
+  check("chk_ops_estimate_proposals_lead_time", sql`${table.leadTimeDays} IS NULL OR ${table.leadTimeDays} BETWEEN 0 AND 3650`),
+  check("chk_ops_estimate_proposals_valid_until", sql`${table.validUntil} IS NULL OR ${table.validUntil} > ${table.submittedAt}`),
+]);
+
 export const opsVisitSessions = pgTable("ops_visit_sessions", {
   id: id(),
   organizationId: organizationId(),
@@ -654,7 +750,7 @@ export const opsVisitSessions = pgTable("ops_visit_sessions", {
   check("chk_ops_visits_status", sql`${table.status} IN ('active', 'checked_out', 'amended')`),
   check("chk_ops_visits_started_channel", sql`${table.startedChannel} IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app')`),
   check("chk_ops_visits_ended_channel", sql`${table.endedChannel} IS NULL OR ${table.endedChannel} IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app')`),
-  check("chk_ops_visits_outcome", sql`${table.outcome} IS NULL OR ${table.outcome} IN ('resolved', 'temporary_repair', 'diagnosed_waiting_parts', 'return_required', 'unable_to_complete', 'no_issue_found', 'inspection_complete', 'pm_complete', 'other')`),
+  check("chk_ops_visits_outcome", sql`${table.outcome} IS NULL OR ${table.outcome} IN ('resolved', 'temporary_repair', 'diagnosed_waiting_parts', 'return_required', 'unable_to_complete', 'unable_to_reproduce', 'no_issue_found', 'inspection_complete', 'pm_complete', 'other')`),
   check("chk_ops_visits_chronology", sql`${table.checkedOutAt} IS NULL OR ${table.checkedOutAt} >= ${table.checkedInAt}`),
   check("chk_ops_visits_duration", sql`${table.observedDurationSeconds} IS NULL OR ${table.observedDurationSeconds} >= 0`),
   check("chk_ops_visits_checkout_state", sql`
@@ -1136,6 +1232,8 @@ export const opsPostgresSchema = {
   opsWorkOrderAssignments,
   opsWorkOrderIssuances,
   opsVendorResponses,
+  opsWorkOrderEstimateRequests,
+  opsVendorEstimateProposals,
   opsVisitSessions,
   opsVisitEvidence,
   opsFiles,

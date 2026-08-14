@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { createStore } from "@/lib/ops/commands";
 import { formText, getOpsRequestContext, opsApiError } from "@/lib/server/ops-request-context";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 export async function POST(request: Request) {
   try {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
         actor: context.actor,
       },
     );
-    return NextResponse.redirect(new URL(`/app/stores/${encodeURIComponent(result.id)}?created=true`, request.url), 303);
+    return relativeRedirect303(`/app/stores/${encodeURIComponent(result.id)}?created=true`);
   } catch (error) {
     return opsApiError(error);
   }

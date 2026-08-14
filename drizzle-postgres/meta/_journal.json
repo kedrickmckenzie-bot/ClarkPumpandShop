@@ -29,6 +29,20 @@
       "when": 1786715485515,
       "tag": "0003_remove_orphaned_store109_invoice_exception",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786734968776,
+      "tag": "0004_work_order_estimates",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786737408000,
+      "tag": "0005_heavy_black_panther",
+      "breakpoints": true
     }
   ]
 }

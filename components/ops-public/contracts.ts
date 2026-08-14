@@ -46,6 +46,7 @@ export interface PublicActionReceipt {
   mode: PublicRuntimeMode;
   heading: string;
   message: string;
+  replayed?: boolean;
 }
 
 export interface ServiceAuthorizationView {
@@ -55,6 +56,7 @@ export interface ServiceAuthorizationView {
   operatorWorkOrderNumber: string;
   revision: number;
   issuedAt: string;
+  opened: boolean;
   status: "awaiting_response" | "accepted" | "declined" | "date_proposed" | "question_received";
   priority: "Routine" | "Priority" | "Emergency";
   store: {
@@ -82,6 +84,53 @@ export interface ServiceAuthorizationView {
   };
   technicianVisitUrl?: string;
   mode: PublicRuntimeMode;
+}
+
+export interface VendorEstimateView {
+  organizationName: string;
+  organizationSupport: string;
+  vendorName: string;
+  operatorWorkOrderNumber: string;
+  status: "requested" | "opened" | "submitted" | "declined" | "expired" | "withdrawn" | "selected" | "not_selected";
+  statusLabel: string;
+  requestKindLabel: string;
+  requestedAt: string;
+  dueAt?: string;
+  store: {
+    number: string;
+    name: string;
+    address: string;
+  };
+  problem: string;
+  requestedScope: string;
+  latestProposal?: {
+    revision: number;
+    amountLabel: string;
+    scope: string;
+    exclusions?: string;
+    leadTimeDays?: number;
+    validUntil?: string;
+    submittedAt: string;
+  };
+  canRespond: boolean;
+  mode: PublicRuntimeMode;
+}
+
+export interface VendorEstimateSubmissionCommand {
+  responderName: string;
+  expectedRevision: number;
+  amount: string;
+  currency?: string;
+  scope: string;
+  exclusions?: string;
+  leadTimeDays?: number;
+  validUntil?: string;
+}
+
+export interface VendorEstimateDeclineCommand {
+  responderName: string;
+  expectedRevision: number;
+  reason: string;
 }
 
 export type PublicVendorResponseKind = OpsVendorResponseKind;
@@ -148,6 +197,7 @@ export interface VendorVisitContextView {
 }
 
 export interface TechnicianCheckInCommand {
+  submissionKey: string;
   vendorId: string;
   workOrderId?: string;
   noWorkOrderReason?: string;
@@ -168,7 +218,7 @@ export interface TechnicianCheckInReceipt extends PublicActionReceipt {
 
 export type VisitOutcome = Extract<
   OpsVisitOutcome,
-  "resolved" | "temporary_repair" | "diagnosed_waiting_parts" | "return_required" | "unable_to_complete" | "other"
+  "resolved" | "temporary_repair" | "diagnosed_waiting_parts" | "return_required" | "unable_to_complete" | "unable_to_reproduce" | "other"
 >;
 
 export interface PublicUpload {
@@ -179,6 +229,7 @@ export interface PublicUpload {
 }
 
 export interface TechnicianCheckOutCommand {
+  submissionKey: string;
   vendorId: string;
   visitId: string;
   outcome: VisitOutcome;
@@ -218,7 +269,12 @@ export interface StoreIssueReceipt extends PublicActionReceipt {
 
 export interface PublicOperationsGateway {
   loadServiceAuthorization(token: string): Promise<ServiceAuthorizationView | null>;
+  openServiceAuthorization(token: string): Promise<PublicActionReceipt>;
   respondToServiceAuthorization(token: string, command: VendorResponseCommand): Promise<PublicActionReceipt>;
+  loadVendorEstimate(token: string): Promise<VendorEstimateView | null>;
+  openVendorEstimate(token: string): Promise<PublicActionReceipt>;
+  submitVendorEstimate(token: string, command: VendorEstimateSubmissionCommand): Promise<PublicActionReceipt>;
+  declineVendorEstimate(token: string, command: VendorEstimateDeclineCommand): Promise<PublicActionReceipt>;
   loadStorePortal(token: string): Promise<StorePortalView | null>;
   lookupVendorVisitContext(token: string, vendorId: string): Promise<VendorVisitContextView>;
   checkIn(token: string, command: TechnicianCheckInCommand): Promise<TechnicianCheckInReceipt>;

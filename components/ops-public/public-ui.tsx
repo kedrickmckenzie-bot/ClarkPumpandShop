@@ -58,7 +58,7 @@ export function PublicFrame({
   );
 }
 
-export function PublicLinkUnavailable({ kind = "link" }: { kind?: "link" | "service authorization" | "store link" }) {
+export function PublicLinkUnavailable({ kind = "link" }: { kind?: "link" | "service authorization" | "store link" | "bid request" }) {
   return (
     <PublicFrame organizationName="TraceOps" context="Secure public workflow" mode="live">
       <section className={styles.errorCard} aria-labelledby="unavailable-title">

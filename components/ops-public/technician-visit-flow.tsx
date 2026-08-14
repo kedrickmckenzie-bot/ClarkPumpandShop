@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Camera, Clock3, MapPin } from "lucide-react";
 import type {
   LocationEvidenceInput,
@@ -19,12 +19,14 @@ type FlowMode = "check_in" | "check_out";
 type VisitReceipt = TechnicianCheckInReceipt | TechnicianCheckOutReceipt;
 
 const NO_WORK_ORDER = "__no_work_order__";
+const SUBMISSION_KEY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const OUTCOMES: Array<{ id: VisitOutcome; title: string; description: string }> = [
   { id: "resolved", title: "Resolved", description: "The reported problem is operating normally now." },
   { id: "temporary_repair", title: "Temporary repair", description: "Service was restored, but permanent work is still needed." },
   { id: "diagnosed_waiting_parts", title: "Waiting on parts", description: "Diagnosis is complete and parts are required." },
   { id: "return_required", title: "Return visit needed", description: "More work or another technician visit is required." },
+  { id: "unable_to_reproduce", title: "Could not reproduce", description: "The reported condition did not occur during this visit." },
   { id: "unable_to_complete", title: "Unable to complete", description: "The visit could not be completed today." },
   { id: "other", title: "Other", description: "Record another clear outcome in the notes." },
 ];
@@ -57,11 +59,15 @@ export function TechnicianVisitFlow({ token, portal }: { token: string; portal: 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<VisitReceipt | null>(null);
+  const submissionKeys = useRef<Partial<Record<FlowMode, string>>>({});
 
   const selectedVendor = useMemo(() => portal.vendors.find((vendor) => vendor.id === vendorId), [portal.vendors, vendorId]);
   const totalSteps = 4;
 
   function reset(nextMode: FlowMode = initialMode) {
+    clearSubmissionKey("check_in");
+    clearSubmissionKey("check_out");
+    submissionKeys.current = {};
     setMode(nextMode);
     setStep(1);
     setVendorId("");
@@ -76,6 +82,54 @@ export function TechnicianVisitFlow({ token, portal }: { token: string; portal: 
     setLocation(null);
     setError(null);
     setReceipt(null);
+  }
+
+  function submissionStorageKey(flowMode: FlowMode): string {
+    return `traceops:technician-visit:${token}:${flowMode}`;
+  }
+
+  function clearSubmissionKey(flowMode: FlowMode) {
+    delete submissionKeys.current[flowMode];
+    try {
+      window.sessionStorage.removeItem(submissionStorageKey(flowMode));
+    } catch {
+      // Retry safety still works for the mounted form when storage is blocked.
+    }
+  }
+
+  function submissionKey(flowMode: FlowMode): string {
+    const existing = submissionKeys.current[flowMode];
+    if (existing) return existing;
+    try {
+      const persisted = JSON.parse(window.sessionStorage.getItem(submissionStorageKey(flowMode)) ?? "null") as {
+        key?: unknown;
+        createdAt?: unknown;
+      } | null;
+      if (
+        typeof persisted?.key === "string"
+        && /^[A-Za-z0-9._:-]{16,120}$/.test(persisted.key)
+        && typeof persisted.createdAt === "number"
+        && Date.now() - persisted.createdAt < SUBMISSION_KEY_MAX_AGE_MS
+      ) {
+        submissionKeys.current[flowMode] = persisted.key;
+        return persisted.key;
+      }
+    } catch {
+      // Generate a mounted-form key when session storage is unavailable.
+    }
+    const created = crypto.randomUUID();
+    submissionKeys.current[flowMode] = created;
+    try {
+      window.sessionStorage.setItem(submissionStorageKey(flowMode), JSON.stringify({ key: created, createdAt: Date.now() }));
+    } catch {
+      // The in-memory key remains stable for retries in this mounted form.
+    }
+    return created;
+  }
+
+  function editSubmission() {
+    clearSubmissionKey(mode);
+    setStep(3);
   }
 
   async function loadVendorContext() {
@@ -106,7 +160,7 @@ export function TechnicianVisitFlow({ token, portal }: { token: string; portal: 
     try {
       const result = await fetch(`/api/ops-public/store/${encodeURIComponent(token)}/check-in`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "idempotency-key": submissionKey("check_in") },
         body: JSON.stringify({
           vendorId,
           workOrderId: workSelection !== NO_WORK_ORDER ? workSelection : undefined,
@@ -117,6 +171,7 @@ export function TechnicianVisitFlow({ token, portal }: { token: string; portal: 
       });
       const body = (await result.json()) as TechnicianCheckInReceipt & { error?: string };
       if (!result.ok) throw new Error(body.error ?? "Check-in could not be completed.");
+      clearSubmissionKey("check_in");
       setReceipt(body);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Check-in could not be completed.");
@@ -134,9 +189,14 @@ export function TechnicianVisitFlow({ token, portal }: { token: string; portal: 
       const formData = new FormData();
       formData.set("command", JSON.stringify(command));
       files.forEach((file) => formData.append("evidence", file));
-      const result = await fetch(`/api/ops-public/store/${encodeURIComponent(token)}/check-out`, { method: "POST", body: formData });
+      const result = await fetch(`/api/ops-public/store/${encodeURIComponent(token)}/check-out`, {
+        method: "POST",
+        headers: { "idempotency-key": submissionKey("check_out") },
+        body: formData,
+      });
       const body = (await result.json()) as TechnicianCheckOutReceipt & { error?: string };
       if (!result.ok) throw new Error(body.error ?? "Checkout could not be completed.");
+      clearSubmissionKey("check_out");
       setReceipt(body);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Checkout could not be completed.");
@@ -303,14 +363,14 @@ export function TechnicianVisitFlow({ token, portal }: { token: string; portal: 
               {portal.trustedStoreDevice ? (
                 <p className={styles.notice}><strong>Trusted store computer</strong><br />The server records the time when you confirm. No location permission or PIN is needed.</p>
               ) : portal.locationPolicy.enabled ? (
-                <LocationEvidenceControl actionLabel={mode === "check_in" ? "check-in" : "checkout"} onChange={setLocation} value={location} />
+                <LocationEvidenceControl actionLabel={mode === "check_in" ? "check-in" : "checkout"} onChange={(nextLocation) => { clearSubmissionKey(mode); setLocation(nextLocation); }} value={location} />
               ) : (
                 <p className={styles.notice}>This operator does not require location evidence for this visit.</p>
               )}
               {portal.locationPolicy.enabled && !portal.trustedStoreDevice ? <p className={styles.helper}>If location is declined or unavailable, you may continue. The server receipt will preserve that exact result; it will never be shown as verified.</p> : null}
               {error ? <p className={styles.error} role="alert">{error}</p> : null}
               <div className={styles.actions}>
-                <button className={styles.secondaryButton} disabled={submitting} onClick={() => setStep(3)} type="button"><ArrowLeft aria-hidden="true" size={17} /> Back</button>
+                <button className={styles.secondaryButton} disabled={submitting} onClick={editSubmission} type="button"><ArrowLeft aria-hidden="true" size={17} /> Back</button>
                 <button className={styles.button} disabled={(portal.locationPolicy.enabled && !location) || submitting} onClick={mode === "check_in" ? submitCheckIn : submitCheckOut} type="button">
                   {submitting ? "Sending…" : mode === "check_in" ? "Confirm check-in" : "Confirm checkout"}
                 </button>

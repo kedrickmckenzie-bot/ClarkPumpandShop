@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { OpsDomainError } from "@/lib/ops/commands";
 import { createPmPlanWithFirstOccurrence } from "@/lib/ops/setup-commands";
 import {
@@ -8,6 +7,7 @@ import {
   opsApiError,
   optionalIsoDate,
 } from "@/lib/server/ops-request-context";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 function wholeNumber(value: string, label: string) {
   const number = Number(value);
@@ -50,11 +50,12 @@ export async function POST(request: Request) {
         actor: context.actor,
       },
     );
-    const target = new URL("/app/pm", request.url);
-    target.searchParams.set("store", storeId);
-    target.searchParams.set("occurrence", result.firstOccurrence.id);
-    target.searchParams.set("created", "true");
-    return NextResponse.redirect(target, 303);
+    const target = new URLSearchParams({
+      store: storeId,
+      occurrence: result.firstOccurrence.id,
+      created: "true",
+    });
+    return relativeRedirect303(`/app/pm?${target.toString()}`);
   } catch (error) {
     return opsApiError(error);
   }

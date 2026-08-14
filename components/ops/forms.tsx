@@ -137,16 +137,17 @@ export function CreateWorkOrderForm({ model, componentId }: { model: CreateWorkO
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>2</span><div><h2>Choose how it will be handled</h2><p>Route internally, send to an approved vendor, or decide after review.</p></div></div>
+            <div className={styles.formSectionHeading}><span>2</span><div><h2>Choose the service path</h2><p>Use a known provider, request pricing first, route internally, or decide later.</p></div></div>
             <fieldset className={styles.assignmentChoices}>
-              <legend>Assignment route <span>Required</span></legend>
+              <legend>Next step <span>Required</span></legend>
               <label htmlFor="assignment-internal" aria-label="Internal maintenance"><input id="assignment-internal" type="radio" name="assignmentKind" value="internal" required /><span><strong>Internal maintenance</strong><small>Assign to your own maintenance team.</small></span></label>
-              <label htmlFor="assignment-vendor" aria-label="Outside vendor"><input id="assignment-vendor" type="radio" name="assignmentKind" value="outside_vendor" /><span><strong>Outside vendor</strong><small>Create the authorization, then issue it to an approved vendor.</small></span></label>
-              <label htmlFor="assignment-later" aria-label="Choose later"><input id="assignment-later" type="radio" name="assignmentKind" value="choose_later" /><span><strong>Choose later</strong><small>Save the work order without blocking urgent reporting.</small></span></label>
+              <label htmlFor="assignment-vendor" aria-label="Send service work"><input id="assignment-vendor" type="radio" name="assignmentKind" value="outside_vendor" /><span><strong>Send service work</strong><small>Choose the vendor now, then send a service authorization. Technician check-in applies after it is issued.</small></span></label>
+              <label htmlFor="assignment-bid" aria-label="Request vendor bids"><input id="assignment-bid" type="radio" name="assignmentKind" value="bid_request" /><span><strong>Request bids first</strong><small>Ask vendors for pricing by a due date. No vendor is assigned and no check-in is available.</small></span></label>
+              <label htmlFor="assignment-later" aria-label="Decide later"><input id="assignment-later" type="radio" name="assignmentKind" value="choose_later" /><span><strong>Decide later</strong><small>Save the work order without choosing a provider or requesting bids yet.</small></span></label>
             </fieldset>
             <div className={styles.fieldGrid}>
               <label className={styles.field} htmlFor="work-vendor">
-                <span>Outside vendor <small>Required only when routed outside</small></span>
+                <span>Service vendor <small>Required only for “Send service work”</small></span>
                 <input id="work-vendor" name="vendorId" list="work-vendor-options" placeholder="Search name, specialty, equipment, or coverage" autoComplete="off" />
                 <Datalist id="work-vendor-options" options={model.vendors} />
               </label>
@@ -155,7 +156,7 @@ export function CreateWorkOrderForm({ model, componentId }: { model: CreateWorkO
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>3</span><div><h2>Set guardrails</h2><p>These fields help the recipient understand the authorization; they do not turn TraceOps into purchasing software.</p></div></div>
+            <div className={styles.formSectionHeading}><span>3</span><div><h2>Add service details</h2><p>These fields apply to authorized service work. Bid requests use a separate pricing scope and response deadline.</p></div></div>
             <label className={styles.field} htmlFor="work-scope">
               <span>Authorized scope <small>Optional</small></span>
               <textarea id="work-scope" name="authorizedScope" rows={4} placeholder="Define what is authorized and when approval is required before expanding the work." />
@@ -172,7 +173,7 @@ export function CreateWorkOrderForm({ model, componentId }: { model: CreateWorkO
             </div>
           </section>
 
-          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p><strong>Creation does not automatically issue work.</strong> Outside work is sent only through the versioned service-authorization action on the saved work order.</p></div>
+          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p><strong>A bid request and a service authorization are different records.</strong> Bid requests ask for numbers only. Service work is not authorized—and vendor check-in is not enabled—until a service authorization is deliberately sent.</p></div>
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Create work order<ArrowRight aria-hidden="true" size={18} /></button></div>
         </form>
       ) : null}
@@ -184,27 +185,44 @@ export function VendorIssuancePanel({ model }: { model: VendorIssuanceViewModel 
   if (!model.available) return null;
   return (
     <section className={styles.issuancePanel} id="issue-work" aria-labelledby="issue-work-heading">
-      <div className={styles.formSectionHeading}><span><Send aria-hidden="true" size={18} /></span><div><h2 id="issue-work-heading">Issue service authorization</h2><p>{model.helperText}</p></div></div>
-      {!model.permitted ? <p className={styles.inlineEmpty}>Your role can review this authorization but cannot issue it.</p> : (
-        <form action={model.submitAction} method="post" target="_blank">
-          <input type="hidden" name="workOrderId" value={model.workOrderId} />
-          {model.currentRevision !== undefined ? <input type="hidden" name="expectedRevision" value={model.currentRevision} /> : null}
-          <div className={styles.fieldGrid}>
-            <label className={styles.field} htmlFor="issuance-vendor">
-              <span>Approved vendor <em>Required</em></span>
-              <select id="issuance-vendor" name="vendorId" required defaultValue={model.selectedVendorId ?? ""}>
-                <option value="" disabled>Select an approved vendor</option>
-                {model.vendors.map((vendor) => <option value={vendor.value} key={vendor.value}>{vendor.label}</option>)}
-              </select>
+      <div className={styles.formSectionHeading}><span><Send aria-hidden="true" size={18} /></span><div><h2 id="issue-work-heading">Service path</h2><p>{model.helperText}</p></div></div>
+      {!model.rolePermitted ? (
+        <p className={styles.inlineEmpty}>Your role can review the service path but cannot send a service authorization.</p>
+      ) : model.workflowBlocked ? (
+        <p className={styles.inlineEmpty} role="status"><strong>Service path paused.</strong> {model.workflowBlockMessage}</p>
+      ) : !model.permitted ? (
+        <p className={styles.inlineEmpty}>Service authorization is unavailable while this work order is in its current state.</p>
+      ) : (
+        <details className={styles.controlDisclosure} open={!model.currentRevision}>
+          <summary className={styles.controlDisclosureSummary}><Send aria-hidden="true" size={18} /><span><strong>{model.currentRevision ? `Send service-authorization revision ${model.currentRevision + 1}` : "Choose a vendor and send the service work order"}</strong><small>This authorizes service. It is not a bid request.</small></span></summary>
+          <form action={model.submitAction} method="post" target="_blank">
+            <input type="hidden" name="workOrderId" value={model.workOrderId} />
+            {model.currentRevision !== undefined ? <input type="hidden" name="expectedRevision" value={model.currentRevision} /> : null}
+            <div className={styles.fieldGrid}>
+              <label className={styles.field} htmlFor="issuance-vendor">
+                <span>Approved vendor <em>Required</em></span>
+                {model.vendorSelectionLocked ? (
+                  <>
+                    <input name="vendorId" type="hidden" value={model.selectedVendorId} />
+                    <input id="issuance-vendor" readOnly value={model.vendors[0]?.label ?? "Selected vendor unavailable"} />
+                    <small>Locked to the vendor selected from the bid comparison.</small>
+                  </>
+                ) : (
+                  <select id="issuance-vendor" name="vendorId" required defaultValue={model.selectedVendorId ?? ""}>
+                    <option value="" disabled>Select an approved vendor</option>
+                    {model.vendors.map((vendor) => <option value={vendor.value} key={vendor.value}>{vendor.label}</option>)}
+                  </select>
+                )}
+              </label>
+              <SelectField id="issuance-channel" name="channel" label="Send via" required options={model.channels} />
+            </div>
+            <label className={styles.field} htmlFor="issuance-message">
+              <span>Service note <small>Optional</small></span>
+              <textarea id="issuance-message" name="message" rows={3} placeholder="Add access timing or a service note. The authorization record remains the source of truth." />
             </label>
-            <SelectField id="issuance-channel" name="channel" label="Send by" required options={model.channels} />
-          </div>
-          <label className={styles.field} htmlFor="issuance-message">
-            <span>Message to dispatch <small>Optional</small></span>
-            <textarea id="issuance-message" name="message" rows={3} placeholder="Add access timing or a dispatch note. The authorization record remains the source of truth." />
-          </label>
-          <div className={styles.formFooter}><span className={styles.formMeta}>{model.workOrderNumber}{model.currentRevision ? ` · next revision ${model.currentRevision + 1}` : ""}</span><button className={styles.primaryButton} type="submit">Issue to vendor<Send aria-hidden="true" size={17} /></button></div>
-        </form>
+            <div className={styles.formFooter}><span className={styles.formMeta}>{model.workOrderNumber}{model.currentRevision ? ` · next revision ${model.currentRevision + 1}` : ""}</span><button className={styles.primaryButton} type="submit">Generate service authorization<Send aria-hidden="true" size={17} /></button></div>
+          </form>
+        </details>
       )}
     </section>
   );

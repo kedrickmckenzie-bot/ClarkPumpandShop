@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 const PREVIEW_ROLE_COOKIE = "traceops-preview-role";
 const ALLOWED_ROLES = new Set([
@@ -34,13 +34,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Choose a supported preview role." }, { status: 422 });
   }
 
-  // Keep the redirect relative. Hosted reverse proxies can expose an internal
-  // origin through request.url; using it here would send the browser to an
-  // unreachable upstream host instead of the public TraceOps site.
-  const response = new NextResponse(null, {
-    status: 303,
-    headers: { Location: returnTo },
-  });
+  const response = relativeRedirect303(returnTo);
   const forwardedProtocol = request.headers
     .get("x-forwarded-proto")
     ?.split(",")[0]

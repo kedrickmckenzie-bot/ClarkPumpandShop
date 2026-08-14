@@ -33,12 +33,24 @@ export type AssignmentKind = "internal" | "outside_vendor" | "choose_later";
 export type AssignmentStatus =
   | "pending"
   | "issued"
+  | "opened"
   | "accepted"
   | "declined"
   | "completed"
   | "cancelled"
   | "superseded";
 export type VendorResponseKind = "accepted" | "declined" | "proposed_date" | "question";
+export type EstimateRequestKind = "estimate_only" | "diagnostic_and_estimate";
+export type EstimateRequestStatus =
+  | "requested"
+  | "opened"
+  | "submitted"
+  | "declined"
+  | "expired"
+  | "withdrawn"
+  | "selected"
+  | "not_selected";
+export type EstimateRequestChannel = "email" | "sms" | "manual";
 export type VisitChannel = "qr" | "secure_link" | "store_device" | "vendor_portal" | "future_app";
 export type VisitStatus = "active" | "checked_out" | "amended";
 export type VisitOutcome =
@@ -47,6 +59,7 @@ export type VisitOutcome =
   | "diagnosed_waiting_parts"
   | "return_required"
   | "unable_to_complete"
+  | "unable_to_reproduce"
   | "no_issue_found"
   | "inspection_complete"
   | "pm_complete"
@@ -246,6 +259,8 @@ export interface WorkOrder {
   componentId?: OpsId;
   priority: WorkOrderPriority;
   status: WorkOrderStatus;
+  /** Monotonic concurrency token for canonical work-order mutations. */
+  version?: number;
   accountableParty: string;
   nextAction: string;
   dueAt?: IsoDateTime;
@@ -296,6 +311,46 @@ export interface VendorResponse {
   proposedAt?: IsoDateTime;
   message?: string;
   respondedAt: IsoDateTime;
+}
+
+/**
+ * A vendor-specific request for pricing evidence attached to one canonical
+ * operator work order. This is deliberately separate from service assignment:
+ * asking two vendors to price one scope must not create two work orders.
+ */
+export interface WorkOrderEstimateRequest {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  vendorId: OpsId;
+  kind: EstimateRequestKind;
+  requestedScope: string;
+  status: EstimateRequestStatus;
+  channel: EstimateRequestChannel;
+  requestedAt: IsoDateTime;
+  dueAt?: IsoDateTime;
+  openedAt?: IsoDateTime;
+  respondedAt?: IsoDateTime;
+  decisionAt?: IsoDateTime;
+}
+
+/**
+ * Immutable vendor-submitted estimate evidence. Corrections append a higher
+ * revision; they never overwrite an earlier amount or scope.
+ */
+export interface VendorEstimateProposal {
+  id: OpsId;
+  organizationId: OpsId;
+  requestId: OpsId;
+  workOrderId: OpsId;
+  vendorId: OpsId;
+  revision: number;
+  amount: Money;
+  scope: string;
+  exclusions?: string;
+  leadTimeDays?: number;
+  validUntil?: IsoDateTime;
+  submittedAt: IsoDateTime;
 }
 
 export interface LocationObservation {
@@ -389,6 +444,7 @@ export interface OpsException {
   status: ExceptionStatus;
   summary: string;
   detectedAt: IsoDateTime;
+  resolvedAt?: IsoDateTime;
 }
 
 export interface Asset {
@@ -523,6 +579,16 @@ export interface PublicActionToken {
   revokedAt?: IsoDateTime;
 }
 
+export interface IdempotencyKey {
+  organizationId: OpsId;
+  key: string;
+  command: string;
+  resultId: OpsId;
+  requestHash: string;
+  createdAt: IsoDateTime;
+  expiresAt: IsoDateTime;
+}
+
 export interface PageRequest {
   limit?: number;
   cursor?: string;
@@ -551,6 +617,8 @@ export interface OpsFixture {
   assignments: WorkOrderAssignment[];
   issuances: WorkOrderIssuance[];
   vendorResponses: VendorResponse[];
+  estimateRequests: WorkOrderEstimateRequest[];
+  estimateProposals: VendorEstimateProposal[];
   visits: VisitSession[];
   visitEvidence: VisitEvidence[];
   files: StoredFile[];

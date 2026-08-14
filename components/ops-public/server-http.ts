@@ -2,6 +2,16 @@ import { z } from "zod";
 import type { PublicUpload } from "./contracts";
 import { PublicWorkflowError } from "./contracts";
 
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,120}$/;
+
+export function readPublicIdempotencyKey(request: Request): string {
+  const key = request.headers.get("idempotency-key")?.trim() ?? "";
+  if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
+    throw new PublicWorkflowError("This action needs a valid retry key. Refresh and try again.", 422, "invalid_idempotency_key");
+  }
+  return key;
+}
+
 export const locationEvidenceSchema = z
   .object({
     captureResult: z.enum(["captured", "permission_denied", "position_unavailable", "timeout", "unsupported", "not_requested"]),

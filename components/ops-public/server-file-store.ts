@@ -15,6 +15,7 @@ export interface PublicUploadStore {
     subjectType: "request" | "visit";
     subjectId: string;
     uploads: PublicUpload[];
+    idempotencyKey?: string;
   }): Promise<StoredPublicUpload[]>;
 }
 
@@ -167,6 +168,7 @@ async function privateObjectKey(input: {
   subjectType: "request" | "visit";
   subjectId: string;
   randomUUID: () => string;
+  stableSuffix?: string;
 }): Promise<string> {
   const [organizationHash, subjectHash] = await Promise.all([
     sha256Hex(input.organizationId),
@@ -177,8 +179,13 @@ async function privateObjectKey(input: {
     organizationHash.slice(0, 32),
     input.subjectType,
     subjectHash.slice(0, 32),
-    input.randomUUID(),
+    input.stableSuffix ?? input.randomUUID(),
   ].join("/");
+}
+
+async function stableUploadSuffix(idempotencyKey: string | undefined, index: number, payloadHash: string): Promise<string | undefined> {
+  if (!idempotencyKey) return undefined;
+  return `retry-${(await sha256Hex(`${idempotencyKey}:${index}:${payloadHash}`)).slice(0, 48)}`;
 }
 
 function safeMediaType(value: string): string {
@@ -202,17 +209,20 @@ class SitesR2PublicUploadStore implements PublicUploadStore {
     subjectType: "request" | "visit";
     subjectId: string;
     uploads: PublicUpload[];
+    idempotencyKey?: string;
   }): Promise<StoredPublicUpload[]> {
     const binding = this.dependencies.r2Bucket === undefined
       ? await defaultR2BindingLoader()
       : this.dependencies.r2Bucket ?? undefined;
     const randomUUID = this.dependencies.randomUUID ?? (() => crypto.randomUUID());
     const stored: StoredPublicUpload[] = [];
-    for (const upload of input.uploads) {
-      const [key, digest] = await Promise.all([
-        privateObjectKey({ ...input, randomUUID }),
-        sha256Hex(upload.bytes),
-      ]);
+    for (const [index, upload] of input.uploads.entries()) {
+      const digest = await sha256Hex(upload.bytes);
+      const key = await privateObjectKey({
+        ...input,
+        randomUUID,
+        stableSuffix: await stableUploadSuffix(input.idempotencyKey, index, digest),
+      });
       const mediaType = safeMediaType(upload.mediaType);
       if (binding) {
         await binding.put(key, upload.bytes, {
@@ -310,17 +320,20 @@ class S3PublicUploadStore implements PublicUploadStore {
     subjectType: "request" | "visit";
     subjectId: string;
     uploads: PublicUpload[];
+    idempotencyKey?: string;
   }): Promise<StoredPublicUpload[]> {
     const fetchRequest = this.dependencies.fetch ?? fetch;
     const currentDate = this.dependencies.now ?? (() => new Date());
     const randomUUID = this.dependencies.randomUUID ?? (() => crypto.randomUUID());
     const stored: StoredPublicUpload[] = [];
 
-    for (const upload of input.uploads) {
-      const [key, payloadHash] = await Promise.all([
-        privateObjectKey({ ...input, randomUUID }),
-        sha256Hex(upload.bytes),
-      ]);
+    for (const [index, upload] of input.uploads.entries()) {
+      const payloadHash = await sha256Hex(upload.bytes);
+      const key = await privateObjectKey({
+        ...input,
+        randomUUID,
+        stableSuffix: await stableUploadSuffix(input.idempotencyKey, index, payloadHash),
+      });
       const mediaType = safeMediaType(upload.mediaType);
       const { url, canonicalUri } = s3ObjectLocation(this.configuration, key);
       const { timestamp, dateStamp } = amzDate(currentDate());

@@ -178,6 +178,7 @@ export interface ServiceAuthorizationView {
   workOrderNumber: string;
   revision: number;
   status: WorkOrderStatus;
+  assignmentStatus: AssignmentStatus;
   store: {
     id: OpsId;
     storeNumber: string;

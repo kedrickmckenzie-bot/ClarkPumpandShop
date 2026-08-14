@@ -1,0 +1,2 @@
+ALTER TABLE "ops_work_orders" ADD COLUMN "version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uidx_ops_assignments_org_work_active" ON "ops_work_order_assignments" USING btree ("organization_id","work_order_id") WHERE "ops_work_order_assignments"."status" IN ('pending', 'issued', 'opened', 'accepted');

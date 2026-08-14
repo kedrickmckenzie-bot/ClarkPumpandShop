@@ -14,12 +14,14 @@ import type {
   WorkOrderListQuery,
 } from "./repository";
 import type {
+  IdempotencyKey,
   IsoDateTime,
   OpsFixture,
   OpsId,
   Page,
   PageRequest,
   Store,
+  StoredFile,
   VisitSession,
   WorkOrder,
 } from "./types";
@@ -117,7 +119,8 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_scope_grants: "scopeGrants", ops_vendors: "vendors", ops_vendor_specialties: "vendorSpecialties",
     ops_vendor_coverage: "vendorCoverage", ops_requests: "requests", ops_work_orders: "workOrders",
     ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
-    ops_vendor_responses: "vendorResponses", ops_visit_sessions: "visits", ops_visit_evidence: "visitEvidence",
+    ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
+    ops_vendor_estimate_proposals: "estimateProposals", ops_visit_sessions: "visits", ops_visit_evidence: "visitEvidence",
     ops_files: "files", ops_entity_files: "entityFiles",
     ops_follow_ups: "followUps", ops_exceptions: "exceptions", ops_assets: "assets",
     ops_asset_components: "components", ops_pm_plans: "pmPlans", ops_pm_occurrences: "pmOccurrences",
@@ -146,6 +149,7 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   }
   if (table === "ops_visit_evidence") { row.location = { result: row.locationResult ?? "not_requested", latitudeE6: row.latitudeE6, longitudeE6: row.longitudeE6, accuracyM: row.accuracyM, distanceM: row.distanceM, capturedAt: row.observedAt }; delete row.locationResult; delete row.latitudeE6; delete row.longitudeE6; delete row.accuracyM; delete row.distanceM; }
   if (table === "ops_cost_lines") { row.amount = { amountMinor: row.amountMinor, currency: row.currency }; delete row.amountMinor; delete row.currency; }
+  if (table === "ops_vendor_estimate_proposals") { row.amount = { amountMinor: row.amountMinor, currency: row.currency }; delete row.amountMinor; delete row.currency; }
   if (table === "ops_invoice_references") { row.grossAmount = { amountMinor: row.grossAmountMinor, currency: row.currency }; delete row.grossAmountMinor; delete row.currency; }
   if (table === "ops_invoice_allocations") { row.amount = { amountMinor: row.amountMinor, currency: row.currency }; delete row.amountMinor; delete row.currency; }
   if (table === "ops_assets") {
@@ -159,15 +163,52 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   return row;
 }
 
-function applyStatement(fixture: OpsFixture, statement: OpsStatement) {
+function assertEstimateRequestUniqueness(rows: Array<Record<string, unknown>>) {
+  const active = new Set<string>();
+  const selected = new Set<string>();
+  for (const row of rows) {
+    if (["requested", "opened", "submitted"].includes(String(row.status))) {
+      const key = `${String(row.organizationId)}:${String(row.workOrderId)}:${String(row.vendorId)}`;
+      if (active.has(key)) throw new Error("Duplicate active vendor-estimate request");
+      active.add(key);
+    }
+    if (row.status === "selected") {
+      const key = `${String(row.organizationId)}:${String(row.workOrderId)}`;
+      if (selected.has(key)) throw new Error("Work order already has a selected vendor bid");
+      selected.add(key);
+    }
+  }
+}
+
+function assertActiveAssignmentUniqueness(rows: Array<Record<string, unknown>>) {
+  const active = new Set<string>();
+  for (const row of rows) {
+    if (!["pending", "issued", "opened", "accepted"].includes(String(row.status))) continue;
+    const key = `${String(row.organizationId)}:${String(row.workOrderId)}`;
+    if (active.has(key)) throw new Error("Work order already has an active assignment");
+    active.add(key);
+  }
+}
+
+function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], statement: OpsStatement) {
   const insertMatch = statement.sql.match(/^INSERT INTO ([a-z0-9_]+) \((.+)\) VALUES \((.+)\)$/i);
   if (insertMatch) {
     const table = insertMatch[1]; const columns = insertMatch[2].split(",").map((item) => item.trim());
     const raw = Object.fromEntries(columns.map((column, index) => [column, statement.params[index]]));
-    const rows = mapTable(fixture, table); const row = hydrateInserted(table, raw);
+    const rows = table === "ops_idempotency_keys"
+      ? idempotencyKeys as unknown as Array<Record<string, unknown>>
+      : mapTable(fixture, table);
+    const row = hydrateInserted(table, raw);
     if (row.id && rows.some((item) => item.id === row.id)) throw new Error(`Duplicate fixture id ${String(row.id)}`);
+    if (table === "ops_idempotency_keys" && rows.some((item) => item.organizationId === row.organizationId && item.key === row.key)) throw new Error(`Duplicate idempotency key ${String(row.key)}`);
+    if (table === "ops_work_order_issuances" && rows.some((item) => item.organizationId === row.organizationId && item.workOrderId === row.workOrderId && item.revision === row.revision)) throw new Error(`Duplicate work-order issuance revision ${String(row.revision)}`);
+    if (table === "ops_vendor_estimate_proposals" && rows.some((item) => item.organizationId === row.organizationId && item.requestId === row.requestId && item.revision === row.revision)) throw new Error(`Duplicate vendor-estimate proposal revision ${String(row.revision)}`);
+    if (table === "ops_public_tokens" && rows.some((item) => item.tokenHash === row.tokenHash)) throw new Error("Duplicate public token hash");
     if (table === "ops_visit_evidence" && ["check_in", "check_out"].includes(String(row.kind)) && rows.some((item) => item.organizationId === row.organizationId && item.visitId === row.visitId && item.kind === row.kind)) throw new Error(`Visit already has ${String(row.kind)} evidence`);
-    rows.push(row); return;
+    rows.push(row);
+    if (table === "ops_work_order_estimate_requests") assertEstimateRequestUniqueness(rows);
+    if (table === "ops_work_order_assignments") assertActiveAssignmentUniqueness(rows);
+    return;
   }
   const updateMatch = statement.sql.match(/^UPDATE ([a-z0-9_]+) SET (.+) WHERE (.+)$/i);
   if (updateMatch) {
@@ -176,6 +217,8 @@ function applyStatement(fixture: OpsFixture, statement: OpsStatement) {
     const setValues = statement.params.slice(0, setColumns.length); const whereValues = statement.params.slice(setColumns.length);
     const rows = mapTable(fixture, table);
     rows.filter((row) => whereColumns.every((column, index) => row[snakeToCamel(column)] === whereValues[index])).forEach((row) => setColumns.forEach((column, index) => { row[snakeToCamel(column)] = setValues[index]; }));
+    if (table === "ops_work_order_estimate_requests") assertEstimateRequestUniqueness(rows);
+    if (table === "ops_work_order_assignments") assertActiveAssignmentUniqueness(rows);
     return;
   }
   throw new Error(`Fixture repository cannot execute statement: ${statement.sql}`);
@@ -184,7 +227,9 @@ function applyStatement(fixture: OpsFixture, statement: OpsStatement) {
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
   readonly kind = "fixture" as const;
   private counters = new Map<string, number>();
+  private idempotencyKeys: IdempotencyKey[] = [];
   constructor(private fixture: OpsFixture) {
+    this.fixture.workOrders.forEach((workOrder) => { workOrder.version ??= 0; });
     for (const organization of fixture.organizations) {
       const max = fixture.workOrders.filter((row) => row.organizationId === organization.id).map((row) => Number(row.number.match(/(\d+)$/)?.[1] ?? 0)).reduce((highest, value) => Math.max(highest, value), 0);
       this.counters.set(`${organization.id}:2026`, max + 1);
@@ -205,11 +250,20 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async getComponent(organizationId: OpsId, componentId: OpsId) { return clone(this.fixture.components.find((row) => row.organizationId === organizationId && row.id === componentId) ?? null); }
   async getAssignment(organizationId: OpsId, assignmentId: OpsId) { return clone(this.fixture.assignments.find((row) => row.organizationId === organizationId && row.id === assignmentId) ?? null); }
   async getIssuance(organizationId: OpsId, issuanceId: OpsId) { return clone(this.fixture.issuances.find((row) => row.organizationId === organizationId && row.id === issuanceId) ?? null); }
+  async getEstimateRequest(organizationId: OpsId, estimateRequestId: OpsId) { return clone(this.fixture.estimateRequests.find((row) => row.organizationId === organizationId && row.id === estimateRequestId) ?? null); }
+  async getLatestEstimateProposal(organizationId: OpsId, estimateRequestId: OpsId) { return clone(this.fixture.estimateProposals.filter((row) => row.organizationId === organizationId && row.requestId === estimateRequestId).sort((a, b) => b.revision - a.revision || b.submittedAt.localeCompare(a.submittedAt) || b.id.localeCompare(a.id)).at(0) ?? null); }
+  async listEstimateRequestsForWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.estimateRequests.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt) || b.id.localeCompare(a.id))); }
   async getVisit(organizationId: OpsId, visitId: OpsId) { return clone(this.fixture.visits.find((row) => row.organizationId === organizationId && row.id === visitId) ?? null); }
+  async getFollowUp(organizationId: OpsId, followUpId: OpsId) { return clone(this.fixture.followUps.find((row) => row.organizationId === organizationId && row.id === followUpId) ?? null); }
+  async getException(organizationId: OpsId, exceptionId: OpsId) { return clone(this.fixture.exceptions.find((row) => row.organizationId === organizationId && row.id === exceptionId) ?? null); }
+  async getIdempotencyKey(organizationId: OpsId, key: string) { return clone(this.idempotencyKeys.find((row) => row.organizationId === organizationId && row.key === key) ?? null); }
+  async getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null> { return clone(this.fixture.files.find((row) => row.organizationId === organizationId && row.storageKey === storageKey) ?? null); }
   async getActiveAssignment(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.assignments.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId && !["cancelled", "declined", "completed", "superseded"].includes(row.status)).at(-1) ?? null); }
   async getLatestIssuanceForWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.issuances.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((a, b) => b.revision - a.revision).at(0) ?? null); }
-  async getLatestVendorResponse(organizationId: OpsId, assignmentId: OpsId) { return clone(this.fixture.vendorResponses.filter((row) => row.organizationId === organizationId && row.assignmentId === assignmentId).sort((a, b) => b.respondedAt.localeCompare(a.respondedAt)).at(0) ?? null); }
-  async findActiveVendorAssignment(organizationId: OpsId, workOrderId: OpsId, vendorId: OpsId) { return clone(this.fixture.assignments.find((row) => row.organizationId === organizationId && row.workOrderId === workOrderId && row.vendorId === vendorId && !["cancelled", "declined", "completed", "superseded"].includes(row.status)) ?? null); }
+  async listIssuancesForWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.issuances.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((a, b) => a.revision - b.revision || a.id.localeCompare(b.id))); }
+  async getLatestVendorResponse(organizationId: OpsId, assignmentId: OpsId) { return clone(this.fixture.vendorResponses.filter((row) => row.organizationId === organizationId && row.assignmentId === assignmentId).sort((a, b) => b.respondedAt.localeCompare(a.respondedAt) || b.id.localeCompare(a.id)).at(0) ?? null); }
+  async getLatestVendorResponseForIssuance(organizationId: OpsId, issuanceId: OpsId) { return clone(this.fixture.vendorResponses.filter((row) => row.organizationId === organizationId && row.issuanceId === issuanceId).sort((a, b) => b.respondedAt.localeCompare(a.respondedAt) || b.id.localeCompare(a.id)).at(0) ?? null); }
+  async findActiveVendorAssignment(organizationId: OpsId, workOrderId: OpsId, vendorId: OpsId) { return clone(this.fixture.assignments.find((row) => row.organizationId === organizationId && row.workOrderId === workOrderId && row.vendorId === vendorId && ["issued", "opened", "accepted"].includes(row.status)) ?? null); }
   async findActiveInternalAssignment(organizationId: OpsId, workOrderId: OpsId, membershipId: OpsId) { return clone(this.fixture.assignments.find((row) => row.organizationId === organizationId && row.workOrderId === workOrderId && row.internalMembershipId === membershipId && !["cancelled", "declined", "completed", "superseded"].includes(row.status)) ?? null); }
   async vendorCoversStore(organizationId: OpsId, vendorId: OpsId, storeId: OpsId) { const store = this.fixture.stores.find((row) => row.organizationId === organizationId && row.id === storeId); if (!store) return false; return this.fixture.vendorCoverage.some((row) => row.organizationId === organizationId && row.vendorId === vendorId && (row.scopeKind === "organization" && row.scopeId === organizationId || row.scopeKind === "region" && row.scopeId === store.regionId || row.scopeKind === "store" && row.scopeId === store.id)); }
   async findActiveVisit(organizationId: OpsId, storeId: OpsId, provider: { vendorId?: OpsId; internalMembershipId?: OpsId; technicianName: string }) { return clone(this.fixture.visits.find((row) => row.organizationId === organizationId && row.storeId === storeId && row.status === "active" && row.vendorId === provider.vendorId && row.internalMembershipId === provider.internalMembershipId && normalize(row.technicianName) === normalize(provider.technicianName)) ?? null); }
@@ -287,9 +341,17 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     const assignment = this.fixture.assignments.find((row) => row.organizationId === token.organizationId && row.id === issuance.assignmentId && row.workOrderId === issuance.workOrderId && row.kind === "outside_vendor");
     const workOrder = this.fixture.workOrders.find((row) => row.organizationId === token.organizationId && row.id === issuance.workOrderId);
     const vendor = assignment?.vendorId ? this.fixture.vendors.find((row) => row.organizationId === token.organizationId && row.id === assignment.vendorId) : undefined;
-    if (!assignment || !workOrder || !vendor) return null;
+    if (!assignment || !workOrder || !vendor || !["issued", "opened", "accepted"].includes(assignment.status) || ["completed_pending_review", "closed", "cancelled"].includes(workOrder.status)) return null;
+    const [latestIssuance, activeAssignment] = await Promise.all([
+      this.getLatestIssuanceForWorkOrder(token.organizationId, workOrder.id),
+      this.getActiveAssignment(token.organizationId, workOrder.id),
+    ]);
+    if (latestIssuance?.id !== issuance.id || activeAssignment?.id !== assignment.id) return null;
     const store = this.fixture.stores.find((row) => row.organizationId === token.organizationId && row.id === workOrder.storeId)!;
-    const response = this.fixture.vendorResponses.filter((row) => row.organizationId === token.organizationId && row.issuanceId === issuance.id).at(-1);
+    const response = this.fixture.vendorResponses
+      .filter((row) => row.organizationId === token.organizationId && row.issuanceId === issuance.id)
+      .sort((a, b) => b.respondedAt.localeCompare(a.respondedAt) || b.id.localeCompare(a.id))
+      .at(0);
     const asset = workOrder.assetId ? this.fixture.assets.find((row) => row.organizationId === token.organizationId && row.id === workOrder.assetId) : undefined;
     let snapshot: Partial<ServiceAuthorizationView> & { store?: ServiceAuthorizationView["store"]; vendor?: ServiceAuthorizationView["vendor"] } = {};
     try { snapshot = JSON.parse(issuance.immutablePayloadJson) as typeof snapshot; } catch { return null; }
@@ -302,6 +364,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       workOrderNumber: snapshot.workOrderNumber ?? workOrder.number,
       revision: issuance.revision,
       status: workOrder.status,
+      assignmentStatus: assignment.status,
       store: snapshot.store ?? { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: formatAddress(store) },
       vendor: snapshot.vendor ?? { id: vendor.id, name: vendor.name },
       problem: snapshot.problem ?? workOrder.problem,
@@ -317,13 +380,17 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     };
   }
 
-  async getStoreVisitContextByToken(input: PublicTokenLookup): Promise<StoreVisitContextView | null> { const gateway = await this.getPublicStoreGatewayByToken(input); if (!gateway || !input.vendorId || !gateway.approvedVendors.some((row) => row.id === input.vendorId)) return null; const vendor = this.fixture.vendors.find((row) => row.organizationId === gateway.organizationId && row.id === input.vendorId)!; const eligibleIds = new Set(this.fixture.assignments.filter((row) => row.organizationId === gateway.organizationId && row.vendorId === vendor.id && !["cancelled", "declined", "superseded", "completed"].includes(row.status)).map((row) => row.workOrderId)); return { organizationName: gateway.organizationName, store: gateway.store, vendor: { id: vendor.id, name: vendor.name }, eligibleWorkOrders: this.fixture.workOrders.filter((row) => row.organizationId === gateway.organizationId && row.storeId === gateway.store.id && eligibleIds.has(row.id) && !["closed", "cancelled"].includes(row.status)).map((row) => ({ id: row.id, number: row.number, problem: row.problem, categoryKey: row.categoryKey, status: row.status })), allowsNoWorkOrder: true }; }
+  async getStoreVisitContextByToken(input: PublicTokenLookup): Promise<StoreVisitContextView | null> { const gateway = await this.getPublicStoreGatewayByToken(input); if (!gateway || !input.vendorId || !gateway.approvedVendors.some((row) => row.id === input.vendorId)) return null; const vendor = this.fixture.vendors.find((row) => row.organizationId === gateway.organizationId && row.id === input.vendorId)!; const eligibleIds = new Set(this.fixture.assignments.filter((row) => row.organizationId === gateway.organizationId && row.vendorId === vendor.id && ["issued", "opened", "accepted"].includes(row.status)).map((row) => row.workOrderId)); return { organizationName: gateway.organizationName, store: gateway.store, vendor: { id: vendor.id, name: vendor.name }, eligibleWorkOrders: this.fixture.workOrders.filter((row) => row.organizationId === gateway.organizationId && row.storeId === gateway.store.id && eligibleIds.has(row.id) && !["completed_pending_review", "closed", "cancelled"].includes(row.status)).map((row) => ({ id: row.id, number: row.number, problem: row.problem, categoryKey: row.categoryKey, status: row.status })), allowsNoWorkOrder: true }; }
 
   async getActiveVisitByToken(input: PublicTokenLookup): Promise<ActiveVisitView | null> { const token = tokenRecord(this.fixture, input); if (!token || token.subjectType !== "visit") return null; const visit = this.fixture.visits.find((row) => row.organizationId === token.organizationId && row.id === token.subjectId && row.status === "active" && row.vendorId); if (!visit) return null; const store = this.fixture.stores.find((row) => row.organizationId === token.organizationId && row.id === visit.storeId)!; const workOrder = visit.workOrderId ? this.fixture.workOrders.find((row) => row.organizationId === token.organizationId && row.id === visit.workOrderId) : undefined; return { organizationId: token.organizationId, id: visit.id, storeId: store.id, storeNumber: store.storeNumber, storeName: store.name, vendorId: visit.vendorId!, vendorName: visit.providerName, workOrderId: workOrder?.id, workOrderNumber: workOrder?.number, unmatchedReason: visit.unmatchedReason, technicianName: visit.technicianName, purpose: visit.purpose, checkedInAt: visit.checkedInAt, startedChannel: visit.startedChannel, checkInLocationResult: locationResult(this.fixture, token.organizationId, visit.id), approximateObservedSeconds: Math.max(0, Math.floor((Date.parse(input.now) - Date.parse(visit.checkedInAt)) / 1000)) }; }
 
+  async getEstimateRequestByPublicToken(input: PublicTokenLookup) { const token = tokenRecord(this.fixture, input); if (!token || token.usedAt || token.subjectType !== "work_order_estimate_request") return null; const request = await this.getEstimateRequest(token.organizationId, token.subjectId); return request && (input.vendorId === undefined || request.vendorId === input.vendorId) ? { request, tokenId: token.id, expiresAt: token.expiresAt } : null; }
+
+  async getVisitByCheckoutToken(input: PublicTokenLookup) { const token = tokenRecord(this.fixture, input); if (!token || token.subjectType !== "visit") return null; const visit = await this.getVisit(token.organizationId, token.subjectId); return visit ? { visit, expiresAt: token.expiresAt } : null; }
+
   async getTrustedStoreDeviceByToken(input: PublicTokenLookup): Promise<TrustedStoreDeviceView | null> { const token = tokenRecord(this.fixture, input); if (!token || token.subjectType !== "store") return null; const organization = this.fixture.organizations.find((row) => row.id === token.organizationId); const store = this.fixture.stores.find((row) => row.organizationId === token.organizationId && row.id === token.subjectId); if (!organization || !store) return null; return { organizationId: organization.id, organizationName: organization.name, store: { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: formatAddress(store) }, activeVisits: await this.listActiveVisitsForStore(organization.id, store.id) }; }
 
-  async atomicWrite(statements: readonly OpsStatement[]) { const candidate = clone(this.fixture); statements.forEach((statement) => applyStatement(candidate, statement)); this.fixture = candidate; }
+  async atomicWrite(statements: readonly OpsStatement[]) { const candidate = clone(this.fixture); const candidateIdempotencyKeys = clone(this.idempotencyKeys); statements.forEach((statement) => applyStatement(candidate, candidateIdempotencyKeys, statement)); this.fixture = candidate; this.idempotencyKeys = candidateIdempotencyKeys; }
 }
 
 export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtureRepository { return new FixtureOpsRepository(clone(fixture)); }

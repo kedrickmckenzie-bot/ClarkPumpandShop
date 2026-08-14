@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { assignWorkOrder, createWorkOrder, OpsDomainError } from "@/lib/ops/commands";
+import { createWorkOrder, OpsDomainError } from "@/lib/ops/commands";
 import {
   assertStoreInSessionScope,
   formText,
@@ -8,9 +7,10 @@ import {
   optionalIsoDate,
   optionalMoneyMinor,
 } from "@/lib/server/ops-request-context";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 const priorities = new Set(["routine", "urgent", "emergency", "planned"]);
-const assignmentKinds = new Set(["internal", "outside_vendor", "choose_later"]);
+const assignmentKinds = new Set(["internal", "outside_vendor", "bid_request", "choose_later"]);
 
 function optionalPositiveInteger(value: string) {
   if (!value) return undefined;
@@ -45,6 +45,14 @@ export async function POST(request: Request) {
         throw new OpsDomainError("VALIDATION", "Choose an internal maintenance assignee.");
       }
     }
+    const initialAssignmentKind = assignmentKind === "bid_request" ? "choose_later" : assignmentKind;
+    const nextAction = assignmentKind === "bid_request"
+      ? "Send bid requests and compare responses"
+      : assignmentKind === "outside_vendor"
+        ? "Generate and send service authorization"
+        : assignmentKind === "internal"
+          ? "Begin internal maintenance work"
+          : "Choose service path";
 
     const result = await createWorkOrder(
       { repository: context.repository },
@@ -59,7 +67,7 @@ export async function POST(request: Request) {
         componentId: formText(formData, "componentId", { max: 120 }) || undefined,
         priority: priority as "routine" | "urgent" | "emergency" | "planned",
         accountableParty: "Facilities coordinator",
-        nextAction: "Assign service provider",
+        nextAction,
         dueAt: optionalIsoDate(formText(formData, "dueAt", { max: 40 })),
         escalationTo: "Facilities director",
         nteAmountMinor: optionalMoneyMinor(formText(formData, "nteAmount", { max: 30 })),
@@ -67,22 +75,20 @@ export async function POST(request: Request) {
         repairEstimateAmountMinor: optionalMoneyMinor(formText(formData, "repairEstimateAmount", { max: 30 })),
         repairEstimateCurrency: "USD",
         estimatedServiceExtensionMonths: optionalPositiveInteger(formText(formData, "estimatedServiceExtensionMonths", { max: 5 })),
+        initialAssignment: {
+          kind: initialAssignmentKind as "internal" | "outside_vendor" | "choose_later",
+          vendorId: assignmentKind === "outside_vendor" ? vendorId : undefined,
+          internalMembershipId: assignmentKind === "internal" ? internalMembershipId : undefined,
+        },
         actor: context.actor,
       },
     );
-
-    await assignWorkOrder(
-      { repository: context.repository },
-      {
-        organizationId: context.session.organizationId,
-        workOrderId: result.id,
-        kind: assignmentKind as "internal" | "outside_vendor" | "choose_later",
-        vendorId: assignmentKind === "outside_vendor" ? vendorId : undefined,
-        internalMembershipId: assignmentKind === "internal" ? internalMembershipId : undefined,
-        actor: context.actor,
-      },
-    );
-    return NextResponse.redirect(new URL(`/app/work-orders/${encodeURIComponent(result.id)}?created=true`, request.url), 303);
+    const destination = assignmentKind === "bid_request"
+      ? `/app/work-orders/${encodeURIComponent(result.id)}?updated=bid-request-created#bid-requests`
+      : assignmentKind === "outside_vendor"
+        ? `/app/work-orders/${encodeURIComponent(result.id)}?updated=service-work-created#issue-work`
+        : `/app/work-orders/${encodeURIComponent(result.id)}?created=true`;
+    return relativeRedirect303(destination);
   } catch (error) {
     return opsApiError(error);
   }

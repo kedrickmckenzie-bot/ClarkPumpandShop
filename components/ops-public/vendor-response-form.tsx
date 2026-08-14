@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, Check, HelpCircle, X } from "lucide-react";
+import { CalendarClock, Check, FileCheck2, HelpCircle, X } from "lucide-react";
 import type { PublicActionReceipt, PublicVendorResponseKind } from "./contracts";
 import { ServerReceipt } from "./public-ui";
 import styles from "./public-workflows.module.css";
@@ -18,7 +18,7 @@ const RESPONSE_OPTIONS: Array<{
   { id: "declined", title: "Decline work", description: "Return the service call to the operator with a reason.", icon: X },
 ];
 
-export function VendorResponseForm({ token, disabled = false }: { token: string; disabled?: boolean }) {
+export function VendorResponseForm({ token, opened, disabled = false }: { token: string; opened: boolean; disabled?: boolean }) {
   const [response, setResponse] = useState<PublicVendorResponseKind | null>(null);
   const [responderName, setResponderName] = useState("");
   const [proposedArrival, setProposedArrival] = useState("");
@@ -28,6 +28,39 @@ export function VendorResponseForm({ token, disabled = false }: { token: string;
   const [receipt, setReceipt] = useState<PublicActionReceipt | null>(null);
 
   if (receipt) return <ServerReceipt receipt={receipt} />;
+
+  if (!opened) {
+    async function openAuthorization() {
+      setSubmitting(true);
+      setError(null);
+      try {
+        const result = await fetch(`/api/ops-public/service/${encodeURIComponent(token)}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "open" }),
+        });
+        const body = (await result.json()) as PublicActionReceipt & { error?: string };
+        if (!result.ok) throw new Error(body.error ?? "The service authorization could not be opened.");
+        window.location.reload();
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "The service authorization could not be opened.");
+        setSubmitting(false);
+      }
+    }
+    return (
+      <section className={styles.card} aria-labelledby="open-service-title">
+        <span className={styles.eyebrow}>Vendor response</span>
+        <h2 className={styles.cardTitle} id="open-service-title">Review this service authorization</h2>
+        <p className={styles.helper}>Opening records that a person reviewed it. Automated email previews and operator test views do not change its status.</p>
+        {error ? <p className={styles.error} role="alert">{error}</p> : null}
+        <div className={styles.actions}>
+          <button className={styles.button} disabled={submitting} onClick={openAuthorization} type="button">
+            <FileCheck2 aria-hidden="true" size={17} />{submitting ? "Opening..." : "Open and respond"}
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   async function submitResponse(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

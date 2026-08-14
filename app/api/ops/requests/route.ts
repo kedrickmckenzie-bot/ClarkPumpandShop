@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { createServiceRequest, OpsDomainError } from "@/lib/ops/commands";
 import {
   assertStoreInSessionScope,
@@ -6,6 +5,7 @@ import {
   getOpsRequestContext,
   opsApiError,
 } from "@/lib/server/ops-request-context";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 const priorities = new Set(["routine", "urgent", "emergency"]);
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
         actor: context.actor,
       },
     );
-    return NextResponse.redirect(new URL(`/app/requests?created=${encodeURIComponent(result.reference)}`, request.url), 303);
+    return relativeRedirect303(`/app/requests?created=${encodeURIComponent(result.reference)}`);
   } catch (error) {
     return opsApiError(error);
   }

@@ -20,12 +20,14 @@ import type {
   User,
   Vendor,
   VendorCoverage,
+  VendorEstimateProposal,
   VendorResponse,
   VendorSpecialty,
   VisitEvidence,
   VisitSession,
   WorkOrder,
   WorkOrderAssignment,
+  WorkOrderEstimateRequest,
   WorkOrderIssuance,
   FollowUp,
   StoredFile,
@@ -40,6 +42,8 @@ export const NORTHLINE_DEMO_ENTRY_TOKENS = {
   serviceAuthorization104: "zdRfp4QemuXSqKVoHtsMHuwXGz4wlruU89tmDjNk7Ts",
   activeVisit112: "L0HMN2vA08eONSnasubFYbEiklRGSjpQQpbP6Ld6vMo",
   trustedStore104: "wjru_t6__2kW59QM_kQw62VgYgeNZporOvMEzA1Sf5w",
+  estimate105Summit: "LvS1x4HpenFPweeAyDmSa4ZRo-zemfa_sZpZrnlQWbw",
+  estimate105Cedar: "Sq3z2tPc9fnBoy7K_qr3caQzey4BSWhGNGZD9o8Xp4E",
 } as const;
 
 export const NORTHLINE_DEMO_TOKEN_HASHES = {
@@ -47,6 +51,8 @@ export const NORTHLINE_DEMO_TOKEN_HASHES = {
   serviceAuthorization104: "5682e8cb6a878b9abb5c7b0cfd870af97c933cd79ce9fb2bcb9d8b88ccf20fa8",
   activeVisit112: "1934698154df94b020ccec22c3cab4023bcd4b0b2c6a5ac62c914d42b395832d",
   trustedStore104: "04ba6edfb1020edc3253848bacd7bf9441371f1dde84d8b4a079f8e0f8b94046",
+  estimate105Summit: "1d82353ab0ce89b2414d3763529186420dad5ca03d48b77b39f91113baa1b81a",
+  estimate105Cedar: "2a1e058b63bbae4102b951756a71a0ed25176e69aba067bca2101475b7184c2a",
 } as const;
 
 export const NORTHLINE_DEMO_HANDLES = {
@@ -259,6 +265,8 @@ function buildFixture(): OpsFixture {
   const assignments: WorkOrderAssignment[] = [];
   const issuances: WorkOrderIssuance[] = [];
   const vendorResponses: VendorResponse[] = [];
+  const estimateRequests: WorkOrderEstimateRequest[] = [];
+  const estimateProposals: VendorEstimateProposal[] = [];
   const visits: VisitSession[] = [];
   const visitEvidence: VisitEvidence[] = [];
   const followUps: FollowUp[] = [];
@@ -457,6 +465,27 @@ function buildFixture(): OpsFixture {
   assignments.push({ id: publicAssignmentId, organizationId: organization.id, workOrderId: publicWorkOrderId, kind: "outside_vendor", vendorId: "vendor-northline-summit", status: "issued", assignedAt: at(8, 10, 14, 20) });
   issuances.push({ id: publicIssuanceId, organizationId: organization.id, workOrderId: publicWorkOrderId, assignmentId: publicAssignmentId, revision: 1, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber: "NL-2026-0116", store: { id: "store-northline-104", storeNumber: "104", name: "Northline Ridgeview", formattedAddress: "104 Ridgeview Drive, Ridgeview, MI 49031" }, vendor: { id: "vendor-northline-summit", name: "Summit Refrigeration" }, problem: publicProblem, priority: "urgent", authorizedScope: "Inspect the evaporator fan assembly, diagnose the noise, and restore normal operation. Call before exceeding authorization.", categoryKey: "refrigeration", asset: { id: "asset-104-beer-cave", name: "Beer cave condensing unit", assetTag: "104-REF-01" }, requestedTiming: at(8, 10, 23), nte: { amountMinor: 175_000, currency: "USD" }, billingInstruction: "Reference operator work order NL-2026-0116 on all service tickets and invoices." }), channel: "email", issuedAt: at(8, 10, 14, 30) });
   auditEvents.push({ id: "audit-wo-northline-104-issued", organizationId: organization.id, aggregateType: "work_order", aggregateId: publicWorkOrderId, eventType: "work_order.issued", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: at(8, 10, 14, 30), payloadJson: JSON.stringify({ assignmentId: publicAssignmentId, issuanceId: publicIssuanceId }) });
+
+  // One canonical Store 105 HVAC repair decision can collect comparable pricing
+  // from multiple vendors without fabricating duplicate work orders or costs.
+  const priceCheckRequestId = "request-northline-105-price-check";
+  const priceCheckWorkOrderId = "wo-northline-105-price-check";
+  const priceCheckAssignmentId = "assignment-northline-105-price-check";
+  const estimateScope = "Replace the failing rooftop-unit condenser fan motor and capacitor, verify rotation and amperage, and confirm the sales floor reaches setpoint. Include labor, materials, travel, and earliest available service date.";
+  const priceCheckProblem = "Sales-floor rooftop unit is cooling intermittently and the condenser fan motor is overheating";
+  requests.push({ id: priceCheckRequestId, organizationId: organization.id, reference: "REQ-26-105C", storeId: "store-northline-105", reporterName: "Jamie Collins", reporterEmployeeId: "E4105", problem: priceCheckProblem, priority: "routine", status: "converted", submittedAt: at(8, 10, 14, 40), convertedWorkOrderId: priceCheckWorkOrderId });
+  workOrders.push({ id: priceCheckWorkOrderId, organizationId: organization.id, number: "NL-2026-0117", storeId: "store-northline-105", requestId: priceCheckRequestId, problem: priceCheckProblem, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", assetId: "asset-105-rtu-1", priority: "routine", status: "awaiting_approval", accountableParty: "Facilities coordinator", nextAction: "Compare vendor bids and choose the service provider", dueAt: at(8, 10, 20), escalationTo: "Facilities director", createdAt: at(8, 10, 14, 45) });
+  assignments.push({ id: priceCheckAssignmentId, organizationId: organization.id, workOrderId: priceCheckWorkOrderId, kind: "choose_later", status: "pending", assignedAt: at(8, 10, 14, 46) });
+  estimateRequests.push(
+    { id: "estimate-request-105-summit", organizationId: organization.id, workOrderId: priceCheckWorkOrderId, vendorId: "vendor-northline-summit", kind: "estimate_only", requestedScope: estimateScope, status: "submitted", channel: "email", requestedAt: at(8, 10, 14, 50), dueAt: at(8, 11, 16), openedAt: at(8, 10, 15, 2), respondedAt: at(8, 10, 15, 31) },
+    { id: "estimate-request-105-cedar", organizationId: organization.id, workOrderId: priceCheckWorkOrderId, vendorId: "vendor-northline-cedar", kind: "estimate_only", requestedScope: estimateScope, status: "submitted", channel: "email", requestedAt: at(8, 10, 14, 51), dueAt: at(8, 11, 16), openedAt: at(8, 10, 15, 11), respondedAt: at(8, 10, 16, 4) },
+  );
+  estimateProposals.push(
+    { id: "estimate-proposal-105-summit-r1", organizationId: organization.id, requestId: "estimate-request-105-summit", workOrderId: priceCheckWorkOrderId, vendorId: "vendor-northline-summit", revision: 1, amount: { amountMinor: 245_000, currency: "USD" }, scope: "Replace the rooftop-unit condenser fan motor and matched capacitor; verify amperage, refrigerant pressures, and supply-air temperature.", exclusions: "Controls, refrigerant leak repair, and after-hours work are excluded.", leadTimeDays: 2, validUntil: at(9, 9, 15, 31), submittedAt: at(8, 10, 15, 31) },
+    { id: "estimate-proposal-105-cedar-r1", organizationId: organization.id, requestId: "estimate-request-105-cedar", workOrderId: priceCheckWorkOrderId, vendorId: "vendor-northline-cedar", revision: 1, amount: { amountMinor: 178_000, currency: "USD" }, scope: "Replace the condenser fan motor and capacitor, commission the rooftop unit, and document final amperage and temperature split.", exclusions: "Refrigerant-system repairs and additional failed components require approval.", leadTimeDays: 3, validUntil: at(9, 9, 16, 4), submittedAt: at(8, 10, 16, 4) },
+  );
+  estimateRequests.forEach((estimateRequest) => auditEvents.push({ id: `audit-${estimateRequest.id}-requested`, organizationId: organization.id, aggregateType: "work_order_estimate_request", aggregateId: estimateRequest.id, eventType: "work_order_estimate.requested", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: estimateRequest.requestedAt, payloadJson: JSON.stringify({ workOrderId: priceCheckWorkOrderId, vendorId: estimateRequest.vendorId, kind: estimateRequest.kind, channel: estimateRequest.channel }) }));
+  estimateProposals.forEach((proposal) => auditEvents.push({ id: `audit-${proposal.id}-submitted`, organizationId: organization.id, aggregateType: "vendor_estimate_proposal", aggregateId: proposal.id, eventType: "vendor_estimate.submitted", actorType: "vendor_link", actorName: vendors.find((vendor) => vendor.id === proposal.vendorId)!.name, occurredAt: proposal.submittedAt, payloadJson: JSON.stringify({ requestId: proposal.requestId, workOrderId: proposal.workOrderId, vendorId: proposal.vendorId, revision: proposal.revision, amountMinor: proposal.amount.amountMinor, currency: proposal.amount.currency }) }));
 
   // Store 104 has a second visit to make the linked repeat-work story real at
   // the exact compressor level rather than relying on a generic repeat flag.
@@ -696,9 +725,11 @@ function buildFixture(): OpsFixture {
     { id: "public-token-northline-service-104", organizationId: organization.id, purpose: "service_authorization", subjectType: "work_order_issuance", subjectId: publicIssuanceId, tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceAuthorization104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
     { id: "public-token-northline-visit-112", organizationId: organization.id, purpose: "active_visit", subjectType: "visit", subjectId: NORTHLINE_DEMO_HANDLES.activeVisitId, tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.activeVisit112, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
     { id: "public-token-northline-trusted-store-104", organizationId: organization.id, purpose: "trusted_store_device", subjectType: "store", subjectId: "store-northline-104", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.trustedStore104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
+    { id: "public-token-northline-estimate-105-summit", organizationId: organization.id, purpose: "vendor_estimate", subjectType: "work_order_estimate_request", subjectId: "estimate-request-105-summit", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.estimate105Summit, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 14, 50) },
+    { id: "public-token-northline-estimate-105-cedar", organizationId: organization.id, purpose: "vendor_estimate", subjectType: "work_order_estimate_request", subjectId: "estimate-request-105-cedar", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.estimate105Cedar, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 14, 51) },
   ];
 
-  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, requests, workOrders, assignments, issuances, vendorResponses, visits, visitEvidence, files, entityFiles, followUps, exceptions, assets, components, pmPlans, pmOccurrences, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
+  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, requests, workOrders, assignments, issuances, vendorResponses, estimateRequests, estimateProposals, visits, visitEvidence, files, entityFiles, followUps, exceptions, assets, components, pmPlans, pmOccurrences, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
 }
 
 const presentationFixture = buildFixture();
@@ -723,6 +754,8 @@ export function buildSyntheticScaleFixture(storeCount = 65): OpsFixture {
   fixture.assignments = [];
   fixture.issuances = [];
   fixture.vendorResponses = [];
+  fixture.estimateRequests = [];
+  fixture.estimateProposals = [];
   fixture.visits = [];
   fixture.visitEvidence = [];
   fixture.files = [];
@@ -751,6 +784,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
   const workOrderIds = new Set(fixture.workOrders.map((row) => row.id));
   const assignmentIds = new Set(fixture.assignments.map((row) => row.id));
   const issuanceIds = new Set(fixture.issuances.map((row) => row.id));
+  const estimateRequestIds = new Set(fixture.estimateRequests.map((row) => row.id));
   const visitIds = new Set(fixture.visits.map((row) => row.id));
   const assetIds = new Set(fixture.assets.map((row) => row.id));
   const fileIds = new Set(fixture.files.map((row) => row.id));
@@ -759,11 +793,11 @@ export function assertOpsFixture(fixture: OpsFixture) {
     if (new Set(rows.map((row) => row.id)).size !== rows.length) throw new Error(`${name} contains duplicate ids`);
   };
   ([
-    ["organizations", fixture.organizations], ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["users", fixture.users], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
+    ["organizations", fixture.organizations], ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["users", fixture.users], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
   ] as Array<[string, Array<{ id: string }>]>).forEach(([name, rows]) => ensureUnique(name, rows));
   const ensureTenant = (name: string, rows: Array<{ organizationId: string }>) => rows.forEach((row) => { if (!organizationIds.has(row.organizationId)) throw new Error(`${name} references an unknown organization`); });
   ([
-    ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["vendor specialties", fixture.vendorSpecialties], ["vendor coverage", fixture.vendorCoverage], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
+    ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["vendor specialties", fixture.vendorSpecialties], ["vendor coverage", fixture.vendorCoverage], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
   ] as Array<[string, Array<{ organizationId: string }>]>).forEach(([name, rows]) => ensureTenant(name, rows));
   fixture.regions.forEach((row) => { if (row.divisionId && !divisionIds.has(row.divisionId)) throw new Error(`Region ${row.id} has no division`); });
   fixture.stores.forEach((row) => {
@@ -826,6 +860,30 @@ export function assertOpsFixture(fixture: OpsFixture) {
     if (snapshot.workOrderNumber !== workOrder.number || snapshot.problem !== workOrder.problem || snapshot.priority !== workOrder.priority || snapshotStore?.id !== store.id || snapshotProvider?.id !== expectedProviderId || typeof snapshot.billingInstruction !== "string" || !snapshot.billingInstruction.trim()) throw new Error(`Issuance ${row.id} has an incomplete immutable authorization snapshot`);
   });
   fixture.vendorResponses.forEach((row) => { const issuance = fixture.issuances.find((item) => item.organizationId === row.organizationId && item.id === row.issuanceId); if (!issuanceIds.has(row.issuanceId) || issuance?.assignmentId !== row.assignmentId || issuance.workOrderId !== row.workOrderId) throw new Error(`Vendor response ${row.id} has no matching issuance`); if (Date.parse(row.respondedAt) < Date.parse(issuance.issuedAt)) throw new Error(`Vendor response ${row.id} predates issuance`); });
+  fixture.estimateRequests.forEach((row) => {
+    const workOrder = fixture.workOrders.find((item) => item.organizationId === row.organizationId && item.id === row.workOrderId);
+    const vendor = fixture.vendors.find((item) => item.organizationId === row.organizationId && item.id === row.vendorId);
+    if (!workOrder || !vendor || vendor.status === "inactive" || !row.requestedScope.trim()) throw new Error(`Estimate request ${row.id} has an invalid work-order/vendor path`);
+    if (Date.parse(row.requestedAt) < Date.parse(workOrder.createdAt)) throw new Error(`Estimate request ${row.id} predates its work order`);
+    if (row.dueAt && Date.parse(row.dueAt) < Date.parse(row.requestedAt)) throw new Error(`Estimate request ${row.id} has an invalid due time`);
+    if (row.openedAt && Date.parse(row.openedAt) < Date.parse(row.requestedAt)) throw new Error(`Estimate request ${row.id} opened before it was requested`);
+    if (row.respondedAt && Date.parse(row.respondedAt) < Date.parse(row.requestedAt)) throw new Error(`Estimate request ${row.id} responded before it was requested`);
+    if (["opened", "submitted", "declined", "selected", "not_selected"].includes(row.status) && !row.openedAt) throw new Error(`Estimate request ${row.id} has no opened time`);
+    if (["submitted", "declined", "selected", "not_selected"].includes(row.status) && !row.respondedAt) throw new Error(`Estimate request ${row.id} has no response time`);
+    if (["selected", "not_selected"].includes(row.status) && !row.decisionAt) throw new Error(`Estimate request ${row.id} has no decision time`);
+    if (row.decisionAt && Date.parse(row.decisionAt) < Date.parse(row.respondedAt ?? row.requestedAt)) throw new Error(`Estimate request ${row.id} has an invalid decision time`);
+  });
+  const proposalRevisionKeys = new Set<string>();
+  fixture.estimateProposals.forEach((row) => {
+    const request = fixture.estimateRequests.find((item) => item.organizationId === row.organizationId && item.id === row.requestId);
+    const revisionKey = `${row.organizationId}:${row.requestId}:${row.revision}`;
+    if (!estimateRequestIds.has(row.requestId) || !request || request.workOrderId !== row.workOrderId || request.vendorId !== row.vendorId) throw new Error(`Estimate proposal ${row.id} has an invalid request path`);
+    if (!Number.isInteger(row.revision) || row.revision < 1 || proposalRevisionKeys.has(revisionKey)) throw new Error(`Estimate proposal ${row.id} has an invalid or duplicate revision`);
+    proposalRevisionKeys.add(revisionKey);
+    if (!Number.isSafeInteger(row.amount.amountMinor) || row.amount.amountMinor < 0 || !row.amount.currency.trim() || !row.scope.trim()) throw new Error(`Estimate proposal ${row.id} has invalid commercial terms`);
+    if (row.leadTimeDays !== undefined && (!Number.isInteger(row.leadTimeDays) || row.leadTimeDays < 0 || row.leadTimeDays > 3_650)) throw new Error(`Estimate proposal ${row.id} has an invalid lead time`);
+    if (Date.parse(row.submittedAt) < Date.parse(request.requestedAt) || row.validUntil && Date.parse(row.validUntil) < Date.parse(row.submittedAt)) throw new Error(`Estimate proposal ${row.id} has invalid timing`);
+  });
   fixture.visits.forEach((row) => { if (!storeIds.has(row.storeId)) throw new Error(`Visit ${row.id} has no store`); if (row.vendorId && !vendorIds.has(row.vendorId)) throw new Error(`Visit ${row.id} has no vendor`); if (row.workOrderId) { const workOrder = fixture.workOrders.find((item) => item.organizationId === row.organizationId && item.id === row.workOrderId); if (!workOrder || workOrder.storeId !== row.storeId) throw new Error(`Visit ${row.id} has an invalid work-order/store path`); if (Date.parse(row.checkedInAt) < Date.parse(workOrder.createdAt)) throw new Error(`Visit ${row.id} predates its work order`); const providerMatches = fixture.assignments.some((assignment) => assignment.organizationId === row.organizationId && assignment.workOrderId === row.workOrderId && (row.providerKind === "outside_vendor" ? assignment.kind === "outside_vendor" && assignment.vendorId === row.vendorId : assignment.kind === "internal" && assignment.internalMembershipId === row.internalMembershipId)); if (!providerMatches) throw new Error(`Visit ${row.id} has no matching work-order provider assignment`); } else if (!row.unmatchedReason) throw new Error(`No-WO visit ${row.id} requires a reason`); if (row.checkedOutAt && Date.parse(row.checkedOutAt) < Date.parse(row.checkedInAt)) throw new Error(`Visit ${row.id} checkout predates check-in`); });
   fixture.visitEvidence.forEach((row) => { const visit = fixture.visits.find((item) => item.id === row.visitId); if (!visitIds.has(row.visitId) || !visit) throw new Error(`Evidence ${row.id} has no visit`); if (Date.parse(row.observedAt) < Date.parse(visit.checkedInAt)) throw new Error(`Evidence ${row.id} predates check-in`); });
   fixture.assets.forEach((row) => { if (!storeIds.has(row.storeId)) throw new Error(`Asset ${row.id} has no store`); if (row.taxonomyNodeId && !taxonomyNodeIds.has(row.taxonomyNodeId)) throw new Error(`Asset ${row.id} has an invalid taxonomy node`); });

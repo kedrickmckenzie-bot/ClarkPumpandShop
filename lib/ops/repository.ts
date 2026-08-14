@@ -3,18 +3,24 @@ import type {
   Asset,
   AssetComponent,
   Division,
+  FollowUp,
+  IdempotencyKey,
   OpsFixture,
   OpsId,
   Membership,
+  OpsException,
   PageRequest,
   ServiceRequest,
   Store,
+  StoredFile,
   TaxonomyNode,
   Organization,
   Vendor,
+  VendorEstimateProposal,
   VisitSession,
   WorkOrder,
   WorkOrderAssignment,
+  WorkOrderEstimateRequest,
   WorkOrderIssuance,
 } from "./types";
 import type {
@@ -68,6 +74,17 @@ export interface PublicTokenLookup {
   vendorId?: OpsId;
 }
 
+export interface VisitCheckoutCapability {
+  visit: VisitSession;
+  expiresAt: IsoDateTime;
+}
+
+export interface EstimateRequestPublicCapability {
+  request: WorkOrderEstimateRequest;
+  tokenId: OpsId;
+  expiresAt: IsoDateTime;
+}
+
 export interface OpsStatement {
   sql: string;
   params: readonly unknown[];
@@ -91,10 +108,19 @@ export interface OpsRepository {
   getComponent(organizationId: OpsId, componentId: OpsId): Promise<AssetComponent | null>;
   getAssignment(organizationId: OpsId, assignmentId: OpsId): Promise<WorkOrderAssignment | null>;
   getIssuance(organizationId: OpsId, issuanceId: OpsId): Promise<WorkOrderIssuance | null>;
+  getEstimateRequest(organizationId: OpsId, estimateRequestId: OpsId): Promise<WorkOrderEstimateRequest | null>;
+  getLatestEstimateProposal(organizationId: OpsId, estimateRequestId: OpsId): Promise<VendorEstimateProposal | null>;
+  listEstimateRequestsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderEstimateRequest[]>;
   getVisit(organizationId: OpsId, visitId: OpsId): Promise<VisitSession | null>;
+  getFollowUp(organizationId: OpsId, followUpId: OpsId): Promise<FollowUp | null>;
+  getException(organizationId: OpsId, exceptionId: OpsId): Promise<OpsException | null>;
+  getIdempotencyKey(organizationId: OpsId, key: string): Promise<IdempotencyKey | null>;
+  getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null>;
   getActiveAssignment(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderAssignment | null>;
   getLatestIssuanceForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderIssuance | null>;
+  listIssuancesForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderIssuance[]>;
   getLatestVendorResponse(organizationId: OpsId, assignmentId: OpsId): Promise<import("./types").VendorResponse | null>;
+  getLatestVendorResponseForIssuance(organizationId: OpsId, issuanceId: OpsId): Promise<import("./types").VendorResponse | null>;
   findActiveVendorAssignment(organizationId: OpsId, workOrderId: OpsId, vendorId: OpsId): Promise<WorkOrderAssignment | null>;
   findActiveInternalAssignment(organizationId: OpsId, workOrderId: OpsId, membershipId: OpsId): Promise<WorkOrderAssignment | null>;
   vendorCoversStore(organizationId: OpsId, vendorId: OpsId, storeId: OpsId): Promise<boolean>;
@@ -124,6 +150,8 @@ export interface OpsRepository {
   getServiceAuthorizationByToken(input: PublicTokenLookup): Promise<ServiceAuthorizationView | null>;
   getStoreVisitContextByToken(input: PublicTokenLookup): Promise<StoreVisitContextView | null>;
   getActiveVisitByToken(input: PublicTokenLookup): Promise<ActiveVisitView | null>;
+  getEstimateRequestByPublicToken(input: PublicTokenLookup): Promise<EstimateRequestPublicCapability | null>;
+  getVisitByCheckoutToken(input: PublicTokenLookup): Promise<VisitCheckoutCapability | null>;
   getTrustedStoreDeviceByToken(input: PublicTokenLookup): Promise<TrustedStoreDeviceView | null>;
 
   // Durable adapters execute the statement list in one database transaction.

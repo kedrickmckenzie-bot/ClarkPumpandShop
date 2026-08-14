@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, foreignKey, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const id = () => text("id").primaryKey();
 const organizationId = () => text("organization_id").notNull();
@@ -52,7 +52,7 @@ export const opsScopeGrants = sqliteTable("ops_scope_grants", {
 
 export const opsVendors = sqliteTable("ops_vendors", {
   id: id(), organizationId: organizationId(), code: text("code").notNull(), name: text("name").notNull(), dispatchEmail: text("dispatch_email").notNull(), dispatchPhone: text("dispatch_phone"), status: text("status").notNull().default("approved"), preferred: bool("preferred"), searchText: text("search_text").notNull(), createdAt: createdAt(),
-}, (table) => [uniqueIndex("uidx_ops_vendors_org_code").on(table.organizationId, table.code), index("idx_ops_vendors_org_status_name").on(table.organizationId, table.status, table.name)]);
+}, (table) => [uniqueIndex("uidx_ops_vendors_org_id").on(table.organizationId, table.id), uniqueIndex("uidx_ops_vendors_org_code").on(table.organizationId, table.code), index("idx_ops_vendors_org_status_name").on(table.organizationId, table.status, table.name)]);
 
 export const opsVendorSpecialties = sqliteTable("ops_vendor_specialties", {
   id: id(), organizationId: organizationId(), vendorId: text("vendor_id").notNull(), canonicalKey: text("canonical_key").notNull(), displayName: text("display_name").notNull(), searchAliasesJson: text("search_aliases_json").notNull().default("[]"),
@@ -68,10 +68,11 @@ export const opsRequests = sqliteTable("ops_requests", {
 
 export const opsWorkOrders = sqliteTable("ops_work_orders", {
   id: id(), organizationId: organizationId(), number: text("number").notNull(), storeId: text("store_id").notNull(), requestId: text("request_id"), problem: text("problem").notNull(), authorizedScope: text("authorized_scope"), categoryKey: text("category_key"), taxonomyNodeId: text("taxonomy_node_id"), assetId: text("asset_id"), componentId: text("component_id"),
-  priority: text("priority").notNull(), status: text("status").notNull(), accountableParty: text("accountable_party").notNull(), nextAction: text("next_action").notNull(), dueAt: text("due_at"), escalationTo: text("escalation_to"),
+  priority: text("priority").notNull(), status: text("status").notNull(), version: integer("version").notNull().default(0), accountableParty: text("accountable_party").notNull(), nextAction: text("next_action").notNull(), dueAt: text("due_at"), escalationTo: text("escalation_to"),
   nteAmountMinor: integer("nte_amount_minor"), nteCurrency: text("nte_currency"), repairEstimateAmountMinor: integer("repair_estimate_amount_minor"), repairEstimateCurrency: text("repair_estimate_currency"), estimatedServiceExtensionMonths: integer("estimated_service_extension_months"), vendorServiceTicketNumber: text("vendor_service_ticket_number"), vendorInvoiceNumber: text("vendor_invoice_number"), externalAccountingPo: text("external_accounting_po"), createdAt: createdAt(), closedAt: text("closed_at"),
 }, (table) => [
   uniqueIndex("uidx_ops_work_orders_org_number").on(table.organizationId, table.number),
+  uniqueIndex("uidx_ops_work_orders_org_id").on(table.organizationId, table.id),
   index("idx_ops_work_orders_org_status_due").on(table.organizationId, table.status, table.dueAt),
   index("idx_ops_work_orders_org_store_created").on(table.organizationId, table.storeId, table.createdAt),
   index("idx_ops_work_orders_org_category_created").on(table.organizationId, table.categoryKey, table.createdAt),
@@ -79,7 +80,11 @@ export const opsWorkOrders = sqliteTable("ops_work_orders", {
 
 export const opsWorkOrderAssignments = sqliteTable("ops_work_order_assignments", {
   id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), kind: text("kind").notNull(), vendorId: text("vendor_id"), internalMembershipId: text("internal_membership_id"), status: text("status").notNull(), assignedAt: text("assigned_at").notNull(), supersedesAssignmentId: text("supersedes_assignment_id"),
-}, (table) => [index("idx_ops_assignments_org_work_status").on(table.organizationId, table.workOrderId, table.status), index("idx_ops_assignments_org_vendor_status").on(table.organizationId, table.vendorId, table.status)]);
+}, (table) => [
+  uniqueIndex("uidx_ops_assignments_org_work_active").on(table.organizationId, table.workOrderId).where(sql`${table.status} IN ('pending', 'issued', 'opened', 'accepted')`),
+  index("idx_ops_assignments_org_work_status").on(table.organizationId, table.workOrderId, table.status),
+  index("idx_ops_assignments_org_vendor_status").on(table.organizationId, table.vendorId, table.status),
+]);
 
 export const opsWorkOrderIssuances = sqliteTable("ops_work_order_issuances", {
   id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), assignmentId: text("assignment_id").notNull(), revision: integer("revision").notNull(), immutablePayloadJson: text("immutable_payload_json").notNull(), channel: text("channel").notNull(), issuedAt: text("issued_at").notNull(),
@@ -88,6 +93,48 @@ export const opsWorkOrderIssuances = sqliteTable("ops_work_order_issuances", {
 export const opsVendorResponses = sqliteTable("ops_vendor_responses", {
   id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), assignmentId: text("assignment_id").notNull(), issuanceId: text("issuance_id").notNull(), response: text("response").notNull(), responderName: text("responder_name").notNull(), proposedAt: text("proposed_at"), message: text("message"), respondedAt: text("responded_at").notNull(),
 }, (table) => [index("idx_ops_vendor_responses_org_assignment_time").on(table.organizationId, table.assignmentId, table.respondedAt), index("idx_ops_vendor_responses_org_work_time").on(table.organizationId, table.workOrderId, table.respondedAt)]);
+
+export const opsWorkOrderEstimateRequests = sqliteTable("ops_work_order_estimate_requests", {
+  id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), vendorId: text("vendor_id").notNull(), kind: text("kind").notNull(), requestedScope: text("requested_scope").notNull(), status: text("status").notNull(), channel: text("channel").notNull(), requestedAt: text("requested_at").notNull(), dueAt: text("due_at"), openedAt: text("opened_at"), respondedAt: text("responded_at"), decisionAt: text("decision_at"),
+}, (table) => [
+  uniqueIndex("uidx_ops_estimate_requests_org_id").on(table.organizationId, table.id),
+  uniqueIndex("uidx_ops_estimate_requests_org_context").on(table.organizationId, table.id, table.workOrderId, table.vendorId),
+  uniqueIndex("uidx_ops_estimate_requests_org_work_vendor_active").on(table.organizationId, table.workOrderId, table.vendorId).where(sql`${table.status} IN ('requested', 'opened', 'submitted')`),
+  uniqueIndex("uidx_ops_estimate_requests_org_work_selected").on(table.organizationId, table.workOrderId).where(sql`${table.status} = 'selected'`),
+  index("idx_ops_estimate_requests_org_work_status_requested").on(table.organizationId, table.workOrderId, table.status, table.requestedAt),
+  index("idx_ops_estimate_requests_org_vendor_status_due").on(table.organizationId, table.vendorId, table.status, table.dueAt),
+  index("idx_ops_estimate_requests_org_status_due").on(table.organizationId, table.status, table.dueAt),
+  foreignKey({ name: "fk_ops_estimate_requests_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+  foreignKey({ name: "fk_ops_estimate_requests_work", columns: [table.organizationId, table.workOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
+  foreignKey({ name: "fk_ops_estimate_requests_vendor", columns: [table.organizationId, table.vendorId], foreignColumns: [opsVendors.organizationId, opsVendors.id] }),
+  check("chk_ops_estimate_requests_kind", sql`${table.kind} IN ('estimate_only', 'diagnostic_and_estimate')`),
+  check("chk_ops_estimate_requests_status", sql`${table.status} IN ('requested', 'opened', 'submitted', 'declined', 'expired', 'withdrawn', 'selected', 'not_selected')`),
+  check("chk_ops_estimate_requests_channel", sql`${table.channel} IN ('email', 'sms', 'manual')`),
+  check("chk_ops_estimate_requests_scope", sql`length(trim(${table.requestedScope})) > 0`),
+  check("chk_ops_estimate_requests_due", sql`${table.dueAt} IS NULL OR ${table.dueAt} >= ${table.requestedAt}`),
+  check("chk_ops_estimate_requests_opened", sql`${table.openedAt} IS NULL OR ${table.openedAt} >= ${table.requestedAt}`),
+  check("chk_ops_estimate_requests_responded", sql`${table.respondedAt} IS NULL OR ${table.respondedAt} >= ${table.requestedAt}`),
+  check("chk_ops_estimate_requests_decision", sql`${table.decisionAt} IS NULL OR ${table.decisionAt} >= ${table.requestedAt}`),
+]);
+
+export const opsVendorEstimateProposals = sqliteTable("ops_vendor_estimate_proposals", {
+  id: id(), organizationId: organizationId(), requestId: text("request_id").notNull(), workOrderId: text("work_order_id").notNull(), vendorId: text("vendor_id").notNull(), revision: integer("revision").notNull(), amountMinor: integer("amount_minor").notNull(), currency: text("currency").notNull(), scope: text("scope").notNull(), exclusions: text("exclusions"), leadTimeDays: integer("lead_time_days"), validUntil: text("valid_until"), submittedAt: text("submitted_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_ops_estimate_proposals_org_id").on(table.organizationId, table.id),
+  uniqueIndex("uidx_ops_estimate_proposals_org_request_revision").on(table.organizationId, table.requestId, table.revision),
+  index("idx_ops_estimate_proposals_org_work_submitted").on(table.organizationId, table.workOrderId, table.submittedAt),
+  index("idx_ops_estimate_proposals_org_vendor_submitted").on(table.organizationId, table.vendorId, table.submittedAt),
+  foreignKey({ name: "fk_ops_estimate_proposals_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+  foreignKey({ name: "fk_ops_estimate_proposals_work", columns: [table.organizationId, table.workOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
+  foreignKey({ name: "fk_ops_estimate_proposals_vendor", columns: [table.organizationId, table.vendorId], foreignColumns: [opsVendors.organizationId, opsVendors.id] }),
+  foreignKey({ name: "fk_ops_estimate_proposals_request_context", columns: [table.organizationId, table.requestId, table.workOrderId, table.vendorId], foreignColumns: [opsWorkOrderEstimateRequests.organizationId, opsWorkOrderEstimateRequests.id, opsWorkOrderEstimateRequests.workOrderId, opsWorkOrderEstimateRequests.vendorId] }),
+  check("chk_ops_estimate_proposals_revision", sql`${table.revision} > 0`),
+  check("chk_ops_estimate_proposals_amount", sql`${table.amountMinor} BETWEEN 0 AND 9007199254740991`),
+  check("chk_ops_estimate_proposals_currency", sql`length(trim(${table.currency})) > 0`),
+  check("chk_ops_estimate_proposals_scope", sql`length(trim(${table.scope})) > 0`),
+  check("chk_ops_estimate_proposals_lead_time", sql`${table.leadTimeDays} IS NULL OR ${table.leadTimeDays} BETWEEN 0 AND 3650`),
+  check("chk_ops_estimate_proposals_valid_until", sql`${table.validUntil} IS NULL OR ${table.validUntil} > ${table.submittedAt}`),
+]);
 
 export const opsVisitSessions = sqliteTable("ops_visit_sessions", {
   id: id(), organizationId: organizationId(), storeId: text("store_id").notNull(), providerKind: text("provider_kind").notNull(), vendorId: text("vendor_id"), internalMembershipId: text("internal_membership_id"), workOrderId: text("work_order_id"), unmatchedReason: text("unmatched_reason"), technicianName: text("technician_name").notNull(), providerName: text("provider_name").notNull(), purpose: text("purpose").notNull(), status: text("status").notNull(), startedChannel: text("started_channel").notNull(), endedChannel: text("ended_channel"), checkedInAt: text("checked_in_at").notNull(), checkedOutAt: text("checked_out_at"), outcome: text("outcome"), outcomeNotes: text("outcome_notes"), observedDurationSeconds: integer("observed_duration_seconds"),
@@ -178,6 +225,8 @@ export const opsSchema = {
   opsWorkOrderAssignments,
   opsWorkOrderIssuances,
   opsVendorResponses,
+  opsWorkOrderEstimateRequests,
+  opsVendorEstimateProposals,
   opsVisitSessions,
   opsVisitEvidence,
   opsFiles,

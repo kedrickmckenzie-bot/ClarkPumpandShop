@@ -19,7 +19,7 @@ The five vendors are Summit Refrigeration, Cedar Mechanical, Forecourt Systems G
 
 The hosted showcase seeds the fictional tenant into Cloudflare D1 and writes workflow changes back through the same tenant-scoped repositories and domain commands. Uploaded evidence uses the private R2 binding. Local development uses the same deterministic fixture through an in-memory repository and resets when the local process restarts.
 
-The presentation fixture currently contains **106 work orders across 20 months, 107 visits, 45 assets and 60 PM occurrences**. It includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
+The presentation fixture currently contains **115 work orders across 20 months, 115 visits, 45 assets and 60 PM occurrences**. It includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
 
 All charts, counts and narrative claims derive from source records. Summary numbers are never independently hardcoded.
 
