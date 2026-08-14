@@ -15,6 +15,13 @@
       "when": 1786653856740,
       "tag": "0001_flawless_archangel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786714142578,
+      "tag": "0002_reset_northline_v6",
+      "breakpoints": true
     }
   ]
 }

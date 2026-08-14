@@ -9,7 +9,7 @@ import {
 } from "./postgres-repository";
 import { seedOpsRepository } from "./seed";
 
-export const NORTHLINE_POSTGRES_SEED_VERSION = "northline-ops-2026-08-13-v5";
+export const NORTHLINE_POSTGRES_SEED_VERSION = "northline-ops-2026-08-14-v6";
 
 export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
   const client = await pool.connect();

@@ -272,7 +272,13 @@ function buildFixture(): OpsFixture {
   const outboxMessages: OutboxMessage[] = [];
 
   stores.forEach((store, index) => {
-    const categoryKey = store.storeNumber === "104" ? "refrigeration" : store.storeNumber === "112" ? "hvac" : categoryCycle[index % categoryCycle.length];
+    const categoryKey = store.storeNumber === "104"
+      ? "refrigeration"
+      : store.storeNumber === "109"
+        ? "forecourt"
+        : store.storeNumber === "112"
+          ? "hvac"
+          : categoryCycle[index % categoryCycle.length];
     const internal = index === 6 || index === 9;
     const chooseLater = index === 14;
     const vendorId = internal || chooseLater ? undefined : vendorByCategory[categoryKey];

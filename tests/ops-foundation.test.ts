@@ -70,6 +70,23 @@ describe("operations fixtures", () => {
     expect(fixture.vendorResponses.some((row) => row.workOrderId === publicWork.id)).toBe(false);
   });
 
+  it("keeps the highlighted Store 109 return visit on one coherent forecourt service record", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const workOrder = fixture.workOrders.find((row) => row.id === "wo-northline-109")!;
+    const linkedAssignments = fixture.assignments.filter((row) => row.workOrderId === workOrder.id);
+    const linkedVisits = fixture.visits.filter((row) => row.workOrderId === workOrder.id);
+
+    expect(workOrder).toMatchObject({
+      categoryKey: "forecourt",
+      assetId: "asset-109-dispenser-4",
+      accountableParty: "Forecourt Systems Group",
+    });
+    expect(linkedAssignments).not.toHaveLength(0);
+    expect(linkedAssignments.every((row) => row.vendorId === "vendor-northline-forecourt")).toBe(true);
+    expect(linkedVisits).not.toHaveLength(0);
+    expect(linkedVisits.every((row) => row.vendorId === "vendor-northline-forecourt")).toBe(true);
+  });
+
   it("keeps PM completion evidence independent of unrelated reactive work", () => {
     const fixture = buildNorthlinePresentationFixture();
     expect(fixture.pmOccurrences.some((row) => row.status === "completed" && row.workOrderId)).toBe(true);
