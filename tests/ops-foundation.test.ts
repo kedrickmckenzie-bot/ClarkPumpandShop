@@ -85,6 +85,7 @@ describe("operations fixtures", () => {
     expect(linkedAssignments.every((row) => row.vendorId === "vendor-northline-forecourt")).toBe(true);
     expect(linkedVisits).not.toHaveLength(0);
     expect(linkedVisits.every((row) => row.vendorId === "vendor-northline-forecourt")).toBe(true);
+    expect(fixture.exceptions.some((row) => row.id === "exception-invoice-northline-109-above-authorization")).toBe(false);
   });
 
   it("keeps PM completion evidence independent of unrelated reactive work", () => {

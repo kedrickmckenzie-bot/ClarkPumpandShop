@@ -64,6 +64,13 @@
       "when": 1786714137685,
       "tag": "0008_reset_northline_v6",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1786715482400,
+      "tag": "0009_remove_orphaned_store109_invoice_exception",
+      "breakpoints": true
     }
   ]
 }

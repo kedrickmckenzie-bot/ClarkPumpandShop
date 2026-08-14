@@ -664,10 +664,7 @@ function buildFixture(): OpsFixture {
 
   const currentUnmatchedInvoice = invoiceReferences.find((invoice) => invoice.id === "invoice-northline-109");
   if (currentUnmatchedInvoice) {
-    exceptions.push(
-      { id: "exception-invoice-northline-109-unmatched", organizationId: organization.id, kind: "unmatched_invoice", storeId: "store-northline-109", vendorId: currentUnmatchedInvoice.vendorId, severity: "attention", status: "open", summary: "Forecourt invoice does not include an operator work-order reference", detectedAt: currentUnmatchedInvoice.createdAt },
-      { id: "exception-invoice-northline-109-above-authorization", organizationId: organization.id, kind: "amount_above_authorization", storeId: "store-northline-109", workOrderId: "wo-northline-109", vendorId: currentUnmatchedInvoice.vendorId, severity: "attention", status: "acknowledged", summary: "Invoice amount differs from the recorded authorization and needs human review", detectedAt: currentUnmatchedInvoice.createdAt },
-    );
+    exceptions.push({ id: "exception-invoice-northline-109-unmatched", organizationId: organization.id, kind: "unmatched_invoice", storeId: "store-northline-109", vendorId: currentUnmatchedInvoice.vendorId, severity: "attention", status: "open", summary: "Forecourt invoice does not include an operator work-order reference", detectedAt: currentUnmatchedInvoice.createdAt });
   }
 
   // Audit and outbox facts are derived from the same deterministic source
