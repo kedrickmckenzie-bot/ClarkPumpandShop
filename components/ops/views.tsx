@@ -423,12 +423,13 @@ export function SearchView({ model }: { model: SearchPageViewModel }) {
   );
 }
 
-export function ProgramView({ model }: { model: ProgramPageViewModel }) {
+export function ProgramView({ model, beforeContent }: { model: ProgramPageViewModel; beforeContent?: React.ReactNode }) {
   return (
     <div className={styles.pageStack}>
       <PageHeader page={model.page} />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
+          {beforeContent}
           <FilterGroups filters={model.filters} />
           <MetricGrid metrics={model.metrics} />
           <section className={styles.visualGrid} aria-label="Program intelligence">

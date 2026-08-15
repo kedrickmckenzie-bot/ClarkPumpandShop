@@ -4,8 +4,10 @@ import { EstimateComparisonPanel } from "@/components/ops/estimate-comparison-pa
 import { MutationReceipt, WorkOrderControlPanel } from "@/components/ops/service-control-panels";
 import { WorkOrderRecordingPanel } from "@/components/ops/work-order-recording-panel";
 import { DetailView } from "@/components/ops/views";
+import { WorkOrderReplacementIntelligencePanel } from "@/components/ops/replacement-intelligence-panel";
 import styles from "@/components/ops/ops.module.css";
 import { loadDetailModel, loadEstimateComparisonModel, loadVendorIssuanceModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel } from "../../_data/operator-loader";
+import { loadWorkOrderReplacementIntelligenceModel } from "../../_data/replacement-loader";
 
 export const metadata: Metadata = { title: "Work order" };
 
@@ -13,12 +15,13 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const { id } = await params;
   const query = await searchParams;
   const updated = Array.isArray(query.updated) ? query.updated[0] : query.updated;
-  const [model, control, recording, estimateComparison, issuance] = await Promise.all([
+  const [model, control, recording, estimateComparison, issuance, replacement] = await Promise.all([
     loadDetailModel("work-order", id),
     loadWorkOrderControlModel(id),
     loadWorkOrderRecordingModel(id),
     loadEstimateComparisonModel(id),
     loadVendorIssuanceModel(id),
+    loadWorkOrderReplacementIntelligenceModel(id),
   ]);
   const hasServiceAuthorization = Boolean(issuance.currentRevision);
   const bidPathIsNext = estimateComparison.permitted
@@ -46,6 +49,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
           <WorkOrderControlPanel model={control} />
           <VendorIssuancePanel model={issuance} />
           <EstimateComparisonPanel model={estimateComparison} />
+          <WorkOrderReplacementIntelligencePanel model={replacement} />
           <WorkOrderRecordingPanel model={recording} />
         </div>
       )}

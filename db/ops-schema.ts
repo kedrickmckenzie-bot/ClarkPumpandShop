@@ -27,6 +27,14 @@ export const opsTaxonomyNodes = sqliteTable("ops_taxonomy_nodes", {
   id: id(), organizationId: organizationId(), parentNodeId: text("parent_node_id"), nodeKind: text("node_kind").notNull(), canonicalKey: text("canonical_key"), name: text("name").notNull(), aliasesJson: text("aliases_json").notNull().default("[]"), depth: integer("depth").notNull(), sortOrder: integer("sort_order").notNull().default(0), active: bool("active"), createdAt: createdAt(),
 }, (table) => [uniqueIndex("uidx_ops_taxonomy_org_parent_name").on(table.organizationId, table.parentNodeId, table.name), index("idx_ops_taxonomy_org_parent_sort").on(table.organizationId, table.parentNodeId, table.sortOrder), index("idx_ops_taxonomy_org_kind_active").on(table.organizationId, table.nodeKind, table.active)]);
 
+export const opsEquipmentTemplates = sqliteTable("ops_equipment_templates", {
+  id: id(), organizationId: organizationId(), taxonomyNodeId: text("taxonomy_node_id").notNull(), name: text("name").notNull(), defaultExpectedLifeYears: integer("default_expected_life_years"), active: bool("active"), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_equipment_templates_org_group_name").on(table.organizationId, table.taxonomyNodeId, table.name), index("idx_ops_equipment_templates_org_group_active").on(table.organizationId, table.taxonomyNodeId, table.active)]);
+
+export const opsComponentTemplates = sqliteTable("ops_component_templates", {
+  id: id(), organizationId: organizationId(), equipmentTemplateId: text("equipment_template_id").notNull(), parentComponentTemplateId: text("parent_component_template_id"), name: text("name").notNull(), sortOrder: integer("sort_order").notNull().default(0), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_component_templates_org_equipment_parent_name").on(table.organizationId, table.equipmentTemplateId, table.parentComponentTemplateId, table.name), index("idx_ops_component_templates_org_equipment_sort").on(table.organizationId, table.equipmentTemplateId, table.sortOrder)]);
+
 export const opsStores = sqliteTable("ops_stores", {
   id: id(), organizationId: organizationId(), divisionId: text("division_id"), regionId: text("region_id"), storeNumber: text("store_number").notNull(), name: text("name").notNull(),
   address1: text("address_1").notNull(), address2: text("address_2"), city: text("city").notNull(), state: text("state").notNull(), postalCode: text("postal_code").notNull(),
@@ -95,7 +103,7 @@ export const opsVendorResponses = sqliteTable("ops_vendor_responses", {
 }, (table) => [index("idx_ops_vendor_responses_org_assignment_time").on(table.organizationId, table.assignmentId, table.respondedAt), index("idx_ops_vendor_responses_org_work_time").on(table.organizationId, table.workOrderId, table.respondedAt)]);
 
 export const opsWorkOrderEstimateRequests = sqliteTable("ops_work_order_estimate_requests", {
-  id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), vendorId: text("vendor_id").notNull(), kind: text("kind").notNull(), requestedScope: text("requested_scope").notNull(), status: text("status").notNull(), channel: text("channel").notNull(), requestedAt: text("requested_at").notNull(), dueAt: text("due_at"), openedAt: text("opened_at"), respondedAt: text("responded_at"), decisionAt: text("decision_at"),
+  id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), vendorId: text("vendor_id").notNull(), kind: text("kind").notNull(), decisionKind: text("decision_kind").notNull().default("service_bid"), requestedScope: text("requested_scope").notNull(), status: text("status").notNull(), channel: text("channel").notNull(), requestedAt: text("requested_at").notNull(), dueAt: text("due_at"), openedAt: text("opened_at"), respondedAt: text("responded_at"), decisionAt: text("decision_at"),
 }, (table) => [
   uniqueIndex("uidx_ops_estimate_requests_org_id").on(table.organizationId, table.id),
   uniqueIndex("uidx_ops_estimate_requests_org_context").on(table.organizationId, table.id, table.workOrderId, table.vendorId),
@@ -108,6 +116,7 @@ export const opsWorkOrderEstimateRequests = sqliteTable("ops_work_order_estimate
   foreignKey({ name: "fk_ops_estimate_requests_work", columns: [table.organizationId, table.workOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
   foreignKey({ name: "fk_ops_estimate_requests_vendor", columns: [table.organizationId, table.vendorId], foreignColumns: [opsVendors.organizationId, opsVendors.id] }),
   check("chk_ops_estimate_requests_kind", sql`${table.kind} IN ('estimate_only', 'diagnostic_and_estimate')`),
+  check("chk_ops_estimate_requests_decision_kind", sql`${table.decisionKind} IN ('service_bid', 'replacement_quote')`),
   check("chk_ops_estimate_requests_status", sql`${table.status} IN ('requested', 'opened', 'submitted', 'declined', 'expired', 'withdrawn', 'selected', 'not_selected')`),
   check("chk_ops_estimate_requests_channel", sql`${table.channel} IN ('email', 'sms', 'manual')`),
   check("chk_ops_estimate_requests_scope", sql`length(trim(${table.requestedScope})) > 0`),
@@ -160,9 +169,25 @@ export const opsExceptions = sqliteTable("ops_exceptions", {
   id: id(), organizationId: organizationId(), kind: text("kind").notNull(), storeId: text("store_id"), workOrderId: text("work_order_id"), visitId: text("visit_id"), vendorId: text("vendor_id"), severity: text("severity").notNull(), status: text("status").notNull(), summary: text("summary").notNull(), detectedAt: text("detected_at").notNull(), resolvedAt: text("resolved_at"),
 }, (table) => [index("idx_ops_exceptions_org_status_time").on(table.organizationId, table.status, table.detectedAt), index("idx_ops_exceptions_org_store_status").on(table.organizationId, table.storeId, table.status), index("idx_ops_exceptions_org_vendor_status").on(table.organizationId, table.vendorId, table.status)]);
 
+export const opsReplacementProfiles = sqliteTable("ops_replacement_profiles", {
+  id: id(), organizationId: organizationId(), code: text("code").notNull(), name: text("name").notNull(), description: text("description").notNull(), categoryKey: text("category_key").notNull(), taxonomyNodeId: text("taxonomy_node_id"), matchKeysJson: text("match_keys_json").notNull().default("[]"), attributesJson: text("attributes_json").notNull().default("{}"), expectedLifeYears: integer("expected_life_years"), annualEscalationBps: integer("annual_escalation_bps").notNull().default(300), lowVarianceBps: integer("low_variance_bps").notNull().default(1000), highVarianceBps: integer("high_variance_bps").notNull().default(2000), active: bool("active"), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_replacement_profiles_org_code").on(table.organizationId, table.code), index("idx_ops_replacement_profiles_org_category_active").on(table.organizationId, table.categoryKey, table.active)]);
+
 export const opsAssets = sqliteTable("ops_assets", {
-  id: id(), organizationId: organizationId(), storeId: text("store_id").notNull(), categoryKey: text("category_key").notNull(), taxonomyNodeId: text("taxonomy_node_id"), groupPathJson: text("group_path_json").notNull().default("[]"), assetTag: text("asset_tag").notNull(), name: text("name").notNull(), manufacturer: text("manufacturer"), model: text("model"), serialNumber: text("serial_number"), supplier: text("supplier"), installedAt: text("installed_at"), expectedLifeYears: integer("expected_life_years"), warrantyEndsAt: text("warranty_ends_at"), replacementEstimateMinor: integer("replacement_estimate_minor"), replacementCurrency: text("replacement_currency"), status: text("status").notNull(), createdAt: createdAt(),
-}, (table) => [uniqueIndex("uidx_ops_assets_org_store_tag").on(table.organizationId, table.storeId, table.assetTag), index("idx_ops_assets_org_store_category").on(table.organizationId, table.storeId, table.categoryKey), index("idx_ops_assets_org_status").on(table.organizationId, table.status)]);
+  id: id(), organizationId: organizationId(), storeId: text("store_id").notNull(), categoryKey: text("category_key").notNull(), taxonomyNodeId: text("taxonomy_node_id"), groupPathJson: text("group_path_json").notNull().default("[]"), assetTag: text("asset_tag").notNull(), name: text("name").notNull(), manufacturer: text("manufacturer"), model: text("model"), serialNumber: text("serial_number"), supplier: text("supplier"), installedAt: text("installed_at"), expectedLifeYears: integer("expected_life_years"), warrantyEndsAt: text("warranty_ends_at"), replacementProfileId: text("replacement_profile_id"), replacementAttributesJson: text("replacement_attributes_json").notNull().default("{}"), replacementAdjustmentBps: integer("replacement_adjustment_bps"), replacementEstimateMinor: integer("replacement_estimate_minor"), replacementCurrency: text("replacement_currency"), status: text("status").notNull(), retiredAt: text("retired_at"), replacedByAssetId: text("replaced_by_asset_id"), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_assets_org_store_tag").on(table.organizationId, table.storeId, table.assetTag), index("idx_ops_assets_org_store_category").on(table.organizationId, table.storeId, table.categoryKey), index("idx_ops_assets_org_status").on(table.organizationId, table.status), index("idx_ops_assets_org_replacement_profile").on(table.organizationId, table.replacementProfileId, table.status)]);
+
+export const opsReplacementBenchmarks = sqliteTable("ops_replacement_benchmarks", {
+  id: id(), organizationId: organizationId(), profileId: text("profile_id").notNull(), sourceType: text("source_type").notNull(), sourceWorkOrderId: text("source_work_order_id"), sourceEstimateProposalId: text("source_estimate_proposal_id"), sourceAssetId: text("source_asset_id"), sourceVendorId: text("source_vendor_id"), equipmentAmountMinor: integer("equipment_amount_minor").notNull(), installationAmountMinor: integer("installation_amount_minor").notNull(), otherAmountMinor: integer("other_amount_minor").notNull(), totalAmountMinor: integer("total_amount_minor").notNull(), currency: text("currency").notNull(), effectiveAt: text("effective_at").notNull(), status: text("status").notNull(), supersededAt: text("superseded_at"), notes: text("notes"), createdAt: createdAt(),
+}, (table) => [index("idx_ops_replacement_benchmarks_org_profile_status_effective").on(table.organizationId, table.profileId, table.status, table.effectiveAt), uniqueIndex("uidx_ops_replacement_benchmarks_org_profile_published").on(table.organizationId, table.profileId).where(sql`${table.status} = 'published'`), uniqueIndex("uidx_ops_replacement_benchmarks_org_source_proposal").on(table.organizationId, table.sourceEstimateProposalId)]);
+
+export const opsAssetReplacementOverrides = sqliteTable("ops_asset_replacement_overrides", {
+  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), sourceBenchmarkId: text("source_benchmark_id"), amountMinor: integer("amount_minor").notNull(), currency: text("currency").notNull(), effectiveAt: text("effective_at").notNull(), reason: text("reason").notNull(), status: text("status").notNull(), supersededAt: text("superseded_at"), createdAt: createdAt(),
+}, (table) => [index("idx_ops_asset_replacement_overrides_org_asset_status_effective").on(table.organizationId, table.assetId, table.status, table.effectiveAt), uniqueIndex("uidx_ops_asset_replacement_overrides_org_asset_active").on(table.organizationId, table.assetId).where(sql`${table.status} = 'active'`)]);
+
+export const opsReplacementEvents = sqliteTable("ops_replacement_events", {
+  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), workOrderId: text("work_order_id").notNull(), profileId: text("profile_id").notNull(), sourceEstimateProposalId: text("source_estimate_proposal_id").notNull(), status: text("status").notNull(), approvedAmountMinor: integer("approved_amount_minor").notNull(), currency: text("currency").notNull(), approvedAt: text("approved_at").notNull(), completedAt: text("completed_at"), finalAmountMinor: integer("final_amount_minor"), replacementAssetId: text("replacement_asset_id"), createdAt: createdAt(),
+}, (table) => [index("idx_ops_replacement_events_org_asset_status").on(table.organizationId, table.assetId, table.status), index("idx_ops_replacement_events_org_work").on(table.organizationId, table.workOrderId, table.createdAt), uniqueIndex("uidx_ops_replacement_events_org_proposal").on(table.organizationId, table.sourceEstimateProposalId)]);
 
 export const opsAssetComponents = sqliteTable("ops_asset_components", {
   id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), parentComponentId: text("parent_component_id"), name: text("name").notNull(), partNumber: text("part_number"), serialNumber: text("serial_number"), installedAt: text("installed_at"), warrantyEndsAt: text("warranty_ends_at"), createdAt: createdAt(),
@@ -213,6 +238,8 @@ export const opsSchema = {
   opsDivisions,
   opsRegions,
   opsTaxonomyNodes,
+  opsEquipmentTemplates,
+  opsComponentTemplates,
   opsStores,
   opsUsers,
   opsMemberships,
@@ -233,7 +260,11 @@ export const opsSchema = {
   opsEntityFiles,
   opsFollowUps,
   opsExceptions,
+  opsReplacementProfiles,
   opsAssets,
+  opsReplacementBenchmarks,
+  opsAssetReplacementOverrides,
+  opsReplacementEvents,
   opsAssetComponents,
   opsPmPlans,
   opsPmOccurrences,

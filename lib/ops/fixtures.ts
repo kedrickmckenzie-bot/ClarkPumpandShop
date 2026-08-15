@@ -1,9 +1,12 @@
 import type {
   Asset,
   AssetComponent,
+  AssetReplacementOverride,
   AuditEvent,
   CostLine,
+  ComponentTemplate,
   Division,
+  EquipmentTemplate,
   InvoiceAllocation,
   InvoiceReference,
   Membership,
@@ -13,6 +16,9 @@ import type {
   PmOccurrence,
   PmPlan,
   PublicActionToken,
+  ReplacementBenchmark,
+  ReplacementEvent,
+  ReplacementProfile,
   ScopeGrant,
   ServiceRequest,
   Store,
@@ -214,6 +220,22 @@ function buildFixture(): OpsFixture {
       createdAt: organization.createdAt,
     });
   }
+  const equipmentTemplates: EquipmentTemplate[] = [
+    ["beer-cave", "taxonomy-northline-beer_caves", "Standard beer cave / walk-in cooler", 12],
+    ["walk-in-freezer", "taxonomy-northline-freezers", "Standard walk-in freezer", 12],
+    ["ice-machine", "taxonomy-northline-ice_machines", "Commercial ice machine", 10],
+    ["rtu-5ton", "taxonomy-northline-rooftop_units", "5-ton packaged rooftop unit", 15],
+    ["fuel-dispenser", "taxonomy-northline-dispensers", "Two-sided fuel dispenser", 15],
+    ["rapid-cook-oven", "taxonomy-northline-ovens", "Rapid-cook oven", 8],
+  ].map(([key, taxonomyNodeId, name, life]) => ({ id: `equipment-template-${key}`, organizationId: organization.id, taxonomyNodeId: String(taxonomyNodeId), name: String(name), defaultExpectedLifeYears: Number(life), active: true, createdAt: organization.createdAt }));
+  const componentTemplates: ComponentTemplate[] = [];
+  const addTemplateComponents = (equipmentKey: string, rows: Array<[string, string, string?]>) => rows.forEach(([key, name, parentKey], sortOrder) => componentTemplates.push({ id: `component-template-${equipmentKey}-${key}`, organizationId: organization.id, equipmentTemplateId: `equipment-template-${equipmentKey}`, parentComponentTemplateId: parentKey ? `component-template-${equipmentKey}-${parentKey}` : undefined, name, sortOrder, createdAt: organization.createdAt }));
+  addTemplateComponents("beer-cave", [["condensing-unit", "Condensing unit"], ["compressor", "Compressor", "condensing-unit"], ["condenser-fan", "Condenser fan motor", "condensing-unit"], ["evaporator", "Evaporator"], ["evaporator-fan", "Evaporator fan motor", "evaporator"], ["controller", "Temperature controller"], ["shelving", "Shelving"]]);
+  addTemplateComponents("walk-in-freezer", [["condensing-unit", "Condensing unit"], ["compressor", "Compressor", "condensing-unit"], ["evaporator", "Evaporator"], ["evaporator-fan", "Evaporator fan motor", "evaporator"], ["defrost", "Defrost system"], ["controller", "Temperature controller"], ["door-heater", "Door heater"]]);
+  addTemplateComponents("ice-machine", [["compressor", "Compressor"], ["water-pump", "Water pump"], ["evaporator", "Evaporator plate"], ["control-board", "Control board"], ["bin", "Storage bin"]]);
+  addTemplateComponents("rtu-5ton", [["compressor", "Compressor"], ["supply-fan", "Supply fan motor"], ["condenser-fan", "Condenser fan motor"], ["heat-exchanger", "Heat exchanger"], ["controls", "Controls"], ["thermostat", "Thermostat", "controls"]]);
+  addTemplateComponents("fuel-dispenser", [["payment-terminal", "Payment terminal"], ["meter", "Meter"], ["display", "Display"], ["hose", "Hose"], ["nozzle", "Nozzle", "hose"], ["breakaway", "Breakaway", "hose"]]);
+  addTemplateComponents("rapid-cook-oven", [["control-board", "Control board"], ["magnetron", "Magnetron"], ["blower-motor", "Blower motor"], ["door-switch", "Door switch"], ["temperature-probe", "Temperature probe"]]);
   const stores: Store[] = storeSeeds.map(([number, name, address1, city, state, postalCode, latitudeE6, longitudeE6], index) => ({
     id: `store-northline-${number}`, organizationId: organization.id, divisionId: divisions[0].id, regionId: regions[Math.floor(index / 5)].id,
     storeNumber: number, name: `Northline ${name}`, address1, city, state, postalCode,
@@ -249,11 +271,26 @@ function buildFixture(): OpsFixture {
   const vendorSpecialties: VendorSpecialty[] = vendors.flatMap((vendor) => specialtySeeds[vendor.code].map(([canonicalKey, displayName, searchAliases]) => ({ id: `specialty-${vendor.code}-${canonicalKey}`, organizationId: organization.id, vendorId: vendor.id, canonicalKey, displayName, searchAliases })));
   const vendorCoverage: VendorCoverage[] = vendors.map((vendor, index) => ({ id: `coverage-${vendor.code}-all`, organizationId: organization.id, vendorId: vendor.id, scopeKind: "organization", scopeId: organization.id, preferredRank: index < 3 ? 1 : 2 }));
 
-  const assets: Asset[] = stores.flatMap((store) => [
-    { id: `asset-${store.id.slice(-3)}-beer-cave`, organizationId: organization.id, storeId: store.id, categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", groupPath: ["Refrigeration", "Walk-in refrigeration", "Coolers", "Beer caves"], assetTag: `${store.storeNumber}-REF-01`, name: "Beer cave condensing unit", manufacturer: store.storeNumber === "104" ? "Heatcraft" : "Copeland", model: store.storeNumber === "104" ? "LHT040L6C" : "M4FH-A050", serialNumber: `NL${store.storeNumber}REF01`, supplier: "Regional Equipment Supply", installedAt: atYear(store.storeNumber === "115" ? 2019 : 2017 + (Number(store.storeNumber) % 5), 4, 12), expectedLifeYears: 12, warrantyEndsAt: atYear(store.storeNumber === "115" ? 2024 : 2022 + (Number(store.storeNumber) % 5), 4, 12), replacementEstimate: { amountMinor: 2_800_000 + Number(store.storeNumber) * 1000, currency: "USD" }, status: store.storeNumber === "115" ? "watch" : "operational", createdAt: at(1, 5, 14) },
-    { id: `asset-${store.id.slice(-3)}-rtu-1`, organizationId: organization.id, storeId: store.id, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", groupPath: ["HVAC", "Rooftop units"], assetTag: `${store.storeNumber}-HVAC-01`, name: "Sales floor rooftop unit", manufacturer: "Trane", model: "Precedent YSC", serialNumber: `NL${store.storeNumber}HVAC01`, supplier: "Cedar Mechanical", installedAt: atYear(2018 + (Number(store.storeNumber) % 4), 6, 1), expectedLifeYears: 15, warrantyEndsAt: atYear(2023 + (Number(store.storeNumber) % 4), 6, 1), replacementEstimate: { amountMinor: 1_950_000, currency: "USD" }, status: store.storeNumber === "112" ? "watch" : "operational", createdAt: at(1, 5, 14) },
-    { id: `asset-${store.id.slice(-3)}-dispenser-4`, organizationId: organization.id, storeId: store.id, categoryKey: "forecourt", taxonomyNodeId: "taxonomy-northline-dispensers", groupPath: ["Fuel and forecourt", "Dispensers"], assetTag: `${store.storeNumber}-FUEL-04`, name: "Fuel dispenser 4", manufacturer: "Gilbarco", model: "Encore 700 S", serialNumber: `NL${store.storeNumber}FUEL04`, supplier: "Forecourt Systems Group", installedAt: atYear(2019 + (Number(store.storeNumber) % 3), 9, 15), expectedLifeYears: 15, warrantyEndsAt: atYear(2024 + (Number(store.storeNumber) % 3), 9, 15), replacementEstimate: { amountMinor: 2_250_000, currency: "USD" }, status: store.storeNumber === "109" ? "watch" : "operational", createdAt: at(1, 5, 14) },
+  const replacementProfiles: ReplacementProfile[] = [
+    { id: "replacement-profile-beer-cave-medium", organizationId: organization.id, code: "REF-BEER-CAVE-MED", name: "Medium beer cave refrigeration system", description: "Functionally equivalent medium beer-cave condensing system, independent of manufacturer or installer.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", matchKeys: ["application", "capacity_band", "refrigerant"], attributes: { application: "beer_cave", capacity_band: "medium", refrigerant: "r448a" }, expectedLifeYears: 12, annualEscalationBps: 350, lowVarianceBps: 1000, highVarianceBps: 1800, active: true, createdAt: at(1, 5, 13) },
+    { id: "replacement-profile-rtu-5ton", organizationId: organization.id, code: "HVAC-RTU-5T", name: "5-ton sales-floor rooftop unit", description: "Packaged rooftop HVAC replacement including standard curb adaptation and controls.", categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", matchKeys: ["equipment_type", "capacity_tons", "heat_type"], attributes: { equipment_type: "packaged_rtu", capacity_tons: "5", heat_type: "gas" }, expectedLifeYears: 15, annualEscalationBps: 300, lowVarianceBps: 1200, highVarianceBps: 2200, active: true, createdAt: at(1, 5, 13) },
+    { id: "replacement-profile-dispenser-two-sided", organizationId: organization.id, code: "FUEL-DISP-2S", name: "Two-sided retail fuel dispenser", description: "Two-sided dispenser replacement with payment hardware and standard commissioning.", categoryKey: "forecourt", taxonomyNodeId: "taxonomy-northline-dispensers", matchKeys: ["equipment_type", "sides", "payment_enabled"], attributes: { equipment_type: "fuel_dispenser", sides: "2", payment_enabled: "yes" }, expectedLifeYears: 15, annualEscalationBps: 275, lowVarianceBps: 800, highVarianceBps: 1500, active: true, createdAt: at(1, 5, 13) },
+  ];
+
+  const assets: Asset[] = stores.flatMap((store): Asset[] => [
+    { id: `asset-${store.id.slice(-3)}-beer-cave`, organizationId: organization.id, storeId: store.id, categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", groupPath: ["Refrigeration", "Walk-in refrigeration", "Coolers", "Beer caves"], assetTag: `${store.storeNumber}-REF-01`, name: "Beer cave condensing unit", manufacturer: store.storeNumber === "104" ? "Heatcraft" : "Copeland", model: store.storeNumber === "104" ? "LHT040L6C" : "M4FH-A050", serialNumber: `NL${store.storeNumber}REF01`, supplier: "Regional Equipment Supply", installedAt: atYear(store.storeNumber === "115" ? 2019 : 2017 + (Number(store.storeNumber) % 5), 4, 12), expectedLifeYears: 12, warrantyEndsAt: atYear(store.storeNumber === "115" ? 2024 : 2022 + (Number(store.storeNumber) % 5), 4, 12), replacementProfileId: "replacement-profile-beer-cave-medium", replacementAttributes: { application: "beer_cave", capacity_band: "medium", refrigerant: "r448a" }, replacementAdjustmentBps: store.storeNumber === "104" ? 500 : undefined, replacementEstimate: { amountMinor: 2_800_000 + Number(store.storeNumber) * 1000, currency: "USD" }, status: store.storeNumber === "115" ? "watch" : "operational", createdAt: at(1, 5, 14) },
+    { id: `asset-${store.id.slice(-3)}-rtu-1`, organizationId: organization.id, storeId: store.id, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", groupPath: ["HVAC", "Rooftop units"], assetTag: `${store.storeNumber}-HVAC-01`, name: "Sales floor rooftop unit", manufacturer: "Trane", model: "Precedent YSC", serialNumber: `NL${store.storeNumber}HVAC01`, supplier: "Cedar Mechanical", installedAt: atYear(2018 + (Number(store.storeNumber) % 4), 6, 1), expectedLifeYears: 15, warrantyEndsAt: atYear(2023 + (Number(store.storeNumber) % 4), 6, 1), replacementProfileId: "replacement-profile-rtu-5ton", replacementAttributes: { equipment_type: "packaged_rtu", capacity_tons: "5", heat_type: "gas" }, replacementEstimate: { amountMinor: 1_950_000, currency: "USD" }, status: store.storeNumber === "112" ? "watch" : "operational", createdAt: at(1, 5, 14) },
+    { id: `asset-${store.id.slice(-3)}-dispenser-4`, organizationId: organization.id, storeId: store.id, categoryKey: "forecourt", taxonomyNodeId: "taxonomy-northline-dispensers", groupPath: ["Fuel and forecourt", "Dispensers"], assetTag: `${store.storeNumber}-FUEL-04`, name: "Fuel dispenser 4", manufacturer: "Gilbarco", model: "Encore 700 S", serialNumber: `NL${store.storeNumber}FUEL04`, supplier: "Forecourt Systems Group", installedAt: atYear(2019 + (Number(store.storeNumber) % 3), 9, 15), expectedLifeYears: 15, warrantyEndsAt: atYear(2024 + (Number(store.storeNumber) % 3), 9, 15), replacementProfileId: "replacement-profile-dispenser-two-sided", replacementAttributes: { equipment_type: "fuel_dispenser", sides: "2", payment_enabled: "yes" }, replacementEstimate: { amountMinor: 2_250_000, currency: "USD" }, status: store.storeNumber === "109" ? "watch" : "operational", createdAt: at(1, 5, 14) },
   ]);
+  const replacementBenchmarks: ReplacementBenchmark[] = [
+    { id: "replacement-benchmark-beer-cave-2024", organizationId: organization.id, profileId: "replacement-profile-beer-cave-medium", sourceType: "manual", equipmentAmount: { amountMinor: 1_920_000, currency: "USD" }, installationAmount: { amountMinor: 730_000, currency: "USD" }, otherAmount: { amountMinor: 0, currency: "USD" }, totalAmount: { amountMinor: 2_650_000, currency: "USD" }, effectiveAt: atYear(2024, 2, 15), status: "published", notes: "Original planning benchmark entered from the 2024 refrigeration refresh.", createdAt: atYear(2024, 2, 15) },
+    { id: "replacement-benchmark-rtu-2025", organizationId: organization.id, profileId: "replacement-profile-rtu-5ton", sourceType: "catalog", equipmentAmount: { amountMinor: 1_420_000, currency: "USD" }, installationAmount: { amountMinor: 610_000, currency: "USD" }, otherAmount: { amountMinor: 120_000, currency: "USD" }, totalAmount: { amountMinor: 2_150_000, currency: "USD" }, effectiveAt: atYear(2025, 10, 1), status: "published", notes: "Budgetary replacement benchmark reviewed with facilities.", createdAt: atYear(2025, 10, 1) },
+    { id: "replacement-benchmark-dispenser-2025", organizationId: organization.id, profileId: "replacement-profile-dispenser-two-sided", sourceType: "catalog", equipmentAmount: { amountMinor: 2_150_000, currency: "USD" }, installationAmount: { amountMinor: 480_000, currency: "USD" }, otherAmount: { amountMinor: 170_000, currency: "USD" }, totalAmount: { amountMinor: 2_800_000, currency: "USD" }, effectiveAt: atYear(2025, 11, 1), status: "published", notes: "Budgetary dispenser benchmark including payment commissioning.", createdAt: atYear(2025, 11, 1) },
+  ];
+  const assetReplacementOverrides: AssetReplacementOverride[] = [
+    { id: "replacement-override-104-beer-cave", organizationId: organization.id, assetId: "asset-104-beer-cave", amount: { amountMinor: 3_480_000, currency: "USD" }, effectiveAt: atYear(2026, 5, 1), reason: "Store 104 requires a longer line set and rooftop crane access.", status: "active", createdAt: atYear(2026, 5, 1) },
+  ];
+  const replacementEvents: ReplacementEvent[] = [];
   const components: AssetComponent[] = [
     { id: "component-104-compressor", organizationId: organization.id, assetId: "asset-104-beer-cave", name: "Compressor", partNumber: "ZB38KCE-TFD", serialNumber: "CMP104-88214", installedAt: atYear(2021, 5, 6), warrantyEndsAt: atYear(2026, 5, 6), createdAt: at(1, 5, 14) },
     { id: "component-104-controller", organizationId: organization.id, assetId: "asset-104-beer-cave", name: "Temperature controller", partNumber: "XR60CX", serialNumber: "CTL104-44310", installedAt: atYear(2023, 3, 12), warrantyEndsAt: atYear(2025, 3, 12), createdAt: at(1, 5, 14) },
@@ -486,6 +523,30 @@ function buildFixture(): OpsFixture {
   );
   estimateRequests.forEach((estimateRequest) => auditEvents.push({ id: `audit-${estimateRequest.id}-requested`, organizationId: organization.id, aggregateType: "work_order_estimate_request", aggregateId: estimateRequest.id, eventType: "work_order_estimate.requested", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: estimateRequest.requestedAt, payloadJson: JSON.stringify({ workOrderId: priceCheckWorkOrderId, vendorId: estimateRequest.vendorId, kind: estimateRequest.kind, channel: estimateRequest.channel }) }));
   estimateProposals.forEach((proposal) => auditEvents.push({ id: `audit-${proposal.id}-submitted`, organizationId: organization.id, aggregateType: "vendor_estimate_proposal", aggregateId: proposal.id, eventType: "vendor_estimate.submitted", actorType: "vendor_link", actorName: vendors.find((vendor) => vendor.id === proposal.vendorId)!.name, occurredAt: proposal.submittedAt, payloadJson: JSON.stringify({ requestId: proposal.requestId, workOrderId: proposal.workOrderId, vendorId: proposal.vendorId, revision: proposal.revision, amountMinor: proposal.amount.amountMinor, currency: proposal.amount.currency }) }));
+
+  // Store 115 demonstrates the capital path: two replacement quotes stay on
+  // one canonical work order, the selected quote publishes a dated functional
+  // benchmark, and no technician assignment or billable visit is created.
+  const replacementWork = workOrders.find((row) => row.id === "wo-northline-115")!;
+  replacementWork.status = "awaiting_approval";
+  replacementWork.accountableParty = "Facilities coordinator";
+  replacementWork.nextAction = "Schedule the approved beer-cave replacement and record final installed cost";
+  replacementWork.dueAt = at(8, 20, 16);
+  replacementWork.escalationTo = "Facilities director";
+  const replacementScope = "Replace the medium beer-cave condensing system with a functionally equivalent R448A system. Include equipment, rigging, line-set connections, electrical reconnection, startup, commissioning, permits, freight, and disposal.";
+  estimateRequests.push(
+    { id: "estimate-request-115-summit", organizationId: organization.id, workOrderId: replacementWork.id, vendorId: "vendor-northline-summit", kind: "estimate_only", decisionKind: "replacement_quote", requestedScope: replacementScope, status: "selected", channel: "email", requestedAt: at(8, 7, 14), dueAt: at(8, 10, 16), openedAt: at(8, 7, 14, 22), respondedAt: at(8, 8, 16, 20), decisionAt: at(8, 9, 14) },
+    { id: "estimate-request-115-cedar", organizationId: organization.id, workOrderId: replacementWork.id, vendorId: "vendor-northline-cedar", kind: "estimate_only", decisionKind: "replacement_quote", requestedScope: replacementScope, status: "not_selected", channel: "email", requestedAt: at(8, 7, 14, 2), dueAt: at(8, 10, 16), openedAt: at(8, 7, 14, 40), respondedAt: at(8, 8, 17, 5), decisionAt: at(8, 9, 14) },
+  );
+  estimateProposals.push(
+    { id: "estimate-proposal-115-summit-r1", organizationId: organization.id, requestId: "estimate-request-115-summit", workOrderId: replacementWork.id, vendorId: "vendor-northline-summit", revision: 1, amount: { amountMinor: 3_280_000, currency: "USD" }, scope: replacementScope, exclusions: "Structural roof work and after-hours premium labor are excluded unless separately approved.", leadTimeDays: 35, validUntil: at(9, 15, 16, 20), submittedAt: at(8, 8, 16, 20) },
+    { id: "estimate-proposal-115-cedar-r1", organizationId: organization.id, requestId: "estimate-request-115-cedar", workOrderId: replacementWork.id, vendorId: "vendor-northline-cedar", revision: 1, amount: { amountMinor: 3_545_000, currency: "USD" }, scope: replacementScope, exclusions: "Roof reinforcement, hazardous-material remediation, and temporary refrigeration are excluded.", leadTimeDays: 28, validUntil: at(9, 15, 17, 5), submittedAt: at(8, 8, 17, 5) },
+  );
+  replacementBenchmarks[0].status = "superseded";
+  replacementBenchmarks[0].supersededAt = at(8, 9, 14);
+  replacementBenchmarks.push({ id: "replacement-benchmark-beer-cave-2026-quote", organizationId: organization.id, profileId: "replacement-profile-beer-cave-medium", sourceType: "approved_quote", sourceWorkOrderId: replacementWork.id, sourceEstimateProposalId: "estimate-proposal-115-summit-r1", sourceAssetId: "asset-115-beer-cave", sourceVendorId: "vendor-northline-summit", equipmentAmount: { amountMinor: 2_310_000, currency: "USD" }, installationAmount: { amountMinor: 820_000, currency: "USD" }, otherAmount: { amountMinor: 150_000, currency: "USD" }, totalAmount: { amountMinor: 3_280_000, currency: "USD" }, effectiveAt: at(8, 8, 16, 20), status: "published", notes: "Selected replacement quote with equipment, installation, permits, freight, and disposal separated.", createdAt: at(8, 9, 14) });
+  replacementEvents.push({ id: "replacement-event-115-approved", organizationId: organization.id, assetId: "asset-115-beer-cave", workOrderId: replacementWork.id, profileId: "replacement-profile-beer-cave-medium", sourceEstimateProposalId: "estimate-proposal-115-summit-r1", status: "approved", approvedAmount: { amountMinor: 3_280_000, currency: "USD" }, approvedAt: at(8, 9, 14), createdAt: at(8, 9, 14) });
+  auditEvents.push({ id: "audit-replacement-event-115-approved", organizationId: organization.id, aggregateType: "asset", aggregateId: "asset-115-beer-cave", eventType: "asset.replacement_approved", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: at(8, 9, 14), payloadJson: JSON.stringify({ replacementEventId: "replacement-event-115-approved", profileId: "replacement-profile-beer-cave-medium", sourceEstimateProposalId: "estimate-proposal-115-summit-r1", benchmarkId: "replacement-benchmark-beer-cave-2026-quote" }) });
 
   // Store 104 has a second visit to make the linked repeat-work story real at
   // the exact compressor level rather than relying on a generic repeat flag.
@@ -729,7 +790,7 @@ function buildFixture(): OpsFixture {
     { id: "public-token-northline-estimate-105-cedar", organizationId: organization.id, purpose: "vendor_estimate", subjectType: "work_order_estimate_request", subjectId: "estimate-request-105-cedar", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.estimate105Cedar, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 14, 51) },
   ];
 
-  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, requests, workOrders, assignments, issuances, vendorResponses, estimateRequests, estimateProposals, visits, visitEvidence, files, entityFiles, followUps, exceptions, assets, components, pmPlans, pmOccurrences, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
+  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, requests, workOrders, assignments, issuances, vendorResponses, estimateRequests, estimateProposals, visits, visitEvidence, files, entityFiles, followUps, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, components, pmPlans, pmOccurrences, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
 }
 
 const presentationFixture = buildFixture();
@@ -763,6 +824,10 @@ export function buildSyntheticScaleFixture(storeCount = 65): OpsFixture {
   fixture.followUps = [];
   fixture.exceptions = [];
   fixture.assets = [];
+  fixture.replacementProfiles = [];
+  fixture.replacementBenchmarks = [];
+  fixture.assetReplacementOverrides = [];
+  fixture.replacementEvents = [];
   fixture.components = [];
   fixture.pmPlans = [];
   fixture.pmOccurrences = [];
@@ -780,6 +845,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
   const divisionIds = new Set(fixture.divisions.map((row) => row.id));
   const storeIds = new Set(fixture.stores.map((row) => row.id));
   const taxonomyNodeIds = new Set(fixture.taxonomyNodes.map((row) => row.id));
+  const equipmentTemplateIds = new Set(fixture.equipmentTemplates.map((row) => row.id));
   const vendorIds = new Set(fixture.vendors.map((row) => row.id));
   const workOrderIds = new Set(fixture.workOrders.map((row) => row.id));
   const assignmentIds = new Set(fixture.assignments.map((row) => row.id));
@@ -787,18 +853,24 @@ export function assertOpsFixture(fixture: OpsFixture) {
   const estimateRequestIds = new Set(fixture.estimateRequests.map((row) => row.id));
   const visitIds = new Set(fixture.visits.map((row) => row.id));
   const assetIds = new Set(fixture.assets.map((row) => row.id));
+  const replacementProfileIds = new Set(fixture.replacementProfiles.map((row) => row.id));
+  const replacementBenchmarkIds = new Set(fixture.replacementBenchmarks.map((row) => row.id));
   const fileIds = new Set(fixture.files.map((row) => row.id));
   const invoiceIds = new Set(fixture.invoiceReferences.map((row) => row.id));
   const ensureUnique = (name: string, rows: Array<{ id: string }>) => {
     if (new Set(rows.map((row) => row.id)).size !== rows.length) throw new Error(`${name} contains duplicate ids`);
   };
   ([
-    ["organizations", fixture.organizations], ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["users", fixture.users], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
+    ["organizations", fixture.organizations], ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["users", fixture.users], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["replacement profiles", fixture.replacementProfiles], ["replacement benchmarks", fixture.replacementBenchmarks], ["asset replacement overrides", fixture.assetReplacementOverrides], ["replacement events", fixture.replacementEvents], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
   ] as Array<[string, Array<{ id: string }>]>).forEach(([name, rows]) => ensureUnique(name, rows));
+  ensureUnique("equipment templates", fixture.equipmentTemplates);
+  ensureUnique("component templates", fixture.componentTemplates);
   const ensureTenant = (name: string, rows: Array<{ organizationId: string }>) => rows.forEach((row) => { if (!organizationIds.has(row.organizationId)) throw new Error(`${name} references an unknown organization`); });
   ([
-    ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["vendor specialties", fixture.vendorSpecialties], ["vendor coverage", fixture.vendorCoverage], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
+    ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["vendor specialties", fixture.vendorSpecialties], ["vendor coverage", fixture.vendorCoverage], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["replacement profiles", fixture.replacementProfiles], ["replacement benchmarks", fixture.replacementBenchmarks], ["asset replacement overrides", fixture.assetReplacementOverrides], ["replacement events", fixture.replacementEvents], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
   ] as Array<[string, Array<{ organizationId: string }>]>).forEach(([name, rows]) => ensureTenant(name, rows));
+  ensureTenant("equipment templates", fixture.equipmentTemplates);
+  ensureTenant("component templates", fixture.componentTemplates);
   fixture.regions.forEach((row) => { if (row.divisionId && !divisionIds.has(row.divisionId)) throw new Error(`Region ${row.id} has no division`); });
   fixture.stores.forEach((row) => {
     if (row.divisionId && !divisionIds.has(row.divisionId)) throw new Error(`Store ${row.id} has no division`);
@@ -872,6 +944,43 @@ export function assertOpsFixture(fixture: OpsFixture) {
     if (["submitted", "declined", "selected", "not_selected"].includes(row.status) && !row.respondedAt) throw new Error(`Estimate request ${row.id} has no response time`);
     if (["selected", "not_selected"].includes(row.status) && !row.decisionAt) throw new Error(`Estimate request ${row.id} has no decision time`);
     if (row.decisionAt && Date.parse(row.decisionAt) < Date.parse(row.respondedAt ?? row.requestedAt)) throw new Error(`Estimate request ${row.id} has an invalid decision time`);
+  });
+  fixture.equipmentTemplates.forEach((row) => { if (!taxonomyNodeIds.has(row.taxonomyNodeId)) throw new Error(`Equipment template ${row.id} has no equipment group`); });
+  fixture.componentTemplates.forEach((row) => { if (!equipmentTemplateIds.has(row.equipmentTemplateId)) throw new Error(`Component template ${row.id} has no equipment template`); if (row.parentComponentTemplateId && !fixture.componentTemplates.some((candidate) => candidate.id === row.parentComponentTemplateId && candidate.equipmentTemplateId === row.equipmentTemplateId)) throw new Error(`Component template ${row.id} has an invalid parent`); });
+  fixture.replacementProfiles.forEach((row) => {
+    if (row.taxonomyNodeId && !taxonomyNodeIds.has(row.taxonomyNodeId)) throw new Error(`Replacement profile ${row.id} has an invalid taxonomy node`);
+    if (!row.code.trim() || !row.name.trim() || row.matchKeys.some((key) => !key.trim())) throw new Error(`Replacement profile ${row.id} is incomplete`);
+    if (!Number.isInteger(row.annualEscalationBps) || row.annualEscalationBps < -9_000 || row.annualEscalationBps > 50_000) throw new Error(`Replacement profile ${row.id} has invalid escalation`);
+  });
+  const publishedProfileIds = new Set<string>();
+  fixture.replacementBenchmarks.forEach((row) => {
+    if (!replacementProfileIds.has(row.profileId)) throw new Error(`Replacement benchmark ${row.id} has no profile`);
+    if (row.totalAmount.amountMinor !== row.equipmentAmount.amountMinor + row.installationAmount.amountMinor + row.otherAmount.amountMinor) throw new Error(`Replacement benchmark ${row.id} does not reconcile`);
+    if (row.status === "published") {
+      const key = `${row.organizationId}:${row.profileId}`;
+      if (publishedProfileIds.has(key)) throw new Error(`Replacement profile ${row.profileId} has multiple published benchmarks`);
+      publishedProfileIds.add(key);
+    }
+  });
+  const activeOverrideAssetIds = new Set<string>();
+  fixture.assetReplacementOverrides.forEach((row) => {
+    if (!assetIds.has(row.assetId) || row.sourceBenchmarkId && !replacementBenchmarkIds.has(row.sourceBenchmarkId)) throw new Error(`Replacement override ${row.id} has invalid evidence links`);
+    if (row.status === "active") {
+      const key = `${row.organizationId}:${row.assetId}`;
+      if (activeOverrideAssetIds.has(key)) throw new Error(`Asset ${row.assetId} has multiple active replacement overrides`);
+      activeOverrideAssetIds.add(key);
+    }
+  });
+  fixture.assets.forEach((row) => {
+    if (row.replacementProfileId && !replacementProfileIds.has(row.replacementProfileId)) throw new Error(`Asset ${row.id} has an invalid replacement profile`);
+    if (row.replacementAttributes && Array.isArray(row.replacementAttributes)) throw new Error(`Asset ${row.id} has invalid replacement attributes`);
+    if (row.replacedByAssetId && !assetIds.has(row.replacedByAssetId)) throw new Error(`Asset ${row.id} has an invalid successor`);
+  });
+  fixture.replacementEvents.forEach((row) => {
+    if (!assetIds.has(row.assetId) || !workOrderIds.has(row.workOrderId) || !replacementProfileIds.has(row.profileId)) throw new Error(`Replacement event ${row.id} has invalid lifecycle links`);
+    const proposal = fixture.estimateProposals.find((candidate) => candidate.organizationId === row.organizationId && candidate.id === row.sourceEstimateProposalId);
+    if (!proposal || proposal.workOrderId !== row.workOrderId || proposal.amount.amountMinor !== row.approvedAmount.amountMinor) throw new Error(`Replacement event ${row.id} has invalid approved quote evidence`);
+    if (row.replacementAssetId && !assetIds.has(row.replacementAssetId)) throw new Error(`Replacement event ${row.id} has invalid replacement asset`);
   });
   const proposalRevisionKeys = new Set<string>();
   fixture.estimateProposals.forEach((row) => {

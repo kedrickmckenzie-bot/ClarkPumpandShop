@@ -12,6 +12,7 @@ export type OperatorCapability =
   | "onboard_vendor"
   | "setup_equipment"
   | "setup_pm"
+  | "manage_lifecycle"
   | "request_estimate"
   | "select_estimate"
   | "issue_work_order"
@@ -73,6 +74,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
       "onboard_vendor",
       "setup_equipment",
       "setup_pm",
+      "manage_lifecycle",
       "request_estimate",
       "select_estimate",
       "issue_work_order",
@@ -86,7 +88,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   regional: {
-    capabilities: ["create_request", "review_request", "create_work_order", "control_work_order", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "request_estimate", "select_estimate", "issue_work_order"],
+    capabilities: ["create_request", "review_request", "create_work_order", "control_work_order", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "manage_lifecycle", "request_estimate", "select_estimate", "issue_work_order"],
     listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],

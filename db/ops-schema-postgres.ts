@@ -326,6 +326,55 @@ export const opsRequests = pgTable("ops_requests", {
   check("chk_ops_requests_status", sql`${table.status} IN ('submitted', 'under_review', 'converted', 'closed')`),
 ]);
 
+export const opsReplacementProfiles = pgTable("ops_replacement_profiles", {
+  id: id(),
+  organizationId: organizationId(),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  categoryKey: text("category_key").notNull(),
+  taxonomyNodeId: text("taxonomy_node_id"),
+  matchKeysJson: jsonb("match_keys_json").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  attributesJson: jsonb("attributes_json").$type<Record<string, string>>().notNull().default(sql`'{}'::jsonb`),
+  expectedLifeYears: integer("expected_life_years"),
+  annualEscalationBps: integer("annual_escalation_bps").notNull().default(300),
+  lowVarianceBps: integer("low_variance_bps").notNull().default(1000),
+  highVarianceBps: integer("high_variance_bps").notNull().default(2000),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+}, (table) => [
+  unique("uq_ops_replacement_profiles_org_id").on(table.organizationId, table.id),
+  uniqueIndex("uidx_ops_replacement_profiles_org_code").on(table.organizationId, table.code),
+  index("idx_ops_replacement_profiles_org_category_active").on(table.organizationId, table.categoryKey, table.active),
+  foreignKey({ name: "fk_ops_replacement_profiles_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+  foreignKey({ name: "fk_ops_replacement_profiles_taxonomy", columns: [table.organizationId, table.taxonomyNodeId], foreignColumns: [opsTaxonomyNodes.organizationId, opsTaxonomyNodes.id] }),
+  check("chk_ops_replacement_profiles_life", sql`${table.expectedLifeYears} IS NULL OR ${table.expectedLifeYears} > 0`),
+  check("chk_ops_replacement_profiles_escalation", sql`${table.annualEscalationBps} BETWEEN -9000 AND 50000`),
+  check("chk_ops_replacement_profiles_variance", sql`${table.lowVarianceBps} BETWEEN 0 AND 10000 AND ${table.highVarianceBps} BETWEEN 0 AND 50000`),
+]);
+
+export const opsEquipmentTemplates = pgTable("ops_equipment_templates", {
+  id: id(), organizationId: organizationId(), taxonomyNodeId: text("taxonomy_node_id").notNull(), name: text("name").notNull(), defaultExpectedLifeYears: integer("default_expected_life_years"), active: boolean("active").notNull().default(true), createdAt: createdAt(),
+}, (table) => [
+  unique("uq_ops_equipment_templates_org_id").on(table.organizationId, table.id),
+  uniqueIndex("uidx_ops_equipment_templates_org_group_name").on(table.organizationId, table.taxonomyNodeId, table.name),
+  index("idx_ops_equipment_templates_org_group_active").on(table.organizationId, table.taxonomyNodeId, table.active),
+  foreignKey({ name: "fk_ops_equipment_templates_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+  foreignKey({ name: "fk_ops_equipment_templates_taxonomy", columns: [table.organizationId, table.taxonomyNodeId], foreignColumns: [opsTaxonomyNodes.organizationId, opsTaxonomyNodes.id] }),
+  check("chk_ops_equipment_templates_life", sql`${table.defaultExpectedLifeYears} IS NULL OR ${table.defaultExpectedLifeYears} > 0`),
+]);
+
+export const opsComponentTemplates = pgTable("ops_component_templates", {
+  id: id(), organizationId: organizationId(), equipmentTemplateId: text("equipment_template_id").notNull(), parentComponentTemplateId: text("parent_component_template_id"), name: text("name").notNull(), sortOrder: integer("sort_order").notNull().default(0), createdAt: createdAt(),
+}, (table): PgTableExtraConfigValue[] => [
+  unique("uq_ops_component_templates_org_id").on(table.organizationId, table.id),
+  uniqueIndex("uidx_ops_component_templates_org_equipment_parent_name").on(table.organizationId, table.equipmentTemplateId, table.parentComponentTemplateId, table.name),
+  index("idx_ops_component_templates_org_equipment_sort").on(table.organizationId, table.equipmentTemplateId, table.sortOrder),
+  foreignKey({ name: "fk_ops_component_templates_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+  foreignKey({ name: "fk_ops_component_templates_equipment", columns: [table.organizationId, table.equipmentTemplateId], foreignColumns: [opsEquipmentTemplates.organizationId, opsEquipmentTemplates.id] }),
+  foreignKey({ name: "fk_ops_component_templates_parent", columns: [table.organizationId, table.parentComponentTemplateId], foreignColumns: [opsComponentTemplates.organizationId, opsComponentTemplates.id] }),
+]);
+
 export const opsAssets = pgTable("ops_assets", {
   id: id(),
   organizationId: organizationId(),
@@ -342,15 +391,21 @@ export const opsAssets = pgTable("ops_assets", {
   installedAt: instant("installed_at"),
   expectedLifeYears: integer("expected_life_years"),
   warrantyEndsAt: instant("warranty_ends_at"),
+  replacementProfileId: text("replacement_profile_id"),
+  replacementAttributesJson: jsonb("replacement_attributes_json").$type<Record<string, string>>().notNull().default(sql`'{}'::jsonb`),
+  replacementAdjustmentBps: integer("replacement_adjustment_bps"),
   replacementEstimateMinor: bigint("replacement_estimate_minor", { mode: "number" }),
   replacementCurrency: text("replacement_currency"),
   status: text("status").notNull(),
+  retiredAt: instant("retired_at"),
+  replacedByAssetId: text("replaced_by_asset_id"),
   createdAt: createdAt(),
 }, (table) => [
   unique("uq_ops_assets_org_id").on(table.organizationId, table.id),
   uniqueIndex("uidx_ops_assets_org_store_tag").on(table.organizationId, table.storeId, table.assetTag),
   index("idx_ops_assets_org_store_category").on(table.organizationId, table.storeId, table.categoryKey),
   index("idx_ops_assets_org_status").on(table.organizationId, table.status),
+  index("idx_ops_assets_org_replacement_profile").on(table.organizationId, table.replacementProfileId, table.status),
   foreignKey({
     name: "fk_ops_assets_org",
     columns: [table.organizationId],
@@ -366,8 +421,11 @@ export const opsAssets = pgTable("ops_assets", {
     columns: [table.organizationId, table.taxonomyNodeId],
     foreignColumns: [opsTaxonomyNodes.organizationId, opsTaxonomyNodes.id],
   }),
+  foreignKey({ name: "fk_ops_assets_replacement_profile", columns: [table.organizationId, table.replacementProfileId], foreignColumns: [opsReplacementProfiles.organizationId, opsReplacementProfiles.id] }),
+  foreignKey({ name: "fk_ops_assets_successor", columns: [table.organizationId, table.replacedByAssetId], foreignColumns: [table.organizationId, table.id] }),
   check("chk_ops_assets_status", sql`${table.status} IN ('operational', 'watch', 'out_of_service', 'retired')`),
   check("chk_ops_assets_life", sql`${table.expectedLifeYears} IS NULL OR ${table.expectedLifeYears} > 0`),
+  check("chk_ops_assets_replacement_adjustment", sql`${table.replacementAdjustmentBps} IS NULL OR ${table.replacementAdjustmentBps} BETWEEN -9000 AND 50000`),
   check("chk_ops_assets_replacement", sql`${table.replacementEstimateMinor} IS NULL OR ${table.replacementEstimateMinor} BETWEEN 0 AND 9007199254740991`),
   check("chk_ops_assets_replacement_money", sql`(${table.replacementEstimateMinor} IS NULL) = (${table.replacementCurrency} IS NULL)`),
 ]);
@@ -603,6 +661,7 @@ export const opsWorkOrderEstimateRequests = pgTable("ops_work_order_estimate_req
   workOrderId: text("work_order_id").notNull(),
   vendorId: text("vendor_id").notNull(),
   kind: text("kind").notNull(),
+  decisionKind: text("decision_kind").notNull().default("service_bid"),
   requestedScope: text("requested_scope").notNull(),
   status: text("status").notNull(),
   channel: text("channel").notNull(),
@@ -635,6 +694,7 @@ export const opsWorkOrderEstimateRequests = pgTable("ops_work_order_estimate_req
     foreignColumns: [opsVendors.organizationId, opsVendors.id],
   }),
   check("chk_ops_estimate_requests_kind", sql`${table.kind} IN ('estimate_only', 'diagnostic_and_estimate')`),
+  check("chk_ops_estimate_requests_decision_kind", sql`${table.decisionKind} IN ('service_bid', 'replacement_quote')`),
   check("chk_ops_estimate_requests_status", sql`${table.status} IN ('requested', 'opened', 'submitted', 'declined', 'expired', 'withdrawn', 'selected', 'not_selected')`),
   check("chk_ops_estimate_requests_channel", sql`${table.channel} IN ('email', 'sms', 'manual')`),
   check("chk_ops_estimate_requests_scope", sql`nullif(btrim(${table.requestedScope}), '') IS NOT NULL`),
@@ -689,6 +749,54 @@ export const opsVendorEstimateProposals = pgTable("ops_vendor_estimate_proposals
   check("chk_ops_estimate_proposals_scope", sql`nullif(btrim(${table.scope}), '') IS NOT NULL`),
   check("chk_ops_estimate_proposals_lead_time", sql`${table.leadTimeDays} IS NULL OR ${table.leadTimeDays} BETWEEN 0 AND 3650`),
   check("chk_ops_estimate_proposals_valid_until", sql`${table.validUntil} IS NULL OR ${table.validUntil} > ${table.submittedAt}`),
+]);
+
+export const opsReplacementBenchmarks = pgTable("ops_replacement_benchmarks", {
+  id: id(), organizationId: organizationId(), profileId: text("profile_id").notNull(), sourceType: text("source_type").notNull(), sourceWorkOrderId: text("source_work_order_id"), sourceEstimateProposalId: text("source_estimate_proposal_id"), sourceAssetId: text("source_asset_id"), sourceVendorId: text("source_vendor_id"), equipmentAmountMinor: bigint("equipment_amount_minor", { mode: "number" }).notNull(), installationAmountMinor: bigint("installation_amount_minor", { mode: "number" }).notNull(), otherAmountMinor: bigint("other_amount_minor", { mode: "number" }).notNull(), totalAmountMinor: bigint("total_amount_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(), effectiveAt: instant("effective_at").notNull(), status: text("status").notNull(), supersededAt: instant("superseded_at"), notes: text("notes"), createdAt: createdAt(),
+}, (table) => [
+  unique("uq_ops_replacement_benchmarks_org_id").on(table.organizationId, table.id),
+  index("idx_ops_replacement_benchmarks_org_profile_status_effective").on(table.organizationId, table.profileId, table.status, table.effectiveAt),
+  uniqueIndex("uidx_ops_replacement_benchmarks_org_profile_published").on(table.organizationId, table.profileId).where(sql`${table.status} = 'published'`),
+  uniqueIndex("uidx_ops_replacement_benchmarks_org_source_proposal").on(table.organizationId, table.sourceEstimateProposalId),
+  foreignKey({ name: "fk_ops_replacement_benchmarks_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+  foreignKey({ name: "fk_ops_replacement_benchmarks_profile", columns: [table.organizationId, table.profileId], foreignColumns: [opsReplacementProfiles.organizationId, opsReplacementProfiles.id] }),
+  foreignKey({ name: "fk_ops_replacement_benchmarks_work", columns: [table.organizationId, table.sourceWorkOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
+  foreignKey({ name: "fk_ops_replacement_benchmarks_proposal", columns: [table.organizationId, table.sourceEstimateProposalId], foreignColumns: [opsVendorEstimateProposals.organizationId, opsVendorEstimateProposals.id] }),
+  foreignKey({ name: "fk_ops_replacement_benchmarks_asset", columns: [table.organizationId, table.sourceAssetId], foreignColumns: [opsAssets.organizationId, opsAssets.id] }),
+  foreignKey({ name: "fk_ops_replacement_benchmarks_vendor", columns: [table.organizationId, table.sourceVendorId], foreignColumns: [opsVendors.organizationId, opsVendors.id] }),
+  check("chk_ops_replacement_benchmarks_source", sql`${table.sourceType} IN ('approved_quote', 'final_cost', 'manual', 'catalog')`),
+  check("chk_ops_replacement_benchmarks_status", sql`${table.status} IN ('published', 'superseded')`),
+  check("chk_ops_replacement_benchmarks_amounts", sql`${table.equipmentAmountMinor} >= 0 AND ${table.installationAmountMinor} >= 0 AND ${table.otherAmountMinor} >= 0 AND ${table.totalAmountMinor} = ${table.equipmentAmountMinor} + ${table.installationAmountMinor} + ${table.otherAmountMinor}`),
+]);
+
+export const opsAssetReplacementOverrides = pgTable("ops_asset_replacement_overrides", {
+  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), sourceBenchmarkId: text("source_benchmark_id"), amountMinor: bigint("amount_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(), effectiveAt: instant("effective_at").notNull(), reason: text("reason").notNull(), status: text("status").notNull(), supersededAt: instant("superseded_at"), createdAt: createdAt(),
+}, (table) => [
+  unique("uq_ops_asset_replacement_overrides_org_id").on(table.organizationId, table.id),
+  index("idx_ops_asset_replacement_overrides_org_asset_status_effective").on(table.organizationId, table.assetId, table.status, table.effectiveAt),
+  uniqueIndex("uidx_ops_asset_replacement_overrides_org_asset_active").on(table.organizationId, table.assetId).where(sql`${table.status} = 'active'`),
+  foreignKey({ name: "fk_ops_asset_replacement_overrides_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+  foreignKey({ name: "fk_ops_asset_replacement_overrides_asset", columns: [table.organizationId, table.assetId], foreignColumns: [opsAssets.organizationId, opsAssets.id] }),
+  foreignKey({ name: "fk_ops_asset_replacement_overrides_benchmark", columns: [table.organizationId, table.sourceBenchmarkId], foreignColumns: [opsReplacementBenchmarks.organizationId, opsReplacementBenchmarks.id] }),
+  check("chk_ops_asset_replacement_overrides_status", sql`${table.status} IN ('active', 'superseded')`),
+  check("chk_ops_asset_replacement_overrides_amount", sql`${table.amountMinor} >= 0`),
+]);
+
+export const opsReplacementEvents = pgTable("ops_replacement_events", {
+  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), workOrderId: text("work_order_id").notNull(), profileId: text("profile_id").notNull(), sourceEstimateProposalId: text("source_estimate_proposal_id").notNull(), status: text("status").notNull(), approvedAmountMinor: bigint("approved_amount_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(), approvedAt: instant("approved_at").notNull(), completedAt: instant("completed_at"), finalAmountMinor: bigint("final_amount_minor", { mode: "number" }), replacementAssetId: text("replacement_asset_id"), createdAt: createdAt(),
+}, (table) => [
+  unique("uq_ops_replacement_events_org_id").on(table.organizationId, table.id),
+  index("idx_ops_replacement_events_org_asset_status").on(table.organizationId, table.assetId, table.status),
+  index("idx_ops_replacement_events_org_work").on(table.organizationId, table.workOrderId, table.createdAt),
+  uniqueIndex("uidx_ops_replacement_events_org_proposal").on(table.organizationId, table.sourceEstimateProposalId),
+  foreignKey({ name: "fk_ops_replacement_events_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+  foreignKey({ name: "fk_ops_replacement_events_asset", columns: [table.organizationId, table.assetId], foreignColumns: [opsAssets.organizationId, opsAssets.id] }),
+  foreignKey({ name: "fk_ops_replacement_events_work", columns: [table.organizationId, table.workOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
+  foreignKey({ name: "fk_ops_replacement_events_profile", columns: [table.organizationId, table.profileId], foreignColumns: [opsReplacementProfiles.organizationId, opsReplacementProfiles.id] }),
+  foreignKey({ name: "fk_ops_replacement_events_proposal", columns: [table.organizationId, table.sourceEstimateProposalId], foreignColumns: [opsVendorEstimateProposals.organizationId, opsVendorEstimateProposals.id] }),
+  foreignKey({ name: "fk_ops_replacement_events_successor", columns: [table.organizationId, table.replacementAssetId], foreignColumns: [opsAssets.organizationId, opsAssets.id] }),
+  check("chk_ops_replacement_events_status", sql`${table.status} IN ('approved', 'completed', 'cancelled')`),
+  check("chk_ops_replacement_events_amounts", sql`${table.approvedAmountMinor} > 0 AND (${table.finalAmountMinor} IS NULL OR ${table.finalAmountMinor} > 0)`),
 ]);
 
 export const opsVisitSessions = pgTable("ops_visit_sessions", {
@@ -1220,6 +1328,8 @@ export const opsPostgresSchema = {
   opsDivisions,
   opsRegions,
   opsTaxonomyNodes,
+  opsEquipmentTemplates,
+  opsComponentTemplates,
   opsStores,
   opsUsers,
   opsMemberships,
@@ -1240,7 +1350,11 @@ export const opsPostgresSchema = {
   opsEntityFiles,
   opsFollowUps,
   opsExceptions,
+  opsReplacementProfiles,
   opsAssets,
+  opsReplacementBenchmarks,
+  opsAssetReplacementOverrides,
+  opsReplacementEvents,
   opsAssetComponents,
   opsPmPlans,
   opsPmOccurrences,

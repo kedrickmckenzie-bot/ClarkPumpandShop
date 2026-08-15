@@ -279,6 +279,55 @@ export async function createAsset(svc: OpsCommandServices, input: CreateAssetInp
   return asset;
 }
 
+export interface ApplyStoreEquipmentTemplateInput { organizationId: OpsId; storeId: OpsId; selections: Array<{ templateId: OpsId; quantity: number }>; actor: ActorContext; }
+
+export async function applyStoreEquipmentTemplates(svc: OpsCommandServices, input: ApplyStoreEquipmentTemplateInput): Promise<Asset[]> {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const [store, nodes, templates, detail] = await Promise.all([repository.getStore(input.organizationId, input.storeId), repository.listTaxonomyNodes(input.organizationId), repository.listEquipmentTemplates(input.organizationId), repository.getStoreDetail({ organizationId: input.organizationId, storeIds: [input.storeId] }, input.storeId)]);
+  if (!store || !detail) throw new OpsDomainError("NOT_FOUND", "Store not found in organization");
+  const selected = input.selections.filter((row) => row.quantity > 0);
+  if (!selected.length) throw new OpsDomainError("VALIDATION", "Select at least one equipment type");
+  if (selected.length > 100) throw new OpsDomainError("VALIDATION", "Too many equipment selections were submitted at once");
+  const byNode = new Map(nodes.map((node) => [node.id, node]));
+  const usedTags = new Set(detail.assets.map((asset) => asset.assetTag.toLocaleLowerCase("en-US")));
+  const now = clock.now();
+  const assets: Asset[] = [];
+  const statements: OpsStatement[] = [];
+  for (const selection of selected) {
+    if (!Number.isSafeInteger(selection.quantity) || selection.quantity < 1 || selection.quantity > 50) throw new OpsDomainError("VALIDATION", "Each equipment quantity must be from 1 to 50");
+    const template = templates.find((row) => row.id === selection.templateId && row.active);
+    if (!template) throw new OpsDomainError("VALIDATION", "Choose an active company equipment type");
+    const leaf = byNode.get(template.taxonomyNodeId);
+    if (!leaf?.active) throw new OpsDomainError("VALIDATION", "The equipment type belongs to an inactive group");
+    const path: typeof nodes = [];
+    let cursor: typeof leaf | undefined = leaf;
+    while (cursor) { path.unshift(cursor); cursor = cursor.parentNodeId ? byNode.get(cursor.parentNodeId) : undefined; }
+    const category = path.find((row) => row.nodeKind === "category");
+    if (!category?.canonicalKey) throw new OpsDomainError("CONFLICT", "Equipment group has no service area");
+    const componentTemplates = await repository.listComponentTemplates(input.organizationId, template.id);
+    for (let index = 1; index <= selection.quantity; index += 1) {
+      const prefix = `${store.storeNumber}-${category.canonicalKey.replace(/[^a-z0-9]/gi, "").slice(0, 4).toUpperCase() || "EQ"}`;
+      let counter = 1;
+      let tag = `${prefix}-${String(counter).padStart(2, "0")}`;
+      while (usedTags.has(tag.toLocaleLowerCase("en-US"))) { counter += 1; tag = `${prefix}-${String(counter).padStart(2, "0")}`; }
+      usedTags.add(tag.toLocaleLowerCase("en-US"));
+      const asset: Asset = { id: ids.next("asset"), organizationId: input.organizationId, storeId: store.id, categoryKey: category.canonicalKey, taxonomyNodeId: leaf.id, groupPath: path.filter((row) => row.nodeKind === "group").map((row) => row.name), assetTag: tag, name: selection.quantity > 1 ? `${template.name} ${index}` : template.name, expectedLifeYears: template.defaultExpectedLifeYears, status: "operational", createdAt: now };
+      assets.push(asset);
+      statements.push(insert("ops_assets", { id: asset.id, organization_id: asset.organizationId, store_id: asset.storeId, category_key: asset.categoryKey, taxonomy_node_id: asset.taxonomyNodeId, group_path_json: JSON.stringify(asset.groupPath), asset_tag: asset.assetTag, name: asset.name, expected_life_years: asset.expectedLifeYears, replacement_attributes_json: "{}", status: asset.status, created_at: asset.createdAt }));
+      const componentIdByTemplate = new Map<string, string>();
+      for (const componentTemplate of componentTemplates) {
+        const componentId = ids.next("component");
+        componentIdByTemplate.set(componentTemplate.id, componentId);
+        statements.push(insert("ops_asset_components", { id: componentId, organization_id: input.organizationId, asset_id: asset.id, parent_component_id: componentTemplate.parentComponentTemplateId ? componentIdByTemplate.get(componentTemplate.parentComponentTemplateId) : undefined, name: componentTemplate.name, created_at: now }));
+      }
+    }
+  }
+  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "store", aggregateId: store.id, eventType: "store.equipment_templates_applied", actor: input.actor, occurredAt: now, payload: { selections: selected, createdAssetIds: assets.map((asset) => asset.id) }, ids }));
+  await repository.atomicWrite(statements);
+  return assets;
+}
+
 export interface AddAssetComponentInput {
   organizationId: OpsId;
   assetId: OpsId;

@@ -404,6 +404,7 @@ export interface EstimateComparisonViewModel {
   vendors: SelectOptionViewModel[];
   requests: EstimateRequestComparisonViewModel[];
   selectedVendorName?: string;
+  selectedDecisionKind?: "service_bid" | "replacement_quote";
   comparisonClosed: boolean;
   activeRequestCount: number;
   proposalCount: number;

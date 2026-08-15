@@ -133,7 +133,8 @@ describe("vendor estimate persistence foundation", () => {
   });
 
   it("serializes estimate evidence into dedicated tables before any cost rows", () => {
-    const statements = buildOpsSeedStatements(buildNorthlinePresentationFixture());
+    const fixture = buildNorthlinePresentationFixture();
+    const statements = buildOpsSeedStatements(fixture);
     const requestIndex = statements.findIndex((row) => row.sql.includes("ops_work_order_estimate_requests"));
     const proposalIndex = statements.findIndex((row) => row.sql.includes("ops_vendor_estimate_proposals"));
     const costIndex = statements.findIndex((row) => row.sql.includes("ops_cost_lines"));
@@ -141,7 +142,7 @@ describe("vendor estimate persistence foundation", () => {
     expect(requestIndex).toBeGreaterThan(-1);
     expect(proposalIndex).toBeGreaterThan(requestIndex);
     expect(costIndex).toBeGreaterThan(proposalIndex);
-    expect(statements.filter((row) => row.sql.includes("ops_vendor_estimate_proposals"))).toHaveLength(2);
+    expect(statements.filter((row) => row.sql.includes("ops_vendor_estimate_proposals"))).toHaveLength(fixture.estimateProposals.length);
     expect(statements.filter((row) => row.sql.includes("ops_cost_lines") && row.params.includes(priceCheckWorkOrderId))).toEqual([]);
   });
 

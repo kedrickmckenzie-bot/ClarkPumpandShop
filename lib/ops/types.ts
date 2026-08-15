@@ -324,6 +324,7 @@ export interface WorkOrderEstimateRequest {
   workOrderId: OpsId;
   vendorId: OpsId;
   kind: EstimateRequestKind;
+  decisionKind?: "service_bid" | "replacement_quote";
   requestedScope: string;
   status: EstimateRequestStatus;
   channel: EstimateRequestChannel;
@@ -463,8 +464,102 @@ export interface Asset {
   installedAt?: IsoDateTime;
   expectedLifeYears?: number;
   warrantyEndsAt?: IsoDateTime;
+  replacementProfileId?: OpsId;
+  replacementAttributes?: Record<string, string>;
+  replacementAdjustmentBps?: number;
   replacementEstimate?: Money;
   status: "operational" | "watch" | "out_of_service" | "retired";
+  retiredAt?: IsoDateTime;
+  replacedByAssetId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export interface EquipmentTemplate {
+  id: OpsId;
+  organizationId: OpsId;
+  taxonomyNodeId: OpsId;
+  name: string;
+  defaultExpectedLifeYears?: number;
+  active: boolean;
+  createdAt: IsoDateTime;
+}
+
+export interface ComponentTemplate {
+  id: OpsId;
+  organizationId: OpsId;
+  equipmentTemplateId: OpsId;
+  parentComponentTemplateId?: OpsId;
+  name: string;
+  sortOrder: number;
+  createdAt: IsoDateTime;
+}
+
+export interface ReplacementProfile {
+  id: OpsId;
+  organizationId: OpsId;
+  code: string;
+  name: string;
+  description: string;
+  categoryKey: string;
+  taxonomyNodeId?: OpsId;
+  matchKeys: string[];
+  attributes: Record<string, string>;
+  expectedLifeYears?: number;
+  annualEscalationBps: number;
+  lowVarianceBps: number;
+  highVarianceBps: number;
+  active: boolean;
+  createdAt: IsoDateTime;
+}
+
+export type ReplacementBenchmarkSource = "approved_quote" | "final_cost" | "manual" | "catalog";
+
+export interface ReplacementBenchmark {
+  id: OpsId;
+  organizationId: OpsId;
+  profileId: OpsId;
+  sourceType: ReplacementBenchmarkSource;
+  sourceWorkOrderId?: OpsId;
+  sourceEstimateProposalId?: OpsId;
+  sourceAssetId?: OpsId;
+  sourceVendorId?: OpsId;
+  equipmentAmount: Money;
+  installationAmount: Money;
+  otherAmount: Money;
+  totalAmount: Money;
+  effectiveAt: IsoDateTime;
+  status: "published" | "superseded";
+  supersededAt?: IsoDateTime;
+  notes?: string;
+  createdAt: IsoDateTime;
+}
+
+export interface AssetReplacementOverride {
+  id: OpsId;
+  organizationId: OpsId;
+  assetId: OpsId;
+  sourceBenchmarkId?: OpsId;
+  amount: Money;
+  effectiveAt: IsoDateTime;
+  reason: string;
+  status: "active" | "superseded";
+  supersededAt?: IsoDateTime;
+  createdAt: IsoDateTime;
+}
+
+export interface ReplacementEvent {
+  id: OpsId;
+  organizationId: OpsId;
+  assetId: OpsId;
+  workOrderId: OpsId;
+  profileId: OpsId;
+  sourceEstimateProposalId: OpsId;
+  status: "approved" | "completed" | "cancelled";
+  approvedAmount: Money;
+  approvedAt: IsoDateTime;
+  completedAt?: IsoDateTime;
+  finalAmount?: Money;
+  replacementAssetId?: OpsId;
   createdAt: IsoDateTime;
 }
 
@@ -605,6 +700,8 @@ export interface OpsFixture {
   divisions: Division[];
   regions: Region[];
   taxonomyNodes: TaxonomyNode[];
+  equipmentTemplates: EquipmentTemplate[];
+  componentTemplates: ComponentTemplate[];
   stores: Store[];
   users: User[];
   memberships: Membership[];
@@ -626,6 +723,10 @@ export interface OpsFixture {
   followUps: FollowUp[];
   exceptions: OpsException[];
   assets: Asset[];
+  replacementProfiles: ReplacementProfile[];
+  replacementBenchmarks: ReplacementBenchmark[];
+  assetReplacementOverrides: AssetReplacementOverride[];
+  replacementEvents: ReplacementEvent[];
   components: AssetComponent[];
   pmPlans: PmPlan[];
   pmOccurrences: PmOccurrence[];

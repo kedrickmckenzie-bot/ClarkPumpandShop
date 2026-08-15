@@ -187,6 +187,14 @@ function RequestEstimateForm({ model }: { model: EstimateComparisonViewModel }) 
       <form action={model.submitAction} method="post" target="_blank" className={styles.controlForm}>
         <input name="kind" type="hidden" value="estimate_only" />
         <div className={styles.fieldGrid}>
+          <label className={styles.field} htmlFor={`estimate-purpose-${model.workOrderId}`}>
+            <span>What are you requesting? <em>Required</em></span>
+            <select id={`estimate-purpose-${model.workOrderId}`} name="decisionKind" required defaultValue="service_bid">
+              <option value="service_bid">Price this service work</option>
+              <option value="replacement_quote">Price equipment replacement</option>
+            </select>
+            <small>A service bid can become a service authorization. A replacement quote goes to capital review and cannot create a technician assignment.</small>
+          </label>
           <label className={styles.field} htmlFor={`estimate-vendor-${model.workOrderId}`}>
             <span>Vendor to invite <em>Required</em></span>
             <select id={`estimate-vendor-${model.workOrderId}`} name="vendorId" required defaultValue="">
@@ -233,19 +241,19 @@ export function EstimateComparisonPanel({ model }: { model: EstimateComparisonVi
       <div className={styles.controlHeading}>
         <span><CircleDollarSign aria-hidden="true" size={19} /></span>
         <div>
-          <h2 id="bid-requests-heading">Bid path</h2>
-          <p>Request and compare vendor bids, then deliberately choose whether to issue service work.</p>
+          <h2 id="bid-requests-heading">Request and compare vendor bids</h2>
+          <p>Request and compare service bids or replacement quotes, with a separate next step for each.</p>
         </div>
       </div>
       <div className={styles.estimateGuardrail}>
         <ShieldCheck aria-hidden="true" size={19} />
-        <p><strong>Bid requests are pricing only.</strong> Vendors are not assigned, should not travel to the store, and cannot check in. A selected bid still requires a separate service authorization before work begins.</p>
+        <p><strong>Bid requests are pricing only.</strong> Vendors are not assigned, should not travel to the store, and cannot check in. A selected service bid requires a separate service authorization; a selected replacement quote requires a capital decision.</p>
       </div>
       <div className={styles.controlSummary}>
         <span><small>Operator work order</small><strong>{model.workOrderNumber}</strong></span>
         <span><small>Open bid requests</small><strong>{model.activeRequestCount}</strong></span>
         <span><small>Bids received</small><strong>{model.proposalCount}</strong></span>
-        <span><small>Selected service provider</small><strong>{model.selectedVendorName ?? "No selection yet"}</strong></span>
+        <span><small>{model.selectedDecisionKind === "replacement_quote" ? "Selected replacement quote" : "Selected service provider"}</small><strong>{model.selectedVendorName ?? "No selection yet"}</strong></span>
       </div>
       {model.requests.length ? (
         <div className={styles.estimateGrid}>{model.requests.map((request) => <EstimateRequestCard request={request} key={request.id} />)}</div>
@@ -257,7 +265,7 @@ export function EstimateComparisonPanel({ model }: { model: EstimateComparisonVi
       ) : model.workflowBlocked ? (
         <p className={styles.inlineEmpty} role="status"><strong>Bid path paused.</strong> {model.workflowBlockMessage}</p>
       ) : model.comparisonClosed ? (
-        <p className={styles.inlineEmpty}>Bid review is closed. {model.selectedVendorName} is locked to the next service authorization; the bid remains separate pricing evidence.</p>
+        <p className={styles.inlineEmpty}>Bid review is closed. {model.selectedDecisionKind === "replacement_quote" ? `${model.selectedVendorName}'s quote is ready for capital review; no service assignment was created.` : `${model.selectedVendorName} is locked to the next service authorization; the bid remains separate pricing evidence.`}</p>
       ) : model.permitted && model.vendors.length ? (
         <RequestEstimateForm model={model} />
       ) : model.permitted ? (

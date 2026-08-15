@@ -27,7 +27,7 @@ export async function POST(request: Request) {
         actor: context.actor,
       },
     );
-    return relativeRedirect303(`/app/stores/${encodeURIComponent(result.id)}?created=true`);
+    return relativeRedirect303(`/app/stores/${encodeURIComponent(result.id)}/equipment-setup?created=true`);
   } catch (error) {
     return opsApiError(error);
   }

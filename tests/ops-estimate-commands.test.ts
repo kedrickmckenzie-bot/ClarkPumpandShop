@@ -619,7 +619,7 @@ describe("estimate selection and canonical work-order preservation", () => {
     expect(workRequests.find((request) => request.id === prepared.brightPath.request.id)).toMatchObject({ status: "not_selected", decisionAt: NOW });
     expect(await test.repository.getAssignment(NORTHLINE_ORGANIZATION_ID, PUBLIC_ASSIGNMENT_ID)).toMatchObject({ status: "superseded" });
     expect(await test.repository.getActiveAssignment(NORTHLINE_ORGANIZATION_ID, PUBLIC_WORK_ORDER_ID)).toMatchObject({
-      id: result.assignment.id,
+      id: result.assignment!.id,
       vendorId: CEDAR,
       status: "pending",
     });
@@ -689,8 +689,8 @@ describe("estimate selection and canonical work-order preservation", () => {
     });
 
     expect(reopened.request.status).toBe("not_selected");
-    expect(reopened.supersededAssignmentId).toBe(selected.assignment.id);
-    expect(await test.repository.getAssignment(NORTHLINE_ORGANIZATION_ID, selected.assignment.id)).toMatchObject({ status: "superseded" });
+    expect(reopened.supersededAssignmentId).toBe(selected.assignment!.id);
+    expect(await test.repository.getAssignment(NORTHLINE_ORGANIZATION_ID, selected.assignment!.id)).toMatchObject({ status: "superseded" });
     expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, PUBLIC_WORK_ORDER_ID)).toMatchObject({
       status: "awaiting_approval",
       accountableParty: "Facilities coordinator",

@@ -56,8 +56,8 @@ export function VendorEstimatePage({ token, estimate }: { token: string; estimat
           </section>
           <section className={styles.card}>
             <ShieldCheck aria-hidden="true" color="#0d6b62" size={24} />
-            <h2 className={styles.cardTitle} style={{ marginTop: ".65rem" }}>This bid request is pricing only</h2>
-            <p className={styles.muted} style={{ marginTop: ".45rem" }}>Your company is not assigned or authorized by this request. Do not travel to the store, check in, begin service, or bill against it. If selected, you will receive a separate Work Order / Service Authorization tied to the same operator work-order number.</p>
+            <h2 className={styles.cardTitle} style={{ marginTop: ".65rem" }}>{estimate.decisionKind === "replacement_quote" ? "This is a replacement quote, not a service assignment" : "This bid request is pricing only"}</h2>
+            <p className={styles.muted} style={{ marginTop: ".45rem" }}>{estimate.decisionKind === "replacement_quote" ? "Your company is being asked to price equipment replacement for capital review. Do not travel to the store, check in, begin work, or bill against this request. Selection records a pricing decision only; any authorized installation work will arrive separately." : "Your company is not assigned or authorized by this request. Do not travel to the store, check in, begin service, or bill against it. If selected, you will receive a separate Work Order / Service Authorization tied to the same operator work-order number."}</p>
           </section>
           <section className={styles.notice}><strong>Need clarification?</strong><p className={styles.helper}>{estimate.organizationSupport}</p></section>
         </aside>

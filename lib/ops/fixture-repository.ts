@@ -16,12 +16,17 @@ import type {
 import type {
   IdempotencyKey,
   IsoDateTime,
+  Asset,
+  AssetReplacementOverride,
   OpsFixture,
   OpsId,
   Page,
   PageRequest,
   Store,
   StoredFile,
+  ReplacementBenchmark,
+  ReplacementEvent,
+  ReplacementProfile,
   VisitSession,
   WorkOrder,
 } from "./types";
@@ -115,6 +120,7 @@ function requestRow(fixture: OpsFixture, request: OpsFixture["requests"][number]
 function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unknown>> {
   const mapping: Record<string, keyof OpsFixture> = {
     ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
+    ops_equipment_templates: "equipmentTemplates", ops_component_templates: "componentTemplates",
     ops_stores: "stores", ops_users: "users", ops_memberships: "memberships",
     ops_scope_grants: "scopeGrants", ops_vendors: "vendors", ops_vendor_specialties: "vendorSpecialties",
     ops_vendor_coverage: "vendorCoverage", ops_requests: "requests", ops_work_orders: "workOrders",
@@ -123,6 +129,8 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_vendor_estimate_proposals: "estimateProposals", ops_visit_sessions: "visits", ops_visit_evidence: "visitEvidence",
     ops_files: "files", ops_entity_files: "entityFiles",
     ops_follow_ups: "followUps", ops_exceptions: "exceptions", ops_assets: "assets",
+    ops_replacement_profiles: "replacementProfiles", ops_replacement_benchmarks: "replacementBenchmarks",
+    ops_asset_replacement_overrides: "assetReplacementOverrides", ops_replacement_events: "replacementEvents",
     ops_asset_components: "components", ops_pm_plans: "pmPlans", ops_pm_occurrences: "pmOccurrences",
     ops_cost_lines: "costLines", ops_invoice_references: "invoiceReferences", ops_invoice_allocations: "invoiceAllocations",
     ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_public_tokens: "publicTokens",
@@ -136,6 +144,7 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   const row: Record<string, unknown> = {};
   Object.entries(raw).forEach(([key, value]) => { row[snakeToCamel(key)] = value; });
   if (table === "ops_taxonomy_nodes") { row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.active = Boolean(row.active); delete row.aliasesJson; }
+  if (table === "ops_equipment_templates") row.active = Boolean(row.active);
   if (table === "ops_stores") { row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.locationPolicyEnabled = Boolean(row.locationPolicyEnabled); delete row.aliasesJson; delete row.searchText; }
   if (table === "ops_vendors") { row.preferred = Boolean(row.preferred); delete row.searchText; }
   if (table === "ops_vendor_specialties") { row.searchAliases = JSON.parse(String(row.searchAliasesJson ?? "[]")); delete row.searchAliasesJson; }
@@ -154,10 +163,36 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_invoice_allocations") { row.amount = { amountMinor: row.amountMinor, currency: row.currency }; delete row.amountMinor; delete row.currency; }
   if (table === "ops_assets") {
     row.groupPath = JSON.parse(String(row.groupPathJson ?? "[]"));
+    row.replacementAttributes = JSON.parse(String(row.replacementAttributesJson ?? "{}"));
     delete row.groupPathJson;
+    delete row.replacementAttributesJson;
     if (row.replacementEstimateMinor !== undefined) row.replacementEstimate = { amountMinor: row.replacementEstimateMinor, currency: row.replacementCurrency ?? "USD" };
     delete row.replacementEstimateMinor;
     delete row.replacementCurrency;
+  }
+  if (table === "ops_replacement_profiles") {
+    row.matchKeys = JSON.parse(String(row.matchKeysJson ?? "[]"));
+    row.attributes = JSON.parse(String(row.attributesJson ?? "{}"));
+    row.active = Boolean(row.active);
+    delete row.matchKeysJson;
+    delete row.attributesJson;
+  }
+  if (table === "ops_replacement_benchmarks") {
+    const currency = String(row.currency ?? "USD");
+    row.equipmentAmount = { amountMinor: row.equipmentAmountMinor, currency };
+    row.installationAmount = { amountMinor: row.installationAmountMinor, currency };
+    row.otherAmount = { amountMinor: row.otherAmountMinor, currency };
+    row.totalAmount = { amountMinor: row.totalAmountMinor, currency };
+    delete row.equipmentAmountMinor; delete row.installationAmountMinor; delete row.otherAmountMinor; delete row.totalAmountMinor; delete row.currency;
+  }
+  if (table === "ops_asset_replacement_overrides") {
+    row.amount = { amountMinor: row.amountMinor, currency: row.currency ?? "USD" };
+    delete row.amountMinor; delete row.currency;
+  }
+  if (table === "ops_replacement_events") {
+    row.approvedAmount = { amountMinor: row.approvedAmountMinor, currency: row.currency ?? "USD" };
+    if (row.finalAmountMinor !== undefined) row.finalAmount = { amountMinor: row.finalAmountMinor, currency: row.currency ?? "USD" };
+    delete row.approvedAmountMinor; delete row.finalAmountMinor; delete row.currency;
   }
   if (table === "ops_pm_plans") row.active = Boolean(row.active);
   return row;
@@ -190,6 +225,22 @@ function assertActiveAssignmentUniqueness(rows: Array<Record<string, unknown>>) 
   }
 }
 
+function assertReplacementUniqueness(table: string, rows: Array<Record<string, unknown>>) {
+  const keys = new Set<string>();
+  for (const row of rows) {
+    if (table === "ops_replacement_benchmarks" && row.status === "published") {
+      const key = `${String(row.organizationId)}:${String(row.profileId)}`;
+      if (keys.has(key)) throw new Error("Replacement profile already has a published benchmark");
+      keys.add(key);
+    }
+    if (table === "ops_asset_replacement_overrides" && row.status === "active") {
+      const key = `${String(row.organizationId)}:${String(row.assetId)}`;
+      if (keys.has(key)) throw new Error("Equipment already has an active replacement override");
+      keys.add(key);
+    }
+  }
+}
+
 function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], statement: OpsStatement) {
   const insertMatch = statement.sql.match(/^INSERT INTO ([a-z0-9_]+) \((.+)\) VALUES \((.+)\)$/i);
   if (insertMatch) {
@@ -208,6 +259,7 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
     rows.push(row);
     if (table === "ops_work_order_estimate_requests") assertEstimateRequestUniqueness(rows);
     if (table === "ops_work_order_assignments") assertActiveAssignmentUniqueness(rows);
+    if (table.startsWith("ops_replacement_") || table === "ops_asset_replacement_overrides") assertReplacementUniqueness(table, rows);
     return;
   }
   const updateMatch = statement.sql.match(/^UPDATE ([a-z0-9_]+) SET (.+) WHERE (.+)$/i);
@@ -216,9 +268,14 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
     const whereColumns = [...updateMatch[3].matchAll(/([a-z0-9_]+) = \?/gi)].map((match) => match[1]);
     const setValues = statement.params.slice(0, setColumns.length); const whereValues = statement.params.slice(setColumns.length);
     const rows = mapTable(fixture, table);
-    rows.filter((row) => whereColumns.every((column, index) => row[snakeToCamel(column)] === whereValues[index])).forEach((row) => setColumns.forEach((column, index) => { row[snakeToCamel(column)] = setValues[index]; }));
+    rows.filter((row) => whereColumns.every((column, index) => row[snakeToCamel(column)] === whereValues[index])).forEach((row) => setColumns.forEach((column, index) => {
+      if (table === "ops_assets" && column === "replacement_attributes_json") row.replacementAttributes = JSON.parse(String(setValues[index] ?? "{}"));
+      else if (table === "ops_replacement_events" && column === "final_amount_minor") row.finalAmount = { amountMinor: setValues[index], currency: (row.approvedAmount as { currency?: string } | undefined)?.currency ?? "USD" };
+      else row[snakeToCamel(column)] = setValues[index];
+    }));
     if (table === "ops_work_order_estimate_requests") assertEstimateRequestUniqueness(rows);
     if (table === "ops_work_order_assignments") assertActiveAssignmentUniqueness(rows);
+    if (table.startsWith("ops_replacement_") || table === "ops_asset_replacement_overrides") assertReplacementUniqueness(table, rows);
     return;
   }
   throw new Error(`Fixture repository cannot execute statement: ${statement.sql}`);
@@ -241,12 +298,23 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async getDivision(organizationId: OpsId, divisionId: OpsId) { return clone(this.fixture.divisions.find((row) => row.organizationId === organizationId && row.id === divisionId) ?? null); }
   async getTaxonomyNode(organizationId: OpsId, taxonomyNodeId: OpsId) { return clone(this.fixture.taxonomyNodes.find((row) => row.organizationId === organizationId && row.id === taxonomyNodeId) ?? null); }
   async listTaxonomyNodes(organizationId: OpsId) { return clone(this.fixture.taxonomyNodes.filter((row) => row.organizationId === organizationId).sort((a, b) => a.depth - b.depth || a.sortOrder - b.sortOrder || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))); }
+  async getEquipmentTemplate(organizationId: OpsId, templateId: OpsId) { return clone(this.fixture.equipmentTemplates.find((row) => row.organizationId === organizationId && row.id === templateId) ?? null); }
+  async listEquipmentTemplates(organizationId: OpsId) { return clone(this.fixture.equipmentTemplates.filter((row) => row.organizationId === organizationId).sort((a, b) => a.taxonomyNodeId.localeCompare(b.taxonomyNodeId) || a.name.localeCompare(b.name))); }
+  async listComponentTemplates(organizationId: OpsId, equipmentTemplateId: OpsId) { return clone(this.fixture.componentTemplates.filter((row) => row.organizationId === organizationId && row.equipmentTemplateId === equipmentTemplateId).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))); }
   async getStore(organizationId: OpsId, storeId: OpsId) { return clone(this.fixture.stores.find((row) => row.organizationId === organizationId && row.id === storeId) ?? null); }
   async getVendor(organizationId: OpsId, vendorId: OpsId) { return clone(this.fixture.vendors.find((row) => row.organizationId === organizationId && row.id === vendorId) ?? null); }
   async getMembership(organizationId: OpsId, membershipId: OpsId) { return clone(this.fixture.memberships.find((row) => row.organizationId === organizationId && row.id === membershipId) ?? null); }
   async getRequest(organizationId: OpsId, requestId: OpsId) { return clone(this.fixture.requests.find((row) => row.organizationId === organizationId && row.id === requestId) ?? null); }
   async getWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.workOrders.find((row) => row.organizationId === organizationId && row.id === workOrderId) ?? null); }
   async getAsset(organizationId: OpsId, assetId: OpsId) { return clone(this.fixture.assets.find((row) => row.organizationId === organizationId && row.id === assetId) ?? null); }
+  async getReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<ReplacementProfile | null> { return clone(this.fixture.replacementProfiles.find((row) => row.organizationId === organizationId && row.id === profileId) ?? null); }
+  async listReplacementProfiles(organizationId: OpsId): Promise<ReplacementProfile[]> { return clone(this.fixture.replacementProfiles.filter((row) => row.organizationId === organizationId).sort((a, b) => a.categoryKey.localeCompare(b.categoryKey) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))); }
+  async getPublishedReplacementBenchmark(organizationId: OpsId, profileId: OpsId): Promise<ReplacementBenchmark | null> { return clone(this.fixture.replacementBenchmarks.filter((row) => row.organizationId === organizationId && row.profileId === profileId && row.status === "published").sort((a, b) => b.effectiveAt.localeCompare(a.effectiveAt) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).at(0) ?? null); }
+  async listReplacementBenchmarks(organizationId: OpsId, profileId: OpsId): Promise<ReplacementBenchmark[]> { return clone(this.fixture.replacementBenchmarks.filter((row) => row.organizationId === organizationId && row.profileId === profileId).sort((a, b) => b.effectiveAt.localeCompare(a.effectiveAt) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))); }
+  async getActiveAssetReplacementOverride(organizationId: OpsId, assetId: OpsId): Promise<AssetReplacementOverride | null> { return clone(this.fixture.assetReplacementOverrides.filter((row) => row.organizationId === organizationId && row.assetId === assetId && row.status === "active").sort((a, b) => b.effectiveAt.localeCompare(a.effectiveAt) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).at(0) ?? null); }
+  async getReplacementEventForProposal(organizationId: OpsId, proposalId: OpsId): Promise<ReplacementEvent | null> { return clone(this.fixture.replacementEvents.find((row) => row.organizationId === organizationId && row.sourceEstimateProposalId === proposalId) ?? null); }
+  async getActiveReplacementEventForAsset(organizationId: OpsId, assetId: OpsId): Promise<ReplacementEvent | null> { return clone(this.fixture.replacementEvents.filter((row) => row.organizationId === organizationId && row.assetId === assetId && row.status === "approved").sort((a, b) => b.approvedAt.localeCompare(a.approvedAt) || b.id.localeCompare(a.id)).at(0) ?? null); }
+  async listAssetsForReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<Asset[]> { return clone(this.fixture.assets.filter((row) => row.organizationId === organizationId && row.replacementProfileId === profileId).sort((a, b) => a.storeId.localeCompare(b.storeId) || a.assetTag.localeCompare(b.assetTag) || a.id.localeCompare(b.id))); }
   async getComponent(organizationId: OpsId, componentId: OpsId) { return clone(this.fixture.components.find((row) => row.organizationId === organizationId && row.id === componentId) ?? null); }
   async getAssignment(organizationId: OpsId, assignmentId: OpsId) { return clone(this.fixture.assignments.find((row) => row.organizationId === organizationId && row.id === assignmentId) ?? null); }
   async getIssuance(organizationId: OpsId, issuanceId: OpsId) { return clone(this.fixture.issuances.find((row) => row.organizationId === organizationId && row.id === issuanceId) ?? null); }
@@ -407,6 +475,10 @@ const fixtureGlobal = globalThis as typeof globalThis & {
 // fallback; it requires PostgreSQL.
 export function getNorthlineFixtureRepository(): MutableOpsFixtureRepository {
   fixtureGlobal.__traceOpsNorthlineRuntimeRepository ??= createNorthlineFixtureRepository();
+  const snapshot = fixtureGlobal.__traceOpsNorthlineRuntimeRepository.snapshot() as Partial<OpsFixture>;
+  if (!Array.isArray(snapshot.equipmentTemplates) || !Array.isArray(snapshot.componentTemplates) || !Array.isArray(snapshot.replacementProfiles)) {
+    fixtureGlobal.__traceOpsNorthlineRuntimeRepository = createNorthlineFixtureRepository();
+  }
   return fixtureGlobal.__traceOpsNorthlineRuntimeRepository;
 }
 

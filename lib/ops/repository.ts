@@ -1,8 +1,11 @@
 import type {
   IsoDateTime,
   Asset,
+  AssetReplacementOverride,
   AssetComponent,
+  ComponentTemplate,
   Division,
+  EquipmentTemplate,
   FollowUp,
   IdempotencyKey,
   OpsFixture,
@@ -15,6 +18,9 @@ import type {
   StoredFile,
   TaxonomyNode,
   Organization,
+  ReplacementBenchmark,
+  ReplacementEvent,
+  ReplacementProfile,
   Vendor,
   VendorEstimateProposal,
   VisitSession,
@@ -99,12 +105,23 @@ export interface OpsRepository {
   getDivision(organizationId: OpsId, divisionId: OpsId): Promise<Division | null>;
   getTaxonomyNode(organizationId: OpsId, taxonomyNodeId: OpsId): Promise<TaxonomyNode | null>;
   listTaxonomyNodes(organizationId: OpsId): Promise<TaxonomyNode[]>;
+  getEquipmentTemplate(organizationId: OpsId, templateId: OpsId): Promise<EquipmentTemplate | null>;
+  listEquipmentTemplates(organizationId: OpsId): Promise<EquipmentTemplate[]>;
+  listComponentTemplates(organizationId: OpsId, equipmentTemplateId: OpsId): Promise<ComponentTemplate[]>;
   getStore(organizationId: OpsId, storeId: OpsId): Promise<Store | null>;
   getVendor(organizationId: OpsId, vendorId: OpsId): Promise<Vendor | null>;
   getMembership(organizationId: OpsId, membershipId: OpsId): Promise<Membership | null>;
   getRequest(organizationId: OpsId, requestId: OpsId): Promise<ServiceRequest | null>;
   getWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrder | null>;
   getAsset(organizationId: OpsId, assetId: OpsId): Promise<Asset | null>;
+  getReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<ReplacementProfile | null>;
+  listReplacementProfiles(organizationId: OpsId): Promise<ReplacementProfile[]>;
+  getPublishedReplacementBenchmark(organizationId: OpsId, profileId: OpsId): Promise<ReplacementBenchmark | null>;
+  listReplacementBenchmarks(organizationId: OpsId, profileId: OpsId): Promise<ReplacementBenchmark[]>;
+  getActiveAssetReplacementOverride(organizationId: OpsId, assetId: OpsId): Promise<AssetReplacementOverride | null>;
+  getReplacementEventForProposal(organizationId: OpsId, proposalId: OpsId): Promise<ReplacementEvent | null>;
+  getActiveReplacementEventForAsset(organizationId: OpsId, assetId: OpsId): Promise<ReplacementEvent | null>;
+  listAssetsForReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<Asset[]>;
   getComponent(organizationId: OpsId, componentId: OpsId): Promise<AssetComponent | null>;
   getAssignment(organizationId: OpsId, assignmentId: OpsId): Promise<WorkOrderAssignment | null>;
   getIssuance(organizationId: OpsId, issuanceId: OpsId): Promise<WorkOrderIssuance | null>;

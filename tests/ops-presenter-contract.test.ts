@@ -273,7 +273,7 @@ describe("operator presenter drill-through contracts", () => {
     expect(detail.state.kind).toBe("ready");
     expect(detail.page.title).toBe(asset.name);
     expect(detail.facts.map((fact) => fact.label)).toEqual(
-      expect.arrayContaining(["Asset tag", "Manufacturer / model", "Serial number", "Warranty", "Recorded work cost", "Replacement estimate"]),
+      expect.arrayContaining(["Asset tag", "Manufacturer / model", "Serial number", "Warranty", "Recorded work cost", "Replacement outlook"]),
     );
     expect(detail.sections.map((section) => section.id)).toEqual(
       expect.arrayContaining(["lifecycle-evidence", "components", "service-history", "preventive-maintenance"]),
@@ -301,7 +301,7 @@ describe("operator presenter drill-through contracts", () => {
     expect(dashboard.spotlight?.facts).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Current repair", value: "$18,000" }),
       expect.objectContaining({ label: "Expected service from repair", value: "5 years" }),
-      expect.objectContaining({ label: "Replacement estimate", value: "$29,150" }),
+      expect.objectContaining({ label: "Replacement estimate", value: "$32,806" }),
     ]));
     expect(JSON.stringify(dashboard.spotlight)).not.toMatch(/recorded work cost|break-even/i);
   });
@@ -337,7 +337,7 @@ describe("operator presenter drill-through contracts", () => {
       ["Cedar Mechanical", "$1,780.00"],
       ["Summit Refrigeration", "$2,450.00"],
     ]);
-    expect(model.requests.every((request) => request.kindLabel === "Bid request - pricing only")).toBe(true);
+    expect(model.requests.every((request) => request.kindLabel === "Service bid - pricing only")).toBe(true);
     expect(model.requests.every((request) => request.canSelect)).toBe(true);
     expect(fixture.workOrders.filter((workOrder) => workOrder.id === workOrderId)).toHaveLength(1);
     expect(fixture.costLines.filter((line) => line.workOrderId === workOrderId)).toHaveLength(0);

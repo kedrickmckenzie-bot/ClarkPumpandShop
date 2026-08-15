@@ -19,7 +19,7 @@ import {
   isRenderNodeRuntime,
 } from "@/lib/server/persistence-runtime";
 
-const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-14-v7";
+const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-15-v9";
 let durableRepository: Promise<OpsRepository> | undefined;
 let repositoryProxy: OpsRepository | undefined;
 

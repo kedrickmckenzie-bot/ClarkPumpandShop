@@ -1,0 +1,41 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import { Boxes, ChevronRight, FolderTree, PencilLine, Plus } from "lucide-react";
+import styles from "./ops.module.css";
+
+export interface TaxonomyManagerViewModel {
+  permitted: boolean;
+  action: string;
+  nodes: Array<{ id: string; name: string; kind: "category" | "group"; parentNodeId?: string; pathLabel: string; active: boolean; equipmentCount: number; templates: Array<{ id: string; name: string; expectedLifeYears?: number; active: boolean; components: string[] }> }>;
+  parentOptions: Array<{ id: string; label: string; depth: number }>;
+}
+
+function useSave() {
+  const [state, setState] = useState<{ pending: boolean; error?: string }>({ pending: false });
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = event.currentTarget; setState({ pending: true }); try { const response = await fetch(form.action, { method: "POST", body: new FormData(form), credentials: "same-origin", headers: { "x-traceops-client": "taxonomy-manager" } }); const body = await response.json().catch(() => null) as { error?: string; redirectTo?: string } | null; if (!response.ok) return setState({ pending: false, error: body?.error ?? "The setup change could not be saved." }); window.location.assign(body?.redirectTo ?? window.location.href); } catch { setState({ pending: false, error: "The setup change could not be saved. Check your connection and try again." }); } }
+  return { state, submit };
+}
+
+export function TaxonomyManager({ model }: { model: TaxonomyManagerViewModel }) {
+  const create = useSave();
+  const [kind, setKind] = useState<"category" | "group">("group");
+  const categories = model.nodes.filter((node) => node.kind === "category");
+  return <div className={styles.pageStack}>
+    <header className={styles.taxonomyHero}><div><p>Company setup</p><h1>Service areas and equipment groups</h1><span>Organize spending the same way at every store. This works like folders—name it, choose where it belongs, and save.</span></div><FolderTree aria-hidden="true" size={30} /></header>
+    <section className={styles.taxonomyQuickCreate} aria-labelledby="quick-create-title"><div className={styles.taxonomyQuickHeading}><span><Plus aria-hidden="true" size={20} /></span><div><h2 id="quick-create-title">Add one</h2><p>Only the name and location are required.</p></div></div><form action={model.action} method="post" onSubmit={create.submit}><input name="operation" type="hidden" value="create" /><label>What are you adding?<select name="nodeKind" value={kind} onChange={(event) => setKind(event.target.value as "category" | "group")}><option value="group">Equipment group</option><option value="category">Service area / cost center</option></select></label><label>Name<input name="name" required placeholder={kind === "category" ? "Example: Refrigeration" : "Example: Beer caves"} /></label>{kind === "group" ? <label>Where does it belong?<select name="parentNodeId" required defaultValue=""><option disabled value="">Choose a service area or group</option>{model.parentOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label> : <p className={styles.taxonomyCompanywide}>Service areas are available companywide automatically.</p>}<button className={styles.primaryButton} disabled={create.state.pending} type="submit">{create.state.pending ? "Saving..." : "Add and use it"}<ChevronRight aria-hidden="true" size={17} /></button>{create.state.error ? <p className={styles.replacementError} role="alert">{create.state.error}</p> : null}</form></section>
+    <section className={styles.taxonomyList}><div className={styles.cardHeading}><div><h2>Current setup</h2><p>Open any row to rename it, move it, or stop offering it for new records. Historical work stays intact.</p></div></div>{categories.map((category) => <TaxonomyBranch category={category} model={model} key={category.id} />)}</section>
+  </div>;
+}
+
+function TaxonomyBranch({ category, model }: { category: TaxonomyManagerViewModel["nodes"][number]; model: TaxonomyManagerViewModel }) {
+  const descendants = model.nodes.filter((node) => node.kind === "group" && (node.pathLabel === category.name || node.pathLabel.startsWith(`${category.name} › `)));
+  return <article className={styles.taxonomyBranch}><div className={styles.taxonomyBranchHeading}><span><Boxes aria-hidden="true" size={20} /></span><div><strong>{category.name}</strong><small>{category.equipmentCount} equipment records · {descendants.length} groups</small></div><EditNode node={category} model={model} /></div>{descendants.length ? <div className={styles.taxonomyChildren}>{descendants.map((node) => <div className={styles.taxonomyGroupBlock} style={{ marginLeft: `${Math.max(0, node.pathLabel.split(" › ").length - 2) * 20}px` }} key={node.id}><div className={styles.taxonomyRow}><div><strong>{node.name}</strong><small>{node.pathLabel} · {node.equipmentCount} equipment records{node.active ? "" : " · Not offered for new records"}</small></div><EditNode node={node} model={model} /></div><div className={styles.taxonomyTemplates}>{node.templates.map((template) => <div key={template.id}><strong>{template.name}</strong><span>{template.components.length ? template.components.join(" · ") : "No default components"}{template.expectedLifeYears ? ` · ${template.expectedLifeYears}-year expected life` : ""}</span></div>)}<AddEquipmentTemplate group={node} action={model.action} /></div></div>)}</div> : <p className={styles.taxonomyEmpty}>No equipment groups yet. Add one above when you need another spending level.</p>}</article>;
+}
+
+function AddEquipmentTemplate({ group, action }: { group: TaxonomyManagerViewModel["nodes"][number]; action: string }) { const save = useSave(); return <details className={styles.taxonomyAddEquipment}><summary><Plus aria-hidden="true" size={15} />Add equipment type</summary><form action={action} method="post" onSubmit={save.submit}><input name="operation" type="hidden" value="create-equipment-template" /><input name="taxonomyNodeId" type="hidden" value={group.id} /><label>Equipment type name<input name="name" required placeholder="Example: Standard walk-in cooler" /></label><label>Expected life <small>Optional</small><input name="defaultExpectedLifeYears" type="number" min="1" max="100" /></label><label>Default components <small>Optional; one per line</small><textarea name="components" rows={6} placeholder={"Condensing unit\nCondensing unit > Compressor\nCondensing unit > Fan motor\nEvaporator\nShelving"} /><small>Use “Parent &gt; Child” when a component sits inside another component.</small></label><button className={styles.secondaryButton} disabled={save.state.pending} type="submit">{save.state.pending ? "Saving..." : "Save equipment type"}</button>{save.state.error ? <p className={styles.replacementError} role="alert">{save.state.error}</p> : null}</form></details>; }
+
+function EditNode({ node, model }: { node: TaxonomyManagerViewModel["nodes"][number]; model: TaxonomyManagerViewModel }) {
+  const save = useSave();
+  return <details className={styles.taxonomyEdit}><summary aria-label={`Edit ${node.name}`}><PencilLine aria-hidden="true" size={17} />Edit</summary><form action={model.action} method="post" onSubmit={save.submit}><input name="operation" type="hidden" value="update" /><input name="nodeId" type="hidden" value={node.id} /><label>Name<input name="name" defaultValue={node.name} required /></label>{node.kind === "group" ? <label>Belongs under<select name="parentNodeId" defaultValue={node.parentNodeId} required>{model.parentOptions.filter((option) => option.id !== node.id).map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label> : null}<label>Status<select name="active" defaultValue={String(node.active)}><option value="true">Available for new records</option><option value="false">Hide from new records</option></select></label><button className={styles.secondaryButton} disabled={save.state.pending} type="submit">{save.state.pending ? "Saving..." : "Save changes"}</button>{save.state.error ? <p className={styles.replacementError} role="alert">{save.state.error}</p> : null}</form></details>;
+}

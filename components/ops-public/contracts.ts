@@ -94,6 +94,7 @@ export interface VendorEstimateView {
   status: "requested" | "opened" | "submitted" | "declined" | "expired" | "withdrawn" | "selected" | "not_selected";
   statusLabel: string;
   requestKindLabel: string;
+  decisionKind?: "service_bid" | "replacement_quote";
   requestedAt: string;
   dueAt?: string;
   store: {

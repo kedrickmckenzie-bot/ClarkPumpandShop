@@ -887,7 +887,7 @@ const gateway: PublicOperationsGateway = {
       declined: "Declined",
       expired: "Expired",
       withdrawn: "Withdrawn",
-      selected: "Selected for authorization",
+      selected: source.decisionKind === "replacement_quote" ? "Selected for capital review" : "Selected for authorization",
       not_selected: "Not selected",
     };
     const responseDeadlinePassed = Boolean(source.dueAt && Date.parse(source.dueAt) <= Date.parse(now()));
@@ -901,9 +901,12 @@ const gateway: PublicOperationsGateway = {
       operatorWorkOrderNumber: resolved.workOrder.number,
       status: presentedStatus,
       statusLabel: statusLabels[presentedStatus],
-      requestKindLabel: source.kind === "diagnostic_and_estimate"
-        ? "Bid request - onsite diagnosis requires separate authorization"
-        : "Bid request - pricing only",
+      requestKindLabel: source.decisionKind === "replacement_quote"
+        ? "Replacement quote - capital pricing only"
+        : source.kind === "diagnostic_and_estimate"
+          ? "Bid request - onsite diagnosis requires separate authorization"
+          : "Bid request - pricing only",
+      decisionKind: source.decisionKind ?? "service_bid",
       requestedAt: source.requestedAt,
       dueAt: source.dueAt,
       store: {

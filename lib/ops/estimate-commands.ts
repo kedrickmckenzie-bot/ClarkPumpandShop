@@ -221,6 +221,7 @@ export interface RequestEstimateInput {
   workOrderId: OpsId;
   vendorId: OpsId;
   kind: EstimateRequestKind;
+  decisionKind?: WorkOrderEstimateRequest["decisionKind"];
   requestedScope: string;
   channel: EstimateRequestChannel;
   dueAt: IsoDateTime;
@@ -244,6 +245,7 @@ export async function requestEstimate(svc: EstimateCommandServices, input: Reque
     throw new OpsDomainError("FORBIDDEN", "Vendor does not cover this work-order store");
   }
   if (!requestKinds.has(input.kind)) throw new OpsDomainError("VALIDATION", "Bid-request kind is invalid");
+  if (input.decisionKind && !["service_bid", "replacement_quote"].includes(input.decisionKind)) throw new OpsDomainError("VALIDATION", "Bid decision kind is invalid");
   if (!requestChannels.has(input.channel)) throw new OpsDomainError("VALIDATION", "Bid-request channel is invalid");
   const now = clock.now();
   const scope = required(input.requestedScope, "Bid scope", MAX_SCOPE_LENGTH);
@@ -286,6 +288,7 @@ export async function requestEstimate(svc: EstimateCommandServices, input: Reque
     workOrderId: workOrder.id,
     vendorId: vendor.id,
     kind: input.kind,
+    decisionKind: input.decisionKind ?? "service_bid",
     requestedScope: scope,
     status: "requested",
     channel: input.channel,
@@ -299,6 +302,7 @@ export async function requestEstimate(svc: EstimateCommandServices, input: Reque
       work_order_id: request.workOrderId,
       vendor_id: request.vendorId,
       kind: request.kind,
+      decision_kind: request.decisionKind,
       requested_scope: request.requestedScope,
       status: request.status,
       channel: request.channel,
@@ -777,8 +781,9 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
   const competing = requests.filter(
     (candidate) => candidate.id !== request.id && activeEstimateRequestStatuses.has(candidate.status),
   );
-  const assignmentId = ids.next("assignment");
-  const assignment: WorkOrderAssignment = {
+  const createsServiceAssignment = request.decisionKind !== "replacement_quote";
+  const assignmentId = createsServiceAssignment ? ids.next("assignment") : undefined;
+  const assignment: WorkOrderAssignment | undefined = assignmentId ? {
     id: assignmentId,
     organizationId: request.organizationId,
     workOrderId: request.workOrderId,
@@ -787,7 +792,7 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
     status: "pending",
     assignedAt: now,
     supersedesAssignmentId: activeAssignment?.id,
-  };
+  } : undefined;
   const selected: WorkOrderEstimateRequest = { ...request, status: "selected", decisionAt: now };
   const statements: OpsStatement[] = [
     {
@@ -813,26 +818,28 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
       params: [now, request.organizationId, "service_authorization", "work_order_issuance", issuance.id],
     });
   }
-  if (activeAssignment) {
+  if (createsServiceAssignment && activeAssignment) {
     statements.push({
       sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ? AND work_order_id = ? AND status = ?",
       params: ["superseded", request.organizationId, activeAssignment.id, workOrder.id, activeAssignment.status],
     });
   }
+  if (assignment) statements.push(insert("ops_work_order_assignments", {
+    id: assignment.id,
+    organization_id: assignment.organizationId,
+    work_order_id: assignment.workOrderId,
+    kind: assignment.kind,
+    vendor_id: assignment.vendorId,
+    status: assignment.status,
+    assigned_at: assignment.assignedAt,
+    supersedes_assignment_id: assignment.supersedesAssignmentId,
+  }));
   statements.push(
-    insert("ops_work_order_assignments", {
-      id: assignment.id,
-      organization_id: assignment.organizationId,
-      work_order_id: assignment.workOrderId,
-      kind: assignment.kind,
-      vendor_id: assignment.vendorId,
-      status: assignment.status,
-      assigned_at: assignment.assignedAt,
-      supersedes_assignment_id: assignment.supersedesAssignmentId,
-    }),
     {
       sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ? AND status = ?",
-      params: ["approved", "Facilities coordinator", "Generate service authorization", request.organizationId, workOrder.id, workOrder.status],
+      params: createsServiceAssignment
+        ? ["approved", "Facilities coordinator", "Generate service authorization", request.organizationId, workOrder.id, workOrder.status]
+        : ["awaiting_approval", "Facilities coordinator", "Review replacement quote and record capital decision", request.organizationId, workOrder.id, workOrder.status],
     },
     ...auditAndOutbox({
       organizationId: request.organizationId,
@@ -849,6 +856,7 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
         amountMinor: latestProposal.amount.amountMinor,
         currency: latestProposal.amount.currency,
         assignmentId,
+        decisionKind: request.decisionKind ?? "service_bid",
         supersededAssignmentId: activeAssignment?.id,
         supersededIssuanceId: latestIssuance?.id,
         notSelectedRequestIds: competing.map((candidate) => candidate.id),
@@ -856,7 +864,7 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
       },
       ids,
     }),
-    ...auditAndOutbox({
+    ...(assignment ? auditAndOutbox({
       organizationId: request.organizationId,
       aggregateType: "work_order",
       aggregateId: workOrder.id,
@@ -873,7 +881,7 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
         estimateProposalId: latestProposal.id,
       },
       ids,
-    }),
+    }) : []),
   );
   try {
     await atomicWorkOrderMutation({

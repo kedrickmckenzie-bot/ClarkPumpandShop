@@ -43,6 +43,7 @@ import {
   calculateRepairReplacementScreening,
   type RepairReplacementScreening,
 } from "@/lib/ops/lifecycle-analytics";
+import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
 
 export type OperatorListRoute =
   | "action-center"
@@ -564,7 +565,8 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
       const expectedReplacementYear = asset.installedAt && expectedLife
         ? new Date(asset.installedAt).getUTCFullYear() + expectedLife
         : undefined;
-      const replacement = asset.replacementEstimate?.amountMinor;
+      const replacementResolution = resolveAssetReplacementEstimate(fixture, asset, fixture.asOf);
+      const replacement = replacementResolution.amount?.amountMinor;
       const warrantyExpired = Boolean(asset.warrantyEndsAt && Date.parse(asset.warrantyEndsAt) < asOf);
       const componentCounts = new Map<string, number>();
       for (const candidate of completedReactiveWork) if (candidate.componentId) {
@@ -589,7 +591,7 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
         )
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
       const screening = calculateRepairReplacementScreening(
-        asset,
+        { ...asset, replacementEstimate: replacementResolution.amount },
         proposalWork ? {
           proposalId: proposalWork.id,
           repairEstimateMinor: proposalWork.repairEstimate?.amountMinor,
@@ -634,6 +636,7 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
         lifeUsed,
         expectedReplacementYear,
         replacement,
+        replacementResolution,
         warrantyExpired,
         sameComponentRepeat,
         proposalWork,
@@ -942,12 +945,12 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
         { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Rolling source cost; not invoice or payment totals", link: { href: "/app/spend", label: "Explain the total" } },
         { id: "cost-work", label: "Cost-bearing work orders", value: String([...rollingCostByWork.keys()].filter((id) => scoped.workOrders.some((work) => work.id === id)).length), supportingText: "Work orders with entered cost in the rolling period", link: { href: hrefWithQuery("/app/work-orders", { hasCost: "true", costFrom: periodStart }), label: "Open supporting work" } },
         { id: "invoice-references", label: "Invoice references recorded", value: String(rollingInvoices.length), supportingText: "Optional matching evidence; not accounts payable", tone: invoiceToReview ? "warning" : "neutral", link: { href: hrefWithQuery("/app/invoices", { from: periodStart }), label: "Review invoice references" } },
-        { id: "replacement-estimates", label: "Entered replacement estimates", value: money(replacementEstimateTotal), supportingText: "Planning inputs across tracked equipment", tone: "info", link: { href: "/app/lifecycle?replacement=entered", label: "Open capital outlook" } },
+        { id: "replacement-estimates", label: "Current replacement outlook", value: money(replacementEstimateTotal), supportingText: "Dated benchmarks and equipment-specific adjustments across tracked equipment", tone: "info", link: { href: "/app/lifecycle?replacement=entered", label: "Open capital outlook" } },
       ],
       priorityActions: [
         dashboardShortcut({ id: "finance-invoices", title: `Review ${rollingInvoices.length} recorded invoice reference${rollingInvoices.length === 1 ? "" : "s"}`, description: "Use operator work-order references and confirmed allocations as an optional safeguard; TraceOps does not approve or pay invoices.", categoryLabel: "Invoice safeguard", dueLabel: "Optional review", ownerLabel: "Finance", tone: invoiceToReview ? "warning" : "positive", href: hrefWithQuery("/app/invoices", { from: periodStart }), linkLabel: "Open invoice references" }),
         dashboardShortcut({ id: "finance-store-cost", title: "Compare recorded cost by store", description: "Move from each store total through service area, equipment, component, work order, and entered cost lines.", categoryLabel: "Cost visibility", dueLabel: "Rolling 12 months", ownerLabel: "Finance and operations", tone: "info", href: "/app/stores?sort=cost", linkLabel: "Open store ranking" }),
-        dashboardShortcut({ id: "finance-capital", title: "Review entered capital-planning inputs", description: `${money(replacementEstimateTotal)} of installed replacement estimates are planning inputs, not an approved budget.`, categoryLabel: "Lifecycle & CapEx", dueLabel: "Planning view", ownerLabel: "Finance and facilities", href: "/app/lifecycle?replacement=entered", linkLabel: "Open capital outlook" }),
+        dashboardShortcut({ id: "finance-capital", title: "Review replacement planning evidence", description: `${money(replacementEstimateTotal)} is the current benchmark-based outlook, not an approved budget.`, categoryLabel: "Lifecycle & CapEx", dueLabel: "Planning view", ownerLabel: "Finance and facilities", href: "/app/lifecycle?replacement=entered", linkLabel: "Open capital outlook" }),
         dashboardShortcut({ id: "finance-reports", title: "Open finance-relevant source views", description: "Recorded cost, work obligations, invoice references, and lifecycle evidence remain separate and traceable.", categoryLabel: "Reporting", dueLabel: "Available now", ownerLabel: "Finance", href: "/app/reports", linkLabel: "Open reports" }),
       ],
       prioritySection: { title: "Financial review paths", description: "Cost and evidence stay distinct so no amount is silently combined or treated as approved.", link: { href: "/app/reports", label: "Open source reports" } },
@@ -1561,7 +1564,7 @@ export function buildListModel(
     const administrationRows: TableRowViewModel[] = [
       { id: "stores", label: "Stores", href: "/app/stores", cells: [{ key: "area", value: "Stores & regions" }, { key: "summary", value: `${scoped.stores.length} stores in scope` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configured", tone: "positive" }] },
       { id: "vendors", label: "Vendors", href: "/app/vendors", cells: [{ key: "area", value: "Approved vendor network" }, { key: "summary", value: `${fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).length} approved vendors` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configured", tone: "positive" }] },
-      { id: "taxonomy", label: "Service taxonomy", href: "/app/equipment", cells: [{ key: "area", value: "Service areas & equipment" }, { key: "summary", value: `${new Set(scoped.assets.map((asset) => asset.categoryKey)).size} active service areas` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Progressive", tone: "info" }] },
+      { id: "taxonomy", label: "Service areas and equipment templates", href: "/app/admin/service-areas", cells: [{ key: "area", value: "Company equipment setup" }, { key: "summary", value: `${(fixture.equipmentTemplates ?? []).filter((template) => template.organizationId === scoped.organizationId && template.active).length} reusable equipment types` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Ready to reuse", tone: "positive" }] },
       { id: "policy", label: "Visit policy", href: "/app/visits", cells: [{ key: "area", value: "Visit evidence policy" }, { key: "summary", value: "Event-only location; no continuous tracking" }, { key: "owner", value: "Security & facilities" }, { key: "status", value: "Active", tone: "positive" }] },
     ];
     rows = administrationRows.filter((row) => !q || searchable(row.label, ...row.cells.map((cell) => cell.value)).includes(q));
@@ -2186,7 +2189,7 @@ export function buildProgramModel(
           ? `${row.screening.comparison.comparisonHorizonYears} ${row.screening.comparison.comparisonHorizonYears === 1 ? "year" : "years"} of expected service · ${Math.round((row.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of replacement estimate`
           : "Enter expected service from the repair for a same-horizon comparison",
       },
-      { key: "replacement", value: row.replacement ? money(row.replacement) : "Not entered" },
+      { key: "replacement", value: row.replacement ? money(row.replacement) : "Not entered", secondary: row.replacementResolution.explanation },
       {
         key: "status",
         value: lifecycleComparisonLabel(row.screening),
@@ -2199,23 +2202,23 @@ export function buildProgramModel(
     page: { title: "Lifecycle & CapEx", eyebrow: "Repair decisions and capital planning", description: "See age against expected life, compare a current repair with replacement over the same expected-service period, and look ahead to likely capital needs. Small bridge repairs are not treated as replacement signals, and TraceOps never makes the decision for you.", scopeLabel: activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
     metrics: [
       { id: "review", label: "Repairs to compare", value: String(lifecycle.filter((row) => row.screening.state === "compare_alternatives").length), supportingText: "Material current repairs worth comparing with replacement", tone: "warning", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, reason: "compare alternatives" }), label: "Open repair comparisons" } },
-      { id: "replacement", label: "Entered replacement estimates", value: money(replacementTotal), supportingText: "Planning input, not an approved budget", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId }), label: "Review estimates" } },
+      { id: "replacement", label: "Current replacement outlook", value: money(replacementTotal), supportingText: "Dated benchmarks, transparent escalation, and equipment adjustments; not an approved budget", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId }), label: "Review estimates" } },
       { id: "work-cost", label: "Historical recorded cost", value: money(candidates.reduce((sum, row) => sum + row.workCost, 0)), supportingText: "Context only; never added to the current repair estimate", link: { href: hrefWithQuery("/app/work-orders", { hasCost: "true", store: selectedStoreId }), label: "Open cost sources" } },
       { id: "coverage", label: "Comparison inputs complete", value: `${lifecycle.filter((row) => row.screening.state !== "incomplete").length}/${lifecycle.length}`, supportingText: "Current repair, replacement, and expected-service inputs", tone: "info", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, reason: "missing inputs" }), label: "Review missing inputs" } },
     ],
     breakdowns: [{ id: "lifecycle-reasons", title: "Current repair screening", description: "A repair must first be meaningful in dollars and as a share of replacement. Only then is it compared over the same expected-service period.", totalLabel: `${candidates.length} assets`, segments: [...reasonCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), link: { href: hrefWithQuery("/app/lifecycle", { reason: key, store: selectedStoreId }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId }), label: "Open all lifecycle evidence" } }],
     trends: [{
       id: "capex-horizon",
-      title: "Entered replacement estimates by expected-life year",
+      title: "Current replacement outlook by expected-life year",
       description: "A planning horizon based on entered installation date, expected life, and replacement estimate—not an approved budget or automatic replacement decision.",
       points: [...lifecycle.reduce((years, row) => {
         if (row.expectedReplacementYear && row.replacement) years.set(String(row.expectedReplacementYear), (years.get(String(row.expectedReplacementYear)) ?? 0) + row.replacement);
         return years;
       }, new Map<string, number>()).entries()].sort(([a], [b]) => a.localeCompare(b)).map(([year, value]) => ({ id: year, label: year, value, formattedValue: money(value), link: { href: hrefWithQuery("/app/lifecycle", { replacementYear: year, store: selectedStoreId }), label: `Review ${year} evidence` } })),
-      sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId }), label: "Review entered life and replacement fields" },
+      sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId }), label: "Review life and replacement evidence" },
     }],
     priorityActions: allActions,
-    table: { id: "lifecycle", caption: "Equipment lifecycle evidence", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "evidence", label: "Comparison basis" }, { key: "work", label: "Current repair" }, { key: "replacement", label: "Installed replacement estimate", align: "end" }, { key: "status", label: "Screening" }], rows },
+    table: { id: "lifecycle", caption: "Equipment lifecycle evidence", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "evidence", label: "Comparison basis" }, { key: "work", label: "Current repair" }, { key: "replacement", label: "Current replacement outlook", align: "end" }, { key: "status", label: "Screening" }], rows },
   };
 }
 
@@ -2364,7 +2367,7 @@ export function buildDetailModel(
         { label: "Installed", value: date(asset.installedAt), helperText: asset.expectedLifeYears ? `${asset.expectedLifeYears}-year expected-life planning reference; not an expiration date` : "Expected-life reference not entered" },
         { label: "Warranty", value: asset.warrantyEndsAt ? date(asset.warrantyEndsAt) : "Not entered", helperText: asset.warrantyEndsAt && Date.parse(asset.warrantyEndsAt) < Date.parse(fixture.asOf) ? "Expired as of this view" : "Check coverage before authorizing work" },
         { label: "Recorded work cost", value: money(lifecycle?.workCost ?? 0), helperText: "Entered cost lines only" },
-        { label: "Replacement estimate", value: asset.replacementEstimate ? money(asset.replacementEstimate.amountMinor) : "Not entered", helperText: expectedReplacementYear ? `Expected-life year ${expectedReplacementYear}` : "Planning inputs remain optional" },
+        { label: "Replacement outlook", value: lifecycle?.replacement ? money(lifecycle.replacement) : "Not entered", helperText: lifecycle ? `${lifecycle.replacementResolution.explanation}${expectedReplacementYear ? ` Expected-life year ${expectedReplacementYear}.` : ""}` : "Planning inputs remain optional" },
       ],
       sections: [
         {
@@ -3142,9 +3145,11 @@ export function buildEstimateComparisonModel(
       id: request.id,
       vendorId: request.vendorId,
       vendorName: vendor?.name ?? "Unknown vendor",
-      kindLabel: request.kind === "diagnostic_and_estimate"
-        ? "Bid request - onsite diagnosis requires separate authorization"
-        : "Bid request - pricing only",
+      kindLabel: request.decisionKind === "replacement_quote"
+        ? "Replacement quote - capital pricing only"
+        : request.kind === "diagnostic_and_estimate"
+          ? "Bid request - onsite diagnosis requires separate authorization"
+          : "Service bid - pricing only",
       requestedScope: request.requestedScope,
       status: presentedStatus,
       statusLabel: statusLabels[presentedStatus],
@@ -3205,6 +3210,7 @@ export function buildEstimateComparisonModel(
       })),
     requests,
     selectedVendorName: selected?.vendorName,
+    selectedDecisionKind: estimateRequests.find((request) => request.status === "selected")?.decisionKind ?? "service_bid",
     comparisonClosed: Boolean(selected),
     activeRequestCount: requests.filter((request) => ["requested", "opened", "submitted"].includes(request.status)).length,
     proposalCount: requests.filter((request) => Boolean(request.latestProposal)).length,

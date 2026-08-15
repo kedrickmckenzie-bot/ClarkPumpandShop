@@ -55,6 +55,7 @@ export async function POST(
         workOrderId,
         vendorId: formText(formData, "vendorId", { required: true, max: 120 }),
         kind,
+        decisionKind: (formText(formData, "decisionKind", { max: 40 }) || "service_bid") as "service_bid" | "replacement_quote",
         requestedScope: formText(formData, "requestedScope", { required: true, max: 4_000 }),
         channel,
         dueAt,

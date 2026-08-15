@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX `uidx_ops_asset_replacement_overrides_org_asset_active` ON `ops_asset_replacement_overrides` (`organization_id`,`asset_id`) WHERE "ops_asset_replacement_overrides"."status" = 'active';--> statement-breakpoint
+CREATE UNIQUE INDEX `uidx_ops_replacement_benchmarks_org_profile_published` ON `ops_replacement_benchmarks` (`organization_id`,`profile_id`) WHERE "ops_replacement_benchmarks"."status" = 'published';
