@@ -20,7 +20,7 @@ async function loadPgModule(): Promise<PgModuleLike> {
     return await import("pg") as PgModuleLike;
   } catch (error) {
     throw new Error(
-      "TraceOps PostgreSQL requires the `pg` runtime package when DATABASE_URL is configured.",
+      "The facilities platform requires the `pg` runtime package when DATABASE_URL is configured.",
       { cause: error },
     );
   }

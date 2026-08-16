@@ -92,7 +92,7 @@ function expectedIds(fixture: OpsFixture, route: PaginatedRoute) {
 
 function query(href: string | undefined) {
   expect(href).toBeDefined();
-  return new URL(href!, "https://traceops.test").searchParams;
+  return new URL(href!, "https://operations.test").searchParams;
 }
 
 function expectParameters(href: string | undefined, values: Record<string, string>) {

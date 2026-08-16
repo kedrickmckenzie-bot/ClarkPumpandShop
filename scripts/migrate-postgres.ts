@@ -2,18 +2,27 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getPostgresPool } from "../lib/server/postgres-pool";
 
 const MIGRATIONS_FOLDER = "drizzle-postgres";
-const MIGRATION_LOCK_KEY = "traceops-postgres-migrations-v1";
+const LEGACY_MIGRATION_LOCK_KEY = "traceops-postgres-migrations-v1";
+const MIGRATION_LOCK_KEY = "cstore-operations-postgres-migrations-v1";
+const MIGRATION_LOCK_KEYS = [
+  // Keep the legacy lock first so a rolling deployment remains serialized
+  // with an older migration runner while the neutral namespace takes over.
+  LEGACY_MIGRATION_LOCK_KEY,
+  MIGRATION_LOCK_KEY,
+] as const;
 
 async function migrate() {
   const pool = await getPostgresPool();
   const migrations = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER });
   const client = await pool.connect();
-  let locked = false;
+  const lockedKeys: string[] = [];
   try {
     // The session lock serializes Render predeploys and any manual migration
     // runner from the first migration-table check through the final commit.
-    await client.query("SELECT pg_advisory_lock(hashtext($1))", [MIGRATION_LOCK_KEY]);
-    locked = true;
+    for (const lockKey of MIGRATION_LOCK_KEYS) {
+      await client.query("SELECT pg_advisory_lock(hashtext($1))", [lockKey]);
+      lockedKeys.push(lockKey);
+    }
 
     await client.query("CREATE SCHEMA IF NOT EXISTS drizzle");
     await client.query(`CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
@@ -51,8 +60,8 @@ async function migrate() {
     console.log(`PostgreSQL migrations are current (${migrations.length} known migration${migrations.length === 1 ? "" : "s"}).`);
   } finally {
     try {
-      if (locked) {
-        await client.query("SELECT pg_advisory_unlock(hashtext($1))", [MIGRATION_LOCK_KEY]);
+      for (const lockKey of lockedKeys.reverse()) {
+        await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]);
       }
     } finally {
       client.release();

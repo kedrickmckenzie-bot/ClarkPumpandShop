@@ -2,7 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import type { OperatorRole } from "./data-contract";
-import styles from "./ops.module.css";
+import styles from "./platform-shell.module.css";
 
 const roles: Array<{ value: OperatorRole; label: string }> = [
   { value: "facilities", label: "Facilities" },
@@ -20,7 +20,7 @@ export function PreviewRoleSwitcher({ role }: { role: OperatorRole }) {
 
   return (
     <form className={styles.previewRole} method="post" action="/api/ops/preview-role">
-      <span>Demo view</span>
+      <span>Preview role</span>
       <label>
         <span className={styles.visuallyHidden}>View workspace as</span>
         <select name="role" defaultValue={role} aria-label="View workspace as a different role">

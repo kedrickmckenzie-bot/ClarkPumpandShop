@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { OpsDomainError } from "@/lib/ops/commands";
+import { isOpsClientRequest } from "@/lib/ops/http-contract";
 import { reopenEstimateSelection, selectEstimate, withdrawEstimate } from "@/lib/ops/estimate-commands";
 import {
   assertStoreInSessionScope,
@@ -10,7 +11,7 @@ import {
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 function decisionSuccess(request: Request, redirectTo: string) {
-  if (request.headers.get("x-traceops-client") === "estimate-comparison") {
+  if (isOpsClientRequest(request, "estimate-comparison")) {
     return NextResponse.json({ ok: true, redirectTo });
   }
   return relativeRedirect303(redirectTo);

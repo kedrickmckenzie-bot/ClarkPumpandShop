@@ -1,6 +1,6 @@
-# TraceOps Convenience Suite
+# Convenience Retail Facilities Suite
 
-TraceOps is a clean-slate, purpose-built convenience-retail maintenance intelligence suite. It connects store issues, operator work orders, internal teams, outside vendors, onsite visits, costs, preventive maintenance, equipment history and optional invoice evidence so managers can trace every dashboard number to its source records.
+The current product name is a temporary presentation value held in one configuration file. The product itself is a clean-slate, purpose-built convenience-retail maintenance intelligence suite. It connects store issues, operator work orders, internal teams, outside vendors, onsite visits, costs, preventive maintenance, equipment history and optional invoice evidence so managers can trace every dashboard number to its source records.
 
 The c-store suite is intentionally specific: store and region visibility, refrigeration/HVAC depth, forecourt and foodservice context, outsourced service, simple employee intake and low-friction vendor participation. The umbrella name can later support other purpose-built industry suites and a master portfolio product.
 
@@ -19,7 +19,7 @@ The five vendors are Summit Refrigeration, Cedar Mechanical, Forecourt Systems G
 
 The hosted showcase seeds the fictional tenant into Cloudflare D1 and writes workflow changes back through the same tenant-scoped repositories and domain commands. Uploaded evidence uses the private R2 binding. Local development uses the same deterministic fixture through an in-memory repository and resets when the local process restarts.
 
-The presentation fixture currently contains **115 work orders across 20 months, 115 visits, 45 assets and 60 PM occurrences**. It includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
+The presentation fixture currently contains **92 intake requests, 117 work orders across 20 months, 115 visits, 138 assets, 835 component records, 75 PM occurrences and 21 invoice references**. It includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
 
 All charts, counts and narrative claims derive from source records. Summary numbers are never independently hardcoded.
 
@@ -29,7 +29,7 @@ The principal evidence chain is:
 
 > Issue or PM occurrence -> operator work order -> internal/outside assignment -> vendor issuance -> visit -> outcome/follow-up -> cost or invoice link -> dashboard/lifecycle/report drill-through
 
-The operator work-order number is the customer's service-authorization and billing reference. Vendors can keep using their own dispatch and invoicing tools, but should include the TraceOps operator WO number on service documents and invoices. Operator WO, vendor ticket, vendor invoice and optional external PO remain separate identifiers.
+The operator work-order number is the customer's service-authorization and billing reference. Vendors can keep using their own dispatch and invoicing tools, but should include the operator WO number on service documents and invoices. Operator WO, vendor ticket, vendor invoice and optional external PO remain separate identifiers.
 
 Primary suite areas:
 
@@ -103,14 +103,14 @@ The separate Render runtime now provides:
 - `/api/health` liveness and sanitized `/api/ready` persistence checks.
 - CI gates for fixture validation, typecheck, lint, tests and both hosting builds.
 
-The Sites/D1/R2 preview remains intact. TraceOps must use its own Render project,
+The Sites/D1/R2 preview remains intact. This application must use its own Render project,
 PostgreSQL database, object-storage bucket and credentials; never reuse DockSafe
 resources. No `render.yaml` is included, so infrastructure cannot be provisioned
 into the wrong Render project by an accidental Blueprint sync.
 
 ## Product boundaries
 
-TraceOps is not a full accounting/AP suite, ERP, general ledger, payment system, POS, merchandising platform, inventory/warehouse system, payroll/timekeeping product, route optimizer, vendor dispatch replacement or continuous tracking product. Optional invoice-reference review surfaces evidence and differences for a human; it never declares fraud or executes payment.
+The suite is not a full accounting/AP suite, ERP, general ledger, payment system, POS, merchandising platform, inventory/warehouse system, payroll/timekeeping product, route optimizer, vendor dispatch replacement or continuous tracking product. Optional invoice-reference review surfaces evidence and differences for a human; it never declares fraud or executes payment.
 
 ## Documentation
 
@@ -120,4 +120,4 @@ TraceOps is not a full accounting/AP suite, ERP, general ledger, payment system,
 - [Demo walkthrough](./DEMO.md) - concise presentation sequence and demo truth statements.
 - [Engineering guide](./AGENTS.md) - invariants and contributor rules for the rebuild.
 
-Older product and architecture documents may provide research context, but they do not override the clean-slate TraceOps plan.
+Older product and architecture documents may provide research context, but they do not override the clean-slate platform blueprint.

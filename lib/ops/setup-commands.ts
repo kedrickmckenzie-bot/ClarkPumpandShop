@@ -64,6 +64,15 @@ function insert(table: string, values: Record<string, unknown>): OpsStatement {
   };
 }
 
+function update(table: string, values: Record<string, unknown>, where: Record<string, unknown>): OpsStatement {
+  const set = Object.entries(values);
+  const filters = Object.entries(where);
+  return {
+    sql: `UPDATE ${table} SET ${set.map(([key]) => `${key} = ?`).join(", ")} WHERE ${filters.map(([key]) => `${key} = ?`).join(" AND ")}`,
+    params: [...set.map(([, value]) => value), ...filters.map(([, value]) => value)],
+  };
+}
+
 function auditAndOutbox(input: {
   organizationId: OpsId;
   aggregateType: string;
@@ -289,6 +298,9 @@ export async function applyStoreEquipmentTemplates(svc: OpsCommandServices, inpu
   const selected = input.selections.filter((row) => row.quantity > 0);
   if (!selected.length) throw new OpsDomainError("VALIDATION", "Select at least one equipment type");
   if (selected.length > 100) throw new OpsDomainError("VALIDATION", "Too many equipment selections were submitted at once");
+  if (selected.reduce((total, row) => total + row.quantity, 0) > 100) {
+    throw new OpsDomainError("VALIDATION", "Create no more than 100 equipment records in one setup batch");
+  }
   const byNode = new Map(nodes.map((node) => [node.id, node]));
   const usedTags = new Set(detail.assets.map((asset) => asset.assetTag.toLocaleLowerCase("en-US")));
   const now = clock.now();
@@ -326,6 +338,102 @@ export async function applyStoreEquipmentTemplates(svc: OpsCommandServices, inpu
   statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "store", aggregateId: store.id, eventType: "store.equipment_templates_applied", actor: input.actor, occurredAt: now, payload: { selections: selected, createdAssetIds: assets.map((asset) => asset.id) }, ids }));
   await repository.atomicWrite(statements);
   return assets;
+}
+
+export interface NameStoreEquipmentInput {
+  organizationId: OpsId;
+  storeId: OpsId;
+  equipment: Array<{
+    assetId: OpsId;
+    name: string;
+  }>;
+  actor: ActorContext;
+}
+
+/**
+ * Completes the quick store-commissioning pass after equipment templates have
+ * created the durable assets and component trees. The user-facing name is the
+ * plain location identity (for example, "Checkout wall") while the stable
+ * asset tag remains unchanged.
+ */
+export async function nameStoreEquipment(
+  svc: OpsCommandServices,
+  input: NameStoreEquipmentInput,
+): Promise<Asset[]> {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  if (!input.equipment.length) throw new OpsDomainError("VALIDATION", "Add at least one equipment name");
+  if (input.equipment.length > 100) throw new OpsDomainError("VALIDATION", "Name no more than 100 equipment records at once");
+
+  const uniqueIds = new Set(input.equipment.map((row) => row.assetId));
+  if (uniqueIds.size !== input.equipment.length) {
+    throw new OpsDomainError("VALIDATION", "Each equipment record can appear only once");
+  }
+
+  const [store, detail] = await Promise.all([
+    repository.getStore(input.organizationId, input.storeId),
+    repository.getStoreDetail(
+      { organizationId: input.organizationId, storeIds: [input.storeId] },
+      input.storeId,
+    ),
+  ]);
+  if (!store || !detail) throw new OpsDomainError("NOT_FOUND", "Store not found in organization");
+
+  const requestedIds = new Set(input.equipment.map((row) => row.assetId));
+  const requestedAssets = await Promise.all(
+    input.equipment.map((row) => repository.getAsset(input.organizationId, row.assetId)),
+  );
+  const assetsById = new Map(
+    requestedAssets
+      .filter((asset): asset is Asset => Boolean(asset && asset.storeId === input.storeId))
+      .map((asset) => [asset.id, asset]),
+  );
+  const existingNames = new Set(
+    detail.assets
+      .filter((asset) => !requestedIds.has(asset.id))
+      .map((asset) => asset.name.trim().toLocaleLowerCase("en-US")),
+  );
+  const submittedNames = new Set<string>();
+  const changes = input.equipment.map((row) => {
+    const asset = assetsById.get(row.assetId);
+    if (!asset) throw new OpsDomainError("FORBIDDEN", "Equipment is outside this store or organization");
+    const name = required(row.name, "Equipment name");
+    const normalized = name.toLocaleLowerCase("en-US");
+    if (existingNames.has(normalized) || submittedNames.has(normalized)) {
+      throw new OpsDomainError("CONFLICT", `Equipment name “${name}” is already used at this store`);
+    }
+    submittedNames.add(normalized);
+    return { asset, name };
+  });
+
+  const now = clock.now();
+  const statements: OpsStatement[] = [];
+  for (const { asset, name } of changes) {
+    statements.push(
+      update(
+        "ops_assets",
+        { name },
+        { organization_id: input.organizationId, store_id: input.storeId, id: asset.id },
+      ),
+      ...auditAndOutbox({
+        organizationId: input.organizationId,
+        aggregateType: "asset",
+        aggregateId: asset.id,
+        eventType: "asset.commissioning_name_set",
+        actor: input.actor,
+        occurredAt: now,
+        payload: {
+          storeId: input.storeId,
+          assetTag: asset.assetTag,
+          before: { name: asset.name },
+          after: { name },
+        },
+        ids,
+      }),
+    );
+  }
+  await repository.atomicWrite(statements);
+  return changes.map(({ asset, name }) => ({ ...asset, name }));
 }
 
 export interface AddAssetComponentInput {

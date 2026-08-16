@@ -34,7 +34,7 @@ describe("preview role switch", () => {
     );
     expect(response.headers.get("location")).not.toContain("127.0.0.1");
     const cookie = response.headers.get("set-cookie") ?? "";
-    expect(cookie).toContain("traceops-preview-role=executive");
+    expect(cookie).toContain("ops-preview-role=executive");
     expect(cookie).toContain("Path=/app");
     expect(cookie).toMatch(/;\s*HttpOnly/i);
     expect(cookie).toMatch(/;\s*SameSite=lax/i);
@@ -46,7 +46,7 @@ describe("preview role switch", () => {
     const cookie = response.headers.get("set-cookie") ?? "";
 
     expect(response.headers.get("location")).toBe("/app/overview");
-    expect(cookie).toContain("traceops-preview-role=regional");
+    expect(cookie).toContain("ops-preview-role=regional");
     expect(cookie).not.toMatch(/;\s*Secure/i);
   });
 

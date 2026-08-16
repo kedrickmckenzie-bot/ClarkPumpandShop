@@ -23,6 +23,7 @@ import type {
   WorkflowStageViewModel,
 } from "./data-contract";
 import styles from "./ops.module.css";
+import { domainLabel } from "@/lib/product/domain-label";
 
 type MutationState = { pending: boolean; error?: string };
 
@@ -242,7 +243,7 @@ function ManualVendorResponseForm({ model }: { model: WorkOrderControlViewModel 
 
   return (
     <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`}>
-      <summary className={styles.subControlHeading}><MessageSquareText aria-hidden="true" size={18} /><div><h3>Record a response received outside TraceOps</h3><p>Use this when a vendor replied by phone, email, or in person. TraceOps preserves who entered it and who responded.</p></div></summary>
+      <summary className={styles.subControlHeading}><MessageSquareText aria-hidden="true" size={18} /><div><h3>Record a response received outside the platform</h3><p>Use this when a vendor replied by phone, email, or in person. The record preserves who entered it and who responded.</p></div></summary>
       <form action={model.manualResponseAction} method="post" onSubmit={submit} className={styles.controlForm}>
         <input type="hidden" name="operation" value="vendor_response" />
         <input type="hidden" name="expectedAssignmentId" value={target.expectedAssignmentId} />
@@ -291,7 +292,7 @@ export function WorkOrderControlPanel({ model }: { model: WorkOrderControlViewMo
       </div>
       {model.assignment ? (
         <div className={styles.handoffStatus}>
-          <span><small>Current provider route</small><strong>{model.assignment.providerLabel}</strong><p>{model.assignment.kind === "outside_vendor" ? "Outside vendor" : model.assignment.kind === "internal" ? "Internal maintenance" : "Provider not selected"} · {model.assignment.status.replaceAll("_", " ")}</p></span>
+          <span><small>Current provider route</small><strong>{model.assignment.providerLabel}</strong><p>{model.assignment.kind === "outside_vendor" ? "Outside vendor" : model.assignment.kind === "internal" ? "Internal maintenance" : "Provider not selected"} · {domainLabel(model.assignment.status)}</p></span>
           <span><small>Assigned</small><strong>{model.assignment.assignedLabel}</strong></span>
         </div>
       ) : null}
@@ -303,7 +304,7 @@ export function WorkOrderControlPanel({ model }: { model: WorkOrderControlViewMo
       ) : null}
       {model.latestVendorResponse ? (
         <div className={styles.handoffStatus}>
-          <span><small>Latest vendor response</small><strong>{model.latestVendorResponse.response.replaceAll("_", " ")}</strong><p>{model.latestVendorResponse.responderName} · {model.latestVendorResponse.respondedLabel}</p></span>
+          <span><small>Latest vendor response</small><strong>{domainLabel(model.latestVendorResponse.response)}</strong><p>{model.latestVendorResponse.responderName} · {model.latestVendorResponse.respondedLabel}</p></span>
           <span><small>Response detail</small><strong>{model.latestVendorResponse.proposedAt ? `Proposed ${model.latestVendorResponse.proposedAt.replace("T", " ")}` : "No proposed date"}</strong><p>{model.latestVendorResponse.message ?? "No additional message recorded"}</p></span>
         </div>
       ) : null}

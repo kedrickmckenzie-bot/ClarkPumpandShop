@@ -1,4 +1,5 @@
 import { checkPersistenceReadiness } from "@/lib/server/persistence-readiness";
+import { OPS_SERVICE_ID } from "@/lib/server/runtime-identifiers";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function GET() {
     return Response.json(
       {
         status: readiness.ready ? "ready" : "not_ready",
-        service: "traceops-convenience-suite",
+        service: OPS_SERVICE_ID,
         checks: readiness.checks,
         checkedAt: new Date().toISOString(),
       },
@@ -21,7 +22,7 @@ export async function GET() {
     return Response.json(
       {
         status: "not_ready",
-        service: "traceops-convenience-suite",
+        service: OPS_SERVICE_ID,
         checks: { persistence: "unavailable" },
         checkedAt: new Date().toISOString(),
       },

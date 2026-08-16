@@ -1,400 +1,488 @@
-# Competitive Research and Product Decisions
+# TraceOps Convenience Suite: Competitive Research and Product Decisions
 
-**Research date:** August 5, 2026
-**Scope:** Multi-site facilities and CMMS platforms relevant to a 65-store convenience-retail operator and independent stores
-**Source policy:** Official product, help, developer and customer-story sources only
-**Naming note:** “Maintenance Intelligence” is a temporary, changeable product label. Clark's is only the fictional pilot/demo tenant.
+**Research date:** August 15, 2026
+**Market:** multi-site facilities management, CMMS, field service, vendor accountability, and convenience retail operations
+**Decision scope:** the clean-slate TraceOps Convenience Suite product and experience
 
-## 1. Research question
+## Executive conclusion
 
-The clean rebuild is not trying to reproduce every feature of an enterprise CMMS. The research asks a narrower question:
+The market does not need another generic work-order tracker. Industrial CMMS products optimize technicians and assets. Enterprise facilities platforms coordinate locations, vendors, proposals, spend, and capital planning. Contractor field-service systems optimize dispatch, selling, labor, and invoicing for the service company. Convenience-retail systems own POS, fuel, inventory, and back-office accounting.
 
-> What patterns make maintenance spending, PM, lifecycle and vendor evidence understandable from portfolio dashboard to exact source record, while keeping store and vendor workflows simple enough to adopt?
+TraceOps belongs between those categories:
 
-The strongest comparisons are ServiceChannel, Fexa, Corrigo, FMX and Ecotrak. MaintainX, Limble and Fiix provide useful evidence for progressive asset classification, location hierarchy and smaller-team usability. Vendor claims are self-reported and features may depend on plan or configuration.
+> An operator-owned facilities control system that connects every store issue, service authorization, vendor interaction, observed visit, outcome, cost, equipment history, and management decision in one auditable service story.
 
-## 2. Market consensus
+The product must combine:
 
-Mature products converge on this lifecycle:
+- ServiceChannel's provider accountability and exact-record drill-through.
+- Corrigo's provider, asset, and operational intelligence.
+- Fexa's flexible multi-provider workflow.
+- Ecotrak's multi-unit simplicity and equipment orientation.
+- OpenWrench and MaintainX's low-friction external participation.
+- ServiceTitan's separation of parent work, appointment, and participant state.
+- TraceOps' own c-store taxonomy, visit evidence, progressive setup, transparent lifecycle review, and value ledger.
 
-```text
-Simple location request
-→ triage and authorization
-→ canonical work order
-→ internal or provider assignment
-→ acceptance and visit
-→ completion, follow-up or proposal
-→ verification
-→ invoice review
-→ cost and asset history
-```
+The defining product principle is:
 
-The important shared patterns are:
+> **One service story, one accountable next action, many optional depths.**
 
-- The work order is the operational spine. Visits, messages, proposals, invoices and asset history attach to it.
-- Store intake is simpler than the final work record. Triage adds trade/category, priority, provider, SLA, NTE and equipment context.
-- Internal and external fulfillment can share one work-order history.
-- Provider routing is usually driven by location, trade/category and priority, with fallback after decline or missed response.
-- Check-in/out records time and location evidence; it is not proof of repair quality.
-- NTE, proposal, authorization, invoice, credit and payment are different stages.
-- Asset and PM value grows from connected work history, not from a standalone asset registry.
-- Portfolio dashboards are useful only when users can reach the exact work orders and costs underneath them.
-- Successful rollout separates location commissioning, workflow configuration, data import and role-specific training.
+## Research method and evidence limits
 
-The competitors often extend this chain into purchasing, AP and provider dispatch. That validates the importance of connected source records, but it does not make those full suites the right boundary for Maintenance Intelligence. The product adopts the evidence and drill-through patterns while keeping invoice review optional and execution lightweight.
+The review used current official product pages, help centers, public workflow guides, pricing pages, release notes, product screenshots, and customer stories. Public product screenshots were inspected for navigation, screen hierarchy, filters, record anatomy, mobile behavior, and density.
 
-## 3. Platform findings
+Customer savings and performance figures are vendor-reported evidence. They prove that buyers value the outcome, not that TraceOps can promise the same result. Product roadmap statements are not treated as current capability. Competitor comparison pages are treated as sales material, not neutral fact.
+
+## Market structure
+
+| Category | Representative products | What they optimize | Commercial model | TraceOps decision |
+|---|---|---|---|---|
+| Multi-site facilities management | ServiceChannel, Corrigo, Fexa, Ecotrak, OpenWrench, FMX | locations, external providers, work, proposals, spend, PM, assets | custom or per location | Primary comparison set |
+| Industrial CMMS | MaintainX, Limble, UpKeep, Fiix | internal technicians, procedures, assets, parts, PM | per user/technician | Borrow mobile and asset patterns; avoid industrial breadth |
+| Contractor field service | ServiceTitan, FieldEdge, ServiceTrade | dispatch, routes, pricebook, selling, labor, invoices, payments | per technician/suite | Integrate with vendor systems; do not recreate them |
+| C-store fuel/compliance | Titan Cloud, Vixxo | fuel assets, compliance, managed maintenance, vendor networks | enterprise quote | Closest vertical threat and strategic integration benchmark |
+| C-store back office | PDI, Petrosoft | POS, pricebook, inventory, fuel, accounting, daily operations | enterprise quote | Integration boundary, not product scope |
+| Frontline communications | Zipline, WorkJam | messages, tasks, scheduling, training | enterprise quote | Do not dilute TraceOps into a general task platform |
+
+Industrial CMMS pricing is usually per user: MaintainX publishes $20 and $65 annual-billing tiers, UpKeep starts at $24, and Fiix publishes $45 and $75 tiers. Multi-site facilities platforms are generally custom-priced, and ServiceChannel explicitly prices per location. TraceOps should price around managed locations and operator value, with unlimited store requesters and no vendor seat charge. Per-vendor or per-technician fees would suppress the occasional participation the product requires.
+
+## Closest enterprise competitors
 
 ### ServiceChannel
 
-ServiceChannel is the clearest enterprise example of a multi-location owner/provider operating model.
+Official sources: [platform](https://servicechannel.com/platform/), [work orders](https://servicechannel.com/products/work-orders/), [assets](https://servicechannel.com/products/assets/), [Contractor Scorecard](https://servicechannel.com/products/contractor-scorecard/), [mobile](https://servicechannel.com/products/servicechannel-mobile/), [RaceTrac case](https://servicechannel.com/case-studies/racetrac/), [2026 release](https://servicechannel.com/blog/summer-2026-product-release/).
 
-#### What it does
+What it does well:
 
-- Puts internal and external work orders in one system.
-- Lets location staff describe issues, attach media, use guided troubleshooting and track provider arrival.
-- Routes work to an internal or external provider based on location and trade and can reassign after a decline.
-- Supports provider app, GPS, IVR, badge and API check-in/out methods.
-- Connects problem-code NTE controls, proposals, RFPs, multi-level approvals, invoice validation and disputes to work.
-- Generates PM work and can bundle multiple asset tasks at a location.
-- Imports assets in bulk and lets authorized providers validate equipment onsite.
-- Reports spend by asset, provider, location, district, region and category, with drill-down to work-order detail.
-- Offers provider APIs and webhooks so a service company can continue using its own system.
+- Connects work orders, planned maintenance, providers, proposals, invoices, assets, analytics, and capital planning.
+- Supports location staff, corporate teams, internal technicians, and external providers.
+- Allows direct issue reporting without complete asset data.
+- Routes work through warranty, landlord, approval, provider, or self-help rules.
+- Supports multiple arrival channels, including provider app, IVR, badge, and geofenced check-in.
+- Shares provider performance measures across customer and provider.
 
-#### Relevant evidence
+Screen anatomy observed:
 
-- [Work orders, internal/external fulfillment, routing, NTE and PM](https://servicechannel.com/products/work-orders/)
-- [Asset history, import, field validation and cost dimensions](https://servicechannel.com/products/assets/)
-- [Location and requester mobile experience](https://servicechannel.com/products/servicechannel-mobile/)
-- [Provider integrations](https://servicechannel.com/tools/integrate-your-systems-with-servicechannel/)
-- [Webhook events](https://developer.servicechannel.com/guides/wh/about-webhooks/)
-- [Provider response, SLA and status guidance](https://servicechannel.com/services-providers/trade-partner-guide/)
-- [Proposal and RFP lifecycle](https://developer.servicechannel.com/guides/proposals/about-proposals-and-RFPs/)
-- [One-click work-order links from email](https://servicechannel.com/learning-channel/just-released-new-features/)
+- Provider scorecards use a wide filter strip for provider, trade, priority, geography, location, brand, period, and benchmark cohort.
+- Tabs separate network summary, repair trends, maintenance trends, and benchmarking.
+- KPI screens place a large measure and definition next to a time-series chart.
+- Benchmark screens show the customer's value beside quartile distributions.
+- Location/mobile views surface saved work filters, upcoming provider visits, current work, and asset context.
+- Work records combine notes, provider activity, visits, parts, time, proposals, invoices, and assets.
 
-#### Decision for Maintenance Intelligence
+Keep:
 
-Adopt the owner-side canonical work order, exception visibility, fallback assignment, explicit cost bases and cost drill-through. Do not copy the full provider scoring burden, workforce administration, marketplace, dispatch console or accounting chain. A provider must be able to participate without adopting a new daily operating system.
+- Shared provider accountability with exact record drill-through.
+- Saved role-specific filters and location dashboards.
+- Warranty context before dispatch.
+- Multiple check-in channels.
+- Per-location commercial framing.
 
-### Fexa
+Adapt:
 
-Fexa's strongest pattern is configurable workflow and channel-flexible provider exchange.
+- Use the customer's approved vendors rather than making a marketplace central.
+- Present location and time as evidence, never certified labor or automatic invoice proof.
+- Make accountless browser links capable enough that a vendor app remains optional.
 
-#### What it does
+Avoid:
 
-- Centralizes intake, triage, dispatch, communication, visits, proposals and invoices.
-- Assigns by trade, priority and location, with alternate-provider and SLA behavior.
-- Supports internal teams and service providers on the same work-order lifecycle.
-- Uses configurable workflows and custom fields rather than a fixed universal process.
-- Supports geofenced/IVR check-in/out, completion evidence and customer verification.
-- Routes proposal and invoice approvals using configurable conditions.
-- Connects vendor rate/compliance/NTE rules to invoice validation.
-- Lets vendors work through a Fexa login or integrate through the provider API.
-- Sends email/text notifications and collects responses and attachments.
-- Provides 360 reporting across locations, work orders, providers, invoices and assets.
+- Provider-network complexity and fees.
+- Dense enterprise terminology on ordinary manager screens.
+- Opaque grades without numerator, denominator, period, cohort, and source records.
 
-#### Relevant evidence
-
-- [Work-order lifecycle and internal/external support](https://fexa.io/work-order-management/)
-- [Rules, alternate assignments, SLA alerts and approval automation](https://fexa.io/automation-workflow-optimization/)
-- [Provider channels and directly recorded performance](https://fexa.io/integrated-vendor-operations/)
-- [Provider API objects and synchronization](https://fexa.io/cmms-api-providers/)
-- [Open provider relationships and check-in options](https://fexa.io/provider-management/)
-- [Smart email/text communications](https://fexa.io/fexa-cmms/)
-- [Location, asset, work-order and invoice analytics](https://fexa.io/data-analytics/)
-- [Retail implementation example](https://fexa.io/customer-stories/tecovas-case-study/)
-- [Multi-brand standardization example](https://fexa.io/customer-stories/med-tail-retailer/)
-
-#### Decision for Maintenance Intelligence
-
-Treat SLA, priority, NTE, approval authority, escalation, provider coverage, landlord/warranty responsibility and notifications as organization-owned configuration. Use one domain command set behind web, email, portal and API adapters. Avoid a generic no-code workflow builder in v1; expose the few policies the pilot actually needs.
+Relevant vendor-reported evidence: RaceTrac describes reducing unresolved daily tickets needing manual intervention from roughly 300 to 150 after centralizing its store maintenance workflow. This is buyer-value evidence, not a guaranteed TraceOps outcome.
 
 ### Corrigo
 
-Corrigo provides strong examples of explicit states, hierarchical configuration and provider-system integration.
+Official sources: [product](https://www.jll.com/en-us/products/corrigo), [business intelligence](https://www.jll.com/en-us/guides/corrigo-business-intelligence-facilities-management), [create work order](https://help.corrigo.com/Content/Work_Orders/create_wo.htm), [assign work](https://help.corrigo.com/Content/Work_Orders/assign_wo.htm), [complete work](https://help.corrigo.com/Content/Work_Orders/complete_wo.htm), [invoice authorization](https://help.corrigo.com/Content/Vendor_Management/authorize_vendor_invoice_payment.htm).
 
-#### What it does
+What it does well:
 
-- Uses Work Zones and Portfolios to group locations and inherit or override business hours, SLA and assignment rules.
-- Requires provider integrations to support work-order receipt and accept/reject.
-- Allows providers to continue in their existing CMMS through CorrigoPro Direct.
-- Models requested, submitted, approved and rejected quote states; approved quotes update NTE.
-- Models invoice draft, submitted, disputed, authorized, pending verification and paid states.
-- Distinguishes reactive requests from PM/routine work.
-- Provides operational dashboards with links to work-order detail by property, region, specialty and assignee.
+- Rich approval, NTE, cost, vendor, and invoice governance.
+- Separates provider, asset, and operational intelligence.
+- Uses repair history, useful life, book value, age, and replacement cost for asset analysis.
+- Uses equipment-specific troubleshooting and call avoidance.
+- Supports internal and external delivery on one portfolio.
 
-#### Relevant evidence
+Screen anatomy observed:
 
-- [CorrigoPro integration scope](https://developer.corrigopro.com/docs/scope-your-integration)
-- [API versus portal/mobile usage scenarios](https://developer.corrigopro.com/docs/usage-scenarios)
-- [Quote and NTE states](https://developer.corrigopro.com/docs/submitting-a-quote)
-- [Invoice verification, dispute and authorization](https://developer.corrigopro.com/docs/retrieving-invoices)
-- [Work Zone SLA and routing configuration](https://securecontent.corrigo.com/docs/HelpCE918/html/14d5d7cd-f175-78cd-5375-ccca12d1b3ab.htm)
-- [Operational reporting and detail drill-down](https://www.jllt.com/blog/business-intelligence-for-work-order-management/)
-- [Jack in the Box/Qdoba facilities example](https://www.jllt.com/customer-story/jack-in-the-box-saves-millions-with-service-call-avoidance-warranty-tracking/)
+- Work creation is a large, sectioned form covering customer/location, asset/task, assignment, priority, specialty, access, dates, warranty, NTE, and PO data.
+- Provider assignment uses a search dialog and an explicit “Assign and Send” action.
+- Completion captures disposition, completion codes, notes, labor, materials, miscellaneous cost, and warranty.
+- Provider Insights shows first-time fix, on-time arrival, labor rates, cost, and bottom performers.
+- Asset Insights shows asset count, replacement count/cost, missing PM, missing data, and breakdown charts.
+- Operational Insights shows work volume, cost, score, cycle time, and invoice turnaround.
 
-#### Decision for Maintenance Intelligence
+Keep:
 
-Use named state transitions and append-only events, not a freely editable status field. Support inheritance from organization policy with store-level overrides only where necessary. Keep the hierarchy understandable: optional division/region scope does not own the store or its history, and it remains independent from maintenance taxonomy.
+- Distinct analytical lenses for providers, assets, and operations.
+- Equipment-aware call avoidance.
+- Explicit cost categories and reconciliation.
+- Dynamic cost-control guidance.
 
-### FMX
+Adapt:
 
-FMX is the useful simplicity benchmark for smaller organizations and internal/external collaboration.
+- Put advanced cost controls behind progressive disclosure.
+- Translate the underlying states into one plain next action.
+- Make every recommendation transparent and reviewable.
 
-#### What it does
+Avoid:
 
-- Organizes organization → building → resource/location → equipment.
-- Creates the building first, then adds service locations and equipment.
-- Requires building and exact location on a maintenance request while equipment is optional.
-- Allows assignment during creation or later from a manager queue.
-- Supports approval rules at organization, request-type and building levels.
-- Imports buildings, locations, users, equipment and PM through guided templates.
-- Exposes filters for overdue, pending assignment, pending approval, pending resolution and pending finalization.
-- Supports outside vendor users and documents email-based submission without login.
-- Reports cost by building, request type, equipment type and equipment tag.
-
-#### Relevant evidence
-
-- [Guided implementation and imports](https://help.gofmx.com/hc/en-us/articles/204688159-How-is-FMX-implemented-for-new-customers)
-- [Adding resources and service locations](https://help.gofmx.com/hc/en-us/articles/203368129-Adding-Resources-Locations)
-- [Maintenance request with optional equipment](https://help.gofmx.com/hc/en-us/articles/204100375-Creating-a-Maintenance-Request)
-- [Assignment after creation](https://help.gofmx.com/hc/en-us/articles/203386369-Assigning-Maintenance-Requests)
-- [Layered approval policy](https://help.gofmx.com/hc/en-us/articles/203710519-Set-Up-a-Maintenance-Technology-or-Custom-Work-Request-Approval-Process)
-- [Manager grid and exception filters](https://help.gofmx.com/hc/en-us/articles/207487356-How-to-filter-your-calendar-grid-view)
-- [External vendors and email-without-login example](https://www.gofmx.com/resources/case-studies/rocketship-education/)
-- [Equipment cost reporting](https://www.gofmx.com/features/equipment-maintenance-summary-report/)
-
-#### Decision for Maintenance Intelligence
-
-Make the single-store experience a simplified presentation of the same domain model. Store creation should launch a commissioning checklist rather than force the user into unrelated setup screens. Equipment completeness must not block useful request and work-order control.
-
-### Ecotrak
-
-Ecotrak is the most directly relevant convenience-store comparison.
-
-#### What it does
-
-- Targets convenience, fuel retail, restaurant, grocery and car-wash equipment.
-- Connects work orders, assets, PM, vendors, proposals, invoices and reporting.
-- Positions intake as a sub-minute store workflow.
-- Supports internal maintenance teams and external service providers in one environment.
-- Offers an entry tier for small operators and larger tiers on the same platform model.
-- Uses asset-level repair history and spend for repair-versus-replace review.
-- Documents a 75+ location convenience operator rollout involving store visits, service-issue modeling, provider onboarding and GL collaboration.
-
-#### Relevant evidence
-
-- [Convenience-store facilities product](https://www.ecotrak.com/industry/convenience)
-- [Platform modules](https://www.ecotrak.com/product/ecotrak-platform)
-- [Work-order intake and asset history](https://www.ecotrak.com/feature/work-order-management)
-- [Small and multi-location packaging](https://www.ecotrak.com/pricing)
-- [Holiday Oil 75+ store implementation](https://www.ecotrak.com/case-studies/holiday-oil-powers-their-convenience-stores-with-ecotrak)
-- [Internal/external fulfillment at roughly 50 locations](https://www.ecotrak.com/case-studies/case-study/l5-capital-manages-more-work-orders)
-- [Internal/external work-order API representation](https://api-docs.ecotrak.com/)
-
-#### Decision for Maintenance Intelligence
-
-Borrow convenience-retail terminology, asset context and one-product packaging. Do not adopt mandatory asset-first intake. Maintenance Intelligence provides value at store or category level and shows asset-classification coverage until deeper records are known.
-
-### MaintainX, Limble and Fiix
-
-These products reinforce hierarchy and progressive setup choices.
-
-- MaintainX documents location-specific templates and work that may receive an asset later. [Locations](https://help.getmaintainx.com/about-locations), [sub-work orders](https://help.getmaintainx.com/create-and-manage-sub-work-orders)
-- Limble distinguishes access-governing locations from equipment-parent relationships and provides a no-asset option in its default work-order flow. [Locations versus parent assets](https://help.limblecmms.com/en/articles/8828169-locations-vs-parent-assets), [default work-order template](https://help.limblecmms.com/en/articles/3231863-default-work-order-template)
-- Fiix describes a physical hierarchy of sites/facilities/equipment/child equipment and recommends deciding the site model during setup. [Asset hierarchy](https://helpdesk.fiixsoftware.com/hc/en-us/articles/211193203-About-the-asset-hierarchy), [basic setup](https://helpdesk.fiixsoftware.com/hc/en-us/articles/360044584571-Basic-setup-Overview)
-
-#### Decision for Maintenance Intelligence
-
-Keep organization scope, company-owned maintenance taxonomy and optional external cost references separate. Provide reusable commissioning blueprints, but never create placeholder assets to satisfy a template or foreign key.
-
-## 4. Decision synthesis for the clean rebuild
-
-### Decision 1: The operator owns the canonical maintenance record
-
-Provider FSM products may own technician dispatch and labor administration. Maintenance Intelligence preserves the operator's work-order number, store issue, classification history, responsible assignment, observed visits, unresolved follow-up, costs, optional invoice links and audit history.
-
-This prevents the owner record from becoming a shallow mirror of whichever vendor happens to serve a store.
-
-### Decision 2: A vendor portal is optional
-
-Vendors may respond through:
-
-- one-click email action
-- purpose-bound deep link
-- optional portal
-- API/webhook integration
-- a phone response recorded by a manager
-
-Technicians use the permanent store QR flow and do not need accounts. They enter a name/vendor and select the work order when visible; “I don't see it / no work order provided” creates a reviewable unmatched visit instead of blocking entry. Notes/photos are optional by default and signatures are not globally required. Every channel produces the same assignment, visit and audit events. Structured decisions use explicit actions; email reply text may add notes or files but does not silently infer status.
-
-### Decision 3: Internal and external fulfillment have equal owner visibility
-
-Both modes use the same work-order lifecycle, next-action control, observed evidence, follow-up, cost and reporting contracts. They receive audience-specific interfaces. Internal teams need usable queues, requested/scheduled windows, concise checklists and cost records; those features stop short of dispatch optimization, route planning, employee rostering, payroll and inventory accounting.
-
-### Decision 4: Classification is progressive
-
-A store is sufficient to create a work order. Category, any nested taxonomy depth, asset and component are optional. Later classification is auditable and validates organization/store belonging. Analytics show coverage and an unclassified bucket instead of inventing placeholder equipment.
-
-### Decision 5: Organization scope and maintenance taxonomy are separate
-
-Organization-scope path:
-
-`company/organization → optional division → optional region → store`
-
-Maintenance-taxonomy path:
-
-`category/department → zero or more nested company groups → store asset → optional component tree`
-
-The user may filter either axis and combine them. Branches may have different depths, each store activates only relevant company-owned branches and optional imported accounting references remain a separate attribution dimension.
-
-### Decision 6: Taxonomy has stable concepts and local language
-
-Organization-owned canonical keys and parent IDs support cross-store comparison at uneven, effectively unlimited grouping depth. Labels and aliases let an operator use its preferred terminology, store nicknames or imported codes without splitting analytics. Activated taxonomy remains tenant-scoped; only non-operational templates are shared.
-
-### Decision 7: The primary owner surface is a management control center
-
-The default experience is a visual spending dashboard that can switch company/division/region/store scope and independently traverse the maintenance taxonomy. It prioritizes:
-
-- spend distribution and period trend
-- cost outliers with exact drivers
-- PM due/missed/compliance
-- lifecycle and replacement-review evidence
-- vendor response, visits, outcomes and captured evidence
-- open accountable exceptions
-- optional invoice/work mismatches
-
-Dashboards are interactive exploration surfaces built from source records. Generated reports are named, versioned snapshots for management handoff and archive. Every number opens a filtered supporting list; no report becomes an opaque dead-end summary.
-
-### Decision 8: Search is an operating tool
-
-Managers must be able to find a store by code, name or address; a work order by number; equipment by tag, serial or alias; a vendor by name; and an optional quote/invoice by reference. Search is organization-scoped, server-filtered and paginated.
-
-### Decision 9: Store creation begins commissioning
-
-The smooth flow is:
-
-1. Core store identity
-2. Contacts, hours, access and escalation
-3. Activate applicable company taxonomy branches
-4. Add known assets/components and lifecycle details
-5. Internal/provider coverage
-6. Response targets, optional NTE and approval policy
-7. Applicable PM
-8. Readiness review
-
-The store may accept reports before asset commissioning is complete. Readiness exposes gaps; it does not create fake data.
-
-### Decision 10: Dashboard exploration is reversible and reports are records
-
-The combined cost drill is:
-
-`company/division/region/store × category/arbitrary groups/asset/component → work, visits, PM, costs and optional invoices`
-
-Each view shows selected cost basis, record count, period, cohort and classification coverage. Recorded work cost, approved amount and linked invoice amount remain separate. Generating a report freezes those definitions and source filters into a versioned handoff/archive record.
-
-### Decision 11: One product serves one and 65 stores
-
-Organization, store, work-order and policy records are the same. Single-store UI hides division/region and meaningless peer controls and defaults store scope. A regional operator gains optional division/region groupings, server-side filters, bulk import and standardized blueprints. The 12-store presentation showcases the model; a separate automated fixture proves approximately 65-store scale. No separate schema or product fork is needed.
-
-### Decision 12: The platform is all-trades; the pilot goes deepest in HVAC/R
-
-The active product supports any maintenance trade through governed taxonomy and local labels. The 12-store demo proves landscaping, snow, janitorial, pest, signage, waste, plumbing, electrical, fuel, building, life safety and foodservice while concentrating the richest equipment, components, PM and failure histories in HVAC and refrigeration. Optional invoice-to-work review is an evidence safeguard, not an accounting suite. Exclusions include full AP/accounting, purchase-order administration, accruals, payment tracking/execution, POS and retail inventory, inventory valuation, vendor marketplace administration, payroll, tax, banking, accounts receivable, general-ledger replacement, predictive maintenance, continuous tracking and route optimization.
-
-## 5. Differentiation
-
-Maintenance Intelligence is not differentiated by merely possessing work orders, assets or charts; every serious competitor has them. The defendable combination is:
-
-1. **Visual spending intelligence** that switches organization scope and independently drills any taxonomy depth to source records.
-2. **PM and lifecycle intelligence** connected to asset identity, warranty, peer cost and transparent replacement-review rules.
-3. **Low-friction vendor evidence** through email/deep links, flexible QR visits and an optional—not mandatory—portal.
-4. **Owner-side record permanence** even when vendors use other systems.
-5. **Progressive equipment intelligence** without blocking work or faking asset precision.
-6. **Generated report records** that preserve scope, basis, definitions and source links for handoff/archive.
-7. **One-store simplicity and approximately 65-store control from one model.**
-
-### Positioning statement
-
-> Maintenance Intelligence (temporary product label) is the owner-side visibility layer for multi-location and independent operators. It makes maintenance spending understandable from company totals to any configured asset depth, connects PM and lifecycle decisions to source records and captures vendor evidence without forcing service companies into a new daily system.
-
-## 6. Approximately 65-store rollout implications
-
-Official implementation guidance across Fexa, FMX, Corrigo, ServiceChannel and Ecotrak consistently emphasizes clean location data, workflow decisions, provider onboarding, role-specific training and phased adoption.
-
-Recommended rollout:
-
-1. Configure company/division/region scope, the organization-owned maintenance taxonomy, response/approval policies and provider coverage.
-2. Import the real pilot stores and validate exact identifiers, addresses, contacts and optional external cost references. This rollout dataset is separate from the concise 12-store presentation demo.
-3. Launch a small representative wave covering different volumes, geography and vendor arrangements.
-4. Stabilize request → work order → response → visit → follow-up → verification before broad expansion.
-5. Activate all maintenance categories, then add reliable HVAC/R equipment/lifecycle depth without delaying store- or category-level visibility.
-6. Expand in waves with a defined hypercare queue and role-specific training.
-7. Measure adoption from source records: dashboard drill-through, PM compliance, lifecycle review, response time, observed visits, overdue unresolved work, optional invoice exceptions and classification coverage.
-
-The pilot should never seed or display a summary that cannot be reproduced from its supporting operational records.
-
-## 7. Risks and responses
-
-| Risk | Product response |
-|---|---|
-| Competitive feature overlap | Compete on workflow fit, adoption and record integrity, not checklist novelty |
-| Low vendor burden reduces detail | Preserve documents, store verification, internal follow-up and optional API enrichment |
-| Progressive classification leaves ambiguity | Show coverage and unclassified buckets next to asset analytics |
-| Email/deep links weaken identity assurance | Purpose-bound expiring tokens, actor/channel audit and step-up confirmation for money |
-| Geolocation is imperfect | Store accuracy/distance/result and show verified or exception state; never claim continuous proof |
-| Cost bases can be double-counted | Name the selected basis, use explicit source attribution and never combine overlapping work/approved/invoice amounts |
-| Regional UI overwhelms one-store owners | Hide optional hierarchy and portfolio comparison without changing the data model |
-| Demo data looks unrealistically complete | Seed incomplete classification and exception cases; calculate all totals from records |
-| Configuration becomes enterprise software | Expose a governed policy set, not an unlimited workflow-builder surface in v1 |
-
-## 8. Official source index
-
-All sources were accessed August 5, 2026.
-
-### ServiceChannel
-
-- [Platform overview](https://servicechannel.com/platform/)
-- [Work orders](https://servicechannel.com/products/work-orders/)
-- [Assets](https://servicechannel.com/products/assets/)
-- [Mobile](https://servicechannel.com/products/servicechannel-mobile/)
-- [Provider integration](https://servicechannel.com/tools/integrate-your-systems-with-servicechannel/)
-- [Developer guides](https://developer.servicechannel.com/guides/)
+- One giant work-order form.
+- Popup-heavy assignment.
+- Editable time records presented as verified arrival.
+- AP vocabulary in the main facilities workflow.
 
 ### Fexa
 
-- [CMMS overview](https://fexa.io/fexa-cmms/)
-- [Work orders](https://fexa.io/work-order-management/)
-- [Provider management](https://fexa.io/provider-management/)
-- [Provider API](https://fexa.io/cmms-api-providers/)
-- [Data and analytics](https://fexa.io/data-analytics/)
-- [Facility software buyer's guide](https://fexa.io/guide/facility-maintenance-software-buyer-guide/)
+Official sources: [platform](https://fexa.io/), [pricing](https://fexa.io/pricing/), [orchestration model](https://fexa.io/blog/fexa-facilities-orchestration-platform/), [executive dashboard](https://fexa.io/blog/fexalytics-executive-dashboard-overview/), [create work order guide](https://info.fexa.io/hubfs/FEXA%20-%20Creating%20a%20Work%20Order.pdf?hsLang=en), [visit guide](https://info.fexa.io/hubfs/FEXA-%20Visit%20Process%20and%20ETA.pdf?hsLang=en), [asset tracking guide](https://info.fexa.io/hubfs/Vendor%20User%20Guide%20Asset%20Tracking%20-%20FEXA%20UPDATED.pdf?hsLang=en).
 
-### Corrigo/JLL Technologies
+What it does well:
 
-- [CorrigoPro Direct introduction](https://developer.corrigopro.com/docs/intro)
-- [Integration scope](https://developer.corrigopro.com/docs/scope-your-integration)
-- [Usage scenarios](https://developer.corrigopro.com/docs/usage-scenarios)
-- [Quote submission](https://developer.corrigopro.com/docs/submitting-a-quote)
-- [Invoices](https://developer.corrigopro.com/docs/retrieving-invoices)
+- Flexible multi-provider and multi-trade assignments.
+- Duplicate warnings, alternate routing, NTE, proposals, visits, invoices, PM, assets, and rule automation.
+- One analytics layer across work, spend, assets, providers, and teams.
+- Vendor-guided HVAC/R asset enrichment.
+- Explicit call-avoidance workflows.
 
-### FMX
+Screen anatomy observed:
 
-- [Maintenance management](https://www.gofmx.com/maintenance-management-software/)
-- [Work Manager](https://www.gofmx.com/work-manager/)
-- [Implementation](https://help.gofmx.com/hc/en-us/articles/204688159-How-is-FMX-implemented-for-new-customers)
-- [Maintenance request creation](https://help.gofmx.com/hc/en-us/articles/204100375-Creating-a-Maintenance-Request)
-- [User and scope permissions](https://help.gofmx.com/hc/en-us/articles/203406679-How-to-Customize-User-Access-on-your-FMX-site)
+- A floating create button begins work; store, trade, and problem are the essential fields.
+- The work-order grid is the primary queue.
+- Work detail shows location, priority, assignee, dates, scope, and assignment requirements.
+- Service assignments show provider, NTE, response deadline, arrival deadline, and completion expectations.
+- Visits are nested under assignments, making the data model clear but the user-visible status chain harder to decode.
+- Fexalytics combines spend, average invoice, NTE variance, aging, proposals, missed deadlines, call avoidance, and provider trends.
+
+Keep:
+
+- Flexible workflow and multiple-provider support.
+- Duplicate warnings and call-avoidance tracking.
+- One analytics layer.
+- Vendor-assisted asset enrichment.
+
+Adapt:
+
+- Keep work, assignment, bid, visit, and cost states separate in data while showing one current action.
+- Store asset type separately from the practical location/name.
+- Allow vendor enrichment without blocking service.
+
+Avoid:
+
+- Requiring users to interpret chained visit, assignment, and workflow statuses.
+- Rigid asset naming conventions.
+- Infinite customer fields in ordinary workflows.
+- Application tabs for every open record.
 
 ### Ecotrak
 
-- [Platform](https://www.ecotrak.com/product/ecotrak-platform)
-- [Convenience stores](https://www.ecotrak.com/industry/convenience)
-- [Work orders](https://www.ecotrak.com/feature/work-order-management)
-- [Pricing and product tiers](https://www.ecotrak.com/pricing)
-- [Holiday Oil case study](https://www.ecotrak.com/case-studies/holiday-oil-powers-their-convenience-stores-with-ecotrak)
+Official sources: [platform](https://www.ecotrak.com/product/ecotrak-platform), [work orders](https://www.ecotrak.com/feature/work-order-management), [assets](https://www.ecotrak.com/feature/asset-management), [pricing](https://www.ecotrak.com/pricing), [convenience retail](https://www.ecotrak.com/industry/convenience), [2026 roadmap](https://www.ecotrak.com/resources/blog/q2-2026-ecotrak-roadmap-product-enhancements-and-what-s-next), [API](https://api-docs.ecotrak.com/), [L5 Capital case](https://www.ecotrak.com/case-studies/case-study/l5-capital-manages-more-work-orders).
 
-### Additional CMMS hierarchy sources
+What it does well:
 
-- MaintainX: [locations](https://help.getmaintainx.com/about-locations), [work orders](https://help.getmaintainx.com/about-work-orders)
-- Limble: [work requests](https://help.limblecmms.com/en/articles/2982723-work-requests-overview), [locations versus parent assets](https://help.limblecmms.com/en/articles/8828169-locations-vs-parent-assets)
-- Fiix: [asset hierarchy](https://helpdesk.fiixsoftware.com/hc/en-us/articles/211193203-About-the-asset-hierarchy), [basic setup](https://helpdesk.fiixsoftware.com/hc/en-us/articles/360044584571-Basic-setup-Overview)
+- Fast issue intake and prebuilt asset/dropdown choices.
+- Strong multi-unit restaurant and c-store language.
+- Work, assets, proposals, RFPs, PM, warranty, providers, and reports.
+- Role-based dashboards and monthly work calendars.
+- Human verification after OCR.
+- Sensor events that can enter the facilities workflow.
+
+Screen anatomy evidenced publicly:
+
+- Module-oriented navigation with work, assets, proposals, RFPs, PM, providers, invoices, and reports.
+- Role dashboards support widget tables, KPI trackers, notes, and links.
+- Dispatch views filter by ETA, emergency, organizational scope, and assignment.
+- Asset records show warranty, make/model/serial, repair history, maintenance history, and total spend.
+- Location PM and work calendar views support operational planning.
+
+Keep:
+
+- Fast operator intake.
+- C-store equipment language.
+- Role-based dashboards.
+- Verify-before-save automation.
+- Sensor-to-work pathway.
+
+Adapt:
+
+- Asset and category classification must be deferrable.
+- AI should suggest and explain, not decide.
+- Component hierarchy should come from optional templates.
+
+Avoid:
+
+- Requiring an asset to create work.
+- Presenting roadmap features as finished.
+- Opaque predictive downtime or replacement claims.
+
+### OpenWrench
+
+Official sources: [platform](https://www.useopenwrench.com/), [supplier workflow](https://www.useopenwrench.com/supplier), [request service](https://www.useopenwrench.com/fm-university/how-to-request-service), [onboarding](https://www.useopenwrench.com/fm-university/buyer-onboarding-guide), [supplier quick start](https://www.useopenwrench.com/sm-university/supplier-quick-start-guide).
+
+What it does well:
+
+- Plain, multi-location service workflow.
+- Free vendor participation and no requirement that technicians use the mobile app.
+- Accept, schedule, start, finish, and bill stages.
+- Optional asset onboarding; its own guide calls assets a potential phase-two goal.
+- General/location/asset work, PM, proposals, invoices, messaging, and inspections.
+- One-click technician check-in is a stated product pattern.
+
+Screen anatomy observed in official images:
+
+- A left icon rail and work-order screen with a stage ribbon: Requested, Open, In Progress, On Hold, Completed, Cancelled.
+- Search and segmented filters for fresh/stale and planned/reactive.
+- Work rows show problem, location, state, urgency/SLA, trade, vendor, WO number, and timing.
+- Work detail separates Overview, Chat, Quotes, and Invoices.
+- Chat is visually prominent and supports photos.
+- Inspection screens pair a checklist with mobile answer choices and photo evidence.
+
+Keep:
+
+- Optional asset onboarding.
+- Vendor-free participation.
+- Plain accept/schedule/start/finish model.
+- Communication tied to the service record.
+
+Adapt:
+
+- Make accountless service authorization, proposal, visit, and outcome flows first-class.
+- Retain one customer work-order number as the billing reference.
+- Replace its visually small, low-contrast screen treatment with readable enterprise UI.
+
+Avoid:
+
+- Depending on every vendor to create an account.
+- Combining invoice submission with the core operational definition of success.
+
+### Titan Cloud
+
+Official sources: [maintenance](https://www.titancloud.com/solutions/maintenance/), [retail](https://www.titancloud.com/industries/retail), [2026 maintenance sheet](https://www.titancloud.com/wp-content/uploads/2026/02/Product_Sheet_Titan_Maintenance_2026.pdf), [Jacksons case](https://www.titancloud.com/wp-content/uploads/2025/11/Titan-Cloud_Jacksons_casestudy.pdf).
+
+Titan Cloud is the closest c-store-specific strategic competitor. It connects fuel and store assets, vendors, technicians, work orders, PM, compliance, warranty, budgets, mobile work, inspections, and analytics. Its advantage is direct fuel-system and compliance depth, including tank gauges, dispensers, alarms, testing, and regulatory data.
+
+Keep:
+
+- Fuel, non-fuel, and EV assets in one location model.
+- Warranty and component context.
+- Site, region, vendor, asset, and category reporting.
+- Future sensor/alarm pathway.
+
+Adapt:
+
+- TraceOps should be easier for regional operators that do not need an energy-asset optimization suite.
+- Fuel/compliance integrations should remain a future adapter, not inflate V0.
+- Vendor accountability should work for landscaping and plumbing as naturally as refrigeration and dispensers.
+
+Avoid:
+
+- Competing immediately in ATG, wetstock, environmental compliance, or fuel inventory.
+- Assuming continuous equipment telemetry exists.
+
+### Vixxo
+
+Official sources: [company](https://www.vixxo.com/), [facilities services](https://www.vixxo.com/facility-management/facility-management-services), [2026 platform analysis](https://www.vixxo.com/facilities-management-news/the-ai-powered-fm-platform-beyond-dashboards-and-reports), [cost-control analysis](https://www.vixxo.com/facilities-management-news/why-technology-alone-is-not-reducing-total-facilities-spend).
+
+Vixxo is primarily a managed facilities outcome competitor. It combines a service platform, provider network, invoice auditing, asset analysis, and program management. Its strongest lesson is that visibility without operating intervention does not change cost.
+
+Keep:
+
+- Focus on time to arrive, time to complete, first observed resolution, PM completion, average work cost, SLA exceptions, and quote cycle time.
+- Turn every insight into a queue, owner, action, and tracked outcome.
+
+Avoid:
+
+- Claiming the software alone changes vendor behavior.
+- Copying managed-service promises that TraceOps is not staffed to deliver.
+
+## CMMS and field-service references
+
+### MaintainX
+
+Sources: [pricing](https://www.getmaintainx.com/pricing), [work requests](https://help.getmaintainx.com/create-a-work-request?platform=mobile), [mobile](https://help.getmaintainx.com/getting-started-new-users/mobile-app-overview), [external work](https://help.getmaintainx.com/external-work-orders), [request portals](https://help.getmaintainx.com/set-up-a-request-portal), [vendor management](https://www.getmaintainx.com/use-cases/vendor-management), [media kit](https://www.getmaintainx.com/media-kit).
+
+Observed product screens are clean, readable, and split-pane. Work lists remain on the left while the selected record appears on the right. Mobile and desktop share recognizable hierarchy. Work detail uses four prominent state actions—Open, On Hold, In Progress, Done—followed by assignment, description, and procedure. Asset detail uses Details and Work Orders, with subassets directly visible. Reporting uses a stable top tab row, filter chips, large measures, and simple charts.
+
+Keep minimal requests, QR prefill, split-pane efficiency, accountless external links, comments/files, and internal final review. Avoid industrial downtime measures, mandatory procedures, parts, and purchasing breadth.
+
+### Limble
+
+Sources: [pricing](https://limble.com/pricing), [request portal](https://help.limblecmms.com/en/articles/6801095-how-to-set-up-a-work-request-portal), [mobile](https://help.limblecmms.com/en/articles/11698403-using-the-new-limble-mobile-app), [task completion](https://help.limblecmms.com/en/articles/3497506-how-to-complete-a-task), [vendor sharing](https://help.limblecmms.com/en/articles/3610812-how-to-share-a-task-with-a-vendor), [location verification](https://help.limblecmms.com/en/articles/6372045-verify-location), [dashboards](https://help.limblecmms.com/en/articles/6825268-how-to-set-up-custom-dashboards).
+
+Keep the mobile Details / Instructions / Comments pattern, prominent QR action, Resume Later / Finish vendor workflow, and chart-to-record drill-through. Adapt location verification into explicit point-in-time visit evidence. Avoid a rigid 10-meter pass/fail rule or making an instruction checklist the entire service lifecycle.
+
+### UpKeep and Fiix
+
+Sources: [UpKeep pricing](https://upkeep.com/pricing/), [UpKeep portal](https://help.onupkeep.com/en/articles/12158452-configure-the-new-upkeep-request-portal), [UpKeep work record](https://help.onupkeep.com/en/articles/15545270-how-to-view-and-process-work-orders-on-web-new), [Fiix pricing](https://fiixsoftware.com/cmms/pricing/), [Fiix portal](https://helpdesk.fiixsoftware.com/hc/en-us/articles/360038455092-Enable-the-work-request-portal), [Fiix create work](https://helpdesk.fiixsoftware.com/hc/en-us/articles/9352747946516-Create-a-new-work-order-v6).
+
+Keep UpKeep's quick-panel versus full-record pattern and Fiix's explicit “I can't find the asset.” Avoid UpKeep's background GPS model, excessive work-record tabs, and either product's parts/PO depth. Historical records must preserve the name/classification at the time of service rather than silently changing when an asset is renamed.
+
+### FMX
+
+Sources: [pricing](https://www.gofmx.com/pricing/quote/), [maintenance request](https://help.gofmx.com/hc/en-us/articles/204100375-Creating-a-Maintenance-Request), [mobile work list](https://help.gofmx.com/hc/en-us/articles/34089695304845-Getting-Started-with-the-Mobile-App-FMX-Work-List), [vendor guide](https://help.gofmx.com/hc/en-us/articles/207459253-FMX-Technician-and-Vendor-Work-Request-Guide), [dashboard](https://help.gofmx.com/hc/en-us/articles/208485536-Dashboard-Basics).
+
+Keep mobile Recent / Nearby / Overdue / On Hold shortcuts and the separation of resolved from finalized. Avoid requiring vendor accounts, tenant-hostname login, and unrelated reservation/purchasing breadth.
+
+### ServiceTitan, FieldEdge, and ServiceTrade
+
+Sources: [ServiceTitan status model](https://help.servicetitan.com/v1/docs/statuses-and-actions-on-jobs-and-appointments), [dispatch](https://help.servicetitan.com/docs/use-the-new-daily-and-weekly-dispatch-board), [mobile actions](https://help.servicetitan.com/docs/explore-job-details-and-actions-in-fma), [ServiceTrade mobile](https://servicetrade.com/products/servicetrade-platform/features/mobile-app/), [ServiceTrade Service Link](https://servicetrade.com/products/servicetrade-platform/features/service-link/), [FieldEdge platform](https://fieldedge.com/field-service-software/).
+
+These products prove that job, appointment/visit, technician, proposal, and invoice state must be distinct. TraceOps should map to these vendor-owned records, not replace their dispatch boards, routes, pricebooks, technician payroll, inventory, quoting, sales, or payment systems.
+
+Keep ServiceTitan's visible next field action and state separation, ServiceTrade's customer-readable after-service report, and FieldEdge's clear en-route state. Avoid real-time tracking, vendor sales tools, and per-technician adoption requirements.
+
+## C-store operating context
+
+Official sources: [NACS equipment downtime](https://www.convenience.org/stay-current/news/2024/july/9/2-the-impact-of-equipment-downtime_operations), [NACS 2025 State of the Industry presentation](https://www.convenience.org/events/SOI/Presentations/Financial-and-Operational-Lessons_SOI2025.pdf), [PDI Enterprise](https://pditechnologies.com/increase-productivity/erp-back-office/enterprise-retail-software/), [Petrosoft reports](https://help.petrosoftinc.com/Content/Reports/b_reports.htm), [Zipline](https://getzipline.com/platform/), [WorkJam retail task management](https://www.workjam.com/library/retail_task_management_the_next_generation/).
+
+The NACS 2025 State of the Industry material reports average 2024 repairs and maintenance of $5,719 per store per month. A $150 monthly TraceOps price is therefore about 2.62% of that benchmark. That does not prove a sale; it defines the required value threshold. TraceOps must help the customer control or explain more than 2.62% of maintenance spend and administrative effort without inventing savings.
+
+The product must reflect:
+
+- 24/7 operations and limited store labor.
+- Revenue, food-safety, fuel, customer-experience, and comfort consequences.
+- Thirty or more maintainable assets in many stores.
+- Internal, external, and blended service models.
+- Different store formats, foodservice programs, dispenser counts, car washes, and regional weather.
+- Equipment failures described by symptoms, not diagnoses.
+- Back-office, POS, pricebook, inventory, and fuel accounting already owned by other systems.
+
+## Screen-pattern synthesis
+
+### Patterns that create enterprise value
+
+- A persistent scope and period context.
+- One queue showing what needs action now.
+- Clear accountable party, next action, due time, and escalation.
+- Split-pane lists for high-frequency triage; full pages for consequential decisions.
+- Fixed work-record header with customer WO number, store, state sentence, owner, and due time.
+- Chronological immutable activity.
+- Exact-record drill-through from every KPI, chart segment, exception, and outlier.
+- Saved role-specific views.
+- Mobile screens with one prominent next action.
+- Human confirmation after OCR, AI, benchmark, or match suggestions.
+- Optional depth for assets, PM, cost, invoice, and portal adoption.
+
+### Patterns that make platforms feel generic or burdensome
+
+- A large menu of disconnected modules.
+- Dashboard cards with no action or source records.
+- One giant work-order form.
+- Tiny typography and excessive table density.
+- A single overloaded status.
+- Mandatory asset, component, vendor, or cost center before intake.
+- App/account requirements for occasional vendors.
+- Opaque vendor grades, asset health scores, savings, or replacement directives.
+- Treating geofence or time onsite as proof of invoiced labor.
+- Making invoice entry a prerequisite for operational or lifecycle insight.
+
+## Decisive Keep / Adapt / Avoid matrix
+
+| Area | Keep | Adapt for TraceOps | Avoid |
+|---|---|---|---|
+| Platform spine | One record across service, visits, cost, asset, provider | One visible service thread linked to the immutable request and canonical WO | Separate mini-apps that force reconstruction |
+| Intake | Plain-language, QR-aware fast reporting | Store and problem only; classify later | Required asset, component, vendor, or cost center |
+| Routing | Direct internal/outside assignment and rules | Internal maintenance, Outside vendor, Choose later | Becoming a vendor dispatch replacement |
+| Bids | Multi-provider proposals | Bid request is distinct; selecting one creates one service assignment | Sending several active service authorizations |
+| Vendor access | Secure links, mobile web, optional portals | Accept, decline, date, question, visit, outcome, files | Mandatory accounts/apps or vendor fees |
+| Accountability | Shared metrics and source rows | Show denominator, period, cohort, and coverage | Opaque grades and accusations |
+| Visit evidence | Channel-independent check-in/out | Point-in-time location, source, accuracy, distance, consent, result | Background tracking and backdated verified time |
+| Status | Separate work, assignment, visit, outcome, cost states | Derive one plain next-action sentence | One overloaded status or chained UI jargon |
+| Spend | NTE, proposals, warranty, duplicate and repeat flags | Money requiring review plus human outcome | Fake savings, automatic denial, full AP |
+| Equipment | Asset history, warranty, PM, costs | Template + quantity + quick name/location + vendor enrichment | Giant forms and rigid naming |
+| Lifecycle | Age, expected life, repair history, replacement cost | Transparent review packet and capital forecast | Percent-spent rule, downtime inference, opaque score |
+| PM | Occurrences create canonical WOs | Show numerator, denominator, window, and exact occurrences | Unsupported compliance percentages |
+| Reporting | Interactive dashboards and exports | Dashboards act; reports are immutable handoff records | Dead charts and unversioned exports |
+| Setup | Templates, imports, defaults, rules | C-store blueprints with progressive configuration | Infinite settings exposed to daily users |
+
+## TraceOps product decisions
+
+### 1. The operator work order is the service spine
+
+The original request remains immutable. The operator WO is the canonical service authorization and billing reference. Vendor tickets, vendor invoices, and optional accounting PO references remain separate. Every assignment, issuance, visit, outcome, follow-up, cost, invoice link, asset link, and audit event attaches to this service thread.
+
+### 2. Simple UI requires richer state, not less state
+
+TraceOps stores separate request, work, assignment, visit, outcome, follow-up, cost, and invoice states. It derives one user-facing sentence such as:
+
+> Waiting on Summit Refrigeration to propose a service date · due today at 4:00 PM.
+
+Every unresolved work order has an accountable party, next required action, due timestamp, and escalation destination.
+
+### 3. Vendor adoption is optional
+
+Email/SMS secure links, QR/mobile web, trusted store device, manual phone/email updates, future app, and optional vendor portal invoke the same domain commands. A technician may check in and out through different channels. No-WO service creates an unmatched visit for review rather than blocking work.
+
+### 4. Dashboards are action surfaces
+
+Every metric must answer:
+
+- What is the exact scope, period, cost basis, taxonomy path, and cohort?
+- Which source records produced it?
+- What decision or action follows?
+- Who owns that action and when is it due?
+
+### 5. TraceOps tracks value without manufacturing ROI
+
+The product uses a value ledger with review states:
+
+- Identified.
+- Under review.
+- Confirmed.
+- Realized.
+- Rejected.
+
+Eligible events include warranty-covered cost, duplicate dispatch avoided, invoice overage corrected, selected proposal difference with scope caveat, callback charge prevented, and customer-confirmed administrative avoidance. PM completion is not automatically monetized. The customer must confirm any dollar outcome.
+
+### 6. Equipment setup is template-first and progressive
+
+Organization templates define c-store equipment types and optional default components. Store onboarding uses quantity selectors, then a quick naming/location step. Serial, model, install date, warranty, and component details are additive. Vendors may enrich equipment data during service.
+
+### 7. Lifecycle is a decision packet, not a verdict
+
+At work authorization—not invoice review—the platform may flag capital review using:
+
+- Current repair/proposal amount.
+- Current installed replacement benchmark.
+- Asset age and expected-life range.
+- Remaining expected life.
+- Warranty.
+- Related repair count and cost.
+- Same-component repeats.
+- Visit outcomes and unresolved follow-up.
+- PM history.
+- Replacement lead time and customer criticality when known.
+
+The review shows repair-now cash, replace-now cash, capital pulled forward, expected replacement window, evidence, and uncertainty. It never says “replace because lifetime repairs reached X% of replacement.” A configurable review threshold may decline as remaining expected life declines, but a dollar floor prevents a small repair near end of life from triggering a pointless capital review.
+
+### 8. Replacement estimates are versioned references
+
+Assets reference an equipment replacement profile; they do not each store a copied estimate that must be manually updated. An approved replacement quote can propose a new effective-dated benchmark for the matching template/cohort. A human reviews affected assets, source quote, date, scope, and any size class before publishing. One quote is allowed and described plainly as “based on one recent approved quote”; multiple comparable quotes may produce a median/range. An outlier never silently updates the fleet.
+
+### 9. C-store specialization is the wedge
+
+The initial program templates are Refrigeration, HVAC, Forecourt, Foodservice, Electrical/Lighting, Plumbing, Exterior/Site, Security/IT, and Car Wash where applicable. Intake uses symptom language such as beer cave warm, pump unavailable, ice machine not producing, canopy lights out, or restroom leak. The underlying platform remains modular enough for future suites, but the user interface does not expose hypothetical industrial complexity.
+
+## What makes $150 per store per month credible
+
+A generic work-order tracker does not justify the price. A portfolio facilities control system can if it consistently exposes and helps resolve:
+
+- Above-authorization work.
+- Duplicate and repeat service.
+- Warranty opportunities.
+- Proposal variance.
+- Rate and cost outliers.
+- Multiple-visit work.
+- Missing or unmatched visit evidence.
+- Aging approvals and vendor responses.
+- PM exceptions with denominator.
+- Store, equipment, and vendor cohorts driving cost.
+- Upcoming capital needs.
+- Administrative intervention and confirmed value outcomes.
+
+The CEO-level answer to “What did the platform do?” should be a drillable record of work controlled, visits observed, exceptions resolved, and value confirmed—not a marketing score.
+
+## Final decision
+
+Do not copy one competitor. Do not reskin the current generic platform. Retain the durable domain and persistence work that already supports the service record, then replace the operator experience and presenter architecture around:
+
+> **One service story. One accountable next action. Every source record underneath it.**

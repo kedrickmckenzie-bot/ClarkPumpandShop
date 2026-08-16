@@ -47,7 +47,7 @@ const session: OperatorSession = {
 
 function requestFor(
   assignmentKind: "bid_request" | "outside_vendor",
-  url = "https://traceops.test/api/ops/work-orders",
+  url = "https://operations.test/api/ops/work-orders",
 ) {
   const formData = new FormData();
   formData.set("storeId", "store-northline-101");

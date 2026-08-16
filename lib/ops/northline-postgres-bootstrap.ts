@@ -28,7 +28,7 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
       marker = result.rows[0];
     } catch (error) {
       throw new Error(
-        "TraceOps PostgreSQL is reachable but the ops baseline migration is not applied.",
+        "PostgreSQL is reachable but the operations baseline migration is not applied.",
         { cause: error },
       );
     }

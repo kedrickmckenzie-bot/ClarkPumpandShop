@@ -1,6 +1,9 @@
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
+import {
+  OPS_INTERNAL_URL_BASE,
+  OPS_PREVIEW_ROLE_COOKIE,
+} from "@/lib/server/runtime-identifiers";
 
-const PREVIEW_ROLE_COOKIE = "traceops-preview-role";
 const ALLOWED_ROLES = new Set([
   "executive",
   "facilities",
@@ -15,8 +18,8 @@ function safeReturnPath(value: FormDataEntryValue | null): string {
   }
 
   try {
-    const url = new URL(value, "https://traceops.local");
-    if (url.origin !== "https://traceops.local" || !url.pathname.startsWith("/app")) {
+    const url = new URL(value, OPS_INTERNAL_URL_BASE);
+    if (url.origin !== OPS_INTERNAL_URL_BASE || !url.pathname.startsWith("/app")) {
       return "/app/overview";
     }
     return `${url.pathname}${url.search}${url.hash}`;
@@ -40,7 +43,7 @@ export async function POST(request: Request) {
     ?.split(",")[0]
     ?.trim()
     .toLowerCase();
-  response.cookies.set(PREVIEW_ROLE_COOKIE, requestedRole, {
+  response.cookies.set(OPS_PREVIEW_ROLE_COOKIE, requestedRole, {
     httpOnly: true,
     sameSite: "lax",
     secure: forwardedProtocol ? forwardedProtocol === "https" : new URL(request.url).protocol === "https:",

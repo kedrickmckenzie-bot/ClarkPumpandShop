@@ -13,7 +13,7 @@ describe("public evidence private object storage", () => {
   it("uses a stable opaque object key when an idempotent checkout upload is retried", async () => {
     const put = vi.fn(async () => undefined);
     const store = createPublicUploadStore({
-      environment: { TRACEOPS_OBJECT_STORAGE_PROVIDER: "r2" },
+      environment: { OPS_OBJECT_STORAGE_PROVIDER: "r2" },
       r2Bucket: { put },
     });
     const input = {
@@ -35,7 +35,7 @@ describe("public evidence private object storage", () => {
     expect(put).toHaveBeenCalledTimes(3);
   });
 
-  it("preserves the Sites R2 binding while using opaque tenant-scoped keys and private metadata", async () => {
+  it("preserves the Sites R2 binding and accepts the legacy provider alias during migration", async () => {
     const put = vi.fn(async () => undefined);
     const store = createPublicUploadStore({
       environment: { TRACEOPS_OBJECT_STORAGE_PROVIDER: "r2" },
@@ -91,7 +91,7 @@ describe("public evidence private object storage", () => {
         RENDER: "true",
         S3_ENDPOINT: "https://objects.example.test",
         S3_REGION: "us-east-1",
-        S3_BUCKET: "traceops-demo-files",
+        S3_BUCKET: "cstore-operations-files",
         S3_ACCESS_KEY_ID: "test-access-key",
         S3_SECRET_ACCESS_KEY: "test-secret-key",
         S3_SERVER_SIDE_ENCRYPTION: "AES256",
@@ -113,7 +113,7 @@ describe("public evidence private object storage", () => {
     expect(result?.key).not.toContain("request-104-opaque");
     const headers = capturedInit?.headers as Record<string, string>;
     expect(capturedUrl?.origin).toBe("https://objects.example.test");
-    expect(capturedUrl?.pathname).toBe(`/traceops-demo-files/${result?.key}`);
+    expect(capturedUrl?.pathname).toBe(`/cstore-operations-files/${result?.key}`);
     expect(capturedInit).toMatchObject({ method: "PUT", body: upload.bytes, redirect: "error" });
     expect(headers.authorization).toMatch(
       /^AWS4-HMAC-SHA256 Credential=test-access-key\/20260813\/us-east-1\/s3\/aws4_request, SignedHeaders=/,
@@ -135,10 +135,10 @@ describe("public evidence private object storage", () => {
   it("does not report a failed S3 response as stored evidence", async () => {
     const store = createPublicUploadStore({
       environment: {
-        TRACEOPS_OBJECT_STORAGE_PROVIDER: "s3",
+        OPS_OBJECT_STORAGE_PROVIDER: "s3",
         S3_ENDPOINT: "https://objects.example.test",
         S3_REGION: "us-east-1",
-        S3_BUCKET: "traceops-demo-files",
+        S3_BUCKET: "cstore-operations-files",
         S3_ACCESS_KEY_ID: "test-access-key",
         S3_SECRET_ACCESS_KEY: "test-secret-key",
       },

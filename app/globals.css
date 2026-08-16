@@ -2,12 +2,12 @@
 
 :root {
   color-scheme: light;
-  --app-canvas: #f2f5f3;
-  --app-surface: #ffffff;
-  --app-ink: #162a2b;
-  --app-muted: #5e6f70;
-  --app-brand: #0f6257;
-  --app-focus: #167c6e;
+  --app-canvas: var(--product-canvas, #f3f4f6);
+  --app-surface: var(--product-surface, #ffffff);
+  --app-ink: #111827;
+  --app-muted: #667085;
+  --app-brand: var(--product-action, #2563eb);
+  --app-focus: var(--product-focus, #3b82f6);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -31,6 +31,7 @@ body {
   font-family: var(--font-geist-sans), Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -53,13 +54,13 @@ select {
 }
 
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--app-focus) 32%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--app-focus) 30%, transparent);
   outline-offset: 3px;
 }
 
 ::selection {
-  background: #cce6df;
-  color: #073f38;
+  color: #1e3a8a;
+  background: var(--product-action-soft, #dbeafe);
 }
 
 @media (prefers-reduced-motion: reduce) {

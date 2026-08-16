@@ -166,11 +166,11 @@ describe("public technician action idempotency", () => {
 
 describe("public idempotency header boundary", () => {
   it("requires a sufficiently strong client submission key", () => {
-    expect(readPublicIdempotencyKey(new Request("https://traceops.example/check-in", {
+    expect(readPublicIdempotencyKey(new Request("https://operations.example/check-in", {
       headers: { "idempotency-key": "browser-submit-uuid-0001" },
     }))).toBe("browser-submit-uuid-0001");
 
-    expect(() => readPublicIdempotencyKey(new Request("https://traceops.example/check-in")))
+    expect(() => readPublicIdempotencyKey(new Request("https://operations.example/check-in")))
       .toThrowError(expect.objectContaining({ status: 422, code: "invalid_idempotency_key" }));
   });
 });

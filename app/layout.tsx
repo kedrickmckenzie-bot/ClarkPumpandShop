@@ -1,43 +1,53 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import {
+  productFullName,
+  productPresentation,
+  productThemeVariables,
+} from "@/lib/product/presentation";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const socialPreview = productPresentation.assets.socialPreviewPath
+  ? [{
+      url: productPresentation.assets.socialPreviewPath,
+      width: productPresentation.assets.socialPreviewWidth,
+      height: productPresentation.assets.socialPreviewHeight,
+      alt: productFullName,
+    }]
+  : undefined;
 
 export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ??
       "http://localhost:3000",
   ),
-  title: { default: "TraceOps Convenience Suite", template: "%s | TraceOps" },
-  description:
-    "A purpose-built convenience retail suite for vendor accountability, maintenance work, spend visibility, equipment, and preventive maintenance.",
+  title: {
+    default: productFullName,
+    template: `%s | ${productPresentation.identity.workingName}`,
+  },
+  description: productPresentation.metadata.description,
   openGraph: {
-    title: "TraceOps Convenience Suite",
-    description: "Every service visit accounted for. Every maintenance dollar explained.",
+    title: productFullName,
+    description: productPresentation.metadata.socialDescription,
     type: "website",
-    images: [
-      {
-        url: "/traceops-og.png",
-        width: 1731,
-        height: 909,
-        alt: "TraceOps Convenience Suite",
-      },
-    ],
+    images: socialPreview,
   },
   twitter: {
     card: "summary_large_image",
-    title: "TraceOps Convenience Suite",
-    description: "Every service visit accounted for. Every maintenance dollar explained.",
-    images: ["/traceops-og.png"],
+    title: productFullName,
+    description: productPresentation.metadata.socialDescription,
+    images: productPresentation.assets.socialPreviewPath
+      ? [productPresentation.assets.socialPreviewPath]
+      : undefined,
   },
-  icons: { icon: "/favicon.svg" },
+  icons: { icon: productPresentation.assets.faviconPath },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth" style={productThemeVariables}>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
     </html>
   );

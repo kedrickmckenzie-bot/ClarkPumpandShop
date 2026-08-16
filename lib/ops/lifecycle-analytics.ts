@@ -43,7 +43,7 @@ export type RepairReplacementDataGap =
   | "no_positive_comparison_horizon";
 
 /**
- * A current repair proposal is deliberately separate from WorkOrder. TraceOps can
+ * A current repair proposal is deliberately separate from WorkOrder. The platform can
  * screen an estimate before a work order exists or before it is issued.
  */
 export interface RepairProposalInput {

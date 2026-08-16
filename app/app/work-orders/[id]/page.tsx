@@ -1,11 +1,5 @@
 import type { Metadata } from "next";
-import { VendorIssuancePanel } from "@/components/ops/forms";
-import { EstimateComparisonPanel } from "@/components/ops/estimate-comparison-panel";
-import { MutationReceipt, WorkOrderControlPanel } from "@/components/ops/service-control-panels";
-import { WorkOrderRecordingPanel } from "@/components/ops/work-order-recording-panel";
-import { DetailView } from "@/components/ops/views";
-import { WorkOrderReplacementIntelligencePanel } from "@/components/ops/replacement-intelligence-panel";
-import styles from "@/components/ops/ops.module.css";
+import { WorkOrderCase } from "@/components/workspace/work-order-case";
 import { loadDetailModel, loadEstimateComparisonModel, loadVendorIssuanceModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel } from "../../_data/operator-loader";
 import { loadWorkOrderReplacementIntelligenceModel } from "../../_data/replacement-loader";
 
@@ -41,18 +35,14 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     };
   }
   return (
-    <DetailView
+    <WorkOrderCase
       model={model}
-      beforeSections={(
-        <div className={styles.controlStack}>
-          <MutationReceipt code={updated} />
-          <WorkOrderControlPanel model={control} />
-          <VendorIssuancePanel model={issuance} />
-          <EstimateComparisonPanel model={estimateComparison} />
-          <WorkOrderReplacementIntelligencePanel model={replacement} />
-          <WorkOrderRecordingPanel model={recording} />
-        </div>
-      )}
+      control={control}
+      recording={recording}
+      estimateComparison={estimateComparison}
+      issuance={issuance}
+      replacement={replacement}
+      updated={updated}
     />
   );
 }

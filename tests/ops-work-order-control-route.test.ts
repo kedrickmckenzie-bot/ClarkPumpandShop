@@ -54,7 +54,7 @@ function manualResponseRequest(overrides: Record<string, string> = {}) {
   };
   const formData = new FormData();
   Object.entries(values).forEach(([name, value]) => formData.set(name, value));
-  return new Request(`https://traceops.test/api/ops/work-orders/${WORK_ORDER_ID}/control`, {
+  return new Request(`https://operations.test/api/ops/work-orders/${WORK_ORDER_ID}/control`, {
     method: "POST",
     body: formData,
   });

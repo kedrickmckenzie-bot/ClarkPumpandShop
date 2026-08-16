@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { roleCan } from "@/components/ops/role-policy";
-import { ProgramView } from "@/components/ops/views";
+import { PlanningWorkspace } from "@/components/workspace/planning-workspace";
 import { loadOperatorSession, loadProgramModel } from "../_data/operator-loader";
 
 export const metadata: Metadata = { title: "Preventive maintenance" };
@@ -15,5 +15,5 @@ export default async function PreventiveMaintenancePage({ searchParams }: { sear
   if (roleCan(session.role, "setup_equipment")) {
     model.page.secondaryAction = { label: "Add equipment", href: store ? `/app/equipment/new?store=${encodeURIComponent(store)}` : "/app/equipment/new" };
   }
-  return <ProgramView model={model} />;
+  return <PlanningWorkspace kind="pm" model={model} />;
 }

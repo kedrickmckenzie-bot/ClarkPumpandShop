@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { OpsDomainError } from "@/lib/ops/commands";
+import { isOpsClientRequest } from "@/lib/ops/http-contract";
 import { createReplacementProfile, publishManualReplacementBenchmark } from "@/lib/ops/replacement-commands";
 import { formText, getOpsRequestContext, opsApiError, optionalIsoDate, optionalMoneyMinor } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 function requiredMoney(formData: FormData, field: string, label: string) { const value = optionalMoneyMinor(formText(formData, field, { max: 20 })); if (value === undefined) throw new OpsDomainError("VALIDATION", `${label} is required.`); return value; }
 function whole(formData: FormData, field: string, fallback: number) { const raw = formText(formData, field, { max: 12 }); const value = raw ? Number(raw) : fallback; if (!Number.isSafeInteger(value)) throw new OpsDomainError("VALIDATION", `${field} must be a whole number.`); return value; }
-function success(request: Request, redirectTo: string) { return request.headers.get("x-traceops-client") === "replacement-intelligence" ? NextResponse.json({ ok: true, redirectTo }) : relativeRedirect303(redirectTo); }
+function success(request: Request, redirectTo: string) { return isOpsClientRequest(request, "replacement-intelligence") ? NextResponse.json({ ok: true, redirectTo }) : relativeRedirect303(redirectTo); }
 
 export async function POST(request: Request) {
   try {

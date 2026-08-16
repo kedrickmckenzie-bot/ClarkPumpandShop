@@ -443,7 +443,7 @@ describe("vendor-estimate concurrency fences", () => {
     if (!workOrder) throw new Error("Race work order was not persisted");
     const internalFence = await workOrderMutationFence(workOrder, NOW);
     const reservedKey = String(internalFence.params[1]);
-    expect(reservedKey).toContain("__traceops_internal__/");
+    expect(reservedKey).toContain("__ops_internal__/");
     const before = test.repository.snapshot();
 
     await expect(checkInVisitWithCheckoutToken(test.services, {

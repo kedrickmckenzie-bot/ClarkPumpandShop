@@ -53,6 +53,8 @@ describe("PostgreSQL migration and seed contract", () => {
   });
 
   it("serializes concurrent migration runners on one PostgreSQL session", () => {
+    expect(migrationRunner).toContain("cstore-operations-postgres-migrations-v1");
+    expect(migrationRunner).toContain("traceops-postgres-migrations-v1");
     expect(migrationRunner).toContain("pg_advisory_lock(hashtext($1))");
     expect(migrationRunner).toContain("pg_advisory_unlock(hashtext($1))");
     expect(migrationRunner).toContain("hash text NOT NULL UNIQUE");

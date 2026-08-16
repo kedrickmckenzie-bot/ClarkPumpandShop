@@ -1,4 +1,4 @@
-name: TraceOps quality gates
+name: C-store operations quality gates
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: traceops-ci-${{ github.ref }}
+  group: cstore-operations-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

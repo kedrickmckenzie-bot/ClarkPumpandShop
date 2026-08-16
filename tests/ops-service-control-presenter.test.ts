@@ -48,7 +48,7 @@ function cell(row: TableRowViewModel, key: string) {
 }
 
 function queryValue(href: string, key: string) {
-  return new URL(href, "https://traceops.test").searchParams.get(key);
+  return new URL(href, "https://operations.test").searchParams.get(key);
 }
 
 describe("enterprise service-control presenter contracts", () => {
@@ -360,9 +360,10 @@ describe("enterprise service-control presenter contracts", () => {
   });
 
   it("wires the presenter controls and source-detail routes into the operator pages", async () => {
-    const [requestRoute, workOrderRoute, visitRoute, attentionRoute, serviceControlPanels] = await Promise.all([
+    const [requestRoute, workOrderRoute, workOrderCase, visitRoute, attentionRoute, serviceControlPanels] = await Promise.all([
       readFile("app/app/requests/[id]/page.tsx", "utf8"),
       readFile("app/app/work-orders/[id]/page.tsx", "utf8"),
+      readFile("components/workspace/work-order-case.tsx", "utf8"),
       readFile("app/app/visits/[id]/page.tsx", "utf8"),
       readFile("app/app/action-center/[id]/page.tsx", "utf8"),
       readFile("components/ops/service-control-panels.tsx", "utf8"),
@@ -371,8 +372,15 @@ describe("enterprise service-control presenter contracts", () => {
     expect(requestRoute).toContain("loadRequestReviewModel");
     expect(requestRoute).toContain("<RequestReviewPanel model={review}");
     expect(workOrderRoute).toContain("loadWorkOrderControlModel");
-    expect(workOrderRoute).toContain("<WorkOrderControlPanel model={control}");
-    expect(workOrderRoute).toContain("<VendorIssuancePanel model={issuance}");
+    expect(workOrderRoute).toContain("<WorkOrderCase");
+    expect(workOrderRoute).toContain("control={control}");
+    expect(workOrderRoute).toContain("issuance={issuance}");
+    expect(workOrderRoute).toContain("estimateComparison={estimateComparison}");
+    expect(workOrderRoute).toContain("recording={recording}");
+    expect(workOrderCase).toContain("<WorkOrderControlPanel model={control}");
+    expect(workOrderCase).toContain("<VendorIssuancePanel model={issuance}");
+    expect(workOrderCase).toContain("<EstimateComparisonPanel model={estimateComparison}");
+    expect(workOrderCase).toContain("<WorkOrderRecordingPanel model={recording}");
     expect(visitRoute).toContain('loadDetailModel("visit", id)');
     expect(attentionRoute).toContain("loadAttentionItemModel");
     expect(attentionRoute).toContain("<AttentionItemPanel model={model.control}");

@@ -44,7 +44,7 @@ function bidRequest(dueAt?: string) {
   formData.set("requestedScope", "Price the complete repair without authorizing onsite work.");
   formData.set("channel", "email");
   if (dueAt !== undefined) formData.set("dueAt", dueAt);
-  return new Request(`https://traceops.test/api/ops/work-orders/${WORK_ORDER_ID}/estimates`, {
+  return new Request(`https://operations.test/api/ops/work-orders/${WORK_ORDER_ID}/estimates`, {
     method: "POST",
     body: formData,
   });

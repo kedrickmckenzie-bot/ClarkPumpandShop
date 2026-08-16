@@ -464,9 +464,20 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
 export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtureRepository { return new FixtureOpsRepository(clone(fixture)); }
 export function createNorthlineFixtureRepository(): MutableOpsFixtureRepository { return createOpsFixtureRepository(buildNorthlinePresentationFixture()); }
 
-const fixtureGlobal = globalThis as typeof globalThis & {
-  __traceOpsNorthlineRuntimeRepository?: MutableOpsFixtureRepository;
-};
+const OPS_PRESENTATION_RUNTIME_KEY = "__opsPresentationRuntimeRepository";
+const LEGACY_PRESENTATION_RUNTIME_KEY = "__traceOpsNorthlineRuntimeRepository";
+const fixtureGlobal = globalThis as typeof globalThis & Partial<Record<
+  typeof OPS_PRESENTATION_RUNTIME_KEY | typeof LEGACY_PRESENTATION_RUNTIME_KEY,
+  MutableOpsFixtureRepository
+>>;
+
+function setPresentationRuntimeRepository(repository: MutableOpsFixtureRepository) {
+  fixtureGlobal[OPS_PRESENTATION_RUNTIME_KEY] = repository;
+  // Keep the old global pointing at the same object while old and new module
+  // graphs can coexist during local HMR or a rolling preview deployment.
+  fixtureGlobal[LEGACY_PRESENTATION_RUNTIME_KEY] = repository;
+  return repository;
+}
 
 // Next compiles API routes and React Server Components into separate module
 // graphs. Process-global storage keeps the local development fixture coherent
@@ -474,17 +485,19 @@ const fixtureGlobal = globalThis as typeof globalThis & {
 // visible to the redirected detail page. Production Render never uses this
 // fallback; it requires PostgreSQL.
 export function getNorthlineFixtureRepository(): MutableOpsFixtureRepository {
-  fixtureGlobal.__traceOpsNorthlineRuntimeRepository ??= createNorthlineFixtureRepository();
-  const snapshot = fixtureGlobal.__traceOpsNorthlineRuntimeRepository.snapshot() as Partial<OpsFixture>;
+  const repository = fixtureGlobal[OPS_PRESENTATION_RUNTIME_KEY]
+    ?? fixtureGlobal[LEGACY_PRESENTATION_RUNTIME_KEY]
+    ?? setPresentationRuntimeRepository(createNorthlineFixtureRepository());
+  setPresentationRuntimeRepository(repository);
+  const snapshot = repository.snapshot() as Partial<OpsFixture>;
   if (!Array.isArray(snapshot.equipmentTemplates) || !Array.isArray(snapshot.componentTemplates) || !Array.isArray(snapshot.replacementProfiles)) {
-    fixtureGlobal.__traceOpsNorthlineRuntimeRepository = createNorthlineFixtureRepository();
+    return setPresentationRuntimeRepository(createNorthlineFixtureRepository());
   }
-  return fixtureGlobal.__traceOpsNorthlineRuntimeRepository;
+  return repository;
 }
 
 export function resetNorthlineFixtureRepository() {
-  fixtureGlobal.__traceOpsNorthlineRuntimeRepository = createNorthlineFixtureRepository();
-  return fixtureGlobal.__traceOpsNorthlineRuntimeRepository;
+  return setPresentationRuntimeRepository(createNorthlineFixtureRepository());
 }
 
 export function getNorthlineDemoRuntime() {

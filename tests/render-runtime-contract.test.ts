@@ -4,19 +4,21 @@ import { describe, expect, it } from "vitest";
 describe("Render runtime contract", () => {
   it("keeps Sites scripts while providing explicit standard Node commands", () => {
     const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
+      name: string;
       scripts: Record<string, string>;
       dependencies: Record<string, string>;
     };
 
+    expect(packageJson.name).toBe("cstore-operations-suite");
     expect(packageJson.scripts.dev).toContain("vinext dev");
     expect(packageJson.scripts.build).toContain("vinext build");
     expect(packageJson.scripts.start).toContain("vinext start");
-    expect(packageJson.scripts["dev:render"]).toContain("TRACEOPS_RUNTIME=render");
+    expect(packageJson.scripts["dev:render"]).toContain("OPS_RUNTIME=render");
     expect(packageJson.scripts["build:render"]).toBe(
-      "cross-env TRACEOPS_RUNTIME=render next build",
+      "cross-env OPS_RUNTIME=render next build",
     );
     expect(packageJson.scripts["start:render"]).toBe(
-      "cross-env TRACEOPS_RUNTIME=render next start --hostname 0.0.0.0",
+      "cross-env OPS_RUNTIME=render next start --hostname 0.0.0.0",
     );
     expect(packageJson.scripts["start:render:free"]).toBe(
       "npm run render:predeploy && npm run start:render",

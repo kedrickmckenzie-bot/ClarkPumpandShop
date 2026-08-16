@@ -60,9 +60,13 @@ function currentEnvironment(): RuntimeEnvironment {
 }
 
 function configuredProvider(environment: RuntimeEnvironment): StorageProvider {
-  const explicit = (environment.TRACEOPS_OBJECT_STORAGE_PROVIDER ?? "").trim().toLowerCase();
+  const explicit = (
+    environment.OPS_OBJECT_STORAGE_PROVIDER?.trim()
+    || environment.TRACEOPS_OBJECT_STORAGE_PROVIDER?.trim()
+    || ""
+  ).toLowerCase();
   if (explicit && explicit !== "r2" && explicit !== "s3") {
-    throw new Error("TRACEOPS_OBJECT_STORAGE_PROVIDER must be either `r2` or `s3`.");
+    throw new Error("OPS_OBJECT_STORAGE_PROVIDER must be either `r2` or `s3`.");
   }
   if (explicit) return explicit as StorageProvider;
 
@@ -80,7 +84,7 @@ function requiredEnvironmentValue(environment: RuntimeEnvironment, name: string,
   const value = environment[name]?.trim() || (fallbackName ? environment[fallbackName]?.trim() : undefined);
   if (!value) {
     throw new Error(
-      `TraceOps S3-compatible file storage is selected, but ${name}${fallbackName ? ` (or ${fallbackName})` : ""} is not configured.`,
+      `S3-compatible file storage is selected, but ${name}${fallbackName ? ` (or ${fallbackName})` : ""} is not configured.`,
     );
   }
   return value;

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { OpsCommandServices } from "@/lib/ops/commands";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
-import { applyStoreEquipmentTemplates } from "@/lib/ops/setup-commands";
+import { applyStoreEquipmentTemplates, nameStoreEquipment } from "@/lib/ops/setup-commands";
 import { createEquipmentTemplate } from "@/lib/ops/taxonomy-commands";
 
 const actor = { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "user" as const, actorId: "membership-northline-facilities", actorName: "Jordan Lee" };
@@ -32,5 +32,58 @@ describe("company equipment templates", () => {
     expect(components).toHaveLength(7);
     expect(components.find((row) => row.name === "Compressor")?.parentComponentId).toBe(components.find((row) => row.name === "Condensing unit")?.id);
     expect(snapshot.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: "store-northline-101", eventType: "store.equipment_templates_applied" }));
+  });
+
+  it("finishes commissioning by naming repeated equipment in one audited atomic update", async () => {
+    const { repository, services } = harness();
+    const assets = await applyStoreEquipmentTemplates(services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-101",
+      selections: [{ templateId: "equipment-template-beer-cave", quantity: 2 }],
+      actor,
+    });
+
+    const named = await nameStoreEquipment(services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-101",
+      equipment: [
+        { assetId: assets[0].id, name: "Checkout wall" },
+        { assetId: assets[1].id, name: "Deli grab-and-go" },
+      ],
+      actor,
+    });
+    const snapshot = repository.snapshot();
+
+    expect(named.map((asset) => asset.name)).toEqual(["Checkout wall", "Deli grab-and-go"]);
+    expect(snapshot.assets.find((asset) => asset.id === assets[0].id)?.assetTag).toBe(assets[0].assetTag);
+    expect(snapshot.assets.find((asset) => asset.id === assets[0].id)?.name).toBe("Checkout wall");
+    expect(snapshot.auditEvents.filter((event) => event.eventType === "asset.commissioning_name_set" && assets.some((asset) => asset.id === event.aggregateId))).toHaveLength(2);
+  });
+
+  it("rejects duplicate or cross-store names during commissioning", async () => {
+    const { services } = harness();
+    const assets = await applyStoreEquipmentTemplates(services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-101",
+      selections: [{ templateId: "equipment-template-beer-cave", quantity: 2 }],
+      actor,
+    });
+
+    await expect(nameStoreEquipment(services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-101",
+      equipment: [
+        { assetId: assets[0].id, name: "Front counter" },
+        { assetId: assets[1].id, name: "front counter" },
+      ],
+      actor,
+    })).rejects.toThrow("already used at this store");
+
+    await expect(nameStoreEquipment(services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-102",
+      equipment: [{ assetId: assets[0].id, name: "Beer cave" }],
+      actor,
+    })).rejects.toThrow("outside this store or organization");
   });
 });

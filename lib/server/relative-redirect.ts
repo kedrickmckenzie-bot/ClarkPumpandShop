@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const RELATIVE_REDIRECT_BASE = "https://traceops-relative.invalid";
+const RELATIVE_REDIRECT_BASE = "https://operations.invalid";
 
 /**
  * Creates a same-origin form redirect without trusting the server-facing

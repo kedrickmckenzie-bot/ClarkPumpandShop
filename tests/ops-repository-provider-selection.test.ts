@@ -8,7 +8,7 @@ import {
 describe("server ops repository selection policy", () => {
   it("prefers PostgreSQL whenever DATABASE_URL is configured", () => {
     expect(selectOpsRepositoryBackend({
-      databaseUrl: "postgresql://example.invalid/traceops",
+      databaseUrl: "postgresql://example.invalid/operations",
       d1Available: true,
       nodeEnv: "production",
     })).toBe("postgres");
@@ -37,9 +37,10 @@ describe("server ops repository selection policy", () => {
   });
 
   it("distinguishes local Node preview from a deployed Render process", () => {
+    expect(isRenderNodeRuntime({ OPS_RUNTIME: "render" })).toBe(true);
+    expect(isLocalRenderDevelopment({ OPS_RUNTIME: "render", NODE_ENV: "development" })).toBe(true);
+    expect(isLocalRenderDevelopment({ OPS_RUNTIME: "render", NODE_ENV: "production" })).toBe(false);
+    expect(isLocalRenderDevelopment({ OPS_RUNTIME: "render", RENDER: "true" })).toBe(false);
     expect(isRenderNodeRuntime({ TRACEOPS_RUNTIME: "render" })).toBe(true);
-    expect(isLocalRenderDevelopment({ TRACEOPS_RUNTIME: "render", NODE_ENV: "development" })).toBe(true);
-    expect(isLocalRenderDevelopment({ TRACEOPS_RUNTIME: "render", NODE_ENV: "production" })).toBe(false);
-    expect(isLocalRenderDevelopment({ TRACEOPS_RUNTIME: "render", RENDER: "true" })).toBe(false);
   });
 });

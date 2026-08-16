@@ -10,6 +10,16 @@ These rules govern the clean-slate TraceOps Convenience Suite rebuild. The prima
 - The 63-store reference is a customer-caliber and engineering-scale benchmark, not the presentation dataset. Keep the showcase completely fictional with exactly 15 stores and five vendors; prove larger scale with a separate synthetic fixture and production architecture.
 - The umbrella name can later serve other industry suites, but this edition should use c-store language, workflows, taxonomy and demo stories without exposing hypothetical industrial complexity.
 - Build a modular monolith for V0. Share domain commands and infrastructure, not one giant configurable interface for every possible industry.
+- The approved implementation strategy is a selective clean-slate rebuild: retain conforming service-domain, audit, idempotency, visit, estimate, lifecycle, persistence-adapter, and fixture behavior; replace the operator UX, generic presenter/full-snapshot query path, and dead parallel application stacks.
+
+## Enterprise experience and temporary brand
+
+- The current operator UX, teal/coral palette, generic page renderer, card-heavy dashboard treatment, tiny labels, and legacy application stacks are not design foundations. Replace them with one coherent enterprise interface.
+- Use neutral cool-gray canvases, white working surfaces, deep slate navigation, one restrained cobalt action color, semantic status colors, strong tables/queues/timelines, readable 15–16 px body text, and designed loading/empty/error/partial/permission states.
+- Cards summarize; exact records belong in tables, queues, split views, and full record pages. Avoid decorative charts, marketing gradients, glass effects, playful illustration, and excessive rounded containers in the operator application.
+- “TraceOps” is a temporary working label. Product name, suite label, logo, favicon, metadata, email/PDF language, support links, and brand tokens must come from one configuration. Routes, database identifiers, domain types/events, component names, CSS names, storage keys, and customer records must remain brand-neutral.
+- The maximum primary navigation is Overview, Work, Stores, Equipment, Vendors, and Spend & planning. Setup is secondary.
+- Every open service record presents one plain-language accountable state: current stage, accountable party, next action, due timestamp, and escalation destination.
 
 ## Product contract
 

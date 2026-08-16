@@ -106,10 +106,17 @@ function base64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-async function stableCheckoutToken(accessToken: string, submissionKey: string): Promise<string> {
+const CHECKOUT_TOKEN_NAMESPACE = "ops-checkout-v1";
+const LEGACY_CHECKOUT_TOKEN_NAMESPACE = "traceops-checkout-v1";
+
+async function stableCheckoutToken(
+  accessToken: string,
+  submissionKey: string,
+  namespace = CHECKOUT_TOKEN_NAMESPACE,
+): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(`traceops-checkout-v1\u0000${accessToken}\u0000${submissionKey}`),
+    new TextEncoder().encode(`${namespace}\u0000${accessToken}\u0000${submissionKey}`),
   );
   return base64Url(new Uint8Array(digest));
 }
@@ -349,7 +356,7 @@ function portalFromAccess(access: PublicAccess): StorePortalView {
           : access.storeRecord.locationPolicyEnabled,
       explanation: access.kind === "trusted_store"
         ? "This trusted store computer records the exact server time. No PIN or location permission is needed."
-        : "Location is requested only when a technician checks in or out. TraceOps does not track anyone continuously.",
+        : "Location is requested only when a technician checks in or out. The service does not track anyone continuously.",
     },
     capabilities: {
       reportIssue: access.kind === "trusted_store" || (access.kind === "store" && access.storeGateway.actions.includes("report_issue")),
@@ -673,16 +680,22 @@ async function replayCheckoutCapability(input: {
   submissionKey: string;
 }) {
   const { repository, visit } = input;
-  const token = await stableCheckoutToken(input.accessToken, input.submissionKey);
-  const capability = await repository.getVisitByCheckoutToken({
-    tokenHash: await hashOpaqueToken(token),
-    purpose: "active_visit",
-    now: now(),
-  });
-  if (!capability || capability.visit.organizationId !== visit.organizationId || capability.visit.id !== visit.id) {
-    throw new PublicWorkflowError("The prior checkout link is unavailable.", 409, "idempotency_result_unavailable");
+  for (const namespace of [CHECKOUT_TOKEN_NAMESPACE, LEGACY_CHECKOUT_TOKEN_NAMESPACE]) {
+    const token = await stableCheckoutToken(input.accessToken, input.submissionKey, namespace);
+    const capability = await repository.getVisitByCheckoutToken({
+      tokenHash: await hashOpaqueToken(token),
+      purpose: "active_visit",
+      now: now(),
+    });
+    if (
+      capability
+      && capability.visit.organizationId === visit.organizationId
+      && capability.visit.id === visit.id
+    ) {
+      return { token, expiresAt: capability.expiresAt };
+    }
   }
-  return { token, expiresAt: capability.expiresAt };
+  throw new PublicWorkflowError("The prior checkout link is unavailable.", 409, "idempotency_result_unavailable");
 }
 
 function checkInReceipt(input: {

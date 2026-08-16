@@ -33,7 +33,7 @@ export function selectOpsRepositoryBackend(input: {
   if (input.databaseUrl?.trim()) return "postgres";
   if (input.d1Available) return "d1";
   if (input.nodeEnv !== "production") return "fixture";
-  throw new Error("TraceOps production requires PostgreSQL DATABASE_URL or the Cloudflare D1 `DB` binding.");
+  throw new Error("The production facilities platform requires PostgreSQL DATABASE_URL or the Cloudflare D1 `DB` binding.");
 }
 
 async function getD1BindingLazily(): Promise<D1Database | undefined> {
@@ -52,7 +52,7 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
       .first<Record<string, unknown>>();
   } catch (error) {
     throw new Error(
-      "TraceOps D1 is bound but the ops migration is not applied. Apply drizzle/0004_ops_platform_foundation.sql before serving the application.",
+      "D1 is bound but the operations migration is not applied. Apply drizzle/0004_ops_platform_foundation.sql before serving the application.",
       { cause: error },
     );
   }
@@ -104,7 +104,7 @@ export async function getServerOpsRepository(): Promise<OpsRepository> {
 
   if (isRenderNodeRuntime()) {
     if (isLocalRenderDevelopment()) return getNorthlineFixtureRepository();
-    throw new Error("TraceOps Render runtime requires DATABASE_URL; fixture and D1 fallbacks are disabled.");
+    throw new Error("The Render runtime requires DATABASE_URL; fixture and D1 fallbacks are disabled.");
   }
 
   const binding = await getD1BindingLazily();
@@ -117,7 +117,7 @@ export async function getServerOpsRepository(): Promise<OpsRepository> {
   }
 
   if (process.env.NODE_ENV === "production") {
-    throw new Error("TraceOps requires the Cloudflare D1 `DB` binding in production; fixture fallback is disabled.");
+    throw new Error("The production runtime requires the Cloudflare D1 `DB` binding; fixture fallback is disabled.");
   }
   return getNorthlineFixtureRepository();
 }
@@ -157,13 +157,13 @@ export async function getServerOpsFixtureSnapshot(
 
   if (isRenderNodeRuntime()) {
     if (isLocalRenderDevelopment()) return getNorthlineFixtureRepository().snapshot();
-    throw new Error("TraceOps Render runtime requires DATABASE_URL; operator data cannot use a fallback.");
+    throw new Error("The Render runtime requires DATABASE_URL; operator data cannot use a fallback.");
   }
 
   const binding = await getD1BindingLazily();
   if (!binding) {
     if (process.env.NODE_ENV === "production") {
-      throw new Error("TraceOps cannot load operator data without the Cloudflare D1 `DB` binding.");
+      throw new Error("Operator data cannot load without the Cloudflare D1 `DB` binding.");
     }
     return getNorthlineFixtureRepository().snapshot();
   }

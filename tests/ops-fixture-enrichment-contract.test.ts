@@ -94,8 +94,10 @@ describe("Northline enriched presentation fixture contract", () => {
     expect(fixture.vendors).toHaveLength(5);
     expect(fixture.workOrders.length).toBeGreaterThanOrEqual(100);
     expect(fixture.workOrders.length).toBeLessThanOrEqual(120);
-    expect(fixture.assets.length).toBeGreaterThanOrEqual(40);
-    expect(fixture.assets.length).toBeLessThanOrEqual(60);
+    expect(fixture.assets.length).toBeGreaterThanOrEqual(120);
+    expect(fixture.assets.length).toBeLessThanOrEqual(160);
+    expect(fixture.memberships.filter((membership) => membership.role === "internal_technician")).toHaveLength(2);
+    expect(fixture.vendors.every((vendor) => vendor.status === "approved")).toBe(true);
 
     const workMonths = new Set(fixture.workOrders.map((workOrder) => workOrder.createdAt.slice(0, 7)));
     expect(workMonths.size).toBeGreaterThanOrEqual(18);
@@ -125,6 +127,104 @@ describe("Northline enriched presentation fixture contract", () => {
         fixture.assignments.filter((assignment) => assignment.vendorId === vendor.id).length,
         `${vendor.name} needs assigned work for vendor-distribution visibility`,
       ).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("builds a location-named equipment register from reusable component trees", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const assetById = new Map(fixture.assets.map((asset) => [asset.id, asset]));
+
+    const assetCategories = new Set(fixture.assets.map((asset) => asset.categoryKey));
+    for (const category of ["refrigeration", "hvac", "forecourt", "foodservice"]) {
+      expect(assetCategories.has(category), `Equipment register is missing ${category}`).toBe(true);
+    }
+    expect(fixture.components.length).toBeGreaterThan(fixture.assets.length * 5);
+
+    for (const store of fixture.stores) {
+      const storeAssets = fixture.assets.filter((asset) => asset.storeId === store.id);
+      expect(storeAssets.length, `${store.storeNumber} needs a useful equipment register`).toBeGreaterThanOrEqual(8);
+      expect(storeAssets.length, `${store.storeNumber} should remain presentation-sized`).toBeLessThanOrEqual(10);
+      expect(storeAssets.filter((asset) => asset.categoryKey === "refrigeration")).toHaveLength(3);
+      expect(storeAssets.filter((asset) => asset.categoryKey === "forecourt")).toHaveLength(4);
+      expect(storeAssets.some((asset) => asset.name.includes(" - ")), `${store.storeNumber} needs human-readable location names`).toBe(true);
+
+      for (const asset of storeAssets) {
+        expect(
+          fixture.components.filter((component) => component.assetId === asset.id).length,
+          `${asset.assetTag} needs its template-derived component tree`,
+        ).toBeGreaterThanOrEqual(5);
+      }
+    }
+
+    for (const component of fixture.components.filter((candidate) => candidate.parentComponentId)) {
+      const parent = fixture.components.find((candidate) => candidate.id === component.parentComponentId);
+      expect(parent, `${component.id} has a missing parent`).toBeTruthy();
+      expect(parent?.assetId, `${component.id} crosses into another asset tree`).toBe(component.assetId);
+      expect(assetById.has(component.assetId)).toBe(true);
+    }
+
+    expect(fixture.components.find((component) => component.id === "component-104-compressor")).toMatchObject({
+      assetId: NORTHLINE_DEMO_HANDLES.storyAssetId,
+      name: "Compressor",
+      partNumber: "ZB38KCE-TFD",
+    });
+  });
+
+  it("keeps unconverted employee reports visible and current work operationally varied", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    expect(new Set(fixture.requests.map((request) => request.status))).toEqual(
+      new Set(["submitted", "under_review", "converted", "closed"]),
+    );
+
+    for (const request of fixture.requests) {
+      const linkedWork = fixture.workOrders.filter((workOrder) => workOrder.requestId === request.id);
+      if (request.status === "converted") {
+        expect(request.convertedWorkOrderId, `${request.reference} is converted without a target`).toBeTruthy();
+        expect(linkedWork).toHaveLength(1);
+        expect(linkedWork[0].id).toBe(request.convertedWorkOrderId);
+      } else {
+        expect(request.convertedWorkOrderId, `${request.reference} should still be independent of work`).toBeUndefined();
+        expect(linkedWork).toHaveLength(0);
+      }
+    }
+
+    const openStatuses = new Set(
+      fixture.workOrders
+        .filter((workOrder) => !["closed", "cancelled"].includes(workOrder.status))
+        .map((workOrder) => workOrder.status),
+    );
+    for (const status of ["approved", "awaiting_approval", "issued", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review"] as const) {
+      expect(openStatuses.has(status), `Current work is missing the ${status} state`).toBe(true);
+    }
+    for (const workOrder of fixture.workOrders.filter((candidate) => !["closed", "cancelled"].includes(candidate.status))) {
+      expect(workOrder.accountableParty.trim()).not.toBe("");
+      expect(workOrder.nextAction.trim()).not.toBe("");
+      expect(workOrder.dueAt).toBeTruthy();
+      expect(workOrder.escalationTo).toBeTruthy();
+    }
+  });
+
+  it("represents every low-friction vendor response without inventing a visit", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    expect(new Set(fixture.vendorResponses.map((response) => response.response))).toEqual(
+      new Set(["accepted", "declined", "proposed_date", "question"]),
+    );
+
+    for (const response of fixture.vendorResponses) {
+      const issuance = fixture.issuances.find((candidate) => candidate.id === response.issuanceId);
+      expect(issuance).toMatchObject({ workOrderId: response.workOrderId, assignmentId: response.assignmentId });
+      expect(Date.parse(response.respondedAt)).toBeGreaterThanOrEqual(Date.parse(issuance!.issuedAt));
+      expect(fixture.auditEvents).toContainEqual(expect.objectContaining({
+        aggregateType: "vendor_response",
+        aggregateId: response.id,
+        eventType: "vendor.response_recorded",
+      }));
+      if (response.response === "proposed_date") expect(response.proposedAt).toBeTruthy();
+      if (response.response === "question") expect(response.message?.trim()).toBeTruthy();
+      if (response.response === "declined") {
+        expect(fixture.assignments.find((assignment) => assignment.id === response.assignmentId)?.status).toBe("declined");
+        expect(fixture.visits.some((visit) => visit.workOrderId === response.workOrderId && visit.vendorId === fixture.assignments.find((assignment) => assignment.id === response.assignmentId)?.vendorId)).toBe(false);
+      }
     }
   });
 
@@ -164,7 +264,10 @@ describe("Northline enriched presentation fixture contract", () => {
   it("uses multiple coherent PM periods and connects PM to canonical work", () => {
     const fixture = buildNorthlinePresentationFixture();
     expect(fixture.pmOccurrences.length).toBeGreaterThan(fixture.pmPlans.length);
-    expect(new Set(fixture.pmOccurrences.map((occurrence) => occurrence.dueAt.slice(0, 7))).size).toBeGreaterThanOrEqual(4);
+    expect(new Set(fixture.pmOccurrences.map((occurrence) => occurrence.dueAt.slice(0, 7))).size).toBeGreaterThanOrEqual(5);
+    expect(new Set(fixture.pmOccurrences.map((occurrence) => occurrence.status))).toEqual(
+      new Set(["completed", "scheduled", "due", "missed", "waived"]),
+    );
 
     for (const occurrence of fixture.pmOccurrences) {
       assertPmStateIsTemporallyCoherent(occurrence, fixture.asOf);
@@ -178,6 +281,11 @@ describe("Northline enriched presentation fixture contract", () => {
       expect(workOrder?.storeId).toBe(occurrence.storeId);
       if (occurrence.assetId) expect(workOrder?.assetId).toBe(occurrence.assetId);
     }
+    expect(fixture.pmOccurrences.filter((occurrence) => occurrence.status === "scheduled")).toHaveLength(fixture.pmPlans.length);
+    expect(fixture.pmOccurrences.find((occurrence) => occurrence.status === "waived")).toMatchObject({
+      storeId: "store-northline-115",
+      assetId: "asset-115-beer-cave",
+    });
   });
 
   it("keeps each observed visit on the exact store and assigned provider", () => {
@@ -219,6 +327,7 @@ describe("Northline enriched presentation fixture contract", () => {
     for (const outcome of ["resolved", "diagnosed_waiting_parts", "return_required", "unable_to_complete", "temporary_repair", "no_issue_found", "inspection_complete"] as const) {
       expect(recentOutcomes.has(outcome), `Recent visit history is missing ${outcome}`).toBe(true);
     }
+    expect(fixture.visits.some((visit) => visit.outcome === "unable_to_reproduce")).toBe(true);
 
     const unresolvedOutcomes = new Set(["diagnosed_waiting_parts", "return_required", "unable_to_complete", "temporary_repair"]);
     for (const visit of recentCompleted.filter((candidate) => candidate.outcome && unresolvedOutcomes.has(candidate.outcome))) {
@@ -254,6 +363,10 @@ describe("Northline enriched presentation fixture contract", () => {
     expect(statuses.has("confirmed")).toBe(true);
     expect(statuses.has("suggested")).toBe(true);
     expect(statuses.has("unmatched")).toBe(true);
+    expect(statuses.has("rejected")).toBe(true);
+    expect(fixture.invoiceReferences.filter((invoice) => invoice.matchStatus === "suggested").length).toBeGreaterThanOrEqual(2);
+    expect(fixture.invoiceReferences.filter((invoice) => invoice.matchStatus === "unmatched").length).toBeGreaterThanOrEqual(2);
+    expect(fixture.invoiceReferences.filter((invoice) => invoice.matchStatus === "rejected").length).toBeGreaterThanOrEqual(2);
 
     const allocationsByInvoice = Map.groupBy(
       fixture.invoiceAllocations,

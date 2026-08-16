@@ -98,7 +98,7 @@ export function WorkOrderLifecycleFields({
         ? `${money(screening.comparison.repairEstimateMinor)} is small in dollars or as a share of the ${money(screening.comparison.replacementEstimateMinor)} replacement estimate. A short remaining life does not turn a low-cost bridge repair into a replacement recommendation.`
         : screening?.state === "below_economic_review"
           ? `${money(screening.comparison.repairEstimateMinor)} does not meet the configured economic-review threshold against ${money(screening.comparison.replacementEstimateMinor)} of replacement capital over ${duration(screening.comparison.comparisonHorizonMonths)}. Repair can still be reviewed normally.`
-          : `${money(screening?.comparison.repairEstimateMinor)} is material enough to compare with a ${money(screening?.comparison.replacementEstimateMinor)} replacement over ${duration(screening?.comparison.comparisonHorizonMonths)} of expected service. Review the evidence; TraceOps does not direct replacement.`;
+          : `${money(screening?.comparison.repairEstimateMinor)} is material enough to compare with a ${money(screening?.comparison.replacementEstimateMinor)} replacement over ${duration(screening?.comparison.comparisonHorizonMonths)} of expected service. Review the evidence; the platform does not direct replacement.`;
 
   return (
     <>

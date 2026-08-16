@@ -20,6 +20,8 @@ type VisitReceipt = TechnicianCheckInReceipt | TechnicianCheckOutReceipt;
 
 const NO_WORK_ORDER = "__no_work_order__";
 const SUBMISSION_KEY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const SUBMISSION_STORAGE_NAMESPACE = "ops:technician-visit";
+const LEGACY_SUBMISSION_STORAGE_NAMESPACE = "traceops:technician-visit";
 
 const OUTCOMES: Array<{ id: VisitOutcome; title: string; description: string }> = [
   { id: "resolved", title: "Resolved", description: "The reported problem is operating normally now." },
@@ -84,14 +86,20 @@ export function TechnicianVisitFlow({ token, portal }: { token: string; portal: 
     setReceipt(null);
   }
 
-  function submissionStorageKey(flowMode: FlowMode): string {
-    return `traceops:technician-visit:${token}:${flowMode}`;
+  function submissionStorageKey(
+    flowMode: FlowMode,
+    namespace = SUBMISSION_STORAGE_NAMESPACE,
+  ): string {
+    return `${namespace}:${token}:${flowMode}`;
   }
 
   function clearSubmissionKey(flowMode: FlowMode) {
     delete submissionKeys.current[flowMode];
     try {
       window.sessionStorage.removeItem(submissionStorageKey(flowMode));
+      window.sessionStorage.removeItem(
+        submissionStorageKey(flowMode, LEGACY_SUBMISSION_STORAGE_NAMESPACE),
+      );
     } catch {
       // Retry safety still works for the mounted form when storage is blocked.
     }
@@ -101,18 +109,27 @@ export function TechnicianVisitFlow({ token, portal }: { token: string; portal: 
     const existing = submissionKeys.current[flowMode];
     if (existing) return existing;
     try {
-      const persisted = JSON.parse(window.sessionStorage.getItem(submissionStorageKey(flowMode)) ?? "null") as {
-        key?: unknown;
-        createdAt?: unknown;
-      } | null;
-      if (
-        typeof persisted?.key === "string"
-        && /^[A-Za-z0-9._:-]{16,120}$/.test(persisted.key)
-        && typeof persisted.createdAt === "number"
-        && Date.now() - persisted.createdAt < SUBMISSION_KEY_MAX_AGE_MS
-      ) {
-        submissionKeys.current[flowMode] = persisted.key;
-        return persisted.key;
+      for (const namespace of [SUBMISSION_STORAGE_NAMESPACE, LEGACY_SUBMISSION_STORAGE_NAMESPACE]) {
+        const persisted = JSON.parse(window.sessionStorage.getItem(submissionStorageKey(flowMode, namespace)) ?? "null") as {
+          key?: unknown;
+          createdAt?: unknown;
+        } | null;
+        if (
+          typeof persisted?.key === "string"
+          && /^[A-Za-z0-9._:-]{16,120}$/.test(persisted.key)
+          && typeof persisted.createdAt === "number"
+          && Date.now() - persisted.createdAt < SUBMISSION_KEY_MAX_AGE_MS
+        ) {
+          submissionKeys.current[flowMode] = persisted.key;
+          if (namespace === LEGACY_SUBMISSION_STORAGE_NAMESPACE) {
+            window.sessionStorage.setItem(
+              submissionStorageKey(flowMode),
+              JSON.stringify(persisted),
+            );
+            window.sessionStorage.removeItem(submissionStorageKey(flowMode, namespace));
+          }
+          return persisted.key;
+        }
       }
     } catch {
       // Generate a mounted-form key when session storage is unavailable.

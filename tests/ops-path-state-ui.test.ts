@@ -104,8 +104,8 @@ describe("operator bid and service path states", () => {
 
     expect(model.requests.find((candidate) => candidate.id === request.id)?.statusLabel).toBe("Link generated");
     expect(markup).toContain("Request created");
-    expect(markup).toContain("This preview generates a secure response link");
-    expect(markup).toContain("Outbound email or text delivery requires a production integration");
+    expect(markup).toContain("This preview prepares a secure response link");
+    expect(markup).toContain("it does not send email or text messages");
     expect(markup).not.toContain(">Sent<");
   });
 });

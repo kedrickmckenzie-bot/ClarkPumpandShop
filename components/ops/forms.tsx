@@ -194,7 +194,7 @@ export function VendorIssuancePanel({ model }: { model: VendorIssuanceViewModel 
         <p className={styles.inlineEmpty}>Service authorization is unavailable while this work order is in its current state.</p>
       ) : (
         <details className={styles.controlDisclosure} open={!model.currentRevision}>
-          <summary className={styles.controlDisclosureSummary}><Send aria-hidden="true" size={18} /><span><strong>{model.currentRevision ? `Send service-authorization revision ${model.currentRevision + 1}` : "Choose a vendor and send the service work order"}</strong><small>This authorizes service. It is not a bid request.</small></span></summary>
+          <summary className={styles.controlDisclosureSummary}><Send aria-hidden="true" size={18} /><span><strong>{model.currentRevision ? `Prepare service-authorization revision ${model.currentRevision + 1}` : "Choose a vendor and prepare the service authorization"}</strong><small>This authorizes service. It is not a bid request.</small></span></summary>
           <form action={model.submitAction} method="post" target="_blank">
             <input type="hidden" name="workOrderId" value={model.workOrderId} />
             {model.currentRevision !== undefined ? <input type="hidden" name="expectedRevision" value={model.currentRevision} /> : null}
@@ -214,7 +214,7 @@ export function VendorIssuancePanel({ model }: { model: VendorIssuanceViewModel 
                   </select>
                 )}
               </label>
-              <SelectField id="issuance-channel" name="channel" label="Send via" required options={model.channels} />
+              <SelectField id="issuance-channel" name="channel" label="Handoff method" required options={model.channels} />
             </div>
             <label className={styles.field} htmlFor="issuance-message">
               <span>Service note <small>Optional</small></span>
@@ -297,7 +297,7 @@ export function CreateVendorForm({ model }: { model: CreateVendorPageViewModel }
               <span>Specialties <em>Required</em></span>
               <input id="vendor-specialties" name="specialtyKeys" list="vendor-specialty-options" required placeholder="Search plumbing, refrigeration, dispenser, electrical, or equipment" autoComplete="off" />
               <Datalist id="vendor-specialty-options" options={model.specialties} />
-              <small>The server may accept multiple approved specialty keys; deeper equipment mapping can be added later.</small>
+              <small>Enter one or more approved specialty keys, separated by commas.</small>
             </label>
             <label className={styles.field} htmlFor="vendor-aliases"><span>Search aliases <small>Optional</small></span><input id="vendor-aliases" name="searchAliases" placeholder="Plumber, beer cave, walk-in, pumps, canopy lights" /><small>Aliases help managers find the right vendor using ordinary language.</small></label>
           </section>
@@ -308,10 +308,11 @@ export function CreateVendorForm({ model }: { model: CreateVendorPageViewModel }
               <span>Coverage <em>Required</em></span>
               <input id="vendor-coverage" name="coverageScopeIds" list="vendor-coverage-options" required placeholder="Search company, region, or store" autoComplete="off" />
               <Datalist id="vendor-coverage-options" options={model.coverageScopes} />
+              <small>Use commas to add more than one company, region, or store scope.</small>
             </label>
           </section>
 
-          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p><strong>Approval is controlled by the operator.</strong> Insurance documents, rates, portal users, response preferences, and store relationships can be added later without delaying basic work-order issuance.</p></div>
+          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p><strong>Approval is controlled by the operator.</strong> Once saved, this vendor can be selected within its approved coverage. Secure service links do not require a portal account.</p></div>
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Add approved vendor<ArrowRight aria-hidden="true" size={18} /></button></div>
         </form>
       ) : null}

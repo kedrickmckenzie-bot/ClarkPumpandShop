@@ -20,7 +20,7 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
           description="Add equipment and preventive maintenance when it creates useful visibility; neither is required to report or authorize service."
           actions={[
             ...(canSetupEquipment
-              ? [{ label: "Add equipment", href: `/app/equipment/new?store=${encodeURIComponent(id)}`, icon: "asset" as const }]
+              ? [{ label: "Set up store equipment", href: `/app/stores/${encodeURIComponent(id)}/equipment-setup`, icon: "asset" as const }]
               : []),
             ...(canSetupPm
               ? [{ label: "Create PM plan", href: `/app/pm/new?store=${encodeURIComponent(id)}`, kind: "secondary" as const, icon: "pm" as const }]

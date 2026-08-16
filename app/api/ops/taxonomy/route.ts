@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { OpsDomainError } from "@/lib/ops/commands";
+import { isOpsClientRequest } from "@/lib/ops/http-contract";
 import { createEquipmentTemplate, createTaxonomyNode, updateTaxonomyNode } from "@/lib/ops/taxonomy-commands";
 import { formText, getOpsRequestContext, opsApiError } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
-function success(request: Request) { const redirectTo = "/app/admin/service-areas?updated=1"; return request.headers.get("x-traceops-client") === "taxonomy-manager" ? NextResponse.json({ ok: true, redirectTo }) : relativeRedirect303(redirectTo); }
+function success(request: Request) { const redirectTo = "/app/admin/service-areas?updated=1"; return isOpsClientRequest(request, "taxonomy-manager") ? NextResponse.json({ ok: true, redirectTo }) : relativeRedirect303(redirectTo); }
 
 export async function POST(request: Request) {
   try {

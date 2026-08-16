@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { OPS_CLIENT_HEADER } from "@/lib/ops/http-contract";
 import {
   AlertTriangle,
   Check,
@@ -35,7 +36,7 @@ function useMutation() {
         method: "POST",
         body: new FormData(form),
         credentials: "same-origin",
-        headers: { "x-traceops-client": "estimate-comparison" },
+        headers: { [OPS_CLIENT_HEADER]: "estimate-comparison" },
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null;
@@ -214,19 +215,19 @@ function RequestEstimateForm({ model }: { model: EstimateComparisonViewModel }) 
             <input id={`estimate-due-${model.workOrderId}`} name="dueAt" type="datetime-local" required />
           </label>
           <label className={styles.field} htmlFor={`estimate-channel-${model.workOrderId}`}>
-            <span>Delivery channel <em>Required</em></span>
+            <span>Link handoff <em>Required</em></span>
             <select id={`estimate-channel-${model.workOrderId}`} name="channel" required defaultValue="email">
-              <option value="email">Email link</option>
-              <option value="sms">Text-message link</option>
+              <option value="email">Prepare email-ready link</option>
+              <option value="sms">Prepare text-message-ready link</option>
               <option value="manual">Copy or print link</option>
             </select>
-            <small>This preview generates a secure response link. Outbound email or text delivery requires a production integration.</small>
+            <small>This preview prepares a secure response link; it does not send email or text messages.</small>
           </label>
         </div>
         <div className={styles.formFooter}>
           <span className={styles.formMeta}>Pricing only—no assignment, site visit, check-in, recorded cost, or billing is created.</span>
           <button className={styles.primaryButton} type="submit">
-            <Send aria-hidden="true" size={16} />Send bid request
+            <Send aria-hidden="true" size={16} />Create bid request & link
           </button>
         </div>
       </form>

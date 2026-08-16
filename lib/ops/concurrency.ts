@@ -3,6 +3,8 @@ import type { OpsRepository, OpsStatement } from "./repository";
 import type { IsoDateTime, OpsId, WorkOrder } from "./types";
 
 const FENCE_EXPIRY = "9999-12-31T23:59:59.999Z";
+const WORK_ORDER_FENCE_NAMESPACE = "__ops_internal__";
+const LEGACY_WORK_ORDER_FENCE_NAMESPACE = "__traceops_internal__";
 
 async function sha256Hex(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -35,11 +37,15 @@ export function persistedWorkOrderVersion(workOrder: WorkOrder) {
   return workOrder.version ?? 0;
 }
 
-export async function workOrderMutationFence(workOrder: WorkOrder, now: IsoDateTime): Promise<OpsStatement> {
+async function workOrderMutationFenceForNamespace(
+  workOrder: WorkOrder,
+  now: IsoDateTime,
+  namespace: string,
+): Promise<OpsStatement> {
   const version = persistedWorkOrderVersion(workOrder);
   // Slash deliberately places internal serialization keys outside the public
   // idempotency-key grammar, so a bearer-link caller cannot preclaim a fence.
-  const key = `__traceops_internal__/work-order:${workOrder.id}:version:${version}`;
+  const key = `${namespace}/work-order:${workOrder.id}:version:${version}`;
   return insertFence({
     organizationId: workOrder.organizationId,
     key,
@@ -48,6 +54,10 @@ export async function workOrderMutationFence(workOrder: WorkOrder, now: IsoDateT
     requestHash: await sha256Hex(key),
     now,
   });
+}
+
+export function workOrderMutationFence(workOrder: WorkOrder, now: IsoDateTime): Promise<OpsStatement> {
+  return workOrderMutationFenceForNamespace(workOrder, now, WORK_ORDER_FENCE_NAMESPACE);
 }
 
 /**
@@ -65,13 +75,24 @@ export async function atomicWorkOrderMutation(input: {
   conflictMessage?: string;
 }) {
   const observedVersion = persistedWorkOrderVersion(input.workOrder);
-  const fence = await workOrderMutationFence(input.workOrder, input.now);
+  const [legacyFence, fence] = await Promise.all([
+    workOrderMutationFenceForNamespace(
+      input.workOrder,
+      input.now,
+      LEGACY_WORK_ORDER_FENCE_NAMESPACE,
+    ),
+    workOrderMutationFence(input.workOrder, input.now),
+  ]);
   const versionStatement: OpsStatement = {
     sql: "UPDATE ops_work_orders SET version = ? WHERE organization_id = ? AND id = ? AND version = ?",
     params: [observedVersion + 1, input.workOrder.organizationId, input.workOrder.id, observedVersion],
   };
   try {
     await input.repository.atomicWrite([
+      // Acquire the legacy fence during rolling deployments so an older
+      // process and a neutral-namespace process cannot both mutate the same
+      // observed work-order version.
+      legacyFence,
       fence,
       ...input.statements,
       versionStatement,

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { OpsDomainError } from "@/lib/ops/commands";
+import { isOpsClientRequest } from "@/lib/ops/http-contract";
 import { assignReplacementProfile, completeReplacement, setAssetReplacementOverride } from "@/lib/ops/replacement-commands";
 import { assertStoreInSessionScope, formText, getOpsRequestContext, opsApiError, optionalIsoDate, optionalMoneyMinor } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 function success(request: Request, redirectTo: string) {
-  return request.headers.get("x-traceops-client") === "replacement-intelligence"
+  return isOpsClientRequest(request, "replacement-intelligence")
     ? NextResponse.json({ ok: true, redirectTo })
     : relativeRedirect303(redirectTo);
 }

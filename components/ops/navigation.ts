@@ -1,24 +1,32 @@
 import type { OperatorRole } from "./data-contract";
 import {
-  roleCanSeeInsightsNavigation,
+  roleCanAccessListRoute,
+  roleCanAccessProgramRoute,
   roleCanSeePrimaryNavigation,
   roleCanSeeWorkNavigation,
-  type OperatorInsightsNavigationId,
-  type OperatorPrimaryNavigationId,
   type OperatorWorkNavigationId,
 } from "./role-policy";
 
-export type NavigationGroupId = "work" | "insights";
+export type PrimaryNavigationId =
+  | "overview"
+  | "work"
+  | "stores"
+  | "equipment"
+  | "vendors"
+  | "planning";
+
+export type NavigationGroupId = "work" | "equipment" | "planning";
 
 export interface NavigationItem {
-  id: OperatorPrimaryNavigationId;
+  id: PrimaryNavigationId;
   label: string;
   href: string;
   matchPrefixes: string[];
+  contextGroup?: NavigationGroupId;
 }
 
 export interface ContextualNavigationItem {
-  id: OperatorWorkNavigationId | OperatorInsightsNavigationId;
+  id: string;
   label: string;
   href: string;
 }
@@ -29,10 +37,11 @@ export interface ContextualNavigationGroup {
   items: ContextualNavigationItem[];
 }
 
+/** The operator application has one stable, six-destination enterprise frame. */
 export const operatorNavigation: NavigationItem[] = [
   {
-    id: "home",
-    label: "Home",
+    id: "overview",
+    label: "Overview",
     href: "/app/overview",
     matchPrefixes: ["/app/overview"],
   },
@@ -40,7 +49,8 @@ export const operatorNavigation: NavigationItem[] = [
     id: "work",
     label: "Work",
     href: "/app/action-center",
-    matchPrefixes: ["/app/action-center", "/app/requests", "/app/work-orders", "/app/visits", "/app/invoices"],
+    matchPrefixes: ["/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits"],
+    contextGroup: "work",
   },
   {
     id: "stores",
@@ -49,22 +59,24 @@ export const operatorNavigation: NavigationItem[] = [
     matchPrefixes: ["/app/stores"],
   },
   {
+    id: "equipment",
+    label: "Equipment",
+    href: "/app/equipment",
+    matchPrefixes: ["/app/equipment", "/app/pm"],
+    contextGroup: "equipment",
+  },
+  {
     id: "vendors",
     label: "Vendors",
     href: "/app/vendors",
     matchPrefixes: ["/app/vendors"],
   },
   {
-    id: "insights",
-    label: "Insights",
+    id: "planning",
+    label: "Spend & planning",
     href: "/app/spend",
-    matchPrefixes: ["/app/spend", "/app/equipment", "/app/pm", "/app/lifecycle"],
-  },
-  {
-    id: "reports",
-    label: "Reports",
-    href: "/app/reports",
-    matchPrefixes: ["/app/reports"],
+    matchPrefixes: ["/app/spend", "/app/lifecycle", "/app/invoices", "/app/reports"],
+    contextGroup: "planning",
   },
 ];
 
@@ -73,21 +85,29 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
     id: "work",
     label: "Work",
     items: [
-      { id: "needs-attention", label: "Needs attention", href: "/app/action-center" },
+      { id: "needs-attention", label: "Action center", href: "/app/action-center" },
       { id: "requests", label: "Requests", href: "/app/requests" },
       { id: "work-orders", label: "Work orders", href: "/app/work-orders" },
-      { id: "visits", label: "Visits", href: "/app/visits" },
-      { id: "invoice-review", label: "Invoice review", href: "/app/invoices" },
+      { id: "estimates", label: "Bid requests", href: "/app/estimates" },
+      { id: "visits", label: "Service visits", href: "/app/visits" },
     ],
   },
   {
-    id: "insights",
-    label: "Insights",
+    id: "equipment",
+    label: "Equipment",
     items: [
-      { id: "spend", label: "Spend", href: "/app/spend" },
-      { id: "equipment", label: "Equipment", href: "/app/equipment" },
+      { id: "equipment", label: "Asset register", href: "/app/equipment" },
       { id: "pm", label: "Preventive maintenance", href: "/app/pm" },
-      { id: "lifecycle", label: "Lifecycle & CapEx", href: "/app/lifecycle" },
+    ],
+  },
+  {
+    id: "planning",
+    label: "Spend & planning",
+    items: [
+      { id: "spend", label: "Recorded spend", href: "/app/spend" },
+      { id: "lifecycle", label: "Lifecycle planning", href: "/app/lifecycle" },
+      { id: "invoice-review", label: "Invoice safeguards", href: "/app/invoices" },
+      { id: "reports", label: "Reports", href: "/app/reports" },
     ],
   },
 ];
@@ -100,32 +120,73 @@ export function navigationItemIsActive(item: NavigationItem, pathname: string) {
   return item.matchPrefixes.some((prefix) => pathMatches(pathname, prefix));
 }
 
+function roleCanSeeNavigationItem(role: OperatorRole, item: NavigationItem) {
+  switch (item.id) {
+    case "overview":
+      return roleCanSeePrimaryNavigation(role, "home");
+    case "work":
+      return roleCanSeePrimaryNavigation(role, "work");
+    case "stores":
+      return roleCanSeePrimaryNavigation(role, "stores") && roleCanAccessListRoute(role, "stores");
+    case "equipment":
+      return roleCanSeePrimaryNavigation(role, "insights") && roleCanAccessProgramRoute(role, "equipment");
+    case "vendors":
+      return roleCanSeePrimaryNavigation(role, "vendors") && roleCanAccessListRoute(role, "vendors");
+    case "planning":
+      return (
+        roleCanSeePrimaryNavigation(role, "insights") ||
+        roleCanSeePrimaryNavigation(role, "reports")
+      ) && (
+        roleCanAccessProgramRoute(role, "spend") ||
+        roleCanAccessListRoute(role, "reports")
+      );
+  }
+}
+
+function roleCanSeeContextItem(role: OperatorRole, groupId: NavigationGroupId, item: ContextualNavigationItem) {
+  if (groupId === "work") {
+    return roleCanSeeWorkNavigation(role, item.id as OperatorWorkNavigationId);
+  }
+
+  if (groupId === "equipment") {
+    return item.id === "equipment"
+      ? roleCanAccessProgramRoute(role, "equipment")
+      : roleCanAccessProgramRoute(role, "pm");
+  }
+
+  if (item.id === "spend") return roleCanAccessProgramRoute(role, "spend");
+  if (item.id === "lifecycle") return roleCanAccessProgramRoute(role, "lifecycle");
+  if (item.id === "invoice-review") return roleCanAccessListRoute(role, "invoices");
+  return roleCanAccessListRoute(role, "reports");
+}
+
+function visibleContextGroup(role: OperatorRole, groupId: NavigationGroupId) {
+  const group = contextualNavigation.find((candidate) => candidate.id === groupId);
+  if (!group) return undefined;
+  return {
+    ...group,
+    items: group.items.filter((item) => roleCanSeeContextItem(role, group.id, item)),
+  };
+}
+
 export function navigationForRole(role: OperatorRole) {
   return operatorNavigation
-    .filter((item) => roleCanSeePrimaryNavigation(role, item.id))
+    .filter((item) => roleCanSeeNavigationItem(role, item))
     .map((item) => {
-      if (item.id !== "work") return item;
-      const firstWorkItem = contextualNavigation
-        .find((group) => group.id === "work")
-        ?.items.find((candidate) => roleCanSeeWorkNavigation(role, candidate.id as OperatorWorkNavigationId));
-      return firstWorkItem ? { ...item, href: firstWorkItem.href } : item;
+      if (!item.contextGroup) return item;
+      const firstVisibleItem = visibleContextGroup(role, item.contextGroup)?.items[0];
+      return firstVisibleItem ? { ...item, href: firstVisibleItem.href } : item;
     });
 }
 
 export function contextualNavigationForPath(role: OperatorRole, pathname: string) {
   const primary = navigationForRole(role).find(
-    (item) => (item.id === "work" || item.id === "insights") && navigationItemIsActive(item, pathname),
+    (item) => item.contextGroup && navigationItemIsActive(item, pathname),
   );
-  if (!primary || (primary.id !== "work" && primary.id !== "insights")) return undefined;
+  if (!primary?.contextGroup) return undefined;
 
-  const group = contextualNavigation.find((candidate) => candidate.id === primary.id);
-  if (!group) return undefined;
-  return {
-    ...group,
-    items: group.items.filter((item) => group.id === "work"
-      ? roleCanSeeWorkNavigation(role, item.id as OperatorWorkNavigationId)
-      : roleCanSeeInsightsNavigation(role, item.id as OperatorInsightsNavigationId)),
-  };
+  const group = visibleContextGroup(role, primary.contextGroup);
+  return group?.items.length ? group : undefined;
 }
 
 export function roleLabel(role: OperatorRole) {
@@ -134,7 +195,7 @@ export function roleLabel(role: OperatorRole) {
     facilities: "Facilities",
     regional: "Regional manager",
     store_manager: "Store manager",
-    finance: "Finance",
+    finance: "Finance reviewer",
   };
   return labels[role];
 }

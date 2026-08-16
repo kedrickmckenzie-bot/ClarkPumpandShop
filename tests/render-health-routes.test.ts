@@ -23,7 +23,7 @@ describe("Render health routes", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toMatchObject({
       status: "ok",
-      service: "traceops-convenience-suite",
+      service: "cstore-operations-suite",
     });
     expect(checkPersistenceReadiness).not.toHaveBeenCalled();
   });

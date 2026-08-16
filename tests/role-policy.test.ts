@@ -8,7 +8,7 @@ import {
   scopeDatasetForRole,
 } from "../lib/cstore/role-policy";
 
-describe("TraceOps demo role policy", () => {
+describe("operations demo role policy", () => {
   it("defines five distinct management personas with safe landing views", () => {
     expect(demoRolePolicies.map((policy) => policy.id)).toEqual([
       "facilities_manager",

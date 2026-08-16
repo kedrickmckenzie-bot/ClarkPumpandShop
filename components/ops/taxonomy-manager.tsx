@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { OPS_CLIENT_HEADER } from "@/lib/ops/http-contract";
 import { Boxes, ChevronRight, FolderTree, PencilLine, Plus } from "lucide-react";
 import styles from "./ops.module.css";
 
@@ -13,7 +14,7 @@ export interface TaxonomyManagerViewModel {
 
 function useSave() {
   const [state, setState] = useState<{ pending: boolean; error?: string }>({ pending: false });
-  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = event.currentTarget; setState({ pending: true }); try { const response = await fetch(form.action, { method: "POST", body: new FormData(form), credentials: "same-origin", headers: { "x-traceops-client": "taxonomy-manager" } }); const body = await response.json().catch(() => null) as { error?: string; redirectTo?: string } | null; if (!response.ok) return setState({ pending: false, error: body?.error ?? "The setup change could not be saved." }); window.location.assign(body?.redirectTo ?? window.location.href); } catch { setState({ pending: false, error: "The setup change could not be saved. Check your connection and try again." }); } }
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = event.currentTarget; setState({ pending: true }); try { const response = await fetch(form.action, { method: "POST", body: new FormData(form), credentials: "same-origin", headers: { [OPS_CLIENT_HEADER]: "taxonomy-manager" } }); const body = await response.json().catch(() => null) as { error?: string; redirectTo?: string } | null; if (!response.ok) return setState({ pending: false, error: body?.error ?? "The setup change could not be saved." }); window.location.assign(body?.redirectTo ?? window.location.href); } catch { setState({ pending: false, error: "The setup change could not be saved. Check your connection and try again." }); } }
   return { state, submit };
 }
 

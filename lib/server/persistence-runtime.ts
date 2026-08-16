@@ -1,7 +1,9 @@
-type RuntimeEnvironment = Partial<Record<"RENDER" | "TRACEOPS_RUNTIME" | "NODE_ENV", string | undefined>>;
+type RuntimeEnvironment = Partial<Record<"RENDER" | "OPS_RUNTIME" | "TRACEOPS_RUNTIME" | "NODE_ENV", string | undefined>>;
 
 export function isRenderNodeRuntime(environment: RuntimeEnvironment = process.env) {
-  return environment.RENDER === "true" || environment.TRACEOPS_RUNTIME === "render";
+  const configuredRuntime = environment.OPS_RUNTIME?.trim()
+    || environment.TRACEOPS_RUNTIME?.trim();
+  return environment.RENDER === "true" || configuredRuntime === "render";
 }
 
 export function isLocalRenderDevelopment(environment: RuntimeEnvironment = process.env) {

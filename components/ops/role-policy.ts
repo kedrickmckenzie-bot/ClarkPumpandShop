@@ -22,6 +22,7 @@ export type OperatorListRoutePolicyId =
   | "action-center"
   | "requests"
   | "work-orders"
+  | "estimates"
   | "visits"
   | "stores"
   | "vendors"
@@ -40,7 +41,7 @@ export type OperatorDetailRoutePolicyId =
   | "invoice";
 
 export type OperatorPrimaryNavigationId = "home" | "work" | "stores" | "vendors" | "insights" | "reports";
-export type OperatorWorkNavigationId = "needs-attention" | "requests" | "work-orders" | "visits" | "invoice-review";
+export type OperatorWorkNavigationId = "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "invoice-review";
 export type OperatorInsightsNavigationId = "spend" | "equipment" | "pm" | "lifecycle";
 
 interface DemoOperatorRolePolicy {
@@ -80,20 +81,20 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
       "issue_work_order",
       "administer",
     ],
-    listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "invoices", "reports", "admin"],
+    listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "invoices", "reports", "admin"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "requests", "work-orders", "visits", "invoice-review"],
+    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   regional: {
     capabilities: ["create_request", "review_request", "create_work_order", "control_work_order", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "manage_lifecycle", "request_estimate", "select_estimate", "issue_work_order"],
-    listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "invoices", "reports"],
+    listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "requests", "work-orders", "visits", "invoice-review"],
+    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   store_manager: {
@@ -107,7 +108,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
   },
   executive: {
     capabilities: [],
-    listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "invoices", "reports"],
+    listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],
     primaryNavigation: ["home", "stores", "vendors", "insights", "reports"],
@@ -116,11 +117,11 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
   },
   finance: {
     capabilities: ["record_work_cost"],
-    listRoutes: ["action-center", "work-orders", "stores", "vendors", "invoices", "reports"],
+    listRoutes: ["action-center", "work-orders", "estimates", "stores", "vendors", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "lifecycle"],
     detailRoutes: ["work-order", "visit", "store", "vendor", "equipment", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "work-orders", "invoice-review"],
+    workNavigation: ["needs-attention", "work-orders", "estimates", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "lifecycle"],
   },
 };
@@ -171,6 +172,7 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
     if (record === "new") return roleCan(role, "create_work_order");
     return record ? roleCanAccessDetailRoute(role, "work-order") : roleCanAccessListRoute(role, "work-orders");
   }
+  if (area === "estimates") return roleCanAccessListRoute(role, "estimates");
   if (area === "visits") return record ? roleCanAccessDetailRoute(role, "visit") : roleCanAccessListRoute(role, "visits");
   if (area === "stores") {
     if (record === "new") return roleCan(role, "create_store");

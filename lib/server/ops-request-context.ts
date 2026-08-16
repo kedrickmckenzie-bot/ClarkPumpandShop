@@ -70,6 +70,6 @@ export function opsApiError(error: unknown) {
     const status = error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404 : error.code === "CONFLICT" ? 409 : 422;
     return Response.json({ error: error.message, code: error.code }, { status });
   }
-  console.error("Unhandled TraceOps API error", error);
+  console.error("Unhandled facilities API error", error);
   return Response.json({ error: "The action could not be completed." }, { status: 500 });
 }

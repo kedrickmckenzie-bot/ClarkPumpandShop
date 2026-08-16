@@ -7,6 +7,7 @@ import type {
   TechnicianCheckInReceipt,
   TechnicianCheckOutReceipt,
 } from "./contracts";
+import { productFullName, productPresentation } from "@/lib/product/presentation";
 import styles from "./public-workflows.module.css";
 
 export function formatPublicDateTime(value: string): string {
@@ -37,7 +38,7 @@ export function PublicFrame({
       <header className={styles.topbar}>
         <div className={styles.topbarInner}>
           <div className={styles.brand}>
-            <span className={styles.brandMark} aria-hidden="true">T</span>
+            <span className={styles.brandMark} aria-hidden="true">{productPresentation.identity.monogram}</span>
             <div className={styles.brandCopy}>
               <p className={styles.brandName}>{organizationName}</p>
               <p className={styles.brandContext}>{context}</p>
@@ -50,7 +51,7 @@ export function PublicFrame({
         {mode === "demo" ? <span className={styles.modeBadge}>Demonstration environment</span> : null}
         {children}
         <footer className={styles.footer}>
-          <p>Powered by TraceOps · Service accountability for multi-location operators</p>
+          <p>Powered by {productPresentation.identity.workingName} · Service accountability for multi-location operators</p>
           <p>Location is captured only at check-in or checkout when enabled. No continuous tracking.</p>
         </footer>
       </main>
@@ -60,7 +61,7 @@ export function PublicFrame({
 
 export function PublicLinkUnavailable({ kind = "link" }: { kind?: "link" | "service authorization" | "store link" | "bid request" }) {
   return (
-    <PublicFrame organizationName="TraceOps" context="Secure public workflow" mode="live">
+    <PublicFrame organizationName={productFullName} context="Secure public workflow" mode="live">
       <section className={styles.errorCard} aria-labelledby="unavailable-title">
         <AlertTriangle size={30} aria-hidden="true" />
         <h1 className={styles.sectionTitle} id="unavailable-title">This {kind} is unavailable</h1>

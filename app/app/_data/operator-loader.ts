@@ -22,6 +22,10 @@ import {
   NORTHLINE_ORGANIZATION_ID,
 } from "@/lib/ops/fixtures";
 import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import {
+  LEGACY_OPS_PREVIEW_ROLE_COOKIE,
+  OPS_PREVIEW_ROLE_COOKIE,
+} from "@/lib/server/runtime-identifiers";
 import type { OpsFixture } from "@/lib/ops/types";
 import {
   buildCreateRequestModel,
@@ -44,8 +48,6 @@ import {
   type OperatorProgramRoute,
   type OperatorSearchParameters,
 } from "./operator-presenter";
-
-const PREVIEW_ROLE_COOKIE = "traceops-preview-role";
 
 function isOperatorRole(value: string | undefined): value is OperatorRole {
   return value === "executive" || value === "facilities" || value === "regional" || value === "store_manager" || value === "finance";
@@ -91,7 +93,10 @@ function previewMembership(role: OperatorRole, snapshot: OpsFixture) {
  */
 async function loadOperatorSessionFromSnapshot(snapshot: OpsFixture): Promise<OperatorSession> {
   const [identity, cookieStore] = await Promise.all([getChatGPTUser(), cookies()]);
-  const requestedRole = cookieStore.get(PREVIEW_ROLE_COOKIE)?.value ?? process.env.TRACEOPS_OPERATOR_PREVIEW_ROLE;
+  const requestedRole = cookieStore.get(OPS_PREVIEW_ROLE_COOKIE)?.value
+    ?? cookieStore.get(LEGACY_OPS_PREVIEW_ROLE_COOKIE)?.value
+    ?? process.env.OPS_OPERATOR_PREVIEW_ROLE
+    ?? process.env.TRACEOPS_OPERATOR_PREVIEW_ROLE;
   const role: OperatorRole = isOperatorRole(requestedRole) ? requestedRole : "facilities";
   const { membership } = previewMembership(role, snapshot);
   const grants = membership
