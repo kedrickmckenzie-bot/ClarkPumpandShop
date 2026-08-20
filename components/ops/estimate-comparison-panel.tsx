@@ -117,7 +117,7 @@ function EstimateDecisionControls({ request }: { request: EstimateRequestCompari
           <input type="hidden" name="expectedRevision" value={request.latestProposal.revision} />
           <input type="hidden" name="note" value="Selected after operator bid and scope review" />
           <button className={styles.primaryButton} type="submit" disabled={select.state.pending}>
-            <ShieldCheck aria-hidden="true" size={16} />{select.state.pending ? "Selecting..." : "Select bid for service authorization"}
+            <ShieldCheck aria-hidden="true" size={16} />{select.state.pending ? "Selecting..." : request.decisionKind === "replacement_quote" ? "Select quote for capital review" : "Select provider — authorization is next"}
           </button>
         </form>
       ) : null}
@@ -266,7 +266,16 @@ export function EstimateComparisonPanel({ model }: { model: EstimateComparisonVi
       ) : model.workflowBlocked ? (
         <p className={styles.inlineEmpty} role="status"><strong>Bid path paused.</strong> {model.workflowBlockMessage}</p>
       ) : model.comparisonClosed ? (
-        <p className={styles.inlineEmpty}>Bid review is closed. {model.selectedDecisionKind === "replacement_quote" ? `${model.selectedVendorName}'s quote is ready for capital review; no service assignment was created.` : `${model.selectedVendorName} is locked to the next service authorization; the bid remains separate pricing evidence.`}</p>
+        <div className={styles.estimateContinuation}>
+          <CheckCircle2 aria-hidden="true" size={20} />
+          <div>
+            <strong>{model.selectedDecisionKind === "replacement_quote" ? "Replacement quote selected" : "Service provider selected"}</strong>
+            <p>{model.selectedDecisionKind === "replacement_quote" ? `${model.selectedVendorName}'s quote is ready for capital review. No assignment, authorization, or visit was created.` : `${model.selectedVendorName} is selected, but is not authorized to begin work until the separate service authorization is sent.`}</p>
+          </div>
+          <a className={styles.primaryButton} href={model.selectedDecisionKind === "replacement_quote" ? `/app/work-orders/${model.workOrderId}?view=equipment` : "#issue-work"}>
+            {model.selectedDecisionKind === "replacement_quote" ? "Open capital review" : "Send service authorization"}<Send aria-hidden="true" size={16} />
+          </a>
+        </div>
       ) : model.permitted && model.vendors.length ? (
         <RequestEstimateForm model={model} />
       ) : model.permitted ? (

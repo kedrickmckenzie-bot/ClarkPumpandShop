@@ -411,12 +411,18 @@ describe("public service and visit capability boundaries", () => {
         actorName: "Pending Assignment Technician",
         organizationId: NORTHLINE_ORGANIZATION_ID,
       },
-    })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    })).rejects.toMatchObject({ code: "CONFLICT" });
 
-    await repository.atomicWrite([{
-      sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND work_order_id = ? AND vendor_id = ?",
-      params: ["issued", NORTHLINE_ORGANIZATION_ID, workOrderId, vendorId],
-    }]);
+    await repository.atomicWrite([
+      {
+        sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND work_order_id = ? AND vendor_id = ?",
+        params: ["issued", NORTHLINE_ORGANIZATION_ID, workOrderId, vendorId],
+      },
+      {
+        sql: "UPDATE ops_work_orders SET status = ? WHERE organization_id = ? AND id = ?",
+        params: ["issued", NORTHLINE_ORGANIZATION_ID, workOrderId],
+      },
+    ]);
     const issuedContext = await gateway.lookupVendorVisitContext(PUBLIC_DEMO_LINKS.storeToken, vendorId);
     expect(issuedContext.eligibleWorkOrders.map((work) => work.id)).toContain(workOrderId);
   });

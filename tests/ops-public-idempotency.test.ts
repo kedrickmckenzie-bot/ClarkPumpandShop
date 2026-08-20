@@ -164,6 +164,81 @@ describe("public technician action idempotency", () => {
   });
 });
 
+describe("public store issue idempotency", () => {
+  beforeEach(() => {
+    resetNorthlineFixtureRepository();
+  });
+
+  function issueCommand(submissionKey: string) {
+    return {
+      submissionKey,
+      reporterName: "Network Retry Reporter",
+      employeeId: "NFM-RETRY-1",
+      problem: "The back-room cooler is warm and making a grinding sound.",
+      urgency: "priority" as const,
+      area: "Back-room cooler",
+      impact: {
+        storeOperatingState: "partially_operational" as const,
+        safetyConcern: "none_reported" as const,
+        productInventoryRisk: "at_risk" as const,
+        customersAffected: "yes" as const,
+      },
+      evidence: [],
+    };
+  }
+
+  it("replays a committed issue after the caller loses the first response", async () => {
+    const gateway = getPublicOperationsGateway();
+    const repository = getNorthlineFixtureRepository();
+    const command = issueCommand("idem-store-issue-timeout-retry-0001");
+    const before = repository.snapshot();
+
+    const first = await gateway.reportStoreIssue(PUBLIC_DEMO_LINKS.storeToken, command);
+    const retry = await gateway.reportStoreIssue(PUBLIC_DEMO_LINKS.storeToken, command);
+    const snapshot = repository.snapshot();
+    const created = snapshot.requests.filter((request) => request.reporterName === command.reporterName);
+
+    expect(retry).toMatchObject({ replayed: true, receiptId: first.receiptId, requestNumber: first.requestNumber, receivedAt: first.receivedAt });
+    expect(created).toHaveLength(1);
+    expect(snapshot.requests).toHaveLength(before.requests.length + 1);
+    expect(snapshot.requestImpactAssessments.filter((assessment) => assessment.requestId === created[0]!.id)).toHaveLength(1);
+    expect(snapshot.workflowTasks.filter((task) => task.serviceRequestId === created[0]!.id)).toHaveLength(1);
+    expect(snapshot.auditEvents.filter((event) => event.aggregateId === created[0]!.id && event.eventType === "request.submitted")).toHaveLength(1);
+    expect(await repository.getIdempotencyKey(NORTHLINE_ORGANIZATION_ID, command.submissionKey)).toMatchObject({
+      command: "public_store_issue_report",
+      resultId: created[0]!.id,
+    });
+    expect(await repository.getIdempotencyKey("organization-outside-tenant", command.submissionKey)).toBeNull();
+  });
+
+  it("collapses concurrent identical issue submissions onto one request", async () => {
+    const gateway = getPublicOperationsGateway();
+    const repository = getNorthlineFixtureRepository();
+    const command = issueCommand("idem-store-issue-concurrent-retry-0001");
+    const requestCountBefore = repository.snapshot().requests.length;
+
+    const [left, right] = await Promise.all([
+      gateway.reportStoreIssue(PUBLIC_DEMO_LINKS.storeToken, command),
+      gateway.reportStoreIssue(PUBLIC_DEMO_LINKS.storeToken, command),
+    ]);
+
+    expect(left.requestNumber).toBe(right.requestNumber);
+    expect([left.replayed, right.replayed].filter(Boolean)).toHaveLength(1);
+    expect(repository.snapshot().requests).toHaveLength(requestCountBefore + 1);
+  });
+
+  it("rejects reuse of an issue key for edited report details", async () => {
+    const gateway = getPublicOperationsGateway();
+    const command = issueCommand("idem-store-issue-conflicting-edit-0001");
+    await gateway.reportStoreIssue(PUBLIC_DEMO_LINKS.storeToken, command);
+
+    await expect(gateway.reportStoreIssue(PUBLIC_DEMO_LINKS.storeToken, {
+      ...command,
+      problem: "The edited report describes a different problem.",
+    })).rejects.toMatchObject({ status: 409, code: "idempotency_conflict" });
+  });
+});
+
 describe("public idempotency header boundary", () => {
   it("requires a sufficiently strong client submission key", () => {
     expect(readPublicIdempotencyKey(new Request("https://operations.example/check-in", {

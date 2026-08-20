@@ -31,6 +31,7 @@ import type {
   TrendViewModel,
 } from "./data-contract";
 import styles from "./enterprise-workspace.module.css";
+import { RecordSections } from "@/components/workspace/record-sections";
 
 const CHART_PALETTE = ["#2855d9", "#64748b", "#0f766e", "#8b5cf6", "#d97706", "#dc2626", "#475569"];
 
@@ -496,40 +497,7 @@ export function DetailView({ model, beforeSections, after }: { model: DetailPage
             </div>
           </section>
           {beforeSections}
-          <div className={styles.detailSections}>
-            {model.sections.length ? model.sections.map((section) => (
-              <section className={styles.detailSection} id={section.id} key={section.id}>
-                <SectionHeading title={section.title} description={section.description} action={section.action} />
-                {section.facts ? (
-                  <div className={styles.compactFacts}>
-                    {section.facts.map((fact) => {
-                      const content = <><span className={styles.factLabel}>{fact.label}</span><strong>{fact.value}</strong>{fact.helperText ? <small>{fact.helperText}</small> : null}</>;
-                      return fact.link ? (
-                        <Link className={styles.compactFactLink} href={fact.link.href} key={fact.label}>{content}<span className={styles.factAction}>{fact.link.label}<ChevronRight aria-hidden="true" size={14} /></span></Link>
-                      ) : <div key={fact.label}>{content}</div>;
-                    })}
-                  </div>
-                ) : null}
-                {section.table ? <DataTable table={section.table} /> : null}
-                {section.timeline ? (
-                  <ol className={styles.timeline}>
-                    {section.timeline.map((event) => (
-                      <li key={event.id}>
-                        <span className={`${styles.timelineDot} ${toneClass(event.tone)}`} aria-hidden="true" />
-                        <div className={styles.timelineContent}>
-                          <strong>{event.title}</strong>
-                          {event.description ? <p>{event.description}</p> : null}
-                          <small>{event.timestampLabel} · {event.actorLabel}</small>
-                          {event.link ? <Link className={styles.textLink} href={event.link.href}>{event.link.label}<ChevronRight aria-hidden="true" size={14} /></Link> : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                ) : null}
-                {!section.facts && !section.table && !section.timeline ? <InlineEmpty message="No information has been recorded in this section yet." /> : null}
-              </section>
-            )) : <InlineEmpty message="No record history is available yet." />}
-          </div>
+          <RecordSections sections={model.sections} />
           {after}
         </>
       )}

@@ -14,13 +14,13 @@ import {
   submitEstimate,
 } from "@/lib/ops/estimate-commands";
 import type { OpsRepository } from "@/lib/ops/repository";
+import { siteVisitOutcomeFromLegacy, siteVisitOutcomeRequiresFollowUp } from "@/lib/ops/site-visit-outcomes";
 import { getServerOpsRepositoryProxy } from "@/lib/server/ops-repository-provider";
-import type { ActorContext, LocationObservation, Store, VendorResponseKind, VisitChannel, VisitOutcome as OpsVisitOutcome, VisitSession } from "@/lib/ops/types";
+import type { ActorContext, LocationObservation, ServiceRequest, SiteVisitWorkOrderOutcome, Store, VendorResponseKind, VisitChannel, VisitOutcome as OpsVisitOutcome, VisitSession } from "@/lib/ops/types";
 import type {
   ActiveVisitView as OpsActiveVisitView,
   PublicStoreGatewayView,
   ServiceAuthorizationView as OpsServiceAuthorizationView,
-  StoreVisitContextView as OpsStoreVisitContextView,
   TrustedStoreDeviceView,
 } from "@/lib/ops/view-models";
 import type {
@@ -28,15 +28,19 @@ import type {
   EligibleWorkOrderView,
   LocationEvidenceInput,
   LocationEvidenceReceipt,
+  PerWorkOrderVisitOutcome,
   PublicOperationsGateway,
   PublicUpload,
   ServiceAuthorizationView,
+  StoreIssueReceipt,
   StorePortalView,
   TechnicianCheckInReceipt,
   TechnicianCheckOutReceipt,
+  VisitWorkOrderView,
   VendorEstimateView,
   VendorVisitContextView,
   VisitOutcome,
+  WorkOrderVisitOutcome,
 } from "./contracts";
 import { PublicWorkflowError } from "./contracts";
 import { getPublicUploadStore } from "./server-file-store";
@@ -123,6 +127,7 @@ async function stableCheckoutToken(
 
 const PUBLIC_CHECK_IN_COMMAND = "public_technician_check_in";
 const PUBLIC_CHECK_OUT_COMMAND = "public_technician_check_out";
+const PUBLIC_STORE_ISSUE_COMMAND = "public_store_issue_report";
 const PUBLIC_IDEMPOTENCY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const SUBMISSION_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,120}$/;
 
@@ -180,6 +185,29 @@ async function idempotentVisitResult(input: {
   const visit = await input.repository.getVisit(input.organizationId, record.resultId);
   if (!visit) throw new PublicWorkflowError("The prior visit receipt could not be loaded.", 409, "idempotency_result_unavailable");
   return visit;
+}
+
+async function idempotentServiceRequestResult(input: {
+  repository: OpsRepository;
+  organizationId: string;
+  submissionKey: string;
+  requestHash: string;
+}): Promise<ServiceRequest | null> {
+  const record = await input.repository.getIdempotencyKey(input.organizationId, input.submissionKey);
+  if (!record) return null;
+  if (record.command !== PUBLIC_STORE_ISSUE_COMMAND || record.requestHash !== input.requestHash) {
+    throw new PublicWorkflowError(
+      "This retry key was already used for a different issue report. Go back before submitting edited details.",
+      409,
+      "idempotency_conflict",
+    );
+  }
+  if (record.expiresAt <= now()) {
+    throw new PublicWorkflowError("This issue report's retry window has expired. Go back and submit it again.", 409, "idempotency_expired");
+  }
+  const request = await input.repository.getRequest(input.organizationId, record.resultId);
+  if (!request) throw new PublicWorkflowError("The prior issue receipt could not be loaded.", 409, "idempotency_result_unavailable");
+  return request;
 }
 
 function cleanRequired(value: string, field: string, max: number): string {
@@ -504,84 +532,163 @@ function trustedStoreLocation(recordedAt: string = now()): { observation: Locati
   };
 }
 
-async function getContextFromAccess(access: PublicAccess, vendorId: string): Promise<VendorVisitContextView> {
+const ELIGIBLE_VISIT_WORK_STATUSES = [
+  "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts",
+] as const;
+const ELIGIBLE_VISIT_ASSIGNMENT_STATUSES = new Set(["issued", "opened", "accepted"]);
+
+async function publicWorkOrdersForVisit(
+  repository: OpsRepository,
+  organizationId: string,
+  visit: Pick<VisitSession, "id" | "workOrderId">,
+): Promise<VisitWorkOrderView[]> {
+  const links = await repository.listSiteVisitWorkOrders(organizationId, visit.id);
+  const workOrderIds = links.length ? links.map((link) => link.workOrderId) : visit.workOrderId ? [visit.workOrderId] : [];
+  const workOrders = await Promise.all(workOrderIds.map((workOrderId) => repository.getWorkOrder(organizationId, workOrderId)));
+  return workOrders.filter((workOrder): workOrder is NonNullable<typeof workOrder> => Boolean(workOrder)).map((workOrder) => ({
+    id: workOrder.id,
+    number: workOrder.number,
+    problem: workOrder.problem,
+  }));
+}
+
+async function getContextFromAccess(access: PublicAccess, requestedVendorId?: string): Promise<VendorVisitContextView> {
   const repository = runtime().repository;
   const vendors = accessVendors(access);
-  const vendor = vendors.find((candidate) => candidate.id === vendorId);
-  if (!vendor) throw new PublicWorkflowError("Choose an approved vendor from this store's list.", 403, "vendor_not_available");
+  const vendorById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
+  if (requestedVendorId && !vendorById.has(requestedVendorId)) {
+    throw new PublicWorkflowError("Choose an approved vendor from this store's list.", 403, "vendor_not_available");
+  }
   const store = accessStore(access);
   const organizationId = accessOrganizationId(access);
-  let sourceContext: OpsStoreVisitContextView | null = null;
-  if (access.kind === "store") {
-    sourceContext = await repository.getStoreVisitContextByToken({
-      tokenHash: access.tokenHash,
-      purpose: "store_gateway",
-      now: now(),
-      vendorId,
-    });
-  }
   const scope = { organizationId, storeIds: [store.id] };
-  const sourceWork: Array<{ id: string; number: string; problem: string; categoryKey?: string }> = sourceContext?.eligibleWorkOrders
-    ?? (access.kind === "service"
-      ? [{
-          id: access.serviceAuthorization.workOrderId,
-          number: access.serviceAuthorization.workOrderNumber,
-          problem: access.serviceAuthorization.problem,
-          categoryKey: access.serviceAuthorization.categoryKey,
-        }]
-      : access.kind === "trusted_store"
-        ? (await repository.listWorkOrders(scope, {
-            vendorId,
-            statuses: ["issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts"],
-            limit: 100,
-          })).items.map((work) => ({ id: work.id, number: work.number, problem: work.problem, categoryKey: work.categoryKey }))
-        : []);
-  const eligibleWorkOrders = await Promise.all(sourceWork.map(async (work): Promise<EligibleWorkOrderView> => {
-    const record = await repository.getWorkOrder(organizationId, work.id);
-    const detail = await repository.getWorkOrderDetail(scope, work.id);
+  const sourceWork = access.kind === "service"
+    ? [{
+        id: access.serviceAuthorization.workOrderId,
+        number: access.serviceAuthorization.workOrderNumber,
+        problem: access.serviceAuthorization.problem,
+        categoryKey: access.serviceAuthorization.categoryKey,
+        priority: access.serviceAuthorization.priority,
+        vendorId: access.serviceAuthorization.vendor.id,
+        vendorName: access.serviceAuthorization.vendor.name,
+        assignmentKind: "outside_vendor" as const,
+        assignmentStatus: access.serviceAuthorization.assignmentStatus,
+        dueAt: undefined,
+        createdAt: access.serviceAuthorization.issuedAt,
+      }]
+    : access.kind === "store" || access.kind === "trusted_store"
+      ? (await repository.listWorkOrders(scope, {
+          statuses: [...ELIGIBLE_VISIT_WORK_STATUSES],
+          limit: 100,
+        })).items
+      : [];
+
+  const eligibleSource = sourceWork.filter((work) => (
+    work.assignmentKind === "outside_vendor"
+    && Boolean(work.vendorId)
+    && vendorById.has(work.vendorId!)
+    && (!requestedVendorId || work.vendorId === requestedVendorId)
+    && Boolean(work.assignmentStatus && ELIGIBLE_VISIT_ASSIGNMENT_STATUSES.has(work.assignmentStatus))
+  ));
+  const eligibleWorkOrderBase = (await Promise.all(eligibleSource.map(async (work): Promise<EligibleWorkOrderView | null> => {
+    const [record, detail, assignment, issuance] = await Promise.all([
+      repository.getWorkOrder(organizationId, work.id),
+      repository.getWorkOrderDetail(scope, work.id),
+      repository.getActiveAssignment(organizationId, work.id),
+      repository.getLatestIssuanceForWorkOrder(organizationId, work.id),
+    ]);
+    if (!record || !assignment || assignment.kind !== "outside_vendor" || assignment.vendorId !== work.vendorId) return null;
+    const [taxonomy, response] = await Promise.all([
+      record.taxonomyNodeId ? repository.getTaxonomyNode(organizationId, record.taxonomyNodeId) : null,
+      repository.getLatestVendorResponse(organizationId, assignment.id),
+    ]);
+    const scheduledAt = response?.proposedAt;
     return {
       id: work.id,
       number: work.number,
-      priority: displayPriority(record?.priority ?? "routine"),
+      priority: displayPriority(work.priority),
       problem: work.problem,
+      area: taxonomy?.name,
       category: titleCase(work.categoryKey),
       asset: detail?.asset ? `${detail.asset.name} · ${detail.asset.assetTag}` : undefined,
-      issuedAt: access.kind === "service" && work.id === access.serviceAuthorization.workOrderId
-        ? access.serviceAuthorization.issuedAt
-        : record?.createdAt ?? now(),
+      dueOrScheduledAt: scheduledAt ?? record.dueAt,
+      dueOrScheduledLabel: scheduledAt ? "Proposed arrival" : record.dueAt ? "Due" : undefined,
+      assignedVendor: { id: work.vendorId!, name: work.vendorName ?? vendorById.get(work.vendorId!)!.name },
+      issuedAt: issuance?.issuedAt ?? work.createdAt,
     };
-  }));
-  // Generic QR and service links never disclose another technician's active
-  // visit identifier. A visit-bound link exposes one visit; a trusted store
-  // device exposes only the selected provider's active visits at that store.
-  const activeVisits: ActiveVisitView[] = access.kind === "visit"
-    ? [{
-        id: access.activeVisit.id,
-        technicianName: access.activeVisit.technicianName,
-        vendorName: access.activeVisit.vendorName,
-        workOrderNumber: access.activeVisit.workOrderNumber,
-        noWorkOrderReason: access.activeVisit.unmatchedReason,
-        checkedInAt: access.activeVisit.checkedInAt,
-        startedVia: access.activeVisit.startedChannel,
-        checkInLocationLabel: locationResultLabel(access.activeVisit.checkInLocationResult, store.storeNumber),
-      }]
+  }))).filter((work): work is EligibleWorkOrderView => Boolean(work));
+  const runVendorIds = requestedVendorId ? [requestedVendorId] : [...new Set(eligibleWorkOrderBase.map((work) => work.assignedVendor.id))];
+  const plannedServiceRuns = (await Promise.all(runVendorIds.map(async (vendorId) => {
+    const runs = await repository.listServiceRunsForStoreVendor(organizationId, store.id, vendorId);
+    return (await Promise.all(runs.filter((run) => ["accepted", "committed", "in_progress"].includes(run.status)).map(async (run) => {
+      const [stops, work] = await Promise.all([
+        repository.listRouteStops(organizationId, run.id),
+        repository.listServiceRunWorkOrders(organizationId, run.id),
+      ]);
+      const stop = stops.find((candidate) => candidate.storeId === store.id && ["planned", "arrived"].includes(candidate.status));
+      if (!stop) return null;
+      return {
+        id: run.id, startsAt: run.committedStartsAt ?? run.proposedStartsAt, status: run.status,
+        stopSequence: stop.sequence,
+        plannedWorkOrderIds: work.filter((link) => link.routeStopId === stop.id && link.planned).map((link) => link.workOrderId),
+        removalReasonRequired: true as const,
+      };
+    }))).filter((run): run is NonNullable<typeof run> => Boolean(run));
+  }))).flat();
+  const plannedByWorkOrder = new Map(plannedServiceRuns.flatMap((run) => run.plannedWorkOrderIds.map((workOrderId) => [workOrderId, run] as const)));
+  const eligibleWorkOrders = eligibleWorkOrderBase.map((workOrder) => {
+    const run = plannedByWorkOrder.get(workOrder.id);
+    return run ? { ...workOrder, plannedServiceRun: { id: run.id, startsAt: run.startsAt, stopSequence: run.stopSequence } } : workOrder;
+  });
+
+  // Generic QR and service links never disclose active-visit identifiers. A
+  // visit capability discloses only itself. A trusted device is already bound
+  // by repository lookup to exactly one store and may list that store's visits.
+  const activeSources = access.kind === "visit"
+    ? [access.activeVisit]
     : access.kind === "trusted_store"
-      ? access.trustedStore.activeVisits
-          .filter((visit) => visit.providerKind === "outside_vendor" && visit.vendorId === vendorId)
-          .map((visit) => ({
-            id: visit.id,
-            technicianName: visit.technicianName,
-            vendorName: visit.providerName,
-            workOrderNumber: visit.workOrderNumber,
-            noWorkOrderReason: visit.unmatchedReason,
-            checkedInAt: visit.checkedInAt,
-            startedVia: visit.startedChannel,
-            checkInLocationLabel: visit.startedChannel === "store_device"
-              ? "Recorded on a trusted store device"
-              : "Original check-in evidence is preserved with this visit",
-          }))
+      ? access.trustedStore.activeVisits.filter((visit) => (
+          visit.providerKind === "outside_vendor"
+          && Boolean(visit.vendorId)
+          && (!requestedVendorId || visit.vendorId === requestedVendorId)
+        ))
       : [];
-  return { vendorId, vendorName: vendor.name, eligibleWorkOrders, activeVisits };
+  const activeVisits = (await Promise.all(activeSources.map(async (source): Promise<ActiveVisitView | null> => {
+    const visit = await repository.getVisit(organizationId, source.id);
+    if (!visit || visit.storeId !== store.id || visit.providerKind !== "outside_vendor" || !visit.vendorId) return null;
+    if (requestedVendorId && visit.vendorId !== requestedVendorId) return null;
+    const workOrders = await publicWorkOrdersForVisit(repository, organizationId, visit);
+    return {
+      id: visit.id,
+      technicianName: visit.technicianName,
+      vendorName: visit.providerName,
+      workOrders,
+      workOrderNumber: workOrders.length === 1 ? workOrders[0]!.number : undefined,
+      noWorkOrderReason: visit.unmatchedReason,
+      checkedInAt: visit.checkedInAt,
+      crewCount: visit.crewCount ?? 1,
+      additionalTechnicianNames: visit.additionalTechnicianNames ?? [],
+      vehicleIdentifier: visit.vehicleIdentifier,
+      arrivalNote: visit.arrivalNote,
+      startedVia: visit.startedChannel,
+      checkInLocationLabel: access.kind === "visit"
+        ? locationResultLabel(access.activeVisit.checkInLocationResult, store.storeNumber)
+        : visit.startedChannel === "store_device"
+          ? "Recorded on a trusted store device"
+          : "Original check-in evidence is preserved with this visit",
+    };
+  }))).filter((visit): visit is ActiveVisitView => Boolean(visit));
+
+  const narrowedVendorId = requestedVendorId
+    ?? (access.kind === "service" ? access.serviceAuthorization.vendor.id : access.kind === "visit" ? access.activeVisit.vendorId : undefined);
+  return {
+    vendorId: narrowedVendorId,
+    vendorName: narrowedVendorId ? vendorById.get(narrowedVendorId)?.name : undefined,
+    workOrderSelectionBound: access.kind === "service",
+    eligibleWorkOrders,
+    plannedServiceRuns,
+    activeVisits,
+  };
 }
 
 function followUpForOutcome(outcome: VisitOutcome, providerName: string): { accountableParty: string; nextAction: string; dueAt: string; escalationTo: string } | undefined {
@@ -613,6 +720,24 @@ function outcomeLabel(outcome: VisitOutcome): string {
     unable_to_complete: "Unable to complete",
     other: "Other outcome",
   }[outcome];
+}
+
+function workOrderOutcomeLabel(outcome: WorkOrderVisitOutcome): string {
+  return {
+    completed: "Completed",
+    diagnosis_only: "Diagnosis only",
+    quote_required: "Quote required",
+    parts_required: "Parts required",
+    return_visit_required: "Return visit required",
+    no_issue_found: "No issue found",
+    store_access_unavailable: "Store access unavailable",
+    work_not_authorized: "Work not authorized",
+    not_addressed: "Not addressed",
+  }[outcome];
+}
+
+function sameStringList(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 async function receiveUploads(input: {
@@ -701,7 +826,7 @@ async function replayCheckoutCapability(input: {
 function checkInReceipt(input: {
   visit: VisitSession;
   organizationName: string;
-  workOrderNumber?: string;
+  workOrders: VisitWorkOrderView[];
   checkoutToken: string;
   checkoutExpiresAt: string;
   location: LocationEvidenceReceipt;
@@ -717,7 +842,12 @@ function checkInReceipt(input: {
     visitId: input.visit.id,
     vendorName: input.visit.providerName,
     technicianName: input.visit.technicianName,
-    workOrderNumber: input.workOrderNumber,
+    workOrders: input.workOrders,
+    crewCount: input.visit.crewCount ?? 1,
+    additionalTechnicianNames: input.visit.additionalTechnicianNames ?? [],
+    vehicleIdentifier: input.visit.vehicleIdentifier,
+    arrivalNote: input.visit.arrivalNote,
+    workOrderNumber: input.workOrders.length === 1 ? input.workOrders[0]!.number : undefined,
     checkedInAt: input.visit.checkedInAt,
     checkoutUrl: `/public/store/${encodeURIComponent(input.checkoutToken)}/visit`,
     checkoutExpiresAt: input.checkoutExpiresAt,
@@ -728,14 +858,15 @@ function checkInReceipt(input: {
 function checkOutReceipt(input: {
   visit: VisitSession;
   store: Store;
-  outcome: VisitOutcome;
+  outcome?: VisitOutcome;
+  workOrderOutcomes: TechnicianCheckOutReceipt["workOrderOutcomes"];
   location: LocationEvidenceReceipt;
   evidenceReceived: number;
   evidenceStorageLabel?: string;
   replayed?: boolean;
 }): TechnicianCheckOutReceipt {
   const durationMinutes = Math.max(0, Math.round((input.visit.observedDurationSeconds ?? 0) / 60));
-  const followUp = input.visit.workOrderId ? followUpForOutcome(input.outcome, input.visit.providerName) : undefined;
+  const followUps = input.workOrderOutcomes.filter((outcome) => outcome.followUpLabel);
   return {
     receiptId: `receipt-${input.visit.id}-checkout`,
     receivedAt: input.visit.checkedOutAt!,
@@ -747,12 +878,42 @@ function checkOutReceipt(input: {
     checkedOutAt: input.visit.checkedOutAt!,
     observedDurationMinutes: durationMinutes,
     observedDurationLabel: `${durationMinutes} minutes of approximate observed onsite time`,
-    outcomeLabel: outcomeLabel(input.outcome),
+    outcomeLabel: input.outcome
+      ? outcomeLabel(input.outcome)
+      : input.workOrderOutcomes.length === 1
+        ? input.workOrderOutcomes[0]!.outcomeLabel
+        : `${input.workOrderOutcomes.length} work-order outcomes recorded`,
+    workOrderOutcomes: input.workOrderOutcomes,
     evidenceReceived: input.evidenceReceived,
     evidenceStorageLabel: input.evidenceStorageLabel,
     location: input.location,
-    followUpLabel: followUp ? `${followUp.accountableParty} now owns: ${followUp.nextAction}.` : undefined,
+    followUpLabel: followUps.length
+      ? followUps.length === 1
+        ? followUps[0]!.followUpLabel
+        : `${followUps.length} work orders have an accountable follow-up.`
+      : undefined,
   };
+}
+
+async function receiptWorkOrderOutcomes(
+  repository: OpsRepository,
+  organizationId: string,
+  outcomes: readonly PerWorkOrderVisitOutcome[],
+): Promise<TechnicianCheckOutReceipt["workOrderOutcomes"]> {
+  return Promise.all(outcomes.map(async (outcome) => {
+    const workOrder = await repository.getWorkOrder(organizationId, outcome.workOrderId);
+    if (!workOrder) throw new PublicWorkflowError("A visit work order is no longer available.", 409, "work_order_unavailable");
+    return {
+      id: workOrder.id,
+      number: workOrder.number,
+      problem: workOrder.problem,
+      outcome: outcome.outcome,
+      outcomeLabel: workOrderOutcomeLabel(outcome.outcome),
+      followUpLabel: outcome.followUp
+        ? `${outcome.followUp.accountableParty} now owns: ${outcome.followUp.nextAction}.`
+        : undefined,
+    };
+  }));
 }
 
 const gateway: PublicOperationsGateway = {
@@ -1061,7 +1222,7 @@ const gateway: PublicOperationsGateway = {
   async lookupVendorVisitContext(token, vendorId) {
     const access = await resolvePublicAccess(token);
     if (!access) throw new PublicWorkflowError("This store link is unavailable.", 404, "link_unavailable");
-    return getContextFromAccess(access, vendorId);
+    return getContextFromAccess(access, cleanOptional(vendorId, 120));
   },
 
   async checkIn(token, command) {
@@ -1070,25 +1231,63 @@ const gateway: PublicOperationsGateway = {
     if (access.kind === "visit") throw new PublicWorkflowError("A checkout link cannot start another visit.", 403, "action_not_allowed");
     const repository = runtime().repository;
     const submissionKey = cleanSubmissionKey(command.submissionKey);
-    const vendorId = cleanRequired(command.vendorId, "Vendor", 100);
-    const workOrderId = cleanOptional(command.workOrderId, 120);
+    const vendorId = cleanOptional(command.vendorId, 120);
+    const compatibilityWorkOrderId = cleanOptional(command.workOrderId, 120);
+    const listedWorkOrderIds = command.workOrderIds?.map((workOrderId) => cleanRequired(workOrderId, "Work order", 120));
+    if (compatibilityWorkOrderId && listedWorkOrderIds && (
+      listedWorkOrderIds.length !== 1 || listedWorkOrderIds[0] !== compatibilityWorkOrderId
+    )) {
+      throw new PublicWorkflowError("The work-order selection is inconsistent.", 422, "invalid_work_order_selection");
+    }
+    const workOrderIds = listedWorkOrderIds ?? (compatibilityWorkOrderId ? [compatibilityWorkOrderId] : []);
+    if (workOrderIds.length > 100 || new Set(workOrderIds).size !== workOrderIds.length) {
+      throw new PublicWorkflowError("Choose each work order once, up to 100 work orders.", 422, "invalid_work_order_selection");
+    }
     const technicianName = cleanRequired(command.technicianName, "Technician name", 100);
-    const unmatchedReason = workOrderId ? undefined : cleanRequired(command.noWorkOrderReason ?? "", "Reason for visit", 500);
+    const technicianPhoneOrPin = cleanOptional(command.technicianPhoneOrPin, 100);
+    const crewCount = command.crewCount ?? 1;
+    if (!Number.isInteger(crewCount) || crewCount < 1 || crewCount > 100) {
+      throw new PublicWorkflowError("Crew count must be a whole number between 1 and 100.", 422, "invalid_crew_count");
+    }
+    const additionalTechnicianNames = (command.additionalTechnicianNames ?? []).map((name) => cleanRequired(name, "Additional technician name", 100));
+    if (additionalTechnicianNames.length > crewCount - 1) {
+      throw new PublicWorkflowError("Additional technician names cannot exceed the crew count.", 422, "invalid_crew_count");
+    }
+    const normalizedNames = [technicianName, ...additionalTechnicianNames].map((name) => name.toLocaleLowerCase("en-US"));
+    if (new Set(normalizedNames).size !== normalizedNames.length) {
+      throw new PublicWorkflowError("Technician names cannot be duplicated.", 422, "duplicate_technician");
+    }
+    const vehicleIdentifier = cleanOptional(command.vehicleIdentifier, 120);
+    const arrivalNote = cleanOptional(command.arrivalNote, 1_000);
+    const serviceRunId = cleanOptional(command.serviceRunId, 120);
+    const plannedWorkOrderRemovalReason = cleanOptional(command.plannedWorkOrderRemovalReason, 1_000);
+    const unmatchedReason = workOrderIds.length ? undefined : cleanRequired(command.noWorkOrderReason ?? "", "Reason for visit", 500);
+    if (!workOrderIds.length && !vendorId) throw new PublicWorkflowError("Choose an approved vendor for a visit without a work order.", 422, "missing_vendor");
+    if (!workOrderIds.length && access.kind === "service") {
+      throw new PublicWorkflowError("This service-authorization link can start only its assigned work order.", 403, "service_token_work_order_bound");
+    }
     const organizationId = accessOrganizationId(access);
     const storeView = accessStore(access);
     const store = await repository.getStore(organizationId, storeView.id);
     if (!store) throw new PublicWorkflowError("This store is unavailable.", 404, "store_unavailable");
     const location = access.kind === "trusted_store" ? trustedStoreLocation() : evaluateLocation(store, command.location);
     const requestHash = await hashRequest({
-      version: 1,
+      version: 2,
       tokenHash: access.tokenHash,
       organizationId,
       storeId: store.id,
       channel: access.channel,
-      vendorId,
-      workOrderId: workOrderId ?? null,
+      vendorId: vendorId ?? null,
+      workOrderIds,
       unmatchedReason: unmatchedReason ?? null,
       technicianName,
+      technicianPhoneOrPin: technicianPhoneOrPin ?? null,
+      crewCount,
+      additionalTechnicianNames,
+      vehicleIdentifier: vehicleIdentifier ?? null,
+      arrivalNote: arrivalNote ?? null,
+      serviceRunId: serviceRunId ?? null,
+      plannedWorkOrderRemovalReason: plannedWorkOrderRemovalReason ?? null,
       location: command.location,
     });
 
@@ -1104,18 +1303,25 @@ const gateway: PublicOperationsGateway = {
       if (
         prior.storeId !== store.id
         || prior.providerKind !== "outside_vendor"
-        || prior.vendorId !== vendorId
-        || prior.workOrderId !== workOrderId
+        || (vendorId && prior.vendorId !== vendorId)
         || prior.technicianName !== technicianName
+        || prior.technicianPhoneOrPin !== technicianPhoneOrPin
+        || (prior.crewCount ?? 1) !== crewCount
+        || !sameStringList(prior.additionalTechnicianNames ?? [], additionalTechnicianNames)
+        || prior.vehicleIdentifier !== vehicleIdentifier
+        || prior.arrivalNote !== arrivalNote
       ) {
         throw new PublicWorkflowError("The prior visit receipt does not match this store action.", 409, "idempotency_result_mismatch");
       }
-      const workOrder = prior.workOrderId ? await repository.getWorkOrder(organizationId, prior.workOrderId) : null;
+      const priorWorkOrders = await publicWorkOrdersForVisit(repository, organizationId, prior);
+      if (!sameStringList(priorWorkOrders.map((workOrder) => workOrder.id), workOrderIds)) {
+        throw new PublicWorkflowError("The prior visit receipt does not match this work selection.", 409, "idempotency_result_mismatch");
+      }
       const checkout = await replayCheckoutCapability({ repository, visit: prior, accessToken: token, submissionKey });
       return checkInReceipt({
         visit: prior,
         organizationName: accessOrganizationName(access),
-        workOrderNumber: workOrder?.number,
+        workOrders: priorWorkOrders,
         checkoutToken: checkout.token,
         checkoutExpiresAt: checkout.expiresAt,
         location: access.kind === "trusted_store" ? trustedStoreLocation(prior.checkedInAt).receipt : location.receipt,
@@ -1126,20 +1332,53 @@ const gateway: PublicOperationsGateway = {
     const replayed = await replayPrior();
     if (replayed) return replayed;
 
-    const context = await getContextFromAccess(access, vendorId);
-    const selectedWork = workOrderId ? context.eligibleWorkOrders.find((work) => work.id === workOrderId) : undefined;
-    if (workOrderId && !selectedWork) throw new PublicWorkflowError("That work order is not available to the selected vendor.", 403, "work_order_not_eligible");
+    const context = await getContextFromAccess(access);
+    if (access.kind === "service" && !sameStringList(workOrderIds, [access.serviceAuthorization.workOrderId])) {
+      throw new PublicWorkflowError("This service-authorization link can start only its assigned work order.", 403, "service_token_work_order_bound");
+    }
+    const eligibleById = new Map(context.eligibleWorkOrders.map((workOrder) => [workOrder.id, workOrder]));
+    const selectedWork = workOrderIds.map((workOrderId) => eligibleById.get(workOrderId));
+    if (selectedWork.some((workOrder) => !workOrder)) {
+      throw new PublicWorkflowError("One or more selected work orders are not eligible at this store.", 403, "work_order_not_eligible");
+    }
+    const selected = selectedWork as EligibleWorkOrderView[];
+    const inferredVendorId = selected[0]?.assignedVendor.id;
+    if (selected.some((workOrder) => workOrder.assignedVendor.id !== inferredVendorId)) {
+      throw new PublicWorkflowError("One visit can include only work assigned to the same vendor.", 403, "mixed_visit_vendor");
+    }
+    if (selected.length && vendorId && vendorId !== inferredVendorId) {
+      throw new PublicWorkflowError("The selected work orders determine the vendor and cannot be overridden.", 403, "vendor_override_not_allowed");
+    }
+    if (!selected.length) await getContextFromAccess(access, vendorId);
+    if (serviceRunId) {
+      const plannedRun = context.plannedServiceRuns.find((run) => run.id === serviceRunId);
+      if (!plannedRun) throw new PublicWorkflowError("This committed Service Run is not available at this Store.", 403, "service_run_not_available");
+      const selectedSet = new Set(selected.map((workOrder) => workOrder.id));
+      const removed = plannedRun.plannedWorkOrderIds.filter((workOrderId) => !selectedSet.has(workOrderId));
+      if (removed.length && !plannedWorkOrderRemovalReason) throw new PublicWorkflowError("Explain why planned Service Run work is not being addressed during this visit.", 422, "planned_work_removal_reason_required");
+    } else if (plannedWorkOrderRemovalReason) {
+      throw new PublicWorkflowError("A planned-work removal reason requires a committed Service Run.", 422, "service_run_required");
+    }
     try {
       const checkoutToken = await stableCheckoutToken(token, submissionKey);
       const checkoutExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
       const result = await checkInVisitWithCheckoutToken({ repository }, {
         organizationId,
         storeId: store.id,
-        vendorId,
-        workOrderId: selectedWork?.id,
+        vendorId: selected.length ? undefined : vendorId,
+        workOrderIds: selected.map((workOrder) => workOrder.id),
+        serviceRunId,
+        plannedWorkOrderRemovalReason,
         unmatchedReason,
         technicianName,
-        purpose: selectedWork?.problem ?? unmatchedReason!,
+        technicianPhoneOrPin,
+        crewCount,
+        additionalTechnicianNames,
+        vehicleIdentifier,
+        arrivalNote,
+        purpose: selected.length
+          ? selected.map((workOrder) => `${workOrder.number}: ${workOrder.problem}`).join("; ")
+          : unmatchedReason!,
         channel: access.channel,
         location: location.observation,
         actor: { actorType: "technician", actorName: technicianName, organizationId },
@@ -1157,7 +1396,7 @@ const gateway: PublicOperationsGateway = {
       return checkInReceipt({
         visit: result.visit,
         organizationName: accessOrganizationName(access),
-        workOrderNumber: selectedWork?.number,
+        workOrders: selected.map((workOrder) => ({ id: workOrder.id, number: workOrder.number, problem: workOrder.problem })),
         checkoutToken,
         checkoutExpiresAt,
         location: location.receipt,
@@ -1172,7 +1411,7 @@ const gateway: PublicOperationsGateway = {
   async checkOut(token, command) {
     const repository = runtime().repository;
     const submissionKey = cleanSubmissionKey(command.submissionKey);
-    const vendorId = cleanRequired(command.vendorId, "Vendor", 100);
+    const suppliedVendorId = cleanOptional(command.vendorId, 120);
     const visitId = cleanRequired(command.visitId, "Visit", 120);
     const tokenHash = await hashOpaqueToken(token);
     const access = await resolvePublicAccess(token);
@@ -1192,25 +1431,93 @@ const gateway: PublicOperationsGateway = {
     const organizationId = access ? accessOrganizationId(access) : tokenVisit!.organizationId;
     const storeId = access ? accessStore(access).id : tokenVisit!.storeId;
     if (access?.kind === "visit") {
-      if (visitId !== access.activeVisit.id || vendorId !== access.activeVisit.vendorId) {
+      if (visitId !== access.activeVisit.id || (suppliedVendorId && suppliedVendorId !== access.activeVisit.vendorId)) {
         throw new PublicWorkflowError("That visit does not match this secure checkout link.", 403, "visit_not_available");
       }
     } else if (tokenVisit && (
       tokenVisit.id !== visitId
       || tokenVisit.providerKind !== "outside_vendor"
-      || tokenVisit.vendorId !== vendorId
+      || (suppliedVendorId && tokenVisit.vendorId !== suppliedVendorId)
     )) {
       throw new PublicWorkflowError("That visit does not match this secure checkout link.", 403, "visit_not_available");
     }
 
     const visit = await repository.getVisit(organizationId, visitId);
-    if (!visit || visit.storeId !== storeId || visit.providerKind !== "outside_vendor" || visit.vendorId !== vendorId) {
+    if (!visit || visit.storeId !== storeId || visit.providerKind !== "outside_vendor" || !visit.vendorId || (suppliedVendorId && visit.vendorId !== suppliedVendorId)) {
       throw new PublicWorkflowError("That visit is not available from this store link.", 403, "visit_not_available");
     }
+    const vendorId = visit.vendorId;
     const store = await repository.getStore(organizationId, storeId);
     if (!store) throw new PublicWorkflowError("This store is unavailable.", 404, "store_unavailable");
     const location = access?.kind === "trusted_store" ? trustedStoreLocation() : evaluateLocation(store, command.location);
-    const outcomeNotes = cleanOptional(command.outcomeNotes, 2000);
+    const visitLinks = await repository.listSiteVisitWorkOrders(organizationId, visit.id);
+    const outcomeNotes = cleanOptional(command.outcomeNotes, 2_000);
+    const allowedWorkOutcomes = new Set<SiteVisitWorkOrderOutcome>([
+      "completed", "diagnosis_only", "quote_required", "parts_required", "return_visit_required",
+      "no_issue_found", "store_access_unavailable", "work_not_authorized", "not_addressed",
+    ]);
+    if (command.perWorkOrderOutcomes?.length && command.outcome) {
+      throw new PublicWorkflowError("Do not mix per-work-order outcomes with the unmatched visit outcome.", 422, "mixed_outcome_contract");
+    }
+    const explicitOutcomes = command.perWorkOrderOutcomes?.map((entry): PerWorkOrderVisitOutcome => {
+      if (!allowedWorkOutcomes.has(entry.outcome)) throw new PublicWorkflowError("Choose a valid outcome for every work order.", 422, "invalid_outcome");
+      const followUp = entry.followUp ? {
+        accountableParty: cleanRequired(entry.followUp.accountableParty, "Follow-up owner", 160),
+        nextAction: cleanRequired(entry.followUp.nextAction, "Follow-up next action", 1_000),
+        dueAt: cleanRequired(entry.followUp.dueAt, "Follow-up due time", 80),
+        escalationTo: cleanRequired(entry.followUp.escalationTo, "Follow-up escalation", 160),
+      } : undefined;
+      if (followUp && !Number.isFinite(Date.parse(followUp.dueAt))) {
+        throw new PublicWorkflowError("Each follow-up needs a valid due time.", 422, "invalid_follow_up_due_at");
+      }
+      const requiresFollowUp = siteVisitOutcomeRequiresFollowUp(entry.outcome);
+      if (requiresFollowUp && !followUp) {
+        throw new PublicWorkflowError("Every unresolved work-order outcome needs its own accountable follow-up.", 422, "follow_up_required");
+      }
+      if (!requiresFollowUp && followUp) {
+        throw new PublicWorkflowError("A completed outcome cannot create an unresolved-work follow-up.", 422, "follow_up_not_allowed");
+      }
+      return {
+        workOrderId: cleanRequired(entry.workOrderId, "Work order", 120),
+        outcome: entry.outcome,
+        outcomeNotes: cleanOptional(entry.outcomeNotes, 2_000),
+        followUp,
+      };
+    });
+    let perWorkOrderOutcomes: PerWorkOrderVisitOutcome[] = [];
+    if (visitLinks.length) {
+      if (explicitOutcomes) {
+        perWorkOrderOutcomes = explicitOutcomes;
+      } else if (visitLinks.length === 1 && command.outcome) {
+        // Compatibility for already-issued one-WO links. The public UI uses
+        // the exact per-WO outcome contract below.
+        const mappedOutcome = command.outcome === "unable_to_reproduce"
+          ? "not_addressed"
+          : siteVisitOutcomeFromLegacy(command.outcome);
+        perWorkOrderOutcomes = [{
+          workOrderId: visitLinks[0]!.workOrderId,
+          outcome: mappedOutcome,
+          outcomeNotes,
+          followUp: siteVisitOutcomeRequiresFollowUp(mappedOutcome)
+            ? followUpForOutcome(command.outcome, visit.providerName)
+            : undefined,
+        }];
+      } else {
+        throw new PublicWorkflowError("Provide exactly one outcome for every selected work order.", 422, "incomplete_work_order_outcomes");
+      }
+      const linkedIds = visitLinks.map((link) => link.workOrderId);
+      const outcomeIds = perWorkOrderOutcomes.map((entry) => entry.workOrderId);
+      if (
+        outcomeIds.length !== linkedIds.length
+        || new Set(outcomeIds).size !== outcomeIds.length
+        || linkedIds.some((workOrderId) => !outcomeIds.includes(workOrderId))
+      ) {
+        throw new PublicWorkflowError("Provide exactly one outcome for every selected work order.", 422, "incomplete_work_order_outcomes");
+      }
+    } else {
+      if (explicitOutcomes?.length) throw new PublicWorkflowError("A visit without a work order cannot record work-order outcomes.", 422, "unexpected_work_order_outcomes");
+      if (!command.outcome) throw new PublicWorkflowError("Visit outcome is required.", 422, "missing_outcome");
+    }
     const evidence = await Promise.all(command.evidence.map(async (upload) => ({
       name: upload.name,
       mediaType: upload.mediaType,
@@ -1218,13 +1525,14 @@ const gateway: PublicOperationsGateway = {
       sha256: await hashUpload(upload),
     })));
     const requestHash = await hashRequest({
-      version: 1,
+      version: 2,
       tokenHash,
       organizationId,
       storeId,
       vendorId,
       visitId,
-      outcome: command.outcome,
+      perWorkOrderOutcomes: command.perWorkOrderOutcomes ? perWorkOrderOutcomes : null,
+      outcome: command.outcome ?? null,
       outcomeNotes: outcomeNotes ?? null,
       location: command.location,
       evidence,
@@ -1242,8 +1550,17 @@ const gateway: PublicOperationsGateway = {
       if (prior.id !== visit.id) {
         throw new PublicWorkflowError("The prior checkout receipt does not match this visit.", 409, "idempotency_result_mismatch");
       }
-      if (prior.status !== "checked_out" || !prior.checkedOutAt || prior.outcome !== command.outcome) {
+      if (prior.status !== "checked_out" || !prior.checkedOutAt) {
         throw new PublicWorkflowError("The prior checkout result is unavailable.", 409, "idempotency_result_unavailable");
+      }
+      const priorLinks = await repository.listSiteVisitWorkOrders(organizationId, prior.id);
+      if (perWorkOrderOutcomes.length) {
+        const priorOutcomeByWork = new Map(priorLinks.map((link) => [link.workOrderId, link.outcome]));
+        if (perWorkOrderOutcomes.some((entry) => priorOutcomeByWork.get(entry.workOrderId) !== entry.outcome)) {
+          throw new PublicWorkflowError("The prior checkout result does not match these work-order outcomes.", 409, "idempotency_result_mismatch");
+        }
+      } else if (prior.outcome !== command.outcome) {
+        throw new PublicWorkflowError("The prior checkout result does not match this visit outcome.", 409, "idempotency_result_mismatch");
       }
       const replayActor: ActorContext = access?.kind === "trusted_store"
         ? { actorType: "store_device", actorName: `Store ${store.storeNumber} service desk`, organizationId }
@@ -1262,6 +1579,7 @@ const gateway: PublicOperationsGateway = {
         visit: prior,
         store,
         outcome: command.outcome,
+        workOrderOutcomes: await receiptWorkOrderOutcomes(repository, organizationId, perWorkOrderOutcomes),
         location: access?.kind === "trusted_store" ? trustedStoreLocation(prior.checkedOutAt).receipt : location.receipt,
         evidenceReceived: replayUploads.received,
         evidenceStorageLabel: replayUploads.label
@@ -1281,14 +1599,13 @@ const gateway: PublicOperationsGateway = {
       const trustedVisit = access.trustedStore.activeVisits.find((candidate) => (
         candidate.id === visitId
         && candidate.providerKind === "outside_vendor"
-        && candidate.vendorId === vendorId
+        && candidate.vendorId === visit.vendorId
       ));
       if (!trustedVisit) {
         throw new PublicWorkflowError("That active visit is not available on this store device.", 403, "visit_not_available");
       }
     }
 
-    const followUp = visit.workOrderId ? followUpForOutcome(command.outcome, visit.providerName) : undefined;
     try {
       const checkoutActor: ActorContext = access.kind === "trusted_store"
         ? { actorType: "store_device", actorName: `Store ${store.storeNumber} service desk`, organizationId }
@@ -1297,10 +1614,10 @@ const gateway: PublicOperationsGateway = {
         organizationId,
         visitId: visit.id,
         channel: access.channel,
-        outcome: command.outcome as OpsVisitOutcome,
-        outcomeNotes,
+        ...(visitLinks.length
+          ? { perWorkOrderOutcomes }
+          : { outcome: command.outcome as OpsVisitOutcome, outcomeNotes }),
         location: location.observation,
-        followUp,
         idempotency: {
           key: submissionKey,
           command: PUBLIC_CHECK_OUT_COMMAND,
@@ -1324,6 +1641,7 @@ const gateway: PublicOperationsGateway = {
         visit: completed,
         store,
         outcome: command.outcome,
+        workOrderOutcomes: await receiptWorkOrderOutcomes(repository, organizationId, perWorkOrderOutcomes),
         location: location.receipt,
         evidenceReceived: uploads.received,
         evidenceStorageLabel: uploads.label,
@@ -1340,6 +1658,8 @@ const gateway: PublicOperationsGateway = {
     if (!access || (access.kind !== "trusted_store" && (access.kind !== "store" || !access.storeGateway.actions.includes("report_issue")))) {
       throw new PublicWorkflowError("This link cannot submit a store issue.", 403, "action_not_allowed");
     }
+    const repository = runtime().repository;
+    const submissionKey = cleanSubmissionKey(command.submissionKey);
     const organizationId = accessOrganizationId(access);
     const storeView = accessStore(access);
     const reporterName = cleanRequired(command.reporterName, "Your name", 100);
@@ -1347,17 +1667,50 @@ const gateway: PublicOperationsGateway = {
     const employeeId = cleanOptional(command.employeeId, 80);
     const area = cleanOptional(command.area, 120);
     const storedProblem = area ? `Area or equipment: ${area}\n\n${problem}` : problem;
-    const priority = command.urgency === "urgent_safety" ? "emergency" : command.urgency === "priority" ? "urgent" : "routine";
-    try {
-      const request = await createServiceRequest({ repository: runtime().repository }, {
-        organizationId,
-        storeId: storeView.id,
-        reporterName,
-        reporterEmployeeId: employeeId,
-        problem: storedProblem,
-        priority,
-        actor: { actorType: "store_device", actorName: reporterName, organizationId },
-      });
+    const priority = command.urgency === "urgent_safety"
+      || command.impact.safetyConcern === "immediate"
+      || command.impact.storeOperatingState === "unable_to_operate"
+      ? "emergency"
+      : command.urgency === "priority"
+        || command.impact.storeOperatingState === "partially_operational"
+        || command.impact.productInventoryRisk === "at_risk"
+        || command.impact.productInventoryRisk === "loss_reported"
+        || command.impact.customersAffected === "yes"
+        ? "urgent"
+        : "routine";
+    const impact = {
+      ...command.impact,
+      complianceImpact: "unknown" as const,
+      redundantEquipment: "unknown" as const,
+      confidence: "low" as const,
+      source: "store_report" as const,
+      notes: "Store-reported operating facts; facilities review is required before work-order creation. Any later monetary or downtime estimates are planning context, not verified losses.",
+    };
+    const evidence = await Promise.all(command.evidence.map(async (upload) => ({
+      name: upload.name,
+      mediaType: upload.mediaType,
+      size: upload.size,
+      sha256: await hashUpload(upload),
+    })));
+    const requestHash = await hashRequest({
+      version: 1,
+      tokenHash: access.tokenHash,
+      organizationId,
+      storeId: storeView.id,
+      reporterName,
+      employeeId: employeeId ?? null,
+      problem,
+      area: area ?? null,
+      storedProblem,
+      urgency: command.urgency,
+      priority,
+      impact,
+      evidence,
+    });
+    const receiptFor = async (request: ServiceRequest, replayed = false): Promise<StoreIssueReceipt> => {
+      if (request.storeId !== storeView.id) {
+        throw new PublicWorkflowError("The prior issue receipt does not match this store.", 409, "idempotency_result_mismatch");
+      }
       const uploadActor: ActorContext = { actorType: "store_device", actorName: reporterName, organizationId };
       const uploads = await receiveUploads({
         organizationId,
@@ -1365,6 +1718,7 @@ const gateway: PublicOperationsGateway = {
         subjectId: request.id,
         uploads: command.evidence,
         visibility: "internal",
+        idempotencyKey: submissionKey,
         actor: uploadActor,
       });
       return {
@@ -1376,12 +1730,44 @@ const gateway: PublicOperationsGateway = {
         requestNumber: request.reference,
         storeNumber: storeView.storeNumber,
         evidenceReceived: uploads.received,
-        evidenceStorageLabel: uploads.label,
+        evidenceStorageLabel: replayed && uploads.label
+          ? `The issue was already recorded. ${uploads.label}`
+          : uploads.label,
         nextStep: command.urgency === "urgent_safety"
           ? "The report is marked as a safety or shutdown concern. Follow store emergency procedures now; this form does not replace emergency services."
           : "The store manager will review the report and decide the next action. The original report remains in the record.",
+        replayed: replayed || undefined,
       };
+    };
+    const replayPrior = async () => idempotentServiceRequestResult({
+      repository,
+      organizationId,
+      submissionKey,
+      requestHash,
+    });
+    const replayed = await replayPrior();
+    if (replayed) return receiptFor(replayed, true);
+    try {
+      const request = await createServiceRequest({ repository }, {
+        organizationId,
+        storeId: storeView.id,
+        reporterName,
+        reporterEmployeeId: employeeId,
+        problem: storedProblem,
+        priority,
+        impact,
+        idempotency: {
+          key: submissionKey,
+          command: PUBLIC_STORE_ISSUE_COMMAND,
+          requestHash,
+          expiresAt: idempotencyExpiresAt(),
+        },
+        actor: { actorType: "store_device", actorName: reporterName, organizationId },
+      });
+      return receiptFor(request);
     } catch (error) {
+      const concurrentReplay = await replayPrior();
+      if (concurrentReplay) return receiptFor(concurrentReplay, true);
       return publicDomainError(error);
     }
   },

@@ -12,6 +12,16 @@ import { ensureNorthlinePostgresSeed } from "@/lib/ops/northline-postgres-bootst
 import { createOpsPostgresRepository } from "@/lib/ops/postgres-repository";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { seedOpsRepository } from "@/lib/ops/seed";
+import {
+  buildNorthlineCompatibilityMarker,
+  buildNorthlineCurrentSeedMarker,
+  NORTHLINE_BOOTSTRAP_COMMAND,
+  NORTHLINE_COMPATIBILITY_COMMAND,
+  NORTHLINE_SEED_COMPATIBILITY_MARKER,
+  NORTHLINE_SEED_VERSION,
+  planNorthlineSeedRelease,
+  type NorthlineSeedMarkerRow,
+} from "@/lib/ops/northline-seed-release";
 import type { OpsFixture, OpsId } from "@/lib/ops/types";
 import { getPostgresPool } from "@/lib/server/postgres-pool";
 import {
@@ -19,7 +29,6 @@ import {
   isRenderNodeRuntime,
 } from "@/lib/server/persistence-runtime";
 
-const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-15-v9";
 let durableRepository: Promise<OpsRepository> | undefined;
 let repositoryProxy: OpsRepository | undefined;
 
@@ -44,37 +53,47 @@ async function getD1BindingLazily(): Promise<D1Database | undefined> {
 }
 
 async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepository) {
-  let marker: Record<string, unknown> | null;
+  let markers: NorthlineSeedMarkerRow[];
   try {
-    marker = await binding
-      .prepare("SELECT result_id FROM ops_idempotency_keys WHERE organization_id = ? AND key = ? LIMIT 1")
-      .bind(NORTHLINE_ORGANIZATION_ID, NORTHLINE_SEED_VERSION)
-      .first<Record<string, unknown>>();
+    const result = await binding
+      .prepare(`SELECT key, command, result_id FROM ops_idempotency_keys
+        WHERE organization_id = ?
+          AND (key IN (?, ?) OR command IN (?, ?))
+        ORDER BY created_at DESC, key DESC`)
+      .bind(
+        NORTHLINE_ORGANIZATION_ID,
+        NORTHLINE_SEED_VERSION,
+        NORTHLINE_SEED_COMPATIBILITY_MARKER,
+        NORTHLINE_BOOTSTRAP_COMMAND,
+        NORTHLINE_COMPATIBILITY_COMMAND,
+      )
+      .all<NorthlineSeedMarkerRow>();
+    markers = result.results ?? [];
   } catch (error) {
     throw new Error(
       "D1 is bound but the operations migration is not applied. Apply drizzle/0004_ops_platform_foundation.sql before serving the application.",
       { cause: error },
     );
   }
-  if (marker) return;
+  const plan = planNorthlineSeedRelease(markers);
+  if (plan.kind === "already_current" || plan.kind === "already_preserved") return;
+
+  if (plan.kind === "preserve_existing") {
+    // Do not merge a newer fictional history into a tenant that may have real
+    // preview mutations. A deliberate guarded reset is the only path from an
+    // older complete fixture to the exact current deterministic fixture.
+    await repository.atomicWrite([
+      buildNorthlineCompatibilityMarker(plan.sourceVersion),
+    ]);
+    return;
+  }
 
   // INSERT OR IGNORE makes bootstrap restartable after a partial failure and
-  // safe when two fresh isolates race. The completion marker is written last.
+  // safe when fresh isolates running this same release race. The completion
+  // marker is written last. Cross-release initialization is an operational
+  // deployment boundary because D1 has no cross-version application lock.
   await seedOpsRepository(repository, buildNorthlinePresentationFixture());
-  await repository.atomicWrite([{
-    sql: `INSERT OR IGNORE INTO ops_idempotency_keys
-      (organization_id, key, command, result_id, request_hash, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    params: [
-      NORTHLINE_ORGANIZATION_ID,
-      NORTHLINE_SEED_VERSION,
-      "bootstrap_ops_fixture",
-      NORTHLINE_ORGANIZATION_ID,
-      NORTHLINE_SEED_VERSION,
-      NORTHLINE_AS_OF,
-      "9999-12-31T23:59:59.999Z",
-    ],
-  }]);
+  await repository.atomicWrite([buildNorthlineCurrentSeedMarker()]);
 }
 
 function initializeDurableRepository(factory: () => Promise<OpsRepository>) {

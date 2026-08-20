@@ -20,6 +20,11 @@ import {
   buildSyntheticScaleFixture,
 } from "@/lib/ops/fixtures";
 import { createNorthlineFixtureRepository } from "@/lib/ops/fixture-repository";
+import {
+  reviewRequestImpactAssessment,
+  type RequestImpactAssessmentDraft,
+} from "@/lib/ops/request-impact-assessment";
+import type { RequestImpactAssessment, ServiceRequest } from "@/lib/ops/types";
 
 function commandServices(): OpsCommandServices {
   let id = 0;
@@ -36,6 +41,41 @@ const actor = {
   actorId: "membership-northline-facilities",
   actorName: "Jordan Lee",
 };
+
+function impactDraft(assessment: RequestImpactAssessment): RequestImpactAssessmentDraft {
+  return {
+    storeOperatingState: assessment.storeOperatingState,
+    safetyConcern: assessment.safetyConcern,
+    productInventoryRisk: assessment.productInventoryRisk,
+    productInventoryValueMinor: assessment.productInventoryValue?.amountMinor,
+    productInventoryCurrency: assessment.productInventoryValue?.currency,
+    customersAffected: assessment.customersAffected,
+    complianceImpact: assessment.complianceImpact,
+    capacityUnavailableBps: assessment.capacityUnavailableBps,
+    redundantEquipment: assessment.redundantEquipment,
+    revenueFunctionImpact: assessment.revenueFunctionImpact,
+    estimatedDailyRevenueExposureMinor: assessment.estimatedDailyRevenueExposure?.amountMinor,
+    estimatedDailyRevenueExposureCurrency: assessment.estimatedDailyRevenueExposure?.currency,
+    estimatedDowntimeMinutes: assessment.estimatedDowntimeMinutes,
+    confidence: assessment.confidence,
+    source: assessment.source,
+    notes: assessment.notes,
+  };
+}
+
+async function reviewRequestImpact(services: OpsCommandServices, request: ServiceRequest) {
+  const latest = (await services.repository.listRequestImpactAssessments(request.organizationId, request.id)).at(-1);
+  if (!latest) throw new Error("Request impact fixture is missing");
+  return reviewRequestImpactAssessment(services, {
+    organizationId: request.organizationId,
+    requestId: request.id,
+    expectedRequestStatus: "submitted",
+    expectedLatestAssessmentId: latest.id,
+    disposition: "confirmed",
+    assessment: impactDraft(latest),
+    actor,
+  });
+}
 
 describe("operations fixtures", () => {
   it("keeps the showcase fictional, deterministic, deep, and separate from scale proof", () => {
@@ -57,7 +97,7 @@ describe("operations fixtures", () => {
     const story = fixture.workOrders.find((row) => row.id === NORTHLINE_DEMO_HANDLES.storyWorkOrderId)!;
     expect(story.assetId).toBe(NORTHLINE_DEMO_HANDLES.storyAssetId);
     expect(story.componentId).toBe("component-104-compressor");
-    expect(fixture.visits.filter((row) => row.workOrderId === story.id)).toHaveLength(2);
+    expect(new Set(fixture.siteVisitWorkOrders.filter((row) => row.workOrderId === story.id).map((row) => row.visitId)).size).toBe(2);
     const publicWork = fixture.workOrders.find((row) => row.id === NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId)!;
     expect(publicWork.status).toBe("issued");
     expect(publicWork.componentId).toBe("component-104-evaporator-fan");
@@ -100,6 +140,7 @@ describe("canonical work and provider commands", () => {
   it("creates store-only work, allocates a safe number, and commits source + audit + outbox", async () => {
     const svc = commandServices();
     const request = await createServiceRequest(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", reporterName: "Casey Clerk", problem: "Unknown equipment is making a loud vibration", actor });
+    await reviewRequestImpact(svc, request);
     const workOrder = await createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", requestId: request.id, problem: request.problem, accountableParty: "Facilities coordinator", nextAction: "Choose service provider", actor });
     expect(workOrder.number).toMatch(/^NL-2026-\d{4}$/);
     expect(workOrder.categoryKey).toBeUndefined();
@@ -113,6 +154,7 @@ describe("canonical work and provider commands", () => {
   it("rejects cross-store asset classification and repeat request conversion", async () => {
     const svc = commandServices();
     const request = await createServiceRequest(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", reporterName: "Casey Clerk", problem: "Cooler alarm", actor });
+    await reviewRequestImpact(svc, request);
     await expect(createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", requestId: request.id, problem: request.problem, categoryKey: "refrigeration", assetId: "asset-104-beer-cave", accountableParty: "Facilities", nextAction: "Review", actor })).rejects.toMatchObject({ code: "VALIDATION" });
     await createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", requestId: request.id, problem: request.problem, accountableParty: "Facilities", nextAction: "Review", actor });
     await expect(createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", requestId: request.id, problem: request.problem, accountableParty: "Facilities", nextAction: "Review", actor })).rejects.toMatchObject({ code: "CONFLICT" });
@@ -156,6 +198,7 @@ describe("canonical work and provider commands", () => {
   it("binds issued links to one immutable revision and keeps proposed dates pending facilities review", async () => {
     const svc = commandServices();
     const request = await createServiceRequest(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", reporterName: "Casey Clerk", problem: "Beer cave fan noise", priority: "urgent", actor });
+    await reviewRequestImpact(svc, request);
     const workOrder = await createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: request.storeId, requestId: request.id, problem: request.problem, categoryKey: "refrigeration", assetId: "asset-101-beer-cave", accountableParty: "Facilities", nextAction: "Assign", actor });
     const assignment = await assignWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: workOrder.id, kind: "outside_vendor", vendorId: "vendor-northline-summit", actor });
     const issuance = await issueWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: workOrder.id, assignmentId: assignment.id, revision: 1, channel: "email", authorizationSnapshot: { organizationName: "Northline Fuel & Market", workOrderNumber: workOrder.number, store: { id: workOrder.storeId, storeNumber: "101", name: "Northline Cedar Grove", formattedAddress: "101 Market Way, Cedar Grove, MI 49001" }, vendor: { id: "vendor-northline-summit", name: "Summit Refrigeration" }, problem: workOrder.problem, priority: "urgent", billingInstruction: `Reference operator work order ${workOrder.number} on all service tickets and invoices.` }, publicToken: { tokenHash: "a".repeat(64), expiresAt: "2026-08-17T19:00:00.000Z" }, actor });

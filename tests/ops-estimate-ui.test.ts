@@ -93,7 +93,7 @@ describe("vendor bid presentation", () => {
     expect(markup).toContain("Bid requests are pricing only");
     expect(markup).toContain("Bid scope");
     expect(markup).toContain("Bid due Aug 12, 2026, 5:00 PM");
-    expect(markup).toContain("Select bid for service authorization");
+    expect(markup).toContain("Select provider — authorization is next");
     expect(markup).toContain("Send another bid request");
     expect(markup).toContain("no assignment, site visit, check-in, recorded cost, or billing is created");
     expect(markup).not.toContain("Estimate only");

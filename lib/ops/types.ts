@@ -27,6 +27,7 @@ export type WorkOrderStatus =
   | "waiting_on_vendor"
   | "waiting_on_parts"
   | "completed_pending_review"
+  | "resolved"
   | "closed"
   | "cancelled";
 export type AssignmentKind = "internal" | "outside_vendor" | "choose_later";
@@ -64,6 +65,16 @@ export type VisitOutcome =
   | "inspection_complete"
   | "pm_complete"
   | "other";
+export type SiteVisitWorkOrderOutcome =
+  | "completed"
+  | "diagnosis_only"
+  | "quote_required"
+  | "parts_required"
+  | "return_visit_required"
+  | "no_issue_found"
+  | "store_access_unavailable"
+  | "work_not_authorized"
+  | "not_addressed";
 export type LocationResult =
   | "verified"
   | "outside_geofence"
@@ -82,6 +93,54 @@ export type EvidenceKind =
   | "store_confirmation"
   | "amendment";
 export type FollowUpStatus = "open" | "completed" | "cancelled";
+export type WorkflowTaskType =
+  | "review_issue"
+  | "approve_quote"
+  | "vendor_response_required"
+  | "confirm_store_access"
+  | "submit_quote"
+  | "choose_service_provider"
+  | "schedule_service"
+  | "record_service_outcome"
+  | "schedule_return_visit"
+  | "verify_repair"
+  | "close_verified_work"
+  | "review_warranty"
+  | "resolve_invoice_exception"
+  | "respond_service_discrepancy"
+  | "other";
+export type WorkflowTaskAssigneeType = "user" | "team" | "vendor" | "role";
+export type WorkflowTaskPriority = "critical" | "high" | "normal" | "low";
+export type WorkflowTaskStatus = "open" | "in_progress" | "completed" | "cancelled";
+export type WorkflowTaskSlaClock =
+  | "intake_review"
+  | "approval"
+  | "vendor_response"
+  | "scheduling"
+  | "arrival"
+  | "operational_restoration"
+  | "completion"
+  | "verification"
+  | "invoice_submission"
+  | "warranty_response"
+  | "service_discrepancy_response";
+export type WorkflowTaskSlaPauseReason =
+  | "awaiting_vendor"
+  | "awaiting_parts"
+  | "awaiting_approval"
+  | "awaiting_store_access"
+  | "awaiting_customer"
+  | "weather_or_site_condition"
+  | "scheduled_future_event"
+  | "external_dependency"
+  | "other";
+export type WorkflowTaskSlaOwnerType =
+  | "membership"
+  | "team"
+  | "vendor"
+  | "store"
+  | "external_party"
+  | "system";
 export type ExceptionStatus = "open" | "acknowledged" | "resolved";
 export type ExceptionKind =
   | "no_work_order"
@@ -94,10 +153,44 @@ export type ExceptionKind =
   | "unmatched_invoice"
   | "amount_above_authorization"
   | "overdue_pm";
-export type PmOccurrenceStatus = "due" | "scheduled" | "completed" | "missed" | "waived";
+export type PmOccurrenceStatus =
+  | "upcoming"
+  | "unscheduled"
+  | "proposed"
+  | "scheduled"
+  | "due"
+  | "completed"
+  | "completed_early"
+  | "completed_on_time"
+  | "completed_late"
+  | "missed"
+  | "waived"
+  | "cancelled";
 export type CostLineKind = "labor" | "parts" | "travel" | "materials" | "other";
 export type InvoiceMatchStatus = "unmatched" | "suggested" | "confirmed" | "rejected";
+export type SchedulingMode = "platform_directed" | "platform_proposed_vendor_confirmed" | "vendor_planned";
+export type ServiceRunStatus = "recommended" | "proposed" | "countered" | "accepted" | "committed" | "in_progress" | "completed" | "declined" | "cancelled";
+export type ServiceRunResponseKind = "accepted" | "countered" | "stop_change_requested" | "work_order_change_requested" | "insufficient_capacity" | "declined";
+export type PmWorkItemStatus = "pending" | "in_progress" | "completed" | "deficient" | "waived" | "cancelled";
+export type ChecklistResponseKind = "pass" | "fail" | "not_applicable" | "measurement" | "text";
+export type WarrantyCoverageType = "labor" | "part" | "travel" | "diagnostic" | "refrigerant_consumable" | "replacement_equipment" | "other_material";
+export type WarrantyRoutingRule = "original_vendor_mandatory" | "original_vendor_first_right_to_cure" | "manufacturer_authorized_provider" | "any_approved_provider" | "manual_review";
+export type WarrantyCaseStatus = "potential" | "diagnosis_required" | "confirmed" | "not_covered" | "routed" | "completed" | "closed";
+export type CustomerChargeStatus = "undetermined" | "customer_responsible" | "warranty_covered" | "split";
+export type InvoiceStatus = "received" | "matching" | "exception" | "warranty_hold" | "discrepancy_hold" | "approved_for_payment" | "partially_paid" | "paid" | "void";
+export type InvoiceLineCategory = "labor" | "part" | "travel" | "diagnostic" | "equipment_rental" | "disposal" | "permit" | "tax" | "other_fee";
+export type InvoiceAllocationMethod = "equal" | "labor" | "work_order_value" | "manual" | "contract_rule";
+export type ValueEventCategory = "realized_verified" | "identified_exposure" | "estimated_opportunity";
 export type ActorType = "user" | "vendor_link" | "technician" | "store_device" | "system" | "support";
+
+export type ApprovalPolicyScopeKind = "organization" | "region" | "store";
+export type ApprovalPolicyStatus = "active" | "superseded" | "inactive";
+export type ApprovalSubjectType = "service_request" | "work_order";
+export type ApprovalDecisionKind = "approved" | "rejected" | "escalated" | "cancelled";
+export type ApprovalRequiredRole = Extract<
+  OrganizationRole,
+  "executive" | "facilities_admin" | "regional_manager" | "store_manager" | "finance_reviewer"
+>;
 
 export interface Money {
   amountMinor: number;
@@ -241,8 +334,203 @@ export interface ServiceRequest {
   problem: string;
   priority: WorkOrderPriority;
   status: RequestStatus;
+  /** Monotonic optimistic-concurrency token for request lifecycle mutations. */
+  version?: number;
   submittedAt: IsoDateTime;
   convertedWorkOrderId?: OpsId;
+}
+
+/** Company-level capability evidence. Technician-level qualification is never inferred from this record. */
+export interface VendorQualification {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorId: OpsId;
+  tradeKey: string;
+  workType?: string;
+  serviceType?: string;
+  assetType?: string;
+  componentType?: string;
+  pmWork: boolean;
+  emergencyResponse: boolean;
+  warrantyWork: boolean;
+  manufacturerAuthorization?: string;
+  regionId?: OpsId;
+  storeId?: OpsId;
+  afterHours: boolean;
+  maximumJobAmount?: Money;
+  requiredLicense?: string;
+  requiredCertification?: string;
+  effectiveAt: IsoDateTime;
+  expiresAt?: IsoDateTime;
+  status: "active" | "expired" | "suspended";
+  createdAt: IsoDateTime;
+}
+
+export interface VendorComplianceDocument {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorId: OpsId;
+  documentType: "insurance" | "license" | "certification" | "tax" | "safety" | "other";
+  issuer?: string;
+  reference?: string;
+  effectiveAt?: IsoDateTime;
+  expiresAt?: IsoDateTime;
+  reviewStatus: "pending" | "approved" | "rejected" | "expired";
+  blocking: boolean;
+  storedFileId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export interface VendorContract {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorId: OpsId;
+  name: string;
+  ownerMembershipId: OpsId;
+  status: "active" | "inactive" | "terminated";
+  createdAt: IsoDateTime;
+}
+
+export interface ContractVersion {
+  id: OpsId;
+  organizationId: OpsId;
+  contractId: OpsId;
+  vendorId: OpsId;
+  version: number;
+  sourceAgreementReference: string;
+  status: "draft" | "active" | "superseded" | "expired";
+  effectiveStartsAt: IsoDateTime;
+  effectiveEndsAt?: IsoDateTime;
+  renewalAt?: IsoDateTime;
+  noticeDays?: number;
+  priceEscalationAt?: IsoDateTime;
+  supersedesContractVersionId?: OpsId;
+  currency: CurrencyCode;
+  preferredProvider: boolean;
+  exclusiveProvider: boolean;
+  reactiveWorkAllowed: boolean;
+  emergencyWorkAllowed: boolean;
+  pmWorkAllowed: boolean;
+  subcontractorPolicy: "prohibited" | "approval_required" | "allowed";
+  schedulingMode: SchedulingMode;
+  reservedCapacityMinutes: number;
+  nteAmount?: Money;
+  materialsMarkupBps: number;
+  routeDiscountBps: number;
+  evidenceRequirements: string[];
+  complianceRequirements: string[];
+  warrantyLaborDays?: number;
+  warrantyPartsDays?: number;
+  warrantyTravelDays?: number;
+  createdByMembershipId: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export interface ContractScope {
+  id: OpsId;
+  organizationId: OpsId;
+  contractVersionId: OpsId;
+  scopeKind: "organization" | "region" | "store" | "trade" | "asset_type" | "pm_program";
+  scopeId: OpsId | string;
+  included: boolean;
+}
+
+export interface RateCardLine {
+  id: OpsId;
+  organizationId: OpsId;
+  contractVersionId: OpsId;
+  chargeType: "labor" | "trip" | "diagnostic" | "pm" | "material_markup" | "other";
+  description: string;
+  unit: "hour" | "visit" | "occurrence" | "flat" | "percent";
+  amount: Money;
+  effectiveStartsAt: IsoDateTime;
+  effectiveEndsAt?: IsoDateTime;
+}
+
+export interface ServiceLevelPolicy {
+  id: OpsId;
+  organizationId: OpsId;
+  contractVersionId: OpsId;
+  priority: WorkOrderPriority;
+  responseMinutes: number;
+  arrivalMinutes: number;
+  completionMinutes: number;
+  calendar: "business_hours" | "24x7";
+}
+
+export interface SchedulingPolicy {
+  id: OpsId;
+  organizationId: OpsId;
+  contractVersionId: OpsId;
+  maximumRouteMinutes: number;
+  maximumStores: number;
+  maximumTravelMinutes: number;
+  maximumUtilizationBps: number;
+  perStopBufferMinutes: number;
+  travelBufferBps: number;
+  documentationBufferMinutes: number;
+  uncertaintyBufferBps: number;
+  emergencyReserveMinutes: number;
+}
+
+export interface VendorCapacity {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorId: OpsId;
+  regionId: OpsId;
+  tradeKey: string;
+  startsAt: IsoDateTime;
+  endsAt: IsoDateTime;
+  crewMinutes: number;
+  committedMinutes: number;
+  maximumRouteMinutes: number;
+  maximumStores: number;
+  maximumTravelMinutes: number;
+  blackout: boolean;
+  emergencyReserveMinutes: number;
+  variableWorkLimitMinutes: number;
+  specialEquipment: string[];
+  createdAt: IsoDateTime;
+}
+
+export type StoreOperatingState = "open" | "partially_operational" | "unable_to_operate" | "unknown";
+export type ImpactSafetyConcern = "none_reported" | "potential" | "immediate" | "unknown";
+export type ProductInventoryRisk = "none_reported" | "at_risk" | "loss_reported" | "unknown";
+export type ImpactAnswer = "yes" | "no" | "unknown";
+export type ComplianceImpact = "none_reported" | "potential" | "confirmed" | "unknown";
+export type RevenueFunctionImpact = "fuel" | "foodservice" | "refrigerated_merchandise" | "beverages" | "lottery" | "car_wash" | "other";
+export type ImpactConfidence = "low" | "medium" | "high";
+export type ImpactSource = "store_report" | "manager_review" | "imported" | "not_assessed";
+
+/**
+ * Append-only assessment of the operating impact reported for a store issue.
+ * Monetary values are reported exposure estimates, never verified revenue loss.
+ */
+export interface RequestImpactAssessment {
+  id: OpsId;
+  organizationId: OpsId;
+  requestId: OpsId;
+  storeId: OpsId;
+  assessmentKind: "initial_report" | "review";
+  reviewDisposition?: "confirmed" | "revised";
+  storeOperatingState: StoreOperatingState;
+  safetyConcern: ImpactSafetyConcern;
+  productInventoryRisk: ProductInventoryRisk;
+  productInventoryValue?: Money;
+  customersAffected: ImpactAnswer;
+  complianceImpact: ComplianceImpact;
+  capacityUnavailableBps?: number;
+  redundantEquipment: ImpactAnswer;
+  revenueFunctionImpact?: RevenueFunctionImpact;
+  estimatedDailyRevenueExposure?: Money;
+  estimatedDowntimeMinutes?: number;
+  confidence: ImpactConfidence;
+  source: ImpactSource;
+  notes?: string;
+  assessedByActorType: ActorType;
+  assessedByActorId?: OpsId;
+  assessedByActorName: string;
+  assessedAt: IsoDateTime;
 }
 
 export interface WorkOrder {
@@ -274,6 +562,7 @@ export interface WorkOrder {
   vendorInvoiceNumber?: string;
   externalAccountingPo?: string;
   createdAt: IsoDateTime;
+  resolvedAt?: IsoDateTime;
   closedAt?: IsoDateTime;
 }
 
@@ -311,6 +600,73 @@ export interface VendorResponse {
   proposedAt?: IsoDateTime;
   message?: string;
   respondedAt: IsoDateTime;
+}
+
+/**
+ * Effective-dated policy versions are never edited in place. A change creates
+ * another row with the same policy key and a higher version, preserving the
+ * exact rule that governed every historical approval request.
+ */
+export interface ApprovalPolicy {
+  id: OpsId;
+  organizationId: OpsId;
+  policyKey: string;
+  version: number;
+  name: string;
+  scopeKind: ApprovalPolicyScopeKind;
+  scopeId: OpsId;
+  categoryKey?: string;
+  minAmountMinor: number;
+  maxAmountMinor?: number;
+  currency: CurrencyCode;
+  requiredRole: ApprovalRequiredRole;
+  escalationRole?: ApprovalRequiredRole;
+  status: ApprovalPolicyStatus;
+  supersedesPolicyId?: OpsId;
+  createdByMembershipId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
+/**
+ * Immutable snapshot of the policy and commercial context presented for a
+ * decision. Current status is derived from append-only decisions.
+ */
+export interface ApprovalRequest {
+  id: OpsId;
+  organizationId: OpsId;
+  subjectType: ApprovalSubjectType;
+  subjectId: OpsId;
+  storeId: OpsId;
+  categoryKey?: string;
+  amount: Money;
+  policyId: OpsId;
+  policyKey: string;
+  policyVersion: number;
+  policyName: string;
+  policyScopeKind: ApprovalPolicyScopeKind;
+  policyScopeId: OpsId;
+  requiredRole: ApprovalRequiredRole;
+  escalationRole?: ApprovalRequiredRole;
+  requestedByMembershipId?: OpsId;
+  requestedByName: string;
+  reason?: string;
+  requestedAt: IsoDateTime;
+  dueAt?: IsoDateTime;
+  parentApprovalRequestId?: OpsId;
+}
+
+/** Append-only human decision. Corrections require a new approval request. */
+export interface ApprovalDecision {
+  id: OpsId;
+  organizationId: OpsId;
+  approvalRequestId: OpsId;
+  decision: ApprovalDecisionKind;
+  decidedByMembershipId?: OpsId;
+  decidedByName: string;
+  decidedByRole: ApprovalRequiredRole;
+  reason?: string;
+  escalatedToRole?: ApprovalRequiredRole;
+  decidedAt: IsoDateTime;
 }
 
 /**
@@ -373,6 +729,11 @@ export interface VisitSession {
   workOrderId?: OpsId;
   unmatchedReason?: string;
   technicianName: string;
+  technicianPhoneOrPin?: string;
+  crewCount?: number;
+  additionalTechnicianNames?: string[];
+  vehicleIdentifier?: string;
+  arrivalNote?: string;
   providerName: string;
   purpose: string;
   status: VisitStatus;
@@ -383,6 +744,48 @@ export interface VisitSession {
   outcome?: VisitOutcome;
   outcomeNotes?: string;
   observedDurationSeconds?: number;
+}
+
+/**
+ * One immutable work selection within a site visit. A visit owns the shared
+ * presence evidence, while this record owns the outcome and next obligation
+ * for exactly one selected operator work order.
+ */
+export interface SiteVisitWorkOrder {
+  id: OpsId;
+  organizationId: OpsId;
+  visitId: OpsId;
+  workOrderId: OpsId;
+  ordinal: number;
+  linkedByActorType: ActorType;
+  linkedByActorId?: OpsId;
+  linkedByActorName: string;
+  linkedAt: IsoDateTime;
+  outcome?: SiteVisitWorkOrderOutcome;
+  outcomeNotes?: string;
+  outcomeRecordedByActorType?: ActorType;
+  outcomeRecordedByActorId?: OpsId;
+  outcomeRecordedByActorName?: string;
+  outcomeRecordedAt?: IsoDateTime;
+  followUpId?: OpsId;
+}
+
+export type WorkOrderVerificationDecision = "verified" | "rejected";
+
+/** Append-only internal decision over one exact per-work-order visit outcome. */
+export interface WorkOrderVerification {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  siteVisitWorkOrderId: OpsId;
+  outcome: SiteVisitWorkOrderOutcome;
+  outcomeRecordedAt: IsoDateTime;
+  cycle: number;
+  decision: WorkOrderVerificationDecision;
+  reason?: string;
+  decidedByMembershipId: OpsId;
+  decidedByName: string;
+  decidedAt: IsoDateTime;
 }
 
 export interface VisitEvidence {
@@ -412,7 +815,7 @@ export interface EntityFileLink {
   id: OpsId;
   organizationId: OpsId;
   fileId: OpsId;
-  entityType: "request" | "work_order" | "visit" | "asset" | "invoice_reference";
+  entityType: "request" | "work_order" | "visit" | "asset" | "invoice_reference" | "invoice";
   entityId: OpsId;
   purpose: "photo" | "service_document" | "invoice" | "warranty" | "other";
   visibility: "internal" | "vendor_shared" | "public_receipt";
@@ -431,6 +834,89 @@ export interface FollowUp {
   status: FollowUpStatus;
   createdAt: IsoDateTime;
   completedAt?: IsoDateTime;
+}
+
+/**
+ * A first-class obligation for the active reactive loop. Most tasks attach to
+ * one canonical work order; intake review tasks attach to the source request
+ * until a work order is created. Exactly one subject id is present.
+ */
+export interface WorkflowTask {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId?: OpsId;
+  serviceRequestId?: OpsId;
+  taskType: WorkflowTaskType;
+  title: string;
+  reason: string;
+  assigneeType: WorkflowTaskAssigneeType;
+  /** Membership, team, or vendor id. Role assignees use assigneeRole. */
+  assigneeId?: OpsId;
+  assigneeRole?: OrganizationRole;
+  assigneeName: string;
+  priority: WorkflowTaskPriority;
+  status: WorkflowTaskStatus;
+  blocking: boolean;
+  requiredForProgress: boolean;
+  dueAt?: IsoDateTime;
+  /** Required instead of dueAt when an explicit policy excludes this task from an SLA. */
+  noSlaReason?: string;
+  applicableSlaClock?: WorkflowTaskSlaClock;
+  completionCriteria: string;
+  escalationDestination: string;
+  escalationLevel: number;
+  sourceFollowUpId?: OpsId;
+  sourceApprovalRequestId?: OpsId;
+  createdByActorType: ActorType;
+  createdByActorId?: OpsId;
+  createdByActorName: string;
+  createdAt: IsoDateTime;
+  startedByActorType?: ActorType;
+  startedByActorId?: OpsId;
+  startedByActorName?: string;
+  startedAt?: IsoDateTime;
+  completedByActorType?: ActorType;
+  completedByActorId?: OpsId;
+  completedByActorName?: string;
+  completedAt?: IsoDateTime;
+  cancelledByActorType?: ActorType;
+  cancelledByActorId?: OpsId;
+  cancelledByActorName?: string;
+  cancelledAt?: IsoDateTime;
+  resolutionNote?: string;
+}
+
+/** Immutable beginning of an SLA hold. Resumption appends a separate row. */
+export interface WorkflowTaskSlaPause {
+  id: OpsId;
+  organizationId: OpsId;
+  workflowTaskId: OpsId;
+  workOrderId: OpsId;
+  reasonCode: WorkflowTaskSlaPauseReason;
+  reasonDetail: string;
+  ownerType: WorkflowTaskSlaOwnerType;
+  ownerId?: OpsId;
+  ownerName: string;
+  affectedClocks: WorkflowTaskSlaClock[];
+  expectedResumeAt?: IsoDateTime;
+  pausedByActorType: ActorType;
+  pausedByActorId?: OpsId;
+  pausedByActorName: string;
+  pausedAt: IsoDateTime;
+}
+
+/** Immutable closure of one SLA pause; the referenced pause is never edited. */
+export interface WorkflowTaskSlaResume {
+  id: OpsId;
+  organizationId: OpsId;
+  workflowTaskId: OpsId;
+  workOrderId: OpsId;
+  pauseId: OpsId;
+  resumedByActorType: ActorType;
+  resumedByActorId?: OpsId;
+  resumedByActorName: string;
+  resumedAt: IsoDateTime;
+  note?: string;
 }
 
 export interface OpsException {
@@ -563,6 +1049,31 @@ export interface ReplacementEvent {
   createdAt: IsoDateTime;
 }
 
+export type LifecycleRecommendationKind = "repair" | "replace" | "capital_review";
+export type LifecycleDecisionKind = "repair" | "replace" | "defer" | "investigate";
+
+export interface LifecycleRecommendation {
+  id: OpsId;
+  organizationId: OpsId;
+  assetId: OpsId;
+  workOrderId?: OpsId;
+  version: number;
+  modelVersion: string;
+  recommendation: LifecycleRecommendationKind;
+  confidence: "low" | "medium" | "high";
+  inputsJson: string;
+  explanation: string;
+  missingData: string[];
+  userDecision: LifecycleDecisionKind;
+  userReason: string;
+  decidedByMembershipId: OpsId;
+  decidedAt: IsoDateTime;
+  actualOutcome?: "repaired" | "replaced" | "retired_without_replacement" | "still_in_service";
+  actualOutcomeAt?: IsoDateTime;
+  replacementEventId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
 export interface AssetComponent {
   id: OpsId;
   organizationId: OpsId;
@@ -576,15 +1087,75 @@ export interface AssetComponent {
   createdAt: IsoDateTime;
 }
 
+export interface MaintenanceProgram {
+  id: OpsId;
+  organizationId: OpsId;
+  programKey: string;
+  version: number;
+  name: string;
+  tradeKey: string;
+  workType: string;
+  applicableAssetTypes: string[];
+  frequencyDays: number;
+  recurrenceKind: "fixed_calendar" | "completion_based";
+  dueWindowDays: number;
+  seasonalStartMonth?: number;
+  seasonalEndMonth?: number;
+  checklistTemplateId: OpsId;
+  requiredEvidenceKinds: EvidenceKind[];
+  expectedDurationMinutes: number;
+  completionCriteria: string;
+  correctiveWorkAuthorityMinor: number;
+  currency: CurrencyCode;
+  deficiencyHandling: "corrective_work_order" | "quote_and_approval" | "review";
+  status: "active" | "superseded" | "inactive";
+  supersedesProgramId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export interface ChecklistTemplate {
+  id: OpsId;
+  organizationId: OpsId;
+  name: string;
+  version: number;
+  items: Array<{
+    key: string;
+    label: string;
+    responseKind: ChecklistResponseKind;
+    required: boolean;
+    measurementUnit?: string;
+    minimumValue?: number;
+    maximumValue?: number;
+    evidenceRequired?: boolean;
+  }>;
+  status: "active" | "superseded" | "inactive";
+  createdAt: IsoDateTime;
+}
+
 export interface PmPlan {
   id: OpsId;
   organizationId: OpsId;
   name: string;
+  programId?: OpsId;
+  programVersion?: number;
   storeId?: OpsId;
   assetId?: OpsId;
+  assetSelectionRule?: string;
   categoryKey?: string;
   cadenceDays: number;
   completionWindowDays: number;
+  preferredVendorId?: OpsId;
+  backupVendorId?: OpsId;
+  contractVersionId?: OpsId;
+  effectiveStartsAt?: IsoDateTime;
+  effectiveEndsAt?: IsoDateTime;
+  accessRequirements?: string;
+  programAuthorizationMinor?: number;
+  budgetMinor?: number;
+  currency?: CurrencyCode;
+  serviceLevelPolicyId?: OpsId;
+  schedulingMode?: SchedulingMode;
+  escalationRules?: string;
   active: boolean;
   createdAt: IsoDateTime;
 }
@@ -596,11 +1167,441 @@ export interface PmOccurrence {
   storeId: OpsId;
   assetId?: OpsId;
   workOrderId?: OpsId;
+  programId?: OpsId;
+  programVersion?: number;
+  planVersion?: number;
   dueAt: IsoDateTime;
   windowStartsAt: IsoDateTime;
   windowEndsAt: IsoDateTime;
+  proposedAt?: IsoDateTime;
+  committedAt?: IsoDateTime;
   status: PmOccurrenceStatus;
   completedAt?: IsoDateTime;
+  result?: string;
+  exceptionReason?: string;
+  recurrenceKey?: string;
+  createdAt?: IsoDateTime;
+}
+
+export interface PmWorkItem {
+  id: OpsId;
+  organizationId: OpsId;
+  occurrenceId: OpsId;
+  workOrderId: OpsId;
+  assetId: OpsId;
+  componentId?: OpsId;
+  requiredTask: string;
+  checklistTemplateId: OpsId;
+  status: PmWorkItemStatus;
+  result?: string;
+  deficiency?: string;
+  followUpId?: OpsId;
+  correctiveWorkOrderId?: OpsId;
+  costAllocationMinor?: number;
+  currency: CurrencyCode;
+  createdAt: IsoDateTime;
+  completedAt?: IsoDateTime;
+}
+
+export interface ChecklistResponse {
+  id: OpsId;
+  organizationId: OpsId;
+  workItemId: OpsId;
+  checklistTemplateId: OpsId;
+  itemKey: string;
+  responseKind: ChecklistResponseKind;
+  passed?: boolean;
+  numericValue?: number;
+  textValue?: string;
+  measurementUnit?: string;
+  evidenceFileIds: OpsId[];
+  recordedByActorType: ActorType;
+  recordedByActorId?: OpsId;
+  recordedByActorName: string;
+  recordedAt: IsoDateTime;
+}
+
+export interface ServiceRun {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorId: OpsId;
+  contractVersionId: OpsId;
+  schedulingMode: SchedulingMode;
+  status: ServiceRunStatus;
+  proposedStartsAt: IsoDateTime;
+  proposedEndsAt: IsoDateTime;
+  responseDueAt: IsoDateTime;
+  committedStartsAt?: IsoDateTime;
+  committedEndsAt?: IsoDateTime;
+  estimatedDriveMinutes: number;
+  estimatedServiceMinutes: number;
+  capacityUsedMinutes: number;
+  expectedWorkValue: Money;
+  estimatedTripReduction: number;
+  estimatedOpportunity: Money;
+  recommendationExplanation: string;
+  requiredQualifications: string[];
+  constraintsJson: string;
+  confidence: "low" | "medium" | "high";
+  schedulerVersion: string;
+  originalRecommendationJson: string;
+  createdByActorType: ActorType;
+  createdByActorId?: OpsId;
+  createdByActorName: string;
+  createdAt: IsoDateTime;
+  acceptedAt?: IsoDateTime;
+  completedAt?: IsoDateTime;
+}
+
+export interface RouteStop {
+  id: OpsId;
+  organizationId: OpsId;
+  serviceRunId: OpsId;
+  storeId: OpsId;
+  sequence: number;
+  proposedArrivalAt: IsoDateTime;
+  committedArrivalAt?: IsoDateTime;
+  estimatedDriveMinutes: number;
+  estimatedServiceMinutes: number;
+  accessRequirements?: string;
+  status: "planned" | "arrived" | "completed" | "skipped";
+  siteVisitId?: OpsId;
+}
+
+export interface ServiceRunWorkOrder {
+  id: OpsId;
+  organizationId: OpsId;
+  serviceRunId: OpsId;
+  routeStopId: OpsId;
+  workOrderId: OpsId;
+  occurrenceId?: OpsId;
+  planned: boolean;
+  estimatedDurationMinutes: number;
+  addressed: boolean;
+  removalReason?: string;
+}
+
+export interface ServiceRunResponse {
+  id: OpsId;
+  organizationId: OpsId;
+  serviceRunId: OpsId;
+  response: ServiceRunResponseKind;
+  requestedStartsAt?: IsoDateTime;
+  requestedStopChangesJson?: string;
+  requestedWorkOrderChangesJson?: string;
+  reasonCode?: string;
+  reasonDetail?: string;
+  travelImpactMinutes: number;
+  dueWindowImpactCount: number;
+  economicImpact: Money;
+  responderName: string;
+  respondedAt: IsoDateTime;
+  resultingPlanJson?: string;
+}
+
+export interface VendorWarrantyProfile {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorId: OpsId;
+  baseLaborDays: number;
+  basePartsDays: number;
+  baseTravelDays: number;
+  baseDiagnosticDays: number;
+  effectiveStartsAt: IsoDateTime;
+  effectiveEndsAt?: IsoDateTime;
+  status: "active" | "superseded" | "inactive";
+  createdAt: IsoDateTime;
+}
+
+export interface WarrantyRule {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorWarrantyProfileId: OpsId;
+  vendorId: OpsId;
+  contractVersionId?: OpsId;
+  quoteId?: OpsId;
+  authorizationId?: OpsId;
+  tradeKey?: string;
+  workType?: string;
+  serviceType?: string;
+  assetType?: string;
+  componentType?: string;
+  manufacturer?: string;
+  model?: string;
+  vendorSuppliedPart?: boolean;
+  customerSuppliedPart?: boolean;
+  regionId?: OpsId;
+  storeId?: OpsId;
+  priority: number;
+  effectiveStartsAt: IsoDateTime;
+  effectiveEndsAt?: IsoDateTime;
+  status: "active" | "superseded" | "inactive";
+  createdAt: IsoDateTime;
+}
+
+export interface WarrantyCoverageLine {
+  id: OpsId;
+  organizationId: OpsId;
+  warrantyRuleId?: OpsId;
+  vendorWarrantyProfileId?: OpsId;
+  coverageType: WarrantyCoverageType;
+  duration: number;
+  durationUnit: "days" | "months" | "years";
+  startEvent: "repair_completion" | "store_verification" | "installation" | "commissioning" | "fixed_date";
+  startDate?: string;
+  endDate?: string;
+  provider: "vendor" | "manufacturer" | "other";
+  obligatedVendorId?: OpsId;
+  routingRule: WarrantyRoutingRule;
+  deductible: Money;
+  maximumCoverage?: Money;
+  conditions?: string;
+  exclusions?: string;
+}
+
+export interface RepairItem {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  siteVisitWorkOrderId: OpsId;
+  vendorId: OpsId;
+  contractVersionId?: OpsId;
+  assetId: OpsId;
+  componentId?: OpsId;
+  failureCode: string;
+  repairAction: string;
+  repairSeverity: "minor" | "moderate" | "major" | "critical";
+  removedComponentId?: OpsId;
+  installedComponentId?: OpsId;
+  partManufacturer?: string;
+  partModel?: string;
+  serialNumber?: string;
+  vendorSupplied: boolean;
+  completionDate: string;
+  verificationDate?: string;
+  laborCost: Money;
+  partCost: Money;
+  rootCause?: string;
+  createdAt: IsoDateTime;
+}
+
+export interface AppliedWarranty {
+  id: OpsId;
+  organizationId: OpsId;
+  repairItemId: OpsId;
+  coverageType: WarrantyCoverageType;
+  provider: "vendor" | "manufacturer" | "other";
+  obligatedVendorId?: OpsId;
+  startDate: string;
+  endDate: string;
+  coveredCharges: string[];
+  routingRule: WarrantyRoutingRule;
+  contractVersionId?: OpsId;
+  policySource: string;
+  ruleSource?: OpsId;
+  originalCalculatedTermsJson: string;
+  createdAt: IsoDateTime;
+}
+
+export interface WarrantyAmendment {
+  id: OpsId;
+  organizationId: OpsId;
+  appliedWarrantyId: OpsId;
+  amendmentKind: "accept_calculated" | "override_coverage" | "add_manufacturer" | "add_other" | "mark_unavailable" | "correct_repair_item";
+  appliesToRepairOnly: boolean;
+  amendedTermsJson: string;
+  reason: string;
+  decidedByMembershipId: OpsId;
+  decidedByName: string;
+  decidedAt: IsoDateTime;
+}
+
+export interface ManufacturerWarranty {
+  id: OpsId;
+  organizationId: OpsId;
+  assetId: OpsId;
+  componentId?: OpsId;
+  manufacturer: string;
+  model?: string;
+  serialNumber?: string;
+  partsCoverage: string;
+  laborCoverage: string;
+  startDate: string;
+  expirationDate: string;
+  authorizedProviderRule?: string;
+  claimRequirements?: string;
+  installingVendorId?: OpsId;
+  administrator?: string;
+  supportingFileId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export interface WarrantyCase {
+  id: OpsId;
+  organizationId: OpsId;
+  requestId?: OpsId;
+  workOrderId: OpsId;
+  assetId: OpsId;
+  componentId?: OpsId;
+  priorRepairItemId?: OpsId;
+  appliedWarrantyId?: OpsId;
+  manufacturerWarrantyId?: OpsId;
+  status: WarrantyCaseStatus;
+  confidence: "low" | "medium" | "high";
+  detectionExplanation: string;
+  diagnosisRequired: boolean;
+  coverageDecision: "pending_diagnosis" | "covered" | "not_covered" | "split";
+  customerChargeStatus: CustomerChargeStatus;
+  invoiceHold: boolean;
+  routingRule: WarrantyRoutingRule;
+  obligatedVendorId?: OpsId;
+  vendorResponseDueAt?: IsoDateTime;
+  createdAt: IsoDateTime;
+  closedAt?: IsoDateTime;
+}
+
+export interface Quote {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  vendorId: OpsId;
+  contractVersionId?: OpsId;
+  quoteNumber: string;
+  version: number;
+  scope: string;
+  subtotal: Money;
+  tax: Money;
+  fees: Money;
+  total: Money;
+  submittedAt: IsoDateTime;
+  expiresAt?: IsoDateTime;
+  supersedesQuoteId?: OpsId;
+}
+
+export interface Authorization {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  authorizationType: "base" | "change_order" | "emergency" | "exception";
+  authorizedAmount: Money;
+  authorizedScope: string;
+  approverMembershipId: OpsId;
+  approverName: string;
+  approvalAuthority: string;
+  authorizedAt: IsoDateTime;
+  reason: string;
+  contractVersionId?: OpsId;
+  supersedesAuthorizationId?: OpsId;
+}
+
+export interface Invoice {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorId: OpsId;
+  contractVersionId?: OpsId;
+  vendorInvoiceNumber: string;
+  invoiceDate: string;
+  subtotal: Money;
+  tax: Money;
+  fees: Money;
+  total: Money;
+  approvedForPayment: Money;
+  paidAmount: Money;
+  status: InvoiceStatus;
+  exceptionReason?: string;
+  supportingFileId?: OpsId;
+  submittedByMembershipId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export interface InvoiceLine {
+  id: OpsId;
+  organizationId: OpsId;
+  invoiceId: OpsId;
+  lineNumber: number;
+  category: InvoiceLineCategory;
+  description: string;
+  quantityThousandths: number;
+  unitAmount: Money;
+  lineAmount: Money;
+  contractRateCardLineId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export interface InvoiceLineAllocation {
+  id: OpsId;
+  organizationId: OpsId;
+  invoiceLineId: OpsId;
+  workOrderId: OpsId;
+  workItemId?: OpsId;
+  repairItemId?: OpsId;
+  siteVisitWorkOrderId?: OpsId;
+  assetId?: OpsId;
+  componentId?: OpsId;
+  storeId: OpsId;
+  tradeKey?: string;
+  amount: Money;
+  method: InvoiceAllocationMethod;
+  confirmedByMembershipId?: OpsId;
+  confirmedAt?: IsoDateTime;
+}
+
+export interface InvoiceException {
+  id: OpsId;
+  organizationId: OpsId;
+  invoiceId: OpsId;
+  invoiceLineId?: OpsId;
+  kind: "duplicate_invoice" | "contract_rate" | "authorization" | "unsupported_trip_charge" | "warranty_hold" | "service_discrepancy_hold" | "allocation_mismatch";
+  status: "open" | "resolved" | "waived";
+  summary: string;
+  amount: Money;
+  detectedAt: IsoDateTime;
+  resolvedAt?: IsoDateTime;
+  resolutionReason?: string;
+}
+
+export interface InvoiceAdjustment {
+  id: OpsId;
+  organizationId: OpsId;
+  invoiceId: OpsId;
+  kind: "credit" | "void" | "deduction" | "refund";
+  amount: Money;
+  reason: string;
+  createdByMembershipId: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export interface ServiceDiscrepancy {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  invoiceId?: OpsId;
+  siteVisitWorkOrderId?: OpsId;
+  discrepancyType: "amount" | "visit_count" | "duration" | "evidence" | "scope" | "other";
+  status: "open" | "vendor_response_pending" | "resolved" | "closed";
+  factsJson: string;
+  vendorResponse?: string;
+  resolution?: string;
+  createdAt: IsoDateTime;
+  resolvedAt?: IsoDateTime;
+}
+
+export interface ValueEvent {
+  id: OpsId;
+  organizationId: OpsId;
+  category: ValueEventCategory;
+  eventType: string;
+  amount: Money;
+  workOrderId?: OpsId;
+  invoiceLineId?: OpsId;
+  serviceRunId?: OpsId;
+  contractVersionId?: OpsId;
+  warrantyCaseId?: OpsId;
+  assetId?: OpsId;
+  approvalDecisionId?: OpsId;
+  sourceDecision: string;
+  deduplicationKey: string;
+  occurredAt: IsoDateTime;
 }
 
 export interface CostLine {
@@ -709,27 +1710,71 @@ export interface OpsFixture {
   vendors: Vendor[];
   vendorSpecialties: VendorSpecialty[];
   vendorCoverage: VendorCoverage[];
+  vendorQualifications: VendorQualification[];
+  vendorComplianceDocuments: VendorComplianceDocument[];
+  vendorContracts: VendorContract[];
+  contractVersions: ContractVersion[];
+  contractScopes: ContractScope[];
+  rateCardLines: RateCardLine[];
+  serviceLevelPolicies: ServiceLevelPolicy[];
+  schedulingPolicies: SchedulingPolicy[];
+  vendorCapacity: VendorCapacity[];
   requests: ServiceRequest[];
+  requestImpactAssessments: RequestImpactAssessment[];
   workOrders: WorkOrder[];
+  approvalPolicies: ApprovalPolicy[];
+  approvalRequests: ApprovalRequest[];
+  approvalDecisions: ApprovalDecision[];
   assignments: WorkOrderAssignment[];
   issuances: WorkOrderIssuance[];
   vendorResponses: VendorResponse[];
   estimateRequests: WorkOrderEstimateRequest[];
   estimateProposals: VendorEstimateProposal[];
   visits: VisitSession[];
+  siteVisitWorkOrders: SiteVisitWorkOrder[];
+  workOrderVerifications: WorkOrderVerification[];
   visitEvidence: VisitEvidence[];
   files: StoredFile[];
   entityFiles: EntityFileLink[];
   followUps: FollowUp[];
+  workflowTasks: WorkflowTask[];
+  workflowTaskSlaPauses: WorkflowTaskSlaPause[];
+  workflowTaskSlaResumes: WorkflowTaskSlaResume[];
   exceptions: OpsException[];
   assets: Asset[];
   replacementProfiles: ReplacementProfile[];
   replacementBenchmarks: ReplacementBenchmark[];
   assetReplacementOverrides: AssetReplacementOverride[];
   replacementEvents: ReplacementEvent[];
+  lifecycleRecommendations: LifecycleRecommendation[];
   components: AssetComponent[];
+  maintenancePrograms: MaintenanceProgram[];
+  checklistTemplates: ChecklistTemplate[];
   pmPlans: PmPlan[];
   pmOccurrences: PmOccurrence[];
+  pmWorkItems: PmWorkItem[];
+  checklistResponses: ChecklistResponse[];
+  serviceRuns: ServiceRun[];
+  routeStops: RouteStop[];
+  serviceRunWorkOrders: ServiceRunWorkOrder[];
+  serviceRunResponses: ServiceRunResponse[];
+  vendorWarrantyProfiles: VendorWarrantyProfile[];
+  warrantyRules: WarrantyRule[];
+  warrantyCoverageLines: WarrantyCoverageLine[];
+  repairItems: RepairItem[];
+  appliedWarranties: AppliedWarranty[];
+  warrantyAmendments: WarrantyAmendment[];
+  manufacturerWarranties: ManufacturerWarranty[];
+  warrantyCases: WarrantyCase[];
+  quotes: Quote[];
+  authorizations: Authorization[];
+  invoices: Invoice[];
+  invoiceLines: InvoiceLine[];
+  invoiceLineAllocations: InvoiceLineAllocation[];
+  invoiceExceptions: InvoiceException[];
+  invoiceAdjustments: InvoiceAdjustment[];
+  serviceDiscrepancies: ServiceDiscrepancy[];
+  valueEvents: ValueEvent[];
   costLines: CostLine[];
   invoiceReferences: InvoiceReference[];
   invoiceAllocations: InvoiceAllocation[];

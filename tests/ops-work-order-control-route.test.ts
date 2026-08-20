@@ -26,6 +26,7 @@ vi.mock("@/lib/server/ops-request-context", async () => {
 });
 
 const WORK_ORDER_ID = NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId;
+const AWAITING_APPROVAL_WORK_ORDER_ID = "wo-northline-105-price-check";
 const ASSIGNMENT_ID = "assignment-northline-104-issued";
 const ISSUANCE_ID = "issuance-northline-104-issued-r1";
 
@@ -60,6 +61,27 @@ function manualResponseRequest(overrides: Record<string, string> = {}) {
   });
 }
 
+function controlUpdateRequest(workOrderId: string, overrides: Record<string, string> = {}) {
+  const values = {
+    operation: "update",
+    expectedStatus: "awaiting_approval",
+    status: "approved",
+    priority: "routine",
+    accountableParty: "Facilities coordinator",
+    nextAction: "Issue service authorization",
+    dueAt: "2026-08-21T13:00",
+    escalationTo: "Facilities director",
+    note: "Attempt to release through the generic work-order editor.",
+    ...overrides,
+  };
+  const formData = new FormData();
+  Object.entries(values).forEach(([name, value]) => formData.set(name, value));
+  return new Request(`https://operations.test/api/ops/work-orders/${workOrderId}/control`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
 function configureContext(fixture: OpsFixture) {
   const repository = createOpsFixtureRepository(fixture);
   requestContextMocks.getOpsRequestContext.mockResolvedValue({
@@ -74,6 +96,32 @@ function configureContext(fixture: OpsFixture) {
   });
   requestContextMocks.assertStoreInSessionScope.mockResolvedValue(undefined);
   return repository;
+}
+
+function addPendingApproval(fixture: OpsFixture) {
+  const workOrder = fixture.workOrders.find((candidate) => candidate.id === AWAITING_APPROVAL_WORK_ORDER_ID)!;
+  const policy = fixture.approvalPolicies.find((candidate) => candidate.policyKey === "major-repair")!;
+  fixture.approvalRequests.push({
+    id: "approval-request-generic-control-pending",
+    organizationId: NORTHLINE_ORGANIZATION_ID,
+    subjectType: "work_order",
+    subjectId: workOrder.id,
+    storeId: workOrder.storeId,
+    categoryKey: workOrder.categoryKey,
+    amount: { amountMinor: 625_000, currency: "USD" },
+    policyId: policy.id,
+    policyKey: policy.policyKey,
+    policyVersion: policy.version,
+    policyName: policy.name,
+    policyScopeKind: policy.scopeKind,
+    policyScopeId: policy.scopeId,
+    requiredRole: policy.requiredRole,
+    escalationRole: policy.escalationRole,
+    requestedByMembershipId: "membership-northline-regional-1",
+    requestedByName: "Morgan Hayes",
+    requestedAt: "2026-08-20T13:00:00.000Z",
+    dueAt: "2026-08-21T13:00:00.000Z",
+  });
 }
 
 function addReplacementRevision(fixture: OpsFixture, reassign: boolean) {
@@ -119,7 +167,7 @@ describe("operator manual vendor-response route", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      `/app/work-orders/${WORK_ORDER_ID}?updated=vendor-response#work-control`,
+      `/app/work-orders/${WORK_ORDER_ID}?view=activity&updated=vendor-response#work-control`,
     );
     const after = repository.snapshot();
     expect(after.vendorResponses).toHaveLength(before.vendorResponses.length + 1);
@@ -155,6 +203,49 @@ describe("operator manual vendor-response route", () => {
     await expect(response.json()).resolves.toEqual({
       code: "CONFLICT",
       error: "This vendor handoff changed after the page loaded. Refresh the work order before recording the vendor response.",
+    });
+    expect(repository.snapshot()).toEqual(before);
+  });
+});
+
+describe("generic work-order control route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("cannot release an awaiting-approval work order without the dedicated approval command", async () => {
+    const repository = configureContext(buildNorthlinePresentationFixture());
+    const before = repository.snapshot();
+
+    const response = await POST(controlUpdateRequest(AWAITING_APPROVAL_WORK_ORDER_ID), {
+      params: Promise.resolve({ id: AWAITING_APPROVAL_WORK_ORDER_ID }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      code: "CONFLICT",
+      error: "Record the pending approval decision before releasing or cancelling this work order.",
+    });
+    expect(repository.snapshot()).toEqual(before);
+  });
+
+  it("cannot cancel a work order while its immutable approval request is pending", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    addPendingApproval(fixture);
+    const repository = configureContext(fixture);
+    const before = repository.snapshot();
+
+    const response = await POST(controlUpdateRequest(AWAITING_APPROVAL_WORK_ORDER_ID, {
+      status: "cancelled",
+      note: "Attempted cancellation before deciding the active approval request.",
+    }), {
+      params: Promise.resolve({ id: AWAITING_APPROVAL_WORK_ORDER_ID }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "CONFLICT",
+      error: "Record the pending approval decision before releasing or cancelling this work order.",
     });
     expect(repository.snapshot()).toEqual(before);
   });

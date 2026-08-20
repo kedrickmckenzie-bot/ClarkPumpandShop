@@ -16,13 +16,14 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run tests/ops-workflow.e2e.test.ts tests/ops-public-boundary.test.ts tests/ops-presenter-contract.test.ts",
+    "test:e2e": "vitest run tests/ops-workflow.e2e.test.ts tests/ops-postgres-engine.integration.test.ts tests/ops-public-boundary.test.ts tests/ops-presenter-contract.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:seed": "tsx scripts/seed-ops-platform.ts",
     "db:generate:postgres": "drizzle-kit generate --config drizzle.postgres.config.ts",
     "db:migrate:postgres": "tsx scripts/migrate-postgres.ts",
     "db:seed:postgres": "tsx scripts/seed-postgres.ts",
+    "db:reset:postgres": "tsx scripts/reset-postgres.ts",
     "render:predeploy": "npm run db:migrate:postgres && npm run db:seed:postgres"
   },
   "dependencies": {

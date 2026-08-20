@@ -29,7 +29,17 @@ const BOOLEAN_COLUMNS = new Map<string, ReadonlySet<string>>([
   ["ops_taxonomy_nodes", new Set(["active"])],
   ["ops_equipment_templates", new Set(["active"])],
   ["ops_vendors", new Set(["preferred"])],
+  ["ops_vendor_qualifications", new Set(["pm_work", "emergency_response", "warranty_work", "after_hours"])],
+  ["ops_vendor_compliance_documents", new Set(["blocking"])],
+  ["ops_contract_versions", new Set(["preferred_provider", "exclusive_provider", "reactive_work_allowed", "emergency_work_allowed", "pm_work_allowed"])],
+  ["ops_contract_scopes", new Set(["included"])],
+  ["ops_vendor_capacity", new Set(["blackout"])],
   ["ops_pm_plans", new Set(["active"])],
+  ["ops_checklist_responses", new Set(["passed"])],
+  ["ops_service_run_work_orders", new Set(["planned", "addressed"])],
+  ["ops_repair_items", new Set(["vendor_supplied"])],
+  ["ops_warranty_amendments", new Set(["applies_to_repair_only"])],
+  ["ops_warranty_cases", new Set(["diagnosis_required", "invoice_hold"])],
   ["ops_replacement_profiles", new Set(["active"])],
 ]);
 

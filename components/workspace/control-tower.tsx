@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -211,20 +212,35 @@ export function ControlTower({ model }: { model: DashboardPageViewModel }) {
     return <div className={styles.workspace}><PageHeader model={model} /><StatePanel model={model} /></div>;
   }
 
-  return (
-    <div className={styles.workspace}>
-      <PageHeader model={model} />
-      <AttentionSection model={model} />
-      <MetricStrip metrics={model.metrics} />
-      <Pipeline model={model} />
-      <div className={styles.insightGrid} aria-label="Scope insights">
-        {model.breakdowns.slice(0, 2).map((breakdown) => <Distribution model={breakdown} key={breakdown.id} />)}
-        {model.trends.slice(0, 2).map((trend) => <Trend model={trend} key={trend.id} />)}
-      </div>
-      {model.spotlight ? <Spotlight model={model.spotlight} /> : null}
-      {model.breakdowns.length + model.trends.length === 0 ? (
-        <section className={styles.section}><div className={styles.empty}><BarChart3 size={24} aria-hidden="true" /><p>No insight records are available for this scope and period.</p></div></section>
-      ) : null}
+  const insights = model.breakdowns.length + model.trends.length ? (
+    <div className={styles.insightGrid} aria-label="Scope insights">
+      {model.breakdowns.slice(0, model.layout === "executive" ? 3 : 2).map((breakdown) => <Distribution model={breakdown} key={breakdown.id} />)}
+      {model.trends.slice(0, 2).map((trend) => <Trend model={trend} key={trend.id} />)}
     </div>
+  ) : (
+    <section className={styles.section}><div className={styles.empty}><BarChart3 size={24} aria-hidden="true" /><p>No insight records are available for this scope and period.</p></div></section>
   );
+  const metrics = <MetricStrip metrics={model.metrics} />;
+  const attention = <AttentionSection model={model} />;
+  const pipeline = <Pipeline model={model} />;
+  const spotlight = model.spotlight ? <Spotlight model={model.spotlight} /> : null;
+  let content: ReactNode;
+
+  switch (model.layout) {
+    case "executive":
+    case "finance":
+      content = <>{metrics}{insights}{spotlight}{attention}{pipeline}</>;
+      break;
+    case "regional":
+      content = <>{metrics}{attention}{insights}{pipeline}{spotlight}</>;
+      break;
+    case "store":
+      content = <>{attention}{metrics}{pipeline}{insights}{spotlight}</>;
+      break;
+    case "operations":
+    default:
+      content = <>{attention}{pipeline}{metrics}{insights}{spotlight}</>;
+  }
+
+  return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;
 }

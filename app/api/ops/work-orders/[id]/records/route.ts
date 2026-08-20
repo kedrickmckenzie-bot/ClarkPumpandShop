@@ -87,7 +87,7 @@ export async function POST(
     }
 
     return relativeRedirect303(
-      `/app/work-orders/${encodeURIComponent(workOrderId)}?updated=${encodeURIComponent(operation)}#work-records`,
+      `/app/work-orders/${encodeURIComponent(workOrderId)}?view=cost&updated=${encodeURIComponent(operation)}#work-records`,
     );
   } catch (error) {
     return opsApiError(error);

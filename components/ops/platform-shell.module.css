@@ -14,12 +14,25 @@
   --ops-critical-soft: #fff1f0;
   --ops-info: #2563eb;
   --ops-info-soft: #eff6ff;
+  --ops-font-body: 16px;
+  --ops-font-table: 14px;
+  --ops-font-label: 13px;
+  --ops-font-meta: 12px;
+  --ops-radius-control: 6px;
+  --ops-radius-panel: 8px;
+  --ops-radius-pill: 999px;
+  --ops-shadow-panel: 0 1px 2px rgba(15, 23, 42, 0.045);
+  --ops-shadow-menu: 0 16px 38px rgba(15, 23, 42, 0.16);
+  --ops-shadow-overlay: 0 10px 28px rgba(15, 23, 42, 0.18);
+  --ops-topbar-height: 66px;
+  --ops-context-nav-height: 43px;
+  --workspace-sticky-offset: calc(var(--ops-topbar-height) + var(--ops-context-nav-height));
   min-height: 100dvh;
   display: grid;
   grid-template-columns: 256px minmax(0, 1fr);
   color: var(--ops-ink);
   background: var(--product-canvas, #f3f4f6);
-  font-size: 16px;
+  font-size: var(--ops-font-body);
   line-height: 1.5;
 }
 
@@ -47,10 +60,10 @@
   left: 12px;
   z-index: 200;
   padding: 9px 13px;
-  border-radius: 6px;
+  border-radius: var(--ops-radius-control);
   color: #ffffff !important;
   background: var(--product-action, #2563eb);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.24);
+  box-shadow: var(--ops-shadow-overlay);
   transform: translateY(-160%);
 }
 
@@ -90,7 +103,7 @@
   place-items: center;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 7px;
+  border-radius: var(--ops-radius-control);
   color: #ffffff;
   background: var(--product-action, #2563eb);
   font-size: 17px;
@@ -127,7 +140,7 @@
 .brandCopy small {
   margin-top: 3px;
   color: #9ca3af;
-  font-size: 12px;
+  font-size: var(--ops-font-meta);
   font-weight: 520;
 }
 
@@ -135,7 +148,7 @@
   margin: 0 3px;
   padding: 12px 12px 11px;
   border: 1px solid #344154;
-  border-radius: 7px;
+  border-radius: var(--ops-radius-control);
   background: var(--product-navigation-raised, #1f2937);
 }
 
@@ -143,7 +156,7 @@
 .organizationContext small {
   display: block;
   color: #9ca3af;
-  font-size: 12px;
+  font-size: var(--ops-font-meta);
 }
 
 .organizationContext span {
@@ -157,7 +170,7 @@
   margin: 4px 0 2px;
   overflow: hidden;
   color: #ffffff;
-  font-size: 14px;
+  font-size: var(--ops-font-table);
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -177,9 +190,9 @@
   align-items: center;
   gap: 11px;
   padding: 9px 11px;
-  border-radius: 6px;
+  border-radius: var(--ops-radius-control);
   color: var(--product-navigation-text, #d1d5db) !important;
-  font-size: 14px;
+  font-size: var(--ops-font-table);
   font-weight: 560;
   transition: color 120ms ease, background-color 120ms ease;
 }
@@ -228,9 +241,9 @@
   align-items: center;
   gap: 10px;
   padding: 8px 11px;
-  border-radius: 6px;
+  border-radius: var(--ops-radius-control);
   color: #aeb7c5 !important;
-  font-size: 14px;
+  font-size: var(--ops-font-table);
   font-weight: 540;
 }
 
@@ -241,7 +254,7 @@
 
 .profilePanel {
   border: 1px solid #344154;
-  border-radius: 7px;
+  border-radius: var(--ops-radius-control);
   background: #182230;
 }
 
@@ -283,14 +296,14 @@
 
 .userCopy strong {
   color: #ffffff;
-  font-size: 13px;
+  font-size: var(--ops-font-label);
   font-weight: 650;
 }
 
 .userCopy span {
   margin-top: 2px;
   color: #9ca3af;
-  font-size: 12px;
+  font-size: var(--ops-font-meta);
 }
 
 .previewRole {
@@ -305,7 +318,7 @@
 .previewRole > span {
   grid-column: 1 / -1;
   color: #9ca3af;
-  font-size: 11px;
+  font-size: var(--ops-font-meta);
   font-weight: 650;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -319,8 +332,8 @@
 .previewRole button {
   min-height: 35px;
   border: 1px solid #475569;
-  border-radius: 5px;
-  font-size: 12px;
+  border-radius: var(--ops-radius-control);
+  font-size: var(--ops-font-meta);
   font-weight: 620;
 }
 
@@ -354,7 +367,7 @@
 }
 
 .topbar {
-  min-height: 66px;
+  min-height: var(--ops-topbar-height);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -369,7 +382,7 @@
   gap: 9px;
   padding-left: 12px;
   border: 1px solid var(--ops-border-strong);
-  border-radius: 7px;
+  border-radius: var(--ops-radius-control);
   color: #667085;
   background: #ffffff;
 }
@@ -387,7 +400,7 @@
   outline: 0;
   color: #111827;
   background: transparent;
-  font-size: 14px;
+  font-size: var(--ops-font-table);
 }
 
 .globalSearch input::placeholder {
@@ -401,7 +414,7 @@
   border-left: 1px solid var(--ops-border);
   color: #344054;
   background: #f8fafc;
-  font-size: 13px;
+  font-size: var(--ops-font-label);
   font-weight: 650;
 }
 
@@ -435,13 +448,13 @@
 
 .topbarContext strong {
   color: #344054;
-  font-size: 13px;
+  font-size: var(--ops-font-label);
   font-weight: 650;
 }
 
 .topbarContext small {
   color: #7a8492;
-  font-size: 12px;
+  font-size: var(--ops-font-meta);
 }
 
 .createMenu {
@@ -456,10 +469,10 @@
   gap: 7px;
   padding: 9px 12px;
   border: 1px solid var(--product-action, #2563eb);
-  border-radius: 6px;
+  border-radius: var(--ops-radius-control);
   color: #ffffff;
   background: var(--product-action, #2563eb);
-  font-size: 14px;
+  font-size: var(--ops-font-table);
   font-weight: 660;
   list-style: none;
 }
@@ -489,16 +502,16 @@
   gap: 2px;
   padding: 6px;
   border: 1px solid var(--ops-border);
-  border-radius: 7px;
+  border-radius: var(--ops-radius-panel);
   background: #ffffff;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--ops-shadow-menu);
 }
 
 .createMenuPanel a {
   display: flex;
   flex-direction: column;
   padding: 10px 11px;
-  border-radius: 5px;
+  border-radius: var(--ops-radius-control);
 }
 
 .createMenuPanel a:hover {
@@ -507,14 +520,14 @@
 
 .createMenuPanel strong {
   color: #1f2937;
-  font-size: 14px;
+  font-size: var(--ops-font-table);
   font-weight: 650;
 }
 
 .createMenuPanel small {
   margin-top: 2px;
   color: #667085;
-  font-size: 12px;
+  font-size: var(--ops-font-meta);
 }
 
 .contextNavBar {
@@ -525,7 +538,7 @@
 .contextNav {
   width: 100%;
   max-width: 1680px;
-  min-height: 43px;
+  min-height: var(--ops-context-nav-height);
   display: flex;
   align-items: stretch;
   gap: 2px;
@@ -537,13 +550,13 @@
 
 .contextNavLink {
   position: relative;
-  min-height: 43px;
+  min-height: var(--ops-context-nav-height);
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   padding: 0 11px;
   color: #667085 !important;
-  font-size: 13px;
+  font-size: var(--ops-font-label);
   font-weight: 590;
   white-space: nowrap;
 }
@@ -621,6 +634,7 @@
 
 @media (max-width: 920px) {
   .shell {
+    --ops-topbar-height: 64px;
     display: block;
   }
 
@@ -629,7 +643,7 @@
   }
 
   .topbar {
-    min-height: 64px;
+    min-height: var(--ops-topbar-height);
     padding: 9px 16px;
   }
 
@@ -645,7 +659,7 @@
     display: grid;
     place-items: center;
     border: 1px solid var(--ops-border-strong);
-    border-radius: 6px;
+    border-radius: var(--ops-radius-control);
     color: #344054;
     background: #ffffff;
     list-style: none;
@@ -658,7 +672,7 @@
 
   .mobileMenuPanel {
     position: fixed;
-    top: 64px;
+    top: var(--ops-topbar-height);
     right: 0;
     bottom: 0;
     left: 0;
@@ -708,12 +722,12 @@
 
   .mobileMenuHeading p strong {
     color: #344054;
-    font-size: 13px;
+    font-size: var(--ops-font-label);
   }
 
   .mobileMenuHeading p span {
     color: #667085;
-    font-size: 12px;
+    font-size: var(--ops-font-meta);
   }
 
   .mobileMenuPanel .navGroups {
@@ -842,7 +856,7 @@
   }
 
   .globalSearch input {
-    font-size: 13px;
+    font-size: var(--ops-font-label);
   }
 
   .globalSearch button {

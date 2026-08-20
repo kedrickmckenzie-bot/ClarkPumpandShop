@@ -107,7 +107,7 @@ describe("work-order vendor path entry", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toMatch(/^\/app\/work-orders\//);
-    expect(response.headers.get("location")).toMatch(/updated=bid-request-created#bid-requests$/);
+    expect(response.headers.get("location")).toMatch(/view=service&updated=bid-request-created#bid-requests$/);
     expect(response.headers.get("location")).not.toContain("0.0.0.0");
     const after = repository.snapshot();
     const workOrder = after.workOrders.at(-1)!;
@@ -134,7 +134,7 @@ describe("work-order vendor path entry", () => {
     const response = await POST(requestFor("outside_vendor"));
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toMatch(/updated=service-work-created#issue-work$/);
+    expect(response.headers.get("location")).toMatch(/view=service&updated=service-work-created#issue-work$/);
     const after = repository.snapshot();
     const workOrder = after.workOrders.at(-1)!;
     expect(workOrder.nextAction).toBe("Issue service authorization");

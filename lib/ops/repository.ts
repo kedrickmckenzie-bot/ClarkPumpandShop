@@ -1,5 +1,8 @@
 import type {
   IsoDateTime,
+  ApprovalDecision,
+  ApprovalPolicy,
+  ApprovalRequest,
   Asset,
   AssetReplacementOverride,
   AssetComponent,
@@ -8,12 +11,16 @@ import type {
   EquipmentTemplate,
   FollowUp,
   IdempotencyKey,
+  LifecycleRecommendation,
   OpsFixture,
   OpsId,
   Membership,
+  ScopeGrant,
   OpsException,
   PageRequest,
+  RequestImpactAssessment,
   ServiceRequest,
+  SiteVisitWorkOrder,
   Store,
   StoredFile,
   TaxonomyNode,
@@ -28,6 +35,39 @@ import type {
   WorkOrderAssignment,
   WorkOrderEstimateRequest,
   WorkOrderIssuance,
+  WorkOrderVerification,
+  WorkflowTask,
+  WorkflowTaskSlaPause,
+  WorkflowTaskSlaResume,
+  VendorQualification,
+  VendorComplianceDocument,
+  ContractVersion,
+  ContractScope,
+  RateCardLine,
+  SchedulingPolicy,
+  VendorCapacity,
+  MaintenanceProgram,
+  PmPlan,
+  PmOccurrence,
+  PmWorkItem,
+  ServiceRun,
+  RouteStop,
+  ServiceRunWorkOrder,
+  ServiceRunResponse,
+  VendorWarrantyProfile,
+  WarrantyRule,
+  WarrantyCoverageLine,
+  RepairItem,
+  AppliedWarranty,
+  WarrantyCase,
+  Quote,
+  Authorization,
+  Invoice,
+  InvoiceLine,
+  InvoiceLineAllocation,
+  InvoiceException,
+  InvoiceAdjustment,
+  ValueEvent,
 } from "./types";
 import type {
   ActiveVisitView,
@@ -80,6 +120,12 @@ export interface PublicTokenLookup {
   vendorId?: OpsId;
 }
 
+export interface ServiceRunPublicCapability {
+  run: ServiceRun;
+  tokenId: OpsId;
+  expiresAt: IsoDateTime;
+}
+
 export interface VisitCheckoutCapability {
   visit: VisitSession;
   expiresAt: IsoDateTime;
@@ -111,8 +157,16 @@ export interface OpsRepository {
   getStore(organizationId: OpsId, storeId: OpsId): Promise<Store | null>;
   getVendor(organizationId: OpsId, vendorId: OpsId): Promise<Vendor | null>;
   getMembership(organizationId: OpsId, membershipId: OpsId): Promise<Membership | null>;
+  listScopeGrantsForMembership(organizationId: OpsId, membershipId: OpsId): Promise<ScopeGrant[]>;
   getRequest(organizationId: OpsId, requestId: OpsId): Promise<ServiceRequest | null>;
+  listRequestImpactAssessments(organizationId: OpsId, requestId: OpsId): Promise<RequestImpactAssessment[]>;
   getWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrder | null>;
+  getApprovalPolicy(organizationId: OpsId, policyId: OpsId): Promise<ApprovalPolicy | null>;
+  listApprovalPolicies(organizationId: OpsId): Promise<ApprovalPolicy[]>;
+  getApprovalRequest(organizationId: OpsId, approvalRequestId: OpsId): Promise<ApprovalRequest | null>;
+  listApprovalRequests(organizationId: OpsId): Promise<ApprovalRequest[]>;
+  listApprovalRequestsForSubject(organizationId: OpsId, subjectType: ApprovalRequest["subjectType"], subjectId: OpsId): Promise<ApprovalRequest[]>;
+  listApprovalDecisionsForRequest(organizationId: OpsId, approvalRequestId: OpsId): Promise<ApprovalDecision[]>;
   getAsset(organizationId: OpsId, assetId: OpsId): Promise<Asset | null>;
   getReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<ReplacementProfile | null>;
   listReplacementProfiles(organizationId: OpsId): Promise<ReplacementProfile[]>;
@@ -121,15 +175,64 @@ export interface OpsRepository {
   getActiveAssetReplacementOverride(organizationId: OpsId, assetId: OpsId): Promise<AssetReplacementOverride | null>;
   getReplacementEventForProposal(organizationId: OpsId, proposalId: OpsId): Promise<ReplacementEvent | null>;
   getActiveReplacementEventForAsset(organizationId: OpsId, assetId: OpsId): Promise<ReplacementEvent | null>;
+  listLifecycleRecommendationsForAsset(organizationId: OpsId, assetId: OpsId): Promise<LifecycleRecommendation[]>;
   listAssetsForReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<Asset[]>;
   getComponent(organizationId: OpsId, componentId: OpsId): Promise<AssetComponent | null>;
+  getMaintenanceProgram(organizationId: OpsId, programId: OpsId): Promise<MaintenanceProgram | null>;
+  getPmPlan(organizationId: OpsId, planId: OpsId): Promise<PmPlan | null>;
+  getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId): Promise<PmOccurrence | null>;
+  listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId): Promise<PmWorkItem[]>;
+  listVendorQualifications(organizationId: OpsId, vendorId: OpsId): Promise<VendorQualification[]>;
+  listVendorComplianceDocuments(organizationId: OpsId, vendorId: OpsId): Promise<VendorComplianceDocument[]>;
+  getContractVersion(organizationId: OpsId, contractVersionId: OpsId): Promise<ContractVersion | null>;
+  listContractScopes(organizationId: OpsId, contractVersionId: OpsId): Promise<ContractScope[]>;
+  listRateCardLines(organizationId: OpsId, contractVersionId: OpsId): Promise<RateCardLine[]>;
+  getSchedulingPolicy(organizationId: OpsId, contractVersionId: OpsId): Promise<SchedulingPolicy | null>;
+  listVendorCapacity(organizationId: OpsId, vendorId: OpsId): Promise<VendorCapacity[]>;
+  getServiceRun(organizationId: OpsId, serviceRunId: OpsId): Promise<ServiceRun | null>;
+  listRouteStops(organizationId: OpsId, serviceRunId: OpsId): Promise<RouteStop[]>;
+  listServiceRunWorkOrders(organizationId: OpsId, serviceRunId: OpsId): Promise<ServiceRunWorkOrder[]>;
+  listServiceRunResponses(organizationId: OpsId, serviceRunId: OpsId): Promise<ServiceRunResponse[]>;
+  listVendorWarrantyProfiles(organizationId: OpsId, vendorId: OpsId): Promise<VendorWarrantyProfile[]>;
+  getVendorWarrantyProfile(organizationId: OpsId, profileId: OpsId): Promise<VendorWarrantyProfile | null>;
+  listWarrantyRules(organizationId: OpsId, vendorId: OpsId): Promise<WarrantyRule[]>;
+  listWarrantyCoverageLines(organizationId: OpsId, profileId: OpsId): Promise<WarrantyCoverageLine[]>;
+  getRepairItem(organizationId: OpsId, repairItemId: OpsId): Promise<RepairItem | null>;
+  listRepairItemsForAsset(organizationId: OpsId, assetId: OpsId): Promise<RepairItem[]>;
+  listAppliedWarrantiesForRepair(organizationId: OpsId, repairItemId: OpsId): Promise<AppliedWarranty[]>;
+  getAppliedWarranty(organizationId: OpsId, appliedWarrantyId: OpsId): Promise<AppliedWarranty | null>;
+  listActiveAppliedWarrantiesForAsset(organizationId: OpsId, assetId: OpsId, onDate: string): Promise<AppliedWarranty[]>;
+  getWarrantyCase(organizationId: OpsId, warrantyCaseId: OpsId): Promise<WarrantyCase | null>;
+  listWarrantyCases(organizationId: OpsId): Promise<WarrantyCase[]>;
+  listQuotesForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<Quote[]>;
+  listAuthorizationsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<Authorization[]>;
+  getInvoice(organizationId: OpsId, invoiceId: OpsId): Promise<Invoice | null>;
+  listInvoices(organizationId: OpsId): Promise<Invoice[]>;
+  listInvoiceLines(organizationId: OpsId, invoiceId: OpsId): Promise<InvoiceLine[]>;
+  listInvoiceLineAllocations(organizationId: OpsId, invoiceLineId: OpsId): Promise<InvoiceLineAllocation[]>;
+  listInvoiceExceptions(organizationId: OpsId, invoiceId: OpsId): Promise<InvoiceException[]>;
+  listInvoiceAdjustments(organizationId: OpsId, invoiceId: OpsId): Promise<InvoiceAdjustment[]>;
+  listValueEvents(organizationId: OpsId): Promise<ValueEvent[]>;
+  listServiceRunsForStoreVendor(organizationId: OpsId, storeId: OpsId, vendorId: OpsId): Promise<ServiceRun[]>;
+  getRouteStopForVisit(organizationId: OpsId, visitId: OpsId): Promise<RouteStop | null>;
   getAssignment(organizationId: OpsId, assignmentId: OpsId): Promise<WorkOrderAssignment | null>;
   getIssuance(organizationId: OpsId, issuanceId: OpsId): Promise<WorkOrderIssuance | null>;
   getEstimateRequest(organizationId: OpsId, estimateRequestId: OpsId): Promise<WorkOrderEstimateRequest | null>;
   getLatestEstimateProposal(organizationId: OpsId, estimateRequestId: OpsId): Promise<VendorEstimateProposal | null>;
   listEstimateRequestsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderEstimateRequest[]>;
   getVisit(organizationId: OpsId, visitId: OpsId): Promise<VisitSession | null>;
+  getSiteVisitWorkOrderById(organizationId: OpsId, siteVisitWorkOrderId: OpsId): Promise<SiteVisitWorkOrder | null>;
+  getSiteVisitWorkOrder(organizationId: OpsId, visitId: OpsId, workOrderId: OpsId): Promise<SiteVisitWorkOrder | null>;
+  listSiteVisitWorkOrders(organizationId: OpsId, visitId: OpsId): Promise<SiteVisitWorkOrder[]>;
+  listSiteVisitWorkOrdersForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<SiteVisitWorkOrder[]>;
+  listWorkOrderVerifications(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderVerification[]>;
   getFollowUp(organizationId: OpsId, followUpId: OpsId): Promise<FollowUp | null>;
+  getWorkflowTask(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTask | null>;
+  listWorkflowTasksForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkflowTask[]>;
+  listWorkflowTasksForRequest(organizationId: OpsId, requestId: OpsId): Promise<WorkflowTask[]>;
+  listWorkflowTaskSlaPauses(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaPause[]>;
+  listWorkflowTaskSlaResumes(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaResume[]>;
+  getActiveWorkflowTaskSlaPause(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaPause | null>;
   getException(organizationId: OpsId, exceptionId: OpsId): Promise<OpsException | null>;
   getIdempotencyKey(organizationId: OpsId, key: string): Promise<IdempotencyKey | null>;
   getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null>;
@@ -168,6 +271,7 @@ export interface OpsRepository {
   getStoreVisitContextByToken(input: PublicTokenLookup): Promise<StoreVisitContextView | null>;
   getActiveVisitByToken(input: PublicTokenLookup): Promise<ActiveVisitView | null>;
   getEstimateRequestByPublicToken(input: PublicTokenLookup): Promise<EstimateRequestPublicCapability | null>;
+  getServiceRunByPublicToken(input: PublicTokenLookup): Promise<ServiceRunPublicCapability | null>;
   getVisitByCheckoutToken(input: PublicTokenLookup): Promise<VisitCheckoutCapability | null>;
   getTrustedStoreDeviceByToken(input: PublicTokenLookup): Promise<TrustedStoreDeviceView | null>;
 

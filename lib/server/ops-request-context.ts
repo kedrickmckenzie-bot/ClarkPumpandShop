@@ -4,7 +4,34 @@ import type { OperatorRole } from "@/components/ops/data-contract";
 import { loadOperatorSession } from "@/app/app/_data/operator-loader";
 import { OpsDomainError } from "@/lib/ops/commands";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
+import type { OpsRepository } from "@/lib/ops/repository";
 import type { ActorContext } from "@/lib/ops/types";
+
+const domainRoleForOperatorRole = {
+  executive: "executive",
+  facilities: "facilities_admin",
+  regional: "regional_manager",
+  store_manager: "store_manager",
+  finance: "finance_reviewer",
+} as const;
+
+export async function assertActiveOperatorMembership(
+  repository: OpsRepository,
+  session: Awaited<ReturnType<typeof loadOperatorSession>>,
+) {
+  if (!session.membershipId) {
+    throw new OpsDomainError("FORBIDDEN", "An active organization membership is required for this action.");
+  }
+  const membership = await repository.getMembership(session.organizationId, session.membershipId);
+  if (
+    !membership
+    || membership.status !== "active"
+    || membership.role !== domainRoleForOperatorRole[session.role]
+  ) {
+    throw new OpsDomainError("FORBIDDEN", "Your organization membership or role is no longer active.");
+  }
+  return membership;
+}
 
 export async function getOpsRequestContext(allowedRoles: readonly OperatorRole[]) {
   const session = await loadOperatorSession();
@@ -12,9 +39,10 @@ export async function getOpsRequestContext(allowedRoles: readonly OperatorRole[]
     throw new OpsDomainError("FORBIDDEN", "Your current role cannot perform this action.");
   }
   const repository = await getServerOpsRepository();
+  const membership = await assertActiveOperatorMembership(repository, session);
   const actor: ActorContext = {
     actorType: "user",
-    actorId: session.membershipId ?? session.userId,
+    actorId: membership.id,
     actorName: session.displayName,
     organizationId: session.organizationId,
   };

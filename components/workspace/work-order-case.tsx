@@ -9,6 +9,7 @@ import {
   CircleDot,
   Clock3,
   FileText,
+  Gauge,
   History,
   MapPin,
   PackageSearch,
@@ -39,6 +40,9 @@ import {
   WorkOrderControlPanel,
 } from "@/components/ops/service-control-panels";
 import { WorkOrderRecordingPanel } from "@/components/ops/work-order-recording-panel";
+import { WorkflowTaskPanel } from "@/components/ops/workflow-task-panel";
+import { WorkOrderVerificationPanel } from "@/components/ops/work-order-verification-panel";
+import type { WorkOrderVerificationViewModel } from "@/app/app/_data/work-order-verification-presenter";
 import {
   WorkOrderReplacementIntelligencePanel,
   type WorkOrderReplacementIntelligenceViewModel,
@@ -53,8 +57,21 @@ interface WorkOrderCaseProps {
   estimateComparison: EstimateComparisonViewModel;
   issuance: VendorIssuanceViewModel;
   replacement: WorkOrderReplacementIntelligenceViewModel;
+  verification: WorkOrderVerificationViewModel;
+  activeView: WorkOrderView;
   updated?: string;
 }
+
+export type WorkOrderView = "overview" | "service" | "visits" | "cost" | "equipment" | "activity";
+
+const caseViews: Array<{ id: WorkOrderView; label: string; icon: ReactNode }> = [
+  { id: "overview", label: "Overview", icon: <Gauge aria-hidden="true" size={16} /> },
+  { id: "service", label: "Provider & bids", icon: <Wrench aria-hidden="true" size={16} /> },
+  { id: "visits", label: "Visits", icon: <MapPin aria-hidden="true" size={16} /> },
+  { id: "cost", label: "Costs", icon: <ReceiptText aria-hidden="true" size={16} /> },
+  { id: "equipment", label: "Equipment", icon: <PackageSearch aria-hidden="true" size={16} /> },
+  { id: "activity", label: "History & control", icon: <History aria-hidden="true" size={16} /> },
+];
 
 const toneStyles: Record<Tone, string> = {
   neutral: styles.toneNeutral,
@@ -322,6 +339,128 @@ function ServicePathChoice({
   );
 }
 
+function continuationFor(
+  control: WorkOrderControlViewModel,
+  issuance: VendorIssuanceViewModel,
+  estimateComparison: EstimateComparisonViewModel,
+) {
+  const base = `/app/work-orders/${control.workOrderId}`;
+  if (estimateComparison.selectedVendorName && !issuance.currentRevision && issuance.permitted) {
+    return { label: "Send the selected vendor an authorization", href: `${base}?view=service#issue-work`, helper: `${estimateComparison.selectedVendorName} was selected. Sending the authorization is the next separate decision.` };
+  }
+  if (estimateComparison.proposalCount > 0 && !estimateComparison.selectedVendorName) {
+    return { label: "Compare vendor bids", href: `${base}?view=service#bid-requests`, helper: `${estimateComparison.proposalCount} proposal${estimateComparison.proposalCount === 1 ? " is" : "s are"} ready for a provider decision.` };
+  }
+  if (estimateComparison.activeRequestCount > 0) {
+    return { label: "Track bid responses", href: `${base}?view=service#bid-requests`, helper: `${estimateComparison.activeRequestCount} pricing request${estimateComparison.activeRequestCount === 1 ? " remains" : "s remain"} open. No vendor is authorized to begin work.` };
+  }
+  if (control.latestVendorResponse?.response === "question" || control.latestVendorResponse?.response === "proposed_date") {
+    return { label: "Resolve the vendor response", href: `${base}?view=activity#work-control`, helper: control.latestVendorResponse.message ?? "A vendor response needs an operator decision before service proceeds." };
+  }
+  if (issuance.currentRevision && !control.latestVendorResponse) {
+    return { label: "Review the vendor handoff", href: `${base}?view=service#issue-work`, helper: "The authorization is issued and the vendor response is still outstanding." };
+  }
+  if (["accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts"].includes(control.status)) {
+    return { label: "Review service and visit evidence", href: `${base}?view=visits`, helper: "Keep the observed visit, outcome, and required follow-up connected to this case." };
+  }
+  if (control.status === "completed_pending_review") {
+    return { label: "Verify the current visit outcome", href: `${base}?view=visits`, helper: "Internal review must accept or reject the exact current per-work-order outcome before this work can be resolved." };
+  }
+  if (control.status === "resolved") {
+    return { label: "Close verified work", href: `${base}?view=activity#work-control`, helper: "The current outcome is accepted. Facilities must still complete the separate close obligation; resolution does not auto-close the work order." };
+  }
+  if (control.assignment?.kind === "choose_later" && issuance.permitted) {
+    return { label: "Choose how to source the work", href: `${base}?view=service`, helper: "Authorize a known provider or request pricing without creating duplicate service work." };
+  }
+  return { label: "Open the current service control", href: `${base}?view=activity#work-control`, helper: "Review the accountable owner, due time, and full immutable activity history." };
+}
+
+function CaseOverview({
+  control,
+  recording,
+  estimateComparison,
+  issuance,
+  replacement,
+  visits,
+  invoices,
+  recordedCost,
+  nte,
+}: {
+  control: WorkOrderControlViewModel;
+  recording: WorkOrderRecordingViewModel;
+  estimateComparison: EstimateComparisonViewModel;
+  issuance: VendorIssuanceViewModel;
+  replacement: WorkOrderReplacementIntelligenceViewModel;
+  visits?: DetailSectionViewModel;
+  invoices?: DetailSectionViewModel;
+  recordedCost?: DetailFactViewModel;
+  nte?: DetailFactViewModel;
+}) {
+  const continuation = continuationFor(control, issuance, estimateComparison);
+  const base = `/app/work-orders/${control.workOrderId}`;
+  const visitCount = visits?.table?.rows.length ?? 0;
+  const invoiceCount = invoices?.table?.rows.length ?? 0;
+  const currentStage = control.stages.find((stage) => stage.state === "current" || stage.state === "blocked");
+  const selectedAsset = recording.assets.find((asset) => asset.value === recording.currentAssetId);
+
+  return (
+    <div className={styles.overviewWorkspace}>
+      <section className={styles.decisionPanel} aria-labelledby="next-decision-heading">
+        <div className={styles.decisionCopy}>
+          <p>Next accountable move</p>
+          <h2 id="next-decision-heading">{control.nextAction || currentStage?.detail || "Review this work order"}</h2>
+          <span>{continuation.helper}</span>
+          <dl>
+            <div><dt>Owner</dt><dd>{control.accountableParty || "Not assigned"}</dd></div>
+            <div><dt>Due</dt><dd>{dueLabel(control.dueAt)}</dd></div>
+            <div><dt>Escalation</dt><dd>{control.escalationTo || "Not active"}</dd></div>
+          </dl>
+        </div>
+        <Link className={styles.decisionAction} href={continuation.href}>{continuation.label}<ArrowRight aria-hidden="true" size={17} /></Link>
+      </section>
+
+      <section className={styles.journeyPanel} aria-labelledby="case-journey-heading">
+        <header><div><p>Connected record</p><h2 id="case-journey-heading">Where this case stands</h2></div><Link href={`${base}?view=activity`}>Open full history<ArrowRight aria-hidden="true" size={15} /></Link></header>
+        <ol>
+          {control.stages.map((stage) => (
+            <li key={stage.id} data-state={stage.state}>
+              <span aria-hidden="true">{stage.state === "complete" ? <CheckCircle2 size={17} /> : stage.state === "blocked" ? <ShieldAlert size={17} /> : <CircleDot size={17} />}</span>
+              <div><strong>{stage.label}</strong><small>{stage.detail}</small>{stage.timestampLabel ? <time>{stage.timestampLabel}</time> : null}</div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className={styles.recordMap} aria-label="Work-order evidence map">
+        <Link href={`${base}?view=service`}>
+          <span><Truck size={18} aria-hidden="true" />Provider & bids</span>
+          <strong>{control.assignment?.providerLabel ?? "Provider not selected"}</strong>
+          <small>{issuance.currentRevision ? `Authorization revision ${issuance.currentRevision}` : estimateComparison.activeRequestCount ? `${estimateComparison.activeRequestCount} pricing request${estimateComparison.activeRequestCount === 1 ? "" : "s"} open` : "Choose direct service or pricing only"}</small>
+          <em>Open service path<ChevronRight size={15} aria-hidden="true" /></em>
+        </Link>
+        <Link href={`${base}?view=visits`}>
+          <span><MapPin size={18} aria-hidden="true" />Observed visits</span>
+          <strong>{visitCount} linked visit{visitCount === 1 ? "" : "s"}</strong>
+          <small>Arrival, checkout, outcome, and follow-up evidence</small>
+          <em>Review visits<ChevronRight size={15} aria-hidden="true" /></em>
+        </Link>
+        <Link href={`${base}?view=cost`}>
+          <span><ReceiptText size={18} aria-hidden="true" />Cost evidence</span>
+          <strong>{recordedCost?.value ?? recording.recordedCostLabel}</strong>
+          <small>{nte?.value ? `${nte.value} authorization limit` : "No authorization limit recorded"} · {invoiceCount ? `${invoiceCount} invoice reference${invoiceCount === 1 ? "" : "s"}` : "No invoice entered — valid"}</small>
+          <em>Explain cost<ChevronRight size={15} aria-hidden="true" /></em>
+        </Link>
+        <Link href={`${base}?view=equipment`}>
+          <span><PackageSearch size={18} aria-hidden="true" />Equipment & lifecycle</span>
+          <strong>{selectedAsset?.label ?? replacement.assetName ?? "Classification deferred"}</strong>
+          <small>{replacement.assetName ? "Repair history and capital-review context available" : "Equipment is optional until diagnosis"}</small>
+          <em>Review equipment<ChevronRight size={15} aria-hidden="true" /></em>
+        </Link>
+      </section>
+    </div>
+  );
+}
+
 export function WorkOrderCase({
   model,
   control,
@@ -329,6 +468,8 @@ export function WorkOrderCase({
   estimateComparison,
   issuance,
   replacement,
+  verification,
+  activeView,
   updated,
 }: WorkOrderCaseProps) {
   if (model.state.kind !== "ready") {
@@ -365,48 +506,76 @@ export function WorkOrderCase({
           </div>
         </div>
         <nav className={styles.caseTabs} aria-label="Work-order sections">
-          <a href="#activity"><History aria-hidden="true" size={16} />Activity</a>
-          <a href="#service"><Wrench aria-hidden="true" size={16} />Service</a>
-          <a href="#visits"><MapPin aria-hidden="true" size={16} />Visits</a>
-          <a href="#cost"><ReceiptText aria-hidden="true" size={16} />Cost</a>
-          <a href="#equipment"><PackageSearch aria-hidden="true" size={16} />Equipment</a>
+          {caseViews.map((view) => (
+            <Link
+              aria-current={activeView === view.id ? "page" : undefined}
+              className={activeView === view.id ? styles.activeTab : undefined}
+              href={`/app/work-orders/${control.workOrderId}?view=${view.id}`}
+              key={view.id}
+            >
+              {view.icon}{view.label}
+            </Link>
+          ))}
         </nav>
       </header>
 
-      <section className={styles.caseBrief} aria-label="Work-order accountability">
-        <div className={styles.problemStatement}>
-          <span>Service need</span>
-          <h2>{model.page.description}</h2>
-          <p>{model.page.scopeLabel}</p>
-        </div>
-        <div className={styles.accountabilityGrid}>
-          <div><span><UserRound aria-hidden="true" size={16} />Accountable party</span><strong>{control.accountableParty || "Not assigned"}</strong></div>
-          <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Next required action</span><strong>{control.nextAction || "No next action recorded"}</strong></div>
-          <div><span><Clock3 aria-hidden="true" size={16} />Due</span><strong>{dueLabel(control.dueAt)}</strong></div>
-          <div><span><ShieldAlert aria-hidden="true" size={16} />Escalate to</span><strong>{control.escalationTo || "Not set"}</strong></div>
-        </div>
-        <dl className={styles.caseMeta}>
-          <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
-          <div><dt>Fulfillment</dt><dd>{assigned?.value ?? control.assignment?.providerLabel ?? "Choose later"}</dd></div>
-          <div><dt>Authorization limit</dt><dd>{nte?.value ?? "Not set"}</dd></div>
-          <div><dt>Classification</dt><dd>{classification?.value ?? "Deferred"}</dd></div>
-        </dl>
-      </section>
+      {activeView === "overview" ? (
+        <section className={styles.caseBrief} aria-label="Work-order accountability">
+          <div className={styles.problemStatement}>
+            <span>Service need</span>
+            <h2>{model.page.description}</h2>
+            <p>{model.page.scopeLabel}</p>
+          </div>
+          <div className={styles.accountabilityGrid}>
+            <div><span><UserRound aria-hidden="true" size={16} />Accountable party</span><strong>{control.accountableParty || "Not assigned"}</strong></div>
+            <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Next required action</span><strong>{control.nextAction || "No next action recorded"}</strong></div>
+            <div><span><Clock3 aria-hidden="true" size={16} />Due</span><strong>{dueLabel(control.dueAt)}</strong></div>
+            <div><span><ShieldAlert aria-hidden="true" size={16} />Escalate to</span><strong>{control.escalationTo || "Not set"}</strong></div>
+          </div>
+          <dl className={styles.caseMeta}>
+            <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
+            <div><dt>Fulfillment</dt><dd>{assigned?.value ?? control.assignment?.providerLabel ?? "Choose later"}</dd></div>
+            <div><dt>Authorization limit</dt><dd>{nte?.value ?? "Not set"}</dd></div>
+            <div><dt>Classification</dt><dd>{classification?.value ?? "Deferred"}</dd></div>
+          </dl>
+        </section>
+      ) : (
+        <section className={styles.caseContextStrip} aria-label="Current work-order context">
+          <div><span>Service need</span><strong>{model.page.description}</strong></div>
+          <div><span>Next action</span><strong>{control.nextAction || "No next action recorded"}</strong></div>
+          <div><span>Owner · due</span><strong>{control.accountableParty || "Not assigned"} · {dueLabel(control.dueAt)}</strong></div>
+        </section>
+      )}
 
       <MutationReceipt code={updated} />
 
-      <WorkspaceSection
+      {activeView === "overview" ? (
+        <CaseOverview
+          control={control}
+          recording={recording}
+          estimateComparison={estimateComparison}
+          issuance={issuance}
+          replacement={replacement}
+          visits={visits}
+          invoices={invoices}
+          recordedCost={recordedCost}
+          nte={nte}
+        />
+      ) : null}
+
+      {activeView === "activity" ? <WorkspaceSection
         id="activity"
         eyebrow="Control and history"
         title="Accountable work state"
         description="The current owner and next action stay visible while every change remains attributable."
         icon={<History aria-hidden="true" size={20} />}
       >
+        <div className={styles.panelRegion}><WorkflowTaskPanel model={control.workflowTasks} /></div>
         <div className={styles.panelRegion}><WorkOrderControlPanel model={control} /></div>
         <RecordBlock section={timeline} icon={<History aria-hidden="true" size={18} />} />
-      </WorkspaceSection>
+      </WorkspaceSection> : null}
 
-      <WorkspaceSection
+      {activeView === "service" ? <WorkspaceSection
         id="service"
         eyebrow="Routing and authorization"
         title="Choose the service path"
@@ -419,19 +588,20 @@ export function WorkOrderCase({
           <div className={styles.panelRegion} data-panel="pricing"><EstimateComparisonPanel model={estimateComparison} /></div>
         </div>
         <RecordBlock section={authorization} icon={<FileText aria-hidden="true" size={18} />} />
-      </WorkspaceSection>
+      </WorkspaceSection> : null}
 
-      <WorkspaceSection
+      {activeView === "visits" ? <WorkspaceSection
         id="visits"
         eyebrow="Observed presence"
         title="Technician visits"
         description="Check-in and checkout add approximate presence evidence without claiming certified labor."
         icon={<MapPin aria-hidden="true" size={20} />}
       >
+        <div className={styles.panelRegion}><WorkOrderVerificationPanel model={verification} /></div>
         <RecordBlock section={visits} icon={<MapPin aria-hidden="true" size={18} />} keepAnchor={false} />
-      </WorkspaceSection>
+      </WorkspaceSection> : null}
 
-      <WorkspaceSection
+      {activeView === "cost" ? <WorkspaceSection
         id="cost"
         eyebrow="Source-linked cost"
         title="Recorded work and invoice evidence"
@@ -446,9 +616,9 @@ export function WorkOrderCase({
         <div className={styles.panelRegion}><WorkOrderRecordingPanel model={recording} /></div>
         <RecordBlock section={costs} icon={<CircleDollarSign aria-hidden="true" size={18} />} keepAnchor={false} />
         <RecordBlock section={invoices} icon={<ReceiptText aria-hidden="true" size={18} />} />
-      </WorkspaceSection>
+      </WorkspaceSection> : null}
 
-      <WorkspaceSection
+      {activeView === "equipment" ? <WorkspaceSection
         id="equipment"
         eyebrow="Classification and lifecycle"
         title="Equipment context"
@@ -461,9 +631,9 @@ export function WorkOrderCase({
           <div><span><Wrench aria-hidden="true" size={16} />Component</span><strong>{selectedComponent?.label ?? "Not linked"}</strong><small>{selectedComponent?.description ?? "Optional depth for repeat work and warranty history"}</small></div>
           <div><span><CircleDollarSign aria-hidden="true" size={16} />Capital context</span><strong>{replacement.assetName ? "Available for review" : "Needs linked equipment"}</strong><small>Human planning evidence, never an automatic replacement decision</small></div>
         </div>
-        {recording.canClassify ? <a className={styles.inlineAction} href="#work-records">Update service area or equipment classification<ArrowRight aria-hidden="true" size={15} /></a> : null}
+        {recording.canClassify ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=cost#work-records`}>Update service area or equipment classification<ArrowRight aria-hidden="true" size={15} /></Link> : null}
         <div className={styles.panelRegion}><WorkOrderReplacementIntelligencePanel model={replacement} /></div>
-      </WorkspaceSection>
+      </WorkspaceSection> : null}
     </div>
   );
 }

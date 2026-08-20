@@ -120,6 +120,7 @@ describe("work-order control truth boundary", () => {
       "waiting_on_vendor",
       "waiting_on_parts",
       "completed_pending_review",
+      "resolved",
       "closed",
       "cancelled",
     ];
@@ -130,7 +131,8 @@ describe("work-order control truth boundary", () => {
       expect(transitions.every((candidate) => candidate === "closed" || candidate === "cancelled")).toBe(true);
     }
     expect(allowedWorkOrderControlTransitions("issued")).toEqual(["cancelled"]);
-    expect(allowedWorkOrderControlTransitions("completed_pending_review")).toEqual(["closed", "cancelled"]);
+    expect(allowedWorkOrderControlTransitions("completed_pending_review")).toEqual(["cancelled"]);
+    expect(allowedWorkOrderControlTransitions("resolved")).toEqual(["closed", "cancelled"]);
     expect(allowedWorkOrderControlTransitions("closed")).toEqual([]);
   });
 
@@ -358,8 +360,11 @@ describe("shared route-and-issue eligibility", () => {
     const closeout = buildWorkOrderControlModel(closeoutFixture, facilitiesSession, PUBLIC_WORK_ORDER_ID);
     expect(closeout.statusOptions.map((option) => option.value)).toEqual([
       "completed_pending_review",
-      "closed",
       "cancelled",
     ]);
+
+    const resolvedFixture = fixtureWithPublicWorkStatus("resolved");
+    const resolved = buildWorkOrderControlModel(resolvedFixture, facilitiesSession, PUBLIC_WORK_ORDER_ID);
+    expect(resolved.statusOptions.map((option) => option.value)).toEqual(["resolved", "closed", "cancelled"]);
   });
 });

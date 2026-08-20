@@ -6,6 +6,7 @@ import {
   createFollowUp,
   createServiceRequest,
   createWorkOrder,
+  issueWorkOrder,
   reconcileUnmatchedVisit,
   rescheduleFollowUp,
   reviewException,
@@ -15,6 +16,12 @@ import {
 } from "@/lib/ops/commands";
 import { createNorthlineFixtureRepository } from "@/lib/ops/fixture-repository";
 import { NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
+import {
+  reviewRequestImpactAssessment,
+  type RequestImpactAssessmentDraft,
+} from "@/lib/ops/request-impact-assessment";
+import type { RequestImpactAssessment, ServiceRequest } from "@/lib/ops/types";
+import { recordWorkOrderVerification } from "@/lib/ops/work-order-verification-commands";
 
 const facilitiesActor = {
   organizationId: NORTHLINE_ORGANIZATION_ID,
@@ -62,6 +69,42 @@ function snapshot(repository: FixtureRepository) {
   return repository.snapshot();
 }
 
+function impactDraft(assessment: RequestImpactAssessment): RequestImpactAssessmentDraft {
+  return {
+    storeOperatingState: assessment.storeOperatingState,
+    safetyConcern: assessment.safetyConcern,
+    productInventoryRisk: assessment.productInventoryRisk,
+    productInventoryValueMinor: assessment.productInventoryValue?.amountMinor,
+    productInventoryCurrency: assessment.productInventoryValue?.currency,
+    customersAffected: assessment.customersAffected,
+    complianceImpact: assessment.complianceImpact,
+    capacityUnavailableBps: assessment.capacityUnavailableBps,
+    redundantEquipment: assessment.redundantEquipment,
+    revenueFunctionImpact: assessment.revenueFunctionImpact,
+    estimatedDailyRevenueExposureMinor: assessment.estimatedDailyRevenueExposure?.amountMinor,
+    estimatedDailyRevenueExposureCurrency: assessment.estimatedDailyRevenueExposure?.currency,
+    estimatedDowntimeMinutes: assessment.estimatedDowntimeMinutes,
+    confidence: assessment.confidence,
+    source: assessment.source,
+    notes: assessment.notes,
+  };
+}
+
+async function reviewImpact(
+  harness: ReturnType<typeof commandHarness>,
+  request: ServiceRequest & { impactAssessment: RequestImpactAssessment },
+) {
+  return reviewRequestImpactAssessment(harness.services, {
+    organizationId: request.organizationId,
+    requestId: request.id,
+    expectedRequestStatus: "submitted",
+    expectedLatestAssessmentId: request.impactAssessment.id,
+    disposition: "confirmed",
+    assessment: impactDraft(request.impactAssessment),
+    actor: facilitiesActor,
+  });
+}
+
 async function createRoutedWorkOrder(
   harness: ReturnType<typeof commandHarness>,
   input?: { priority?: "emergency" | "urgent" | "routine" | "planned"; storeId?: string },
@@ -93,6 +136,7 @@ describe("atomic work-order creation and control defaults", () => {
       priority: "urgent",
       actor: facilitiesActor,
     });
+    await reviewImpact(harness, request);
     const before = snapshot(harness.repository);
 
     await expect(createWorkOrder(harness.services, {
@@ -109,7 +153,7 @@ describe("atomic work-order creation and control defaults", () => {
 
     expect(snapshot(harness.repository)).toEqual(before);
     const persistedRequest = await harness.repository.getRequest(NORTHLINE_ORGANIZATION_ID, request.id);
-    expect(persistedRequest).toMatchObject({ status: "submitted" });
+    expect(persistedRequest).toMatchObject({ status: "under_review" });
     expect(persistedRequest?.convertedWorkOrderId).toBeUndefined();
   });
 
@@ -177,14 +221,8 @@ describe("service-request review decisions", () => {
       actor: facilitiesActor,
     });
 
-    const started = await reviewServiceRequest(harness.services, {
-      organizationId: NORTHLINE_ORGANIZATION_ID,
-      requestId: request.id,
-      expectedStatus: "submitted",
-      decision: "start_review",
-      actor: facilitiesActor,
-    });
-    expect(started.status).toBe("under_review");
+    const started = await reviewImpact(harness, request);
+    expect(started.requestStatus).toBe("under_review");
     expect(await harness.repository.getRequest(NORTHLINE_ORGANIZATION_ID, request.id)).toMatchObject({ status: "under_review" });
 
     const beforeMissingReason = snapshot(harness.repository);
@@ -216,8 +254,14 @@ describe("service-request review decisions", () => {
 
     expect(closed.status).toBe("closed");
     expect(await harness.repository.getRequest(NORTHLINE_ORGANIZATION_ID, request.id)).toMatchObject({ status: "closed" });
+    expect(snapshot(harness.repository).workflowTasks.find((task) => (
+      task.serviceRequestId === request.id && task.taskType === "review_issue"
+    ))).toMatchObject({
+      status: "completed",
+      resolutionNote: "Duplicate of a request already under active repair.",
+    });
     expect(snapshot(harness.repository).auditEvents.filter((event) => event.aggregateId === request.id).map((event) => event.eventType))
-      .toEqual(["request.submitted", "request.review_started", "request.escalated", "request.closed"]);
+      .toEqual(["request.submitted", "request.impact_assessed", "request.impact_reviewed", "request.review_started", "request.escalated", "request.closed"]);
 
     await expect(reviewServiceRequest(harness.services, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
@@ -244,16 +288,23 @@ describe("work-order transition controls", () => {
       actor: facilitiesActor,
     })).rejects.toMatchObject({ code: "CONFLICT" });
 
-    await harness.repository.atomicWrite([
-      {
-        sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ?",
-        params: ["issued", NORTHLINE_ORGANIZATION_ID, workOrder.initialAssignment!.id],
+    await issueWorkOrder(harness.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      workOrderId: workOrder.id,
+      assignmentId: workOrder.initialAssignment!.id,
+      revision: 1,
+      channel: "manual",
+      authorizationSnapshot: {
+        organizationName: "Northline Fuel & Market",
+        workOrderNumber: workOrder.number,
+        store: { id: workOrder.storeId, storeNumber: "101", name: "Northline Cedar Grove", formattedAddress: "101 Market Way, Cedar Grove, MI 49001" },
+        vendor: { id: "vendor-northline-summit", name: "Summit Refrigeration" },
+        problem: workOrder.problem,
+        priority: workOrder.priority,
+        billingInstruction: `Reference operator work order ${workOrder.number} on all service tickets and invoices.`,
       },
-      {
-        sql: "UPDATE ops_work_orders SET status = ? WHERE organization_id = ? AND id = ?",
-        params: ["issued", NORTHLINE_ORGANIZATION_ID, workOrder.id],
-      },
-    ]);
+      actor: facilitiesActor,
+    });
 
     const visit = await checkInVisit(harness.services, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
@@ -279,7 +330,7 @@ describe("work-order transition controls", () => {
     expect(await harness.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id)).toMatchObject({ status: "in_progress" });
 
     harness.setNow("2026-08-14T13:15:00.000Z");
-    await checkOutVisit(harness.services, {
+    const checkout = await checkOutVisit(harness.services, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
       visitId: visit.id,
       channel: "store_device",
@@ -288,10 +339,24 @@ describe("work-order transition controls", () => {
       location: { result: "verified", accuracyM: 15, distanceM: 16, capturedAt: "2026-08-14T13:15:00.000Z" },
       actor: technicianActor,
     });
+    const awaitingVerification = await harness.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id);
+    const outcome = checkout.siteVisitWorkOrders[0]!;
+    harness.setNow("2026-08-14T13:20:00.000Z");
+    await recordWorkOrderVerification(harness.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      workOrderId: workOrder.id,
+      expectedWorkOrderVersion: awaitingVerification?.version ?? 0,
+      expectedSiteVisitWorkOrderId: outcome.id,
+      expectedOutcomeRecordedAt: outcome.outcomeRecordedAt!,
+      decision: "verified",
+      reason: "Facilities confirmed normal temperature after service.",
+      actor: facilitiesActor,
+    });
+
     const closed = await updateWorkOrderControl(harness.services, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
       workOrderId: workOrder.id,
-      expectedStatus: "completed_pending_review",
+      expectedStatus: "resolved",
       status: "closed",
       note: "Facilities reviewed the completed visit and outcome evidence.",
       actor: facilitiesActor,
@@ -303,7 +368,7 @@ describe("work-order transition controls", () => {
       nextAction: "No further action",
       dueAt: undefined,
       escalationTo: undefined,
-      closedAt: "2026-08-14T13:15:00.000Z",
+      closedAt: "2026-08-14T13:20:00.000Z",
     });
     expect(await harness.repository.getActiveAssignment(NORTHLINE_ORGANIZATION_ID, workOrder.id)).toBeNull();
     expect(snapshot(harness.repository).assignments.find((assignment) => assignment.id === workOrder.initialAssignment?.id)?.status).toBe("completed");
@@ -367,7 +432,7 @@ describe("follow-up accountability", () => {
       nextProjection: {
         status: "completed_pending_review",
         accountableParty: "Facilities coordinator",
-        nextAction: "Review completed service and close",
+        nextAction: "Verify current service outcome",
         dueAt: "2026-08-19T16:00:00.000Z",
         escalationTo: "Facilities director",
       },

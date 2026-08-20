@@ -1,0 +1,1 @@
+ALTER TABLE `ops_requests` ADD `version` integer DEFAULT 0 NOT NULL;

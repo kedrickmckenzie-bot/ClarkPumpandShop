@@ -49,7 +49,7 @@ export const operatorNavigation: NavigationItem[] = [
     id: "work",
     label: "Work",
     href: "/app/action-center",
-    matchPrefixes: ["/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits"],
+    matchPrefixes: ["/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits", "/app/service-runs"],
     contextGroup: "work",
   },
   {
@@ -75,7 +75,7 @@ export const operatorNavigation: NavigationItem[] = [
     id: "planning",
     label: "Spend & planning",
     href: "/app/spend",
-    matchPrefixes: ["/app/spend", "/app/lifecycle", "/app/invoices", "/app/reports"],
+    matchPrefixes: ["/app/spend", "/app/lifecycle", "/app/warranties", "/app/invoices", "/app/reports"],
     contextGroup: "planning",
   },
 ];
@@ -90,6 +90,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
       { id: "work-orders", label: "Work orders", href: "/app/work-orders" },
       { id: "estimates", label: "Bid requests", href: "/app/estimates" },
       { id: "visits", label: "Service visits", href: "/app/visits" },
+      { id: "service-runs", label: "Service runs", href: "/app/service-runs" },
     ],
   },
   {
@@ -106,7 +107,9 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
     items: [
       { id: "spend", label: "Recorded spend", href: "/app/spend" },
       { id: "lifecycle", label: "Lifecycle planning", href: "/app/lifecycle" },
+      { id: "warranties", label: "Warranty center", href: "/app/warranties" },
       { id: "invoice-review", label: "Invoice safeguards", href: "/app/invoices" },
+      { id: "value-ledger", label: "Value ledger", href: "/app/reports/value" },
       { id: "reports", label: "Reports", href: "/app/reports" },
     ],
   },
@@ -156,7 +159,9 @@ function roleCanSeeContextItem(role: OperatorRole, groupId: NavigationGroupId, i
 
   if (item.id === "spend") return roleCanAccessProgramRoute(role, "spend");
   if (item.id === "lifecycle") return roleCanAccessProgramRoute(role, "lifecycle");
+  if (item.id === "warranties") return roleCanAccessListRoute(role, "warranties");
   if (item.id === "invoice-review") return roleCanAccessListRoute(role, "invoices");
+  if (item.id === "value-ledger") return roleCanAccessListRoute(role, "reports");
   return roleCanAccessListRoute(role, "reports");
 }
 

@@ -84,9 +84,9 @@ export async function POST(request: Request) {
       },
     );
     const destination = assignmentKind === "bid_request"
-      ? `/app/work-orders/${encodeURIComponent(result.id)}?updated=bid-request-created#bid-requests`
+      ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=bid-request-created#bid-requests`
       : assignmentKind === "outside_vendor"
-        ? `/app/work-orders/${encodeURIComponent(result.id)}?updated=service-work-created#issue-work`
+        ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=service-work-created#issue-work`
         : `/app/work-orders/${encodeURIComponent(result.id)}?created=true`;
     return relativeRedirect303(destination);
   } catch (error) {

@@ -26,7 +26,7 @@ const randomIds: OpsIdSource = { next: (prefix) => `${prefix}-${crypto.randomUUI
 const terminalWorkOrderStatuses = new Set(["closed", "cancelled"]);
 const activeEstimateRequestStatuses = new Set<EstimateRequestStatus>(["requested", "opened", "submitted"]);
 const liveOutsideServiceAssignmentStatuses = new Set(["issued", "opened", "accepted"]);
-const selectableBlockedWorkOrderStatuses = new Set(["in_progress", "completed_pending_review", "closed", "cancelled"]);
+const selectableBlockedWorkOrderStatuses = new Set(["in_progress", "completed_pending_review", "resolved", "closed", "cancelled"]);
 const requestKinds = new Set<EstimateRequestKind>(["estimate_only", "diagnostic_and_estimate"]);
 const requestChannels = new Set<EstimateRequestChannel>(["email", "sms", "manual"]);
 const MAX_MONEY_MINOR = 999_999_999_999;

@@ -21,6 +21,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const planningApplication = formText(formData, "planningApplication", { required: true, max: 30 });
     if (planningApplication !== "asset_only" && planningApplication !== "planning_group") throw new OpsDomainError("VALIDATION", "Choose where this planning reference should apply.");
     await approveReplacementFromSelectedQuote({ repository: context.repository }, { organizationId: context.session.organizationId, workOrderId: workOrder.id, profileId: formText(formData, "profileId", { required: true, max: 120 }), equipmentAmountMinor: requiredMoney(formData, "equipmentAmount", "Equipment amount"), installationAmountMinor: requiredMoney(formData, "installationAmount", "Installation amount"), otherAmountMinor: requiredMoney(formData, "otherAmount", "Other amount"), currency: "USD", effectiveAt, planningApplication, notes: formText(formData, "notes", { max: 2_000 }) || undefined, actor: context.actor });
-    return success(request, `/app/work-orders/${encodeURIComponent(workOrder.id)}?updated=replacement-approved#replacement-intelligence`);
+    return success(request, `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=equipment&updated=replacement-approved#replacement-intelligence`);
   } catch (error) { return opsApiError(error); }
 }

@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   ActionItemViewModel,
+  ApprovalDecisionViewModel,
   AttentionItemControlViewModel,
   BreakdownViewModel,
   CreateRequestPageViewModel,
@@ -10,6 +11,8 @@ import type {
   CreateWorkOrderPageViewModel,
   DashboardPageViewModel,
   DetailPageViewModel,
+  DetailFactViewModel,
+  DetailSectionViewModel,
   EstimateComparisonViewModel,
   ListPageViewModel,
   MetricViewModel,
@@ -25,11 +28,24 @@ import type {
   WorkOrderControlViewModel,
   WorkOrderRecordingViewModel,
 } from "@/components/ops/data-contract";
+import type {
+  VendorAccountabilityEvidenceRow,
+  VendorAuthorizationEvidenceRow,
+  VendorCostEvidenceRow,
+  VendorCoverageEvidenceRow,
+  VendorPerformanceDetailViewModel,
+  VendorPerformanceListViewModel,
+  VendorPerformanceSummary,
+  VendorRepeatVisitEvidenceRow,
+  VendorVisitEvidenceRow,
+} from "@/components/ops/vendor-performance-contract";
 import { roleCan, roleCanAccessProgramRoute, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
 import type {
+  ApprovalRequiredRole,
   Asset,
   OpsFixture,
   PmOccurrence,
+  RequestImpactAssessment,
   Store,
   VisitSession,
   WorkOrder,
@@ -38,6 +54,8 @@ import {
   allowedWorkOrderControlTransitions,
   canRouteAndIssueWorkOrder,
 } from "@/lib/ops/commands";
+import { approvalRequestState } from "@/lib/ops/approval-governance";
+import { buildWorkflowTaskWorkspaceModel } from "./workflow-task-presenter";
 import { NORTHLINE_DEMO_ENTRY_TOKENS, NORTHLINE_DEMO_HANDLES } from "@/lib/ops/fixtures";
 import {
   calculateRepairReplacementScreening,
@@ -132,6 +150,143 @@ function sentence(value: string): string {
   return domainLabel(value);
 }
 
+const IMPACT_ESTIMATE_CAVEAT = "Product value, revenue exposure, capacity, and downtime estimates are planning context—not verified losses.";
+
+function impactMoney(value: RequestImpactAssessment["productInventoryValue"]) {
+  return value ? estimateMoney(value.amountMinor, value.currency) : "Not estimated";
+}
+
+function impactEvidenceSection(
+  assessments: RequestImpactAssessment[],
+  recordHref: string,
+): DetailSectionViewModel {
+  const history = [...assessments].sort((left, right) => right.assessedAt.localeCompare(left.assessedAt) || right.id.localeCompare(left.id));
+  const current = history[0];
+  return {
+    id: "business-impact",
+    title: "Business-impact assessment",
+    description: current ? IMPACT_ESTIMATE_CAVEAT : "No structured impact assessment was recorded for this legacy issue.",
+    facts: current ? [
+      { label: "Store operation", value: sentence(current.storeOperatingState) },
+      { label: "Safety", value: sentence(current.safetyConcern), helperText: `Compliance: ${sentence(current.complianceImpact)}` },
+      { label: "Product / inventory", value: sentence(current.productInventoryRisk), helperText: `Reported value at risk: ${impactMoney(current.productInventoryValue)}` },
+      { label: "Customers affected", value: sentence(current.customersAffected) },
+      { label: "Unavailable capacity", value: current.capacityUnavailableBps === undefined ? "Not estimated" : `${current.capacityUnavailableBps / 100}%`, helperText: `Redundant equipment: ${sentence(current.redundantEquipment)}` },
+      { label: "Revenue function", value: current.revenueFunctionImpact ? sentence(current.revenueFunctionImpact) : "Not identified", helperText: `Estimated daily exposure: ${impactMoney(current.estimatedDailyRevenueExposure)}` },
+      { label: "Estimated downtime", value: current.estimatedDowntimeMinutes === undefined ? "Not estimated" : `${current.estimatedDowntimeMinutes} minutes` },
+      { label: "Current evidence", value: `${sentence(current.confidence)} confidence · ${sentence(current.source)}`, helperText: `${current.assessedByActorName} · ${dateTime(current.assessedAt)}` },
+    ] : [{ label: "Assessment", value: "Not recorded" }],
+    table: {
+      id: "impact-history",
+      caption: "Append-only impact assessment history",
+      columns: [
+        { key: "assessment", label: "Assessment" },
+        { key: "operation", label: "Store operation" },
+        { key: "risk", label: "Reported risk" },
+        { key: "estimates", label: "Exposure estimates" },
+        { key: "provenance", label: "Recorded by" },
+      ],
+      rows: history.map((assessment) => ({
+        id: assessment.id,
+        label: assessment.assessmentKind === "review" ? `Manager ${assessment.reviewDisposition}` : "Initial store report",
+        href: `${recordHref}#business-impact`,
+        cells: [
+          { key: "assessment", value: assessment.assessmentKind === "review" ? `Manager ${sentence(assessment.reviewDisposition ?? "review")}` : "Initial store report", secondary: `${sentence(assessment.confidence)} confidence` },
+          { key: "operation", value: sentence(assessment.storeOperatingState), secondary: `Customers: ${sentence(assessment.customersAffected)}` },
+          { key: "risk", value: sentence(assessment.safetyConcern), secondary: `Inventory: ${sentence(assessment.productInventoryRisk)} · Compliance: ${sentence(assessment.complianceImpact)}` },
+          { key: "estimates", value: `Inventory ${impactMoney(assessment.productInventoryValue)}`, secondary: `Daily revenue ${impactMoney(assessment.estimatedDailyRevenueExposure)} · Downtime ${assessment.estimatedDowntimeMinutes === undefined ? "not estimated" : `${assessment.estimatedDowntimeMinutes} min`}` },
+          { key: "provenance", value: assessment.assessedByActorName, secondary: dateTime(assessment.assessedAt) },
+        ],
+      })),
+    },
+  };
+}
+
+const approvalRoleLabels: Record<ApprovalRequiredRole, string> = {
+  executive: "Executive",
+  facilities_admin: "Facilities administrator",
+  regional_manager: "Regional manager",
+  store_manager: "Store manager",
+  finance_reviewer: "Finance reviewer",
+};
+
+function approvalEvidence(
+  fixture: OpsFixture,
+  organizationId: string,
+  subjectType: "service_request" | "work_order",
+  subjectId: string,
+): { fact: DetailFactViewModel; section: DetailSectionViewModel } {
+  const requests = fixture.approvalRequests
+    .filter((request) => request.organizationId === organizationId && request.subjectType === subjectType && request.subjectId === subjectId)
+    .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt) || right.id.localeCompare(left.id));
+  if (!requests.length) {
+    return {
+      fact: { label: "Approval", value: "No approval gate", helperText: "Basic store-and-problem work remains valid when no policy-triggering amount is entered" },
+      section: {
+        id: "approval-governance",
+        title: "Approval governance",
+        description: "No approval request is attached to this record. Approval limits are additive controls and are not prerequisites for basic issue intake or work-order creation.",
+        facts: [
+          { label: "Current state", value: "No approval required" },
+          { label: "Source rule", value: "No policy snapshot attached" },
+          { label: "History", value: "No approval decisions recorded" },
+        ],
+      },
+    };
+  }
+  const decisions = fixture.approvalDecisions.filter((decision) => decision.organizationId === organizationId && requests.some((request) => request.id === decision.approvalRequestId));
+  const current = requests[0];
+  const currentState = approvalRequestState(current, decisions);
+  const scopeName = current.policyScopeKind === "organization"
+    ? fixture.organizations.find((organization) => organization.id === current.policyScopeId)?.name
+    : current.policyScopeKind === "region"
+      ? fixture.regions.find((region) => region.organizationId === organizationId && region.id === current.policyScopeId)?.name
+      : fixture.stores.find((store) => store.organizationId === organizationId && store.id === current.policyScopeId)?.storeNumber;
+  return {
+    fact: { label: "Approval", value: sentence(currentState), helperText: `${sentence(current.requiredRole)} under ${current.policyName} v${current.policyVersion}` },
+    section: {
+      id: "approval-governance",
+      title: "Approval governance",
+      description: "The policy version, amount, accountable role, escalation, and human decisions are preserved as source facts. Decisions append; they do not overwrite the request.",
+      facts: [
+        { label: "Current state", value: sentence(currentState), helperText: currentState === "pending" && current.dueAt ? `Due ${dateTime(current.dueAt)}` : undefined },
+        { label: "Amount presented", value: estimateMoney(current.amount.amountMinor, current.amount.currency), helperText: "Authorization basis captured when review was requested" },
+        { label: "Required role", value: sentence(current.requiredRole), helperText: current.escalationRole ? `Escalates to ${sentence(current.escalationRole)}` : "No further escalation role configured" },
+        { label: "Applied policy", value: `${current.policyName} v${current.policyVersion}`, helperText: `${sentence(current.policyScopeKind)} scope${scopeName ? ` · ${scopeName}` : ""}${current.categoryKey ? ` · ${sentence(current.categoryKey)}` : " · all categories"}` },
+        { label: "Requested by", value: current.requestedByName, helperText: dateTime(current.requestedAt) },
+        { label: "Reason", value: current.reason ?? "No additional reason entered" },
+      ],
+      table: {
+        id: "approval-ledger",
+        caption: "Immutable approval request and decision ledger",
+        columns: [
+          { key: "request", label: "Request" },
+          { key: "amount", label: "Amount", align: "end" },
+          { key: "role", label: "Accountable role" },
+          { key: "status", label: "State" },
+          { key: "decision", label: "Decision evidence" },
+        ],
+        rows: requests.map((request) => {
+          const decision = decisions.find((candidate) => candidate.approvalRequestId === request.id);
+          const state = approvalRequestState(request, decisions);
+          return {
+            id: request.id,
+            label: `${request.policyName} v${request.policyVersion}`,
+            href: subjectType === "work_order" ? `/app/work-orders/${subjectId}#approval-governance` : `/app/requests/${subjectId}#approval-governance`,
+            cells: [
+              { key: "request", value: `${request.policyName} v${request.policyVersion}`, secondary: `${request.requestedByName} · ${dateTime(request.requestedAt)}` },
+              { key: "amount", value: estimateMoney(request.amount.amountMinor, request.amount.currency) },
+              { key: "role", value: sentence(request.requiredRole), secondary: request.parentApprovalRequestId ? "Escalated review" : "Initial review" },
+              { key: "status", value: sentence(state), tone: state === "approved" ? "positive" : state === "rejected" || state === "cancelled" ? "critical" : "warning" },
+              { key: "decision", value: decision ? `${decision.decidedByName} · ${dateTime(decision.decidedAt)}` : "Awaiting decision", secondary: decision?.reason },
+            ],
+          };
+        }),
+      },
+    },
+  };
+}
+
 function auditDescription(payloadJson: string): string | undefined {
   try {
     const payload = JSON.parse(payloadJson) as Record<string, unknown>;
@@ -152,7 +307,7 @@ function auditDescription(payloadJson: string): string | undefined {
 
 function workStatusTone(status: WorkOrder["status"]): Tone {
   if (["cancelled", "closed"].includes(status)) return "neutral";
-  if (["completed_pending_review"].includes(status)) return "positive";
+  if (["completed_pending_review", "resolved"].includes(status)) return "positive";
   if (["waiting_on_parts", "waiting_on_vendor"].includes(status)) return "warning";
   if (["in_progress", "accepted", "scheduled"].includes(status)) return "info";
   return "neutral";
@@ -530,7 +685,7 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
       const work = scoped.workOrders.filter((candidate) => candidate.assetId === asset.id);
       const reactiveWork = work.filter((candidate) => candidate.priority !== "planned");
       const completedReactiveWork = reactiveWork.filter((candidate) =>
-        candidate.status === "closed" || candidate.status === "completed_pending_review",
+        candidate.status === "closed" || candidate.status === "completed_pending_review" || candidate.status === "resolved",
       );
       const workCost = costForWorkIds(costByWork, work.map((candidate) => candidate.id));
       const workInDays = (days: number) => reactiveWork.filter(
@@ -587,7 +742,7 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
       const sameComponentRepeat = Boolean(repeatedComponent);
       const proposalWork = reactiveWork
         .filter((candidate) =>
-          !["closed", "cancelled", "completed_pending_review"].includes(candidate.status) &&
+          !["closed", "cancelled", "completed_pending_review", "resolved"].includes(candidate.status) &&
           Boolean(candidate.repairEstimate),
         )
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
@@ -731,6 +886,7 @@ function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession
 
   return {
     state: { kind: "ready" },
+    layout: session.role === "executive" ? "executive" : session.role === "finance" ? "finance" : session.role === "store_manager" ? "store" : session.role === "regional" ? "regional" : "operations",
     page: {
       title: session.role === "executive" ? "Your company at a glance" : "Here’s what needs attention",
       eyebrow: session.role === "executive" ? "Executive home" : "Manager home",
@@ -843,6 +999,10 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
       .filter((vendor) => vendor.organizationId === scoped.organizationId)
       .map((vendor) => [vendor.id, vendor]),
   );
+  const observedVisitCounts = new Map<string, number>();
+  for (const visit of scoped.visits) {
+    if (visit.vendorId) observedVisitCounts.set(visit.vendorId, (observedVisitCounts.get(visit.vendorId) ?? 0) + 1);
+  }
 
   const categoryCost = new Map<string, number>();
   const storeCost = new Map<string, number>();
@@ -874,6 +1034,18 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
       sourceLabel: "Open the complete store ranking",
     },
   );
+  const vendorAccountabilityBreakdown = countBreakdown(
+    "observed-visits-by-vendor",
+    "Observed service visits by vendor",
+    observedVisitCounts,
+    (key) => hrefWithQuery("/app/visits", { vendor: key }),
+    {
+      description: "Observed check-in records by outside vendor in this scope. Open any segment to review work-order linkage, presence evidence, outcome, and follow-up.",
+      labelFor: (key) => vendorById.get(key)?.name ?? "Unknown vendor",
+      totalNoun: "observed outside-vendor visits",
+      sourceLink: { href: "/app/vendors", label: "Open vendor accountability" },
+    },
+  );
   const trend = costTrend(fixture, scoped, rollingCostByWork, { periodStart });
   const lifecycleSpotlight: DashboardPageViewModel["spotlight"] = candidate
     ? {
@@ -899,6 +1071,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     const highestCostStore = [...storeCost.entries()].sort((left, right) => right[1] - left[1])[0];
     return {
       state: { kind: "ready" },
+      layout: "executive",
       page: {
         ...pageBase,
         title: "Your company at a glance",
@@ -920,7 +1093,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
         dashboardShortcut({ id: "executive-reports", title: "Open leadership-ready source views", description: "Use traceable report views for obligations, cost, vendor accountability, PM, and invoice safeguards.", categoryLabel: "Reporting", dueLabel: "Available now", ownerLabel: "Leadership", href: "/app/reports", linkLabel: "Open reports" }),
       ],
       prioritySection: { title: "Leadership decisions to review", description: "High-level questions with direct paths to the records behind them.", link: { href: "/app/action-center", label: "Open all attention items" } },
-      breakdowns: [storeBreakdown, categoryBreakdown],
+      breakdowns: [storeBreakdown, vendorAccountabilityBreakdown, categoryBreakdown],
       trends: [trend],
       spotlight: lifecycleSpotlight,
     };
@@ -934,6 +1107,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     const invoiceToReview = rollingInvoices.find((invoice) => invoice.matchStatus !== "confirmed");
     return {
       state: { kind: "ready" },
+      layout: "finance",
       page: {
         ...pageBase,
         title: "Maintenance cost and evidence",
@@ -978,6 +1152,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     const store = scoped.stores[0];
     return {
       state: { kind: "ready" },
+      layout: "store",
       page: {
         ...pageBase,
         title: store ? `Store ${store.storeNumber} at a glance` : "Your store at a glance",
@@ -1014,6 +1189,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
   const isFacilities = session.role === "facilities";
   return {
     state: { kind: "ready" },
+    layout: isFacilities ? "operations" : "regional",
     page: {
       ...pageBase,
       title: isFacilities ? "Maintenance control center" : "Your region at a glance",
@@ -1231,6 +1407,7 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
   const stage = first(query.stage);
   const storeId = first(query.store);
   const regionId = first(query.region);
+  const vendorId = first(query.vendor);
   const hasCost = first(query.hasCost) === "true";
   const asset = first(query.asset);
   const component = first(query.component);
@@ -1250,6 +1427,7 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
     .filter((work) => !category || (work.categoryKey ?? "unclassified") === category)
     .filter((work) => !storeId || work.storeId === storeId)
     .filter((work) => !regionId || storeById.get(work.storeId)?.regionId === regionId)
+    .filter((work) => !vendorId || assignmentForWork(fixture, scoped.organizationId, work.id)?.vendorId === vendorId)
     .filter((work) => !hasCost || (costByWork.get(work.id) ?? 0) > 0)
     .filter((work) => !costMonth || fixture.costLines.some((line) => line.organizationId === scoped.organizationId && line.workOrderId === work.id && line.serviceDate.startsWith(costMonth)))
     .filter((work) => !asset || (asset === "unlinked" ? !work.assetId : work.assetId === asset))
@@ -1390,6 +1568,538 @@ function storeRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
         ],
       };
     });
+}
+
+const vendorServiceAssignmentStatuses = new Set(["issued", "opened", "accepted", "completed"]);
+
+function median(values: number[]): number | undefined {
+  if (!values.length) return undefined;
+  const ordered = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+}
+
+function elapsedLabel(hours: number | undefined): string {
+  if (hours === undefined) return "No response recorded";
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
+  if (hours < 24) return `${hours.toFixed(1)} hr`;
+  return `${(hours / 24).toFixed(1)} days`;
+}
+
+function ratioLabel(numerator: number, denominator: number): string {
+  return denominator ? `${Math.round((numerator / denominator) * 100)}%` : "Not enough history";
+}
+
+interface VendorEvidenceBundle {
+  summary: VendorPerformanceSummary;
+  medianResponseHours?: number;
+  authorizationRows: VendorAuthorizationEvidenceRow[];
+  accountabilityRows: VendorAccountabilityEvidenceRow[];
+  repeatVisitRows: VendorRepeatVisitEvidenceRow[];
+  visitRows: VendorVisitEvidenceRow[];
+  costRows: VendorCostEvidenceRow[];
+  coverageRows: VendorCoverageEvidenceRow[];
+  regionLabels: string[];
+  searchTerms: string[];
+}
+
+function buildVendorEvidenceBundle(
+  fixture: OpsFixture,
+  scoped: ScopedFixture,
+  vendor: OpsFixture["vendors"][number],
+): VendorEvidenceBundle {
+  const allScopedWorkIds = new Set(scoped.workOrders.map((work) => work.id));
+  const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
+  const workById = new Map(scoped.workOrders.map((work) => [work.id, work]));
+  const regionById = new Map(
+    fixture.regions
+      .filter((region) => region.organizationId === scoped.organizationId)
+      .map((region) => [region.id, region]),
+  );
+  const costByWork = recordedCostByWork(fixture, scoped.organizationId);
+  const costLineCountByWork = fixture.costLines.reduce((counts, line) => {
+    if (line.organizationId === scoped.organizationId && allScopedWorkIds.has(line.workOrderId)) {
+      counts.set(line.workOrderId, (counts.get(line.workOrderId) ?? 0) + 1);
+    }
+    return counts;
+  }, new Map<string, number>());
+
+  const vendorAssignments = fixture.assignments.filter(
+    (assignment) =>
+      assignment.organizationId === scoped.organizationId &&
+      assignment.vendorId === vendor.id &&
+      allScopedWorkIds.has(assignment.workOrderId),
+  );
+  const vendorAssignmentIds = new Set(vendorAssignments.map((assignment) => assignment.id));
+  const attributedWork = scoped.workOrders.filter(
+    (work) => assignmentForWork(fixture, scoped.organizationId, work.id)?.vendorId === vendor.id,
+  );
+  const attributedWorkIds = new Set(attributedWork.map((work) => work.id));
+  const serviceWorkIds = new Set(
+    vendorAssignments
+      .filter((assignment) => vendorServiceAssignmentStatuses.has(assignment.status))
+      .filter((assignment) => workById.get(assignment.workOrderId)?.status !== "cancelled")
+      .map((assignment) => assignment.workOrderId),
+  );
+
+  const vendorVisits = scoped.visits
+    .filter((visit) => visit.vendorId === vendor.id)
+    .sort((left, right) => right.checkedInAt.localeCompare(left.checkedInAt));
+  const linkedVisitsByWork = new Map<string, VisitSession[]>();
+  for (const visit of vendorVisits) {
+    if (!visit.workOrderId) continue;
+    const current = linkedVisitsByWork.get(visit.workOrderId) ?? [];
+    current.push(visit);
+    linkedVisitsByWork.set(visit.workOrderId, current);
+  }
+  const coveredServiceWorkCount = [...serviceWorkIds].filter((workOrderId) => linkedVisitsByWork.has(workOrderId)).length;
+  const noWorkOrderVisits = vendorVisits.filter((visit) => !visit.workOrderId);
+  const checkedOutVisits = vendorVisits.filter((visit) => visit.status !== "active");
+  const unresolvedVisits = checkedOutVisits.filter(
+    (visit) => Boolean(visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome)),
+  );
+  const repeatVisitWorkIds = [...linkedVisitsByWork.entries()]
+    .filter(([, visits]) => visits.length > 1)
+    .map(([workOrderId]) => workOrderId);
+
+  const vendorIssuances = fixture.issuances
+    .filter(
+      (issuance) =>
+        issuance.organizationId === scoped.organizationId &&
+        vendorAssignmentIds.has(issuance.assignmentId) &&
+        allScopedWorkIds.has(issuance.workOrderId),
+    )
+    .sort((left, right) => right.issuedAt.localeCompare(left.issuedAt) || right.revision - left.revision);
+  const validResponses = fixture.vendorResponses.filter(
+    (response) =>
+      response.organizationId === scoped.organizationId &&
+      vendorAssignmentIds.has(response.assignmentId) &&
+      vendorIssuances.some((issuance) => issuance.id === response.issuanceId),
+  );
+  const firstResponseByIssuance = new Map<string, OpsFixture["vendorResponses"][number]>();
+  const terminalResponseByIssuance = new Map<string, OpsFixture["vendorResponses"][number]>();
+  for (const issuance of vendorIssuances) {
+    const responses = validResponses
+      .filter(
+        (response) =>
+          response.issuanceId === issuance.id &&
+          response.assignmentId === issuance.assignmentId &&
+          Date.parse(response.respondedAt) >= Date.parse(issuance.issuedAt),
+      )
+      .sort((left, right) => left.respondedAt.localeCompare(right.respondedAt) || left.id.localeCompare(right.id));
+    if (responses[0]) firstResponseByIssuance.set(issuance.id, responses[0]);
+    const terminal = responses.find((response) => response.response === "accepted" || response.response === "declined");
+    if (terminal) terminalResponseByIssuance.set(issuance.id, terminal);
+  }
+  const responseHours = vendorIssuances.flatMap((issuance) => {
+    const response = firstResponseByIssuance.get(issuance.id);
+    if (!response) return [];
+    const hours = (Date.parse(response.respondedAt) - Date.parse(issuance.issuedAt)) / 3_600_000;
+    return Number.isFinite(hours) && hours >= 0 ? [hours] : [];
+  });
+  const medianResponseHours = median(responseHours);
+  const terminalResponses = [...terminalResponseByIssuance.values()];
+  const acceptedResponseCount = terminalResponses.filter((response) => response.response === "accepted").length;
+
+  const vendorExceptions = fixture.exceptions
+    .filter(
+      (exception) =>
+        exception.organizationId === scoped.organizationId &&
+        exception.vendorId === vendor.id &&
+        exception.status !== "resolved" &&
+        (!exception.storeId || scoped.storeIds.has(exception.storeId)),
+    )
+    .sort((left, right) => right.detectedAt.localeCompare(left.detectedAt));
+  const vendorFollowUps = fixture.followUps
+    .filter(
+      (followUp) =>
+        followUp.organizationId === scoped.organizationId &&
+        followUp.status === "open" &&
+        attributedWorkIds.has(followUp.workOrderId),
+    )
+    .sort((left, right) => left.dueAt.localeCompare(right.dueAt));
+
+  const coverageRecords = fixture.vendorCoverage.filter(
+    (coverage) => coverage.organizationId === scoped.organizationId && coverage.vendorId === vendor.id,
+  );
+  const coveredStoreIds = new Set<string>();
+  for (const coverage of coverageRecords) {
+    for (const store of scoped.stores) {
+      if (
+        (coverage.scopeKind === "organization" && coverage.scopeId === scoped.organizationId) ||
+        (coverage.scopeKind === "region" && store.regionId === coverage.scopeId) ||
+        (coverage.scopeKind === "store" && store.id === coverage.scopeId)
+      ) coveredStoreIds.add(store.id);
+    }
+  }
+  const coveredRegionIds = new Set(
+    scoped.stores
+      .filter((store) => coveredStoreIds.has(store.id) && store.regionId)
+      .map((store) => store.regionId!),
+  );
+  const observedStoreCount = new Set(vendorVisits.map((visit) => visit.storeId)).size;
+  const specialtyRecords = fixture.vendorSpecialties.filter(
+    (specialty) => specialty.organizationId === scoped.organizationId && specialty.vendorId === vendor.id,
+  );
+  const specialties = specialtyRecords.map((specialty) => specialty.displayName);
+  const recordedCostMinor = costForWorkIds(costByWork, attributedWorkIds);
+  const recordedCostLineCount = [...attributedWorkIds].reduce(
+    (total, workOrderId) => total + (costLineCountByWork.get(workOrderId) ?? 0),
+    0,
+  );
+  const openWorkCount = attributedWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length;
+  const accountabilityCount = vendorExceptions.length + vendorFollowUps.length;
+  const visitedWorkDenominator = linkedVisitsByWork.size;
+
+  const summary: VendorPerformanceSummary = {
+    id: vendor.id,
+    name: vendor.name,
+    code: vendor.code,
+    statusLabel: sentence(vendor.status),
+    preferred: vendor.preferred,
+    dispatchEmail: vendor.dispatchEmail,
+    dispatchPhone: vendor.dispatchPhone,
+    specialties,
+    coverageLabel: coveredStoreIds.size === scoped.stores.length && scoped.stores.length
+      ? `All ${scoped.stores.length} stores in scope`
+      : `${coveredStoreIds.size} of ${scoped.stores.length} stores in scope`,
+    coverageStoreCount: coveredStoreIds.size,
+    coverageStoreDenominator: scoped.stores.length,
+    coverageRegionCount: coveredRegionIds.size,
+    observedStoreCount,
+    openWorkCount,
+    assignedWorkCount: attributedWork.length,
+    recordedCostMinor,
+    recordedCostLineCount,
+    href: `/app/vendors/${vendor.id}`,
+    measures: {
+      responseTime: {
+        id: "response-time",
+        label: "Median first response",
+        value: responseHours.length >= 3 ? elapsedLabel(medianResponseHours) : "Not enough history",
+        numerator: responseHours.length,
+        denominator: vendorIssuances.length,
+        denominatorLabel: `${responseHours.length} of ${vendorIssuances.length} issued authorization${vendorIssuances.length === 1 ? "" : "s"} have a timed response`,
+        definition: "Median elapsed time from an issued service authorization to its first recorded vendor response.",
+        state: responseHours.length >= 3 ? "ready" : "insufficient",
+        sourceLink: { href: `/app/vendors/${vendor.id}#authorization-evidence`, label: "Open response evidence" },
+      },
+      acceptance: {
+        id: "acceptance",
+        label: "Authorization acceptance",
+        value: terminalResponses.length >= 3 ? ratioLabel(acceptedResponseCount, terminalResponses.length) : "Not enough history",
+        numerator: acceptedResponseCount,
+        denominator: terminalResponses.length,
+        denominatorLabel: `${acceptedResponseCount} accepted of ${terminalResponses.length} accepted-or-declined decision${terminalResponses.length === 1 ? "" : "s"}`,
+        definition: "Accepted service authorizations divided by accepted plus declined authorizations. Questions and proposed dates are excluded.",
+        state: terminalResponses.length >= 3 ? "ready" : "insufficient",
+        sourceLink: { href: `/app/vendors/${vendor.id}#authorization-evidence`, label: "Open decision evidence" },
+      },
+      visitCoverage: {
+        id: "visit-coverage",
+        label: "Work with observed visit",
+        value: ratioLabel(coveredServiceWorkCount, serviceWorkIds.size),
+        numerator: coveredServiceWorkCount,
+        denominator: serviceWorkIds.size,
+        denominatorLabel: `${coveredServiceWorkCount} of ${serviceWorkIds.size} issued, accepted, or completed work order${serviceWorkIds.size === 1 ? "" : "s"}`,
+        definition: "Vendor-assigned service work with at least one linked observed visit. Declined, cancelled, superseded, and pricing-only requests are excluded.",
+        state: serviceWorkIds.size ? "ready" : "insufficient",
+        sourceLink: { href: `/app/vendors/${vendor.id}#visit-evidence`, label: "Open visit sources" },
+      },
+      noWorkOrder: {
+        id: "no-work-order",
+        label: "Visits without work order",
+        value: ratioLabel(noWorkOrderVisits.length, vendorVisits.length),
+        numerator: noWorkOrderVisits.length,
+        denominator: vendorVisits.length,
+        denominatorLabel: `${noWorkOrderVisits.length} of ${vendorVisits.length} observed visit${vendorVisits.length === 1 ? "" : "s"}`,
+        definition: "Observed visits where the technician selected no work order or could not find one.",
+        state: vendorVisits.length ? "ready" : "insufficient",
+        tone: noWorkOrderVisits.length ? "warning" : "positive",
+        sourceLink: { href: `/app/vendors/${vendor.id}#visit-evidence`, label: "Open visit sources" },
+      },
+      accountability: {
+        id: "accountability",
+        label: "Open accountability",
+        value: String(accountabilityCount),
+        numerator: accountabilityCount,
+        denominator: vendorExceptions.length + vendorFollowUps.length,
+        denominatorLabel: `${vendorExceptions.length} active exception${vendorExceptions.length === 1 ? "" : "s"} and ${vendorFollowUps.length} open follow-up${vendorFollowUps.length === 1 ? "" : "s"}`,
+        definition: "Unresolved vendor-specific exceptions plus open follow-ups on work currently attributed to this vendor.",
+        state: "ready",
+        tone: accountabilityCount ? "warning" : "positive",
+        sourceLink: { href: `/app/vendors/${vendor.id}#accountability-evidence`, label: "Open accountable records" },
+      },
+      repeatVisits: {
+        id: "repeat-visits",
+        label: "Work with repeat visits",
+        value: ratioLabel(repeatVisitWorkIds.length, visitedWorkDenominator),
+        numerator: repeatVisitWorkIds.length,
+        denominator: visitedWorkDenominator,
+        denominatorLabel: `${repeatVisitWorkIds.length} of ${visitedWorkDenominator} work order${visitedWorkDenominator === 1 ? "" : "s"} with observed visits`,
+        definition: "Work orders with more than one observed visit by this vendor. It is a review fact, not proof of poor work.",
+        state: visitedWorkDenominator ? "ready" : "insufficient",
+        tone: repeatVisitWorkIds.length ? "warning" : "positive",
+        sourceLink: { href: `/app/vendors/${vendor.id}#repeat-visits`, label: "Open repeat-visit work" },
+      },
+      unresolvedOutcomes: {
+        id: "unresolved-outcomes",
+        label: "Unresolved checkout outcomes",
+        value: ratioLabel(unresolvedVisits.length, checkedOutVisits.length),
+        numerator: unresolvedVisits.length,
+        denominator: checkedOutVisits.length,
+        denominatorLabel: `${unresolvedVisits.length} of ${checkedOutVisits.length} checked-out visit${checkedOutVisits.length === 1 ? "" : "s"}`,
+        definition: "Checked-out visits recorded as temporary repair, waiting on parts, return required, unable to complete, or unable to reproduce.",
+        state: checkedOutVisits.length ? "ready" : "insufficient",
+        tone: unresolvedVisits.length ? "warning" : "positive",
+        sourceLink: { href: `/app/vendors/${vendor.id}#visit-evidence`, label: "Open checkout evidence" },
+      },
+    },
+  };
+
+  const authorizationRows: VendorAuthorizationEvidenceRow[] = vendorIssuances.map((issuance) => {
+    const work = workById.get(issuance.workOrderId);
+    const response = firstResponseByIssuance.get(issuance.id);
+    const decision = terminalResponseByIssuance.get(issuance.id);
+    const responseTime = response
+      ? (Date.parse(response.respondedAt) - Date.parse(issuance.issuedAt)) / 3_600_000
+      : undefined;
+    return {
+      id: issuance.id,
+      workOrderNumber: work?.number ?? "Work order unavailable",
+      workOrderProblem: work?.problem ?? "Source work is outside this view",
+      storeLabel: storeLabel(work ? storeById.get(work.storeId) : undefined),
+      revision: issuance.revision,
+      issuedAtLabel: dateTime(issuance.issuedAt),
+      responseLabel: response ? sentence(response.response) : "No response recorded",
+      responderLabel: response?.responderName ?? "—",
+      responseAtLabel: response ? dateTime(response.respondedAt) : "—",
+      responseTimeLabel: elapsedLabel(responseTime),
+      decisionLabel: decision ? sentence(decision.response) : "No accepted-or-declined decision",
+      decisionAtLabel: decision ? `${decision.responderName} · ${dateTime(decision.respondedAt)}` : "Questions and proposed dates are not acceptance decisions",
+      href: work ? `/app/work-orders/${work.id}` : `/app/vendors/${vendor.id}`,
+    };
+  });
+
+  const accountabilityRows: VendorAccountabilityEvidenceRow[] = [
+    ...vendorExceptions.map<VendorAccountabilityEvidenceRow>((exception) => ({
+      id: exception.id,
+      kindLabel: sentence(exception.kind),
+      summary: exception.summary,
+      workOrderLabel: exception.workOrderId ? workById.get(exception.workOrderId)?.number ?? "Linked work" : "Visit evidence",
+      ownerLabel: "Facilities review",
+      dueLabel: exception.severity === "urgent" ? "Review now" : "Needs review",
+      tone: exception.severity === "urgent" ? "critical" : "warning",
+      href: `/app/action-center/${exception.id}`,
+    })),
+    ...vendorFollowUps.map<VendorAccountabilityEvidenceRow>((followUp) => ({
+      id: followUp.id,
+      kindLabel: "Open follow-up",
+      summary: followUp.nextAction,
+      workOrderLabel: workById.get(followUp.workOrderId)?.number ?? "Linked work",
+      ownerLabel: followUp.accountableParty,
+      dueLabel: dateTime(followUp.dueAt),
+      tone: Date.parse(followUp.dueAt) < Date.parse(fixture.asOf) ? "critical" : "warning",
+      href: `/app/action-center/${followUp.id}`,
+    })),
+  ];
+
+  const repeatVisitRows: VendorRepeatVisitEvidenceRow[] = repeatVisitWorkIds
+    .map((workOrderId) => {
+      const work = workById.get(workOrderId);
+      const visits = linkedVisitsByWork.get(workOrderId) ?? [];
+      const latest = [...visits].sort((left, right) => right.checkedInAt.localeCompare(left.checkedInAt))[0];
+      return work ? {
+        id: work.id,
+        workOrderNumber: work.number,
+        problem: work.problem,
+        storeLabel: storeLabel(storeById.get(work.storeId)),
+        visitCount: visits.length,
+        latestOutcomeLabel: latest?.outcome ? sentence(latest.outcome) : latest?.status === "active" ? "Onsite now" : "Outcome not recorded",
+        recordedCostLabel: money(costByWork.get(work.id) ?? 0),
+        href: `/app/work-orders/${work.id}`,
+      } : undefined;
+    })
+    .filter((row): row is VendorRepeatVisitEvidenceRow => Boolean(row))
+    .sort((left, right) => right.visitCount - left.visitCount || left.workOrderNumber.localeCompare(right.workOrderNumber));
+
+  const visitRows: VendorVisitEvidenceRow[] = vendorVisits.map((visit) => {
+    const work = visit.workOrderId ? workById.get(visit.workOrderId) : undefined;
+    return {
+      id: visit.id,
+      technicianName: visit.technicianName,
+      storeLabel: storeLabel(storeById.get(visit.storeId)),
+      workOrderLabel: work?.number ?? "No work order",
+      observedLabel: visit.checkedOutAt
+        ? `${dateTime(visit.checkedInAt)} – ${dateTime(visit.checkedOutAt)}`
+        : `Onsite since ${dateTime(visit.checkedInAt)}`,
+      outcomeLabel: visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "Onsite now" : "Outcome not recorded",
+      isNoWorkOrder: !visit.workOrderId,
+      isUnresolved: Boolean(visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome)),
+      href: `/app/visits/${visit.id}`,
+    };
+  });
+
+  const costRows: VendorCostEvidenceRow[] = attributedWork
+    .filter((work) => (costByWork.get(work.id) ?? 0) > 0)
+    .sort((left, right) => (costByWork.get(right.id) ?? 0) - (costByWork.get(left.id) ?? 0))
+    .map((work) => ({
+      id: work.id,
+      workOrderNumber: work.number,
+      problem: work.problem,
+      storeLabel: storeLabel(storeById.get(work.storeId)),
+      statusLabel: sentence(work.status),
+      costLabel: money(costByWork.get(work.id) ?? 0),
+      costLineCount: costLineCountByWork.get(work.id) ?? 0,
+      href: `/app/work-orders/${work.id}`,
+    }));
+
+  const coverageRows: VendorCoverageEvidenceRow[] = coverageRecords.map((coverage) => {
+    const stores = scoped.stores.filter((store) =>
+      (coverage.scopeKind === "organization" && coverage.scopeId === scoped.organizationId) ||
+      (coverage.scopeKind === "region" && store.regionId === coverage.scopeId) ||
+      (coverage.scopeKind === "store" && store.id === coverage.scopeId),
+    );
+    const scopeLabel = coverage.scopeKind === "organization"
+      ? "Companywide"
+      : coverage.scopeKind === "region"
+        ? regionById.get(coverage.scopeId)?.name ?? "Selected region"
+        : storeLabel(storeById.get(coverage.scopeId));
+    return {
+      id: coverage.id,
+      scopeLabel,
+      includedStoresLabel: `${stores.length} store${stores.length === 1 ? "" : "s"} in current view`,
+      preferredRankLabel: coverage.preferredRank ? `Preference ${coverage.preferredRank}` : "No preference rank",
+    };
+  });
+
+  return {
+    summary,
+    medianResponseHours,
+    authorizationRows,
+    accountabilityRows,
+    repeatVisitRows,
+    visitRows,
+    costRows,
+    coverageRows,
+    regionLabels: [...coveredRegionIds]
+      .map((regionId) => regionById.get(regionId)?.name)
+      .filter((label): label is string => Boolean(label))
+      .sort((left, right) => left.localeCompare(right)),
+    searchTerms: specialtyRecords.flatMap((specialty) => [specialty.displayName, ...specialty.searchAliases]),
+  };
+}
+
+export function buildVendorPerformanceListModel(
+  fixture: OpsFixture,
+  session: OperatorSession,
+  query: OperatorSearchParameters = {},
+): VendorPerformanceListViewModel {
+  const scoped = scopeFixture(fixture, session);
+  const searchValue = cleanSearch(first(query.q));
+  const requestedSort = first(query.sort);
+  const sort: VendorPerformanceListViewModel["sort"] = requestedSort === "name" || requestedSort === "response" || requestedSort === "cost"
+    ? requestedSort
+    : "attention";
+  const bundles = fixture.vendors
+    .filter((vendor) => vendor.organizationId === scoped.organizationId)
+    .map((vendor) => buildVendorEvidenceBundle(fixture, scoped, vendor))
+    .filter(({ summary, regionLabels, coverageRows, searchTerms }) => !searchValue || searchable(
+      summary.name,
+      summary.code,
+      summary.coverageLabel,
+      ...searchTerms,
+      ...regionLabels,
+      ...coverageRows.map((coverage) => coverage.scopeLabel),
+    ).includes(searchValue));
+
+  bundles.sort((left, right) => {
+    if (sort === "name") return left.summary.name.localeCompare(right.summary.name);
+    if (sort === "cost") return right.summary.recordedCostMinor - left.summary.recordedCostMinor || left.summary.name.localeCompare(right.summary.name);
+    if (sort === "response") {
+      const leftValue = left.summary.measures.responseTime.state === "ready" ? left.medianResponseHours ?? Number.POSITIVE_INFINITY : Number.POSITIVE_INFINITY;
+      const rightValue = right.summary.measures.responseTime.state === "ready" ? right.medianResponseHours ?? Number.POSITIVE_INFINITY : Number.POSITIVE_INFINITY;
+      return leftValue - rightValue || left.summary.name.localeCompare(right.summary.name);
+    }
+    return right.summary.measures.accountability.numerator - left.summary.measures.accountability.numerator ||
+      right.summary.measures.unresolvedOutcomes.numerator - left.summary.measures.unresolvedOutcomes.numerator ||
+      left.summary.name.localeCompare(right.summary.name);
+  });
+
+  const vendors = bundles.map((bundle) => bundle.summary);
+  const responded = vendors.reduce((total, vendor) => total + vendor.measures.responseTime.numerator, 0);
+  const issued = vendors.reduce((total, vendor) => total + vendor.measures.responseTime.denominator, 0);
+  const visitCovered = vendors.reduce((total, vendor) => total + vendor.measures.visitCoverage.numerator, 0);
+  const visitEligible = vendors.reduce((total, vendor) => total + vendor.measures.visitCoverage.denominator, 0);
+  const accountability = vendors.reduce((total, vendor) => total + vendor.measures.accountability.numerator, 0);
+  const recordedCostMinor = vendors.reduce((total, vendor) => total + vendor.recordedCostMinor, 0);
+
+  return {
+    title: "Vendor performance evidence",
+    description: "Compare approved vendors using response, visit, accountability, and recorded-cost source records. TraceOps shows definitions and denominators—not a hidden score or invented rating.",
+    scopeLabel: session.scopeLabel,
+    updatedLabel: `Through ${date(fixture.asOf)}`,
+    searchValue: first(query.q),
+    sort,
+    resultSummary: `${vendors.length} of ${fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).length} approved vendors`,
+    createVendorLink: roleCan(session.role, "onboard_vendor") ? { href: "/app/vendors/new", label: "Add approved vendor" } : undefined,
+    portfolioMetrics: [
+      { id: "vendors", label: "Approved vendors", value: String(vendors.length), context: `Exactly ${vendors.length} source-derived vendor record${vendors.length === 1 ? "" : "s"} in this view` },
+      { id: "responses", label: "Authorization response coverage", value: ratioLabel(responded, issued), context: `${responded} of ${issued} issued authorizations have a recorded response` },
+      { id: "visits", label: "Work with observed visit", value: ratioLabel(visitCovered, visitEligible), context: `${visitCovered} of ${visitEligible} eligible vendor work orders` },
+      { id: "accountability", label: "Open accountability", value: String(accountability), context: "Active vendor exceptions plus open attributed follow-ups" },
+      { id: "cost", label: "Recorded work cost", value: money(recordedCostMinor), context: "Entered cost lines on work currently attributed to these vendors" },
+    ],
+    vendors,
+  };
+}
+
+export function buildVendorPerformanceDetailModel(
+  fixture: OpsFixture,
+  session: OperatorSession,
+  vendorId: string,
+): VendorPerformanceDetailViewModel {
+  const scoped = scopeFixture(fixture, session);
+  const vendor = fixture.vendors.find(
+    (candidate) => candidate.organizationId === scoped.organizationId && candidate.id === vendorId,
+  );
+  if (!vendor) {
+    return {
+      state: "missing",
+      title: "Vendor not available",
+      description: "This vendor does not exist or is outside your authorized organization.",
+      scopeLabel: session.scopeLabel,
+      updatedLabel: `Through ${date(fixture.asOf)}`,
+      backLink: { href: "/app/vendors", label: "Back to vendors" },
+      authorizationRows: [],
+      accountabilityRows: [],
+      repeatVisitRows: [],
+      visitRows: [],
+      costRows: [],
+      coverageRows: [],
+      regionLabels: [],
+    };
+  }
+  const bundle = buildVendorEvidenceBundle(fixture, scoped, vendor);
+  return {
+    state: "ready",
+    title: vendor.name,
+    description: "Decision-grade vendor evidence with every measure tied to the authorization, work order, visit, exception, follow-up, coverage, or cost record behind it.",
+    scopeLabel: session.scopeLabel,
+    updatedLabel: `Through ${date(fixture.asOf)}`,
+    backLink: { href: "/app/vendors", label: "Back to vendor comparison" },
+    createWorkOrderLink: roleCan(session.role, "create_work_order")
+      ? { href: `/app/work-orders/new?vendor=${vendor.id}`, label: "Create work order" }
+      : undefined,
+    summary: bundle.summary,
+    authorizationRows: bundle.authorizationRows,
+    accountabilityRows: bundle.accountabilityRows,
+    repeatVisitRows: bundle.repeatVisitRows,
+    visitRows: bundle.visitRows,
+    costRows: bundle.costRows,
+    coverageRows: bundle.coverageRows,
+    regionLabels: bundle.regionLabels,
+  };
 }
 
 function vendorRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSearchParameters): TableRowViewModel[] {
@@ -1549,7 +2259,7 @@ export function buildListModel(
       .map(({ request, work, store, vendor, proposal }) => ({
         id: request.id,
         label: `${work.number} - ${vendor?.name ?? "Unknown vendor"}`,
-        href: `/app/work-orders/${work.id}#bid-requests`,
+        href: `/app/work-orders/${work.id}?view=service#bid-requests`,
         cells: [
           { key: "request", value: request.decisionKind === "replacement_quote" ? "Replacement quote" : "Service bid", secondary: request.requestedScope },
           { key: "work", value: work.number, secondary: storeLabel(store) },
@@ -1625,6 +2335,7 @@ export function buildListModel(
       { id: "stores", label: "Stores", href: "/app/stores", cells: [{ key: "area", value: "Store directory" }, { key: "summary", value: `${scoped.stores.length} stores in scope` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configured", tone: "positive" }] },
       { id: "vendors", label: "Vendors", href: "/app/vendors", cells: [{ key: "area", value: "Approved vendor network" }, { key: "summary", value: `${fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).length} approved vendors` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configured", tone: "positive" }] },
       { id: "taxonomy", label: "Service areas and equipment templates", href: "/app/admin/service-areas", cells: [{ key: "area", value: "Company equipment setup" }, { key: "summary", value: `${(fixture.equipmentTemplates ?? []).filter((template) => template.organizationId === scoped.organizationId && template.active).length} reusable equipment types` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Ready to reuse", tone: "positive" }] },
+      { id: "approval-policies", label: "Approval policies", href: "/app/admin/approval-policies", cells: [{ key: "area", value: "Authorization governance" }, { key: "summary", value: `${fixture.approvalPolicies.filter((policy) => policy.organizationId === scoped.organizationId && policy.status === "active").length} active policies · ${fixture.approvalRequests.filter((request) => request.organizationId === scoped.organizationId && approvalRequestState(request, fixture.approvalDecisions) === "pending").length} pending decisions` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Auditable", tone: "positive" }] },
     ];
     rows = administrationRows.filter((row) => !q || searchable(row.label, ...row.cells.map((cell) => cell.value)).includes(q));
   }
@@ -2201,6 +2912,20 @@ export function buildProgramModel(
     );
     const completed = closedWindow.filter((item) => item.status === "completed").length;
     const eligible = closedWindow.length;
+    const latestClosedByAsset = new Map<string, (typeof closedWindow)[number]>();
+    for (const item of closedWindow.filter((candidate) => candidate.occurrence.assetId).sort((a, b) => a.occurrence.windowEndsAt.localeCompare(b.occurrence.windowEndsAt))) latestClosedByAsset.set(item.occurrence.assetId!, item);
+    const compliantAssetIds = new Set([...latestClosedByAsset.values()].filter((item) => item.status === "completed").map((item) => item.occurrence.assetId!));
+    const noncompliantAssetIds = new Set([...latestClosedByAsset.values()].filter((item) => item.status !== "completed").map((item) => item.occurrence.assetId!));
+    const pmWorkOrderIds = new Set(occurrences.map((item) => item.workOrderId).filter((value): value is string => Boolean(value)));
+    const trailingStart = new Date(Date.parse(fixture.asOf) - 365.2425 * 24 * 60 * 60 * 1_000).toISOString();
+    const reactiveAssetWork = scoped.workOrders.filter((work) => work.assetId && work.createdAt >= trailingStart && work.createdAt <= fixture.asOf && !pmWorkOrderIds.has(work.id));
+    const cohortRate = (assetIds: Set<string>) => assetIds.size ? reactiveAssetWork.filter((work) => assetIds.has(work.assetId!)).length / (assetIds.size * 12) * 100 : 0;
+    const compliantRate = cohortRate(compliantAssetIds);
+    const noncompliantRate = cohortRate(noncompliantAssetIds);
+    const minimumCohort = Math.min(compliantAssetIds.size || Number.POSITIVE_INFINITY, noncompliantAssetIds.size || Number.POSITIVE_INFINITY);
+    const cohortCaution = Number.isFinite(minimumCohort) && minimumCohort >= 10 ? "Descriptive association only; review source records before changing cadence." : "Directional only: at least one cohort has fewer than 10 equipment records, so no effectiveness conclusion is made.";
+    const reactiveCostByMonth = new Map<string, number>();
+    for (const work of reactiveAssetWork) reactiveCostByMonth.set(work.createdAt.slice(0, 7), (reactiveCostByMonth.get(work.createdAt.slice(0, 7)) ?? 0) + (costByWork.get(work.id) ?? 0));
     const rows = visible.sort((a, b) => a.occurrence.dueAt.localeCompare(b.occurrence.dueAt)).map<TableRowViewModel>(({ occurrence, status }) => {
       const plan = fixture.pmPlans.find((item) => item.id === occurrence.planId && item.organizationId === scoped.organizationId);
       const store = scoped.stores.find((item) => item.id === occurrence.storeId);
@@ -2218,8 +2943,14 @@ export function buildProgramModel(
       state: { kind: "ready" },
       page: { title: "Preventive maintenance", eyebrow: "Planned work", description: "Due, scheduled, completed, missed, and waived occurrences with the exact compliance numerator and denominator.", scopeLabel: activeScopeLabel, periodLabel: "Current PM window", updatedLabel: `Through ${date(fixture.asOf)}` },
       metrics: [metric("due", "Due", "warning"), metric("scheduled", "Scheduled", "info"), metric("completed", "Completed", "positive"), metric("missed", "Missed", "critical")],
-      breakdowns: [{ id: "pm-status", title: "PM occurrence status", description: `Closed-window compliance: ${completed} completed / ${eligible} eligible occurrences = ${eligible ? Math.round((completed / eligible) * 100) : 0}%. Work still inside its completion window is excluded.`, totalLabel: `${occurrences.length} occurrences`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "completed" ? "positive" : key === "missed" ? "critical" : key === "due" ? "warning" : "info", link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId }), label: "Filter occurrences" } })), sourceLink: { href: hrefWithQuery("/app/pm", { store: selectedStoreId }), label: "Open all source occurrences" } }],
-      trends: [],
+      breakdowns: [
+        { id: "pm-status", title: "PM occurrence status", description: `Closed-window compliance: ${completed} completed / ${eligible} eligible occurrences = ${eligible ? Math.round((completed / eligible) * 100) : 0}%. Work still inside its completion window is excluded.`, totalLabel: `${occurrences.length} occurrences`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "completed" ? "positive" : key === "missed" ? "critical" : key === "due" ? "warning" : "info", link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId }), label: "Filter occurrences" } })), sourceLink: { href: hrefWithQuery("/app/pm", { store: selectedStoreId }), label: "Open all source occurrences" } },
+        { id: "pm-effectiveness-cohorts", title: "Reactive work after the latest closed PM window", description: `${cohortCaution} Rates use trailing-12-month reactive Work Orders per 100 equipment-months; PM-generated Work Orders are excluded.`, totalLabel: `${compliantAssetIds.size + noncompliantAssetIds.size} equipment`, segments: [
+          { id: "latest-compliant", label: `Latest PM completed (${compliantAssetIds.size})`, value: compliantRate, formattedValue: `${compliantRate.toFixed(1)} / 100`, tone: "positive", link: { href: hrefWithQuery("/app/pm", { status: "completed", store: selectedStoreId }), label: "Open completed occurrence evidence" } },
+          { id: "latest-noncompliant", label: `Latest PM missed (${noncompliantAssetIds.size})`, value: noncompliantRate, formattedValue: `${noncompliantRate.toFixed(1)} / 100`, tone: "warning", link: { href: hrefWithQuery("/app/pm", { status: "missed", store: selectedStoreId }), label: "Open missed occurrence evidence" } },
+        ], sourceLink: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: "Open supporting reactive Work Orders" } },
+      ],
+      trends: [{ id: "pm-reactive-cost", title: "Recorded reactive cost for PM-covered equipment", description: "Trailing-12-month recorded work cost only. This is context for cadence review, not proof that PM caused or prevented a repair.", points: [...reactiveCostByMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, value]) => ({ id: month, label: month, value, formattedValue: money(value), link: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: `Open ${month} source Work Orders` } })), sourceLink: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: "Open all supporting cost records" } }],
       priorityActions: allActions,
       table: { id: "pm-occurrences", caption: "Preventive-maintenance occurrences", columns: [{ key: "plan", label: "Plan / equipment" }, { key: "store", label: "Store" }, { key: "window", label: "Completion window" }, { key: "work", label: "Work order" }, { key: "status", label: "Status" }], rows },
     };
@@ -2310,6 +3041,116 @@ export function buildProgramModel(
   };
 }
 
+export function buildApprovalPolicyWorkspaceModel(
+  fixture: OpsFixture,
+  session: OperatorSession,
+): DetailPageViewModel {
+  const policies = fixture.approvalPolicies
+    .filter((policy) => policy.organizationId === session.organizationId)
+    .sort((left, right) => left.name.localeCompare(right.name) || right.version - left.version);
+  const requests = fixture.approvalRequests
+    .filter((request) => request.organizationId === session.organizationId)
+    .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt) || right.id.localeCompare(left.id));
+  const decisions = fixture.approvalDecisions.filter((decision) => decision.organizationId === session.organizationId);
+  const stateCount = (state: ReturnType<typeof approvalRequestState>) => requests.filter((request) => approvalRequestState(request, decisions) === state).length;
+  const scopeLabel = (policy: (typeof policies)[number]) => {
+    if (policy.scopeKind === "organization") return "All stores";
+    if (policy.scopeKind === "region") return fixture.regions.find((region) => region.organizationId === session.organizationId && region.id === policy.scopeId)?.name ?? "Unknown region";
+    const store = fixture.stores.find((candidate) => candidate.organizationId === session.organizationId && candidate.id === policy.scopeId);
+    return store ? `Store ${store.storeNumber}` : "Unknown store";
+  };
+  const amountRange = (policy: (typeof policies)[number]) => policy.maxAmountMinor === undefined
+    ? `${estimateMoney(policy.minAmountMinor, policy.currency)} and above`
+    : `${estimateMoney(policy.minAmountMinor, policy.currency)} – ${estimateMoney(policy.maxAmountMinor, policy.currency)}`;
+  return {
+    state: { kind: "ready" },
+    page: {
+      title: "Approval policies",
+      eyebrow: "Governed authorization",
+      description: "Define who reviews service commitments by company, region, store, category, and amount. Every request freezes the exact policy version used; every decision is appended and attributed.",
+      scopeLabel: session.scopeLabel,
+      updatedLabel: `Source data through ${date(fixture.asOf)}`,
+    },
+    statusLabel: `${policies.filter((policy) => policy.status === "active").length} active policies`,
+    statusTone: "positive",
+    facts: [
+      { label: "Pending decisions", value: String(stateCount("pending")), helperText: "Each item retains an accountable role and due time" },
+      { label: "Approved", value: String(stateCount("approved")), helperText: "Immutable decisions in the current source ledger" },
+      { label: "Escalated", value: String(stateCount("escalated")), helperText: "Original escalation evidence remains visible beside the next review" },
+      { label: "Access", value: session.role === "facilities" ? "Facilities administrator" : sentence(session.role), helperText: "This setup workspace is restricted by the server-side role policy" },
+    ],
+    sections: [
+      {
+        id: "policy-versions",
+        title: "Effective policy versions",
+        description: "A rule change creates a new version. Historical approval requests keep the name, scope, threshold, and required role that applied when review began.",
+        table: {
+          id: "approval-policies",
+          caption: "Tenant-scoped approval policy versions",
+          columns: [
+            { key: "policy", label: "Policy" },
+            { key: "applies", label: "Applies to" },
+            { key: "range", label: "Amount range", align: "end" },
+            { key: "role", label: "Required role" },
+            { key: "usage", label: "Approval requests", align: "end" },
+            { key: "status", label: "Status" },
+          ],
+          rows: policies.map((policy) => ({
+            id: policy.id,
+            label: policy.name,
+            href: "/app/admin/approval-policies#policy-versions",
+            cells: [
+              { key: "policy", value: policy.name, secondary: `${policy.policyKey} · version ${policy.version}` },
+              { key: "applies", value: scopeLabel(policy), secondary: policy.categoryKey ? sentence(policy.categoryKey) : "All categories" },
+              { key: "range", value: amountRange(policy) },
+              { key: "role", value: sentence(policy.requiredRole), secondary: policy.escalationRole ? `Escalates to ${sentence(policy.escalationRole)}` : "Final approval level" },
+              { key: "usage", value: String(requests.filter((request) => request.policyId === policy.id).length) },
+              { key: "status", value: sentence(policy.status), tone: policy.status === "active" ? "positive" : "neutral" },
+            ],
+          })),
+        },
+      },
+      {
+        id: "approval-ledger",
+        title: "Approval request ledger",
+        description: "Pending, approved, and escalated examples point back to the exact operational record. Basic work with no triggering amount does not appear here.",
+        table: {
+          id: "approval-requests",
+          caption: "Approval requests and immutable decisions",
+          columns: [
+            { key: "record", label: "Operational record" },
+            { key: "store", label: "Store" },
+            { key: "amount", label: "Amount", align: "end" },
+            { key: "policy", label: "Policy snapshot" },
+            { key: "owner", label: "Accountable role" },
+            { key: "status", label: "State" },
+          ],
+          rows: requests.map((request) => {
+            const workOrder = request.subjectType === "work_order" ? fixture.workOrders.find((candidate) => candidate.organizationId === session.organizationId && candidate.id === request.subjectId) : undefined;
+            const serviceRequest = request.subjectType === "service_request" ? fixture.requests.find((candidate) => candidate.organizationId === session.organizationId && candidate.id === request.subjectId) : undefined;
+            const store = fixture.stores.find((candidate) => candidate.organizationId === session.organizationId && candidate.id === request.storeId);
+            const state = approvalRequestState(request, decisions);
+            return {
+              id: request.id,
+              label: workOrder?.number ?? serviceRequest?.reference ?? "Approval subject",
+              href: request.subjectType === "work_order" ? `/app/work-orders/${request.subjectId}#approval-governance` : `/app/requests/${request.subjectId}#approval-governance`,
+              cells: [
+                { key: "record", value: workOrder?.number ?? serviceRequest?.reference ?? "Unknown record", secondary: workOrder?.problem ?? serviceRequest?.problem },
+                { key: "store", value: store ? `Store ${store.storeNumber}` : "Unknown store" },
+                { key: "amount", value: estimateMoney(request.amount.amountMinor, request.amount.currency) },
+                { key: "policy", value: request.policyName, secondary: `Frozen version ${request.policyVersion}` },
+                { key: "owner", value: sentence(request.requiredRole), secondary: request.dueAt ? `Due ${dateTime(request.dueAt)}` : "No due time" },
+                { key: "status", value: sentence(state), tone: state === "approved" ? "positive" : state === "rejected" || state === "cancelled" ? "critical" : "warning" },
+              ],
+            };
+          }),
+        },
+      },
+    ],
+    backLink: { label: "Back to administration", href: "/app/admin" },
+  };
+}
+
 export function buildDetailModel(
   fixture: OpsFixture,
   session: OperatorSession,
@@ -2331,7 +3172,6 @@ export function buildDetailModel(
     const convertedWork = request.convertedWorkOrderId
       ? scoped.workOrders.find((work) => work.id === request.convertedWorkOrderId)
       : undefined;
-    const canConvert = roleCan(session.role, "create_work_order");
     const audit = fixture.auditEvents
       .filter(
         (event) =>
@@ -2345,6 +3185,38 @@ export function buildDetailModel(
         link.entityType === "request" &&
         link.entityId === request.id,
     );
+    const approval = approvalEvidence(fixture, scoped.organizationId, "service_request", request.id);
+    const impactAssessments = fixture.requestImpactAssessments.filter((assessment) => assessment.organizationId === scoped.organizationId && assessment.requestId === request.id);
+    const latestImpact = [...impactAssessments]
+      .sort((left, right) => right.assessedAt.localeCompare(left.assessedAt) || right.id.localeCompare(left.id))[0];
+    const latestApprovalRequest = fixture.approvalRequests
+      .filter((approvalRequest) => approvalRequest.organizationId === scoped.organizationId && approvalRequest.subjectType === "service_request" && approvalRequest.subjectId === request.id)
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt) || right.id.localeCompare(left.id))[0];
+    const latestApprovalState = latestApprovalRequest
+      ? approvalRequestState(latestApprovalRequest, fixture.approvalDecisions)
+      : undefined;
+    const impactReviewed = latestImpact?.assessmentKind === "review"
+      && latestImpact.source === "manager_review"
+      && Boolean(latestImpact.reviewDisposition);
+    const approvalAllowsConversion = !latestApprovalRequest || latestApprovalState === "approved";
+    const canConvert = Boolean(
+      !convertedWork
+      && request.status === "under_review"
+      && impactReviewed
+      && approvalAllowsConversion
+      && roleCan(session.role, "create_work_order"),
+    );
+    const conversionState = convertedWork
+      ? `Converted to ${convertedWork.number}`
+      : !impactReviewed
+        ? "Awaiting manager impact review"
+        : latestApprovalState === "pending" || latestApprovalState === "escalated"
+          ? "Awaiting approval decision"
+          : latestApprovalState === "rejected" || latestApprovalState === "cancelled"
+            ? "Authorization not approved"
+            : canConvert
+              ? "Ready for work-order creation"
+              : "Awaiting an authorized facilities operator";
     return {
       state: { kind: "ready" },
       page: {
@@ -2355,7 +3227,7 @@ export function buildDetailModel(
         primaryAction: convertedWork
           ? { label: `Open ${convertedWork.number}`, href: `/app/work-orders/${convertedWork.id}` }
           : canConvert
-            ? { label: "Approve & create work order", href: `/app/work-orders/new?request=${request.id}` }
+            ? { label: "Create work order", href: `/app/work-orders/new?request=${request.id}` }
             : undefined,
         secondaryAction: store ? { label: "Open store", href: `/app/stores/${store.id}` } : undefined,
       },
@@ -2367,16 +3239,19 @@ export function buildDetailModel(
         { label: "Reported", value: dateTime(request.submittedAt) },
         { label: "Priority", value: sentence(request.priority) },
         { label: "Work order", value: convertedWork?.number ?? "Not created", link: convertedWork ? { href: `/app/work-orders/${convertedWork.id}`, label: "Open work order" } : undefined },
+        approval.fact,
         { label: "Attached evidence", value: String(linkedFiles.length), helperText: "Original evidence remains tied to this report" },
       ],
       sections: [
+        approval.section,
+        impactEvidenceSection(impactAssessments, `/app/requests/${request.id}`),
         {
           id: "source-report",
           title: "Original store report",
           description: "This text remains preserved after classification, approval, and work-order creation.",
           facts: [
             { label: "Observed problem", value: request.problem },
-            { label: "Review state", value: convertedWork ? `Converted to ${convertedWork.number}` : canConvert ? "Ready for facilities review" : "Awaiting facilities review" },
+            { label: "Review state", value: conversionState },
           ],
           action: !convertedWork && canConvert ? { label: "Create the accountable work record", href: `/app/work-orders/new?request=${request.id}` } : undefined,
         },
@@ -2637,6 +3512,10 @@ export function buildDetailModel(
       .filter((item): item is typeof item & { invoice: NonNullable<typeof item.invoice> } => Boolean(item.invoice));
     const audit = fixture.auditEvents.filter((event) => event.organizationId === scoped.organizationId && (event.aggregateId === work.id || visits.some((visit) => visit.id === event.aggregateId))).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     const issuances = fixture.issuances.filter((item) => item.organizationId === scoped.organizationId && item.workOrderId === work.id);
+    const approval = approvalEvidence(fixture, scoped.organizationId, "work_order", work.id);
+    const impactAssessments = work.requestId
+      ? fixture.requestImpactAssessments.filter((assessment) => assessment.organizationId === scoped.organizationId && assessment.requestId === work.requestId)
+      : [];
     return {
       state: { kind: "ready" },
       page: {
@@ -2663,10 +3542,13 @@ export function buildDetailModel(
         { label: "Assigned to", value: vendor?.name ?? (assignment?.kind === "internal" ? "Internal maintenance" : "Choose later") },
         { label: "Accountable party", value: work.accountableParty },
         { label: "Next action", value: work.nextAction, helperText: work.dueAt ? `Due ${dateTime(work.dueAt)}` : "No due time entered" },
+        approval.fact,
         { label: "Recorded work cost", value: money(costByWork.get(work.id) ?? 0), helperText: "Entered source lines; not inferred from observed time" },
         { label: "Classification", value: work.categoryKey ? sentence(work.categoryKey) : "Deferred", helperText: work.assetId ? "Equipment linked" : "Equipment not required" },
       ],
       sections: [
+        approval.section,
+        ...(work.requestId ? [impactEvidenceSection(impactAssessments, `/app/work-orders/${work.id}`)] : []),
         { id: "authorization", title: "Authorization", description: "The operator work-order number remains the billing reference; vendor ticket, invoice, and external PO stay separate.", action: work.id === NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId ? { label: "Preview vendor authorization", href: `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}` } : undefined, facts: [
           { label: "Authorized scope", value: work.authorizedScope ?? "No additional scope entered" },
           { label: "Not to exceed", value: work.nte ? money(work.nte.amountMinor) : "Not set" },
@@ -3173,7 +4055,7 @@ export function buildEstimateComparisonModel(
   )));
   const canManage = Boolean(
     work &&
-    !["in_progress", "completed_pending_review", "closed", "cancelled"].includes(work.status) &&
+    !["in_progress", "completed_pending_review", "resolved", "closed", "cancelled"].includes(work.status) &&
     !hasActiveVisit,
   );
   const requestVendorIds = new Set(
@@ -3233,6 +4115,7 @@ export function buildEstimateComparisonModel(
       id: request.id,
       vendorId: request.vendorId,
       vendorName: vendor?.name ?? "Unknown vendor",
+      decisionKind: request.decisionKind,
       kindLabel: request.decisionKind === "replacement_quote"
         ? "Replacement quote - capital pricing only"
         : request.kind === "diagnostic_and_estimate"
@@ -3336,10 +4219,10 @@ function workOrderStages(
     (item) => item.organizationId === organizationId && item.workOrderId === work.id && item.status === "open",
   );
   const terminal = work.status === "closed" || work.status === "cancelled";
-  const completedStatus = work.status === "completed_pending_review" || terminal;
+  const completedStatus = work.status === "completed_pending_review" || work.status === "resolved" || terminal;
   const vendorNeedsDecision = responses[0] &&
     ["declined", "proposed_date", "question"].includes(responses[0].response) &&
-    !["scheduled", "in_progress", "waiting_on_parts", "completed_pending_review", "closed", "cancelled"].includes(work.status);
+    !["scheduled", "in_progress", "waiting_on_parts", "completed_pending_review", "resolved", "closed", "cancelled"].includes(work.status);
 
   return [
     {
@@ -3402,7 +4285,7 @@ function workOrderStages(
       id: "closeout",
       label: "Follow-up / close",
       state: terminal ? "complete" : openFollowUps.length || completedStatus ? "current" : "upcoming",
-      detail: terminal ? sentence(work.status) : openFollowUps.length ? `${openFollowUps.length} accountable follow-up${openFollowUps.length === 1 ? "" : "s"} open` : completedStatus ? "Manager closeout review is required" : "Outcome determines the next accountable action",
+      detail: terminal ? sentence(work.status) : openFollowUps.length ? `${openFollowUps.length} accountable follow-up${openFollowUps.length === 1 ? "" : "s"} open` : work.status === "resolved" ? "Accepted verification is ready for explicit closure" : completedStatus ? "Internal verification is required before resolution" : "Outcome determines the next accountable action",
       timestampLabel: work.closedAt ? dateTime(work.closedAt) : undefined,
     },
   ];
@@ -3416,6 +4299,7 @@ export function buildWorkOrderControlModel(
   const scoped = scopeFixture(fixture, session);
   const work = scoped.workOrders.find((item) => item.id === workOrderId);
   const permitted = roleCan(session.role, "control_work_order");
+  const workflowTasks = buildWorkflowTaskWorkspaceModel(fixture, session, workOrderId);
   if (!work) {
     return {
       available: false,
@@ -3433,11 +4317,81 @@ export function buildWorkOrderControlModel(
       nextAction: "",
       isTerminal: false,
       stages: [],
+      workflowTasks,
       followUps: [],
       canRecordManualVendorResponse: false,
       vendorResponseOptions: [],
     };
   }
+  const pendingApprovalRequest = fixture.approvalRequests
+    .filter((request) => (
+      request.organizationId === scoped.organizationId
+      && request.subjectType === "work_order"
+      && request.subjectId === work.id
+      && approvalRequestState(request, fixture.approvalDecisions) === "pending"
+    ))
+    .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt) || right.id.localeCompare(left.id))[0];
+  const approvalMembership = session.membershipId
+    ? fixture.memberships.find((membership) => (
+        membership.organizationId === scoped.organizationId
+        && membership.id === session.membershipId
+        && membership.status === "active"
+      ))
+    : undefined;
+  const pendingApproval = pendingApprovalRequest
+    ? (() => {
+        const requiredRoleLabel = approvalRoleLabels[pendingApprovalRequest.requiredRole];
+        const escalationRoleLabel = pendingApprovalRequest.escalationRole
+          ? approvalRoleLabels[pendingApprovalRequest.escalationRole]
+          : undefined;
+        const hasRequiredRole = approvalMembership?.role === pendingApprovalRequest.requiredRole;
+        const isRequester = approvalMembership?.id === pendingApprovalRequest.requestedByMembershipId;
+        const canDecide = Boolean(hasRequiredRole && !isRequester);
+        const decisionOptions: NonNullable<WorkOrderControlViewModel["pendingApproval"]>["decisionOptions"] = [
+          {
+            value: "approved",
+            label: "Approve authorization",
+            description: "Authorize the presented amount and release the work order for its next service action.",
+            reasonRequired: false,
+          },
+          {
+            value: "rejected",
+            label: "Reject authorization",
+            description: "Return the authorization for revision or cancellation. A reason is required.",
+            reasonRequired: true,
+          },
+        ];
+        if (pendingApprovalRequest.escalationRole && escalationRoleLabel) {
+          decisionOptions.push({
+            value: "escalated",
+            label: `Escalate to ${escalationRoleLabel}`,
+            description: `Create the next immutable review for ${escalationRoleLabel}. A reason is required.`,
+            reasonRequired: true,
+          });
+        }
+        return {
+          requestId: pendingApprovalRequest.id,
+          subjectLabel: "work order" as const,
+          decisionAction: `/api/ops/approvals/${encodeURIComponent(pendingApprovalRequest.id)}/decision`,
+          policyName: pendingApprovalRequest.policyName,
+          policyVersion: pendingApprovalRequest.policyVersion,
+          amountLabel: estimateMoney(pendingApprovalRequest.amount.amountMinor, pendingApprovalRequest.amount.currency),
+          requiredRoleLabel,
+          dueAt: pendingApprovalRequest.dueAt,
+          dueLabel: pendingApprovalRequest.dueAt ? dateTime(pendingApprovalRequest.dueAt) : "No deadline set",
+          escalationRoleLabel,
+          canDecide,
+          decisionAccessMessage: canDecide
+            ? undefined
+            : !approvalMembership
+              ? "This preview session is not backed by an active organization membership."
+              : !hasRequiredRole
+                ? `An active ${requiredRoleLabel} membership must record this decision.`
+                : `You requested this authorization. A different active ${requiredRoleLabel} must record the decision.`,
+          decisionOptions,
+        };
+      })()
+    : undefined;
   const assignment = assignmentForWork(fixture, scoped.organizationId, work.id);
   const latestIssuance = fixture.issuances
     .filter((item) => item.organizationId === scoped.organizationId && item.workOrderId === work.id)
@@ -3473,7 +4427,9 @@ export function buildWorkOrderControlModel(
         : deliveryMessage?.status === "failed"
           ? "The delivery record requires operator attention"
           : "Automated email and SMS delivery are not connected in this preview; copy or share the secure link manually";
-  const statuses = [work.status, ...allowedWorkOrderControlTransitions(work.status)];
+  const statuses = pendingApproval
+    ? [work.status]
+    : [work.status, ...allowedWorkOrderControlTransitions(work.status)];
   const terminal = work.status === "closed" || work.status === "cancelled";
   const canRecordManualVendorResponse = Boolean(
     permitted &&
@@ -3501,7 +4457,9 @@ export function buildWorkOrderControlModel(
     dueAt: work.dueAt?.slice(0, 16),
     escalationTo: work.escalationTo,
     isTerminal: terminal,
+    pendingApproval,
     stages: workOrderStages(fixture, scoped.organizationId, work),
+    workflowTasks,
     assignment: assignment ? {
       kind: assignment.kind,
       status: assignment.status,
@@ -3563,6 +4521,97 @@ export function buildRequestReviewModel(
   );
   const available = Boolean(request && (request.status === "submitted" || request.status === "under_review"));
   const permitted = available && roleCan(session.role, "review_request");
+  const impactHistory = request
+    ? fixture.requestImpactAssessments
+      .filter((assessment) => assessment.organizationId === scoped.organizationId && assessment.requestId === request.id)
+      .sort((left, right) => right.assessedAt.localeCompare(left.assessedAt) || right.id.localeCompare(left.id))
+    : [];
+  const latestImpact = impactHistory[0];
+  const requestApprovals = request
+    ? fixture.approvalRequests
+      .filter((approvalRequest) => (
+        approvalRequest.organizationId === scoped.organizationId
+        && approvalRequest.subjectType === "service_request"
+        && approvalRequest.subjectId === request.id
+      ))
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt) || right.id.localeCompare(left.id))
+    : [];
+  const latestApprovalRequest = requestApprovals[0];
+  const latestApprovalState = latestApprovalRequest
+    ? approvalRequestState(latestApprovalRequest, fixture.approvalDecisions)
+    : undefined;
+  const pendingApprovalRequest = requestApprovals.find(
+    (approvalRequest) => approvalRequestState(approvalRequest, fixture.approvalDecisions) === "pending",
+  );
+  const approvalMembership = session.membershipId
+    ? fixture.memberships.find((membership) => (
+        membership.organizationId === scoped.organizationId
+        && membership.id === session.membershipId
+        && membership.status === "active"
+      ))
+    : undefined;
+  const pendingApproval: ApprovalDecisionViewModel | undefined = pendingApprovalRequest
+    ? (() => {
+        const requiredRoleLabel = approvalRoleLabels[pendingApprovalRequest.requiredRole];
+        const escalationRoleLabel = pendingApprovalRequest.escalationRole
+          ? approvalRoleLabels[pendingApprovalRequest.escalationRole]
+          : undefined;
+        const hasRequiredRole = approvalMembership?.role === pendingApprovalRequest.requiredRole;
+        const isRequester = approvalMembership?.id === pendingApprovalRequest.requestedByMembershipId;
+        const canDecide = Boolean(hasRequiredRole && !isRequester);
+        const decisionOptions: ApprovalDecisionViewModel["decisionOptions"] = [
+          {
+            value: "approved",
+            label: "Approve authorization",
+            description: "Authorize the presented amount and release this request for work-order creation.",
+            reasonRequired: false,
+          },
+          {
+            value: "rejected",
+            label: "Reject authorization",
+            description: "Return the authorization for revision or closeout. A reason is required.",
+            reasonRequired: true,
+          },
+        ];
+        if (pendingApprovalRequest.escalationRole && escalationRoleLabel) {
+          decisionOptions.push({
+            value: "escalated",
+            label: `Escalate to ${escalationRoleLabel}`,
+            description: `Create the next immutable review for ${escalationRoleLabel}. A reason is required.`,
+            reasonRequired: true,
+          });
+        }
+        return {
+          requestId: pendingApprovalRequest.id,
+          subjectLabel: "request" as const,
+          decisionAction: `/api/ops/approvals/${encodeURIComponent(pendingApprovalRequest.id)}/decision`,
+          policyName: pendingApprovalRequest.policyName,
+          policyVersion: pendingApprovalRequest.policyVersion,
+          amountLabel: estimateMoney(pendingApprovalRequest.amount.amountMinor, pendingApprovalRequest.amount.currency),
+          requiredRoleLabel,
+          dueAt: pendingApprovalRequest.dueAt,
+          dueLabel: pendingApprovalRequest.dueAt ? dateTime(pendingApprovalRequest.dueAt) : "No deadline set",
+          escalationRoleLabel,
+          canDecide,
+          decisionAccessMessage: canDecide
+            ? undefined
+            : !approvalMembership
+              ? "This preview session is not backed by an active organization membership."
+              : !hasRequiredRole
+                ? `An active ${requiredRoleLabel} membership must record this decision.`
+                : `You requested this authorization. A different active ${requiredRoleLabel} must record the decision.`,
+          decisionOptions,
+        };
+      })()
+    : undefined;
+  const canCreateWorkOrder = Boolean(
+    request
+    && request.status === "under_review"
+    && latestImpact?.assessmentKind === "review"
+    && !request.convertedWorkOrderId
+    && (!latestApprovalRequest || latestApprovalState === "approved")
+    && roleCan(session.role, "create_work_order"),
+  );
   return {
     available,
     permitted,
@@ -3571,10 +4620,39 @@ export function buildRequestReviewModel(
     reference: request?.reference ?? requestId,
     expectedStatus: request?.status === "under_review" ? "under_review" : "submitted",
     statusLabel: request ? sentence(request.status) : "Unavailable",
-    canCreateWorkOrder: Boolean(request && request.status !== "closed" && !request.convertedWorkOrderId && roleCan(session.role, "create_work_order")),
-    createWorkOrderHref: request && request.status !== "closed" && !request.convertedWorkOrderId && roleCan(session.role, "create_work_order")
+    canCreateWorkOrder,
+    createWorkOrderHref: canCreateWorkOrder && request
       ? `/app/work-orders/new?request=${encodeURIComponent(request.id)}`
       : undefined,
+    impactSubmitAction: request ? `/api/ops/requests/${encodeURIComponent(request.id)}/impact` : "",
+    pendingApproval,
+    latestImpact: latestImpact ? {
+      id: latestImpact.id,
+      storeOperatingState: latestImpact.storeOperatingState,
+      safetyConcern: latestImpact.safetyConcern,
+      productInventoryRisk: latestImpact.productInventoryRisk,
+      productInventoryValueInput: latestImpact.productInventoryValue ? String(latestImpact.productInventoryValue.amountMinor / 100) : undefined,
+      productInventoryValueLabel: impactMoney(latestImpact.productInventoryValue),
+      customersAffected: latestImpact.customersAffected,
+      complianceImpact: latestImpact.complianceImpact,
+      capacityUnavailablePercentInput: latestImpact.capacityUnavailableBps === undefined ? undefined : String(latestImpact.capacityUnavailableBps / 100),
+      capacityUnavailableLabel: latestImpact.capacityUnavailableBps === undefined ? "Not estimated" : `${latestImpact.capacityUnavailableBps / 100}%`,
+      redundantEquipment: latestImpact.redundantEquipment,
+      revenueFunctionImpact: latestImpact.revenueFunctionImpact,
+      estimatedDailyRevenueExposureInput: latestImpact.estimatedDailyRevenueExposure ? String(latestImpact.estimatedDailyRevenueExposure.amountMinor / 100) : undefined,
+      estimatedDailyRevenueExposureLabel: impactMoney(latestImpact.estimatedDailyRevenueExposure),
+      estimatedDowntimeMinutesInput: latestImpact.estimatedDowntimeMinutes === undefined ? undefined : String(latestImpact.estimatedDowntimeMinutes),
+      estimatedDowntimeLabel: latestImpact.estimatedDowntimeMinutes === undefined ? "Not estimated" : `${latestImpact.estimatedDowntimeMinutes} minutes`,
+      confidence: latestImpact.confidence,
+      notes: latestImpact.notes,
+    } : undefined,
+    impactHistory: impactHistory.map((assessment) => ({
+      id: assessment.id,
+      kindLabel: assessment.assessmentKind === "review" ? `Manager ${sentence(assessment.reviewDisposition ?? "review")}` : "Initial store report",
+      summary: `${sentence(assessment.storeOperatingState)} · Safety ${sentence(assessment.safetyConcern)} · Customers ${sentence(assessment.customersAffected)}`,
+      provenanceLabel: `${assessment.assessedByActorName} · ${dateTime(assessment.assessedAt)}`,
+    })),
+    impactCaveat: IMPACT_ESTIMATE_CAVEAT,
   };
 }
 

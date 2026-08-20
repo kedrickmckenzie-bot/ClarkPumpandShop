@@ -39,6 +39,9 @@ export interface AssetReplacementIntelligenceViewModel {
   inheritedPeerCount: number;
   profiles: ReplacementProfileViewModel[];
   event?: { id: string; approvedAmountLabel: string; approvedAtLabel: string; workOrderNumber: string };
+  recommendation: { recommendationLabel: string; confidenceLabel: string; explanation: string; missingData: string[] };
+  recommendationHistory: Array<{ id: string; version: number; modelVersion: string; recommendationLabel: string; confidenceLabel: string; decisionLabel: string; reason: string; decidedAtLabel: string; explanation: string; missingData: string[]; actualOutcomeLabel: string }>;
+  latestRecommendationId?: string;
   assetDefaults: { tag: string; name: string; manufacturer: string; model: string; supplier: string };
 }
 
@@ -82,6 +85,7 @@ export function AssetReplacementIntelligencePanel({ model }: { model: AssetRepla
   const assignment = useMutation();
   const override = useMutation();
   const closeout = useMutation();
+  const recommendation = useMutation();
   return (
     <section className={styles.replacementPanel} id="replacement-intelligence">
       <header className={styles.replacementHeading}><span><Calculator aria-hidden="true" size={24} /></span><div><p>Replacement intelligence</p><h2>A current, explainable capital-planning estimate</h2><span>One dated quote can be useful immediately. Comparable equipment inherits it; unique site conditions stay equipment-specific.</span></div></header>
@@ -91,6 +95,11 @@ export function AssetReplacementIntelligencePanel({ model }: { model: AssetRepla
         <div><small>Comparable equipment</small><strong>{model.inheritedPeerCount}</strong><span>Active records using this profile</span></div>
       </div>
       <p className={styles.replacementExplanation}><ShieldCheck aria-hidden="true" size={18} />{model.explanation}</p>
+      <div className={styles.replacementRecommendation}>
+        <div><small>Current transparent rule result</small><strong>{model.recommendation.recommendationLabel} · {model.recommendation.confidenceLabel} confidence</strong><p>{model.recommendation.explanation}</p><span>Known gaps: {model.recommendation.missingData.join(" · ") || "None"}</span></div>
+        {model.permitted ? <form action={model.action} method="post" onSubmit={recommendation.submit}><input type="hidden" name="operation" value="record-recommendation" /><label>Manager decision<select name="userDecision" required defaultValue="investigate"><option value="repair">Repair</option><option value="replace">Replace</option><option value="defer">Defer</option><option value="investigate">Investigate further</option></select></label><label>Decision reason<textarea name="userReason" rows={3} required placeholder="Explain why this choice is reasonable given the visible evidence and missing data." /></label><button className={styles.primaryButton} type="submit" disabled={recommendation.state.pending}>{recommendation.state.pending ? "Recording..." : "Record versioned recommendation and decision"}</button><ErrorText value={recommendation.state.error} /></form> : null}
+      </div>
+      {model.recommendationHistory.length ? <details className={styles.replacementHistory} open><summary>Recommendation history ({model.recommendationHistory.length})</summary>{model.recommendationHistory.map((row) => <article key={row.id}><div><strong>Version {row.version} · {row.recommendationLabel}</strong><span>{row.modelVersion} · {row.confidenceLabel} confidence · {row.decidedAtLabel}</span></div><p>{row.explanation}</p><dl><div><dt>Manager decision</dt><dd>{row.decisionLabel}</dd></div><div><dt>Reason</dt><dd>{row.reason}</dd></div><div><dt>Later outcome</dt><dd>{row.actualOutcomeLabel}</dd></div><div><dt>Missing data at decision</dt><dd>{row.missingData.join(" · ") || "None"}</dd></div></dl></article>)}</details> : null}
       <div className={styles.replacementProfileLine}><div><small>Functional replacement profile</small><strong>{model.profileName ?? "No profile assigned"}</strong><span>{model.specificationLabel}</span></div><div><small>Equipment adjustment</small><strong>{model.adjustmentLabel}</strong><span>For site-specific scope only</span></div></div>
       {model.event ? <div className={styles.replacementDecision}><CheckCircle2 aria-hidden="true" size={21} /><div><strong>Replacement approved on {model.event.workOrderNumber}</strong><span>{model.event.approvedAmountLabel} approved {model.event.approvedAtLabel}. Close out the installation to retire this record, create its successor, and publish final installed cost.</span></div></div> : null}
       {model.permitted ? (

@@ -5,11 +5,14 @@ import type {
   Asset,
   AssetReplacementOverride,
   IsoDateTime,
+  LifecycleDecisionKind,
+  LifecycleRecommendation,
   OpsId,
   ReplacementBenchmark,
   ReplacementEvent,
   ReplacementProfile,
 } from "./types";
+import type { LifecycleRecommendationDraft } from "./replacement-intelligence";
 
 const systemClock: OpsClock = { now: () => new Date().toISOString() };
 const randomIds: OpsIdSource = { next: (prefix) => `${prefix}-${crypto.randomUUID()}` };
@@ -223,6 +226,43 @@ export async function publishManualReplacementBenchmark(svc: OpsCommandServices,
   return benchmark;
 }
 
+export interface RecordLifecycleRecommendationInput extends LifecycleRecommendationDraft {
+  organizationId: OpsId;
+  assetId: OpsId;
+  userDecision: LifecycleDecisionKind;
+  userReason: string;
+  actor: ActorContext;
+}
+
+export async function recordLifecycleRecommendation(svc: OpsCommandServices, input: RecordLifecycleRecommendationInput): Promise<LifecycleRecommendation> {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const asset = await repository.getAsset(input.organizationId, input.assetId);
+  if (!asset || asset.status === "retired") throw new OpsDomainError("CONFLICT", "Equipment is not available for a new lifecycle recommendation");
+  if (!input.actor.actorId || !(await repository.getMembership(input.organizationId, input.actor.actorId))) throw new OpsDomainError("FORBIDDEN", "A current organization membership is required");
+  if (!(["repair", "replace", "capital_review"] as const).includes(input.recommendation)) throw new OpsDomainError("VALIDATION", "Recommendation is invalid");
+  if (!(["low", "medium", "high"] as const).includes(input.confidence)) throw new OpsDomainError("VALIDATION", "Confidence is invalid");
+  if (!(["repair", "replace", "defer", "investigate"] as const).includes(input.userDecision)) throw new OpsDomainError("VALIDATION", "Decision is invalid");
+  try { JSON.parse(input.inputsJson); } catch { throw new OpsDomainError("VALIDATION", "Recommendation inputs are invalid"); }
+  const prior = await repository.listLifecycleRecommendationsForAsset(input.organizationId, asset.id);
+  const now = clock.now();
+  const row: LifecycleRecommendation = {
+    id: ids.next("lifecycle-recommendation"), organizationId: input.organizationId, assetId: asset.id,
+    workOrderId: input.workOrderId, version: (prior[0]?.version ?? 0) + 1,
+    modelVersion: required(input.modelVersion, "Model version", 80), recommendation: input.recommendation,
+    confidence: input.confidence, inputsJson: input.inputsJson,
+    explanation: required(input.explanation, "Recommendation explanation", 2_000),
+    missingData: [...new Set(input.missingData.map((value) => required(value, "Missing-data label", 160)))],
+    userDecision: input.userDecision, userReason: required(input.userReason, "Decision reason", 2_000),
+    decidedByMembershipId: input.actor.actorId, decidedAt: now, createdAt: now,
+  };
+  await repository.atomicWrite([
+    insert("ops_lifecycle_recommendations", { id: row.id, organization_id: row.organizationId, asset_id: row.assetId, work_order_id: row.workOrderId, version: row.version, model_version: row.modelVersion, recommendation: row.recommendation, confidence: row.confidence, inputs_json: row.inputsJson, explanation: row.explanation, missing_data_json: JSON.stringify(row.missingData), user_decision: row.userDecision, user_reason: row.userReason, decided_by_membership_id: row.decidedByMembershipId, decided_at: row.decidedAt, created_at: row.createdAt }),
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "asset", aggregateId: asset.id, eventType: "asset.lifecycle_recommendation_recorded", actor: input.actor, occurredAt: now, payload: { recommendationId: row.id, version: row.version, modelVersion: row.modelVersion, recommendation: row.recommendation, confidence: row.confidence, missingData: row.missingData, userDecision: row.userDecision, userReason: row.userReason }, ids }),
+  ]);
+  return row;
+}
+
 export interface ApproveReplacementFromSelectedQuoteInput extends PublishBenchmarkAmounts {
   organizationId: OpsId;
   workOrderId: OpsId;
@@ -270,6 +310,7 @@ export async function approveReplacementFromSelectedQuote(svc: OpsCommandService
   }
   statements.push(
     insert("ops_replacement_events", { id: event.id, organization_id: event.organizationId, asset_id: event.assetId, work_order_id: event.workOrderId, profile_id: event.profileId, source_estimate_proposal_id: event.sourceEstimateProposalId, status: event.status, approved_amount_minor: event.approvedAmount.amountMinor, currency: event.approvedAmount.currency, approved_at: event.approvedAt, created_at: event.createdAt }),
+    { sql: "UPDATE ops_lifecycle_recommendations SET replacement_event_id = ? WHERE organization_id = ? AND asset_id = ? AND version = (SELECT MAX(version) FROM ops_lifecycle_recommendations WHERE organization_id = ? AND asset_id = ?)", params: [event.id, input.organizationId, asset.id, input.organizationId, asset.id] },
     ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "asset", aggregateId: asset.id, eventType: "asset.replacement_approved", actor: input.actor, occurredAt: now, payload: { replacementEventId: event.id, benchmarkId: benchmark?.id, profileId: profile.id, proposalId: proposal.id, amount: proposal.amount, planningApplication, supersededBenchmarkId: benchmark ? currentBenchmark?.id : undefined }, ids }),
   );
   await repository.atomicWrite(statements);
@@ -323,6 +364,7 @@ export async function completeReplacement(svc: OpsCommandServices, input: Comple
     insert("ops_assets", { id: successor.id, organization_id: successor.organizationId, store_id: successor.storeId, category_key: successor.categoryKey, taxonomy_node_id: successor.taxonomyNodeId, group_path_json: JSON.stringify(successor.groupPath), asset_tag: successor.assetTag, name: successor.name, manufacturer: successor.manufacturer, model: successor.model, serial_number: successor.serialNumber, supplier: successor.supplier, installed_at: successor.installedAt, expected_life_years: successor.expectedLifeYears, warranty_ends_at: successor.warrantyEndsAt, replacement_profile_id: successor.replacementProfileId, replacement_attributes_json: JSON.stringify(successor.replacementAttributes), replacement_adjustment_bps: successor.replacementAdjustmentBps, status: successor.status, created_at: successor.createdAt }),
     update("ops_assets", { status: "retired", retired_at: now, replaced_by_asset_id: successor.id }, { organization_id: input.organizationId, id: asset.id }),
     update("ops_replacement_events", { status: "completed", completed_at: now, final_amount_minor: finalAmountMinor, replacement_asset_id: successor.id }, { organization_id: input.organizationId, id: event.id, status: "approved" }),
+    { sql: "UPDATE ops_lifecycle_recommendations SET actual_outcome = ?, actual_outcome_at = ?, replacement_event_id = ? WHERE organization_id = ? AND asset_id = ? AND version = (SELECT MAX(version) FROM ops_lifecycle_recommendations WHERE organization_id = ? AND asset_id = ?)", params: ["replaced", now, event.id, input.organizationId, asset.id, input.organizationId, asset.id] },
   ];
   if (benchmark && currentBenchmark) statements.push(update("ops_replacement_benchmarks", { status: "superseded", superseded_at: now }, { organization_id: input.organizationId, id: currentBenchmark.id, status: "published" }));
   if (benchmark) statements.push(insert("ops_replacement_benchmarks", { id: benchmark.id, organization_id: benchmark.organizationId, profile_id: benchmark.profileId, source_type: benchmark.sourceType, source_work_order_id: benchmark.sourceWorkOrderId, source_estimate_proposal_id: benchmark.sourceEstimateProposalId, source_asset_id: benchmark.sourceAssetId, equipment_amount_minor: benchmark.equipmentAmount.amountMinor, installation_amount_minor: 0, other_amount_minor: 0, total_amount_minor: benchmark.totalAmount.amountMinor, currency: code, effective_at: benchmark.effectiveAt, status: benchmark.status, notes: benchmark.notes, created_at: benchmark.createdAt }));

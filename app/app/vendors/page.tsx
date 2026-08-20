@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { ListView } from "@/components/ops/views";
-import { loadListModel } from "../_data/operator-loader";
+import { VendorPerformanceList } from "@/components/ops/vendor-performance-workspace";
+import { loadVendorPerformanceListModel } from "../_data/operator-loader";
 
 export const metadata: Metadata = { title: "Vendors" };
 type Query = Record<string, string | string[] | undefined>;
 
 export default async function VendorsPage({ searchParams }: { searchParams: Promise<Query> }) {
-  return <ListView model={await loadListModel("vendors", await searchParams)} />;
+  return <VendorPerformanceList model={await loadVendorPerformanceListModel(await searchParams)} />;
 }

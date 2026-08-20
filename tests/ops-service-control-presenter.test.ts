@@ -7,6 +7,7 @@ import {
   NORTHLINE_ORGANIZATION_ID,
   buildNorthlinePresentationFixture,
 } from "@/lib/ops/fixtures";
+import type { ApprovalRequest, OpsFixture } from "@/lib/ops/types";
 
 vi.mock("server-only", () => ({}));
 
@@ -51,6 +52,36 @@ function queryValue(href: string, key: string) {
   return new URL(href, "https://operations.test").searchParams.get(key);
 }
 
+function attachPendingWorkApproval(fixture: OpsFixture) {
+  const workOrder = fixture.workOrders.find((candidate) => candidate.id === "wo-northline-105-price-check")!;
+  const policy = fixture.approvalPolicies.find((candidate) => candidate.policyKey === "major-repair")!;
+  workOrder.status = "awaiting_approval";
+  const request: ApprovalRequest = {
+    id: "approval-request-presenter-pending",
+    organizationId: NORTHLINE_ORGANIZATION_ID,
+    subjectType: "work_order",
+    subjectId: workOrder.id,
+    storeId: workOrder.storeId,
+    categoryKey: workOrder.categoryKey,
+    amount: { amountMinor: 625_000, currency: "USD" },
+    policyId: policy.id,
+    policyKey: policy.policyKey,
+    policyVersion: policy.version,
+    policyName: policy.name,
+    policyScopeKind: policy.scopeKind,
+    policyScopeId: policy.scopeId,
+    requiredRole: "facilities_admin",
+    escalationRole: "executive",
+    requestedByMembershipId: "membership-northline-regional-1",
+    requestedByName: "Morgan Hayes",
+    reason: "Selected repair scope exceeds the regional authorization limit",
+    requestedAt: "2026-08-20T13:00:00.000Z",
+    dueAt: "2026-08-21T13:00:00.000Z",
+  };
+  fixture.approvalRequests.push(request);
+  return { workOrder, request };
+}
+
 describe("enterprise service-control presenter contracts", () => {
   it("offers request review only in reviewable states and separates review from work-order creation authority", () => {
     const fixture = buildNorthlinePresentationFixture();
@@ -67,20 +98,33 @@ describe("enterprise service-control presenter contracts", () => {
       available: true,
       permitted: true,
       expectedStatus: "submitted",
-      canCreateWorkOrder: true,
+      canCreateWorkOrder: false,
       submitAction: `/api/ops/requests/${request.id}/review`,
+      impactSubmitAction: `/api/ops/requests/${request.id}/impact`,
     });
-    expect(facilities.createWorkOrderHref).toBe(`/app/work-orders/new?request=${request.id}`);
-    expect(regional).toMatchObject({ available: true, permitted: true, canCreateWorkOrder: true });
+    expect(facilities.createWorkOrderHref).toBeUndefined();
+    expect(regional).toMatchObject({ available: true, permitted: true, canCreateWorkOrder: false });
     expect(storeManager).toMatchObject({ available: true, permitted: true, canCreateWorkOrder: false });
     expect(storeManager.createWorkOrderHref).toBeUndefined();
     expect(executive).toMatchObject({ available: true, permitted: false, canCreateWorkOrder: false });
 
     request.status = "under_review";
+    const initialImpact = fixture.requestImpactAssessments.find((assessment) => assessment.requestId === request.id)!;
+    fixture.requestImpactAssessments.push({
+      ...initialImpact,
+      id: `${initialImpact.id}-test-review`,
+      assessmentKind: "review",
+      reviewDisposition: "confirmed",
+      source: "manager_review",
+      assessedByActorId: "membership-northline-facilities",
+      assessedByActorName: "Jordan Lee",
+      assessedAt: new Date(Date.parse(initialImpact.assessedAt) + 60_000).toISOString(),
+    });
     expect(buildRequestReviewModel(fixture, operatorSession("facilities"), request.id)).toMatchObject({
       available: true,
       permitted: true,
       expectedStatus: "under_review",
+      canCreateWorkOrder: true,
     });
 
     request.status = "converted";
@@ -136,6 +180,64 @@ describe("enterprise service-control presenter contracts", () => {
     expect(closed.isTerminal).toBe(true);
     expect(closed.statusOptions.map((option) => option.value)).toEqual(["closed"]);
     expect(closed.canRecordManualVendorResponse).toBe(false);
+  });
+
+  it("presents the current pending approval and grants its decision only to the exact active membership role", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const { workOrder, request } = attachPendingWorkApproval(fixture);
+    const facilitiesSession = {
+      ...operatorSession("facilities"),
+      membershipId: "membership-northline-facilities",
+    };
+
+    const model = buildWorkOrderControlModel(fixture, facilitiesSession, workOrder.id);
+
+    expect(model.pendingApproval).toMatchObject({
+      requestId: request.id,
+      decisionAction: `/api/ops/approvals/${request.id}/decision`,
+      policyName: "Major repair authorization",
+      policyVersion: 1,
+      amountLabel: "$6,250.00",
+      requiredRoleLabel: "Facilities administrator",
+      dueLabel: "Aug 21, 1:00 PM",
+      escalationRoleLabel: "Executive",
+      canDecide: true,
+    });
+    expect(model.pendingApproval?.decisionOptions).toEqual([
+      expect.objectContaining({ value: "approved", reasonRequired: false }),
+      expect.objectContaining({ value: "rejected", reasonRequired: true }),
+      expect.objectContaining({ value: "escalated", reasonRequired: true }),
+    ]);
+    expect(model.statusOptions.map((option) => option.value)).toEqual(["awaiting_approval"]);
+
+    request.requestedByMembershipId = "membership-northline-facilities";
+    expect(buildWorkOrderControlModel(fixture, facilitiesSession, workOrder.id).pendingApproval).toMatchObject({
+      canDecide: false,
+      decisionAccessMessage: "You requested this authorization. A different active Facilities administrator must record the decision.",
+    });
+    request.requestedByMembershipId = "membership-northline-regional-1";
+
+    const executive = buildWorkOrderControlModel(fixture, {
+      ...operatorSession("executive"),
+      membershipId: "membership-northline-executive",
+    }, workOrder.id);
+    expect(executive.pendingApproval).toMatchObject({
+      requestId: request.id,
+      canDecide: false,
+      decisionAccessMessage: "An active Facilities administrator membership must record this decision.",
+    });
+
+    fixture.approvalDecisions.push({
+      id: "approval-decision-presenter-approved",
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      approvalRequestId: request.id,
+      decision: "approved",
+      decidedByMembershipId: "membership-northline-facilities",
+      decidedByName: "Jordan Lee",
+      decidedByRole: "facilities_admin",
+      decidedAt: "2026-08-20T14:00:00.000Z",
+    });
+    expect(buildWorkOrderControlModel(fixture, facilitiesSession, workOrder.id).pendingApproval).toBeUndefined();
   });
 
   it("uses honest handoff language and exposes attributable vendor-response state without claiming dispatch", () => {

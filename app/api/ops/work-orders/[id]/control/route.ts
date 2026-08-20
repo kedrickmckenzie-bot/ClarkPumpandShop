@@ -3,6 +3,7 @@ import {
   recordVendorResponse,
   updateWorkOrderControl,
 } from "@/lib/ops/commands";
+import { approvalRequestState } from "@/lib/ops/approval-governance";
 import {
   assertStoreInSessionScope,
   formText,
@@ -24,6 +25,7 @@ const workOrderStatuses = new Set<WorkOrderStatus>([
   "waiting_on_vendor",
   "waiting_on_parts",
   "completed_pending_review",
+  "resolved",
   "closed",
   "cancelled",
 ]);
@@ -115,7 +117,7 @@ export async function POST(
     if (operation === "vendor_response") {
       await recordOutsideResponse(context, workOrderId, formData);
       return relativeRedirect303(
-        `/app/work-orders/${encodeURIComponent(workOrderId)}?updated=vendor-response#work-control`,
+        `/app/work-orders/${encodeURIComponent(workOrderId)}?view=activity&updated=vendor-response#work-control`,
       );
     }
     if (operation !== "update") throw new OpsDomainError("VALIDATION", "Choose a supported work-order operation.");
@@ -125,6 +127,27 @@ export async function POST(
     const priority = formText(formData, "priority", { required: true, max: 30 });
     if (!workOrderStatuses.has(expectedStatus as WorkOrderStatus) || !workOrderStatuses.has(status as WorkOrderStatus) || !priorities.has(priority as WorkOrderPriority)) {
       throw new OpsDomainError("VALIDATION", "Choose a supported work state and priority.");
+    }
+    if (workOrder.status === "awaiting_approval" && status !== "awaiting_approval") {
+      const approvalRequests = await context.repository.listApprovalRequestsForSubject(
+        context.session.organizationId,
+        "work_order",
+        workOrder.id,
+      );
+      const decisionSets = await Promise.all(
+        approvalRequests.map((approvalRequest) => (
+          context.repository.listApprovalDecisionsForRequest(context.session.organizationId, approvalRequest.id)
+        )),
+      );
+      const hasPendingApproval = approvalRequests.some((approvalRequest, index) => (
+        approvalRequestState(approvalRequest, decisionSets[index]) === "pending"
+      ));
+      if (hasPendingApproval || status !== "cancelled") {
+        throw new OpsDomainError(
+          "CONFLICT",
+          "Record the pending approval decision before releasing or cancelling this work order.",
+        );
+      }
     }
 
     await updateWorkOrderControl(
@@ -145,7 +168,7 @@ export async function POST(
     );
 
     return relativeRedirect303(
-      `/app/work-orders/${encodeURIComponent(workOrderId)}?updated=control#work-control`,
+      `/app/work-orders/${encodeURIComponent(workOrderId)}?view=activity&updated=control#work-control`,
     );
   } catch (error) {
     return opsApiError(error);

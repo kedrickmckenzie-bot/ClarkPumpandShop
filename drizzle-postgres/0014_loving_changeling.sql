@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uidx_ops_work_orders_org_request" ON "ops_work_orders" USING btree ("organization_id","request_id") WHERE "ops_work_orders"."request_id" IS NOT NULL;

@@ -1,0 +1,7 @@
+import { OpsDomainError } from "@/lib/ops/errors";
+import { overrideWarrantyRouting } from "@/lib/ops/warranty-commands";
+import type { WarrantyRoutingRule } from "@/lib/ops/types";
+import { formText,getOpsRequestContext,opsApiError } from "@/lib/server/ops-request-context";
+import { relativeRedirect303 } from "@/lib/server/relative-redirect";
+const rules=new Set<WarrantyRoutingRule>(["original_vendor_mandatory","original_vendor_first_right_to_cure","manufacturer_authorized_provider","any_approved_provider","manual_review"]);
+export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){try{const context=await getOpsRequestContext(["executive","facilities","regional"]);const{id}=await params;const item=await context.repository.getWarrantyCase(context.session.organizationId,id);if(!item)throw new OpsDomainError("NOT_FOUND","Warranty Case not found");const form=await request.formData();const routingRule=formText(form,"routingRule",{required:true}) as WarrantyRoutingRule;if(!rules.has(routingRule))throw new OpsDomainError("VALIDATION","Warranty routing rule is invalid");await overrideWarrantyRouting({organizationId:context.session.organizationId,warrantyCaseId:item.id,actor:context.actor,routingRule,obligatedVendorId:item.obligatedVendorId,reasonCode:formText(form,"reasonCode",{required:true,max:80}),reasonDetail:formText(form,"reasonDetail",{required:true,max:1000})},{repository:context.repository});return relativeRedirect303(`/app/warranties/${encodeURIComponent(id)}?updated=routing`)}catch(error){return opsApiError(error)}}

@@ -200,6 +200,7 @@ export interface ListPageViewModel {
 export interface DashboardPageViewModel {
   state: DataState;
   page: PageContext;
+  layout?: "executive" | "finance" | "operations" | "regional" | "store";
   journey?: JourneyStageViewModel[];
   metrics: MetricViewModel[];
   priorityActions: ActionItemViewModel[];
@@ -375,6 +376,7 @@ export interface EstimateRequestComparisonViewModel {
   id: string;
   vendorId: string;
   vendorName: string;
+  decisionKind?: "service_bid" | "replacement_quote";
   kindLabel: string;
   requestedScope: string;
   status: EstimateRequestStatusViewModel;
@@ -420,6 +422,91 @@ export interface WorkflowStageViewModel {
   timestampLabel?: string;
 }
 
+export interface WorkflowTaskPauseViewModel {
+  id: string;
+  state: "active" | "resumed";
+  reasonLabel: string;
+  reasonDetail: string;
+  ownerLabel: string;
+  affectedClocksLabel: string;
+  expectedResumeLabel?: string;
+  pausedByLabel: string;
+  pausedLabel: string;
+  resumedByLabel?: string;
+  resumedLabel?: string;
+  resumeNote?: string;
+}
+
+export interface WorkflowTaskItemViewModel {
+  id: string;
+  action: string;
+  typeLabel: string;
+  title: string;
+  reason: string;
+  assigneeTypeLabel: string;
+  assigneeLabel: string;
+  priorityLabel: string;
+  status: "open" | "in_progress" | "completed" | "cancelled";
+  statusLabel: string;
+  statusTone: Tone;
+  blocking: boolean;
+  requiredForProgress: boolean;
+  dueAt?: string;
+  dueLabel: string;
+  noSlaReason?: string;
+  slaClockLabel?: string;
+  completionCriteria: string;
+  escalationDestination: string;
+  escalationLevel: number;
+  createdByLabel: string;
+  createdLabel: string;
+  startedLabel?: string;
+  completedLabel?: string;
+  cancelledLabel?: string;
+  resolutionNote?: string;
+  activePauseId?: string;
+  pauses: WorkflowTaskPauseViewModel[];
+  availableActions: Array<"start" | "complete" | "cancel" | "pause" | "resume" | "escalate">;
+}
+
+export interface WorkflowTaskWorkspaceViewModel {
+  permitted: boolean;
+  permissionMessage: string;
+  createAction: string;
+  activeTasks: WorkflowTaskItemViewModel[];
+  history: WorkflowTaskItemViewModel[];
+  taskTypeOptions: SelectOptionViewModel[];
+  priorityOptions: SelectOptionViewModel[];
+  assigneeTypeOptions: SelectOptionViewModel[];
+  memberOptions: SelectOptionViewModel[];
+  vendorOptions: SelectOptionViewModel[];
+  roleOptions: SelectOptionViewModel[];
+  slaClockOptions: SelectOptionViewModel[];
+  pauseReasonOptions: SelectOptionViewModel[];
+  pauseOwnerTypeOptions: SelectOptionViewModel[];
+}
+
+export interface ApprovalDecisionViewModel {
+  requestId: string;
+  subjectLabel: "request" | "work order";
+  decisionAction: string;
+  policyName: string;
+  policyVersion: number;
+  amountLabel: string;
+  requiredRoleLabel: string;
+  dueAt?: string;
+  dueLabel: string;
+  escalationRoleLabel?: string;
+  canDecide: boolean;
+  decisionAccessMessage?: string;
+  decisionOptions: Array<{
+    value: "approved" | "rejected" | "escalated";
+    label: string;
+    description: string;
+    reasonRequired: boolean;
+  }>;
+}
+
 export interface WorkOrderControlViewModel {
   available: boolean;
   permitted: boolean;
@@ -437,7 +524,9 @@ export interface WorkOrderControlViewModel {
   dueAt?: string;
   escalationTo?: string;
   isTerminal: boolean;
+  pendingApproval?: ApprovalDecisionViewModel;
   stages: WorkflowStageViewModel[];
+  workflowTasks: WorkflowTaskWorkspaceViewModel;
   assignment?: {
     kind: "internal" | "outside_vendor" | "choose_later";
     status: string;
@@ -508,6 +597,35 @@ export interface RequestReviewViewModel {
   statusLabel: string;
   canCreateWorkOrder: boolean;
   createWorkOrderHref?: string;
+  impactSubmitAction: string;
+  pendingApproval?: ApprovalDecisionViewModel;
+  latestImpact?: {
+    id: string;
+    storeOperatingState: string;
+    safetyConcern: string;
+    productInventoryRisk: string;
+    productInventoryValueInput?: string;
+    productInventoryValueLabel: string;
+    customersAffected: string;
+    complianceImpact: string;
+    capacityUnavailablePercentInput?: string;
+    capacityUnavailableLabel: string;
+    redundantEquipment: string;
+    revenueFunctionImpact?: string;
+    estimatedDailyRevenueExposureInput?: string;
+    estimatedDailyRevenueExposureLabel: string;
+    estimatedDowntimeMinutesInput?: string;
+    estimatedDowntimeLabel: string;
+    confidence: string;
+    notes?: string;
+  };
+  impactHistory: Array<{
+    id: string;
+    kindLabel: string;
+    summary: string;
+    provenanceLabel: string;
+  }>;
+  impactCaveat: string;
 }
 
 export interface AttentionItemControlViewModel {

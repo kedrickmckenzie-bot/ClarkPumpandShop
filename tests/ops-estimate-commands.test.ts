@@ -281,6 +281,16 @@ describe("vendor estimate request boundary", () => {
       startedChannel: "secure_link",
       checkedInAt: "2026-08-14T11:30:00.000Z",
     });
+    activeVisitFixture.siteVisitWorkOrders.push({
+      id: "site-visit-work-bid-request-active",
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      visitId: "visit-bid-request-active",
+      workOrderId: PUBLIC_WORK_ORDER_ID,
+      ordinal: 1,
+      linkedByActorType: "technician",
+      linkedByActorName: "Morgan Ellis",
+      linkedAt: "2026-08-14T11:30:00.000Z",
+    });
     const activeVisit = harness({ fixture: activeVisitFixture });
     const beforeActiveVisit = activeVisit.repository.snapshot();
 
@@ -790,23 +800,38 @@ describe("estimate selection and canonical work-order preservation", () => {
   it("rejects selection while a technician is actively onsite", async () => {
     const test = harness();
     const prepared = await prepareSelection(test);
-    await test.repository.atomicWrite([{
-      sql: "INSERT INTO ops_visit_sessions (id, organization_id, store_id, provider_kind, vendor_id, work_order_id, technician_name, provider_name, purpose, status, started_channel, checked_in_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      params: [
-        "visit-estimate-selection-active",
-        NORTHLINE_ORGANIZATION_ID,
-        "store-northline-104",
-        "outside_vendor",
-        SUMMIT,
-        PUBLIC_WORK_ORDER_ID,
-        "Active technician",
-        "Summit Refrigeration",
-        "Existing authorized service",
-        "active",
-        "secure_link",
-        "2026-08-14T11:30:00.000Z",
-      ],
-    }]);
+    await test.repository.atomicWrite([
+      {
+        sql: "INSERT INTO ops_visit_sessions (id, organization_id, store_id, provider_kind, vendor_id, work_order_id, technician_name, provider_name, purpose, status, started_channel, checked_in_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        params: [
+          "visit-estimate-selection-active",
+          NORTHLINE_ORGANIZATION_ID,
+          "store-northline-104",
+          "outside_vendor",
+          SUMMIT,
+          PUBLIC_WORK_ORDER_ID,
+          "Active technician",
+          "Summit Refrigeration",
+          "Existing authorized service",
+          "active",
+          "secure_link",
+          "2026-08-14T11:30:00.000Z",
+        ],
+      },
+      {
+        sql: "INSERT INTO ops_site_visit_work_orders (id, organization_id, visit_id, work_order_id, ordinal, linked_by_actor_type, linked_by_actor_name, linked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        params: [
+          "site-visit-work-estimate-selection-active",
+          NORTHLINE_ORGANIZATION_ID,
+          "visit-estimate-selection-active",
+          PUBLIC_WORK_ORDER_ID,
+          1,
+          "technician",
+          "Active technician",
+          "2026-08-14T11:30:00.000Z",
+        ],
+      },
+    ]);
     const before = test.repository.snapshot();
 
     await expect(selectEstimate(test.services, {

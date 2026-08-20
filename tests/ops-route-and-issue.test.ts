@@ -18,6 +18,7 @@ import {
   NORTHLINE_ORGANIZATION_ID,
 } from "@/lib/ops/fixtures";
 import { requestEstimate } from "@/lib/ops/estimate-commands";
+import { recordApprovalDecision } from "@/lib/ops/approval-governance";
 import type { MutableOpsFixtureRepository } from "@/lib/ops/repository";
 import type { OpsFixture, WorkOrder } from "@/lib/ops/types";
 import type { ServiceAuthorizationSnapshot } from "@/lib/ops/view-models";
@@ -68,7 +69,7 @@ async function createRoutingWorkOrder(
   services: OpsCommandServices,
   initialAssignment: { kind: "choose_later" } | { kind: "outside_vendor"; vendorId: string },
 ) {
-  return createWorkOrder(services, {
+  const workOrder = await createWorkOrder(services, {
     organizationId: NORTHLINE_ORGANIZATION_ID,
     storeId: "store-northline-101",
     problem: "Beer cave temperature is above its safe operating range.",
@@ -83,6 +84,22 @@ async function createRoutingWorkOrder(
     initialAssignment,
     actor: facilitiesActor,
   });
+  if (workOrder.approvalRequest) {
+    await recordApprovalDecision(services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      approvalRequestId: workOrder.approvalRequest.id,
+      decision: "approved",
+      deciderMembershipId: "membership-northline-regional-1",
+      reason: "Routing test authorization approved before provider selection.",
+      actor: {
+        organizationId: NORTHLINE_ORGANIZATION_ID,
+        actorType: "user",
+        actorId: "membership-northline-regional-1",
+        actorName: "Avery Brooks",
+      },
+    });
+  }
+  return workOrder;
 }
 
 async function authorizationSnapshot(
@@ -124,13 +141,15 @@ async function routeInput(
   expectedRevision: number,
   hashCharacter: string,
 ) {
+  const currentWorkOrder = await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id);
+  if (!currentWorkOrder) throw new Error("Routing test work order disappeared");
   return {
     organizationId: NORTHLINE_ORGANIZATION_ID,
     workOrderId: workOrder.id,
     vendorId,
     expectedRevision,
     channel: "email" as const,
-    authorizationSnapshot: await authorizationSnapshot(repository, workOrder, vendorId),
+    authorizationSnapshot: await authorizationSnapshot(repository, currentWorkOrder, vendorId),
     publicToken: { tokenHash: tokenHash(hashCharacter), expiresAt: TOKEN_EXPIRY },
     actor: facilitiesActor,
   };
@@ -234,9 +253,9 @@ describe("atomic vendor routing and issuance", () => {
       purpose: "service_authorization",
     }));
     expect(after.auditEvents.slice(before.auditEvents.length).map((event) => event.eventType))
-      .toEqual(["work_order.assigned", "work_order.issued"]);
+      .toEqual(["work_order.assigned", "work_order.issued", "workflow_task.completed", "workflow_task.created"]);
     expect(after.outboxMessages.slice(before.outboxMessages.length).map((message) => message.topic))
-      .toEqual(["ops.work_order.assigned", "ops.work_order.issued"]);
+      .toEqual(["ops.work_order.assigned", "ops.work_order.issued", "ops.workflow_task.completed", "ops.workflow_task.created"]);
   });
 
   it("requires an explicit reassignment before issuing a different active vendor", async () => {

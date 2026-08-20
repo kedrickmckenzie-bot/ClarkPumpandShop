@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
-import { ListView } from "@/components/ops/views";
-import { loadListModel } from "../_data/operator-loader";
+import { InvoiceQueueWorkspace } from "@/components/ops/warranty-finance-workspace";
+import { ReceiveInvoiceLink } from "@/components/ops/invoice-receive-workspace";
+import { loadWarrantyFinanceWorkspace } from "../_data/warranty-finance-loader";
 
 export const metadata: Metadata = { title: "Invoice references" };
-type Query = Record<string, string | string[] | undefined>;
-
-export default async function InvoiceReferencesPage({ searchParams }: { searchParams: Promise<Query> }) {
-  return <ListView model={await loadListModel("invoices", await searchParams)} />;
-}
+export default async function InvoiceReferencesPage() { const {fixture,invoices,session}=await loadWarrantyFinanceWorkspace(); return <>{["executive","facilities","finance"].includes(session.role)?<ReceiveInvoiceLink/>:null}<InvoiceQueueWorkspace fixture={fixture} invoices={invoices} /></>; }

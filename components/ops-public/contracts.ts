@@ -1,4 +1,9 @@
 import type {
+  ImpactAnswer,
+  ImpactSafetyConcern,
+  ProductInventoryRisk,
+  SiteVisitWorkOrderOutcome,
+  StoreOperatingState,
   VendorResponseKind as OpsVendorResponseKind,
   VisitChannel,
   VisitOutcome as OpsVisitOutcome,
@@ -174,35 +179,77 @@ export interface EligibleWorkOrderView {
   number: string;
   priority: "Routine" | "Priority" | "Emergency";
   problem: string;
+  area?: string;
   category?: string;
   asset?: string;
+  dueOrScheduledAt?: string;
+  dueOrScheduledLabel?: "Scheduled" | "Proposed arrival" | "Due";
+  assignedVendor: {
+    id: string;
+    name: string;
+  };
   issuedAt: string;
+  plannedServiceRun?: { id: string; startsAt: string; stopSequence: number };
+}
+
+export interface PlannedServiceRunView {
+  id: string;
+  startsAt: string;
+  status: string;
+  stopSequence: number;
+  plannedWorkOrderIds: string[];
+  removalReasonRequired: true;
+}
+
+export interface VisitWorkOrderView {
+  id: string;
+  number: string;
+  problem: string;
 }
 
 export interface ActiveVisitView {
   id: string;
   technicianName: string;
   vendorName: string;
+  workOrders: VisitWorkOrderView[];
   workOrderNumber?: string;
   noWorkOrderReason?: string;
   checkedInAt: string;
+  crewCount: number;
+  additionalTechnicianNames: string[];
+  vehicleIdentifier?: string;
+  arrivalNote?: string;
   startedVia: VisitChannel;
   checkInLocationLabel: string;
 }
 
 export interface VendorVisitContextView {
-  vendorId: string;
-  vendorName: string;
+  /** Present only when this context was deliberately narrowed to one vendor. */
+  vendorId?: string;
+  vendorName?: string;
+  /** True for a service-authorization capability that is bound to one WO. */
+  workOrderSelectionBound: boolean;
   eligibleWorkOrders: EligibleWorkOrderView[];
+  plannedServiceRuns: PlannedServiceRunView[];
   activeVisits: ActiveVisitView[];
 }
 
 export interface TechnicianCheckInCommand {
   submissionKey: string;
-  vendorId: string;
+  /** Allowed only for the controlled unmatched path. Matched work infers it. */
+  vendorId?: string;
+  workOrderIds?: string[];
+  /** Temporary one-WO compatibility input. */
   workOrderId?: string;
+  serviceRunId?: string;
+  plannedWorkOrderRemovalReason?: string;
   noWorkOrderReason?: string;
   technicianName: string;
+  technicianPhoneOrPin?: string;
+  crewCount?: number;
+  additionalTechnicianNames?: string[];
+  vehicleIdentifier?: string;
+  arrivalNote?: string;
   location: LocationEvidenceInput;
 }
 
@@ -210,6 +257,11 @@ export interface TechnicianCheckInReceipt extends PublicActionReceipt {
   visitId: string;
   vendorName: string;
   technicianName: string;
+  workOrders: VisitWorkOrderView[];
+  crewCount: number;
+  additionalTechnicianNames: string[];
+  vehicleIdentifier?: string;
+  arrivalNote?: string;
   workOrderNumber?: string;
   checkedInAt: string;
   checkoutUrl: string;
@@ -222,6 +274,33 @@ export type VisitOutcome = Extract<
   "resolved" | "temporary_repair" | "diagnosed_waiting_parts" | "return_required" | "unable_to_complete" | "unable_to_reproduce" | "other"
 >;
 
+export type WorkOrderVisitOutcome = Extract<
+  SiteVisitWorkOrderOutcome,
+  | "completed"
+  | "diagnosis_only"
+  | "quote_required"
+  | "parts_required"
+  | "return_visit_required"
+  | "no_issue_found"
+  | "store_access_unavailable"
+  | "work_not_authorized"
+  | "not_addressed"
+>;
+
+export interface PublicVisitFollowUp {
+  accountableParty: string;
+  nextAction: string;
+  dueAt: string;
+  escalationTo: string;
+}
+
+export interface PerWorkOrderVisitOutcome {
+  workOrderId: string;
+  outcome: WorkOrderVisitOutcome;
+  outcomeNotes?: string;
+  followUp?: PublicVisitFollowUp;
+}
+
 export interface PublicUpload {
   name: string;
   mediaType: string;
@@ -231,9 +310,12 @@ export interface PublicUpload {
 
 export interface TechnicianCheckOutCommand {
   submissionKey: string;
-  vendorId: string;
+  /** Equality-only compatibility field; the server always trusts the visit. */
+  vendorId?: string;
   visitId: string;
-  outcome: VisitOutcome;
+  perWorkOrderOutcomes?: PerWorkOrderVisitOutcome[];
+  /** Used only by a reviewable unmatched visit or old single-WO clients. */
+  outcome?: VisitOutcome;
   outcomeNotes?: string;
   location: LocationEvidenceInput;
   evidence: PublicUpload[];
@@ -245,6 +327,11 @@ export interface TechnicianCheckOutReceipt extends PublicActionReceipt {
   observedDurationMinutes?: number;
   observedDurationLabel: string;
   outcomeLabel: string;
+  workOrderOutcomes: Array<VisitWorkOrderView & {
+    outcome: WorkOrderVisitOutcome;
+    outcomeLabel: string;
+    followUpLabel?: string;
+  }>;
   evidenceReceived: number;
   evidenceStorageLabel?: string;
   location: LocationEvidenceReceipt;
@@ -252,11 +339,18 @@ export interface TechnicianCheckOutReceipt extends PublicActionReceipt {
 }
 
 export interface StoreIssueCommand {
+  submissionKey: string;
   reporterName: string;
   employeeId?: string;
   problem: string;
   urgency: "routine" | "priority" | "urgent_safety";
   area?: string;
+  impact: {
+    storeOperatingState: StoreOperatingState;
+    safetyConcern: ImpactSafetyConcern;
+    productInventoryRisk: ProductInventoryRisk;
+    customersAffected: ImpactAnswer;
+  };
   evidence: PublicUpload[];
 }
 
@@ -277,7 +371,7 @@ export interface PublicOperationsGateway {
   submitVendorEstimate(token: string, command: VendorEstimateSubmissionCommand): Promise<PublicActionReceipt>;
   declineVendorEstimate(token: string, command: VendorEstimateDeclineCommand): Promise<PublicActionReceipt>;
   loadStorePortal(token: string): Promise<StorePortalView | null>;
-  lookupVendorVisitContext(token: string, vendorId: string): Promise<VendorVisitContextView>;
+  lookupVendorVisitContext(token: string, vendorId?: string): Promise<VendorVisitContextView>;
   checkIn(token: string, command: TechnicianCheckInCommand): Promise<TechnicianCheckInReceipt>;
   checkOut(token: string, command: TechnicianCheckOutCommand): Promise<TechnicianCheckOutReceipt>;
   reportStoreIssue(token: string, command: StoreIssueCommand): Promise<StoreIssueReceipt>;

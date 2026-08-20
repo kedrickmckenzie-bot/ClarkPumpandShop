@@ -5,6 +5,7 @@ export type OperatorCapability =
   | "review_request"
   | "create_work_order"
   | "control_work_order"
+  | "manage_workflow_tasks"
   | "classify_work_order"
   | "record_work_cost"
   | "review_attention"
@@ -26,6 +27,7 @@ export type OperatorListRoutePolicyId =
   | "visits"
   | "stores"
   | "vendors"
+  | "warranties"
   | "invoices"
   | "reports"
   | "admin";
@@ -38,10 +40,11 @@ export type OperatorDetailRoutePolicyId =
   | "store"
   | "vendor"
   | "equipment"
+  | "warranty"
   | "invoice";
 
 export type OperatorPrimaryNavigationId = "home" | "work" | "stores" | "vendors" | "insights" | "reports";
-export type OperatorWorkNavigationId = "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "invoice-review";
+export type OperatorWorkNavigationId = "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "service-runs" | "invoice-review";
 export type OperatorInsightsNavigationId = "spend" | "equipment" | "pm" | "lifecycle";
 
 interface DemoOperatorRolePolicy {
@@ -68,6 +71,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
       "review_request",
       "create_work_order",
       "control_work_order",
+      "manage_workflow_tasks",
       "classify_work_order",
       "record_work_cost",
       "review_attention",
@@ -81,20 +85,20 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
       "issue_work_order",
       "administer",
     ],
-    listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "invoices", "reports", "admin"],
+    listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "warranties", "invoices", "reports", "admin"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
-    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],
+    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
+    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "service-runs", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   regional: {
-    capabilities: ["create_request", "review_request", "create_work_order", "control_work_order", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "manage_lifecycle", "request_estimate", "select_estimate", "issue_work_order"],
-    listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "invoices", "reports"],
+    capabilities: ["create_request", "review_request", "create_work_order", "control_work_order", "manage_workflow_tasks", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "manage_lifecycle", "request_estimate", "select_estimate", "issue_work_order"],
+    listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "warranties", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
-    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],
+    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
+    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "service-runs", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   store_manager: {
@@ -103,25 +107,25 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     programRoutes: ["spend", "equipment", "pm"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["requests", "work-orders", "visits"],
+    workNavigation: ["requests", "work-orders", "visits", "service-runs"],
     insightsNavigation: ["spend", "equipment", "pm"],
   },
   executive: {
     capabilities: [],
-    listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "invoices", "reports"],
+    listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "warranties", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
-    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "invoice"],
+    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "stores", "vendors", "insights", "reports"],
     workNavigation: [],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   finance: {
     capabilities: ["record_work_cost"],
-    listRoutes: ["action-center", "work-orders", "estimates", "stores", "vendors", "invoices", "reports"],
+    listRoutes: ["action-center", "work-orders", "estimates", "stores", "vendors", "warranties", "invoices", "reports"],
     programRoutes: ["spend", "equipment", "lifecycle"],
-    detailRoutes: ["work-order", "visit", "store", "vendor", "equipment", "invoice"],
+    detailRoutes: ["work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "work-orders", "estimates", "invoice-review"],
+    workNavigation: ["needs-attention", "work-orders", "estimates", "service-runs", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "lifecycle"],
   },
 };
@@ -174,6 +178,7 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
   }
   if (area === "estimates") return roleCanAccessListRoute(role, "estimates");
   if (area === "visits") return record ? roleCanAccessDetailRoute(role, "visit") : roleCanAccessListRoute(role, "visits");
+  if (area === "service-runs") return roleCanSeeWorkNavigation(role, "service-runs");
   if (area === "stores") {
     if (record === "new") return roleCan(role, "create_store");
     return record ? roleCanAccessDetailRoute(role, "store") : roleCanAccessListRoute(role, "stores");
@@ -184,6 +189,9 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
   }
   if (area === "invoices") {
     return record ? roleCanAccessDetailRoute(role, "invoice") : roleCanAccessListRoute(role, "invoices");
+  }
+  if (area === "warranties") {
+    return record ? roleCanAccessDetailRoute(role, "warranty") : roleCanAccessListRoute(role, "warranties");
   }
   if (area === "reports") return roleCanAccessListRoute(role, "reports");
   if (area === "admin") return roleCanAccessListRoute(role, "admin");

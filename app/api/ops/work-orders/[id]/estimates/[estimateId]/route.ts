@@ -51,7 +51,7 @@ export async function POST(
       );
       return decisionSuccess(
         request,
-        `/app/work-orders/${encodeURIComponent(workOrder.id)}?updated=estimate-reopened#bid-requests`,
+        `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service&updated=estimate-reopened#bid-requests`,
       );
     }
     if (operation === "withdraw") {
@@ -71,7 +71,7 @@ export async function POST(
       );
       return decisionSuccess(
         request,
-        `/app/work-orders/${encodeURIComponent(workOrder.id)}?updated=estimate-withdrawn#bid-requests`,
+        `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service&updated=estimate-withdrawn#bid-requests`,
       );
     }
     if (operation !== "select") throw new OpsDomainError("VALIDATION", "Choose a supported bid decision.");
@@ -92,7 +92,7 @@ export async function POST(
     );
     return decisionSuccess(
       request,
-      `/app/work-orders/${encodeURIComponent(workOrder.id)}?updated=estimate-selected#bid-requests`,
+      `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service&updated=estimate-selected#bid-requests`,
     );
   } catch (error) {
     return opsApiError(error);

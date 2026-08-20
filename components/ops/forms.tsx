@@ -85,6 +85,68 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
             <SelectField id="request-priority" name="priority" label="Priority" required options={model.priorityOptions} helper="Use emergency only for immediate safety, fuel, food-safety, or major operating impact." />
           </section>
 
+          <section className={styles.formSection}>
+            <div className={styles.formSectionHeading}><span>3</span><div><h2>How is the store affected?</h2><p>Report what you can observe. Managers will confirm or revise this assessment before work is selected.</p></div></div>
+            <div className={styles.fieldGrid}>
+              <SelectField id="request-operating-state" name="storeOperatingState" label="Store operating state" required options={[
+                { value: "open", label: "Open", description: "Normal operation continues" },
+                { value: "partially_operational", label: "Partially operational", description: "A meaningful function or area is unavailable" },
+                { value: "unable_to_operate", label: "Unable to operate", description: "The store cannot operate" },
+                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
+              ]} />
+              <SelectField id="request-safety" name="safetyConcern" label="Safety concern" required options={[
+                { value: "none_reported", label: "None reported", description: "No safety concern observed" },
+                { value: "potential", label: "Potential concern", description: "Needs timely review" },
+                { value: "immediate", label: "Immediate concern", description: "Requires immediate response" },
+                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
+              ]} />
+              <SelectField id="request-inventory-risk" name="productInventoryRisk" label="Product or inventory risk" required options={[
+                { value: "none_reported", label: "None reported", description: "No product risk observed" },
+                { value: "at_risk", label: "Product at risk", description: "Loss may occur" },
+                { value: "loss_reported", label: "Loss reported", description: "Store reports product loss" },
+                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
+              ]} />
+              <SelectField id="request-customers" name="customersAffected" label="Customers affected" required options={[
+                { value: "yes", label: "Yes", description: "Customers are affected" },
+                { value: "no", label: "No", description: "No customer impact observed" },
+                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
+              ]} />
+              <SelectField id="request-compliance" name="complianceImpact" label="Compliance impact" required options={[
+                { value: "none_reported", label: "None reported", description: "No compliance concern observed" },
+                { value: "potential", label: "Potential impact", description: "Needs review" },
+                { value: "confirmed", label: "Confirmed impact", description: "A known requirement is affected" },
+                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
+              ]} />
+              <SelectField id="request-redundancy" name="redundantEquipment" label="Backup equipment available" required options={[
+                { value: "yes", label: "Yes", description: "Backup capacity is available" },
+                { value: "no", label: "No", description: "No redundant equipment" },
+                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
+              ]} />
+            </div>
+            <div className={styles.fieldGrid}>
+              <label className={styles.field} htmlFor="request-inventory-value"><span>Product value at risk <small>Optional · USD</small></span><input id="request-inventory-value" name="productInventoryValue" type="number" min="0" step="0.01" inputMode="decimal" /></label>
+              <label className={styles.field} htmlFor="request-capacity"><span>Capacity unavailable <small>Optional · percent</small></span><input id="request-capacity" name="capacityUnavailablePercent" type="number" min="0" max="100" step="0.01" inputMode="decimal" /></label>
+              <SelectField id="request-revenue-function" name="revenueFunctionImpact" label="Revenue function affected" options={[
+                { value: "fuel", label: "Fuel", description: "Fuel sales or dispensing" },
+                { value: "foodservice", label: "Foodservice", description: "Prepared food service" },
+                { value: "refrigerated_merchandise", label: "Refrigerated merchandise", description: "Cold product sales" },
+                { value: "beverages", label: "Beverages", description: "Packaged or fountain beverages" },
+                { value: "lottery", label: "Lottery", description: "Lottery sales" },
+                { value: "car_wash", label: "Car wash", description: "Car wash sales" },
+                { value: "other", label: "Other", description: "Another store function" },
+              ]} />
+              <label className={styles.field} htmlFor="request-daily-exposure"><span>Estimated daily revenue exposure <small>Optional · USD</small></span><input id="request-daily-exposure" name="estimatedDailyRevenueExposure" type="number" min="0" step="0.01" inputMode="decimal" /></label>
+              <label className={styles.field} htmlFor="request-downtime"><span>Estimated downtime <small>Optional · minutes</small></span><input id="request-downtime" name="estimatedDowntimeMinutes" type="number" min="0" step="1" inputMode="numeric" /></label>
+              <SelectField id="request-confidence" name="confidence" label="Confidence in this report" required options={[
+                { value: "low", label: "Low", description: "Facts are incomplete" },
+                { value: "medium", label: "Medium", description: "Based on direct store observation" },
+                { value: "high", label: "High", description: "Facts have been checked" },
+              ]} />
+            </div>
+            <label className={styles.field} htmlFor="request-impact-notes"><span>Impact notes <small>Optional</small></span><textarea id="request-impact-notes" name="impactNotes" rows={3} placeholder="Add observed constraints, affected areas, or why an estimate is uncertain." /></label>
+            <div className={styles.formNotice}><Info aria-hidden="true" size={19} /><p><strong>Estimates are planning context.</strong> Product value, revenue exposure, capacity, and downtime estimates are not verified losses.</p></div>
+          </section>
+
           <div className={styles.formNotice}><Info aria-hidden="true" size={19} /><p><strong>This creates a visible record.</strong> Managers can review, classify, approve, and convert it to a work order without erasing the original report.</p></div>
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Submit request<ArrowRight aria-hidden="true" size={18} /></button></div>
         </form>

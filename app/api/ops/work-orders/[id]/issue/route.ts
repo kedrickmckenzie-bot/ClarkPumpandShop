@@ -31,7 +31,7 @@ export async function POST(
     const workOrder = await context.repository.getWorkOrder(context.session.organizationId, workOrderId);
     if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order was not found in your organization.");
     await assertStoreInSessionScope(context.session, workOrder.storeId);
-    if (["closed", "cancelled", "completed_pending_review"].includes(workOrder.status)) {
+    if (["closed", "cancelled", "completed_pending_review", "resolved"].includes(workOrder.status)) {
       throw new OpsDomainError("CONFLICT", "Closed or completed work cannot be issued again.");
     }
 

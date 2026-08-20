@@ -1,5 +1,8 @@
 import type {
   Asset,
+  ApprovalDecision,
+  ApprovalPolicy,
+  ApprovalRequest,
   AssetComponent,
   AssetReplacementOverride,
   AuditEvent,
@@ -19,8 +22,10 @@ import type {
   ReplacementBenchmark,
   ReplacementEvent,
   ReplacementProfile,
+  RequestImpactAssessment,
   ScopeGrant,
   ServiceRequest,
+  SiteVisitWorkOrder,
   Store,
   TaxonomyNode,
   User,
@@ -32,13 +37,18 @@ import type {
   VisitEvidence,
   VisitSession,
   WorkOrder,
+  WorkOrderVerification,
   WorkOrderAssignment,
   WorkOrderEstimateRequest,
   WorkOrderIssuance,
+  WorkflowTask,
+  WorkflowTaskSlaPause,
+  WorkflowTaskSlaResume,
   FollowUp,
   StoredFile,
   EntityFileLink,
 } from "./types";
+import { siteVisitOutcomeFromLegacy, siteVisitOutcomeRequiresFollowUp } from "./site-visit-outcomes";
 
 export const NORTHLINE_ORGANIZATION_ID = "org-northline-demo";
 export const NORTHLINE_AS_OF = "2026-08-10T18:00:00.000Z";
@@ -50,6 +60,7 @@ export const NORTHLINE_DEMO_ENTRY_TOKENS = {
   trustedStore104: "wjru_t6__2kW59QM_kQw62VgYgeNZporOvMEzA1Sf5w",
   estimate105Summit: "LvS1x4HpenFPweeAyDmSa4ZRo-zemfa_sZpZrnlQWbw",
   estimate105Cedar: "Sq3z2tPc9fnBoy7K_qr3caQzey4BSWhGNGZD9o8Xp4E",
+  serviceRunSummit: "NorthlineServiceRunDemoVendorResponse2026",
 } as const;
 
 export const NORTHLINE_DEMO_TOKEN_HASHES = {
@@ -59,6 +70,7 @@ export const NORTHLINE_DEMO_TOKEN_HASHES = {
   trustedStore104: "04ba6edfb1020edc3253848bacd7bf9441371f1dde84d8b4a079f8e0f8b94046",
   estimate105Summit: "1d82353ab0ce89b2414d3763529186420dad5ca03d48b77b39f91113baa1b81a",
   estimate105Cedar: "2a1e058b63bbae4102b951756a71a0ed25176e69aba067bca2101475b7184c2a",
+  serviceRunSummit: "36be3c1b87d9043f0b65d78197e1b4e8991c97ca12ad261793f5a5736d024478",
 } as const;
 
 export const NORTHLINE_DEMO_HANDLES = {
@@ -244,14 +256,20 @@ function buildFixture(): OpsFixture {
     aliases: [name, `Store ${number}`, `${number} ${city}`], latitudeE6, longitudeE6, geofenceRadiusM: index === 6 ? 125 : 180, locationPolicyEnabled: true, timeZone: "America/New_York", status: "active", createdAt: at(1, 3, 14),
   }));
 
+  const storeManagerNames = [
+    "Cameron Blake", "Dana Ortiz", "Elliot Warren", "Robin Carter", "Harper Nguyen",
+    "Avery Bennett", "Quinn Foster", "Reese Sullivan", "Skyler James", "Peyton Murphy",
+    "Emerson Diaz", "Rowan Cooper", "Finley Ross", "Dakota Bailey", "Sage Perry",
+  ];
   const users: User[] = [
     { id: "user-northline-executive", email: "alex.morgan@northline-demo.example", displayName: "Alex Morgan", status: "active", createdAt: at(1, 2, 15) },
     { id: "user-northline-facilities", email: "jordan.lee@northline-demo.example", displayName: "Jordan Lee", status: "active", createdAt: at(1, 2, 15) },
     { id: "user-northline-tech-1", email: "maria.santos@northline-demo.example", displayName: "Maria Santos", status: "active", createdAt: at(1, 2, 15) },
     { id: "user-northline-tech-2", email: "devon.price@northline-demo.example", displayName: "Devon Price", status: "active", createdAt: at(1, 2, 15) },
     ...regions.map((region, index) => ({ id: `user-northline-regional-${index + 1}`, email: `regional${index + 1}@northline-demo.example`, displayName: ["Taylor Reed", "Morgan Hayes", "Casey Brooks"][index], status: "active" as const, createdAt: at(1, 2, 15) })),
-    { id: "user-northline-store-104", email: "store104.manager@northline-demo.example", displayName: "Robin Carter", status: "active", createdAt: at(1, 2, 15) },
+    ...stores.map((store, index) => ({ id: `user-northline-store-${store.storeNumber}`, email: `store${store.storeNumber}.manager@northline-demo.example`, displayName: storeManagerNames[index]!, status: "active" as const, createdAt: at(1, 2, 15) })),
     { id: "user-northline-finance", email: "finance.review@northline-demo.example", displayName: "Parker Shaw", status: "active", createdAt: at(1, 2, 15) },
+    { id: "user-northline-facilities-approver", email: "samir.patel@northline-demo.example", displayName: "Samir Patel", status: "active", createdAt: at(1, 2, 15) },
   ];
   const memberships: Membership[] = [
     { id: "membership-northline-executive", organizationId: organization.id, userId: users[0].id, role: "executive", status: "active", createdAt: users[0].createdAt },
@@ -259,19 +277,55 @@ function buildFixture(): OpsFixture {
     { id: "membership-northline-tech-1", organizationId: organization.id, userId: users[2].id, role: "internal_technician", status: "active", createdAt: users[2].createdAt },
     { id: "membership-northline-tech-2", organizationId: organization.id, userId: users[3].id, role: "internal_technician", status: "active", createdAt: users[3].createdAt },
     ...regions.map((region, index) => ({ id: `membership-northline-regional-${index + 1}`, organizationId: organization.id, userId: users[index + 4].id, role: "regional_manager" as const, status: "active" as const, createdAt: users[index + 4].createdAt })),
-    { id: "membership-northline-store-104", organizationId: organization.id, userId: "user-northline-store-104", role: "store_manager", status: "active", createdAt: at(1, 2, 15) },
+    ...stores.map((store) => ({ id: `membership-northline-store-${store.storeNumber}`, organizationId: organization.id, userId: `user-northline-store-${store.storeNumber}`, role: "store_manager" as const, status: "active" as const, createdAt: at(1, 2, 15) })),
     { id: "membership-northline-finance", organizationId: organization.id, userId: "user-northline-finance", role: "finance_reviewer", status: "active", createdAt: at(1, 2, 15) },
+    { id: "membership-northline-facilities-approver", organizationId: organization.id, userId: "user-northline-facilities-approver", role: "facilities_admin", status: "active", createdAt: at(1, 2, 15) },
   ];
   const scopeGrants: ScopeGrant[] = [
     ...memberships.slice(0, 4).map((membership) => ({ id: `scope-${membership.id}`, organizationId: organization.id, membershipId: membership.id, scopeKind: "organization" as const, scopeId: organization.id, permission: "ops:*", createdAt: membership.createdAt })),
     ...regions.map((region, index) => ({ id: `scope-northline-regional-${index + 1}`, organizationId: organization.id, membershipId: `membership-northline-regional-${index + 1}`, scopeKind: "region" as const, scopeId: region.id, permission: "ops:read_write", createdAt: at(1, 2, 15) })),
-    { id: "scope-membership-northline-store-104", organizationId: organization.id, membershipId: "membership-northline-store-104", scopeKind: "store", scopeId: "store-northline-104", permission: "ops:store_manage", createdAt: at(1, 2, 15) },
+    ...stores.map((store) => ({ id: `scope-membership-northline-store-${store.storeNumber}`, organizationId: organization.id, membershipId: `membership-northline-store-${store.storeNumber}`, scopeKind: "store" as const, scopeId: store.id, permission: "ops:store_manage", createdAt: at(1, 2, 15) })),
     { id: "scope-membership-northline-finance", organizationId: organization.id, membershipId: "membership-northline-finance", scopeKind: "organization", scopeId: organization.id, permission: "ops:finance_read", createdAt: at(1, 2, 15) },
+    { id: "scope-membership-northline-facilities-approver", organizationId: organization.id, membershipId: "membership-northline-facilities-approver", scopeKind: "organization", scopeId: organization.id, permission: "ops:*", createdAt: at(1, 2, 15) },
   ];
 
   const vendors: Vendor[] = vendorSeeds.map(([code, name, email, phone, preferred]) => ({ id: `vendor-northline-${code}`, organizationId: organization.id, code, name, dispatchEmail: email, dispatchPhone: phone, status: "approved", preferred, createdAt: at(1, 4, 14) }));
   const vendorSpecialties: VendorSpecialty[] = vendors.flatMap((vendor) => specialtySeeds[vendor.code].map(([canonicalKey, displayName, searchAliases]) => ({ id: `specialty-${vendor.code}-${canonicalKey}`, organizationId: organization.id, vendorId: vendor.id, canonicalKey, displayName, searchAliases })));
   const vendorCoverage: VendorCoverage[] = vendors.map((vendor, index) => ({ id: `coverage-${vendor.code}-all`, organizationId: organization.id, vendorId: vendor.id, scopeKind: "organization", scopeId: organization.id, preferredRank: index < 3 ? 1 : 2 }));
+  const vendorQualifications: OpsFixture["vendorQualifications"] = [
+    { id: "qualification-summit-refrigeration-north", organizationId: organization.id, vendorId: "vendor-northline-summit", tradeKey: "refrigeration", serviceType: "preventive_and_reactive", assetType: "refrigeration", pmWork: true, emergencyResponse: true, warrantyWork: true, manufacturerAuthorization: "Copeland", regionId: "region-northline-north", afterHours: true, maximumJobAmount: { amountMinor: 2_500_000, currency: "USD" }, requiredLicense: "Michigan mechanical contractor", requiredCertification: "EPA Section 608", effectiveAt: atYear(2026, 1, 1), expiresAt: atYear(2027, 1, 1), status: "active", createdAt: atYear(2026, 1, 1) },
+  ];
+  const vendorComplianceDocuments: OpsFixture["vendorComplianceDocuments"] = [
+    { id: "compliance-summit-insurance-2026", organizationId: organization.id, vendorId: "vendor-northline-summit", documentType: "insurance", issuer: "Fictional Mutual", reference: "COI-SUMMIT-2026", effectiveAt: atYear(2026, 1, 1), expiresAt: atYear(2027, 1, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 1, 2) },
+    { id: "compliance-summit-license-2026", organizationId: organization.id, vendorId: "vendor-northline-summit", documentType: "license", issuer: "State licensing demo registry", reference: "MECH-SUMMIT-608", effectiveAt: atYear(2026, 1, 1), expiresAt: atYear(2027, 1, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 1, 2) },
+    { id: "compliance-summit-tax-2026", organizationId: organization.id, vendorId: "vendor-northline-summit", documentType: "tax", reference: "W9-ON-FILE", reviewStatus: "approved", blocking: false, createdAt: atYear(2026, 1, 2) },
+  ];
+  const vendorContracts: OpsFixture["vendorContracts"] = [
+    { id: "contract-summit-refrigeration", organizationId: organization.id, vendorId: "vendor-northline-summit", name: "Refrigeration service and preventive maintenance", ownerMembershipId: "membership-northline-facilities", status: "active", createdAt: atYear(2026, 1, 1) },
+  ];
+  const contractVersions: OpsFixture["contractVersions"] = [
+    { id: "contract-version-summit-refrigeration-v1", organizationId: organization.id, contractId: "contract-summit-refrigeration", vendorId: "vendor-northline-summit", version: 1, sourceAgreementReference: "NORTHLINE-SUMMIT-MSA-2026", status: "active", effectiveStartsAt: atYear(2026, 1, 1), effectiveEndsAt: atYear(2026, 12, 31, 23), renewalAt: atYear(2027, 1, 1), noticeDays: 60, priceEscalationAt: atYear(2027, 1, 1), currency: "USD", preferredProvider: true, exclusiveProvider: false, reactiveWorkAllowed: true, emergencyWorkAllowed: true, pmWorkAllowed: true, subcontractorPolicy: "approval_required", schedulingMode: "platform_proposed_vendor_confirmed", reservedCapacityMinutes: 240, nteAmount: { amountMinor: 500_000, currency: "USD" }, materialsMarkupBps: 1500, routeDiscountBps: 1000, evidenceRequirements: ["check_in", "check_out", "photo", "checklist"], complianceRequirements: ["insurance", "license"], warrantyLaborDays: 90, warrantyPartsDays: 365, warrantyTravelDays: 30, createdByMembershipId: "membership-northline-facilities", createdAt: atYear(2026, 1, 1) },
+  ];
+  const contractScopes: OpsFixture["contractScopes"] = [
+    { id: "contract-scope-summit-north", organizationId: organization.id, contractVersionId: "contract-version-summit-refrigeration-v1", scopeKind: "region", scopeId: "region-northline-north", included: true },
+    { id: "contract-scope-summit-refrigeration", organizationId: organization.id, contractVersionId: "contract-version-summit-refrigeration-v1", scopeKind: "trade", scopeId: "refrigeration", included: true },
+    { id: "contract-scope-summit-pm", organizationId: organization.id, contractVersionId: "contract-version-summit-refrigeration-v1", scopeKind: "pm_program", scopeId: "maintenance-program-quarterly-refrigeration-v1", included: true },
+  ];
+  const rateCardLines: OpsFixture["rateCardLines"] = [
+    { id: "rate-summit-trip", organizationId: organization.id, contractVersionId: "contract-version-summit-refrigeration-v1", chargeType: "trip", description: "Standard refrigeration dispatch", unit: "visit", amount: { amountMinor: 12_500, currency: "USD" }, effectiveStartsAt: atYear(2026, 1, 1) },
+    { id: "rate-summit-labor", organizationId: organization.id, contractVersionId: "contract-version-summit-refrigeration-v1", chargeType: "labor", description: "Refrigeration service labor", unit: "hour", amount: { amountMinor: 14_500, currency: "USD" }, effectiveStartsAt: atYear(2026, 1, 1) },
+    { id: "rate-summit-pm", organizationId: organization.id, contractVersionId: "contract-version-summit-refrigeration-v1", chargeType: "pm", description: "Quarterly refrigeration PM per asset", unit: "occurrence", amount: { amountMinor: 42_500, currency: "USD" }, effectiveStartsAt: atYear(2026, 1, 1) },
+  ];
+  const serviceLevelPolicies: OpsFixture["serviceLevelPolicies"] = [
+    { id: "sla-summit-urgent", organizationId: organization.id, contractVersionId: "contract-version-summit-refrigeration-v1", priority: "urgent", responseMinutes: 60, arrivalMinutes: 240, completionMinutes: 720, calendar: "24x7" },
+    { id: "sla-summit-planned", organizationId: organization.id, contractVersionId: "contract-version-summit-refrigeration-v1", priority: "planned", responseMinutes: 1_440, arrivalMinutes: 4_320, completionMinutes: 10_080, calendar: "business_hours" },
+  ];
+  const schedulingPolicies: OpsFixture["schedulingPolicies"] = [
+    { id: "scheduling-summit-v1", organizationId: organization.id, contractVersionId: "contract-version-summit-refrigeration-v1", maximumRouteMinutes: 600, maximumStores: 5, maximumTravelMinutes: 180, maximumUtilizationBps: 8000, perStopBufferMinutes: 15, travelBufferBps: 2000, documentationBufferMinutes: 10, uncertaintyBufferBps: 3000, emergencyReserveMinutes: 60 },
+  ];
+  const vendorCapacity: OpsFixture["vendorCapacity"] = [
+    { id: "capacity-summit-north-2026-08-24", organizationId: organization.id, vendorId: "vendor-northline-summit", regionId: "region-northline-north", tradeKey: "refrigeration", startsAt: at(8, 24, 8), endsAt: at(8, 24, 18), crewMinutes: 600, committedMinutes: 120, maximumRouteMinutes: 600, maximumStores: 5, maximumTravelMinutes: 180, blackout: false, emergencyReserveMinutes: 60, variableWorkLimitMinutes: 180, specialEquipment: ["refrigerant-recovery", "coil-cleaning"], createdAt: at(8, 1, 12) },
+  ];
 
   const replacementProfiles: ReplacementProfile[] = [
     { id: "replacement-profile-beer-cave-medium", organizationId: organization.id, code: "REF-BEER-CAVE-MED", name: "Medium beer cave refrigeration system", description: "Functionally equivalent medium beer-cave condensing system, independent of manufacturer or installer.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", matchKeys: ["application", "capacity_band", "refrigerant"], attributes: { application: "beer_cave", capacity_band: "medium", refrigerant: "r448a" }, expectedLifeYears: 12, annualEscalationBps: 350, lowVarianceBps: 1000, highVarianceBps: 1800, active: true, createdAt: at(1, 5, 13) },
@@ -317,6 +371,7 @@ function buildFixture(): OpsFixture {
     { id: "replacement-override-104-beer-cave", organizationId: organization.id, assetId: "asset-104-beer-cave", amount: { amountMinor: 3_480_000, currency: "USD" }, effectiveAt: atYear(2026, 5, 1), reason: "Store 104 requires a longer line set and rooftop crane access.", status: "active", createdAt: atYear(2026, 5, 1) },
   ];
   const replacementEvents: ReplacementEvent[] = [];
+  const lifecycleRecommendations: OpsFixture["lifecycleRecommendations"] = [];
   const components: AssetComponent[] = [];
   const componentIdFor = (asset: Asset, templateId: string, equipmentTemplateKey: string) => {
     const componentKey = templateId.replace(`component-template-${equipmentTemplateKey}-`, "");
@@ -347,6 +402,7 @@ function buildFixture(): OpsFixture {
   });
 
   const requests: ServiceRequest[] = [];
+  const requestImpactAssessments: RequestImpactAssessment[] = [];
   const workOrders: WorkOrder[] = [];
   const assignments: WorkOrderAssignment[] = [];
   const issuances: WorkOrderIssuance[] = [];
@@ -354,8 +410,13 @@ function buildFixture(): OpsFixture {
   const estimateRequests: WorkOrderEstimateRequest[] = [];
   const estimateProposals: VendorEstimateProposal[] = [];
   const visits: VisitSession[] = [];
+  const siteVisitWorkOrders: SiteVisitWorkOrder[] = [];
+  const workOrderVerifications: WorkOrderVerification[] = [];
   const visitEvidence: VisitEvidence[] = [];
   const followUps: FollowUp[] = [];
+  const workflowTasks: WorkflowTask[] = [];
+  const workflowTaskSlaPauses: WorkflowTaskSlaPause[] = [];
+  const workflowTaskSlaResumes: WorkflowTaskSlaResume[] = [];
   const files: StoredFile[] = [];
   const entityFiles: EntityFileLink[] = [];
   const exceptions: OpsException[] = [];
@@ -364,6 +425,14 @@ function buildFixture(): OpsFixture {
   const invoiceAllocations: InvoiceAllocation[] = [];
   const auditEvents: AuditEvent[] = [];
   const outboxMessages: OutboxMessage[] = [];
+  const approvalPolicies: ApprovalPolicy[] = [
+    { id: "approval-policy-store-routine-v1", organizationId: organization.id, policyKey: "store-routine", version: 1, name: "Routine store authorization", scopeKind: "organization", scopeId: organization.id, minAmountMinor: 0, maxAmountMinor: 99_999, currency: "USD", requiredRole: "store_manager", escalationRole: "regional_manager", status: "active", createdByMembershipId: "membership-northline-facilities", createdAt: at(1, 8, 14) },
+    { id: "approval-policy-regional-service-v1", organizationId: organization.id, policyKey: "regional-service", version: 1, name: "Regional service authorization", scopeKind: "organization", scopeId: organization.id, minAmountMinor: 100_000, maxAmountMinor: 499_999, currency: "USD", requiredRole: "regional_manager", escalationRole: "facilities_admin", status: "active", createdByMembershipId: "membership-northline-facilities", createdAt: at(1, 8, 14, 5) },
+    { id: "approval-policy-major-repair-v1", organizationId: organization.id, policyKey: "major-repair", version: 1, name: "Major repair authorization", scopeKind: "organization", scopeId: organization.id, minAmountMinor: 500_000, maxAmountMinor: 2_499_999, currency: "USD", requiredRole: "facilities_admin", escalationRole: "executive", status: "active", createdByMembershipId: "membership-northline-facilities", createdAt: at(1, 8, 14, 10) },
+    { id: "approval-policy-refrigeration-capital-v1", organizationId: organization.id, policyKey: "refrigeration-capital", version: 1, name: "Refrigeration capital authorization", scopeKind: "organization", scopeId: organization.id, categoryKey: "refrigeration", minAmountMinor: 2_500_000, currency: "USD", requiredRole: "executive", status: "active", createdByMembershipId: "membership-northline-facilities", createdAt: at(1, 8, 14, 15) },
+  ];
+  const approvalRequests: ApprovalRequest[] = [];
+  const approvalDecisions: ApprovalDecision[] = [];
 
   stores.forEach((store, index) => {
     const categoryKey = store.storeNumber === "104"
@@ -601,6 +670,7 @@ function buildFixture(): OpsFixture {
   replacementBenchmarks[0].supersededAt = at(8, 9, 14);
   replacementBenchmarks.push({ id: "replacement-benchmark-beer-cave-2026-quote", organizationId: organization.id, profileId: "replacement-profile-beer-cave-medium", sourceType: "approved_quote", sourceWorkOrderId: replacementWork.id, sourceEstimateProposalId: "estimate-proposal-115-summit-r1", sourceAssetId: "asset-115-beer-cave", sourceVendorId: "vendor-northline-summit", equipmentAmount: { amountMinor: 2_310_000, currency: "USD" }, installationAmount: { amountMinor: 820_000, currency: "USD" }, otherAmount: { amountMinor: 150_000, currency: "USD" }, totalAmount: { amountMinor: 3_280_000, currency: "USD" }, effectiveAt: at(8, 8, 16, 20), status: "published", notes: "Selected replacement quote with equipment, installation, permits, freight, and disposal separated.", createdAt: at(8, 9, 14) });
   replacementEvents.push({ id: "replacement-event-115-approved", organizationId: organization.id, assetId: "asset-115-beer-cave", workOrderId: replacementWork.id, profileId: "replacement-profile-beer-cave-medium", sourceEstimateProposalId: "estimate-proposal-115-summit-r1", status: "approved", approvedAmount: { amountMinor: 3_280_000, currency: "USD" }, approvedAt: at(8, 9, 14), createdAt: at(8, 9, 14) });
+  lifecycleRecommendations.push({ id: "lifecycle-recommendation-115-v1", organizationId: organization.id, assetId: "asset-115-beer-cave", workOrderId: replacementWork.id, version: 1, modelVersion: "transparent-rules-v1", recommendation: "replace", confidence: "medium", inputsJson: JSON.stringify({ asOf: at(8, 9, 14), assetAgeYears: 14.6, expectedLifeYears: 15, trailingRepairSpendMinor: 842000, replacementEstimateMinor: 3280000, failureCount36Months: 4, warrantyActive: false, downtimeMinutes: null }), explanation: "The equipment is near its expected-life range, has repeated reactive work, and recent repair spend is material relative to the dated replacement quote. This is a capital-review recommendation, not an automatic replacement decision.", missingData: ["Verified downtime history", "Peer model failure cohort"], userDecision: "replace", userReason: "Approved the selected Summit quote after facilities review; the repeated failures and age make further major repair unattractive.", decidedByMembershipId: "membership-northline-facilities", decidedAt: at(8, 9, 14), replacementEventId: "replacement-event-115-approved", createdAt: at(8, 9, 14) });
   auditEvents.push({ id: "audit-replacement-event-115-approved", organizationId: organization.id, aggregateType: "asset", aggregateId: "asset-115-beer-cave", eventType: "asset.replacement_approved", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: at(8, 9, 14), payloadJson: JSON.stringify({ replacementEventId: "replacement-event-115-approved", profileId: "replacement-profile-beer-cave-medium", sourceEstimateProposalId: "estimate-proposal-115-summit-r1", benchmarkId: "replacement-benchmark-beer-cave-2026-quote" }) });
 
   // Store 104 has a second visit to make the linked repeat-work story real at
@@ -692,7 +762,7 @@ function buildFixture(): OpsFixture {
     followUpDueAt?: string;
   };
   const recentServiceStories: RecentServiceStory[] = [
-    { key: "aug-101-refrigeration", storeNumber: "101", categoryKey: "refrigeration", problem: "Beer cave temperature climbed to 44°F during the afternoon rush", providerKind: "outside_vendor", vendorId: "vendor-northline-summit", technicianName: "Chris Walker", providerName: "Summit Refrigeration", priority: "urgent", submittedAt: at(8, 1, 19, 20), checkedInAt: at(8, 2, 13, 10), durationMinutes: 112, startedChannel: "qr", endedChannel: "secure_link", locationResult: "verified", outcome: "resolved", outcomeNotes: "Cleared a blocked condensate path, replaced the failed controller probe, and documented a stable 36°F box temperature.", workStatus: "closed", nteAmountMinor: 185_000, laborAmountMinor: 46_000, materialsAmountMinor: 31_500 },
+    { key: "aug-101-refrigeration", storeNumber: "101", categoryKey: "refrigeration", problem: "Beer cave temperature climbed to 44°F during the afternoon rush", providerKind: "outside_vendor", vendorId: "vendor-northline-summit", technicianName: "Chris Walker", providerName: "Summit Refrigeration", priority: "urgent", submittedAt: at(8, 1, 19, 20), checkedInAt: at(8, 2, 13, 10), durationMinutes: 112, startedChannel: "qr", endedChannel: "secure_link", locationResult: "verified", outcome: "resolved", outcomeNotes: "Cleared a blocked condensate path, replaced the failed controller probe, and documented a stable 36°F box temperature.", workStatus: "completed_pending_review", nteAmountMinor: 185_000, laborAmountMinor: 46_000, materialsAmountMinor: 31_500, followUpAction: "Verify the stable beer-cave temperature and accept or reject the recorded outcome", followUpDueAt: at(8, 11, 14) },
     { key: "aug-102-hvac", storeNumber: "102", categoryKey: "hvac", problem: "Sales floor rooftop unit runs continuously but cannot hold setpoint", providerKind: "outside_vendor", vendorId: "vendor-northline-cedar", technicianName: "Sam Patel", providerName: "Cedar Mechanical", priority: "urgent", submittedAt: at(8, 2, 21, 5), checkedInAt: at(8, 3, 14, 35), durationMinutes: 86, startedChannel: "secure_link", endedChannel: "qr", locationResult: "verified", outcome: "diagnosed_waiting_parts", outcomeNotes: "Confirmed a failed condenser-fan motor. The unit is safe to remain off until the approved motor arrives.", workStatus: "waiting_on_parts", nteAmountMinor: 240_000, laborAmountMinor: 39_500, materialsAmountMinor: 0, followUpAction: "Confirm motor availability and schedule the approved return visit", followUpDueAt: at(8, 12, 16) },
     { key: "aug-103-electrical", storeNumber: "103", categoryKey: "electrical", problem: "Manager reported intermittent power loss at the stockroom receptacles", providerKind: "internal", internalMembershipId: "membership-northline-tech-1", technicianName: "Maria Santos", providerName: "Northline Internal Maintenance", priority: "routine", submittedAt: at(8, 4, 11), checkedInAt: at(8, 4, 14, 5), durationMinutes: 54, startedChannel: "store_device", endedChannel: "store_device", locationResult: "trusted_store_device", outcome: "no_issue_found", outcomeNotes: "Tested the receptacles under load and checked the panel; no fault recurred. Store will monitor and photograph the next event.", workStatus: "closed", nteAmountMinor: 60_000, laborAmountMinor: 21_500, materialsAmountMinor: 0 },
     { key: "aug-105-forecourt", storeNumber: "105", categoryKey: "forecourt", problem: "Dispenser 4 card reader reboots during some contactless transactions", providerKind: "outside_vendor", vendorId: "vendor-northline-forecourt", technicianName: "Dana Ruiz", providerName: "Forecourt Systems Group", priority: "urgent", submittedAt: at(8, 4, 18, 40), checkedInAt: at(8, 5, 12, 50), durationMinutes: 74, startedChannel: "qr", endedChannel: "store_device", locationResult: "verified", outcome: "return_required", outcomeNotes: "Isolated the fault to the payment-terminal communication board. Dispenser remains available for chip transactions pending replacement.", workStatus: "waiting_on_vendor", nteAmountMinor: 275_000, laborAmountMinor: 48_000, materialsAmountMinor: 0, followUpAction: "Provide board availability and a return-service date", followUpDueAt: at(8, 11, 18) },
@@ -753,6 +823,7 @@ function buildFixture(): OpsFixture {
   // been approved, and that a closed request does not invent maintenance cost.
   requests.push(
     { id: "request-current-101-freezer-door", organizationId: organization.id, reference: "REQ-26-101D", storeId: "store-northline-101", reporterName: "Taylor Kim", reporterEmployeeId: "E6101", problem: "Walk-in freezer door is not sealing along the lower hinge side", priority: "urgent", status: "submitted", submittedAt: at(8, 10, 15, 5) },
+    { id: "request-current-104-beer-cave-door", organizationId: organization.id, reference: "REQ-26-104D", storeId: "store-northline-104", reporterName: "Robin Carter", reporterEmployeeId: "E6104", problem: "Beer cave door is not sealing and packaged beverages were moved to backup coolers", priority: "urgent", status: "under_review", submittedAt: at(8, 10, 15, 35) },
     { id: "request-current-106-ceiling-stain", organizationId: organization.id, reference: "REQ-26-106B", storeId: "store-northline-106", reporterName: "Morgan Wells", reporterEmployeeId: "E6106", problem: "A new ceiling stain is visible above the stockroom receiving door", priority: "routine", status: "under_review", submittedAt: at(8, 10, 13, 35) },
     { id: "request-current-110-ice-machine", organizationId: organization.id, reference: "REQ-26-110C", storeId: "store-northline-110", reporterName: "Avery Johnson", reporterEmployeeId: "E6110", problem: "Ice machine is leaking into the beverage-island floor drain", priority: "urgent", status: "under_review", submittedAt: at(8, 10, 14, 20) },
     { id: "request-current-114-pavement", organizationId: organization.id, reference: "REQ-26-114B", storeId: "store-northline-114", reporterName: "Jamie Cole", reporterEmployeeId: "E6114", problem: "Pavement has settled at the north entrance and is holding water", priority: "routine", status: "submitted", submittedAt: at(8, 10, 16, 10) },
@@ -790,8 +861,78 @@ function buildFixture(): OpsFixture {
   const questionedIssuance = issuances.find((issuance) => issuance.id === "issuance-recent-aug-108-electrical-r1")!;
   vendorResponses.push({ id: "response-recent-aug-108-electrical-question", organizationId: organization.id, workOrderId: questionedIssuance.workOrderId, assignmentId: questionedIssuance.assignmentId, issuanceId: questionedIssuance.id, response: "question", responderName: "BrightPath Electrical dispatch", message: "Does the store have overnight lift access, or should the quote include a lift rental?", respondedAt: new Date(Date.parse(questionedIssuance.issuedAt) + 5 * 60_000).toISOString() });
 
-  const pmPlans: PmPlan[] = stores.map((store) => ({ id: `pm-plan-${store.storeNumber}-refrigeration`, organizationId: organization.id, name: "Quarterly refrigeration inspection", storeId: store.id, assetId: `asset-${store.storeNumber}-beer-cave`, categoryKey: "refrigeration", cadenceDays: 90, completionWindowDays: 7, active: true, createdAt: at(1, 6, 14) }));
+  // Every employee issue carries a structured, append-only impact report. A
+  // manager confirmation is appended for requests that have moved beyond the
+  // submitted queue; exposure amounts remain estimates, never verified loss.
+  requests.forEach((request, index) => {
+    const problem = request.problem.toLocaleLowerCase("en-US");
+    const coldProduct = /beer cave|refriger|freezer|ice machine|temperature|warm/.test(problem);
+    const potentialSafety = /leak|stain|pavement|power|receptacle|dark|fuel|breaker/.test(problem);
+    const customerFacing = coldProduct || /coffee|canopy|fuel|door|lighting/.test(problem);
+    const revenueFunctionImpact = /fuel|dispenser|canopy/.test(problem) ? "fuel" as const
+      : /coffee|foodservice/.test(problem) ? "foodservice" as const
+        : coldProduct ? "refrigerated_merchandise" as const : undefined;
+    const partial = coldProduct || potentialSafety || customerFacing;
+    const initialAt = request.submittedAt;
+    const initial: RequestImpactAssessment = {
+      id: `impact-${request.id}-initial`, organizationId: request.organizationId, requestId: request.id, storeId: request.storeId,
+      assessmentKind: "initial_report", storeOperatingState: partial ? "partially_operational" : "open",
+      safetyConcern: potentialSafety ? "potential" : "none_reported", productInventoryRisk: coldProduct ? "at_risk" : "none_reported",
+      productInventoryValue: coldProduct ? { amountMinor: request.storeId === "store-northline-104" ? 285_000 : 95_000 + index * 250, currency: "USD" } : undefined,
+      customersAffected: customerFacing ? "yes" : "no", complianceImpact: coldProduct || potentialSafety ? "potential" : "none_reported",
+      capacityUnavailableBps: request.storeId === "store-northline-104" ? 10_000 : partial ? 2_500 : undefined,
+      redundantEquipment: coldProduct ? "no" : "unknown", revenueFunctionImpact,
+      estimatedDailyRevenueExposure: revenueFunctionImpact ? { amountMinor: request.storeId === "store-northline-104" ? 475_000 : 120_000 + index * 500, currency: "USD" } : undefined,
+      estimatedDowntimeMinutes: partial ? 240 : undefined, confidence: "medium", source: "store_report",
+      notes: coldProduct ? "Store-reported product and operating exposure; values require manager review." : "Store-reported operating impact.",
+      assessedByActorType: "user", assessedByActorId: request.reporterEmployeeId, assessedByActorName: request.reporterName, assessedAt: initialAt,
+    };
+    requestImpactAssessments.push(initial);
+    if (request.status === "submitted") return;
+    const reviewedAt = new Date(Date.parse(initialAt) + 15 * 60_000).toISOString();
+    requestImpactAssessments.push({
+      ...initial, id: `impact-${request.id}-review`, assessmentKind: "review", reviewDisposition: "confirmed",
+      confidence: "high", source: "manager_review", notes: "Manager confirmed the reported operating facts. Monetary and downtime figures remain estimates, not verified losses.",
+      assessedByActorType: "user", assessedByActorId: "membership-northline-facilities", assessedByActorName: "Jordan Lee", assessedAt: reviewedAt,
+    });
+  });
+
+  const pmPlans: PmPlan[] = stores.map((store) => ({ id: `pm-plan-${store.storeNumber}-refrigeration`, organizationId: organization.id, name: "Quarterly refrigeration inspection", programId: "maintenance-program-quarterly-refrigeration-v1", programVersion: 1, storeId: store.id, assetId: `asset-${store.storeNumber}-beer-cave`, categoryKey: "refrigeration", cadenceDays: 90, completionWindowDays: 7, preferredVendorId: "vendor-northline-summit", backupVendorId: "vendor-northline-cedar", contractVersionId: "contract-version-summit-refrigeration-v1", effectiveStartsAt: atYear(2026, 1, 1), effectiveEndsAt: atYear(2026, 12, 31, 23), accessRequirements: "Manager unlocks the rear service entrance and confirms safe access to refrigeration equipment.", programAuthorizationMinor: 50_000, budgetMinor: 60_000, currency: "USD", serviceLevelPolicyId: "sla-summit-planned", schedulingMode: "platform_proposed_vendor_confirmed", escalationRules: "Escalate an unscheduled occurrence 48 hours before its due-window end.", active: true, createdAt: at(1, 6, 14) }));
   const pmOccurrences: PmOccurrence[] = [];
+  const maintenancePrograms: OpsFixture["maintenancePrograms"] = [
+    { id: "maintenance-program-quarterly-refrigeration-v1", organizationId: organization.id, programKey: "quarterly-refrigeration", version: 1, name: "Quarterly refrigeration preventive service", tradeKey: "refrigeration", workType: "preventive_maintenance", applicableAssetTypes: ["beer_cave", "walk_in_cooler", "walk_in_freezer", "ice_machine"], frequencyDays: 90, recurrenceKind: "fixed_calendar", dueWindowDays: 7, seasonalStartMonth: 1, seasonalEndMonth: 12, checklistTemplateId: "checklist-quarterly-refrigeration-v1", requiredEvidenceKinds: ["check_in", "check_out", "photo"], expectedDurationMinutes: 75, completionCriteria: "Every Asset-level Work Item has a complete checklist, required evidence, measurements, and a documented result.", correctiveWorkAuthorityMinor: 50_000, currency: "USD", deficiencyHandling: "quote_and_approval", status: "active", createdAt: atYear(2026, 1, 1) },
+  ];
+  const checklistTemplates: OpsFixture["checklistTemplates"] = [
+    { id: "checklist-quarterly-refrigeration-v1", organizationId: organization.id, name: "Quarterly refrigeration condition checklist", version: 1, items: [
+      { key: "coil-condition", label: "Inspect and clean accessible condenser and evaporator coils", responseKind: "pass", required: true, evidenceRequired: true },
+      { key: "discharge-temperature", label: "Record discharge temperature", responseKind: "measurement", required: true, measurementUnit: "°F", minimumValue: 30, maximumValue: 50 },
+      { key: "door-seal", label: "Inspect door seal and closure", responseKind: "pass", required: true },
+      { key: "deficiency", label: "Document any deficiency and required follow-up", responseKind: "text", required: true },
+    ], status: "active", createdAt: atYear(2026, 1, 1) },
+  ];
+  const pmWorkItems: OpsFixture["pmWorkItems"] = [];
+  const checklistResponses: OpsFixture["checklistResponses"] = [];
+  const serviceRuns: OpsFixture["serviceRuns"] = [];
+  const routeStops: OpsFixture["routeStops"] = [];
+  const serviceRunWorkOrders: OpsFixture["serviceRunWorkOrders"] = [];
+  const serviceRunResponses: OpsFixture["serviceRunResponses"] = [];
+  const vendorWarrantyProfiles: OpsFixture["vendorWarrantyProfiles"] = [];
+  const warrantyRules: OpsFixture["warrantyRules"] = [];
+  const warrantyCoverageLines: OpsFixture["warrantyCoverageLines"] = [];
+  const repairItems: OpsFixture["repairItems"] = [];
+  const appliedWarranties: OpsFixture["appliedWarranties"] = [];
+  const warrantyAmendments: OpsFixture["warrantyAmendments"] = [];
+  const manufacturerWarranties: OpsFixture["manufacturerWarranties"] = [];
+  const warrantyCases: OpsFixture["warrantyCases"] = [];
+  const quotes: OpsFixture["quotes"] = [];
+  const authorizations: OpsFixture["authorizations"] = [];
+  const invoices: OpsFixture["invoices"] = [];
+  const invoiceLines: OpsFixture["invoiceLines"] = [];
+  const invoiceLineAllocations: OpsFixture["invoiceLineAllocations"] = [];
+  const invoiceExceptions: OpsFixture["invoiceExceptions"] = [];
+  const invoiceAdjustments: OpsFixture["invoiceAdjustments"] = [];
+  const serviceDiscrepancies: OpsFixture["serviceDiscrepancies"] = [];
+  const valueEvents: OpsFixture["valueEvents"] = [];
   const pmPeriods = [
     { key: "2025-q4", year: 2025, month: 11, linkWorkOrder: true },
     { key: "2026-q1", year: 2026, month: 2, linkWorkOrder: true },
@@ -821,7 +962,7 @@ function buildFixture(): OpsFixture {
       const completedAt = status === "completed" ? new Date(Date.parse(due) + ((storeIndex + periodIndex) % 3 - 1) * 86_400_000).toISOString() : undefined;
       const occurrenceId = `pm-occurrence-${store.storeNumber}-${period.key}`;
       const workOrderId = period.linkWorkOrder ? `wo-pm-${store.storeNumber}-${period.key}` : undefined;
-      pmOccurrences.push({ id: occurrenceId, organizationId: organization.id, planId: plan.id, storeId: store.id, assetId: plan.assetId, workOrderId, dueAt: due, windowStartsAt, windowEndsAt, status, completedAt });
+      pmOccurrences.push({ id: occurrenceId, organizationId: organization.id, planId: plan.id, storeId: store.id, assetId: plan.assetId, workOrderId, programId: plan.programId, programVersion: plan.programVersion, planVersion: 1, dueAt: due, windowStartsAt, windowEndsAt, status, completedAt, result: completedAt ? "Preventive service completed with checklist evidence" : status === "waived" ? "Waived by authorized operator" : undefined, exceptionReason: status === "waived" ? "Asset replacement is already approved" : status === "missed" ? "Vendor capacity was not committed inside the due window" : undefined, recurrenceKey: `${plan.id}:${period.key}`, createdAt: new Date(Date.parse(due) - 90 * 86_400_000).toISOString() });
 
       if (!workOrderId) return;
       const workOrderNumber = `NL-${period.year}-PM-${store.storeNumber}-${periodIndex + 1}`;
@@ -847,6 +988,14 @@ function buildFixture(): OpsFixture {
         { id: `evidence-${visitId}-out`, organizationId: organization.id, visitId, kind: "check_out", channel: "store_device", observedAt: visitEnd, location: { result: "trusted_store_device", capturedAt: visitEnd }, payloadJson: JSON.stringify({ outcome: "pm_complete", occurrenceId }) },
       );
       costLines.push({ id: `cost-pm-${store.storeNumber}-${period.key}`, organizationId: organization.id, workOrderId, kind: "labor", description: "Internal preventive-maintenance labor", amount: { amountMinor: 18_500 + storeIndex * 250, currency: "USD" }, serviceDate: visitEnd.slice(0, 10), recordedAt: new Date(Date.parse(visitEnd) + 30 * 60_000).toISOString() });
+      const workItemId = `pm-work-item-${store.storeNumber}-${period.key}-beer-cave`;
+      pmWorkItems.push({ id: workItemId, organizationId: organization.id, occurrenceId, workOrderId, assetId: asset.id, requiredTask: "Inspect, clean, measure, and document the beer-cave refrigeration system", checklistTemplateId: "checklist-quarterly-refrigeration-v1", status: "completed", result: "Operating condition documented; no unresolved deficiency", costAllocationMinor: 18_500 + storeIndex * 250, currency: "USD", createdAt, completedAt: visitEnd });
+      checklistResponses.push(
+        { id: `${workItemId}-coil`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "coil-condition", responseKind: "pass", passed: true, evidenceFileIds: [], recordedByActorType: "user", recordedByActorId: internalMembershipId, recordedByActorName: internalUser.displayName, recordedAt: visitEnd },
+        { id: `${workItemId}-temp`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "discharge-temperature", responseKind: "measurement", numericValue: 37 + storeIndex % 4, measurementUnit: "°F", evidenceFileIds: [], recordedByActorType: "user", recordedByActorId: internalMembershipId, recordedByActorName: internalUser.displayName, recordedAt: visitEnd },
+        { id: `${workItemId}-door`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "door-seal", responseKind: "pass", passed: true, evidenceFileIds: [], recordedByActorType: "user", recordedByActorId: internalMembershipId, recordedByActorName: internalUser.displayName, recordedAt: visitEnd },
+        { id: `${workItemId}-deficiency`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "deficiency", responseKind: "text", textValue: "No unresolved deficiency observed.", evidenceFileIds: [], recordedByActorType: "user", recordedByActorId: internalMembershipId, recordedByActorName: internalUser.displayName, recordedAt: visitEnd },
+      );
     });
   });
   exceptions.push(
@@ -859,29 +1008,441 @@ function buildFixture(): OpsFixture {
     exceptions.push({ id: "exception-invoice-northline-109-unmatched", organizationId: organization.id, kind: "unmatched_invoice", storeId: "store-northline-109", vendorId: currentUnmatchedInvoice.vendorId, severity: "attention", status: "open", summary: "Forecourt invoice does not include an operator work-order reference", detectedAt: currentUnmatchedInvoice.createdAt });
   }
 
+  // Approval evidence is intentionally mixed across a store issue and
+  // canonical work orders. Requests and decisions are immutable snapshots;
+  // the current state below is derived from the appended decision ledger.
+  approvalRequests.push(
+    { id: "approval-request-101-pending", organizationId: organization.id, subjectType: "service_request", subjectId: "request-current-101-freezer-door", storeId: "store-northline-101", categoryKey: "refrigeration", amount: { amountMinor: 65_000, currency: "USD" }, policyId: "approval-policy-store-routine-v1", policyKey: "store-routine", policyVersion: 1, policyName: "Routine store authorization", policyScopeKind: "organization", policyScopeId: organization.id, requiredRole: "store_manager", escalationRole: "regional_manager", requestedByMembershipId: "membership-northline-facilities", requestedByName: "Jordan Lee", reason: "Authorize a door-adjustment diagnostic allowance before work-order creation", requestedAt: at(8, 10, 15, 20), dueAt: at(8, 11, 15, 20) },
+    { id: "approval-request-104-pending", organizationId: organization.id, subjectType: "service_request", subjectId: "request-current-104-beer-cave-door", storeId: "store-northline-104", categoryKey: "refrigeration", amount: { amountMinor: 65_000, currency: "USD" }, policyId: "approval-policy-store-routine-v1", policyKey: "store-routine", policyVersion: 1, policyName: "Routine store authorization", policyScopeKind: "organization", policyScopeId: organization.id, requiredRole: "store_manager", escalationRole: "regional_manager", requestedByMembershipId: "membership-northline-facilities", requestedByName: "Jordan Lee", reason: "Authorize a door-alignment diagnostic allowance before work-order creation", requestedAt: at(8, 10, 15, 55), dueAt: at(8, 11, 15, 55) },
+    { id: "approval-request-106-escalated", organizationId: organization.id, subjectType: "service_request", subjectId: "request-current-106-ceiling-stain", storeId: "store-northline-106", categoryKey: "exterior", amount: { amountMinor: 180_000, currency: "USD" }, policyId: "approval-policy-regional-service-v1", policyKey: "regional-service", policyVersion: 1, policyName: "Regional service authorization", policyScopeKind: "organization", policyScopeId: organization.id, requiredRole: "regional_manager", escalationRole: "facilities_admin", requestedByMembershipId: "membership-northline-facilities", requestedByName: "Jordan Lee", reason: "Authorize investigation above the stockroom ceiling", requestedAt: at(8, 10, 13, 50), dueAt: at(8, 11, 13, 50) },
+    { id: "approval-request-106-facilities-pending", organizationId: organization.id, subjectType: "service_request", subjectId: "request-current-106-ceiling-stain", storeId: "store-northline-106", categoryKey: "exterior", amount: { amountMinor: 180_000, currency: "USD" }, policyId: "approval-policy-regional-service-v1", policyKey: "regional-service", policyVersion: 1, policyName: "Regional service authorization", policyScopeKind: "organization", policyScopeId: organization.id, requiredRole: "facilities_admin", requestedByMembershipId: "membership-northline-regional-2", requestedByName: "Morgan Hayes", reason: "Escalated from Regional manager: possible roof penetration needs facilities review", requestedAt: at(8, 10, 14, 30), dueAt: at(8, 11, 14, 30), parentApprovalRequestId: "approval-request-106-escalated" },
+    { id: "approval-request-115-approved", organizationId: organization.id, subjectType: "work_order", subjectId: "wo-northline-115", storeId: "store-northline-115", categoryKey: "refrigeration", amount: { amountMinor: 3_280_000, currency: "USD" }, policyId: "approval-policy-refrigeration-capital-v1", policyKey: "refrigeration-capital", policyVersion: 1, policyName: "Refrigeration capital authorization", policyScopeKind: "organization", policyScopeId: organization.id, requiredRole: "executive", requestedByMembershipId: "membership-northline-facilities", requestedByName: "Jordan Lee", reason: "Selected beer-cave replacement quote requires capital authorization", requestedAt: at(8, 9, 12, 30), dueAt: at(8, 10, 12, 30) },
+  );
+  approvalDecisions.push(
+    { id: "approval-decision-106-escalated", organizationId: organization.id, approvalRequestId: "approval-request-106-escalated", decision: "escalated", decidedByMembershipId: "membership-northline-regional-2", decidedByName: "Morgan Hayes", decidedByRole: "regional_manager", reason: "Possible roof penetration needs facilities review before authorizing access", escalatedToRole: "facilities_admin", decidedAt: at(8, 10, 14, 30) },
+    { id: "approval-decision-115-approved", organizationId: organization.id, approvalRequestId: "approval-request-115-approved", decision: "approved", decidedByMembershipId: "membership-northline-executive", decidedByName: "Alex Morgan", decidedByRole: "executive", reason: "Approved against the selected Summit quote and current capital plan", decidedAt: at(8, 9, 13, 50) },
+  );
+
+  // Store 112 preserves a complete rejected verification cycle before the
+  // currently active return visit. The original visit and outcome stay intact.
+  const rejectedVisitId = "visit-northline-112-rejected-1";
+  visits.push({
+    id: rejectedVisitId, organizationId: organization.id, storeId: "store-northline-112", providerKind: "outside_vendor",
+    vendorId: "vendor-northline-cedar", workOrderId: "wo-northline-112", technicianName: "Sam Patel", crewCount: 1,
+    providerName: "Cedar Mechanical", purpose: "Restore rooftop-unit cooling and confirm stable discharge temperature",
+    status: "checked_out", startedChannel: "secure_link", endedChannel: "store_device", checkedInAt: at(8, 9, 16, 30), checkedOutAt: at(8, 9, 18),
+    outcome: "resolved", outcomeNotes: "Replaced the failed contactor and recorded normal operation before departure.", observedDurationSeconds: 5_400,
+  });
+  visitEvidence.push(
+    { id: `evidence-${rejectedVisitId}-in`, organizationId: organization.id, visitId: rejectedVisitId, kind: "check_in", channel: "secure_link", observedAt: at(8, 9, 16, 30), location: { result: "verified", accuracyM: 18, distanceM: 22, capturedAt: at(8, 9, 16, 30) }, payloadJson: JSON.stringify({ workOrderNumber: "NL-2026-0112" }) },
+    { id: `evidence-${rejectedVisitId}-out`, organizationId: organization.id, visitId: rejectedVisitId, kind: "check_out", channel: "store_device", observedAt: at(8, 9, 18), location: { result: "trusted_store_device", capturedAt: at(8, 9, 18) }, payloadJson: JSON.stringify({ outcome: "resolved" }) },
+  );
+
+  // Workflow tasks are the durable source for accountable next actions. The
+  // legacy fields on work orders intentionally mirror the deterministic
+  // primary task so the compatibility presenter remains truthful while it is
+  // migrated to task-native reads.
+  const taskPriority = (priority: WorkOrder["priority"]): WorkflowTask["priority"] => ({ emergency: "critical", urgent: "high", routine: "normal", planned: "low" })[priority] as WorkflowTask["priority"];
+  const taskType = (workOrder: WorkOrder, followUp?: FollowUp): WorkflowTask["taskType"] => {
+    if (followUp) return /review|confirm|verify/i.test(followUp.nextAction) ? "verify_repair" : "schedule_return_visit";
+    if (workOrder.status === "awaiting_approval") return "approve_quote";
+    if (workOrder.status === "approved") return "choose_service_provider";
+    if (workOrder.status === "issued") return "vendor_response_required";
+    if (workOrder.status === "accepted" || workOrder.status === "scheduled") return "confirm_store_access";
+    if (workOrder.status === "in_progress") return "record_service_outcome";
+    if (workOrder.status === "completed_pending_review") return "verify_repair";
+    return "schedule_return_visit";
+  };
+  const slaClock = (type: WorkflowTask["taskType"]): WorkflowTask["applicableSlaClock"] => ({
+    review_issue: "intake_review", approve_quote: "approval", vendor_response_required: "vendor_response",
+    confirm_store_access: "scheduling", submit_quote: "vendor_response", choose_service_provider: "scheduling",
+    schedule_service: "scheduling", record_service_outcome: "completion", schedule_return_visit: "scheduling",
+    verify_repair: "verification", close_verified_work: "verification", review_warranty: "warranty_response", resolve_invoice_exception: "invoice_submission",
+    respond_service_discrepancy: "service_discrepancy_response", other: "completion",
+  })[type] as WorkflowTask["applicableSlaClock"];
+
+  requests.forEach((request) => {
+    const initial = requestImpactAssessments.find((assessment) => assessment.requestId === request.id && assessment.assessmentKind === "initial_report")!;
+    const latest = requestImpactAssessments.filter((assessment) => assessment.requestId === request.id).at(-1)!;
+    const status: WorkflowTask["status"] = request.status === "submitted" ? "open" : request.status === "under_review" ? "in_progress" : "completed";
+    const dueHours = ({ emergency: 1, urgent: 4, routine: 24, planned: 72 } as const)[request.priority];
+    workflowTasks.push({
+      id: `workflow-task-${request.id}-review`, organizationId: request.organizationId, serviceRequestId: request.id,
+      taskType: "review_issue", title: `Review ${request.reference} business impact`, reason: `Assess the reported operating impact before authorizing work: ${request.problem}`,
+      assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities review", priority: taskPriority(request.priority), status,
+      blocking: true, requiredForProgress: true, dueAt: new Date(Date.parse(request.submittedAt) + dueHours * 60 * 60_000).toISOString(), applicableSlaClock: "intake_review",
+      completionCriteria: "Business impact is confirmed or revised and the issue is ready for an approval or work-order decision",
+      escalationDestination: request.priority === "emergency" ? "Regional maintenance leader" : "Facilities director", escalationLevel: 0,
+      createdByActorType: "user", createdByActorId: request.reporterEmployeeId, createdByActorName: request.reporterName, createdAt: initial.assessedAt,
+      ...(status !== "open" ? { startedByActorType: "user" as const, startedByActorId: "membership-northline-facilities", startedByActorName: "Jordan Lee", startedAt: latest.assessedAt } : {}),
+      ...(status === "completed" ? { completedByActorType: "user" as const, completedByActorId: "membership-northline-facilities", completedByActorName: "Jordan Lee", completedAt: latest.assessedAt, resolutionNote: request.status === "converted" ? "Impact reviewed and converted to the canonical work order" : "Impact reviewed; no work order required" } : {}),
+    });
+  });
+
+  // Sales-demo Service Run: one reactive repair at Store 104 plus one immutable
+  // PM obligation at Store 105. The recommendation is still awaiting a real
+  // Vendor link response, so the guided demo can accept or counter it without
+  // editing seed data.
+  const serviceRunId = "service-run-summit-north-2026-08-24";
+  const serviceRunReactiveWorkId = "wo-service-run-104-reactive";
+  const serviceRunPmWorkId = "wo-service-run-105-pm";
+  const serviceRunOccurrenceId = "pm-occurrence-105-service-run-2026-08";
+  const serviceRunCreatedAt = at(8, 10, 16);
+  workOrders.push(
+    { id: serviceRunReactiveWorkId, organizationId: organization.id, number: "NL-2026-0118", storeId: "store-northline-104", problem: "Beer-cave door is icing along the lower hinge and needs an approved seal adjustment", authorizedScope: "Inspect the hinge and seal, correct alignment within the existing authorization, and document any part requirement.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", assetId: "asset-104-beer-cave", priority: "routine", status: "accepted", version: 0, accountableParty: "Summit Refrigeration", nextAction: "Respond to proposed Service Run", dueAt: at(8, 22, 16), escalationTo: "Facilities coordinator", nte: { amountMinor: 75_000, currency: "USD" }, createdAt: at(8, 10, 14) },
+    { id: serviceRunPmWorkId, organizationId: organization.id, number: "NL-2026-PM-105-5", storeId: "store-northline-105", problem: "Complete the quarterly refrigeration preventive-maintenance occurrence and asset checklist", authorizedScope: "Inspect, clean, measure, and document the Store 105 beer-cave refrigeration system under the approved PM Program.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", assetId: "asset-105-beer-cave", priority: "planned", status: "accepted", version: 0, accountableParty: "Summit Refrigeration", nextAction: "Respond to proposed Service Run", dueAt: at(8, 22, 16), escalationTo: "Facilities coordinator", nte: { amountMinor: 50_000, currency: "USD" }, createdAt: at(8, 10, 14, 5) },
+  );
+  assignments.push(
+    { id: "assignment-service-run-104", organizationId: organization.id, workOrderId: serviceRunReactiveWorkId, kind: "outside_vendor", vendorId: "vendor-northline-summit", status: "accepted", assignedAt: at(8, 10, 14, 20) },
+    { id: "assignment-service-run-105", organizationId: organization.id, workOrderId: serviceRunPmWorkId, kind: "outside_vendor", vendorId: "vendor-northline-summit", status: "accepted", assignedAt: at(8, 10, 14, 25) },
+  );
+  pmOccurrences.push({ id: serviceRunOccurrenceId, organizationId: organization.id, planId: "pm-plan-105-refrigeration", storeId: "store-northline-105", assetId: "asset-105-beer-cave", workOrderId: serviceRunPmWorkId, programId: "maintenance-program-quarterly-refrigeration-v1", programVersion: 1, planVersion: 1, dueAt: at(8, 25, 12), windowStartsAt: at(8, 18, 12), windowEndsAt: at(9, 1, 12), proposedAt: at(8, 24, 13), status: "proposed", recurrenceKey: "pm-plan-105-refrigeration:2026-service-run-demo", createdAt: at(5, 27, 12) });
+  pmWorkItems.push({ id: "pm-work-item-105-service-run-beer-cave", organizationId: organization.id, occurrenceId: serviceRunOccurrenceId, workOrderId: serviceRunPmWorkId, assetId: "asset-105-beer-cave", requiredTask: "Complete the full quarterly refrigeration checklist and capture required evidence", checklistTemplateId: "checklist-quarterly-refrigeration-v1", status: "pending", currency: "USD", createdAt: at(8, 10, 14, 5) });
+  serviceRuns.push({ id: serviceRunId, organizationId: organization.id, vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", schedulingMode: "platform_proposed_vendor_confirmed", status: "proposed", proposedStartsAt: at(8, 24, 13), proposedEndsAt: at(8, 24, 17), responseDueAt: at(8, 22, 16), estimatedDriveMinutes: 66, estimatedServiceMinutes: 174, capacityUsedMinutes: 240, expectedWorkValue: { amountMinor: 125_000, currency: "USD" }, estimatedTripReduction: 1, estimatedOpportunity: { amountMinor: 11_250, currency: "USD" }, recommendationExplanation: "Combines one accepted reactive repair at Store 104 with the Store 105 PM obligation; stays inside the PM due window; uses Summit under the active refrigeration Contract Version; validates current insurance, license, EPA qualification, and North-region coverage; protects 65 minutes of stop, travel, documentation, and uncertainty buffer; consumes 240 of 420 protected crew minutes; and may avoid one separate truck roll and trip charge.", requiredQualifications: ["refrigeration:pm", "refrigeration:reactive", "equipment:refrigerant-recovery"], constraintsJson: JSON.stringify({ contractScope: true, geographicCoverage: true, qualifications: true, compliance: true, dueWindows: true, access: true, authorization: true, capacity: true, equipment: true, maximumUtilizationBps: 8000, buffers: { stopBufferMinutes: 30, travelBufferMinutes: 11, documentationMinutes: 20, uncertaintyMinutes: 4 } }), confidence: "medium", schedulerVersion: "directive-11.8-v1", originalRecommendationJson: JSON.stringify({ vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", proposedStartsAt: at(8, 24, 13), proposedEndsAt: at(8, 24, 17), stops: [{ storeId: "store-northline-104", sequence: 1, proposedArrivalAt: at(8, 24, 13, 30) }, { storeId: "store-northline-105", sequence: 2, proposedArrivalAt: at(8, 24, 15, 20) }], workOrders: [{ workOrderId: serviceRunReactiveWorkId, estimatedDurationMinutes: 60 }, { workOrderId: serviceRunPmWorkId, occurrenceId: serviceRunOccurrenceId, estimatedDurationMinutes: 90 }], expectedWorkValueMinor: 125_000, estimatedOpportunityMinor: 11_250, estimatedTripReduction: 1 }), createdByActorType: "user", createdByActorId: "membership-northline-facilities", createdByActorName: "Jordan Lee", createdAt: serviceRunCreatedAt });
+  routeStops.push(
+    { id: "route-stop-service-run-104", organizationId: organization.id, serviceRunId, storeId: "store-northline-104", sequence: 1, proposedArrivalAt: at(8, 24, 13, 30), estimatedDriveMinutes: 30, estimatedServiceMinutes: 85, accessRequirements: "Meet the Store 104 manager at the rear service entrance.", status: "planned" },
+    { id: "route-stop-service-run-105", organizationId: organization.id, serviceRunId, storeId: "store-northline-105", sequence: 2, proposedArrivalAt: at(8, 24, 15, 20), estimatedDriveMinutes: 25, estimatedServiceMinutes: 115, accessRequirements: "Check in with the Store 105 manager and use the equipment-room access key.", status: "planned" },
+  );
+  serviceRunWorkOrders.push(
+    { id: "service-run-work-104", organizationId: organization.id, serviceRunId, routeStopId: "route-stop-service-run-104", workOrderId: serviceRunReactiveWorkId, planned: true, estimatedDurationMinutes: 60, addressed: false },
+    { id: "service-run-work-105", organizationId: organization.id, serviceRunId, routeStopId: "route-stop-service-run-105", workOrderId: serviceRunPmWorkId, occurrenceId: serviceRunOccurrenceId, planned: true, estimatedDurationMinutes: 90, addressed: false },
+  );
+  auditEvents.push({ id: "audit-service-run-summit-proposed", organizationId: organization.id, aggregateType: "service_run", aggregateId: serviceRunId, eventType: "service_run.proposed", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: serviceRunCreatedAt, payloadJson: JSON.stringify({ vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", workOrderIds: [serviceRunReactiveWorkId, serviceRunPmWorkId], estimatedTripReduction: 1, estimatedOpportunity: { amountMinor: 11_250, currency: "USD" }, estimatedValueCategory: "estimated_opportunity" }) });
+
+  // Warranty + financial-control demo story. The original compressor repair
+  // creates category-specific immutable coverage snapshots. A later exact
+  // component callback is only flagged as potential coverage pending
+  // diagnosis; it routes to the obligated Vendor and holds customer billing.
+  const warrantyRepairItemId = "repair-item-104-compressor-2026-07";
+  const warrantyCaseId = "warranty-case-104-compressor-callback";
+  const warrantyCallbackWorkId = "wo-warranty-104-compressor-callback";
+  const warrantyCallbackRequestId = "request-warranty-104-compressor-callback";
+  const priorVisitWorkId = "site-visit-work-visit-northline-104-2-wo-northline-104";
+  vendorWarrantyProfiles.push({ id: "warranty-profile-summit-v1", organizationId: organization.id, vendorId: "vendor-northline-summit", baseLaborDays: 90, basePartsDays: 365, baseTravelDays: 30, baseDiagnosticDays: 90, effectiveStartsAt: atYear(2026, 1, 1), effectiveEndsAt: atYear(2026, 12, 31, 23), status: "active", createdAt: atYear(2026, 1, 1) });
+  warrantyRules.push({ id: "warranty-rule-summit-compressor-v1", organizationId: organization.id, vendorWarrantyProfileId: "warranty-profile-summit-v1", vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", tradeKey: "refrigeration", workType: "reactive_repair", serviceType: "compressor_replacement", assetType: "beer_cave", componentType: "compressor", manufacturer: "Copeland", vendorSuppliedPart: true, regionId: "region-northline-north", priority: 3, effectiveStartsAt: atYear(2026, 1, 1), effectiveEndsAt: atYear(2026, 12, 31, 23), status: "active", createdAt: atYear(2026, 1, 1) });
+  warrantyCoverageLines.push(
+    { id: "warranty-line-summit-compressor-labor", organizationId: organization.id, warrantyRuleId: "warranty-rule-summit-compressor-v1", coverageType: "labor", duration: 90, durationUnit: "days", startEvent: "store_verification", provider: "vendor", obligatedVendorId: "vendor-northline-summit", routingRule: "original_vendor_first_right_to_cure", deductible: { amountMinor: 0, currency: "USD" }, conditions: "Related compressor workmanship after verified completion", exclusions: "Damage caused by power-quality events or unauthorized alteration" },
+    { id: "warranty-line-summit-compressor-part", organizationId: organization.id, warrantyRuleId: "warranty-rule-summit-compressor-v1", coverageType: "part", duration: 365, durationUnit: "days", startEvent: "store_verification", provider: "vendor", obligatedVendorId: "vendor-northline-summit", routingRule: "original_vendor_mandatory", deductible: { amountMinor: 0, currency: "USD" }, maximumCoverage: { amountMinor: 725_000, currency: "USD" }, conditions: "Vendor-supplied compressor and installed service parts", exclusions: "Consumables outside the diagnosed compressor failure" },
+    { id: "warranty-line-summit-compressor-travel", organizationId: organization.id, warrantyRuleId: "warranty-rule-summit-compressor-v1", coverageType: "travel", duration: 30, durationUnit: "days", startEvent: "store_verification", provider: "vendor", obligatedVendorId: "vendor-northline-summit", routingRule: "original_vendor_first_right_to_cure", deductible: { amountMinor: 0, currency: "USD" } },
+    { id: "warranty-line-summit-compressor-diagnostic", organizationId: organization.id, warrantyRuleId: "warranty-rule-summit-compressor-v1", coverageType: "diagnostic", duration: 90, durationUnit: "days", startEvent: "store_verification", provider: "vendor", obligatedVendorId: "vendor-northline-summit", routingRule: "original_vendor_first_right_to_cure", deductible: { amountMinor: 0, currency: "USD" } },
+  );
+  repairItems.push({ id: warrantyRepairItemId, organizationId: organization.id, workOrderId: "wo-northline-104", siteVisitWorkOrderId: priorVisitWorkId, vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", assetId: "asset-104-beer-cave", componentId: "component-104-compressor", failureCode: "compressor-ground-fault", repairAction: "Removed failed compressor; installed Copeland replacement; evacuated, charged, and commissioned the circuit", repairSeverity: "major", removedComponentId: "component-104-compressor", installedComponentId: "component-104-compressor", partManufacturer: "Copeland", partModel: "ZB38KCE-TFD", serialNumber: "CMP104-2026-0710", vendorSupplied: true, completionDate: visit104End.slice(0, 10), verificationDate: visit104End.slice(0, 10), laborCost: { amountMinor: 165_000, currency: "USD" }, partCost: { amountMinor: 725_000, currency: "USD" }, rootCause: "Internal winding insulation failure", createdAt: new Date(Date.parse(visit104End) + 45 * 60_000).toISOString() });
+  const warrantyStartDate = visit104End.slice(0, 10);
+  const immutableTerms = (coverageType: string, endDate: string, routingRule: string) => JSON.stringify({ resolutionPrecedence: "contract-specific component rule", coverageType, startDate: warrantyStartDate, endDate, routingRule, contractVersionId: "contract-version-summit-refrigeration-v1", ruleId: "warranty-rule-summit-compressor-v1", calculatedAt: new Date(Date.parse(visit104End) + 50 * 60_000).toISOString() });
+  appliedWarranties.push(
+    { id: "applied-warranty-104-compressor-labor", organizationId: organization.id, repairItemId: warrantyRepairItemId, coverageType: "labor", provider: "vendor", obligatedVendorId: "vendor-northline-summit", startDate: warrantyStartDate, endDate: "2026-10-08", coveredCharges: ["labor", "diagnostic"], routingRule: "original_vendor_first_right_to_cure", contractVersionId: "contract-version-summit-refrigeration-v1", policySource: "Contract-specific Component rule", ruleSource: "warranty-rule-summit-compressor-v1", originalCalculatedTermsJson: immutableTerms("labor", "2026-10-08", "original_vendor_first_right_to_cure"), createdAt: new Date(Date.parse(visit104End) + 50 * 60_000).toISOString() },
+    { id: "applied-warranty-104-compressor-part", organizationId: organization.id, repairItemId: warrantyRepairItemId, coverageType: "part", provider: "vendor", obligatedVendorId: "vendor-northline-summit", startDate: warrantyStartDate, endDate: "2027-07-10", coveredCharges: ["vendor-supplied compressor", "installed service parts"], routingRule: "original_vendor_mandatory", contractVersionId: "contract-version-summit-refrigeration-v1", policySource: "Contract-specific Component rule", ruleSource: "warranty-rule-summit-compressor-v1", originalCalculatedTermsJson: immutableTerms("part", "2027-07-10", "original_vendor_mandatory"), createdAt: new Date(Date.parse(visit104End) + 50 * 60_000).toISOString() },
+    { id: "applied-warranty-104-compressor-travel", organizationId: organization.id, repairItemId: warrantyRepairItemId, coverageType: "travel", provider: "vendor", obligatedVendorId: "vendor-northline-summit", startDate: warrantyStartDate, endDate: "2026-08-09", coveredCharges: ["callback travel"], routingRule: "original_vendor_first_right_to_cure", contractVersionId: "contract-version-summit-refrigeration-v1", policySource: "Contract-specific Component rule", ruleSource: "warranty-rule-summit-compressor-v1", originalCalculatedTermsJson: immutableTerms("travel", "2026-08-09", "original_vendor_first_right_to_cure"), createdAt: new Date(Date.parse(visit104End) + 50 * 60_000).toISOString() },
+    { id: "applied-warranty-104-compressor-diagnostic", organizationId: organization.id, repairItemId: warrantyRepairItemId, coverageType: "diagnostic", provider: "vendor", obligatedVendorId: "vendor-northline-summit", startDate: warrantyStartDate, endDate: "2026-10-08", coveredCharges: ["diagnosis of related callback"], routingRule: "original_vendor_first_right_to_cure", contractVersionId: "contract-version-summit-refrigeration-v1", policySource: "Contract-specific Component rule", ruleSource: "warranty-rule-summit-compressor-v1", originalCalculatedTermsJson: immutableTerms("diagnostic", "2026-10-08", "original_vendor_first_right_to_cure"), createdAt: new Date(Date.parse(visit104End) + 50 * 60_000).toISOString() },
+  );
+  manufacturerWarranties.push({ id: "manufacturer-warranty-104-compressor", organizationId: organization.id, assetId: "asset-104-beer-cave", componentId: "component-104-compressor", manufacturer: "Copeland", model: "ZB38KCE-TFD", serialNumber: "CMP104-2026-0710", partsCoverage: "Replacement compressor part only", laborCoverage: "Not included", startDate: warrantyStartDate, expirationDate: "2028-07-10", authorizedProviderRule: "EPA-certified refrigeration provider approved by the manufacturer", claimRequirements: "Failure diagnosis, serial number, commissioning sheet, and returned compressor", installingVendorId: "vendor-northline-summit", administrator: "Fictional Copeland Demo Warranty Desk", supportingFileId: "file-104-service-report", createdAt: new Date(Date.parse(visit104End) + 55 * 60_000).toISOString() });
+  requests.push({ id: warrantyCallbackRequestId, organizationId: organization.id, reference: "REQ-26-104W", storeId: "store-northline-104", reporterName: "Avery Johnson", reporterEmployeeId: "E3103", problem: "Beer-cave compressor is cycling on overload one month after replacement", priority: "urgent", status: "converted", version: 1, submittedAt: at(8, 10, 16, 30), convertedWorkOrderId: warrantyCallbackWorkId });
+  requestImpactAssessments.push(
+    { id: "impact-warranty-104-callback-initial", organizationId: organization.id, requestId: warrantyCallbackRequestId, storeId: "store-northline-104", assessmentKind: "initial_report", storeOperatingState: "partially_operational", safetyConcern: "none_reported", productInventoryRisk: "at_risk", productInventoryValue: { amountMinor: 285_000, currency: "USD" }, customersAffected: "yes", complianceImpact: "none_reported", capacityUnavailableBps: 5_000, redundantEquipment: "yes", revenueFunctionImpact: "refrigerated_merchandise", estimatedDailyRevenueExposure: { amountMinor: 475_000, currency: "USD" }, estimatedDowntimeMinutes: 240, confidence: "medium", source: "store_report", notes: "Compressor is cycling on overload; backup coolers are in use. Exposure is an estimate, not verified revenue loss.", assessedByActorType: "user", assessedByActorId: "E3103", assessedByActorName: "Avery Johnson", assessedAt: at(8, 10, 16, 30) },
+    { id: "impact-warranty-104-callback-review", organizationId: organization.id, requestId: warrantyCallbackRequestId, storeId: "store-northline-104", assessmentKind: "review", reviewDisposition: "confirmed", storeOperatingState: "partially_operational", safetyConcern: "none_reported", productInventoryRisk: "at_risk", productInventoryValue: { amountMinor: 285_000, currency: "USD" }, customersAffected: "yes", complianceImpact: "none_reported", capacityUnavailableBps: 5_000, redundantEquipment: "yes", revenueFunctionImpact: "refrigerated_merchandise", estimatedDailyRevenueExposure: { amountMinor: 475_000, currency: "USD" }, estimatedDowntimeMinutes: 240, confidence: "high", source: "manager_review", notes: "Manager confirmed degraded operation and exact replaced compressor. Estimates remain unverified exposure.", assessedByActorType: "user", assessedByActorId: "membership-northline-facilities", assessedByActorName: "Jordan Lee", assessedAt: at(8, 10, 16, 38) },
+  );
+  workOrders.push({ id: warrantyCallbackWorkId, organizationId: organization.id, number: "NL-2026-0119", storeId: "store-northline-104", requestId: warrantyCallbackRequestId, problem: "Beer-cave compressor is cycling on overload one month after replacement", authorizedScope: "Diagnose the exact replaced compressor and related installation; do not charge the customer or replace parts until warranty coverage is determined.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", assetId: "asset-104-beer-cave", componentId: "component-104-compressor", priority: "urgent", status: "approved", version: 0, accountableParty: "Warranty review", nextAction: "Confirm diagnosis and warranty coverage", dueAt: at(8, 10, 20), escalationTo: "Facilities director", nte: { amountMinor: 0, currency: "USD" }, createdAt: at(8, 10, 16, 40) });
+  assignments.push({ id: "assignment-warranty-104-callback", organizationId: organization.id, workOrderId: warrantyCallbackWorkId, kind: "outside_vendor", vendorId: "vendor-northline-summit", status: "pending", assignedAt: at(8, 10, 16, 45) });
+  warrantyCases.push({ id: warrantyCaseId, organizationId: organization.id, requestId: warrantyCallbackRequestId, workOrderId: warrantyCallbackWorkId, assetId: "asset-104-beer-cave", componentId: "component-104-compressor", priorRepairItemId: warrantyRepairItemId, appliedWarrantyId: "applied-warranty-104-compressor-part", manufacturerWarrantyId: "manufacturer-warranty-104-compressor", status: "diagnosis_required", confidence: "high", detectionExplanation: "Potential warranty coverage found — diagnosis required. Exact Asset, Component, installed compressor serial, related symptom, prior Vendor, and active coverage dates match the July repair; liability is not determined.", diagnosisRequired: true, coverageDecision: "pending_diagnosis", customerChargeStatus: "undetermined", invoiceHold: true, routingRule: "original_vendor_mandatory", obligatedVendorId: "vendor-northline-summit", vendorResponseDueAt: at(8, 10, 18), createdAt: at(8, 10, 16, 41) });
+  workOrderVerifications.push({ id: "verification-wo-northline-104-compressor", organizationId: organization.id, workOrderId: "wo-northline-104", siteVisitWorkOrderId: priorVisitWorkId, outcome: "completed", outcomeRecordedAt: visit104End, cycle: 1, decision: "verified", decidedByMembershipId: "membership-northline-facilities", decidedByName: "Jordan Lee", decidedAt: new Date(Date.parse(visit104End) + 40 * 60_000).toISOString() });
+
+  quotes.push({ id: "quote-summit-104-compressor-v1", organizationId: organization.id, workOrderId: "wo-northline-104", vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", quoteNumber: "SUM-Q-104-2607", version: 1, scope: "Replace failed compressor, filter drier, refrigerant charge, evacuation, startup, and commissioning", subtotal: { amountMinor: 890_000, currency: "USD" }, tax: { amountMinor: 55_000, currency: "USD" }, fees: { amountMinor: 12_500, currency: "USD" }, total: { amountMinor: 957_500, currency: "USD" }, submittedAt: at(7, 8, 14), expiresAt: at(8, 7, 14) });
+  authorizations.push({ id: "authorization-104-compressor-base", organizationId: organization.id, workOrderId: "wo-northline-104", authorizationType: "base", authorizedAmount: { amountMinor: 945_000, currency: "USD" }, authorizedScope: "Compressor replacement and commissioning under Summit Contract Version 1; trip charge is included in approved mobilization", approverMembershipId: "membership-northline-facilities", approverName: "Jordan Lee", approvalAuthority: "Major repair approval policy and delegated NTE", authorizedAt: at(7, 9, 10), reason: "Restore the Store 104 beer cave after diagnostic confirmation", contractVersionId: "contract-version-summit-refrigeration-v1" });
+  invoices.push({ id: "invoice-summit-104-compressor", organizationId: organization.id, vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", vendorInvoiceNumber: "SUM-104-2607", invoiceDate: "2026-07-11", subtotal: { amountMinor: 902_500, currency: "USD" }, tax: { amountMinor: 55_000, currency: "USD" }, fees: { amountMinor: 0, currency: "USD" }, total: { amountMinor: 957_500, currency: "USD" }, approvedForPayment: { amountMinor: 0, currency: "USD" }, paidAmount: { amountMinor: 0, currency: "USD" }, status: "exception", exceptionReason: "A separate trip line exceeds the current Authorization ceiling and needs human review against the Contract Version, authorization scope, and visit evidence. No deduction has been made.", supportingFileId: "file-104-service-report", createdAt: at(7, 11, 14) });
+  invoiceLines.push(
+    { id: "invoice-line-104-labor", organizationId: organization.id, invoiceId: "invoice-summit-104-compressor", lineNumber: 1, category: "labor", description: "Compressor replacement labor and commissioning", quantityThousandths: 1_000, unitAmount: { amountMinor: 165_000, currency: "USD" }, lineAmount: { amountMinor: 165_000, currency: "USD" }, contractRateCardLineId: "rate-summit-labor", createdAt: at(7, 11, 14) },
+    { id: "invoice-line-104-part", organizationId: organization.id, invoiceId: "invoice-summit-104-compressor", lineNumber: 2, category: "part", description: "Copeland compressor and installed service parts", quantityThousandths: 1_000, unitAmount: { amountMinor: 725_000, currency: "USD" }, lineAmount: { amountMinor: 725_000, currency: "USD" }, createdAt: at(7, 11, 14) },
+    { id: "invoice-line-104-trip", organizationId: organization.id, invoiceId: "invoice-summit-104-compressor", lineNumber: 3, category: "travel", description: "Separate trip charge", quantityThousandths: 1_000, unitAmount: { amountMinor: 12_500, currency: "USD" }, lineAmount: { amountMinor: 12_500, currency: "USD" }, contractRateCardLineId: "rate-summit-trip", createdAt: at(7, 11, 14) },
+    { id: "invoice-line-104-tax", organizationId: organization.id, invoiceId: "invoice-summit-104-compressor", lineNumber: 4, category: "tax", description: "Sales tax", quantityThousandths: 1_000, unitAmount: { amountMinor: 55_000, currency: "USD" }, lineAmount: { amountMinor: 55_000, currency: "USD" }, createdAt: at(7, 11, 14) },
+  );
+  invoiceLines.forEach((line) => { if (line.invoiceId !== "invoice-summit-104-compressor") return; invoiceLineAllocations.push({ id: `allocation-${line.id}`, organizationId: organization.id, invoiceLineId: line.id, workOrderId: "wo-northline-104", repairItemId: line.category === "labor" || line.category === "part" ? warrantyRepairItemId : undefined, siteVisitWorkOrderId: priorVisitWorkId, assetId: "asset-104-beer-cave", componentId: line.category === "labor" || line.category === "part" ? "component-104-compressor" : undefined, storeId: "store-northline-104", tradeKey: "refrigeration", amount: line.lineAmount, method: "manual", confirmedByMembershipId: "membership-northline-finance", confirmedAt: at(7, 12, 14) }); });
+  invoiceExceptions.push({ id: "invoice-exception-104-trip", organizationId: organization.id, invoiceId: "invoice-summit-104-compressor", invoiceLineId: "invoice-line-104-trip", kind: "unsupported_trip_charge", status: "open", summary: "Review the separate trip line: it exceeds the current Authorization ceiling and may already be included in the authorized mobilization. The system has not determined validity or changed the amount.", amount: { amountMinor: 12_500, currency: "USD" }, detectedAt: at(7, 11, 14, 5) });
+  valueEvents.push(
+    { id: "value-event-service-run-104-105-opportunity", organizationId: organization.id, category: "estimated_opportunity", eventType: "projected_route_savings", amount: { amountMinor: 11_250, currency: "USD" }, serviceRunId, contractVersionId: "contract-version-summit-refrigeration-v1", sourceDecision: "Service Run recommendation only; not realized", deduplicationKey: `service-run:${serviceRunId}:projected-route`, occurredAt: serviceRunCreatedAt },
+    { id: "value-event-warranty-104-exposure", organizationId: organization.id, category: "identified_exposure", eventType: "potential_warranty", amount: { amountMinor: 890_000, currency: "USD" }, workOrderId: warrantyCallbackWorkId, warrantyCaseId, assetId: "asset-104-beer-cave", contractVersionId: "contract-version-summit-refrigeration-v1", sourceDecision: "Exact-component potential warranty detection; diagnosis pending", deduplicationKey: `warranty-case:${warrantyCaseId}:potential`, occurredAt: at(8, 10, 16, 41) },
+    { id: "value-event-invoice-104-trip-review", organizationId: organization.id, category: "identified_exposure", eventType: "invoice_line_review", amount: { amountMinor: 12_500, currency: "USD" }, workOrderId: "wo-northline-104", invoiceLineId: "invoice-line-104-trip", contractVersionId: "contract-version-summit-refrigeration-v1", sourceDecision: "Potential exception identified; no deduction or approval decision", deduplicationKey: "invoice-line:invoice-line-104-trip:review", occurredAt: at(7, 11, 14, 5) },
+  );
+  auditEvents.push(
+    { id: "audit-warranty-case-104-detected", organizationId: organization.id, aggregateType: "warranty_case", aggregateId: warrantyCaseId, eventType: "warranty_case.detected", actorType: "system", actorName: "Warranty detection", occurredAt: at(8, 10, 16, 41), payloadJson: JSON.stringify({ confidence: "high", liabilityDetermined: false, invoiceHold: true, customerChargeStatus: "undetermined", routingRule: "original_vendor_mandatory", priorRepairItemId: warrantyRepairItemId }) },
+    { id: "audit-invoice-104-exception-flagged", organizationId: organization.id, aggregateType: "invoice", aggregateId: "invoice-summit-104-compressor", eventType: "invoice.exception_flagged", actorType: "system", actorName: "Invoice safeguards", occurredAt: at(7, 11, 14, 5), payloadJson: JSON.stringify({ invoiceLineId: "invoice-line-104-trip", reviewOnly: true, validityDetermined: false, deductionMinor: 0, approvedForPaymentMinor: 0, paymentExecuted: false }) },
+  );
+
+  workOrders.filter((workOrder) => !["closed", "cancelled"].includes(workOrder.status)).forEach((workOrder) => {
+    const openFollowUps = followUps.filter((followUp) => followUp.organizationId === workOrder.organizationId && followUp.workOrderId === workOrder.id && followUp.status === "open");
+    const sources: Array<FollowUp | undefined> = openFollowUps.length ? openFollowUps : [undefined];
+    sources.forEach((followUp, index) => {
+      const assignment = assignments.filter((candidate) => candidate.organizationId === workOrder.organizationId && candidate.workOrderId === workOrder.id).at(-1);
+      const assigneeName = followUp?.accountableParty ?? workOrder.accountableParty;
+      const assignee = assignment?.kind === "outside_vendor" && assignment.vendorId
+        ? { assigneeType: "vendor" as const, assigneeId: assignment.vendorId }
+        : assignment?.kind === "internal" && assignment.internalMembershipId
+          ? { assigneeType: "user" as const, assigneeId: assignment.internalMembershipId }
+          : { assigneeType: "role" as const, assigneeRole: "facilities_admin" as const };
+      const type = taskType(workOrder, followUp);
+      workflowTasks.push({
+        id: followUp ? `workflow-task-${followUp.id}` : `workflow-task-${workOrder.id}-${index + 1}`,
+        organizationId: workOrder.organizationId,
+        workOrderId: workOrder.id,
+        taskType: type,
+        title: followUp?.nextAction ?? workOrder.nextAction,
+        reason: `Keep ${workOrder.number} moving: ${workOrder.problem}`,
+        ...assignee,
+        assigneeName,
+        priority: taskPriority(workOrder.priority),
+        status: workOrder.status === "in_progress" ? "in_progress" : "open",
+        blocking: ["approved", "awaiting_approval", "waiting_on_vendor", "waiting_on_parts"].includes(workOrder.status),
+        requiredForProgress: true,
+        dueAt: followUp?.dueAt ?? workOrder.dueAt,
+        noSlaReason: followUp?.dueAt || workOrder.dueAt ? undefined : "No SLA applies under the current service policy",
+        applicableSlaClock: slaClock(type),
+        completionCriteria: `Record evidence that the action is complete: ${followUp?.nextAction ?? workOrder.nextAction}`,
+        escalationDestination: followUp?.escalationTo ?? workOrder.escalationTo ?? "Facilities director",
+        escalationLevel: 0,
+        sourceFollowUpId: followUp?.id,
+        createdByActorType: "system",
+        createdByActorName: "Deterministic demo fixture",
+        createdAt: followUp?.createdAt ?? workOrder.createdAt,
+        ...(workOrder.status === "in_progress" ? { startedByActorType: "system" as const, startedByActorName: "Deterministic demo fixture", startedAt: workOrder.createdAt } : {}),
+      });
+    });
+  });
+  [serviceRunReactiveWorkId, serviceRunPmWorkId].forEach((workOrderId) => {
+    const task = workflowTasks.find((candidate) => candidate.workOrderId === workOrderId && ["open", "in_progress"].includes(candidate.status));
+    if (!task) return;
+    Object.assign(task, {
+      taskType: "schedule_service" as const,
+      title: "Respond to proposed Service Run",
+      reason: `Service Run ${serviceRunId} bundles this Work Order under the active Summit Contract Version.`,
+      assigneeType: "vendor" as const,
+      assigneeId: "vendor-northline-summit",
+      assigneeRole: undefined,
+      assigneeName: "Summit Refrigeration",
+      priority: "high" as const,
+      blocking: true,
+      dueAt: at(8, 22, 16),
+      applicableSlaClock: "scheduling" as const,
+      completionCriteria: "Vendor accepts, counters, requests a scoped change, reports insufficient capacity, or declines.",
+      escalationDestination: "Facilities coordinator",
+      createdAt: serviceRunCreatedAt,
+    });
+  });
+  const warrantyReviewTask = workflowTasks.find((task) => task.workOrderId === warrantyCallbackWorkId && ["open", "in_progress"].includes(task.status));
+  if (warrantyReviewTask) Object.assign(warrantyReviewTask, {
+    taskType: "review_warranty" as const,
+    title: "Confirm diagnosis and warranty coverage",
+    reason: "Exact-component active coverage was found; liability remains undetermined until diagnosis.",
+    assigneeType: "role" as const,
+    assigneeId: undefined,
+    assigneeRole: "facilities_admin" as const,
+    assigneeName: "Warranty review",
+    priority: "critical" as const,
+    blocking: true,
+    dueAt: at(8, 10, 20),
+    applicableSlaClock: "warranty_review" as const,
+    completionCriteria: "Diagnosis is recorded, each coverage category is decided independently, routing is confirmed, and billing hold is explicitly released or retained.",
+    escalationDestination: "Facilities director",
+    createdAt: at(8, 10, 16, 41),
+  });
+
+  // The active visit carries two real obligations at once: the technician
+  // records the outcome while facilities prepares an independent verification.
+  const activeVisitWorkOrder = workOrders.find((workOrder) => workOrder.id === "wo-northline-112");
+  if (activeVisitWorkOrder) workflowTasks.push({
+    id: "workflow-task-wo-northline-112-verification", organizationId: organization.id, workOrderId: activeVisitWorkOrder.id,
+    taskType: "verify_repair", title: "Verify operating condition after technician checkout", reason: "Store operations must confirm the repair before service review is complete",
+    assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator", priority: "high", status: "open", blocking: false, requiredForProgress: true,
+    dueAt: at(8, 11, 16), applicableSlaClock: "verification", completionCriteria: "Store confirmation and service evidence are reviewed and the operating condition is recorded",
+    escalationDestination: "Facilities director", escalationLevel: 0, createdByActorType: "system", createdByActorName: "Deterministic demo fixture", createdAt: at(8, 10, 17, 20),
+  });
+
+  // Preserve both a completed pause interval and the currently active hold;
+  // resumption is append-only and never rewrites the original pause record.
+  const waitingPartsTask = workflowTasks.find((task) => task.workOrderId === "wo-recent-aug-102-hvac");
+  const waitingPartsWorkOrderId = waitingPartsTask?.workOrderId;
+  if (waitingPartsTask && waitingPartsWorkOrderId) {
+    workflowTaskSlaPauses.push(
+      { id: "workflow-task-pause-102-diagnosis", organizationId: organization.id, workflowTaskId: waitingPartsTask.id, workOrderId: waitingPartsWorkOrderId, reasonCode: "external_dependency", reasonDetail: "Diagnostic evidence was under facilities review before the parts request was released", ownerType: "team", ownerId: "facilities", ownerName: "Northline Facilities", affectedClocks: ["operational_restoration", "completion"], expectedResumeAt: at(8, 4, 16), pausedByActorType: "user", pausedByActorId: "membership-northline-facilities", pausedByActorName: "Jordan Lee", pausedAt: at(8, 3, 17) },
+      { id: "workflow-task-pause-102-parts", organizationId: organization.id, workflowTaskId: waitingPartsTask.id, workOrderId: waitingPartsWorkOrderId, reasonCode: "awaiting_parts", reasonDetail: "Approved condenser-fan motor is awaiting confirmed distributor availability", ownerType: "vendor", ownerId: "vendor-northline-cedar", ownerName: "Cedar Mechanical", affectedClocks: ["operational_restoration", "completion"], expectedResumeAt: at(8, 12, 14), pausedByActorType: "user", pausedByActorId: "membership-northline-facilities", pausedByActorName: "Jordan Lee", pausedAt: at(8, 8, 15) },
+    );
+    workflowTaskSlaResumes.push({ id: "workflow-task-resume-102-diagnosis", organizationId: organization.id, workflowTaskId: waitingPartsTask.id, workOrderId: waitingPartsWorkOrderId, pauseId: "workflow-task-pause-102-diagnosis", resumedByActorType: "user", resumedByActorId: "membership-northline-facilities", resumedByActorName: "Jordan Lee", resumedAt: at(8, 4, 14), note: "Facilities review completed and the parts request was released" });
+  }
+
+  // Site/WO selection is the canonical relationship. Scalar visit fields are
+  // retained only as a temporary projection for a genuinely single-WO visit.
+  visits.filter((visit) => visit.workOrderId).forEach((visit) => {
+    const workOrderId = visit.workOrderId!;
+    const outcome = visit.outcome ? siteVisitOutcomeFromLegacy(visit.outcome) : undefined;
+    const followUp = outcome && siteVisitOutcomeRequiresFollowUp(outcome)
+      ? followUps.find((row) => row.organizationId === visit.organizationId && row.sourceVisitId === visit.id && row.workOrderId === workOrderId)
+      : undefined;
+    siteVisitWorkOrders.push({
+      id: `site-visit-work-${visit.id}-${workOrderId}`,
+      organizationId: visit.organizationId,
+      visitId: visit.id,
+      workOrderId,
+      ordinal: 1,
+      linkedByActorType: "system",
+      linkedByActorName: "Deterministic demo fixture",
+      linkedAt: visit.checkedInAt,
+      outcome,
+      outcomeNotes: outcome ? visit.outcomeNotes : undefined,
+      outcomeRecordedByActorType: outcome ? (visit.providerKind === "internal" ? "user" : "technician") : undefined,
+      outcomeRecordedByActorId: outcome ? visit.internalMembershipId : undefined,
+      outcomeRecordedByActorName: outcome ? visit.technicianName : undefined,
+      outcomeRecordedAt: outcome ? visit.checkedOutAt : undefined,
+      followUpId: followUp?.id,
+    });
+  });
+
+  // One shared Summit presence event covers two independently selected Store
+  // 104 work orders, each with its own outcome record.
+  const multiWorkVisit = visits.find((visit) => visit.id === "visit-northline-104-2")!;
+  const multiWorkFirstLink = siteVisitWorkOrders.find((row) => row.visitId === multiWorkVisit.id)!;
+  multiWorkVisit.crewCount = 2;
+  multiWorkVisit.additionalTechnicianNames = ["Morgan Reed"];
+  multiWorkVisit.vehicleIdentifier = "SUMMIT-TRUCK-14";
+  multiWorkVisit.arrivalNote = "Return crew checked in with the replacement compressor and recovery equipment.";
+  multiWorkVisit.workOrderId = undefined;
+  multiWorkVisit.outcome = undefined;
+  multiWorkVisit.outcomeNotes = undefined;
+  siteVisitWorkOrders.push({
+    id: `site-visit-work-${multiWorkVisit.id}-wo-history-104-4`,
+    organizationId: organization.id,
+    visitId: multiWorkVisit.id,
+    workOrderId: "wo-history-104-4",
+    ordinal: 2,
+    linkedByActorType: "system",
+    linkedByActorName: "Deterministic demo fixture",
+    linkedAt: multiWorkVisit.checkedInAt,
+    outcome: "completed",
+    outcomeNotes: "Verified the previously serviced compressor circuit remained stable during the shared return visit.",
+    outcomeRecordedByActorType: "technician",
+    outcomeRecordedByActorName: multiWorkVisit.technicianName,
+    outcomeRecordedAt: multiWorkVisit.checkedOutAt,
+  });
+  const multiWorkCheckoutEvidence = visitEvidence.find((row) => row.visitId === multiWorkVisit.id && row.kind === "check_out")!;
+  multiWorkCheckoutEvidence.payloadJson = JSON.stringify({
+    workOrderIds: [multiWorkFirstLink.workOrderId, "wo-history-104-4"],
+    perWorkOrderOutcomes: [
+      { workOrderId: multiWorkFirstLink.workOrderId, outcome: multiWorkFirstLink.outcome },
+      { workOrderId: "wo-history-104-4", outcome: "completed" },
+    ],
+  });
+
+  // Store 111 is verified and resolved, but deliberately remains open until a
+  // separate close task is completed. This makes resolution distinct from
+  // closure in the deterministic presentation data.
+  const resolvedWork = workOrders.find((row) => row.id === "wo-recent-aug-111-plumbing")!;
+  const resolvedOutcome = siteVisitWorkOrders.find((row) => row.workOrderId === resolvedWork.id && row.outcomeRecordedAt)!;
+  const resolvedDecisionAt = at(8, 10, 14);
+  const resolvedFollowUp = followUps.find((row) => row.workOrderId === resolvedWork.id && row.status === "open")!;
+  const resolvedVerifyTask = workflowTasks.find((row) => row.workOrderId === resolvedWork.id && row.taskType === "verify_repair" && ["open", "in_progress"].includes(row.status))!;
+  resolvedFollowUp.status = "completed";
+  resolvedFollowUp.completedAt = resolvedDecisionAt;
+  Object.assign(resolvedVerifyTask, {
+    status: "completed", completedByActorType: "user", completedByActorId: "membership-northline-facilities",
+    completedByActorName: "Jordan Lee", completedAt: resolvedDecisionAt,
+    resolutionNote: "Store confirmation and the recorded repair outcome were accepted.",
+  });
+  Object.assign(resolvedWork, {
+    status: "resolved", resolvedAt: resolvedDecisionAt, accountableParty: "Facilities coordinator",
+    nextAction: "Close verified work", dueAt: at(8, 11, 17), escalationTo: "Facilities director",
+  });
+  workOrderVerifications.push({
+    id: "verification-wo-recent-aug-111-plumbing-cycle-1", organizationId: organization.id, workOrderId: resolvedWork.id,
+    siteVisitWorkOrderId: resolvedOutcome.id, outcome: resolvedOutcome.outcome!, outcomeRecordedAt: resolvedOutcome.outcomeRecordedAt!, cycle: 1,
+    decision: "verified", reason: "Store confirmation and service evidence show the sink supply connection remains dry.",
+    decidedByMembershipId: "membership-northline-facilities", decidedByName: "Jordan Lee", decidedAt: resolvedDecisionAt,
+  });
+  workflowTasks.push({
+    id: "workflow-task-wo-recent-aug-111-plumbing-close", organizationId: organization.id, workOrderId: resolvedWork.id,
+    taskType: "close_verified_work", title: "Close verified work", reason: "The current visit outcome was accepted and the resolved work remains open pending explicit closure.",
+    assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator", priority: "normal", status: "open",
+    blocking: true, requiredForProgress: true, dueAt: at(8, 11, 17), applicableSlaClock: "verification",
+    completionCriteria: "Confirm no active visit, open follow-up, or other required task remains, then close the work order.",
+    escalationDestination: "Facilities director", escalationLevel: 0, createdByActorType: "user", createdByActorId: "membership-northline-facilities",
+    createdByActorName: "Jordan Lee", createdAt: resolvedDecisionAt,
+  });
+
+  // Store 112's rejected decision is append-only. A bounded return-work task
+  // was completed by the later visit check-in; current service evidence is not
+  // rewritten and the work order remains active.
+  const rejectedOutcome = siteVisitWorkOrders.find((row) => row.visitId === rejectedVisitId && row.workOrderId === "wo-northline-112")!;
+  const rejectedDecisionAt = at(8, 9, 19);
+  workOrderVerifications.push({
+    id: "verification-wo-northline-112-cycle-1", organizationId: organization.id, workOrderId: "wo-northline-112",
+    siteVisitWorkOrderId: rejectedOutcome.id, outcome: rejectedOutcome.outcome!, outcomeRecordedAt: rejectedOutcome.outcomeRecordedAt!, cycle: 1,
+    decision: "rejected", reason: "Store temperature rose again after the technician departed; return service is required.",
+    decidedByMembershipId: "membership-northline-facilities", decidedByName: "Jordan Lee", decidedAt: rejectedDecisionAt,
+  });
+  workflowTasks.push(
+    {
+      id: "workflow-task-wo-northline-112-rejected-verification", organizationId: organization.id, workOrderId: "wo-northline-112",
+      taskType: "verify_repair", title: "Verify operating condition after technician checkout", reason: "Store operations must confirm the repair before service review is complete.",
+      assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator", priority: "high", status: "completed",
+      blocking: true, requiredForProgress: true, dueAt: at(8, 10, 12), applicableSlaClock: "verification",
+      completionCriteria: "Record an accepted or rejected decision against the exact visit outcome.", escalationDestination: "Facilities director", escalationLevel: 0,
+      createdByActorType: "system", createdByActorName: "Deterministic demo fixture", createdAt: at(8, 9, 18),
+      completedByActorType: "user", completedByActorId: "membership-northline-facilities", completedByActorName: "Jordan Lee", completedAt: rejectedDecisionAt,
+      resolutionNote: "Rejected after the reported operating condition returned.",
+    },
+    {
+      id: "workflow-task-wo-northline-112-return-cycle-1", organizationId: organization.id, workOrderId: "wo-northline-112",
+      taskType: "schedule_return_visit", title: "Return to restore rooftop-unit cooling", reason: "The accepted-looking repair outcome was rejected after the store condition recurred.",
+      assigneeType: "vendor", assigneeId: "vendor-northline-cedar", assigneeName: "Cedar Mechanical", priority: "high", status: "completed",
+      blocking: true, requiredForProgress: true, dueAt: at(8, 10, 17, 15), applicableSlaClock: "scheduling",
+      completionCriteria: "Cedar Mechanical begins the accountable return visit.", escalationDestination: "Facilities director", escalationLevel: 0,
+      createdByActorType: "user", createdByActorId: "membership-northline-facilities", createdByActorName: "Jordan Lee", createdAt: rejectedDecisionAt,
+      completedByActorType: "technician", completedByActorName: "Cedar Mechanical technician", completedAt: at(8, 10, 17, 15),
+      resolutionNote: "Return visit checked in and service resumed.",
+    },
+  );
+
   // Audit and outbox facts are derived from the same deterministic source
   // records, so the showcase can demonstrate provenance and delivery state.
   const addAudit = (event: AuditEvent) => {
     if (!auditEvents.some((candidate) => candidate.aggregateId === event.aggregateId && candidate.eventType === event.eventType)) auditEvents.push(event);
   };
   requests.forEach((request) => addAudit({ id: `audit-source-request-${request.id}`, organizationId: organization.id, aggregateType: "service_request", aggregateId: request.id, eventType: "request.submitted", actorType: "user", actorName: request.reporterName, occurredAt: request.submittedAt, payloadJson: JSON.stringify({ storeId: request.storeId, reference: request.reference }) }));
+  requestImpactAssessments.forEach((assessment) => addAudit({
+    id: `audit-source-${assessment.id}`,
+    organizationId: assessment.organizationId,
+    aggregateType: "request",
+    aggregateId: assessment.requestId,
+    eventType: assessment.assessmentKind === "initial_report" ? "request.impact_assessed" : "request.impact_reviewed",
+    actorType: assessment.assessedByActorType,
+    actorId: assessment.assessedByActorId,
+    actorName: assessment.assessedByActorName,
+    occurredAt: assessment.assessedAt,
+    payloadJson: JSON.stringify({ assessmentId: assessment.id, storeId: assessment.storeId, assessmentKind: assessment.assessmentKind, reviewDisposition: assessment.reviewDisposition, confidence: assessment.confidence, source: assessment.source, estimateCaveat: "Exposure and downtime estimates are not verified losses" }),
+  }));
   workOrders.forEach((workOrder) => addAudit({ id: `audit-source-work-order-${workOrder.id}`, organizationId: organization.id, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.created", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: workOrder.createdAt, payloadJson: JSON.stringify({ storeId: workOrder.storeId, requestId: workOrder.requestId }) }));
   assignments.forEach((assignment) => addAudit({ id: `audit-source-assignment-${assignment.id}`, organizationId: organization.id, aggregateType: "work_order_assignment", aggregateId: assignment.id, eventType: "work_order.assigned", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: assignment.assignedAt, payloadJson: JSON.stringify({ workOrderId: assignment.workOrderId, kind: assignment.kind, vendorId: assignment.vendorId, internalMembershipId: assignment.internalMembershipId }) }));
   issuances.forEach((issuance) => addAudit({ id: `audit-source-issuance-${issuance.id}`, organizationId: organization.id, aggregateType: "work_order", aggregateId: issuance.workOrderId, eventType: `work_order.issued.r${issuance.revision}`, actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: issuance.issuedAt, payloadJson: JSON.stringify({ issuanceId: issuance.id, assignmentId: issuance.assignmentId, revision: issuance.revision, channel: issuance.channel }) }));
   vendorResponses.forEach((response) => addAudit({ id: `audit-source-response-${response.id}`, organizationId: organization.id, aggregateType: "vendor_response", aggregateId: response.id, eventType: "vendor.response_recorded", actorType: "vendor_link", actorName: response.responderName, occurredAt: response.respondedAt, payloadJson: JSON.stringify({ workOrderId: response.workOrderId, responseId: response.id, issuanceId: response.issuanceId, response: response.response }) }));
   visits.forEach((visit) => {
-    addAudit({ id: `audit-source-visit-${visit.id}-in`, organizationId: organization.id, aggregateType: "visit", aggregateId: visit.id, eventType: "visit.checked_in", actorType: visit.providerKind === "internal" ? "user" : "technician", actorId: visit.internalMembershipId, actorName: visit.technicianName, occurredAt: visit.checkedInAt, payloadJson: JSON.stringify({ storeId: visit.storeId, workOrderId: visit.workOrderId, vendorId: visit.vendorId, channel: visit.startedChannel, presenceBasis: "approximate_presence_not_labor" }) });
-    if (visit.checkedOutAt) addAudit({ id: `audit-source-visit-${visit.id}-out`, organizationId: organization.id, aggregateType: "visit", aggregateId: visit.id, eventType: "visit.checked_out", actorType: visit.providerKind === "internal" ? "user" : "technician", actorId: visit.internalMembershipId, actorName: visit.technicianName, occurredAt: visit.checkedOutAt, payloadJson: JSON.stringify({ outcome: visit.outcome, observedDurationSeconds: visit.observedDurationSeconds, presenceBasis: "approximate_presence_not_labor" }) });
+    const visitWork = siteVisitWorkOrders.filter((row) => row.organizationId === visit.organizationId && row.visitId === visit.id).sort((left, right) => left.ordinal - right.ordinal);
+    addAudit({ id: `audit-source-visit-${visit.id}-in`, organizationId: organization.id, aggregateType: "visit", aggregateId: visit.id, eventType: "visit.checked_in", actorType: visit.providerKind === "internal" ? "user" : "technician", actorId: visit.internalMembershipId, actorName: visit.technicianName, occurredAt: visit.checkedInAt, payloadJson: JSON.stringify({ storeId: visit.storeId, workOrderId: visitWork.length === 1 ? visitWork[0].workOrderId : undefined, workOrderIds: visitWork.map((row) => row.workOrderId), vendorId: visit.vendorId, channel: visit.startedChannel, presenceBasis: "approximate_presence_not_labor" }) });
+    if (visit.checkedOutAt) addAudit({ id: `audit-source-visit-${visit.id}-out`, organizationId: organization.id, aggregateType: "visit", aggregateId: visit.id, eventType: "visit.checked_out", actorType: visit.providerKind === "internal" ? "user" : "technician", actorId: visit.internalMembershipId, actorName: visit.technicianName, occurredAt: visit.checkedOutAt, payloadJson: JSON.stringify({ outcome: visitWork.length === 1 ? visit.outcome : undefined, workOrderIds: visitWork.map((row) => row.workOrderId), perWorkOrderOutcomes: visitWork.map((row) => ({ workOrderId: row.workOrderId, outcome: row.outcome, followUpId: row.followUpId })), observedDurationSeconds: visit.observedDurationSeconds, presenceBasis: "approximate_presence_not_labor" }) });
   });
   costLines.forEach((cost) => addAudit({ id: `audit-source-cost-${cost.id}`, organizationId: organization.id, aggregateType: "work_order", aggregateId: cost.workOrderId, eventType: "work_order.cost_recorded", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: cost.recordedAt, payloadJson: JSON.stringify({ costLineId: cost.id, kind: cost.kind, amountMinor: cost.amount.amountMinor, currency: cost.amount.currency }) }));
   invoiceReferences.forEach((invoice) => addAudit({ id: `audit-source-invoice-${invoice.id}`, organizationId: organization.id, aggregateType: "invoice_reference", aggregateId: invoice.id, eventType: "invoice_reference.recorded", actorType: "user", actorId: "membership-northline-finance", actorName: "Parker Shaw", occurredAt: invoice.createdAt, payloadJson: JSON.stringify({ vendorId: invoice.vendorId, invoiceNumber: invoice.invoiceNumber, matchStatus: invoice.matchStatus, operatorWorkOrderNumber: invoice.operatorWorkOrderNumber }) }));
   pmOccurrences.forEach((occurrence) => addAudit({ id: `audit-source-pm-${occurrence.id}`, organizationId: organization.id, aggregateType: "pm_occurrence", aggregateId: occurrence.id, eventType: `pm_occurrence.${occurrence.status}`, actorType: occurrence.status === "completed" ? "user" : "system", actorId: occurrence.status === "completed" ? "membership-northline-tech-1" : undefined, actorName: occurrence.status === "completed" ? "Northline Internal Maintenance" : "Automated PM schedule", occurredAt: occurrence.completedAt ?? (occurrence.status === "missed" ? occurrence.windowEndsAt : NORTHLINE_AS_OF), payloadJson: JSON.stringify({ planId: occurrence.planId, storeId: occurrence.storeId, workOrderId: occurrence.workOrderId, dueAt: occurrence.dueAt, windowStartsAt: occurrence.windowStartsAt, windowEndsAt: occurrence.windowEndsAt }) }));
   files.forEach((file) => addAudit({ id: `audit-source-file-${file.id}`, organizationId: organization.id, aggregateType: "file", aggregateId: file.id, eventType: "file.available", actorType: "technician", actorName: "Service technician", occurredAt: file.createdAt, payloadJson: JSON.stringify({ originalName: file.originalName, contentType: file.contentType, byteLength: file.byteLength }) }));
   exceptions.forEach((exception) => addAudit({ id: `audit-source-exception-${exception.id}`, organizationId: organization.id, aggregateType: "exception", aggregateId: exception.id, eventType: "exception.detected", actorType: "system", actorName: "Automated service rules", occurredAt: exception.detectedAt, payloadJson: JSON.stringify({ kind: exception.kind, storeId: exception.storeId, workOrderId: exception.workOrderId, visitId: exception.visitId, severity: exception.severity }) }));
+  approvalRequests.forEach((request) => addAudit({ id: `audit-source-approval-request-${request.id}`, organizationId: organization.id, aggregateType: "approval_request", aggregateId: request.id, eventType: "approval.requested", actorType: "user", actorId: request.requestedByMembershipId, actorName: request.requestedByName, occurredAt: request.requestedAt, payloadJson: JSON.stringify({ subjectType: request.subjectType, subjectId: request.subjectId, policyId: request.policyId, policyVersion: request.policyVersion, requiredRole: request.requiredRole, amountMinor: request.amount.amountMinor, currency: request.amount.currency, parentApprovalRequestId: request.parentApprovalRequestId }) }));
+  approvalDecisions.forEach((decision) => addAudit({ id: `audit-source-approval-decision-${decision.id}`, organizationId: organization.id, aggregateType: "approval_request", aggregateId: decision.approvalRequestId, eventType: `approval.${decision.decision}`, actorType: "user", actorId: decision.decidedByMembershipId, actorName: decision.decidedByName, occurredAt: decision.decidedAt, payloadJson: JSON.stringify({ decisionId: decision.id, decidedByRole: decision.decidedByRole, reason: decision.reason, escalatedToRole: decision.escalatedToRole }) }));
+  workOrderVerifications.forEach((verification) => addAudit({ id: `audit-source-${verification.id}`, organizationId: verification.organizationId, aggregateType: "work_order", aggregateId: verification.workOrderId, eventType: verification.decision === "verified" ? "work_order.verified_and_resolved" : "work_order.verification_rejected", actorType: "user", actorId: verification.decidedByMembershipId, actorName: verification.decidedByName, occurredAt: verification.decidedAt, payloadJson: JSON.stringify({ verificationId: verification.id, siteVisitWorkOrderId: verification.siteVisitWorkOrderId, outcome: verification.outcome, outcomeRecordedAt: verification.outcomeRecordedAt, cycle: verification.cycle, decision: verification.decision, reason: verification.reason }) }));
+  workflowTasks.forEach((task) => addAudit({ id: `audit-source-workflow-task-${task.id}`, organizationId: task.organizationId, aggregateType: "workflow_task", aggregateId: task.id, eventType: "workflow_task.created", actorType: task.createdByActorType, actorId: task.createdByActorId, actorName: task.createdByActorName, occurredAt: task.createdAt, payloadJson: JSON.stringify({ workOrderId: task.workOrderId, serviceRequestId: task.serviceRequestId, taskType: task.taskType, assigneeType: task.assigneeType, blocking: task.blocking, dueAt: task.dueAt, noSlaReason: task.noSlaReason }) }));
+  workflowTaskSlaPauses.forEach((pause) => auditEvents.push({ id: `audit-source-workflow-pause-${pause.id}`, organizationId: pause.organizationId, aggregateType: "workflow_task", aggregateId: pause.workflowTaskId, eventType: "workflow_task.sla_paused", actorType: pause.pausedByActorType, actorId: pause.pausedByActorId, actorName: pause.pausedByActorName, occurredAt: pause.pausedAt, payloadJson: JSON.stringify({ pauseId: pause.id, workOrderId: pause.workOrderId, reasonCode: pause.reasonCode, ownerType: pause.ownerType, ownerId: pause.ownerId, affectedClocks: pause.affectedClocks, expectedResumeAt: pause.expectedResumeAt }) }));
+  workflowTaskSlaResumes.forEach((resume) => auditEvents.push({ id: `audit-source-workflow-resume-${resume.id}`, organizationId: resume.organizationId, aggregateType: "workflow_task", aggregateId: resume.workflowTaskId, eventType: "workflow_task.sla_resumed", actorType: resume.resumedByActorType, actorId: resume.resumedByActorId, actorName: resume.resumedByActorName, occurredAt: resume.resumedAt, payloadJson: JSON.stringify({ resumeId: resume.id, pauseId: resume.pauseId, workOrderId: resume.workOrderId, note: resume.note }) }));
 
   issuances.forEach((issuance) => outboxMessages.push({ id: `outbox-issuance-${issuance.id}`, organizationId: organization.id, topic: "ops.work_order.issued", aggregateType: "work_order", aggregateId: issuance.workOrderId, payloadJson: JSON.stringify({ issuanceId: issuance.id, assignmentId: issuance.assignmentId, channel: issuance.channel }), status: "pending", availableAt: issuance.issuedAt, createdAt: issuance.issuedAt }));
   exceptions.filter((exception) => exception.status !== "resolved").forEach((exception) => outboxMessages.push({ id: `outbox-exception-${exception.id}`, organizationId: organization.id, topic: "ops.exception.detected", aggregateType: "exception", aggregateId: exception.id, payloadJson: JSON.stringify({ kind: exception.kind, storeId: exception.storeId, severity: exception.severity }), status: "delivered", availableAt: exception.detectedAt, createdAt: exception.detectedAt }));
-  visits.filter((visit) => visit.status === "active").forEach((visit) => outboxMessages.push({ id: `outbox-active-visit-${visit.id}`, organizationId: organization.id, topic: "ops.visit.checked_in", aggregateType: "visit", aggregateId: visit.id, payloadJson: JSON.stringify({ storeId: visit.storeId, vendorId: visit.vendorId, workOrderId: visit.workOrderId }), status: "delivered", availableAt: visit.checkedInAt, createdAt: visit.checkedInAt }));
+  visits.filter((visit) => visit.status === "active").forEach((visit) => { const workOrderIds = siteVisitWorkOrders.filter((row) => row.organizationId === visit.organizationId && row.visitId === visit.id).sort((left, right) => left.ordinal - right.ordinal).map((row) => row.workOrderId); outboxMessages.push({ id: `outbox-active-visit-${visit.id}`, organizationId: organization.id, topic: "ops.visit.checked_in", aggregateType: "visit", aggregateId: visit.id, payloadJson: JSON.stringify({ storeId: visit.storeId, vendorId: visit.vendorId, workOrderId: workOrderIds.length === 1 ? workOrderIds[0] : undefined, workOrderIds }), status: "delivered", availableAt: visit.checkedInAt, createdAt: visit.checkedInAt }); });
+  approvalRequests.filter((request) => !approvalDecisions.some((decision) => decision.approvalRequestId === request.id)).forEach((request) => outboxMessages.push({ id: `outbox-approval-request-${request.id}`, organizationId: organization.id, topic: "ops.approval.requested", aggregateType: "approval_request", aggregateId: request.id, payloadJson: JSON.stringify({ subjectType: request.subjectType, subjectId: request.subjectId, requiredRole: request.requiredRole, amountMinor: request.amount.amountMinor, currency: request.amount.currency }), status: "pending", availableAt: request.requestedAt, createdAt: request.requestedAt }));
+  workOrderVerifications.forEach((verification) => outboxMessages.push({ id: `outbox-${verification.id}`, organizationId: verification.organizationId, topic: verification.decision === "verified" ? "ops.work_order.resolved" : "ops.work_order.verification_rejected", aggregateType: "work_order", aggregateId: verification.workOrderId, payloadJson: JSON.stringify({ verificationId: verification.id, siteVisitWorkOrderId: verification.siteVisitWorkOrderId, cycle: verification.cycle, decision: verification.decision }), status: "pending", availableAt: verification.decidedAt, createdAt: verification.decidedAt }));
+  workflowTasks.forEach((task) => outboxMessages.push({ id: `outbox-workflow-task-${task.id}`, organizationId: task.organizationId, topic: "ops.workflow_task.created", aggregateType: "workflow_task", aggregateId: task.id, payloadJson: JSON.stringify({ workOrderId: task.workOrderId, serviceRequestId: task.serviceRequestId, taskType: task.taskType, assigneeType: task.assigneeType, blocking: task.blocking, dueAt: task.dueAt, noSlaReason: task.noSlaReason }), status: "pending", availableAt: task.createdAt, createdAt: task.createdAt }));
 
   const publicTokens: PublicActionToken[] = [
     { id: "public-token-northline-store-104", organizationId: organization.id, purpose: "store_gateway", subjectType: "store", subjectId: "store-northline-104", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.store104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
@@ -890,9 +1451,10 @@ function buildFixture(): OpsFixture {
     { id: "public-token-northline-trusted-store-104", organizationId: organization.id, purpose: "trusted_store_device", subjectType: "store", subjectId: "store-northline-104", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.trustedStore104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
     { id: "public-token-northline-estimate-105-summit", organizationId: organization.id, purpose: "vendor_estimate", subjectType: "work_order_estimate_request", subjectId: "estimate-request-105-summit", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.estimate105Summit, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 14, 50) },
     { id: "public-token-northline-estimate-105-cedar", organizationId: organization.id, purpose: "vendor_estimate", subjectType: "work_order_estimate_request", subjectId: "estimate-request-105-cedar", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.estimate105Cedar, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 14, 51) },
+    { id: "public-token-northline-service-run-summit", organizationId: organization.id, purpose: "service_run_response", subjectType: "service_run", subjectId: "service-run-summit-north-2026-08-24", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceRunSummit, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 16) },
   ];
 
-  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, requests, workOrders, assignments, issuances, vendorResponses, estimateRequests, estimateProposals, visits, visitEvidence, files, entityFiles, followUps, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, components, pmPlans, pmOccurrences, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
+  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
 }
 
 const presentationFixture = buildFixture();
@@ -913,26 +1475,70 @@ export function buildSyntheticScaleFixture(storeCount = 65): OpsFixture {
     return { ...source, id: `store-scale-${storeNumber}`, regionId: fixture.regions[index % fixture.regions.length].id, storeNumber, name: `Scale Fixture Store ${storeNumber}`, address1: `${500 + index} Load Test Avenue`, aliases: [`Store ${storeNumber}`], latitudeE6: source.latitudeE6! + index * 50, longitudeE6: source.longitudeE6! - index * 50 };
   });
   fixture.requests = [];
+  fixture.requestImpactAssessments = [];
   fixture.workOrders = [];
+  fixture.approvalPolicies = [];
+  fixture.approvalRequests = [];
+  fixture.vendorQualifications = [];
+  fixture.vendorComplianceDocuments = [];
+  fixture.vendorContracts = [];
+  fixture.contractVersions = [];
+  fixture.contractScopes = [];
+  fixture.rateCardLines = [];
+  fixture.serviceLevelPolicies = [];
+  fixture.schedulingPolicies = [];
+  fixture.vendorCapacity = [];
+  fixture.approvalDecisions = [];
   fixture.assignments = [];
   fixture.issuances = [];
   fixture.vendorResponses = [];
   fixture.estimateRequests = [];
   fixture.estimateProposals = [];
   fixture.visits = [];
+  fixture.siteVisitWorkOrders = [];
+  fixture.workOrderVerifications = [];
   fixture.visitEvidence = [];
   fixture.files = [];
   fixture.entityFiles = [];
   fixture.followUps = [];
+  fixture.workflowTasks = [];
+  fixture.workflowTaskSlaPauses = [];
+  fixture.workflowTaskSlaResumes = [];
   fixture.exceptions = [];
   fixture.assets = [];
   fixture.replacementProfiles = [];
   fixture.replacementBenchmarks = [];
   fixture.assetReplacementOverrides = [];
   fixture.replacementEvents = [];
+  fixture.lifecycleRecommendations = [];
   fixture.components = [];
+  fixture.maintenancePrograms = [];
+  fixture.checklistTemplates = [];
   fixture.pmPlans = [];
   fixture.pmOccurrences = [];
+  fixture.pmWorkItems = [];
+  fixture.checklistResponses = [];
+  fixture.serviceRuns = [];
+  fixture.routeStops = [];
+  fixture.serviceRunWorkOrders = [];
+  fixture.serviceRunResponses = [];
+  fixture.vendorWarrantyProfiles = [];
+  fixture.warrantyRules = [];
+  fixture.warrantyCoverageLines = [];
+  fixture.repairItems = [];
+  fixture.appliedWarranties = [];
+  fixture.warrantyAmendments = [];
+  fixture.manufacturerWarranties = [];
+  fixture.warrantyCases = [];
+  fixture.quotes = [];
+  fixture.authorizations = [];
+  fixture.invoices = [];
+  fixture.invoiceLines = [];
+  fixture.invoiceLineAllocations = [];
+  fixture.invoiceExceptions = [];
+  fixture.invoiceAdjustments = [];
+  fixture.serviceDiscrepancies = [];
+  fixture.valueEvents = [];
   fixture.costLines = [];
   fixture.invoiceReferences = [];
   fixture.invoiceAllocations = [];
@@ -954,6 +1560,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
   const issuanceIds = new Set(fixture.issuances.map((row) => row.id));
   const estimateRequestIds = new Set(fixture.estimateRequests.map((row) => row.id));
   const visitIds = new Set(fixture.visits.map((row) => row.id));
+  const workflowTaskIds = new Set(fixture.workflowTasks.map((row) => row.id));
   const assetIds = new Set(fixture.assets.map((row) => row.id));
   const replacementProfileIds = new Set(fixture.replacementProfiles.map((row) => row.id));
   const replacementBenchmarkIds = new Set(fixture.replacementBenchmarks.map((row) => row.id));
@@ -963,16 +1570,24 @@ export function assertOpsFixture(fixture: OpsFixture) {
     if (new Set(rows.map((row) => row.id)).size !== rows.length) throw new Error(`${name} contains duplicate ids`);
   };
   ([
-    ["organizations", fixture.organizations], ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["users", fixture.users], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["replacement profiles", fixture.replacementProfiles], ["replacement benchmarks", fixture.replacementBenchmarks], ["asset replacement overrides", fixture.assetReplacementOverrides], ["replacement events", fixture.replacementEvents], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
+    ["organizations", fixture.organizations], ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["users", fixture.users], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["approval policies", fixture.approvalPolicies], ["approval requests", fixture.approvalRequests], ["approval decisions", fixture.approvalDecisions], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["site visit work orders", fixture.siteVisitWorkOrders], ["work-order verifications", fixture.workOrderVerifications], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["workflow tasks", fixture.workflowTasks], ["workflow task SLA pauses", fixture.workflowTaskSlaPauses], ["workflow task SLA resumes", fixture.workflowTaskSlaResumes], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["replacement profiles", fixture.replacementProfiles], ["replacement benchmarks", fixture.replacementBenchmarks], ["asset replacement overrides", fixture.assetReplacementOverrides], ["replacement events", fixture.replacementEvents], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
   ] as Array<[string, Array<{ id: string }>]>).forEach(([name, rows]) => ensureUnique(name, rows));
   ensureUnique("equipment templates", fixture.equipmentTemplates);
   ensureUnique("component templates", fixture.componentTemplates);
+  ensureUnique("request impact assessments", fixture.requestImpactAssessments);
+  ([
+    ["vendor qualifications", fixture.vendorQualifications], ["vendor compliance", fixture.vendorComplianceDocuments], ["vendor contracts", fixture.vendorContracts], ["contract versions", fixture.contractVersions], ["contract scopes", fixture.contractScopes], ["rate-card lines", fixture.rateCardLines], ["service-level policies", fixture.serviceLevelPolicies], ["scheduling policies", fixture.schedulingPolicies], ["vendor capacity", fixture.vendorCapacity], ["maintenance programs", fixture.maintenancePrograms], ["checklist templates", fixture.checklistTemplates], ["PM work items", fixture.pmWorkItems], ["checklist responses", fixture.checklistResponses], ["service runs", fixture.serviceRuns], ["route stops", fixture.routeStops], ["service-run work orders", fixture.serviceRunWorkOrders], ["service-run responses", fixture.serviceRunResponses], ["vendor warranty profiles", fixture.vendorWarrantyProfiles], ["warranty rules", fixture.warrantyRules], ["warranty coverage lines", fixture.warrantyCoverageLines], ["repair items", fixture.repairItems], ["applied warranties", fixture.appliedWarranties], ["warranty amendments", fixture.warrantyAmendments], ["manufacturer warranties", fixture.manufacturerWarranties], ["warranty cases", fixture.warrantyCases], ["quotes", fixture.quotes], ["authorizations", fixture.authorizations], ["invoices", fixture.invoices], ["invoice lines", fixture.invoiceLines], ["invoice line allocations", fixture.invoiceLineAllocations], ["invoice exceptions", fixture.invoiceExceptions], ["invoice adjustments", fixture.invoiceAdjustments], ["service discrepancies", fixture.serviceDiscrepancies], ["value events", fixture.valueEvents],
+  ] as Array<[string, Array<{ id: string }>]>).forEach(([name, rows]) => ensureUnique(name, rows));
   const ensureTenant = (name: string, rows: Array<{ organizationId: string }>) => rows.forEach((row) => { if (!organizationIds.has(row.organizationId)) throw new Error(`${name} references an unknown organization`); });
   ([
-    ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["vendor specialties", fixture.vendorSpecialties], ["vendor coverage", fixture.vendorCoverage], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["replacement profiles", fixture.replacementProfiles], ["replacement benchmarks", fixture.replacementBenchmarks], ["asset replacement overrides", fixture.assetReplacementOverrides], ["replacement events", fixture.replacementEvents], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
+    ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["vendor specialties", fixture.vendorSpecialties], ["vendor coverage", fixture.vendorCoverage], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["approval policies", fixture.approvalPolicies], ["approval requests", fixture.approvalRequests], ["approval decisions", fixture.approvalDecisions], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["site visit work orders", fixture.siteVisitWorkOrders], ["work-order verifications", fixture.workOrderVerifications], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["workflow tasks", fixture.workflowTasks], ["workflow task SLA pauses", fixture.workflowTaskSlaPauses], ["workflow task SLA resumes", fixture.workflowTaskSlaResumes], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["replacement profiles", fixture.replacementProfiles], ["replacement benchmarks", fixture.replacementBenchmarks], ["asset replacement overrides", fixture.assetReplacementOverrides], ["replacement events", fixture.replacementEvents], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
   ] as Array<[string, Array<{ organizationId: string }>]>).forEach(([name, rows]) => ensureTenant(name, rows));
   ensureTenant("equipment templates", fixture.equipmentTemplates);
   ensureTenant("component templates", fixture.componentTemplates);
+  ensureTenant("request impact assessments", fixture.requestImpactAssessments);
+  ([
+    ["vendor qualifications", fixture.vendorQualifications], ["vendor compliance", fixture.vendorComplianceDocuments], ["vendor contracts", fixture.vendorContracts], ["contract versions", fixture.contractVersions], ["contract scopes", fixture.contractScopes], ["rate-card lines", fixture.rateCardLines], ["service-level policies", fixture.serviceLevelPolicies], ["scheduling policies", fixture.schedulingPolicies], ["vendor capacity", fixture.vendorCapacity], ["maintenance programs", fixture.maintenancePrograms], ["checklist templates", fixture.checklistTemplates], ["PM work items", fixture.pmWorkItems], ["checklist responses", fixture.checklistResponses], ["service runs", fixture.serviceRuns], ["route stops", fixture.routeStops], ["service-run work orders", fixture.serviceRunWorkOrders], ["service-run responses", fixture.serviceRunResponses], ["vendor warranty profiles", fixture.vendorWarrantyProfiles], ["warranty rules", fixture.warrantyRules], ["warranty coverage lines", fixture.warrantyCoverageLines], ["repair items", fixture.repairItems], ["applied warranties", fixture.appliedWarranties], ["warranty amendments", fixture.warrantyAmendments], ["manufacturer warranties", fixture.manufacturerWarranties], ["warranty cases", fixture.warrantyCases], ["quotes", fixture.quotes], ["authorizations", fixture.authorizations], ["invoices", fixture.invoices], ["invoice lines", fixture.invoiceLines], ["invoice line allocations", fixture.invoiceLineAllocations], ["invoice exceptions", fixture.invoiceExceptions], ["invoice adjustments", fixture.invoiceAdjustments], ["service discrepancies", fixture.serviceDiscrepancies], ["value events", fixture.valueEvents],
+  ] as Array<[string, Array<{ organizationId: string }>]>).forEach(([name, rows]) => ensureTenant(name, rows));
   fixture.regions.forEach((row) => { if (row.divisionId && !divisionIds.has(row.divisionId)) throw new Error(`Region ${row.id} has no division`); });
   fixture.stores.forEach((row) => {
     if (row.divisionId && !divisionIds.has(row.divisionId)) throw new Error(`Store ${row.id} has no division`);
@@ -994,6 +1609,22 @@ export function assertOpsFixture(fixture: OpsFixture) {
     if (row.convertedWorkOrderId && !convertedWorkOrder) throw new Error(`Request ${row.id} has no converted work order`);
     if (row.status === "converted" && (!convertedWorkOrder || convertedWorkOrder.requestId !== row.id || convertedWorkOrder.storeId !== row.storeId)) throw new Error(`Converted request ${row.id} has an invalid work-order path`);
   });
+  fixture.requestImpactAssessments.forEach((assessment) => {
+    const request = fixture.requests.find((candidate) => candidate.organizationId === assessment.organizationId && candidate.id === assessment.requestId);
+    if (!request || request.storeId !== assessment.storeId) throw new Error(`Impact assessment ${assessment.id} has an invalid request/store path`);
+    if (Date.parse(assessment.assessedAt) < Date.parse(request.submittedAt) || !assessment.assessedByActorName.trim()) throw new Error(`Impact assessment ${assessment.id} has invalid provenance`);
+    if (assessment.assessmentKind === "review" ? !assessment.reviewDisposition : assessment.reviewDisposition !== undefined) throw new Error(`Impact assessment ${assessment.id} has an invalid review shape`);
+    if (assessment.capacityUnavailableBps !== undefined && (!Number.isSafeInteger(assessment.capacityUnavailableBps) || assessment.capacityUnavailableBps < 0 || assessment.capacityUnavailableBps > 10_000)) throw new Error(`Impact assessment ${assessment.id} has invalid unavailable capacity`);
+    if (assessment.estimatedDowntimeMinutes !== undefined && (!Number.isSafeInteger(assessment.estimatedDowntimeMinutes) || assessment.estimatedDowntimeMinutes < 0)) throw new Error(`Impact assessment ${assessment.id} has invalid downtime exposure`);
+    for (const estimate of [assessment.productInventoryValue, assessment.estimatedDailyRevenueExposure]) {
+      if (estimate && (!Number.isSafeInteger(estimate.amountMinor) || estimate.amountMinor < 0 || !estimate.currency.trim())) throw new Error(`Impact assessment ${assessment.id} has an invalid exposure estimate`);
+    }
+  });
+  fixture.requests.forEach((request) => {
+    const assessments = fixture.requestImpactAssessments.filter((assessment) => assessment.organizationId === request.organizationId && assessment.requestId === request.id);
+    if (assessments.filter((assessment) => assessment.assessmentKind === "initial_report").length !== 1) throw new Error(`Request ${request.id} must have exactly one initial impact assessment`);
+    if (request.status !== "submitted" && !assessments.some((assessment) => assessment.assessmentKind === "review")) throw new Error(`Reviewed request ${request.id} has no manager impact review`);
+  });
   fixture.workOrders.forEach((row) => {
     if (!storeIds.has(row.storeId)) throw new Error(`Work order ${row.id} has no store`);
     if (!row.problem.trim()) throw new Error(`Work order ${row.id} has no problem`);
@@ -1010,6 +1641,104 @@ export function assertOpsFixture(fixture: OpsFixture) {
     if ((row.repairEstimate || row.estimatedServiceExtensionMonths !== undefined) && !row.assetId) throw new Error(`Work order ${row.id} has repair planning inputs without an asset`);
     if (row.taxonomyNodeId && !taxonomyNodeIds.has(row.taxonomyNodeId)) throw new Error(`Work order ${row.id} has an invalid taxonomy node`);
     if (!["closed", "cancelled"].includes(row.status) && (!row.accountableParty.trim() || !row.nextAction.trim() || !row.dueAt || !row.escalationTo?.trim())) throw new Error(`Open work order ${row.id} has no complete accountability state`);
+  });
+  const approvalPolicyIds = new Set(fixture.approvalPolicies.map((row) => row.id));
+  const policyVersionKeys = new Set<string>();
+  fixture.approvalPolicies.forEach((row) => {
+    const versionKey = `${row.organizationId}:${row.policyKey}:${row.version}`;
+    if (policyVersionKeys.has(versionKey) || !Number.isInteger(row.version) || row.version < 1) throw new Error(`Approval policy ${row.id} has an invalid version`);
+    policyVersionKeys.add(versionKey);
+    if (!Number.isSafeInteger(row.minAmountMinor) || row.minAmountMinor < 0 || row.maxAmountMinor !== undefined && (!Number.isSafeInteger(row.maxAmountMinor) || row.maxAmountMinor < row.minAmountMinor)) throw new Error(`Approval policy ${row.id} has an invalid amount range`);
+    if (row.scopeKind === "organization" && row.scopeId !== row.organizationId || row.scopeKind === "region" && !fixture.regions.some((region) => region.organizationId === row.organizationId && region.id === row.scopeId) || row.scopeKind === "store" && !fixture.stores.some((store) => store.organizationId === row.organizationId && store.id === row.scopeId)) throw new Error(`Approval policy ${row.id} has an invalid scope`);
+    if (row.supersedesPolicyId && !approvalPolicyIds.has(row.supersedesPolicyId)) throw new Error(`Approval policy ${row.id} has an invalid predecessor`);
+  });
+  fixture.approvalRequests.forEach((row) => {
+    const policy = fixture.approvalPolicies.find((candidate) => candidate.organizationId === row.organizationId && candidate.id === row.policyId);
+    const subject = row.subjectType === "work_order"
+      ? fixture.workOrders.find((candidate) => candidate.organizationId === row.organizationId && candidate.id === row.subjectId)
+      : fixture.requests.find((candidate) => candidate.organizationId === row.organizationId && candidate.id === row.subjectId);
+    if (!policy || !subject || subject.storeId !== row.storeId || !storeIds.has(row.storeId)) throw new Error(`Approval request ${row.id} has an invalid subject, policy, or store`);
+    if (policy.policyKey !== row.policyKey || policy.version !== row.policyVersion || policy.name !== row.policyName || policy.scopeKind !== row.policyScopeKind || policy.scopeId !== row.policyScopeId) throw new Error(`Approval request ${row.id} does not preserve its policy snapshot`);
+    if (!Number.isSafeInteger(row.amount.amountMinor) || row.amount.amountMinor < 0 || !row.amount.currency.trim() || row.dueAt && row.dueAt < row.requestedAt) throw new Error(`Approval request ${row.id} has invalid commercial or timing facts`);
+    if (row.parentApprovalRequestId) {
+      const parent = fixture.approvalRequests.find((candidate) => candidate.organizationId === row.organizationId && candidate.id === row.parentApprovalRequestId);
+      if (!parent || parent.subjectType !== row.subjectType || parent.subjectId !== row.subjectId || parent.requestedAt > row.requestedAt) throw new Error(`Approval request ${row.id} has an invalid escalation parent`);
+    }
+  });
+  const decidedApprovalRequests = new Set<string>();
+  fixture.approvalDecisions.forEach((row) => {
+    const request = fixture.approvalRequests.find((candidate) => candidate.organizationId === row.organizationId && candidate.id === row.approvalRequestId);
+    const membership = row.decidedByMembershipId ? fixture.memberships.find((candidate) => candidate.organizationId === row.organizationId && candidate.id === row.decidedByMembershipId) : undefined;
+    const key = `${row.organizationId}:${row.approvalRequestId}`;
+    if (!request || decidedApprovalRequests.has(key) || row.decidedAt < request.requestedAt) throw new Error(`Approval decision ${row.id} has an invalid or duplicate request`);
+    decidedApprovalRequests.add(key);
+    if (membership && membership.role !== row.decidedByRole || row.decidedByRole !== request.requiredRole) throw new Error(`Approval decision ${row.id} was made by the wrong role`);
+    if (row.decision === "escalated" && !row.escalatedToRole || row.decision !== "escalated" && row.escalatedToRole) throw new Error(`Approval decision ${row.id} has an invalid escalation shape`);
+  });
+  const openTaskStatuses = new Set<WorkflowTask["status"]>(["open", "in_progress"]);
+  const sourceFollowUpIds = new Set<string>();
+  const sourceApprovalRequestIds = new Set<string>();
+  const priorityRank: Record<WorkflowTask["priority"], number> = { critical: 4, high: 3, normal: 2, low: 1 };
+  const selectPrimaryTask = (tasks: WorkflowTask[]) => tasks.filter((task) => openTaskStatuses.has(task.status)).sort((left, right) =>
+    Number(right.blocking) - Number(left.blocking)
+    || Number(right.requiredForProgress) - Number(left.requiredForProgress)
+    || priorityRank[right.priority] - priorityRank[left.priority]
+    || (left.dueAt ?? "9999").localeCompare(right.dueAt ?? "9999")
+    || Number(right.status === "in_progress") - Number(left.status === "in_progress")
+    || left.createdAt.localeCompare(right.createdAt)
+    || left.id.localeCompare(right.id))[0];
+  fixture.workflowTasks.forEach((task) => {
+    const workOrder = task.workOrderId ? fixture.workOrders.find((candidate) => candidate.organizationId === task.organizationId && candidate.id === task.workOrderId) : undefined;
+    const serviceRequest = task.serviceRequestId ? fixture.requests.find((candidate) => candidate.organizationId === task.organizationId && candidate.id === task.serviceRequestId) : undefined;
+    if ((task.workOrderId ? 1 : 0) + (task.serviceRequestId ? 1 : 0) !== 1 || (!workOrder && !serviceRequest)) throw new Error(`Workflow task ${task.id} must have exactly one valid request or work-order subject`);
+    if (!task.title.trim() || !task.reason.trim() || !task.assigneeName.trim() || !task.completionCriteria.trim() || !task.escalationDestination.trim()) throw new Error(`Workflow task ${task.id} is missing accountable task detail`);
+    if ((task.dueAt ? 1 : 0) + (task.noSlaReason?.trim() ? 1 : 0) !== 1) throw new Error(`Workflow task ${task.id} requires a due date or one explicit no-SLA reason`);
+    if (task.dueAt && Date.parse(task.dueAt) < Date.parse(task.createdAt) || !Number.isInteger(task.escalationLevel) || task.escalationLevel < 0) throw new Error(`Workflow task ${task.id} has invalid timing or escalation`);
+    if (task.assigneeType === "role" ? !task.assigneeRole || task.assigneeId : !task.assigneeId || task.assigneeRole) throw new Error(`Workflow task ${task.id} has an invalid assignee shape`);
+    if (task.assigneeType === "user" && !fixture.memberships.some((candidate) => candidate.organizationId === task.organizationId && candidate.id === task.assigneeId)) throw new Error(`Workflow task ${task.id} has an invalid user assignee`);
+    if (task.assigneeType === "vendor" && !fixture.vendors.some((candidate) => candidate.organizationId === task.organizationId && candidate.id === task.assigneeId)) throw new Error(`Workflow task ${task.id} has an invalid vendor assignee`);
+    if (task.status === "in_progress" && (!task.startedAt || !task.startedByActorType || !task.startedByActorName?.trim())) throw new Error(`Workflow task ${task.id} has no start evidence`);
+    if (task.status === "completed" && (!task.completedAt || !task.completedByActorType || !task.completedByActorName?.trim() || !task.resolutionNote?.trim()) || task.status !== "completed" && task.completedAt) throw new Error(`Workflow task ${task.id} has an invalid completion shape`);
+    if (task.status === "cancelled" && (!task.cancelledAt || !task.cancelledByActorType || !task.cancelledByActorName?.trim() || !task.resolutionNote?.trim()) || task.status !== "cancelled" && task.cancelledAt) throw new Error(`Workflow task ${task.id} has an invalid cancellation shape`);
+    if (workOrder && ["closed", "cancelled"].includes(workOrder.status) && openTaskStatuses.has(task.status)) throw new Error(`Terminal work order ${workOrder.id} has open workflow task ${task.id}`);
+    if (task.sourceFollowUpId) {
+      const followUp = fixture.followUps.find((candidate) => candidate.organizationId === task.organizationId && candidate.id === task.sourceFollowUpId);
+      if (!workOrder || !followUp || followUp.workOrderId !== task.workOrderId || sourceFollowUpIds.has(`${task.organizationId}:${task.sourceFollowUpId}`)) throw new Error(`Workflow task ${task.id} has an invalid or duplicate follow-up source`);
+      sourceFollowUpIds.add(`${task.organizationId}:${task.sourceFollowUpId}`);
+    }
+    if (task.sourceApprovalRequestId) {
+      const approval = fixture.approvalRequests.find((candidate) => candidate.organizationId === task.organizationId && candidate.id === task.sourceApprovalRequestId);
+      const request = approval?.subjectType === "service_request" ? fixture.requests.find((candidate) => candidate.organizationId === task.organizationId && candidate.id === approval.subjectId) : undefined;
+      const targetsSubject = approval?.subjectType === "work_order"
+        ? approval.subjectId === task.workOrderId
+        : task.serviceRequestId ? approval?.subjectId === task.serviceRequestId : request?.convertedWorkOrderId === task.workOrderId;
+      if (!approval || !targetsSubject || sourceApprovalRequestIds.has(`${task.organizationId}:${task.sourceApprovalRequestId}`)) throw new Error(`Workflow task ${task.id} has an invalid or duplicate approval source`);
+      sourceApprovalRequestIds.add(`${task.organizationId}:${task.sourceApprovalRequestId}`);
+    }
+  });
+  fixture.workOrders.forEach((workOrder) => {
+    const tasks = fixture.workflowTasks.filter((task) => task.organizationId === workOrder.organizationId && task.workOrderId === workOrder.id);
+    const primary = selectPrimaryTask(tasks);
+    if (!["closed", "cancelled"].includes(workOrder.status)) {
+      if (!tasks.some((task) => openTaskStatuses.has(task.status) && task.requiredForProgress)) throw new Error(`Nonterminal work order ${workOrder.id} has no required open workflow task`);
+      if (!primary || primary.assigneeName !== workOrder.accountableParty || primary.title !== workOrder.nextAction || primary.dueAt !== workOrder.dueAt || primary.escalationDestination !== workOrder.escalationTo) throw new Error(`Work order ${workOrder.id} accountability fields are not the deterministic workflow-task projection`);
+    }
+  });
+  const resumedPauseIds = new Set<string>();
+  fixture.workflowTaskSlaResumes.forEach((resume) => {
+    const pause = fixture.workflowTaskSlaPauses.find((candidate) => candidate.organizationId === resume.organizationId && candidate.id === resume.pauseId);
+    if (!pause || !workflowTaskIds.has(resume.workflowTaskId) || pause.workflowTaskId !== resume.workflowTaskId || pause.workOrderId !== resume.workOrderId || resumedPauseIds.has(`${resume.organizationId}:${resume.pauseId}`) || Date.parse(resume.resumedAt) < Date.parse(pause.pausedAt)) throw new Error(`Workflow SLA resume ${resume.id} has an invalid pause history`);
+    resumedPauseIds.add(`${resume.organizationId}:${resume.pauseId}`);
+  });
+  const activePauseTasks = new Set<string>();
+  fixture.workflowTaskSlaPauses.forEach((pause) => {
+    const task = fixture.workflowTasks.find((candidate) => candidate.organizationId === pause.organizationId && candidate.id === pause.workflowTaskId);
+    if (!task || task.workOrderId !== pause.workOrderId || !pause.reasonDetail.trim() || !pause.ownerName.trim() || pause.affectedClocks.length === 0 || new Set(pause.affectedClocks).size !== pause.affectedClocks.length || pause.expectedResumeAt && Date.parse(pause.expectedResumeAt) <= Date.parse(pause.pausedAt)) throw new Error(`Workflow SLA pause ${pause.id} is invalid`);
+    if (pause.ownerType === "membership" && !fixture.memberships.some((candidate) => candidate.organizationId === pause.organizationId && candidate.id === pause.ownerId) || pause.ownerType === "vendor" && !fixture.vendors.some((candidate) => candidate.organizationId === pause.organizationId && candidate.id === pause.ownerId) || pause.ownerType === "store" && !fixture.stores.some((candidate) => candidate.organizationId === pause.organizationId && candidate.id === pause.ownerId)) throw new Error(`Workflow SLA pause ${pause.id} has an invalid owner`);
+    const active = !resumedPauseIds.has(`${pause.organizationId}:${pause.id}`);
+    const key = `${pause.organizationId}:${pause.workflowTaskId}`;
+    if (active && activePauseTasks.has(key)) throw new Error(`Workflow task ${pause.workflowTaskId} has multiple active SLA pauses`);
+    if (active) activePauseTasks.add(key);
   });
   fixture.assignments.forEach((row) => {
     if (!workOrderIds.has(row.workOrderId)) throw new Error(`Assignment ${row.id} has no work order`);
@@ -1100,7 +1829,71 @@ export function assertOpsFixture(fixture: OpsFixture) {
     if (row.leadTimeDays !== undefined && (!Number.isInteger(row.leadTimeDays) || row.leadTimeDays < 0 || row.leadTimeDays > 3_650)) throw new Error(`Estimate proposal ${row.id} has an invalid lead time`);
     if (Date.parse(row.submittedAt) < Date.parse(request.requestedAt) || row.validUntil && Date.parse(row.validUntil) < Date.parse(row.submittedAt)) throw new Error(`Estimate proposal ${row.id} has invalid timing`);
   });
-  fixture.visits.forEach((row) => { if (!storeIds.has(row.storeId)) throw new Error(`Visit ${row.id} has no store`); if (row.vendorId && !vendorIds.has(row.vendorId)) throw new Error(`Visit ${row.id} has no vendor`); if (row.workOrderId) { const workOrder = fixture.workOrders.find((item) => item.organizationId === row.organizationId && item.id === row.workOrderId); if (!workOrder || workOrder.storeId !== row.storeId) throw new Error(`Visit ${row.id} has an invalid work-order/store path`); if (Date.parse(row.checkedInAt) < Date.parse(workOrder.createdAt)) throw new Error(`Visit ${row.id} predates its work order`); const providerMatches = fixture.assignments.some((assignment) => assignment.organizationId === row.organizationId && assignment.workOrderId === row.workOrderId && (row.providerKind === "outside_vendor" ? assignment.kind === "outside_vendor" && assignment.vendorId === row.vendorId : assignment.kind === "internal" && assignment.internalMembershipId === row.internalMembershipId)); if (!providerMatches) throw new Error(`Visit ${row.id} has no matching work-order provider assignment`); } else if (!row.unmatchedReason) throw new Error(`No-WO visit ${row.id} requires a reason`); if (row.checkedOutAt && Date.parse(row.checkedOutAt) < Date.parse(row.checkedInAt)) throw new Error(`Visit ${row.id} checkout predates check-in`); });
+  const visitWorkSelectionKeys = new Set<string>();
+  const visitWorkOrdinalKeys = new Set<string>();
+  fixture.siteVisitWorkOrders.forEach((row) => {
+    const visit = fixture.visits.find((item) => item.organizationId === row.organizationId && item.id === row.visitId);
+    const workOrder = fixture.workOrders.find((item) => item.organizationId === row.organizationId && item.id === row.workOrderId);
+    const selectionKey = `${row.organizationId}:${row.visitId}:${row.workOrderId}`;
+    const ordinalKey = `${row.organizationId}:${row.visitId}:${row.ordinal}`;
+    if (!visit || !workOrder || visit.storeId !== workOrder.storeId || visitWorkSelectionKeys.has(selectionKey) || visitWorkOrdinalKeys.has(ordinalKey) || !Number.isInteger(row.ordinal) || row.ordinal < 1) throw new Error(`Site visit work order ${row.id} has an invalid visit/work selection`);
+    visitWorkSelectionKeys.add(selectionKey);
+    visitWorkOrdinalKeys.add(ordinalKey);
+    if (Date.parse(row.linkedAt) < Date.parse(workOrder.createdAt) || !row.linkedByActorName.trim()) throw new Error(`Site visit work order ${row.id} has invalid link provenance`);
+    const providerMatches = fixture.assignments.some((assignment) => assignment.organizationId === row.organizationId && assignment.workOrderId === row.workOrderId && (visit.providerKind === "outside_vendor" ? assignment.kind === "outside_vendor" && assignment.vendorId === visit.vendorId : assignment.kind === "internal" && assignment.internalMembershipId === visit.internalMembershipId));
+    if (!providerMatches) throw new Error(`Site visit work order ${row.id} has no matching provider assignment`);
+    const hasOutcomeProvenance = Boolean(row.outcomeRecordedByActorType && row.outcomeRecordedByActorName?.trim() && row.outcomeRecordedAt);
+    if (row.outcome ? !hasOutcomeProvenance : row.outcomeNotes !== undefined || row.outcomeRecordedByActorType !== undefined || row.outcomeRecordedByActorId !== undefined || row.outcomeRecordedByActorName !== undefined || row.outcomeRecordedAt !== undefined || row.followUpId !== undefined) throw new Error(`Site visit work order ${row.id} has an invalid outcome shape`);
+    if (row.outcomeRecordedAt && (!visit.checkedOutAt || row.outcomeRecordedAt !== visit.checkedOutAt)) throw new Error(`Site visit work order ${row.id} outcome does not match checkout`);
+    const followUp = row.followUpId ? fixture.followUps.find((item) => item.organizationId === row.organizationId && item.id === row.followUpId) : undefined;
+    if (row.outcome && siteVisitOutcomeRequiresFollowUp(row.outcome) ? !followUp || followUp.workOrderId !== row.workOrderId || followUp.sourceVisitId !== row.visitId : row.followUpId !== undefined) throw new Error(`Site visit work order ${row.id} has an invalid follow-up obligation`);
+  });
+  const verifiedOutcomeKeys = new Set<string>();
+  const verificationCycleKeys = new Set<string>();
+  fixture.workOrderVerifications.forEach((verification) => {
+    const workOrder = fixture.workOrders.find((row) => row.organizationId === verification.organizationId && row.id === verification.workOrderId);
+    const outcome = fixture.siteVisitWorkOrders.find((row) => row.organizationId === verification.organizationId && row.id === verification.siteVisitWorkOrderId && row.workOrderId === verification.workOrderId);
+    const membership = fixture.memberships.find((row) => row.organizationId === verification.organizationId && row.id === verification.decidedByMembershipId);
+    const outcomeKey = `${verification.organizationId}:${verification.siteVisitWorkOrderId}`;
+    const cycleKey = `${verification.organizationId}:${verification.workOrderId}:${verification.cycle}`;
+    if (!workOrder || !outcome?.outcome || !outcome.outcomeRecordedAt || outcome.outcome !== verification.outcome || outcome.outcomeRecordedAt !== verification.outcomeRecordedAt) throw new Error(`Work-order verification ${verification.id} has stale or cross-work outcome evidence`);
+    if (!membership || membership.status !== "active" || !["facilities_admin", "regional_manager", "store_manager"].includes(membership.role)) throw new Error(`Work-order verification ${verification.id} has an invalid decision membership`);
+    if (!Number.isInteger(verification.cycle) || verification.cycle < 1 || verifiedOutcomeKeys.has(outcomeKey) || verificationCycleKeys.has(cycleKey)) throw new Error(`Work-order verification ${verification.id} has a duplicate outcome or cycle`);
+    if (!verification.decidedByName.trim() || verification.decision === "rejected" && !verification.reason?.trim() || Date.parse(verification.decidedAt) < Date.parse(verification.outcomeRecordedAt)) throw new Error(`Work-order verification ${verification.id} has invalid decision provenance`);
+    verifiedOutcomeKeys.add(outcomeKey);
+    verificationCycleKeys.add(cycleKey);
+  });
+  fixture.workOrders.forEach((workOrder) => {
+    const decisions = fixture.workOrderVerifications.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).sort((left, right) => left.cycle - right.cycle);
+    if (decisions.some((row, index) => row.cycle !== index + 1)) throw new Error(`Work order ${workOrder.id} has a non-contiguous verification cycle`);
+    const currentVisitWork = fixture.siteVisitWorkOrders.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).sort((left, right) => right.linkedAt.localeCompare(left.linkedAt) || (right.outcomeRecordedAt ?? "").localeCompare(left.outcomeRecordedAt ?? "") || right.id.localeCompare(left.id))[0];
+    const latestOutcome = currentVisitWork?.outcome && currentVisitWork.outcomeRecordedAt ? currentVisitWork : undefined;
+    const latestDecision = decisions.at(-1);
+    if (workOrder.status === "resolved" && (!latestOutcome || latestDecision?.decision !== "verified" || latestDecision.siteVisitWorkOrderId !== latestOutcome.id || workOrder.resolvedAt !== latestDecision.decidedAt)) throw new Error(`Resolved work order ${workOrder.id} has no accepted current verification projection`);
+    if (workOrder.status === "resolved") {
+      const openRequiredTasks = fixture.workflowTasks.filter((task) => task.organizationId === workOrder.organizationId && task.workOrderId === workOrder.id && openTaskStatuses.has(task.status) && (task.blocking || task.requiredForProgress));
+      const activeVisits = fixture.visits.filter((visit) => visit.organizationId === workOrder.organizationId && visit.status === "active" && fixture.siteVisitWorkOrders.some((link) => link.organizationId === workOrder.organizationId && link.visitId === visit.id && link.workOrderId === workOrder.id));
+      const openFollowUps = fixture.followUps.filter((followUp) => followUp.organizationId === workOrder.organizationId && followUp.workOrderId === workOrder.id && followUp.status === "open");
+      if (openRequiredTasks.length !== 1 || openRequiredTasks[0].taskType !== "close_verified_work" || activeVisits.length || openFollowUps.length) throw new Error(`Resolved work order ${workOrder.id} is not ready for bounded explicit closure`);
+    }
+    if (workOrder.resolvedAt && latestDecision?.decision !== "verified") throw new Error(`Work order ${workOrder.id} has a resolved time without accepted verification`);
+  });
+  fixture.visits.forEach((row) => {
+    if (!storeIds.has(row.storeId)) throw new Error(`Visit ${row.id} has no store`);
+    if (row.vendorId && !vendorIds.has(row.vendorId)) throw new Error(`Visit ${row.id} has no vendor`);
+    const crewCount = row.crewCount ?? 1;
+    const additionalTechnicianNames = row.additionalTechnicianNames ?? [];
+    const crewNames = [row.technicianName, ...additionalTechnicianNames].map((name) => name.trim().toLocaleLowerCase("en-US"));
+    if (!Number.isInteger(crewCount) || crewCount < 1 || crewCount > 100 || additionalTechnicianNames.length >= crewCount || crewNames.some((name) => !name) || new Set(crewNames).size !== crewNames.length) throw new Error(`Visit ${row.id} has invalid crew details`);
+    if ([row.technicianPhoneOrPin, row.vehicleIdentifier, row.arrivalNote].some((value) => value !== undefined && !value.trim())) throw new Error(`Visit ${row.id} has blank optional arrival details`);
+    const links = fixture.siteVisitWorkOrders.filter((link) => link.organizationId === row.organizationId && link.visitId === row.id).sort((left, right) => left.ordinal - right.ordinal);
+    if (links.length === 0 ? !row.unmatchedReason?.trim() : row.unmatchedReason !== undefined) throw new Error(`Visit ${row.id} has an invalid matched/unmatched shape`);
+    if (links.some((link, index) => link.ordinal !== index + 1)) throw new Error(`Visit ${row.id} has non-contiguous work-order ordinals`);
+    if (links.length === 1 && row.workOrderId !== links[0].workOrderId || links.length > 1 && (row.workOrderId !== undefined || row.outcome !== undefined || row.outcomeNotes !== undefined) || links.length === 0 && row.workOrderId !== undefined) throw new Error(`Visit ${row.id} has an invalid scalar compatibility projection`);
+    if (row.outcome && links[0]?.outcome !== siteVisitOutcomeFromLegacy(row.outcome)) throw new Error(`Visit ${row.id} scalar outcome does not match its work-order outcome`);
+    if (row.status === "active" ? links.some((link) => link.outcome !== undefined) : links.some((link) => link.outcome === undefined)) throw new Error(`Visit ${row.id} has incomplete per-work-order outcomes`);
+    if (row.checkedOutAt && Date.parse(row.checkedOutAt) < Date.parse(row.checkedInAt)) throw new Error(`Visit ${row.id} checkout predates check-in`);
+  });
   fixture.visitEvidence.forEach((row) => { const visit = fixture.visits.find((item) => item.id === row.visitId); if (!visitIds.has(row.visitId) || !visit) throw new Error(`Evidence ${row.id} has no visit`); if (Date.parse(row.observedAt) < Date.parse(visit.checkedInAt)) throw new Error(`Evidence ${row.id} predates check-in`); });
   const assetTagKeys = new Set<string>();
   fixture.assets.forEach((row) => {
@@ -1132,7 +1925,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
   fixture.invoiceReferences.forEach((row) => { if (!vendorIds.has(row.vendorId) || row.grossAmount.amountMinor < 0) throw new Error(`Invoice ${row.id} is invalid`); });
   fixture.invoiceAllocations.forEach((row) => { const invoice = fixture.invoiceReferences.find((item) => item.organizationId === row.organizationId && item.id === row.invoiceReferenceId); if (!workOrderIds.has(row.workOrderId) || !invoiceIds.has(row.invoiceReferenceId) || !invoice || row.amount.currency !== invoice.grossAmount.currency || row.amount.amountMinor < 0) throw new Error(`Invoice allocation ${row.id} is invalid`); });
   fixture.invoiceReferences.filter((invoice) => invoice.matchStatus === "confirmed").forEach((invoice) => { const allocated = fixture.invoiceAllocations.filter((item) => item.organizationId === invoice.organizationId && item.invoiceReferenceId === invoice.id).reduce((sum, item) => sum + item.amount.amountMinor, 0); if (allocated !== invoice.grossAmount.amountMinor) throw new Error(`Confirmed invoice ${invoice.id} does not reconcile`); });
-  const entityIds: Record<EntityFileLink["entityType"], Set<string>> = { request: new Set(fixture.requests.map((row) => row.id)), work_order: workOrderIds, visit: visitIds, asset: assetIds, invoice_reference: invoiceIds };
+  const entityIds: Record<EntityFileLink["entityType"], Set<string>> = { request: new Set(fixture.requests.map((row) => row.id)), work_order: workOrderIds, visit: visitIds, asset: assetIds, invoice_reference: invoiceIds, invoice: new Set(fixture.invoices.map((row) => row.id)) };
   fixture.files.forEach((row) => { if (!/^[a-f0-9]{64}$/i.test(row.sha256) || row.byteLength <= 0 || !row.storageKey.trim()) throw new Error(`File ${row.id} has invalid immutable metadata`); });
   fixture.entityFiles.forEach((row) => { if (!fileIds.has(row.fileId) || !entityIds[row.entityType].has(row.entityId)) throw new Error(`Entity file ${row.id} has an invalid target`); });
   [...fixture.auditEvents, ...fixture.outboxMessages].forEach((row) => { try { JSON.parse(row.payloadJson); } catch { throw new Error(`Event ${row.id} has invalid JSON`); } });

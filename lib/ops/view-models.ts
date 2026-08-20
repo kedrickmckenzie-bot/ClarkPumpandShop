@@ -8,6 +8,7 @@ import type {
   LocationResult,
   OpsId,
   Page,
+  SiteVisitWorkOrderOutcome,
   VisitChannel,
   VisitOutcome,
   VendorResponseKind,
@@ -67,11 +68,18 @@ export interface VisitListRow {
   workOrderId?: OpsId;
   workOrderNumber?: string;
   technicianName: string;
+  crewCount: number;
+  additionalTechnicianNames: string[];
+  vehicleIdentifier?: string;
+  arrivalNote?: string;
   purpose: string;
   status: string;
   checkedInAt: IsoDateTime;
   checkedOutAt?: IsoDateTime;
   outcome?: VisitOutcome;
+  workOutcome?: SiteVisitWorkOrderOutcome;
+  workOutcomeNotes?: string;
+  workFollowUpId?: OpsId;
   locationResult: LocationResult;
   approximateObservedSeconds?: number;
 }

@@ -36,11 +36,14 @@ import {
   buildDetailModel,
   buildEstimateComparisonModel,
   buildAttentionItemModel,
+  buildApprovalPolicyWorkspaceModel,
   buildListModel,
   buildProgramModel,
   buildRequestReviewModel,
   buildSearchModel,
   buildVendorIssuanceModel,
+  buildVendorPerformanceDetailModel,
+  buildVendorPerformanceListModel,
   buildWorkOrderControlModel,
   buildWorkOrderRecordingModel,
   type OperatorDetailRoute,
@@ -252,6 +255,15 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
   );
 }
 
+export async function loadApprovalPolicyWorkspaceModel() {
+  const context = await sessionAndFixture();
+  requireCapability(context.session.role, "administer");
+  return enforceDetailLinkPolicy(
+    buildApprovalPolicyWorkspaceModel(context.fixture, context.session),
+    context.session.role,
+  );
+}
+
 export async function loadDashboardModel() {
   const context = await sessionAndFixture();
   return enforceDashboardLinkPolicy(
@@ -295,6 +307,18 @@ export async function loadDetailModel(route: DetailRouteId, id: string) {
     model,
     context.session.role,
   );
+}
+
+export async function loadVendorPerformanceListModel(searchParams: OperatorSearchParameters = {}) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessListRoute(context.session.role, "vendors")) notFound();
+  return buildVendorPerformanceListModel(context.fixture, context.session, searchParams);
+}
+
+export async function loadVendorPerformanceDetailModel(vendorId: string) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessDetailRoute(context.session.role, "vendor")) notFound();
+  return buildVendorPerformanceDetailModel(context.fixture, context.session, vendorId);
 }
 
 export async function loadCreateRequestModel() {

@@ -2,7 +2,7 @@ import "server-only";
 
 import type { AssetReplacementIntelligenceViewModel, ReplacementProfileManagerViewModel, ReplacementProfileViewModel, WorkOrderReplacementIntelligenceViewModel } from "@/components/ops/replacement-intelligence-panel";
 import { roleCan } from "@/components/ops/role-policy";
-import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
+import { buildLifecycleRecommendationDraft, resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
 import type { OpsFixture, ReplacementProfile } from "@/lib/ops/types";
 import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
 import { loadOperatorSession } from "./operator-loader";
@@ -40,6 +40,9 @@ export async function loadAssetReplacementIntelligenceModel(assetId: string): Pr
   const resolution = resolveAssetReplacementEstimate(fixture, asset, fixture.asOf);
   const profile = asset.replacementProfileId ? fixture.replacementProfiles.find((row) => row.id === asset.replacementProfileId && row.organizationId === session.organizationId) : undefined;
   const event = fixture.replacementEvents.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && row.status === "approved").sort((a, b) => b.approvedAt.localeCompare(a.approvedAt))[0];
+  const recommendationDraft = buildLifecycleRecommendationDraft(fixture, asset, fixture.asOf);
+  const recommendationHistory = fixture.lifecycleRecommendations.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id).sort((a, b) => b.version - a.version);
+  const latestRecommendation = recommendationHistory[0];
   const workOrder = event ? fixture.workOrders.find((row) => row.organizationId === session.organizationId && row.id === event.workOrderId) : undefined;
   return {
     assetId: asset.id, permitted: roleCan(session.role, "manage_lifecycle"), action: `/api/ops/equipment/${encodeURIComponent(asset.id)}/replacement`,
@@ -50,6 +53,9 @@ export async function loadAssetReplacementIntelligenceModel(assetId: string): Pr
     inheritedPeerCount: profile ? fixture.assets.filter((row) => row.organizationId === session.organizationId && row.replacementProfileId === profile.id && row.status !== "retired").length : 0,
     profiles: fixture.replacementProfiles.filter((row) => row.organizationId === session.organizationId && row.active && row.categoryKey === asset.categoryKey).map((row) => profileView(fixture, row)),
     event: event && workOrder ? { id: event.id, approvedAmountLabel: money(event.approvedAmount.amountMinor, event.approvedAmount.currency), approvedAtLabel: date(event.approvedAt), workOrderNumber: workOrder.number } : undefined,
+    recommendation: { recommendationLabel: sentence(recommendationDraft.recommendation), confidenceLabel: sentence(recommendationDraft.confidence), explanation: recommendationDraft.explanation, missingData: recommendationDraft.missingData },
+    recommendationHistory: recommendationHistory.map((row) => ({ id: row.id, version: row.version, modelVersion: row.modelVersion, recommendationLabel: sentence(row.recommendation), confidenceLabel: sentence(row.confidence), decisionLabel: sentence(row.userDecision), reason: row.userReason, decidedAtLabel: date(row.decidedAt), explanation: row.explanation, missingData: row.missingData, actualOutcomeLabel: row.actualOutcome ? sentence(row.actualOutcome) : "Outcome not recorded yet" })),
+    latestRecommendationId: latestRecommendation?.id,
     assetDefaults: { tag: asset.assetTag, name: asset.name, manufacturer: asset.manufacturer ?? "", model: asset.model ?? "", supplier: asset.supplier ?? "" },
   };
 }

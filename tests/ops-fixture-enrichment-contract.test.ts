@@ -41,9 +41,10 @@ function median(values: number[]) {
 function assignmentMatchesVisit(
   assignments: WorkOrderAssignment[],
   visit: OpsFixture["visits"][number],
+  workOrderId = visit.workOrderId,
 ) {
   return assignments.some((assignment) => {
-    if (assignment.workOrderId !== visit.workOrderId) return false;
+    if (assignment.workOrderId !== workOrderId) return false;
     if (
       visit.status === "active" &&
       ["completed", "cancelled", "declined", "superseded"].includes(assignment.status)
@@ -266,7 +267,7 @@ describe("Northline enriched presentation fixture contract", () => {
     expect(fixture.pmOccurrences.length).toBeGreaterThan(fixture.pmPlans.length);
     expect(new Set(fixture.pmOccurrences.map((occurrence) => occurrence.dueAt.slice(0, 7))).size).toBeGreaterThanOrEqual(5);
     expect(new Set(fixture.pmOccurrences.map((occurrence) => occurrence.status))).toEqual(
-      new Set(["completed", "scheduled", "due", "missed", "waived"]),
+      new Set(["completed", "proposed", "scheduled", "due", "missed", "waived"]),
     );
 
     for (const occurrence of fixture.pmOccurrences) {
@@ -293,19 +294,24 @@ describe("Northline enriched presentation fixture contract", () => {
     for (const visit of fixture.visits) {
       const store = fixture.stores.find((candidate) => candidate.id === visit.storeId);
       expect(store, `${visit.id} references a missing store`).toBeTruthy();
+      const visitWorkOrders = fixture.siteVisitWorkOrders
+        .filter((candidate) => candidate.visitId === visit.id)
+        .sort((left, right) => left.ordinal - right.ordinal);
 
-      if (!visit.workOrderId) {
+      if (!visitWorkOrders.length) {
         expect(visit.unmatchedReason, `${visit.id} has no work order or review reason`).toBeTruthy();
         continue;
       }
 
-      const workOrder = fixture.workOrders.find((candidate) => candidate.id === visit.workOrderId);
-      expect(workOrder, `${visit.id} references a missing work order`).toBeTruthy();
-      expect(workOrder?.storeId, `${visit.id} and its work order disagree on store`).toBe(visit.storeId);
-      expect(
-        assignmentMatchesVisit(fixture.assignments, visit),
-        `${visit.id} does not match any assignment for its work order and provider`,
-      ).toBe(true);
+      for (const visitWorkOrder of visitWorkOrders) {
+        const workOrder = fixture.workOrders.find((candidate) => candidate.id === visitWorkOrder.workOrderId);
+        expect(workOrder, `${visit.id} references a missing work order`).toBeTruthy();
+        expect(workOrder?.storeId, `${visit.id} and its work order disagree on store`).toBe(visit.storeId);
+        expect(
+          assignmentMatchesVisit(fixture.assignments, visit, visitWorkOrder.workOrderId),
+          `${visit.id} does not match any assignment for ${visitWorkOrder.workOrderId} and its provider`,
+        ).toBe(true);
+      }
     }
   });
 

@@ -399,6 +399,9 @@ describe("vendor-estimate concurrency fences", () => {
     await test.repository.atomicWrite([{
       sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ?",
       params: ["issued", NORTHLINE_ORGANIZATION_ID, workOrder.initialAssignment!.id],
+    }, {
+      sql: "UPDATE ops_work_orders SET status = ? WHERE organization_id = ? AND id = ?",
+      params: ["issued", NORTHLINE_ORGANIZATION_ID, workOrder.id],
     }]);
     const before = test.repository.snapshot();
     const services = test.services;
@@ -427,7 +430,10 @@ describe("vendor-estimate concurrency fences", () => {
     const after = test.repository.snapshot();
     const request = after.estimateRequests.find((row) => row.id === estimate.requested.request.id);
     const activeAssignment = await test.repository.getActiveAssignment(NORTHLINE_ORGANIZATION_ID, workOrder.id);
-    const newVisits = after.visits.slice(before.visits.length).filter((visit) => visit.workOrderId === workOrder.id);
+    const newVisitIds = new Set(after.siteVisitWorkOrders.slice(before.siteVisitWorkOrders.length)
+      .filter((link) => link.workOrderId === workOrder.id)
+      .map((link) => link.visitId));
+    const newVisits = after.visits.slice(before.visits.length).filter((visit) => newVisitIds.has(visit.id));
     const persistedWork = await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id);
     expect(request).toMatchObject({ status: "submitted", vendorId: CEDAR });
     expect(activeAssignment).toMatchObject({ vendorId: SUMMIT, status: "issued" });
