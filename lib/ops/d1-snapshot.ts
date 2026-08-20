@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
   opsAssetComponents,
+  opsComponentLifecycleEvents,
   opsAssets,
   opsAssetReplacementOverrides,
   opsApprovalDecisions,
@@ -195,6 +196,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     replacementEventRows,
     lifecycleRecommendationRows,
     componentRows,
+    componentLifecycleEventRows,
     maintenanceProgramRows,
     checklistTemplateRows,
     pmPlanRows,
@@ -282,6 +284,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     db.select().from(opsReplacementEvents).where(tenant(opsReplacementEvents.organizationId)),
     db.select().from(opsLifecycleRecommendations).where(tenant(opsLifecycleRecommendations.organizationId)),
     db.select().from(opsAssetComponents).where(tenant(opsAssetComponents.organizationId)),
+    db.select().from(opsComponentLifecycleEvents).where(tenant(opsComponentLifecycleEvents.organizationId)),
     db.select().from(opsMaintenancePrograms).where(tenant(opsMaintenancePrograms.organizationId)),
     db.select().from(opsChecklistTemplates).where(tenant(opsChecklistTemplates.organizationId)),
     db.select().from(opsPmPlans).where(tenant(opsPmPlans.organizationId)),
@@ -471,7 +474,8 @@ export async function loadOpsFixtureSnapshotFromD1(
     assetReplacementOverrides: replacementOverrideRows.map((row) => ({ ...row, sourceBenchmarkId: optional(row.sourceBenchmarkId), amount: { amountMinor: row.amountMinor, currency: row.currency }, supersededAt: optional(row.supersededAt) })) as OpsFixture["assetReplacementOverrides"],
     replacementEvents: replacementEventRows.map((row) => ({ ...row, approvedAmount: { amountMinor: row.approvedAmountMinor, currency: row.currency }, completedAt: optional(row.completedAt), finalAmount: row.finalAmountMinor == null ? undefined : { amountMinor: row.finalAmountMinor, currency: row.currency }, replacementAssetId: optional(row.replacementAssetId) })) as OpsFixture["replacementEvents"],
     lifecycleRecommendations: lifecycleRecommendationRows.map((row) => ({ ...row, workOrderId: optional(row.workOrderId), inputsJson: typeof row.inputsJson === "string" ? row.inputsJson : JSON.stringify(row.inputsJson), missingData: parseStringArray(row.missingDataJson), actualOutcome: optional(row.actualOutcome), actualOutcomeAt: optional(row.actualOutcomeAt), replacementEventId: optional(row.replacementEventId) })) as OpsFixture["lifecycleRecommendations"],
-    components: componentRows.map((row) => ({ ...row, parentComponentId: optional(row.parentComponentId), partNumber: optional(row.partNumber), serialNumber: optional(row.serialNumber), installedAt: optional(row.installedAt), warrantyEndsAt: optional(row.warrantyEndsAt) })) as OpsFixture["components"],
+    components: componentRows.map((row) => ({ ...row, parentComponentId: optional(row.parentComponentId), partNumber: optional(row.partNumber), serialNumber: optional(row.serialNumber), installedAt: optional(row.installedAt), warrantyEndsAt: optional(row.warrantyEndsAt), removedAt: optional(row.removedAt), replacedByComponentId: optional(row.replacedByComponentId) })) as OpsFixture["components"],
+    componentLifecycleEvents: componentLifecycleEventRows.map((row) => ({ ...row, serialNumber: optional(row.serialNumber), rootCause: optional(row.rootCause), laborCost: { amountMinor: Number(row.laborCostMinor), currency: row.currency }, partCost: { amountMinor: Number(row.partCostMinor), currency: row.currency }, expectedLifeMonths: optional(row.expectedLifeMonths), warrantyEndsAt: optional(row.warrantyEndsAt) })) as OpsFixture["componentLifecycleEvents"],
     maintenancePrograms: maintenanceProgramRows.map((row) => ({ ...row, applicableAssetTypes: parseStringArray(row.applicableAssetTypesJson), seasonalStartMonth: optional(row.seasonalStartMonth), seasonalEndMonth: optional(row.seasonalEndMonth), requiredEvidenceKinds: parseStringArray(row.requiredEvidenceKindsJson), supersedesProgramId: optional(row.supersedesProgramId) })) as OpsFixture["maintenancePrograms"],
     checklistTemplates: checklistTemplateRows.map((row) => ({ ...row, items: parseJsonArray(row.itemsJson) })) as OpsFixture["checklistTemplates"],
     pmPlans: pmPlanRows.map((row) => ({ ...row, programId: optional(row.programId), programVersion: optional(row.programVersion), storeId: optional(row.storeId), assetId: optional(row.assetId), assetSelectionRule: optional(row.assetSelectionRule), categoryKey: optional(row.categoryKey), preferredVendorId: optional(row.preferredVendorId), backupVendorId: optional(row.backupVendorId), contractVersionId: optional(row.contractVersionId), effectiveStartsAt: optional(row.effectiveStartsAt), effectiveEndsAt: optional(row.effectiveEndsAt), accessRequirements: optional(row.accessRequirements), programAuthorizationMinor: optional(row.programAuthorizationMinor), budgetMinor: optional(row.budgetMinor), currency: optional(row.currency), serviceLevelPolicyId: optional(row.serviceLevelPolicyId), schedulingMode: optional(row.schedulingMode), escalationRules: optional(row.escalationRules) })) as OpsFixture["pmPlans"],

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { OpsCommandServices } from "@/lib/ops/commands";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
-import { amendCompletedWarranty, createFutureWarrantyRule, decideWarrantyCoverage, detectPotentialWarranty, previewWarrantyCoverage } from "@/lib/ops/warranty-commands";
+import { amendCompletedWarranty, createFutureWarrantyRule, decideWarrantyCoverage, detectPotentialWarranty, previewWarrantyCoverage, recordRepairAndApplyWarranty } from "@/lib/ops/warranty-commands";
 
 const actor={organizationId:NORTHLINE_ORGANIZATION_ID,actorType:"user" as const,actorId:"membership-northline-facilities",actorName:"Jordan Lee"};
 function harness(){const fixture=buildNorthlinePresentationFixture();const repository=createOpsFixtureRepository(fixture);let sequence=0;const services:OpsCommandServices={repository,clock:{now:()=>"2026-08-20T14:00:00.000Z"},ids:{next:(prefix)=>`${prefix}-warranty-test-${++sequence}`}};return{fixture,repository,services};}
@@ -38,5 +38,23 @@ describe("directive warranty architecture",()=>{
     const test=harness();const before=test.repository.snapshot().appliedWarranties.find((item)=>item.id==="applied-warranty-104-compressor-labor")!;
     const result=await amendCompletedWarranty({organizationId:NORTHLINE_ORGANIZATION_ID,appliedWarrantyId:before.id,actor,amendmentKind:"override_coverage",amendedTerms:{endDate:"2026-11-08"},reason:"Vendor confirmed a one-time 30-day labor extension for this repair"},test.services);
     const snapshot=test.repository.snapshot();expect(result.appliesToRepairOnly).toBe(true);expect(snapshot.appliedWarranties.find((item)=>item.id===before.id)).toEqual(before);expect(snapshot.warrantyAmendments).toContainEqual(expect.objectContaining({appliedWarrantyId:before.id,appliesToRepairOnly:true}));expect(snapshot.warrantyRules).toHaveLength(test.fixture.warrantyRules.length);
+  });
+
+  it("atomically records a structured Component replacement, successor, warranties, and audit", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const prior = fixture.repairItems.find((item) => item.id === "repair-item-104-compressor-2026-07")!;
+    fixture.componentLifecycleEvents = fixture.componentLifecycleEvents.filter((item) => item.repairItemId !== prior.id);
+    fixture.appliedWarranties = fixture.appliedWarranties.filter((item) => item.repairItemId !== prior.id);
+    fixture.repairItems = fixture.repairItems.filter((item) => item.id !== prior.id);
+    const work = fixture.workOrders.find((item) => item.id === prior.workOrderId)!;
+    work.componentId = "component-104-compressor";
+    const repository = createOpsFixtureRepository(fixture); let sequence = 0;
+    const result = await recordRepairAndApplyWarranty({ organizationId: NORTHLINE_ORGANIZATION_ID, actor, workOrderId: work.id, siteVisitWorkOrderId: prior.siteVisitWorkOrderId, vendorId: prior.vendorId, contractVersionId: prior.contractVersionId, assetId: prior.assetId, componentId: work.componentId, failureCode: "compressor-ground-fault", repairAction: "Removed failed compressor and commissioned the replacement", repairSeverity: "major", removedComponentId: work.componentId, partManufacturer: "Copeland", partModel: "ZB38KCE-TFD", serialNumber: "CMP-NEW-2026", vendorSupplied: true, completionDate: "2026-07-10", verificationDate: "2026-07-10", laborCost: { amountMinor: 165_000, currency: "USD" }, partCost: { amountMinor: 725_000, currency: "USD" }, rootCause: "Internal winding insulation failure", workType: "reactive_repair", serviceType: "compressor_replacement", assetType: "beer_cave", componentType: "compressor", componentReplacement: { installedComponentName: "Compressor", partNumber: "ZB38KCE-TFD", removedAt: "2026-07-10", installedAt: "2026-07-10", warrantyEndsAt: "2027-07-10", replacementKind: "reactive", expectedLifeMonths: 96 } }, { repository, clock: { now: () => "2026-08-20T14:00:00.000Z" }, ids: { next: (prefix) => `${prefix}-component-test-${++sequence}` } });
+    const snapshot = repository.snapshot();
+    expect(result.componentLifecycleEvent).toMatchObject({ removedComponentId: work.componentId, repairItemId: result.repairItem.id, expectedLifeMonths: 96 });
+    expect(snapshot.components.find((item) => item.id === work.componentId)).toMatchObject({ removedAt: "2026-07-10", replacedByComponentId: result.installedComponent?.id });
+    expect(snapshot.components).toContainEqual(expect.objectContaining({ id: result.installedComponent?.id, serialNumber: "CMP-NEW-2026" }));
+    expect(snapshot.appliedWarranties.some((item) => item.repairItemId === result.repairItem.id)).toBe(true);
+    expect(snapshot.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: result.repairItem.id, eventType: "component.replaced" }));
   });
 });

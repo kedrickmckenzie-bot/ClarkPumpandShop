@@ -8,6 +8,7 @@ import type {
   AuditEvent,
   CostLine,
   ComponentTemplate,
+  ComponentLifecycleEvent,
   Division,
   EquipmentTemplate,
   InvoiceAllocation,
@@ -373,6 +374,7 @@ function buildFixture(): OpsFixture {
   const replacementEvents: ReplacementEvent[] = [];
   const lifecycleRecommendations: OpsFixture["lifecycleRecommendations"] = [];
   const components: AssetComponent[] = [];
+  const componentLifecycleEvents: ComponentLifecycleEvent[] = [];
   const componentIdFor = (asset: Asset, templateId: string, equipmentTemplateKey: string) => {
     const componentKey = templateId.replace(`component-template-${equipmentTemplateKey}-`, "");
     if (asset.id === "asset-104-beer-cave") {
@@ -391,7 +393,7 @@ function buildFixture(): OpsFixture {
       const componentId = componentIds.get(template.id)!;
       const storyComponent = asset.id === "asset-104-beer-cave" ? componentId : undefined;
       const storyDetails = storyComponent === "component-104-compressor"
-        ? { partNumber: "ZB38KCE-TFD", serialNumber: "CMP104-88214", installedAt: atYear(2021, 5, 6), warrantyEndsAt: atYear(2026, 5, 6) }
+        ? { partNumber: "ZB38KCE-TFD", serialNumber: "CMP104-2026-0710", installedAt: atYear(2026, 7, 10), warrantyEndsAt: atYear(2028, 7, 10) }
         : storyComponent === "component-104-controller"
           ? { partNumber: "XR60CX", serialNumber: "CTL104-44310", installedAt: atYear(2023, 3, 12), warrantyEndsAt: atYear(2025, 3, 12) }
           : storyComponent === "component-104-evaporator-fan"
@@ -399,6 +401,13 @@ function buildFixture(): OpsFixture {
             : {};
       components.push({ id: componentId, organizationId: organization.id, assetId: asset.id, parentComponentId: template.parentComponentTemplateId ? componentIds.get(template.parentComponentTemplateId) : undefined, name: template.name, installedAt: asset.installedAt, warrantyEndsAt: asset.warrantyEndsAt, createdAt: at(1, 5, 14), ...storyDetails });
     });
+  });
+  const compressor104 = components.find((component) => component.id === "component-104-compressor")!;
+  components.push({
+    id: "component-104-compressor-removed-2021", organizationId: organization.id, assetId: compressor104.assetId,
+    parentComponentId: compressor104.parentComponentId, name: "Compressor (removed July 2026)", partNumber: "ZB38KCE-TFD",
+    serialNumber: "CMP104-88214", installedAt: atYear(2021, 5, 6), warrantyEndsAt: atYear(2026, 5, 6),
+    removedAt: atYear(2026, 7, 10), replacedByComponentId: compressor104.id, createdAt: at(1, 5, 14),
   });
 
   const requests: ServiceRequest[] = [];
@@ -1126,7 +1135,8 @@ function buildFixture(): OpsFixture {
     { id: "warranty-line-summit-compressor-travel", organizationId: organization.id, warrantyRuleId: "warranty-rule-summit-compressor-v1", coverageType: "travel", duration: 30, durationUnit: "days", startEvent: "store_verification", provider: "vendor", obligatedVendorId: "vendor-northline-summit", routingRule: "original_vendor_first_right_to_cure", deductible: { amountMinor: 0, currency: "USD" } },
     { id: "warranty-line-summit-compressor-diagnostic", organizationId: organization.id, warrantyRuleId: "warranty-rule-summit-compressor-v1", coverageType: "diagnostic", duration: 90, durationUnit: "days", startEvent: "store_verification", provider: "vendor", obligatedVendorId: "vendor-northline-summit", routingRule: "original_vendor_first_right_to_cure", deductible: { amountMinor: 0, currency: "USD" } },
   );
-  repairItems.push({ id: warrantyRepairItemId, organizationId: organization.id, workOrderId: "wo-northline-104", siteVisitWorkOrderId: priorVisitWorkId, vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", assetId: "asset-104-beer-cave", componentId: "component-104-compressor", failureCode: "compressor-ground-fault", repairAction: "Removed failed compressor; installed Copeland replacement; evacuated, charged, and commissioned the circuit", repairSeverity: "major", removedComponentId: "component-104-compressor", installedComponentId: "component-104-compressor", partManufacturer: "Copeland", partModel: "ZB38KCE-TFD", serialNumber: "CMP104-2026-0710", vendorSupplied: true, completionDate: visit104End.slice(0, 10), verificationDate: visit104End.slice(0, 10), laborCost: { amountMinor: 165_000, currency: "USD" }, partCost: { amountMinor: 725_000, currency: "USD" }, rootCause: "Internal winding insulation failure", createdAt: new Date(Date.parse(visit104End) + 45 * 60_000).toISOString() });
+  repairItems.push({ id: warrantyRepairItemId, organizationId: organization.id, workOrderId: "wo-northline-104", siteVisitWorkOrderId: priorVisitWorkId, vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", assetId: "asset-104-beer-cave", componentId: "component-104-compressor", failureCode: "compressor-ground-fault", repairAction: "Removed failed compressor; installed Copeland replacement; evacuated, charged, and commissioned the circuit", repairSeverity: "major", removedComponentId: "component-104-compressor-removed-2021", installedComponentId: "component-104-compressor", partManufacturer: "Copeland", partModel: "ZB38KCE-TFD", serialNumber: "CMP104-2026-0710", vendorSupplied: true, completionDate: visit104End.slice(0, 10), verificationDate: visit104End.slice(0, 10), laborCost: { amountMinor: 165_000, currency: "USD" }, partCost: { amountMinor: 725_000, currency: "USD" }, rootCause: "Internal winding insulation failure", createdAt: new Date(Date.parse(visit104End) + 45 * 60_000).toISOString() });
+  componentLifecycleEvents.push({ id: "component-life-104-compressor-2026-07", organizationId: organization.id, assetId: "asset-104-beer-cave", removedComponentId: "component-104-compressor-removed-2021", installedComponentId: "component-104-compressor", repairItemId: warrantyRepairItemId, workOrderId: "wo-northline-104", vendorId: "vendor-northline-summit", partManufacturer: "Copeland", partModel: "ZB38KCE-TFD", serialNumber: "CMP104-2026-0710", removedAt: "2026-07-10", installedAt: "2026-07-10", failureMode: "compressor-ground-fault", rootCause: "Internal winding insulation failure", laborCost: { amountMinor: 165_000, currency: "USD" }, partCost: { amountMinor: 725_000, currency: "USD" }, replacementKind: "reactive", expectedLifeMonths: 96, warrantyEndsAt: "2028-07-10", createdAt: new Date(Date.parse(visit104End) + 46 * 60_000).toISOString() });
   const warrantyStartDate = visit104End.slice(0, 10);
   const immutableTerms = (coverageType: string, endDate: string, routingRule: string) => JSON.stringify({ resolutionPrecedence: "contract-specific component rule", coverageType, startDate: warrantyStartDate, endDate, routingRule, contractVersionId: "contract-version-summit-refrigeration-v1", ruleId: "warranty-rule-summit-compressor-v1", calculatedAt: new Date(Date.parse(visit104End) + 50 * 60_000).toISOString() });
   appliedWarranties.push(
@@ -1454,7 +1464,7 @@ function buildFixture(): OpsFixture {
     { id: "public-token-northline-service-run-summit", organizationId: organization.id, purpose: "service_run_response", subjectType: "service_run", subjectId: "service-run-summit-north-2026-08-24", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceRunSummit, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 16) },
   ];
 
-  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
+  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, componentLifecycleEvents, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
 }
 
 const presentationFixture = buildFixture();
@@ -1512,6 +1522,7 @@ export function buildSyntheticScaleFixture(storeCount = 65): OpsFixture {
   fixture.replacementEvents = [];
   fixture.lifecycleRecommendations = [];
   fixture.components = [];
+  fixture.componentLifecycleEvents = [];
   fixture.maintenancePrograms = [];
   fixture.checklistTemplates = [];
   fixture.pmPlans = [];
@@ -1570,7 +1581,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
     if (new Set(rows.map((row) => row.id)).size !== rows.length) throw new Error(`${name} contains duplicate ids`);
   };
   ([
-    ["organizations", fixture.organizations], ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["users", fixture.users], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["approval policies", fixture.approvalPolicies], ["approval requests", fixture.approvalRequests], ["approval decisions", fixture.approvalDecisions], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["site visit work orders", fixture.siteVisitWorkOrders], ["work-order verifications", fixture.workOrderVerifications], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["workflow tasks", fixture.workflowTasks], ["workflow task SLA pauses", fixture.workflowTaskSlaPauses], ["workflow task SLA resumes", fixture.workflowTaskSlaResumes], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["replacement profiles", fixture.replacementProfiles], ["replacement benchmarks", fixture.replacementBenchmarks], ["asset replacement overrides", fixture.assetReplacementOverrides], ["replacement events", fixture.replacementEvents], ["components", fixture.components], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
+    ["organizations", fixture.organizations], ["divisions", fixture.divisions], ["regions", fixture.regions], ["taxonomy nodes", fixture.taxonomyNodes], ["stores", fixture.stores], ["users", fixture.users], ["memberships", fixture.memberships], ["scope grants", fixture.scopeGrants], ["vendors", fixture.vendors], ["requests", fixture.requests], ["work orders", fixture.workOrders], ["approval policies", fixture.approvalPolicies], ["approval requests", fixture.approvalRequests], ["approval decisions", fixture.approvalDecisions], ["assignments", fixture.assignments], ["issuances", fixture.issuances], ["vendor responses", fixture.vendorResponses], ["estimate requests", fixture.estimateRequests], ["estimate proposals", fixture.estimateProposals], ["visits", fixture.visits], ["site visit work orders", fixture.siteVisitWorkOrders], ["work-order verifications", fixture.workOrderVerifications], ["visit evidence", fixture.visitEvidence], ["files", fixture.files], ["entity files", fixture.entityFiles], ["follow-ups", fixture.followUps], ["workflow tasks", fixture.workflowTasks], ["workflow task SLA pauses", fixture.workflowTaskSlaPauses], ["workflow task SLA resumes", fixture.workflowTaskSlaResumes], ["exceptions", fixture.exceptions], ["assets", fixture.assets], ["replacement profiles", fixture.replacementProfiles], ["replacement benchmarks", fixture.replacementBenchmarks], ["asset replacement overrides", fixture.assetReplacementOverrides], ["replacement events", fixture.replacementEvents], ["components", fixture.components], ["component lifecycle events", fixture.componentLifecycleEvents], ["PM plans", fixture.pmPlans], ["PM occurrences", fixture.pmOccurrences], ["cost lines", fixture.costLines], ["invoice references", fixture.invoiceReferences], ["invoice allocations", fixture.invoiceAllocations], ["audit events", fixture.auditEvents], ["outbox", fixture.outboxMessages], ["public tokens", fixture.publicTokens],
   ] as Array<[string, Array<{ id: string }>]>).forEach(([name, rows]) => ensureUnique(name, rows));
   ensureUnique("equipment templates", fixture.equipmentTemplates);
   ensureUnique("component templates", fixture.componentTemplates);

@@ -12,6 +12,8 @@ import {
 import type {
   ActorContext,
   AppliedWarranty,
+  AssetComponent,
+  ComponentLifecycleEvent,
   IsoDateTime,
   Money,
   OpsId,
@@ -179,6 +181,15 @@ export interface RecordRepairWarrantyInput extends Omit<RepairItem, "id" | "orga
   componentType?: string;
   quoteId?: OpsId;
   authorizationId?: OpsId;
+  componentReplacement?: {
+    installedComponentName?: string;
+    partNumber?: string;
+    removedAt: string;
+    installedAt: string;
+    warrantyEndsAt?: string;
+    replacementKind: "planned" | "reactive";
+    expectedLifeMonths?: number;
+  };
 }
 
 export async function recordRepairAndApplyWarranty(input: RecordRepairWarrantyInput, dependencies: OpsCommandServices) {
@@ -191,18 +202,41 @@ export async function recordRepairAndApplyWarranty(input: RecordRepairWarrantyIn
   const verification = decisions.findLast((item) => item.siteVisitWorkOrderId === input.siteVisitWorkOrderId);
   if (!verification || verification.decision !== "verified") throw new OpsDomainError("CONFLICT", "Repair Items require the exact outcome to be internally verified");
   if (workOrder.assetId !== input.assetId || workOrder.componentId && input.componentId && workOrder.componentId !== input.componentId) throw new OpsDomainError("CONFLICT", "Repair Item Asset or Component does not match the Work Order");
+  const removedComponent = input.componentReplacement && input.removedComponentId
+    ? await repository.getComponent(input.organizationId, input.removedComponentId)
+    : null;
+  if (input.componentReplacement) {
+    if (!removedComponent || removedComponent.assetId !== input.assetId) throw new OpsDomainError("CONFLICT", "The removed Component must be active on the Work Order Asset");
+    if (removedComponent.removedAt || removedComponent.replacedByComponentId) throw new OpsDomainError("CONFLICT", "This Component already has a recorded replacement");
+    if (!input.partManufacturer?.trim() || !input.partModel?.trim()) throw new OpsDomainError("VALIDATION", "Installed Component manufacturer and model are required");
+    if (Date.parse(input.componentReplacement.installedAt) < Date.parse(input.componentReplacement.removedAt)) throw new OpsDomainError("VALIDATION", "Installed date cannot precede the removal date");
+    if (input.componentReplacement.expectedLifeMonths !== undefined && (!Number.isInteger(input.componentReplacement.expectedLifeMonths) || input.componentReplacement.expectedLifeMonths <= 0)) throw new OpsDomainError("VALIDATION", "Expected Component life must be a positive whole number of months");
+  }
   nonnegativeMoney(input.laborCost, "Labor cost"); nonnegativeMoney(input.partCost, "Part cost");
   if (input.laborCost.currency !== input.partCost.currency) throw new OpsDomainError("VALIDATION", "Repair Item costs must share one currency");
   const store = await repository.getStore(input.organizationId, workOrder.storeId);
   if (!store) throw new OpsDomainError("NOT_FOUND", "Store not found");
   const preview = await previewWarrantyCoverage({ organizationId: input.organizationId, vendorId: input.vendorId, contractVersionId: input.contractVersionId, quoteId: input.quoteId, authorizationId: input.authorizationId, tradeKey: workOrder.categoryKey, workType: input.workType, serviceType: input.serviceType, assetType: input.assetType, componentType: input.componentType, manufacturer: input.partManufacturer, model: input.partModel, vendorSuppliedPart: input.vendorSupplied, customerSuppliedPart: !input.vendorSupplied, regionId: store.regionId, storeId: store.id, completionDate: input.completionDate, verificationDate: input.verificationDate ?? verification.decidedAt.slice(0,10), installationDate: input.completionDate, commissioningDate: input.completionDate }, repository);
-  const repair: RepairItem = { ...input, id: ids.next("repair-item"), createdAt: now };
+  if ((await repository.listRepairItemsForAsset(input.organizationId, input.assetId)).some((item) => item.siteVisitWorkOrderId === input.siteVisitWorkOrderId)) throw new OpsDomainError("CONFLICT", "This Site Visit / Work Order outcome already has a Repair Item");
+  const installedComponentId = input.componentReplacement ? ids.next("component") : input.installedComponentId;
+  const repair: RepairItem = { ...input, installedComponentId, id: ids.next("repair-item"), createdAt: now };
   const statements: OpsStatement[] = [insert("ops_repair_items", { id: repair.id, organization_id: repair.organizationId, work_order_id: repair.workOrderId, site_visit_work_order_id: repair.siteVisitWorkOrderId, vendor_id: repair.vendorId, contract_version_id: repair.contractVersionId, asset_id: repair.assetId, component_id: repair.componentId, failure_code: required(repair.failureCode,"Failure code"), repair_action: required(repair.repairAction,"Repair action"), repair_severity: repair.repairSeverity, removed_component_id: repair.removedComponentId, installed_component_id: repair.installedComponentId, part_manufacturer: repair.partManufacturer, part_model: repair.partModel, serial_number: repair.serialNumber, vendor_supplied: repair.vendorSupplied, completion_date: repair.completionDate, verification_date: repair.verificationDate, labor_cost_minor: repair.laborCost.amountMinor, part_cost_minor: repair.partCost.amountMinor, currency: repair.laborCost.currency, root_cause: repair.rootCause, created_at: now })];
+  let installedComponent: AssetComponent | undefined;
+  let lifecycleEvent: ComponentLifecycleEvent | undefined;
+  if (input.componentReplacement && removedComponent && installedComponentId) {
+    installedComponent = { id: installedComponentId, organizationId: input.organizationId, assetId: input.assetId, parentComponentId: removedComponent.parentComponentId, name: input.componentReplacement.installedComponentName?.trim() || removedComponent.name.replace(/\s*\(removed.*\)$/i, ""), partNumber: input.componentReplacement.partNumber?.trim() || input.partModel?.trim(), serialNumber: input.serialNumber?.trim(), installedAt: input.componentReplacement.installedAt, warrantyEndsAt: input.componentReplacement.warrantyEndsAt, createdAt: now };
+    lifecycleEvent = { id: ids.next("component-life"), organizationId: input.organizationId, assetId: input.assetId, removedComponentId: removedComponent.id, installedComponentId, repairItemId: repair.id, workOrderId: input.workOrderId, vendorId: input.vendorId, partManufacturer: input.partManufacturer!.trim(), partModel: input.partModel!.trim(), serialNumber: input.serialNumber?.trim(), removedAt: input.componentReplacement.removedAt, installedAt: input.componentReplacement.installedAt, failureMode: required(input.failureCode, "Failure mode"), rootCause: input.rootCause?.trim(), laborCost: input.laborCost, partCost: input.partCost, replacementKind: input.componentReplacement.replacementKind, expectedLifeMonths: input.componentReplacement.expectedLifeMonths, warrantyEndsAt: input.componentReplacement.warrantyEndsAt, createdAt: now };
+    statements.push(
+      insert("ops_asset_components", { id: installedComponent.id, organization_id: installedComponent.organizationId, asset_id: installedComponent.assetId, parent_component_id: installedComponent.parentComponentId, name: installedComponent.name, part_number: installedComponent.partNumber, serial_number: installedComponent.serialNumber, installed_at: installedComponent.installedAt, warranty_ends_at: installedComponent.warrantyEndsAt, created_at: now }),
+      { sql: "UPDATE ops_asset_components SET removed_at = ?, replaced_by_component_id = ? WHERE organization_id = ? AND id = ? AND removed_at IS NULL AND replaced_by_component_id IS NULL", params: [lifecycleEvent.removedAt, installedComponent.id, input.organizationId, removedComponent.id] },
+      insert("ops_component_lifecycle_events", { id: lifecycleEvent.id, organization_id: lifecycleEvent.organizationId, asset_id: lifecycleEvent.assetId, removed_component_id: lifecycleEvent.removedComponentId, installed_component_id: lifecycleEvent.installedComponentId, repair_item_id: lifecycleEvent.repairItemId, work_order_id: lifecycleEvent.workOrderId, vendor_id: lifecycleEvent.vendorId, part_manufacturer: lifecycleEvent.partManufacturer, part_model: lifecycleEvent.partModel, serial_number: lifecycleEvent.serialNumber, removed_at: lifecycleEvent.removedAt, installed_at: lifecycleEvent.installedAt, failure_mode: lifecycleEvent.failureMode, root_cause: lifecycleEvent.rootCause, labor_cost_minor: lifecycleEvent.laborCost.amountMinor, part_cost_minor: lifecycleEvent.partCost.amountMinor, currency: lifecycleEvent.laborCost.currency, replacement_kind: lifecycleEvent.replacementKind, expected_life_months: lifecycleEvent.expectedLifeMonths, warranty_ends_at: lifecycleEvent.warrantyEndsAt, created_at: now }),
+    );
+  }
   const applied: AppliedWarranty[] = preview.map((item) => ({ id: ids.next("applied-warranty"), organizationId: input.organizationId, repairItemId: repair.id, coverageType: item.coverage.coverageType, provider: item.coverage.provider, obligatedVendorId: item.coverage.obligatedVendorId, startDate: item.startDate, endDate: item.endDate, coveredCharges: [item.coverage.coverageType], routingRule: item.coverage.routingRule, contractVersionId: input.contractVersionId, policySource: item.policySource, ruleSource: item.rule?.id, originalCalculatedTermsJson: JSON.stringify({ coverageLine: item.coverage, rule: item.rule, precedence: item.precedence, explanation: item.explanation, overriddenRuleIds: item.overriddenRuleIds }), createdAt: now }));
   for (const warranty of applied) statements.push(insert("ops_applied_warranties", { id:warranty.id, organization_id:warranty.organizationId, repair_item_id:warranty.repairItemId, coverage_type:warranty.coverageType, provider:warranty.provider, obligated_vendor_id:warranty.obligatedVendorId, start_date:warranty.startDate, end_date:warranty.endDate, covered_charges_json:JSON.stringify(warranty.coveredCharges), routing_rule:warranty.routingRule, contract_version_id:warranty.contractVersionId, policy_source:warranty.policySource, rule_source:warranty.ruleSource, original_calculated_terms_json:warranty.originalCalculatedTermsJson, created_at:now }));
-  statements.push(...auditAndOutbox({ organizationId:input.organizationId, aggregateType:"repair_item", aggregateId:repair.id, eventType:"repair_item.warranty_applied", actor:input.actor, occurredAt:now, payload:{ workOrderId:workOrder.id, siteVisitWorkOrderId:visitWork.id, appliedWarrantyIds:applied.map((item)=>item.id), immutable:true }, ids }));
+  statements.push(...auditAndOutbox({ organizationId:input.organizationId, aggregateType:"repair_item", aggregateId:repair.id, eventType:lifecycleEvent ? "component.replaced" : "repair_item.warranty_applied", actor:input.actor, occurredAt:now, payload:{ workOrderId:workOrder.id, siteVisitWorkOrderId:visitWork.id, appliedWarrantyIds:applied.map((item)=>item.id), componentLifecycleEventId:lifecycleEvent?.id, removedComponentId:lifecycleEvent?.removedComponentId, installedComponentId:lifecycleEvent?.installedComponentId, immutable:true }, ids }));
   await repository.atomicWrite(statements);
-  return { repairItem: repair, appliedWarranties: applied, preview };
+  return { repairItem: repair, appliedWarranties: applied, preview, installedComponent, componentLifecycleEvent: lifecycleEvent };
 }
 
 export async function detectPotentialWarranty(input: { organizationId: OpsId; workOrderId: OpsId; actor: ActorContext; symptom: string }, dependencies: OpsCommandServices) {

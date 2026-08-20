@@ -29,12 +29,12 @@ Workflow Tasks and SLA metadata express only the accountable obligations inside 
 
 ## Persistence, deterministic data, authorization, and audit
 
-- D1 schema coverage is current through migration `0025`; PostgreSQL schema coverage is current through migration `0020`. In addition to the reactive loop, both persist PM/Service Run, Contract/Warranty, Invoice Line/allocation/exception/adjustment, Service Discrepancy, Value Event, and versioned Lifecycle Recommendation records used by the interactive demo.
+- D1 schema coverage is current through migration `0026`; PostgreSQL schema coverage is current through migration `0021`. In addition to the reactive loop, both persist PM/Service Run, Contract/Warranty, Invoice Line/allocation/exception/adjustment, Service Discrepancy, Value Event, versioned Lifecycle Recommendation, and structured Component Lifecycle Event records used by the interactive demo.
 - New Wave 1 records are organization-bound. Command reads establish organization scope before Store, role, membership-scope, or record checks, and public tokens remain opaque, purpose-bound, expiring, and hashed at rest.
 - Unsafe mutations use optimistic Work Order, request-state, latest-assessment, or active-visit fences. Database constraints prevent duplicate request conversion and overlapping active visits for the same Work Order.
 - Domain mutations, their bounded Workflow Task changes, Audit Events, and outbox records commit in the same repository transaction. UI and public-link routes invoke the same domain commands.
-- A fresh or explicitly reset database receives deterministic fixture release `northline-ops-2026-08-20-v10`. The Northline showcase remains exactly 15 Stores, exactly five approved outside Vendors, and a two-person internal maintenance team; separate fixtures continue to prove one-Store and approximately 65-Store shapes.
-- A database already carrying the completed `northline-ops-2026-08-15-v9` bootstrap is deliberately preserved rather than silently merged or reprojected over accumulated preview mutations. It receives the distinct `northline-ops-2026-08-20-v10:preserved-existing` compatibility receipt and is not falsely marked as a fresh v10 seed. D1 and PostgreSQL use the same release decision.
+- A fresh or explicitly reset database receives deterministic fixture release `northline-ops-2026-08-20-v11`. The Northline showcase remains exactly 15 Stores, exactly five approved outside Vendors, and a two-person internal maintenance team; separate fixtures continue to prove one-Store and approximately 65-Store shapes.
+- A database already carrying the completed `northline-ops-2026-08-15-v9` bootstrap receives additive `INSERT OR IGNORE` enrichment only: existing facts and preview mutations win, migration-generated Visit/Work Order link identities are reused, and no source fact is updated or deleted. It receives the distinct `northline-ops-2026-08-20-v11:enriched-existing` receipt and is not falsely marked as a fresh v11 seed. D1 and PostgreSQL use the same release decision.
 - The deterministic journey covers a reviewed Service Request with approval, outside assignment and issuance, a two-Work-Order inferred-vendor visit, independent outcomes, one accepted verification, one rejected/return-work cycle, resolution, and final closure.
 
 ## Recorded browser proof
@@ -60,7 +60,7 @@ The following inspection was completed against the local application backed by t
 - Current Sites hosting bindings remain D1 `DB` and R2 `FILES`; Render portability retains PostgreSQL/S3-compatible boundaries without adding `render.yaml`.
 - `npm run db:reset:postgres` is fail-closed and restricted to explicitly confirmed development/demo targets. It has guard tests; no live database reset is claimed unless separately recorded.
 - Approval-policy currency constraints are aligned between D1 and PostgreSQL.
-- Hosted Sites versions 24 and 25 were saved from the validated source, but their private publish attempts were rolled back automatically because the preserved legacy hosted D1 contains a foreign-key violation exposed by the populated upgrade chain. The current live version and data were left untouched. Do not reset it; reconcile the exact legacy rows before publishing this migration set.
+- Hosted Sites versions 24 and 25 were saved from the earlier source, but their private publish attempts were rolled back automatically. The exact prior Sites source checkpoint (`33939f6`, migrations through `0009`) and its complete 2,397-statement seed were reconstructed locally. The populated chain now advances through D1 `0026` with zero foreign-key violations: migration `0015` creates the required composite Store index before its new foreign key, and migration `0019` adds `resolved_at` without rebuilding the referenced Work Order table. No hosted reset is required.
 
 ## Interactive demo expansion
 
@@ -69,6 +69,7 @@ The following inspection was completed against the local application backed by t
 - Warranty review preserves immutable Repair Items and Applied Warranty category lines; future effective-dated rules, one-repair amendments, routing overrides, coverage decisions, invoice holds, manufacturer evidence, and Audit Events are interactive.
 - Invoice intake persists exact Invoice Lines, Work Order allocations, optional private evidence, Contract Version/Authorization/Visit comparisons, and review tasks. Automated differences are flags only. Only an authorized human decision may create an immutable adjustment and realized Value Event; the platform does not execute payment or resolve operational work.
 - Lifecycle and capital planning allow operators to create functional replacement profiles, publish dated benchmarks, set equipment-specific estimates, approve selected replacement quotes, and close out a replacement by retiring the old Asset and creating its linked successor with final installed cost. A manager can also freeze the current transparent rule inputs/model version, recommendation, confidence, explanation, missing data, decision, and reason as a new immutable version; replacement closeout records the later actual outcome against the latest version.
+- Component replacement is a real verified-service action: one atomic transaction creates the immutable Repair Item, retires the removed Component, creates the separately identified installed Component, calculates applicable warranty lines, records manufacturer/model/serial, install/removal dates, failure/root cause, labor/part cost, Vendor, planned/reactive classification, expected life, warranty end, Component Lifecycle Event, Audit Event, and outbox fact. Component detail shows actual life, life ratio, model-cohort median and premature-failure rate where supported, repeat work, warranty opportunity, exact Work Order drill-through, and explicit small-sample cautions.
 - PM effectiveness now presents trailing reactive Work Orders per 100 equipment-months for latest-compliant and latest-noncompliant PM cohorts, plus recorded reactive-cost trend context. Every view opens supporting source records and explicitly withholds an effectiveness conclusion when a cohort is too small.
 - The Value Ledger displays realized-and-verified value, identified exposure, and estimated opportunity as three separate totals. Each row retains a deduplication key and opens its supporting operational or financial record.
 
@@ -77,7 +78,7 @@ The following inspection was completed against the local application backed by t
 - Preview identity and role selection are not production authentication and must not protect real customer data.
 - Operator read paths still include broad snapshot/presenter behavior that requires later tenant-scale and least-privilege replacement.
 - Outbox persistence exists, but production delivery/retry workers and external notification proof are not part of this completed loop.
-- Component replacement history and component-life cohort statistics remain the principal lifecycle demo gap. Structured production import, broad versioned metric coverage, and generalized background-job infrastructure remain later production work.
+- Structured production import, broad versioned metric coverage, and generalized background-job infrastructure remain later production work; they are not required for the current private working-demo claim.
 - Existing `test:e2e` coverage is a server/database Vitest journey, not a configured cross-browser automation suite; the manual browser proof is recorded above.
 - The repository still contains parallel legacy/prototype stacks. Reference-safe retirement is later work and must not be conflated with Wave 1 acceptance.
 
@@ -87,18 +88,18 @@ These results are from the same settled worktree on August 20, 2026.
 
 | Command | Exact latest result |
 |---|---|
-| `npm run db:seed` | **PASS** — deterministic fixture: 15 Stores, five Vendors, two internal technicians, 94 requests, 120 Work Orders, 116 visits, 138 assets, 76 PM occurrences, 4,607 source seed statements, and the separate 65-Store scale fixture. |
+| `npm run db:seed` | **PASS** — deterministic fixture: 15 Stores, five Vendors, two internal technicians, 94 requests, 120 Work Orders, 116 visits, 138 assets, 76 PM occurrences, 4,609 source seed statements, and the separate 65-Store scale fixture. |
 | `npm run typecheck` | **PASS** — zero TypeScript errors. |
 | `npm run lint` | **PASS** — zero ESLint errors. |
-| `npm test` | **PASS** — 79 files / 468 tests. |
+| `npm test` | **PASS** — 81 files / 472 tests. |
 | `npm run test:e2e` | **PASS** — 4 files / 31 tests, including the complete Wave 1 loop and real PostgreSQL engine. |
 | `npm run build` | **PASS** — Vinext production build completed; only its existing plugin-timing and duplicate CSS filename warnings were emitted. |
 | `npm run build:render` | **PASS** — Next.js 16.3 production build compiled, typechecked, generated routes, and finalized successfully. |
-| PostgreSQL migration + integration | **PASS** — all 21 migrations through `0020`, fresh deterministic seed, constraints, issuance, and full reactive-loop engine journey. |
-| D1 migration chain through `0025` | **PASS** — all 26 migrations applied with foreign keys enabled and the full deterministic seed. |
+| PostgreSQL migration + integration | **PASS** — all 22 migrations through `0021`, fresh deterministic seed, constraints, issuance, and full reactive-loop engine journey. |
+| D1 migration chain through `0026` | **PASS** — all 27 migrations applied with foreign keys enabled, the full deterministic seed, and a populated hosted-era upgrade regression. |
 | `git diff --check` | **PASS** — exit 0; only repository line-ending conversion warnings. |
 | Browser smoke | **PASS** — real local D1 invoice creation/flagging/Value Ledger propagation plus populated deterministic Warranty, Service Run, PM, lifecycle, scoped-search, reactive-loop, and 390×844 technician views. |
 
 ## Next action
 
-Preserve the passing reactive loop and interactive PM/Service Run/Warranty/Invoice/Value Ledger/Lifecycle work. The next worthwhile demo slice is structured Component replacement history and component-life cohort drill-through; that work should be done on High because it crosses equipment, Repair Items, warranties, Vendors, cost, and lifecycle analytics.
+Publish this settled source privately, allow the protected hosted database to run its additive migration/enrichment path, and complete the final browser walkthrough against the hosted URL. Production authentication, worker delivery, imports, and broad scale hardening remain a later production-readiness phase.

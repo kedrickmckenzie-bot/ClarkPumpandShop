@@ -94,45 +94,16 @@ CREATE UNIQUE INDEX `uidx_ops_workflow_tasks_org_approval` ON `ops_workflow_task
 CREATE INDEX `idx_ops_workflow_tasks_org_work_status_due` ON `ops_workflow_tasks` (`organization_id`,`work_order_id`,`status`,`due_at`);--> statement-breakpoint
 CREATE INDEX `idx_ops_workflow_tasks_org_request_status_due` ON `ops_workflow_tasks` (`organization_id`,`service_request_id`,`status`,`due_at`);--> statement-breakpoint
 CREATE INDEX `idx_ops_workflow_tasks_org_assignee_status_due` ON `ops_workflow_tasks` (`organization_id`,`assignee_type`,`assignee_id`,`status`,`due_at`);--> statement-breakpoint
-CREATE TABLE `__new_ops_work_orders` (
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`number` text NOT NULL,
-	`store_id` text NOT NULL,
-	`request_id` text,
-	`problem` text NOT NULL,
-	`authorized_scope` text,
-	`category_key` text,
-	`taxonomy_node_id` text,
-	`asset_id` text,
-	`component_id` text,
-	`priority` text NOT NULL,
-	`status` text NOT NULL,
-	`version` integer DEFAULT 0 NOT NULL,
-	`accountable_party` text NOT NULL,
-	`next_action` text NOT NULL,
-	`due_at` text,
-	`escalation_to` text,
-	`nte_amount_minor` integer,
-	`nte_currency` text,
-	`repair_estimate_amount_minor` integer,
-	`repair_estimate_currency` text,
-	`estimated_service_extension_months` integer,
-	`vendor_service_ticket_number` text,
-	`vendor_invoice_number` text,
-	`external_accounting_po` text,
-	`created_at` text NOT NULL,
-	`resolved_at` text,
-	`closed_at` text,
-	CONSTRAINT "chk_ops_work_orders_status" CHECK("__new_ops_work_orders"."status" IN ('draft', 'awaiting_approval', 'approved', 'issued', 'accepted', 'scheduled', 'in_progress', 'waiting_on_vendor', 'waiting_on_parts', 'completed_pending_review', 'resolved', 'closed', 'cancelled')),
-	CONSTRAINT "chk_ops_work_orders_resolution_time" CHECK("__new_ops_work_orders"."resolved_at" IS NULL OR "__new_ops_work_orders"."resolved_at" >= "__new_ops_work_orders"."created_at")
-);
---> statement-breakpoint
-INSERT INTO `__new_ops_work_orders`("id", "organization_id", "number", "store_id", "request_id", "problem", "authorized_scope", "category_key", "taxonomy_node_id", "asset_id", "component_id", "priority", "status", "version", "accountable_party", "next_action", "due_at", "escalation_to", "nte_amount_minor", "nte_currency", "repair_estimate_amount_minor", "repair_estimate_currency", "estimated_service_extension_months", "vendor_service_ticket_number", "vendor_invoice_number", "external_accounting_po", "created_at", "resolved_at", "closed_at") SELECT "id", "organization_id", "number", "store_id", "request_id", "problem", "authorized_scope", "category_key", "taxonomy_node_id", "asset_id", "component_id", "priority", "status", "version", "accountable_party", "next_action", "due_at", "escalation_to", "nte_amount_minor", "nte_currency", "repair_estimate_amount_minor", "repair_estimate_currency", "estimated_service_extension_months", "vendor_service_ticket_number", "vendor_invoice_number", "external_accounting_po", "created_at", NULL, "closed_at" FROM `ops_work_orders`;--> statement-breakpoint
-DROP TABLE `ops_work_orders`;--> statement-breakpoint
-ALTER TABLE `__new_ops_work_orders` RENAME TO `ops_work_orders`;--> statement-breakpoint
-CREATE UNIQUE INDEX `uidx_ops_work_orders_org_number` ON `ops_work_orders` (`organization_id`,`number`);--> statement-breakpoint
-CREATE UNIQUE INDEX `uidx_ops_work_orders_org_id` ON `ops_work_orders` (`organization_id`,`id`);--> statement-breakpoint
-CREATE INDEX `idx_ops_work_orders_org_status_due` ON `ops_work_orders` (`organization_id`,`status`,`due_at`);--> statement-breakpoint
-CREATE INDEX `idx_ops_work_orders_org_store_created` ON `ops_work_orders` (`organization_id`,`store_id`,`created_at`);--> statement-breakpoint
-CREATE INDEX `idx_ops_work_orders_org_category_created` ON `ops_work_orders` (`organization_id`,`category_key`,`created_at`);
+ALTER TABLE `ops_work_orders` ADD `resolved_at` text;--> statement-breakpoint
+CREATE TRIGGER `trg_ops_work_orders_status_insert` BEFORE INSERT ON `ops_work_orders`
+WHEN NEW.`status` NOT IN ('draft', 'awaiting_approval', 'approved', 'issued', 'accepted', 'scheduled', 'in_progress', 'waiting_on_vendor', 'waiting_on_parts', 'completed_pending_review', 'resolved', 'closed', 'cancelled')
+BEGIN SELECT RAISE(ABORT, 'invalid ops_work_orders status'); END;--> statement-breakpoint
+CREATE TRIGGER `trg_ops_work_orders_status_update` BEFORE UPDATE OF `status` ON `ops_work_orders`
+WHEN NEW.`status` NOT IN ('draft', 'awaiting_approval', 'approved', 'issued', 'accepted', 'scheduled', 'in_progress', 'waiting_on_vendor', 'waiting_on_parts', 'completed_pending_review', 'resolved', 'closed', 'cancelled')
+BEGIN SELECT RAISE(ABORT, 'invalid ops_work_orders status'); END;--> statement-breakpoint
+CREATE TRIGGER `trg_ops_work_orders_resolution_insert` BEFORE INSERT ON `ops_work_orders`
+WHEN NEW.`resolved_at` IS NOT NULL AND NEW.`resolved_at` < NEW.`created_at`
+BEGIN SELECT RAISE(ABORT, 'resolved_at precedes created_at'); END;--> statement-breakpoint
+CREATE TRIGGER `trg_ops_work_orders_resolution_update` BEFORE UPDATE OF `resolved_at`, `created_at` ON `ops_work_orders`
+WHEN NEW.`resolved_at` IS NOT NULL AND NEW.`resolved_at` < NEW.`created_at`
+BEGIN SELECT RAISE(ABORT, 'resolved_at precedes created_at'); END;

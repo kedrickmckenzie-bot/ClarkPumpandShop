@@ -300,8 +300,8 @@ export async function loadComponentDetailModel(
         ? { label: "Create work order", href: `/app/work-orders/new?store=${encodeURIComponent(store.id)}&asset=${encodeURIComponent(asset.id)}&component=${encodeURIComponent(component.id)}` }
         : undefined,
     },
-    statusLabel: "Tracked component",
-    statusTone: "info",
+    statusLabel: component.removedAt ? "Removed component" : "Active component",
+    statusTone: component.removedAt ? "warning" : "info",
     facts: [
       { label: "Equipment", value: `${asset.name} · ${asset.assetTag}`, link: { href: `/app/equipment/${asset.id}`, label: "Open equipment" } },
       {
@@ -314,6 +314,7 @@ export async function loadComponentDetailModel(
       { label: "Part number", value: component.partNumber ?? "Not entered" },
       { label: "Serial number", value: component.serialNumber ?? "Not entered" },
       { label: "Installed", value: date(component.installedAt) },
+      { label: "Removed", value: date(component.removedAt), helperText: component.replacedByComponentId ? "Superseded by a separately tracked installed Component" : "Current unless a removal is recorded" },
       {
         label: "Warranty",
         value: date(component.warrantyEndsAt),

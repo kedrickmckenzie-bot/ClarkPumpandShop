@@ -15,6 +15,7 @@ import {
   NORTHLINE_SEED_COMPATIBILITY_MARKER,
   NORTHLINE_SEED_VERSION,
   planNorthlineSeedRelease,
+  remapNorthlineFixtureVisitWorkIds,
   type NorthlineSeedMarkerRow,
 } from "./northline-seed-release";
 
@@ -22,7 +23,7 @@ export const NORTHLINE_POSTGRES_SEED_VERSION = NORTHLINE_SEED_VERSION;
 
 /**
  * Fixture releases share this lock from v10 onward. Keep the v9 key during the
- * transition so an in-flight v9 process and v10 cannot seed different fixture
+ * transition so an in-flight legacy process and the current release cannot seed different fixture
  * versions into the same empty database at the same time.
  */
 export const NORTHLINE_POSTGRES_SEED_LOCK_KEY = `ops-fixture-bootstrap:${NORTHLINE_ORGANIZATION_ID}`;
@@ -66,8 +67,8 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
     }
     const plan = planNorthlineSeedRelease(markers);
     if (plan.kind === "already_current") return { seeded: false as const };
-    if (plan.kind === "already_preserved") {
-      return { seeded: false as const, preservedExisting: true as const };
+    if (plan.kind === "already_enriched") {
+      return { seeded: false as const, enrichedExisting: true as const };
     }
 
     // Keep the advisory lock, marker check, source seed, and completion marker
@@ -77,16 +78,20 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
     inTransaction = true;
     const repository = createOpsPostgresTransactionRepository(client);
 
-    if (plan.kind === "preserve_existing") {
-      await repository.atomicWrite([
-        buildNorthlineCompatibilityMarker(plan.sourceVersion),
-      ]);
+    if (plan.kind === "enrich_existing") {
+      const links = await client.query<{ organization_id: string; id: string; visit_id: string; work_order_id: string }>(
+        "SELECT organization_id, id, visit_id, work_order_id FROM ops_site_visit_work_orders WHERE organization_id = $1",
+        [NORTHLINE_ORGANIZATION_ID],
+      );
+      const fixture = remapNorthlineFixtureVisitWorkIds(buildNorthlinePresentationFixture(), links.rows.map((row) => ({ organizationId: row.organization_id, id: row.id, visitId: row.visit_id, workOrderId: row.work_order_id })));
+      const result = await seedOpsRepository(repository, fixture, [buildNorthlineCompatibilityMarker(plan.sourceVersion)]);
       await client.query("COMMIT");
       inTransaction = false;
       return {
-        seeded: false as const,
-        preservedExisting: true as const,
+        seeded: true as const,
+        enrichedExisting: true as const,
         sourceVersion: plan.sourceVersion,
+        ...result,
       };
     }
 

@@ -20,6 +20,7 @@ import {
   NORTHLINE_SEED_COMPATIBILITY_MARKER,
   NORTHLINE_SEED_VERSION,
   planNorthlineSeedRelease,
+  remapNorthlineFixtureVisitWorkIds,
   type NorthlineSeedMarkerRow,
 } from "@/lib/ops/northline-seed-release";
 import type { OpsFixture, OpsId } from "@/lib/ops/types";
@@ -76,15 +77,20 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
     );
   }
   const plan = planNorthlineSeedRelease(markers);
-  if (plan.kind === "already_current" || plan.kind === "already_preserved") return;
+  if (plan.kind === "already_current" || plan.kind === "already_enriched") return;
 
-  if (plan.kind === "preserve_existing") {
-    // Do not merge a newer fictional history into a tenant that may have real
-    // preview mutations. A deliberate guarded reset is the only path from an
-    // older complete fixture to the exact current deterministic fixture.
-    await repository.atomicWrite([
-      buildNorthlineCompatibilityMarker(plan.sourceVersion),
-    ]);
+  if (plan.kind === "enrich_existing") {
+    const links = await binding.prepare(`SELECT organization_id, id, visit_id, work_order_id
+      FROM ops_site_visit_work_orders WHERE organization_id = ?`).bind(NORTHLINE_ORGANIZATION_ID).all<{
+        organization_id: string; id: string; visit_id: string; work_order_id: string;
+      }>();
+    const fixture = remapNorthlineFixtureVisitWorkIds(buildNorthlinePresentationFixture(), (links.results ?? []).map((row) => ({
+      organizationId: row.organization_id, id: row.id, visitId: row.visit_id, workOrderId: row.work_order_id,
+    })));
+    // Every source statement is INSERT OR IGNORE: existing facts and user
+    // mutations win, while missing demo capabilities receive source records.
+    await seedOpsRepository(repository, fixture);
+    await repository.atomicWrite([buildNorthlineCompatibilityMarker(plan.sourceVersion)]);
     return;
   }
 

@@ -503,8 +503,12 @@ export const opsLifecycleRecommendations = sqliteTable("ops_lifecycle_recommenda
 }, (table) => [uniqueIndex("uidx_ops_lifecycle_recommendations_org_asset_version").on(table.organizationId, table.assetId, table.version), index("idx_ops_lifecycle_recommendations_org_asset_created").on(table.organizationId, table.assetId, table.createdAt)]);
 
 export const opsAssetComponents = sqliteTable("ops_asset_components", {
-  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), parentComponentId: text("parent_component_id"), name: text("name").notNull(), partNumber: text("part_number"), serialNumber: text("serial_number"), installedAt: text("installed_at"), warrantyEndsAt: text("warranty_ends_at"), createdAt: createdAt(),
+  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), parentComponentId: text("parent_component_id"), name: text("name").notNull(), partNumber: text("part_number"), serialNumber: text("serial_number"), installedAt: text("installed_at"), warrantyEndsAt: text("warranty_ends_at"), removedAt: text("removed_at"), replacedByComponentId: text("replaced_by_component_id"), createdAt: createdAt(),
 }, (table) => [index("idx_ops_components_org_asset_parent").on(table.organizationId, table.assetId, table.parentComponentId)]);
+
+export const opsComponentLifecycleEvents = sqliteTable("ops_component_lifecycle_events", {
+  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), removedComponentId: text("removed_component_id").notNull(), installedComponentId: text("installed_component_id").notNull(), repairItemId: text("repair_item_id").notNull(), workOrderId: text("work_order_id").notNull(), vendorId: text("vendor_id").notNull(), partManufacturer: text("part_manufacturer").notNull(), partModel: text("part_model").notNull(), serialNumber: text("serial_number"), removedAt: text("removed_at").notNull(), installedAt: text("installed_at").notNull(), failureMode: text("failure_mode").notNull(), rootCause: text("root_cause"), laborCostMinor: integer("labor_cost_minor").notNull(), partCostMinor: integer("part_cost_minor").notNull(), currency: text("currency").notNull(), replacementKind: text("replacement_kind").notNull(), expectedLifeMonths: integer("expected_life_months"), warrantyEndsAt: text("warranty_ends_at"), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_component_lifecycle_org_removed").on(table.organizationId, table.removedComponentId), uniqueIndex("uidx_ops_component_lifecycle_org_repair").on(table.organizationId, table.repairItemId), index("idx_ops_component_lifecycle_org_model_removed").on(table.organizationId, table.partManufacturer, table.partModel, table.removedAt), index("idx_ops_component_lifecycle_org_vendor_removed").on(table.organizationId, table.vendorId, table.removedAt)]);
 
 export const opsMaintenancePrograms = sqliteTable("ops_maintenance_programs", {
   id: id(), organizationId: organizationId(), programKey: text("program_key").notNull(), version: integer("version").notNull(), name: text("name").notNull(), tradeKey: text("trade_key").notNull(), workType: text("work_type").notNull(), applicableAssetTypesJson: text("applicable_asset_types_json").notNull().default("[]"), frequencyDays: integer("frequency_days").notNull(), recurrenceKind: text("recurrence_kind").notNull(), dueWindowDays: integer("due_window_days").notNull(), seasonalStartMonth: integer("seasonal_start_month"), seasonalEndMonth: integer("seasonal_end_month"), checklistTemplateId: text("checklist_template_id").notNull(), requiredEvidenceKindsJson: text("required_evidence_kinds_json").notNull().default("[]"), expectedDurationMinutes: integer("expected_duration_minutes").notNull(), completionCriteria: text("completion_criteria").notNull(), correctiveWorkAuthorityMinor: integer("corrective_work_authority_minor").notNull(), currency: text("currency").notNull(), deficiencyHandling: text("deficiency_handling").notNull(), status: text("status").notNull(), supersedesProgramId: text("supersedes_program_id"), createdAt: createdAt(),
@@ -698,6 +702,7 @@ export const opsSchema = {
   opsReplacementEvents,
   opsLifecycleRecommendations,
   opsAssetComponents,
+  opsComponentLifecycleEvents,
   opsMaintenancePrograms,
   opsChecklistTemplates,
   opsPmPlans,

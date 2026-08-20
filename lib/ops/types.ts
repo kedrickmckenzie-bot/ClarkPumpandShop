@@ -1084,6 +1084,32 @@ export interface AssetComponent {
   serialNumber?: string;
   installedAt?: IsoDateTime;
   warrantyEndsAt?: IsoDateTime;
+  removedAt?: IsoDateTime;
+  replacedByComponentId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export interface ComponentLifecycleEvent {
+  id: OpsId;
+  organizationId: OpsId;
+  assetId: OpsId;
+  removedComponentId: OpsId;
+  installedComponentId: OpsId;
+  repairItemId: OpsId;
+  workOrderId: OpsId;
+  vendorId: OpsId;
+  partManufacturer: string;
+  partModel: string;
+  serialNumber?: string;
+  removedAt: string;
+  installedAt: string;
+  failureMode: string;
+  rootCause?: string;
+  laborCost: Money;
+  partCost: Money;
+  replacementKind: "planned" | "reactive";
+  expectedLifeMonths?: number;
+  warrantyEndsAt?: string;
   createdAt: IsoDateTime;
 }
 
@@ -1748,6 +1774,7 @@ export interface OpsFixture {
   replacementEvents: ReplacementEvent[];
   lifecycleRecommendations: LifecycleRecommendation[];
   components: AssetComponent[];
+  componentLifecycleEvents: ComponentLifecycleEvent[];
   maintenancePrograms: MaintenanceProgram[];
   checklistTemplates: ChecklistTemplate[];
   pmPlans: PmPlan[];

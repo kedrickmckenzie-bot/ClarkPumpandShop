@@ -149,7 +149,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_exceptions: "exceptions", ops_assets: "assets",
     ops_replacement_profiles: "replacementProfiles", ops_replacement_benchmarks: "replacementBenchmarks",
     ops_asset_replacement_overrides: "assetReplacementOverrides", ops_replacement_events: "replacementEvents", ops_lifecycle_recommendations: "lifecycleRecommendations",
-    ops_asset_components: "components", ops_maintenance_programs: "maintenancePrograms", ops_checklist_templates: "checklistTemplates", ops_pm_plans: "pmPlans", ops_pm_occurrences: "pmOccurrences",
+    ops_asset_components: "components", ops_component_lifecycle_events: "componentLifecycleEvents", ops_maintenance_programs: "maintenancePrograms", ops_checklist_templates: "checklistTemplates", ops_pm_plans: "pmPlans", ops_pm_occurrences: "pmOccurrences",
     ops_pm_work_items: "pmWorkItems", ops_checklist_responses: "checklistResponses", ops_service_runs: "serviceRuns", ops_route_stops: "routeStops",
     ops_service_run_work_orders: "serviceRunWorkOrders", ops_service_run_responses: "serviceRunResponses",
     ops_vendor_warranty_profiles: "vendorWarrantyProfiles", ops_warranty_rules: "warrantyRules", ops_warranty_coverage_lines: "warrantyCoverageLines",
@@ -171,6 +171,7 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_taxonomy_nodes") { row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.active = Boolean(row.active); delete row.aliasesJson; }
   if (table === "ops_equipment_templates") row.active = Boolean(row.active);
   if (table === "ops_lifecycle_recommendations") { row.missingData = JSON.parse(String(row.missingDataJson ?? "[]")); delete row.missingDataJson; }
+  if (table === "ops_component_lifecycle_events") { row.laborCost = { amountMinor: row.laborCostMinor, currency: row.currency }; row.partCost = { amountMinor: row.partCostMinor, currency: row.currency }; delete row.laborCostMinor; delete row.partCostMinor; delete row.currency; }
   if (table === "ops_stores") { row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.locationPolicyEnabled = Boolean(row.locationPolicyEnabled); delete row.aliasesJson; delete row.searchText; }
   if (table === "ops_vendors") { row.preferred = Boolean(row.preferred); delete row.searchText; }
   if (table === "ops_vendor_specialties") { row.searchAliases = JSON.parse(String(row.searchAliasesJson ?? "[]")); delete row.searchAliasesJson; }

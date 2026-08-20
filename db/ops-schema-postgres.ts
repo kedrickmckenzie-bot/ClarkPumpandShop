@@ -530,6 +530,8 @@ export const opsAssetComponents = pgTable("ops_asset_components", {
   serialNumber: text("serial_number"),
   installedAt: instant("installed_at"),
   warrantyEndsAt: instant("warranty_ends_at"),
+  removedAt: instant("removed_at"),
+  replacedByComponentId: text("replaced_by_component_id"),
   createdAt: createdAt(),
 }, (table): PgTableExtraConfigValue[] => [
   unique("uq_ops_components_org_id").on(table.organizationId, table.id),
@@ -547,6 +549,11 @@ export const opsAssetComponents = pgTable("ops_asset_components", {
   foreignKey({
     name: "fk_ops_components_parent",
     columns: [table.organizationId, table.parentComponentId],
+    foreignColumns: [opsAssetComponents.organizationId, opsAssetComponents.id],
+  }),
+  foreignKey({
+    name: "fk_ops_components_replacement",
+    columns: [table.organizationId, table.replacedByComponentId],
     foreignColumns: [opsAssetComponents.organizationId, opsAssetComponents.id],
   }),
 ]);
@@ -1446,6 +1453,27 @@ export const opsRepairItems = pgTable("ops_repair_items", {
   id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), siteVisitWorkOrderId: text("site_visit_work_order_id").notNull(), vendorId: text("vendor_id").notNull(), contractVersionId: text("contract_version_id"), assetId: text("asset_id").notNull(), componentId: text("component_id"), failureCode: text("failure_code").notNull(), repairAction: text("repair_action").notNull(), repairSeverity: text("repair_severity").notNull(), removedComponentId: text("removed_component_id"), installedComponentId: text("installed_component_id"), partManufacturer: text("part_manufacturer"), partModel: text("part_model"), serialNumber: text("serial_number"), vendorSupplied: boolean("vendor_supplied").notNull().default(false), completionDate: date("completion_date", { mode: "string" }).notNull(), verificationDate: date("verification_date", { mode: "string" }), laborCostMinor: bigint("labor_cost_minor", { mode: "number" }).notNull(), partCostMinor: bigint("part_cost_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(), rootCause: text("root_cause"), createdAt: createdAt(),
 }, (table) => [unique("uq_ops_repair_items_org_id").on(table.organizationId, table.id), index("idx_ops_repair_items_org_work").on(table.organizationId, table.workOrderId), index("idx_ops_repair_items_org_asset_component_date").on(table.organizationId, table.assetId, table.componentId, table.completionDate)]);
 
+export const opsComponentLifecycleEvents = pgTable("ops_component_lifecycle_events", {
+  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), removedComponentId: text("removed_component_id").notNull(), installedComponentId: text("installed_component_id").notNull(), repairItemId: text("repair_item_id").notNull(), workOrderId: text("work_order_id").notNull(), vendorId: text("vendor_id").notNull(), partManufacturer: text("part_manufacturer").notNull(), partModel: text("part_model").notNull(), serialNumber: text("serial_number"), removedAt: instant("removed_at").notNull(), installedAt: instant("installed_at").notNull(), failureMode: text("failure_mode").notNull(), rootCause: text("root_cause"), laborCostMinor: bigint("labor_cost_minor", { mode: "number" }).notNull(), partCostMinor: bigint("part_cost_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(), replacementKind: text("replacement_kind").notNull(), expectedLifeMonths: integer("expected_life_months"), warrantyEndsAt: instant("warranty_ends_at"), createdAt: createdAt(),
+}, (table): PgTableExtraConfigValue[] => [
+  unique("uq_ops_component_lifecycle_org_id").on(table.organizationId, table.id),
+  unique("uq_ops_component_lifecycle_org_removed").on(table.organizationId, table.removedComponentId),
+  unique("uq_ops_component_lifecycle_org_repair").on(table.organizationId, table.repairItemId),
+  index("idx_ops_component_lifecycle_org_model_removed").on(table.organizationId, table.partManufacturer, table.partModel, table.removedAt),
+  index("idx_ops_component_lifecycle_org_vendor_removed").on(table.organizationId, table.vendorId, table.removedAt),
+  foreignKey({ name: "fk_ops_component_lifecycle_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+  foreignKey({ name: "fk_ops_component_lifecycle_asset", columns: [table.organizationId, table.assetId], foreignColumns: [opsAssets.organizationId, opsAssets.id] }),
+  foreignKey({ name: "fk_ops_component_lifecycle_removed", columns: [table.organizationId, table.removedComponentId], foreignColumns: [opsAssetComponents.organizationId, opsAssetComponents.id] }),
+  foreignKey({ name: "fk_ops_component_lifecycle_installed", columns: [table.organizationId, table.installedComponentId], foreignColumns: [opsAssetComponents.organizationId, opsAssetComponents.id] }),
+  foreignKey({ name: "fk_ops_component_lifecycle_repair", columns: [table.organizationId, table.repairItemId], foreignColumns: [opsRepairItems.organizationId, opsRepairItems.id] }),
+  foreignKey({ name: "fk_ops_component_lifecycle_work", columns: [table.organizationId, table.workOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
+  foreignKey({ name: "fk_ops_component_lifecycle_vendor", columns: [table.organizationId, table.vendorId], foreignColumns: [opsVendors.organizationId, opsVendors.id] }),
+  check("chk_ops_component_lifecycle_costs", sql`${table.laborCostMinor} >= 0 AND ${table.partCostMinor} >= 0`),
+  check("chk_ops_component_lifecycle_kind", sql`${table.replacementKind} IN ('planned', 'reactive')`),
+  check("chk_ops_component_lifecycle_life", sql`${table.expectedLifeMonths} IS NULL OR ${table.expectedLifeMonths} > 0`),
+  check("chk_ops_component_lifecycle_dates", sql`${table.installedAt} >= ${table.removedAt}`),
+]);
+
 export const opsAppliedWarranties = pgTable("ops_applied_warranties", {
   id: id(), organizationId: organizationId(), repairItemId: text("repair_item_id").notNull(), coverageType: text("coverage_type").notNull(), provider: text("provider").notNull(), obligatedVendorId: text("obligated_vendor_id"), startDate: date("start_date", { mode: "string" }).notNull(), endDate: date("end_date", { mode: "string" }).notNull(), coveredChargesJson: jsonb("covered_charges_json").$type<string[]>().notNull().default(sql`'[]'::jsonb`), routingRule: text("routing_rule").notNull(), contractVersionId: text("contract_version_id"), policySource: text("policy_source").notNull(), ruleSource: text("rule_source"), originalCalculatedTermsJson: jsonb("original_calculated_terms_json").notNull(), createdAt: createdAt(),
 }, (table) => [unique("uq_ops_applied_warranties_org_id").on(table.organizationId, table.id), uniqueIndex("uidx_ops_applied_warranty_repair_type").on(table.organizationId, table.repairItemId, table.coverageType), index("idx_ops_applied_warranty_org_end").on(table.organizationId, table.endDate)]);
@@ -1766,6 +1794,7 @@ export const opsPostgresSchema = {
   opsWarrantyRules,
   opsWarrantyCoverageLines,
   opsRepairItems,
+  opsComponentLifecycleEvents,
   opsAppliedWarranties,
   opsWarrantyAmendments,
   opsManufacturerWarranties,

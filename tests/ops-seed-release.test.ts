@@ -76,12 +76,12 @@ describe("Northline deterministic seed release", () => {
     expect(planNorthlineSeedRelease([{
       key: NORTHLINE_SEED_COMPATIBILITY_MARKER,
       command: NORTHLINE_COMPATIBILITY_COMMAND,
-    }])).toEqual({ kind: "already_preserved" });
+    }])).toEqual({ kind: "already_enriched" });
     expect(planNorthlineSeedRelease([{
       key: "northline-ops-2026-08-15-v9",
       command: NORTHLINE_BOOTSTRAP_COMMAND,
     }])).toEqual({
-      kind: "preserve_existing",
+      kind: "enrich_existing",
       sourceVersion: "northline-ops-2026-08-15-v9",
     });
 
@@ -96,7 +96,7 @@ describe("Northline deterministic seed release", () => {
       ]);
   });
 
-  it("writes the complete v10 fixture and full-version marker to a fresh PostgreSQL database", async () => {
+  it("writes the complete v11 fixture and full-version marker to a fresh PostgreSQL database", async () => {
     const fixture = buildNorthlinePresentationFixture();
     const expectedSourceStatements = buildOpsSeedStatements(fixture);
     const client = new RecordingPostgresClient([]);
@@ -133,7 +133,7 @@ describe("Northline deterministic seed release", () => {
     expect(client.released).toBe(true);
   });
 
-  it("preserves a completed v9 database without historical fixture writes or a false v10 marker", async () => {
+  it("enriches a completed v9 database with missing rows without overwriting existing facts or claiming an exact v11 seed", async () => {
     const legacyVersion = "northline-ops-2026-08-15-v9";
     const client = new RecordingPostgresClient([{
       key: legacyVersion,
@@ -143,19 +143,17 @@ describe("Northline deterministic seed release", () => {
 
     const result = await ensureNorthlinePostgresSeed(new RecordingPostgresPool(client));
 
-    expect(result).toEqual({
-      seeded: false,
-      preservedExisting: true,
-      sourceVersion: legacyVersion,
-    });
+    expect(result).toMatchObject({ seeded: true, enrichedExisting: true, sourceVersion: legacyVersion, stores: 15, vendors: 5 });
     const inserts = client.queries.filter((query) => /^\s*INSERT/i.test(query.text));
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0]!.text).toMatch(/INTO ops_idempotency_keys/i);
-    expect(inserts[0]!.values).toContain(NORTHLINE_SEED_COMPATIBILITY_MARKER);
-    expect(inserts[0]!.values).toContain(NORTHLINE_COMPATIBILITY_COMMAND);
-    expect(inserts[0]!.values).toContain(legacyVersion);
-    expect(inserts[0]!.values[1]).not.toBe(NORTHLINE_SEED_VERSION);
-    expect(client.queries.some((query) => /INTO ops_(?!idempotency_keys)/i.test(query.text))).toBe(false);
+    expect(inserts).toHaveLength(buildOpsSeedStatements(buildNorthlinePresentationFixture()).length + 1);
+    const receipt = inserts.at(-1)!;
+    expect(receipt.text).toMatch(/INTO ops_idempotency_keys/i);
+    expect(receipt.values).toContain(NORTHLINE_SEED_COMPATIBILITY_MARKER);
+    expect(receipt.values).toContain(NORTHLINE_COMPATIBILITY_COMMAND);
+    expect(receipt.values).toContain(legacyVersion);
+    expect(receipt.values[1]).not.toBe(NORTHLINE_SEED_VERSION);
+    expect(client.queries.some((query) => /^\s*(UPDATE|DELETE)/i.test(query.text))).toBe(false);
+    expect(inserts.some((query) => /INTO ops_component_lifecycle_events/i.test(query.text))).toBe(true);
     expect(client.queries.map((query) => query.text.trim())).toContain("COMMIT");
     expect(client.released).toBe(true);
   });
