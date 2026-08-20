@@ -1,3 +1,4 @@
+PRAGMA defer_foreign_keys = ON;--> statement-breakpoint
 CREATE TABLE `ops_approval_decisions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,

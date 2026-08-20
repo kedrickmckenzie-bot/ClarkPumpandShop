@@ -1,3 +1,4 @@
+PRAGMA defer_foreign_keys = ON;--> statement-breakpoint
 CREATE UNIQUE INDEX `uidx_ops_requests_org_id` ON `ops_requests` (`organization_id`,`id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `uidx_ops_stores_org_id` ON `ops_stores` (`organization_id`,`id`);--> statement-breakpoint
 CREATE TABLE `ops_request_impact_assessments` (
