@@ -60,6 +60,7 @@ The following inspection was completed against the local application backed by t
 - Current Sites hosting bindings remain D1 `DB` and R2 `FILES`; Render portability retains PostgreSQL/S3-compatible boundaries without adding `render.yaml`.
 - `npm run db:reset:postgres` is fail-closed and restricted to explicitly confirmed development/demo targets. It has guard tests; no live database reset is claimed unless separately recorded.
 - Approval-policy currency constraints are aligned between D1 and PostgreSQL.
+- Hosted Sites versions 24 and 25 were saved from the validated source, but their private publish attempts were rolled back automatically because the preserved legacy hosted D1 contains a foreign-key violation exposed by the populated upgrade chain. The current live version and data were left untouched. Do not reset it; reconcile the exact legacy rows before publishing this migration set.
 
 ## Interactive demo expansion
 
