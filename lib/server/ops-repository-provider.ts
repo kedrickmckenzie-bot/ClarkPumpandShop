@@ -13,6 +13,7 @@ import { createOpsPostgresRepository } from "@/lib/ops/postgres-repository";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { seedOpsRepository } from "@/lib/ops/seed";
 import {
+  buildNorthlineCompatibilityAmendments,
   buildNorthlineCompatibilityMarker,
   buildNorthlineCurrentSeedMarker,
   NORTHLINE_BOOTSTRAP_COMMAND,
@@ -90,7 +91,10 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
     // Every source statement is INSERT OR IGNORE: existing facts and user
     // mutations win, while missing demo capabilities receive source records.
     await seedOpsRepository(repository, fixture);
-    await repository.atomicWrite([buildNorthlineCompatibilityMarker(plan.sourceVersion)]);
+    await repository.atomicWrite([
+      ...buildNorthlineCompatibilityAmendments(),
+      buildNorthlineCompatibilityMarker(plan.sourceVersion),
+    ]);
     return;
   }
 

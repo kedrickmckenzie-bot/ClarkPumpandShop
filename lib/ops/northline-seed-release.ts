@@ -11,12 +11,12 @@ import {
  * real preview mutations, so a new fixture version never merges or reprojects
  * records underneath an older completed bootstrap.
  */
-export const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-20-v11";
+export const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-20-v12";
 
 /**
  * An older completed fixture is enriched only with missing deterministic rows.
  * Existing IDs and user mutations are never overwritten. This separate
- * receipt remains honest that the database was not freshly seeded as v11.
+ * receipt remains honest that the database was not freshly seeded as v12.
  */
 export const NORTHLINE_SEED_COMPATIBILITY_MARKER = `${NORTHLINE_SEED_VERSION}:enriched-existing`;
 
@@ -117,4 +117,36 @@ export function buildNorthlineCompatibilityMarker(sourceVersion: string): OpsSta
       "9999-12-31T23:59:59.999Z",
     ],
   };
+}
+
+/**
+ * Narrow amendments for deterministic Northline facts whose stable IDs existed
+ * before their structured replacement history. Every predicate includes the
+ * exact legacy identity, so user edits and unrelated tenant data are untouched.
+ */
+export function buildNorthlineCompatibilityAmendments(): OpsStatement[] {
+  return [{
+    sql: `UPDATE ops_asset_components
+      SET serial_number = ?, installed_at = ?, warranty_ends_at = ?
+      WHERE organization_id = ?
+        AND id = ?
+        AND asset_id = ?
+        AND part_number = ?
+        AND serial_number = ?
+        AND installed_at = ?
+        AND warranty_ends_at = ?
+        AND removed_at IS NULL`,
+    params: [
+      "CMP104-2026-0710",
+      "2026-07-10T12:00:00.000Z",
+      "2028-07-10T12:00:00.000Z",
+      NORTHLINE_ORGANIZATION_ID,
+      "component-104-compressor",
+      "asset-104-beer-cave",
+      "ZB38KCE-TFD",
+      "CMP104-88214",
+      "2021-05-06T12:00:00.000Z",
+      "2026-05-06T12:00:00.000Z",
+    ],
+  }];
 }

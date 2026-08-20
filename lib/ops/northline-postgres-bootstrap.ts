@@ -8,6 +8,7 @@ import {
 } from "./postgres-repository";
 import { seedOpsRepository } from "./seed";
 import {
+  buildNorthlineCompatibilityAmendments,
   buildNorthlineCompatibilityMarker,
   buildNorthlineCurrentSeedMarker,
   NORTHLINE_BOOTSTRAP_COMMAND,
@@ -84,7 +85,10 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
         [NORTHLINE_ORGANIZATION_ID],
       );
       const fixture = remapNorthlineFixtureVisitWorkIds(buildNorthlinePresentationFixture(), links.rows.map((row) => ({ organizationId: row.organization_id, id: row.id, visitId: row.visit_id, workOrderId: row.work_order_id })));
-      const result = await seedOpsRepository(repository, fixture, [buildNorthlineCompatibilityMarker(plan.sourceVersion)]);
+      const result = await seedOpsRepository(repository, fixture, [
+        ...buildNorthlineCompatibilityAmendments(),
+        buildNorthlineCompatibilityMarker(plan.sourceVersion),
+      ]);
       await client.query("COMMIT");
       inTransaction = false;
       return {

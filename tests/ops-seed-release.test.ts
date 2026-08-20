@@ -7,6 +7,7 @@ import {
   NORTHLINE_POSTGRES_SEED_VERSION,
 } from "@/lib/ops/northline-postgres-bootstrap";
 import {
+  buildNorthlineCompatibilityAmendments,
   buildNorthlineCompatibilityMarker,
   buildNorthlineCurrentSeedMarker,
   NORTHLINE_BOOTSTRAP_COMMAND,
@@ -96,7 +97,7 @@ describe("Northline deterministic seed release", () => {
       ]);
   });
 
-  it("writes the complete v11 fixture and full-version marker to a fresh PostgreSQL database", async () => {
+  it("writes the complete v12 fixture and full-version marker to a fresh PostgreSQL database", async () => {
     const fixture = buildNorthlinePresentationFixture();
     const expectedSourceStatements = buildOpsSeedStatements(fixture);
     const client = new RecordingPostgresClient([]);
@@ -133,7 +134,7 @@ describe("Northline deterministic seed release", () => {
     expect(client.released).toBe(true);
   });
 
-  it("enriches a completed v9 database with missing rows without overwriting existing facts or claiming an exact v11 seed", async () => {
+  it("enriches a completed v9 database with missing rows and exact guarded amendments without claiming an exact v12 seed", async () => {
     const legacyVersion = "northline-ops-2026-08-15-v9";
     const client = new RecordingPostgresClient([{
       key: legacyVersion,
@@ -152,7 +153,13 @@ describe("Northline deterministic seed release", () => {
     expect(receipt.values).toContain(NORTHLINE_COMPATIBILITY_COMMAND);
     expect(receipt.values).toContain(legacyVersion);
     expect(receipt.values[1]).not.toBe(NORTHLINE_SEED_VERSION);
-    expect(client.queries.some((query) => /^\s*(UPDATE|DELETE)/i.test(query.text))).toBe(false);
+    const updates = client.queries.filter((query) => /^\s*UPDATE/i.test(query.text));
+    expect(updates).toHaveLength(buildNorthlineCompatibilityAmendments().length);
+    expect(updates[0].text).toMatch(/UPDATE ops_asset_components/);
+    expect(updates[0].text).toMatch(/serial_number = \$1/);
+    expect(updates[0].values).toContain("CMP104-88214");
+    expect(updates[0].values).toContain("CMP104-2026-0710");
+    expect(client.queries.some((query) => /^\s*DELETE/i.test(query.text))).toBe(false);
     expect(inserts.some((query) => /INTO ops_component_lifecycle_events/i.test(query.text))).toBe(true);
     expect(client.queries.map((query) => query.text.trim())).toContain("COMMIT");
     expect(client.released).toBe(true);
