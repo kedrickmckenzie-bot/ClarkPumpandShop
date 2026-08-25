@@ -596,6 +596,17 @@ export interface WorkOrderIssuance {
  */
 export type ServiceAppointmentStatus = "proposed_by_vendor" | "confirmed" | "counter_proposed" | "cancelled";
 
+/** One immutable operator follow-up fact on a vendor response (accept/counter/reply). */
+export interface VendorContinuation {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  vendorResponseId: OpsId;
+  action: "accept_date" | "counter_date" | "reply" | "decline_recovery";
+  message?: string;
+  createdByMembershipId?: OpsId;
+  createdAt: IsoDateTime;
+}
 export interface ServiceAppointment {
   id: OpsId;
   organizationId: OpsId;
@@ -1862,6 +1873,7 @@ export interface OpsFixture {
   auditEvents: AuditEvent[];
   savedViews?: SavedView[];
   serviceAppointments?: ServiceAppointment[];
+  vendorContinuations?: VendorContinuation[];
   outboxMessages: OutboxMessage[];
   jobRuns?: JobRun[];
   publicTokens: PublicActionToken[];

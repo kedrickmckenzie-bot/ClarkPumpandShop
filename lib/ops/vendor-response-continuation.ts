@@ -1,5 +1,5 @@
 import { OpsDomainError, type OpsCommandServices } from "./commands";
-import type { ServiceAppointment, VendorResponse } from "./types";
+import type { ActorContext, ServiceAppointment, VendorResponse } from "./types";
 
 /**
  * Operator-side continuation of an outside vendor's response.
@@ -31,7 +31,7 @@ export async function resolveVendorResponse(
     decision: VendorContinuationDecision;
     scheduledFor?: string;
     message?: string;
-    actor: { organizationId: string; actorType: "user"; actorId: string; actorName: string };
+    actor: ActorContext;
   },
 ): Promise<{ appointment?: ServiceAppointment; response: Pick<VendorResponse, "id" | "workOrderId" | "response"> }> {
   const repository = svc.repository;
@@ -47,6 +47,13 @@ export async function resolveVendorResponse(
   }
   const response = await repository.getVendorResponse(input.organizationId, input.vendorResponseId);
   if (!response) throw new OpsDomainError("NOT_FOUND", "Vendor response not found in this organization");
+  // Idempotency/concurrency: each response accepts exactly one continuation of
+  // a given action. The database unique index backstops the pre-check.
+  const existing = await repository.listVendorContinuationsForWorkOrder(input.organizationId, response.workOrderId);
+  const actionKey = input.decision === "accept_proposed_date" ? "accept_date" : input.decision === "counter_proposed_date" ? "counter_date" : "reply";
+  if (existing.some((row) => row.vendorResponseId === response.id && row.action === actionKey)) {
+    throw new OpsDomainError("CONFLICT", "This vendor response has already been handled");
+  }
   if (input.decision === "reply_to_question" && !input.message?.trim()) {
     throw new OpsDomainError("VALIDATION", "A vendor question reply needs a message");
   }
@@ -101,6 +108,11 @@ export async function resolveVendorResponse(
     vendorResponseId: response.id, decision: input.decision, appointmentId: appointment?.id ?? null,
     scheduledFor: appointment?.startsAt ?? null, message: input.message ?? null,
   });
+  statements.push(insert("ops_vendor_continuations", {
+    id: ids.next("continuation"), organization_id: input.organizationId, work_order_id: response.workOrderId,
+    vendor_response_id: response.id, action: actionKey, message: input.message,
+    created_by_membership_id: membership.id, created_at: now,
+  }));
   statements.push(insert("ops_audit_events", {
     id: ids.next("audit"), organization_id: input.organizationId, aggregate_type: "vendor_response",
     aggregate_id: response.id, event_type: eventType, actor_type: "user",

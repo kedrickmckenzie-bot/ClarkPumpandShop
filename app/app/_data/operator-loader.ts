@@ -381,15 +381,52 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
     issuances: fixture.issuances.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     vendorResponses: fixture.vendorResponses.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     appointments: await (await getServerOpsRepository()).listServiceAppointmentsForWorkOrder(context.session.organizationId, workOrderId),
+    continuations: await (await getServerOpsRepository()).listVendorContinuationsForWorkOrder(context.session.organizationId, workOrderId),
     visits: fixture.visits.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     workflowTasks: fixture.workflowTasks.filter((row) => row.organizationId === context.session.organizationId && (row.workOrderId === workOrderId || (workOrder.requestId && row.serviceRequestId === workOrder.requestId))),
     followUps: fixture.followUps.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     costLines: fixture.costLines.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
-    invoices: fixture.invoices.filter((row) => row.organizationId === context.session.organizationId),
+    // Invoice evidence is scoped to THIS work order through its allocations;
+    // an unrelated tenant invoice must never surface on the case.
+    invoices: (() => {
+      const linkedReferenceIds = new Set(
+        fixture.invoiceAllocations
+          .filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId)
+          .map((row) => row.invoiceReferenceId),
+      );
+      return fixture.invoiceReferences
+        .filter((row) => row.organizationId === context.session.organizationId && linkedReferenceIds.has(row.id))
+        .map((row) => ({ id: row.id, status: row.matchStatus }));
+    })(),
     estimateRequests,
     estimateProposals: fixture.estimateProposals.filter((row) => requestIds.has(row.requestId)),
   });
 }
+export async function loadVendorResponseActionsModel(workOrderId: string) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
+  const orgId = context.session.organizationId;
+  const responses = context.fixture.vendorResponses
+    .filter((row) => row.organizationId === orgId && row.workOrderId === workOrderId)
+    .sort((a, b) => b.respondedAt.localeCompare(a.respondedAt));
+  const handled = new Set(
+    (await (await getServerOpsRepository()).listVendorContinuationsForWorkOrder(orgId, workOrderId)).map((row) => `${row.vendorResponseId}:${row.action}`),
+  );
+  const actionable = responses.find((row) =>
+    (row.response === "proposed_date" && !handled.has(`${row.id}:counter_date`) && !handled.has(`${row.id}:accept_date`))
+    || (row.response === "question" && !handled.has(`${row.id}:reply`))
+    || row.response === "declined");
+  if (!actionable) return null;
+  return {
+    responseId: actionable.id,
+    kind: actionable.response,
+    responderName: actionable.responderName,
+    proposedAt: actionable.proposedAt,
+    message: actionable.message,
+    respondedAt: actionable.respondedAt,
+  };
+}
+
 export async function loadWorkOrderControlModel(workOrderId: string) {
   const context = await sessionAndFixture();
   if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();

@@ -1,7 +1,6 @@
 import type {
   CostLine,
   FollowUp,
-  Invoice,
   ServiceAppointment,
   VendorResponse,
   VisitSession,
@@ -42,6 +41,7 @@ export type WorkOrderServiceSubStage =
   | "opened_by_vendor"
   | "question_pending"
   | "date_proposed"
+  | "counterproposal_pending"
   | "accepted"
   | "scheduled"
   | "onsite"
@@ -77,6 +77,8 @@ export interface WorkOrderCaseView {
   escalationDestination: string;
   blockingReason?: string;
   alternativeActions: WorkOrderCaseAction[];
+  /** True when the projected due time has passed (input.now vs dueAt). */
+  primaryActionOverdue: boolean;
 }
 
 export const CANONICAL_STAGE_LABELS: Record<WorkOrderCanonicalStageId, string> = {
@@ -100,6 +102,7 @@ export const SERVICE_SUB_STAGE_LABELS: Record<WorkOrderServiceSubStage, string> 
   opened_by_vendor: "Opened by vendor",
   question_pending: "Question pending",
   date_proposed: "Date proposed",
+  counterproposal_pending: "Waiting for vendor response to counterproposal",
   accepted: "Accepted",
   scheduled: "Scheduled",
   onsite: "Onsite",
@@ -109,7 +112,6 @@ export const SERVICE_SUB_STAGE_LABELS: Record<WorkOrderServiceSubStage, string> 
 };
 
 const OPEN_TASK_STATUSES = new Set(["open", "in_progress"]);
-const TERMINAL_WORK_ORDER_STATUSES = new Set(["resolved", "closed", "cancelled"]);
 const OPEN_FOLLOWUP_STATUSES = new Set(["open"]);
 
 /**
@@ -143,10 +145,14 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const liveAppointment = [...appointments]
     .filter((row) => row.status !== "cancelled")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const continuations = (input.continuations ?? []).filter((row) => row.workOrderId === workOrder.id);
+  const hasContinuation = (action: string, responseId?: string) =>
+    continuations.some((row) => row.action === action && (!responseId || row.vendorResponseId === responseId));
 
   // --- Canonical stage -----------------------------------------------------
   let stage: WorkOrderCanonicalStageId;
-  if (TERMINAL_WORK_ORDER_STATUSES.has(workOrder.status)) {
+  const fullyClosed = workOrder.status === "closed" || workOrder.status === "cancelled";
+  if (fullyClosed) {
     stage = "closed";
   } else if (workOrder.status === "awaiting_approval" || (blockingTask?.taskType ?? "").includes("approval")) {
     stage = "approval";
@@ -160,29 +166,44 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     stage = "onsite_service";
   } else if (openFollowUps.length > 0 || workOrder.status === "completed_pending_review") {
     stage = "followup_closeout";
-  } else if (visits.length > 0 && !hasCost) {
-    stage = "cost_invoice_evidence";
-  } else if (!currentIssuance && activeAssignment.kind === "outside_vendor") {
+  } else if (!currentIssuance && activeAssignment.kind === "outside_vendor" && visits.length === 0 && !hasCost) {
     stage = "authorization_or_bidding";
+  } else if (visits.length > 0 || hasCost || hasInvoices) {
+    // Post-visit: the case sits in cost and optional invoice evidence until
+    // the manager closes it. Recorded cost never pulls it backward.
+    stage = "cost_invoice_evidence";
   } else {
     stage = "vendor_response_scheduling";
   }
 
   // --- Service sub-stage (external fulfillment detail) --------------------
+  // Precedence: terminal > onsite presence > unresolved checkout / closeout >
+  // appointment & correspondence > authorization state. A recorded cost never
+  // pulls a completed job backward into vendor scheduling, and declined or
+  // superseded assignments are not active fulfillment.
   let serviceSubStage: WorkOrderServiceSubStage | undefined;
-  if (!TERMINAL_WORK_ORDER_STATUSES.has(workOrder.status) && activeAssignment?.kind === "outside_vendor") {
+  const onsiteNow = Boolean(activeVisit && !activeVisit.checkedOutAt && activeVisit.workOrderId === workOrder.id);
+  const unresolvedCheckout = visits.some((row) => row.checkedOutAt && !row.outcome);
+  if (fullyClosed) {
+    stage = "closed";
+    serviceSubStage = "closed";
+  } else if (onsiteNow) {
+    stage = "onsite_service";
+    serviceSubStage = activeAssignment?.kind === "outside_vendor" ? "onsite" : undefined;
+  } else if (openFollowUps.length > 0 || unresolvedCheckout || workOrder.status === "completed_pending_review") {
+    stage = "followup_closeout";
+    serviceSubStage = openFollowUps.length > 0 || unresolvedCheckout ? "followup_required" : "closeout_review";
+  } else if (stage === "cost_invoice_evidence") {
+    serviceSubStage = undefined;
+  } else if (stage === "vendor_response_scheduling" && activeAssignment?.kind === "outside_vendor") {
     if (liveAppointment?.status === "confirmed") serviceSubStage = "scheduled";
-    else if (latestResponse?.response === "question") serviceSubStage = "question_pending";
+    else if (liveAppointment?.status === "counter_proposed") serviceSubStage = "counterproposal_pending";
+    else if (latestResponse?.response === "question") serviceSubStage = hasContinuation("reply", latestResponse.id) ? "sent" : "question_pending";
     else if (latestResponse?.response === "proposed_date") serviceSubStage = "date_proposed";
     else if (latestResponse?.response === "declined") serviceSubStage = "authorization_ready";
     else if (latestResponse?.response === "accepted") serviceSubStage = "accepted";
-    else if (activeVisit && !activeVisit.checkedOutAt) serviceSubStage = "onsite";
     else if (currentIssuance) serviceSubStage = "sent";
     else serviceSubStage = "authorization_ready";
-  } else if (!TERMINAL_WORK_ORDER_STATUSES.has(workOrder.status) && stage === "followup_closeout" && openFollowUps.length === 0) {
-    serviceSubStage = "closeout_review";
-  } else if (!TERMINAL_WORK_ORDER_STATUSES.has(workOrder.status) && stage === "followup_closeout") {
-    serviceSubStage = "followup_required";
   }
 
   const base = `/app/work-orders/${workOrder.id}`;
@@ -196,8 +217,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
         : { label: "Issue the service authorization", href: `${base}?view=service#issue-work` },
     vendor_response_scheduling:
       latestResponse?.response === "proposed_date" ? { label: "Accept or counter the proposed date", href: `${base}?view=service#vendor-response` }
-      : latestResponse?.response === "question" ? { label: "Reply to the vendor question", href: `${base}?view=service#vendor-response` }
+      : latestResponse?.response === "question" && !hasContinuation("reply", latestResponse.id) ? { label: "Reply to the vendor question", href: `${base}?view=service#vendor-response` }
       : latestResponse?.response === "declined" ? { label: "Select another provider or convert to bids", href: `${base}?view=service` }
+      : liveAppointment?.status === "counter_proposed" ? { label: "Track the counterproposal with the vendor", href: `${base}?view=service#vendor-response` }
       : { label: "Track the vendor response", href: `${base}?view=service#vendor-response` },
     onsite_service: { label: "Follow the onsite visit", href: activeVisit ? `/app/visits/${activeVisit.id}` : `${base}?view=visits` },
     followup_closeout: openFollowUps.length > 0
@@ -259,6 +281,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     escalationDestination,
     blockingReason,
     alternativeActions: alternativeActions.slice(0, 4),
+    primaryActionOverdue: Boolean(dueAt && input.now > dueAt),
   };
 }
 
@@ -274,11 +297,14 @@ export interface WorkOrderCaseInput {
   issuances?: Pick<WorkOrderIssuance, "id" | "assignmentId" | "revision" | "issuedAt">[];
   vendorResponses?: Pick<VendorResponse, "id" | "issuanceId" | "response" | "respondedAt" | "proposedAt">[];
   appointments?: Pick<ServiceAppointment, "id" | "status" | "startsAt" | "createdAt" | "sourceVendorResponseId" | "workOrderId" | "assignmentId" | "proposedBy">[];
-  visits?: Pick<VisitSession, "id" | "workOrderId" | "status" | "checkedInAt" | "checkedOutAt">[];
+  visits?: Pick<VisitSession, "id" | "workOrderId" | "status" | "checkedInAt" | "checkedOutAt" | "outcome">[];
+  /** Immutable operator follow-up facts on vendor responses (accept/counter/reply/decline recovery). */
+  continuations?: Pick<import("./types").VendorContinuation, "id" | "vendorResponseId" | "workOrderId" | "action" | "createdAt">[];
   workflowTasks?: Pick<WorkflowTask, "id" | "workOrderId" | "serviceRequestId" | "taskType" | "title" | "assigneeName" | "status" | "dueAt" | "escalationDestination" | "blocking" | "requiredForProgress" | "reason">[];
   followUps?: Pick<FollowUp, "id" | "workOrderId" | "status" | "accountableParty" | "nextAction" | "dueAt" | "escalationTo">[];
   costLines?: Pick<CostLine, "workOrderId">[];
-  invoices?: Pick<Invoice, "id" | "status">[];
+  /** Invoice evidence linked to THIS work order (already scoped by the caller). */
+  invoices?: { id: string; status?: string }[];
   /** Estimate (bid) requests and proposals attached to this work order. */
   estimateRequests?: { id: string; workOrderId: string; status?: string }[];
   estimateProposals?: { id: string; requestId: string; kind?: string; status?: string }[];

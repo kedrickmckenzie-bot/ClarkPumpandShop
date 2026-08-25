@@ -642,6 +642,9 @@ export const opsPublicTokens = sqliteTable("ops_public_tokens", {
   id: id(), organizationId: organizationId(), purpose: text("purpose").notNull(), subjectType: text("subject_type").notNull(), subjectId: text("subject_id").notNull(), tokenHash: text("token_hash").notNull(), expiresAt: text("expires_at").notNull(), createdAt: createdAt(), usedAt: text("used_at"), revokedAt: text("revoked_at"),
 }, (table) => [uniqueIndex("uidx_ops_public_tokens_hash").on(table.tokenHash), index("idx_ops_public_tokens_org_subject").on(table.organizationId, table.subjectType, table.subjectId), index("idx_ops_public_tokens_org_purpose_expiry").on(table.organizationId, table.purpose, table.expiresAt)]);
 
+export const opsVendorContinuations = sqliteTable("ops_vendor_continuations", {
+  id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), vendorResponseId: text("vendor_response_id").notNull(), action: text("action").notNull(), message: text("message"), createdByMembershipId: text("created_by_membership_id"), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_vendor_continuations_resp_action").on(table.organizationId, table.vendorResponseId, table.action)]);
 export const opsServiceAppointments = sqliteTable("ops_service_appointments", {
   id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), assignmentId: text("assignment_id").notNull(), issuanceId: text("issuance_id"), sourceVendorResponseId: text("source_vendor_response_id"), status: text("status").notNull(), proposedBy: text("proposed_by").notNull(), startsAt: text("starts_at").notNull(), note: text("note"), createdByMembershipId: text("created_by_membership_id"), createdAt: createdAt(),
 }, (table) => [index("idx_ops_service_appointments_org_work").on(table.organizationId, table.workOrderId, table.startsAt)]);
