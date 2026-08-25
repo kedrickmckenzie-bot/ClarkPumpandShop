@@ -1,4 +1,4 @@
-import type { JobRun, OutboxMessage, PmOccurrence, PmPlan, SavedView } from "./types";
+import type { JobRun, OutboxMessage, PmOccurrence, PmPlan, SavedView, ServiceAppointment, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
 import {
   NORTHLINE_AS_OF,
@@ -160,7 +160,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_invoices: "invoices", ops_invoice_lines: "invoiceLines", ops_invoice_line_allocations: "invoiceLineAllocations", ops_invoice_exceptions: "invoiceExceptions",
     ops_invoice_adjustments: "invoiceAdjustments", ops_service_discrepancies: "serviceDiscrepancies", ops_value_events: "valueEvents",
     ops_cost_lines: "costLines", ops_invoice_references: "invoiceReferences", ops_invoice_allocations: "invoiceAllocations",
-    ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_job_runs: "jobRuns", ops_saved_views: "savedViews", ops_public_tokens: "publicTokens",
+    ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_job_runs: "jobRuns", ops_service_appointments: "serviceAppointments", ops_saved_views: "savedViews", ops_public_tokens: "publicTokens",
   };
   const key = mapping[table];
   if (!key) throw new Error(`Fixture repository does not support table ${table}`);
@@ -494,6 +494,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listIssuancesForWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.issuances.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((a, b) => a.revision - b.revision || a.id.localeCompare(b.id))); }
   async getLatestVendorResponse(organizationId: OpsId, assignmentId: OpsId) { return clone(this.fixture.vendorResponses.filter((row) => row.organizationId === organizationId && row.assignmentId === assignmentId).sort((a, b) => b.respondedAt.localeCompare(a.respondedAt) || b.id.localeCompare(a.id)).at(0) ?? null); }
   async getLatestVendorResponseForIssuance(organizationId: OpsId, issuanceId: OpsId) { return clone(this.fixture.vendorResponses.filter((row) => row.organizationId === organizationId && row.issuanceId === issuanceId).sort((a, b) => b.respondedAt.localeCompare(a.respondedAt) || b.id.localeCompare(a.id)).at(0) ?? null); }
+  async getVendorResponse(organizationId: OpsId, vendorResponseId: OpsId): Promise<VendorResponse | null> { return clone(this.fixture.vendorResponses.find((row) => row.organizationId === organizationId && row.id === vendorResponseId) ?? null); }
+  async listServiceAppointmentsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<ServiceAppointment[]> { return clone((this.fixture.serviceAppointments ?? []).filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))); }
   async findActiveVendorAssignment(organizationId: OpsId, workOrderId: OpsId, vendorId: OpsId) { return clone(this.fixture.assignments.find((row) => row.organizationId === organizationId && row.workOrderId === workOrderId && row.vendorId === vendorId && ["issued", "opened", "accepted"].includes(row.status)) ?? null); }
   async findActiveInternalAssignment(organizationId: OpsId, workOrderId: OpsId, membershipId: OpsId) { return clone(this.fixture.assignments.find((row) => row.organizationId === organizationId && row.workOrderId === workOrderId && row.internalMembershipId === membershipId && !["cancelled", "declined", "completed", "superseded"].includes(row.status)) ?? null); }
   async vendorCoversStore(organizationId: OpsId, vendorId: OpsId, storeId: OpsId) { const store = this.fixture.stores.find((row) => row.organizationId === organizationId && row.id === storeId); if (!store) return false; return this.fixture.vendorCoverage.some((row) => row.organizationId === organizationId && row.vendorId === vendorId && (row.scopeKind === "organization" && row.scopeId === organizationId || row.scopeKind === "region" && row.scopeId === store.regionId || row.scopeKind === "store" && row.scopeId === store.id)); }
@@ -664,6 +666,7 @@ export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtu
   const normalized = clone(fixture);
   if (!Array.isArray(normalized.jobRuns)) normalized.jobRuns = [];
   if (!Array.isArray(normalized.savedViews)) normalized.savedViews = [];
+  if (!Array.isArray(normalized.serviceAppointments)) normalized.serviceAppointments = [];
   return new FixtureOpsRepository(normalized);
 }
 export function createNorthlineFixtureRepository(): MutableOpsFixtureRepository { return createOpsFixtureRepository(buildNorthlinePresentationFixture()); }

@@ -63,6 +63,7 @@ export interface OwnerBrief {
   };
   drillThrough: {
     recordedSpendHref: string;
+    verifiedValueHref: string;
     invoiceReviewHref: string;
     pmComplianceHref: string;
     activeWorkOrdersHref: string;
@@ -154,7 +155,7 @@ export function buildOwnerBrief(
     completedLate: countStatus("completed_late"),
     missed: countStatus("missed"),
     finishedWithoutTimingRecord: countStatus("completed"),
-    openInWindow: countStatus("scheduled", "due"),
+    openInWindow: dueThisPeriod.filter((row) => ["scheduled", "due"].includes(String(row.status)) && (!row.windowEndsAt || row.windowEndsAt >= period.endsAt)).length,
     waived: countStatus("waived"),
     notYetScheduled: countStatus("proposed", "upcoming", "unscheduled"),
   };
@@ -231,6 +232,7 @@ export function buildOwnerBrief(
     },
     drillThrough: {
       recordedSpendHref: "/app/spend",
+      verifiedValueHref: "/app/reports/value",
       invoiceReviewHref: "/app/invoices",
       pmComplianceHref: "/app/pm",
       activeWorkOrdersHref: "/app/work-orders?status=open",

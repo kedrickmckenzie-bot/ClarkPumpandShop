@@ -1695,6 +1695,23 @@ export const opsJobRuns = pgTable("ops_job_runs", {
   check("chk_ops_job_runs_counts", sql`${table.processedCount} >= 0 AND ${table.failedCount} >= 0`),
 ]);
 
+export const opsServiceAppointments = pgTable("ops_service_appointments", {
+  id: id(),
+  organizationId: organizationId(),
+  workOrderId: text("work_order_id").notNull(),
+  assignmentId: text("assignment_id").notNull(),
+  issuanceId: text("issuance_id"),
+  sourceVendorResponseId: text("source_vendor_response_id"),
+  status: text("status").notNull(),
+  proposedBy: text("proposed_by").notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  note: text("note"),
+  createdByMembershipId: text("created_by_membership_id"),
+  createdAt: createdAt(),
+}, (table) => [
+  index("idx_ops_service_appointments_org_work").on(table.organizationId, table.workOrderId, table.startsAt),
+  foreignKey({ name: "fk_ops_service_appointments_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
+]);
 export const opsSavedViews = pgTable("ops_saved_views", {
   id: id(),
   organizationId: organizationId(),

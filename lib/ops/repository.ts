@@ -244,6 +244,8 @@ export interface OpsRepository {
   listIssuancesForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderIssuance[]>;
   getLatestVendorResponse(organizationId: OpsId, assignmentId: OpsId): Promise<import("./types").VendorResponse | null>;
   getLatestVendorResponseForIssuance(organizationId: OpsId, issuanceId: OpsId): Promise<import("./types").VendorResponse | null>;
+  getVendorResponse(organizationId: OpsId, vendorResponseId: OpsId): Promise<import("./types").VendorResponse | null>;
+  listServiceAppointmentsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<import("./types").ServiceAppointment[]>;
   findActiveVendorAssignment(organizationId: OpsId, workOrderId: OpsId, vendorId: OpsId): Promise<WorkOrderAssignment | null>;
   findActiveInternalAssignment(organizationId: OpsId, workOrderId: OpsId, membershipId: OpsId): Promise<WorkOrderAssignment | null>;
   vendorCoversStore(organizationId: OpsId, vendorId: OpsId, storeId: OpsId): Promise<boolean>;

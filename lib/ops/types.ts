@@ -589,6 +589,27 @@ export interface WorkOrderIssuance {
   issuedAt: IsoDateTime;
 }
 
+/**
+ * One persisted scheduling fact between operator and provider. A proposed date
+ * becomes an appointment record at proposal time or acceptance time - never
+ * free-form evidence inside a response message.
+ */
+export type ServiceAppointmentStatus = "proposed_by_vendor" | "confirmed" | "counter_proposed" | "cancelled";
+
+export interface ServiceAppointment {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  assignmentId: OpsId;
+  issuanceId?: OpsId;
+  sourceVendorResponseId?: OpsId;
+  status: ServiceAppointmentStatus;
+  proposedBy: "vendor" | "operator";
+  startsAt: IsoDateTime;
+  note?: string;
+  createdByMembershipId?: OpsId;
+  createdAt: IsoDateTime;
+}
 export interface VendorResponse {
   id: OpsId;
   organizationId: OpsId;
@@ -1840,6 +1861,7 @@ export interface OpsFixture {
   invoiceAllocations: InvoiceAllocation[];
   auditEvents: AuditEvent[];
   savedViews?: SavedView[];
+  serviceAppointments?: ServiceAppointment[];
   outboxMessages: OutboxMessage[];
   jobRuns?: JobRun[];
   publicTokens: PublicActionToken[];

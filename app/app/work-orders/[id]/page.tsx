@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { WorkOrderCase } from "@/components/workspace/work-order-case";
-import { loadDetailModel, loadEstimateComparisonModel, loadVendorIssuanceModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel } from "../../_data/operator-loader";
+import { WorkOrderStageRail } from "@/components/workspace/work-order-case-stage-rail";
+import { loadDetailModel, loadEstimateComparisonModel, loadVendorIssuanceModel, loadWorkOrderCaseModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel } from "../../_data/operator-loader";
 import { loadWorkOrderReplacementIntelligenceModel } from "../../_data/replacement-loader";
 import { loadWorkOrderVerificationModel } from "../../_data/work-order-verification-presenter";
 
@@ -20,7 +21,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const query = await searchParams;
   const updated = Array.isArray(query.updated) ? query.updated[0] : query.updated;
   const view = selectedView(query.view);
-  const [model, control, recording, estimateComparison, issuance, replacement, verification] = await Promise.all([
+  const [model, control, recording, estimateComparison, issuance, replacement, verification, stageCase] = await Promise.all([
     loadDetailModel("work-order", id),
     loadWorkOrderControlModel(id),
     loadWorkOrderRecordingModel(id),
@@ -28,6 +29,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     loadVendorIssuanceModel(id),
     loadWorkOrderReplacementIntelligenceModel(id),
     loadWorkOrderVerificationModel(id),
+    loadWorkOrderCaseModel(id),
   ]);
   const hasServiceAuthorization = Boolean(issuance.currentRevision);
   const bidPathIsNext = estimateComparison.permitted
@@ -50,6 +52,8 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     };
   }
   return (
+    <>
+    <WorkOrderStageRail model={stageCase} />
     <WorkOrderCase
       model={model}
       control={control}
@@ -61,5 +65,6 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       activeView={view}
       updated={updated}
     />
+    </>
   );
 }

@@ -1,6 +1,6 @@
 {
-  "id": "c179da5f-abcd-4fdc-9b25-ac77531cf64b",
-  "prevId": "50722d3e-131f-4056-8591-6ca4b8ff1087",
+  "id": "d5752d37-376e-4018-a241-333b087cd550",
+  "prevId": "c179da5f-abcd-4fdc-9b25-ac77531cf64b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -10141,6 +10141,133 @@
           "value": "\"ops_scope_grants\".\"scope_kind\" IN ('organization', 'division', 'region', 'store', 'vendor')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.ops_service_appointments": {
+      "name": "ops_service_appointments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "work_order_id": {
+          "name": "work_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assignment_id": {
+          "name": "assignment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issuance_id": {
+          "name": "issuance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_vendor_response_id": {
+          "name": "source_vendor_response_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposed_by": {
+          "name": "proposed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by_membership_id": {
+          "name": "created_by_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_ops_service_appointments_org_work": {
+          "name": "idx_ops_service_appointments_org_work",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "work_order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "starts_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fk_ops_service_appointments_org": {
+          "name": "fk_ops_service_appointments_org",
+          "tableFrom": "ops_service_appointments",
+          "tableTo": "ops_organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.ops_service_discrepancies": {

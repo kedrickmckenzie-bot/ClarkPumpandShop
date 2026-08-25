@@ -23,6 +23,7 @@ import {
 } from "@/lib/ops/fixtures";
 import { getServerOpsRepository, getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
 import { buildOwnerBrief } from "@/lib/ops/owner-brief";
+import { buildWorkOrderCase } from "@/lib/ops/work-order-case";
 import { buildClosedLoopCoverage, buildDataQualityIssues } from "@/lib/ops/coverage-quality";
 import { buildVendorScorecards } from "@/lib/ops/vendor-scorecards";
 import {
@@ -363,6 +364,32 @@ export async function loadEstimateComparisonModel(workOrderId: string) {
   return model;
 }
 
+export async function loadWorkOrderCaseModel(workOrderId: string) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
+  const fixture = context.fixture;
+  const workOrder = fixture.workOrders.find((row) => row.organizationId === context.session.organizationId && row.id === workOrderId);
+  if (!workOrder) notFound();
+  const store = fixture.stores.find((row) => row.id === workOrder.storeId);
+  const estimateRequests = fixture.estimateRequests.filter((row) => row.workOrderId === workOrderId);
+  const requestIds = new Set(estimateRequests.map((row) => row.id));
+  return buildWorkOrderCase({
+    now: context.fixture.asOf,
+    workOrder,
+    storeName: store ? `${store.storeNumber} - ${store.name}` : undefined,
+    assignments: fixture.assignments.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
+    issuances: fixture.issuances.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
+    vendorResponses: fixture.vendorResponses.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
+    appointments: await (await getServerOpsRepository()).listServiceAppointmentsForWorkOrder(context.session.organizationId, workOrderId),
+    visits: fixture.visits.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
+    workflowTasks: fixture.workflowTasks.filter((row) => row.organizationId === context.session.organizationId && (row.workOrderId === workOrderId || (workOrder.requestId && row.serviceRequestId === workOrder.requestId))),
+    followUps: fixture.followUps.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
+    costLines: fixture.costLines.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
+    invoices: fixture.invoices.filter((row) => row.organizationId === context.session.organizationId),
+    estimateRequests,
+    estimateProposals: fixture.estimateProposals.filter((row) => requestIds.has(row.requestId)),
+  });
+}
 export async function loadWorkOrderControlModel(workOrderId: string) {
   const context = await sessionAndFixture();
   if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
