@@ -1,0 +1,1 @@
+ALTER TABLE `ops_outbox_messages` ADD `claimed_at` text;

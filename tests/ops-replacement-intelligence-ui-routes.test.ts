@@ -89,7 +89,7 @@ describe("interactive replacement intelligence", () => {
     expect(response.status).toBe(303);
     const after = repository.snapshot();
     expect(after.lifecycleRecommendations.filter((row) => row.assetId === asset.id)).toHaveLength(before + 1);
-    expect(after.lifecycleRecommendations).toContainEqual(expect.objectContaining({ assetId: asset.id, modelVersion: "transparent-rules-v1", userDecision: "investigate", confidence: expect.stringMatching(/low|medium|high/), missingData: expect.any(Array) }));
+    expect(after.lifecycleRecommendations).toContainEqual(expect.objectContaining({ assetId: asset.id, modelVersion: "transparent-rules-v2", userDecision: "investigate", confidence: expect.stringMatching(/low|medium|high/), missingData: expect.any(Array) }));
     expect(after.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: asset.id, eventType: "asset.lifecycle_recommendation_recorded" }));
   });
 

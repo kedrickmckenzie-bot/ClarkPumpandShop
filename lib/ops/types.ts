@@ -1686,6 +1686,39 @@ export interface OutboxMessage {
   status: "pending" | "processing" | "delivered" | "failed";
   availableAt: IsoDateTime;
   createdAt: IsoDateTime;
+  /** Absent on rows written before the delivery-worker slice; treated as 0. */
+  attemptCount?: number;
+  /** Delivery-lease timestamp set when a worker claims the message. */
+  claimedAt?: IsoDateTime | null;
+  deliveredAt?: IsoDateTime | null;
+  lastError?: string | null;
+}
+
+export interface SavedView {
+  id: OpsId;
+  organizationId: OpsId;
+  ownerMembershipId: OpsId;
+  /** Which list surface this view belongs to, e.g. "work-orders". */
+  surface: string;
+  name: string;
+  /** URLSearchParams-encoded filter state. */
+  queryJson: string;
+  createdAt: IsoDateTime;
+}
+
+export interface JobRun {
+  id: OpsId;
+  organizationId: OpsId;
+  jobType: string;
+  /** Idempotency slot, e.g. the UTC hour a recurring worker executes in. */
+  slotKey: string;
+  status: "running" | "succeeded" | "failed";
+  startedAt: IsoDateTime;
+  finishedAt?: IsoDateTime | null;
+  processedCount: number;
+  failedCount: number;
+  detailsJson: string;
+  createdAt: IsoDateTime;
 }
 
 export interface PublicActionToken {
@@ -1806,6 +1839,8 @@ export interface OpsFixture {
   invoiceReferences: InvoiceReference[];
   invoiceAllocations: InvoiceAllocation[];
   auditEvents: AuditEvent[];
+  savedViews?: SavedView[];
   outboxMessages: OutboxMessage[];
+  jobRuns?: JobRun[];
   publicTokens: PublicActionToken[];
 }

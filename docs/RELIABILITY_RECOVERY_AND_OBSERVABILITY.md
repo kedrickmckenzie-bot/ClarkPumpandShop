@@ -12,7 +12,27 @@
 - Private R2 and S3-compatible file adapters exist behind a file-store boundary.
 - Render deployment settings and isolation guidance are documented in [RENDER_DEPLOYMENT.md](RENDER_DEPLOYMENT.md).
 
-These are foundations, not production readiness. There is no outbox delivery worker, recurrence/escalation worker, `JobRun` registry, centralized structured logging/correlation, delivery/job dashboard, automated backup/restore drill, or validated rollback procedure.
+These are foundations, not production readiness. There is no recurrence/escalation worker, `JobRun` registry, centralized structured logging/correlation, delivery/job dashboard, automated backup/restore drill, or validated rollback procedure.
+
+### Outbox delivery worker (implemented)
+
+`runOutboxDeliveryCycle` in [`../../lib/ops/outbox-delivery.ts`](../lib/ops/outbox-delivery.ts) closes the delivery half of the transactional outbox:
+
+- Recovers messages whose processing lease (`claimed_at`) expired without settlement, so a crashed worker cannot strand events.
+- Claims due messages through a conditional `pending → processing` transition with attempt increment; a lost race is skipped, never double-settled.
+- Delivers through an injected, idempotent-per-message transport. The only implemented transport is `createOperationalLogDeliveryTransport` — delivery means a structured operational-log event, **not** an email/SMS/vendor notification.
+- Records outcomes atomically: delivered timestamps, retry with exponential backoff capped at one hour, or terminal `failed` after `maxAttempts` with retained last error for forensics.
+
+Entry points: the Cloudflare Worker `scheduled` handler (D1) runs outbox delivery followed by SLA escalation, and `npm run jobs:postgres` (Render cron context) does the same against PostgreSQL. Both are safe to schedule repeatedly. Attempt counts, ages, and terminal failures are visible in `ops_outbox_messages`; job executions are recorded per organization+type+slot in `ops_job_runs`; automated dashboards/alerts on those signals do not exist yet.
+
+### SLA escalation worker (implemented)
+
+`runSlaEscalationCycle` in [`../../lib/ops/job-workers.ts`](../lib/ops/job-workers.ts) escalates overdue open Workflow Tasks by reusing the same governed `escalateWorkflowTask` domain command a human operator uses (system actor, audit event, outbox intent, version fencing):
+
+- Candidates: open/in-progress tasks whose due time has passed, oldest first.
+- Each organization+slot executes at most once (`ops_job_runs` unique on organization + `sla_escalation` + slot); the default slot is the UTC hour.
+- Overdue tasks climb one escalation level per slot up to a ceiling; tasks already at the ceiling are counted and left untouched.
+
 
 ## Reliability rules
 

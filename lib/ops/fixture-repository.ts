@@ -1,3 +1,5 @@
+import type { JobRun, OutboxMessage, PmOccurrence, PmPlan, SavedView } from "./types";
+import type { OutboxDeliveryOutcome } from "./repository";
 import {
   NORTHLINE_AS_OF,
   NORTHLINE_DEMO_ENTRY_TOKENS,
@@ -158,7 +160,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_invoices: "invoices", ops_invoice_lines: "invoiceLines", ops_invoice_line_allocations: "invoiceLineAllocations", ops_invoice_exceptions: "invoiceExceptions",
     ops_invoice_adjustments: "invoiceAdjustments", ops_service_discrepancies: "serviceDiscrepancies", ops_value_events: "valueEvents",
     ops_cost_lines: "costLines", ops_invoice_references: "invoiceReferences", ops_invoice_allocations: "invoiceAllocations",
-    ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_public_tokens: "publicTokens",
+    ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_job_runs: "jobRuns", ops_saved_views: "savedViews", ops_public_tokens: "publicTokens",
   };
   const key = mapping[table];
   if (!key) throw new Error(`Fixture repository does not support table ${table}`);
@@ -627,10 +629,43 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
 
   async getTrustedStoreDeviceByToken(input: PublicTokenLookup): Promise<TrustedStoreDeviceView | null> { const token = tokenRecord(this.fixture, input); if (!token || token.subjectType !== "store") return null; const organization = this.fixture.organizations.find((row) => row.id === token.organizationId); const store = this.fixture.stores.find((row) => row.organizationId === token.organizationId && row.id === token.subjectId); if (!organization || !store) return null; return { organizationId: organization.id, organizationName: organization.name, store: { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: formatAddress(store) }, activeVisits: await this.listActiveVisitsForStore(organization.id, store.id) }; }
 
+  async listDueOutboxMessages(now: string, limit: number): Promise<OutboxMessage[]> { return clone(this.fixture.outboxMessages.filter((row) => row.status === "pending" && row.availableAt <= now).sort((a, b) => a.availableAt.localeCompare(b.availableAt) || a.id.localeCompare(b.id)).slice(0, Math.max(1, Math.min(100, limit)))); }
+
+  async listStaleProcessingOutboxMessages(staleBefore: string, limit: number): Promise<OutboxMessage[]> { return clone(this.fixture.outboxMessages.filter((row) => row.status === "processing" && (row.claimedAt == null || row.claimedAt <= staleBefore)).sort((a, b) => (a.claimedAt ?? "").localeCompare(b.claimedAt ?? "") || a.id.localeCompare(b.id)).slice(0, Math.max(1, Math.min(100, limit)))); }
+
+  async claimOutboxMessage(organizationId: OpsId, id: OpsId, claimedAt: string): Promise<boolean> { const candidate = clone(this.fixture); const row = candidate.outboxMessages.find((item) => item.organizationId === organizationId && item.id === id); if (!row || row.status !== "pending") return false; row.status = "processing"; row.claimedAt = claimedAt; row.attemptCount = (row.attemptCount ?? 0) + 1; this.fixture = candidate; return true; }
+
+  async recordOutboxDeliveryOutcome(input: OutboxDeliveryOutcome): Promise<void> { if (input.outcome === "delivered") { await this.atomicWrite([{ sql: "UPDATE ops_outbox_messages SET status = ?, delivered_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["delivered", input.deliveredAt, input.organizationId, input.id, "processing"] }]); return; } if (input.outcome === "retry") { await this.atomicWrite([{ sql: "UPDATE ops_outbox_messages SET status = ?, available_at = ?, last_error = ?, claimed_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["pending", input.retryAt, input.lastError.slice(0, 2000), null, input.organizationId, input.id, "processing"] }]); return; } await this.atomicWrite([{ sql: "UPDATE ops_outbox_messages SET status = ?, last_error = ?, claimed_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["failed", input.lastError.slice(0, 2000), null, input.organizationId, input.id, "processing"] }]); }
+
+  async listOverdueEscalationCandidates(now: string, limit: number): Promise<WorkflowTask[]> { return clone((this.fixture.workflowTasks ?? []).filter((row) => (row.status === "open" || row.status === "in_progress") && row.dueAt != null && row.dueAt <= now).sort((a, b) => (a.dueAt ?? "").localeCompare(b.dueAt ?? "") || a.id.localeCompare(b.id)).slice(0, Math.max(1, Math.min(100, limit)))); }
+
+  async tryBeginJobRun(input: { organizationId: OpsId; jobRunId: OpsId; jobType: string; slotKey: string; startedAt: string }): Promise<boolean> { const candidate = clone(this.fixture); const runs = candidate.jobRuns ?? []; if (runs.some((row) => row.organizationId === input.organizationId && row.jobType === input.jobType && row.slotKey === input.slotKey)) return false; runs.push({ id: input.jobRunId, organizationId: input.organizationId, jobType: input.jobType, slotKey: input.slotKey, status: "running", startedAt: input.startedAt, finishedAt: null, processedCount: 0, failedCount: 0, detailsJson: "{}", createdAt: input.startedAt }); candidate.jobRuns = runs; this.fixture = candidate; return true; }
+
+  async finishJobRun(input: { organizationId: OpsId; jobRunId: OpsId; status: "succeeded" | "failed"; finishedAt: string; processedCount: number; failedCount: number }): Promise<void> { await this.atomicWrite([{ sql: "UPDATE ops_job_runs SET status = ?, finished_at = ?, processed_count = ?, failed_count = ? WHERE organization_id = ? AND id = ? AND status = ?", params: [input.status, input.finishedAt, input.processedCount, input.failedCount, input.organizationId, input.jobRunId, "running"] }]); }
+
+  async listPmPlans(): Promise<PmPlan[]> { return clone(this.fixture.pmPlans.slice().sort((a, b) => (a.storeId ?? "").localeCompare(b.storeId ?? "") || a.id.localeCompare(b.id))); }
+
+  async listPmOccurrencesForPlan(organizationId: OpsId, planId: OpsId): Promise<PmOccurrence[]> { return clone(this.fixture.pmOccurrences.filter((row) => row.organizationId === organizationId && row.planId === planId).sort((a, b) => a.dueAt.localeCompare(b.dueAt) || a.id.localeCompare(b.id))); }
+
+  async listRecentJobRuns(organizationId: OpsId, limit: number): Promise<JobRun[]> { return clone((this.fixture.jobRuns ?? []).filter((row) => row.organizationId === organizationId).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id)).slice(0, Math.max(1, Math.min(100, limit)))); }
+
+  async outboxStatusCounts(): Promise<Array<{ status: string; count: number }>> { const counts = new Map<string, number>(); for (const row of this.fixture.outboxMessages) counts.set(row.status, (counts.get(row.status) ?? 0) + 1); return [...counts.entries()].map(([status, count]) => ({ status, count })); }
+
+  async listSavedViews(organizationId: OpsId, ownerMembershipId: OpsId, surface: string): Promise<SavedView[]> { return clone((this.fixture.savedViews ?? []).filter((row) => row.organizationId === organizationId && row.ownerMembershipId === ownerMembershipId && row.surface === surface).sort((a, b) => a.name.localeCompare(b.name))); }
+
+  async putSavedView(input: { organizationId: OpsId; id: OpsId; ownerMembershipId: OpsId; surface: string; name: string; queryJson: string; createdAt: string }): Promise<void> { await this.atomicWrite([{ sql: "DELETE FROM ops_saved_views WHERE organization_id = ? AND owner_membership_id = ? AND surface = ? AND name = ?", params: [input.organizationId, input.ownerMembershipId, input.surface, input.name] }, { sql: "INSERT INTO ops_saved_views (id, organization_id, owner_membership_id, surface, name, query_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", params: [input.id, input.organizationId, input.ownerMembershipId, input.surface, input.name, input.queryJson, input.createdAt] }]); }
+
+  async deleteSavedView(organizationId: OpsId, ownerMembershipId: OpsId, id: OpsId): Promise<boolean> { const candidate = clone(this.fixture); const before = (candidate.savedViews ?? []).length; candidate.savedViews = (candidate.savedViews ?? []).filter((row) => !(row.organizationId === organizationId && row.ownerMembershipId === ownerMembershipId && row.id === id)); if ((candidate.savedViews ?? []).length === before) return false; this.fixture = candidate; return true; }
+
   async atomicWrite(statements: readonly OpsStatement[]) { const candidate = clone(this.fixture); const candidateIdempotencyKeys = clone(this.idempotencyKeys); statements.forEach((statement) => applyStatement(candidate, candidateIdempotencyKeys, statement)); this.fixture = candidate; this.idempotencyKeys = candidateIdempotencyKeys; }
 }
 
-export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtureRepository { return new FixtureOpsRepository(clone(fixture)); }
+export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtureRepository {
+  const normalized = clone(fixture);
+  if (!Array.isArray(normalized.jobRuns)) normalized.jobRuns = [];
+  if (!Array.isArray(normalized.savedViews)) normalized.savedViews = [];
+  return new FixtureOpsRepository(normalized);
+}
 export function createNorthlineFixtureRepository(): MutableOpsFixtureRepository { return createOpsFixtureRepository(buildNorthlinePresentationFixture()); }
 
 const OPS_PRESENTATION_RUNTIME_KEY = "__opsPresentationRuntimeRepository";

@@ -24,6 +24,7 @@
     "db:migrate:postgres": "tsx scripts/migrate-postgres.ts",
     "db:seed:postgres": "tsx scripts/seed-postgres.ts",
     "db:reset:postgres": "tsx scripts/reset-postgres.ts",
+    "jobs:postgres": "tsx scripts/run-ops-jobs-postgres.ts",
     "render:predeploy": "npm run db:migrate:postgres && npm run db:seed:postgres"
   },
   "dependencies": {

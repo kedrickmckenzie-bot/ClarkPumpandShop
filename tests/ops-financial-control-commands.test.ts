@@ -18,6 +18,16 @@ describe("directive financial safeguard decisions",()=>{
   });
 
   it("prevents an exact Vendor invoice-number duplicate",async()=>{const test=harness();await expect(receiveInvoice({organizationId:NORTHLINE_ORGANIZATION_ID,vendorId:"vendor-northline-summit",workOrderId:"wo-northline-104",vendorInvoiceNumber:"SUM-104-2607",invoiceDate:"2026-08-20",currency:"USD",lines:[{category:"labor",description:"Duplicate",amount:{amountMinor:100,currency:"USD"}}],actor:financeActor},test.services)).rejects.toMatchObject({code:"CONFLICT"});});
+  it("flags a near-duplicate submission that dodges the exact-number block without creating deductions",async()=>{
+    const test=harness();
+    const prior=test.repository.snapshot().invoices.find((row)=>row.id==="invoice-summit-104-compressor")!;
+    const result=await receiveInvoice({organizationId:NORTHLINE_ORGANIZATION_ID,vendorId:prior.vendorId,workOrderId:"wo-northline-104",vendorInvoiceNumber:"SUM-ALT-NUMBER-9",invoiceDate:prior.invoiceDate,currency:"USD",lines:[{category:"labor",description:"Compressor replacement",amount:{amountMinor:prior.total.amountMinor,currency:"USD"}}],actor:financeActor},test.services);
+    const snapshot=test.repository.snapshot();
+    expect(snapshot.invoiceExceptions.some((item)=>item.invoiceId===result.invoiceId&&item.kind==="duplicate_invoice"&&item.status==="open")).toBe(true);
+    expect(snapshot.valueEvents.some((event)=>event.category==="identified_exposure"&&event.eventType==="invoice_duplicate_invoice"&&event.deduplicationKey.includes("duplicate_invoice"))).toBe(true);
+    expect(snapshot.invoiceAdjustments.some((item)=>item.invoiceId===result.invoiceId)).toBe(false);
+    expect(result.paymentExecuted).toBe(false);
+  });
   it("flags a proposed deduction without changing money or claiming realized value",async()=>{
     const test=harness();const before=test.repository.snapshot().invoices.find((row)=>row.id==="invoice-summit-104-compressor")!;
     const result=await flagInvoiceReview({organizationId:NORTHLINE_ORGANIZATION_ID,invoiceId:before.id,invoiceLineId:"invoice-line-104-trip",actor:{organizationId:NORTHLINE_ORGANIZATION_ID,actorType:"system",actorName:"Invoice safeguards"},kind:"authorization",summary:"Review whether the travel line is inside the authorized scope",amount:{amountMinor:12_500,currency:"USD"},evidence:{invoiceLineCategory:"travel",authorizationCeilingMinor:945_000,automaticValidityDecision:false}},test.services);

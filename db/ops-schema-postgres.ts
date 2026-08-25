@@ -1655,6 +1655,7 @@ export const opsOutboxMessages = pgTable("ops_outbox_messages", {
   availableAt: instant("available_at").notNull(),
   createdAt: createdAt(),
   attemptCount: integer("attempt_count").notNull().default(0),
+  claimedAt: instant("claimed_at"),
   deliveredAt: instant("delivered_at"),
   lastError: text("last_error"),
 }, (table) => [
@@ -1667,6 +1668,46 @@ export const opsOutboxMessages = pgTable("ops_outbox_messages", {
   }),
   check("chk_ops_outbox_status", sql`${table.status} IN ('pending', 'processing', 'delivered', 'failed')`),
   check("chk_ops_outbox_attempt_count", sql`${table.attemptCount} >= 0`),
+]);
+
+export const opsJobRuns = pgTable("ops_job_runs", {
+  id: id(),
+  organizationId: organizationId(),
+  jobType: text("job_type").notNull(),
+  slotKey: text("slot_key").notNull(),
+  status: text("status").notNull().default("running"),
+  startedAt: instant("started_at").notNull(),
+  finishedAt: instant("finished_at"),
+  processedCount: integer("processed_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  detailsJson: jsonb("details_json").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  createdAt: createdAt(),
+}, (table) => [
+  unique("uq_ops_job_runs_org_id").on(table.organizationId, table.id),
+  uniqueIndex("uidx_ops_job_runs_org_type_slot").on(table.organizationId, table.jobType, table.slotKey),
+  index("idx_ops_job_runs_org_type_started").on(table.organizationId, table.jobType, table.startedAt),
+  foreignKey({
+    name: "fk_ops_job_runs_org",
+    columns: [table.organizationId],
+    foreignColumns: [opsOrganizations.id],
+  }),
+  check("chk_ops_job_runs_status", sql`${table.status} IN ('running', 'succeeded', 'failed')`),
+  check("chk_ops_job_runs_counts", sql`${table.processedCount} >= 0 AND ${table.failedCount} >= 0`),
+]);
+
+export const opsSavedViews = pgTable("ops_saved_views", {
+  id: id(),
+  organizationId: organizationId(),
+  ownerMembershipId: text("owner_membership_id").notNull(),
+  surface: text("surface").notNull(),
+  name: text("name").notNull(),
+  queryJson: jsonb("query_json").$type<Record<string, unknown>>().notNull(),
+  createdAt: createdAt(),
+}, (table) => [
+  unique("uq_ops_saved_views_org_id").on(table.organizationId, table.id),
+  uniqueIndex("uidx_ops_saved_views_org_owner_surface_name").on(table.organizationId, table.ownerMembershipId, table.surface, table.name),
+  index("idx_ops_saved_views_org_owner_surface").on(table.organizationId, table.ownerMembershipId, table.surface),
+  foreignKey({ name: "fk_ops_saved_views_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
 ]);
 
 export const opsPublicTokens = pgTable("ops_public_tokens", {
@@ -1813,6 +1854,8 @@ export const opsPostgresSchema = {
   opsInvoiceAllocations,
   opsAuditEvents,
   opsOutboxMessages,
+  opsJobRuns,
+  opsSavedViews,
   opsPublicTokens,
   opsIdempotencyKeys,
   opsWorkOrderCounters,

@@ -1,0 +1,1 @@
+ALTER TABLE "ops_outbox_messages" ADD COLUMN "claimed_at" timestamp with time zone;

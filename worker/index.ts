@@ -1,6 +1,9 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { createOpsD1Repository } from "../lib/ops/d1-repository";
+import { createOperationalLogDeliveryTransport, runOutboxDeliveryCycle } from "../lib/ops/outbox-delivery";
+import { runPmRecurrenceCycle, runSlaEscalationCycle } from "../lib/ops/job-workers";
 
 interface Env {
   ASSETS: Fetcher;
@@ -41,6 +44,19 @@ const worker = {
     }
 
     return handler.fetch(request, env, ctx);
+  },
+
+  // Platform job cycles: transactional-outbox delivery, then SLA escalation.
+  // Both are idempotent per message/slot; cron scheduling for this handler is
+  // owned by the deployment configuration.
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil((async () => {
+      const repository = createOpsD1Repository(env.DB);
+      const deliverySummary = await runOutboxDeliveryCycle({ repository }, createOperationalLogDeliveryTransport());
+      const escalationSummary = await runSlaEscalationCycle({ repository });
+      const pmRecurrenceSummary = await runPmRecurrenceCycle({ repository });
+      console.log(JSON.stringify({ channel: "ops.jobs.cycle", runtime: "d1", transport: "operational-log", outbox: deliverySummary, slaEscalation: escalationSummary, pmRecurrence: pmRecurrenceSummary }));
+    })());
   },
 };
 

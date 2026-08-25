@@ -185,7 +185,7 @@ export function benchmarkPeerImpact(fixture: Pick<OpsFixture, "assets">, profile
     .filter((match) => match.classification !== "not_comparable" || fixture.assets.some((asset) => asset.id === match.assetId && asset.replacementProfileId === profile.id));
 }
 
-export const LIFECYCLE_RECOMMENDATION_MODEL_VERSION = "transparent-rules-v1";
+export const LIFECYCLE_RECOMMENDATION_MODEL_VERSION = "transparent-rules-v2";
 
 export interface LifecycleRecommendationDraft {
   modelVersion: string;
@@ -198,7 +198,7 @@ export interface LifecycleRecommendationDraft {
 }
 
 export function buildLifecycleRecommendationDraft(
-  fixture: Pick<OpsFixture, "replacementProfiles" | "replacementBenchmarks" | "assetReplacementOverrides" | "workOrders" | "costLines">,
+  fixture: Pick<OpsFixture, "replacementProfiles" | "replacementBenchmarks" | "assetReplacementOverrides" | "workOrders" | "costLines" | "components" | "componentLifecycleEvents">,
   asset: Asset,
   asOf: IsoDateTime,
 ): LifecycleRecommendationDraft {
@@ -214,28 +214,52 @@ export function buildLifecycleRecommendationDraft(
   const replacementEstimateMinor = estimate.amount?.amountMinor;
   const spendRatio = replacementEstimateMinor ? trailingRepairSpendMinor / replacementEstimateMinor : undefined;
   const warrantyActive = Boolean(asset.warrantyEndsAt && asset.warrantyEndsAt >= asOf);
+  const assetComponentIds = new Set(fixture.components.filter((row) => row.organizationId === asset.organizationId && row.assetId === asset.id).map((row) => row.id));
+  const trailing24Start = new Date(Date.parse(asOf) - 2 * MILLIS_PER_YEAR).toISOString();
+  const componentReplacements24Months = fixture.componentLifecycleEvents.filter((row) => row.organizationId === asset.organizationId && assetComponentIds.has(row.removedComponentId) && row.installedAt >= trailing24Start && row.installedAt <= asOf).length;
+  const profileMatch = estimate.profile ? matchAssetToReplacementProfile(asset, estimate.profile) : undefined;
   const missingData = [
     !installedAt ? "Installation date" : undefined,
     !expectedLifeYears ? "Expected useful-life range" : undefined,
     !replacementEstimateMinor ? "Current replacement estimate" : undefined,
+    assetComponentIds.size === 0 ? "Component failure history" : undefined,
     "Verified downtime history",
     "Peer model failure cohort",
   ].filter((value): value is string => Boolean(value));
-  const replacementSignals = Number((ageRatio ?? 0) >= 0.85) + Number((spendRatio ?? 0) >= 0.25) + Number(trailingWorkOrders.length >= 3);
-  const recommendation = replacementSignals >= 2 ? "replace" : replacementSignals === 1 ? "capital_review" : "repair";
+  const ageSignal = (ageRatio ?? 0) >= 0.85;
+  const spendSignal = (spendRatio ?? 0) >= 0.25;
+  const repeatWorkSignal = trailingWorkOrders.length >= 3;
+  const componentChurnSignal = componentReplacements24Months >= 2;
+  const metThresholds = [
+    ageSignal ? "Useful-life position is at or beyond 85% of expected life" : undefined,
+    spendSignal ? "Trailing 36-month repair spend reached at least 25% of the current replacement estimate" : undefined,
+    repeatWorkSignal ? "Three or more service events were recorded in the last 36 months" : undefined,
+    componentChurnSignal ? "Two or more components were replaced in the last 24 months" : undefined,
+  ].filter((value): value is string => Boolean(value));
+  const replacementSignals = metThresholds.length;
+  let recommendation: LifecycleRecommendationDraft["recommendation"] = replacementSignals >= 2 ? "replace" : replacementSignals === 1 ? "capital_review" : "repair";
+  let warrantyDemoted = false;
+  if (recommendation === "replace" && warrantyActive) {
+    recommendation = "capital_review";
+    warrantyDemoted = true;
+  }
   const completeCoreInputs = [installedAt, expectedLifeYears, replacementEstimateMinor].filter((value) => value !== undefined).length;
-  const confidence = completeCoreInputs === 3 && trailingWorkOrders.length >= 3 ? "high" : completeCoreInputs >= 2 ? "medium" : "low";
+  let confidence: LifecycleRecommendationDraft["confidence"] = completeCoreInputs === 3 && trailingWorkOrders.length >= 3 ? "high" : completeCoreInputs >= 2 ? "medium" : "low";
+  if (confidence === "high" && profileMatch && profileMatch.classification !== "exact") confidence = "medium";
+  const thresholdSentence = metThresholds.length
+    ? ` Met thresholds: ${metThresholds.map((item) => `${item}.`).join(" ")}${warrantyDemoted ? " Active warranty coverage favors repair under warranty, so a human must review the capital case." : ""}`
+    : "";
   const explanation = recommendation === "replace"
-    ? `Capital review is recommended because ${replacementSignals} transparent thresholds are met: useful-life position, recent repair burden, or repeat work. This is a rule-based recommendation for a human decision, not an automatic replacement or prediction.`
+    ? `Capital review is recommended because ${replacementSignals} transparent thresholds are met: useful-life position, recent repair burden, or repeat work. This is a rule-based recommendation for a human decision, not an automatic replacement or prediction.${thresholdSentence}`
     : recommendation === "capital_review"
-      ? "One transparent lifecycle threshold is met. Review repair scope, remaining life, warranty, and the dated replacement estimate before choosing; the evidence is not strong enough for an automatic conclusion."
+      ? `One transparent lifecycle threshold is met. Review repair scope, remaining life, warranty, and the dated replacement estimate before choosing; the evidence is not strong enough for an automatic conclusion.${thresholdSentence}`
       : "Current structured evidence favors repair. Continue to monitor repeat work and cost; this conclusion should be revisited when new source records arrive.";
   const latestWorkOrder = trailingWorkOrders.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0];
   return {
     modelVersion: LIFECYCLE_RECOMMENDATION_MODEL_VERSION,
     recommendation,
     confidence,
-    inputsJson: JSON.stringify({ asOf, assetAgeYears: assetAgeYears ?? null, expectedLifeYears: expectedLifeYears ?? null, trailingRepairSpendMinor, replacementEstimateMinor: replacementEstimateMinor ?? null, replacementCurrency: estimate.amount?.currency ?? null, failureCount36Months: trailingWorkOrders.length, warrantyActive, downtimeMinutes: null }),
+    inputsJson: JSON.stringify({ asOf, assetAgeYears: assetAgeYears ?? null, expectedLifeYears: expectedLifeYears ?? null, trailingRepairSpendMinor, replacementEstimateMinor: replacementEstimateMinor ?? null, replacementCurrency: estimate.amount?.currency ?? null, failureCount36Months: trailingWorkOrders.length, componentReplacements24Months, metThresholds, profileMatchClassification: profileMatch?.classification ?? null, warrantyActive, warrantyEndsAt: asset.warrantyEndsAt ?? null, downtimeMinutes: null }),
     explanation,
     missingData,
     workOrderId: latestWorkOrder?.id,

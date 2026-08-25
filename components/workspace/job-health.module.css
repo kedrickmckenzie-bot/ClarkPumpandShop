@@ -1,0 +1,66 @@
+.health {
+  background: var(--to-surface);
+  border: 1px solid var(--to-line-strong);
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.health h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: var(--to-ink);
+}
+
+.note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--to-muted);
+}
+
+.outboxRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.pill {
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+
+.pillNeutral { background: var(--to-soft); color: var(--to-copy); }
+.pillInfo { background: var(--to-teal-soft); color: var(--to-teal-dark); }
+.pillCritical { background: var(--to-red-soft); color: var(--to-red); }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  border-bottom: 1px solid var(--to-line);
+  padding: 7px 8px;
+}
+
+.table th {
+  color: var(--to-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.positiveText { color: var(--to-green); }
+.criticalText { color: var(--to-red); }
+
+.empty {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--to-muted);
+}

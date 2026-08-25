@@ -635,12 +635,20 @@ export const opsAuditEvents = sqliteTable("ops_audit_events", {
 }, (table) => [index("idx_ops_audit_org_aggregate_time").on(table.organizationId, table.aggregateType, table.aggregateId, table.occurredAt), index("idx_ops_audit_org_event_time").on(table.organizationId, table.eventType, table.occurredAt)]);
 
 export const opsOutboxMessages = sqliteTable("ops_outbox_messages", {
-  id: id(), organizationId: organizationId(), topic: text("topic").notNull(), aggregateType: text("aggregate_type").notNull(), aggregateId: text("aggregate_id").notNull(), payloadJson: text("payload_json").notNull(), status: text("status").notNull().default("pending"), availableAt: text("available_at").notNull(), createdAt: createdAt(), attemptCount: integer("attempt_count").notNull().default(0), deliveredAt: text("delivered_at"), lastError: text("last_error"),
+  id: id(), organizationId: organizationId(), topic: text("topic").notNull(), aggregateType: text("aggregate_type").notNull(), aggregateId: text("aggregate_id").notNull(), payloadJson: text("payload_json").notNull(), status: text("status").notNull().default("pending"), availableAt: text("available_at").notNull(), createdAt: createdAt(), attemptCount: integer("attempt_count").notNull().default(0), claimedAt: text("claimed_at"), deliveredAt: text("delivered_at"), lastError: text("last_error"),
 }, (table) => [index("idx_ops_outbox_org_status_available").on(table.organizationId, table.status, table.availableAt)]);
 
 export const opsPublicTokens = sqliteTable("ops_public_tokens", {
   id: id(), organizationId: organizationId(), purpose: text("purpose").notNull(), subjectType: text("subject_type").notNull(), subjectId: text("subject_id").notNull(), tokenHash: text("token_hash").notNull(), expiresAt: text("expires_at").notNull(), createdAt: createdAt(), usedAt: text("used_at"), revokedAt: text("revoked_at"),
 }, (table) => [uniqueIndex("uidx_ops_public_tokens_hash").on(table.tokenHash), index("idx_ops_public_tokens_org_subject").on(table.organizationId, table.subjectType, table.subjectId), index("idx_ops_public_tokens_org_purpose_expiry").on(table.organizationId, table.purpose, table.expiresAt)]);
+
+export const opsSavedViews = sqliteTable("ops_saved_views", {
+  id: id(), organizationId: organizationId(), ownerMembershipId: text("owner_membership_id").notNull(), surface: text("surface").notNull(), name: text("name").notNull(), queryJson: text("query_json").notNull(), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_saved_views_org_owner_surface_name").on(table.organizationId, table.ownerMembershipId, table.surface, table.name), index("idx_ops_saved_views_org_owner_surface").on(table.organizationId, table.ownerMembershipId, table.surface)]);
+
+export const opsJobRuns = sqliteTable("ops_job_runs", {
+  id: id(), organizationId: organizationId(), jobType: text("job_type").notNull(), slotKey: text("slot_key").notNull(), status: text("status").notNull().default("running"), startedAt: text("started_at").notNull(), finishedAt: text("finished_at"), processedCount: integer("processed_count").notNull().default(0), failedCount: integer("failed_count").notNull().default(0), detailsJson: text("details_json").notNull().default("{}"), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_job_runs_org_type_slot").on(table.organizationId, table.jobType, table.slotKey), index("idx_ops_job_runs_org_type_started").on(table.organizationId, table.jobType, table.startedAt)]);
 
 export const opsIdempotencyKeys = sqliteTable("ops_idempotency_keys", {
   organizationId: organizationId(), key: text("key").notNull(), command: text("command").notNull(), resultId: text("result_id").notNull(), requestHash: text("request_hash").notNull(), createdAt: createdAt(), expiresAt: text("expires_at").notNull(),
@@ -735,6 +743,7 @@ export const opsSchema = {
   opsInvoiceAllocations,
   opsAuditEvents,
   opsOutboxMessages,
+  opsJobRuns,
   opsPublicTokens,
   opsIdempotencyKeys,
   opsWorkOrderCounters,

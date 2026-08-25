@@ -369,6 +369,104 @@ function DataTable({ table }: { table: TableViewModel }) {
   );
 }
 
+type SurfaceViewMode = "tile" | "table";
+
+export function ListSurface({ model, surface, searchParams }: { model: ListPageViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
+  const viewParam = searchParams.view;
+  const viewMode: SurfaceViewMode = typeof viewParam === "string" && viewParam === "table" ? "table" : "tile";
+  const toggleQuery = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (key === "view" || value === undefined) continue;
+    for (const single of Array.isArray(value) ? value : [value]) toggleQuery.append(key, single);
+  }
+  const baseQuery = toggleQuery.toString();
+  const nextView: SurfaceViewMode = viewMode === "tile" ? "table" : "tile";
+  const toggleHref = `/app/${surface}?${baseQuery ? `${baseQuery}&` : ""}view=${nextView}`;
+  return (
+    <div className={styles.pageStack}>
+      <PageHeader page={model.page} />
+      {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
+        <>
+          {model.metrics ? <MetricStrip metrics={model.metrics} /> : null}
+          <section className={styles.listWorkspace}>
+            <div className={styles.listToolbar}>
+              {model.search ? (
+                <form className={styles.listSearch} action={model.search.action} method="get" role="search">
+                  <Search aria-hidden="true" size={18} />
+                  <label className={styles.visuallyHidden} htmlFor={`${model.table.id}-search`}>{model.search.label}</label>
+                  <input id={`${model.table.id}-search`} name="q" type="search" defaultValue={model.search.value} placeholder={model.search.placeholder} />
+                  {model.search.preservedParameters?.map((parameter) => <input key={parameter.name} name={parameter.name} type="hidden" value={parameter.value} />)}
+                  <button type="submit">Search</button>
+                </form>
+              ) : <span className={styles.toolbarTitle}>Records</span>}
+              <strong className={styles.resultSummary}>{model.resultSummary}</strong>
+            </div>
+            <FilterGroups filters={model.filters} />
+            {model.appliedFilters?.length ? (
+              <div className={styles.appliedFilters} aria-label="Applied filters">
+                <span>Applied</span>
+                <div>{model.appliedFilters.map((filter) => <Link href={filter.removeHref} key={filter.id} aria-label={`Remove ${filter.label} filter`}>{filter.label}<span aria-hidden="true">×</span></Link>)}</div>
+                {model.clearFiltersHref ? <Link className={styles.clearFilters} href={model.clearFiltersHref}>Clear all</Link> : null}
+              </div>
+            ) : null}
+            {viewMode === "tile" ? <RecordTileGrid table={model.table} /> : <DataTable table={model.table} />}
+            <nav className={styles.viewToggle} aria-label="Display mode">
+              <Link href={toggleHref} className={styles.viewToggleLink}>
+                {nextView === "table" ? "Switch to table view" : "Switch to card view"}
+              </Link>
+            </nav>
+            {model.pagination ? (
+              <nav className={styles.pagination} aria-label="Result pages">
+                <span>{model.pagination.summary}</span>
+                <div>
+                  {model.pagination.previousHref ? <Link href={model.pagination.previousHref}><ArrowLeft aria-hidden="true" size={16} />Previous</Link> : <span aria-disabled="true"><ArrowLeft aria-hidden="true" size={16} />Previous</span>}
+                  {model.pagination.nextHref ? <Link href={model.pagination.nextHref}>Next<ArrowRight aria-hidden="true" size={16} /></Link> : <span aria-disabled="true">Next<ArrowRight aria-hidden="true" size={16} /></span>}
+                </div>
+              </nav>
+            ) : null}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RecordTileGrid({ table }: { table: TableViewModel }) {
+  const toneClassNames: Partial<Record<string, string>> = {
+    positive: styles.tileTonePositive,
+    warning: styles.tileToneWarning,
+    critical: styles.tileToneCritical,
+    info: styles.tileToneInfo,
+  };
+  if (table.rows.length === 0) {
+    return <div className={styles.tileEmpty}>No records match the current filters.</div>;
+  }
+  return (
+    <div className={styles.tileGrid}>
+      {table.rows.map((row) => {
+        const facts = table.columns.slice(1)
+          .map((column) => ({ label: column.label, cell: row.cells.find((candidate) => candidate.key === column.key) }))
+          .filter((fact) => fact.cell != null && fact.cell.value !== "" && fact.cell.value !== "—")
+          .slice(0, 5);
+        return (
+          <Link key={row.id} href={row.href} className={styles.tile}>
+            <span className={styles.tileTitle}>{row.label}</span>
+            {row.cells[0]?.secondary ? <span className={styles.tileSubtitle}>{row.cells[0].secondary}</span> : null}
+            <dl className={styles.tileFacts}>
+              {facts.map((fact) => (
+                <div key={fact.label} className={fact.cell?.tone ? toneClassNames[fact.cell.tone ?? ""] : undefined}>
+                  <dt>{fact.label}</dt>
+                  <dd>{fact.cell!.value}{fact.cell!.secondary ? <small>{fact.cell!.secondary}</small> : null}</dd>
+                </div>
+              ))}
+            </dl>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ListView({ model }: { model: ListPageViewModel }) {
   return (
     <div className={styles.pageStack}>

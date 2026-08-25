@@ -21,7 +21,10 @@ import {
 import {
   NORTHLINE_ORGANIZATION_ID,
 } from "@/lib/ops/fixtures";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getServerOpsRepository, getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { buildOwnerBrief } from "@/lib/ops/owner-brief";
+import { buildClosedLoopCoverage, buildDataQualityIssues } from "@/lib/ops/coverage-quality";
+import { buildVendorScorecards } from "@/lib/ops/vendor-scorecards";
 import {
   LEGACY_OPS_PREVIEW_ROLE_COOKIE,
   OPS_PREVIEW_ROLE_COOKIE,
@@ -389,4 +392,45 @@ export async function loadAttentionItemModel(itemId: string) {
   if (!model.control.available) notFound();
   model.detail = enforceDetailLinkPolicy(model.detail, context.session.role);
   return model;
+}
+
+export async function loadOwnerBriefModel() {
+  const context = await sessionAndFixture();
+  const role = context.session.role;
+  if (role !== "executive" && role !== "facilities" && role !== "regional") return null;
+  const periodEndsAt = context.fixture.asOf;
+  const periodStartsAt = new Date(Date.parse(periodEndsAt) - 30 * 24 * 60 * 60 * 1000).toISOString();
+  return buildOwnerBrief(context.fixture, context.session.organizationId, { startsAt: periodStartsAt, endsAt: periodEndsAt });
+}
+
+export async function loadJobHealthModel() {
+  const context = await sessionAndFixture();
+  const role = context.session.role;
+  if (role !== "executive" && role !== "facilities") return null;
+  const repository = await getServerOpsRepository();
+  const [runs, outboxCounts] = await Promise.all([
+    repository.listRecentJobRuns(context.session.organizationId, 20),
+    repository.outboxStatusCounts(),
+  ]);
+  return { generatedAt: context.fixture.asOf, runs, outboxCounts };
+}
+
+export async function loadSavedViewsModel(surface: string) {
+  const context = await sessionAndFixture();
+  const repository = await getServerOpsRepository();
+  return repository.listSavedViews(context.session.organizationId, (context.session.membershipId ?? ""), surface);
+}
+
+export async function loadVendorScorecardsModel() {
+  const context = await sessionAndFixture();
+  const role = context.session.role;
+  if (role !== "executive" && role !== "facilities" && role !== "regional") return [];
+  return buildVendorScorecards(context.fixture, context.session.organizationId);
+}  export async function loadCoverageQualityModel() {
+  const context = await sessionAndFixture();
+  const role = context.session.role;
+  if (role !== "executive" && role !== "facilities") return null;
+  const coverage = buildClosedLoopCoverage(context.fixture, context.session.organizationId);
+  const quality = buildDataQualityIssues(context.fixture, context.session.organizationId, context.fixture.asOf);
+  return { coverage, quality };
 }

@@ -1,0 +1,98 @@
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  background: var(--to-surface);
+  border: 1px solid var(--to-line-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 auto 16px;
+  max-width: 1180px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--to-copy);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--to-muted);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--to-line-strong);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.chipLink {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--to-teal);
+  padding: 4px 6px 4px 11px;
+}
+
+.deleteForm {
+  display: inline;
+  margin: 0;
+}
+
+.deleteButton {
+  border: none;
+  background: transparent;
+  color: var(--to-muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.deleteButton:hover { color: var(--to-red); }
+
+.saveForm {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.nameInput {
+  border: 1px solid var(--to-line-strong);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 13px;
+  width: 200px;
+}
+
+.saveButton {
+  background: var(--to-teal);
+  color: var(--to-surface);
+  border: none;
+  border-radius: 6px;
+  padding: 5px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--to-muted);
+}
+.chipLink:hover { color: var(--to-teal-dark); background: var(--to-soft); }
+.saveButton:hover { background: var(--to-teal-dark); }
+.chipLink:focus-visible,.saveButton:focus-visible,.deleteButton:focus-visible,.nameInput:focus-visible { outline: 2px solid var(--to-teal); outline-offset: 1px; }

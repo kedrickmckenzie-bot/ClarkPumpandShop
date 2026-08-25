@@ -1,0 +1,179 @@
+.brief {
+  background: var(--to-surface);
+  border: 1px solid var(--to-line-strong);
+  border-radius: 10px;
+  padding: 24px 28px;
+  margin: 0 auto 28px;
+  max-width: 1180px;
+}
+
+.header h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  color: var(--to-ink);
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--to-copy);
+  font-weight: 600;
+}
+
+.moneyRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 18px 0 6px;
+}
+
+.moneyCell {
+  border: 1px solid var(--to-line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.moneyCell strong {
+  font-size: 22px;
+  color: var(--to-ink);
+}
+
+.moneyLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--to-copy);
+}
+
+.moneyNote,
+.factsRow small {
+  font-size: 12px;
+  color: var(--to-muted);
+}
+
+.positiveText { color: var(--to-green); }
+.warningText { color: var(--to-amber); }
+
+.factsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 14px 0 4px;
+  padding: 0;
+}
+
+.factsRow > div {
+  border-top: 2px solid var(--to-soft);
+  padding-top: 8px;
+}
+
+.factsRow dt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--to-copy);
+}
+
+.factsRow dd {
+  margin: 2px 0 0;
+  font-size: 15px;
+  color: var(--to-ink);
+}
+
+.decisionsBlock h3 {
+  margin: 18px 0 8px;
+  font-size: 15px;
+  color: var(--to-ink);
+}
+
+.decisionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.decisionList li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid var(--to-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-top: 2px;
+}
+
+.badgeNeutral { background: var(--to-teal-soft); color: var(--to-teal-dark); }
+.badgeCritical { background: var(--to-red-soft); color: var(--to-red); }
+
+.decisionLabel {
+  margin: 0;
+  font-weight: 600;
+  color: var(--to-ink);
+}
+
+.decisionDetail {
+  margin: 2px 0 6px;
+  font-size: 13px;
+  color: var(--to-muted);
+}
+
+.drillLink { 
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--to-teal);
+}
+
+.allClear {
+  margin: 16px 0 4px;
+  padding: 12px 14px;
+  background: #effaf3;
+  border-radius: 8px;
+  color: #14532d;
+}
+
+.storeDetails {
+  margin-top: 16px;
+}
+
+.storeDetails summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--to-copy);
+}
+
+.storeTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.storeTable th,
+.storeTable td {
+  text-align: left;
+  border-bottom: 1px solid var(--to-line);
+  padding: 7px 8px;
+}
+
+.storeTable th {
+  color: var(--to-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

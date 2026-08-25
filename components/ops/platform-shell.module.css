@@ -1,19 +1,19 @@
 .shell {
-  --ops-ink: #111827;
+  --ops-ink: var(--to-ink);
   --ops-muted: #5f6b7a;
   --ops-border: #dde2e8;
   --ops-border-strong: #c7ced8;
-  --ops-soft: var(--product-surface-subtle, #f8fafc);
+  --ops-soft: var(--product-surface-subtle, var(--to-soft));
   --ops-panel: var(--product-surface, #ffffff);
-  --ops-brand: var(--product-action, #2563eb);
-  --ops-brand-dark: var(--product-action-hover, #1d4ed8);
-  --ops-brand-soft: var(--product-action-soft, #eff6ff);
+  --ops-brand: var(--product-action, var(--to-teal));
+  --ops-brand-dark: var(--product-action-hover, var(--to-teal-dark));
+  --ops-brand-soft: var(--product-action-soft, var(--to-teal-soft));
   --ops-warning: #a15c07;
   --ops-warning-soft: #fff7e8;
   --ops-critical: #b42318;
   --ops-critical-soft: #fff1f0;
-  --ops-info: #2563eb;
-  --ops-info-soft: #eff6ff;
+  --ops-info: var(--to-teal);
+  --ops-info-soft: var(--to-teal-soft);
   --ops-font-body: 16px;
   --ops-font-table: 14px;
   --ops-font-label: 13px;
@@ -62,7 +62,7 @@
   padding: 9px 13px;
   border-radius: var(--ops-radius-control);
   color: #ffffff !important;
-  background: var(--product-action, #2563eb);
+  background: var(--product-action, var(--to-teal));
   box-shadow: var(--ops-shadow-overlay);
   transform: translateY(-160%);
 }
@@ -81,8 +81,8 @@
   flex-direction: column;
   overflow-y: auto;
   padding: 20px 14px 14px;
-  color: var(--product-navigation-text, #d1d5db);
-  background: var(--product-navigation, #111827);
+  color: var(--product-navigation-text, var(--to-line-strong));
+  background: var(--product-navigation, var(--to-ink));
   border-right: 1px solid #0b1220;
 }
 
@@ -105,7 +105,7 @@
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: var(--ops-radius-control);
   color: #ffffff;
-  background: var(--product-action, #2563eb);
+  background: var(--product-action, var(--to-teal));
   font-size: 17px;
   font-weight: 760;
   letter-spacing: -0.02em;
@@ -139,7 +139,7 @@
 
 .brandCopy small {
   margin-top: 3px;
-  color: #9ca3af;
+  color: var(--to-muted);
   font-size: var(--ops-font-meta);
   font-weight: 520;
 }
@@ -147,15 +147,15 @@
 .organizationContext {
   margin: 0 3px;
   padding: 12px 12px 11px;
-  border: 1px solid #344154;
+  border: 1px solid var(--to-copy);
   border-radius: var(--ops-radius-control);
-  background: var(--product-navigation-raised, #1f2937);
+  background: var(--product-navigation-raised, var(--to-ink));
 }
 
 .organizationContext span,
 .organizationContext small {
   display: block;
-  color: #9ca3af;
+  color: var(--to-muted);
   font-size: var(--ops-font-meta);
 }
 
@@ -191,7 +191,7 @@
   gap: 11px;
   padding: 9px 11px;
   border-radius: var(--ops-radius-control);
-  color: var(--product-navigation-text, #d1d5db) !important;
+  color: var(--product-navigation-text, var(--to-line-strong)) !important;
   font-size: var(--ops-font-table);
   font-weight: 560;
   transition: color 120ms ease, background-color 120ms ease;
@@ -215,12 +215,12 @@
 
 .navLinkActive {
   color: #ffffff !important;
-  background: var(--product-navigation-raised, #1f2937);
+  background: var(--product-navigation-raised, var(--to-ink));
   font-weight: 680;
 }
 
 .navLinkActive::before {
-  background: var(--product-action, #2563eb);
+  background: var(--product-action, var(--to-teal));
 }
 
 .sidebarFooter {
@@ -253,7 +253,7 @@
 }
 
 .profilePanel {
-  border: 1px solid #344154;
+  border: 1px solid var(--to-copy);
   border-radius: var(--ops-radius-control);
   background: #182230;
 }
@@ -302,7 +302,7 @@
 
 .userCopy span {
   margin-top: 2px;
-  color: #9ca3af;
+  color: var(--to-muted);
   font-size: var(--ops-font-meta);
 }
 
@@ -312,12 +312,12 @@
   align-items: center;
   gap: 7px;
   padding: 10px;
-  border-top: 1px solid #344154;
+  border-top: 1px solid var(--to-copy);
 }
 
 .previewRole > span {
   grid-column: 1 / -1;
-  color: #9ca3af;
+  color: var(--to-muted);
   font-size: var(--ops-font-meta);
   font-weight: 650;
   letter-spacing: 0.05em;
@@ -341,7 +341,7 @@
   width: 100%;
   padding: 5px 25px 5px 8px;
   color: #f3f4f6;
-  background: #111827;
+  background: var(--to-ink);
 }
 
 .previewRole button {
@@ -351,7 +351,7 @@
 }
 
 .previewRole button:hover {
-  background: #344154;
+  background: var(--to-copy);
 }
 
 .contentColumn {
@@ -383,12 +383,12 @@
   padding-left: 12px;
   border: 1px solid var(--ops-border-strong);
   border-radius: var(--ops-radius-control);
-  color: #667085;
+  color: var(--to-copy);
   background: #ffffff;
 }
 
 .globalSearch:focus-within {
-  border-color: var(--product-action, #2563eb);
+  border-color: var(--product-action, var(--to-teal));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--product-focus, #3b82f6) 16%, transparent);
 }
 
@@ -398,7 +398,7 @@
   padding: 9px 2px;
   border: 0;
   outline: 0;
-  color: #111827;
+  color: var(--to-ink);
   background: transparent;
   font-size: var(--ops-font-table);
 }
@@ -412,14 +412,14 @@
   padding: 0 13px;
   border: 0;
   border-left: 1px solid var(--ops-border);
-  color: #344054;
-  background: #f8fafc;
+  color: var(--to-copy);
+  background: var(--to-soft);
   font-size: var(--ops-font-label);
   font-weight: 650;
 }
 
 .globalSearch button:hover {
-  color: var(--product-action-hover, #1d4ed8);
+  color: var(--product-action-hover, var(--to-teal-dark));
   background: #f1f5f9;
 }
 
@@ -429,7 +429,7 @@
   align-items: center;
   gap: 8px;
   margin-left: auto;
-  color: #667085;
+  color: var(--to-copy);
 }
 
 .topbarContext > span {
@@ -447,7 +447,7 @@
 }
 
 .topbarContext strong {
-  color: #344054;
+  color: var(--to-copy);
   font-size: var(--ops-font-label);
   font-weight: 650;
 }
@@ -468,10 +468,10 @@
   align-items: center;
   gap: 7px;
   padding: 9px 12px;
-  border: 1px solid var(--product-action, #2563eb);
+  border: 1px solid var(--product-action, var(--to-teal));
   border-radius: var(--ops-radius-control);
   color: #ffffff;
-  background: var(--product-action, #2563eb);
+  background: var(--product-action, var(--to-teal));
   font-size: var(--ops-font-table);
   font-weight: 660;
   list-style: none;
@@ -483,8 +483,8 @@
 }
 
 .createMenu > summary:hover {
-  border-color: var(--product-action-hover, #1d4ed8);
-  background: var(--product-action-hover, #1d4ed8);
+  border-color: var(--product-action-hover, var(--to-teal-dark));
+  background: var(--product-action-hover, var(--to-teal-dark));
 }
 
 .createMenu[open] .createMenuChevron {
@@ -515,18 +515,18 @@
 }
 
 .createMenuPanel a:hover {
-  background: var(--product-action-soft, #eff6ff);
+  background: var(--product-action-soft, var(--to-teal-soft));
 }
 
 .createMenuPanel strong {
-  color: #1f2937;
+  color: var(--to-ink);
   font-size: var(--ops-font-table);
   font-weight: 650;
 }
 
 .createMenuPanel small {
   margin-top: 2px;
-  color: #667085;
+  color: var(--to-copy);
   font-size: var(--ops-font-meta);
 }
 
@@ -555,7 +555,7 @@
   flex: 0 0 auto;
   align-items: center;
   padding: 0 11px;
-  color: #667085 !important;
+  color: var(--to-copy) !important;
   font-size: var(--ops-font-label);
   font-weight: 590;
   white-space: nowrap;
@@ -572,16 +572,16 @@
 }
 
 .contextNavLink:hover {
-  color: #1f2937 !important;
+  color: var(--to-ink) !important;
 }
 
 .contextNavLinkActive {
-  color: #1f2937 !important;
+  color: var(--to-ink) !important;
   font-weight: 680;
 }
 
 .contextNavLinkActive::after {
-  background: var(--product-action, #2563eb);
+  background: var(--product-action, var(--to-teal));
 }
 
 .main {
@@ -660,14 +660,14 @@
     place-items: center;
     border: 1px solid var(--ops-border-strong);
     border-radius: var(--ops-radius-control);
-    color: #344054;
+    color: var(--to-copy);
     background: #ffffff;
     list-style: none;
   }
 
   .mobileMenu[open] > summary {
-    color: var(--product-action-hover, #1d4ed8);
-    background: var(--product-action-soft, #eff6ff);
+    color: var(--product-action-hover, var(--to-teal-dark));
+    background: var(--product-action-soft, var(--to-teal-soft));
   }
 
   .mobileMenuPanel {
@@ -681,7 +681,7 @@
     flex-direction: column;
     overflow-y: auto;
     padding: 18px 16px 22px;
-    color: #344054;
+    color: var(--to-copy);
     background: #ffffff;
     border-top: 1px solid var(--ops-border);
   }
@@ -697,11 +697,11 @@
 
   .mobileMenuHeading .brand {
     padding: 0;
-    color: #111827 !important;
+    color: var(--to-ink) !important;
   }
 
   .mobileMenuHeading .brandCopy small {
-    color: #667085;
+    color: var(--to-copy);
   }
 
   .mobileMenuHeading p {
@@ -721,12 +721,12 @@
   }
 
   .mobileMenuHeading p strong {
-    color: #344054;
+    color: var(--to-copy);
     font-size: var(--ops-font-label);
   }
 
   .mobileMenuHeading p span {
-    color: #667085;
+    color: var(--to-copy);
     font-size: var(--ops-font-meta);
   }
 
@@ -736,19 +736,19 @@
   }
 
   .mobileMenuPanel .navLink {
-    color: #344054 !important;
+    color: var(--to-copy) !important;
     border: 1px solid transparent;
   }
 
   .mobileMenuPanel .navLink:hover {
-    color: #111827 !important;
-    background: #f8fafc;
+    color: var(--to-ink) !important;
+    background: var(--to-soft);
   }
 
   .mobileMenuPanel .navLinkActive {
-    color: #1d4ed8 !important;
+    color: var(--to-teal-dark) !important;
     border-color: #dbeafe;
-    background: #eff6ff;
+    background: var(--to-teal-soft);
   }
 
   .mobileMenuPanel .sidebarFooter {
@@ -760,13 +760,13 @@
   }
 
   .mobileMenuPanel .setupLink:hover {
-    color: #111827 !important;
-    background: #f8fafc;
+    color: var(--to-ink) !important;
+    background: var(--to-soft);
   }
 
   .mobileMenuPanel .profilePanel {
     border-color: var(--ops-border);
-    background: #f8fafc;
+    background: var(--to-soft);
   }
 
   .mobileMenuPanel .userSummary {
@@ -775,17 +775,17 @@
 
   .mobileMenuPanel .avatar {
     border-color: #cbd5e1;
-    color: #1d4ed8;
-    background: #eff6ff;
+    color: var(--to-teal-dark);
+    background: var(--to-teal-soft);
   }
 
   .mobileMenuPanel .userCopy strong {
-    color: #1f2937;
+    color: var(--to-ink);
   }
 
   .mobileMenuPanel .userCopy span,
   .mobileMenuPanel .previewRole > span {
-    color: #667085;
+    color: var(--to-copy);
   }
 
   .mobileMenuPanel .previewRole {
@@ -795,13 +795,13 @@
   .mobileMenuPanel .previewRole select,
   .mobileMenuPanel .previewRole button {
     border-color: var(--ops-border-strong);
-    color: #344054;
+    color: var(--to-copy);
     background: #ffffff;
   }
 
   .mobileMenuPanel .previewRole button:hover {
-    color: #1d4ed8;
-    background: #eff6ff;
+    color: var(--to-teal-dark);
+    background: var(--to-teal-soft);
   }
 
   .mobileBrand {
@@ -812,7 +812,7 @@
 
   .brandCompact {
     padding: 0;
-    color: #111827 !important;
+    color: var(--to-ink) !important;
   }
 
   .brandCompact .brandMark {

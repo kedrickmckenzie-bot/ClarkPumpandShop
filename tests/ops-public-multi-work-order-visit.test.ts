@@ -133,7 +133,7 @@ describe("public work-order-first multi-work-order visit", () => {
           followUp: {
             accountableParty: "Summit Refrigeration",
             nextAction: "Return with the compatible compressor contactor.",
-            dueAt: "2026-08-23T18:00:00.000Z",
+            dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             escalationTo: "Northline Facilities",
           },
         },

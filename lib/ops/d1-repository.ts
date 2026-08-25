@@ -3,6 +3,7 @@ import type {
   OpsRepository,
   OpsStatement,
   OrganizationScope,
+  OutboxDeliveryOutcome,
   PublicTokenLookup,
   WorkOrderListQuery,
 } from "./repository";
@@ -75,6 +76,9 @@ import type {
   InvoiceException,
   InvoiceAdjustment,
   ValueEvent,
+  OutboxMessage,
+  JobRun,
+  SavedView,
 } from "./types";
 import type {
   ActiveVisitView,
@@ -294,6 +298,28 @@ function scopeWhere(scope: OrganizationScope, alias: string, params: unknown[]) 
   }
   return clauses.join(" AND ");
 }
+
+function outboxMessageFrom(row: Row): OutboxMessage {
+  return {
+    id: text(row, "id"),
+    organizationId: text(row, "organization_id"),
+    topic: text(row, "topic"),
+    aggregateType: text(row, "aggregate_type"),
+    aggregateId: text(row, "aggregate_id"),
+    payloadJson: text(row, "payload_json"),
+    status: text(row, "status") as OutboxMessage["status"],
+    availableAt: text(row, "available_at"),
+    createdAt: text(row, "created_at"),
+    attemptCount: maybeNumber(row, "attempt_count") ?? 0,
+    claimedAt: maybeText(row, "claimed_at") ?? null,
+    deliveredAt: maybeText(row, "delivered_at") ?? null,
+    lastError: maybeText(row, "last_error") ?? null,
+  };
+}
+
+function jobRunFrom(row: Row): JobRun { return { id: text(row, "id"), organizationId: text(row, "organization_id"), jobType: text(row, "job_type"), slotKey: text(row, "slot_key"), status: text(row, "status") as JobRun["status"], startedAt: text(row, "started_at"), finishedAt: maybeText(row, "finished_at") ?? null, processedCount: maybeNumber(row, "processed_count") ?? 0, failedCount: maybeNumber(row, "failed_count") ?? 0, detailsJson: text(row, "details_json"), createdAt: text(row, "created_at") }; }
+
+function savedViewFrom(row: Row): SavedView { return { id: text(row, "id"), organizationId: text(row, "organization_id"), ownerMembershipId: text(row, "owner_membership_id"), surface: text(row, "surface"), name: text(row, "name"), queryJson: text(row, "query_json"), createdAt: text(row, "created_at") }; }
 
 class D1OpsRepository implements OpsRepository {
   constructor(
@@ -631,6 +657,62 @@ class D1OpsRepository implements OpsRepository {
   async getServiceRunByPublicToken(input: PublicTokenLookup) { const token=await this.publicToken(input); if(!token||token.used_at!=null||text(token,"subject_type")!=="service_run")return null; const run=await this.getServiceRun(text(token,"organization_id"),text(token,"subject_id")); return run&&(input.vendorId===undefined||run.vendorId===input.vendorId)?{run,tokenId:text(token,"id"),expiresAt:text(token,"expires_at")}:null; }
   async getVisitByCheckoutToken(input: PublicTokenLookup) { const token=await this.publicToken(input); if(!token||text(token,"subject_type")!=="visit")return null; const visit=await this.getVisit(text(token,"organization_id"),text(token,"subject_id")); return visit ? { visit, expiresAt:text(token,"expires_at") } : null; }
   async getTrustedStoreDeviceByToken(input: PublicTokenLookup): Promise<TrustedStoreDeviceView|null> { const token=await this.publicToken(input); if(!token||text(token,"subject_type")!=="store")return null; const org=text(token,"organization_id"); const store=await this.getStore(org,text(token,"subject_id")); const organization=await this.getOrganization(org); if(!store||!organization)return null; return { organizationId:org, organizationName:organization.name, store:{ id:store.id, storeNumber:store.storeNumber, name:store.name, formattedAddress:formatAddress(store) }, activeVisits:await this.listActiveVisitsForStore(org,store.id) }; }
+
+  async listDueOutboxMessages(now: string, limit: number): Promise<OutboxMessage[]> {
+    const rows = await this.all("SELECT * FROM ops_outbox_messages WHERE status = ? AND available_at <= ? ORDER BY available_at, id LIMIT ?", ["pending", now, Math.max(1, Math.min(100, limit))]);
+    return rows.map(outboxMessageFrom);
+  }
+
+  async listStaleProcessingOutboxMessages(staleBefore: string, limit: number): Promise<OutboxMessage[]> {
+    const rows = await this.all("SELECT * FROM ops_outbox_messages WHERE status = ? AND (claimed_at IS NULL OR claimed_at <= ?) ORDER BY claimed_at, id LIMIT ?", ["processing", staleBefore, Math.max(1, Math.min(100, limit))]);
+    return rows.map(outboxMessageFrom);
+  }
+
+  async claimOutboxMessage(organizationId: OpsId, id: OpsId, claimedAt: string): Promise<boolean> {
+    const result = await this.db.prepare("UPDATE ops_outbox_messages SET status = ?, claimed_at = ?, attempt_count = attempt_count + 1 WHERE organization_id = ? AND id = ? AND status = ? RETURNING id").bind("processing", claimedAt, organizationId, id, "pending").run();
+    const meta = (result as { meta?: { changes?: number } }).meta;
+    const returned = ((result as { results?: unknown[] }).results ?? (result as { rows?: unknown[] }).rows ?? []) as unknown[];
+    return Number(meta?.changes ?? 0) > 0 || returned.length > 0;
+  }
+
+  async listOverdueEscalationCandidates(now: string, limit: number): Promise<WorkflowTask[]> {
+    const rows = await this.all("SELECT * FROM ops_workflow_tasks WHERE status IN ('open', 'in_progress') AND due_at IS NOT NULL AND due_at <= ? ORDER BY due_at, id LIMIT ?", [now, now, Math.max(1, Math.min(100, limit))]);
+    return rows.map(workflowTaskFrom);
+  }
+
+  async tryBeginJobRun(input: { organizationId: OpsId; jobRunId: OpsId; jobType: string; slotKey: string; startedAt: string }): Promise<boolean> {
+    const result = await this.db.prepare("INSERT OR IGNORE INTO ops_job_runs (id, organization_id, job_type, slot_key, status, started_at, processed_count, failed_count) VALUES (?, ?, ?, ?, ?, ?, 0, 0) RETURNING id").bind(input.jobRunId, input.organizationId, input.jobType, input.slotKey, "running", input.startedAt).run();
+    const meta = (result as { meta?: { changes?: number } }).meta;
+    const returned = ((result as { results?: unknown[] }).results ?? (result as { rows?: unknown[] }).rows ?? []) as unknown[];
+    return Number(meta?.changes ?? 0) > 0 || returned.length > 0;
+  }
+
+  async finishJobRun(input: { organizationId: OpsId; jobRunId: OpsId; status: "succeeded" | "failed"; finishedAt: string; processedCount: number; failedCount: number }): Promise<void> {
+    await this.atomicWrite([{ sql: "UPDATE ops_job_runs SET status = ?, finished_at = ?, processed_count = ?, failed_count = ? WHERE organization_id = ? AND id = ? AND status = ?", params: [input.status, input.finishedAt, input.processedCount, input.failedCount, input.organizationId, input.jobRunId, "running"] }]);
+  }
+
+  async listPmPlans(): Promise<PmPlan[]> { const rows = await this.all("SELECT * FROM ops_pm_plans ORDER BY store_id, id"); return rows.map(pmPlanFrom); }
+
+  async listPmOccurrencesForPlan(organizationId: OpsId, planId: OpsId): Promise<PmOccurrence[]> { const rows = await this.all("SELECT * FROM ops_pm_occurrences WHERE organization_id = ? AND plan_id = ? ORDER BY due_at, id", [organizationId, planId]); return rows.map(pmOccurrenceFrom); }
+
+  async listRecentJobRuns(organizationId: OpsId, limit: number): Promise<JobRun[]> { const rows = await this.all("SELECT * FROM ops_job_runs WHERE organization_id = ? ORDER BY started_at DESC, id DESC LIMIT ?", [organizationId, Math.max(1, Math.min(100, limit))]); return rows.map(jobRunFrom); }
+
+  async outboxStatusCounts(): Promise<Array<{ status: string; count: number }>> { const rows = await this.all("SELECT status, COUNT(*) AS count FROM ops_outbox_messages GROUP BY status"); return rows.map((row) => ({ status: text(row, "status"), count: Number(row.count) })); }
+  async listSavedViews(organizationId: OpsId, ownerMembershipId: OpsId, surface: string): Promise<SavedView[]> { const rows = await this.all("SELECT * FROM ops_saved_views WHERE organization_id = ? AND owner_membership_id = ? AND surface = ? ORDER BY name", [organizationId, ownerMembershipId, surface]); return rows.map(savedViewFrom); }
+  async putSavedView(input: { organizationId: OpsId; id: OpsId; ownerMembershipId: OpsId; surface: string; name: string; queryJson: string; createdAt: string }): Promise<void> { await this.atomicWrite([{ sql: "DELETE FROM ops_saved_views WHERE organization_id = ? AND owner_membership_id = ? AND surface = ? AND name = ?", params: [input.organizationId, input.ownerMembershipId, input.surface, input.name] }, { sql: "INSERT INTO ops_saved_views (id, organization_id, owner_membership_id, surface, name, query_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", params: [input.id, input.organizationId, input.ownerMembershipId, input.surface, input.name, input.queryJson, input.createdAt] }]); }
+  async deleteSavedView(organizationId: OpsId, ownerMembershipId: OpsId, id: OpsId): Promise<boolean> { const result = await this.db.prepare("DELETE FROM ops_saved_views WHERE organization_id = ? AND owner_membership_id = ? AND id = ?").bind(organizationId, ownerMembershipId, id).run(); const meta = (result as { meta?: { changes?: number } }).meta; return Number(meta?.changes ?? 0) > 0; }
+
+  async recordOutboxDeliveryOutcome(input: OutboxDeliveryOutcome): Promise<void> {
+    if (input.outcome === "delivered") {
+      await this.atomicWrite([{ sql: "UPDATE ops_outbox_messages SET status = ?, delivered_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["delivered", input.deliveredAt, input.organizationId, input.id, "processing"] }]);
+      return;
+    }
+    if (input.outcome === "retry") {
+      await this.atomicWrite([{ sql: "UPDATE ops_outbox_messages SET status = ?, available_at = ?, last_error = ?, claimed_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["pending", input.retryAt, input.lastError.slice(0, 2000), null, input.organizationId, input.id, "processing"] }]);
+      return;
+    }
+    await this.atomicWrite([{ sql: "UPDATE ops_outbox_messages SET status = ?, last_error = ?, claimed_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["failed", input.lastError.slice(0, 2000), null, input.organizationId, input.id, "processing"] }]);
+  }
 
   async atomicWrite(statements: readonly OpsStatement[]) {
     try {

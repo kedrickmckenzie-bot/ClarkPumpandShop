@@ -1,0 +1,102 @@
+.section {
+  margin-bottom: 28px;
+}
+
+.header h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  color: var(--to-ink);
+}
+
+.note {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--to-muted);
+  max-width: 720px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: var(--to-surface);
+  border: 1px solid var(--to-line-strong);
+  border-top-width: 3px;
+  border-radius: var(--to-radius);
+  padding: 18px 20px 16px;
+  box-shadow: var(--to-shadow);
+}
+
+.tone_good { border-top-color: var(--to-green); }
+.tone_watch { border-top-color: var(--to-amber); }
+.tone_attention { border-top-color: var(--to-red); }
+.tone_new { border-top-color: var(--to-muted); }
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cardHead h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--to-ink);
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+
+.verdict {
+  margin: 10px 0 4px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--to-ink);
+}
+
+.detail {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--to-copy);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+  border-top: 1px solid var(--to-line);
+  padding-top: 10px;
+}
+
+.facts dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--to-muted);
+}
+
+.facts dd {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--to-ink);
+}
+.actions { display: flex; flex-wrap: wrap; gap: 6px 16px; border-top: 1px solid var(--to-line); margin-top: 12px; padding-top: 10px; }
+.drillLink { font-size: 13px; font-weight: 600; color: var(--to-teal); }
+.drillLink:hover { color: var(--to-teal-dark); }
+.warnNumber { color: var(--to-amber); }

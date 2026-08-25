@@ -1,0 +1,111 @@
+.section {
+  background: var(--to-surface);
+  border: 1px solid var(--to-line-strong);
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.section h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  color: var(--to-ink);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.block {
+  border-top: 2px solid var(--to-soft);
+  padding-top: 10px;
+}
+
+.block h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: var(--to-ink);
+}
+
+.bigNumber {
+  font-size: 34px;
+  font-weight: 700;
+  margin: 4px 0;
+  color: var(--to-ink);
+}
+
+.subtext {
+  font-size: 13px;
+  color: var(--to-muted);
+  margin: 0 0 8px;
+}
+
+.reqList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--to-copy);
+}
+
+.gaps {
+  border-top: 1px solid var(--to-line);
+  padding-top: 8px;
+}
+
+.gapsTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--to-copy);
+  margin: 0 0 6px;
+}
+
+.gaps ul,
+.issueList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.gapList {
+  color: var(--to-muted);
+  margin-left: 8px;
+}
+
+.moreNote {
+  color: var(--to-muted);
+  font-size: 12px;
+}
+
+.severityRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pill {
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.pillHigh { background: var(--to-red-soft); color: var(--to-red); }
+.pillMedium { background: var(--to-amber-soft); color: var(--to-amber); }
+.pillLow { background: var(--to-soft); color: var(--to-copy); }
+
+.issueDetail {
+  display: block;
+  color: var(--to-muted);
+}
+
+.empty {
+  font-size: 14px;
+  color: var(--to-muted);
+}

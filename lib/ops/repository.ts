@@ -68,6 +68,9 @@ import type {
   InvoiceException,
   InvoiceAdjustment,
   ValueEvent,
+  OutboxMessage,
+  JobRun,
+  SavedView,
 } from "./types";
 import type {
   ActiveVisitView,
@@ -278,7 +281,36 @@ export interface OpsRepository {
   // Durable adapters execute the statement list in one database transaction.
   // Fixture repositories apply it to a cloned fixture before committing it.
   atomicWrite(statements: readonly OpsStatement[]): Promise<void>;
-}
+
+  // Outbox delivery-worker support. These run in a platform job context with
+  // no user session; every method remains organization-keyed so a message can
+  // never be settled against the wrong tenant.
+  listDueOutboxMessages(now: IsoDateTime, limit: number): Promise<OutboxMessage[]>;
+  listStaleProcessingOutboxMessages(staleBefore: IsoDateTime, limit: number): Promise<OutboxMessage[]>;
+  /** Conditionally transitions one pending message to processing. Returns false when another worker holds it. */
+  claimOutboxMessage(organizationId: OpsId, id: OpsId, claimedAt: IsoDateTime): Promise<boolean>;
+  recordOutboxDeliveryOutcome(input: OutboxDeliveryOutcome): Promise<void>;
+
+  // SLA escalation worker support (same platform job context as the outbox).
+  /** Open tasks whose due time has passed, oldest due first, across tenants. */
+  listOverdueEscalationCandidates(now: IsoDateTime, limit: number): Promise<WorkflowTask[]>;
+  /** Claims one org+job+slot combination; returns false when the slot already ran. */
+  tryBeginJobRun(input: { organizationId: OpsId; jobRunId: OpsId; jobType: string; slotKey: string; startedAt: IsoDateTime }): Promise<boolean>;
+  finishJobRun(input: { organizationId: OpsId; jobRunId: OpsId; status: "succeeded" | "failed"; finishedAt: IsoDateTime; processedCount: number; failedCount: number }): Promise<void>;
+
+  // PM recurrence + job-health support (same platform job/admin context).
+  listPmPlans(): Promise<PmPlan[]>;
+  listPmOccurrencesForPlan(organizationId: OpsId, planId: OpsId): Promise<PmOccurrence[]>;
+  listRecentJobRuns(organizationId: OpsId, limit: number): Promise<JobRun[]>;
+  outboxStatusCounts(): Promise<Array<{ status: string; count: number }>>;
+  listSavedViews(organizationId: OpsId, ownerMembershipId: OpsId, surface: string): Promise<SavedView[]>;
+  putSavedView(input: { organizationId: OpsId; id: OpsId; ownerMembershipId: OpsId; surface: string; name: string; queryJson: string; createdAt: IsoDateTime }): Promise<void>;
+  deleteSavedView(organizationId: OpsId, ownerMembershipId: OpsId, id: OpsId): Promise<boolean>;}
+
+export type OutboxDeliveryOutcome =
+  | { outcome: "delivered"; organizationId: OpsId; id: OpsId; deliveredAt: IsoDateTime }
+  | { outcome: "retry"; organizationId: OpsId; id: OpsId; retryAt: IsoDateTime; lastError: string }
+  | { outcome: "failed"; organizationId: OpsId; id: OpsId; lastError: string };
 
 export interface MutableOpsFixtureRepository extends OpsRepository {
   readonly kind: "fixture";

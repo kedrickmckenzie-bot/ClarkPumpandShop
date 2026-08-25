@@ -1,7 +1,7 @@
 # Rebuild Implementation Status
 
-**Snapshot date:** August 20, 2026  
-**Demo implementation status:** reactive loop accepted end to end; PM, Service Runs, warranty, invoice controls, lifecycle planning, and source-linked value are now interactive  
+**Snapshot date:** August 24, 2026  
+**Demo implementation status:** reactive loop accepted end to end; PM, Service Runs, warranty, invoice controls, lifecycle planning, and source-linked value are now interactive; transactional-outbox delivery/retry worker and SLA escalation worker added  
 **Authority:** the merged Codex master rebuild directive supplied for this rebuild, the user's active Wave 1 acceptance target, and repository `AGENTS.md`. Earlier c-store plans remain useful history only where they do not conflict.
 
 This is an honest inventory of the active worktree. “Complete” below means the step is connected through persisted data, server authorization, product UI, bounded Workflow Tasks, Audit Events, deterministic fixture coverage, and automated tests. The original merged master directive remains the capability authority; demo sequencing does not narrow those requirements.
@@ -74,18 +74,140 @@ The following inspection was completed against the local application backed by t
 - PM effectiveness now presents trailing reactive Work Orders per 100 equipment-months for latest-compliant and latest-noncompliant PM cohorts, plus recorded reactive-cost trend context. Every view opens supporting source records and explicitly withholds an effectiveness conclusion when a cohort is too small.
 - The Value Ledger displays realized-and-verified value, identified exposure, and estimated opportunity as three separate totals. Each row retains a deduplication key and opens its supporting operational or financial record.
 
+## Outbox delivery/retry worker (added August 24, 2026)
+
+The delivery half of the transactional outbox is now implemented and tested end to end:
+
+- `lib/ops/outbox-delivery.ts` runs one idempotent cycle: recover abandoned processing leases (`claimed_at` older than the stale window), conditionally claim due `pending` messages (a lost race is counted as skipped), deliver through an injected transport, and settle atomically — delivered timestamps, exponential-backoff retry capped at one hour, or terminal `failed` after `maxAttempts` with the last error retained for forensics.
+- Additive migration `ops_outbox_messages.claimed_at`: D1 `drizzle/0027_damp_stick.sql` and PostgreSQL `drizzle-postgres/0022_equal_captain_america.sql`, generated from the schema files with no other drift.
+- Repository support on all three adapters: `listDueOutboxMessages`, `listStaleProcessingOutboxMessages`, conditional `claimOutboxMessage` (D1/PostgreSQL via `UPDATE … WHERE status='pending' RETURNING`; fixture via guarded clone-commit), and `recordOutboxDeliveryOutcome`.
+- Entry points: Cloudflare Worker `scheduled` handler (D1) and `npm run jobs:outbox:postgres` for a Render cron context. Both are repeatable and safe to run concurrently.
+- The only transport is the structured operational log. No email/SMS/vendor-notification channel is implied; adding one requires a named, message-id-idempotent transport.
+- Tests: `tests/ops-outbox-delivery.test.ts` covers full delivery and settlement, backoff retry then success, terminal failure and non-reclaim, stale-lease recovery with fresh leases untouched, claim-race skipping, and the empty-queue no-op.
+
+Also fixed this session: `tests/ops-public-multi-work-order-visit.test.ts` used a hardcoded follow-up due time that aged into the past and began failing against the real clock; it now derives its due time relative to now.
+
+## SLA escalation worker and job-run registry (added August 24, 2026)
+
+- `lib/ops/job-workers.ts` (`runSlaEscalationCycle`) escalates overdue open Workflow Tasks by reusing the governed `escalateWorkflowTask` command — system actor, Audit Event, outbox intent, version fencing, and Work Order projection are identical to a human escalation.
+- New `JobRun` registry: `ops_job_runs` (D1 migration `drizzle/0028_high_steel_serpent.sql`, PostgreSQL `drizzle-postgres/0023_quick_post.sql`) is unique per organization + job type + slot key, so each recurring slot executes at most once per organization and repeated scheduling is safe. The default slot is the UTC hour.
+- Overdue tasks climb one level per slot up to a ceiling (default 3); tasks at the ceiling are counted and left untouched, so automation can never rewrite history it does not understand.
+- The Cloudflare Worker `scheduled` handler now runs outbox delivery followed by escalation; `npm run jobs:postgres` replaces `jobs:outbox:postgres` for PostgreSQL cron contexts.
+- Tests: `tests/ops-sla-escalation-worker.test.ts` covers first-slot escalation with audit/outbox/job-run evidence, same-slot skip, one-level-per-slot climb to the ceiling, and exclusion of no-due-time or terminal tasks.
+
+## Demo-readiness pass: scorecards and record-integrity surfaces wired (added August 24, 2026)
+
+- Vendor scorecards now render on `/app/vendors` for internal roles: work orders assigned, outcomes recorded, verification pass rate, quote acceptance rate, and open invoice flags with dollar amounts. Small samples display "Small sample" instead of a rate.
+- `/app/overview` now carries an "Operating record integrity" section (executive/facilities only): Closed-Loop Coverage percentage with per-requirement satisfaction counts and drill-through links to closed-with-gaps Work Orders, plus the data-quality queue by severity with source-record links.
+- With these two surfaces, every register item that computes in the domain is now also visible in a screen. Remaining register items are enhancement-tier: bulk actions on the Work table, weather ingestion + metric registry, import/onboarding pipeline, production authentication.
+
+
+
+## UX grouping pass: dedicated Owner brief page + plain-language vendors (added August 24, 2026)
+
+- Owner Brief moved to its own destination: `/app/brief`, seventh primary navigation slot ("Owner brief", BookOpenText icon), gated to executive/facilities/regional. Overview returns to its single control-tower job - no more duplicated executive content.
+ - Vendor scorecards redesigned as plain-language verdict cards for non-maintenance readers: each vendor gets a colored verdict (Reliable / Watch / Billing under review / Building history) derived from verification outcomes and invoice flags, with three plain facts (jobs handled, site visits finished, work passed inspection). Jargon columns removed from the default view.
+- The dense vendor performance workspace remains available but collapsed behind a "Detailed vendor performance workspace" disclosure - progressive disclosure per the UX doctrine: simple by default, complete on demand.
+- Coverage/quality section headings simplified to owner language ("Jobs followed through to done", "Records that need cleanup").
+- Local dev D1 repair utility added: `apply-local-d1.mjs` applies the full drizzle chain to the local miniflare database after sync incidents.
+
+## Vendor verdict cards v2 with drill-through (added August 24, 2026)
+
+- Verdict logic now uses the full honest signal set: open invoice exceptions (Attention - billing under review), declined dispatches (Watch - declined work recently), open callbacks owed from prior visits (Watch), and only vendors with 10+ finished visits and zero flags earn Reliable. Scorecards gained responsesDeclined and openFollowUpCount fields.
+- Every card drills through: "See their work orders" opens the filtered work-order list for that vendor; cards with invoice flags add a direct "Review invoice flags" link to the invoice safeguards queue.
+- Card styling strengthened with the platform shadow so tiles separate visibly from the canvas.
+
+## Tile-first list surfaces (added August 24, 2026)
+
+- New `ListSurface` component replaces flat tables on `/app/work-orders`, `/app/action-center`, `/app/requests`, `/app/visits`, `/app/stores`, and `/app/estimates`: every record renders as a clickable card showing its title plus up to five labeled facts, tone-colored where status matters. Every card links to the full record - drill-down is universal.
+- Card/table toggle preserves all active filters via a "Switch to table/card view" control; pagination, search, filter chips, and saved views work identically in both modes.
+- Tile styles live in `enterprise-workspace.module.css` consuming the shared token layer (hover lift, focus-visible rings).
+
+
+## Enterprise visual system pass (added August 24, 2026)
+
+- Retired the last of the rejected teal/coral prototype identity from `app/traceops.css`: canvas is now neutral cool gray (#f2f4f7), sidebar deep slate (#16212e), and the single action color is a restrained cobalt (#2a5cc7) used for brand mark, active navigation, focus rings, links, and primary buttons. Semantic amber/red/green/blue tones retained; radii tightened (12/16px); shadow softened; topbar/backdrop cooled to match. All hardcoded old-hue rgba values replaced - zero leftovers.
+- The five workspace component stylesheets (owner brief, coverage/quality, vendor scorecards, job health, saved views) now consume the shared tokens instead of scattered hex values, with hover and focus-visible states on interactive controls.
+
+
+
+## Saved views on the Work queue (added August 24, 2026)
+
+- New `ops_saved_views` table (D1 `drizzle/0029_bouncy_tenebrous.sql`, PostgreSQL `drizzle-postgres/0024_great_major_mapleleaf.sql`): named URL-query filter sets per organization + membership + surface, unique on name so re-saving updates in place via delete+insert inside one transaction.
+- Repository CRUD on all three adapters (`listSavedViews`, `putSavedView`, `deleteSavedView`).
+- `POST /app/../api/ops/saved-views` handles save and delete for any authenticated operator role; the stored query must parse as URLSearchParams with at least one key.
+- `/app/work-orders` now renders a saved-views bar above the list: chips link to their stored filter query, each carries a delete control, and saving captures the current query string verbatim.
+
+
+## Coverage, data-quality, PM recurrence, and job health (added August 24, 2026)
+
+- Closed-Loop Maintenance Coverage policy v1 (`lib/ops/coverage-quality.ts`): every resolved/closed Work Order is evaluated against three transparent requirements - visit outcome recorded, vendor claim verified internally (outside-vendor work only), cost evidence recorded. Results carry the policy version, per-requirement satisfaction counts, and the exact incomplete Work Orders.
+- Operational data-quality queue: high (active work with no open Workflow Task - a direct invariant check), medium (unclassified problems, invoice reviews aging past 30 days), low (missing equipment links, incomplete lifecycle inputs). Issues name their source entity; nothing is fixed silently.
+- PM recurrence worker (`runPmRecurrenceCycle`): for each plan whose latest occurrence is completed, schedules the next occurrence at due date + cadence inside the completion window, idempotent per organization + daily slot (`ops_job_runs`) and per plan + `recurrence_key` unique index. Creation emits Audit Event + outbox intent atomically like every governed change.
+- Job-health surface on `/app/admin`: recent job runs (job, slot, status, processed/failed counts) and outbox depth by status, gated to executive/facilities roles.
+
+- Known limitation: the Vinext-after-Next build ordering leaves `.next/types` stale for tsc; run `build:render` before `typecheck`.
+
+## Owner Brief on Overview (added August 24, 2026)
+
+- `loadOwnerBriefModel()` joins the operator loader: executive, facilities, and regional preview roles receive a 30-day Owner Brief computed by `lib/ops/owner-brief.ts`; other roles get no section (role-appropriate presentation, not hidden data).
+- New `components/workspace/owner-brief.tsx` renders the brief above the Control Tower on `/app/overview`: separated money bases (recorded spend / identified exposure / verified savings / estimated opportunity - each labeled so estimated is never read as realized), PM compliance with its explicit method, active escalation count, a "What needs you" decision list where every item links to its exact source record (`/app/equipment/[id]`, `/app/work-orders/[id]`, or `/app/action-center/[id]`), and an expandable per-store spend table sorted worst-first.
+- Vendor scorecards domain module shipped alongside (`lib/ops/vendor-scorecards.ts`); UI wiring onto the existing vendor-performance surface is the next slice.
+- Known toolchain quirk documented: running the Vinext build after Next's build leaves `.next/types` in a format `tsc` rejects until the next `build:render`; run `build:render` before `typecheck` when validating.
+
+## Lifecycle model v2 and near-duplicate invoice safeguard (added August 24, 2026)
+
+- `buildLifecycleRecommendationDraft` upgraded to `transparent-rules-v2`: abnormal component churn (two or more Component Lifecycle Events on an asset's components within 24 months) is now a fourth transparent threshold; explanations enumerate exactly which thresholds were met; active warranty coverage demotes a would-be "replace" outcome to a human capital review with an explicit reason; high confidence is capped when the replacement-profile match is not exact; missing-data labeling adds component-history gaps; inputs snapshots record component counts, met thresholds, profile-match classification, and warranty end.
+- Near-duplicate invoice safeguard: `receiveInvoice` still hard-blocks exact vendor invoice-number repeats, and now also raises a review-only `duplicate_invoice` exception when a different invoice number from the same vendor arrives within 30 days carrying the same total — creating identified-exposure evidence and a finance review task without any deduction or payment decision.
+- Tests: `tests/ops-lifecycle-v2.test.ts` (warranty demotion, component-churn threshold, zero-dollar callbacks counting toward repeat work) plus a near-duplicate flag test in the financial safeguards suite.
+
+
+## Verified gap register (code-audited August 24, 2026)
+
+Corrects earlier assumptions; each item was checked against domain source, not docs. Updated after the v2 lifecycle slice: the duplicate-invoice row is now "Partial — exact blocked + near-duplicate review flag shipped", and the job-workers row reflects outbox delivery + SLA escalation shipped:
+
+| Directive requirement | Actual state |
+|---|---|
+| Lifecycle / repair-vs-replace algorithm | **Implemented** — transparent rule inputs, versioned frozen recommendations with confidence/missing data, manager decisions, replacement closeout with actual outcome. Gaps are only in what feeds it (weather, trends, cohorts breadth). |
+| Duplicate invoices | **Partial** — exact vendor+invoice-number repeats are hard-blocked (`receiveInvoice` CONFLICT). Near-duplicate review flags (same vendor/amount/date, different number) do not exist. |
+| Vendor scorecards | Missing. |
+| Closed-Loop Maintenance Coverage queue/metric | Catalog target only; not implemented. |
+| Data-quality queue | Legacy components only; not in active ops domain. |
+| Saved views / bulk actions | Not implemented. |
+| Weather ingestion / exposure windows / normalized trends | Only an SLA pause-reason enum value exists. |
+| Versioned metric registry in code | Markdown catalog only; no enforcement. |
+| PM recurrence worker | Occurrences exist; no scheduler generates the next slot. |
+| Structured import/onboarding | Not started. |
+| Job workers | Outbox delivery + SLA escalation shipped this session; job-run registry live; health UI surface still open. |
+
 ## Known limitations outside the current demo claim
 
 - Preview identity and role selection are not production authentication and must not protect real customer data.
 - Operator read paths still include broad snapshot/presenter behavior that requires later tenant-scale and least-privilege replacement.
-- Outbox persistence exists, but production delivery/retry workers and external notification proof are not part of this completed loop.
+- The outbox delivery worker delivers to the structured operational log only; external notification channels, cron scheduling configuration for the `scheduled` handler in the hosted deployment, an outbox observability dashboard, and delivery-proof evidence remain open.
 - Structured production import, broad versioned metric coverage, and generalized background-job infrastructure remain later production work; they are not required for the current private working-demo claim.
 - Existing `test:e2e` coverage is a server/database Vitest journey, not a configured cross-browser automation suite; the manual browser proof is recorded above.
 - The repository still contains parallel legacy/prototype stacks. Reference-safe retirement is later work and must not be conflated with Wave 1 acceptance.
 
+## Exact final validation (August 24, 2026 — outbox delivery slice)
+
+| Command | Exact latest result |
+|---|---|
+| `npm run db:seed` | **PASS** — deterministic fixture release reseeded: 15 Stores, five Vendors, 94 requests, 120 Work Orders, 116 visits, 138 assets, 76 PM occurrences, 4,609 seed statements, and the separate 65-Store scale fixture. |
+| `npm run lint` | **PASS** — zero ESLint findings. |
+| `npm test` | **PASS** — 85 files / 493 tests, zero failures (includes SLA-escalation, outbox-delivery, lifecycle-v2, and executive-intelligence suites). |
+| `npm run test:e2e` | **PASS** — exit code 0 across all four suites including the PostgreSQL engine integration journey. |
+| `npm run typecheck` | **PASS** — zero TypeScript errors (after regenerating `.next/types` via `npm run build:render`; the pre-build state had stale generated-validator errors unrelated to source). |
+| `npm run build:render` | **PASS** — exit code 0; Next.js production build compiled and finalized. |
+| `npm run build` | **PASS** — exit code 0; Vinext production build completed ("Build complete"). |
+| D1 migration chain through `0027` | **PASS** — all 28 migrations applied with foreign keys enabled by the updated chain guard inside `npm test`. |
+| PostgreSQL migration chain through `0022` | **PASS** — exercised by `npm run test:e2e` (PostgreSQL engine integration journey), exit code 0. |
+
+The first full `npm test` run surfaced two failures, both addressed and then verified by targeted rerun (`ops-d1-migration-chain.test.ts` asserted the previous 27-migration count before migration `0027`; the multi-work-order visit test carried the expired hardcoded due time described above).
+
 ## Exact final validation
 
-These results are from the same settled worktree on August 20, 2026.
+Prior-snapshot results from the same settled worktree on August 20, 2026 (superseded above for changed surfaces):
 
 | Command | Exact latest result |
 |---|---|
@@ -103,4 +225,4 @@ These results are from the same settled worktree on August 20, 2026.
 
 ## Next action
 
-Publish this settled source privately, allow the protected hosted database to run its additive migration/enrichment path, and complete the final browser walkthrough against the hosted URL. Production authentication, worker delivery, imports, and broad scale hardening remain a later production-readiness phase.
+Publish this settled source privately, allow the protected hosted database to run its additive migration/enrichment path (now through D1 `0027`), and complete the final browser walkthrough against the hosted URL. Configure cron scheduling for the new outbox `scheduled` handler as part of that hosted step. Production authentication, external notification transports behind the existing outbox worker contract, imports, and broad scale hardening remain a later production-readiness phase.

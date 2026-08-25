@@ -9,6 +9,7 @@ import {
 
 export type PrimaryNavigationId =
   | "overview"
+  | "brief"
   | "work"
   | "stores"
   | "equipment"
@@ -44,6 +45,12 @@ export const operatorNavigation: NavigationItem[] = [
     label: "Overview",
     href: "/app/overview",
     matchPrefixes: ["/app/overview"],
+  },
+  {
+    id: "brief",
+    label: "Owner brief",
+    href: "/app/brief",
+    matchPrefixes: ["/app/brief"],
   },
   {
     id: "work",
@@ -127,6 +134,8 @@ function roleCanSeeNavigationItem(role: OperatorRole, item: NavigationItem) {
   switch (item.id) {
     case "overview":
       return roleCanSeePrimaryNavigation(role, "home");
+    case "brief":
+      return role === "executive" || role === "facilities" || role === "regional";
     case "work":
       return roleCanSeePrimaryNavigation(role, "work");
     case "stores":
