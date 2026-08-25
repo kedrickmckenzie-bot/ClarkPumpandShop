@@ -162,7 +162,10 @@ class PostgresPreparedStatement {
 
   async run<Row extends PostgresRow>() {
     const result = await this.execute<Row>();
-    return compatibilityResult(result.rows);
+    // Surface affected-row counts through the D1-compatible meta shape so
+    // callers that branch on meta.changes (claims, deletes) behave identically
+    // on PostgreSQL.
+    return { ...compatibilityResult(result.rows), meta: result.rowCount != null ? { changes: result.rowCount } : {} };
   }
 
   async raw<Row extends unknown[]>() {

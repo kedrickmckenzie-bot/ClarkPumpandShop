@@ -643,7 +643,7 @@ export const opsPublicTokens = sqliteTable("ops_public_tokens", {
 }, (table) => [uniqueIndex("uidx_ops_public_tokens_hash").on(table.tokenHash), index("idx_ops_public_tokens_org_subject").on(table.organizationId, table.subjectType, table.subjectId), index("idx_ops_public_tokens_org_purpose_expiry").on(table.organizationId, table.purpose, table.expiresAt)]);
 
 export const opsSavedViews = sqliteTable("ops_saved_views", {
-  id: id(), organizationId: organizationId(), ownerMembershipId: text("owner_membership_id").notNull(), surface: text("surface").notNull(), name: text("name").notNull(), queryJson: text("query_json").notNull(), createdAt: createdAt(),
+  id: id(), organizationId: organizationId(), ownerMembershipId: text("owner_membership_id").notNull(), surface: text("surface").notNull(), name: text("name").notNull(), queryString: text("query_string").notNull(), createdAt: createdAt(),
 }, (table) => [uniqueIndex("uidx_ops_saved_views_org_owner_surface_name").on(table.organizationId, table.ownerMembershipId, table.surface, table.name), index("idx_ops_saved_views_org_owner_surface").on(table.organizationId, table.ownerMembershipId, table.surface)]);
 
 export const opsJobRuns = sqliteTable("ops_job_runs", {

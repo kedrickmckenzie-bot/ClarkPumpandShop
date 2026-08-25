@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   ChevronDown,
-  BookOpenText,
   ClipboardList,
   LayoutDashboard,
   Menu,
@@ -35,7 +34,6 @@ import styles from "./platform-shell.module.css";
 
 const iconByNavigationId: Record<NavigationItem["id"], LucideIcon> = {
   overview: LayoutDashboard,
-  brief: BookOpenText,
   work: ClipboardList,
   stores: Store,
   equipment: Wrench,

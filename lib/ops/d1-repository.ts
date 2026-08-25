@@ -319,7 +319,7 @@ function outboxMessageFrom(row: Row): OutboxMessage {
 
 function jobRunFrom(row: Row): JobRun { return { id: text(row, "id"), organizationId: text(row, "organization_id"), jobType: text(row, "job_type"), slotKey: text(row, "slot_key"), status: text(row, "status") as JobRun["status"], startedAt: text(row, "started_at"), finishedAt: maybeText(row, "finished_at") ?? null, processedCount: maybeNumber(row, "processed_count") ?? 0, failedCount: maybeNumber(row, "failed_count") ?? 0, detailsJson: text(row, "details_json"), createdAt: text(row, "created_at") }; }
 
-function savedViewFrom(row: Row): SavedView { return { id: text(row, "id"), organizationId: text(row, "organization_id"), ownerMembershipId: text(row, "owner_membership_id"), surface: text(row, "surface"), name: text(row, "name"), queryJson: text(row, "query_json"), createdAt: text(row, "created_at") }; }
+function savedViewFrom(row: Row): SavedView { return { id: text(row, "id"), organizationId: text(row, "organization_id"), ownerMembershipId: text(row, "owner_membership_id"), surface: text(row, "surface"), name: text(row, "name"), queryString: text(row, "query_string"), createdAt: text(row, "created_at") }; }
 
 class D1OpsRepository implements OpsRepository {
   constructor(
@@ -676,12 +676,12 @@ class D1OpsRepository implements OpsRepository {
   }
 
   async listOverdueEscalationCandidates(now: string, limit: number): Promise<WorkflowTask[]> {
-    const rows = await this.all("SELECT * FROM ops_workflow_tasks WHERE status IN ('open', 'in_progress') AND due_at IS NOT NULL AND due_at <= ? ORDER BY due_at, id LIMIT ?", [now, now, Math.max(1, Math.min(100, limit))]);
+    const rows = await this.all("SELECT * FROM ops_workflow_tasks WHERE status IN ('open', 'in_progress') AND due_at IS NOT NULL AND due_at <= ? ORDER BY due_at, id LIMIT ?", [now, Math.max(1, Math.min(100, limit))]);
     return rows.map(workflowTaskFrom);
   }
 
   async tryBeginJobRun(input: { organizationId: OpsId; jobRunId: OpsId; jobType: string; slotKey: string; startedAt: string }): Promise<boolean> {
-    const result = await this.db.prepare("INSERT OR IGNORE INTO ops_job_runs (id, organization_id, job_type, slot_key, status, started_at, processed_count, failed_count) VALUES (?, ?, ?, ?, ?, ?, 0, 0) RETURNING id").bind(input.jobRunId, input.organizationId, input.jobType, input.slotKey, "running", input.startedAt).run();
+    const result = await this.db.prepare("INSERT OR IGNORE INTO ops_job_runs (id, organization_id, job_type, slot_key, status, started_at, processed_count, failed_count, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?) RETURNING id").bind(input.jobRunId, input.organizationId, input.jobType, input.slotKey, "running", input.startedAt, input.startedAt).run();
     const meta = (result as { meta?: { changes?: number } }).meta;
     const returned = ((result as { results?: unknown[] }).results ?? (result as { rows?: unknown[] }).rows ?? []) as unknown[];
     return Number(meta?.changes ?? 0) > 0 || returned.length > 0;
@@ -697,9 +697,9 @@ class D1OpsRepository implements OpsRepository {
 
   async listRecentJobRuns(organizationId: OpsId, limit: number): Promise<JobRun[]> { const rows = await this.all("SELECT * FROM ops_job_runs WHERE organization_id = ? ORDER BY started_at DESC, id DESC LIMIT ?", [organizationId, Math.max(1, Math.min(100, limit))]); return rows.map(jobRunFrom); }
 
-  async outboxStatusCounts(): Promise<Array<{ status: string; count: number }>> { const rows = await this.all("SELECT status, COUNT(*) AS count FROM ops_outbox_messages GROUP BY status"); return rows.map((row) => ({ status: text(row, "status"), count: Number(row.count) })); }
+  async outboxStatusCounts(organizationId: OpsId): Promise<Array<{ status: string; count: number }>> { const rows = await this.all("SELECT status, COUNT(*) AS count FROM ops_outbox_messages WHERE organization_id = ? GROUP BY status", [organizationId]); return rows.map((row) => ({ status: text(row, "status"), count: Number(row.count) })); }
   async listSavedViews(organizationId: OpsId, ownerMembershipId: OpsId, surface: string): Promise<SavedView[]> { const rows = await this.all("SELECT * FROM ops_saved_views WHERE organization_id = ? AND owner_membership_id = ? AND surface = ? ORDER BY name", [organizationId, ownerMembershipId, surface]); return rows.map(savedViewFrom); }
-  async putSavedView(input: { organizationId: OpsId; id: OpsId; ownerMembershipId: OpsId; surface: string; name: string; queryJson: string; createdAt: string }): Promise<void> { await this.atomicWrite([{ sql: "DELETE FROM ops_saved_views WHERE organization_id = ? AND owner_membership_id = ? AND surface = ? AND name = ?", params: [input.organizationId, input.ownerMembershipId, input.surface, input.name] }, { sql: "INSERT INTO ops_saved_views (id, organization_id, owner_membership_id, surface, name, query_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", params: [input.id, input.organizationId, input.ownerMembershipId, input.surface, input.name, input.queryJson, input.createdAt] }]); }
+  async putSavedView(input: { organizationId: OpsId; id: OpsId; ownerMembershipId: OpsId; surface: string; name: string; queryString: string; createdAt: string }): Promise<void> { await this.atomicWrite([{ sql: "DELETE FROM ops_saved_views WHERE organization_id = ? AND owner_membership_id = ? AND surface = ? AND name = ?", params: [input.organizationId, input.ownerMembershipId, input.surface, input.name] }, { sql: "INSERT INTO ops_saved_views (id, organization_id, owner_membership_id, surface, name, query_string, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", params: [input.id, input.organizationId, input.ownerMembershipId, input.surface, input.name, input.queryString, input.createdAt] }]); }
   async deleteSavedView(organizationId: OpsId, ownerMembershipId: OpsId, id: OpsId): Promise<boolean> { const result = await this.db.prepare("DELETE FROM ops_saved_views WHERE organization_id = ? AND owner_membership_id = ? AND id = ?").bind(organizationId, ownerMembershipId, id).run(); const meta = (result as { meta?: { changes?: number } }).meta; return Number(meta?.changes ?? 0) > 0; }
 
   async recordOutboxDeliveryOutcome(input: OutboxDeliveryOutcome): Promise<void> {

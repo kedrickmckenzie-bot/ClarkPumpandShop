@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ListView } from "@/components/ops/views";
+import { ListSurface } from "@/components/ops/views";
 import { SavedViewsBar } from "@/components/workspace/saved-views";
 import { loadListModel, loadSavedViewsModel } from "../_data/operator-loader";
 
@@ -16,7 +16,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   return (
     <>
       <SavedViewsBar model={{ surface: "work-orders", currentQuery, views: savedViews }} />
-      <ListView model={model} />
+      <ListSurface model={model} surface="work-orders" searchParams={params} />
     </>
   );
 }

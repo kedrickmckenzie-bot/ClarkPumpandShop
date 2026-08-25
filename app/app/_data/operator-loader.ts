@@ -410,7 +410,7 @@ export async function loadJobHealthModel() {
   const repository = await getServerOpsRepository();
   const [runs, outboxCounts] = await Promise.all([
     repository.listRecentJobRuns(context.session.organizationId, 20),
-    repository.outboxStatusCounts(),
+    repository.outboxStatusCounts(context.session.organizationId),
   ]);
   return { generatedAt: context.fixture.asOf, runs, outboxCounts };
 }

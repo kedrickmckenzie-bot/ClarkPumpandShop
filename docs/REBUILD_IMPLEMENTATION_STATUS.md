@@ -226,3 +226,19 @@ Prior-snapshot results from the same settled worktree on August 20, 2026 (supers
 ## Next action
 
 Publish this settled source privately, allow the protected hosted database to run its additive migration/enrichment path (now through D1 `0027`), and complete the final browser walkthrough against the hosted URL. Configure cron scheduling for the new outbox `scheduled` handler as part of that hosted step. Production authentication, external notification transports behind the existing outbox worker contract, imports, and broad scale hardening remain a later production-readiness phase.
+
+## Correctness repair pass (added August 24, 2026)
+
+An external review of the previous commit (5ff7437) identified five correctness defects and several honesty/UX gaps. All were verified against source, then repaired in this commit. This pass repairs defects; it is **not** a new capability wave and not a completion of the platform rebuild.
+
+Defects fixed:
+
+1. `listOverdueEscalationCandidates` bound three SQL parameters to a two-placeholder statement; every real SLA escalation cycle would have failed on D1/PostgreSQL. Fixture tests masked it. Fixed, with a PGlite regression test that runs the worker through the actual SQL adapter.
+2. `outboxStatusCounts` was tenant-unbounded and rendered inside one tenant's admin page. It now requires and filters by `organizationId`, with fixture- and engine-level isolation tests.
+3. Saved views stored a URL query string into a PostgreSQL JSONB column, which rejects non-JSON text. The column is now TEXT named `query_string` on both dialects (D1 migration 0030, PostgreSQL migration 0025), the domain field is renamed `queryString`, and a write/read/replace/delete round trip is covered on PGlite.
+4. The Owner Brief summed every `identified_exposure` value event, so one invoice carrying authorization + warranty + duplicate flags counted its dollars once per flag. The brief now reports distinct invoices under review at invoice totals, each counted once, plus separately-labeled other exposure.
+5. The lifecycle decision queue treated any latest capital_review recommendation as awaiting a decision even though persisted recommendations always carry a decision. Decisions are now derived outstanding states (review required, investigation underway, deferred, repair approved, replacement approved, closed by recorded outcome), including replace recommendations.
+
+Additional repairs: per-organization job-run success status (was mixed with global cycle counters), period-qualified "work orders opened" store lines with a printed definition, a full PM obligation breakdown beside the compliance ratio (late, missed, open-in-window, waived, unscheduled are no longer invisible), drill-through links on every principal Owner Brief metric, work orders restored to the tile-capable list surface while keeping saved views, operational queues default to dense tables (cards remain available via toggle; stores default to cards), six-destination navigation restored with one role-aware Overview slot (executives land on `/app/brief`; the route stays reachable as a secondary page), worker actor names read from the centralized presentation config instead of hardcoding the temporary brand, `apply-local-d1.mjs` is idempotent via a marker table and documented local-only, and the PostgreSQL adapter now surfaces affected-row counts so claim/delete semantics match D1.
+
+Known debt deliberately not solved here: executive calculations still load tenant snapshots rather than server-side aggregates (demo architecture); deferred lifecycle recommendations have no modeled re-review date; the stage-driven work-order case screen remains future work.

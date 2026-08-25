@@ -19,9 +19,9 @@ export async function POST(request: Request) {
     }
 
     const name = formText(formData, "name", { required: true, max: 60 });
-    const queryJson = formText(formData, "query", { required: true, max: 1000 });
+    const queryString = formText(formData, "query", { required: true, max: 1000 });
     // The stored query must be a well-formed URLSearchParams payload.
-    const params = new URLSearchParams(queryJson);
+    const params = new URLSearchParams(queryString);
     if ([...params.keys()].length === 0) {
       return Response.json({ error: "A saved view needs at least one filter." }, { status: 422 });
     }
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       ownerMembershipId: membershipId,
       surface,
       name,
-      queryJson,
+      queryString,
       createdAt: new Date().toISOString(),
     });
     return relativeRedirect303(returnTo);

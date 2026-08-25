@@ -1,0 +1,1 @@
+ALTER TABLE `ops_saved_views` RENAME COLUMN `query_json` TO `query_string`;

@@ -18,7 +18,7 @@ export function SavedViewsBar({ model }: { model: SavedViewsBarModel }) {
         {views.length === 0 ? <span className={styles.empty}>None yet</span> : null}
         {views.map((view) => (
           <span key={view.id} className={styles.chip}>
-            <Link className={styles.chipLink} href={`/app/${surface}?${view.queryJson}`}>
+            <Link className={styles.chipLink} href={`/app/${surface}?${view.queryString}`}>
               {view.name}
             </Link>
             <form action="/api/ops/saved-views" method="post" className={styles.deleteForm}>

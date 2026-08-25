@@ -21,6 +21,7 @@ import {
   type PostgresQueryResult,
 } from "@/lib/ops/postgres-repository";
 import { seedOpsRepository } from "@/lib/ops/seed";
+import { runSlaEscalationCycle } from "@/lib/ops/job-workers";
 import {
   reviewRequestImpactAssessment,
   type RequestImpactAssessmentDraft,
@@ -578,4 +579,119 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
       { cycle: 2, decision: "verified", siteVisitWorkOrderId: returnCheckout.siteVisitWorkOrders[0]!.id },
     ]);
   }, 120_000);
-});
+
+  it("runs the SLA escalation worker through the SQL adapter without bind mismatches", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const repository = createOpsPostgresRepository(pool);
+    await seedOpsRepository(repository, fixture);
+    const organizationId = fixture.organizations[0].id;
+
+    // Regression: listOverdueEscalationCandidates previously bound three
+    // parameters to a two-placeholder statement; PGlite rejects the mismatch.
+    await database.query(
+      `UPDATE ops_workflow_tasks t SET due_at = '2026-01-01T00:00:00.000Z'
+       WHERE t.organization_id = $1 AND t.status IN ('open', 'in_progress')
+         AND t.escalation_destination IS NOT NULL
+         AND EXISTS (SELECT 1 FROM ops_work_orders w WHERE w.organization_id = t.organization_id AND w.id = t.work_order_id AND w.status NOT IN ('resolved', 'closed', 'cancelled'))`,
+      [organizationId],
+    );
+
+    const summary = await runSlaEscalationCycle({
+      repository,
+      clock: { now: () => "2026-08-20T09:00:00.000Z" },
+    });
+    expect(summary.organizationsSkipped).toBe(0);
+    expect(summary.escalatedCount).toBeGreaterThan(0);
+    // Tasks already overdue against a terminal work order are honest failures;
+    // the worker must count exactly those and nothing else.
+    const expectedFailures = await database.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM ops_workflow_tasks t
+       WHERE t.organization_id = $1 AND t.status IN ('open', 'in_progress')
+         AND t.due_at IS NOT NULL AND t.due_at <= $2
+         AND t.work_order_id IS NULL`,
+      [organizationId, "2026-08-20T09:00:00.000Z"],
+    );
+    expect(summary.failedCount).toBe(expectedFailures.rows[0]!.count);
+
+    // The per-organization job run records this org's own outcome.
+    const runs = await database.query<{ status: string; failed_count: number }>(
+      "SELECT status, failed_count FROM ops_job_runs WHERE organization_id = $1 AND job_type = 'sla_escalation'",
+      [organizationId],
+    );
+    expect(runs.rows.length).toBe(1);
+    expect(runs.rows[0]).toMatchObject({ status: "succeeded", failed_count: expectedFailures.rows[0]!.count });
+
+    // Slot idempotency still holds through the SQL adapter.
+    const second = await runSlaEscalationCycle({
+      repository,
+      clock: { now: () => "2026-08-20T09:30:00.000Z" },
+    });
+    expect(second.organizationsSkipped).toBe(summary.organizationsConsidered);
+  }, 120_000);
+
+  it("scopes outbox status counts to the requesting organization", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const repository = createOpsPostgresRepository(pool);
+    await seedOpsRepository(repository, fixture);
+    const organizationId = fixture.organizations[0].id;
+
+    // A foreign tenant with its own outbox traffic must be invisible.
+    await database.transaction(async (transaction) => {
+      await transaction.exec("INSERT INTO ops_organizations (id, name, slug, work_order_prefix, created_at) VALUES ('org-foreign-counts', 'Foreign Tenant', 'foreign-counts', 'FRX', now())");
+      for (let index = 0; index < 3; index += 1) {
+        await transaction.exec(`INSERT INTO ops_outbox_messages (id, organization_id, topic, aggregate_type, aggregate_id, payload_json, status, available_at, created_at, attempt_count) VALUES ('outbox-foreign-${index}', 'org-foreign-counts', 'ops.foreign.topic', 'test', 'aggregate-${index}', '{}', 'pending', now(), now(), 0)`);
+      }
+    });
+
+    const ownCounts = await repository.outboxStatusCounts(organizationId);
+    const ownTotal = ownCounts.reduce((sum, row) => sum + row.count, 0);
+    const expected = await database.query<{ status: string; count: number }>(
+      "SELECT status, count(*)::int AS count FROM ops_outbox_messages WHERE organization_id = $1 GROUP BY status",
+      [organizationId],
+    );
+    expect(ownTotal).toBeGreaterThan(0);
+    expect(ownCounts).toEqual(expected.rows.map((row) => ({ status: row.status, count: row.count })));
+
+    const foreignCounts = await repository.outboxStatusCounts("org-foreign-counts");
+    expect(foreignCounts).toEqual([{ status: "pending", count: 3 }]);
+  }, 60_000);
+
+  it("stores saved views as plain query strings and round-trips them on PostgreSQL", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const repository = createOpsPostgresRepository(pool);
+    await seedOpsRepository(repository, fixture);
+    const organizationId = fixture.organizations[0].id;
+    const membershipId = "membership-northline-facilities";
+
+    // Regression: the column was JSONB and rejected URL-search strings.
+    await repository.putSavedView({
+      organizationId,
+      id: "saved-view-pg-roundtrip",
+      ownerMembershipId: membershipId,
+      surface: "work-orders",
+      name: "Open at store 101",
+      queryString: "status=open&store=store-northline-101",
+      createdAt: "2026-08-20T09:00:00.000Z",
+    });
+
+    const views = await repository.listSavedViews(organizationId, membershipId, "work-orders");
+    const roundTripped = views.find((view) => view.id === "saved-view-pg-roundtrip");
+    expect(roundTripped).toBeDefined();
+    expect(roundTripped!.queryString).toBe("status=open&store=store-northline-101");
+
+    // Saving the same name replaces without duplicating.
+    await repository.putSavedView({
+      organizationId,
+      id: "saved-view-pg-roundtrip-2",
+      ownerMembershipId: membershipId,
+      surface: "work-orders",
+      name: "Open at store 101",
+      queryString: "status=open",
+      createdAt: "2026-08-20T09:05:00.000Z",
+    });
+    const replaced = await repository.listSavedViews(organizationId, membershipId, "work-orders");
+    expect(replaced.filter((view) => view.name === "Open at store 101")).toHaveLength(1);
+    expect(replaced.find((view) => view.name === "Open at store 101")!.queryString).toBe("status=open");
+
+    await expect(repository.deleteSavedView(organizationId, membershipId, "saved-view-pg-roundtrip-2")).resolves.toBe(true);
+  }, 60_000);});

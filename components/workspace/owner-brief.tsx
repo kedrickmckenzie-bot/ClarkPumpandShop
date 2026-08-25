@@ -12,11 +12,22 @@ function hrefFor(drill: OwnerBrief["decisionsNeeded"][number]["drillThrough"]) {
 
 const decisionBadge: Record<OwnerBrief["decisionsNeeded"][number]["kind"], string> = {
   capital_review: "Capital decision",
+  replacement_review: "Replacement review",
   approval: "Approval waiting",
   escalated_task: "Escalated",
 };
 
 export function OwnerBriefSection({ model }: { model: OwnerBrief }) {
+  const obligations = model.pmCompliance.obligations;
+  const obligationSummary = [
+    `Completed on time or early: ${obligations.completedOnTimeOrEarly}`,
+    `Completed late: ${obligations.completedLate}`,
+    `Missed: ${obligations.missed}`,
+    `Finished without a timing record: ${obligations.finishedWithoutTimingRecord}`,
+    `Still open inside the completion window: ${obligations.openInWindow}`,
+    `Waived: ${obligations.waived}`,
+    `Not yet scheduled: ${obligations.notYetScheduled}`,
+  ].join(" · ");
   return (
     <section className={styles.brief} aria-labelledby="owner-brief-heading">
       <header className={styles.header}>
@@ -25,21 +36,21 @@ export function OwnerBriefSection({ model }: { model: OwnerBrief }) {
       </header>
 
       <div className={styles.moneyRow}>
-        <div className={styles.moneyCell}>
+        <Link className={styles.moneyCell} href={model.drillThrough.recordedSpendHref}>
           <span className={styles.moneyLabel}>Recorded work spend</span>
           <strong>{usd(model.money.recordedSpendMinor)}</strong>
-          <span className={styles.moneyNote}>{model.money.currency} · cost lines with service dates in the period</span>
-        </div>
-        <div className={styles.moneyCell}>
-          <span className={styles.moneyLabel}>Identified exposure</span>
-          <strong className={styles.warningText}>{usd(model.money.identifiedExposureMinor)}</strong>
-          <span className={styles.moneyNote}>Invoice and warranty flags awaiting a human decision</span>
-        </div>
-        <div className={styles.moneyCell}>
+          <span className={styles.moneyNote}>{model.money.currency} · cost lines with service dates in the period — open every cost line</span>
+        </Link>
+        <Link className={styles.moneyCell} href={model.drillThrough.invoiceReviewHref}>
+          <span className={styles.moneyLabel}>Invoices under review</span>
+          <strong className={styles.warningText}>{usd(model.money.invoiceReviewAmountMinor)}</strong>
+          <span className={styles.moneyNote}>{model.money.invoiceReviewCount} invoice{model.money.invoiceReviewCount === 1 ? "" : "s"} with open review flags, each counted once at its full total{model.money.otherIdentifiedExposureMinor > 0 ? ` · other exposure ${usd(model.money.otherIdentifiedExposureMinor)}` : ""}</span>
+        </Link>
+        <Link className={styles.moneyCell} href={model.drillThrough.recordedSpendHref}>
           <span className={styles.moneyLabel}>Verified savings recovered</span>
           <strong className={styles.positiveText}>{usd(model.money.realizedVerifiedMinor)}</strong>
           <span className={styles.moneyNote}>Deductions, credits, and warranty recoveries backed by source records</span>
-        </div>
+        </Link>
         <div className={styles.moneyCell}>
           <span className={styles.moneyLabel}>Estimated opportunity</span>
           <strong>{usd(model.money.estimatedOpportunityMinor)}</strong>
@@ -51,28 +62,33 @@ export function OwnerBriefSection({ model }: { model: OwnerBrief }) {
         <div>
           <dt>PM compliance</dt>
           <dd>
-            {model.pmCompliance.denominator > 0
-              ? `${Math.round((model.pmCompliance.numerator / model.pmCompliance.denominator) * 100)}% (${model.pmCompliance.numerator} of ${model.pmCompliance.denominator})`
-              : "No PM obligations were due in this period"}
+            <Link href={model.drillThrough.pmComplianceHref}>
+              {model.pmCompliance.denominator > 0
+                ? `${Math.round((model.pmCompliance.numerator / model.pmCompliance.denominator) * 100)}% (${model.pmCompliance.numerator} of ${model.pmCompliance.denominator})`
+                : "No PM obligations were due in this period"}
+            </Link>
             <small>{model.pmCompliance.method}</small>
+            <small>{obligationSummary}</small>
           </dd>
         </div>
         <div>
           <dt>Work orders</dt>
           <dd>
-            {model.headline.openedWorkOrders} opened · {model.headline.activeWorkOrders} active
+            <Link href={model.drillThrough.activeWorkOrdersHref}>
+              {model.headline.openedWorkOrders} opened · {model.headline.activeWorkOrders} active
+            </Link>
+            <small>{model.workOrderDefinition}</small>
             <small>Active means not yet resolved or closed.</small>
           </dd>
         </div>
         <div>
           <dt>Escalations active</dt>
           <dd>
-            {model.headline.escalationsActive}
+            <Link href={model.drillThrough.escalationsHref}>{model.headline.escalationsActive}</Link>
             <small>Each one has an accountable owner, a due time, and a destination.</small>
           </dd>
         </div>
       </dl>
-
       {model.decisionsNeeded.length > 0 ? (
         <div className={styles.decisionsBlock}>
           <h3>What needs you</h3>
@@ -104,8 +120,8 @@ export function OwnerBriefSection({ model }: { model: OwnerBrief }) {
             <thead>
               <tr>
                 <th scope="col">Store</th>
-                <th scope="col">Work orders touched</th>
-                <th scope="col">Recorded spend</th>
+                <th scope="col">Work orders opened in period</th>
+                <th scope="col">Recorded spend in period</th>
               </tr>
             </thead>
             <tbody>
@@ -114,7 +130,7 @@ export function OwnerBriefSection({ model }: { model: OwnerBrief }) {
                   <td>
                     <Link href={`/app/stores/${line.storeId}`}>{line.storeNumber} · {line.storeName}</Link>
                   </td>
-                  <td>{line.workOrdersTouched}</td>
+                  <td>{line.workOrdersOpenedInPeriod}</td>
                   <td>{usd(line.recordedSpendMinor)}</td>
                 </tr>
               ))}

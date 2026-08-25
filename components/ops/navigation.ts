@@ -9,7 +9,6 @@ import {
 
 export type PrimaryNavigationId =
   | "overview"
-  | "brief"
   | "work"
   | "stores"
   | "equipment"
@@ -45,12 +44,6 @@ export const operatorNavigation: NavigationItem[] = [
     label: "Overview",
     href: "/app/overview",
     matchPrefixes: ["/app/overview"],
-  },
-  {
-    id: "brief",
-    label: "Owner brief",
-    href: "/app/brief",
-    matchPrefixes: ["/app/brief"],
   },
   {
     id: "work",
@@ -134,8 +127,6 @@ function roleCanSeeNavigationItem(role: OperatorRole, item: NavigationItem) {
   switch (item.id) {
     case "overview":
       return roleCanSeePrimaryNavigation(role, "home");
-    case "brief":
-      return role === "executive" || role === "facilities" || role === "regional";
     case "work":
       return roleCanSeePrimaryNavigation(role, "work");
     case "stores":
@@ -187,6 +178,11 @@ export function navigationForRole(role: OperatorRole) {
   return operatorNavigation
     .filter((item) => roleCanSeeNavigationItem(role, item))
     .map((item) => {
+      if (item.id === "overview" && role === "executive") {
+        // One role-aware Overview slot: executives land on the Owner Brief.
+        // /app/brief stays reachable for other roles via its secondary route.
+        return { ...item, href: "/app/brief", matchPrefixes: ["/app/overview", "/app/brief"] };
+      }
       if (!item.contextGroup) return item;
       const firstVisibleItem = visibleContextGroup(role, item.contextGroup)?.items[0];
       return firstVisibleItem ? { ...item, href: firstVisibleItem.href } : item;

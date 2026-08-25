@@ -371,9 +371,13 @@ function DataTable({ table }: { table: TableViewModel }) {
 
 type SurfaceViewMode = "tile" | "table";
 
+/** Surfaces whose records read best as summary cards; every operational queue defaults to a dense table. */
+const TILE_DEFAULT_SURFACES = new Set(["stores"]);
+
 export function ListSurface({ model, surface, searchParams }: { model: ListPageViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
   const viewParam = searchParams.view;
-  const viewMode: SurfaceViewMode = typeof viewParam === "string" && viewParam === "table" ? "table" : "tile";
+  const requestedView = typeof viewParam === "string" && (viewParam === "table" || viewParam === "tile") ? viewParam : null;
+  const viewMode: SurfaceViewMode = requestedView ?? (TILE_DEFAULT_SURFACES.has(surface) ? "tile" : "table");
   const toggleQuery = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
     if (key === "view" || value === undefined) continue;

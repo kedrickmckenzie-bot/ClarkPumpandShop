@@ -1701,7 +1701,7 @@ export const opsSavedViews = pgTable("ops_saved_views", {
   ownerMembershipId: text("owner_membership_id").notNull(),
   surface: text("surface").notNull(),
   name: text("name").notNull(),
-  queryJson: jsonb("query_json").$type<Record<string, unknown>>().notNull(),
+  queryString: text("query_string").notNull(),
   createdAt: createdAt(),
 }, (table) => [
   unique("uq_ops_saved_views_org_id").on(table.organizationId, table.id),

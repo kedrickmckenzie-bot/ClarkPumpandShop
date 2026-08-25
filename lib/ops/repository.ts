@@ -302,9 +302,9 @@ export interface OpsRepository {
   listPmPlans(): Promise<PmPlan[]>;
   listPmOccurrencesForPlan(organizationId: OpsId, planId: OpsId): Promise<PmOccurrence[]>;
   listRecentJobRuns(organizationId: OpsId, limit: number): Promise<JobRun[]>;
-  outboxStatusCounts(): Promise<Array<{ status: string; count: number }>>;
+  outboxStatusCounts(organizationId: OpsId): Promise<Array<{ status: string; count: number }>>;
   listSavedViews(organizationId: OpsId, ownerMembershipId: OpsId, surface: string): Promise<SavedView[]>;
-  putSavedView(input: { organizationId: OpsId; id: OpsId; ownerMembershipId: OpsId; surface: string; name: string; queryJson: string; createdAt: IsoDateTime }): Promise<void>;
+  putSavedView(input: { organizationId: OpsId; id: OpsId; ownerMembershipId: OpsId; surface: string; name: string; queryString: string; createdAt: IsoDateTime }): Promise<void>;
   deleteSavedView(organizationId: OpsId, ownerMembershipId: OpsId, id: OpsId): Promise<boolean>;}
 
 export type OutboxDeliveryOutcome =

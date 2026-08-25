@@ -1701,8 +1701,8 @@ export interface SavedView {
   /** Which list surface this view belongs to, e.g. "work-orders". */
   surface: string;
   name: string;
-  /** URLSearchParams-encoded filter state. */
-  queryJson: string;
+  /** URLSearchParams-encoded filter state, e.g. "status=open&store=store-104". */
+  queryString: string;
   createdAt: IsoDateTime;
 }
 

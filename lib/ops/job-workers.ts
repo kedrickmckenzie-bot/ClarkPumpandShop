@@ -1,5 +1,6 @@
 import type { OpsCommandServices } from "./commands";
 import { escalateWorkflowTask } from "./workflow-task-commands";
+import { productPresentation } from "../product/presentation";
 import type { WorkflowTask } from "./types";
 
 /**
@@ -35,7 +36,8 @@ export interface SlaEscalationCycleSummary {
   failedCount: number;
 }
 
-const systemActorName = "TraceOps SLA worker";
+const workerName = productPresentation.identity.workingName;
+const systemActorName = `${workerName} SLA worker`;
 const jobType = "sla_escalation";
 
 export async function runSlaEscalationCycle(
@@ -102,7 +104,7 @@ export async function runSlaEscalationCycle(
     await repository.finishJobRun({
       organizationId,
       jobRunId,
-      status: failed > 0 && summary.escalatedCount === 0 ? "failed" : "succeeded",
+      status: jobRunStatus(processed, failed),
       finishedAt: clock.now(),
       processedCount: processed,
       failedCount: failed,
@@ -131,7 +133,12 @@ export interface PmRecurrenceCycleSummary {
 }
 
 const pmJobType = "pm_recurrence";
-const pmActorName = "TraceOps PM recurrence worker";
+const pmActorName = `${workerName} PM recurrence worker`;
+
+/** Per-organization job-run status: failed only when every item this org processed failed. */
+function jobRunStatus(processed: number, failed: number): "succeeded" | "failed" {
+  return processed > 0 && failed >= processed ? "failed" : "succeeded";
+}
 
 function insertStatement(table: string, values: Record<string, unknown>) {
   const entries = Object.entries(values).filter(([, value]) => value !== undefined);
@@ -189,7 +196,7 @@ export async function runPmRecurrenceCycle(
       }
       processed += 1;
     }
-    await repository.finishJobRun({ organizationId, jobRunId, status: failed > 0 && summary.occurrencesCreated === 0 ? "failed" : "succeeded", finishedAt: clock.now(), processedCount: processed, failedCount: failed });
+    await repository.finishJobRun({ organizationId, jobRunId, status: jobRunStatus(processed, failed), finishedAt: clock.now(), processedCount: processed, failedCount: failed });
   }
   return summary;
 }
