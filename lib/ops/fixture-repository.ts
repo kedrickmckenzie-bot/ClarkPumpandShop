@@ -1,4 +1,4 @@
-import type { JobRun, OutboxMessage, PmOccurrence, PmPlan, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
+import type { JobRun, NotificationRecipient, NotificationRule, OutboxMessage, PmOccurrence, PmPlan, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
 import {
   NORTHLINE_AS_OF,
@@ -161,7 +161,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_invoices: "invoices", ops_invoice_lines: "invoiceLines", ops_invoice_line_allocations: "invoiceLineAllocations", ops_invoice_exceptions: "invoiceExceptions",
     ops_invoice_adjustments: "invoiceAdjustments", ops_service_discrepancies: "serviceDiscrepancies", ops_value_events: "valueEvents",
     ops_cost_lines: "costLines", ops_invoice_references: "invoiceReferences", ops_invoice_allocations: "invoiceAllocations",
-    ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_job_runs: "jobRuns", ops_service_appointments: "serviceAppointments", ops_vendor_continuations: "vendorContinuations", ops_saved_views: "savedViews", ops_public_tokens: "publicTokens",
+    ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_notification_rules: "notificationRules", ops_job_runs: "jobRuns", ops_service_appointments: "serviceAppointments", ops_vendor_continuations: "vendorContinuations", ops_saved_views: "savedViews", ops_public_tokens: "publicTokens",
   };
   const key = mapping[table];
   if (!key) throw new Error(`Fixture repository does not support table ${table}`);
@@ -177,6 +177,7 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_component_lifecycle_events") { row.laborCost = { amountMinor: row.laborCostMinor, currency: row.currency }; row.partCost = { amountMinor: row.partCostMinor, currency: row.currency }; delete row.laborCostMinor; delete row.partCostMinor; delete row.currency; }
   if (table === "ops_stores") { row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.locationPolicyEnabled = Boolean(row.locationPolicyEnabled); delete row.aliasesJson; delete row.searchText; }
   if (table === "ops_vendors") { row.preferred = Boolean(row.preferred); delete row.searchText; }
+  if (table === "ops_notification_rules") row.emailEnabled = Boolean(row.emailEnabled);
   if (table === "ops_vendor_specialties") { row.searchAliases = JSON.parse(String(row.searchAliasesJson ?? "[]")); delete row.searchAliasesJson; }
   if (table === "ops_vendor_qualifications") { row.pmWork = Boolean(row.pmWork); row.emergencyResponse = Boolean(row.emergencyResponse); row.warrantyWork = Boolean(row.warrantyWork); row.afterHours = Boolean(row.afterHours); if (row.maximumJobAmountMinor !== undefined) row.maximumJobAmount = { amountMinor: row.maximumJobAmountMinor, currency: row.currency ?? "USD" }; delete row.maximumJobAmountMinor; delete row.currency; }
   if (table === "ops_vendor_compliance_documents") row.blocking = Boolean(row.blocking);
@@ -415,6 +416,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listComponentTemplates(organizationId: OpsId, equipmentTemplateId: OpsId) { return clone(this.fixture.componentTemplates.filter((row) => row.organizationId === organizationId && row.equipmentTemplateId === equipmentTemplateId).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))); }
   async getStore(organizationId: OpsId, storeId: OpsId) { return clone(this.fixture.stores.find((row) => row.organizationId === organizationId && row.id === storeId) ?? null); }
   async getVendor(organizationId: OpsId, vendorId: OpsId) { return clone(this.fixture.vendors.find((row) => row.organizationId === organizationId && row.id === vendorId) ?? null); }
+  async listNotificationRules(organizationId: OpsId) { return clone((this.fixture.notificationRules ?? []).filter((row) => row.organizationId === organizationId).sort((a, b) => a.eventKey.localeCompare(b.eventKey))); }
+  async upsertNotificationRule(input: Parameters<OpsRepository["upsertNotificationRule"]>[0]) { const candidate = clone(this.fixture); candidate.notificationRules ??= []; const existing = candidate.notificationRules.find((row) => row.organizationId === input.organizationId && row.eventKey === input.eventKey); if (existing) Object.assign(existing, { emailEnabled: input.emailEnabled, recipientRole: input.recipientRole, updatedByMembershipId: input.updatedByMembershipId, updatedAt: input.occurredAt }); else candidate.notificationRules.push({ id: input.id, organizationId: input.organizationId, eventKey: input.eventKey, emailEnabled: input.emailEnabled, recipientRole: input.recipientRole, updatedByMembershipId: input.updatedByMembershipId, createdAt: input.occurredAt, updatedAt: input.occurredAt }); this.fixture = candidate; }
+  async listNotificationRecipients(organizationId: OpsId, role: NotificationRule["recipientRole"]): Promise<NotificationRecipient[]> { return clone(this.fixture.memberships.filter((membership) => membership.organizationId === organizationId && membership.role === role && membership.status === "active").flatMap((membership) => { const user = this.fixture.users.find((candidate) => candidate.id === membership.userId && candidate.status === "active"); return user ? [{ membershipId: membership.id, userId: user.id, email: user.email, displayName: user.displayName, role }] : []; })); }
   async getMembership(organizationId: OpsId, membershipId: OpsId) { return clone(this.fixture.memberships.find((row) => row.organizationId === organizationId && row.id === membershipId) ?? null); }
   async listScopeGrantsForMembership(organizationId: OpsId, membershipId: OpsId) { return clone(this.fixture.scopeGrants.filter((row) => row.organizationId === organizationId && row.membershipId === membershipId).sort((left, right) => left.scopeKind.localeCompare(right.scopeKind) || left.scopeId.localeCompare(right.scopeId) || left.id.localeCompare(right.id))); }
   async getRequest(organizationId: OpsId, requestId: OpsId) { return clone(this.fixture.requests.find((row) => row.organizationId === organizationId && row.id === requestId) ?? null); }

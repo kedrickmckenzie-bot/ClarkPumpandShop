@@ -484,6 +484,15 @@ function rollingYearStart(asOf: string): string {
   return start.toISOString().slice(0, 10);
 }
 
+function spendPeriod(asOf: string, key: string | undefined) {
+  const selected = key === "3m" || key === "6m" || key === "ytd" ? key : "12m";
+  const asOfDate = new Date(asOf);
+  const start = selected === "ytd"
+    ? `${asOf.slice(0, 4)}-01-01`
+    : new Date(Date.UTC(asOfDate.getUTCFullYear(), asOfDate.getUTCMonth() - (selected === "3m" ? 2 : selected === "6m" ? 5 : 11), 1)).toISOString().slice(0, 10);
+  return { key: selected, start, label: selected === "ytd" ? `Year to date from ${date(start)}` : `Rolling ${selected.slice(0, -1)} months from ${date(start)}`, months: selected === "ytd" ? asOfDate.getUTCMonth() + 1 : Number(selected.slice(0, -1)) };
+}
+
 function rollingMonthKeys(asOf: string, count = 12): string[] {
   const end = new Date(`${asOf.slice(0, 7)}-01T00:00:00Z`);
   return Array.from({ length: count }, (_, index) => {
@@ -510,6 +519,7 @@ function costBreakdown(
     linkLabel?: string;
     sourceHref?: string;
     sourceLabel?: string;
+    amountLabel?: string;
   } = {},
 ): BreakdownViewModel {
   const entries = [...values.entries()].sort((a, b) => b[1] - a[1]);
@@ -524,7 +534,7 @@ function costBreakdown(
       label: options.labelFor?.(key) ?? sentence(key || "unclassified"),
       value,
       formattedValue: money(value),
-      shareLabel: total ? `${Math.round((value / total) * 100)}% of recorded cost` : "No recorded cost",
+      shareLabel: total ? `${Math.round((value / total) * 100)}% of ${options.amountLabel ?? "recorded cost"}` : `No ${options.amountLabel ?? "recorded cost"}`,
       tone: index === 0 ? "warning" : "neutral",
       link: { href: hrefFor(key), label: options.linkLabel ?? "Open source work" },
     })),
@@ -2754,6 +2764,8 @@ export function buildListModel(
       { id: "vendors", label: "Vendors", href: "/app/vendors", cells: [{ key: "area", value: "Approved vendor network" }, { key: "summary", value: `${fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).length} approved vendors` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configured", tone: "positive" }] },
       { id: "taxonomy", label: "Service areas and equipment templates", href: "/app/admin/service-areas", cells: [{ key: "area", value: "Company equipment setup" }, { key: "summary", value: `${(fixture.equipmentTemplates ?? []).filter((template) => template.organizationId === scoped.organizationId && template.active).length} reusable equipment types` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Ready to reuse", tone: "positive" }] },
       { id: "approval-policies", label: "Approval policies", href: "/app/admin/approval-policies", cells: [{ key: "area", value: "Authorization governance" }, { key: "summary", value: `${fixture.approvalPolicies.filter((policy) => policy.organizationId === scoped.organizationId && policy.status === "active").length} active policies · ${fixture.approvalRequests.filter((request) => request.organizationId === scoped.organizationId && approvalRequestState(request, fixture.approvalDecisions) === "pending").length} pending decisions` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Auditable", tone: "positive" }] },
+      { id: "notifications", label: "Notification delivery", href: "/app/admin/notifications", cells: [{ key: "area", value: "Email and escalation rules" }, { key: "summary", value: `${(fixture.notificationRules ?? []).filter((rule) => rule.organizationId === scoped.organizationId && rule.emailEnabled).length} email rules enabled` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configurable", tone: "info" }] },
+      { id: "imports", label: "Data imports", href: "/app/admin/imports", cells: [{ key: "area", value: "Store, vendor, and equipment onboarding" }, { key: "summary", value: "Validate CSV files before any records are written" }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Dry-run preview", tone: "info" }] },
     ];
     rows = administrationRows.filter((row) => !q || searchable(row.label, ...row.cells.map((cell) => cell.value)).includes(q));
   }
@@ -3056,8 +3068,10 @@ export function buildProgramModel(
   const allActions = actions(fixture, scoped, 6);
 
   if (route === "spend") {
-    const periodStart = rollingYearStart(fixture.asOf);
-    const rollingCostByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart);
+    const period = spendPeriod(fixture.asOf, first(query.period));
+    const periodStart = period.start;
+    const basis = first(query.basis) === "invoiced" ? "invoiced" : "recorded";
+    const recordedAmountByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart);
     const selectedCategory = first(query.category);
     const selectedPath = pathSegments(first(query.path));
     const selectedAssetId = first(query.asset);
@@ -3079,24 +3093,28 @@ export function buildProgramModel(
       .filter((work) => selectedPath.length === 0 || assetMatchesPath(work.assetId ? assetById.get(work.assetId) : undefined, selectedPath));
     const spendScope: ScopedFixture = { ...scoped, workOrders: spendWork };
     const scopedWorkIds = new Set(spendWork.map((work) => work.id));
+    const periodInvoiceIds = new Set(fixture.invoiceReferences.filter((invoice) => invoice.organizationId === scoped.organizationId && invoice.invoiceDate >= periodStart && invoice.invoiceDate <= fixture.asOf.slice(0, 10)).map((invoice) => invoice.id));
+    const invoiceAmountByWork = new Map<string, number>();
+    for (const allocation of fixture.invoiceAllocations) if (allocation.organizationId === scoped.organizationId && scopedWorkIds.has(allocation.workOrderId) && periodInvoiceIds.has(allocation.invoiceReferenceId)) invoiceAmountByWork.set(allocation.workOrderId, (invoiceAmountByWork.get(allocation.workOrderId) ?? 0) + allocation.amount.amountMinor);
+    const basisAmountByWork = basis === "invoiced" ? invoiceAmountByWork : recordedAmountByWork;
     const sourceLines = fixture.costLines.filter(
       (line) =>
         line.organizationId === scoped.organizationId &&
         scopedWorkIds.has(line.workOrderId) &&
         line.serviceDate >= periodStart,
     );
-    const total = costForWorkIds(rollingCostByWork, spendWork.map((work) => work.id));
+    const total = costForWorkIds(basisAmountByWork, spendWork.map((work) => work.id));
     const storeCost = new Map<string, number>();
     for (const store of scoped.stores) {
       storeCost.set(
         store.id,
-        costForWorkIds(rollingCostByWork, spendWork.filter((work) => work.storeId === store.id).map((work) => work.id)),
+        costForWorkIds(basisAmountByWork, spendWork.filter((work) => work.storeId === store.id).map((work) => work.id)),
       );
     }
     const ranked = [...storeCost.values()].sort((a, b) => b - a);
     const median = ranked.length ? ranked[Math.floor(ranked.length / 2)] : 0;
     const unclassified = spendWork.filter((work) => {
-      if ((rollingCostByWork.get(work.id) ?? 0) <= 0) return false;
+      if ((basisAmountByWork.get(work.id) ?? 0) <= 0) return false;
       if (!selectedCategory) return !work.categoryKey;
       if (!work.assetId) return true;
       if (selectedAssetId && !work.componentId) return true;
@@ -3121,7 +3139,7 @@ export function buildProgramModel(
     const equipmentCost = new Map<string, number>();
     for (const work of spendWork) {
       const key = work.assetId ?? "unlinked";
-      equipmentCost.set(key, (equipmentCost.get(key) ?? 0) + (rollingCostByWork.get(work.id) ?? 0));
+      equipmentCost.set(key, (equipmentCost.get(key) ?? 0) + (basisAmountByWork.get(work.id) ?? 0));
     }
     const workLink = (extra: Record<string, string | undefined>) => hrefWithQuery("/app/work-orders", {
       region: selectedRegionId,
@@ -3131,14 +3149,16 @@ export function buildProgramModel(
       asset: selectedAssetId,
       component: selectedComponentId,
       costFrom: periodStart,
+      basis,
+      period: period.key,
       ...extra,
     });
     const comparisonMetric: MetricViewModel = selectedStoreId
       ? {
           id: "cost-bearing-work",
           label: "Cost-bearing work",
-          value: String([...rollingCostByWork.keys()].filter((workId) => scopedWorkIds.has(workId)).length),
-          supportingText: "Work orders with entered cost in this scope and period",
+          value: String([...basisAmountByWork.keys()].filter((workId) => scopedWorkIds.has(workId)).length),
+          supportingText: basis === "recorded" ? "Work orders with entered cost in this scope and period" : "Work orders with confirmed invoice allocations in this scope and period",
           link: { href: workLink({ hasCost: "true" }), label: "Open source work" },
         }
       : {
@@ -3156,6 +3176,8 @@ export function buildProgramModel(
       path: selectedPath.length ? selectedPath.join("|") : undefined,
       asset: selectedAssetId,
       component: selectedComponentId,
+      basis,
+      period: period.key,
       ...overrides,
     });
     const hierarchyParts = [
@@ -3182,27 +3204,29 @@ export function buildProgramModel(
     let hierarchyBreakdown: BreakdownViewModel;
     if (selectedComponentId) {
       const kindCost = new Map<string, number>();
-      for (const line of sourceLines) kindCost.set(line.kind, (kindCost.get(line.kind) ?? 0) + line.amount.amountMinor);
+      if (basis === "recorded") for (const line of sourceLines) kindCost.set(line.kind, (kindCost.get(line.kind) ?? 0) + line.amount.amountMinor);
+      else kindCost.set("linked invoice amount", total);
       hierarchyBreakdown = costBreakdown(
-        "Recorded cost by source type",
+        basis === "recorded" ? "Recorded cost by source type" : "Linked invoice amount",
         kindCost,
         () => workLink({ hasCost: "true" }),
-        { description: "This is the deepest configured component level. Open the source work orders for every entered cost line.", sourceHref: workLink({ hasCost: "true" }) },
+        { description: "This is the deepest configured component level. Open the source work orders for every entered cost line.", sourceHref: workLink({ hasCost: "true" }), amountLabel: basis === "recorded" ? "recorded cost" : "linked invoice amount" },
       );
     } else if (selectedAssetId) {
       const componentCost = new Map<string, number>();
       for (const work of spendWork) {
         const key = work.componentId ?? "unlinked";
-        componentCost.set(key, (componentCost.get(key) ?? 0) + (rollingCostByWork.get(work.id) ?? 0));
+        componentCost.set(key, (componentCost.get(key) ?? 0) + (basisAmountByWork.get(work.id) ?? 0));
       }
       hierarchyBreakdown = costBreakdown(
-        "Recorded cost by component",
+        `${basis === "recorded" ? "Recorded cost" : "Linked invoice amount"} by component`,
         componentCost,
         (key) => key === "unlinked" ? workLink({ component: "unlinked", hasCost: "true" }) : spendHref({ component: key }),
         {
           description: "Component depth is optional. Cost that stops at the equipment record remains visible.",
           labelFor: (key) => key === "unlinked" ? "Not classified to a component" : componentById.get(key)?.name ?? "Unknown component",
           sourceHref: workLink({ hasCost: "true" }),
+          amountLabel: basis === "recorded" ? "recorded cost" : "linked invoice amount",
         },
       );
     } else if (selectedCategory) {
@@ -3210,7 +3234,7 @@ export function buildProgramModel(
       const nextKind = new Map<string, "path" | "asset" | "source">();
       const categoryRoot = selectedPath.length === 0;
       for (const work of spendWork) {
-        const amount = rollingCostByWork.get(work.id) ?? 0;
+        const amount = basisAmountByWork.get(work.id) ?? 0;
         const asset = work.assetId ? assetById.get(work.assetId) : undefined;
         if (!asset) {
           nextValues.set("unlinked", (nextValues.get("unlinked") ?? 0) + amount);
@@ -3241,29 +3265,55 @@ export function buildProgramModel(
           description: "Open each level until you reach a specific equipment record. Unclassified cost never disappears.",
           labelFor: (key) => key === "unlinked" ? "Unclassified below this level" : nextKind.get(key) === "asset" ? assetById.get(key)?.name ?? "Unknown equipment" : key.split("|").at(-1) ?? key,
           sourceHref: workLink({ hasCost: "true" }),
+          amountLabel: basis === "recorded" ? "recorded cost" : "linked invoice amount",
         },
       );
     } else {
       hierarchyBreakdown = costBreakdown(
-        "Recorded cost by service area",
-        categoryCostMap(spendScope, rollingCostByWork),
+        `${basis === "recorded" ? "Recorded cost" : "Linked invoice amount"} by service area`,
+        categoryCostMap(spendScope, basisAmountByWork),
         (key) => key === "unclassified" ? workLink({ category: "unclassified", hasCost: "true" }) : spendHref({ category: key }),
-        { description: "Choose a service area to continue through organization-defined groups, equipment, and optional components.", sourceHref: workLink({ hasCost: "true" }) },
+        { description: "Choose a service area to continue through organization-defined groups, equipment, and optional components.", sourceHref: workLink({ hasCost: "true" }), amountLabel: basis === "recorded" ? "recorded cost" : "linked invoice amount" },
       );
     }
 
     const regionOptions = fixture.regions
       .filter((region) => region.organizationId === scoped.organizationId && scopeFixture(fixture, session).stores.some((store) => store.regionId === region.id))
-      .map((region) => ({ value: region.id, label: region.name, href: hrefWithQuery("/app/spend", { region: region.id, category: selectedCategory }), selected: region.id === selectedRegionId }));
+      .map((region) => ({ value: region.id, label: region.name, href: spendHref({ region: region.id, store: undefined }), selected: region.id === selectedRegionId }));
     const categoryOptions = [...new Set(scopeFixture(fixture, session).workOrders.map((work) => work.categoryKey).filter((value): value is string => Boolean(value)))]
       .sort()
-      .map((category) => ({ value: category, label: sentence(category), href: hrefWithQuery("/app/spend", { region: selectedRegionId, store: selectedStoreId, category }), selected: category === selectedCategory }));
+      .map((category) => ({ value: category, label: sentence(category), href: spendHref({ category, path: undefined, asset: undefined, component: undefined }), selected: category === selectedCategory }));
+    const monthKeys = rollingMonthKeys(fixture.asOf, period.months);
+    const monthly = new Map<string, number>();
+    if (basis === "recorded") for (const line of sourceLines) monthly.set(monthKey(line.serviceDate), (monthly.get(monthKey(line.serviceDate)) ?? 0) + line.amount.amountMinor);
+    else {
+      const invoiceById = new Map(fixture.invoiceReferences.filter((invoice) => invoice.organizationId === scoped.organizationId).map((invoice) => [invoice.id, invoice]));
+      for (const allocation of fixture.invoiceAllocations) { const invoice = invoiceById.get(allocation.invoiceReferenceId); if (allocation.organizationId === scoped.organizationId && scopedWorkIds.has(allocation.workOrderId) && invoice && invoice.invoiceDate >= periodStart) monthly.set(monthKey(invoice.invoiceDate), (monthly.get(monthKey(invoice.invoiceDate)) ?? 0) + allocation.amount.amountMinor); }
+    }
+    const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Entered work costs grouped by service month. Invoice amounts are not included in this basis." : "Confirmed invoice allocations grouped by invoice month. Recorded work costs are not included in this basis.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : hrefWithQuery("/app/invoices", { from: `${key}-01`, store: selectedStoreId, category: selectedCategory }), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : hrefWithQuery("/app/invoices", { from: periodStart, store: selectedStoreId, category: selectedCategory }), label: "Open all exact source records" } };
+    const sourceRows = spendWork.filter((work) => (basisAmountByWork.get(work.id) ?? 0) > 0).sort((a, b) => (basisAmountByWork.get(b.id) ?? 0) - (basisAmountByWork.get(a.id) ?? 0)).slice(0, 20).map<TableRowViewModel>((work) => ({ id: work.id, label: work.number, href: `/app/work-orders/${work.id}?view=records`, cells: [
+      { key: "work", value: work.number, secondary: work.problem },
+      { key: "store", value: storeLabel(storeById.get(work.storeId)) },
+      { key: "category", value: work.categoryKey ? sentence(work.categoryKey) : "Unclassified" },
+      { key: "amount", value: money(basisAmountByWork.get(work.id) ?? 0) },
+      { key: "basis", value: basis === "recorded" ? "Recorded work cost" : "Confirmed invoice allocation" },
+    ] }));
     const filters = [
+      { id: "period", label: "Period", options: [
+        { value: "3m", label: "3 months", href: spendHref({ period: "3m" }), selected: period.key === "3m" },
+        { value: "6m", label: "6 months", href: spendHref({ period: "6m" }), selected: period.key === "6m" },
+        { value: "12m", label: "12 months", href: spendHref({ period: "12m" }), selected: period.key === "12m" },
+        { value: "ytd", label: "Year to date", href: spendHref({ period: "ytd" }), selected: period.key === "ytd" },
+      ] },
+      { id: "basis", label: "Amount basis", options: [
+        { value: "recorded", label: "Recorded work cost", href: spendHref({ basis: "recorded" }), selected: basis === "recorded" },
+        { value: "invoiced", label: "Linked invoice amount", href: spendHref({ basis: "invoiced" }), selected: basis === "invoiced" },
+      ] },
       {
         id: "region",
         label: "Region",
         options: [
-          { value: "all", label: "All regions", href: hrefWithQuery("/app/spend", { category: selectedCategory }), selected: !selectedRegionId },
+          { value: "all", label: "All regions", href: spendHref({ region: undefined, store: undefined }), selected: !selectedRegionId },
           ...regionOptions,
         ],
       },
@@ -3271,17 +3321,17 @@ export function buildProgramModel(
         id: "category",
         label: "Service area",
         options: [
-          { value: "all", label: "All service areas", href: hrefWithQuery("/app/spend", { region: selectedRegionId, store: selectedStoreId }), selected: !selectedCategory },
+          { value: "all", label: "All service areas", href: spendHref({ category: undefined, path: undefined, asset: undefined, component: undefined }), selected: !selectedCategory },
           ...categoryOptions,
         ],
       },
     ];
     return {
       state: { kind: "ready" },
-      page: { title: selectedComponent?.name ?? selectedAsset?.name ?? selectedPath.at(-1) ?? (selectedCategory ? sentence(selectedCategory) : "Maintenance spend"), eyebrow: "Recorded cost visibility", description: "Move from company to region, store, service area, flexible equipment groups, equipment, component, work order, and source cost without changing the selected basis.", scopeLabel: `${activeScopeLabel} · ${hierarchyLabel}`, periodLabel: `Rolling 12 months from ${date(periodStart)}`, updatedLabel: `Through ${date(fixture.asOf)}`, secondaryAction: upHref ? { label: "Up one level", href: upHref } : undefined },
+      page: { title: selectedComponent?.name ?? selectedAsset?.name ?? selectedPath.at(-1) ?? (selectedCategory ? sentence(selectedCategory) : "Maintenance spend"), eyebrow: "Actual spend visibility", description: "Move from company to region, store, service area, flexible equipment groups, equipment, component, work order, and source record while keeping the selected period and amount basis visible.", scopeLabel: `${activeScopeLabel} · ${hierarchyLabel} · ${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"}`, periodLabel: period.label, updatedLabel: `Through ${date(fixture.asOf)}`, secondaryAction: upHref ? { label: "Up one level", href: upHref } : undefined },
       filters,
       metrics: [
-        { id: "total", label: "Recorded work cost", value: money(total), supportingText: `${sourceLines.length} entered source lines`, link: { href: workLink({ hasCost: "true" }), label: "Open source work" } },
+        { id: "total", label: basis === "recorded" ? "Recorded work cost" : "Linked invoice amount", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} entered source lines` : `${invoiceAmountByWork.size} work orders with confirmed allocations`, link: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : hrefWithQuery("/app/invoices", { region: selectedRegionId, store: selectedStoreId, category: selectedCategory, from: periodStart }), label: "Open exact source records" } },
         comparisonMetric,
         { id: "unclassified", label: selectedAssetId ? "Not mapped to a component" : selectedCategory ? "Not mapped to equipment" : "Unclassified service area", value: String(unclassified.length), supportingText: "Visible rather than forced into a guess", tone: unclassified.length ? "warning" : "positive", link: { href: selectedAssetId ? workLink({ component: "unlinked", hasCost: "true" }) : selectedCategory ? workLink({ asset: "unlinked", hasCost: "true" }) : workLink({ category: "unclassified", hasCost: "true" }), label: "Open source work" } },
         { id: "invoices", label: "Linked invoice references", value: String(invoiceCount), supportingText: "Optional billing safeguard; not required for cost visibility", link: { href: hrefWithQuery("/app/invoices", { region: selectedRegionId, store: selectedStoreId, category: selectedCategory, from: periodStart }), label: "Review invoice references" } },
@@ -3290,16 +3340,17 @@ export function buildProgramModel(
         hierarchyBreakdown,
         selectedStoreId
           ? costBreakdown(
-              "Recorded cost by equipment",
+              `${basis === "recorded" ? "Recorded cost" : "Linked invoice amount"} by equipment`,
               equipmentCost,
               (key) => key === "unlinked" ? workLink({ asset: "unlinked", hasCost: "true" }) : spendHref({ asset: key }),
               {
                 labelFor: (key) => key === "unlinked" ? "Not linked to equipment" : assetById.get(key)?.name ?? "Unknown equipment",
                 sourceHref: workLink({ hasCost: "true" }),
+                amountLabel: basis === "recorded" ? "recorded cost" : "linked invoice amount",
               },
             )
           : costBreakdown(
-              "Recorded cost by store",
+              `${basis === "recorded" ? "Recorded cost" : "Linked invoice amount"} by store`,
               storeCost,
               (key) => spendHref({ region: undefined, store: key }),
               {
@@ -3308,12 +3359,13 @@ export function buildProgramModel(
                   return store ? `Store ${store.storeNumber}` : "Unknown store";
                 },
                 sourceHref: workLink({ hasCost: "true" }),
+                amountLabel: basis === "recorded" ? "recorded cost" : "linked invoice amount",
               },
             ),
       ],
-      trends: [costTrend(fixture, spendScope, { storeId: selectedStoreId, periodStart, query: { region: selectedRegionId, category: selectedCategory, path: selectedPath.length ? selectedPath.join("|") : undefined, asset: selectedAssetId, component: selectedComponentId } })],
+      trends: [spendTrendModel],
       priorityActions: allActions,
-      table: { id: "spend-work", caption: "Work orders with recorded cost in this scope and period", columns: columns["work-orders"], rows: workRows(fixture, spendScope, { ...query, hasCost: "true", costFrom: periodStart }).slice(0, 12) },
+      table: { id: "spend-work", caption: `${basis === "recorded" ? "Work orders with recorded cost" : "Work orders with confirmed invoice allocations"} in this scope and period`, columns: [{ key: "work", label: "Work order / problem" }, { key: "store", label: "Store" }, { key: "category", label: "Service area" }, { key: "amount", label: "Amount", align: "end" }, { key: "basis", label: "Source basis" }], rows: sourceRows },
     };
   }
 

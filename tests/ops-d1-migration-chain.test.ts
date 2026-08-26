@@ -22,7 +22,7 @@ describe("D1 migration chain", () => {
       .sort();
 
     try {
-      expect(migrations).toHaveLength(35);
+      expect(migrations).toHaveLength(36);
       for (const migration of migrations) {
         database.exec("BEGIN");
         try {
@@ -49,10 +49,11 @@ describe("D1 migration chain", () => {
             'ops_invoices',
             'ops_value_events'
             ,'ops_component_lifecycle_events'
+            ,'ops_notification_rules'
           )
         ORDER BY name
       `).all();
-      expect(tables).toHaveLength(9);
+      expect(tables).toHaveLength(10);
       expect(database.prepare("PRAGMA table_info(ops_requests)").all())
         .toEqual(expect.arrayContaining([expect.objectContaining({ name: "version", notnull: 1, dflt_value: "0" })]));
       expect(database.prepare("PRAGMA table_info(ops_invoices)").all())

@@ -642,6 +642,13 @@ export const opsOutboxMessages = sqliteTable("ops_outbox_messages", {
   id: id(), organizationId: organizationId(), topic: text("topic").notNull(), aggregateType: text("aggregate_type").notNull(), aggregateId: text("aggregate_id").notNull(), payloadJson: text("payload_json").notNull(), status: text("status").notNull().default("pending"), availableAt: text("available_at").notNull(), createdAt: createdAt(), attemptCount: integer("attempt_count").notNull().default(0), claimedAt: text("claimed_at"), deliveredAt: text("delivered_at"), lastError: text("last_error"),
 }, (table) => [index("idx_ops_outbox_org_status_available").on(table.organizationId, table.status, table.availableAt)]);
 
+export const opsNotificationRules = sqliteTable("ops_notification_rules", {
+  id: id(), organizationId: organizationId(), eventKey: text("event_key").notNull(), emailEnabled: bool("email_enabled"), recipientRole: text("recipient_role").notNull(), updatedByMembershipId: text("updated_by_membership_id"), createdAt: createdAt(), updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_ops_notification_rules_org_event").on(table.organizationId, table.eventKey),
+  index("idx_ops_notification_rules_org_role").on(table.organizationId, table.recipientRole),
+]);
+
 export const opsPublicTokens = sqliteTable("ops_public_tokens", {
   id: id(), organizationId: organizationId(), purpose: text("purpose").notNull(), subjectType: text("subject_type").notNull(), subjectId: text("subject_id").notNull(), tokenHash: text("token_hash").notNull(), expiresAt: text("expires_at").notNull(), createdAt: createdAt(), usedAt: text("used_at"), revokedAt: text("revoked_at"),
 }, (table) => [uniqueIndex("uidx_ops_public_tokens_hash").on(table.tokenHash), index("idx_ops_public_tokens_org_subject").on(table.organizationId, table.subjectType, table.subjectId), index("idx_ops_public_tokens_org_purpose_expiry").on(table.organizationId, table.purpose, table.expiresAt)]);
@@ -754,6 +761,7 @@ export const opsSchema = {
   opsInvoiceAllocations,
   opsAuditEvents,
   opsOutboxMessages,
+  opsNotificationRules,
   opsJobRuns,
   opsPublicTokens,
   opsIdempotencyKeys,

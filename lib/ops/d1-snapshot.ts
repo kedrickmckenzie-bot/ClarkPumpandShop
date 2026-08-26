@@ -25,6 +25,7 @@ import {
   opsMemberships,
   opsOrganizations,
   opsOutboxMessages,
+  opsNotificationRules,
   opsMaintenancePrograms,
   opsChecklistTemplates,
   opsPmOccurrences,
@@ -231,6 +232,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     allocationRows,
     auditRows,
     outboxRows,
+    notificationRuleRows,
     tokenRows,
   ] = await Promise.all([
     db.select().from(opsOrganizations).where(eq(opsOrganizations.id, organizationId)),
@@ -320,6 +322,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     db.select().from(opsInvoiceAllocations).where(tenant(opsInvoiceAllocations.organizationId)),
     db.select().from(opsAuditEvents).where(tenant(opsAuditEvents.organizationId)),
     db.select().from(opsOutboxMessages).where(tenant(opsOutboxMessages.organizationId)),
+    db.select().from(opsNotificationRules).where(tenant(opsNotificationRules.organizationId)),
     db.select().from(opsPublicTokens).where(tenant(opsPublicTokens.organizationId)),
   ]);
 
@@ -513,6 +516,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     invoiceAllocations: allocationRows.map((row) => ({ ...row, amount: { amountMinor: row.amountMinor, currency: row.currency }, confirmedByMembershipId: optional(row.confirmedByMembershipId), confirmedAt: optional(row.confirmedAt) })) as OpsFixture["invoiceAllocations"],
     auditEvents: auditRows.map((row) => ({ ...row, actorId: optional(row.actorId) })) as OpsFixture["auditEvents"],
     outboxMessages: outboxRows as OpsFixture["outboxMessages"],
+    notificationRules: notificationRuleRows.map((row) => ({ ...row, updatedByMembershipId: optional(row.updatedByMembershipId) })) as OpsFixture["notificationRules"],
     publicTokens: tokenRows.map((row) => ({ ...row, usedAt: optional(row.usedAt), revokedAt: optional(row.revokedAt) })) as OpsFixture["publicTokens"],
   };
 }

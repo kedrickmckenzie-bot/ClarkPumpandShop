@@ -26,6 +26,7 @@ export interface PostgresPoolLike extends PostgresQueryableLike {
 
 const BOOLEAN_COLUMNS = new Map<string, ReadonlySet<string>>([
   ["ops_stores", new Set(["location_policy_enabled"])],
+  ["ops_notification_rules", new Set(["email_enabled"])],
   ["ops_taxonomy_nodes", new Set(["active"])],
   ["ops_equipment_templates", new Set(["active"])],
   ["ops_vendors", new Set(["preferred"])],

@@ -159,6 +159,7 @@ export async function loadOpsFixtureSnapshotFromPostgres(
     invoiceAllocations,
     auditEvents,
     outboxMessages,
+    notificationRules,
     publicTokens,
   ] = await Promise.all([
     tenantRows(pool, "ops_divisions", organizationId),
@@ -244,6 +245,7 @@ export async function loadOpsFixtureSnapshotFromPostgres(
     tenantRows(pool, "ops_invoice_allocations", organizationId),
     tenantRows(pool, "ops_audit_events", organizationId),
     tenantRows(pool, "ops_outbox_messages", organizationId),
+    tenantRows(pool, "ops_notification_rules", organizationId),
     tenantRows(pool, "ops_public_tokens", organizationId),
   ]);
 
@@ -339,6 +341,7 @@ export async function loadOpsFixtureSnapshotFromPostgres(
     invoiceAllocations: invoiceAllocations.map((row) => ({ ...row, amount: { amountMinor: Number(row.amountMinor), currency: row.currency }, confirmedByMembershipId: optional(row.confirmedByMembershipId), confirmedAt: optional(row.confirmedAt) })) as unknown as OpsFixture["invoiceAllocations"],
     auditEvents: auditEvents.map((row) => ({ ...row, actorId: optional(row.actorId), payloadJson: jsonText(row.payloadJson) })) as unknown as OpsFixture["auditEvents"],
     outboxMessages: outboxMessages.map((row) => ({ ...row, payloadJson: jsonText(row.payloadJson) })) as unknown as OpsFixture["outboxMessages"],
+    notificationRules: notificationRules.map((row) => ({ ...row, updatedByMembershipId: optional(row.updatedByMembershipId) })) as unknown as OpsFixture["notificationRules"],
     publicTokens: publicTokens.map((row) => ({ ...row, usedAt: optional(row.usedAt), revokedAt: optional(row.revokedAt) })) as unknown as OpsFixture["publicTokens"],
   };
 }

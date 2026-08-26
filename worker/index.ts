@@ -2,12 +2,18 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { createOpsD1Repository } from "../lib/ops/d1-repository";
-import { createOperationalLogDeliveryTransport, runOutboxDeliveryCycle } from "../lib/ops/outbox-delivery";
+import { runOutboxDeliveryCycle } from "../lib/ops/outbox-delivery";
+import { createNotificationEmailTransport, emailRuntimeFromEnvironment } from "../lib/ops/email-delivery";
 import { runPmRecurrenceCycle, runSlaEscalationCycle } from "../lib/ops/job-workers";
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  EMAIL_PROVIDER?: string;
+  EMAIL_API_KEY?: string;
+  EMAIL_FROM?: string;
+  EMAIL_REPLY_TO?: string;
+  NEXT_PUBLIC_SITE_URL?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -52,10 +58,12 @@ const worker = {
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil((async () => {
       const repository = createOpsD1Repository(env.DB);
-      const deliverySummary = await runOutboxDeliveryCycle({ repository }, createOperationalLogDeliveryTransport());
+      const email = emailRuntimeFromEnvironment({ EMAIL_PROVIDER: env.EMAIL_PROVIDER, EMAIL_API_KEY: env.EMAIL_API_KEY, EMAIL_FROM: env.EMAIL_FROM, EMAIL_REPLY_TO: env.EMAIL_REPLY_TO, NEXT_PUBLIC_SITE_URL: env.NEXT_PUBLIC_SITE_URL });
+      const transport = createNotificationEmailTransport({ repository, provider: email.provider, baseUrl: email.baseUrl });
+      const deliverySummary = await runOutboxDeliveryCycle({ repository }, transport);
       const escalationSummary = await runSlaEscalationCycle({ repository });
       const pmRecurrenceSummary = await runPmRecurrenceCycle({ repository });
-      console.log(JSON.stringify({ channel: "ops.jobs.cycle", runtime: "d1", transport: "operational-log", outbox: deliverySummary, slaEscalation: escalationSummary, pmRecurrence: pmRecurrenceSummary }));
+      console.log(JSON.stringify({ channel: "ops.jobs.cycle", runtime: "d1", transport: transport.name, outbox: deliverySummary, slaEscalation: escalationSummary, pmRecurrence: pmRecurrenceSummary }));
     })());
   },
 };

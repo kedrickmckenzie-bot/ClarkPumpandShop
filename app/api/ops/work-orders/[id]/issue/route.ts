@@ -6,6 +6,7 @@ import {
   opsApiError,
 } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
+import { emailRuntimeFromEnvironment, sendVendorServiceAuthorizationEmail } from "@/lib/ops/email-delivery";
 
 const channels = new Set(["email", "sms", "print", "manual"]);
 
@@ -63,7 +64,7 @@ export async function POST(
     const asset = workOrder.assetId
       ? await context.repository.getAsset(context.session.organizationId, workOrder.assetId)
       : null;
-    await routeAndIssueWorkOrder(
+    const issued = await routeAndIssueWorkOrder(
       { repository: context.repository },
       {
         organizationId: context.session.organizationId,
@@ -95,6 +96,49 @@ export async function POST(
         actor: context.actor,
       },
     );
+
+    if (channel === "email") {
+      const runtime = emailRuntimeFromEnvironment({ EMAIL_PROVIDER: process.env.EMAIL_PROVIDER, EMAIL_API_KEY: process.env.EMAIL_API_KEY, EMAIL_FROM: process.env.EMAIL_FROM, EMAIL_REPLY_TO: process.env.EMAIL_REPLY_TO, NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL });
+      const actionUrl = new URL(`/public/service/${encodeURIComponent(rawToken)}`, runtime.baseUrl).toString();
+      const attemptedAt = new Date().toISOString();
+      let eventType = "work_order.email_delivery_failed";
+      let payload: Record<string, unknown> = {
+        issuanceId: issued.issuance.id,
+        vendorId: vendor.id,
+        recipient: vendor.dispatchEmail,
+        provider: runtime.providerLabel,
+      };
+      let notice = "The authorization was issued, but email delivery is not configured. Open Administration → Notifications before using live vendor addresses.";
+      if (runtime.provider) {
+        try {
+          const delivery = await sendVendorServiceAuthorizationEmail({
+            provider: runtime.provider,
+            vendorEmail: vendor.dispatchEmail,
+            vendorName: vendor.name,
+            organizationName: context.session.organizationName,
+            workOrder,
+            storeLabel: `Store ${store.storeNumber} · ${store.name}`,
+            authorizedScope: workOrder.authorizedScope,
+            actionUrl,
+            replyTo: process.env.EMAIL_REPLY_TO,
+            issuanceId: issued.issuance.id,
+          });
+          eventType = "work_order.email_delivered";
+          payload = { ...payload, providerMessageId: delivery.messageId };
+          notice = `Authorization ${workOrder.number} was emailed to ${vendor.name}.`;
+        } catch (error) {
+          payload = { ...payload, error: (error instanceof Error ? error.message : String(error)).slice(0, 500) };
+          notice = `Authorization ${workOrder.number} was issued, but the email could not be delivered. Review notification status before reissuing.`;
+        }
+      } else {
+        payload = { ...payload, missingConfiguration: runtime.missing };
+      }
+      await context.repository.atomicWrite([{
+        sql: "INSERT INTO ops_audit_events (id, organization_id, aggregate_type, aggregate_id, event_type, actor_type, actor_name, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        params: [`audit-email-${crypto.randomUUID()}`, context.session.organizationId, "work_order", workOrder.id, eventType, "system", "Transactional email delivery", attemptedAt, JSON.stringify(payload)],
+      }]);
+      return relativeRedirect303(`/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service&notice=${encodeURIComponent(notice)}`);
+    }
 
     return relativeRedirect303(`/public/service/${encodeURIComponent(rawToken)}`);
   } catch (error) {

@@ -1756,6 +1756,40 @@ export interface OutboxMessage {
   lastError?: string | null;
 }
 
+export type NotificationEventKey =
+  | "vendor_response_received"
+  | "workflow_task_escalated"
+  | "follow_up_created"
+  | "vendor_reminder_created";
+
+export type NotificationRecipientRole =
+  | "facilities_admin"
+  | "regional_manager"
+  | "executive"
+  | "finance_reviewer";
+
+/** Tenant-owned internal notification preference. Vendor service
+ * authorizations follow the explicit delivery method selected on the work
+ * order and do not depend on these internal-recipient rules. */
+export interface NotificationRule {
+  id: OpsId;
+  organizationId: OpsId;
+  eventKey: NotificationEventKey;
+  emailEnabled: boolean;
+  recipientRole: NotificationRecipientRole;
+  updatedByMembershipId?: OpsId;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface NotificationRecipient {
+  membershipId: OpsId;
+  userId: OpsId;
+  email: string;
+  displayName: string;
+  role: NotificationRecipientRole;
+}
+
 export interface SavedView {
   id: OpsId;
   organizationId: OpsId;
@@ -1902,6 +1936,7 @@ export interface OpsFixture {
   invoiceReferences: InvoiceReference[];
   invoiceAllocations: InvoiceAllocation[];
   auditEvents: AuditEvent[];
+  notificationRules?: NotificationRule[];
   savedViews?: SavedView[];
   serviceAppointments?: ServiceAppointment[];
   vendorContinuations?: VendorContinuation[];

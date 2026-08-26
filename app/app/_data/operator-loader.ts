@@ -280,6 +280,25 @@ export async function loadApprovalPolicyWorkspaceModel() {
   );
 }
 
+export async function loadNotificationSettingsModel() {
+  const context = await sessionAndFixture();
+  requireCapability(context.session.role, "administer");
+  const repository = await getServerOpsRepository();
+  return {
+    organizationName: context.session.organizationName,
+    rules: await repository.listNotificationRules(context.session.organizationId),
+    providerConfigured: Boolean(process.env.EMAIL_PROVIDER && process.env.EMAIL_API_KEY && process.env.EMAIL_FROM),
+    providerLabel: process.env.EMAIL_PROVIDER?.trim() || "Not configured",
+    fromAddress: process.env.EMAIL_FROM?.trim(),
+  };
+}
+
+export async function loadImportWorkspaceAccess() {
+  const context = await sessionAndFixture();
+  requireCapability(context.session.role, "administer");
+  return { organizationName: context.session.organizationName };
+}
+
 export async function loadDashboardModel() {
   const context = await sessionAndFixture();
   return enforceDashboardLinkPolicy(

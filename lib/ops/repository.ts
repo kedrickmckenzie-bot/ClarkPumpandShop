@@ -69,6 +69,10 @@ import type {
   InvoiceAdjustment,
   ValueEvent,
   OutboxMessage,
+  NotificationEventKey,
+  NotificationRecipient,
+  NotificationRecipientRole,
+  NotificationRule,
   JobRun,
   SavedView,
 } from "./types";
@@ -159,6 +163,9 @@ export interface OpsRepository {
   listComponentTemplates(organizationId: OpsId, equipmentTemplateId: OpsId): Promise<ComponentTemplate[]>;
   getStore(organizationId: OpsId, storeId: OpsId): Promise<Store | null>;
   getVendor(organizationId: OpsId, vendorId: OpsId): Promise<Vendor | null>;
+  listNotificationRules(organizationId: OpsId): Promise<NotificationRule[]>;
+  upsertNotificationRule(input: { organizationId: OpsId; id: OpsId; eventKey: NotificationEventKey; emailEnabled: boolean; recipientRole: NotificationRecipientRole; updatedByMembershipId?: OpsId; occurredAt: IsoDateTime }): Promise<void>;
+  listNotificationRecipients(organizationId: OpsId, role: NotificationRecipientRole): Promise<NotificationRecipient[]>;
   getVendorReminder(organizationId: OpsId, reminderId: OpsId): Promise<import("./types").VendorReminder | null>;
   listVendorReminders(organizationId: OpsId, vendorId: OpsId): Promise<import("./types").VendorReminder[]>;
   getMembership(organizationId: OpsId, membershipId: OpsId): Promise<Membership | null>;
