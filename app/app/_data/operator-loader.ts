@@ -35,6 +35,7 @@ import {
 } from "@/lib/server/runtime-identifiers";
 import { DEFAULT_DEMO_EDITION, isDemoEdition } from "@/components/ops/demo-edition";
 import type { OpsFixture } from "@/lib/ops/types";
+import type { PmProgramManagementModel } from "@/components/workspace/pm-program-management";
 import {
   buildCreateRequestModel,
   buildCreateStoreModel,
@@ -301,6 +302,110 @@ export async function loadProgramModel(route: ProgramRouteId, searchParams: Oper
     buildProgramModel(context.fixture, context.session, route, searchParams),
     context.session.role,
   );
+}
+
+function pmTypeKey(value: string) {
+  return value.trim().toLocaleLowerCase("en-US").replace(/^equipment-template-/, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function pmProgramMatchesTemplate(applicableAssetTypes: string[], templateId: string, templateName: string) {
+  const accepted = new Set([templateId, pmTypeKey(templateId), pmTypeKey(templateName)]);
+  return applicableAssetTypes.some((value) => accepted.has(value) || accepted.has(pmTypeKey(value)));
+}
+
+function shortDate(value: string | undefined) {
+  if (!value) return "not set";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+}
+
+export async function loadPmProgramManagementModel(searchParams: OperatorSearchParameters = {}): Promise<PmProgramManagementModel> {
+  const { session, fixture } = await sessionAndFixture();
+  if (!roleCanAccessProgramRoute(session.role, "pm")) notFound();
+  const selectedStoreId = Array.isArray(searchParams.store) ? searchParams.store[0] : searchParams.store;
+  const selectedProgramId = Array.isArray(searchParams.program) ? searchParams.program[0] : searchParams.program;
+  const visibleStores = fixture.stores.filter((store) => {
+    if (store.organizationId !== session.organizationId) return false;
+    if (session.storeIds?.length && !session.storeIds.includes(store.id)) return false;
+    if (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
+    return true;
+  });
+  const visibleStoreIds = new Set(visibleStores.map((store) => store.id));
+  const storesById = new Map(visibleStores.map((store) => [store.id, store]));
+  const templates = fixture.equipmentTemplates.filter((template) => template.organizationId === session.organizationId && template.active);
+  const visibleAssets = fixture.assets.filter((asset) => asset.organizationId === session.organizationId && visibleStoreIds.has(asset.storeId) && asset.status !== "retired");
+  const assetById = new Map(visibleAssets.map((asset) => [asset.id, asset]));
+  const programs = fixture.maintenancePrograms.filter((program) => program.organizationId === session.organizationId && program.status === "active");
+  const programById = new Map(programs.map((program) => [program.id, program]));
+  const visiblePlans = fixture.pmPlans.filter((plan) => plan.organizationId === session.organizationId && plan.active && plan.storeId && visibleStoreIds.has(plan.storeId));
+
+  const equipmentTypesForProgram = (program: (typeof programs)[number]) => templates.filter((template) => pmProgramMatchesTemplate(program.applicableAssetTypes, template.id, template.name));
+  const matchingAssetsForProgram = (program: (typeof programs)[number]) => {
+    const matchingTemplateIds = new Set(equipmentTypesForProgram(program).map((template) => template.id));
+    return visibleAssets.filter((asset) => asset.equipmentTemplateId && matchingTemplateIds.has(asset.equipmentTemplateId));
+  };
+  const programRows = programs.map((program) => {
+    const programTemplates = equipmentTypesForProgram(program);
+    const matchingAssets = matchingAssetsForProgram(program);
+    const plans = visiblePlans.filter((plan) => plan.programId === program.id);
+    const enrolledAssetIds = new Set(plans.map((plan) => plan.assetId).filter((id): id is string => Boolean(id)));
+    const gaps = matchingAssets.filter((asset) => !enrolledAssetIds.has(asset.id)).length;
+    const overrides = plans.filter((plan) => plan.cadenceDays !== program.frequencyDays || plan.completionWindowDays !== program.dueWindowDays || Boolean(plan.cadenceOverrideReason)).length;
+    return {
+      id: program.id,
+      name: program.name,
+      serviceAreaLabel: program.tradeKey.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toLocaleUpperCase("en-US")),
+      equipmentTypeLabels: programTemplates.map((template) => template.name),
+      cadenceLabel: `Every ${program.frequencyDays} days`,
+      windowLabel: `±${program.dueWindowDays} day window`,
+      anchorLabel: shortDate(program.scheduleAnchorAt),
+      matchingEquipment: matchingAssets.length,
+      enrolledPlans: plans.length,
+      coverageGaps: gaps,
+      localOverrides: overrides,
+      href: `/app/pm?program=${encodeURIComponent(program.id)}${selectedStoreId ? `&store=${encodeURIComponent(selectedStoreId)}` : ""}`,
+      selected: selectedProgramId === program.id,
+    };
+  });
+  const filteredPlans = visiblePlans
+    .filter((plan) => !selectedStoreId || plan.storeId === selectedStoreId)
+    .filter((plan) => !selectedProgramId || plan.programId === selectedProgramId)
+    .sort((left, right) => {
+      const leftStore = storesById.get(left.storeId ?? "")?.storeNumber ?? "";
+      const rightStore = storesById.get(right.storeId ?? "")?.storeNumber ?? "";
+      return leftStore.localeCompare(rightStore, undefined, { numeric: true }) || left.name.localeCompare(right.name);
+    })
+    .slice(0, 75)
+    .map((plan) => {
+      const store = storesById.get(plan.storeId ?? "");
+      const asset = plan.assetId ? assetById.get(plan.assetId) : undefined;
+      const program = plan.programId ? programById.get(plan.programId) : undefined;
+      const inherited = Boolean(program) && plan.cadenceDays === program?.frequencyDays && plan.completionWindowDays === program?.dueWindowDays && !plan.cadenceOverrideReason;
+      return {
+        id: plan.id,
+        planName: plan.name,
+        storeLabel: store ? `Store ${store.storeNumber} · ${store.name}` : "Unknown store",
+        assetLabel: asset ? `${asset.name} · ${asset.assetTag}` : "Store-level plan",
+        programName: program?.name ?? "Store-created plan",
+        cadenceLabel: `Every ${plan.cadenceDays} days · ±${plan.completionWindowDays} days`,
+        sourceLabel: inherited ? "Company standard" : program ? "Store override" : "Store-created",
+        overrideReason: plan.cadenceOverrideReason,
+        href: `/app/pm/plans/${encodeURIComponent(plan.id)}`,
+      };
+    });
+  const matchingEquipment = programRows.reduce((sum, program) => sum + program.matchingEquipment, 0);
+  return {
+    scopeLabel: session.scopeLabel,
+    canCreateMasterSchedule: session.role === "executive" || session.role === "facilities",
+    summary: {
+      activePrograms: programs.length,
+      matchingEquipment,
+      enrolledPlans: programRows.reduce((sum, program) => sum + program.enrolledPlans, 0),
+      coverageGaps: programRows.reduce((sum, program) => sum + program.coverageGaps, 0),
+      localOverrides: programRows.reduce((sum, program) => sum + program.localOverrides, 0),
+    },
+    programs: programRows,
+    plans: filteredPlans,
+  };
 }
 
 export async function loadDetailModel(route: DetailRouteId, id: string) {

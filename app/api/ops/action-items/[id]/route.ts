@@ -10,9 +10,9 @@ import {
   formText,
   getOpsRequestContext,
   opsApiError,
-  optionalIsoDate,
 } from "@/lib/server/ops-request-context";
 import type { OpsException } from "@/lib/ops/types";
+import { localDateTimeToIso } from "@/lib/ops/local-date-time";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 async function assertExceptionInScope(
@@ -86,8 +86,14 @@ export async function POST(
       await assertStoreInSessionScope(context.session, workOrder.storeId);
 
       if (operation === "update") {
-        const dueAt = optionalIsoDate(formText(formData, "dueAt", { required: true, max: 40 }));
-        if (!dueAt) throw new OpsDomainError("VALIDATION", "A follow-up due time is required.");
+        const [store, organization] = await Promise.all([
+          context.repository.getStore(context.session.organizationId, workOrder.storeId),
+          context.repository.getOrganization(context.session.organizationId),
+        ]);
+        const dueAt = localDateTimeToIso(
+          formText(formData, "dueAt", { required: true, max: 40 }),
+          store?.timeZone ?? organization?.timeZone ?? "UTC",
+        );
         await rescheduleFollowUp(
           { repository: context.repository },
           {

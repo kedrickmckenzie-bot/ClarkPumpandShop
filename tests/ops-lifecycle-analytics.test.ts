@@ -112,7 +112,7 @@ describe("repair-versus-replacement lifecycle screening", () => {
     expect(withExtension.age.lifeUsedPercentage).toBeGreaterThan(100);
     expect(withExtension.state).toBe("below_materiality");
     expect(withExtension.reviewTriggers).toEqual([]);
-    expect(withExtension.definition).toMatch(/age, historical spend, and reliability are context only/i);
+    expect(withExtension.definition).toMatch(/age, historical spend, and reliability remain visible context only/i);
   });
 
   it("keeps a material repair below review when same-horizon economics remain low", () => {
@@ -125,6 +125,22 @@ describe("repair-versus-replacement lifecycle screening", () => {
     expect(result.comparison.repairToBreakEvenRatio).toBe(0.5);
     expect(result.state).toBe("below_economic_review");
     expect(result.reasons).toEqual(["same_horizon_below_review_threshold"]);
+  });
+
+  it("calculates the service runway required for a repair to equal annualized replacement capital", () => {
+    const result = screen(
+      { repairEstimateMinor: 60_000 },
+      {
+        ...baseAsset,
+        expectedLifeYears: 15,
+        replacementEstimate: { amountMinor: 2_800_000, currency: "USD" },
+      },
+    );
+
+    expect(result.comparison.requiredEconomicRunwayMonths).toBe(3.9);
+    expect(result.comparison.requiredEconomicRunwayYears).toBe(0.32);
+    expect(result.comparison.estimatedServiceExtensionMonths).toBeUndefined();
+    expect(result.definition).toMatch(/required runway/i);
   });
 
   it("returns incomplete when required economic inputs are unavailable", () => {

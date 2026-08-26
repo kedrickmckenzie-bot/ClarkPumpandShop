@@ -212,6 +212,7 @@ export interface DashboardPageViewModel {
     title: string;
     description: string;
     link: SupportingLink;
+    display?: "expanded" | "summary";
   };
   breakdowns: BreakdownViewModel[];
   trends: TrendViewModel[];
@@ -528,6 +529,7 @@ export interface WorkOrderControlViewModel {
   available: boolean;
   permitted: boolean;
   submitAction: string;
+  followUpAction: string;
   manualResponseAction: string;
   workOrderId: string;
   workOrderNumber: string;
@@ -540,6 +542,7 @@ export interface WorkOrderControlViewModel {
   accountableParty: string;
   nextAction: string;
   dueAt?: string;
+  dueInputValue?: string;
   escalationTo?: string;
   isTerminal: boolean;
   pendingApproval?: ApprovalDecisionViewModel;

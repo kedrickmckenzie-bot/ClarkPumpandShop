@@ -167,6 +167,7 @@ function taskDraft(input: {
   noSlaReason?: string;
   applicableSlaClock?: WorkflowTask["applicableSlaClock"];
   blocking?: boolean;
+  requiredForProgress?: boolean;
   sourceFollowUpId?: OpsId;
   sourceApprovalRequestId?: OpsId;
   escalationDestination?: string;
@@ -180,7 +181,7 @@ function taskDraft(input: {
     ...input.assignee,
     priority: workflowTaskPriority(input.workOrder.priority),
     blocking: input.blocking ?? true,
-    requiredForProgress: true,
+    requiredForProgress: input.requiredForProgress ?? true,
     dueAt: input.dueAt,
     noSlaReason: input.dueAt ? undefined : input.noSlaReason ?? "No SLA target applies to this obligation",
     applicableSlaClock: input.applicableSlaClock,
@@ -1761,7 +1762,7 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
   return { ...visit, workOrderId: links.length === 1 ? links[0]!.workOrderId : undefined, status: "checked_out" as const, endedChannel: input.channel, checkedOutAt: now, outcome: scalarOutcome, outcomeNotes: scalarOutcomeNotes, observedDurationSeconds, followUpId: updatedLinks.length === 1 ? updatedLinks[0]!.followUpId : undefined, siteVisitWorkOrders: updatedLinks };
 }
 
-export interface CreateFollowUpInput { organizationId: OpsId; workOrderId: OpsId; sourceVisitId?: OpsId; accountableParty: string; nextAction: string; dueAt: IsoDateTime; escalationTo: string; actor: ActorContext }
+export interface CreateFollowUpInput { organizationId: OpsId; workOrderId: OpsId; sourceVisitId?: OpsId; accountableParty: string; nextAction: string; dueAt: IsoDateTime; escalationTo: string; promoteToPrimary?: boolean; actor: ActorContext }
 export async function createFollowUp(svc: OpsCommandServices, input: CreateFollowUpInput) {
   const { repository, clock, ids } = services(svc); assertActorOrganization(input.actor, input.organizationId);
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
@@ -1770,31 +1771,95 @@ export async function createFollowUp(svc: OpsCommandServices, input: CreateFollo
   if (input.sourceVisitId && !(await repository.getVisit(input.organizationId, input.sourceVisitId))) throw new OpsDomainError("NOT_FOUND", "Source visit not found");
   const now = clock.now(); const id = ids.next("follow-up");
   const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
+  const promoteToPrimary = input.promoteToPrimary !== false;
   const task = buildWorkflowTaskRecord({
     id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
     draft: taskDraft({ workOrder, taskType: "schedule_return_visit", title: required(input.nextAction, "Next action"),
       assignee: facilitiesAssignee(required(input.accountableParty, "Accountable party")), dueAt: input.dueAt,
       applicableSlaClock: "scheduling", sourceFollowUpId: id,
+      blocking: promoteToPrimary, requiredForProgress: promoteToPrimary,
       escalationDestination: required(input.escalationTo, "Escalation") }),
     actor: input.actor, createdAt: now,
   });
   const primaryTask = selectPrimaryWorkflowTask(tasks);
-  const taskStatements = primaryTask && !primaryTask.sourceFollowUpId && !primaryTask.sourceApprovalRequestId
-    ? buildReplaceMatchingTaskStatements({
-        workOrder, tasks, targetTask: primaryTask, replacementTask: task,
-        actor: input.actor, occurredAt: now, ids, resolutionNote: "Required follow-up created",
-      })
-    : [
+  const taskStatements = !promoteToPrimary
+    ? [
         ...buildCreateTaskStatements({ task, actor: input.actor, ids }),
         buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, [...tasks, task]),
-      ];
+      ]
+    : primaryTask && !primaryTask.sourceFollowUpId && !primaryTask.sourceApprovalRequestId
+      ? buildReplaceMatchingTaskStatements({
+          workOrder, tasks, targetTask: primaryTask, replacementTask: task,
+          actor: input.actor, occurredAt: now, ids, resolutionNote: "Required follow-up created",
+        })
+      : [
+          ...buildCreateTaskStatements({ task, actor: input.actor, ids }),
+          buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, [...tasks, task]),
+        ];
   await atomicWorkOrderMutation({ repository, workOrder, now, statements: [
     insert("ops_follow_ups", { id, organization_id: input.organizationId, work_order_id: input.workOrderId, source_visit_id: input.sourceVisitId, accountable_party: required(input.accountableParty, "Accountable party"), next_action: required(input.nextAction, "Next action"), due_at: input.dueAt, escalation_to: required(input.escalationTo, "Escalation"), status: "open", created_at: now }),
-    { sql: "UPDATE ops_work_orders SET accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [input.accountableParty, input.nextAction, input.dueAt, input.escalationTo, input.organizationId, input.workOrderId] },
+    ...(promoteToPrimary ? [{ sql: "UPDATE ops_work_orders SET accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [input.accountableParty, input.nextAction, input.dueAt, input.escalationTo, input.organizationId, input.workOrderId] }] : []),
     ...taskStatements,
-    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: input.workOrderId, eventType: "follow_up.created", actor: input.actor, occurredAt: now, payload: { followUpId: id, sourceVisitId: input.sourceVisitId, dueAt: input.dueAt }, ids }),
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: input.workOrderId, eventType: "follow_up.created", actor: input.actor, occurredAt: now, payload: { followUpId: id, sourceVisitId: input.sourceVisitId, dueAt: input.dueAt, promoteToPrimary }, ids }),
   ] });
   return { id, organizationId: input.organizationId, workOrderId: input.workOrderId, sourceVisitId: input.sourceVisitId, accountableParty: input.accountableParty.trim(), nextAction: input.nextAction.trim(), dueAt: input.dueAt, escalationTo: input.escalationTo.trim(), status: "open" as const, createdAt: now };
+}
+
+export interface CreateVendorReminderInput { organizationId: OpsId; vendorId: OpsId; title: string; note?: string; accountableParty: string; dueAt: IsoDateTime; escalationTo: string; actor: ActorContext }
+export async function createVendorReminder(svc: OpsCommandServices, input: CreateVendorReminderInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const vendor = await repository.getVendor(input.organizationId, input.vendorId);
+  if (!vendor) throw new OpsDomainError("NOT_FOUND", "Vendor not found");
+  if (!Number.isFinite(Date.parse(input.dueAt))) throw new OpsDomainError("VALIDATION", "Vendor reminder due date is invalid");
+  const title = required(input.title, "Reminder");
+  const accountableParty = required(input.accountableParty, "Accountable party");
+  const escalationTo = required(input.escalationTo, "Escalation destination");
+  const note = input.note?.trim() || undefined;
+  const now = clock.now();
+  const id = ids.next("vendor-reminder");
+  await repository.atomicWrite([
+    insert("ops_vendor_reminders", { id, organization_id: input.organizationId, vendor_id: vendor.id, title, note, accountable_party: accountableParty, due_at: input.dueAt, escalation_to: escalationTo, status: "open", created_by_actor_type: input.actor.actorType, created_by_actor_id: input.actor.actorId, created_by_actor_name: input.actor.actorName, created_at: now }),
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "vendor", aggregateId: vendor.id, eventType: "vendor.reminder_created", actor: input.actor, occurredAt: now, payload: { reminderId: id, title, accountableParty, dueAt: input.dueAt, escalationTo }, ids }),
+  ]);
+  return { id, organizationId: input.organizationId, vendorId: vendor.id, title, note, accountableParty, dueAt: input.dueAt, escalationTo, status: "open" as const, createdByActorType: input.actor.actorType, createdByActorId: input.actor.actorId, createdByActorName: input.actor.actorName, createdAt: now };
+}
+
+export interface UpdateVendorReminderInput extends Omit<CreateVendorReminderInput, "vendorId"> { reminderId: OpsId; updateNote: string }
+export async function updateVendorReminder(svc: OpsCommandServices, input: UpdateVendorReminderInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const reminder = await repository.getVendorReminder(input.organizationId, input.reminderId);
+  if (!reminder) throw new OpsDomainError("NOT_FOUND", "Vendor reminder not found");
+  if (reminder.status !== "open") throw new OpsDomainError("CONFLICT", "Only an open vendor reminder can be updated");
+  if (!Number.isFinite(Date.parse(input.dueAt))) throw new OpsDomainError("VALIDATION", "Vendor reminder due date is invalid");
+  const title = required(input.title, "Reminder");
+  const accountableParty = required(input.accountableParty, "Accountable party");
+  const escalationTo = required(input.escalationTo, "Escalation destination");
+  const updateNote = required(input.updateNote, "Update note");
+  const note = input.note?.trim() || undefined;
+  const now = clock.now();
+  await repository.atomicWrite([
+    { sql: "UPDATE ops_vendor_reminders SET title = ?, note = ?, accountable_party = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ? AND status = 'open'", params: [title, note ?? null, accountableParty, input.dueAt, escalationTo, input.organizationId, reminder.id] },
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "vendor", aggregateId: reminder.vendorId, eventType: "vendor.reminder_updated", actor: input.actor, occurredAt: now, payload: { reminderId: reminder.id, updateNote, previous: { title: reminder.title, note: reminder.note, accountableParty: reminder.accountableParty, dueAt: reminder.dueAt, escalationTo: reminder.escalationTo }, current: { title, note, accountableParty, dueAt: input.dueAt, escalationTo } }, ids }),
+  ]);
+  return { ...reminder, title, note, accountableParty, dueAt: input.dueAt, escalationTo };
+}
+
+export interface CompleteVendorReminderInput { organizationId: OpsId; reminderId: OpsId; completionNote: string; actor: ActorContext }
+export async function completeVendorReminder(svc: OpsCommandServices, input: CompleteVendorReminderInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const reminder = await repository.getVendorReminder(input.organizationId, input.reminderId);
+  if (!reminder) throw new OpsDomainError("NOT_FOUND", "Vendor reminder not found");
+  if (reminder.status !== "open") throw new OpsDomainError("CONFLICT", "Vendor reminder is already complete or cancelled");
+  const completionNote = required(input.completionNote, "Completion note");
+  const now = clock.now();
+  await repository.atomicWrite([
+    { sql: "UPDATE ops_vendor_reminders SET status = ?, completed_by_actor_type = ?, completed_by_actor_id = ?, completed_by_actor_name = ?, completed_at = ?, completion_note = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["completed", input.actor.actorType, input.actor.actorId ?? null, input.actor.actorName, now, completionNote, input.organizationId, reminder.id, "open"] },
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "vendor", aggregateId: reminder.vendorId, eventType: "vendor.reminder_completed", actor: input.actor, occurredAt: now, payload: { reminderId: reminder.id, completionNote }, ids }),
+  ]);
+  return { ...reminder, status: "completed" as const, completedByActorType: input.actor.actorType, completedByActorId: input.actor.actorId, completedByActorName: input.actor.actorName, completedAt: now, completionNote };
 }
 
 export interface ReviewServiceRequestInput {

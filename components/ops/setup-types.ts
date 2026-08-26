@@ -39,3 +39,20 @@ export interface CreatePmSetupModel extends SetupPageContext {
   defaultAssetId?: string;
   defaultCategoryKey?: string;
 }
+
+export interface CreatePmProgramSetupModel extends SetupPageContext {
+  equipmentTypes: SetupOption[];
+}
+
+export interface PmPlanScheduleSetupModel extends SetupPageContext {
+  planId: string;
+  planName: string;
+  storeLabel: string;
+  assetLabel: string;
+  masterProgramName?: string;
+  masterCadenceDays?: number;
+  masterWindowDays?: number;
+  cadenceDays: number;
+  completionWindowDays: number;
+  overrideReason?: string;
+}

@@ -197,7 +197,8 @@ describe("operator presenter drill-through contracts", () => {
     const fixture = buildNorthlinePresentationFixture();
     const session = executiveSession();
     const model = buildProgramModel(fixture, session, "pm");
-    for (const metric of model.metrics.filter((candidate) => ["due", "scheduled", "completed", "missed"].includes(candidate.id))) {
+    expect(model.metrics.map((metric) => metric.id)).toEqual(["due", "scheduled", "completed", "missed", "waived"]);
+    for (const metric of model.metrics) {
       const filtered = buildProgramModel(fixture, session, "pm", { status: metric.id });
       expect(filtered.table!.rows).toHaveLength(Number(metric.value));
       expect(
@@ -339,15 +340,17 @@ describe("operator presenter drill-through contracts", () => {
 
     expect(dashboard.spotlight?.title).toContain("NL-2026-0115");
     expect(dashboard.spotlight?.eyebrow).toBe("Repair or replace");
-    expect(dashboard.spotlight?.description).toMatch(/proposed repair.*expected to keep/i);
+    expect(dashboard.spotlight?.description).toMatch(/proposed repair.*would need.*continued service/i);
+    expect(dashboard.spotlight?.description).toMatch(/entered vendor estimate/i);
     expect(dashboard.spotlight?.description).toMatch(/age, warranty, prior repairs, visits, and preventive maintenance/i);
     expect(dashboard.spotlight?.facts).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Proposed repair", value: "$18,000" }),
-      expect.objectContaining({ label: "Expected added service", value: "5 years" }),
+      expect.objectContaining({ label: "Required service runway", value: "6.6 years" }),
+      expect.objectContaining({ label: "Entered service estimate", value: "5 years" }),
       expect.objectContaining({ label: "Estimated replacement", value: "$32,853" }),
     ]));
     expect(dashboard.spotlight?.link.label).toBe("Open repair-or-replace details");
-    expect(JSON.stringify(dashboard.spotlight)).not.toMatch(/recorded work cost|break-even|economic screening|before issuing/i);
+    expect(JSON.stringify(dashboard.spotlight)).not.toMatch(/recorded work cost|break-even|economic screening|before issuing|expected to keep/i);
   });
 
   it("exposes working Store 104 QR, trusted-device, and vendor entry points", () => {

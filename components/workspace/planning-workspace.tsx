@@ -55,7 +55,7 @@ const workspaceCopy: Record<PlanningWorkspaceKind, {
   lifecycle: {
     label: "Repair or replace",
     basisTitle: "How the comparison works",
-    basis: "The platform compares the current repair with replacement over the same expected-use period. Age, warranty, repeat work, and past costs stay visible, but the final decision remains yours.",
+    basis: "The platform calculates how long a repair must keep equipment in service to equal the annualized installed-capital cost of replacement. An entered vendor service estimate is shown separately; age, warranty, repeat work, and past costs remain context, and the final decision stays yours.",
     sourceTitle: "Equipment to review",
     sourceDescription: "Open a row to see the repair, expected life, replacement estimate, and service history behind the comparison.",
   },
@@ -221,10 +221,12 @@ export function PlanningWorkspace({
   model,
   kind,
   administration,
+  programManagement,
 }: {
   model: ProgramPageViewModel;
   kind: PlanningWorkspaceKind;
   administration?: ReactNode;
+  programManagement?: ReactNode;
 }) {
   const copy = workspaceCopy[kind];
   return (
@@ -234,6 +236,7 @@ export function PlanningWorkspace({
         <BasisBanner kind={kind} />
         <Filters model={model} />
         <MetricStrip model={model} kind={kind} />
+        {kind === "pm" ? programManagement : null}
         <section className={styles.insights} aria-label={`${copy.label} analysis`}>
           {model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}
           {model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}

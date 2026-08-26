@@ -114,6 +114,14 @@ export interface RepairReplacementScreening {
     comparisonHorizonYears?: number;
     comparisonHorizonSource: ComparisonHorizonSource;
     replacementAnnualizedCapitalCostMinor?: number;
+    /**
+     * Continued in-service time required for the repair cost to equal the
+     * annualized installed-capital cost of replacement. This is calculated
+     * from entered costs and replacement expected life; it is not a claim
+     * about how long the repair will actually last.
+     */
+    requiredEconomicRunwayMonths?: number;
+    requiredEconomicRunwayYears?: number;
     breakEvenRepairAmountMinor?: number;
     repairAnnualizedCostMinor?: number;
     repairToBreakEvenRatio?: number;
@@ -279,6 +287,7 @@ export function calculateRepairReplacementScreening(
   }
 
   let replacementAnnualizedRaw: number | undefined;
+  let requiredEconomicRunwayMonthsRaw: number | undefined;
   let breakEvenRepairAmountRaw: number | undefined;
   let repairAnnualizedRaw: number | undefined;
   let repairToBreakEvenRatio: number | undefined;
@@ -286,6 +295,13 @@ export function calculateRepairReplacementScreening(
 
   if (expectedLifeIsValid && replacementEstimateIsValid) {
     replacementAnnualizedRaw = replacementEstimateMinor / expectedLifeYears;
+  }
+  if (
+    repairEstimateIsValid &&
+    replacementAnnualizedRaw !== undefined &&
+    replacementAnnualizedRaw > 0
+  ) {
+    requiredEconomicRunwayMonthsRaw = (repairEstimateMinor / replacementAnnualizedRaw) * 12;
   }
   if (replacementAnnualizedRaw !== undefined && horizonMonthsExact !== undefined) {
     breakEvenRepairAmountRaw = replacementAnnualizedRaw * (horizonMonthsExact / 12);
@@ -402,6 +418,10 @@ export function calculateRepairReplacementScreening(
       comparisonHorizonSource: horizonSource,
       replacementAnnualizedCapitalCostMinor:
         replacementAnnualizedRaw === undefined ? undefined : Math.round(replacementAnnualizedRaw),
+      requiredEconomicRunwayMonths:
+        requiredEconomicRunwayMonthsRaw === undefined ? undefined : round(requiredEconomicRunwayMonthsRaw, 1),
+      requiredEconomicRunwayYears:
+        requiredEconomicRunwayMonthsRaw === undefined ? undefined : round(requiredEconomicRunwayMonthsRaw / 12, 2),
       breakEvenRepairAmountMinor:
         breakEvenRepairAmountRaw === undefined ? undefined : Math.round(breakEvenRepairAmountRaw),
       repairAnnualizedCostMinor:
@@ -420,6 +440,6 @@ export function calculateRepairReplacementScreening(
     historicalContextSourceRecordIds,
     sourceRecordIds: uniqueIds([...economicSourceRecordIds, ...historicalContextSourceRecordIds]),
     definition:
-      "Repair cost must first meet both the configured dollar and replacement-share materiality gates. Material repairs are flagged when they approach the annualized installed replacement cost over the same service horizon or directly exceed the high replacement-share threshold. Expected life, age, historical spend, and reliability are context only and never change this economic screening state.",
+      "Repair cost must first meet both the configured dollar and replacement-share materiality gates. For material repairs, the platform calculates how long the equipment must remain in service for the repair to equal the annualized installed-capital cost of a replacement, then compares that required runway with the entered vendor planning estimate or chronological expected-life runway. This is decision evidence, not a promise that the repair will last or a direction to replace. Age, historical spend, and reliability remain visible context only.",
   };
 }

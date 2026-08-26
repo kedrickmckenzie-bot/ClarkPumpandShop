@@ -157,7 +157,7 @@ export async function runPmRecurrenceCycle(
   const horizonDays = Math.max(1, Math.floor(options.horizonDays ?? 45));
   const summary: PmRecurrenceCycleSummary = { slotKey, organizationsConsidered: 0, organizationsSkipped: 0, occurrencesCreated: 0, plansWithoutOccurrences: 0, plansWithOpenOccurrence: 0, beyondHorizonCount: 0 };
   const plansByOrganization = new Map<string, typeof plans>();
-  const plans = await repository.listPmPlans();
+  const plans = await repository.listAllPmPlansForWorker();
   for (const plan of plans) {
     const bucket = plansByOrganization.get(plan.organizationId);
     if (bucket) bucket.push(plan);

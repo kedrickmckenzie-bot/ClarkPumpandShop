@@ -191,6 +191,38 @@ describe("stage precedence transition matrix", () => {
     expect(resolvedVisit.serviceSubStage?.id).toBe("closeout_review");
   });
 
+  it("keeps an auxiliary reminder visible without letting it replace the current service stage", () => {
+    const auxiliary = buildWorkOrderCase({
+      now: NOW,
+      workOrder: wo("wo-reminder", "issued"),
+      assignments: [{ ...assignment, id: "assignment-reminder", status: "issued" }],
+      issuances: [{ id: "issuance-reminder", assignmentId: "assignment-reminder", revision: 1, issuedAt: NOW }],
+      vendorResponses: [{ id: "response-reminder", issuanceId: "issuance-reminder", response: "proposed_date", respondedAt: NOW, proposedAt: "2026-08-27T15:00:00.000Z" }],
+      followUps: [{
+        id: "follow-up-reminder", workOrderId: "wo-reminder", status: "open",
+        accountableParty: "Parts coordinator", nextAction: "Confirm controller shipment",
+        dueAt: "2026-08-28T15:00:00.000Z", escalationTo: "Facilities director",
+      }],
+    });
+    expect(auxiliary.stage).toBe("vendor_response_scheduling");
+    expect(auxiliary.serviceSubStage?.id).toBe("date_proposed");
+    expect(auxiliary.primaryNextAction.label).toMatch(/proposed date/i);
+
+    const serviceFollowUp = buildWorkOrderCase({
+      now: NOW,
+      workOrder: wo("wo-return", "accepted"),
+      assignments: [{ ...assignment, id: "assignment-return" }],
+      visits: [{ id: "visit-return", workOrderId: "wo-return", status: "checked_out", checkedInAt: NOW, checkedOutAt: NOW, outcome: "parts_required" as never }],
+      followUps: [{
+        id: "follow-up-return", workOrderId: "wo-return", sourceVisitId: "visit-return", status: "open",
+        accountableParty: "Facilities coordinator", nextAction: "Confirm parts and return date",
+        dueAt: "2026-08-28T15:00:00.000Z", escalationTo: "Facilities director",
+      }],
+    });
+    expect(serviceFollowUp.stage).toBe("followup_closeout");
+    expect(serviceFollowUp.serviceSubStage?.id).toBe("followup_required");
+  });
+
   it("keeps recorded cost from pulling a completed job back into vendor scheduling", () => {
     const view = buildWorkOrderCase({
       now: NOW,

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BadgeCheck,
+  BellRing,
   Building2,
   CheckCircle2,
   CircleDollarSign,
@@ -393,6 +394,7 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
 
       <nav className={styles.recordNav} aria-label="Vendor record sections">
         <a href="#relationship-evidence">Overview</a>
+        <a href="#vendor-reminders">Reminders</a>
         <a href="#accountability-evidence">Open items</a>
         <a href="#compliance-evidence">Documents & capabilities</a>
         <a href="#authorization-evidence">Work sent</a>
@@ -426,6 +428,61 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
       </section>
 
       <div className={styles.evidenceStack}>
+        <section className={styles.evidenceSection} aria-labelledby="vendor-reminders-heading" id="vendor-reminders">
+          <SectionHeader id="vendor-reminders-heading" icon={<BellRing size={20} />} title="Vendor relationship reminders" description="General callbacks, renewals, rate reviews, and other vendor obligations that are not tied to a work order." count={`${model.vendorReminderRows.filter((row) => row.status === "open").length} open`} />
+          {model.manageRemindersAction ? (
+            <details className={styles.reminderCreate}>
+              <summary><span><BellRing aria-hidden="true" size={17} /><strong>Set a vendor reminder</strong><small>Give it a clear owner, due time, and escalation path.</small></span><ArrowRight aria-hidden="true" size={16} /></summary>
+              <form action={model.manageRemindersAction} method="post" className={styles.relationshipForm}>
+                <input type="hidden" name="operation" value="create" />
+                <div className={styles.relationshipFormGrid}>
+                  <label><span>Reminder</span><input name="title" required maxLength={240} placeholder="Confirm renewal, pricing, paperwork, or callback" /></label>
+                  <label><span>Owner</span><input name="accountableParty" required maxLength={200} defaultValue={model.defaultReminderOwner} /></label>
+                  <label><span>Due</span><input name="dueAt" type="datetime-local" required /></label>
+                  <label><span>If overdue, notify</span><input name="escalationTo" required maxLength={200} defaultValue={model.defaultReminderEscalation} /></label>
+                </div>
+                <label className={styles.reminderNote}><span>Context <small>Optional</small></span><textarea name="note" rows={3} maxLength={2000} placeholder="What should the owner know before following up?" /></label>
+                <div className={styles.relationshipFormFooter}><p>Uses {model.timeZone.replaceAll("_", " ")} for the due time. This reminder does not create or change a work order.</p><button type="submit">Set reminder</button></div>
+              </form>
+            </details>
+          ) : null}
+          {model.vendorReminderRows.length ? (
+            <div className={styles.reminderList}>
+              {model.vendorReminderRows.map((reminder) => (
+                <article className={styles.reminderRecord} data-status={reminder.status} key={reminder.id}>
+                  <div className={styles.reminderSummary}>
+                    <span className={styles.reminderStatus}>{reminder.statusLabel}</span>
+                    <div><strong>{reminder.title}</strong><p>{reminder.note ?? "No additional context entered."}</p><small>Created by {reminder.createdLabel}{reminder.completionLabel ? ` · Completed by ${reminder.completionLabel}` : ""}</small></div>
+                    <dl><div><dt>Owner</dt><dd>{reminder.accountableParty}</dd></div><div><dt>Due</dt><dd>{reminder.dueLabel}</dd></div><div><dt>Escalates to</dt><dd>{reminder.escalationTo}</dd></div></dl>
+                  </div>
+                  {model.manageRemindersAction && reminder.status === "open" ? (
+                    <details className={styles.reminderEdit}>
+                      <summary>Update or complete<ArrowRight aria-hidden="true" size={14} /></summary>
+                      <div className={styles.reminderEditGrid}>
+                        <form action={model.manageRemindersAction} method="post" className={styles.relationshipForm}>
+                          <input type="hidden" name="operation" value="update" /><input type="hidden" name="reminderId" value={reminder.id} />
+                          <label><span>Reminder</span><input name="title" required maxLength={240} defaultValue={reminder.title} /></label>
+                          <label><span>Owner</span><input name="accountableParty" required maxLength={200} defaultValue={reminder.accountableParty} /></label>
+                          <label><span>Due</span><input name="dueAt" type="datetime-local" required defaultValue={reminder.dueInputValue} /></label>
+                          <label><span>If overdue, notify</span><input name="escalationTo" required maxLength={200} defaultValue={reminder.escalationTo} /></label>
+                          <label className={styles.reminderNote}><span>Context <small>Optional</small></span><textarea name="note" rows={3} maxLength={2000} defaultValue={reminder.note} /></label>
+                          <label className={styles.reminderNote}><span>Why is it changing?</span><textarea name="updateNote" rows={2} required maxLength={2000} placeholder="Record the reason for the new owner, date, or wording." /></label>
+                          <button type="submit">Save reminder changes</button>
+                        </form>
+                        <form action={model.manageRemindersAction} method="post" className={styles.completeReminderForm}>
+                          <input type="hidden" name="operation" value="complete" /><input type="hidden" name="reminderId" value={reminder.id} />
+                          <label><span>Completion note</span><textarea name="completionNote" rows={3} required maxLength={2000} placeholder="What was confirmed or completed?" /></label>
+                          <button type="submit">Mark complete</button>
+                        </form>
+                      </div>
+                    </details>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : <EmptyEvidence>No relationship reminder has been recorded for this vendor.</EmptyEvidence>}
+        </section>
+
         <section className={styles.evidenceSection} aria-labelledby="accountability-evidence" id="accountability-evidence">
           <SectionHeader id="accountability-evidence-heading" icon={<AlertTriangle size={20} />} title="Open follow-ups" description="Items tied to this vendor that still need an update or decision." count={`${model.accountabilityRows.length} open`} />
           {model.accountabilityRows.length ? (

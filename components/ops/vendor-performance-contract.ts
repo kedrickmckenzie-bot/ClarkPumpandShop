@@ -30,6 +30,7 @@ export interface VendorPerformanceSummary {
   coverageRegionCount: number;
   observedStoreCount: number;
   openWorkCount: number;
+  openReminderCount: number;
   assignedWorkCount: number;
   recordedCostMinor: number;
   recordedCostLineCount: number;
@@ -169,6 +170,21 @@ export interface VendorCoverageEvidenceRow {
   preferredRankLabel: string;
 }
 
+export interface VendorReminderViewModel {
+  id: string;
+  title: string;
+  note?: string;
+  accountableParty: string;
+  dueAt: string;
+  dueInputValue: string;
+  dueLabel: string;
+  escalationTo: string;
+  status: "open" | "completed" | "cancelled";
+  statusLabel: string;
+  createdLabel: string;
+  completionLabel?: string;
+}
+
 export interface VendorPerformanceDetailViewModel {
   state: "ready" | "missing";
   title: string;
@@ -178,6 +194,10 @@ export interface VendorPerformanceDetailViewModel {
   backLink: SupportingLink;
   createWorkOrderLink?: SupportingLink;
   manageRelationshipAction?: string;
+  manageRemindersAction?: string;
+  timeZone: string;
+  defaultReminderOwner: string;
+  defaultReminderEscalation: string;
   specialtyOptions: Array<{ value: string; label: string }>;
   notice?: string;
   summary?: VendorPerformanceSummary;
@@ -189,5 +209,6 @@ export interface VendorPerformanceDetailViewModel {
   coverageRows: VendorCoverageEvidenceRow[];
   complianceRows: VendorComplianceEvidenceRow[];
   qualificationRows: VendorQualificationEvidenceRow[];
+  vendorReminderRows: VendorReminderViewModel[];
   regionLabels: string[];
 }

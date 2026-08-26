@@ -159,6 +159,8 @@ export interface OpsRepository {
   listComponentTemplates(organizationId: OpsId, equipmentTemplateId: OpsId): Promise<ComponentTemplate[]>;
   getStore(organizationId: OpsId, storeId: OpsId): Promise<Store | null>;
   getVendor(organizationId: OpsId, vendorId: OpsId): Promise<Vendor | null>;
+  getVendorReminder(organizationId: OpsId, reminderId: OpsId): Promise<import("./types").VendorReminder | null>;
+  listVendorReminders(organizationId: OpsId, vendorId: OpsId): Promise<import("./types").VendorReminder[]>;
   getMembership(organizationId: OpsId, membershipId: OpsId): Promise<Membership | null>;
   listScopeGrantsForMembership(organizationId: OpsId, membershipId: OpsId): Promise<ScopeGrant[]>;
   getRequest(organizationId: OpsId, requestId: OpsId): Promise<ServiceRequest | null>;
@@ -182,6 +184,8 @@ export interface OpsRepository {
   listAssetsForReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<Asset[]>;
   getComponent(organizationId: OpsId, componentId: OpsId): Promise<AssetComponent | null>;
   getMaintenanceProgram(organizationId: OpsId, programId: OpsId): Promise<MaintenanceProgram | null>;
+  listMaintenancePrograms(organizationId: OpsId): Promise<MaintenanceProgram[]>;
+  listAssetsForEquipmentTemplates(organizationId: OpsId, equipmentTemplateIds: OpsId[]): Promise<Asset[]>;
   getPmPlan(organizationId: OpsId, planId: OpsId): Promise<PmPlan | null>;
   getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId): Promise<PmOccurrence | null>;
   listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId): Promise<PmWorkItem[]>;
@@ -302,7 +306,9 @@ export interface OpsRepository {
   finishJobRun(input: { organizationId: OpsId; jobRunId: OpsId; status: "succeeded" | "failed"; finishedAt: IsoDateTime; processedCount: number; failedCount: number }): Promise<void>;
 
   // PM recurrence + job-health support (same platform job/admin context).
-  listPmPlans(): Promise<PmPlan[]>;
+  listPmPlans(organizationId: OpsId): Promise<PmPlan[]>;
+  /** Deliberately cross-tenant read reserved for the platform recurrence worker. */
+  listAllPmPlansForWorker(): Promise<PmPlan[]>;
   listPmOccurrencesForPlan(organizationId: OpsId, planId: OpsId): Promise<PmOccurrence[]>;
   listRecentJobRuns(organizationId: OpsId, limit: number): Promise<JobRun[]>;
   outboxStatusCounts(organizationId: OpsId): Promise<Array<{ status: string; count: number }>>;

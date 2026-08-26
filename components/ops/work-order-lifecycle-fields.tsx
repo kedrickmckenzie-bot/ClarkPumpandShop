@@ -148,7 +148,7 @@ export function WorkOrderLifecycleFields({
             <small>Use the current repair under consideration—not past work cost.</small>
           </label>
           <label className={styles.field} htmlFor="work-service-extension">
-            <span>Expected service this repair could buy <small>Optional years</small></span>
+            <span>Vendor&apos;s estimated added service <small>Optional years</small></span>
             <input
               id="work-service-extension"
               type="number"
@@ -160,7 +160,7 @@ export function WorkOrderLifecycleFields({
               onChange={(event) => setServiceExtensionYears(event.target.value)}
             />
             <input type="hidden" name="estimatedServiceExtensionMonths" value={extensionMonths ?? ""} />
-            <small>A planning estimate, not a warranty or guaranteed outcome.</small>
+            <small>Enter this only when the vendor provides a credible estimate. It is not a warranty or guaranteed outcome.</small>
           </label>
         </div>
 
@@ -175,6 +175,8 @@ export function WorkOrderLifecycleFields({
                 <div><dt>Expected life left</dt><dd>{duration(screening.age.chronologicalRemainingExpectedLifeMonths)}</dd></div>
                 <div><dt>Replacement estimate</dt><dd>{money(screening.comparison.replacementEstimateMinor)}</dd></div>
                 <div><dt>Repair share</dt><dd>{percentage(screening.comparison.repairToReplacementRatio)}</dd></div>
+                <div><dt>Required service runway</dt><dd>{duration(screening.comparison.requiredEconomicRunwayMonths)}</dd></div>
+                <div><dt>Vendor service estimate</dt><dd>{duration(screening.comparison.estimatedServiceExtensionMonths)}</dd></div>
               </dl>
             ) : null}
           </div>

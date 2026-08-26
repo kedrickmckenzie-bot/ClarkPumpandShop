@@ -11,12 +11,12 @@ import {
  * real preview mutations, so a new fixture version never merges or reprojects
  * records underneath an older completed bootstrap.
  */
-export const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-25-v13";
+export const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-26-v14";
 
 /**
  * An older completed fixture is enriched only with missing deterministic rows.
  * Existing IDs and user mutations are never overwritten. This separate
- * receipt remains honest that the database was not freshly seeded as v13.
+ * receipt remains honest that the database was not freshly seeded as v14.
  */
 export const NORTHLINE_SEED_COMPATIBILITY_MARKER = `${NORTHLINE_SEED_VERSION}:enriched-existing`;
 

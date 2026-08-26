@@ -117,9 +117,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const activeAssignment = allAssignments.find((row) => ["pending", "issued", "opened", "accepted"].includes(row.status));
   const openTasks = (input.workflowTasks ?? []).filter((row) => row.workOrderId === workOrder.id && OPEN_TASK_STATUSES.has(row.status));
   const blockingTask = openTasks.find((row) => row.blocking)
-    ?? openTasks.filter((row) => row.requiredForProgress).sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999"))[0]
-    ?? openTasks.sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999"))[0];
+    ?? openTasks.filter((row) => row.requiredForProgress).sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999"))[0];
   const openFollowUps = (input.followUps ?? []).filter((row) => OPEN_FOLLOWUP_STATUSES.has(row.status));
+  const closeoutFollowUps = openFollowUps.filter((row) => Boolean(row.sourceVisitId));
   const visits = (input.visits ?? []).filter((row) => row.workOrderId === workOrder.id);
   const activeVisit = visits.find((row) => !row.checkedOutAt)
     ?? [...visits].sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt))[0];
@@ -157,7 +157,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     stage = "provider_decision";
   } else if (activeVisit && !activeVisit.checkedOutAt) {
     stage = "onsite_service";
-  } else if (openFollowUps.length > 0 || closeoutTask || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
+  } else if (closeoutFollowUps.length > 0 || closeoutTask || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
     stage = "followup_closeout";
   } else if (!currentIssuance && activeAssignment.kind === "outside_vendor" && visits.length === 0 && !hasCost) {
     stage = "authorization_or_bidding";
@@ -185,9 +185,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   } else if (onsiteNow) {
     stage = "onsite_service";
     serviceSubStage = activeAssignment?.kind === "outside_vendor" ? "onsite" : undefined;
-  } else if (openFollowUps.length > 0 || closeoutTask || unresolvedCheckout || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
+  } else if (closeoutFollowUps.length > 0 || closeoutTask || unresolvedCheckout || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
     stage = "followup_closeout";
-    serviceSubStage = openFollowUps.length > 0 || unresolvedCheckout || closeoutTask?.taskType === "verify_repair" ? "followup_required" : "closeout_review";
+    serviceSubStage = closeoutFollowUps.length > 0 || unresolvedCheckout || closeoutTask?.taskType === "verify_repair" ? "followup_required" : "closeout_review";
   } else if (stage === "cost_invoice_evidence") {
     serviceSubStage = undefined;
   } else if (stage === "vendor_response_scheduling" && activeAssignment?.kind === "outside_vendor") {
@@ -224,7 +224,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
       : blockingTask
         ? { label: blockingTask.title, href: `/app/action-center/${blockingTask.id}` }
         : { label: activeAssignment?.kind === "internal" ? "Start internal service" : "Open visit activity", href: `${base}?view=visits` },
-    followup_closeout: openFollowUps.length > 0
+    followup_closeout: closeoutFollowUps.length > 0
       ? { label: "Complete or transfer the required follow-up", href: `${base}?view=activity` }
       : closeoutTask
         ? { label: closeoutTask.title, href: `${base}?view=activity#work-control` }
@@ -236,12 +236,12 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   // --- Accountability ------------------------------------------------------
   let accountableParty = workOrder.accountableParty;
   if (blockingTask) accountableParty = blockingTask.assigneeName;
-  if (stage === "followup_closeout" && openFollowUps[0]) accountableParty = openFollowUps[0].accountableParty;
+  if (stage === "followup_closeout" && closeoutFollowUps[0]) accountableParty = closeoutFollowUps[0].accountableParty;
 
-  let dueAt = blockingTask?.dueAt ?? openFollowUps[0]?.dueAt ?? workOrder.dueAt;
+  let dueAt = blockingTask?.dueAt ?? closeoutFollowUps[0]?.dueAt ?? workOrder.dueAt;
   if (stage === "vendor_response_scheduling" && liveAppointment?.status === "confirmed") dueAt = liveAppointment.startsAt;
 
-  const escalationDestination = blockingTask?.escalationDestination ?? openFollowUps[0]?.escalationTo ?? workOrder.escalationTo ?? "Facilities";
+  const escalationDestination = blockingTask?.escalationDestination ?? closeoutFollowUps[0]?.escalationTo ?? workOrder.escalationTo ?? "Facilities";
 
   let blockingReason: string | undefined;
   if (stage === "vendor_response_scheduling" && liveAppointment?.status === "confirmed") {
@@ -309,7 +309,7 @@ export interface WorkOrderCaseInput {
   /** Immutable operator follow-up facts on vendor responses (accept/counter/reply/decline recovery). */
   continuations?: Pick<import("./types").VendorContinuation, "id" | "vendorResponseId" | "workOrderId" | "action" | "createdAt">[];
   workflowTasks?: Pick<WorkflowTask, "id" | "workOrderId" | "serviceRequestId" | "taskType" | "title" | "assigneeName" | "status" | "dueAt" | "escalationDestination" | "blocking" | "requiredForProgress" | "reason">[];
-  followUps?: Pick<FollowUp, "id" | "workOrderId" | "status" | "accountableParty" | "nextAction" | "dueAt" | "escalationTo">[];
+  followUps?: Pick<FollowUp, "id" | "workOrderId" | "sourceVisitId" | "status" | "accountableParty" | "nextAction" | "dueAt" | "escalationTo">[];
   costLines?: Pick<CostLine, "workOrderId">[];
   /** Invoice evidence linked to THIS work order (already scoped by the caller). */
   invoices?: { id: string; status?: string }[];

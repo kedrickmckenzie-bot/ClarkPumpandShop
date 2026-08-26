@@ -97,7 +97,7 @@ describe("Northline deterministic seed release", () => {
       ]);
   });
 
-  it("writes the complete v13 fixture and full-version marker to a fresh PostgreSQL database", async () => {
+  it("writes the complete v14 fixture and full-version marker to a fresh PostgreSQL database", async () => {
     const fixture = buildNorthlinePresentationFixture();
     const expectedSourceStatements = buildOpsSeedStatements(fixture);
     const client = new RecordingPostgresClient([]);

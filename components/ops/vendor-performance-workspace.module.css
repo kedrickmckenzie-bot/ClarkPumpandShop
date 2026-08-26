@@ -1198,6 +1198,217 @@
   padding: 8px 14px;
 }
 
+.reminderCreate {
+  background: #f8fafc;
+  border-top: 1px solid var(--soft-line);
+}
+
+.reminderCreate > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 62px;
+  padding: 12px 20px;
+}
+
+.reminderCreate > summary::-webkit-details-marker,
+.reminderEdit > summary::-webkit-details-marker {
+  display: none;
+}
+
+.reminderCreate > summary > span {
+  align-items: center;
+  display: grid;
+  gap: 2px 9px;
+  grid-template-columns: auto 1fr;
+}
+
+.reminderCreate > summary > span > svg {
+  color: var(--action);
+  grid-row: 1 / span 2;
+}
+
+.reminderCreate > summary strong,
+.reminderEdit > summary {
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.reminderCreate > summary small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.reminderNote,
+.completeReminderForm label,
+.reminderEdit .relationshipForm > label {
+  display: grid;
+  gap: 6px;
+}
+
+.reminderNote > span,
+.completeReminderForm label > span,
+.reminderEdit .relationshipForm > label > span {
+  color: #344054;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.reminderNote textarea,
+.completeReminderForm textarea,
+.reminderEdit .relationshipForm > label input,
+.reminderEdit .relationshipForm > label textarea {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 9px 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.reminderList {
+  border-top: 1px solid var(--soft-line);
+}
+
+.reminderRecord + .reminderRecord {
+  border-top: 1px solid var(--soft-line);
+}
+
+.reminderRecord[data-status="completed"] {
+  background: #fbfcfd;
+}
+
+.reminderSummary {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: auto minmax(240px, 1.2fr) minmax(340px, 1fr);
+  padding: 16px 20px;
+}
+
+.reminderStatus {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.reminderRecord[data-status="completed"] .reminderStatus {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.reminderSummary > div > strong {
+  display: block;
+  font-size: 0.86rem;
+  margin-bottom: 4px;
+}
+
+.reminderSummary p,
+.reminderSummary small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.reminderSummary small {
+  display: block;
+  margin-top: 7px;
+}
+
+.reminderSummary dl {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.reminderSummary dt {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.reminderSummary dd {
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin: 4px 0 0;
+}
+
+.reminderEdit {
+  border-top: 1px solid var(--soft-line);
+}
+
+.reminderEdit > summary {
+  align-items: center;
+  color: var(--action);
+  cursor: pointer;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  list-style: none;
+  padding: 10px 20px;
+}
+
+.reminderEditGrid {
+  background: #f8fafc;
+  border-top: 1px solid var(--soft-line);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  padding: 16px 20px 20px;
+}
+
+.reminderEditGrid .relationshipForm {
+  background: #fff;
+  border: 1px solid var(--line);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reminderEditGrid .relationshipForm .reminderNote,
+.reminderEditGrid .relationshipForm button {
+  grid-column: 1 / -1;
+}
+
+.reminderEditGrid button,
+.completeReminderForm button {
+  background: var(--action);
+  border: 0;
+  border-radius: 3px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 750;
+  min-height: 38px;
+  padding: 8px 14px;
+}
+
+.completeReminderForm {
+  align-self: start;
+  background: #fff;
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.completeReminderForm button {
+  background: #166534;
+}
+
 .relationshipSubsection {
   border-top: 1px solid var(--soft-line);
 }
@@ -1405,6 +1616,18 @@
   .relationshipFormGrid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .reminderSummary {
+    grid-template-columns: auto 1fr;
+  }
+
+  .reminderSummary dl {
+    grid-column: 1 / -1;
+  }
+
+  .reminderEditGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 580px) {
@@ -1472,6 +1695,21 @@
   .relationshipActions,
   .relationshipFormGrid {
     grid-template-columns: 1fr;
+  }
+
+  .reminderSummary,
+  .reminderSummary dl,
+  .reminderEditGrid .relationshipForm {
+    grid-template-columns: 1fr;
+  }
+
+  .reminderSummary dl {
+    grid-column: auto;
+  }
+
+  .reminderEditGrid .relationshipForm .reminderNote,
+  .reminderEditGrid .relationshipForm button {
+    grid-column: auto;
   }
 
   .relationshipActions details[open] {

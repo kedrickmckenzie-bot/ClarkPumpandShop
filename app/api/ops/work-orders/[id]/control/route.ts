@@ -12,6 +12,7 @@ import {
   optionalIsoDate,
 } from "@/lib/server/ops-request-context";
 import type { VendorResponseKind, WorkOrderPriority, WorkOrderStatus } from "@/lib/ops/types";
+import { localDateTimeToIso } from "@/lib/ops/local-date-time";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 const workOrderStatuses = new Set<WorkOrderStatus>([
@@ -174,6 +175,11 @@ export async function POST(
       }
     }
 
+    const rawDueAt = formText(formData, "dueAt", { max: 40 });
+    const [store, organization] = rawDueAt ? await Promise.all([
+      context.repository.getStore(context.session.organizationId, workOrder.storeId),
+      context.repository.getOrganization(context.session.organizationId),
+    ]) : [undefined, undefined];
     await updateWorkOrderControl(
       { repository: context.repository },
       {
@@ -184,7 +190,7 @@ export async function POST(
         priority: priority as WorkOrderPriority,
         accountableParty: formText(formData, "accountableParty", { max: 200 }) || undefined,
         nextAction: formText(formData, "nextAction", { max: 500 }) || undefined,
-        dueAt: optionalIsoDate(formText(formData, "dueAt", { max: 40 })),
+        dueAt: rawDueAt ? localDateTimeToIso(rawDueAt, store?.timeZone ?? organization?.timeZone ?? "UTC") : undefined,
         escalationTo: formText(formData, "escalationTo", { max: 200 }) || undefined,
         note: formText(formData, "note", { required: true, max: 2_000 }),
         actor: context.actor,

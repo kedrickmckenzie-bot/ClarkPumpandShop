@@ -137,6 +137,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_equipment_templates: "equipmentTemplates", ops_component_templates: "componentTemplates",
     ops_stores: "stores", ops_users: "users", ops_memberships: "memberships",
     ops_scope_grants: "scopeGrants", ops_vendors: "vendors", ops_vendor_specialties: "vendorSpecialties",
+    ops_vendor_reminders: "vendorReminders",
     ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
@@ -375,7 +376,12 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
       if (table === "ops_assets" && column === "replacement_attributes_json") row.replacementAttributes = JSON.parse(String(setValues[index] ?? "{}"));
       else if (table === "ops_replacement_events" && column === "final_amount_minor") row.finalAmount = { amountMinor: setValues[index], currency: (row.approvedAmount as { currency?: string } | undefined)?.currency ?? "USD" };
       else if (table === "ops_invoices" && column === "approved_for_payment_minor") row.approvedForPayment = { amountMinor: setValues[index], currency: (row.total as { currency?: string } | undefined)?.currency ?? "USD" };
-      else if (table === "ops_site_visit_work_orders" && setValues[index] === null) row[snakeToCamel(column)] = undefined;
+      else if (
+        (table === "ops_site_visit_work_orders" || table === "ops_vendor_reminders") &&
+        setValues[index] === null
+      ) {
+        row[snakeToCamel(column)] = undefined;
+      }
       else row[snakeToCamel(column)] = setValues[index];
     }));
     if (table === "ops_work_order_estimate_requests") assertEstimateRequestUniqueness(rows);
@@ -432,6 +438,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listAssetsForReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<Asset[]> { return clone(this.fixture.assets.filter((row) => row.organizationId === organizationId && row.replacementProfileId === profileId).sort((a, b) => a.storeId.localeCompare(b.storeId) || a.assetTag.localeCompare(b.assetTag) || a.id.localeCompare(b.id))); }
   async getComponent(organizationId: OpsId, componentId: OpsId) { return clone(this.fixture.components.find((row) => row.organizationId === organizationId && row.id === componentId) ?? null); }
   async getMaintenanceProgram(organizationId: OpsId, programId: OpsId) { return clone(this.fixture.maintenancePrograms.find((row) => row.organizationId === organizationId && row.id === programId) ?? null); }
+  async listMaintenancePrograms(organizationId: OpsId) { return clone(this.fixture.maintenancePrograms.filter((row) => row.organizationId === organizationId).sort((a, b) => a.status.localeCompare(b.status) || a.name.localeCompare(b.name) || b.version - a.version)); }
+  async listAssetsForEquipmentTemplates(organizationId: OpsId, equipmentTemplateIds: OpsId[]) { const allowed = new Set(equipmentTemplateIds); return clone(this.fixture.assets.filter((row) => row.organizationId === organizationId && row.equipmentTemplateId && allowed.has(row.equipmentTemplateId) && row.status !== "retired").sort((a, b) => a.storeId.localeCompare(b.storeId) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))); }
   async getPmPlan(organizationId: OpsId, planId: OpsId) { return clone(this.fixture.pmPlans.find((row) => row.organizationId === organizationId && row.id === planId) ?? null); }
   async getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return clone(this.fixture.pmOccurrences.find((row) => row.organizationId === organizationId && row.id === occurrenceId) ?? null); }
   async listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return clone(this.fixture.pmWorkItems.filter((row) => row.organizationId === organizationId && row.occurrenceId === occurrenceId)); }
@@ -480,6 +488,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listSiteVisitWorkOrdersForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<SiteVisitWorkOrder[]> { return clone(this.fixture.siteVisitWorkOrders.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((left, right) => right.linkedAt.localeCompare(left.linkedAt) || right.id.localeCompare(left.id))); }
   async listWorkOrderVerifications(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderVerification[]> { return clone(this.fixture.workOrderVerifications.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((left, right) => left.cycle - right.cycle || left.decidedAt.localeCompare(right.decidedAt) || left.id.localeCompare(right.id))); }
   async getFollowUp(organizationId: OpsId, followUpId: OpsId) { return clone(this.fixture.followUps.find((row) => row.organizationId === organizationId && row.id === followUpId) ?? null); }
+  async getVendorReminder(organizationId: OpsId, reminderId: OpsId) { return clone(this.fixture.vendorReminders.find((row) => row.organizationId === organizationId && row.id === reminderId) ?? null); }
+  async listVendorReminders(organizationId: OpsId, vendorId: OpsId) { return clone(this.fixture.vendorReminders.filter((row) => row.organizationId === organizationId && row.vendorId === vendorId).sort((left, right) => Number(left.status !== "open") - Number(right.status !== "open") || left.dueAt.localeCompare(right.dueAt) || left.id.localeCompare(right.id))); }
   async getWorkflowTask(organizationId: OpsId, workflowTaskId: OpsId) { return clone(this.fixture.workflowTasks.find((row) => row.organizationId === organizationId && row.id === workflowTaskId) ?? null); }
   async listWorkflowTasksForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkflowTask[]> { return clone(this.fixture.workflowTasks.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))); }
   async listWorkflowTasksForRequest(organizationId: OpsId, requestId: OpsId): Promise<WorkflowTask[]> { return clone(this.fixture.workflowTasks.filter((row) => row.organizationId === organizationId && row.serviceRequestId === requestId).sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))); }
@@ -646,7 +656,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
 
   async finishJobRun(input: { organizationId: OpsId; jobRunId: OpsId; status: "succeeded" | "failed"; finishedAt: string; processedCount: number; failedCount: number }): Promise<void> { await this.atomicWrite([{ sql: "UPDATE ops_job_runs SET status = ?, finished_at = ?, processed_count = ?, failed_count = ? WHERE organization_id = ? AND id = ? AND status = ?", params: [input.status, input.finishedAt, input.processedCount, input.failedCount, input.organizationId, input.jobRunId, "running"] }]); }
 
-  async listPmPlans(): Promise<PmPlan[]> { return clone(this.fixture.pmPlans.slice().sort((a, b) => (a.storeId ?? "").localeCompare(b.storeId ?? "") || a.id.localeCompare(b.id))); }
+  async listPmPlans(organizationId: OpsId): Promise<PmPlan[]> { return clone(this.fixture.pmPlans.filter((row) => row.organizationId === organizationId).sort((a, b) => (a.storeId ?? "").localeCompare(b.storeId ?? "") || a.id.localeCompare(b.id))); }
+
+  async listAllPmPlansForWorker(): Promise<PmPlan[]> { return clone(this.fixture.pmPlans.slice().sort((a, b) => a.organizationId.localeCompare(b.organizationId) || (a.storeId ?? "").localeCompare(b.storeId ?? "") || a.id.localeCompare(b.id))); }
 
   async listPmOccurrencesForPlan(organizationId: OpsId, planId: OpsId): Promise<PmOccurrence[]> { return clone(this.fixture.pmOccurrences.filter((row) => row.organizationId === organizationId && row.planId === planId).sort((a, b) => a.dueAt.localeCompare(b.dueAt) || a.id.localeCompare(b.id))); }
 

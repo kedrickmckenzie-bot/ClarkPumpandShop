@@ -232,6 +232,20 @@
       "when": 1787664816841,
       "tag": "0032_magenta_killer_shrike",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1787764405137,
+      "tag": "0033_lush_thor_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1787769997629,
+      "tag": "0034_nice_menace",
+      "breakpoints": true
     }
   ]
 }

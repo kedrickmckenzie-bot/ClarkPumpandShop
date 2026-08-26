@@ -365,6 +365,30 @@ export interface VendorQualification {
   createdAt: IsoDateTime;
 }
 
+export type VendorReminderStatus = "open" | "completed" | "cancelled";
+
+/** Relationship work that is not service work and must not become a fake work order. */
+export interface VendorReminder {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorId: OpsId;
+  title: string;
+  note?: string;
+  accountableParty: string;
+  dueAt: IsoDateTime;
+  escalationTo: string;
+  status: VendorReminderStatus;
+  createdByActorType: ActorType;
+  createdByActorId?: OpsId;
+  createdByActorName: string;
+  createdAt: IsoDateTime;
+  completedByActorType?: ActorType;
+  completedByActorId?: OpsId;
+  completedByActorName?: string;
+  completedAt?: IsoDateTime;
+  completionNote?: string;
+}
+
 export interface VendorComplianceDocument {
   id: OpsId;
   organizationId: OpsId;
@@ -971,6 +995,8 @@ export interface Asset {
   storeId: OpsId;
   categoryKey: string;
   taxonomyNodeId?: OpsId;
+  /** Durable company equipment type used for setup defaults and PM enrollment. */
+  equipmentTemplateId?: OpsId;
   groupPath: string[];
   assetTag: string;
   name: string;
@@ -1156,6 +1182,8 @@ export interface MaintenanceProgram {
   frequencyDays: number;
   recurrenceKind: "fixed_calendar" | "completion_based";
   dueWindowDays: number;
+  /** Company calendar anchor used when newly commissioned equipment auto-enrolls. */
+  scheduleAnchorAt?: IsoDateTime;
   seasonalStartMonth?: number;
   seasonalEndMonth?: number;
   checklistTemplateId: OpsId;
@@ -1213,6 +1241,9 @@ export interface PmPlan {
   serviceLevelPolicyId?: OpsId;
   schedulingMode?: SchedulingMode;
   escalationRules?: string;
+  cadenceOverrideReason?: string;
+  cadenceOverriddenAt?: IsoDateTime;
+  cadenceOverriddenByMembershipId?: OpsId;
   active: boolean;
   createdAt: IsoDateTime;
 }
@@ -1798,6 +1829,7 @@ export interface OpsFixture {
   memberships: Membership[];
   scopeGrants: ScopeGrant[];
   vendors: Vendor[];
+  vendorReminders: VendorReminder[];
   vendorSpecialties: VendorSpecialty[];
   vendorCoverage: VendorCoverage[];
   vendorQualifications: VendorQualification[];

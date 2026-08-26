@@ -363,6 +363,14 @@ a.factCard { padding-right: 38px; }
 .checkField > span { display: flex; flex-direction: column; }
 .checkField strong { font-size: 14px; }
 .checkField small { margin-top: 3px; color: var(--ops-muted); font-size: 14px; line-height: 1.45; }
+.choiceGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.choiceCard { display: flex; align-items: flex-start; gap: 11px; min-height: 76px; padding: 14px; border: 1px solid #d1d8d4; border-radius: 10px; cursor: pointer; }
+.choiceCard:has(input:checked) { border-color: #93c5fd; background: var(--ops-brand-soft); box-shadow: 0 0 0 2px rgba(37,99,235,.09); }
+.choiceCard:has(input:focus-visible) { outline: 3px solid rgba(37,99,235,.28); outline-offset: 2px; }
+.choiceCard input { margin-top: 4px; accent-color: var(--ops-brand); }
+.choiceCard > span { display: flex; flex-direction: column; }
+.choiceCard strong { font-size: 14px; }
+.choiceCard small { margin-top: 4px; color: var(--ops-muted); font-size: 14px; line-height: 1.4; }
 .assignmentChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; border: 0; }
 .assignmentChoices legend { margin-bottom: 8px; }
 .assignmentChoices label { position: relative; display: flex; align-items: flex-start; gap: 10px; min-height: 105px; padding: 14px; border: 1px solid #d1d8d4; border-radius: 10px; cursor: pointer; }

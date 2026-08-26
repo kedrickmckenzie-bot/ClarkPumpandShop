@@ -159,6 +159,16 @@ describe("vendor performance workspace", () => {
     expect(detail.complianceRows.every((row) => row.statusLabel === "Approved")).toBe(true);
   });
 
+  it("renders vendor reminder due times in the organization timezone", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const detail = buildVendorPerformanceDetailModel(fixture, session(), "vendor-northline-summit");
+    expect(detail.timeZone).toBe("America/New_York");
+    expect(detail.vendorReminderRows.find((row) => row.id === "vendor-reminder-summit-fall-capacity")).toMatchObject({
+      dueInputValue: "2026-08-28T11:00",
+      dueLabel: "Aug 28, 11:00 AM EDT",
+    });
+  });
+
   it("searches vendor specialties through organization-approved plain-language aliases", () => {
     const fixture = buildNorthlinePresentationFixture();
     const plumbing = buildVendorPerformanceListModel(fixture, session(), { q: "plumber" });

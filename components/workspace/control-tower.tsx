@@ -223,7 +223,7 @@ export function ControlTower({ model }: { model: DashboardPageViewModel }) {
     <section className={styles.section}><div className={styles.empty}><BarChart3 size={24} aria-hidden="true" /><p>No insight records are available for this scope and period.</p></div></section>
   );
   const metrics = <MetricStrip metrics={model.metrics} />;
-  const attention = <AttentionSection model={model} />;
+  const attention = model.prioritySection?.display === "summary" ? null : <AttentionSection model={model} />;
   const pipeline = <Pipeline model={model} />;
   const spotlight = model.spotlight ? <Spotlight model={model.spotlight} /> : null;
   let content: ReactNode;
@@ -241,7 +241,7 @@ export function ControlTower({ model }: { model: DashboardPageViewModel }) {
       break;
     case "operations":
     default:
-      content = <>{attention}{pipeline}{metrics}{insights}{spotlight}</>;
+      content = <>{metrics}{pipeline}{attention}{insights}{spotlight}</>;
   }
 
   return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;

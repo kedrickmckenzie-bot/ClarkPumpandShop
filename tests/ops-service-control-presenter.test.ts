@@ -337,20 +337,25 @@ describe("enterprise service-control presenter contracts", () => {
     const all = buildListModel(fixture, session, "action-center");
     const exceptionIds = fixture.exceptions.filter((item) => item.status !== "resolved").map((item) => item.id);
     const followUpIds = fixture.followUps.filter((item) => item.status === "open").map((item) => item.id);
+    const vendorReminderIds = fixture.vendorReminders.filter((item) => item.status === "open").map((item) => item.id);
 
-    expect(all.table.rows.map((row) => row.id).sort()).toEqual([...exceptionIds, ...followUpIds].sort());
-    expect(all.table.rows.every((row) => row.href === `/app/action-center/${row.id}`)).toBe(true);
+    expect(all.table.rows.map((row) => row.id).sort()).toEqual([...exceptionIds, ...followUpIds, ...vendorReminderIds].sort());
+    expect(all.table.rows.filter((row) => !vendorReminderIds.includes(row.id)).every((row) => row.href === `/app/action-center/${row.id}`)).toBe(true);
+    expect(all.table.rows.filter((row) => vendorReminderIds.includes(row.id)).every((row) => row.href.includes("/app/vendors/") && row.href.endsWith("#vendor-reminders"))).toBe(true);
     expect(all.metrics?.find((metric) => metric.id === "attention-all")?.value).toBe(String(all.table.rows.length));
     expect(all.metrics?.find((metric) => metric.id === "attention-exceptions")?.value).toBe(String(exceptionIds.length));
     expect(all.metrics?.find((metric) => metric.id === "attention-followups")?.value).toBe(String(followUpIds.length));
+    expect(all.metrics?.find((metric) => metric.id === "attention-vendor-reminders")?.value).toBe(String(vendorReminderIds.length));
 
     const exceptions = buildListModel(fixture, session, "action-center", { type: "exception" });
     const followUps = buildListModel(fixture, session, "action-center", { type: "follow-up" });
+    const vendorReminders = buildListModel(fixture, session, "action-center", { type: "vendor-reminder" });
     const urgent = buildListModel(fixture, session, "action-center", { priority: "urgent" });
     expect(exceptions.table.rows.every((row) => exceptionIds.includes(row.id))).toBe(true);
     expect(exceptions.table.rows.some((row) => followUpIds.includes(row.id))).toBe(false);
     expect(followUps.table.rows.every((row) => followUpIds.includes(row.id))).toBe(true);
     expect(followUps.table.rows.some((row) => exceptionIds.includes(row.id))).toBe(false);
+    expect(vendorReminders.table.rows.every((row) => vendorReminderIds.includes(row.id))).toBe(true);
     expect(urgent.table.rows.every((row) => ["Urgent", "Overdue"].includes(cell(row, "priority") ?? ""))).toBe(true);
 
     const combined = buildListModel(fixture, session, "action-center", { type: "exception", priority: "urgent" });

@@ -148,6 +148,33 @@ function dateTime(value: string | undefined): string {
   return value ? dateTimeFormatter.format(new Date(value)) : "Not recorded";
 }
 
+function dateTimeInZone(value: string | undefined, timeZone: string): string {
+  return value
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone,
+        timeZoneName: "short",
+      }).format(new Date(value))
+    : "Not recorded";
+}
+
+function dateTimeInputInZone(value: string, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+}
+
 function sentence(value: string): string {
   return domainLabel(value);
 }
@@ -625,7 +652,27 @@ function actions(fixture: OpsFixture, scoped: ScopedFixture, limit = 6): ActionI
         link: { href: `/app/action-center/${followUp.id}`, label: "Complete or reassign" },
       };
     });
-  return [...exceptionActions, ...followUpActions].slice(0, limit);
+  const vendorById = new Map(fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).map((vendor) => [vendor.id, vendor]));
+  const vendorReminderActions = scoped.includeCompanywide
+    ? fixture.vendorReminders
+        .filter((reminder) => reminder.organizationId === scoped.organizationId && reminder.status === "open" && vendorById.has(reminder.vendorId))
+        .map<ActionItemViewModel>((reminder) => ({
+          id: reminder.id,
+          title: reminder.title,
+          description: `${vendorById.get(reminder.vendorId)?.name ?? "Approved vendor"} · Relationship reminder`,
+          categoryLabel: "Vendor reminder",
+          storeLabel: "Companywide",
+          recordLabel: vendorById.get(reminder.vendorId)?.name ?? "Vendor",
+          dueLabel: `Due ${date(reminder.dueAt)}`,
+          ownerLabel: reminder.accountableParty,
+          priorityLabel: Date.parse(reminder.dueAt) < Date.parse(fixture.asOf) ? "Overdue" : "Due soon",
+          tone: Date.parse(reminder.dueAt) < Date.parse(fixture.asOf) ? "critical" : "warning",
+          link: { href: `/app/vendors/${reminder.vendorId}#vendor-reminders`, label: "Open vendor reminder" },
+        }))
+    : [];
+  return [...exceptionActions, ...followUpActions, ...vendorReminderActions]
+    .sort((left, right) => Number(right.tone === "critical") - Number(left.tone === "critical") || left.dueLabel.localeCompare(right.dueLabel))
+    .slice(0, limit);
 }
 
 const accountabilityExceptionKinds = new Set([
@@ -686,16 +733,29 @@ function lifecycleComparisonLabel(screening: RepairReplacementScreening): string
 }
 
 function lifecycleComparisonExplanation(screening: RepairReplacementScreening): string {
+  const runway = screening.comparison.requiredEconomicRunwayMonths;
+  const runwayLabel = runway === undefined
+    ? "The required service runway cannot be calculated until repair, replacement, and expected-life inputs are entered."
+    : `The repair would need about ${formatRunway(runway)} of continued service to equal the replacement's annualized installed-capital cost.`;
   if (screening.state === "compare_alternatives") {
-    return "The current repair is meaningful in dollars and as a share of replacement, then meets the same-service-period review threshold. Compare the alternatives; this is not a replacement direction.";
+    return `${runwayLabel} Compare the entered repair-service estimate, warranty, and service history before authorizing; this is not a replacement direction.`;
   }
   if (screening.state === "below_materiality") {
-    return "The current repair is small in dollars or as a share of replacement. A short remaining expected life does not turn a low-cost bridge repair into a replacement signal.";
+    return `${runwayLabel} The current repair remains below the materiality threshold, so a short remaining expected life does not turn it into a replacement signal.`;
   }
   if (screening.state === "below_economic_review") {
-    return "The current repair does not meet the capital-review threshold against replacement over the same expected-service period.";
+    return `${runwayLabel} The available planning runway is above that requirement, so the repair is not flagged for capital review.`;
   }
   return "Add the current repair, replacement estimate, and expected-service facts that are still missing.";
+}
+
+function formatRunway(months: number): string {
+  if (months < 12) {
+    const rounded = Math.max(0.1, Math.round(months * 10) / 10);
+    return `${rounded} ${rounded === 1 ? "month" : "months"}`;
+  }
+  const years = Math.round((months / 12) * 10) / 10;
+  return `${years} ${years === 1 ? "year" : "years"}`;
 }
 
 function lifecycleGapLabel(gap: RepairReplacementScreening["dataGaps"][number]): string {
@@ -873,12 +933,6 @@ function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession
       followUp.status === "open" &&
       scoped.workOrders.some((workOrder) => workOrder.id === followUp.workOrderId),
   );
-  const openExceptions = fixture.exceptions.filter(
-    (exception) =>
-      exception.organizationId === scoped.organizationId &&
-      exception.status !== "resolved" &&
-      (exception.storeId ? scoped.storeIds.has(exception.storeId) : scoped.includeCompanywide),
-  );
   const categoryCost = new Map<string, number>();
   for (const work of scoped.workOrders) {
     const key = work.categoryKey ?? "unclassified";
@@ -888,6 +942,7 @@ function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession
     row.screening.state === "compare_alternatives",
   );
 
+  const reviewItems = actions(fixture, scoped, 200);
   const metrics: MetricViewModel[] = [
     {
       id: "active-visits",
@@ -899,11 +954,11 @@ function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession
     },
     {
       id: "open-exceptions",
-      label: "Needs attention",
-      value: String(openExceptions.length),
-      supportingText: "No-WO, location, checkout, and review facts",
-      tone: openExceptions.length ? "warning" : "positive",
-      link: { href: "/app/action-center?type=exception", label: "Review exceptions" },
+      label: "Items to review",
+      value: String(reviewItems.length),
+      supportingText: "Open the queue for source records and next steps",
+      tone: reviewItems.length ? "warning" : "positive",
+      link: { href: "/app/action-center", label: "Open review queue" },
     },
     {
       id: "open-work",
@@ -925,13 +980,13 @@ function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession
     state: { kind: "ready" },
     layout: session.role === "executive" ? "executive" : session.role === "finance" ? "finance" : session.role === "store_manager" ? "store" : session.role === "regional" ? "regional" : "operations",
     page: {
-      title: session.role === "executive" ? "Your company at a glance" : "Here’s what needs attention",
+      title: session.role === "executive" ? "Your company at a glance" : "Maintenance overview",
       eyebrow: session.role === "executive" ? "Executive home" : "Manager home",
       description: "Start with the decisions that need you, then follow every number into the store, work order, visit, or cost record behind it.",
       scopeLabel: session.scopeLabel,
       periodLabel: `Rolling 12 months from ${date(periodStart)}`,
       updatedLabel: `Source data through ${date(fixture.asOf)}`,
-      primaryAction: { label: "Review what needs attention", href: "/app/action-center" },
+      primaryAction: { label: "Open review queue", href: "/app/action-center" },
       secondaryAction: session.role === "facilities" || session.role === "regional"
         ? { label: "Create work order", href: "/app/work-orders/new" }
         : undefined,
@@ -996,12 +1051,13 @@ function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession
       ? {
           eyebrow: "Repair or replace",
           title: `${candidate.proposalWork?.number ?? "Current repair"}: review repair versus replacement`,
-          description: `The proposed repair is ${money(candidate.screening.comparison.repairEstimateMinor ?? 0)}. Based on the information entered, it is expected to keep ${candidate.asset.name} in service for about ${candidate.screening.comparison.comparisonHorizonYears ?? "an unentered number of"} ${candidate.screening.comparison.comparisonHorizonYears === 1 ? "year" : "years"}. Replacement is estimated at ${money(candidate.screening.comparison.replacementEstimateMinor ?? 0)}, so the repair is ${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of the replacement estimate.`,
+          description: `The proposed repair is ${money(candidate.screening.comparison.repairEstimateMinor ?? 0)}, or ${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of the ${money(candidate.screening.comparison.replacementEstimateMinor ?? 0)} replacement estimate. It would need about ${candidate.screening.comparison.requiredEconomicRunwayMonths === undefined ? "an uncalculated period" : formatRunway(candidate.screening.comparison.requiredEconomicRunwayMonths)} of continued service to equal the replacement's annualized installed-capital cost. The entered service estimate is planning evidence, not a guarantee.`,
           facts: [
             { label: "Proposed repair", value: money(candidate.screening.comparison.repairEstimateMinor ?? 0) },
             { label: "Estimated replacement", value: money(candidate.screening.comparison.replacementEstimateMinor ?? 0) },
             { label: "Repair vs. replacement", value: `${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}%` },
-            { label: "Expected added service", value: candidate.screening.comparison.comparisonHorizonYears ? `${candidate.screening.comparison.comparisonHorizonYears} ${candidate.screening.comparison.comparisonHorizonYears === 1 ? "year" : "years"}` : "Not entered" },
+            { label: "Required service runway", value: candidate.screening.comparison.requiredEconomicRunwayMonths === undefined ? "Not calculable" : formatRunway(candidate.screening.comparison.requiredEconomicRunwayMonths) },
+            { label: "Entered service estimate", value: candidate.screening.comparison.estimatedServiceExtensionMonths === undefined ? "Not entered" : formatRunway(candidate.screening.comparison.estimatedServiceExtensionMonths) },
           ],
           link: { href: `/app/lifecycle?asset=${candidate.asset.id}`, label: "Open repair-or-replace details" },
         }
@@ -1150,9 +1206,10 @@ export function buildAccountabilityDashboardModel(
     ],
     priorityActions: visitReviewActions,
     prioritySection: {
-      title: "Visits to review",
-      description: "Open the exact check-in or checkout record. Nothing here is a vendor score or automatic accusation.",
+      title: "Visit review queue",
+      description: "Open the full queue for the exact check-in and checkout records.",
       link: { href: "/app/visits?review=true", label: "Open all visits needing review" },
+      display: "summary",
     },
     breakdowns: [
       countBreakdown(
@@ -1184,12 +1241,6 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
   const awaitingVendor = openWork.filter((work) =>
     ["approved", "issued", "waiting_on_vendor"].includes(work.status),
   );
-  const openExceptions = fixture.exceptions.filter(
-    (exception) =>
-      exception.organizationId === scoped.organizationId &&
-      exception.status !== "resolved" &&
-      (exception.storeId ? scoped.storeIds.has(exception.storeId) : scoped.includeCompanywide),
-  );
   const lifecycle = lifecycleRows(fixture, scoped, allCostByWork);
   const repairComparisons = lifecycle.filter((row) => row.screening.state === "compare_alternatives");
   const candidate = repairComparisons[0];
@@ -1204,6 +1255,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     if (visit.vendorId) observedVisitCounts.set(visit.vendorId, (observedVisitCounts.get(visit.vendorId) ?? 0) + 1);
   }
 
+  const reviewItems = actions(fixture, scoped, 200);
   const categoryCost = new Map<string, number>();
   const storeCost = new Map<string, number>();
   for (const work of scoped.workOrders) {
@@ -1251,12 +1303,13 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     ? {
         eyebrow: "Repair or replace",
         title: `${candidate.proposalWork?.number ?? "Current repair"}: review repair versus replacement`,
-        description: `The proposed repair is ${money(candidate.screening.comparison.repairEstimateMinor ?? 0)}. Based on the information entered, it is expected to keep ${candidate.asset.name} in service for about ${candidate.screening.comparison.comparisonHorizonYears ?? "an unentered number of"} ${candidate.screening.comparison.comparisonHorizonYears === 1 ? "year" : "years"}. Replacement is estimated at ${money(candidate.screening.comparison.replacementEstimateMinor ?? 0)}, so the repair is ${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of the replacement estimate. Open the comparison to review age, warranty, prior repairs, visits, and preventive maintenance before making the decision.`,
+        description: `The proposed repair is ${money(candidate.screening.comparison.repairEstimateMinor ?? 0)}, or ${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of the ${money(candidate.screening.comparison.replacementEstimateMinor ?? 0)} replacement estimate. It would need about ${candidate.screening.comparison.requiredEconomicRunwayMonths === undefined ? "an uncalculated period" : formatRunway(candidate.screening.comparison.requiredEconomicRunwayMonths)} of continued service to equal the replacement's annualized installed-capital cost. Open the comparison to review the entered vendor estimate, age, warranty, prior repairs, visits, and preventive maintenance before making the decision.`,
         facts: [
           { label: "Proposed repair", value: money(candidate.screening.comparison.repairEstimateMinor ?? 0) },
           { label: "Estimated replacement", value: money(candidate.screening.comparison.replacementEstimateMinor ?? 0) },
           { label: "Repair vs. replacement", value: `${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}%` },
-          { label: "Expected added service", value: candidate.screening.comparison.comparisonHorizonYears ? `${candidate.screening.comparison.comparisonHorizonYears} ${candidate.screening.comparison.comparisonHorizonYears === 1 ? "year" : "years"}` : "Not entered" },
+          { label: "Required service runway", value: candidate.screening.comparison.requiredEconomicRunwayMonths === undefined ? "Not calculable" : formatRunway(candidate.screening.comparison.requiredEconomicRunwayMonths) },
+          { label: "Entered service estimate", value: candidate.screening.comparison.estimatedServiceExtensionMonths === undefined ? "Not entered" : formatRunway(candidate.screening.comparison.estimatedServiceExtensionMonths) },
         ],
         link: { href: `/app/lifecycle?asset=${candidate.asset.id}`, label: "Open repair-or-replace details" },
       }
@@ -1283,11 +1336,11 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
       metrics: [
         { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Entered work costs for the last 12 months", link: { href: "/app/spend", label: "See the costs" } },
         { id: "open-work", label: "Open work", value: String(openWork.length), supportingText: "Every item has an owner and next step", tone: openWork.length ? "info" : "positive", link: { href: "/app/work-orders?status=open", label: "See open work" } },
-        { id: "open-exceptions", label: "Needs attention", value: String(openExceptions.length), supportingText: "Items waiting for review or a decision", tone: openExceptions.length ? "warning" : "positive", link: { href: "/app/action-center?type=exception", label: "Review items" } },
+        { id: "open-exceptions", label: "Items to review", value: String(reviewItems.length), supportingText: "Open the queue for source records and next steps", tone: reviewItems.length ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
         { id: "watch-assets", label: "Equipment to review", value: String(scoped.assets.filter((asset) => asset.status === "watch").length), supportingText: "Equipment flagged for a closer look", tone: "warning", link: { href: "/app/equipment?status=watch", label: "Review equipment" } },
       ],
       priorityActions: [
-        dashboardShortcut({ id: "executive-attention", title: `Review ${openExceptions.length} item${openExceptions.length === 1 ? "" : "s"} needing attention`, description: "See visits without a work order, location issues, missed checkouts, and open follow-ups.", categoryLabel: "Company overview", dueLabel: "Current", ownerLabel: "Maintenance leadership", tone: openExceptions.length ? "warning" : "positive", href: "/app/action-center?type=exception", linkLabel: "Review items" }),
+        dashboardShortcut({ id: "executive-attention", title: `Review ${reviewItems.length} item${reviewItems.length === 1 ? "" : "s"}`, description: "Open the complete queue for source records, owners, and next steps.", categoryLabel: "Company overview", dueLabel: "Current", ownerLabel: "Maintenance leadership", tone: reviewItems.length ? "warning" : "positive", href: "/app/action-center", linkLabel: "Open review queue" }),
         dashboardShortcut({ id: "executive-store-cost", title: highestCostStore ? `${storeLabel(storeById.get(highestCostStore[0]))} has the highest recorded cost` : "Compare store costs", description: highestCostStore ? `${money(highestCostStore[1])} of rolling recorded work cost; open the hierarchy and source work before drawing a conclusion.` : "No store cost is recorded in this period.", categoryLabel: "Cost visibility", dueLabel: "Rolling 12 months", ownerLabel: "Operations leadership", tone: "info", href: highestCostStore ? hrefWithQuery("/app/spend", { store: highestCostStore[0] }) : "/app/spend", linkLabel: "Explain the store total" }),
         dashboardShortcut({ id: "executive-capital", title: `${repairComparisons.length} repair comparison${repairComparisons.length === 1 ? "" : "s"} to review`, description: "Compare larger repairs with age, expected life, replacement cost, and service history.", categoryLabel: "Equipment planning", dueLabel: "Planning view", ownerLabel: "Maintenance and finance", tone: candidate ? "warning" : "positive", href: "/app/lifecycle?reason=compare+alternatives", linkLabel: "Open equipment planning" }),
         dashboardShortcut({ id: "executive-reports", title: "Open reports", description: "Share or archive reports for open work, costs, vendors, preventive maintenance, and invoice review.", categoryLabel: "Reporting", dueLabel: "Available now", ownerLabel: "Leadership", href: "/app/reports", linkLabel: "Open reports" }),
@@ -1395,27 +1448,27 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
       title: isFacilities ? "Maintenance overview" : "Your region at a glance",
       eyebrow: isFacilities ? "Daily maintenance" : "Regional overview",
       description: isFacilities
-        ? "See what needs attention, who is onsite, what is waiting, and where maintenance costs are moving."
+        ? "See what is waiting for review, who is onsite, where work stands, and how maintenance costs are moving."
         : "See stores, open work, vendor activity, and recorded costs across your region.",
-      primaryAction: { label: "See what needs attention", href: "/app/action-center" },
+      primaryAction: { label: "Open review queue", href: "/app/action-center" },
       secondaryAction: { label: "Create work order", href: "/app/work-orders/new" },
     },
     journey: base.journey,
     metrics: isFacilities
       ? [
-          { id: "open-exceptions", label: "Needs attention", value: String(openExceptions.length), supportingText: "Visit or service records waiting for review", tone: openExceptions.length ? "warning" : "positive", link: { href: "/app/action-center?type=exception", label: "Review items" } },
+          { id: "open-exceptions", label: "Items to review", value: String(reviewItems.length), supportingText: "Open the queue for records, owners, and next steps", tone: reviewItems.length ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
           { id: "vendor-response", label: "Awaiting vendor response", value: String(awaitingVendor.length), supportingText: "Approved, issued, or waiting on vendor", tone: awaitingVendor.length ? "warning" : "positive", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
           { id: "active-visits", label: "Vendors onsite now", value: String(activeVisits.length), supportingText: `${scoped.visits.length} total visits recorded`, tone: activeVisits.length ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
           { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Entered work costs for the last 12 months", link: { href: "/app/spend", label: "See the costs" } },
         ]
       : [
           { id: "open-work", label: "Open work", value: String(openWork.length), supportingText: "Each item has an owner, next step, and due date", tone: openWork.length ? "info" : "positive", link: { href: "/app/work-orders?status=open", label: "Open regional work" } },
-          { id: "open-exceptions", label: "Needs attention", value: String(openExceptions.length), supportingText: "Items waiting for review in your region", tone: openExceptions.length ? "warning" : "positive", link: { href: "/app/action-center?type=exception", label: "Review regional items" } },
+          { id: "open-exceptions", label: "Items to review", value: String(reviewItems.length), supportingText: "Open the regional queue for records and next steps", tone: reviewItems.length ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
           { id: "active-visits", label: "Vendors onsite now", value: String(activeVisits.length), supportingText: `${scoped.visits.length} recorded visits in regional scope`, tone: activeVisits.length ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
           { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Rolling source cost inside your region", link: { href: "/app/spend", label: "Explain the total" } },
         ],
-    priorityActions: actions(fixture, scoped),
-    prioritySection: { title: "Needs attention", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "See all" } },
+    priorityActions: reviewItems.slice(0, 6),
+    prioritySection: { title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" }, display: "summary" },
     breakdowns: isFacilities
       ? [
           countBreakdown("open-work-status", "Open work by status", workStatusCounts, (key) => hrefWithQuery("/app/work-orders", { status: key }), { description: "Every segment opens the work orders currently carrying that status.", totalNoun: "open work orders", sourceLink: { href: "/app/work-orders?status=open", label: "Open every maintenance obligation" } }),
@@ -1508,7 +1561,7 @@ const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
 };
 
 const listMeta: Record<OperatorListRoute, { title: string; eyebrow: string; description: string; placeholder?: string }> = {
-  "action-center": { title: "Needs attention", eyebrow: "Your work", description: "Approvals, follow-ups, and other items waiting for a decision or update.", placeholder: "Search stores, work orders, vendors, or issues" },
+  "action-center": { title: "Review queue", eyebrow: "Your work", description: "Approvals, follow-ups, and other records waiting for a decision or update.", placeholder: "Search stores, work orders, vendors, or issues" },
   requests: { title: "Service requests", eyebrow: "Reported issues", description: "Review what store teams reported, then create work, escalate it, or close it without changing the original report.", placeholder: "Search problem, reporter, request, or store" },
   "work-orders": { title: "Work orders", eyebrow: "Maintenance work", description: "Track internal and outside service from creation through visits, follow-up, and recorded cost.", placeholder: "Search number, problem, store, vendor, or category" },
   estimates: { title: "Bid requests", eyebrow: "Request pricing", description: "Ask one or more vendors for pricing without creating duplicate work orders, visits, or costs.", placeholder: "Search work order, store, vendor, scope, or amount" },
@@ -1818,6 +1871,7 @@ function buildVendorEvidenceBundle(
   scoped: ScopedFixture,
   vendor: OpsFixture["vendors"][number],
 ): VendorEvidenceBundle {
+  const organizationTimeZone = fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone ?? "UTC";
   const allScopedWorkIds = new Set(scoped.workOrders.map((work) => work.id));
   const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
   const workById = new Map(scoped.workOrders.map((work) => [work.id, work]));
@@ -1928,6 +1982,10 @@ function buildVendorEvidenceBundle(
         attributedWorkIds.has(followUp.workOrderId),
     )
     .sort((left, right) => left.dueAt.localeCompare(right.dueAt));
+  const vendorRelationshipReminders = fixture.vendorReminders
+    .filter((reminder) => reminder.organizationId === scoped.organizationId && reminder.vendorId === vendor.id)
+    .sort((left, right) => Number(left.status !== "open") - Number(right.status !== "open") || left.dueAt.localeCompare(right.dueAt));
+  const openVendorRelationshipReminders = vendorRelationshipReminders.filter((reminder) => reminder.status === "open");
 
   const coverageRecords = fixture.vendorCoverage.filter(
     (coverage) => coverage.organizationId === scoped.organizationId && coverage.vendorId === vendor.id,
@@ -1958,7 +2016,7 @@ function buildVendorEvidenceBundle(
     0,
   );
   const openWorkCount = attributedWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length;
-  const accountabilityCount = vendorExceptions.length + vendorFollowUps.length;
+  const accountabilityCount = vendorExceptions.length + vendorFollowUps.length + openVendorRelationshipReminders.length;
   const visitedWorkDenominator = linkedVisitsByWork.size;
   const vendorDocuments = fixture.vendorComplianceDocuments
     .filter((document) => document.organizationId === scoped.organizationId && document.vendorId === vendor.id)
@@ -2007,9 +2065,9 @@ function buildVendorEvidenceBundle(
       : "stable";
   const relationshipLabel = relationshipState === "attention" ? "Action required" : relationshipState === "watch" ? "Monitor" : "Operating normally";
   const relationshipSummary = relationshipState === "attention"
-    ? [accountabilityCount ? `${accountabilityCount} open item${accountabilityCount === 1 ? "" : "s"}` : undefined, unresolvedVisits.length ? `${unresolvedVisits.length} unresolved checkout${unresolvedVisits.length === 1 ? "" : "s"}` : undefined, complianceState === "blocked" ? complianceDetail : undefined].filter(Boolean).join(" · ")
+    ? [accountabilityCount ? `${accountabilityCount} open item${accountabilityCount === 1 ? "" : "s"}` : undefined, openVendorRelationshipReminders.length ? `${openVendorRelationshipReminders.length} relationship reminder${openVendorRelationshipReminders.length === 1 ? "" : "s"}` : undefined, unresolvedVisits.length ? `${unresolvedVisits.length} unresolved checkout${unresolvedVisits.length === 1 ? "" : "s"}` : undefined, complianceState === "blocked" ? complianceDetail : undefined].filter(Boolean).join(" · ")
     : relationshipState === "watch"
-      ? [accountabilityCount ? `${accountabilityCount} open item${accountabilityCount === 1 ? "" : "s"}` : undefined, noWorkOrderVisits.length ? `${noWorkOrderVisits.length} visit${noWorkOrderVisits.length === 1 ? "" : "s"} without a work order` : undefined, complianceState === "due_soon" || complianceState === "unconfigured" ? complianceDetail : undefined].filter(Boolean).join(" · ")
+      ? [accountabilityCount ? `${accountabilityCount} open item${accountabilityCount === 1 ? "" : "s"}` : undefined, openVendorRelationshipReminders.length ? `${openVendorRelationshipReminders.length} relationship reminder${openVendorRelationshipReminders.length === 1 ? "" : "s"}` : undefined, noWorkOrderVisits.length ? `${noWorkOrderVisits.length} visit${noWorkOrderVisits.length === 1 ? "" : "s"} without a work order` : undefined, complianceState === "due_soon" || complianceState === "unconfigured" ? complianceDetail : undefined].filter(Boolean).join(" · ")
       : "No open follow-ups or vendor-document issues in this view";
 
   const summary: VendorPerformanceSummary = {
@@ -2029,6 +2087,7 @@ function buildVendorEvidenceBundle(
     coverageRegionCount: coveredRegionIds.size,
     observedStoreCount,
     openWorkCount,
+    openReminderCount: openVendorRelationshipReminders.length,
     assignedWorkCount: attributedWork.length,
     recordedCostMinor,
     recordedCostLineCount,
@@ -2170,7 +2229,7 @@ function buildVendorEvidenceBundle(
       summary: followUp.nextAction,
       workOrderLabel: workById.get(followUp.workOrderId)?.number ?? "Linked work",
       ownerLabel: followUp.accountableParty,
-      dueLabel: dateTime(followUp.dueAt),
+      dueLabel: dateTimeInZone(followUp.dueAt, organizationTimeZone),
       tone: Date.parse(followUp.dueAt) < Date.parse(fixture.asOf) ? "critical" : "warning",
       href: `/app/action-center/${followUp.id}`,
     })),
@@ -2399,10 +2458,15 @@ export function buildVendorPerformanceDetailModel(
       coverageRows: [],
       complianceRows: [],
       qualificationRows: [],
+      vendorReminderRows: [],
+      timeZone: "UTC",
+      defaultReminderOwner: "",
+      defaultReminderEscalation: "Facilities leadership",
       regionLabels: [],
     };
   }
   const bundle = buildVendorEvidenceBundle(fixture, scoped, vendor);
+  const organizationTimeZone = fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone ?? "UTC";
   return {
     state: "ready",
     title: vendor.name,
@@ -2416,6 +2480,12 @@ export function buildVendorPerformanceDetailModel(
     manageRelationshipAction: roleCan(session.role, "onboard_vendor")
       ? `/api/ops/vendors/${encodeURIComponent(vendor.id)}/relationship`
       : undefined,
+    manageRemindersAction: roleCan(session.role, "onboard_vendor")
+      ? `/api/ops/vendors/${encodeURIComponent(vendor.id)}/reminders`
+      : undefined,
+    timeZone: organizationTimeZone,
+    defaultReminderOwner: session.displayName,
+    defaultReminderEscalation: session.role === "facilities" ? "Executive leadership" : "Facilities leadership",
     specialtyOptions: fixture.vendorSpecialties
       .filter((specialty) => specialty.organizationId === scoped.organizationId && specialty.vendorId === vendor.id)
       .sort((left, right) => left.displayName.localeCompare(right.displayName))
@@ -2429,6 +2499,23 @@ export function buildVendorPerformanceDetailModel(
     coverageRows: bundle.coverageRows,
     complianceRows: bundle.complianceRows,
     qualificationRows: bundle.qualificationRows,
+    vendorReminderRows: fixture.vendorReminders
+      .filter((reminder) => reminder.organizationId === scoped.organizationId && reminder.vendorId === vendor.id)
+      .sort((left, right) => Number(left.status !== "open") - Number(right.status !== "open") || left.dueAt.localeCompare(right.dueAt))
+      .map((reminder) => ({
+        id: reminder.id,
+        title: reminder.title,
+        note: reminder.note,
+        accountableParty: reminder.accountableParty,
+        dueAt: reminder.dueAt.slice(0, 16),
+        dueInputValue: dateTimeInputInZone(reminder.dueAt, organizationTimeZone),
+        dueLabel: dateTimeInZone(reminder.dueAt, organizationTimeZone),
+        escalationTo: reminder.escalationTo,
+        status: reminder.status,
+        statusLabel: sentence(reminder.status),
+        createdLabel: `${reminder.createdByActorName} · ${dateTimeInZone(reminder.createdAt, organizationTimeZone)}`,
+        completionLabel: reminder.completedAt ? `${reminder.completedByActorName ?? "Recorded user"} · ${dateTimeInZone(reminder.completedAt, organizationTimeZone)}` : undefined,
+      })),
     regionLabels: bundle.regionLabels,
   };
 }
@@ -2623,7 +2710,7 @@ export function buildListModel(
     const requestedType = first(query.type);
     const requestedPriority = first(query.priority);
     rows = actionsForSession(fixture, scoped, session, 200)
-      .filter((action) => !requestedType || (requestedType === "exception" ? action.categoryLabel !== "Open follow-up" : action.categoryLabel === "Open follow-up"))
+      .filter((action) => !requestedType || (requestedType === "exception" ? !["Open follow-up", "Vendor reminder"].includes(action.categoryLabel) : requestedType === "vendor-reminder" ? action.categoryLabel === "Vendor reminder" : action.categoryLabel === "Open follow-up"))
       .filter((action) => !requestedPriority || (requestedPriority === "urgent" ? action.tone === "critical" : action.tone !== "critical"))
       .filter((action) => !q || searchable(action.title, action.description, action.ownerLabel).includes(q))
       .map((action) => ({
@@ -2766,8 +2853,9 @@ export function buildListModel(
           label: "Queue",
           options: [
             { value: "all", label: `All (${allAttention.length})`, href: hrefWithoutQueryKey(route, query, "type"), selected: !actionType },
-            { value: "exception", label: `Exceptions (${allAttention.filter((item) => item.categoryLabel !== "Open follow-up").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, type: "exception" }), selected: actionType === "exception" },
+            { value: "exception", label: `Exceptions (${allAttention.filter((item) => !["Open follow-up", "Vendor reminder"].includes(item.categoryLabel)).length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, type: "exception" }), selected: actionType === "exception" },
             { value: "follow-up", label: `Follow-ups (${allAttention.filter((item) => item.categoryLabel === "Open follow-up").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, type: "follow-up" }), selected: actionType === "follow-up" },
+            { value: "vendor-reminder", label: `Vendor reminders (${allAttention.filter((item) => item.categoryLabel === "Vendor reminder").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, type: "vendor-reminder" }), selected: actionType === "vendor-reminder" },
           ],
         },
         {
@@ -2808,8 +2896,9 @@ export function buildListModel(
       : route === "action-center"
         ? [
             { id: "attention-all", label: "Open decisions", value: String(allAttention.length), supportingText: "Every item has source evidence and a review action", tone: allAttention.length ? "warning" : "positive", link: { href: "/app/action-center", label: "Open full queue" } },
-            { id: "attention-exceptions", label: "Exceptions", value: String(allAttention.filter((item) => item.categoryLabel !== "Open follow-up").length), supportingText: "Visit, location, and matching facts for human review", tone: "info", link: { href: "/app/action-center?type=exception", label: "Review exceptions" } },
+            { id: "attention-exceptions", label: "Exceptions", value: String(allAttention.filter((item) => !["Open follow-up", "Vendor reminder"].includes(item.categoryLabel)).length), supportingText: "Visit, location, and matching facts for human review", tone: "info", link: { href: "/app/action-center?type=exception", label: "Review exceptions" } },
             { id: "attention-followups", label: "Follow-ups", value: String(allAttention.filter((item) => item.categoryLabel === "Open follow-up").length), supportingText: "Named owner, next action, deadline, and escalation", tone: "warning", link: { href: "/app/action-center?type=follow-up", label: "Open follow-ups" } },
+            { id: "attention-vendor-reminders", label: "Vendor reminders", value: String(allAttention.filter((item) => item.categoryLabel === "Vendor reminder").length), supportingText: "Company-level callbacks, renewals, rate reviews, and relationship commitments", tone: "warning", link: { href: "/app/action-center?type=vendor-reminder", label: "Open vendor reminders" } },
             { id: "attention-urgent", label: "Urgent / overdue", value: String(allAttention.filter((item) => item.tone === "critical").length), supportingText: "Items that should be handled first", tone: allAttention.some((item) => item.tone === "critical") ? "critical" : "positive", link: { href: "/app/action-center?priority=urgent", label: "Open priority work" } },
           ]
         : undefined,
@@ -3314,7 +3403,7 @@ export function buildProgramModel(
     return {
       state: { kind: "ready" },
       page: { title: "Preventive maintenance", eyebrow: "Planned work", description: "Due, scheduled, completed, missed, and waived occurrences with the exact compliance numerator and denominator.", scopeLabel: activeScopeLabel, periodLabel: "Current PM window", updatedLabel: `Through ${date(fixture.asOf)}` },
-      metrics: [metric("due", "Due", "warning"), metric("scheduled", "Scheduled", "info"), metric("completed", "Completed", "positive"), metric("missed", "Missed", "critical")],
+      metrics: [metric("due", "Due", "warning"), metric("scheduled", "Scheduled", "info"), metric("completed", "Completed", "positive"), metric("missed", "Missed", "critical"), metric("waived", "Waived", "neutral")],
       breakdowns: [
         { id: "pm-status", title: "PM occurrence status", description: `Closed-window compliance: ${completed} completed / ${eligible} eligible occurrences = ${eligible ? Math.round((completed / eligible) * 100) : 0}%. Work still inside its completion window is excluded.`, totalLabel: `${occurrences.length} occurrences`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "completed" ? "positive" : key === "missed" ? "critical" : key === "due" ? "warning" : "info", link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId }), label: "Filter occurrences" } })), sourceLink: { href: hrefWithQuery("/app/pm", { store: selectedStoreId }), label: "Open all source occurrences" } },
         { id: "pm-effectiveness-cohorts", title: "Reactive work after the latest closed PM window", description: `${cohortCaution} Rates use trailing-12-month reactive Work Orders per 100 equipment-months; PM-generated Work Orders are excluded.`, totalLabel: `${compliantAssetIds.size + noncompliantAssetIds.size} equipment`, segments: [
@@ -3377,9 +3466,9 @@ export function buildProgramModel(
         value: row.proposalWork
           ? `${row.proposalWork.number}: ${money(row.screening.comparison.repairEstimateMinor ?? 0)}`
           : "No current repair estimate",
-        secondary: row.screening.comparison.comparisonHorizonYears
-          ? `${row.screening.comparison.comparisonHorizonYears} ${row.screening.comparison.comparisonHorizonYears === 1 ? "year" : "years"} of expected service · ${Math.round((row.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of replacement estimate`
-          : "Enter expected service from the repair for a same-horizon comparison",
+        secondary: row.screening.comparison.requiredEconomicRunwayMonths === undefined
+          ? "Enter repair, replacement, and expected-life inputs to calculate the required service runway"
+          : `${formatRunway(row.screening.comparison.requiredEconomicRunwayMonths)} required runway · ${row.screening.comparison.estimatedServiceExtensionMonths === undefined ? "service estimate not entered" : `${formatRunway(row.screening.comparison.estimatedServiceExtensionMonths)} entered service estimate`} · ${Math.round((row.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of replacement estimate`,
       },
       { key: "replacement", value: row.replacement ? money(row.replacement) : "Not entered", secondary: row.replacementResolution.explanation },
       {
@@ -3391,14 +3480,14 @@ export function buildProgramModel(
   }));
   return {
     state: { kind: "ready" },
-    page: { title: "Equipment lifecycle", eyebrow: "Repair or replace", description: "Compare a current repair with replacement over the same expected-use period, see age against expected life, and plan ahead for likely replacement needs. Small repairs are not treated as replacement signals, and the decision remains yours.", scopeLabel: selectedLifecycleAsset ? `${activeScopeLabel} · ${selectedLifecycleAsset.asset.name}` : activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
+    page: { title: "Equipment lifecycle", eyebrow: "Repair or replace", description: "See how long a current repair must keep equipment in service to justify its cost against replacement, then review the vendor estimate, age, warranty, and history. Small repairs are not treated as replacement signals, and the decision remains yours.", scopeLabel: selectedLifecycleAsset ? `${activeScopeLabel} · ${selectedLifecycleAsset.asset.name}` : activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
     metrics: [
       { id: "review", label: "Repairs to compare", value: String(candidates.filter((row) => row.screening.state === "compare_alternatives").length), supportingText: "Material current repairs worth comparing with replacement in this view", tone: "warning", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, reason: "compare alternatives" }), label: "Open repair comparisons" } },
       { id: "replacement", label: "Estimated replacement cost", value: money(replacementTotal), supportingText: "Current planning estimates; not an approved budget", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset }), label: "Review estimates" } },
       { id: "work-cost", label: "Historical recorded cost", value: money(candidates.reduce((sum, row) => sum + row.workCost, 0)), supportingText: "Context only; never added to the current repair estimate", link: { href: hrefWithQuery("/app/work-orders", { hasCost: "true", store: selectedStoreId, asset: selectedAsset }), label: "Open cost sources" } },
       { id: "scope", label: "Equipment in view", value: String(candidates.length), supportingText: selectedLifecycleAsset ? "This equipment record and its exact decision evidence" : "Equipment matching the selected planning scope", tone: "info", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset }), label: "Review equipment evidence" } },
     ],
-    breakdowns: [{ id: "lifecycle-reasons", title: "Repairs in this view", description: "Larger repairs are compared with replacement over the same expected-use period. Small repairs remain visible without being treated as replacement signals.", totalLabel: `${candidates.length} equipment`, segments: [...reasonCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), link: { href: hrefWithQuery("/app/lifecycle", { reason: key, store: selectedStoreId, asset: selectedAsset }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset }), label: "Open all equipment" } }],
+    breakdowns: [{ id: "lifecycle-reasons", title: "Repairs in this view", description: "For each material repair, the platform calculates the minimum continued-service runway needed to justify the repair cost against replacement. Small repairs remain visible without becoming replacement signals.", totalLabel: `${candidates.length} equipment`, segments: [...reasonCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), link: { href: hrefWithQuery("/app/lifecycle", { reason: key, store: selectedStoreId, asset: selectedAsset }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset }), label: "Open all equipment" } }],
     trends: [{
       id: "capex-horizon",
       title: "Estimated replacements by year",
@@ -3713,7 +3802,8 @@ export function buildDetailModel(
           facts: [
             { label: "Current comparison", value: lifecycle ? lifecycleComparisonLabel(lifecycle.screening) : "Inputs not available", helperText: lifecycle ? lifecycleComparisonExplanation(lifecycle.screening) : undefined },
             { label: "Current repair estimate", value: lifecycle?.screening.comparison.repairEstimateMinor === undefined ? "Not entered" : money(lifecycle.screening.comparison.repairEstimateMinor), helperText: "Current proposal only; not accumulated historical spend" },
-            { label: "Expected service from repair", value: lifecycle?.screening.comparison.comparisonHorizonYears === undefined ? "Not entered" : `${lifecycle.screening.comparison.comparisonHorizonYears} ${lifecycle.screening.comparison.comparisonHorizonYears === 1 ? "year" : "years"}`, helperText: lifecycle?.screening.comparison.comparisonHorizonSource === "estimated_service_extension" ? "Entered planning estimate" : "Uses chronological remaining expected life" },
+            { label: "Required service runway", value: lifecycle?.screening.comparison.requiredEconomicRunwayMonths === undefined ? "Not calculable" : formatRunway(lifecycle.screening.comparison.requiredEconomicRunwayMonths), helperText: "Calculated from the current repair, installed replacement estimate, and expected life of a replacement; not a promise about repair life" },
+            { label: "Entered service estimate", value: lifecycle?.screening.comparison.estimatedServiceExtensionMonths === undefined ? "Not entered" : formatRunway(lifecycle.screening.comparison.estimatedServiceExtensionMonths), helperText: "Vendor or operator planning estimate; kept visibly separate from the calculated runway" },
             { label: "Age against expected life", value: lifecycle?.screening.age.ageYears === undefined || lifecycle?.screening.age.expectedLifeYears === undefined ? "Not available" : `${lifecycle.screening.age.ageYears} of ${lifecycle.screening.age.expectedLifeYears} years`, helperText: lifecycle?.screening.age.lifeUsedPercentage === undefined ? undefined : `${Math.round(lifecycle.screening.age.lifeUsedPercentage)}% of the planning reference used; expected life is not an expiration date` },
             { label: "Expected life remaining", value: lifecycle?.screening.age.chronologicalRemainingExpectedLifeYears === undefined ? "Not available" : `${lifecycle.screening.age.chronologicalRemainingExpectedLifeYears} ${lifecycle.screening.age.chronologicalRemainingExpectedLifeYears === 1 ? "year" : "years"}`, helperText: "Chronological planning reference before any entered repair extension" },
             { label: "Repair share of replacement", value: lifecycle?.screening.comparison.repairToReplacementRatio === undefined ? "Not available" : `${Math.round(lifecycle.screening.comparison.repairToReplacementRatio * 100)}%`, helperText: "One transparent materiality fact; never a replacement rule by itself" },
@@ -4089,6 +4179,10 @@ export function buildDetailModel(
     const eligiblePm = storePm.filter((occurrence) => occurrence.status !== "waived" && Date.parse(occurrence.windowEndsAt) < Date.parse(fixture.asOf));
     const completedPm = eligiblePm.filter((occurrence) => effectivePmStatus(occurrence, fixture.asOf) === "completed");
     const pmByPlan = new Map(fixture.pmPlans.filter((plan) => plan.organizationId === scoped.organizationId).map((plan) => [plan.id, plan]));
+    const programById = new Map(fixture.maintenancePrograms.filter((program) => program.organizationId === scoped.organizationId).map((program) => [program.id, program]));
+    const storePlans = fixture.pmPlans
+      .filter((plan) => plan.organizationId === scoped.organizationId && plan.storeId === store.id && plan.active)
+      .sort((left, right) => left.name.localeCompare(right.name));
     const serviceAreas = [...new Set([
       ...storeWork.map((work) => work.categoryKey).filter((value): value is string => Boolean(value)),
       ...storeAssets.map((asset) => asset.categoryKey),
@@ -4139,6 +4233,40 @@ export function buildDetailModel(
             { label: "Vendor authorization", value: "Account-free acceptance, scheduling, decline, or question", link: { href: `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}`, label: "Open vendor view" } },
           ],
         }] : []),
+        {
+          id: "preventive-maintenance-plans",
+          title: "Preventive maintenance plans",
+          description: "This store inherits company schedules. Open any plan to document a faster local cadence without changing the company standard or rewriting prior due dates.",
+          table: {
+            id: "store-pm-plans",
+            caption: `Preventive maintenance plans for Store ${store.storeNumber}`,
+            columns: [
+              { key: "equipment", label: "Equipment / plan" },
+              { key: "program", label: "Company schedule" },
+              { key: "cadence", label: "Current cadence" },
+              { key: "source", label: "Schedule source" },
+            ],
+            rows: storePlans.map((plan) => {
+              const asset = storeAssets.find((candidate) => candidate.id === plan.assetId);
+              const program = plan.programId ? programById.get(plan.programId) : undefined;
+              const overridden = program
+                ? plan.cadenceDays !== program.frequencyDays || plan.completionWindowDays !== program.dueWindowDays || Boolean(plan.cadenceOverrideReason)
+                : false;
+              return {
+                id: plan.id,
+                label: plan.name,
+                href: roleCan(session.role, "setup_pm") ? `/app/pm/plans/${plan.id}` : `/app/pm?store=${store.id}`,
+                cells: [
+                  { key: "equipment", value: asset?.name ?? plan.name, secondary: asset?.assetTag ?? "Store-level plan" },
+                  { key: "program", value: program?.name ?? "Store-created plan", secondary: program ? `Every ${program.frequencyDays} days` : "No company master" },
+                  { key: "cadence", value: `Every ${plan.cadenceDays} days`, secondary: `±${plan.completionWindowDays}-day completion window` },
+                  { key: "source", value: overridden ? "Store override" : program ? "Company standard" : "Store-created", secondary: plan.cadenceOverrideReason, tone: overridden ? "warning" : "positive" },
+                ],
+              };
+            }),
+          },
+          action: { label: "Open company PM workspace", href: `/app/pm?store=${store.id}` },
+        },
         { id: "service-areas", title: "Store systems", description: "Start broad, then open a service area and continue through flexible groups, equipment, components, work orders, and entered cost.", table: { id: "store-service-areas", caption: `Service areas for Store ${store.storeNumber}`, columns: [{ key: "area", label: "Service area" }, { key: "cost", label: "12-month cost", align: "end" }, { key: "open", label: "Open work", align: "end" }, { key: "pm", label: "PM" }, { key: "status", label: "Current signal" }], rows: serviceAreaRows } },
         { id: "work", title: "Work orders", table: { id: "store-work", caption: `Work orders for Store ${store.storeNumber}`, columns: columns["work-orders"], rows: workRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
         { id: "visits", title: "Service visits", description: "All channels create the same store visit record.", table: { id: "store-visits", caption: `Visits for Store ${store.storeNumber}`, columns: columns.visits, rows: visitRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
@@ -4742,6 +4870,7 @@ export function buildWorkOrderControlModel(
       available: false,
       permitted: false,
       submitAction: "",
+      followUpAction: "",
       manualResponseAction: "",
       workOrderId,
       workOrderNumber: workOrderId,
@@ -4919,6 +5048,7 @@ export function buildWorkOrderControlModel(
     available: true,
     permitted,
     submitAction: `/api/ops/work-orders/${encodeURIComponent(work.id)}/control`,
+    followUpAction: `/api/ops/work-orders/${encodeURIComponent(work.id)}/follow-ups`,
     manualResponseAction: `/api/ops/work-orders/${encodeURIComponent(work.id)}/control`,
     workOrderId: work.id,
     workOrderNumber: work.number,
@@ -4934,6 +5064,7 @@ export function buildWorkOrderControlModel(
     // its datetime-local shape separately; stripping the offset here made the
     // same deadline render four hours differently across the case header.
     dueAt: work.dueAt,
+    dueInputValue: work.dueAt ? dateTimeInputInZone(work.dueAt, storeTimeZone) : undefined,
     escalationTo: work.escalationTo,
     isTerminal: terminal,
     pendingApproval,
@@ -4970,7 +5101,7 @@ export function buildWorkOrderControlModel(
         accountableParty: item.accountableParty,
         nextAction: item.nextAction,
         dueAt: item.dueAt.slice(0, 16),
-        dueLabel: dateTime(item.dueAt),
+        dueLabel: dateTimeInZone(item.dueAt, storeTimeZone),
         escalationTo: item.escalationTo,
       })),
     canRecordManualVendorResponse,

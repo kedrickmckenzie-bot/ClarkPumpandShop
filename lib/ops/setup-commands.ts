@@ -4,7 +4,10 @@ import type {
   ActorContext,
   Asset,
   AssetComponent,
+  ChecklistTemplate,
+  EquipmentTemplate,
   IsoDateTime,
+  MaintenanceProgram,
   OpsId,
   PmOccurrence,
   PmPlan,
@@ -110,6 +113,129 @@ function auditAndOutbox(input: {
       attempt_count: 0,
     }),
   ];
+}
+
+function normalizedEquipmentType(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("en-US")
+    .replace(/^equipment-template-/, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function programAppliesToTemplate(program: MaintenanceProgram, template: EquipmentTemplate) {
+  const accepted = new Set([
+    template.id,
+    normalizedEquipmentType(template.id),
+    normalizedEquipmentType(template.name),
+  ]);
+  return program.applicableAssetTypes.some((value) => accepted.has(value) || accepted.has(normalizedEquipmentType(value)));
+}
+
+function occurrenceTiming(dueAt: IsoDateTime, windowDays: number, now: IsoDateTime) {
+  const dueMs = Date.parse(dueAt);
+  const windowMs = windowDays * DAY_MS;
+  const windowStartsAt = new Date(dueMs - windowMs).toISOString();
+  const windowEndsAt = new Date(dueMs + windowMs).toISOString();
+  const nowMs = Date.parse(now);
+  const status: PmOccurrence["status"] = nowMs < Date.parse(windowStartsAt)
+    ? "scheduled"
+    : nowMs <= Date.parse(windowEndsAt)
+      ? "due"
+      : "missed";
+  return { windowStartsAt, windowEndsAt, status };
+}
+
+function nextProgramDueAt(program: MaintenanceProgram, now: IsoDateTime) {
+  const cadenceMs = Math.max(1, program.frequencyDays) * DAY_MS;
+  const windowMs = Math.max(0, program.dueWindowDays) * DAY_MS;
+  let dueMs = Date.parse(program.scheduleAnchorAt ?? program.createdAt);
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(dueMs)) dueMs = nowMs + cadenceMs;
+  if (dueMs + windowMs < nowMs) {
+    const cycles = Math.ceil((nowMs - (dueMs + windowMs)) / cadenceMs);
+    dueMs += Math.max(1, cycles) * cadenceMs;
+  }
+  return new Date(dueMs).toISOString();
+}
+
+function pmPlanStatements(plan: PmPlan, occurrence: PmOccurrence): OpsStatement[] {
+  return [
+    insert("ops_pm_plans", {
+      id: plan.id,
+      organization_id: plan.organizationId,
+      name: plan.name,
+      program_id: plan.programId,
+      program_version: plan.programVersion,
+      store_id: plan.storeId,
+      asset_id: plan.assetId,
+      asset_selection_rule: plan.assetSelectionRule,
+      category_key: plan.categoryKey,
+      cadence_days: plan.cadenceDays,
+      completion_window_days: plan.completionWindowDays,
+      effective_starts_at: plan.effectiveStartsAt,
+      active: plan.active ? 1 : 0,
+      created_at: plan.createdAt,
+    }),
+    insert("ops_pm_occurrences", {
+      id: occurrence.id,
+      organization_id: occurrence.organizationId,
+      plan_id: occurrence.planId,
+      store_id: occurrence.storeId,
+      asset_id: occurrence.assetId,
+      program_id: occurrence.programId,
+      program_version: occurrence.programVersion,
+      plan_version: occurrence.planVersion,
+      due_at: occurrence.dueAt,
+      window_starts_at: occurrence.windowStartsAt,
+      window_ends_at: occurrence.windowEndsAt,
+      status: occurrence.status,
+      recurrence_key: occurrence.recurrenceKey,
+      created_at: occurrence.createdAt,
+    }),
+  ];
+}
+
+function programPlanForAsset(input: {
+  program: MaintenanceProgram;
+  asset: Asset;
+  dueAt: IsoDateTime;
+  now: IsoDateTime;
+  ids: OpsIdSource;
+}) {
+  const timing = occurrenceTiming(input.dueAt, input.program.dueWindowDays, input.now);
+  const plan: PmPlan = {
+    id: input.ids.next("pm-plan"),
+    organizationId: input.program.organizationId,
+    name: `${input.program.name} · ${input.asset.name}`,
+    programId: input.program.id,
+    programVersion: input.program.version,
+    storeId: input.asset.storeId,
+    assetId: input.asset.id,
+    assetSelectionRule: `equipment_template:${input.program.applicableAssetTypes.join(",")}`,
+    categoryKey: input.asset.categoryKey,
+    cadenceDays: input.program.frequencyDays,
+    completionWindowDays: input.program.dueWindowDays,
+    effectiveStartsAt: input.now,
+    active: true,
+    createdAt: input.now,
+  };
+  const occurrence: PmOccurrence = {
+    id: input.ids.next("pm-occurrence"),
+    organizationId: input.program.organizationId,
+    planId: plan.id,
+    storeId: input.asset.storeId,
+    assetId: input.asset.id,
+    programId: input.program.id,
+    programVersion: input.program.version,
+    planVersion: 1,
+    dueAt: input.dueAt,
+    ...timing,
+    recurrenceKey: input.dueAt.slice(0, 10),
+    createdAt: input.now,
+  };
+  return { plan, occurrence };
 }
 
 const assetStatuses = new Set<Asset["status"]>([
@@ -293,7 +419,14 @@ export interface ApplyStoreEquipmentTemplateInput { organizationId: OpsId; store
 export async function applyStoreEquipmentTemplates(svc: OpsCommandServices, input: ApplyStoreEquipmentTemplateInput): Promise<Asset[]> {
   const { repository, clock, ids } = services(svc);
   assertActorOrganization(input.actor, input.organizationId);
-  const [store, nodes, templates, detail] = await Promise.all([repository.getStore(input.organizationId, input.storeId), repository.listTaxonomyNodes(input.organizationId), repository.listEquipmentTemplates(input.organizationId), repository.getStoreDetail({ organizationId: input.organizationId, storeIds: [input.storeId] }, input.storeId)]);
+  const [store, nodes, templates, detail, programs, existingPlans] = await Promise.all([
+    repository.getStore(input.organizationId, input.storeId),
+    repository.listTaxonomyNodes(input.organizationId),
+    repository.listEquipmentTemplates(input.organizationId),
+    repository.getStoreDetail({ organizationId: input.organizationId, storeIds: [input.storeId] }, input.storeId),
+    repository.listMaintenancePrograms(input.organizationId),
+    repository.listPmPlans(input.organizationId),
+  ]);
   if (!store || !detail) throw new OpsDomainError("NOT_FOUND", "Store not found in organization");
   const selected = input.selections.filter((row) => row.quantity > 0);
   if (!selected.length) throw new OpsDomainError("VALIDATION", "Select at least one equipment type");
@@ -305,6 +438,7 @@ export async function applyStoreEquipmentTemplates(svc: OpsCommandServices, inpu
   const usedTags = new Set(detail.assets.map((asset) => asset.assetTag.toLocaleLowerCase("en-US")));
   const now = clock.now();
   const assets: Asset[] = [];
+  const templateByAssetId = new Map<OpsId, EquipmentTemplate>();
   const statements: OpsStatement[] = [];
   for (const selection of selected) {
     if (!Number.isSafeInteger(selection.quantity) || selection.quantity < 1 || selection.quantity > 50) throw new OpsDomainError("VALIDATION", "Each equipment quantity must be from 1 to 50");
@@ -324,9 +458,10 @@ export async function applyStoreEquipmentTemplates(svc: OpsCommandServices, inpu
       let tag = `${prefix}-${String(counter).padStart(2, "0")}`;
       while (usedTags.has(tag.toLocaleLowerCase("en-US"))) { counter += 1; tag = `${prefix}-${String(counter).padStart(2, "0")}`; }
       usedTags.add(tag.toLocaleLowerCase("en-US"));
-      const asset: Asset = { id: ids.next("asset"), organizationId: input.organizationId, storeId: store.id, categoryKey: category.canonicalKey, taxonomyNodeId: leaf.id, groupPath: path.filter((row) => row.nodeKind === "group").map((row) => row.name), assetTag: tag, name: selection.quantity > 1 ? `${template.name} ${index}` : template.name, expectedLifeYears: template.defaultExpectedLifeYears, status: "operational", createdAt: now };
+      const asset: Asset = { id: ids.next("asset"), organizationId: input.organizationId, storeId: store.id, categoryKey: category.canonicalKey, taxonomyNodeId: leaf.id, equipmentTemplateId: template.id, groupPath: path.filter((row) => row.nodeKind === "group").map((row) => row.name), assetTag: tag, name: selection.quantity > 1 ? `${template.name} ${index}` : template.name, expectedLifeYears: template.defaultExpectedLifeYears, status: "operational", createdAt: now };
       assets.push(asset);
-      statements.push(insert("ops_assets", { id: asset.id, organization_id: asset.organizationId, store_id: asset.storeId, category_key: asset.categoryKey, taxonomy_node_id: asset.taxonomyNodeId, group_path_json: JSON.stringify(asset.groupPath), asset_tag: asset.assetTag, name: asset.name, expected_life_years: asset.expectedLifeYears, replacement_attributes_json: "{}", status: asset.status, created_at: asset.createdAt }));
+      templateByAssetId.set(asset.id, template);
+      statements.push(insert("ops_assets", { id: asset.id, organization_id: asset.organizationId, store_id: asset.storeId, category_key: asset.categoryKey, taxonomy_node_id: asset.taxonomyNodeId, equipment_template_id: asset.equipmentTemplateId, group_path_json: JSON.stringify(asset.groupPath), asset_tag: asset.assetTag, name: asset.name, expected_life_years: asset.expectedLifeYears, replacement_attributes_json: "{}", status: asset.status, created_at: asset.createdAt }));
       const componentIdByTemplate = new Map<string, string>();
       for (const componentTemplate of componentTemplates) {
         const componentId = ids.next("component");
@@ -335,7 +470,21 @@ export async function applyStoreEquipmentTemplates(svc: OpsCommandServices, inpu
       }
     }
   }
-  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "store", aggregateId: store.id, eventType: "store.equipment_templates_applied", actor: input.actor, occurredAt: now, payload: { selections: selected, createdAssetIds: assets.map((asset) => asset.id) }, ids }));
+  const enrollmentKeys = new Set(existingPlans.filter((plan) => plan.programId && plan.assetId).map((plan) => `${plan.programId}:${plan.assetId}`));
+  const autoEnrolled: Array<{ plan: PmPlan; occurrence: PmOccurrence }> = [];
+  for (const asset of assets) {
+    const template = templateByAssetId.get(asset.id);
+    if (!template) continue;
+    for (const program of programs.filter((candidate) => candidate.status === "active" && programAppliesToTemplate(candidate, template))) {
+      const key = `${program.id}:${asset.id}`;
+      if (enrollmentKeys.has(key)) continue;
+      const enrolled = programPlanForAsset({ program, asset, dueAt: nextProgramDueAt(program, now), now, ids });
+      enrollmentKeys.add(key);
+      autoEnrolled.push(enrolled);
+      statements.push(...pmPlanStatements(enrolled.plan, enrolled.occurrence));
+    }
+  }
+  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "store", aggregateId: store.id, eventType: "store.equipment_templates_applied", actor: input.actor, occurredAt: now, payload: { selections: selected, createdAssetIds: assets.map((asset) => asset.id), autoEnrolledPmPlanIds: autoEnrolled.map(({ plan }) => plan.id) }, ids }));
   await repository.atomicWrite(statements);
   return assets;
 }
@@ -510,6 +659,233 @@ export async function addAssetComponent(
     }),
   ]);
   return component;
+}
+
+export interface CreateMaintenanceProgramInput {
+  organizationId: OpsId;
+  name: string;
+  applicableEquipmentTemplateIds: OpsId[];
+  cadenceDays: number;
+  completionWindowDays: number;
+  firstDueAt: IsoDateTime;
+  actor: ActorContext;
+}
+
+export interface CreatedMaintenanceProgram {
+  program: MaintenanceProgram;
+  checklistTemplate: ChecklistTemplate;
+  plans: PmPlan[];
+  occurrences: PmOccurrence[];
+}
+
+/**
+ * Creates one company PM standard and immediately enrolls every matching
+ * equipment record. Future equipment created from the same templates is
+ * enrolled by applyStoreEquipmentTemplates using this same durable program.
+ */
+export async function createMaintenanceProgramAndEnrollEquipment(
+  svc: OpsCommandServices,
+  input: CreateMaintenanceProgramInput,
+): Promise<CreatedMaintenanceProgram> {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const name = required(input.name, "Master schedule name");
+  const templateIds = [...new Set(input.applicableEquipmentTemplateIds.map((id) => required(id, "Equipment type", 120)))];
+  if (!templateIds.length) throw new OpsDomainError("VALIDATION", "Choose at least one equipment type");
+  if (templateIds.length > 50) throw new OpsDomainError("VALIDATION", "Choose no more than 50 equipment types");
+  const cadenceDays = positiveInteger(input.cadenceDays, "Cadence", 3_650);
+  const completionWindowDays = positiveInteger(input.completionWindowDays, "Completion window", 365);
+  if (completionWindowDays >= cadenceDays) throw new OpsDomainError("VALIDATION", "Completion window must be shorter than the cadence");
+  const firstDueAt = iso(input.firstDueAt, "First company due date");
+  if (!firstDueAt) throw new OpsDomainError("VALIDATION", "First company due date is required");
+
+  const [templates, taxonomyNodes, existingPrograms] = await Promise.all([
+    repository.listEquipmentTemplates(input.organizationId),
+    repository.listTaxonomyNodes(input.organizationId),
+    repository.listMaintenancePrograms(input.organizationId),
+  ]);
+  const selectedTemplates = templateIds.map((templateId) => {
+    const template = templates.find((row) => row.id === templateId && row.active);
+    if (!template) throw new OpsDomainError("VALIDATION", "Choose active company equipment types");
+    return template;
+  });
+  const taxonomyById = new Map(taxonomyNodes.map((node) => [node.id, node]));
+  const categoryForTemplate = (template: EquipmentTemplate) => {
+    let node = taxonomyById.get(template.taxonomyNodeId);
+    const seen = new Set<string>();
+    while (node && !seen.has(node.id)) {
+      seen.add(node.id);
+      if (node.nodeKind === "category" && node.canonicalKey) return node.canonicalKey;
+      node = node.parentNodeId ? taxonomyById.get(node.parentNodeId) : undefined;
+    }
+    return undefined;
+  };
+  const categories = [...new Set(selectedTemplates.map(categoryForTemplate).filter((value): value is string => Boolean(value)))];
+  if (categories.length !== 1) throw new OpsDomainError("VALIDATION", "A master schedule must use equipment types from one service area");
+  const programKey = normalizedEquipmentType(name);
+  if (existingPrograms.some((program) => program.programKey === programKey && program.status === "active")) {
+    throw new OpsDomainError("CONFLICT", "An active master schedule already uses this name");
+  }
+
+  const now = clock.now();
+  const checklistTemplate: ChecklistTemplate = {
+    id: ids.next("checklist"),
+    organizationId: input.organizationId,
+    name: `${name} checklist`,
+    version: 1,
+    items: [
+      { key: "service-completed", label: "Complete the scheduled preventive service", responseKind: "pass", required: true },
+      { key: "condition-notes", label: "Record condition, readings, and any recommended follow-up", responseKind: "text", required: true },
+    ],
+    status: "active",
+    createdAt: now,
+  };
+  const program: MaintenanceProgram = {
+    id: ids.next("maintenance-program"),
+    organizationId: input.organizationId,
+    programKey,
+    version: 1,
+    name,
+    tradeKey: categories[0],
+    workType: "preventive_maintenance",
+    applicableAssetTypes: selectedTemplates.map((template) => template.id),
+    frequencyDays: cadenceDays,
+    recurrenceKind: "fixed_calendar",
+    dueWindowDays: completionWindowDays,
+    scheduleAnchorAt: firstDueAt,
+    checklistTemplateId: checklistTemplate.id,
+    requiredEvidenceKinds: [],
+    expectedDurationMinutes: 60,
+    completionCriteria: "Scheduled preventive service is completed and the condition note is recorded.",
+    correctiveWorkAuthorityMinor: 0,
+    currency: "USD",
+    deficiencyHandling: "review",
+    status: "active",
+    createdAt: now,
+  };
+  const assets = await repository.listAssetsForEquipmentTemplates(
+    input.organizationId,
+    selectedTemplates.map((template) => template.id),
+  );
+  const enrolled = assets.map((asset) => programPlanForAsset({ program, asset, dueAt: firstDueAt, now, ids }));
+  const statements: OpsStatement[] = [
+    insert("ops_checklist_templates", {
+      id: checklistTemplate.id,
+      organization_id: checklistTemplate.organizationId,
+      name: checklistTemplate.name,
+      version: checklistTemplate.version,
+      items_json: JSON.stringify(checklistTemplate.items),
+      status: checklistTemplate.status,
+      created_at: checklistTemplate.createdAt,
+    }),
+    insert("ops_maintenance_programs", {
+      id: program.id,
+      organization_id: program.organizationId,
+      program_key: program.programKey,
+      version: program.version,
+      name: program.name,
+      trade_key: program.tradeKey,
+      work_type: program.workType,
+      applicable_asset_types_json: JSON.stringify(program.applicableAssetTypes),
+      frequency_days: program.frequencyDays,
+      recurrence_kind: program.recurrenceKind,
+      due_window_days: program.dueWindowDays,
+      schedule_anchor_at: program.scheduleAnchorAt,
+      checklist_template_id: program.checklistTemplateId,
+      required_evidence_kinds_json: JSON.stringify(program.requiredEvidenceKinds),
+      expected_duration_minutes: program.expectedDurationMinutes,
+      completion_criteria: program.completionCriteria,
+      corrective_work_authority_minor: program.correctiveWorkAuthorityMinor,
+      currency: program.currency,
+      deficiency_handling: program.deficiencyHandling,
+      status: program.status,
+      created_at: program.createdAt,
+    }),
+    ...enrolled.flatMap(({ plan, occurrence }) => pmPlanStatements(plan, occurrence)),
+    ...auditAndOutbox({
+      organizationId: input.organizationId,
+      aggregateType: "maintenance_program",
+      aggregateId: program.id,
+      eventType: "pm.master_schedule_created",
+      actor: input.actor,
+      occurredAt: now,
+      payload: {
+        equipmentTemplateIds: program.applicableAssetTypes,
+        cadenceDays,
+        completionWindowDays,
+        scheduleAnchorAt: firstDueAt,
+        enrolledPlanIds: enrolled.map(({ plan }) => plan.id),
+      },
+      ids,
+    }),
+  ];
+  await repository.atomicWrite(statements);
+  return {
+    program,
+    checklistTemplate,
+    plans: enrolled.map(({ plan }) => plan),
+    occurrences: enrolled.map(({ occurrence }) => occurrence),
+  };
+}
+
+export interface OverridePmPlanCadenceInput {
+  organizationId: OpsId;
+  planId: OpsId;
+  cadenceDays: number;
+  completionWindowDays: number;
+  reason: string;
+  actor: ActorContext;
+}
+
+/** Store-level exception to a company schedule; current occurrences are not rewritten. */
+export async function overridePmPlanCadence(
+  svc: OpsCommandServices,
+  input: OverridePmPlanCadenceInput,
+): Promise<PmPlan> {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const plan = await repository.getPmPlan(input.organizationId, input.planId);
+  if (!plan) throw new OpsDomainError("NOT_FOUND", "PM plan not found in organization");
+  const cadenceDays = positiveInteger(input.cadenceDays, "Cadence", 3_650);
+  const completionWindowDays = positiveInteger(input.completionWindowDays, "Completion window", 365);
+  if (completionWindowDays >= cadenceDays) throw new OpsDomainError("VALIDATION", "Completion window must be shorter than the cadence");
+  const reason = required(input.reason, "Reason for store schedule", 500);
+  const now = clock.now();
+  const updated: PmPlan = {
+    ...plan,
+    cadenceDays,
+    completionWindowDays,
+    cadenceOverrideReason: reason,
+    cadenceOverriddenAt: now,
+    cadenceOverriddenByMembershipId: input.actor.actorId,
+  };
+  await repository.atomicWrite([
+    update("ops_pm_plans", {
+      cadence_days: cadenceDays,
+      completion_window_days: completionWindowDays,
+      cadence_override_reason: reason,
+      cadence_overridden_at: now,
+      cadence_overridden_by_membership_id: input.actor.actorId ?? null,
+    }, { organization_id: input.organizationId, id: plan.id }),
+    ...auditAndOutbox({
+      organizationId: input.organizationId,
+      aggregateType: "pm_plan",
+      aggregateId: plan.id,
+      eventType: "pm.store_schedule_overridden",
+      actor: input.actor,
+      occurredAt: now,
+      payload: {
+        storeId: plan.storeId,
+        assetId: plan.assetId,
+        programId: plan.programId,
+        before: { cadenceDays: plan.cadenceDays, completionWindowDays: plan.completionWindowDays },
+        after: { cadenceDays, completionWindowDays },
+        reason,
+      },
+      ids,
+    }),
+  ]);
+  return updated;
 }
 
 export interface CreatePmPlanInput {

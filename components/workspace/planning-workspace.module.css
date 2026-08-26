@@ -37,6 +37,7 @@
 .filters nav a:hover { border-color: #94a3b8; background: #f8fafc; }
 .filters nav a[data-selected] { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; }
 .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--workspace-border); border-radius: var(--workspace-radius-panel); background: #fff; box-shadow: var(--workspace-shadow-panel); overflow: hidden; }
+.metrics:has(> a:nth-child(5)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .metrics > a { position: relative; display: grid; align-content: start; gap: 4px; min-height: 134px; padding: 16px 17px; border-left: 3px solid transparent; }
 .metrics > a + a { border-left-width: 1px; border-left-color: #e4e8ef; }
 .metrics > a:hover { background: #f8fbff; }
@@ -144,8 +145,10 @@
 
 @media (max-width: 1100px) {
   .metrics { grid-template-columns: repeat(2, 1fr); }
+  .metrics:has(> a:nth-child(5)) { grid-template-columns: repeat(2, 1fr); }
   .metrics > a:nth-child(3) { border-top: 1px solid #e4e8ef; border-left: 0; }
   .metrics > a:nth-child(4) { border-top: 1px solid #e4e8ef; }
+  .metrics > a:nth-child(n + 5) { border-top: 1px solid #e4e8ef; }
   .insights { grid-template-columns: 1fr; }
   .actions > div > a { grid-template-columns: 4px minmax(0, 1fr) minmax(120px, .3fr) minmax(120px, .3fr) 16px; gap: 11px; }
 }

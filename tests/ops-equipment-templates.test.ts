@@ -28,10 +28,19 @@ describe("company equipment templates", () => {
     const components = snapshot.components.filter((row) => row.assetId === assets[0].id);
 
     expect(assets).toHaveLength(1);
-    expect(assets[0]).toMatchObject({ storeId: "store-northline-101", taxonomyNodeId: "taxonomy-northline-beer_caves", name: "Standard beer cave / walk-in cooler", expectedLifeYears: 12 });
+    expect(assets[0]).toMatchObject({ storeId: "store-northline-101", equipmentTemplateId: "equipment-template-beer-cave", taxonomyNodeId: "taxonomy-northline-beer_caves", name: "Standard beer cave / walk-in cooler", expectedLifeYears: 12 });
     expect(components).toHaveLength(7);
     expect(components.find((row) => row.name === "Compressor")?.parentComponentId).toBe(components.find((row) => row.name === "Condensing unit")?.id);
     expect(snapshot.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: "store-northline-101", eventType: "store.equipment_templates_applied" }));
+    expect(snapshot.pmPlans).toContainEqual(expect.objectContaining({
+      assetId: assets[0].id,
+      programId: "maintenance-program-quarterly-refrigeration-v1",
+      storeId: "store-northline-101",
+    }));
+    expect(snapshot.pmOccurrences).toContainEqual(expect.objectContaining({
+      assetId: assets[0].id,
+      status: "scheduled",
+    }));
   });
 
   it("finishes commissioning by naming repeated equipment in one audited atomic update", async () => {

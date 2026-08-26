@@ -32,6 +32,7 @@ import type {
   TaxonomyNode,
   User,
   Vendor,
+  VendorReminder,
   VendorCoverage,
   VendorEstimateProposal,
   VendorResponse,
@@ -293,6 +294,11 @@ function buildFixture(): OpsFixture {
   ];
 
   const vendors: Vendor[] = vendorSeeds.map(([code, name, email, phone, preferred]) => ({ id: `vendor-northline-${code}`, organizationId: organization.id, code, name, dispatchEmail: email, dispatchPhone: phone, status: "approved", preferred, createdAt: at(1, 4, 14) }));
+  const vendorReminders: VendorReminder[] = [
+    { id: "vendor-reminder-summit-fall-capacity", organizationId: organization.id, vendorId: "vendor-northline-summit", title: "Confirm fall refrigeration PM availability", note: "Confirm crew capacity for the September refrigeration route before the schedule is released.", accountableParty: "Jordan Lee", dueAt: at(8, 28, 15), escalationTo: "Alex Morgan", status: "open", createdByActorType: "user", createdByActorId: "membership-northline-facilities", createdByActorName: "Jordan Lee", createdAt: at(8, 20, 14) },
+    { id: "vendor-reminder-brightpath-coi", organizationId: organization.id, vendorId: "vendor-northline-brightpath", title: "Request renewed insurance certificate", note: "The current certificate expires September 15. Request the renewal before assigning new October work.", accountableParty: "Jordan Lee", dueAt: at(9, 1, 16), escalationTo: "Samir Patel", status: "open", createdByActorType: "user", createdByActorId: "membership-northline-facilities", createdByActorName: "Jordan Lee", createdAt: at(8, 22, 13) },
+    { id: "vendor-reminder-cedar-after-hours-complete", organizationId: organization.id, vendorId: "vendor-northline-cedar", title: "Confirm after-hours escalation contacts", accountableParty: "Jordan Lee", dueAt: at(8, 15, 15), escalationTo: "Samir Patel", status: "completed", createdByActorType: "user", createdByActorId: "membership-northline-facilities", createdByActorName: "Jordan Lee", createdAt: at(8, 8, 14), completedByActorType: "user", completedByActorId: "membership-northline-facilities", completedByActorName: "Jordan Lee", completedAt: at(8, 14, 16), completionNote: "Primary and backup contacts confirmed with Cedar dispatch." },
+  ];
   const vendorSpecialties: VendorSpecialty[] = vendors.flatMap((vendor) => specialtySeeds[vendor.code].map(([canonicalKey, displayName, searchAliases]) => ({ id: `specialty-${vendor.code}-${canonicalKey}`, organizationId: organization.id, vendorId: vendor.id, canonicalKey, displayName, searchAliases })));
   const vendorCoverage: VendorCoverage[] = vendors.map((vendor, index) => ({ id: `coverage-${vendor.code}-all`, organizationId: organization.id, vendorId: vendor.id, scopeKind: "organization", scopeId: organization.id, preferredRank: index < 3 ? 1 : 2 }));
   const vendorQualifications: OpsFixture["vendorQualifications"] = [
@@ -361,7 +367,7 @@ function buildFixture(): OpsFixture {
   const assets: Asset[] = [];
   const assetEquipmentTemplateKeys = new Map<string, string>();
   const seedAsset = (asset: Asset, equipmentTemplateKey: string) => {
-    assets.push(asset);
+    assets.push({ ...asset, equipmentTemplateId: `equipment-template-${equipmentTemplateKey}` });
     assetEquipmentTemplateKeys.set(asset.id, equipmentTemplateKey);
   };
   const dispenserLocations = ["Northwest island", "Northeast island", "Southwest island", "Southeast island"];
@@ -940,10 +946,10 @@ function buildFixture(): OpsFixture {
     });
   });
 
-  const pmPlans: PmPlan[] = stores.map((store) => ({ id: `pm-plan-${store.storeNumber}-refrigeration`, organizationId: organization.id, name: "Quarterly refrigeration inspection", programId: "maintenance-program-quarterly-refrigeration-v1", programVersion: 1, storeId: store.id, assetId: `asset-${store.storeNumber}-beer-cave`, categoryKey: "refrigeration", cadenceDays: 90, completionWindowDays: 7, preferredVendorId: "vendor-northline-summit", backupVendorId: "vendor-northline-cedar", contractVersionId: "contract-version-summit-refrigeration-v1", effectiveStartsAt: atYear(2026, 1, 1), effectiveEndsAt: atYear(2026, 12, 31, 23), accessRequirements: "Manager unlocks the rear service entrance and confirms safe access to refrigeration equipment.", programAuthorizationMinor: 50_000, budgetMinor: 60_000, currency: "USD", serviceLevelPolicyId: "sla-summit-planned", schedulingMode: "platform_proposed_vendor_confirmed", escalationRules: "Escalate an unscheduled occurrence 48 hours before its due-window end.", active: true, createdAt: at(1, 6, 14) }));
+  const pmPlans: PmPlan[] = stores.map((store) => ({ id: `pm-plan-${store.storeNumber}-refrigeration`, organizationId: organization.id, name: "Quarterly refrigeration inspection", programId: "maintenance-program-quarterly-refrigeration-v1", programVersion: 1, storeId: store.id, assetId: `asset-${store.storeNumber}-beer-cave`, categoryKey: "refrigeration", cadenceDays: store.storeNumber === "111" ? 60 : 90, completionWindowDays: 7, preferredVendorId: "vendor-northline-summit", backupVendorId: "vendor-northline-cedar", contractVersionId: "contract-version-summit-refrigeration-v1", effectiveStartsAt: atYear(2026, 1, 1), effectiveEndsAt: atYear(2026, 12, 31, 23), accessRequirements: "Manager unlocks the rear service entrance and confirms safe access to refrigeration equipment.", programAuthorizationMinor: 50_000, budgetMinor: 60_000, currency: "USD", serviceLevelPolicyId: "sla-summit-planned", schedulingMode: "platform_proposed_vendor_confirmed", escalationRules: "Escalate an unscheduled occurrence 48 hours before its due-window end.", cadenceOverrideReason: store.storeNumber === "111" ? "Lakefront Travel Center volume requires a shorter refrigeration service interval." : undefined, cadenceOverriddenAt: store.storeNumber === "111" ? at(8, 18, 14) : undefined, cadenceOverriddenByMembershipId: store.storeNumber === "111" ? "membership-northline-facilities" : undefined, active: true, createdAt: at(1, 6, 14) }));
   const pmOccurrences: PmOccurrence[] = [];
   const maintenancePrograms: OpsFixture["maintenancePrograms"] = [
-    { id: "maintenance-program-quarterly-refrigeration-v1", organizationId: organization.id, programKey: "quarterly-refrigeration", version: 1, name: "Quarterly refrigeration preventive service", tradeKey: "refrigeration", workType: "preventive_maintenance", applicableAssetTypes: ["beer_cave", "walk_in_cooler", "walk_in_freezer", "ice_machine"], frequencyDays: 90, recurrenceKind: "fixed_calendar", dueWindowDays: 7, seasonalStartMonth: 1, seasonalEndMonth: 12, checklistTemplateId: "checklist-quarterly-refrigeration-v1", requiredEvidenceKinds: ["check_in", "check_out", "photo"], expectedDurationMinutes: 75, completionCriteria: "Every Asset-level Work Item has a complete checklist, required evidence, measurements, and a documented result.", correctiveWorkAuthorityMinor: 50_000, currency: "USD", deficiencyHandling: "quote_and_approval", status: "active", createdAt: atYear(2026, 1, 1) },
+    { id: "maintenance-program-quarterly-refrigeration-v1", organizationId: organization.id, programKey: "quarterly-refrigeration", version: 1, name: "Quarterly refrigeration preventive service", tradeKey: "refrigeration", workType: "preventive_maintenance", applicableAssetTypes: ["equipment-template-beer-cave"], frequencyDays: 90, recurrenceKind: "fixed_calendar", dueWindowDays: 7, scheduleAnchorAt: atYear(2026, 3, 14, 12), seasonalStartMonth: 1, seasonalEndMonth: 12, checklistTemplateId: "checklist-quarterly-refrigeration-v1", requiredEvidenceKinds: ["check_in", "check_out", "photo"], expectedDurationMinutes: 75, completionCriteria: "Every Asset-level Work Item has a complete checklist, required evidence, measurements, and a documented result.", correctiveWorkAuthorityMinor: 50_000, currency: "USD", deficiencyHandling: "quote_and_approval", status: "active", createdAt: atYear(2026, 1, 1) },
   ];
   const checklistTemplates: OpsFixture["checklistTemplates"] = [
     { id: "checklist-quarterly-refrigeration-v1", organizationId: organization.id, name: "Quarterly refrigeration condition checklist", version: 1, items: [
@@ -988,7 +994,9 @@ function buildFixture(): OpsFixture {
     const asset = assets.find((candidate) => candidate.id === plan.assetId)!;
     pmPeriods.forEach((period, periodIndex) => {
       const augustDay = storeIndex === 11 ? 15 : 20 + (storeIndex % 6);
-      const due = new Date(Date.UTC(period.year, period.month - 1, period.month === 8 ? augustDay : 14 + (storeIndex % 5), 12)).toISOString();
+      const due = store.storeNumber === "111" && period.key === "2026-q4"
+        ? new Date(Date.UTC(2026, 9, 19, 12)).toISOString()
+        : new Date(Date.UTC(period.year, period.month - 1, period.month === 8 ? augustDay : 14 + (storeIndex % 5), 12)).toISOString();
       const windowStartsAt = new Date(Date.parse(due) - 7 * 86_400_000).toISOString();
       const windowEndsAt = new Date(Date.parse(due) + 7 * 86_400_000).toISOString();
       const currentPeriod = period.key === "2026-q3";
@@ -1515,7 +1523,7 @@ function buildFixture(): OpsFixture {
     { id: "public-token-northline-service-run-summit", organizationId: organization.id, purpose: "service_run_response", subjectType: "service_run", subjectId: "service-run-summit-north-2026-08-24", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceRunSummit, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 16) },
   ];
 
-  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, serviceAppointments, vendorContinuations, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, componentLifecycleEvents, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
+  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorReminders, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, serviceAppointments, vendorContinuations, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, componentLifecycleEvents, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
 }
 
 const presentationFixture = buildFixture();
@@ -1541,6 +1549,7 @@ export function buildSyntheticScaleFixture(storeCount = 65): OpsFixture {
   fixture.approvalPolicies = [];
   fixture.approvalRequests = [];
   fixture.vendorQualifications = [];
+  fixture.vendorReminders = [];
   fixture.vendorComplianceDocuments = [];
   fixture.vendorContracts = [];
   fixture.contractVersions = [];
@@ -1637,6 +1646,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
   ensureUnique("equipment templates", fixture.equipmentTemplates);
   ensureUnique("component templates", fixture.componentTemplates);
   ensureUnique("request impact assessments", fixture.requestImpactAssessments);
+  ensureUnique("vendor reminders", fixture.vendorReminders);
   ([
     ["vendor qualifications", fixture.vendorQualifications], ["vendor compliance", fixture.vendorComplianceDocuments], ["vendor contracts", fixture.vendorContracts], ["contract versions", fixture.contractVersions], ["contract scopes", fixture.contractScopes], ["rate-card lines", fixture.rateCardLines], ["service-level policies", fixture.serviceLevelPolicies], ["scheduling policies", fixture.schedulingPolicies], ["vendor capacity", fixture.vendorCapacity], ["maintenance programs", fixture.maintenancePrograms], ["checklist templates", fixture.checklistTemplates], ["PM work items", fixture.pmWorkItems], ["checklist responses", fixture.checklistResponses], ["service runs", fixture.serviceRuns], ["route stops", fixture.routeStops], ["service-run work orders", fixture.serviceRunWorkOrders], ["service-run responses", fixture.serviceRunResponses], ["vendor warranty profiles", fixture.vendorWarrantyProfiles], ["warranty rules", fixture.warrantyRules], ["warranty coverage lines", fixture.warrantyCoverageLines], ["repair items", fixture.repairItems], ["applied warranties", fixture.appliedWarranties], ["warranty amendments", fixture.warrantyAmendments], ["manufacturer warranties", fixture.manufacturerWarranties], ["warranty cases", fixture.warrantyCases], ["quotes", fixture.quotes], ["authorizations", fixture.authorizations], ["invoices", fixture.invoices], ["invoice lines", fixture.invoiceLines], ["invoice line allocations", fixture.invoiceLineAllocations], ["invoice exceptions", fixture.invoiceExceptions], ["invoice adjustments", fixture.invoiceAdjustments], ["service discrepancies", fixture.serviceDiscrepancies], ["value events", fixture.valueEvents],
   ] as Array<[string, Array<{ id: string }>]>).forEach(([name, rows]) => ensureUnique(name, rows));
@@ -1647,10 +1657,15 @@ export function assertOpsFixture(fixture: OpsFixture) {
   ensureTenant("equipment templates", fixture.equipmentTemplates);
   ensureTenant("component templates", fixture.componentTemplates);
   ensureTenant("request impact assessments", fixture.requestImpactAssessments);
+  ensureTenant("vendor reminders", fixture.vendorReminders);
   ([
     ["vendor qualifications", fixture.vendorQualifications], ["vendor compliance", fixture.vendorComplianceDocuments], ["vendor contracts", fixture.vendorContracts], ["contract versions", fixture.contractVersions], ["contract scopes", fixture.contractScopes], ["rate-card lines", fixture.rateCardLines], ["service-level policies", fixture.serviceLevelPolicies], ["scheduling policies", fixture.schedulingPolicies], ["vendor capacity", fixture.vendorCapacity], ["maintenance programs", fixture.maintenancePrograms], ["checklist templates", fixture.checklistTemplates], ["PM work items", fixture.pmWorkItems], ["checklist responses", fixture.checklistResponses], ["service runs", fixture.serviceRuns], ["route stops", fixture.routeStops], ["service-run work orders", fixture.serviceRunWorkOrders], ["service-run responses", fixture.serviceRunResponses], ["vendor warranty profiles", fixture.vendorWarrantyProfiles], ["warranty rules", fixture.warrantyRules], ["warranty coverage lines", fixture.warrantyCoverageLines], ["repair items", fixture.repairItems], ["applied warranties", fixture.appliedWarranties], ["warranty amendments", fixture.warrantyAmendments], ["manufacturer warranties", fixture.manufacturerWarranties], ["warranty cases", fixture.warrantyCases], ["quotes", fixture.quotes], ["authorizations", fixture.authorizations], ["invoices", fixture.invoices], ["invoice lines", fixture.invoiceLines], ["invoice line allocations", fixture.invoiceLineAllocations], ["invoice exceptions", fixture.invoiceExceptions], ["invoice adjustments", fixture.invoiceAdjustments], ["service discrepancies", fixture.serviceDiscrepancies], ["value events", fixture.valueEvents],
   ] as Array<[string, Array<{ organizationId: string }>]>).forEach(([name, rows]) => ensureTenant(name, rows));
   fixture.regions.forEach((row) => { if (row.divisionId && !divisionIds.has(row.divisionId)) throw new Error(`Region ${row.id} has no division`); });
+  fixture.vendorReminders.forEach((row) => {
+    if (!fixture.vendors.some((vendor) => vendor.organizationId === row.organizationId && vendor.id === row.vendorId)) throw new Error(`Vendor reminder ${row.id} has no vendor`);
+    if ((row.status === "completed") !== Boolean(row.completedAt)) throw new Error(`Vendor reminder ${row.id} has inconsistent completion state`);
+  });
   fixture.stores.forEach((row) => {
     if (row.divisionId && !divisionIds.has(row.divisionId)) throw new Error(`Store ${row.id} has no division`);
     if (row.regionId) {

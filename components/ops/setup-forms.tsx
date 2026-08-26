@@ -13,12 +13,14 @@ import {
 import type {
   AddComponentSetupModel,
   CreateAssetSetupModel,
+  CreatePmProgramSetupModel,
   CreatePmSetupModel,
+  PmPlanScheduleSetupModel,
   SetupOption,
 } from "./setup-types";
 import styles from "./ops.module.css";
 
-function PageIntro({ model }: { model: CreateAssetSetupModel | AddComponentSetupModel | CreatePmSetupModel }) {
+function PageIntro({ model }: { model: CreateAssetSetupModel | AddComponentSetupModel | CreatePmSetupModel | CreatePmProgramSetupModel | PmPlanScheduleSetupModel }) {
   return (
     <header className={styles.formPageHeader}>
       <Link className={styles.backLink} href={model.cancelHref}>
@@ -186,6 +188,80 @@ export function CreatePmSetupForm({ model }: { model: CreatePmSetupModel }) {
 
         <div className={styles.formNotice}><CalendarClock aria-hidden="true" size={20} /><p><strong>The first occurrence is created now.</strong> It will appear as scheduled, due, or missed based on its exact completion window. Future work orders remain optional until your team chooses to create them.</p></div>
         <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelHref}>Cancel</Link><button className={styles.primaryButton} type="submit">Create plan & first occurrence<ArrowRight aria-hidden="true" size={18} /></button></div>
+      </form>
+    </div>
+  );
+}
+
+export function CreatePmProgramSetupForm({ model }: { model: CreatePmProgramSetupModel }) {
+  return (
+    <div className={styles.formPage}>
+      <PageIntro model={model} />
+      <form className={styles.recordForm} action={model.submitAction} method="post">
+        <section className={styles.formSection}>
+          <div className={styles.formSectionHeading}>
+            <span>1</span><div><h2>Name the company schedule</h2><p>Use one plain-language standard that every matching equipment record can inherit.</p></div>
+          </div>
+          <label className={styles.field} htmlFor="program-name"><span>Master schedule name <em>Required</em></span><input id="program-name" name="name" required placeholder="Quarterly refrigeration preventive service" autoComplete="off" /></label>
+        </section>
+
+        <section className={styles.formSection}>
+          <div className={styles.formSectionHeading}>
+            <span>2</span><div><h2>Choose the equipment types</h2><p>Existing matching equipment is enrolled now. Equipment added to a store later is enrolled automatically.</p></div>
+          </div>
+          <div className={styles.choiceGrid}>
+            {model.equipmentTypes.map((option) => (
+              <label className={styles.choiceCard} key={option.value}>
+                <input type="checkbox" name="equipmentTemplateId" value={option.value} />
+                <span><strong>{option.label}</strong>{option.description ? <small>{option.description}</small> : null}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className={styles.formSection}>
+          <div className={styles.formSectionHeading}>
+            <span>3</span><div><h2>Set the company cadence</h2><p>This becomes the default at every matching store. A store can later use a faster cadence with a documented reason.</p></div>
+          </div>
+          <div className={styles.fieldGrid}>
+            <label className={styles.field} htmlFor="program-cadence"><span>Cadence in days <em>Required</em></span><input id="program-cadence" name="cadenceDays" type="number" min="1" max="3650" defaultValue="90" required inputMode="numeric" /><small>30 monthly · 90 quarterly · 365 annually.</small></label>
+            <label className={styles.field} htmlFor="program-window"><span>Completion window in days <em>Required</em></span><input id="program-window" name="completionWindowDays" type="number" min="1" max="365" defaultValue="7" required inputMode="numeric" /><small>Allowed before and after the due date.</small></label>
+          </div>
+          <label className={styles.field} htmlFor="program-first-due"><span>First company due date <em>Required</em></span><input id="program-first-due" name="firstDueAt" type="date" required /></label>
+        </section>
+
+        <div className={styles.formNotice}><CalendarClock aria-hidden="true" size={20} /><p><strong>One setup action creates the whole schedule.</strong> Matching equipment receives a store plan and first occurrence. Future equipment from the selected company types joins the same schedule automatically.</p></div>
+        <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelHref}>Cancel</Link><button className={styles.primaryButton} type="submit">Create master schedule<ArrowRight aria-hidden="true" size={18} /></button></div>
+      </form>
+    </div>
+  );
+}
+
+export function PmPlanScheduleSetupForm({ model }: { model: PmPlanScheduleSetupModel }) {
+  return (
+    <div className={styles.formPage}>
+      <PageIntro model={model} />
+      <form className={styles.recordForm} action={model.submitAction} method="post">
+        <section className={styles.formSection}>
+          <div className={styles.formSectionHeading}>
+            <span>1</span><div><h2>Schedule inherited by this store</h2><p>The equipment stays connected to the company program; only this store&apos;s future cadence changes.</p></div>
+          </div>
+          <div className={styles.formNotice}><Layers3 aria-hidden="true" size={20} /><p><strong>{model.assetLabel}</strong> · {model.storeLabel}<br />{model.masterProgramName ? `${model.masterProgramName}: every ${model.masterCadenceDays} days with a ${model.masterWindowDays}-day window.` : "This is a store-created plan without a master program."}</p></div>
+        </section>
+
+        <section className={styles.formSection}>
+          <div className={styles.formSectionHeading}>
+            <span>2</span><div><h2>Set the local cadence</h2><p>Use this for higher-volume stores, unusual operating conditions, or another documented local need.</p></div>
+          </div>
+          <div className={styles.fieldGrid}>
+            <label className={styles.field} htmlFor="plan-cadence"><span>Cadence in days <em>Required</em></span><input id="plan-cadence" name="cadenceDays" type="number" min="1" max="3650" defaultValue={model.cadenceDays} required inputMode="numeric" /></label>
+            <label className={styles.field} htmlFor="plan-window"><span>Completion window in days <em>Required</em></span><input id="plan-window" name="completionWindowDays" type="number" min="1" max="365" defaultValue={model.completionWindowDays} required inputMode="numeric" /></label>
+          </div>
+          <label className={styles.field} htmlFor="plan-reason"><span>Why this store is different <em>Required</em></span><textarea id="plan-reason" name="reason" required maxLength={500} defaultValue={model.overrideReason} placeholder="This location has extended hours and higher refrigeration traffic." /><small>The reason remains visible with the local override.</small></label>
+        </section>
+
+        <div className={styles.formNotice}><Info aria-hidden="true" size={20} /><p><strong>The current occurrence is not rewritten.</strong> The scheduler uses this cadence for future cycles, preserving prior due dates and compliance evidence.</p></div>
+        <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelHref}>Cancel</Link><button className={styles.primaryButton} type="submit">Save store schedule<ArrowRight aria-hidden="true" size={18} /></button></div>
       </form>
     </div>
   );

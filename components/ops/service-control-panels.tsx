@@ -289,7 +289,7 @@ function WorkOrderControlForm({ model }: { model: WorkOrderControlViewModel }) {
         <div className={styles.accountabilityFields}>
           <div className={styles.fieldGrid}>
             <label className={styles.field} htmlFor={`work-owner-${model.workOrderId}`}><span>Owner <em>Required</em></span><input id={`work-owner-${model.workOrderId}`} name="accountableParty" required defaultValue={model.accountableParty} /></label>
-            <label className={styles.field} htmlFor={`work-due-${model.workOrderId}`}><span>Due <em>Required</em></span><input id={`work-due-${model.workOrderId}`} name="dueAt" type="datetime-local" required defaultValue={inputDateTime(model.dueAt)} /></label>
+            <label className={styles.field} htmlFor={`work-due-${model.workOrderId}`}><span>Due <em>Required</em></span><input id={`work-due-${model.workOrderId}`} name="dueAt" type="datetime-local" required defaultValue={model.dueInputValue ?? inputDateTime(model.dueAt)} /></label>
           </div>
           <label className={styles.field} htmlFor={`work-next-${model.workOrderId}`}><span>Next step <em>Required</em></span><input id={`work-next-${model.workOrderId}`} name="nextAction" required defaultValue={model.nextAction} /></label>
           <label className={styles.field} htmlFor={`work-escalation-${model.workOrderId}`}><span>If overdue, notify <em>Required</em></span><input id={`work-escalation-${model.workOrderId}`} name="escalationTo" required defaultValue={model.escalationTo} /></label>
@@ -437,6 +437,25 @@ function ManualVendorResponseForm({ model }: { model: WorkOrderControlViewModel 
   );
 }
 
+function CreateFollowUpForm({ model }: { model: WorkOrderControlViewModel }) {
+  const { state, submit } = useMutation();
+  return (
+    <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`} id="follow-up-control">
+      <summary className={styles.subControlHeading}><Clock3 aria-hidden="true" size={18} /><div><h3>Add another follow-up</h3><p>Track a separate callback, parts check, site confirmation, or vendor commitment with its own owner and due time.</p></div></summary>
+      <form action={model.followUpAction} method="post" onSubmit={submit} className={styles.controlForm}>
+        <label className={styles.field} htmlFor={`follow-up-next-${model.workOrderId}`}><span>What needs to happen? <em>Required</em></span><input id={`follow-up-next-${model.workOrderId}`} name="nextAction" required maxLength={500} placeholder="Confirm parts arrival with vendor" /></label>
+        <div className={styles.fieldGrid}>
+          <label className={styles.field} htmlFor={`follow-up-owner-${model.workOrderId}`}><span>Owner <em>Required</em></span><input id={`follow-up-owner-${model.workOrderId}`} name="accountableParty" required maxLength={200} defaultValue={model.accountableParty} /></label>
+          <label className={styles.field} htmlFor={`follow-up-due-${model.workOrderId}`}><span>Due <em>Required</em></span><input id={`follow-up-due-${model.workOrderId}`} name="dueAt" type="datetime-local" required defaultValue={model.dueInputValue ?? inputDateTime(model.dueAt)} /></label>
+        </div>
+        <label className={styles.field} htmlFor={`follow-up-escalation-${model.workOrderId}`}><span>If overdue, notify <em>Required</em></span><input id={`follow-up-escalation-${model.workOrderId}`} name="escalationTo" required maxLength={200} defaultValue={model.escalationTo} /></label>
+        <MutationError message={state.error} />
+        <div className={styles.formFooter}><span className={styles.formMeta}>This adds a distinct obligation; it does not replace another open follow-up.</span><button className={styles.secondaryButton} type="submit" disabled={state.pending}>{state.pending ? "Adding…" : "Add follow-up"}</button></div>
+      </form>
+    </details>
+  );
+}
+
 export function WorkOrderControlPanel({ model }: { model: WorkOrderControlViewModel }) {
   if (!model.available) return null;
   return (
@@ -445,7 +464,7 @@ export function WorkOrderControlPanel({ model }: { model: WorkOrderControlViewMo
         id="work-control-heading"
         icon={<Route aria-hidden="true" size={19} />}
         title="Service control"
-        description="Keep one accountable owner, one next required action, and one due time on every unresolved work order."
+        description="Keep one primary next action on the case, with as many separately owned follow-ups and due times as the work requires."
       />
       <WorkflowStages stages={model.stages} />
       <div className={styles.controlSummary}>
@@ -482,6 +501,7 @@ export function WorkOrderControlPanel({ model }: { model: WorkOrderControlViewMo
         </details>
       )}
       {model.permitted ? <ManualVendorResponseForm model={model} /> : null}
+      {model.permitted && !model.isTerminal ? <CreateFollowUpForm model={model} /> : null}
       {model.followUps.length ? (
         <div className={styles.followUpList}>
           <h3>Open follow-ups</h3>

@@ -10,7 +10,9 @@ import {
 import type {
   AddComponentSetupModel,
   CreateAssetSetupModel,
+  CreatePmProgramSetupModel,
   CreatePmSetupModel,
+  PmPlanScheduleSetupModel,
   SetupOption,
 } from "@/components/ops/setup-types";
 import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
@@ -197,6 +199,67 @@ export async function loadCreatePmSetupModel(query: Query = {}): Promise<CreateP
     defaultStoreId,
     defaultAssetId: requestedAsset?.id,
     defaultCategoryKey: requestedAsset?.categoryKey,
+  };
+}
+
+export async function loadCreatePmProgramSetupModel(): Promise<CreatePmProgramSetupModel> {
+  const { session, fixture } = await setupContext("setup_pm");
+  if (session.role !== "executive" && session.role !== "facilities") notFound();
+  const nodes = fixture.taxonomyNodes.filter((node) => node.organizationId === session.organizationId && node.active);
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  return {
+    title: "Create company PM schedule",
+    eyebrow: "Preventive maintenance standards",
+    description: "Choose the company equipment types once. Matching equipment across every store joins the schedule now, and future equipment joins automatically.",
+    scopeLabel: session.scopeLabel,
+    submitAction: "/api/ops/pm-programs",
+    cancelHref: "/app/pm",
+    cancelLabel: "Back to preventive maintenance",
+    equipmentTypes: fixture.equipmentTemplates
+      .filter((template) => template.organizationId === session.organizationId && template.active)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((template) => {
+        const path = taxonomyPath(byId.get(template.taxonomyNodeId)!, byId);
+        return {
+          value: template.id,
+          label: template.name,
+          description: path.map((node) => node.name).join(" › "),
+        };
+      }),
+  };
+}
+
+export async function loadPmPlanScheduleSetupModel(planId: string): Promise<PmPlanScheduleSetupModel> {
+  const { session, fixture } = await setupContext("setup_pm");
+  const plan = fixture.pmPlans.find((row) => row.organizationId === session.organizationId && row.id === planId);
+  const store = plan?.storeId
+    ? fixture.stores.find((row) => row.organizationId === session.organizationId && row.id === plan.storeId)
+    : undefined;
+  if (!plan || !store || !storeAllowed(session, store)) notFound();
+  const asset = plan.assetId
+    ? fixture.assets.find((row) => row.organizationId === session.organizationId && row.id === plan.assetId)
+    : undefined;
+  const program = plan.programId
+    ? fixture.maintenancePrograms.find((row) => row.organizationId === session.organizationId && row.id === plan.programId)
+    : undefined;
+  return {
+    title: "Adjust this store's PM schedule",
+    eyebrow: "Store-level exception",
+    description: "Keep the company standard intact while documenting why this store needs a different future cadence.",
+    scopeLabel: `${storeLabel(store)} · ${asset?.name ?? plan.name}`,
+    submitAction: `/api/ops/pm-plans/${encodeURIComponent(plan.id)}/schedule`,
+    cancelHref: `/app/pm?store=${encodeURIComponent(store.id)}`,
+    cancelLabel: "Back to store PM",
+    planId: plan.id,
+    planName: plan.name,
+    storeLabel: storeLabel(store),
+    assetLabel: asset ? `${asset.name} · ${asset.assetTag}` : plan.name,
+    masterProgramName: program?.name,
+    masterCadenceDays: program?.frequencyDays,
+    masterWindowDays: program?.dueWindowDays,
+    cadenceDays: plan.cadenceDays,
+    completionWindowDays: plan.completionWindowDays,
+    overrideReason: plan.cadenceOverrideReason,
   };
 }
 

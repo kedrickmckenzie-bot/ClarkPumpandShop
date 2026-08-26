@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { RecordSections } from "@/components/workspace/record-sections";
-import type { DetailSectionViewModel } from "@/components/ops/data-contract";
+import { ControlTower } from "@/components/workspace/control-tower";
+import type { DashboardPageViewModel, DetailSectionViewModel } from "@/components/ops/data-contract";
 
 describe("summary-first enterprise records", () => {
   it("opens generic records on a section map instead of rendering every source table at once", () => {
@@ -41,5 +42,51 @@ describe("summary-first enterprise records", () => {
     expect(workspace).toContain('activeView === "cost"');
     expect(workspace).toContain('activeView === "equipment"');
     expect(workspace).toContain('activeView === "activity"');
+  });
+
+  it("keeps review details off the overview while preserving one count that opens the full queue", () => {
+    const model: DashboardPageViewModel = {
+      state: { kind: "ready" },
+      layout: "operations",
+      page: {
+        title: "Maintenance overview",
+        description: "A clean daily view.",
+        scopeLabel: "Companywide",
+      },
+      metrics: [{
+        id: "review-items",
+        label: "Items to review",
+        value: "12",
+        supportingText: "Open the queue for records, owners, and next steps",
+        tone: "warning",
+        link: { href: "/app/action-center", label: "Open review queue" },
+      }],
+      priorityActions: [{
+        id: "detail-that-belongs-in-the-queue",
+        title: "Detailed exception that belongs in the review queue",
+        description: "This source-record wording must not appear on the overview.",
+        categoryLabel: "Visit review",
+        dueLabel: "Review now",
+        ownerLabel: "Maintenance",
+        tone: "critical",
+        link: { href: "/app/action-center/detail", label: "Review" },
+      }],
+      prioritySection: {
+        title: "Review queue",
+        description: "Open the full queue.",
+        link: { href: "/app/action-center", label: "Open review queue" },
+        display: "summary",
+      },
+      breakdowns: [],
+      trends: [],
+    };
+
+    const markup = renderToStaticMarkup(createElement(ControlTower, { model }));
+
+    expect(markup).toContain("Items to review");
+    expect(markup).toContain("12");
+    expect(markup).toContain('href="/app/action-center"');
+    expect(markup).not.toContain("Detailed exception that belongs in the review queue");
+    expect(markup).not.toContain("Action queue summary");
   });
 });

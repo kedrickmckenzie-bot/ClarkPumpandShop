@@ -3,7 +3,9 @@ import type { OpsCommandServices } from "@/lib/ops/commands";
 import {
   addAssetComponent,
   createAsset,
+  createMaintenanceProgramAndEnrollEquipment,
   createPmPlanWithFirstOccurrence,
+  overridePmPlanCadence,
 } from "@/lib/ops/setup-commands";
 import { createNorthlineFixtureRepository } from "@/lib/ops/fixture-repository";
 import { NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
@@ -118,6 +120,67 @@ describe("equipment setup commands", () => {
 });
 
 describe("preventive-maintenance setup command", () => {
+  it("creates one company schedule and enrolls every matching equipment record", async () => {
+    const svc = commandServices();
+    const created = await createMaintenanceProgramAndEnrollEquipment(svc, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      name: "Company beer cave monthly service",
+      applicableEquipmentTemplateIds: ["equipment-template-beer-cave"],
+      cadenceDays: 30,
+      completionWindowDays: 4,
+      firstDueAt: "2026-09-01T00:00:00.000Z",
+      actor,
+    });
+
+    expect(created.program).toMatchObject({
+      frequencyDays: 30,
+      dueWindowDays: 4,
+      scheduleAnchorAt: "2026-09-01T00:00:00.000Z",
+      applicableAssetTypes: ["equipment-template-beer-cave"],
+    });
+    expect(created.plans).toHaveLength(15);
+    expect(created.occurrences).toHaveLength(15);
+    expect(created.plans.every((plan) => plan.programId === created.program.id && plan.assetId)).toBe(true);
+    expect(created.occurrences.every((occurrence) => occurrence.status === "scheduled")).toBe(true);
+
+    const snapshot = (svc.repository as ReturnType<typeof createNorthlineFixtureRepository>).snapshot();
+    expect(snapshot.auditEvents).toContainEqual(expect.objectContaining({
+      aggregateId: created.program.id,
+      eventType: "pm.master_schedule_created",
+    }));
+  });
+
+  it("records a store-specific cadence exception without rewriting the active occurrence", async () => {
+    const svc = commandServices();
+    const repository = svc.repository as ReturnType<typeof createNorthlineFixtureRepository>;
+    const before = repository.snapshot();
+    const plan = before.pmPlans.find((row) => row.storeId === "store-northline-101" && row.programId === "maintenance-program-quarterly-refrigeration-v1");
+    expect(plan).toBeDefined();
+    const occurrenceBefore = before.pmOccurrences.find((row) => row.planId === plan?.id);
+
+    const updated = await overridePmPlanCadence(svc, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      planId: plan!.id,
+      cadenceDays: 45,
+      completionWindowDays: 5,
+      reason: "Higher customer volume requires more frequent coil cleaning.",
+      actor,
+    });
+
+    expect(updated).toMatchObject({
+      cadenceDays: 45,
+      completionWindowDays: 5,
+      cadenceOverrideReason: "Higher customer volume requires more frequent coil cleaning.",
+      cadenceOverriddenByMembershipId: actor.actorId,
+    });
+    const after = repository.snapshot();
+    expect(after.pmOccurrences.find((row) => row.id === occurrenceBefore?.id)).toEqual(occurrenceBefore);
+    expect(after.auditEvents).toContainEqual(expect.objectContaining({
+      aggregateId: plan!.id,
+      eventType: "pm.store_schedule_overridden",
+    }));
+  });
+
   it("creates the plan and its first occurrence with a transparent completion window", async () => {
     const svc = commandServices();
     const created = await createPmPlanWithFirstOccurrence(svc, {
