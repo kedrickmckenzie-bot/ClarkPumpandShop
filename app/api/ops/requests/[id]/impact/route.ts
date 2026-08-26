@@ -45,7 +45,11 @@ export async function POST(
       },
     );
 
-    return relativeRedirect303(`/app/requests/${encodeURIComponent(requestId)}?updated=impact-review`);
+    const continueTo = formText(formData, "continueTo", { max: 300 });
+    const workOrderHref = `/app/work-orders/new?request=${encodeURIComponent(requestId)}`;
+    return relativeRedirect303(continueTo === workOrderHref
+      ? workOrderHref
+      : `/app/requests/${encodeURIComponent(requestId)}?updated=impact-review`);
   } catch (error) {
     return opsApiError(error);
   }

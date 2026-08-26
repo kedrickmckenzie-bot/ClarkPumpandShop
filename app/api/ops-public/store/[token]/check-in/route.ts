@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getPublicOperationsGateway } from "@/components/ops-public/server-gateway";
+import { setPendingVisitCookie } from "@/components/ops-public/pending-visit-cookie";
 import { locationEvidenceSchema, publicApiError, publicApiSuccess, readPublicIdempotencyKey } from "@/components/ops-public/server-http";
 
 const checkInSchema = z.object({
@@ -23,7 +24,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     const { token } = await params;
     const submissionKey = readPublicIdempotencyKey(request);
     const command = checkInSchema.parse(await request.json());
-    return publicApiSuccess(await getPublicOperationsGateway().checkIn(token, { ...command, submissionKey }), 201);
+    const receipt = await getPublicOperationsGateway().checkIn(token, { ...command, submissionKey });
+    const response = publicApiSuccess(receipt, 201);
+    setPendingVisitCookie(response, request.url, receipt.checkoutUrl, receipt.checkoutExpiresAt);
+    return response;
   } catch (error) {
     return publicApiError(error);
   }

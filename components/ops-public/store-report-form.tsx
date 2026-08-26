@@ -50,6 +50,7 @@ const SUBMISSION_KEY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 const SUBMISSION_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,120}$/;
 
 export function StoreReportForm({ token, portal }: { token: string; portal: StorePortalView }) {
+  const storeOptionsHref = `/public/store/${encodeURIComponent(token)}`;
   const submissionKeyRef = useRef<string | null>(null);
   const [step, setStep] = useState(1);
   const [reporterName, setReporterName] = useState("");
@@ -141,7 +142,7 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
 
   if (receipt) {
     return (
-      <PublicFrame organizationName={portal.organizationName} context={`Store ${portal.store.number} · Report an issue`} mode={portal.mode}>
+      <PublicFrame backHref={storeOptionsHref} organizationName={portal.organizationName} context={`Store ${portal.store.number} · Report an issue`} mode={portal.mode}>
         <div className={styles.hero}><div><span className={styles.eyebrow}>Server-confirmed receipt</span><h1 className={styles.title}>Report received</h1></div></div>
         <ServerReceipt receipt={receipt} />
       </PublicFrame>
@@ -149,7 +150,7 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
   }
 
   return (
-    <PublicFrame organizationName={portal.organizationName} context={`Store ${portal.store.number} · Report an issue`} mode={portal.mode}>
+    <PublicFrame backHref={storeOptionsHref} organizationName={portal.organizationName} context={`Store ${portal.store.number} · Report an issue`} mode={portal.mode}>
       <div className={styles.hero}>
         <div>
           <span className={styles.eyebrow}>Store {portal.store.number}</span>

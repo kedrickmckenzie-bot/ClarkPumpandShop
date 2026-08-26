@@ -1,4 +1,4 @@
-import { createWorkOrder, OpsDomainError } from "@/lib/ops/commands";
+import { createWorkOrder, OpsDomainError, reconcileUnmatchedVisit } from "@/lib/ops/commands";
 import {
   assertStoreInSessionScope,
   formText,
@@ -35,6 +35,24 @@ export async function POST(request: Request) {
 
     const vendorId = formText(formData, "vendorId", { max: 120 }) || undefined;
     const internalMembershipId = formText(formData, "internalMembershipId", { max: 120 }) || undefined;
+    const sourceExceptionId = formText(formData, "sourceExceptionId", { max: 120 }) || undefined;
+    let sourceVisit: Awaited<ReturnType<typeof context.repository.getVisit>> | undefined;
+    if (sourceExceptionId) {
+      const sourceException = await context.repository.getException(context.session.organizationId, sourceExceptionId);
+      if (!sourceException || sourceException.kind !== "no_work_order" || sourceException.status === "resolved" || !sourceException.visitId) {
+        throw new OpsDomainError("CONFLICT", "The unmatched-visit review item is no longer available.");
+      }
+      sourceVisit = await context.repository.getVisit(context.session.organizationId, sourceException.visitId) ?? undefined;
+      if (!sourceVisit || sourceVisit.workOrderId || sourceVisit.storeId !== storeId) {
+        throw new OpsDomainError("CONFLICT", "The visit is already linked or does not belong to the selected store.");
+      }
+      if (sourceVisit.providerKind === "outside_vendor" && (assignmentKind !== "outside_vendor" || vendorId !== sourceVisit.vendorId)) {
+        throw new OpsDomainError("VALIDATION", "Work created from this visit must stay assigned to the vendor who checked in.");
+      }
+      if (sourceVisit.providerKind === "internal" && (assignmentKind !== "internal" || internalMembershipId !== sourceVisit.internalMembershipId)) {
+        throw new OpsDomainError("VALIDATION", "Work created from this visit must stay assigned to the internal technician who checked in.");
+      }
+    }
     if (assignmentKind === "outside_vendor") {
       if (!vendorId || !(await context.repository.getVendor(context.session.organizationId, vendorId))) {
         throw new OpsDomainError("VALIDATION", "Choose an approved outside vendor.");
@@ -83,11 +101,25 @@ export async function POST(request: Request) {
         actor: context.actor,
       },
     );
-    const destination = assignmentKind === "bid_request"
-      ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=bid-request-created#bid-requests`
-      : assignmentKind === "outside_vendor"
-        ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=service-work-created#issue-work`
-        : `/app/work-orders/${encodeURIComponent(result.id)}?created=true`;
+    if (sourceExceptionId && sourceVisit) {
+      await reconcileUnmatchedVisit(
+        { repository: context.repository },
+        {
+          organizationId: context.session.organizationId,
+          exceptionId: sourceExceptionId,
+          workOrderId: result.id,
+          note: `Created ${result.number} from the preserved unmatched visit by ${sourceVisit.technicianName} (${sourceVisit.providerName}).`,
+          actor: context.actor,
+        },
+      );
+    }
+    const destination = sourceExceptionId
+      ? `/app/work-orders/${encodeURIComponent(result.id)}?view=visits&created=from-unmatched-visit`
+      : assignmentKind === "bid_request"
+        ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=bid-request-created#bid-requests`
+        : assignmentKind === "outside_vendor"
+          ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=service-work-created#issue-work`
+          : `/app/work-orders/${encodeURIComponent(result.id)}?created=true`;
     return relativeRedirect303(destination);
   } catch (error) {
     return opsApiError(error);

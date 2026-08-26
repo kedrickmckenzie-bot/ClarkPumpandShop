@@ -88,7 +88,7 @@ describe("vendor estimate persistence foundation", () => {
     const tokenHash = "f".repeat(64);
     await repository.atomicWrite([{
       sql: "INSERT INTO ops_public_tokens (id, organization_id, purpose, subject_type, subject_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      params: ["public-token-estimate-summit", NORTHLINE_ORGANIZATION_ID, "vendor_estimate", "work_order_estimate_request", summitRequestId, tokenHash, "2026-08-17T18:00:00.000Z", NORTHLINE_AS_OF],
+      params: ["public-token-estimate-summit", NORTHLINE_ORGANIZATION_ID, "vendor_estimate", "work_order_estimate_request", summitRequestId, tokenHash, "2026-08-30T18:00:00.000Z", NORTHLINE_AS_OF],
     }]);
 
     await expect(repository.getEstimateRequestByPublicToken({
@@ -116,13 +116,13 @@ describe("vendor estimate persistence foundation", () => {
     await expect(repository.getEstimateRequestByPublicToken({
       tokenHash,
       purpose: "vendor_estimate",
-      now: "2026-08-18T18:00:00.000Z",
+      now: "2026-08-31T18:00:00.000Z",
       vendorId: "vendor-northline-summit",
     })).resolves.toBeNull();
 
     await repository.atomicWrite([{
       sql: "UPDATE ops_public_tokens SET used_at = ? WHERE organization_id = ? AND id = ?",
-      params: ["2026-08-10T18:01:00.000Z", NORTHLINE_ORGANIZATION_ID, "public-token-estimate-summit"],
+      params: ["2026-08-25T18:01:00.000Z", NORTHLINE_ORGANIZATION_ID, "public-token-estimate-summit"],
     }]);
     await expect(repository.getEstimateRequestByPublicToken({
       tokenHash,

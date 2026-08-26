@@ -7,6 +7,7 @@ import {
   BarChart3,
   ChevronDown,
   ClipboardList,
+  Layers3,
   LayoutDashboard,
   Menu,
   Plus,
@@ -19,7 +20,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { productPresentation, productThemeVariables } from "@/lib/product/presentation";
-import type { OperatorRole, OperatorSession } from "./data-contract";
+import type { DemoEdition, OperatorRole, OperatorSession } from "./data-contract";
+import { DEFAULT_DEMO_EDITION, demoEditionPresentation } from "./demo-edition";
 import {
   contextualNavigationForPath,
   navigationForRole,
@@ -29,6 +31,7 @@ import {
   type NavigationItem,
 } from "./navigation";
 import { PreviewRoleSwitcher } from "./preview-role-switcher";
+import { PreviewEditionSwitcher } from "./preview-edition-switcher";
 import { roleCan, type OperatorCapability } from "./role-policy";
 import styles from "./platform-shell.module.css";
 
@@ -124,18 +127,34 @@ function NavigationLink({ item, pathname }: { item: NavigationItem; pathname: st
   );
 }
 
-function PrimaryNavigation({ session, pathname }: { session: OperatorSession; pathname: string }) {
+function PrimaryNavigation({
+  session,
+  pathname,
+  edition,
+}: {
+  session: OperatorSession;
+  pathname: string;
+  edition: DemoEdition;
+}) {
   return (
     <nav aria-label="Primary navigation" className={styles.navGroups}>
-      {navigationForRole(session.role).map((item) => (
+      {navigationForRole(session.role, edition).map((item) => (
         <NavigationLink item={item} pathname={pathname} key={item.id} />
       ))}
     </nav>
   );
 }
 
-function ContextualNavigation({ session, pathname }: { session: OperatorSession; pathname: string }) {
-  const group = contextualNavigationForPath(session.role, pathname);
+function ContextualNavigation({
+  session,
+  pathname,
+  edition,
+}: {
+  session: OperatorSession;
+  pathname: string;
+  edition: DemoEdition;
+}) {
+  const group = contextualNavigationForPath(session.role, pathname, edition);
   if (!group) return null;
 
   return (
@@ -178,11 +197,11 @@ function UserSummary({ session }: { session: OperatorSession }) {
   );
 }
 
-function SidebarFooter({ session }: { session: OperatorSession }) {
+function SidebarFooter({ session, edition }: { session: OperatorSession; edition: DemoEdition }) {
   return (
     <div className={styles.sidebarFooter}>
       <nav aria-label="Workspace settings" className={styles.secondaryNavigation}>
-        {roleCan(session.role, "administer") ? (
+        {edition === "complete" && roleCan(session.role, "administer") ? (
           <Link className={styles.setupLink} href="/app/admin">
             <Settings2 aria-hidden="true" size={18} />
             <span>Setup</span>
@@ -200,8 +219,12 @@ function SidebarFooter({ session }: { session: OperatorSession }) {
   );
 }
 
-function CreateMenu({ role }: { role: OperatorRole }) {
-  const actions = createActions.filter((action) => roleCan(role, action.capability));
+function CreateMenu({ role, edition }: { role: OperatorRole; edition: DemoEdition }) {
+  const actions = createActions.filter(
+    (action) => roleCan(role, action.capability) && (
+      edition === "complete" || action.capability === "create_work_order"
+    ),
+  );
   if (!actions.length) return null;
 
   return (
@@ -225,6 +248,7 @@ function CreateMenu({ role }: { role: OperatorRole }) {
 
 export function PlatformShell({ session, children }: PlatformShellProps) {
   const pathname = usePathname();
+  const edition = session.demoEdition ?? DEFAULT_DEMO_EDITION;
 
   return (
     <div className={styles.shell} style={productThemeVariables}>
@@ -234,13 +258,15 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
         <ProductIdentity />
 
         <div className={styles.organizationContext} aria-label="Current organization and scope">
-          <span>Organization</span>
+          <span>Company</span>
           <strong>{session.organizationName}</strong>
           <small>{session.scopeLabel}</small>
         </div>
 
-        <PrimaryNavigation session={session} pathname={pathname} />
-        <SidebarFooter session={session} />
+        <PreviewEditionSwitcher edition={edition} />
+
+        <PrimaryNavigation session={session} pathname={pathname} edition={edition} />
+        <SidebarFooter session={session} edition={edition} />
       </aside>
 
       <div className={styles.contentColumn}>
@@ -259,8 +285,9 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
                     <span>{session.scopeLabel}</span>
                   </p>
                 </div>
-                <PrimaryNavigation session={session} pathname={pathname} />
-                <SidebarFooter session={session} />
+                <PreviewEditionSwitcher edition={edition} />
+                <PrimaryNavigation session={session} pathname={pathname} edition={edition} />
+                <SidebarFooter session={session} edition={edition} />
               </div>
             </details>
 
@@ -275,11 +302,21 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
                 id="global-platform-search"
                 name="q"
                 type="search"
-                placeholder="Search store number, address, work order, vendor, or equipment"
+                placeholder={edition === "accountability"
+                  ? "Search work orders, visits, stores, or vendors"
+                  : "Search a store, work order, vendor, or equipment"}
                 autoComplete="off"
               />
               <button type="submit">Search</button>
             </form>
+
+            <div className={styles.editionIndicator} aria-label={`Demo package: ${demoEditionPresentation[edition].label}`}>
+              <Layers3 aria-hidden="true" size={17} />
+              <span>
+                <small>Demo package</small>
+                <strong>{demoEditionPresentation[edition].label}</strong>
+              </span>
+            </div>
 
             <div className={styles.topbarContext} aria-label="Current preview role and access scope">
               <UsersRound aria-hidden="true" size={18} />
@@ -288,9 +325,9 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
                 <small>{session.scopeLabel}</small>
               </span>
             </div>
-            <CreateMenu role={session.role} />
+            <CreateMenu role={session.role} edition={edition} />
           </header>
-          <ContextualNavigation session={session} pathname={pathname} />
+          <ContextualNavigation session={session} pathname={pathname} edition={edition} />
         </div>
 
         <main className={styles.main} id="main-content" tabIndex={-1}>{children}</main>

@@ -23,15 +23,15 @@ export function ReportingCenter({ model }: { model: ListPageViewModel }) {
         <div><p>{model.page.eyebrow}</p><h1>{model.page.title}</h1><span>{model.page.description}</span></div>
       </header>
       <div className={styles.context} aria-label="Current reporting context">
-        <span><Layers3 size={16} aria-hidden="true" /><small>Scope</small><strong>{model.page.scopeLabel}</strong></span>
-        <span><Database size={16} aria-hidden="true" /><small>Basis</small><strong>Persisted source records</strong></span>
-        <span><ShieldCheck size={16} aria-hidden="true" /><small>Governance</small><strong>Definitions travel with every export</strong></span>
+        <span><Layers3 size={16} aria-hidden="true" /><small>Viewing</small><strong>{model.page.scopeLabel}</strong></span>
+        <span><Database size={16} aria-hidden="true" /><small>Based on</small><strong>Recorded work and activity</strong></span>
+        <span><ShieldCheck size={16} aria-hidden="true" /><small>Exports</small><strong>Include the report definition</strong></span>
       </div>
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           <section className={styles.intro}>
             <span><FileBarChart2 size={21} aria-hidden="true" /></span>
-            <div><small>Management reporting</small><strong>Start with a governed live view, then export the exact supporting rows.</strong><p>Each report preserves a plain-language definition and opens the operational workspace behind it. CSV exports are generated from the same scoped presenter rows shown in the application.</p></div>
+            <div><small>Management reports</small><strong>Open a live report, then export it when you are ready to share or archive it.</strong><p>Each report explains what is counted and lets you open the work behind the totals. The export contains the same rows shown on screen.</p></div>
           </section>
           <section className={styles.grid} aria-label="Available management reports">
             {model.table.rows.map((row) => {

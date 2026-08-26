@@ -39,25 +39,25 @@ const workspaceCopy: Record<PlanningWorkspaceKind, {
   sourceDescription: string;
 }> = {
   spend: {
-    label: "Cost intelligence",
-    basisTitle: "Recorded work cost",
-    basis: "Only entered work-cost lines are totaled here. Approved amounts, vendor proposals, linked invoices, and unmatched invoice amounts remain separate facts.",
-    sourceTitle: "Source work and cost",
-    sourceDescription: "The selected scope, period, service area, and hierarchy carry into every source record.",
+    label: "Spending",
+    basisTitle: "What counts in this total",
+    basis: "This view totals work costs that were entered in the platform. Approvals, quotes, and invoices stay separate so the numbers are not accidentally combined.",
+    sourceTitle: "Work costs in this view",
+    sourceDescription: "Open any row to see the store, work order, and cost behind it.",
   },
   pm: {
-    label: "Preventive maintenance control",
-    basisTitle: "Occurrence compliance",
-    basis: "Compliance uses completed eligible occurrences divided by all eligible occurrences whose completion window has closed. Open windows and waived work are not silently counted as failures.",
-    sourceTitle: "PM occurrence ledger",
-    sourceDescription: "Each row is a dated occurrence with its completion window, equipment or plan, status, and canonical work order when one exists.",
+    label: "Preventive maintenance",
+    basisTitle: "How completion is counted",
+    basis: "Only maintenance windows that have ended count toward completion. Work that is still in its window—or was waived—is not counted as missed.",
+    sourceTitle: "Maintenance schedule",
+    sourceDescription: "Each row shows the store, due window, equipment or plan, status, and linked work order when one exists.",
   },
   lifecycle: {
-    label: "Lifecycle and capital planning",
-    basisTitle: "Human capital review",
-    basis: "The platform compares the current repair and replacement over the same expected-service horizon. Age, warranty, repeat work, and historical cost stay visible, but no score or rule makes the replacement decision.",
-    sourceTitle: "Repair and replacement evidence",
-    sourceDescription: "Review the current proposal, service-life assumptions, replacement benchmark, history, and exact source work before deciding.",
+    label: "Repair or replace",
+    basisTitle: "How the comparison works",
+    basis: "The platform compares the current repair with replacement over the same expected-use period. Age, warranty, repeat work, and past costs stay visible, but the final decision remains yours.",
+    sourceTitle: "Equipment to review",
+    sourceDescription: "Open a row to see the repair, expected life, replacement estimate, and service history behind the comparison.",
   },
 };
 
@@ -74,8 +74,8 @@ function toneClass(tone: Tone = "neutral") {
 function StatePanel({ state }: { state: Exclude<DataState, { kind: "ready" }> }) {
   const loading = state.kind === "loading";
   const error = state.kind === "error";
-  const title = loading ? state.label ?? "Loading planning workspace" : state.title;
-  const message = loading ? "Gathering the latest source records in your permitted scope." : state.message;
+  const title = loading ? state.label ?? "Loading this view" : state.title;
+  const message = loading ? "Getting the latest records available to you." : state.message;
   return (
     <section className={styles.state} role={error ? "alert" : "status"}>
       {loading ? <LoaderCircle className={styles.spin} size={25} aria-hidden="true" /> : error ? <AlertCircle size={25} aria-hidden="true" /> : <Inbox size={25} aria-hidden="true" />}
@@ -102,9 +102,9 @@ function WorkspaceHeader({ model, kind }: { model: ProgramPageViewModel; kind: P
         </div>
       </header>
       <div className={styles.context} aria-label="Current planning context">
-        <span><Layers3 size={15} aria-hidden="true" /><small>Scope</small><strong>{model.page.scopeLabel}</strong></span>
+        <span><Layers3 size={15} aria-hidden="true" /><small>Viewing</small><strong>{model.page.scopeLabel}</strong></span>
         {model.page.periodLabel ? <span><Clock3 size={15} aria-hidden="true" /><small>Period</small><strong>{model.page.periodLabel}</strong></span> : null}
-        {model.page.updatedLabel ? <span><ShieldCheck size={15} aria-hidden="true" /><small>Data</small><strong>{model.page.updatedLabel}</strong></span> : null}
+        {model.page.updatedLabel ? <span><ShieldCheck size={15} aria-hidden="true" /><small>Updated</small><strong>{model.page.updatedLabel}</strong></span> : null}
       </div>
     </>
   );
@@ -114,10 +114,14 @@ function BasisBanner({ kind }: { kind: PlanningWorkspaceKind }) {
   const copy = workspaceCopy[kind];
   const Icon = kind === "spend" ? CircleDollarSign : kind === "pm" ? CalendarCheck2 : Scale;
   return (
-    <section className={styles.basis} aria-label="Evidence basis">
-      <span><Icon size={20} aria-hidden="true" /></span>
-      <div><small>Evidence basis</small><strong>{copy.basisTitle}</strong><p>{copy.basis}</p></div>
-    </section>
+    <details className={styles.basis}>
+      <summary>
+        <span><Icon size={19} aria-hidden="true" /></span>
+        <div><small>How this view works</small><strong>{copy.basisTitle}</strong></div>
+        <ChevronRight size={17} aria-hidden="true" />
+      </summary>
+      <p>{copy.basis}</p>
+    </details>
   );
 }
 
@@ -161,7 +165,7 @@ function Breakdown({ model }: { model: BreakdownViewModel }) {
       <header><div><h2>{model.title}</h2>{model.description ? <p>{model.description}</p> : null}</div>{model.totalLabel ? <strong>{model.totalLabel}</strong> : null}</header>
       {model.segments.length ? (
         <div className={styles.breakdown}>
-          <div className={styles.donut} style={{ background: gradient }} role="img" aria-label={model.segments.map((segment) => `${segment.label}: ${segment.formattedValue}`).join("; ")}><span><strong>{model.totalLabel ?? total}</strong><small>source total</small></span></div>
+          <div className={styles.donut} style={{ background: gradient }} role="img" aria-label={model.segments.map((segment) => `${segment.label}: ${segment.formattedValue}`).join("; ")}><span><strong>{model.totalLabel ?? total}</strong><small>total</small></span></div>
           <div className={styles.segmentList}>{model.segments.map((segment, index) => (
             <Link href={segment.link.href} key={segment.id}>
               <i style={{ background: palette[index % palette.length] }} aria-hidden="true" />
@@ -193,7 +197,7 @@ function ActionQueue({ model, kind }: { model: ProgramPageViewModel; kind: Plann
   return (
     <section className={styles.actions}>
       <header><div><p>Accountability</p><h2>{label}</h2></div><Link href="/app/action-center">Open full action queue<ArrowRight size={14} aria-hidden="true" /></Link></header>
-      <div>{model.priorityActions.slice(0, 6).map((action) => <Link href={action.link.href} key={action.id}><i className={toneClass(action.tone)} aria-hidden="true" /><span><small>{[action.categoryLabel, action.recordLabel, action.storeLabel].filter(Boolean).join(" · ")}</small><strong>{action.title}</strong><p>{action.description}</p></span><span className={styles.owner}><small>Accountable</small><strong>{action.ownerLabel}</strong></span><span className={styles.due}><small>Due</small><strong>{action.dueLabel}</strong></span><ChevronRight size={16} aria-hidden="true" /></Link>)}</div>
+      <div>{model.priorityActions.slice(0, 6).map((action) => <Link href={action.link.href} key={action.id}><i className={toneClass(action.tone)} aria-hidden="true" /><span><small>{[action.categoryLabel, action.recordLabel, action.storeLabel].filter(Boolean).join(" · ")}</small><strong>{action.title}</strong><p>{action.description}</p></span><span className={styles.owner}><small>Owner</small><strong>{action.ownerLabel}</strong></span><span className={styles.due}><small>Due</small><strong>{action.dueLabel}</strong></span><ChevronRight size={16} aria-hidden="true" /></Link>)}</div>
     </section>
   );
 }

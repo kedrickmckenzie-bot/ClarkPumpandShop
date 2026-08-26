@@ -33,6 +33,17 @@ export interface VendorPerformanceSummary {
   assignedWorkCount: number;
   recordedCostMinor: number;
   recordedCostLineCount: number;
+  relationshipState: "attention" | "watch" | "stable";
+  relationshipLabel: string;
+  relationshipSummary: string;
+  compliance: {
+    state: "ready" | "due_soon" | "blocked" | "unconfigured";
+    label: string;
+    detail: string;
+    approvedDocumentCount: number;
+    documentCount: number;
+    activeQualificationCount: number;
+  };
   measures: {
     responseTime: VendorEvidenceMeasure;
     acceptance: VendorEvidenceMeasure;
@@ -58,11 +69,36 @@ export interface VendorPerformanceListViewModel {
   scopeLabel: string;
   updatedLabel: string;
   searchValue?: string;
+  view: "all" | "attention" | "preferred" | "stable";
+  specialty?: string;
+  specialtyOptions: Array<{ value: string; label: string }>;
   sort: "attention" | "name" | "response" | "cost";
   resultSummary: string;
   createVendorLink?: SupportingLink;
   portfolioMetrics: VendorPortfolioMetric[];
   vendors: VendorPerformanceSummary[];
+}
+
+export interface VendorComplianceEvidenceRow {
+  id: string;
+  documentTypeLabel: string;
+  referenceLabel: string;
+  statusLabel: string;
+  effectiveLabel: string;
+  expiryLabel: string;
+  blockingLabel: string;
+  tone: Tone;
+}
+
+export interface VendorQualificationEvidenceRow {
+  id: string;
+  tradeLabel: string;
+  capabilityLabel: string;
+  serviceRightsLabel: string;
+  limitLabel: string;
+  expiryLabel: string;
+  statusLabel: string;
+  tone: Tone;
 }
 
 export interface VendorAuthorizationEvidenceRow {
@@ -141,6 +177,9 @@ export interface VendorPerformanceDetailViewModel {
   updatedLabel: string;
   backLink: SupportingLink;
   createWorkOrderLink?: SupportingLink;
+  manageRelationshipAction?: string;
+  specialtyOptions: Array<{ value: string; label: string }>;
+  notice?: string;
   summary?: VendorPerformanceSummary;
   authorizationRows: VendorAuthorizationEvidenceRow[];
   accountabilityRows: VendorAccountabilityEvidenceRow[];
@@ -148,5 +187,7 @@ export interface VendorPerformanceDetailViewModel {
   visitRows: VendorVisitEvidenceRow[];
   costRows: VendorCostEvidenceRow[];
   coverageRows: VendorCoverageEvidenceRow[];
+  complianceRows: VendorComplianceEvidenceRow[];
+  qualificationRows: VendorQualificationEvidenceRow[];
   regionLabels: string[];
 }

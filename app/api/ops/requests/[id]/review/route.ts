@@ -7,7 +7,7 @@ import {
 } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
-const reviewStatuses = new Set(["under_review"]);
+const reviewStatuses = new Set(["submitted", "under_review"]);
 const reviewDecisions = new Set(["escalate", "close"]);
 
 export async function POST(
@@ -33,7 +33,7 @@ export async function POST(
       {
         organizationId: context.session.organizationId,
         requestId,
-        expectedStatus: expectedStatus as "under_review",
+        expectedStatus: expectedStatus as "submitted" | "under_review",
         decision: decision as "escalate" | "close",
         note: formText(formData, "note", { max: 2_000 }) || undefined,
         actor: context.actor,

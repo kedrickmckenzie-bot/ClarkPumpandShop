@@ -40,11 +40,25 @@ export function selectOpsRepositoryBackend(input: {
   databaseUrl?: string;
   d1Available: boolean;
   nodeEnv?: string;
+  allowLocalD1?: boolean;
 }): OpsRepositoryBackend {
   if (input.databaseUrl?.trim()) return "postgres";
+  // The product contract deliberately keeps ordinary local development on a
+  // resettable fixture. Vinext exposes a D1 binding in development even when
+  // the developer's local sqlite file is several migrations behind; treating
+  // the mere presence of that binding as intent made record pages fail at
+  // runtime. D1 remains available as an explicit adapter-integration mode.
+  if (input.nodeEnv !== "production" && !input.allowLocalD1) return "fixture";
   if (input.d1Available) return "d1";
-  if (input.nodeEnv !== "production") return "fixture";
   throw new Error("The production facilities platform requires PostgreSQL DATABASE_URL or the Cloudflare D1 `DB` binding.");
+}
+
+function localD1Requested() {
+  return process.env.OPS_LOCAL_D1 === "1";
+}
+
+function shouldUseDevelopmentFixture() {
+  return process.env.NODE_ENV !== "production" && !localD1Requested();
 }
 
 async function getD1BindingLazily(): Promise<D1Database | undefined> {
@@ -136,6 +150,8 @@ export async function getServerOpsRepository(): Promise<OpsRepository> {
     throw new Error("The Render runtime requires DATABASE_URL; fixture and D1 fallbacks are disabled.");
   }
 
+  if (shouldUseDevelopmentFixture()) return getNorthlineFixtureRepository();
+
   const binding = await getD1BindingLazily();
   if (binding) {
     return initializeDurableRepository(async () => {
@@ -157,7 +173,7 @@ export function getServerOpsRepositoryProxy(): OpsRepository {
     ? "postgres"
     : isRenderNodeRuntime()
       ? isLocalRenderDevelopment() ? "fixture" : "postgres"
-      : "d1";
+      : shouldUseDevelopmentFixture() ? "fixture" : "d1";
   repositoryProxy ??= new Proxy(
     { kind: proxyKind } as OpsRepository,
     {
@@ -188,6 +204,8 @@ export async function getServerOpsFixtureSnapshot(
     if (isLocalRenderDevelopment()) return getNorthlineFixtureRepository().snapshot();
     throw new Error("The Render runtime requires DATABASE_URL; operator data cannot use a fallback.");
   }
+
+  if (shouldUseDevelopmentFixture()) return getNorthlineFixtureRepository().snapshot();
 
   const binding = await getD1BindingLazily();
   if (!binding) {

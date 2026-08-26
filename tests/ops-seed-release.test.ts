@@ -97,7 +97,7 @@ describe("Northline deterministic seed release", () => {
       ]);
   });
 
-  it("writes the complete v12 fixture and full-version marker to a fresh PostgreSQL database", async () => {
+  it("writes the complete v13 fixture and full-version marker to a fresh PostgreSQL database", async () => {
     const fixture = buildNorthlinePresentationFixture();
     const expectedSourceStatements = buildOpsSeedStatements(fixture);
     const client = new RecordingPostgresClient([]);
@@ -118,6 +118,19 @@ describe("Northline deterministic seed release", () => {
     expect(inserts.some((query) => /INTO ops_site_visit_work_orders/i.test(query.text))).toBe(true);
     expect(inserts.some((query) => /INTO ops_work_order_verifications/i.test(query.text))).toBe(true);
     expect(inserts.some((query) => /INTO ops_workflow_tasks/i.test(query.text))).toBe(true);
+    expect(inserts.some((query) => /INTO ops_service_appointments/i.test(query.text))).toBe(true);
+    expect(inserts.some((query) => /INTO ops_vendor_continuations/i.test(query.text))).toBe(false);
+    const continuationFixture = structuredClone(fixture);
+    (continuationFixture.vendorContinuations ??= []).push({
+      id: "continuation-seed-contract",
+      organizationId: fixture.organizations[0]!.id,
+      workOrderId: "wo-current-113-freezer-service",
+      vendorResponseId: "response-current-113-proposed-date",
+      action: "accept_date",
+      createdByMembershipId: "membership-northline-facilities",
+      createdAt: fixture.asOf,
+    });
+    expect(buildOpsSeedStatements(continuationFixture).some((statement) => /INTO ops_vendor_continuations/i.test(statement.sql))).toBe(true);
     expect(inserts.some((query) => /INTO ops_requests/i.test(query.text) && query.values[0] === "request-current-104-beer-cave-door")).toBe(true);
     expect(inserts.some((query) => /INTO ops_request_impact_assessments/i.test(query.text) && query.values[0] === "impact-request-current-104-beer-cave-door-review")).toBe(true);
     expect(inserts.some((query) => /INTO ops_workflow_tasks/i.test(query.text) && query.values[0] === "workflow-task-request-current-104-beer-cave-door-review")).toBe(true);
@@ -134,7 +147,7 @@ describe("Northline deterministic seed release", () => {
     expect(client.released).toBe(true);
   });
 
-  it("enriches a completed v9 database with missing rows and exact guarded amendments without claiming an exact v12 seed", async () => {
+  it("enriches a completed v9 database with missing rows and exact guarded amendments without claiming an exact v13 seed", async () => {
     const legacyVersion = "northline-ops-2026-08-15-v9";
     const client = new RecordingPostgresClient([{
       key: legacyVersion,

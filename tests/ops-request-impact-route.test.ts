@@ -26,7 +26,7 @@ const serviceRequest = { id: "request-impact-route", organizationId: NORTHLINE_O
 const session = { organizationId: NORTHLINE_ORGANIZATION_ID, role: "facilities", storeIds: undefined, regionIds: undefined };
 const actor = { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "user" as const, actorId: "membership-northline-facilities", actorName: "Jordan Lee" };
 
-function impactRequest() {
+function impactRequest(continueTo?: string) {
   const form = new FormData();
   form.set("expectedRequestStatus", "submitted");
   form.set("expectedLatestAssessmentId", "impact-initial-route");
@@ -44,6 +44,7 @@ function impactRequest() {
   form.set("estimatedDowntimeMinutes", "180");
   form.set("confidence", "high");
   form.set("impactNotes", "Manager verified the operating facts.");
+  if (continueTo) form.set("continueTo", continueTo);
   return new Request(`https://operations.test/api/ops/requests/${serviceRequest.id}/impact`, { method: "POST", body: form });
 }
 
@@ -54,6 +55,16 @@ describe("request impact review route", () => {
     mocks.getOpsRequestContext.mockResolvedValue({ session, repository, actor });
     mocks.assertStoreInSessionScope.mockResolvedValue({ id: serviceRequest.storeId });
     mocks.reviewRequestImpactAssessment.mockResolvedValue({ id: "impact-review-route" });
+  });
+
+  it("continues directly to work-order creation only for this reviewed request", async () => {
+    const workOrderHref = `/app/work-orders/new?request=${serviceRequest.id}`;
+    const response = await POST(impactRequest(workOrderHref), { params: Promise.resolve({ id: serviceRequest.id }) });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(workOrderHref);
+
+    const unsafe = await POST(impactRequest("https://example.test/steal"), { params: Promise.resolve({ id: serviceRequest.id }) });
+    expect(unsafe.headers.get("location")).toBe(`/app/requests/${serviceRequest.id}?updated=impact-review`);
   });
 
   it("uses membership context and store scope before invoking the atomic review command", async () => {

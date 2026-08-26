@@ -95,6 +95,7 @@ describe("operator bid and service path states", () => {
     const fixture = buildNorthlinePresentationFixture();
     const request = fixture.estimateRequests.find((candidate) => candidate.id === "estimate-request-105-summit")!;
     request.status = "requested";
+    request.dueAt = "2026-08-27T16:00:00.000Z";
     request.openedAt = undefined;
     request.respondedAt = undefined;
     fixture.estimateRequests = fixture.estimateRequests.filter((candidate) => candidate.id === request.id);

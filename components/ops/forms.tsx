@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Info, Send, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Info, Route, Send, ShieldCheck } from "lucide-react";
 import type {
   CreateRequestPageViewModel,
   CreateStorePageViewModel,
   CreateVendorPageViewModel,
   CreateWorkOrderPageViewModel,
   DataState,
+  DemoEdition,
   SelectOptionViewModel,
   VendorIssuanceViewModel,
 } from "./data-contract";
@@ -31,11 +32,11 @@ function Datalist({ id, options }: { id: string; options: SelectOptionViewModel[
   return <datalist id={id}>{options.map((option) => <option value={option.value} label={option.label} key={option.value}>{option.description}</option>)}</datalist>;
 }
 
-function SelectField({ id, name, label, options, required, helper }: { id: string; name: string; label: string; options: SelectOptionViewModel[]; required?: boolean; helper?: string }) {
+function SelectField({ id, name, label, options, required, helper, defaultValue }: { id: string; name: string; label: string; options: SelectOptionViewModel[]; required?: boolean; helper?: string; defaultValue?: string }) {
   return (
     <label className={styles.field} htmlFor={id}>
       <span>{label}{required ? <em>Required</em> : <small>Optional</small>}</span>
-      <select id={id} name={name} required={required} defaultValue="">
+      <select id={id} name={name} required={required} defaultValue={defaultValue ?? ""}>
         <option value="" disabled={required}>Select an option</option>
         {options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
       </select>
@@ -61,7 +62,7 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
               <span>Store <em>Required</em></span>
               <input id="request-store" name="storeId" list="request-store-options" required placeholder="Search by store number, name, or address" autoComplete="off" />
               <Datalist id="request-store-options" options={model.stores} />
-              <small>Select a result supplied by the organization store directory.</small>
+              <small>Choose one of the stores shown in the search results.</small>
             </label>
           </section>
 
@@ -85,69 +86,7 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
             <SelectField id="request-priority" name="priority" label="Priority" required options={model.priorityOptions} helper="Use emergency only for immediate safety, fuel, food-safety, or major operating impact." />
           </section>
 
-          <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>3</span><div><h2>How is the store affected?</h2><p>Report what you can observe. Managers will confirm or revise this assessment before work is selected.</p></div></div>
-            <div className={styles.fieldGrid}>
-              <SelectField id="request-operating-state" name="storeOperatingState" label="Store operating state" required options={[
-                { value: "open", label: "Open", description: "Normal operation continues" },
-                { value: "partially_operational", label: "Partially operational", description: "A meaningful function or area is unavailable" },
-                { value: "unable_to_operate", label: "Unable to operate", description: "The store cannot operate" },
-                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
-              ]} />
-              <SelectField id="request-safety" name="safetyConcern" label="Safety concern" required options={[
-                { value: "none_reported", label: "None reported", description: "No safety concern observed" },
-                { value: "potential", label: "Potential concern", description: "Needs timely review" },
-                { value: "immediate", label: "Immediate concern", description: "Requires immediate response" },
-                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
-              ]} />
-              <SelectField id="request-inventory-risk" name="productInventoryRisk" label="Product or inventory risk" required options={[
-                { value: "none_reported", label: "None reported", description: "No product risk observed" },
-                { value: "at_risk", label: "Product at risk", description: "Loss may occur" },
-                { value: "loss_reported", label: "Loss reported", description: "Store reports product loss" },
-                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
-              ]} />
-              <SelectField id="request-customers" name="customersAffected" label="Customers affected" required options={[
-                { value: "yes", label: "Yes", description: "Customers are affected" },
-                { value: "no", label: "No", description: "No customer impact observed" },
-                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
-              ]} />
-              <SelectField id="request-compliance" name="complianceImpact" label="Compliance impact" required options={[
-                { value: "none_reported", label: "None reported", description: "No compliance concern observed" },
-                { value: "potential", label: "Potential impact", description: "Needs review" },
-                { value: "confirmed", label: "Confirmed impact", description: "A known requirement is affected" },
-                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
-              ]} />
-              <SelectField id="request-redundancy" name="redundantEquipment" label="Backup equipment available" required options={[
-                { value: "yes", label: "Yes", description: "Backup capacity is available" },
-                { value: "no", label: "No", description: "No redundant equipment" },
-                { value: "unknown", label: "Not sure", description: "Manager review is needed" },
-              ]} />
-            </div>
-            <div className={styles.fieldGrid}>
-              <label className={styles.field} htmlFor="request-inventory-value"><span>Product value at risk <small>Optional · USD</small></span><input id="request-inventory-value" name="productInventoryValue" type="number" min="0" step="0.01" inputMode="decimal" /></label>
-              <label className={styles.field} htmlFor="request-capacity"><span>Capacity unavailable <small>Optional · percent</small></span><input id="request-capacity" name="capacityUnavailablePercent" type="number" min="0" max="100" step="0.01" inputMode="decimal" /></label>
-              <SelectField id="request-revenue-function" name="revenueFunctionImpact" label="Revenue function affected" options={[
-                { value: "fuel", label: "Fuel", description: "Fuel sales or dispensing" },
-                { value: "foodservice", label: "Foodservice", description: "Prepared food service" },
-                { value: "refrigerated_merchandise", label: "Refrigerated merchandise", description: "Cold product sales" },
-                { value: "beverages", label: "Beverages", description: "Packaged or fountain beverages" },
-                { value: "lottery", label: "Lottery", description: "Lottery sales" },
-                { value: "car_wash", label: "Car wash", description: "Car wash sales" },
-                { value: "other", label: "Other", description: "Another store function" },
-              ]} />
-              <label className={styles.field} htmlFor="request-daily-exposure"><span>Estimated daily revenue exposure <small>Optional · USD</small></span><input id="request-daily-exposure" name="estimatedDailyRevenueExposure" type="number" min="0" step="0.01" inputMode="decimal" /></label>
-              <label className={styles.field} htmlFor="request-downtime"><span>Estimated downtime <small>Optional · minutes</small></span><input id="request-downtime" name="estimatedDowntimeMinutes" type="number" min="0" step="1" inputMode="numeric" /></label>
-              <SelectField id="request-confidence" name="confidence" label="Confidence in this report" required options={[
-                { value: "low", label: "Low", description: "Facts are incomplete" },
-                { value: "medium", label: "Medium", description: "Based on direct store observation" },
-                { value: "high", label: "High", description: "Facts have been checked" },
-              ]} />
-            </div>
-            <label className={styles.field} htmlFor="request-impact-notes"><span>Impact notes <small>Optional</small></span><textarea id="request-impact-notes" name="impactNotes" rows={3} placeholder="Add observed constraints, affected areas, or why an estimate is uncertain." /></label>
-            <div className={styles.formNotice}><Info aria-hidden="true" size={19} /><p><strong>Estimates are planning context.</strong> Product value, revenue exposure, capacity, and downtime estimates are not verified losses.</p></div>
-          </section>
-
-          <div className={styles.formNotice}><Info aria-hidden="true" size={19} /><p><strong>This creates a visible record.</strong> Managers can review, classify, approve, and convert it to a work order without erasing the original report.</p></div>
+          <div className={styles.formNotice}><Info aria-hidden="true" size={19} /><p><strong>You do not need equipment details or a diagnosis.</strong> This creates a visible record that a manager can review, classify, and turn into work without changing the original report.</p></div>
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Submit request<ArrowRight aria-hidden="true" size={18} /></button></div>
         </form>
       ) : null}
@@ -155,7 +94,11 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
   );
 }
 
-export function CreateWorkOrderForm({ model, componentId }: { model: CreateWorkOrderPageViewModel; componentId?: string }) {
+export function CreateWorkOrderForm({ model, componentId, edition = "complete" }: { model: CreateWorkOrderPageViewModel; componentId?: string; edition?: DemoEdition }) {
+  const accountabilityOnly = edition === "accountability";
+  const sourceStoreLabel = model.sourceVisit ? model.stores.find((store) => store.value === model.defaults?.storeId)?.label : undefined;
+  const sourceVendorLabel = model.sourceVisit ? model.vendors.find((vendor) => vendor.value === model.defaults?.vendorId)?.label : undefined;
+  const sourceInternalLabel = model.sourceVisit ? model.internalAssignees.find((member) => member.value === model.defaults?.internalMembershipId)?.label : undefined;
   return (
     <div className={styles.formPage}>
       <PageIntro model={model} />
@@ -163,6 +106,7 @@ export function CreateWorkOrderForm({ model, componentId }: { model: CreateWorkO
       {model.state.kind === "ready" ? (
         <form className={styles.recordForm} action={model.submitAction} method="post">
           {model.sourceRequest ? <input type="hidden" name="requestId" value={model.sourceRequest.id} /> : null}
+          {model.sourceVisit ? <input type="hidden" name="sourceExceptionId" value={model.sourceVisit.exceptionId} /> : null}
           {componentId ? <input type="hidden" name="componentId" value={componentId} /> : null}
           {componentId ? (
             <div className={styles.formNotice}>
@@ -176,58 +120,72 @@ export function CreateWorkOrderForm({ model, componentId }: { model: CreateWorkO
               <p><strong>Converting {model.sourceRequest.reference}.</strong> Reported by {model.sourceRequest.reporterName} {model.sourceRequest.submittedLabel}. The original request remains in the audit trail.</p>
             </div>
           ) : null}
+          {model.sourceVisit ? (
+            <div className={styles.formNotice}>
+              <Route aria-hidden="true" size={19} />
+              <p><strong>Creating work from an unmatched visit.</strong> {model.sourceVisit.technicianName} from {model.sourceVisit.providerName} checked in {model.sourceVisit.checkedInLabel}. Creating this record will link the visit by an auditable amendment; the original “{model.sourceVisit.unmatchedReason}” assertion remains preserved.</p>
+            </div>
+          ) : null}
           <section className={styles.formSection}>
             <div className={styles.formSectionHeading}><span>1</span><div><h2>Define the work</h2><p>Only the store and problem are required. Classification stays honest when details are not yet known.</p></div></div>
             <label className={styles.field} htmlFor="work-store">
               <span>Store <em>Required</em></span>
-              <input id="work-store" name="storeId" list="work-store-options" required placeholder="Search store number, name, or address" autoComplete="off" defaultValue={model.sourceRequest?.storeId ?? model.defaults?.storeId} />
-              <Datalist id="work-store-options" options={model.stores} />
+              {model.sourceVisit ? <><input name="storeId" type="hidden" value={model.defaults?.storeId} /><input id="work-store" readOnly value={sourceStoreLabel ?? model.defaults?.storeId ?? "Bound store"} /></> : <><input id="work-store" name="storeId" list="work-store-options" required placeholder="Search store number, name, or address" autoComplete="off" defaultValue={model.sourceRequest?.storeId ?? model.defaults?.storeId} /><Datalist id="work-store-options" options={model.stores} /></>}
             </label>
             <label className={styles.field} htmlFor="work-problem">
               <span>Problem <em>Required</em></span>
-              <textarea id="work-problem" name="problem" rows={5} required minLength={10} placeholder="What needs to be inspected, repaired, or maintained?" defaultValue={model.sourceRequest?.problem} />
+              <textarea id="work-problem" name="problem" rows={5} required minLength={10} placeholder="What needs to be inspected, repaired, or maintained?" defaultValue={model.sourceRequest?.problem ?? model.defaults?.problem} />
             </label>
             <div className={styles.fieldGrid}>
               <SelectField id="work-priority" name="priority" label="Priority" required options={model.priorityOptions} />
-              <label className={styles.field} htmlFor="work-category">
+              {!accountabilityOnly ? <label className={styles.field} htmlFor="work-category">
                 <span>Category <small>Optional</small></span>
                 <input id="work-category" name="categoryKey" list="work-category-options" placeholder="Classify now or leave blank" autoComplete="off" defaultValue={model.defaults?.categoryKey} />
                 <Datalist id="work-category-options" options={model.categories} />
-              </label>
+              </label> : null}
             </div>
-            <WorkOrderLifecycleFields assets={model.assetLifecycleInputs} asOf={model.lifecycleAsOf} defaultAssetId={model.defaults?.assetId} />
+            {!accountabilityOnly ? <WorkOrderLifecycleFields assets={model.assetLifecycleInputs} asOf={model.lifecycleAsOf} defaultAssetId={model.defaults?.assetId} /> : null}
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>2</span><div><h2>Choose the service path</h2><p>Use a known provider, request pricing first, route internally, or decide later.</p></div></div>
-            <fieldset className={styles.assignmentChoices}>
+            <div className={styles.formSectionHeading}><span>2</span><div><h2>{accountabilityOnly ? "Choose the vendor" : "Choose the service path"}</h2><p>{accountabilityOnly ? "Select the outside vendor now or save the work order and choose one later." : "Use a known provider, request pricing first, route internally, or decide later."}</p></div></div>
+            {model.sourceVisit ? (
+              <div className={styles.formNotice}>
+                <Route aria-hidden="true" size={19} />
+                <input type="hidden" name="assignmentKind" value={model.defaults?.assignmentKind} />
+                {model.defaults?.vendorId ? <input type="hidden" name="vendorId" value={model.defaults.vendorId} /> : null}
+                {model.defaults?.internalMembershipId ? <input type="hidden" name="internalMembershipId" value={model.defaults.internalMembershipId} /> : null}
+                <p><strong>Provider preserved from check-in.</strong> {sourceVendorLabel ?? sourceInternalLabel ?? model.sourceVisit.providerName} will stay attached to this visit-derived work order. Change the provider later only through an auditable reassignment.</p>
+              </div>
+            ) : <><fieldset className={styles.assignmentChoices}>
               <legend>Next step <span>Required</span></legend>
-              <label htmlFor="assignment-internal" aria-label="Internal maintenance"><input id="assignment-internal" type="radio" name="assignmentKind" value="internal" required /><span><strong>Internal maintenance</strong><small>Assign to your own maintenance team.</small></span></label>
-              <label htmlFor="assignment-vendor" aria-label="Send service work"><input id="assignment-vendor" type="radio" name="assignmentKind" value="outside_vendor" /><span><strong>Send service work</strong><small>Choose the vendor now, then send a service authorization. Technician check-in applies after it is issued.</small></span></label>
-              <label htmlFor="assignment-bid" aria-label="Request vendor bids"><input id="assignment-bid" type="radio" name="assignmentKind" value="bid_request" /><span><strong>Request bids first</strong><small>Ask vendors for pricing by a due date. No vendor is assigned and no check-in is available.</small></span></label>
-              <label htmlFor="assignment-later" aria-label="Decide later"><input id="assignment-later" type="radio" name="assignmentKind" value="choose_later" /><span><strong>Decide later</strong><small>Save the work order without choosing a provider or requesting bids yet.</small></span></label>
+              {!accountabilityOnly ? <label htmlFor="assignment-internal" aria-label="Internal maintenance"><input id="assignment-internal" type="radio" name="assignmentKind" value="internal" required defaultChecked={model.defaults?.assignmentKind === "internal"} /><span><strong>Internal maintenance</strong><small>Assign to your own maintenance team.</small></span></label> : null}
+              <label htmlFor="assignment-vendor" aria-label="Outside vendor"><input id="assignment-vendor" type="radio" name="assignmentKind" value="outside_vendor" required={accountabilityOnly} defaultChecked={model.defaults?.assignmentKind === "outside_vendor" || (accountabilityOnly && Boolean(model.defaults?.vendorId))} /><span><strong>Outside vendor</strong><small>Choose the vendor now, then send a service authorization. Technician check-in applies after it is issued.</small></span></label>
+              {!accountabilityOnly ? <label htmlFor="assignment-bid" aria-label="Request vendor bids"><input id="assignment-bid" type="radio" name="assignmentKind" value="bid_request" /><span><strong>Request bids first</strong><small>Ask vendors for pricing by a due date. No vendor is assigned and no check-in is available.</small></span></label> : null}
+              <label htmlFor="assignment-later" aria-label="Decide later"><input id="assignment-later" type="radio" name="assignmentKind" value="choose_later" defaultChecked={model.defaults?.assignmentKind === "choose_later" || (accountabilityOnly && !model.defaults?.vendorId && model.defaults?.assignmentKind !== "outside_vendor")} /><span><strong>Choose later</strong><small>Save the work order now and select the vendor before sending it.</small></span></label>
             </fieldset>
             <div className={styles.fieldGrid}>
               <label className={styles.field} htmlFor="work-vendor">
-                <span>Service vendor <small>Required only for “Send service work”</small></span>
-                <input id="work-vendor" name="vendorId" list="work-vendor-options" placeholder="Search name, specialty, equipment, or coverage" autoComplete="off" />
+                <span>Service vendor <small>Required only for “Outside vendor”</small></span>
+                <input id="work-vendor" name="vendorId" list="work-vendor-options" placeholder="Search name, specialty, equipment, or coverage" autoComplete="off" defaultValue={model.defaults?.vendorId} />
                 <Datalist id="work-vendor-options" options={model.vendors} />
               </label>
-              <SelectField id="work-internal-assignee" name="internalMembershipId" label="Internal assignee" options={model.internalAssignees} helper="Can be assigned after creation." />
+              {!accountabilityOnly ? <SelectField id="work-internal-assignee" name="internalMembershipId" label="Internal assignee" options={model.internalAssignees} helper="Can be assigned after creation." defaultValue={model.defaults?.internalMembershipId} /> : null}
             </div>
+            </>}
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>3</span><div><h2>Add service details</h2><p>These fields apply to authorized service work. Bid requests use a separate pricing scope and response deadline.</p></div></div>
+            <div className={styles.formSectionHeading}><span>3</span><div><h2>Add service details</h2><p>{accountabilityOnly ? "Give the vendor the scope and requested service date they need to act." : "These fields apply to authorized service work. Bid requests use a separate pricing scope and response deadline."}</p></div></div>
             <label className={styles.field} htmlFor="work-scope">
               <span>Authorized scope <small>Optional</small></span>
               <textarea id="work-scope" name="authorizedScope" rows={4} placeholder="Define what is authorized and when approval is required before expanding the work." />
             </label>
             <div className={styles.fieldGrid}>
-              <label className={styles.field} htmlFor="work-nte">
+              {!accountabilityOnly ? <label className={styles.field} htmlFor="work-nte">
                 <span>Not-to-exceed amount <small>Optional</small></span>
                 <input id="work-nte" name="nteAmount" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00" />
-              </label>
+              </label> : null}
               <label className={styles.field} htmlFor="work-due">
                 <span>Requested by <small>Optional</small></span>
                 <input id="work-due" name="dueAt" type="datetime-local" />
@@ -235,7 +193,7 @@ export function CreateWorkOrderForm({ model, componentId }: { model: CreateWorkO
             </div>
           </section>
 
-          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p><strong>A bid request and a service authorization are different records.</strong> Bid requests ask for numbers only. Service work is not authorized—and vendor check-in is not enabled—until a service authorization is deliberately sent.</p></div>
+          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p>{accountabilityOnly ? <><strong>Creating the work order does not invent a visit.</strong> Send the service authorization, then the technician selects this work order when checking in at the store.</> : <><strong>A bid request and a service authorization are different records.</strong> Bid requests ask for numbers only. Service work is not authorized—and vendor check-in is not enabled—until a service authorization is deliberately sent.</>}</p></div>
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Create work order<ArrowRight aria-hidden="true" size={18} /></button></div>
         </form>
       ) : null}
@@ -243,11 +201,12 @@ export function CreateWorkOrderForm({ model, componentId }: { model: CreateWorkO
   );
 }
 
-export function VendorIssuancePanel({ model }: { model: VendorIssuanceViewModel }) {
+export function VendorIssuancePanel({ model, edition = "complete" }: { model: VendorIssuanceViewModel; edition?: DemoEdition }) {
   if (!model.available) return null;
+  const accountabilityOnly = edition === "accountability";
   return (
     <section className={styles.issuancePanel} id="issue-work" aria-labelledby="issue-work-heading">
-      <div className={styles.formSectionHeading}><span><Send aria-hidden="true" size={18} /></span><div><h2 id="issue-work-heading">Service path</h2><p>{model.helperText}</p></div></div>
+      <div className={styles.formSectionHeading}><span><Send aria-hidden="true" size={18} /></span><div><h2 id="issue-work-heading">{accountabilityOnly ? "Send work order" : "Service path"}</h2><p>{accountabilityOnly ? "Choose the vendor and generate the account-free work-order link they will receive." : model.helperText}</p></div></div>
       {!model.rolePermitted ? (
         <p className={styles.inlineEmpty}>Your role can review the service path but cannot send a service authorization.</p>
       ) : model.workflowBlocked ? (
@@ -256,7 +215,7 @@ export function VendorIssuancePanel({ model }: { model: VendorIssuanceViewModel 
         <p className={styles.inlineEmpty}>Service authorization is unavailable while this work order is in its current state.</p>
       ) : (
         <details className={styles.controlDisclosure} open={!model.currentRevision}>
-          <summary className={styles.controlDisclosureSummary}><Send aria-hidden="true" size={18} /><span><strong>{model.currentRevision ? `Prepare service-authorization revision ${model.currentRevision + 1}` : "Choose a vendor and prepare the service authorization"}</strong><small>This authorizes service. It is not a bid request.</small></span></summary>
+          <summary className={styles.controlDisclosureSummary}><Send aria-hidden="true" size={18} /><span><strong>{model.currentRevision ? `Prepare service-authorization revision ${model.currentRevision + 1}` : "Choose a vendor and prepare the service authorization"}</strong><small>{accountabilityOnly ? "This sends the vendor work order and enables technician check-in." : "This authorizes service. It is not a bid request."}</small></span></summary>
           <form action={model.submitAction} method="post" target="_blank">
             <input type="hidden" name="workOrderId" value={model.workOrderId} />
             {model.currentRevision !== undefined ? <input type="hidden" name="expectedRevision" value={model.currentRevision} /> : null}
@@ -267,7 +226,7 @@ export function VendorIssuancePanel({ model }: { model: VendorIssuanceViewModel 
                   <>
                     <input name="vendorId" type="hidden" value={model.selectedVendorId} />
                     <input id="issuance-vendor" readOnly value={model.vendors[0]?.label ?? "Selected vendor unavailable"} />
-                    <small>Locked to the vendor selected from the bid comparison.</small>
+                    <small>{accountabilityOnly ? "Current vendor selection; later changes remain auditable." : "Locked to the vendor selected from the bid comparison."}</small>
                   </>
                 ) : (
                   <select id="issuance-vendor" name="vendorId" required defaultValue={model.selectedVendorId ?? ""}>

@@ -25,6 +25,7 @@ import type {
   ReplacementProfile,
   RequestImpactAssessment,
   ScopeGrant,
+  ServiceAppointment,
   ServiceRequest,
   SiteVisitWorkOrder,
   Store,
@@ -34,6 +35,7 @@ import type {
   VendorCoverage,
   VendorEstimateProposal,
   VendorResponse,
+  VendorContinuation,
   VendorSpecialty,
   VisitEvidence,
   VisitSession,
@@ -52,7 +54,7 @@ import type {
 import { siteVisitOutcomeFromLegacy, siteVisitOutcomeRequiresFollowUp } from "./site-visit-outcomes";
 
 export const NORTHLINE_ORGANIZATION_ID = "org-northline-demo";
-export const NORTHLINE_AS_OF = "2026-08-10T18:00:00.000Z";
+export const NORTHLINE_AS_OF = "2026-08-25T18:00:00.000Z";
 
 export const NORTHLINE_DEMO_ENTRY_TOKENS = {
   store104: "yxXEL85UZIlTAPwVDanaA1n5n2O0Sx5cmQc2s3TQYUM",
@@ -295,11 +297,27 @@ function buildFixture(): OpsFixture {
   const vendorCoverage: VendorCoverage[] = vendors.map((vendor, index) => ({ id: `coverage-${vendor.code}-all`, organizationId: organization.id, vendorId: vendor.id, scopeKind: "organization", scopeId: organization.id, preferredRank: index < 3 ? 1 : 2 }));
   const vendorQualifications: OpsFixture["vendorQualifications"] = [
     { id: "qualification-summit-refrigeration-north", organizationId: organization.id, vendorId: "vendor-northline-summit", tradeKey: "refrigeration", serviceType: "preventive_and_reactive", assetType: "refrigeration", pmWork: true, emergencyResponse: true, warrantyWork: true, manufacturerAuthorization: "Copeland", regionId: "region-northline-north", afterHours: true, maximumJobAmount: { amountMinor: 2_500_000, currency: "USD" }, requiredLicense: "Michigan mechanical contractor", requiredCertification: "EPA Section 608", effectiveAt: atYear(2026, 1, 1), expiresAt: atYear(2027, 1, 1), status: "active", createdAt: atYear(2026, 1, 1) },
+    { id: "qualification-cedar-mechanical-companywide", organizationId: organization.id, vendorId: "vendor-northline-cedar", tradeKey: "mechanical", serviceType: "preventive_and_reactive", assetType: "hvac_plumbing_foodservice", pmWork: true, emergencyResponse: true, warrantyWork: true, afterHours: true, maximumJobAmount: { amountMinor: 1_500_000, currency: "USD" }, requiredLicense: "Michigan mechanical and plumbing contractor", effectiveAt: atYear(2026, 2, 1), expiresAt: atYear(2027, 2, 1), status: "active", createdAt: atYear(2026, 2, 1) },
+    { id: "qualification-forecourt-fuel-systems", organizationId: organization.id, vendorId: "vendor-northline-forecourt", tradeKey: "fuel_systems", serviceType: "dispensers_payment_and_tank_monitoring", assetType: "forecourt", pmWork: true, emergencyResponse: true, warrantyWork: true, afterHours: true, maximumJobAmount: { amountMinor: 3_000_000, currency: "USD" }, requiredCertification: "Manufacturer-authorized petroleum equipment service", effectiveAt: atYear(2026, 3, 1), expiresAt: atYear(2027, 3, 1), status: "active", createdAt: atYear(2026, 3, 1) },
+    { id: "qualification-brightpath-electrical", organizationId: organization.id, vendorId: "vendor-northline-brightpath", tradeKey: "electrical", serviceType: "power_lighting_signage_and_low_voltage", assetType: "electrical_and_security", pmWork: true, emergencyResponse: true, warrantyWork: true, afterHours: true, maximumJobAmount: { amountMinor: 2_000_000, currency: "USD" }, requiredLicense: "Michigan electrical contractor", effectiveAt: atYear(2026, 1, 15), expiresAt: atYear(2027, 1, 15), status: "active", createdAt: atYear(2026, 1, 15) },
+    { id: "qualification-four-seasons-site", organizationId: organization.id, vendorId: "vendor-northline-four-seasons", tradeKey: "exterior_services", serviceType: "landscaping_snow_and_pavement", assetType: "site_and_parking", pmWork: true, emergencyResponse: true, warrantyWork: false, afterHours: true, maximumJobAmount: { amountMinor: 1_000_000, currency: "USD" }, effectiveAt: atYear(2026, 4, 1), expiresAt: atYear(2027, 4, 1), status: "active", createdAt: atYear(2026, 4, 1) },
   ];
   const vendorComplianceDocuments: OpsFixture["vendorComplianceDocuments"] = [
     { id: "compliance-summit-insurance-2026", organizationId: organization.id, vendorId: "vendor-northline-summit", documentType: "insurance", issuer: "Fictional Mutual", reference: "COI-SUMMIT-2026", effectiveAt: atYear(2026, 1, 1), expiresAt: atYear(2027, 1, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 1, 2) },
     { id: "compliance-summit-license-2026", organizationId: organization.id, vendorId: "vendor-northline-summit", documentType: "license", issuer: "State licensing demo registry", reference: "MECH-SUMMIT-608", effectiveAt: atYear(2026, 1, 1), expiresAt: atYear(2027, 1, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 1, 2) },
     { id: "compliance-summit-tax-2026", organizationId: organization.id, vendorId: "vendor-northline-summit", documentType: "tax", reference: "W9-ON-FILE", reviewStatus: "approved", blocking: false, createdAt: atYear(2026, 1, 2) },
+    { id: "compliance-cedar-insurance-2026", organizationId: organization.id, vendorId: "vendor-northline-cedar", documentType: "insurance", issuer: "Fictional Commercial Indemnity", reference: "COI-CEDAR-2026", effectiveAt: atYear(2026, 2, 1), expiresAt: atYear(2027, 2, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 2, 2) },
+    { id: "compliance-cedar-license-2026", organizationId: organization.id, vendorId: "vendor-northline-cedar", documentType: "license", issuer: "State licensing demo registry", reference: "MECH-PLUMB-CEDAR", effectiveAt: atYear(2026, 2, 1), expiresAt: atYear(2027, 2, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 2, 2) },
+    { id: "compliance-cedar-tax-2026", organizationId: organization.id, vendorId: "vendor-northline-cedar", documentType: "tax", reference: "W9-ON-FILE", reviewStatus: "approved", blocking: false, createdAt: atYear(2026, 2, 2) },
+    { id: "compliance-forecourt-insurance-2026", organizationId: organization.id, vendorId: "vendor-northline-forecourt", documentType: "insurance", issuer: "Fictional Specialty Risk", reference: "COI-FORECOURT-2026", effectiveAt: atYear(2026, 3, 1), expiresAt: atYear(2027, 3, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 3, 2) },
+    { id: "compliance-forecourt-certification-2026", organizationId: organization.id, vendorId: "vendor-northline-forecourt", documentType: "certification", issuer: "Petroleum equipment demo registry", reference: "PETRO-SVC-FORECOURT", effectiveAt: atYear(2026, 3, 1), expiresAt: atYear(2027, 3, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 3, 2) },
+    { id: "compliance-forecourt-tax-2026", organizationId: organization.id, vendorId: "vendor-northline-forecourt", documentType: "tax", reference: "W9-ON-FILE", reviewStatus: "approved", blocking: false, createdAt: atYear(2026, 3, 2) },
+    { id: "compliance-brightpath-insurance-2026", organizationId: organization.id, vendorId: "vendor-northline-brightpath", documentType: "insurance", issuer: "Fictional Trade Insurance", reference: "COI-BRIGHTPATH-2026", effectiveAt: atYear(2025, 9, 15), expiresAt: atYear(2026, 9, 15), reviewStatus: "approved", blocking: true, createdAt: atYear(2025, 9, 15) },
+    { id: "compliance-brightpath-license-2026", organizationId: organization.id, vendorId: "vendor-northline-brightpath", documentType: "license", issuer: "State licensing demo registry", reference: "ELEC-BRIGHTPATH-2026", effectiveAt: atYear(2026, 1, 15), expiresAt: atYear(2027, 1, 15), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 1, 16) },
+    { id: "compliance-brightpath-tax-2026", organizationId: organization.id, vendorId: "vendor-northline-brightpath", documentType: "tax", reference: "W9-ON-FILE", reviewStatus: "approved", blocking: false, createdAt: atYear(2026, 1, 16) },
+    { id: "compliance-four-seasons-insurance-2026", organizationId: organization.id, vendorId: "vendor-northline-four-seasons", documentType: "insurance", issuer: "Fictional Grounds and Fleet", reference: "COI-FOUR-SEASONS-2026", effectiveAt: atYear(2026, 4, 1), expiresAt: atYear(2027, 4, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 4, 2) },
+    { id: "compliance-four-seasons-safety-2026", organizationId: organization.id, vendorId: "vendor-northline-four-seasons", documentType: "safety", issuer: "Northline vendor onboarding", reference: "SITE-SAFETY-ACK-2026", effectiveAt: atYear(2026, 4, 1), reviewStatus: "approved", blocking: true, createdAt: atYear(2026, 4, 2) },
+    { id: "compliance-four-seasons-tax-2026", organizationId: organization.id, vendorId: "vendor-northline-four-seasons", documentType: "tax", reference: "W9-ON-FILE", reviewStatus: "approved", blocking: false, createdAt: atYear(2026, 4, 2) },
   ];
   const vendorContracts: OpsFixture["vendorContracts"] = [
     { id: "contract-summit-refrigeration", organizationId: organization.id, vendorId: "vendor-northline-summit", name: "Refrigeration service and preventive maintenance", ownerMembershipId: "membership-northline-facilities", status: "active", createdAt: atYear(2026, 1, 1) },
@@ -416,6 +434,8 @@ function buildFixture(): OpsFixture {
   const assignments: WorkOrderAssignment[] = [];
   const issuances: WorkOrderIssuance[] = [];
   const vendorResponses: VendorResponse[] = [];
+  const serviceAppointments: ServiceAppointment[] = [];
+  const vendorContinuations: VendorContinuation[] = [];
   const estimateRequests: WorkOrderEstimateRequest[] = [];
   const estimateProposals: VendorEstimateProposal[] = [];
   const visits: VisitSession[] = [];
@@ -715,11 +735,11 @@ function buildFixture(): OpsFixture {
   );
 
   // A no-WO forecourt visit is allowed to proceed, but remains conspicuous and
-  // reviewable because unscheduled dispenser access is security-sensitive.
+  // reviewable because the visit was not tied to an operator work order.
   const noWoStart = at(8, 10, 16, 20);
   visits.push({ id: NORTHLINE_DEMO_HANDLES.unmatchedVisitId, organizationId: organization.id, storeId: "store-northline-107", providerKind: "outside_vendor", vendorId: "vendor-northline-forecourt", unmatchedReason: "Vendor dispatch did not provide an operator work-order number", technicianName: "Dana Ruiz", providerName: "Forecourt Systems Group", purpose: "Inspect intermittent card-reader failure at dispenser 4", status: "active", startedChannel: "qr", checkedInAt: noWoStart });
   visitEvidence.push({ id: "evidence-visit-northline-107-no-wo-in", organizationId: organization.id, visitId: NORTHLINE_DEMO_HANDLES.unmatchedVisitId, kind: "check_in", channel: "qr", observedAt: noWoStart, location: { result: "outside_geofence", accuracyM: 20, distanceM: 171, capturedAt: noWoStart }, payloadJson: "{}" });
-  exceptions.push({ id: "exception-northline-107-no-wo", organizationId: organization.id, kind: "no_work_order", storeId: "store-northline-107", visitId: NORTHLINE_DEMO_HANDLES.unmatchedVisitId, vendorId: "vendor-northline-forecourt", severity: "urgent", status: "open", summary: "Unscheduled forecourt technician visit has no operator work order", detectedAt: noWoStart }, { id: "exception-northline-107-location", organizationId: organization.id, kind: "outside_geofence", storeId: "store-northline-107", visitId: NORTHLINE_DEMO_HANDLES.unmatchedVisitId, vendorId: "vendor-northline-forecourt", severity: "attention", status: "open", summary: "Forecourt visit check-in was 171 m from the store geofence center", detectedAt: noWoStart }, { id: "exception-northline-107-high-risk", organizationId: organization.id, kind: "high_risk_service", storeId: "store-northline-107", visitId: NORTHLINE_DEMO_HANDLES.unmatchedVisitId, vendorId: "vendor-northline-forecourt", severity: "urgent", status: "open", summary: "Unexpected access to payment-enabled fuel equipment requires manager review", detectedAt: noWoStart });
+  exceptions.push({ id: "exception-northline-107-no-wo", organizationId: organization.id, kind: "no_work_order", storeId: "store-northline-107", visitId: NORTHLINE_DEMO_HANDLES.unmatchedVisitId, vendorId: "vendor-northline-forecourt", severity: "urgent", status: "open", summary: "Unscheduled forecourt technician visit has no operator work order", detectedAt: noWoStart }, { id: "exception-northline-107-location", organizationId: organization.id, kind: "outside_geofence", storeId: "store-northline-107", visitId: NORTHLINE_DEMO_HANDLES.unmatchedVisitId, vendorId: "vendor-northline-forecourt", severity: "attention", status: "open", summary: "Forecourt visit check-in was 171 m from the store geofence center", detectedAt: noWoStart });
 
   // A past unclosed visit is an exception; no checkout time is invented.
   const staleStart = at(8, 9, 13, 40);
@@ -847,11 +867,25 @@ function buildFixture(): OpsFixture {
   const scheduledAssignmentId = "assignment-current-113-freezer-service";
   const scheduledIssuanceId = "issuance-current-113-freezer-service-r1";
   const scheduledProblem = "Walk-in freezer temperature alarm returns after the nightly defrost cycle";
-  requests.push({ id: scheduledRequestId, organizationId: organization.id, reference: "REQ-26-113B", storeId: "store-northline-113", reporterName: "Morgan Wells", reporterEmployeeId: "E6113", problem: scheduledProblem, priority: "urgent", status: "converted", submittedAt: at(8, 9, 18, 25), convertedWorkOrderId: scheduledWorkOrderId });
-  workOrders.push({ id: scheduledWorkOrderId, organizationId: organization.id, number: "NL-2026-0211", storeId: "store-northline-113", requestId: scheduledRequestId, problem: scheduledProblem, authorizedScope: "Diagnose the defrost-cycle alarm, restore stable freezer operation within the authorization limit, and document controller readings.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-freezers", assetId: "asset-113-walk-in-freezer", priority: "urgent", status: "scheduled", accountableParty: "Summit Refrigeration", nextAction: "Arrive for the confirmed service window and record check-in", dueAt: at(8, 12, 14), escalationTo: "Northline Facilities", nte: { amountMinor: 225_000, currency: "USD" }, createdAt: at(8, 9, 18, 45) });
-  assignments.push({ id: scheduledAssignmentId, organizationId: organization.id, workOrderId: scheduledWorkOrderId, kind: "outside_vendor", vendorId: "vendor-northline-summit", status: "accepted", assignedAt: at(8, 9, 19) });
-  issuances.push({ id: scheduledIssuanceId, organizationId: organization.id, workOrderId: scheduledWorkOrderId, assignmentId: scheduledAssignmentId, revision: 1, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber: "NL-2026-0211", store: { id: "store-northline-113", storeNumber: "113", name: "Northline Riverbend", formattedAddress: "313 Riverbend Parkway, Riverbend, OH 43529" }, vendor: { id: "vendor-northline-summit", name: "Summit Refrigeration" }, problem: scheduledProblem, priority: "urgent", authorizedScope: "Diagnose the defrost-cycle alarm, restore stable freezer operation within the authorization limit, and document controller readings.", categoryKey: "refrigeration", asset: { id: "asset-113-walk-in-freezer", name: "Walk-in freezer - receiving", assetTag: "113-FRZ-01" }, requestedTiming: at(8, 11, 16), nte: { amountMinor: 225_000, currency: "USD" }, billingInstruction: "Reference operator work order NL-2026-0211 on all service paperwork and invoices." }), channel: "email", issuedAt: at(8, 9, 19, 10) });
-  vendorResponses.push({ id: "response-current-113-proposed-date", organizationId: organization.id, workOrderId: scheduledWorkOrderId, assignmentId: scheduledAssignmentId, issuanceId: scheduledIssuanceId, response: "proposed_date", responderName: "Summit Refrigeration dispatch", proposedAt: at(8, 12, 14), message: "Defrost technician and controller stock are available Tuesday afternoon.", respondedAt: at(8, 10, 9, 15) });
+  requests.push({ id: scheduledRequestId, organizationId: organization.id, reference: "REQ-26-113B", storeId: "store-northline-113", reporterName: "Morgan Wells", reporterEmployeeId: "E6113", problem: scheduledProblem, priority: "urgent", status: "converted", submittedAt: at(8, 24, 18, 25), convertedWorkOrderId: scheduledWorkOrderId });
+  workOrders.push({ id: scheduledWorkOrderId, organizationId: organization.id, number: "NL-2026-0211", storeId: "store-northline-113", requestId: scheduledRequestId, problem: scheduledProblem, authorizedScope: "Diagnose the defrost-cycle alarm, restore stable freezer operation within the authorization limit, and document controller readings.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-freezers", assetId: "asset-113-walk-in-freezer", priority: "urgent", status: "waiting_on_vendor", accountableParty: "Facilities coordinator", nextAction: "Accept or counter Summit's proposed service date", dueAt: at(8, 25, 17, 15), escalationTo: "Facilities director", nte: { amountMinor: 225_000, currency: "USD" }, createdAt: at(8, 24, 18, 45) });
+  assignments.push({ id: scheduledAssignmentId, organizationId: organization.id, workOrderId: scheduledWorkOrderId, kind: "outside_vendor", vendorId: "vendor-northline-summit", status: "issued", assignedAt: at(8, 24, 19) });
+  issuances.push({ id: scheduledIssuanceId, organizationId: organization.id, workOrderId: scheduledWorkOrderId, assignmentId: scheduledAssignmentId, revision: 1, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber: "NL-2026-0211", store: { id: "store-northline-113", storeNumber: "113", name: "Northline Riverbend", formattedAddress: "313 Riverbend Parkway, Riverbend, OH 43529" }, vendor: { id: "vendor-northline-summit", name: "Summit Refrigeration" }, problem: scheduledProblem, priority: "urgent", authorizedScope: "Diagnose the defrost-cycle alarm, restore stable freezer operation within the authorization limit, and document controller readings.", categoryKey: "refrigeration", asset: { id: "asset-113-walk-in-freezer", name: "Walk-in freezer - receiving", assetTag: "113-FRZ-01" }, requestedTiming: at(8, 27, 16), nte: { amountMinor: 225_000, currency: "USD" }, billingInstruction: "Reference operator work order NL-2026-0211 on all service paperwork and invoices." }), channel: "email", issuedAt: at(8, 24, 19, 10) });
+  vendorResponses.push({ id: "response-current-113-proposed-date", organizationId: organization.id, workOrderId: scheduledWorkOrderId, assignmentId: scheduledAssignmentId, issuanceId: scheduledIssuanceId, response: "proposed_date", responderName: "Summit Refrigeration dispatch", proposedAt: at(8, 28, 14), message: "Defrost technician and controller stock are available Friday afternoon.", respondedAt: at(8, 25, 9, 15) });
+
+  // A separate confirmed appointment proves the post-decision state without
+  // pretending that the still-pending Store 113 proposal was already accepted.
+  const confirmedWorkOrderId = "wo-current-107-hvac-scheduled";
+  const confirmedAssignmentId = "assignment-current-107-hvac-scheduled";
+  const confirmedIssuanceId = "issuance-current-107-hvac-scheduled-r1";
+  const confirmedResponseId = "response-current-107-hvac-accepted";
+  const confirmedProblem = "Sales-floor rooftop unit is cooling intermittently during the afternoon peak";
+  requests.push({ id: "request-current-107-hvac-scheduled", organizationId: organization.id, reference: "REQ-26-107H", storeId: "store-northline-107", reporterName: "Quinn Foster", reporterEmployeeId: "E6107", problem: confirmedProblem, priority: "urgent", status: "converted", submittedAt: at(8, 24, 13), convertedWorkOrderId: confirmedWorkOrderId });
+  workOrders.push({ id: confirmedWorkOrderId, organizationId: organization.id, number: "NL-2026-0213", storeId: "store-northline-107", requestId: "request-current-107-hvac-scheduled", problem: confirmedProblem, authorizedScope: "Diagnose the intermittent cooling condition, restore stable operation within the authorization limit, and record supply-air readings.", categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", assetId: "asset-107-rtu-1", priority: "urgent", status: "scheduled", accountableParty: "Cedar Mechanical", nextAction: "Arrive for the confirmed service window and check in", dueAt: at(8, 27, 13), escalationTo: "Facilities director", nte: { amountMinor: 185_000, currency: "USD" }, createdAt: at(8, 24, 13, 20) });
+  assignments.push({ id: confirmedAssignmentId, organizationId: organization.id, workOrderId: confirmedWorkOrderId, kind: "outside_vendor", vendorId: "vendor-northline-cedar", status: "accepted", assignedAt: at(8, 24, 14) });
+  issuances.push({ id: confirmedIssuanceId, organizationId: organization.id, workOrderId: confirmedWorkOrderId, assignmentId: confirmedAssignmentId, revision: 1, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber: "NL-2026-0213", store: { id: "store-northline-107", storeNumber: "107", name: "Northline Junction City", formattedAddress: "17 Junction Plaza, Junction City, IN 46712" }, vendor: { id: "vendor-northline-cedar", name: "Cedar Mechanical" }, problem: confirmedProblem, priority: "urgent", authorizedScope: "Diagnose the intermittent cooling condition, restore stable operation within the authorization limit, and record supply-air readings.", categoryKey: "hvac", requestedTiming: at(8, 27, 13), nte: { amountMinor: 185_000, currency: "USD" }, billingInstruction: "Reference operator work order NL-2026-0213 on all service paperwork and invoices." }), channel: "email", issuedAt: at(8, 24, 14, 10) });
+  vendorResponses.push({ id: confirmedResponseId, organizationId: organization.id, workOrderId: confirmedWorkOrderId, assignmentId: confirmedAssignmentId, issuanceId: confirmedIssuanceId, response: "accepted", responderName: "Cedar Mechanical dispatch", message: "Service window confirmed with the store manager.", respondedAt: at(8, 24, 14, 35) });
+  serviceAppointments.push({ id: "appointment-current-107-hvac-confirmed", organizationId: organization.id, workOrderId: confirmedWorkOrderId, assignmentId: confirmedAssignmentId, issuanceId: confirmedIssuanceId, sourceVendorResponseId: confirmedResponseId, status: "confirmed", proposedBy: "operator", startsAt: at(8, 27, 13), createdByMembershipId: "membership-northline-facilities", createdAt: at(8, 24, 14, 40) });
 
   const declinedRequestId = "request-current-114-canopy-service";
   const declinedWorkOrderId = "wo-current-114-canopy-service";
@@ -953,7 +987,8 @@ function buildFixture(): OpsFixture {
     const store = stores[storeIndex];
     const asset = assets.find((candidate) => candidate.id === plan.assetId)!;
     pmPeriods.forEach((period, periodIndex) => {
-      const due = new Date(Date.UTC(period.year, period.month - 1, period.month === 8 ? 1 + (storeIndex % 10) : 14 + (storeIndex % 5), 12)).toISOString();
+      const augustDay = storeIndex === 11 ? 15 : 20 + (storeIndex % 6);
+      const due = new Date(Date.UTC(period.year, period.month - 1, period.month === 8 ? augustDay : 14 + (storeIndex % 5), 12)).toISOString();
       const windowStartsAt = new Date(Date.parse(due) - 7 * 86_400_000).toISOString();
       const windowEndsAt = new Date(Date.parse(due) + 7 * 86_400_000).toISOString();
       const currentPeriod = period.key === "2026-q3";
@@ -968,7 +1003,8 @@ function buildFixture(): OpsFixture {
                 ? "missed"
                 : "due"
           : "completed";
-      const completedAt = status === "completed" ? new Date(Date.parse(due) + ((storeIndex + periodIndex) % 3 - 1) * 86_400_000).toISOString() : undefined;
+      const calculatedCompletion = Date.parse(due) + ((storeIndex + periodIndex) % 3 - 1) * 86_400_000;
+      const completedAt = status === "completed" ? new Date(Math.min(calculatedCompletion, Date.parse(NORTHLINE_AS_OF))).toISOString() : undefined;
       const occurrenceId = `pm-occurrence-${store.storeNumber}-${period.key}`;
       const workOrderId = period.linkWorkOrder ? `wo-pm-${store.storeNumber}-${period.key}` : undefined;
       pmOccurrences.push({ id: occurrenceId, organizationId: organization.id, planId: plan.id, storeId: store.id, assetId: plan.assetId, workOrderId, programId: plan.programId, programVersion: plan.programVersion, planVersion: 1, dueAt: due, windowStartsAt, windowEndsAt, status, completedAt, result: completedAt ? "Preventive service completed with checklist evidence" : status === "waived" ? "Waived by authorized operator" : undefined, exceptionReason: status === "waived" ? "Asset replacement is already approved" : status === "missed" ? "Vendor capacity was not committed inside the due window" : undefined, recurrenceKey: `${plan.id}:${period.key}`, createdAt: new Date(Date.parse(due) - 90 * 86_400_000).toISOString() });
@@ -1215,6 +1251,21 @@ function buildFixture(): OpsFixture {
         ...(workOrder.status === "in_progress" ? { startedByActorType: "system" as const, startedByActorName: "Deterministic demo fixture", startedAt: workOrder.createdAt } : {}),
       });
     });
+  });
+  const proposedDateReviewTask = workflowTasks.find((task) => task.workOrderId === scheduledWorkOrderId && ["open", "in_progress"].includes(task.status));
+  if (proposedDateReviewTask) Object.assign(proposedDateReviewTask, {
+    taskType: "schedule_service" as const,
+    title: "Accept or counter Summit's proposed service date",
+    reason: "Summit proposed a service window that needs an operator scheduling decision.",
+    assigneeType: "role" as const,
+    assigneeId: undefined,
+    assigneeRole: "facilities_admin" as const,
+    assigneeName: "Facilities coordinator",
+    blocking: true,
+    dueAt: at(8, 25, 17, 15),
+    applicableSlaClock: "scheduling" as const,
+    completionCriteria: "The proposed service date is accepted or a store-local counterproposal is sent.",
+    escalationDestination: "Facilities director",
   });
   [serviceRunReactiveWorkId, serviceRunPmWorkId].forEach((workOrderId) => {
     const task = workflowTasks.find((candidate) => candidate.workOrderId === workOrderId && ["open", "in_progress"].includes(candidate.status));
@@ -1464,7 +1515,7 @@ function buildFixture(): OpsFixture {
     { id: "public-token-northline-service-run-summit", organizationId: organization.id, purpose: "service_run_response", subjectType: "service_run", subjectId: "service-run-summit-north-2026-08-24", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceRunSummit, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 16) },
   ];
 
-  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, componentLifecycleEvents, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
+  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, serviceAppointments, vendorContinuations, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, componentLifecycleEvents, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, outboxMessages, publicTokens };
 }
 
 const presentationFixture = buildFixture();

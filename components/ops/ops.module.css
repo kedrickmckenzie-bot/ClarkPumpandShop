@@ -456,6 +456,20 @@ a.factCard { padding-right: 38px; }
 .subControlPanel.controlDisclosure .controlForm { margin: 0 18px 18px; }
 .subControlHeading h3 { font-size: 16px; }
 .subControlHeading > svg { width: 32px; height: 32px; }
+.recoveryChoiceGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.recoveryChoice { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 0; padding: 16px; border: 1px solid #dce3df; border-radius: 9px; background: #fff; }
+.recoveryChoice > strong { color: var(--ops-ink); font-size: 15px; line-height: 1.35; }
+.recoveryChoice > p { margin: 0; color: var(--ops-muted); font-size: 13px; line-height: 1.5; }
+.recoveryChoice .field { width: 100%; margin-top: 0; }
+.recoveryChoice > button, .recoveryChoice > a { margin-top: auto; }
+.closeoutChecklist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.closeoutChecklist label { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: flex-start; gap: 10px; padding: 13px 14px; border: 1px solid #d9e2dd; border-radius: 9px; background: #fff; cursor: pointer; }
+.closeoutChecklist label:last-child { grid-column: 1 / -1; }
+.closeoutChecklist input { width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--ops-brand-dark); }
+.closeoutChecklist span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.closeoutChecklist strong { color: var(--ops-ink); font-size: 14px; line-height: 1.35; }
+.closeoutChecklist small { color: var(--ops-muted); font-size: 13px; line-height: 1.45; }
+.closeoutChecklist label[data-ready="false"] { border-color: #e9d39b; background: var(--ops-warning-soft); cursor: not-allowed; }
 .followUpList { margin-top: 20px; }
 .followUpList h3 { margin: 0 0 8px; font-size: 15px; }
 .followUpList > a { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 60px; padding: 11px 12px; border-top: 1px solid #e7ebe8; }
@@ -801,6 +815,9 @@ a.factCard { padding-right: 38px; }
   .replacementForms details:last-child:nth-child(odd) { grid-column: auto; }
   .replacementQuote { flex-direction: column; }
   .subControlPanel { padding: 15px; }
+  .recoveryChoiceGrid { grid-template-columns: 1fr; }
+  .closeoutChecklist { grid-template-columns: 1fr; }
+  .closeoutChecklist label:last-child { grid-column: auto; }
   .followUpList > a { align-items: flex-start; }
   .fieldGrid, .addressGrid, .assignmentChoices { grid-template-columns: 1fr; }
   .lifecyclePlanningResult dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }

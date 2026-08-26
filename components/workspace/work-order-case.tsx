@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type {
   DataState,
+  DemoEdition,
   DetailFactViewModel,
   DetailPageViewModel,
   DetailSectionViewModel,
@@ -49,6 +50,7 @@ import {
 } from "@/components/ops/replacement-intelligence-panel";
 import styles from "./work-order-case.module.css";
 import { domainLabel } from "@/lib/product/domain-label";
+import type { WorkOrderCaseView } from "@/lib/ops/work-order-case";
 
 interface WorkOrderCaseProps {
   model: DetailPageViewModel;
@@ -58,7 +60,9 @@ interface WorkOrderCaseProps {
   issuance: VendorIssuanceViewModel;
   replacement: WorkOrderReplacementIntelligenceViewModel;
   verification: WorkOrderVerificationViewModel;
+  canonicalCase: WorkOrderCaseView;
   activeView: WorkOrderView;
+  edition?: DemoEdition;
   updated?: string;
 }
 
@@ -66,11 +70,11 @@ export type WorkOrderView = "overview" | "service" | "visits" | "cost" | "equipm
 
 const caseViews: Array<{ id: WorkOrderView; label: string; icon: ReactNode }> = [
   { id: "overview", label: "Overview", icon: <Gauge aria-hidden="true" size={16} /> },
-  { id: "service", label: "Provider & bids", icon: <Wrench aria-hidden="true" size={16} /> },
+  { id: "service", label: "Vendor or bids", icon: <Wrench aria-hidden="true" size={16} /> },
   { id: "visits", label: "Visits", icon: <MapPin aria-hidden="true" size={16} /> },
   { id: "cost", label: "Costs", icon: <ReceiptText aria-hidden="true" size={16} /> },
   { id: "equipment", label: "Equipment", icon: <PackageSearch aria-hidden="true" size={16} /> },
-  { id: "activity", label: "History & control", icon: <History aria-hidden="true" size={16} /> },
+  { id: "activity", label: "History & follow-up", icon: <History aria-hidden="true" size={16} /> },
 ];
 
 const toneStyles: Record<Tone, string> = {
@@ -97,12 +101,16 @@ function sentence(value: string | undefined) {
   return domainLabel(value);
 }
 
-function dueLabel(value?: string) {
+function dueLabel(value: string | undefined, timeZone = "UTC") {
   if (!value || !Number.isFinite(Date.parse(value))) return "Not set";
   return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+    timeZoneName: "short",
   }).format(new Date(value));
 }
 
@@ -343,8 +351,18 @@ function continuationFor(
   control: WorkOrderControlViewModel,
   issuance: VendorIssuanceViewModel,
   estimateComparison: EstimateComparisonViewModel,
+  accountabilityOnly = false,
 ) {
   const base = `/app/work-orders/${control.workOrderId}`;
+  if (accountabilityOnly) {
+    if (issuance.currentRevision && !control.latestVendorResponse) {
+      return { label: "Review the vendor handoff", href: `${base}?view=service#issue-work`, helper: "The work order was sent and the vendor response is still outstanding." };
+    }
+    if (["accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"].includes(control.status)) {
+      return { label: "Review check-in and checkout", href: `${base}?view=visits`, helper: "Keep the technician visit, selected work order, and checkout outcome connected." };
+    }
+    return { label: "Choose and send the vendor", href: `${base}?view=service`, helper: "Select the vendor and send the work order before the technician checks in." };
+  }
   if (estimateComparison.selectedVendorName && !issuance.currentRevision && issuance.permitted) {
     return { label: "Send the selected vendor an authorization", href: `${base}?view=service#issue-work`, helper: `${estimateComparison.selectedVendorName} was selected. Sending the authorization is the next separate decision.` };
   }
@@ -385,6 +403,7 @@ function CaseOverview({
   invoices,
   recordedCost,
   nte,
+  accountabilityOnly,
 }: {
   control: WorkOrderControlViewModel;
   recording: WorkOrderRecordingViewModel;
@@ -395,8 +414,9 @@ function CaseOverview({
   invoices?: DetailSectionViewModel;
   recordedCost?: DetailFactViewModel;
   nte?: DetailFactViewModel;
+  accountabilityOnly: boolean;
 }) {
-  const continuation = continuationFor(control, issuance, estimateComparison);
+  const continuation = continuationFor(control, issuance, estimateComparison, accountabilityOnly);
   const base = `/app/work-orders/${control.workOrderId}`;
   const visitCount = visits?.table?.rows.length ?? 0;
   const invoiceCount = invoices?.table?.rows.length ?? 0;
@@ -419,7 +439,7 @@ function CaseOverview({
         <Link className={styles.decisionAction} href={continuation.href}>{continuation.label}<ArrowRight aria-hidden="true" size={17} /></Link>
       </section>
 
-      <section className={styles.journeyPanel} aria-labelledby="case-journey-heading">
+      {!accountabilityOnly ? <section className={styles.journeyPanel} aria-labelledby="case-journey-heading">
         <header><div><p>Connected record</p><h2 id="case-journey-heading">Where this case stands</h2></div><Link href={`${base}?view=activity`}>Open full history<ArrowRight aria-hidden="true" size={15} /></Link></header>
         <ol>
           {control.stages.map((stage) => (
@@ -429,14 +449,14 @@ function CaseOverview({
             </li>
           ))}
         </ol>
-      </section>
+      </section> : null}
 
       <section className={styles.recordMap} aria-label="Work-order evidence map">
         <Link href={`${base}?view=service`}>
-          <span><Truck size={18} aria-hidden="true" />Provider & bids</span>
+          <span><Truck size={18} aria-hidden="true" />{accountabilityOnly ? "Vendor work order" : "Provider & bids"}</span>
           <strong>{control.assignment?.providerLabel ?? "Provider not selected"}</strong>
-          <small>{issuance.currentRevision ? `Authorization revision ${issuance.currentRevision}` : estimateComparison.activeRequestCount ? `${estimateComparison.activeRequestCount} pricing request${estimateComparison.activeRequestCount === 1 ? "" : "s"} open` : "Choose direct service or pricing only"}</small>
-          <em>Open service path<ChevronRight size={15} aria-hidden="true" /></em>
+          <small>{issuance.currentRevision ? `Work order sent · revision ${issuance.currentRevision}` : accountabilityOnly ? "Choose the vendor and send the work order" : estimateComparison.activeRequestCount ? `${estimateComparison.activeRequestCount} pricing request${estimateComparison.activeRequestCount === 1 ? "" : "s"} open` : "Choose direct service or pricing only"}</small>
+          <em>{accountabilityOnly ? "Open vendor handoff" : "Open service path"}<ChevronRight size={15} aria-hidden="true" /></em>
         </Link>
         <Link href={`${base}?view=visits`}>
           <span><MapPin size={18} aria-hidden="true" />Observed visits</span>
@@ -444,18 +464,18 @@ function CaseOverview({
           <small>Arrival, checkout, outcome, and follow-up evidence</small>
           <em>Review visits<ChevronRight size={15} aria-hidden="true" /></em>
         </Link>
-        <Link href={`${base}?view=cost`}>
+        {!accountabilityOnly ? <Link href={`${base}?view=cost`}>
           <span><ReceiptText size={18} aria-hidden="true" />Cost evidence</span>
           <strong>{recordedCost?.value ?? recording.recordedCostLabel}</strong>
           <small>{nte?.value ? `${nte.value} authorization limit` : "No authorization limit recorded"} · {invoiceCount ? `${invoiceCount} invoice reference${invoiceCount === 1 ? "" : "s"}` : "No invoice entered — valid"}</small>
           <em>Explain cost<ChevronRight size={15} aria-hidden="true" /></em>
-        </Link>
-        <Link href={`${base}?view=equipment`}>
+        </Link> : null}
+        {!accountabilityOnly ? <Link href={`${base}?view=equipment`}>
           <span><PackageSearch size={18} aria-hidden="true" />Equipment & lifecycle</span>
           <strong>{selectedAsset?.label ?? replacement.assetName ?? "Classification deferred"}</strong>
           <small>{replacement.assetName ? "Repair history and capital-review context available" : "Equipment is optional until diagnosis"}</small>
           <em>Review equipment<ChevronRight size={15} aria-hidden="true" /></em>
-        </Link>
+        </Link> : null}
       </section>
     </div>
   );
@@ -469,7 +489,9 @@ export function WorkOrderCase({
   issuance,
   replacement,
   verification,
+  canonicalCase,
   activeView,
+  edition = "complete",
   updated,
 }: WorkOrderCaseProps) {
   if (model.state.kind !== "ready") {
@@ -488,6 +510,20 @@ export function WorkOrderCase({
   const nte = sectionFact(authorization, "Not to exceed");
   const selectedAsset = recording.assets.find((asset) => asset.value === recording.currentAssetId);
   const selectedComponent = recording.components.find((component) => component.value === recording.currentComponentId);
+  const canonicalStatus = canonicalCase.serviceSubStage?.label ?? canonicalCase.stageLabel;
+  const canonicalTone: Tone = canonicalCase.stage === "closed"
+    ? "positive"
+    : canonicalCase.primaryActionOverdue
+      ? "critical"
+      : canonicalCase.stage === "onsite_service" || canonicalCase.stage === "vendor_response_scheduling"
+        ? "info"
+        : "warning";
+  const accountabilityOnly = edition === "accountability";
+  const visibleCaseViews = accountabilityOnly
+    ? caseViews
+        .filter((view) => ["overview", "service", "visits"].includes(view.id))
+        .map((view) => view.id === "service" ? { ...view, label: "Send to vendor" } : view)
+    : caseViews;
 
   return (
     <div className={styles.page}>
@@ -499,14 +535,14 @@ export function WorkOrderCase({
             <h1>{model.page.title}</h1>
             {store ? <FactValue fact={store} /> : <small>{model.page.scopeLabel}</small>}
           </div>
-          <span className={`${styles.statusPill} ${toneStyles[model.statusTone ?? "neutral"]}`}><CircleDot aria-hidden="true" size={14} />{model.statusLabel}</span>
+          <span className={`${styles.statusPill} ${toneStyles[canonicalTone]}`}><CircleDot aria-hidden="true" size={14} />{canonicalStatus}</span>
           <div className={styles.headerActions}>
             <CaseAction action={model.page.secondaryAction} />
-            <CaseAction action={model.page.primaryAction} primary />
+            <CaseAction action={canonicalCase.primaryNextAction} primary />
           </div>
         </div>
         <nav className={styles.caseTabs} aria-label="Work-order sections">
-          {caseViews.map((view) => (
+          {visibleCaseViews.map((view) => (
             <Link
               aria-current={activeView === view.id ? "page" : undefined}
               className={activeView === view.id ? styles.activeTab : undefined}
@@ -520,30 +556,30 @@ export function WorkOrderCase({
       </header>
 
       {activeView === "overview" ? (
-        <section className={styles.caseBrief} aria-label="Work-order accountability">
+        <section className={styles.caseBrief} aria-label="Work-order summary">
           <div className={styles.problemStatement}>
             <span>Service need</span>
             <h2>{model.page.description}</h2>
             <p>{model.page.scopeLabel}</p>
           </div>
           <div className={styles.accountabilityGrid}>
-            <div><span><UserRound aria-hidden="true" size={16} />Accountable party</span><strong>{control.accountableParty || "Not assigned"}</strong></div>
-            <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Next required action</span><strong>{control.nextAction || "No next action recorded"}</strong></div>
-            <div><span><Clock3 aria-hidden="true" size={16} />Due</span><strong>{dueLabel(control.dueAt)}</strong></div>
-            <div><span><ShieldAlert aria-hidden="true" size={16} />Escalate to</span><strong>{control.escalationTo || "Not set"}</strong></div>
+            <div><span><UserRound aria-hidden="true" size={16} />Owner</span><strong>{canonicalCase.accountableParty}</strong></div>
+            <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Next step</span><strong>{canonicalCase.primaryNextAction.label}</strong></div>
+            <div><span><Clock3 aria-hidden="true" size={16} />Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
+            <div><span><ShieldAlert aria-hidden="true" size={16} />If overdue, notify</span><strong>{canonicalCase.escalationDestination}</strong></div>
           </div>
           <dl className={styles.caseMeta}>
             <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
             <div><dt>Fulfillment</dt><dd>{assigned?.value ?? control.assignment?.providerLabel ?? "Choose later"}</dd></div>
-            <div><dt>Authorization limit</dt><dd>{nte?.value ?? "Not set"}</dd></div>
-            <div><dt>Classification</dt><dd>{classification?.value ?? "Deferred"}</dd></div>
+            {!accountabilityOnly ? <div><dt>Authorization limit</dt><dd>{nte?.value ?? "Not set"}</dd></div> : null}
+            {!accountabilityOnly ? <div><dt>Classification</dt><dd>{classification?.value ?? "Deferred"}</dd></div> : null}
           </dl>
         </section>
       ) : (
         <section className={styles.caseContextStrip} aria-label="Current work-order context">
           <div><span>Service need</span><strong>{model.page.description}</strong></div>
-          <div><span>Next action</span><strong>{control.nextAction || "No next action recorded"}</strong></div>
-          <div><span>Owner · due</span><strong>{control.accountableParty || "Not assigned"} · {dueLabel(control.dueAt)}</strong></div>
+          <div><span>Next action</span><strong>{canonicalCase.primaryNextAction.label}</strong></div>
+          <div><span>Owner · due</span><strong>{canonicalCase.accountableParty} · {dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
         </section>
       )}
 
@@ -560,14 +596,15 @@ export function WorkOrderCase({
           invoices={invoices}
           recordedCost={recordedCost}
           nte={nte}
+          accountabilityOnly={accountabilityOnly}
         />
       ) : null}
 
       {activeView === "activity" ? <WorkspaceSection
         id="activity"
-        eyebrow="Control and history"
-        title="Accountable work state"
-        description="The current owner and next action stay visible while every change remains attributable."
+        eyebrow="Status and history"
+        title="Work status and follow-up"
+        description="See who owns the next step, update the work, and review what changed over time."
         icon={<History aria-hidden="true" size={20} />}
       >
         <div className={styles.panelRegion}><WorkflowTaskPanel model={control.workflowTasks} /></div>
@@ -578,23 +615,23 @@ export function WorkOrderCase({
       {activeView === "service" ? <WorkspaceSection
         id="service"
         eyebrow="Routing and authorization"
-        title="Choose the service path"
-        description="Direct service and vendor pricing are separate workflows with separate consequences."
+        title={accountabilityOnly ? "Send the vendor work order" : "Choose the service path"}
+        description={accountabilityOnly ? "Choose the outside vendor and send the customer work-order number they will use for service and billing reference." : "Direct service and vendor pricing are separate workflows with separate consequences."}
         icon={<Truck aria-hidden="true" size={20} />}
       >
-        <ServicePathChoice control={control} issuance={issuance} estimateComparison={estimateComparison} />
+        {!accountabilityOnly ? <ServicePathChoice control={control} issuance={issuance} estimateComparison={estimateComparison} /> : null}
         <div className={styles.servicePanels}>
-          <div className={styles.panelRegion} data-panel="authorization"><VendorIssuancePanel model={issuance} /></div>
-          <div className={styles.panelRegion} data-panel="pricing"><EstimateComparisonPanel model={estimateComparison} /></div>
+          <div className={styles.panelRegion} data-panel="authorization"><VendorIssuancePanel model={issuance} edition={edition} /></div>
+          {!accountabilityOnly ? <div className={styles.panelRegion} data-panel="pricing"><EstimateComparisonPanel model={estimateComparison} /></div> : null}
         </div>
         <RecordBlock section={authorization} icon={<FileText aria-hidden="true" size={18} />} />
       </WorkspaceSection> : null}
 
       {activeView === "visits" ? <WorkspaceSection
         id="visits"
-        eyebrow="Observed presence"
+        eyebrow="Check-in and checkout"
         title="Technician visits"
-        description="Check-in and checkout add approximate presence evidence without claiming certified labor."
+        description="See when technicians checked in and out. Time onsite is approximate and is not certified labor."
         icon={<MapPin aria-hidden="true" size={20} />}
       >
         <div className={styles.panelRegion}><WorkOrderVerificationPanel model={verification} /></div>
@@ -603,15 +640,15 @@ export function WorkOrderCase({
 
       {activeView === "cost" ? <WorkspaceSection
         id="cost"
-        eyebrow="Source-linked cost"
-        title="Recorded work and invoice evidence"
-        description="Entered work cost, authorization, and optional invoice references stay distinct and explainable."
+        eyebrow="Costs"
+        title="Work costs and invoices"
+        description="Entered work costs, authorization limits, and optional invoice references stay separate and easy to trace."
         icon={<ReceiptText aria-hidden="true" size={20} />}
       >
         <div className={styles.costSummary}>
           <div><small>Recorded work cost</small><FactValue fact={recordedCost} /></div>
           <div><small>Authorization limit</small><FactValue fact={nte} /></div>
-          <div><small>Invoice safeguards</small><strong>{invoices?.table?.rows.length ?? 0} linked reference{invoices?.table?.rows.length === 1 ? "" : "s"}</strong></div>
+          <div><small>Invoice references</small><strong>{invoices?.table?.rows.length ?? 0} linked reference{invoices?.table?.rows.length === 1 ? "" : "s"}</strong></div>
         </div>
         <div className={styles.panelRegion}><WorkOrderRecordingPanel model={recording} /></div>
         <RecordBlock section={costs} icon={<CircleDollarSign aria-hidden="true" size={18} />} keepAnchor={false} />
@@ -620,9 +657,9 @@ export function WorkOrderCase({
 
       {activeView === "equipment" ? <WorkspaceSection
         id="equipment"
-        eyebrow="Classification and lifecycle"
-        title="Equipment context"
-        description="Equipment and component depth remain optional; when linked, the same work record powers repeat-repair and planning evidence."
+        eyebrow="Equipment"
+        title="Equipment details"
+        description="Equipment and components are optional. Link them when useful for service history, repeat repairs, and replacement planning."
         icon={<PackageSearch aria-hidden="true" size={20} />}
       >
         <div className={styles.equipmentSummary}>

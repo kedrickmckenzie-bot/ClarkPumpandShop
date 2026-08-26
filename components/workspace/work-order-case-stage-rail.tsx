@@ -19,43 +19,47 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
         </h2>
       </header>
 
-      <ol className={styles.factsRow} aria-label="Canonical service stages">
-        {model.stages.map((stage) => (
-          <li key={stage.id} aria-current={stage.state === "current" ? "step" : undefined}>
+      <ol className={styles.stageRail} aria-label="Service progress">
+        {model.stages.map((stage, index) => (
+          <li className={styles.stageStep} data-state={stage.state} key={stage.id} aria-current={stage.state === "current" ? "step" : undefined}>
+            <span className={styles.stageMarker} aria-hidden="true">{stage.state === "complete" ? "✓" : index + 1}</span>
             <strong>{stage.label}</strong>
-            <small>{stage.state === "complete" ? "Done" : stage.state === "current" ? "You are here" : ""}</small>
+            <small>{stage.state === "complete" ? "Complete" : stage.state === "current" ? "Current" : "Upcoming"}</small>
           </li>
         ))}
       </ol>
 
       <dl className={styles.factsRow}>
         <div>
-          <dt>Accountable</dt>
+          <dt>Owner</dt>
           <dd>{model.accountableParty}</dd>
         </div>
         <div>
           <dt>Due</dt>
-          <dd>{model.dueAt ? new Date(model.dueAt).toLocaleString("en-US") : "No due time recorded"}</dd>
+          <dd className={model.primaryActionOverdue ? styles.warningText : undefined}>
+            {model.dueAt ? new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: model.timeZone, timeZoneName: "short" }).format(new Date(model.dueAt)) : "No due time recorded"}
+            {model.primaryActionOverdue ? " · Overdue" : ""}
+          </dd>
         </div>
         <div>
-          <dt>Escalates to</dt>
+          <dt>If overdue, notify</dt>
           <dd>{model.escalationDestination}</dd>
         </div>
       </dl>
 
       {model.blockingReason ? (
-        <p className={styles.decisionDetail}>Blocking: {model.blockingReason}</p>
+        <p className={styles.decisionDetail}>Waiting on: {model.blockingReason}</p>
       ) : null}
 
       <div className={styles.moneyRow}>
         <Link className={styles.moneyCell} href={model.primaryNextAction.href}>
-          <span className={styles.moneyLabel}>Next required action</span>
+          <span className={styles.moneyLabel}>Next step</span>
           <strong>{model.primaryNextAction.label}</strong>
-          <span className={styles.moneyNote}>One primary action for this stage — projected from open records</span>
+          <span className={styles.moneyNote}>The one action that moves this work forward.</span>
         </Link>
         {model.alternativeActions.map((action) => (
           <Link className={styles.moneyCell} key={action.href + action.label} href={action.href}>
-            <span className={styles.moneyLabel}>Alternative</span>
+            <span className={styles.moneyLabel}>Another option</span>
             <strong>{action.label}</strong>
           </Link>
         ))}

@@ -90,10 +90,50 @@ describe("work-order vendor path entry", () => {
     const markup = renderToStaticMarkup(createElement(CreateWorkOrderForm, { model }));
 
     expect(markup).toContain("Choose the service path");
-    expect(markup).toContain("Send service work");
+    expect(markup).toContain("Outside vendor");
     expect(markup).toContain("Request bids first");
     expect(markup).toContain("No vendor is assigned and no check-in is available");
     expect(markup).toContain("Bid requests ask for numbers only");
+  });
+
+  it("prefills an unmatched visit and creates its canonical work order with an auditable link", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const model = buildCreateWorkOrderModel(fixture, session, { sourceException: "exception-northline-107-no-wo" });
+    const markup = renderToStaticMarkup(createElement(CreateWorkOrderForm, { model }));
+    expect(model.defaults).toMatchObject({
+      storeId: "store-northline-107",
+      problem: "Inspect intermittent card-reader failure at dispenser 4",
+      assignmentKind: "outside_vendor",
+      vendorId: "vendor-northline-forecourt",
+    });
+    expect(model.sourceVisit).toMatchObject({
+      visitId: "visit-northline-107-no-wo",
+      providerName: "Forecourt Systems Group",
+    });
+    expect(markup).toContain("Creating work from an unmatched visit");
+    expect(markup).toContain("sourceExceptionId");
+
+    const repository = configureContext();
+    const before = repository.snapshot();
+    const formData = new FormData();
+    formData.set("storeId", "store-northline-107");
+    formData.set("priority", "urgent");
+    formData.set("problem", "Inspect intermittent card-reader failure at dispenser 4");
+    formData.set("assignmentKind", "outside_vendor");
+    formData.set("vendorId", "vendor-northline-forecourt");
+    formData.set("sourceExceptionId", "exception-northline-107-no-wo");
+
+    const response = await POST(new Request("https://operations.test/api/ops/work-orders", { method: "POST", body: formData }));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toMatch(/view=visits&created=from-unmatched-visit$/);
+    const after = repository.snapshot();
+    const beforeIds = new Set(before.workOrders.map((workOrder) => workOrder.id));
+    const workOrder = after.workOrders.find((candidate) => !beforeIds.has(candidate.id))!;
+    expect(workOrder).toMatchObject({ storeId: "store-northline-107", status: "in_progress" });
+    expect(after.visits.find((visit) => visit.id === "visit-northline-107-no-wo")?.workOrderId).toBe(workOrder.id);
+    expect(after.exceptions.find((exception) => exception.id === "exception-northline-107-no-wo")).toMatchObject({ status: "resolved", workOrderId: workOrder.id });
+    expect(after.siteVisitWorkOrders).toContainEqual(expect.objectContaining({ visitId: "visit-northline-107-no-wo", workOrderId: workOrder.id }));
+    expect(after.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: "visit-northline-107-no-wo", eventType: "visit.reconciled" }));
   });
 
   it("starts the bid path without assigning a vendor, issuing service, or creating cost", async () => {

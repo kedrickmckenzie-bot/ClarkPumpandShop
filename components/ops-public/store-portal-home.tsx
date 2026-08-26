@@ -1,10 +1,31 @@
 import Link from "next/link";
-import { ArrowRight, ClipboardPlus, MapPin, UserRoundCheck } from "lucide-react";
+import { ArrowRight, ClipboardPlus, Clock3, LogOut, MapPin, UserRoundCheck } from "lucide-react";
 import type { StorePortalView } from "./contracts";
-import { PublicFrame } from "./public-ui";
+import type { PendingVisitCheckout } from "./pending-visit-cookie";
+import { formatPublicDateTime, PublicFrame } from "./public-ui";
+import { PublicStoreQr } from "./public-store-qr";
 import styles from "./public-workflows.module.css";
 
-export function StorePortalHome({ token, portal }: { token: string; portal: StorePortalView }) {
+export function PendingVisitCard({ pendingVisit }: { pendingVisit: PendingVisitCheckout }) {
+  return (
+    <section className={styles.pendingVisit} aria-labelledby="pending-visit-title">
+      <span className={styles.pendingVisitIcon}><Clock3 aria-hidden="true" size={23} /></span>
+      <div>
+        <span className={styles.eyebrow}>Visit currently onsite</span>
+        <h2 id="pending-visit-title">Ready to check out {pendingVisit.technicianName}?</h2>
+        <p>
+          {pendingVisit.vendorName} · Checked in {formatPublicDateTime(pendingVisit.checkedInAt)}
+          {pendingVisit.workOrderLabels.length ? ` · ${pendingVisit.workOrderLabels.join(" · ")}` : " · No work order provided"}
+        </p>
+      </div>
+      <Link className={styles.button} href={pendingVisit.checkoutUrl}>
+        <LogOut aria-hidden="true" size={18} /> Finish this visit
+      </Link>
+    </section>
+  );
+}
+
+export function StorePortalHome({ token, portal, pendingVisit, publicOrigin }: { token: string; portal: StorePortalView; pendingVisit: PendingVisitCheckout | null; publicOrigin?: string }) {
   const base = `/public/store/${encodeURIComponent(token)}`;
   return (
     <PublicFrame organizationName={portal.organizationName} context={`Store ${portal.store.number} · Service desk`} mode={portal.mode}>
@@ -15,6 +36,7 @@ export function StorePortalHome({ token, portal }: { token: string; portal: Stor
           <p className={styles.lede}><MapPin aria-hidden="true" size={18} /> {portal.store.name} · {portal.store.address}</p>
         </div>
       </div>
+      {pendingVisit ? <PendingVisitCard pendingVisit={pendingVisit} /> : null}
       <div className={styles.portalChoices}>
         {portal.capabilities.reportIssue ? (
           <Link className={styles.portalChoice} href={`${base}/report`}>
@@ -34,6 +56,7 @@ export function StorePortalHome({ token, portal }: { token: string; portal: Stor
           </Link>
         ) : null}
       </div>
+      {portal.capabilities.startVisit ? <PublicStoreQr configuredOrigin={publicOrigin} storeNumber={portal.store.number} targetPath={base} /> : null}
       <section className={styles.notice} style={{ marginTop: "1rem" }}>
         <strong>Simple by design</strong>
         <p className={styles.helper}>{portal.trustedStoreDevice ? "This trusted store computer uses the server receipt time, so a busy employee cannot backdate the visit later." : "This page does not require a login or PIN. Each action receives a server-confirmed record."}</p>

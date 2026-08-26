@@ -70,6 +70,21 @@ describe("operator presenter drill-through contracts", () => {
     expect(dashboard.metrics.map((metric) => metric.id)).toEqual(
       expect.arrayContaining(["recorded-cost", "open-work", "open-exceptions", "watch-assets"]),
     );
+    const costTrend = dashboard.trends.find((trend) => trend.id === "recorded-cost-trend");
+    expect(costTrend?.title).toBe("Recorded work cost — last 12 months");
+    expect(costTrend?.points).toHaveLength(12);
+    expect(costTrend?.points.map((point) => point.id)).toEqual([
+      "2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02",
+      "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08",
+    ]);
+    const fixtureWithAnEmptyMonth = {
+      ...fixture,
+      costLines: fixture.costLines.filter((line) => !line.serviceDate.startsWith("2025-09")),
+    };
+    const emptyMonthTrend = buildDashboardModel(fixtureWithAnEmptyMonth, session).trends.find(
+      (trend) => trend.id === "recorded-cost-trend",
+    );
+    expect(emptyMonthTrend?.points.find((point) => point.id === "2025-09")?.value).toBe(0);
     expect(search.groups.find((group) => group.id === "stores")?.rows.some((row) => row.id === NORTHLINE_DEMO_HANDLES.storyStoreId)).toBe(true);
     expect(search.resultSummary).toMatch(/matches across/i);
   });
@@ -215,12 +230,33 @@ describe("operator presenter drill-through contracts", () => {
     });
     const evidence = store104.table!.rows[0]?.cells.find((cell) => cell.key === "evidence")?.value;
     const proposal = store104.table!.rows[0]?.cells.find((cell) => cell.key === "work");
+    const storyAsset = fixture.assets.find((asset) => asset.id === NORTHLINE_DEMO_HANDLES.storyAssetId)!;
+    expect(store104.page.scopeLabel).toContain(storyAsset.name);
+    expect(store104.metrics.find((metric) => metric.id === "scope")).toMatchObject({ value: "1" });
+    expect(store104.metrics.map((metric) => metric.label)).not.toContain("Comparison inputs complete");
+    expect(store104.metrics.every((metric) => metric.link.href.includes(`asset=${encodeURIComponent(storyAsset.id)}`))).toBe(true);
+    expect(store104.priorityActions).toHaveLength(0);
     expect(evidence).toMatch(/small repair; not flagged/i);
     expect(evidence).not.toMatch(/return visit|recorded work cost|percent of replacement/i);
     expect(proposal?.value).toContain("$1,250");
     expect(proposal?.secondary).toMatch(/1 year.*replacement estimate/i);
+    const benchmarkAsset = fixture.assets.find(
+      (asset) =>
+        Boolean(asset.replacementProfileId) &&
+        !fixture.assetReplacementOverrides.some(
+          (override) => override.assetId === asset.id && override.status === "active",
+        ),
+    )!;
+    const benchmarkProfile = fixture.replacementProfiles.find(
+      (profile) => profile.id === benchmarkAsset.replacementProfileId,
+    )!;
+    const benchmarkLifecycle = buildProgramModel(fixture, session, "lifecycle", {
+      asset: benchmarkAsset.id,
+    });
+    expect(
+      benchmarkLifecycle.table!.rows[0]?.cells.find((cell) => cell.key === "replacement")?.secondary,
+    ).toContain(`${benchmarkProfile.annualEscalationBps / 100}% annually`);
 
-    const storyAsset = fixture.assets.find((asset) => asset.id === NORTHLINE_DEMO_HANDLES.storyAssetId)!;
     const replacementYear = String(new Date(storyAsset.installedAt!).getUTCFullYear() + storyAsset.expectedLifeYears!);
     const filtered = buildProgramModel(fixture, session, "lifecycle", { replacementYear });
     expect(filtered.table!.rows.some((row) => row.id === storyAsset.id)).toBe(true);
@@ -302,14 +338,16 @@ describe("operator presenter drill-through contracts", () => {
     const dashboard = buildDashboardModel(fixture, executiveSession());
 
     expect(dashboard.spotlight?.title).toContain("NL-2026-0115");
-    expect(dashboard.spotlight?.description).toMatch(/current repair estimate/i);
-    expect(dashboard.spotlight?.description).toMatch(/historical work.*do not change/i);
+    expect(dashboard.spotlight?.eyebrow).toBe("Repair or replace");
+    expect(dashboard.spotlight?.description).toMatch(/proposed repair.*expected to keep/i);
+    expect(dashboard.spotlight?.description).toMatch(/age, warranty, prior repairs, visits, and preventive maintenance/i);
     expect(dashboard.spotlight?.facts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "Current repair", value: "$18,000" }),
-      expect.objectContaining({ label: "Expected service from repair", value: "5 years" }),
-      expect.objectContaining({ label: "Replacement estimate", value: "$32,806" }),
+      expect.objectContaining({ label: "Proposed repair", value: "$18,000" }),
+      expect.objectContaining({ label: "Expected added service", value: "5 years" }),
+      expect.objectContaining({ label: "Estimated replacement", value: "$32,853" }),
     ]));
-    expect(JSON.stringify(dashboard.spotlight)).not.toMatch(/recorded work cost|break-even/i);
+    expect(dashboard.spotlight?.link.label).toBe("Open repair-or-replace details");
+    expect(JSON.stringify(dashboard.spotlight)).not.toMatch(/recorded work cost|break-even|economic screening|before issuing/i);
   });
 
   it("exposes working Store 104 QR, trusted-device, and vendor entry points", () => {
@@ -324,6 +362,16 @@ describe("operator presenter drill-through contracts", () => {
       `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}`,
     ]);
     expect(section?.facts?.every((fact) => Boolean(fact.link?.label))).toBe(true);
+  });
+
+  it("uses the same closed-window PM denominator on the store summary and service-area row", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const detail = buildDetailModel(fixture, executiveSession(), "store", NORTHLINE_DEMO_HANDLES.storyStoreId);
+    const compliance = detail.facts.find((fact) => fact.label === "PM compliance")!;
+    const match = compliance.helperText?.match(/(\d+) completed \/ (\d+) eligible occurrences/);
+    expect(match).toBeTruthy();
+    const refrigeration = detail.sections.find((section) => section.id === "service-areas")?.table?.rows.find((row) => row.id === "refrigeration");
+    expect(refrigeration?.cells.find((cell) => cell.key === "pm")?.value).toBe(`${match![1]}/${match![2]} eligible completed`);
   });
 
   it("compares multiple vendor bids on one canonical work order without creating spend", () => {

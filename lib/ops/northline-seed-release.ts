@@ -11,12 +11,12 @@ import {
  * real preview mutations, so a new fixture version never merges or reprojects
  * records underneath an older completed bootstrap.
  */
-export const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-20-v12";
+export const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-25-v13";
 
 /**
  * An older completed fixture is enriched only with missing deterministic rows.
  * Existing IDs and user mutations are never overwritten. This separate
- * receipt remains honest that the database was not freshly seeded as v12.
+ * receipt remains honest that the database was not freshly seeded as v13.
  */
 export const NORTHLINE_SEED_COMPATIBILITY_MARKER = `${NORTHLINE_SEED_VERSION}:enriched-existing`;
 
@@ -147,6 +147,72 @@ export function buildNorthlineCompatibilityAmendments(): OpsStatement[] {
       "CMP104-88214",
       "2021-05-06T12:00:00.000Z",
       "2026-05-06T12:00:00.000Z",
+    ],
+  }, {
+    // v12 accidentally projected a vendor-proposed date as already accepted.
+    // Repair only the untouched deterministic row; a real operator
+    // continuation always wins and is never rewritten by fixture enrichment.
+    sql: `UPDATE ops_work_orders
+      SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ?
+      WHERE organization_id = ? AND id = ?
+        AND status = ? AND accountable_party = ? AND next_action = ? AND due_at = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM ops_vendor_continuations c
+          WHERE c.organization_id = ops_work_orders.organization_id
+            AND c.work_order_id = ops_work_orders.id
+        )`,
+    params: [
+      "waiting_on_vendor", "Facilities coordinator", "Accept or counter Summit's proposed service date",
+      "2026-08-25T17:15:00.000Z", "Facilities director",
+      NORTHLINE_ORGANIZATION_ID, "wo-current-113-freezer-service",
+      "scheduled", "Summit Refrigeration", "Arrive for the confirmed service window and record check-in",
+      "2026-08-12T14:00:00.000Z",
+    ],
+  }, {
+    sql: `UPDATE ops_work_order_assignments
+      SET status = ?
+      WHERE organization_id = ? AND id = ? AND status = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM ops_vendor_continuations c
+          WHERE c.organization_id = ops_work_order_assignments.organization_id
+            AND c.work_order_id = ops_work_order_assignments.work_order_id
+        )`,
+    params: ["issued", NORTHLINE_ORGANIZATION_ID, "assignment-current-113-freezer-service", "accepted"],
+  }, {
+    sql: `UPDATE ops_vendor_responses
+      SET proposed_at = ?, message = ?, responded_at = ?
+      WHERE organization_id = ? AND id = ?
+        AND proposed_at = ? AND responded_at = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM ops_vendor_continuations c
+          WHERE c.organization_id = ops_vendor_responses.organization_id
+            AND c.vendor_response_id = ops_vendor_responses.id
+        )`,
+    params: [
+      "2026-08-28T14:00:00.000Z", "Defrost technician and controller stock are available Friday afternoon.",
+      "2026-08-25T09:15:00.000Z", NORTHLINE_ORGANIZATION_ID, "response-current-113-proposed-date",
+      "2026-08-12T14:00:00.000Z", "2026-08-10T09:15:00.000Z",
+    ],
+  }, {
+    sql: `UPDATE ops_workflow_tasks
+      SET task_type = ?, title = ?, reason = ?, assignee_type = ?, assignee_id = NULL,
+          assignee_role = ?, assignee_name = ?, due_at = ?, applicable_sla_clock = ?,
+          completion_criteria = ?, escalation_destination = ?
+      WHERE organization_id = ? AND work_order_id = ?
+        AND status IN ('open', 'in_progress')
+        AND title = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM ops_vendor_continuations c
+          WHERE c.organization_id = ops_workflow_tasks.organization_id
+            AND c.work_order_id = ops_workflow_tasks.work_order_id
+        )`,
+    params: [
+      "schedule_service", "Accept or counter Summit's proposed service date",
+      "Summit proposed a service window that needs an operator scheduling decision.",
+      "role", "facilities_admin", "Facilities coordinator", "2026-08-25T17:15:00.000Z", "scheduling",
+      "The proposed service date is accepted or a store-local counterproposal is sent.", "Facilities director",
+      NORTHLINE_ORGANIZATION_ID, "wo-current-113-freezer-service",
+      "Arrive for the confirmed service window and record check-in",
     ],
   }];
 }

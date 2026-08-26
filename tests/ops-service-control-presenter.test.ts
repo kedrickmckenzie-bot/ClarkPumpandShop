@@ -98,15 +98,16 @@ describe("enterprise service-control presenter contracts", () => {
       available: true,
       permitted: true,
       expectedStatus: "submitted",
+      canPrepareWorkOrder: true,
       canCreateWorkOrder: false,
       submitAction: `/api/ops/requests/${request.id}/review`,
       impactSubmitAction: `/api/ops/requests/${request.id}/impact`,
     });
-    expect(facilities.createWorkOrderHref).toBeUndefined();
-    expect(regional).toMatchObject({ available: true, permitted: true, canCreateWorkOrder: false });
-    expect(storeManager).toMatchObject({ available: true, permitted: true, canCreateWorkOrder: false });
+    expect(facilities.createWorkOrderHref).toBe(`/app/work-orders/new?request=${request.id}`);
+    expect(regional).toMatchObject({ available: true, permitted: true, canPrepareWorkOrder: true, canCreateWorkOrder: false });
+    expect(storeManager).toMatchObject({ available: true, permitted: true, canPrepareWorkOrder: false, canCreateWorkOrder: false });
     expect(storeManager.createWorkOrderHref).toBeUndefined();
-    expect(executive).toMatchObject({ available: true, permitted: false, canCreateWorkOrder: false });
+    expect(executive).toMatchObject({ available: true, permitted: false, canPrepareWorkOrder: false, canCreateWorkOrder: false });
 
     request.status = "under_review";
     const initialImpact = fixture.requestImpactAssessments.find((assessment) => assessment.requestId === request.id)!;
@@ -124,6 +125,7 @@ describe("enterprise service-control presenter contracts", () => {
       available: true,
       permitted: true,
       expectedStatus: "under_review",
+      canPrepareWorkOrder: true,
       canCreateWorkOrder: true,
     });
 
@@ -180,6 +182,15 @@ describe("enterprise service-control presenter contracts", () => {
     expect(closed.isTerminal).toBe(true);
     expect(closed.statusOptions.map((option) => option.value)).toEqual(["closed"]);
     expect(closed.canRecordManualVendorResponse).toBe(false);
+
+    const resolved = buildWorkOrderControlModel(fixture, operatorSession("facilities"), "wo-recent-aug-111-plumbing");
+    expect(resolved.closeout).toMatchObject({
+      ready: true,
+      openFollowUpCount: 0,
+    });
+    expect(resolved.closeout?.outcomeLabel).toMatch(/Verified by/i);
+    expect(resolved.closeout?.visitEvidenceLabel).toMatch(/visit/i);
+    expect(resolved.closeout?.costEvidenceLabel).toMatch(/recorded work cost/i);
   });
 
   it("presents the current pending approval and grants its decision only to the exact active membership role", () => {
@@ -198,9 +209,9 @@ describe("enterprise service-control presenter contracts", () => {
       policyName: "Major repair authorization",
       policyVersion: 1,
       amountLabel: "$6,250.00",
-      requiredRoleLabel: "Facilities administrator",
+      requiredRoleLabel: "Maintenance administrator",
       dueLabel: "Aug 21, 1:00 PM",
-      escalationRoleLabel: "Executive",
+      escalationRoleLabel: "Owner / leadership",
       canDecide: true,
     });
     expect(model.pendingApproval?.decisionOptions).toEqual([
@@ -213,7 +224,7 @@ describe("enterprise service-control presenter contracts", () => {
     request.requestedByMembershipId = "membership-northline-facilities";
     expect(buildWorkOrderControlModel(fixture, facilitiesSession, workOrder.id).pendingApproval).toMatchObject({
       canDecide: false,
-      decisionAccessMessage: "You requested this authorization. A different active Facilities administrator must record the decision.",
+      decisionAccessMessage: "You requested this authorization. A different active Maintenance administrator must record the decision.",
     });
     request.requestedByMembershipId = "membership-northline-regional-1";
 
@@ -224,7 +235,7 @@ describe("enterprise service-control presenter contracts", () => {
     expect(executive.pendingApproval).toMatchObject({
       requestId: request.id,
       canDecide: false,
-      decisionAccessMessage: "An active Facilities administrator membership must record this decision.",
+      decisionAccessMessage: "An active Maintenance administrator membership must record this decision.",
     });
 
     fixture.approvalDecisions.push({
@@ -397,6 +408,10 @@ describe("enterprise service-control presenter contracts", () => {
     expect(exception.control.reconciliationOptions).toEqual([
       expect.objectContaining({ value: "wo-contract-store-107-forecourt", label: "NL-2026-0999" }),
     ]);
+    expect(exception.control.unmatchedVisit).toMatchObject({
+      createWorkOrderHref: "/app/work-orders/new?sourceException=exception-northline-107-no-wo",
+      providerLabel: "Forecourt Systems Group",
+    });
     expect(exception.detail.page.primaryAction?.href).toBe(`/app/visits/${NORTHLINE_DEMO_HANDLES.unmatchedVisitId}`);
     expect(exception.detail.sections.map((section) => section.id)).toEqual(["source-evidence", "timeline"]);
     expect(buildAttentionItemModel(fixture, operatorSession("executive"), "exception-northline-107-no-wo").control.permitted).toBe(false);
@@ -430,10 +445,10 @@ describe("enterprise service-control presenter contracts", () => {
       "Dispatch",
       "Open work",
       "Onsite now",
-      "Observed visits",
+      "Recorded visits",
       "Response time",
       "Accepted authorizations",
-      "Open accountability",
+      "Open items",
       "Recorded work cost",
     ]);
     expect(detail.sections.map((section) => section.id)).toEqual([

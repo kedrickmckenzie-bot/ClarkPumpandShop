@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Check, LockKeyhole } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, LockKeyhole } from "lucide-react";
 import type {
   PublicActionReceipt,
   PublicRuntimeMode,
@@ -25,11 +25,15 @@ export function PublicFrame({
   organizationName,
   context,
   mode,
+  backHref,
+  backLabel = "Back to store options",
   children,
 }: {
   organizationName: string;
   context: string;
   mode: PublicRuntimeMode;
+  backHref?: string;
+  backLabel?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -49,6 +53,7 @@ export function PublicFrame({
       </header>
       <main className={styles.main} id="public-main">
         {mode === "demo" ? <span className={styles.modeBadge}>Demonstration environment</span> : null}
+        {backHref ? <Link className={styles.workflowBackLink} href={backHref}><ArrowLeft aria-hidden="true" size={17} />{backLabel}</Link> : null}
         {children}
         <footer className={styles.footer}>
           <p>Powered by {productPresentation.identity.workingName} · Service accountability for multi-location operators</p>

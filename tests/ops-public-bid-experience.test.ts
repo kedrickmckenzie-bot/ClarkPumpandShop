@@ -89,7 +89,8 @@ describe("public bid request and service authorization distinction", () => {
     expect(markup).toContain("Authorized work issued to Summit Refrigeration");
     expect(markup).toContain("This is a work order, not a bid request");
     expect(markup).toContain("Your company was selected for this work");
-    expect(markup).toContain("accept the service authorization before scheduling or beginning work");
+    expect(markup).toContain("Digital acceptance is available when your company uses it");
+    expect(markup).toContain("operator may still allow technician check-in for already-issued work");
     expect(markup).toContain("Technician check-in and checkout");
     expect(markup).toContain("Open technician check-in / checkout");
     expect(markup).toContain("Accept work");

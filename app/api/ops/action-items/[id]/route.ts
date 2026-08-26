@@ -60,14 +60,18 @@ export async function POST(
             actor: context.actor,
           },
         );
-      } else if (operation === "acknowledge" || operation === "resolve") {
+      } else if (operation === "acknowledge" || operation === "resolve" || operation === "resolve_non_work_service") {
+        if (operation === "resolve_non_work_service" && exception.kind !== "no_work_order") {
+          throw new OpsDomainError("VALIDATION", "Only an unmatched visit can be classified as non-work service.");
+        }
+        const note = formText(formData, "note", { required: true, max: 2_000 });
         await reviewException(
           { repository: context.repository },
           {
             organizationId: context.session.organizationId,
             exceptionId: itemId,
-            decision: operation,
-            note: formText(formData, "note", { required: true, max: 2_000 }),
+            decision: operation === "acknowledge" ? "acknowledge" : "resolve",
+            note: operation === "resolve_non_work_service" ? `Classified as authorized non-work service: ${note}` : note,
             actor: context.actor,
           },
         );

@@ -66,6 +66,79 @@
   padding: 0;
 }
 
+.stageRail {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(96px, 1fr));
+  gap: 0;
+  list-style: none;
+  margin: 22px 0 18px;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.stageStep {
+  position: relative;
+  min-width: 96px;
+  padding: 38px 10px 10px 0;
+  border-top: 2px solid var(--to-line-strong);
+  color: var(--to-muted);
+}
+
+.stageStep strong,
+.stageStep small {
+  display: block;
+}
+
+.stageStep strong {
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.stageStep small {
+  margin-top: 4px;
+  font-size: 12px;
+  color: inherit;
+}
+
+.stageMarker {
+  position: absolute;
+  top: -14px;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--to-line-strong);
+  border-radius: 50%;
+  background: var(--to-surface);
+  color: var(--to-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stageStep[data-state="complete"] {
+  border-color: var(--to-green);
+  color: var(--to-copy);
+}
+
+.stageStep[data-state="complete"] .stageMarker {
+  border-color: var(--to-green);
+  background: var(--to-green);
+  color: white;
+}
+
+.stageStep[data-state="current"] {
+  border-color: var(--to-cobalt, #2563eb);
+  color: var(--to-ink);
+}
+
+.stageStep[data-state="current"] .stageMarker {
+  border-color: var(--to-cobalt, #2563eb);
+  background: var(--to-cobalt, #2563eb);
+  color: white;
+}
+
 .factsRow > div {
   border-top: 2px solid var(--to-soft);
   padding-top: 8px;
@@ -131,6 +204,65 @@
   margin: 2px 0 6px;
   font-size: 13px;
   color: var(--to-muted);
+}
+
+.moneyCell input,
+.moneyCell textarea {
+  width: 100%;
+  min-height: 42px;
+  margin: 8px 0;
+  border: 1px solid var(--to-line-strong);
+  border-radius: 6px;
+  padding: 9px 10px;
+  background: var(--to-surface);
+  color: var(--to-ink);
+  font: inherit;
+}
+
+.moneyCell button {
+  align-self: flex-start;
+  min-height: 40px;
+  margin-top: 10px;
+  border: 1px solid var(--to-cobalt, #2563eb);
+  border-radius: 6px;
+  padding: 8px 14px;
+  background: var(--to-cobalt, #2563eb);
+  color: white;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.statusNotice,
+.errorNotice {
+  max-width: 1180px;
+  margin: 0 auto 16px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.statusNotice {
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.errorNotice {
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+@media (max-width: 720px) {
+  .brief {
+    padding: 20px;
+  }
+
+  .stageRail {
+    grid-template-columns: repeat(9, 132px);
+    padding-top: 4px;
+  }
 }
 
 .drillLink { 

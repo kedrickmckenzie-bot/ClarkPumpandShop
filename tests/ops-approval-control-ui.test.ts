@@ -74,10 +74,10 @@ describe("work-order pending approval controls", () => {
 
     const markup = renderToStaticMarkup(createElement(WorkOrderControlPanel, { model }));
 
-    expect(markup).toContain("Authorization decision required");
+    expect(markup).toContain("Approval needed");
     expect(markup).toContain("Major repair authorization · version 1");
     expect(markup).toContain("$6,250.00");
-    expect(markup).toContain("Facilities administrator");
+    expect(markup).toContain("Maintenance administrator");
     expect(markup).toContain("Aug 21, 1:00 PM");
     expect(markup).toContain(`action="/api/ops/approvals/${APPROVAL_REQUEST_ID}/decision"`);
     expect(markup).toContain('name="decision"');
@@ -86,7 +86,7 @@ describe("work-order pending approval controls", () => {
     expect(markup).toContain('value="escalated"');
     expect(markup).toContain('name="reason"');
     expect(markup).toContain("A reason is required for rejection or escalation and optional for approval.");
-    expect(markup).toContain("Ordinary service-control updates cannot approve this work order.");
+    expect(markup).toContain("The policy version and presented amount remain immutable.");
   });
 
   it("keeps the pending approval visible but withholds the form from a different membership role", () => {
@@ -100,8 +100,8 @@ describe("work-order pending approval controls", () => {
 
     const markup = renderToStaticMarkup(createElement(WorkOrderControlPanel, { model }));
 
-    expect(markup).toContain("Authorization decision required");
-    expect(markup).toContain("An active Facilities administrator membership must record this decision.");
+    expect(markup).toContain("Approval needed");
+    expect(markup).toContain("An active Maintenance administrator membership must record this decision.");
     expect(markup).not.toContain(`action="/api/ops/approvals/${APPROVAL_REQUEST_ID}/decision"`);
   });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getPublicOperationsGateway } from "@/components/ops-public/server-gateway";
+import { clearPendingVisitCookie } from "@/components/ops-public/pending-visit-cookie";
 import {
   locationEvidenceSchema,
   parseJsonFormField,
@@ -43,7 +44,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     const formData = await request.formData();
     const command = parseJsonFormField(formData, "command", checkOutSchema);
     const evidence = await readPublicUploads(formData);
-    return publicApiSuccess(await getPublicOperationsGateway().checkOut(token, { ...command, evidence, submissionKey }), 201);
+    const receipt = await getPublicOperationsGateway().checkOut(token, { ...command, evidence, submissionKey });
+    const response = publicApiSuccess(receipt, 201);
+    clearPendingVisitCookie(response, request.url);
+    return response;
   } catch (error) {
     return publicApiError(error);
   }

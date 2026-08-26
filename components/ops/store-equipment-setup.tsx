@@ -52,7 +52,7 @@ export interface StoreEquipmentNamingViewModel {
 
 function SetupProgress({ active }: { active: 2 | 3 }) {
   return (
-    <ol className={styles.progress} aria-label="Store commissioning progress">
+    <ol className={styles.progress} aria-label="Store setup progress">
       <li data-state="complete"><span><Check size={14} aria-hidden="true" /></span><div><strong>Store</strong><small>Details saved</small></div></li>
       <li data-state={active === 2 ? "active" : "complete"}><span>{active === 2 ? "2" : <Check size={14} aria-hidden="true" />}</span><div><strong>Equipment</strong><small>Select quantities</small></div></li>
       <li data-state={active === 3 ? "active" : "upcoming"}><span>3</span><div><strong>Name & finish</strong><small>Identify locations</small></div></li>
@@ -78,7 +78,7 @@ function CommissioningHeader({
       <Link className={styles.backLink} href={backHref}><ArrowLeft size={15} aria-hidden="true" />Back to store</Link>
       <header className={styles.header}>
         <div>
-          <p>Store commissioning</p>
+          <p>Store setup</p>
           <h1>{title}</h1>
           <span>{description}</span>
         </div>
@@ -152,12 +152,12 @@ export function StoreEquipmentSetup({ model }: { model: StoreEquipmentSetupViewM
       <form action={model.action} method="post" onSubmit={submit} className={styles.form}>
         <div className={styles.toolbar}>
           <label><Search size={17} aria-hidden="true" /><span className={styles.visuallyHidden}>Search equipment types</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search coolers, HVAC, dispensers…" /></label>
-          <span><strong>{total}</strong> equipment record{total === 1 ? "" : "s"} selected</span>
+          <span><strong>{total}</strong> equipment item{total === 1 ? "" : "s"} selected</span>
         </div>
         <div className={styles.groupList}>
           {groups.map((group) => (
             <section className={styles.group} key={group.id}>
-              <header><div><small>{group.pathLabel || "Company equipment library"}</small><h2>{group.name}</h2></div><span>{group.templates.length} type{group.templates.length === 1 ? "" : "s"}</span></header>
+              <header><div><small>{group.pathLabel || "Equipment library"}</small><h2>{group.name}</h2></div><span>{group.templates.length} type{group.templates.length === 1 ? "" : "s"}</span></header>
               <div className={styles.templateRows}>
                 {group.templates.map((template) => {
                   const quantity = quantities[template.id] ?? 0;
@@ -179,7 +179,7 @@ export function StoreEquipmentSetup({ model }: { model: StoreEquipmentSetupViewM
         </div>
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
         <footer className={styles.stickyFooter}>
-          <div><strong>{total || "No"} equipment record{total === 1 ? "" : "s"} selected</strong><span>Next, give repeated units a plain name or location.</span></div>
+          <div><strong>{total || "No"} equipment item{total === 1 ? "" : "s"} selected</strong><span>Next, give repeated units a plain name or location.</span></div>
           <div><Link className={styles.secondaryButton} href={model.backHref}>Skip for now</Link><button className={styles.primaryButton} disabled={pending || total === 0} type="submit">{pending ? "Creating equipment…" : "Continue to names"}<ArrowRight size={17} aria-hidden="true" /></button></div>
         </footer>
       </form>

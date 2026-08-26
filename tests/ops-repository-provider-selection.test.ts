@@ -21,6 +21,18 @@ describe("server ops repository selection policy", () => {
     })).toBe("d1");
   });
 
+  it("uses the resettable fixture in ordinary local development even when Vinext exposes D1", () => {
+    expect(selectOpsRepositoryBackend({
+      d1Available: true,
+      nodeEnv: "development",
+    })).toBe("fixture");
+    expect(selectOpsRepositoryBackend({
+      d1Available: true,
+      nodeEnv: "development",
+      allowLocalD1: true,
+    })).toBe("d1");
+  });
+
   it("allows fixture state only in non-production development", () => {
     expect(selectOpsRepositoryBackend({
       databaseUrl: "   ",

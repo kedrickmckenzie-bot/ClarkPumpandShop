@@ -6,6 +6,8 @@ export interface VendorResponseActionsModel {
   kind: "accepted" | "declined" | "proposed_date" | "question";
   responderName: string;
   proposedAt?: string;
+  proposedAtLabel?: string;
+  timeZone: string;
   message?: string;
   respondedAt: string;
   workOrderId: string;
@@ -25,7 +27,7 @@ function ActionForms({ model }: { model: VendorResponseActionsModel }) {
           {common}
           <input type="hidden" name="decision" value="accept_proposed_date" />
           <span className={styles.moneyLabel}>Accept the proposed date</span>
-          <strong>{model.proposedAt ? new Date(model.proposedAt).toLocaleString("en-US") : "Proposed time missing"}</strong>
+          <strong>{model.proposedAtLabel ?? "Proposed time missing"}</strong>
           <button type="submit">Accept proposed date</button>
         </form>
         <form action="/api/ops/vendor-response" method="post" className={styles.moneyCell}>
@@ -33,6 +35,7 @@ function ActionForms({ model }: { model: VendorResponseActionsModel }) {
           <input type="hidden" name="decision" value="counter_proposed_date" />
           <span className={styles.moneyLabel}>Counter with another date/time</span>
           <input type="datetime-local" name="scheduledFor" required />
+          <span className={styles.moneyNote}>Store-local time ({model.timeZone})</span>
           <button type="submit">Send counterproposal</button>
         </form>
       </div>
@@ -54,7 +57,7 @@ function ActionForms({ model }: { model: VendorResponseActionsModel }) {
 
 export function VendorResponseActions({ model }: { model: VendorResponseActionsModel }) {
   return (
-    <section className={styles.brief} aria-labelledby="vendor-response-heading">
+    <section id="vendor-response" className={styles.brief} aria-labelledby="vendor-response-heading">
       <header className={styles.header}>
         <p className={styles.eyebrow}>{model.responderName} responded</p>
         <h2 id="vendor-response-heading">

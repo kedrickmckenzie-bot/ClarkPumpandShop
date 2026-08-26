@@ -72,9 +72,9 @@ function PageHeader({ page }: { page: DashboardPageViewModel["page"] }) {
       </div>
       <PageActions primary={page.primaryAction} secondary={page.secondaryAction} />
       <div className={styles.contextBar} aria-label="Current view context">
-        <span><small>Scope</small><strong>{page.scopeLabel}</strong></span>
+        <span><small>Viewing</small><strong>{page.scopeLabel}</strong></span>
         {page.periodLabel ? <span><small>Period</small><strong>{page.periodLabel}</strong></span> : null}
-        {page.updatedLabel ? <span><small>Data</small><strong>{page.updatedLabel}</strong></span> : null}
+        {page.updatedLabel ? <span><small>Updated</small><strong>{page.updatedLabel}</strong></span> : null}
       </div>
     </header>
   );
@@ -229,8 +229,8 @@ function InlineEmpty({ message }: { message: string }) {
 
 function ActionQueue({ actions, section }: { actions: ActionItemViewModel[]; section?: DashboardPageViewModel["prioritySection"] }) {
   const title = section?.title ?? "What needs attention";
-  const description = section?.description ?? "Exceptions and decisions assigned within your scope.";
-  const link = section?.link ?? { href: "/app/action-center", label: "Open action center" };
+  const description = section?.description ?? "Items waiting for your team to review or update.";
+  const link = section?.link ?? { href: "/app/action-center", label: "See all" };
 
   return (
     <section className={styles.queuePanel} aria-labelledby="priority-actions-heading">
@@ -246,7 +246,7 @@ function ActionQueue({ actions, section }: { actions: ActionItemViewModel[]; sec
                 <small>{[action.recordLabel, action.storeLabel, action.categoryLabel].filter(Boolean).join(" · ")}</small>
               </span>
               {action.priorityLabel ? <span className={`${styles.queueBadge} ${toneClass(action.tone)}`}>{action.priorityLabel}</span> : null}
-              <span className={styles.actionOwner}><small>Accountable</small><strong>{action.ownerLabel}</strong></span>
+              <span className={styles.actionOwner}><small>Owner</small><strong>{action.ownerLabel}</strong></span>
               <span className={styles.actionDue}><Clock3 aria-hidden="true" size={14} /><span><small>Due</small><strong>{action.dueLabel}</strong></span></span>
               <ChevronRight className={styles.rowChevron} aria-hidden="true" size={17} />
             </Link>
@@ -523,7 +523,7 @@ export function SearchView({ model }: { model: SearchPageViewModel }) {
       <form className={styles.universalSearch} action="/app/search" method="get" role="search">
         <Search aria-hidden="true" size={20} />
         <label className={styles.visuallyHidden} htmlFor="universal-search">Search records</label>
-        <input id="universal-search" name="q" type="search" defaultValue={model.query} placeholder="Store, address, work order, vendor, equipment, or serial number" />
+        <input id="universal-search" name="q" type="search" defaultValue={model.query} placeholder={model.placeholder ?? "Store, address, work order, vendor, equipment, or serial number"} />
         <button type="submit">Search</button>
       </form>
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (

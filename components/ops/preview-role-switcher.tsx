@@ -5,11 +5,11 @@ import type { OperatorRole } from "./data-contract";
 import styles from "./platform-shell.module.css";
 
 const roles: Array<{ value: OperatorRole; label: string }> = [
-  { value: "facilities", label: "Facilities" },
-  { value: "executive", label: "Executive" },
+  { value: "facilities", label: "Maintenance / facilities" },
+  { value: "executive", label: "Owner / leadership" },
   { value: "regional", label: "Regional manager" },
   { value: "store_manager", label: "Store manager" },
-  { value: "finance", label: "Finance reviewer" },
+  { value: "finance", label: "Invoice reviewer" },
 ];
 
 export function PreviewRoleSwitcher({ role }: { role: OperatorRole }) {

@@ -149,7 +149,6 @@ export type ExceptionKind =
   | "outside_geofence"
   | "low_accuracy_location"
   | "duplicate_active_visit"
-  | "high_risk_service"
   | "unmatched_invoice"
   | "amount_above_authorization"
   | "overdue_pm";

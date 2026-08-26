@@ -6,6 +6,7 @@ import { getChatGPTUser } from "@/app/chatgpt-auth";
 import type {
   DashboardPageViewModel,
   DetailPageViewModel,
+  DemoEdition,
   ListPageViewModel,
   OperatorRole,
   OperatorSession,
@@ -24,18 +25,22 @@ import {
 import { getServerOpsRepository, getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
 import { buildOwnerBrief } from "@/lib/ops/owner-brief";
 import { buildWorkOrderCase } from "@/lib/ops/work-order-case";
+import { formatInTimeZone } from "@/lib/ops/local-date-time";
 import { buildClosedLoopCoverage, buildDataQualityIssues } from "@/lib/ops/coverage-quality";
 import { buildVendorScorecards } from "@/lib/ops/vendor-scorecards";
 import {
   LEGACY_OPS_PREVIEW_ROLE_COOKIE,
+  OPS_PREVIEW_EDITION_COOKIE,
   OPS_PREVIEW_ROLE_COOKIE,
 } from "@/lib/server/runtime-identifiers";
+import { DEFAULT_DEMO_EDITION, isDemoEdition } from "@/components/ops/demo-edition";
 import type { OpsFixture } from "@/lib/ops/types";
 import {
   buildCreateRequestModel,
   buildCreateStoreModel,
   buildCreateVendorModel,
   buildCreateWorkOrderModel,
+  buildAccountabilityDashboardModel,
   buildDashboardModel,
   buildDetailModel,
   buildEstimateComparisonModel,
@@ -105,6 +110,11 @@ async function loadOperatorSessionFromSnapshot(snapshot: OpsFixture): Promise<Op
     ?? process.env.OPS_OPERATOR_PREVIEW_ROLE
     ?? process.env.TRACEOPS_OPERATOR_PREVIEW_ROLE;
   const role: OperatorRole = isOperatorRole(requestedRole) ? requestedRole : "facilities";
+  const requestedEdition = cookieStore.get(OPS_PREVIEW_EDITION_COOKIE)?.value
+    ?? process.env.OPS_OPERATOR_PREVIEW_EDITION;
+  const demoEdition: DemoEdition = isDemoEdition(requestedEdition)
+    ? requestedEdition
+    : DEFAULT_DEMO_EDITION;
   const { membership } = previewMembership(role, snapshot);
   const grants = membership
     ? snapshot.scopeGrants.filter(
@@ -141,6 +151,7 @@ async function loadOperatorSessionFromSnapshot(snapshot: OpsFixture): Promise<Op
     regionIds: regionIds.length ? regionIds : undefined,
     storeIds: storeIds.length ? storeIds : undefined,
     permissions: grants.map((grant) => grant.permission),
+    demoEdition,
   };
 }
 
@@ -271,7 +282,9 @@ export async function loadApprovalPolicyWorkspaceModel() {
 export async function loadDashboardModel() {
   const context = await sessionAndFixture();
   return enforceDashboardLinkPolicy(
-    buildDashboardModel(context.fixture, context.session),
+    context.session.demoEdition === "accountability"
+      ? buildAccountabilityDashboardModel(context.fixture, context.session)
+      : buildDashboardModel(context.fixture, context.session),
     context.session.role,
   );
 }
@@ -376,6 +389,7 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
   return buildWorkOrderCase({
     now: context.fixture.asOf,
     workOrder,
+    timeZone: store?.timeZone ?? context.fixture.organizations.find((row) => row.id === context.session.organizationId)?.timeZone ?? "UTC",
     storeName: store ? `${store.storeNumber} - ${store.name}` : undefined,
     assignments: fixture.assignments.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     issuances: fixture.issuances.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
@@ -405,23 +419,38 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
 export async function loadVendorResponseActionsModel(workOrderId: string) {
   const context = await sessionAndFixture();
   if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
+  if (!roleCan(context.session.role, "control_work_order")) return null;
   const orgId = context.session.organizationId;
+  const workOrder = context.fixture.workOrders.find((row) => row.organizationId === orgId && row.id === workOrderId);
+  if (!workOrder || ["completed_pending_review", "resolved", "closed", "cancelled"].includes(workOrder.status)) return null;
+  const repository = await getServerOpsRepository();
+  const [activeAssignment, latestIssuance, continuations] = await Promise.all([
+    repository.getActiveAssignment(orgId, workOrderId),
+    repository.getLatestIssuanceForWorkOrder(orgId, workOrderId),
+    repository.listVendorContinuationsForWorkOrder(orgId, workOrderId),
+  ]);
   const responses = context.fixture.vendorResponses
     .filter((row) => row.organizationId === orgId && row.workOrderId === workOrderId)
     .sort((a, b) => b.respondedAt.localeCompare(a.respondedAt));
   const handled = new Set(
-    (await (await getServerOpsRepository()).listVendorContinuationsForWorkOrder(orgId, workOrderId)).map((row) => `${row.vendorResponseId}:${row.action}`),
+    continuations.map((row) => row.vendorResponseId),
   );
   const actionable = responses.find((row) =>
-    (row.response === "proposed_date" && !handled.has(`${row.id}:counter_date`) && !handled.has(`${row.id}:accept_date`))
-    || (row.response === "question" && !handled.has(`${row.id}:reply`))
-    || row.response === "declined");
+    !handled.has(row.id)
+    && ((row.response === "proposed_date" || row.response === "question")
+      ? row.assignmentId === activeAssignment?.id && row.issuanceId === latestIssuance?.id
+      : row.response === "declined"));
   if (!actionable) return null;
+  const store = context.fixture.stores.find((row) => row.organizationId === orgId && row.id === workOrder.storeId);
+  const organization = context.fixture.organizations.find((row) => row.id === orgId);
+  const timeZone = store?.timeZone ?? organization?.timeZone ?? "UTC";
   return {
     responseId: actionable.id,
     kind: actionable.response,
     responderName: actionable.responderName,
     proposedAt: actionable.proposedAt,
+    proposedAtLabel: actionable.proposedAt ? formatInTimeZone(actionable.proposedAt, timeZone) : undefined,
+    timeZone,
     message: actionable.message,
     respondedAt: actionable.respondedAt,
   };

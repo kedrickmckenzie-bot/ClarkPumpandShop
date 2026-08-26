@@ -21,9 +21,9 @@ describe("summary-first enterprise records", () => {
 
     const markup = renderToStaticMarkup(createElement(RecordSections, { sections }));
 
-    expect(markup).toContain("Open only the detail you need");
+    expect(markup).toContain("Choose what you want to see");
     expect(markup).toContain("Service history");
-    expect(markup).toContain("1 source record");
+    expect(markup).toContain("1 record");
     expect(markup).not.toContain("WO-1 source detail");
   });
 

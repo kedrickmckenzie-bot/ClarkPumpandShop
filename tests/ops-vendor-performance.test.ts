@@ -2,6 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { VendorPerformanceDetail, VendorPerformanceList } from "@/components/ops/vendor-performance-workspace";
+import { recordVendorComplianceDocument, recordVendorQualification, type OpsCommandServices } from "@/lib/ops/commands";
+import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
 import type { OpsFixture } from "@/lib/ops/types";
 import type { OperatorSession } from "@/components/ops/data-contract";
@@ -119,25 +121,100 @@ describe("vendor performance workspace", () => {
 
     const markup = renderToStaticMarkup(createElement(VendorPerformanceDetail, { model: detail }));
     expect(markup).toContain("Not enough history");
-    expect(markup).toContain("Evidence, not a rating");
+    expect(markup).toContain("Numbers, not a grade");
     expect(markup).not.toContain("Overall score");
   });
 
-  it("renders denominator-first scorecard cells and evidence links without an opaque score", () => {
+  it("renders the enterprise directory with relationship, compliance, and source-linked evidence", () => {
     const fixture = buildNorthlinePresentationFixture();
     const list = buildVendorPerformanceListModel(fixture, session());
     const markup = renderToStaticMarkup(createElement(VendorPerformanceList, { model: list }));
-    expect(markup).toContain("No composite vendor score");
-    expect(markup).toContain("issued authorizations have a recorded response");
-    expect(markup).toContain("Open response evidence");
-    expect(markup).toContain("Open cost sources");
+    expect(markup).toContain("Vendor network");
+    expect(markup).toContain("How vendor measures work");
+    expect(markup).toContain("Ready to use");
+    expect(markup).toContain("Documents current");
+    expect(markup).toContain("Recorded work cost only");
     expect(markup).toContain("5 of 5 approved vendors");
+  });
+
+  it("derives onboarding controls and relationship filters from vendor source records", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const model = buildVendorPerformanceListModel(fixture, session());
+    const summit = model.vendors.find((vendor) => vendor.id === "vendor-northline-summit")!;
+    const brightPath = model.vendors.find((vendor) => vendor.id === "vendor-northline-brightpath")!;
+    const fourSeasons = model.vendors.find((vendor) => vendor.id === "vendor-northline-four-seasons")!;
+
+    expect(summit.compliance).toMatchObject({ state: "ready", approvedDocumentCount: 3, documentCount: 3, activeQualificationCount: 1 });
+    expect(brightPath.compliance).toMatchObject({ state: "due_soon", label: "Renewal due soon" });
+    expect(fourSeasons.relationshipState).toBe("stable");
+
+    const stable = buildVendorPerformanceListModel(fixture, session(), { view: "stable" });
+    expect(stable.vendors.map((vendor) => vendor.id)).toEqual(["vendor-northline-four-seasons"]);
+    const plumbing = buildVendorPerformanceListModel(fixture, session(), { specialty: "plumbing" });
+    expect(plumbing.vendors.map((vendor) => vendor.id)).toEqual(["vendor-northline-cedar"]);
+
+    const detail = buildVendorPerformanceDetailModel(fixture, session(), summit.id);
+    expect(detail.complianceRows).toHaveLength(3);
+    expect(detail.qualificationRows).toHaveLength(1);
+    expect(detail.complianceRows.every((row) => row.statusLabel === "Approved")).toBe(true);
   });
 
   it("searches vendor specialties through organization-approved plain-language aliases", () => {
     const fixture = buildNorthlinePresentationFixture();
     const plumbing = buildVendorPerformanceListModel(fixture, session(), { q: "plumber" });
     expect(plumbing.vendors.map((vendor) => vendor.name)).toContain("Cedar Mechanical");
+  });
+
+  it("records audited vendor renewals and routing qualifications without losing prior evidence", async () => {
+    const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    let sequence = 0;
+    const services: OpsCommandServices = {
+      repository,
+      clock: { now: () => "2026-08-25T16:00:00.000Z" },
+      ids: { next: (prefix) => `${prefix}-vendor-control-${++sequence}` },
+    };
+    const actor = {
+      actorType: "user" as const,
+      actorId: "membership-northline-facilities",
+      actorName: "Jordan Lee",
+      organizationId: session().organizationId,
+    };
+    const vendorId = "vendor-northline-brightpath";
+
+    await recordVendorComplianceDocument(services, {
+      organizationId: session().organizationId,
+      vendorId,
+      documentType: "insurance",
+      issuer: "Fictional Mutual",
+      reference: "GL-2026-RENEWED",
+      effectiveAt: "2026-09-01T00:00:00.000Z",
+      expiresAt: "2027-09-01T00:00:00.000Z",
+      reviewStatus: "approved",
+      blocking: true,
+      actor,
+    });
+    await recordVendorQualification(services, {
+      organizationId: session().organizationId,
+      vendorId,
+      tradeKey: "electrical",
+      serviceType: "Emergency electrical service",
+      emergencyResponse: true,
+      afterHours: true,
+      maximumJobAmountMinor: 750_000,
+      requiredLicense: "State electrical contractor license",
+      actor,
+    });
+
+    const snapshot = repository.snapshot();
+    const detail = buildVendorPerformanceDetailModel(snapshot, session(), vendorId);
+    expect(detail.summary?.compliance).toMatchObject({ state: "ready", approvedDocumentCount: 3, documentCount: 3, activeQualificationCount: 2 });
+    expect(detail.complianceRows).toHaveLength(4);
+    expect(detail.complianceRows.filter((row) => row.documentTypeLabel === "Insurance").map((row) => row.statusLabel)).toEqual(["Approved", "Superseded record"]);
+    expect(detail.qualificationRows.some((row) => row.serviceRightsLabel.includes("Emergency") && row.limitLabel === "$7,500")).toBe(true);
+    expect(snapshot.auditEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ aggregateId: vendorId, eventType: "vendor.compliance_document_recorded" }),
+      expect.objectContaining({ aggregateId: vendorId, eventType: "vendor.qualification_recorded" }),
+    ]));
   });
 
   it("keeps work-order vendor source links exact by honoring the vendor query", async () => {

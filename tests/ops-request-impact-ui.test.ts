@@ -30,9 +30,9 @@ describe("request impact presentation", () => {
     const requestImpact = requestDetail.sections.find((section) => section.id === "business-impact")!;
     const workImpact = workDetail.sections.find((section) => section.id === "business-impact")!;
 
-    expect(requestImpact.description).toMatch(/not verified losses/i);
+    expect(requestImpact.description).toMatch(/not confirmed losses/i);
     expect(requestImpact.table?.rows.length).toBeGreaterThanOrEqual(2);
-    expect(workImpact.description).toMatch(/not verified losses/i);
+    expect(workImpact.description).toMatch(/not confirmed losses/i);
     expect(workImpact.table?.rows.map((row) => row.id)).toEqual(requestImpact.table?.rows.map((row) => row.id));
   });
 
@@ -44,7 +44,7 @@ describe("request impact presentation", () => {
     expect(model.impactSubmitAction).toBe(`/api/ops/requests/${request.id}/impact`);
     expect(model.latestImpact?.id).toBeTruthy();
     expect(model.impactHistory).toHaveLength(1);
-    expect(model.impactCaveat).toMatch(/not verified losses/i);
+    expect(model.impactCaveat).toMatch(/not confirmed losses/i);
     expect(model.canCreateWorkOrder).toBe(false);
   });
 
@@ -58,7 +58,7 @@ describe("request impact presentation", () => {
     expect(model.pendingApproval).toMatchObject({
       requestId: "approval-request-106-facilities-pending",
       canDecide: true,
-      requiredRoleLabel: "Facilities administrator",
+      requiredRoleLabel: "Maintenance administrator",
     });
     expect(model.canCreateWorkOrder).toBe(false);
     expect(detail.page.primaryAction).toBeUndefined();
@@ -68,8 +68,8 @@ describe("request impact presentation", () => {
       ]),
       action: undefined,
     });
-    expect(markup).toContain("Authorization decision required");
-    expect(markup).toContain("Ordinary request-review updates cannot approve this request.");
+    expect(markup).toContain("Approval needed");
+    expect(markup).toContain("A person with the role below must decide it.");
     expect(markup).toContain('action="/api/ops/approvals/approval-request-106-facilities-pending/decision"');
     expect(markup).toContain('name="decision"');
     expect(markup).toContain('value="approved"');
@@ -91,22 +91,23 @@ describe("request impact presentation", () => {
         expect.objectContaining({ label: "Review state", value: "Ready for work-order creation" }),
       ]),
       action: {
-        label: "Create the accountable work record",
+        label: "Create work order",
         href: `/app/work-orders/new?request=${requestId}`,
       },
     });
   });
 
-  it("keeps structured impact inputs and the caveat embedded in employee intake and manager review", async () => {
+  it("keeps employee intake simple while preserving optional structured manager review", async () => {
     const [intake, review] = await Promise.all([
       readFile("components/ops/forms.tsx", "utf8"),
       readFile("components/ops/service-control-panels.tsx", "utf8"),
     ]);
     for (const field of ["storeOperatingState", "safetyConcern", "productInventoryRisk", "customersAffected", "complianceImpact", "redundantEquipment", "estimatedDailyRevenueExposure", "estimatedDowntimeMinutes", "confidence"]) {
-      expect(intake).toContain(`name="${field}"`);
+      expect(intake).not.toContain(`name="${field}"`);
       expect(review).toContain(`name="${field}"`);
     }
-    expect(intake).toMatch(/not verified losses/i);
+    expect(intake).toMatch(/do not need equipment details or a diagnosis/i);
     expect(review).toContain("expectedLatestAssessmentId");
+    expect(review).toMatch(/optional detail/i);
   });
 });

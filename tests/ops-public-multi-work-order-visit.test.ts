@@ -179,14 +179,18 @@ describe("public work-order-first multi-work-order visit", () => {
     expect(getNorthlineFixtureRepository().snapshot().visits.some((visit) => visit.technicianName === "Cross Tenant Probe")).toBe(false);
   });
 
-  it("keeps the WO-first, inferred-Vendor, crew, exact-outcome and shared-evidence controls in the public form", async () => {
+  it("keeps WO-first routing and exact checkout evidence without burdening technician check-in", async () => {
     const source = await readFile("components/ops-public/technician-visit-flow.tsx", "utf8");
-    expect(source).toContain("Choose store work orders");
+    expect(source).toContain("Choose the work");
     expect(source).toContain("Assigned Vendor (inferred)");
-    expect(source).toContain("No work order provided / I don&apos;t see my work order");
+    expect(source).toContain("No work order provided");
+    expect(source).toContain("Reason for visit");
+    expect(source).toContain("Number of technicians onsite");
+    expect(source).toContain("Visit note");
     expect(source).toContain("workOrderIds: unmatched ? undefined : selectedWorkOrderIds");
-    expect(source).toContain("technicianPhoneOrPin");
-    expect(source).toContain("additionalTechnicianNames");
+    expect(source).not.toContain("technicianPhoneOrPin");
+    expect(source).not.toContain("additionalTechnicianNames:");
+    expect(source).not.toContain("vehicleIdentifier:");
     expect(source).toContain("perWorkOrderOutcomes");
     expect(source).toContain("Accountable follow-up required");
     expect(source).toContain("Shared photos or service files");

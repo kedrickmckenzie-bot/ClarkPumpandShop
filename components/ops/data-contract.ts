@@ -5,6 +5,8 @@ export type OperatorRole =
   | "store_manager"
   | "finance";
 
+export type DemoEdition = "accountability" | "complete";
+
 export type Tone = "neutral" | "positive" | "warning" | "critical" | "info";
 
 export interface OperatorSession {
@@ -19,6 +21,8 @@ export interface OperatorSession {
   regionIds?: string[];
   storeIds?: string[];
   permissions?: string[];
+  /** Visible showcase packaging only; production entitlements remain server-enforced separately. */
+  demoEdition?: DemoEdition;
 }
 
 export interface SupportingLink {
@@ -273,6 +277,7 @@ export interface SearchPageViewModel {
   state: DataState;
   page: PageContext;
   query: string;
+  placeholder?: string;
   resultSummary: string;
   groups: SearchResultGroupViewModel[];
 }
@@ -322,6 +327,10 @@ export interface CreateWorkOrderPageViewModel {
     storeId?: string;
     assetId?: string;
     categoryKey?: string;
+    problem?: string;
+    assignmentKind?: "internal" | "outside_vendor" | "choose_later";
+    vendorId?: string;
+    internalMembershipId?: string;
   };
   sourceRequest?: {
     id: string;
@@ -330,6 +339,14 @@ export interface CreateWorkOrderPageViewModel {
     problem: string;
     reporterName: string;
     submittedLabel: string;
+  };
+  sourceVisit?: {
+    exceptionId: string;
+    visitId: string;
+    technicianName: string;
+    providerName: string;
+    checkedInLabel: string;
+    unmatchedReason: string;
   };
 }
 
@@ -514,6 +531,7 @@ export interface WorkOrderControlViewModel {
   manualResponseAction: string;
   workOrderId: string;
   workOrderNumber: string;
+  timeZone: string;
   expectedStatus: string;
   status: string;
   statusOptions: SelectOptionViewModel[];
@@ -547,6 +565,15 @@ export interface WorkOrderControlViewModel {
     respondedLabel: string;
     proposedAt?: string;
     message?: string;
+  };
+  closeout?: {
+    ready: boolean;
+    outcomeLabel: string;
+    visitEvidenceLabel: string;
+    costEvidenceLabel: string;
+    invoiceEvidenceLabel: string;
+    classificationLabel: string;
+    openFollowUpCount: number;
   };
   followUps: Array<{
     id: string;
@@ -595,6 +622,8 @@ export interface RequestReviewViewModel {
   reference: string;
   expectedStatus: "submitted" | "under_review";
   statusLabel: string;
+  impactReviewed: boolean;
+  canPrepareWorkOrder: boolean;
   canCreateWorkOrder: boolean;
   createWorkOrderHref?: string;
   impactSubmitAction: string;
@@ -642,6 +671,11 @@ export interface AttentionItemControlViewModel {
   dueAt?: string;
   escalationTo?: string;
   reconciliationOptions?: SelectOptionViewModel[];
+  unmatchedVisit?: {
+    createWorkOrderHref: string;
+    providerLabel: string;
+    purpose: string;
+  };
 }
 
 export interface CreateStorePageViewModel {

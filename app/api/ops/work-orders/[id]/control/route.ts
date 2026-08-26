@@ -120,6 +120,30 @@ export async function POST(
         `/app/work-orders/${encodeURIComponent(workOrderId)}?view=activity&updated=vendor-response#work-control`,
       );
     }
+    if (operation === "closeout") {
+      if (workOrder.status !== "resolved") {
+        throw new OpsDomainError("CONFLICT", "Only verified and resolved work can use manager closeout.");
+      }
+      const checklistFields = ["outcomeReviewed", "evidenceReviewed", "costReviewed", "classificationReviewed", "followUpsReviewed"];
+      if (checklistFields.some((field) => formText(formData, field, { max: 8 }) !== "on")) {
+        throw new OpsDomainError("VALIDATION", "Complete every closeout review item before closing the work order.");
+      }
+      await updateWorkOrderControl(
+        { repository: context.repository },
+        {
+          organizationId: context.session.organizationId,
+          workOrderId,
+          expectedStatus: "resolved",
+          status: "closed",
+          priority: workOrder.priority,
+          note: formText(formData, "note", { required: true, max: 2_000 }),
+          actor: context.actor,
+        },
+      );
+      return relativeRedirect303(
+        `/app/work-orders/${encodeURIComponent(workOrderId)}?view=overview&updated=closeout#work-control`,
+      );
+    }
     if (operation !== "update") throw new OpsDomainError("VALIDATION", "Choose a supported work-order operation.");
 
     const expectedStatus = formText(formData, "expectedStatus", { required: true, max: 40 });

@@ -1,4 +1,5 @@
-import type { OperatorRole } from "./data-contract";
+import type { DemoEdition, OperatorRole } from "./data-contract";
+import { DEFAULT_DEMO_EDITION, demoEditionAllowsPath } from "./demo-edition";
 import {
   roleCanAccessListRoute,
   roleCanAccessProgramRoute,
@@ -73,7 +74,7 @@ export const operatorNavigation: NavigationItem[] = [
   },
   {
     id: "planning",
-    label: "Spend & planning",
+    label: "Spending & planning",
     href: "/app/spend",
     matchPrefixes: ["/app/spend", "/app/lifecycle", "/app/warranties", "/app/invoices", "/app/reports"],
     contextGroup: "planning",
@@ -85,7 +86,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
     id: "work",
     label: "Work",
     items: [
-      { id: "needs-attention", label: "Action center", href: "/app/action-center" },
+      { id: "needs-attention", label: "Needs attention", href: "/app/action-center" },
       { id: "requests", label: "Requests", href: "/app/requests" },
       { id: "work-orders", label: "Work orders", href: "/app/work-orders" },
       { id: "estimates", label: "Bid requests", href: "/app/estimates" },
@@ -97,19 +98,19 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
     id: "equipment",
     label: "Equipment",
     items: [
-      { id: "equipment", label: "Asset register", href: "/app/equipment" },
+      { id: "equipment", label: "Equipment list", href: "/app/equipment" },
       { id: "pm", label: "Preventive maintenance", href: "/app/pm" },
     ],
   },
   {
     id: "planning",
-    label: "Spend & planning",
+    label: "Spending & planning",
     items: [
-      { id: "spend", label: "Recorded spend", href: "/app/spend" },
-      { id: "lifecycle", label: "Lifecycle planning", href: "/app/lifecycle" },
-      { id: "warranties", label: "Warranty center", href: "/app/warranties" },
-      { id: "invoice-review", label: "Invoice safeguards", href: "/app/invoices" },
-      { id: "value-ledger", label: "Value ledger", href: "/app/reports/value" },
+      { id: "spend", label: "Spending", href: "/app/spend" },
+      { id: "lifecycle", label: "Repair or replace", href: "/app/lifecycle" },
+      { id: "warranties", label: "Warranties", href: "/app/warranties" },
+      { id: "invoice-review", label: "Invoice review", href: "/app/invoices" },
+      { id: "value-ledger", label: "Savings", href: "/app/reports/value" },
       { id: "reports", label: "Reports", href: "/app/reports" },
     ],
   },
@@ -165,47 +166,66 @@ function roleCanSeeContextItem(role: OperatorRole, groupId: NavigationGroupId, i
   return roleCanAccessListRoute(role, "reports");
 }
 
-function visibleContextGroup(role: OperatorRole, groupId: NavigationGroupId) {
+function visibleContextGroup(role: OperatorRole, groupId: NavigationGroupId, edition: DemoEdition) {
   const group = contextualNavigation.find((candidate) => candidate.id === groupId);
   if (!group) return undefined;
   return {
     ...group,
-    items: group.items.filter((item) => roleCanSeeContextItem(role, group.id, item)),
+    items: group.items.filter((item) => {
+      if (edition === "accountability" && group.id === "work" && !["work-orders", "visits"].includes(item.id)) {
+        return false;
+      }
+      return roleCanSeeContextItem(role, group.id, item) && demoEditionAllowsPath(edition, item.href);
+    }),
   };
 }
 
-export function navigationForRole(role: OperatorRole) {
+export function navigationForRole(role: OperatorRole, edition: DemoEdition = DEFAULT_DEMO_EDITION) {
   return operatorNavigation
-    .filter((item) => roleCanSeeNavigationItem(role, item))
+    .filter((item) => roleCanSeeNavigationItem(role, item) && (
+      (edition === "accountability" && item.id === "work") || demoEditionAllowsPath(edition, item.href)
+    ))
     .map((item) => {
-      if (item.id === "overview" && role === "executive") {
+      if (item.id === "overview" && role === "executive" && edition === "complete") {
         // One role-aware Overview slot: executives land on the Owner Brief.
         // /app/brief stays reachable for other roles via its secondary route.
         return { ...item, href: "/app/brief", matchPrefixes: ["/app/overview", "/app/brief"] };
       }
+      if (item.id === "work" && edition === "accountability") {
+        return {
+          ...item,
+          label: "Work orders",
+          href: "/app/work-orders",
+          matchPrefixes: ["/app/work-orders", "/app/visits"],
+        };
+      }
       if (!item.contextGroup) return item;
-      const firstVisibleItem = visibleContextGroup(role, item.contextGroup)?.items[0];
+      const firstVisibleItem = visibleContextGroup(role, item.contextGroup, edition)?.items[0];
       return firstVisibleItem ? { ...item, href: firstVisibleItem.href } : item;
     });
 }
 
-export function contextualNavigationForPath(role: OperatorRole, pathname: string) {
-  const primary = navigationForRole(role).find(
+export function contextualNavigationForPath(
+  role: OperatorRole,
+  pathname: string,
+  edition: DemoEdition = DEFAULT_DEMO_EDITION,
+) {
+  const primary = navigationForRole(role, edition).find(
     (item) => item.contextGroup && navigationItemIsActive(item, pathname),
   );
   if (!primary?.contextGroup) return undefined;
 
-  const group = visibleContextGroup(role, primary.contextGroup);
+  const group = visibleContextGroup(role, primary.contextGroup, edition);
   return group?.items.length ? group : undefined;
 }
 
 export function roleLabel(role: OperatorRole) {
   const labels: Record<OperatorRole, string> = {
-    executive: "Executive",
-    facilities: "Facilities",
+    executive: "Owner / leadership",
+    facilities: "Maintenance / facilities",
     regional: "Regional manager",
     store_manager: "Store manager",
-    finance: "Finance reviewer",
+    finance: "Invoice reviewer",
   };
   return labels[role];
 }

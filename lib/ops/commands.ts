@@ -452,6 +452,141 @@ export async function onboardVendor(svc: OpsCommandServices, input: OnboardVendo
   return { id, organizationId: input.organizationId, code, name, dispatchEmail, dispatchPhone: input.dispatchPhone, status: "approved" as const, preferred: input.preferred ?? false, createdAt: now };
 }
 
+export interface RecordVendorComplianceDocumentInput {
+  organizationId: OpsId;
+  vendorId: OpsId;
+  documentType: "insurance" | "license" | "certification" | "tax" | "safety" | "other";
+  issuer?: string;
+  reference: string;
+  effectiveAt?: IsoDateTime;
+  expiresAt?: IsoDateTime;
+  reviewStatus: "pending" | "approved" | "rejected" | "expired";
+  blocking?: boolean;
+  storedFileId?: OpsId;
+  actor: ActorContext;
+}
+
+export async function recordVendorComplianceDocument(svc: OpsCommandServices, input: RecordVendorComplianceDocumentInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const vendor = await repository.getVendor(input.organizationId, input.vendorId);
+  if (!vendor) throw new OpsDomainError("NOT_FOUND", "Vendor not found in organization");
+  const now = clock.now();
+  const id = ids.next("vendor-document");
+  const reference = required(input.reference, "Document reference");
+  if (input.effectiveAt && input.expiresAt && Date.parse(input.expiresAt) < Date.parse(input.effectiveAt)) {
+    throw new OpsDomainError("VALIDATION", "Document expiration cannot be before its effective date");
+  }
+  const statements: OpsStatement[] = [
+    insert("ops_vendor_compliance_documents", {
+      id,
+      organization_id: input.organizationId,
+      vendor_id: vendor.id,
+      document_type: input.documentType,
+      issuer: input.issuer,
+      reference,
+      effective_at: input.effectiveAt,
+      expires_at: input.expiresAt,
+      review_status: input.reviewStatus,
+      blocking: input.blocking ? 1 : 0,
+      stored_file_id: input.storedFileId,
+      created_at: now,
+    }),
+    ...auditAndOutbox({
+      organizationId: input.organizationId,
+      aggregateType: "vendor",
+      aggregateId: vendor.id,
+      eventType: "vendor.compliance_document_recorded",
+      actor: input.actor,
+      occurredAt: now,
+      payload: { documentId: id, documentType: input.documentType, reviewStatus: input.reviewStatus, blocking: Boolean(input.blocking) },
+      ids,
+    }),
+  ];
+  await repository.atomicWrite(statements);
+  return { id, vendorId: vendor.id, recordedAt: now };
+}
+
+export interface RecordVendorQualificationInput {
+  organizationId: OpsId;
+  vendorId: OpsId;
+  tradeKey: string;
+  workType?: string;
+  serviceType?: string;
+  assetType?: string;
+  componentType?: string;
+  pmWork?: boolean;
+  emergencyResponse?: boolean;
+  warrantyWork?: boolean;
+  manufacturerAuthorization?: string;
+  regionId?: OpsId;
+  storeId?: OpsId;
+  afterHours?: boolean;
+  maximumJobAmountMinor?: number;
+  currency?: string;
+  requiredLicense?: string;
+  requiredCertification?: string;
+  effectiveAt?: IsoDateTime;
+  expiresAt?: IsoDateTime;
+  actor: ActorContext;
+}
+
+export async function recordVendorQualification(svc: OpsCommandServices, input: RecordVendorQualificationInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const vendor = await repository.getVendor(input.organizationId, input.vendorId);
+  if (!vendor) throw new OpsDomainError("NOT_FOUND", "Vendor not found in organization");
+  if (input.maximumJobAmountMinor !== undefined && (!Number.isInteger(input.maximumJobAmountMinor) || input.maximumJobAmountMinor < 0)) {
+    throw new OpsDomainError("VALIDATION", "Maximum job amount must be zero or greater");
+  }
+  const now = clock.now();
+  const effectiveAt = input.effectiveAt ?? now;
+  if (input.expiresAt && Date.parse(input.expiresAt) < Date.parse(effectiveAt)) {
+    throw new OpsDomainError("VALIDATION", "Qualification expiration cannot be before its effective date");
+  }
+  const id = ids.next("vendor-qualification");
+  const tradeKey = required(input.tradeKey, "Trade");
+  const statements: OpsStatement[] = [
+    insert("ops_vendor_qualifications", {
+      id,
+      organization_id: input.organizationId,
+      vendor_id: vendor.id,
+      trade_key: tradeKey,
+      work_type: input.workType,
+      service_type: input.serviceType,
+      asset_type: input.assetType,
+      component_type: input.componentType,
+      pm_work: input.pmWork ? 1 : 0,
+      emergency_response: input.emergencyResponse ? 1 : 0,
+      warranty_work: input.warrantyWork ? 1 : 0,
+      manufacturer_authorization: input.manufacturerAuthorization,
+      region_id: input.regionId,
+      store_id: input.storeId,
+      after_hours: input.afterHours ? 1 : 0,
+      maximum_job_amount_minor: input.maximumJobAmountMinor,
+      currency: input.maximumJobAmountMinor === undefined ? undefined : input.currency ?? "USD",
+      required_license: input.requiredLicense,
+      required_certification: input.requiredCertification,
+      effective_at: effectiveAt,
+      expires_at: input.expiresAt,
+      status: "active",
+      created_at: now,
+    }),
+    ...auditAndOutbox({
+      organizationId: input.organizationId,
+      aggregateType: "vendor",
+      aggregateId: vendor.id,
+      eventType: "vendor.qualification_recorded",
+      actor: input.actor,
+      occurredAt: now,
+      payload: { qualificationId: id, tradeKey, pmWork: Boolean(input.pmWork), emergencyResponse: Boolean(input.emergencyResponse), afterHours: Boolean(input.afterHours) },
+      ids,
+    }),
+  ];
+  await repository.atomicWrite(statements);
+  return { id, vendorId: vendor.id, recordedAt: now };
+}
+
 export interface CreateServiceRequestInput {
   organizationId: OpsId; storeId: OpsId; reporterName: string; reporterEmployeeId?: string;
   problem: string; priority?: WorkOrderPriority; impact?: RequestImpactAssessmentDraft; idempotency?: CommandIdempotency; actor: ActorContext;

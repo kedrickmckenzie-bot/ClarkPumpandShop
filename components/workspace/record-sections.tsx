@@ -15,7 +15,7 @@ const toneClass: Record<Tone, string> = {
 };
 
 function DataTable({ table }: { table: TableViewModel }) {
-  if (!table.rows.length) return <div className={styles.empty}><FileSearch aria-hidden="true" size={20} /><p>No source records have been added to this section.</p></div>;
+  if (!table.rows.length) return <div className={styles.empty}><FileSearch aria-hidden="true" size={20} /><p>Nothing has been added here yet.</p></div>;
   return (
     <div className={styles.tableFrame}>
       <table>
@@ -42,7 +42,7 @@ function SectionContent({ section }: { section: DetailSectionViewModel }) {
   return (
     <section className={styles.section} aria-labelledby={`record-section-${section.id}`}>
       <header className={styles.sectionHeader}>
-        <div><p>Record detail</p><h2 id={`record-section-${section.id}`}>{section.title}</h2>{section.description ? <span>{section.description}</span> : null}</div>
+        <div><p>Details</p><h2 id={`record-section-${section.id}`}>{section.title}</h2>{section.description ? <span>{section.description}</span> : null}</div>
         {section.action ? <Link href={section.action.href}>{section.action.label}<ArrowRight aria-hidden="true" size={15} /></Link> : null}
       </header>
       {section.facts?.length ? (
@@ -78,7 +78,7 @@ function SectionCard({ section, onOpen }: { section: DetailSectionViewModel; onO
     <button className={styles.sectionCard} type="button" onClick={onOpen}>
       <span className={styles.cardHeading}><span><CheckCircle2 aria-hidden="true" size={17} /></span><strong>{section.title}</strong></span>
       {section.description ? <p>{section.description}</p> : null}
-      {preview.length ? <dl>{preview.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl> : <small>{sourceCount} source record{sourceCount === 1 ? "" : "s"}</small>}
+      {preview.length ? <dl>{preview.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl> : <small>{sourceCount} record{sourceCount === 1 ? "" : "s"}</small>}
       <em>Open details<ChevronRight aria-hidden="true" size={15} /></em>
     </button>
   );
@@ -97,7 +97,7 @@ export function RecordSections({ sections }: { sections: DetailSectionViewModel[
       </nav>
       {active ? <SectionContent section={active} /> : (
         <section className={styles.overview} aria-labelledby="record-map-heading">
-          <header><div><p>Connected record</p><h2 id="record-map-heading">Open only the detail you need</h2><span>The summary stays visible above. Each area below opens its exact source facts, records, or history.</span></div><span><Clock3 aria-hidden="true" size={16} />Live record</span></header>
+          <header><div><p>More detail</p><h2 id="record-map-heading">Choose what you want to see</h2><span>The summary stays above while you open the history, related work, or supporting details you need.</span></div><span><Clock3 aria-hidden="true" size={16} />Up to date</span></header>
           <div className={styles.cardGrid}>{sections.map((section) => <SectionCard section={section} onOpen={() => setActiveId(section.id)} key={section.id} />)}</div>
         </section>
       )}

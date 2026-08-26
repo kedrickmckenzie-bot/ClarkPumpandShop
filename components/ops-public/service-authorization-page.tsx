@@ -30,7 +30,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
             </div>
             <div className={styles.callout}>
               <strong>Your company was selected for this work</strong>
-              <p>Review and accept the service authorization before scheduling or beginning work. Technician visit and check-in tools are available for this authorized service.</p>
+              <p>Review the service authorization before scheduling or beginning work. Digital acceptance is available when your company uses it, but the operator may still allow technician check-in for already-issued work.</p>
             </div>
             <p className={styles.problem}>{authorization.service.problem}</p>
             <div className={styles.callout} style={{ marginTop: "1rem" }}>

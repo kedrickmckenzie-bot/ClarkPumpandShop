@@ -34,11 +34,7 @@ export type WorkOrderCanonicalStageId =
 
 export type WorkOrderServiceSubStage =
   | "authorization_ready"
-  | "link_generated"
-  | "delivery_queued"
-  | "delivery_failed"
-  | "sent"
-  | "opened_by_vendor"
+  | "waiting_on_vendor"
   | "question_pending"
   | "date_proposed"
   | "counterproposal_pending"
@@ -66,6 +62,7 @@ export interface WorkOrderCaseView {
   storeName?: string;
   problem: string;
   priority: string;
+  timeZone: string;
   stage: WorkOrderCanonicalStageId;
   stageLabel: string;
   stageIndex: number;
@@ -95,11 +92,7 @@ export const CANONICAL_STAGE_LABELS: Record<WorkOrderCanonicalStageId, string> =
 
 export const SERVICE_SUB_STAGE_LABELS: Record<WorkOrderServiceSubStage, string> = {
   authorization_ready: "Authorization ready",
-  link_generated: "Link generated",
-  delivery_queued: "Delivery queued",
-  delivery_failed: "Delivery failed",
-  sent: "Sent",
-  opened_by_vendor: "Opened by vendor",
+  waiting_on_vendor: "Waiting on vendor",
   question_pending: "Question pending",
   date_proposed: "Date proposed",
   counterproposal_pending: "Waiting for vendor response to counterproposal",
@@ -121,7 +114,7 @@ const OPEN_FOLLOWUP_STATUSES = new Set(["open"]);
 export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView {
   const { workOrder } = input;
   const allAssignments = [...(input.assignments ?? [])].sort((a, b) => b.assignedAt.localeCompare(a.assignedAt));
-  const activeAssignment = allAssignments.find((row) => row.status !== "cancelled" && row.status !== "superseded") ?? allAssignments[0];
+  const activeAssignment = allAssignments.find((row) => ["pending", "issued", "opened", "accepted"].includes(row.status));
   const openTasks = (input.workflowTasks ?? []).filter((row) => row.workOrderId === workOrder.id && OPEN_TASK_STATUSES.has(row.status));
   const blockingTask = openTasks.find((row) => row.blocking)
     ?? openTasks.filter((row) => row.requiredForProgress).sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999"))[0]
@@ -134,20 +127,20 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const hasInvoices = (input.invoices ?? []).length > 0;
   const estimateRequests = (input.estimateRequests ?? []).filter((row) => row.workOrderId === workOrder.id);
   const estimateProposals = (input.estimateProposals ?? []).filter((proposal) => estimateRequests.some((request) => request.id === proposal.requestId));
-  const selectedProposal = estimateProposals.find((proposal) => proposal.status === "selected" || proposal.status === "accepted");
-  const replacementProposal = estimateProposals.find((proposal) => proposal.kind === "replacement");
-  void replacementProposal;
-  const issuances = input.issuances ?? [];
+  const selectedEstimateRequest = estimateRequests.find((request) => request.status === "selected");
+  const issuances = (input.issuances ?? []).filter((row) => !activeAssignment || row.assignmentId === activeAssignment.id);
   const currentIssuance = [...issuances].sort((a, b) => b.revision - a.revision)[0];
   const responses = (input.vendorResponses ?? []).filter((row) => !currentIssuance || row.issuanceId === currentIssuance.id);
   const latestResponse = latest(responses, (row) => row.respondedAt);
-  const appointments = (input.appointments ?? []).filter((row) => row.workOrderId === workOrder.id);
+  const appointments = (input.appointments ?? []).filter((row) =>
+    row.workOrderId === workOrder.id && (!activeAssignment || row.assignmentId === activeAssignment.id));
   const liveAppointment = [...appointments]
     .filter((row) => row.status !== "cancelled")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   const continuations = (input.continuations ?? []).filter((row) => row.workOrderId === workOrder.id);
   const hasContinuation = (action: string, responseId?: string) =>
     continuations.some((row) => row.action === action && (!responseId || row.vendorResponseId === responseId));
+  const closeoutTask = openTasks.find((row) => row.taskType === "close_verified_work" || row.taskType === "verify_repair");
 
   // --- Canonical stage -----------------------------------------------------
   let stage: WorkOrderCanonicalStageId;
@@ -158,13 +151,13 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     stage = "approval";
   } else if (!activeAssignment && blockingTask && blockingTask.serviceRequestId) {
     stage = "intake";
-  } else if (!activeAssignment && estimateRequests.length > 0 && !selectedProposal) {
+  } else if (!activeAssignment && estimateRequests.length > 0 && (!selectedEstimateRequest || selectedEstimateRequest.decisionKind === "replacement_quote")) {
     stage = "authorization_or_bidding";
   } else if (!activeAssignment || activeAssignment.kind === "choose_later") {
     stage = "provider_decision";
   } else if (activeVisit && !activeVisit.checkedOutAt) {
     stage = "onsite_service";
-  } else if (openFollowUps.length > 0 || workOrder.status === "completed_pending_review") {
+  } else if (openFollowUps.length > 0 || closeoutTask || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
     stage = "followup_closeout";
   } else if (!currentIssuance && activeAssignment.kind === "outside_vendor" && visits.length === 0 && !hasCost) {
     stage = "authorization_or_bidding";
@@ -172,6 +165,8 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     // Post-visit: the case sits in cost and optional invoice evidence until
     // the manager closes it. Recorded cost never pulls it backward.
     stage = "cost_invoice_evidence";
+  } else if (activeAssignment.kind === "internal") {
+    stage = "onsite_service";
   } else {
     stage = "vendor_response_scheduling";
   }
@@ -190,19 +185,19 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   } else if (onsiteNow) {
     stage = "onsite_service";
     serviceSubStage = activeAssignment?.kind === "outside_vendor" ? "onsite" : undefined;
-  } else if (openFollowUps.length > 0 || unresolvedCheckout || workOrder.status === "completed_pending_review") {
+  } else if (openFollowUps.length > 0 || closeoutTask || unresolvedCheckout || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
     stage = "followup_closeout";
-    serviceSubStage = openFollowUps.length > 0 || unresolvedCheckout ? "followup_required" : "closeout_review";
+    serviceSubStage = openFollowUps.length > 0 || unresolvedCheckout || closeoutTask?.taskType === "verify_repair" ? "followup_required" : "closeout_review";
   } else if (stage === "cost_invoice_evidence") {
     serviceSubStage = undefined;
   } else if (stage === "vendor_response_scheduling" && activeAssignment?.kind === "outside_vendor") {
     if (liveAppointment?.status === "confirmed") serviceSubStage = "scheduled";
     else if (liveAppointment?.status === "counter_proposed") serviceSubStage = "counterproposal_pending";
-    else if (latestResponse?.response === "question") serviceSubStage = hasContinuation("reply", latestResponse.id) ? "sent" : "question_pending";
+    else if (latestResponse?.response === "question") serviceSubStage = hasContinuation("reply", latestResponse.id) ? "waiting_on_vendor" : "question_pending";
     else if (latestResponse?.response === "proposed_date") serviceSubStage = "date_proposed";
     else if (latestResponse?.response === "declined") serviceSubStage = "authorization_ready";
     else if (latestResponse?.response === "accepted") serviceSubStage = "accepted";
-    else if (currentIssuance) serviceSubStage = "sent";
+    else if (currentIssuance) serviceSubStage = "waiting_on_vendor";
     else serviceSubStage = "authorization_ready";
   }
 
@@ -212,18 +207,27 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     approval: { label: blockingTask ? `Record the ${blockingTask.title.toLowerCase()}` : "Record the approval decision", href: blockingTask ? `/app/action-center/${blockingTask.id}` : `${base}?view=activity` },
     provider_decision: { label: activeAssignment?.kind === "choose_later" ? "Choose a provider" : "Choose internal maintenance, direct authorization, or bids", href: `${base}?view=service` },
     authorization_or_bidding:
-      estimateRequests.length > 0 && !selectedProposal
+      selectedEstimateRequest?.decisionKind === "replacement_quote"
+        ? { label: "Advance the selected replacement quote to capital review", href: `${base}?view=service#bid-requests` }
+      : estimateRequests.length > 0 && !selectedEstimateRequest
         ? { label: estimateProposals.length > 0 ? "Review vendor bids" : "Track vendor bid requests", href: `${base}?view=service#bid-requests` }
         : { label: "Issue the service authorization", href: `${base}?view=service#issue-work` },
     vendor_response_scheduling:
-      latestResponse?.response === "proposed_date" ? { label: "Accept or counter the proposed date", href: `${base}?view=service#vendor-response` }
+      liveAppointment?.status === "confirmed" ? { label: "Track the confirmed service appointment", href: `${base}?view=visits` }
+      : liveAppointment?.status === "counter_proposed" ? { label: "Track the counterproposal with the vendor", href: `${base}?view=service#vendor-response` }
+      : latestResponse?.response === "proposed_date" && !hasContinuation("accept_date", latestResponse.id) && !hasContinuation("counter_date", latestResponse.id) ? { label: "Accept or counter the proposed date", href: `${base}?view=service#vendor-response` }
       : latestResponse?.response === "question" && !hasContinuation("reply", latestResponse.id) ? { label: "Reply to the vendor question", href: `${base}?view=service#vendor-response` }
       : latestResponse?.response === "declined" ? { label: "Select another provider or convert to bids", href: `${base}?view=service` }
-      : liveAppointment?.status === "counter_proposed" ? { label: "Track the counterproposal with the vendor", href: `${base}?view=service#vendor-response` }
       : { label: "Track the vendor response", href: `${base}?view=service#vendor-response` },
-    onsite_service: { label: "Follow the onsite visit", href: activeVisit ? `/app/visits/${activeVisit.id}` : `${base}?view=visits` },
+    onsite_service: activeVisit
+      ? { label: "Follow the onsite visit", href: `/app/visits/${activeVisit.id}` }
+      : blockingTask
+        ? { label: blockingTask.title, href: `/app/action-center/${blockingTask.id}` }
+        : { label: activeAssignment?.kind === "internal" ? "Start internal service" : "Open visit activity", href: `${base}?view=visits` },
     followup_closeout: openFollowUps.length > 0
       ? { label: "Complete or transfer the required follow-up", href: `${base}?view=activity` }
+      : closeoutTask
+        ? { label: closeoutTask.title, href: `${base}?view=activity#work-control` }
       : { label: "Complete the manager closeout review", href: `${base}?view=visits` },
     cost_invoice_evidence: { label: hasCost ? "Review recorded costs and optional invoice evidence" : "Record the work cost", href: `${base}?view=cost` },
     closed: { label: "Open the closed record", href: `${base}?view=overview` },
@@ -240,15 +244,17 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const escalationDestination = blockingTask?.escalationDestination ?? openFollowUps[0]?.escalationTo ?? workOrder.escalationTo ?? "Facilities";
 
   let blockingReason: string | undefined;
-  if (blockingTask) blockingReason = blockingTask.reason;
+  if (stage === "vendor_response_scheduling" && liveAppointment?.status === "confirmed") {
+    blockingReason = `${accountableParty || "The vendor"} and the operator confirmed the service appointment.`;
+  } else if (blockingTask) blockingReason = blockingTask.reason;
   else if (latestResponse?.response === "declined") blockingReason = "The vendor declined this authorization.";
-  else if (stage === "authorization_or_bidding" && replacementProposal && estimateRequests.length === 0) blockingReason = "A replacement quote routes to capital review before any service authorization.";
+  else if (stage === "authorization_or_bidding" && selectedEstimateRequest?.decisionKind === "replacement_quote") blockingReason = "The selected replacement quote routes to capital review before any service authorization.";
 
   const alternativeActions: WorkOrderCaseAction[] = [];
   if (stage !== "closed") {
-    if (!currentIssuance) alternativeActions.push({ label: "Request vendor bids instead", href: `${base}?view=service#bid-requests` });
+    if (!currentIssuance && activeAssignment?.kind !== "internal") alternativeActions.push({ label: "Request vendor bids instead", href: `${base}?view=service#bid-requests` });
     if (currentIssuance) alternativeActions.push({ label: "Reissue or revise the authorization", href: `${base}?view=service#issue-work` });
-    if (estimateRequests.length > 0 && !selectedProposal) alternativeActions.push({ label: "Compare received proposals", href: `${base}?view=service#bid-requests` });
+    if (estimateRequests.length > 0 && !selectedEstimateRequest) alternativeActions.push({ label: "Compare received proposals", href: `${base}?view=service#bid-requests` });
     if (visits.some((visit) => visit.checkedOutAt)) alternativeActions.push({ label: "Create a follow-up", href: `${base}?view=activity` });
     if (hasCost || hasInvoices) alternativeActions.push({ label: "Open cost and invoice evidence", href: `${base}?view=cost` });
     alternativeActions.push({ label: "View full activity history", href: `${base}?view=activity` });
@@ -266,6 +272,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     storeName: input.storeName,
     problem: workOrder.problem,
     priority: workOrder.priority,
+    timeZone: input.timeZone ?? "UTC",
     stage,
     stageLabel: CANONICAL_STAGE_LABELS[stage],
     stageIndex: currentIndex,
@@ -281,16 +288,17 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     escalationDestination,
     blockingReason,
     alternativeActions: alternativeActions.slice(0, 4),
-    primaryActionOverdue: Boolean(dueAt && input.now > dueAt),
+    primaryActionOverdue: Boolean(dueAt && Date.parse(input.now) > Date.parse(dueAt)),
   };
 }
 
 
 function latest<T>(rows: T[], key: (row: T) => string): T | undefined {
-  return [...rows].sort((a, b) => key(a).localeCompare(key(b)))[0];
+  return [...rows].sort((a, b) => key(b).localeCompare(key(a)))[0];
 }
 export interface WorkOrderCaseInput {
   now: string;
+  timeZone?: string;
   workOrder: Pick<WorkOrder, "id" | "organizationId" | "number" | "storeId" | "problem" | "priority" | "status" | "accountableParty" | "nextAction" | "dueAt" | "escalationTo" | "createdAt" | "closedAt">;
   storeName?: string;
   assignments?: Pick<WorkOrderAssignment, "id" | "kind" | "status" | "assignedAt" | "supersedesAssignmentId">[];
@@ -306,6 +314,6 @@ export interface WorkOrderCaseInput {
   /** Invoice evidence linked to THIS work order (already scoped by the caller). */
   invoices?: { id: string; status?: string }[];
   /** Estimate (bid) requests and proposals attached to this work order. */
-  estimateRequests?: { id: string; workOrderId: string; status?: string }[];
+  estimateRequests?: { id: string; workOrderId: string; status?: string; decisionKind?: "service_bid" | "replacement_quote" }[];
   estimateProposals?: { id: string; requestId: string; kind?: string; status?: string }[];
 }

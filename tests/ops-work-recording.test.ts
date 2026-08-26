@@ -265,7 +265,7 @@ describe("recorded work-cost facts", () => {
     expect(afterExecutive.recordedCost.amountMinor).toBe(beforeExecutive.recordedCost.amountMinor + 17_500 + 23_999);
     expect(afterExecutive.sourceCounts.costLines).toBe(beforeExecutive.sourceCounts.costLines + 2);
 
-    const rollingStart = "2025-08-10";
+    const rollingStart = new Date(Date.parse(after.asOf) - 365 * 24 * 60 * 60_000).toISOString().slice(0, 10);
     const expectedRollingCost = after.costLines
       .filter((line) => line.organizationId === NORTHLINE_ORGANIZATION_ID && line.serviceDate >= rollingStart)
       .filter((line) => after.workOrders.some((work) => work.organizationId === NORTHLINE_ORGANIZATION_ID && work.id === line.workOrderId))

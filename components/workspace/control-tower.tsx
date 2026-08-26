@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Clock3,
   ExternalLink,
-  Layers3,
   MapPinned,
   ShieldAlert,
 } from "lucide-react";
@@ -49,10 +48,9 @@ function PageHeader({ model }: { model: DashboardPageViewModel }) {
         </div>
       </header>
       <div className={styles.contextBar} aria-label="Dashboard context">
-        <span><MapPinned size={15} aria-hidden="true" /><strong>Scope</strong> {page.scopeLabel}</span>
+        <span><MapPinned size={15} aria-hidden="true" /><strong>Viewing</strong> {page.scopeLabel}</span>
         {page.periodLabel ? <span><CalendarClock size={15} aria-hidden="true" /><strong>Period</strong> {page.periodLabel}</span> : null}
         {page.updatedLabel ? <span><Clock3 size={15} aria-hidden="true" /><strong>Updated</strong> {page.updatedLabel}</span> : null}
-        <span><Layers3 size={15} aria-hidden="true" /><strong>Basis</strong> Source records in your permitted scope</span>
       </div>
     </>
   );
@@ -87,8 +85,8 @@ function ActionRow({ action }: { action: ActionItemViewModel }) {
         <strong>{action.title}</strong>
         <p>{action.description}</p>
       </span>
-      <span className={styles.actionMeta}><span>Accountable party</span><strong>{action.ownerLabel}</strong></span>
-      <span className={styles.actionMeta}><span>Required by</span><strong>{action.dueLabel}</strong></span>
+      <span className={styles.actionMeta}><span>Owner</span><strong>{action.ownerLabel}</strong></span>
+      <span className={styles.actionMeta}><span>Due</span><strong>{action.dueLabel}</strong></span>
       <ChevronRight size={18} aria-hidden="true" />
     </Link>
   );
@@ -109,12 +107,12 @@ function AttentionSection({ model }: { model: DashboardPageViewModel }) {
       </header>
       <div className={styles.attentionLayout}>
         <div className={styles.actionList}>
-          {actions.length ? actions.map((action) => <ActionRow action={action} key={action.id} />) : <div className={styles.empty}><CheckCircle2 size={22} aria-hidden="true" /><p>No source records currently require action in this scope.</p></div>}
+          {actions.length ? actions.map((action) => <ActionRow action={action} key={action.id} />) : <div className={styles.empty}><CheckCircle2 size={22} aria-hidden="true" /><p>Nothing needs attention right now.</p></div>}
         </div>
         <aside className={styles.attentionSummary} aria-label="Action queue summary">
-          <Link href={source.href}><span>Critical or overdue</span><strong>{critical}</strong><small>Needs immediate review</small></Link>
+          <Link href={source.href}><span>Urgent or overdue</span><strong>{critical}</strong><small>Needs a decision now</small></Link>
           <Link href={source.href}><span>Waiting or due soon</span><strong>{waiting}</strong><small>Monitor the next action</small></Link>
-          <Link href={source.href}><span>Additional records</span><strong>{remaining}</strong><small>Open the complete queue</small></Link>
+          <Link href={source.href}><span>More items</span><strong>{remaining}</strong><small>See the full list</small></Link>
         </aside>
       </div>
     </section>
@@ -125,7 +123,7 @@ function Pipeline({ model }: { model: DashboardPageViewModel }) {
   if (!model.journey?.length) return null;
   return (
     <section className={styles.section} aria-labelledby="pipeline-heading">
-      <header className={styles.sectionHeader}><div><h2 id="pipeline-heading">Service pipeline</h2><p>Every stage opens the exact work records represented.</p></div></header>
+      <header className={styles.sectionHeader}><div><h2 id="pipeline-heading">Where work stands</h2><p>Select a stage to see the work behind it.</p></div></header>
       <div className={styles.pipeline}>
         {model.journey.map((stage) => (
           <Link href={stage.link.href} className={toneClass(stage.tone)} key={stage.id}>
@@ -157,7 +155,7 @@ function Distribution({ model }: { model: BreakdownViewModel }) {
           </Link>
         )) : <p className={styles.empty}>No source records match this context.</p>}
       </div>
-      <footer className={styles.sourceFooter}><span>Scope and basis carry into the source list.</span><Link className={styles.textLink} href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={14} aria-hidden="true" /></Link></footer>
+      <footer className={styles.sourceFooter}><span>Open the records behind this view.</span><Link className={styles.textLink} href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={14} aria-hidden="true" /></Link></footer>
     </section>
   );
 }
@@ -168,10 +166,10 @@ function Trend({ model }: { model: TrendViewModel }) {
     <section className={styles.section}>
       <header className={styles.sectionHeader}><div><h2>{model.title}</h2>{model.description ? <p>{model.description}</p> : null}</div></header>
       {model.points.length ? (
-        <div className={styles.trendChart} role="img" aria-label={`${model.title}. ${model.points.map((point) => `${point.label}: ${point.formattedValue}`).join("; ")}`}>
+        <div className={styles.trendChart} style={{ gridTemplateColumns: `repeat(${model.points.length}, minmax(56px, 1fr))` }} role="group" aria-label={`${model.title}. ${model.points.map((point) => `${point.label}: ${point.formattedValue}`).join("; ")}`}>
           {model.points.slice(-12).map((point) => (
             <Link href={point.link.href} className={styles.trendPoint} key={point.id} title={`${point.label}: ${point.formattedValue}`}>
-              <i style={{ height: `${Math.max(3, (Math.max(0, point.value) / maximum) * 100)}%` }} aria-hidden="true" />
+              <i style={{ height: point.value > 0 ? `${Math.max(3, (point.value / maximum) * 100)}%` : "0" }} aria-hidden="true" />
               <strong>{point.formattedValue}</strong>
               <span>{point.label}</span>
             </Link>
@@ -202,8 +200,8 @@ function Spotlight({ model }: { model: NonNullable<DashboardPageViewModel["spotl
 function StatePanel({ model }: { model: DashboardPageViewModel }) {
   if (model.state.kind === "ready") return null;
   const icon = model.state.kind === "error" ? <AlertCircle size={28} aria-hidden="true" /> : model.state.kind === "loading" ? <Clock3 size={28} aria-hidden="true" /> : <ShieldAlert size={28} aria-hidden="true" />;
-  const title = model.state.kind === "loading" ? model.state.label ?? "Loading control tower" : model.state.title;
-  const message = model.state.kind === "loading" ? "Gathering the latest source records for your permitted scope." : model.state.message;
+  const title = model.state.kind === "loading" ? model.state.label ?? "Loading your dashboard" : model.state.title;
+  const message = model.state.kind === "loading" ? "Getting the latest records available to you." : model.state.message;
   return <div className={styles.statePanel}>{icon}<h2>{title}</h2><p>{message}</p></div>;
 }
 
@@ -213,8 +211,12 @@ export function ControlTower({ model }: { model: DashboardPageViewModel }) {
   }
 
   const insights = model.breakdowns.length + model.trends.length ? (
-    <div className={styles.insightGrid} aria-label="Scope insights">
-      {model.breakdowns.slice(0, model.layout === "executive" ? 3 : 2).map((breakdown) => <Distribution model={breakdown} key={breakdown.id} />)}
+    <div className={styles.insightStack} aria-label="Scope insights">
+      {model.breakdowns.length ? (
+        <div className={styles.insightGrid}>
+          {model.breakdowns.slice(0, model.layout === "executive" ? 3 : 2).map((breakdown) => <Distribution model={breakdown} key={breakdown.id} />)}
+        </div>
+      ) : null}
       {model.trends.slice(0, 2).map((trend) => <Trend model={trend} key={trend.id} />)}
     </div>
   ) : (

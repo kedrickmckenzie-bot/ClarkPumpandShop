@@ -123,7 +123,7 @@ export function resolveAssetReplacementEstimate(
       ageMonths: months,
       evidenceCount,
       freshness: freshnessFor(months),
-      explanation: `${profile.name} benchmark, escalated ${Math.round(profile.annualEscalationBps / 100) / 100}% annually${asset.replacementAdjustmentBps ? ` with a ${asset.replacementAdjustmentBps > 0 ? "+" : ""}${Math.round(asset.replacementAdjustmentBps / 100) / 100}% asset adjustment` : ""}. ${evidenceCount === 1 ? "One dated source is on record; it is usable now but is not presented as a market average." : `${evidenceCount} dated sources are preserved in the benchmark history.`}`,
+      explanation: `${profile.name} benchmark, escalated ${profile.annualEscalationBps / 100}% annually${asset.replacementAdjustmentBps ? ` with a ${asset.replacementAdjustmentBps > 0 ? "+" : ""}${asset.replacementAdjustmentBps / 100}% asset adjustment` : ""}. ${evidenceCount === 1 ? "One dated source is on record; it is usable now but is not presented as a market average." : `${evidenceCount} dated sources are preserved in the benchmark history.`}`,
     };
   }
 
