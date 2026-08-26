@@ -1,0 +1,1 @@
+ALTER TABLE `ops_lifecycle_recommendations` ADD `planned_for_year` integer;

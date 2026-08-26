@@ -25,49 +25,31 @@ type VisitReceipt = TechnicianCheckInReceipt | TechnicianCheckOutReceipt;
 type OutcomeDraft = {
   outcome: WorkOrderVisitOutcome | "";
   outcomeNotes: string;
-  accountableParty: string;
-  nextAction: string;
-  dueAt: string;
-  escalationTo: string;
 };
 
 const SUBMISSION_KEY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SUBMISSION_STORAGE_NAMESPACE = "ops:technician-visit";
 const LEGACY_SUBMISSION_STORAGE_NAMESPACE = "traceops:technician-visit";
-const UNRESOLVED_OUTCOMES = new Set<WorkOrderVisitOutcome>([
-  "diagnosis_only",
-  "quote_required",
-  "parts_required",
-  "return_visit_required",
-  "store_access_unavailable",
-  "work_not_authorized",
-  "not_addressed",
-]);
-
 const WORK_ORDER_OUTCOMES: Array<{ id: WorkOrderVisitOutcome; title: string; description: string }> = [
-  { id: "completed", title: "Completed", description: "The authorized work is complete and ready for internal verification." },
-  { id: "diagnosis_only", title: "Diagnosis only", description: "Diagnosis is complete; additional action is still required." },
-  { id: "quote_required", title: "Quote required", description: "The next work requires a quote and operator decision." },
-  { id: "parts_required", title: "Parts required", description: "Parts are needed before this work can be completed." },
-  { id: "return_visit_required", title: "Return visit required", description: "A separate return visit must be scheduled." },
-  { id: "no_issue_found", title: "No issue found", description: "The reported condition could not be observed during this visit." },
-  { id: "store_access_unavailable", title: "Store access unavailable", description: "Required access or a safe work area was unavailable." },
-  { id: "work_not_authorized", title: "Work not authorized", description: "The needed work was outside the current authorization." },
-  { id: "not_addressed", title: "Not addressed", description: "This selected work order was not addressed during the visit." },
+  { id: "completed", title: "Work completed", description: "The requested work is finished." },
+  { id: "parts_required", title: "Waiting on parts", description: "Parts are needed before the work can be finished." },
+  { id: "return_visit_required", title: "Return visit needed", description: "Another visit must be scheduled." },
+  { id: "quote_required", title: "Quote or approval needed", description: "The operator must review pricing or authorize more work." },
+  { id: "no_issue_found", title: "Could not find the issue", description: "The reported condition was not present during this visit." },
+  { id: "not_addressed", title: "Could not complete the work", description: "Access, time, safety, or another condition prevented completion." },
 ];
 
-const UNMATCHED_OUTCOMES: Array<{ id: VisitOutcome; title: string }> = [
-  { id: "resolved", title: "Service completed" },
-  { id: "temporary_repair", title: "Temporary repair" },
-  { id: "diagnosed_waiting_parts", title: "Diagnosed · waiting on parts" },
-  { id: "return_required", title: "Return visit required" },
-  { id: "unable_to_reproduce", title: "Could not reproduce" },
-  { id: "unable_to_complete", title: "Unable to complete" },
-  { id: "other", title: "Other" },
+const UNMATCHED_OUTCOMES: Array<{ id: VisitOutcome; title: string; description: string }> = [
+  { id: "resolved", title: "Work completed", description: "The reason for the visit was addressed." },
+  { id: "diagnosed_waiting_parts", title: "Waiting on parts", description: "Parts are needed before the work can be finished." },
+  { id: "return_required", title: "Return visit needed", description: "Another visit must be scheduled." },
+  { id: "other", title: "Quote or approval needed", description: "The operator must review the next step." },
+  { id: "unable_to_reproduce", title: "Could not find the issue", description: "The reported condition was not present during this visit." },
+  { id: "unable_to_complete", title: "Could not complete the work", description: "Access, time, safety, or another condition prevented completion." },
 ];
 
 function emptyOutcome(): OutcomeDraft {
-  return { outcome: "", outcomeNotes: "", accountableParty: "", nextAction: "", dueAt: "", escalationTo: "" };
+  return { outcome: "", outcomeNotes: "" };
 }
 
 function startedViaLabel(channel: string): string {
@@ -265,11 +247,7 @@ export function TechnicianVisitFlow({
   function checkoutDetailsComplete(): boolean {
     if (!selectedVisit) return false;
     if (!selectedVisit.workOrders.length) return Boolean(unmatchedOutcome);
-    return selectedVisit.workOrders.every((workOrder) => {
-      const draft = outcomes[workOrder.id];
-      if (!draft?.outcome) return false;
-      return !UNRESOLVED_OUTCOMES.has(draft.outcome) || Boolean(draft.accountableParty.trim() && draft.nextAction.trim() && draft.dueAt && draft.escalationTo.trim());
-    });
+    return selectedVisit.workOrders.every((workOrder) => Boolean(outcomes[workOrder.id]?.outcome));
   }
 
   async function submitCheckIn() {
@@ -311,17 +289,10 @@ export function TechnicianVisitFlow({
       const perWorkOrderOutcomes: PerWorkOrderVisitOutcome[] | undefined = selectedVisit.workOrders.length
         ? selectedVisit.workOrders.map((workOrder) => {
             const draft = outcomes[workOrder.id]!;
-            const unresolved = UNRESOLVED_OUTCOMES.has(draft.outcome as WorkOrderVisitOutcome);
             return {
               workOrderId: workOrder.id,
               outcome: draft.outcome as WorkOrderVisitOutcome,
               outcomeNotes: draft.outcomeNotes || undefined,
-              followUp: unresolved ? {
-                accountableParty: draft.accountableParty,
-                nextAction: draft.nextAction,
-                dueAt: new Date(draft.dueAt).toISOString(),
-                escalationTo: draft.escalationTo,
-              } : undefined,
             };
           })
         : undefined;
@@ -381,7 +352,7 @@ export function TechnicianVisitFlow({
       <div className={styles.layout}>
         <section className={styles.card} aria-labelledby="visit-flow-title">
           {portal.capabilities.startVisit && portal.capabilities.finishVisit ? <div className={styles.tabs} aria-label="Visit action"><button className={`${styles.tab} ${mode === "check_in" ? styles.tabActive : ""}`} onClick={() => reset("check_in")} type="button">Start a visit</button><button className={`${styles.tab} ${mode === "check_out" ? styles.tabActive : ""}`} onClick={() => reset("check_out")} type="button">Finish a visit</button></div> : null}
-          <div style={{ marginTop: "1.3rem" }}><span className={styles.eyebrow}>Step {step} of {totalSteps}</span><h2 className={styles.sectionTitle} id="visit-flow-title">{step === 1 ? (mode === "check_in" ? "Choose the work" : "Choose the active visit") : step === 2 ? (mode === "check_in" ? "Check in the crew" : "Record every work-order outcome") : "Confirm checkout"}</h2></div>
+          <div style={{ marginTop: "1.3rem" }}><span className={styles.eyebrow}>Step {step} of {totalSteps}</span><h2 className={styles.sectionTitle} id="visit-flow-title">{step === 1 ? (mode === "check_in" ? "Choose the work" : "Choose the active visit") : step === 2 ? (mode === "check_in" ? "Check in the crew" : "How did the visit end?") : "Confirm checkout"}</h2></div>
 
           {step === 1 && loadingContext ? <p className={styles.notice} style={{ marginTop: "1rem" }}>Loading the store&apos;s authorized work…</p> : null}
           {step === 1 && error ? <div className={styles.form} style={{ marginTop: "1rem" }}><p className={styles.error} role="alert">{error}</p><button className={styles.secondaryButton} onClick={() => { setLoadingContext(true); setError(null); setContextNonce((value) => value + 1); }} type="button">Try again</button></div> : null}
@@ -429,9 +400,8 @@ export function TechnicianVisitFlow({
             <div className={styles.form} style={{ marginTop: "1.1rem" }}>
               {selectedVisit.workOrders.length ? selectedVisit.workOrders.map((workOrder) => {
                 const draft = outcomes[workOrder.id] ?? emptyOutcome();
-                const unresolved = Boolean(draft.outcome && UNRESOLVED_OUTCOMES.has(draft.outcome));
-                return <section className={styles.card} key={workOrder.id} aria-labelledby={`outcome-${workOrder.id}`}><h3 className={styles.cardTitle} id={`outcome-${workOrder.id}`}>{workOrder.number}</h3><p className={styles.helper}>{workOrder.problem}</p><label className={styles.label} style={{ marginTop: "0.9rem" }}>Outcome <span className={styles.required} aria-hidden="true">*</span><select className={styles.select} onChange={(event) => updateOutcome(workOrder.id, { outcome: event.target.value as WorkOrderVisitOutcome })} value={draft.outcome}><option value="">Choose an outcome</option>{WORK_ORDER_OUTCOMES.map((option) => <option key={option.id} value={option.id}>{option.title} — {option.description}</option>)}</select></label><label className={styles.label}>Notes for {workOrder.number} <span className={styles.helper}>(separate from other work)</span><textarea className={styles.textarea} maxLength={2000} onChange={(event) => updateOutcome(workOrder.id, { outcomeNotes: event.target.value })} placeholder="Diagnosis, work completed, readings, parts, or access conditions." value={draft.outcomeNotes} /></label>{unresolved ? <div className={styles.form}><p className={styles.notice}><strong>Accountable follow-up required</strong><br />This unresolved outcome cannot be submitted without a separate owner, action, due time, and escalation destination.</p><div className={styles.twoColumns}><label className={styles.label}>Accountable party <span className={styles.required} aria-hidden="true">*</span><input className={styles.input} maxLength={160} onChange={(event) => updateOutcome(workOrder.id, { accountableParty: event.target.value })} value={draft.accountableParty} /></label><label className={styles.label}>Due date and time <span className={styles.required} aria-hidden="true">*</span><input className={styles.input} onChange={(event) => updateOutcome(workOrder.id, { dueAt: event.target.value })} type="datetime-local" value={draft.dueAt} /></label></div><label className={styles.label}>Next action <span className={styles.required} aria-hidden="true">*</span><textarea className={styles.textarea} maxLength={1000} onChange={(event) => updateOutcome(workOrder.id, { nextAction: event.target.value })} value={draft.nextAction} /></label><label className={styles.label}>Escalate to <span className={styles.required} aria-hidden="true">*</span><input className={styles.input} maxLength={160} onChange={(event) => updateOutcome(workOrder.id, { escalationTo: event.target.value })} value={draft.escalationTo} /></label></div> : null}</section>;
-              }) : <fieldset className={styles.fieldset}><legend className={styles.legend}>Visit outcome</legend><div className={styles.choiceGrid}>{UNMATCHED_OUTCOMES.map((option) => <label className={`${styles.choiceCard} ${unmatchedOutcome === option.id ? styles.choiceCardSelected : ""}`} key={option.id}><input checked={unmatchedOutcome === option.id} className={styles.choiceInput} name="unmatched-outcome" onChange={() => setUnmatchedOutcome(option.id)} type="radio" /><span className={styles.choiceTitle}>{option.title}</span></label>)}</div><label className={styles.label}>Visit notes <span className={styles.helper}>(optional)</span><textarea className={styles.textarea} maxLength={2000} onChange={(event) => setUnmatchedOutcomeNotes(event.target.value)} value={unmatchedOutcomeNotes} /></label></fieldset>}
+                return <section className={styles.card} key={workOrder.id} aria-labelledby={`outcome-${workOrder.id}`}><h3 className={styles.cardTitle} id={`outcome-${workOrder.id}`}>{workOrder.number}</h3><p className={styles.helper}>{workOrder.problem}</p><label className={styles.label} style={{ marginTop: "0.9rem" }}>Outcome <span className={styles.required} aria-hidden="true">*</span><select className={styles.select} onChange={(event) => updateOutcome(workOrder.id, { outcome: event.target.value as WorkOrderVisitOutcome })} value={draft.outcome}><option value="">Choose an outcome</option>{WORK_ORDER_OUTCOMES.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}</select></label><p className={styles.helper}>{WORK_ORDER_OUTCOMES.find((option) => option.id === draft.outcome)?.description ?? "Choose the closest result. The platform creates any required follow-up for the operator."}</p><label className={styles.label}>Visit notes <span className={styles.helper}>(optional)</span><textarea className={styles.textarea} maxLength={2000} onChange={(event) => updateOutcome(workOrder.id, { outcomeNotes: event.target.value })} placeholder="Diagnosis, work completed, readings, parts, or access conditions." value={draft.outcomeNotes} /></label></section>;
+              }) : <fieldset className={styles.fieldset}><legend className={styles.legend}>Visit outcome</legend><div className={styles.choiceGrid}>{UNMATCHED_OUTCOMES.map((option) => <label className={`${styles.choiceCard} ${unmatchedOutcome === option.id ? styles.choiceCardSelected : ""}`} key={option.id}><input checked={unmatchedOutcome === option.id} className={styles.choiceInput} name="unmatched-outcome" onChange={() => setUnmatchedOutcome(option.id)} type="radio" /><span className={styles.choiceTitle}>{option.title}</span><span className={styles.helper}>{option.description}</span></label>)}</div><label className={styles.label}>Visit notes <span className={styles.helper}>(optional)</span><textarea className={styles.textarea} maxLength={2000} onChange={(event) => setUnmatchedOutcomeNotes(event.target.value)} value={unmatchedOutcomeNotes} /></label></fieldset>}
               <label className={styles.label}><Camera aria-hidden="true" size={18} /> Shared photos or service files <span className={styles.helper}>(optional, up to 4)</span><input accept="image/*,application/pdf" className={styles.fileInput} multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []).slice(0, 4))} type="file" /></label>
               {files.length ? <ul className={styles.fileList}>{files.map((file) => <li key={`${file.name}-${file.size}`}>{file.name} · {Math.max(1, Math.round(file.size / 1024))} KB</li>)}</ul> : null}
               <div className={styles.actions}><button className={styles.secondaryButton} onClick={() => setStep(1)} type="button"><ArrowLeft aria-hidden="true" size={17} /> Back</button><button className={styles.button} disabled={!checkoutDetailsComplete()} onClick={() => setStep(3)} type="button">Continue <ArrowRight aria-hidden="true" size={17} /></button></div>
@@ -450,7 +420,7 @@ export function TechnicianVisitFlow({
         </section>
 
         <aside className={styles.stack} aria-label="Visit information">
-          <section className={styles.card}><Clock3 aria-hidden="true" color="#0d6b62" size={23} /><h2 className={styles.cardTitle} style={{ marginTop: "0.6rem" }}>What this records</h2><ul className={styles.list} style={{ marginTop: "0.85rem" }}><li className={styles.listItem}><strong>One presence boundary</strong><p>One check-in and checkout can cover several work orders assigned to the same Vendor.</p></li><li className={styles.listItem}><strong>One outcome per work order</strong><p>Checkout is atomic: every selected work order must have an outcome before anything is recorded.</p></li><li className={styles.listItem}><strong>Accountable unresolved work</strong><p>Every unresolved outcome needs its own owner, next action, due time, and escalation destination.</p></li></ul></section>
+          <section className={styles.card}><Clock3 aria-hidden="true" color="#0d6b62" size={23} /><h2 className={styles.cardTitle} style={{ marginTop: "0.6rem" }}>What this records</h2><ul className={styles.list} style={{ marginTop: "0.85rem" }}><li className={styles.listItem}><strong>One visit window</strong><p>One check-in and checkout can cover several work orders assigned to the same vendor.</p></li><li className={styles.listItem}><strong>One result per work order</strong><p>Choose the closest plain-language result before checkout.</p></li><li className={styles.listItem}><strong>Follow-up without extra typing</strong><p>If work remains, the platform creates the accountable operator or vendor follow-up automatically.</p></li></ul></section>
           <section className={styles.notice}><strong>Presence evidence, not a timesheet</strong><p className={styles.helper}>The observed onsite window is approximate. It does not certify billable labor or automatically approve an invoice.</p></section>
         </aside>
       </div>

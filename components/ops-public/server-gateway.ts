@@ -710,6 +710,26 @@ function followUpForOutcome(outcome: VisitOutcome, providerName: string): { acco
   };
 }
 
+function followUpForWorkOrderOutcome(outcome: WorkOrderVisitOutcome, providerName: string): { accountableParty: string; nextAction: string; dueAt: string; escalationTo: string } | undefined {
+  if (!siteVisitOutcomeRequiresFollowUp(outcome)) return undefined;
+  const facilitiesOwned = outcome === "no_issue_found" || outcome === "store_access_unavailable" || outcome === "work_not_authorized" || outcome === "not_addressed";
+  const nextAction: Record<Exclude<WorkOrderVisitOutcome, "completed" | "no_issue_found">, string> = {
+    diagnosis_only: "Review the diagnosis and confirm the next service step",
+    quote_required: "Provide the requested quote for operator review",
+    parts_required: "Provide the parts ETA and proposed return date",
+    return_visit_required: "Propose the return service date",
+    store_access_unavailable: "Review the access issue and coordinate a workable return",
+    work_not_authorized: "Review the additional work and decide whether to authorize it",
+    not_addressed: "Review why the work was not completed and choose the next action",
+  };
+  return {
+    accountableParty: facilitiesOwned ? "Facilities coordinator" : providerName,
+    nextAction: nextAction[outcome as Exclude<WorkOrderVisitOutcome, "completed" | "no_issue_found">],
+    dueAt: new Date(Date.now() + (facilitiesOwned ? 4 : 24) * 60 * 60 * 1000).toISOString(),
+    escalationTo: "Facilities director",
+  };
+}
+
 function outcomeLabel(outcome: VisitOutcome): string {
   return {
     resolved: "Resolved",
@@ -1461,16 +1481,16 @@ const gateway: PublicOperationsGateway = {
     }
     const explicitOutcomes = command.perWorkOrderOutcomes?.map((entry): PerWorkOrderVisitOutcome => {
       if (!allowedWorkOutcomes.has(entry.outcome)) throw new PublicWorkflowError("Choose a valid outcome for every work order.", 422, "invalid_outcome");
+      const requiresFollowUp = siteVisitOutcomeRequiresFollowUp(entry.outcome);
       const followUp = entry.followUp ? {
         accountableParty: cleanRequired(entry.followUp.accountableParty, "Follow-up owner", 160),
         nextAction: cleanRequired(entry.followUp.nextAction, "Follow-up next action", 1_000),
         dueAt: cleanRequired(entry.followUp.dueAt, "Follow-up due time", 80),
         escalationTo: cleanRequired(entry.followUp.escalationTo, "Follow-up escalation", 160),
-      } : undefined;
+      } : requiresFollowUp ? followUpForWorkOrderOutcome(entry.outcome, visit.providerName) : undefined;
       if (followUp && !Number.isFinite(Date.parse(followUp.dueAt))) {
         throw new PublicWorkflowError("Each follow-up needs a valid due time.", 422, "invalid_follow_up_due_at");
       }
-      const requiresFollowUp = siteVisitOutcomeRequiresFollowUp(entry.outcome);
       if (requiresFollowUp && !followUp) {
         throw new PublicWorkflowError("Every unresolved work-order outcome needs its own accountable follow-up.", 422, "follow_up_required");
       }

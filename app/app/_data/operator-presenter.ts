@@ -342,6 +342,26 @@ function workStatusTone(status: WorkOrder["status"]): Tone {
   return "neutral";
 }
 
+/** Plain operator language; persisted status keys remain stable and auditable. */
+function workStatusLabel(status: WorkOrder["status"]): string {
+  const labels: Record<WorkOrder["status"], string> = {
+    draft: "Draft",
+    awaiting_approval: "Approval needed",
+    approved: "Ready to send",
+    issued: "Sent to vendor",
+    accepted: "Vendor accepted",
+    scheduled: "Scheduled",
+    in_progress: "Work in progress",
+    waiting_on_vendor: "Waiting on vendor",
+    waiting_on_parts: "Waiting on parts",
+    completed_pending_review: "Completed · review needed",
+    resolved: "Closeout ready",
+    closed: "Closed",
+    cancelled: "Cancelled",
+  };
+  return labels[status];
+}
+
 function scopeFixture(fixture: OpsFixture, session: OperatorSession): ScopedFixture {
   const organizationId = session.organizationId;
   const organizationStores = fixture.stores.filter((store) => store.organizationId === organizationId);
@@ -479,9 +499,8 @@ function hrefWithQuery(path: string, values: Record<string, string | undefined>)
 }
 
 function rollingYearStart(asOf: string): string {
-  const start = new Date(asOf);
-  start.setUTCFullYear(start.getUTCFullYear() - 1);
-  return start.toISOString().slice(0, 10);
+  const asOfDate = new Date(asOf);
+  return new Date(Date.UTC(asOfDate.getUTCFullYear(), asOfDate.getUTCMonth() - 11, 1)).toISOString().slice(0, 10);
 }
 
 function spendPeriod(asOf: string, key: string | undefined) {
@@ -828,6 +847,20 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
       const expectedReplacementYear = asset.installedAt && expectedLife
         ? new Date(asset.installedAt).getUTCFullYear() + expectedLife
         : undefined;
+      const latestLifecycleDecision = fixture.lifecycleRecommendations
+        .filter((recommendation) => recommendation.organizationId === scoped.organizationId && recommendation.assetId === asset.id)
+        .sort((left, right) => right.version - left.version || right.decidedAt.localeCompare(left.decidedAt))[0];
+      const hasManagementPlan = Boolean(
+        latestLifecycleDecision?.plannedForYear &&
+        ["replace", "defer"].includes(latestLifecycleDecision.userDecision) &&
+        latestLifecycleDecision.actualOutcome !== "replaced",
+      );
+      const capitalPlanYear = hasManagementPlan ? latestLifecycleDecision?.plannedForYear : expectedReplacementYear;
+      const capitalPlanLabel = hasManagementPlan
+        ? `${latestLifecycleDecision?.userDecision === "defer" ? "Deferred" : "Planned"} for ${capitalPlanYear}`
+        : expectedReplacementYear
+          ? `Age-based outlook: ${expectedReplacementYear}`
+          : "Planning year not set";
       const replacementResolution = resolveAssetReplacementEstimate(fixture, asset, fixture.asOf);
       const replacement = replacementResolution.amount?.amountMinor;
       const warrantyExpired = Boolean(asset.warrantyEndsAt && Date.parse(asset.warrantyEndsAt) < asOf);
@@ -898,6 +931,10 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
         ageYears,
         lifeUsed,
         expectedReplacementYear,
+        latestLifecycleDecision,
+        hasManagementPlan,
+        capitalPlanYear,
+        capitalPlanLabel,
         replacement,
         replacementResolution,
         warrantyExpired,
@@ -1467,7 +1504,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     metrics: isFacilities
       ? [
           { id: "open-exceptions", label: "Items to review", value: String(reviewItems.length), supportingText: "Open the queue for records, owners, and next steps", tone: reviewItems.length ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
-          { id: "vendor-response", label: "Awaiting vendor response", value: String(awaitingVendor.length), supportingText: "Approved, issued, or waiting on vendor", tone: awaitingVendor.length ? "warning" : "positive", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
+          { id: "vendor-response", label: "Awaiting vendor response", value: String(awaitingVendor.length), supportingText: "Ready to send, sent, or waiting on vendor", tone: awaitingVendor.length ? "warning" : "positive", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
           { id: "active-visits", label: "Vendors onsite now", value: String(activeVisits.length), supportingText: `${scoped.visits.length} total visits recorded`, tone: activeVisits.length ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
           { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Entered work costs for the last 12 months", link: { href: "/app/spend", label: "See the costs" } },
         ]
@@ -1481,7 +1518,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     prioritySection: { title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" }, display: "summary" },
     breakdowns: isFacilities
       ? [
-          countBreakdown("open-work-status", "Open work by status", workStatusCounts, (key) => hrefWithQuery("/app/work-orders", { status: key }), { description: "Every segment opens the work orders currently carrying that status.", totalNoun: "open work orders", sourceLink: { href: "/app/work-orders?status=open", label: "Open every maintenance obligation" } }),
+          countBreakdown("open-work-status", "Open work by status", workStatusCounts, (key) => hrefWithQuery("/app/work-orders", { status: key }), { description: "Every segment opens the work orders currently carrying that status.", labelFor: (key) => workStatusLabel(key as WorkOrder["status"]), totalNoun: "open work orders", sourceLink: { href: "/app/work-orders?status=open", label: "Open every maintenance obligation" } }),
           countBreakdown("onsite-vendor", "Who is onsite now", activeVendorCounts, (key) => hrefWithQuery("/app/visits", { status: "active", vendor: key }), { description: "Observed active visits by outside vendor; time and location are presence evidence, not certified labor.", labelFor: (key) => vendorById.get(key)?.name ?? "Unknown vendor", totalNoun: "active visits", sourceLink: { href: "/app/visits?status=active", label: "Open all live visits" } }),
         ]
       : [storeBreakdown, categoryBreakdown],
@@ -1717,7 +1754,7 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
           { key: "assignment", value: assignee ?? "Not assigned", secondary: assignment ? sentence(assignment.status) : "Assignment needed" },
           { key: "next", value: work.nextAction, secondary: work.accountableParty },
           { key: "cost", value: money(costByWork.get(work.id) ?? 0) },
-          { key: "status", value: sentence(work.status), tone: workStatusTone(work.status) },
+          { key: "status", value: workStatusLabel(work.status), tone: workStatusTone(work.status) },
         ],
       };
     });
@@ -2289,7 +2326,7 @@ function buildVendorEvidenceBundle(
       workOrderNumber: work.number,
       problem: work.problem,
       storeLabel: storeLabel(storeById.get(work.storeId)),
-      statusLabel: sentence(work.status),
+      statusLabel: workStatusLabel(work.status),
       costLabel: money(costByWork.get(work.id) ?? 0),
       costLineCount: costLineCountByWork.get(work.id) ?? 0,
       href: `/app/work-orders/${work.id}`,
@@ -2772,7 +2809,8 @@ export function buildListModel(
 
   rows = rows.filter((row) => roleCanOpenOperatorHref(session.role, row.href));
   const totalRows = rows.length;
-  const pageSize = 25;
+  const exportAll = first(query.export) === "all";
+  const pageSize = exportAll ? Math.max(totalRows, 1) : 25;
   const requestedPage = Number(first(query.page) ?? "1");
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const currentPage = Number.isInteger(requestedPage) && requestedPage > 0
@@ -3475,12 +3513,14 @@ export function buildProgramModel(
   const requestedReason = first(query.reason);
   const requestedReplacementYear = first(query.replacementYear);
   const requestedReplacement = first(query.replacement);
+  const requestedPlan = first(query.plan);
   const requestedAssetStatus = first(query.status);
   const candidates = lifecycle
     .filter((row) => !selectedAsset || row.asset.id === selectedAsset)
     .filter((row) => !requestedAssetStatus || row.asset.status === requestedAssetStatus)
     .filter((row) => !requestedReplacement || (requestedReplacement === "entered" && row.replacement !== undefined))
-    .filter((row) => !requestedReplacementYear || String(row.expectedReplacementYear) === requestedReplacementYear)
+    .filter((row) => requestedPlan !== "management" || row.hasManagementPlan)
+    .filter((row) => !requestedReplacementYear || String(row.capitalPlanYear) === requestedReplacementYear)
     .filter((row) => !requestedReason ||
       (["repair review", "compare alternatives"].includes(requestedReason) && row.screening.state === "compare_alternatives") ||
       (requestedReason === "not flagged" && row.screening.state === "below_economic_review") ||
@@ -3522,7 +3562,7 @@ export function buildProgramModel(
           ? "Enter repair, replacement, and expected-life inputs to calculate the required service runway"
           : `${formatRunway(row.screening.comparison.requiredEconomicRunwayMonths)} required runway · ${row.screening.comparison.estimatedServiceExtensionMonths === undefined ? "service estimate not entered" : `${formatRunway(row.screening.comparison.estimatedServiceExtensionMonths)} entered service estimate`} · ${Math.round((row.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of replacement estimate`,
       },
-      { key: "replacement", value: row.replacement ? money(row.replacement) : "Not entered", secondary: row.replacementResolution.explanation },
+      { key: "replacement", value: row.replacement ? money(row.replacement) : "Not entered", secondary: `${row.capitalPlanLabel}. ${row.replacementResolution.explanation}` },
       {
         key: "status",
         value: lifecycleComparisonLabel(row.screening),
@@ -3530,22 +3570,25 @@ export function buildProgramModel(
       },
     ],
   }));
+  const managementPlanned = candidates.filter((row) => row.hasManagementPlan && row.replacement);
+  const managementPlannedTotal = managementPlanned.reduce((sum, row) => sum + (row.replacement ?? 0), 0);
   return {
     state: { kind: "ready" },
     page: { title: "Equipment lifecycle", eyebrow: "Repair or replace", description: "See how long a current repair must keep equipment in service to justify its cost against replacement, then review the vendor estimate, age, warranty, and history. Small repairs are not treated as replacement signals, and the decision remains yours.", scopeLabel: selectedLifecycleAsset ? `${activeScopeLabel} · ${selectedLifecycleAsset.asset.name}` : activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
     metrics: [
       { id: "review", label: "Repairs to compare", value: String(candidates.filter((row) => row.screening.state === "compare_alternatives").length), supportingText: "Material current repairs worth comparing with replacement in this view", tone: "warning", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, reason: "compare alternatives" }), label: "Open repair comparisons" } },
       { id: "replacement", label: "Estimated replacement cost", value: money(replacementTotal), supportingText: "Current planning estimates; not an approved budget", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset }), label: "Review estimates" } },
+      { id: "management-plan", label: "Management-planned capital", value: money(managementPlannedTotal), supportingText: `${managementPlanned.length} replacement decision${managementPlanned.length === 1 ? "" : "s"} assigned to a planning year`, tone: managementPlanned.length ? "info" : "neutral", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, plan: "management" }), label: "Review management decisions" } },
       { id: "work-cost", label: "Historical recorded cost", value: money(candidates.reduce((sum, row) => sum + row.workCost, 0)), supportingText: "Context only; never added to the current repair estimate", link: { href: hrefWithQuery("/app/work-orders", { hasCost: "true", store: selectedStoreId, asset: selectedAsset }), label: "Open cost sources" } },
       { id: "scope", label: "Equipment in view", value: String(candidates.length), supportingText: selectedLifecycleAsset ? "This equipment record and its exact decision evidence" : "Equipment matching the selected planning scope", tone: "info", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset }), label: "Review equipment evidence" } },
     ],
     breakdowns: [{ id: "lifecycle-reasons", title: "Repairs in this view", description: "For each material repair, the platform calculates the minimum continued-service runway needed to justify the repair cost against replacement. Small repairs remain visible without becoming replacement signals.", totalLabel: `${candidates.length} equipment`, segments: [...reasonCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), link: { href: hrefWithQuery("/app/lifecycle", { reason: key, store: selectedStoreId, asset: selectedAsset }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset }), label: "Open all equipment" } }],
     trends: [{
       id: "capex-horizon",
-      title: "Estimated replacements by year",
-      description: "Based on installation date, expected life, and the current replacement estimate. This is a planning view, not an approved budget.",
+      title: "Capital outlook by year",
+      description: "Management decisions use their chosen planning year. Equipment without a recorded decision remains an age-based outlook. Neither is an approved budget.",
       points: [...candidates.reduce((years, row) => {
-        if (row.expectedReplacementYear && row.replacement) years.set(String(row.expectedReplacementYear), (years.get(String(row.expectedReplacementYear)) ?? 0) + row.replacement);
+        if (row.capitalPlanYear && row.replacement) years.set(String(row.capitalPlanYear), (years.get(String(row.capitalPlanYear)) ?? 0) + row.replacement);
         return years;
       }, new Map<string, number>()).entries()].sort(([a], [b]) => a.localeCompare(b)).map(([year, value]) => ({ id: year, label: year, value, formattedValue: money(value), link: { href: hrefWithQuery("/app/lifecycle", { replacementYear: year, store: selectedStoreId, asset: selectedAsset }), label: `Review ${year} evidence` } })),
       sourceLink: { href: selectedLifecycleAsset ? `/app/equipment/${selectedLifecycleAsset.asset.id}` : hrefWithQuery("/app/equipment", { store: selectedStoreId }), label: "Review life and replacement evidence" },
@@ -4050,7 +4093,7 @@ export function buildDetailModel(
             }
           : undefined,
       },
-      statusLabel: sentence(work.status),
+      statusLabel: workStatusLabel(work.status),
       statusTone: workStatusTone(work.status),
       facts: [
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
@@ -4610,7 +4653,7 @@ export function buildVendorIssuanceModel(fixture: OpsFixture, session: OperatorS
     (!assignment || !["completed", "cancelled", "superseded"].includes(assignment.status)),
   );
   const rolePermitted = Boolean(work && roleCan(session.role, "issue_work_order"));
-  const previewDeliveryText = "This preview generates a secure response link; automated email and SMS delivery are not connected and require a production integration.";
+  const previewDeliveryText = "A secure response link is always generated. When email delivery is configured in Setup, choosing email sends it to the vendor dispatch address; otherwise the link remains available for manual sharing. SMS requires a later integration.";
   return {
     available,
     permitted: available && rolePermitted,
@@ -4902,7 +4945,7 @@ function workOrderStages(
       id: "closeout",
       label: "Follow-up / close",
       state: terminal ? "complete" : openFollowUps.length || completedStatus ? "current" : "upcoming",
-      detail: terminal ? sentence(work.status) : openFollowUps.length ? `${openFollowUps.length} accountable follow-up${openFollowUps.length === 1 ? "" : "s"} open` : work.status === "resolved" ? "Accepted verification is ready for explicit closure" : completedStatus ? "Internal verification is required before resolution" : "Outcome determines the next accountable action",
+      detail: terminal ? workStatusLabel(work.status) : openFollowUps.length ? `${openFollowUps.length} accountable follow-up${openFollowUps.length === 1 ? "" : "s"} open` : work.status === "resolved" ? "Accepted verification is ready for explicit closure" : completedStatus ? "Internal verification is required before resolution" : "Outcome determines the next accountable action",
       timestampLabel: work.closedAt ? dateTime(work.closedAt) : undefined,
     },
   ];
@@ -5048,7 +5091,7 @@ export function buildWorkOrderControlModel(
         ? "The configured delivery worker marked this handoff delivered"
         : deliveryMessage?.status === "failed"
           ? "The delivery record requires operator attention"
-          : "Automated email and SMS delivery are not connected in this preview; copy or share the secure link manually";
+          : "Secure links can be shared manually; configured email delivery sends authorizations to the vendor dispatch address, while SMS requires a later integration";
   const statuses = pendingApproval
     ? [work.status]
     : [work.status, ...allowedWorkOrderControlTransitions(work.status)];

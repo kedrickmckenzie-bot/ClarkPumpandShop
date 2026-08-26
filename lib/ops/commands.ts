@@ -1805,6 +1805,67 @@ export async function createFollowUp(svc: OpsCommandServices, input: CreateFollo
   return { id, organizationId: input.organizationId, workOrderId: input.workOrderId, sourceVisitId: input.sourceVisitId, accountableParty: input.accountableParty.trim(), nextAction: input.nextAction.trim(), dueAt: input.dueAt, escalationTo: input.escalationTo.trim(), status: "open" as const, createdAt: now };
 }
 
+export interface CreateBulkFollowUpsInput {
+  organizationId: OpsId;
+  workOrderIds: OpsId[];
+  accountableParty: string;
+  nextAction: string;
+  dueAt: IsoDateTime;
+  escalationTo: string;
+  actor: ActorContext;
+}
+
+/** Adds the same non-blocking reminder to a bounded work-order set in one commit. */
+export async function createBulkFollowUps(svc: OpsCommandServices, input: CreateBulkFollowUpsInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const workOrderIds = [...new Set(input.workOrderIds.map((id) => id.trim()).filter(Boolean))];
+  if (!workOrderIds.length) throw new OpsDomainError("VALIDATION", "Select at least one work order.");
+  if (workOrderIds.length > 50) throw new OpsDomainError("VALIDATION", "A bulk follow-up can include at most 50 work orders.");
+  if (!Number.isFinite(Date.parse(input.dueAt))) throw new OpsDomainError("VALIDATION", "Follow-up due date is invalid.");
+  const accountableParty = required(input.accountableParty, "Accountable party");
+  const nextAction = required(input.nextAction, "Next action");
+  const escalationTo = required(input.escalationTo, "Escalation");
+  const workOrders = await Promise.all(workOrderIds.map((id) => repository.getWorkOrder(input.organizationId, id)));
+  if (workOrders.some((workOrder) => !workOrder)) {
+    throw new OpsDomainError("NOT_FOUND", "One or more selected work orders are no longer available in your organization.");
+  }
+  const eligible = workOrders as WorkOrder[];
+  if (eligible.some((workOrder) => workOrder.status === "resolved" || terminalWorkOrderStatuses.has(workOrder.status))) {
+    throw new OpsDomainError("CONFLICT", "Resolved, closed, or cancelled work cannot receive a follow-up.");
+  }
+  const tasksByWorkOrder = await Promise.all(eligible.map((workOrder) => repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id)));
+  const now = clock.now();
+  const created: Array<{ id: OpsId; workOrderId: OpsId }> = [];
+  const statements: OpsStatement[] = [];
+  eligible.forEach((workOrder, index) => {
+    const followUpId = ids.next("follow-up");
+    const task = buildWorkflowTaskRecord({
+      id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
+      draft: taskDraft({ workOrder, taskType: "schedule_return_visit", title: nextAction,
+        assignee: facilitiesAssignee(accountableParty), dueAt: input.dueAt,
+        applicableSlaClock: "scheduling", sourceFollowUpId: followUpId,
+        blocking: false, requiredForProgress: false, escalationDestination: escalationTo }),
+      actor: input.actor, createdAt: now,
+    });
+    statements.push(
+      insert("ops_follow_ups", { id: followUpId, organization_id: input.organizationId, work_order_id: workOrder.id, accountable_party: accountableParty, next_action: nextAction, due_at: input.dueAt, escalation_to: escalationTo, status: "open", created_at: now }),
+      ...buildCreateTaskStatements({ task, actor: input.actor, ids }),
+      buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, [...tasksByWorkOrder[index]!, task]),
+      ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "follow_up.created", actor: input.actor, occurredAt: now, payload: { followUpId, dueAt: input.dueAt, promoteToPrimary: false, bulk: true }, ids }),
+    );
+    created.push({ id: followUpId, workOrderId: workOrder.id });
+  });
+  await atomicWorkOrderSetMutation({
+    repository,
+    workOrders: eligible,
+    now,
+    statements,
+    conflictMessage: "One of the selected work orders changed. Refresh the queue and apply the follow-up again.",
+  });
+  return { created, count: created.length, dueAt: input.dueAt, nextAction };
+}
+
 export interface CreateVendorReminderInput { organizationId: OpsId; vendorId: OpsId; title: string; note?: string; accountableParty: string; dueAt: IsoDateTime; escalationTo: string; actor: ActorContext }
 export async function createVendorReminder(svc: OpsCommandServices, input: CreateVendorReminderInput) {
   const { repository, clock, ids } = services(svc);

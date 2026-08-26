@@ -264,11 +264,13 @@ describe("enterprise service-control presenter contracts", () => {
       "Record phone or manual handoff",
     ]);
     expect(issuance.channels.every((channel) => !/^Send\b/i.test(channel.label))).toBe(true);
-    expect(issuance.helperText).toMatch(/automated email and SMS delivery are not connected/i);
+    expect(issuance.helperText).toMatch(/email delivery is configured in Setup/i);
+    expect(issuance.helperText).toMatch(/SMS requires a later integration/i);
     expect(pending.latestIssuance).toMatchObject({
       deliveryStateLabel: "Link generated",
     });
-    expect(pending.latestIssuance?.deliveryStateDetail).toMatch(/not connected.*copy or share/i);
+    expect(pending.latestIssuance?.deliveryStateDetail).toMatch(/shared manually/i);
+    expect(pending.latestIssuance?.deliveryStateDetail).toMatch(/configured email delivery sends/i);
     expect(pending.canRecordManualVendorResponse).toBe(true);
     expect(pending.manualVendorResponseTarget).toEqual({
       expectedAssignmentId: "assignment-northline-104-issued",

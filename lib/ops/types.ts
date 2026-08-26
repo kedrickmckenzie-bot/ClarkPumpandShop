@@ -1123,6 +1123,8 @@ export interface LifecycleRecommendation {
   missingData: string[];
   userDecision: LifecycleDecisionKind;
   userReason: string;
+  /** Optional management-selected capital-planning year; required for replace/defer decisions. */
+  plannedForYear?: number;
   decidedByMembershipId: OpsId;
   decidedAt: IsoDateTime;
   actualOutcome?: "repaired" | "replaced" | "retired_without_replacement" | "still_in_service";

@@ -231,6 +231,7 @@ export interface RecordLifecycleRecommendationInput extends LifecycleRecommendat
   assetId: OpsId;
   userDecision: LifecycleDecisionKind;
   userReason: string;
+  plannedForYear?: number;
   actor: ActorContext;
 }
 
@@ -243,6 +244,8 @@ export async function recordLifecycleRecommendation(svc: OpsCommandServices, inp
   if (!(["repair", "replace", "capital_review"] as const).includes(input.recommendation)) throw new OpsDomainError("VALIDATION", "Recommendation is invalid");
   if (!(["low", "medium", "high"] as const).includes(input.confidence)) throw new OpsDomainError("VALIDATION", "Confidence is invalid");
   if (!(["repair", "replace", "defer", "investigate"] as const).includes(input.userDecision)) throw new OpsDomainError("VALIDATION", "Decision is invalid");
+  if (input.plannedForYear !== undefined && (!Number.isInteger(input.plannedForYear) || input.plannedForYear < 2000 || input.plannedForYear > 2200)) throw new OpsDomainError("VALIDATION", "Capital-planning year is invalid");
+  if (["replace", "defer"].includes(input.userDecision) && input.plannedForYear === undefined) throw new OpsDomainError("VALIDATION", "Replacement and defer decisions require a capital-planning year");
   try { JSON.parse(input.inputsJson); } catch { throw new OpsDomainError("VALIDATION", "Recommendation inputs are invalid"); }
   const prior = await repository.listLifecycleRecommendationsForAsset(input.organizationId, asset.id);
   const now = clock.now();
@@ -253,12 +256,12 @@ export async function recordLifecycleRecommendation(svc: OpsCommandServices, inp
     confidence: input.confidence, inputsJson: input.inputsJson,
     explanation: required(input.explanation, "Recommendation explanation", 2_000),
     missingData: [...new Set(input.missingData.map((value) => required(value, "Missing-data label", 160)))],
-    userDecision: input.userDecision, userReason: required(input.userReason, "Decision reason", 2_000),
+    userDecision: input.userDecision, userReason: required(input.userReason, "Decision reason", 2_000), plannedForYear: input.plannedForYear,
     decidedByMembershipId: input.actor.actorId, decidedAt: now, createdAt: now,
   };
   await repository.atomicWrite([
-    insert("ops_lifecycle_recommendations", { id: row.id, organization_id: row.organizationId, asset_id: row.assetId, work_order_id: row.workOrderId, version: row.version, model_version: row.modelVersion, recommendation: row.recommendation, confidence: row.confidence, inputs_json: row.inputsJson, explanation: row.explanation, missing_data_json: JSON.stringify(row.missingData), user_decision: row.userDecision, user_reason: row.userReason, decided_by_membership_id: row.decidedByMembershipId, decided_at: row.decidedAt, created_at: row.createdAt }),
-    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "asset", aggregateId: asset.id, eventType: "asset.lifecycle_recommendation_recorded", actor: input.actor, occurredAt: now, payload: { recommendationId: row.id, version: row.version, modelVersion: row.modelVersion, recommendation: row.recommendation, confidence: row.confidence, missingData: row.missingData, userDecision: row.userDecision, userReason: row.userReason }, ids }),
+    insert("ops_lifecycle_recommendations", { id: row.id, organization_id: row.organizationId, asset_id: row.assetId, work_order_id: row.workOrderId, version: row.version, model_version: row.modelVersion, recommendation: row.recommendation, confidence: row.confidence, inputs_json: row.inputsJson, explanation: row.explanation, missing_data_json: JSON.stringify(row.missingData), user_decision: row.userDecision, user_reason: row.userReason, planned_for_year: row.plannedForYear, decided_by_membership_id: row.decidedByMembershipId, decided_at: row.decidedAt, created_at: row.createdAt }),
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "asset", aggregateId: asset.id, eventType: "asset.lifecycle_recommendation_recorded", actor: input.actor, occurredAt: now, payload: { recommendationId: row.id, version: row.version, modelVersion: row.modelVersion, recommendation: row.recommendation, confidence: row.confidence, missingData: row.missingData, userDecision: row.userDecision, userReason: row.userReason, plannedForYear: row.plannedForYear }, ids }),
   ]);
   return row;
 }

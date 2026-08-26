@@ -54,8 +54,9 @@ export async function loadAssetReplacementIntelligenceModel(assetId: string): Pr
     profiles: fixture.replacementProfiles.filter((row) => row.organizationId === session.organizationId && row.active && row.categoryKey === asset.categoryKey).map((row) => profileView(fixture, row)),
     event: event && workOrder ? { id: event.id, approvedAmountLabel: money(event.approvedAmount.amountMinor, event.approvedAmount.currency), approvedAtLabel: date(event.approvedAt), workOrderNumber: workOrder.number } : undefined,
     recommendation: { recommendationLabel: sentence(recommendationDraft.recommendation), confidenceLabel: sentence(recommendationDraft.confidence), explanation: recommendationDraft.explanation, missingData: recommendationDraft.missingData },
-    recommendationHistory: recommendationHistory.map((row) => ({ id: row.id, version: row.version, modelVersion: row.modelVersion, recommendationLabel: sentence(row.recommendation), confidenceLabel: sentence(row.confidence), decisionLabel: sentence(row.userDecision), reason: row.userReason, decidedAtLabel: date(row.decidedAt), explanation: row.explanation, missingData: row.missingData, actualOutcomeLabel: row.actualOutcome ? sentence(row.actualOutcome) : "Outcome not recorded yet" })),
+    recommendationHistory: recommendationHistory.map((row) => ({ id: row.id, version: row.version, modelVersion: row.modelVersion, recommendationLabel: sentence(row.recommendation), confidenceLabel: sentence(row.confidence), decisionLabel: sentence(row.userDecision), planningLabel: row.plannedForYear ? `Planned for ${row.plannedForYear}` : "No replacement year committed", reason: row.userReason, decidedAtLabel: date(row.decidedAt), explanation: row.explanation, missingData: row.missingData, actualOutcomeLabel: row.actualOutcome ? sentence(row.actualOutcome) : "Outcome not recorded yet" })),
     latestRecommendationId: latestRecommendation?.id,
+    defaultPlanningYear: new Date(fixture.asOf).getUTCFullYear() + 1,
     assetDefaults: { tag: asset.assetTag, name: asset.name, manufacturer: asset.manufacturer ?? "", model: asset.model ?? "", supplier: asset.supplier ?? "" },
   };
 }

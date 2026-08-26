@@ -608,7 +608,7 @@ function buildFixture(): OpsFixture {
       let parts = Math.round(baseCost.parts * variance / 100);
       if (store.storeNumber === "104" && categoryKey === "refrigeration") {
         labor = 95_000;
-        parts = 365_000;
+        parts = 765_000;
       }
       const travel = internal ? 0 : (storeIndex + historyIndex) % 3 === 0 ? 12_500 : 0;
       const recordedTotal = labor + parts + travel;
@@ -646,6 +646,79 @@ function buildFixture(): OpsFixture {
         if (matchStatus === "unmatched") exceptions.push({ id: `exception-${invoiceId}-unmatched`, organizationId: organization.id, kind: "unmatched_invoice", storeId: store.id, vendorId, severity: "attention", status: "resolved", summary: `Invoice ${invoiceId} arrived without an operator work-order reference`, detectedAt: new Date(Date.parse(visitEnd) + 2 * 86_400_000).toISOString() });
       }
     }
+  });
+
+  // Recurring site services are a large, ordinary part of a convenience-store
+  // facilities ledger. Keep unit prices realistic and create the missing event
+  // volume instead of inflating a handful of repair invoices. These closed
+  // records make the portfolio trend commercially believable while preserving
+  // the deeper reactive stories above.
+  const recurringServiceSeeds: ReadonlyArray<{
+    key: string;
+    year?: number;
+    month: number;
+    day: number;
+    categoryKey: string;
+    taxonomyNodeId: string;
+    vendorId: string;
+    problem: string;
+    scope: string;
+    amountMinor: number;
+  }> = [
+    { key: "grounds-apr", month: 4, day: 9, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled spring grounds cleanup and landscape bed service", scope: "Complete scheduled grounds service and document site condition before departure.", amountMinor: 47_500 },
+    { key: "grounds-may", month: 5, day: 8, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled landscape and grounds service", scope: "Complete scheduled mowing, trimming, and grounds service.", amountMinor: 39_500 },
+    { key: "grounds-jun", month: 6, day: 11, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled landscape and grounds service", scope: "Complete scheduled mowing, trimming, and grounds service.", amountMinor: 39_500 },
+    { key: "grounds-jul", month: 7, day: 9, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled landscape and grounds service", scope: "Complete scheduled mowing, trimming, and grounds service.", amountMinor: 39_500 },
+    { key: "grounds-aug", month: 8, day: 6, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled landscape and grounds service", scope: "Complete scheduled mowing, trimming, and grounds service.", amountMinor: 39_500 },
+    { key: "grounds-oct", year: 2025, month: 10, day: 16, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled fall grounds cleanup", scope: "Complete fall cleanup, trim landscape areas, and remove accumulated debris.", amountMinor: 52_500 },
+    { key: "snow-dec", year: 2025, month: 12, day: 14, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-snow_removal", vendorId: "vendor-northline-four-seasons", problem: "Snow and ice response after overnight accumulation", scope: "Clear vehicle and pedestrian areas and apply ice control according to the site service agreement.", amountMinor: 82_500 },
+    { key: "snow-jan", month: 1, day: 19, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-snow_removal", vendorId: "vendor-northline-four-seasons", problem: "Snow and ice response after overnight accumulation", scope: "Clear vehicle and pedestrian areas and apply ice control according to the site service agreement.", amountMinor: 94_500 },
+    { key: "snow-feb", month: 2, day: 7, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-snow_removal", vendorId: "vendor-northline-four-seasons", problem: "Snow and ice response after freezing precipitation", scope: "Treat vehicle and pedestrian areas and document completed ice control.", amountMinor: 71_500 },
+    { key: "snow-mar", month: 3, day: 3, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-snow_removal", vendorId: "vendor-northline-four-seasons", problem: "Late-season snow and ice response", scope: "Clear priority areas and apply ice control according to the site service agreement.", amountMinor: 68_500 },
+    { key: "drain-jan", month: 1, day: 13, categoryKey: "plumbing", taxonomyNodeId: "taxonomy-northline-drains", vendorId: "vendor-northline-cedar", problem: "Scheduled drain and grease-line service", scope: "Complete scheduled drain service and report any condition requiring separate repair authorization.", amountMinor: 46_500 },
+    { key: "drain-jul", month: 7, day: 14, categoryKey: "plumbing", taxonomyNodeId: "taxonomy-northline-drains", vendorId: "vendor-northline-cedar", problem: "Scheduled drain and grease-line service", scope: "Complete scheduled drain service and report any condition requiring separate repair authorization.", amountMinor: 46_500 },
+    { key: "hvac-sep", year: 2025, month: 9, day: 18, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", vendorId: "vendor-northline-cedar", problem: "Quarterly rooftop-unit filter and operating inspection", scope: "Replace filters, inspect belts and drains, and record operating condition.", amountMinor: 64_500 },
+    { key: "hvac-dec", year: 2025, month: 12, day: 8, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", vendorId: "vendor-northline-cedar", problem: "Quarterly rooftop-unit filter and heating inspection", scope: "Replace filters and verify safe heating operation before departure.", amountMinor: 69_500 },
+    { key: "hvac-mar", month: 3, day: 17, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", vendorId: "vendor-northline-cedar", problem: "Quarterly rooftop-unit filter and cooling inspection", scope: "Replace filters, clear drains, and verify cooling readiness.", amountMinor: 72_500 },
+    { key: "hvac-jun", month: 6, day: 16, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", vendorId: "vendor-northline-cedar", problem: "Quarterly rooftop-unit filter and operating inspection", scope: "Replace filters, inspect belts and drains, and record operating condition.", amountMinor: 67_500 },
+    { key: "food-oct", year: 2025, month: 10, day: 21, categoryKey: "foodservice", taxonomyNodeId: "taxonomy-northline-ovens", vendorId: "vendor-northline-cedar", problem: "Scheduled hot-food equipment cleaning and safety inspection", scope: "Complete scheduled cleaning and inspection; report repair needs separately.", amountMinor: 57_500 },
+    { key: "food-apr", month: 4, day: 21, categoryKey: "foodservice", taxonomyNodeId: "taxonomy-northline-ovens", vendorId: "vendor-northline-cedar", problem: "Scheduled hot-food equipment cleaning and safety inspection", scope: "Complete scheduled cleaning and inspection; report repair needs separately.", amountMinor: 57_500 },
+  ];
+  let recurringSequence = 2_000;
+  stores.forEach((store, storeIndex) => {
+    recurringServiceSeeds.forEach((service, serviceIndex) => {
+      const year = service.year ?? 2026;
+      const visitStart = new Date(Date.UTC(year, service.month - 1, Math.min(25, service.day + storeIndex % 4), 12 + serviceIndex % 4, 15)).toISOString();
+      const createdAt = new Date(Date.parse(visitStart) - 3 * 86_400_000).toISOString();
+      const assignedAt = new Date(Date.parse(createdAt) + 45 * 60_000).toISOString();
+      const issuedAt = new Date(Date.parse(assignedAt) + 15 * 60_000).toISOString();
+      const checkedOutAt = new Date(Date.parse(visitStart) + (55 + (storeIndex * 7 + serviceIndex * 11) % 70) * 60_000).toISOString();
+      const suffix = `${store.storeNumber}-${service.key}`;
+      const workOrderId = `wo-recurring-${suffix}`;
+      const assignmentId = `assignment-recurring-${suffix}`;
+      const issuanceId = `issuance-recurring-${suffix}`;
+      const visitId = `visit-recurring-${suffix}`;
+      const vendor = vendors.find((candidate) => candidate.id === service.vendorId)!;
+      const amountMinor = service.amountMinor + (storeIndex % 5) * 2_500;
+      const workOrderNumber = `NL-${year}-${String(recurringSequence++).padStart(4, "0")}`;
+      const assetId = service.categoryKey === "hvac" ? `asset-${store.storeNumber}-rtu-1` : undefined;
+      const asset = assetId ? assets.find((candidate) => candidate.id === assetId) : undefined;
+      workOrders.push({ id: workOrderId, organizationId: organization.id, number: workOrderNumber, storeId: store.id, problem: service.problem, authorizedScope: service.scope, categoryKey: service.categoryKey, taxonomyNodeId: service.taxonomyNodeId, assetId, priority: "planned", status: "closed", accountableParty: vendor.name, nextAction: "No action required", dueAt: visitStart, nte: { amountMinor: amountMinor + 20_000, currency: "USD" }, vendorServiceTicketNumber: `${vendor.code.toUpperCase()}-${year}-${store.storeNumber}-${String(serviceIndex + 1).padStart(2, "0")}`, createdAt, closedAt: checkedOutAt });
+      assignments.push({ id: assignmentId, organizationId: organization.id, workOrderId, kind: "outside_vendor", vendorId: vendor.id, status: "completed", assignedAt });
+      issuances.push({ id: issuanceId, organizationId: organization.id, workOrderId, assignmentId, revision: 1, channel: "email", issuedAt, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber, store: { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: [store.address1, `${store.city}, ${store.state} ${store.postalCode}`].join(", ") }, vendor: { id: vendor.id, name: vendor.name }, problem: service.problem, priority: "planned", authorizedScope: service.scope, categoryKey: service.categoryKey, asset: asset ? { id: asset.id, name: asset.name, assetTag: asset.assetTag } : undefined, requestedTiming: visitStart, nte: { amountMinor: amountMinor + 20_000, currency: "USD" }, billingInstruction: `Reference operator work order ${workOrderNumber} on all service paperwork and invoices.` }) });
+      vendorResponses.push({ id: `response-recurring-${suffix}`, organizationId: organization.id, workOrderId, assignmentId, issuanceId, response: "accepted", responderName: `${vendor.name} dispatch`, respondedAt: new Date(Date.parse(issuedAt) + 25 * 60_000).toISOString(), proposedAt: visitStart });
+      visits.push({ id: visitId, organizationId: organization.id, storeId: store.id, providerKind: "outside_vendor", vendorId: vendor.id, workOrderId, technicianName: ["Chris Walker", "Dana Ruiz", "Sam Patel", "Drew Miller"][(storeIndex + serviceIndex) % 4]!, providerName: vendor.name, purpose: service.problem, crewCount: service.categoryKey === "exterior" ? 2 : 1, status: "checked_out", startedChannel: serviceIndex % 2 ? "secure_link" : "qr", endedChannel: serviceIndex % 3 ? "qr" : "store_device", checkedInAt: visitStart, checkedOutAt, outcome: "resolved", outcomeNotes: "Scheduled service completed and site condition documented before departure.", observedDurationSeconds: durationSeconds(visitStart, checkedOutAt) });
+      visitEvidence.push(
+        { id: `evidence-${visitId}-in`, organizationId: organization.id, visitId, kind: "check_in", channel: serviceIndex % 2 ? "secure_link" : "qr", observedAt: visitStart, location: { result: "verified", accuracyM: 15 + serviceIndex % 9, distanceM: 12 + storeIndex, capturedAt: visitStart }, payloadJson: JSON.stringify({ workOrderNumber, recurringService: service.key }) },
+        { id: `evidence-${visitId}-out`, organizationId: organization.id, visitId, kind: "check_out", channel: serviceIndex % 3 ? "qr" : "store_device", observedAt: checkedOutAt, location: { result: serviceIndex % 3 ? "verified" : "trusted_store_device", accuracyM: serviceIndex % 3 ? 18 + serviceIndex % 8 : undefined, distanceM: serviceIndex % 3 ? 14 + storeIndex : undefined, capturedAt: checkedOutAt }, payloadJson: JSON.stringify({ outcome: "resolved", recurringService: service.key }) },
+      );
+      costLines.push({ id: `cost-recurring-${suffix}`, organizationId: organization.id, workOrderId, kind: service.categoryKey === "hvac" || service.categoryKey === "plumbing" ? "labor" : "other", description: `${service.problem} — recorded service charge`, amount: { amountMinor, currency: "USD" }, serviceDate: checkedOutAt.slice(0, 10), recordedAt: new Date(Date.parse(checkedOutAt) + 60 * 60_000).toISOString() });
+      if ((storeIndex + serviceIndex) % 4 === 0) {
+        const invoiceId = `invoice-recurring-${suffix}`;
+        invoiceReferences.push({ id: invoiceId, organizationId: organization.id, vendorId: vendor.id, invoiceNumber: `${vendor.code.toUpperCase()}-${year}${String(service.month).padStart(2, "0")}-${store.storeNumber}`, invoiceDate: checkedOutAt.slice(0, 10), grossAmount: { amountMinor, currency: "USD" }, operatorWorkOrderNumber: workOrderNumber, matchStatus: "confirmed", createdAt: new Date(Date.parse(checkedOutAt) + 2 * 86_400_000).toISOString() });
+        invoiceAllocations.push({ id: `allocation-${invoiceId}`, organizationId: organization.id, invoiceReferenceId: invoiceId, workOrderId, amount: { amountMinor, currency: "USD" }, confirmedByMembershipId: "membership-northline-finance", confirmedAt: new Date(Date.parse(checkedOutAt) + 3 * 86_400_000).toISOString() });
+      }
+    });
   });
 
   // A separate, current Store 104 authorization powers the account-free
@@ -705,7 +778,7 @@ function buildFixture(): OpsFixture {
   replacementBenchmarks[0].supersededAt = at(8, 9, 14);
   replacementBenchmarks.push({ id: "replacement-benchmark-beer-cave-2026-quote", organizationId: organization.id, profileId: "replacement-profile-beer-cave-medium", sourceType: "approved_quote", sourceWorkOrderId: replacementWork.id, sourceEstimateProposalId: "estimate-proposal-115-summit-r1", sourceAssetId: "asset-115-beer-cave", sourceVendorId: "vendor-northline-summit", equipmentAmount: { amountMinor: 2_310_000, currency: "USD" }, installationAmount: { amountMinor: 820_000, currency: "USD" }, otherAmount: { amountMinor: 150_000, currency: "USD" }, totalAmount: { amountMinor: 3_280_000, currency: "USD" }, effectiveAt: at(8, 8, 16, 20), status: "published", notes: "Selected replacement quote with equipment, installation, permits, freight, and disposal separated.", createdAt: at(8, 9, 14) });
   replacementEvents.push({ id: "replacement-event-115-approved", organizationId: organization.id, assetId: "asset-115-beer-cave", workOrderId: replacementWork.id, profileId: "replacement-profile-beer-cave-medium", sourceEstimateProposalId: "estimate-proposal-115-summit-r1", status: "approved", approvedAmount: { amountMinor: 3_280_000, currency: "USD" }, approvedAt: at(8, 9, 14), createdAt: at(8, 9, 14) });
-  lifecycleRecommendations.push({ id: "lifecycle-recommendation-115-v1", organizationId: organization.id, assetId: "asset-115-beer-cave", workOrderId: replacementWork.id, version: 1, modelVersion: "transparent-rules-v1", recommendation: "replace", confidence: "medium", inputsJson: JSON.stringify({ asOf: at(8, 9, 14), assetAgeYears: 14.6, expectedLifeYears: 15, trailingRepairSpendMinor: 842000, replacementEstimateMinor: 3280000, failureCount36Months: 4, warrantyActive: false, downtimeMinutes: null }), explanation: "The equipment is near its expected-life range, has repeated reactive work, and recent repair spend is material relative to the dated replacement quote. This is a capital-review recommendation, not an automatic replacement decision.", missingData: ["Verified downtime history", "Peer model failure cohort"], userDecision: "replace", userReason: "Approved the selected Summit quote after facilities review; the repeated failures and age make further major repair unattractive.", decidedByMembershipId: "membership-northline-facilities", decidedAt: at(8, 9, 14), replacementEventId: "replacement-event-115-approved", createdAt: at(8, 9, 14) });
+  lifecycleRecommendations.push({ id: "lifecycle-recommendation-115-v1", organizationId: organization.id, assetId: "asset-115-beer-cave", workOrderId: replacementWork.id, version: 1, modelVersion: "transparent-rules-v1", recommendation: "replace", confidence: "medium", inputsJson: JSON.stringify({ asOf: at(8, 9, 14), assetAgeYears: 14.6, expectedLifeYears: 15, trailingRepairSpendMinor: 842000, replacementEstimateMinor: 3280000, failureCount36Months: 4, warrantyActive: false, downtimeMinutes: null }), explanation: "The equipment is near its expected-life range, has repeated reactive work, and recent repair spend is material relative to the dated replacement quote. This is a capital-review recommendation, not an automatic replacement decision.", missingData: ["Verified downtime history", "Peer model failure cohort"], userDecision: "replace", userReason: "Approved the selected Summit quote after facilities review; the repeated failures and age make further major repair unattractive.", plannedForYear: 2027, decidedByMembershipId: "membership-northline-facilities", decidedAt: at(8, 9, 14), replacementEventId: "replacement-event-115-approved", createdAt: at(8, 9, 14) });
   auditEvents.push({ id: "audit-replacement-event-115-approved", organizationId: organization.id, aggregateType: "asset", aggregateId: "asset-115-beer-cave", eventType: "asset.replacement_approved", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: at(8, 9, 14), payloadJson: JSON.stringify({ replacementEventId: "replacement-event-115-approved", profileId: "replacement-profile-beer-cave-medium", sourceEstimateProposalId: "estimate-proposal-115-summit-r1", benchmarkId: "replacement-benchmark-beer-cave-2026-quote" }) });
 
   // Store 104 has a second visit to make the linked repeat-work story real at
@@ -982,6 +1055,47 @@ function buildFixture(): OpsFixture {
   const invoiceAdjustments: OpsFixture["invoiceAdjustments"] = [];
   const serviceDiscrepancies: OpsFixture["serviceDiscrepancies"] = [];
   const valueEvents: OpsFixture["valueEvents"] = [];
+
+  // Invoice review and spend reporting use different projections, but they
+  // must describe the same source invoices. Seed the richer review projection
+  // from every lightweight invoice reference so counts and drill-throughs do
+  // not contradict one another. Unmatched references intentionally have no
+  // invented line detail or allocation.
+  invoiceReferences.forEach((reference) => {
+    const allocation = invoiceAllocations.find((candidate) => candidate.invoiceReferenceId === reference.id);
+    const workOrder = allocation ? workOrders.find((candidate) => candidate.id === allocation.workOrderId) : undefined;
+    const needsReview = reference.matchStatus !== "confirmed";
+    invoices.push({
+      id: reference.id,
+      organizationId: reference.organizationId,
+      vendorId: reference.vendorId,
+      vendorInvoiceNumber: reference.invoiceNumber,
+      invoiceDate: reference.invoiceDate,
+      subtotal: reference.grossAmount,
+      tax: { amountMinor: 0, currency: reference.grossAmount.currency },
+      fees: { amountMinor: 0, currency: reference.grossAmount.currency },
+      total: reference.grossAmount,
+      approvedForPayment: { amountMinor: 0, currency: reference.grossAmount.currency },
+      paidAmount: { amountMinor: 0, currency: reference.grossAmount.currency },
+      status: needsReview ? "exception" : "received",
+      exceptionReason: needsReview
+        ? reference.matchStatus === "unmatched"
+          ? "No exact operator work-order reference was provided. A reviewer must identify the source work before allocating this invoice."
+          : reference.matchStatus === "suggested"
+            ? "A possible work-order match is available but has not been confirmed by a reviewer."
+            : "The proposed match was rejected and the invoice remains unallocated."
+        : undefined,
+      createdAt: reference.createdAt,
+    });
+    if (allocation && workOrder) {
+      const lineId = `invoice-line-reference-${reference.id}`;
+      invoiceLines.push({ id: lineId, organizationId: reference.organizationId, invoiceId: reference.id, lineNumber: 1, category: "labor", description: "Imported invoice total; source line detail was not captured", quantityThousandths: 1_000, unitAmount: reference.grossAmount, lineAmount: reference.grossAmount, createdAt: reference.createdAt });
+      invoiceLineAllocations.push({ id: `invoice-line-allocation-reference-${reference.id}`, organizationId: reference.organizationId, invoiceLineId: lineId, workOrderId: workOrder.id, assetId: workOrder.assetId, componentId: workOrder.componentId, storeId: workOrder.storeId, tradeKey: workOrder.categoryKey, amount: reference.grossAmount, method: "manual", confirmedByMembershipId: allocation.confirmedByMembershipId, confirmedAt: allocation.confirmedAt });
+    }
+    if (needsReview) {
+      invoiceExceptions.push({ id: `invoice-exception-reference-${reference.id}`, organizationId: reference.organizationId, invoiceId: reference.id, kind: "allocation_mismatch", status: "open", summary: reference.matchStatus === "unmatched" ? "Invoice has no exact operator work-order reference." : reference.matchStatus === "suggested" ? "Suggested work-order match requires human confirmation." : "The prior match suggestion was rejected; select the correct source work.", amount: reference.grossAmount, detectedAt: reference.createdAt });
+    }
+  });
   const pmPeriods = [
     { key: "2025-q4", year: 2025, month: 11, linkWorkOrder: true },
     { key: "2026-q1", year: 2026, month: 2, linkWorkOrder: true },
@@ -1210,6 +1324,8 @@ function buildFixture(): OpsFixture {
     { id: "invoice-line-104-tax", organizationId: organization.id, invoiceId: "invoice-summit-104-compressor", lineNumber: 4, category: "tax", description: "Sales tax", quantityThousandths: 1_000, unitAmount: { amountMinor: 55_000, currency: "USD" }, lineAmount: { amountMinor: 55_000, currency: "USD" }, createdAt: at(7, 11, 14) },
   );
   invoiceLines.forEach((line) => { if (line.invoiceId !== "invoice-summit-104-compressor") return; invoiceLineAllocations.push({ id: `allocation-${line.id}`, organizationId: organization.id, invoiceLineId: line.id, workOrderId: "wo-northline-104", repairItemId: line.category === "labor" || line.category === "part" ? warrantyRepairItemId : undefined, siteVisitWorkOrderId: priorVisitWorkId, assetId: "asset-104-beer-cave", componentId: line.category === "labor" || line.category === "part" ? "component-104-compressor" : undefined, storeId: "store-northline-104", tradeKey: "refrigeration", amount: line.lineAmount, method: "manual", confirmedByMembershipId: "membership-northline-finance", confirmedAt: at(7, 12, 14) }); });
+  invoiceReferences.push({ id: "invoice-summit-104-compressor", organizationId: organization.id, vendorId: "vendor-northline-summit", invoiceNumber: "SUM-104-2607", invoiceDate: "2026-07-11", grossAmount: { amountMinor: 957_500, currency: "USD" }, operatorWorkOrderNumber: "NL-2026-0104", matchStatus: "confirmed", createdAt: at(7, 11, 14) });
+  invoiceAllocations.push({ id: "invoice-reference-allocation-summit-104-compressor", organizationId: organization.id, invoiceReferenceId: "invoice-summit-104-compressor", workOrderId: "wo-northline-104", amount: { amountMinor: 957_500, currency: "USD" }, confirmedByMembershipId: "membership-northline-finance", confirmedAt: at(7, 12, 14) });
   invoiceExceptions.push({ id: "invoice-exception-104-trip", organizationId: organization.id, invoiceId: "invoice-summit-104-compressor", invoiceLineId: "invoice-line-104-trip", kind: "unsupported_trip_charge", status: "open", summary: "Review the separate trip line: it exceeds the current Authorization ceiling and may already be included in the authorized mobilization. The system has not determined validity or changed the amount.", amount: { amountMinor: 12_500, currency: "USD" }, detectedAt: at(7, 11, 14, 5) });
   valueEvents.push(
     { id: "value-event-service-run-104-105-opportunity", organizationId: organization.id, category: "estimated_opportunity", eventType: "projected_route_savings", amount: { amountMinor: 11_250, currency: "USD" }, serviceRunId, contractVersionId: "contract-version-summit-refrigeration-v1", sourceDecision: "Service Run recommendation only; not realized", deduplicationKey: `service-run:${serviceRunId}:projected-route`, occurredAt: serviceRunCreatedAt },

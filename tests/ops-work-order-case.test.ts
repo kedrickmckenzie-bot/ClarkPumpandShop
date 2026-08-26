@@ -53,7 +53,8 @@ describe("work-order case stage projector", () => {
 
     const closed = buildWorkOrderCase({ now: NOW, workOrder: wo("wo-2", "closed") });
     expect(closed.stage).toBe("closed");
-    expect(closed.serviceSubStage?.id).toBe("closed");
+    expect(closed.serviceSubStage).toBeUndefined();
+    expect(closed).toMatchObject({ accountableParty: "No active owner", dueAt: undefined, escalationDestination: "None", primaryActionOverdue: false });
   });
 
   it("moves a confirmed vendor appointment into scheduled with the appointment as due time", () => {

@@ -15,7 +15,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
   if (!definition) return NextResponse.json({ error: "Report definition not found." }, { status: 404 });
 
   const incoming = new URL(request.url).searchParams;
-  const query: Record<string, string> = { ...(definition.source.query ?? {}) };
+  const query: Record<string, string> = { ...(definition.source.query ?? {}), export: "all" };
   for (const key of ["store", "region", "category", "status", "period", "from", "costFrom", "costMonth"]) {
     const value = incoming.get(key)?.trim();
     if (value) query[key] = value;
@@ -28,6 +28,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
   if (!table) return NextResponse.json({ error: "This report has no source rows in the selected scope." }, { status: 409 });
 
   const lines = [
+    [csvCell("Report"), csvCell(definition.title)].join(","),
+    [csvCell("Definition"), csvCell(definition.definition)].join(","),
+    [csvCell("Scope"), csvCell(model.page.scopeLabel)].join(","),
+    [csvCell("Source period"), csvCell(model.page.updatedLabel ?? "Not specified")].join(","),
+    "",
     table.columns.map((column) => csvCell(column.label)).join(","),
     ...table.rows.map((row) => table.columns.map((column) => {
       const cell = row.cells.find((candidate) => candidate.key === column.key);
@@ -41,6 +46,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
       "Content-Disposition": `attachment; filename="${definition.id}.csv"`,
       "Content-Type": "text/csv; charset=utf-8",
       "X-Content-Type-Options": "nosniff",
+      "X-Exported-Record-Count": String(table.rows.length),
     },
   });
 }

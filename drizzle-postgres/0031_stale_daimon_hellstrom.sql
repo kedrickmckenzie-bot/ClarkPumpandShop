@@ -1,0 +1,2 @@
+ALTER TABLE "ops_lifecycle_recommendations" ADD COLUMN "planned_for_year" integer;--> statement-breakpoint
+ALTER TABLE "ops_lifecycle_recommendations" ADD CONSTRAINT "chk_ops_lifecycle_recommendations_plan_year" CHECK ("ops_lifecycle_recommendations"."planned_for_year" IS NULL OR "ops_lifecycle_recommendations"."planned_for_year" BETWEEN 2000 AND 2200);

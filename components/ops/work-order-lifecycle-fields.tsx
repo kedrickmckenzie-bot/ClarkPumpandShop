@@ -123,65 +123,67 @@ export function WorkOrderLifecycleFields({
         <small>Leaving this blank will not create a placeholder asset. It can be linked after diagnosis.</small>
       </label>
 
-      <div className={styles.lifecyclePlanningPanel}>
-        <div className={styles.lifecyclePlanningHeading}>
+      <details className={styles.lifecyclePlanningPanel}>
+        <summary className={styles.lifecyclePlanningHeading}>
           <CircleDollarSign aria-hidden="true" size={21} />
           <div>
-            <strong>Repair vs. replacement planning</strong>
-            <p>Optional when a quote or credible repair estimate exists. This is separate from the authorization limit below.</p>
+            <strong>Compare a quoted repair with replacement</strong>
+            <p>Optional — open only when a vendor supplied a credible repair estimate.</p>
           </div>
-        </div>
-        <div className={styles.fieldGrid}>
-          <label className={styles.field} htmlFor="work-repair-estimate">
-            <span>Current repair estimate <small>Optional</small></span>
-            <input
-              id="work-repair-estimate"
-              name="repairEstimateAmount"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={repairEstimate}
-              onChange={(event) => setRepairEstimate(event.target.value)}
-            />
-            <small>Use the current repair under consideration—not past work cost.</small>
-          </label>
-          <label className={styles.field} htmlFor="work-service-extension">
-            <span>Vendor&apos;s estimated added service <small>Optional years</small></span>
-            <input
-              id="work-service-extension"
-              type="number"
-              inputMode="decimal"
-              min="0.1"
-              step="0.1"
-              placeholder="Uses remaining expected life when blank"
-              value={serviceExtensionYears}
-              onChange={(event) => setServiceExtensionYears(event.target.value)}
-            />
-            <input type="hidden" name="estimatedServiceExtensionMonths" value={extensionMonths ?? ""} />
-            <small>Enter this only when the vendor provides a credible estimate. It is not a warranty or guaranteed outcome.</small>
-          </label>
-        </div>
+        </summary>
+        <div className={styles.lifecyclePlanningBody}>
+          <div className={styles.fieldGrid}>
+            <label className={styles.field} htmlFor="work-repair-estimate">
+              <span>Current repair estimate <small>Optional</small></span>
+              <input
+                id="work-repair-estimate"
+                name="repairEstimateAmount"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={repairEstimate}
+                onChange={(event) => setRepairEstimate(event.target.value)}
+              />
+              <small>Use the current repair under consideration—not past work cost.</small>
+            </label>
+            <label className={styles.field} htmlFor="work-service-extension">
+              <span>Vendor&apos;s estimated added service <small>Optional years</small></span>
+              <input
+                id="work-service-extension"
+                type="number"
+                inputMode="decimal"
+                min="0.1"
+                step="0.1"
+                placeholder="Uses remaining expected life when blank"
+                value={serviceExtensionYears}
+                onChange={(event) => setServiceExtensionYears(event.target.value)}
+              />
+              <input type="hidden" name="estimatedServiceExtensionMonths" value={extensionMonths ?? ""} />
+              <small>Enter this only when the vendor provides a credible estimate. It is not a warranty or guaranteed outcome.</small>
+            </label>
+          </div>
 
-        <div className={styles.lifecyclePlanningResult} data-state={screening?.state ?? "incomplete"}>
-          <Info aria-hidden="true" size={18} />
-          <div>
-            <strong>{resultTitle}</strong>
-            <p>{resultDescription}</p>
-            {screening ? (
-              <dl>
-                <div><dt>Equipment age</dt><dd>{screening.age.ageYears === undefined ? "Not entered" : duration(screening.age.ageYears * 12)}</dd></div>
-                <div><dt>Expected life left</dt><dd>{duration(screening.age.chronologicalRemainingExpectedLifeMonths)}</dd></div>
-                <div><dt>Replacement estimate</dt><dd>{money(screening.comparison.replacementEstimateMinor)}</dd></div>
-                <div><dt>Repair share</dt><dd>{percentage(screening.comparison.repairToReplacementRatio)}</dd></div>
-                <div><dt>Required service runway</dt><dd>{duration(screening.comparison.requiredEconomicRunwayMonths)}</dd></div>
-                <div><dt>Vendor service estimate</dt><dd>{duration(screening.comparison.estimatedServiceExtensionMonths)}</dd></div>
-              </dl>
-            ) : null}
+          <div className={styles.lifecyclePlanningResult} data-state={screening?.state ?? "incomplete"}>
+            <Info aria-hidden="true" size={18} />
+            <div>
+              <strong>{resultTitle}</strong>
+              <p>{resultDescription}</p>
+              {screening ? (
+                <dl>
+                  <div><dt>Equipment age</dt><dd>{screening.age.ageYears === undefined ? "Not entered" : duration(screening.age.ageYears * 12)}</dd></div>
+                  <div><dt>Expected life left</dt><dd>{duration(screening.age.chronologicalRemainingExpectedLifeMonths)}</dd></div>
+                  <div><dt>Replacement estimate</dt><dd>{money(screening.comparison.replacementEstimateMinor)}</dd></div>
+                  <div><dt>Repair share</dt><dd>{percentage(screening.comparison.repairToReplacementRatio)}</dd></div>
+                  <div><dt>Required service runway</dt><dd>{duration(screening.comparison.requiredEconomicRunwayMonths)}</dd></div>
+                  <div><dt>Vendor service estimate</dt><dd>{duration(screening.comparison.estimatedServiceExtensionMonths)}</dd></div>
+                </dl>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      </details>
     </>
   );
 }

@@ -217,6 +217,16 @@ function LifecycleAdministration({ children }: { children?: ReactNode }) {
   return <details className={styles.administration}><summary><span><Landmark size={18} aria-hidden="true" /><span><strong>Replacement planning settings</strong><small>Profiles, benchmarks, escalation, and cohort rules</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary><div>{children}</div></details>;
 }
 
+function LifecycleContext({ model }: { model: ProgramPageViewModel }) {
+  if (!model.breakdowns.length && !model.trends.length) return null;
+  return (
+    <details className={styles.administration}>
+      <summary><span><BarChart3 size={18} aria-hidden="true" /><span><strong>Capital outlook and comparison method</strong><small>Replacement timing, portfolio totals, and the transparent calculation</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary>
+      <div><section className={styles.insights} aria-label="Repair and replacement context">{model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}{model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}</section></div>
+    </details>
+  );
+}
+
 export function PlanningWorkspace({
   model,
   kind,
@@ -237,13 +247,18 @@ export function PlanningWorkspace({
         <Filters model={model} />
         <MetricStrip model={model} kind={kind} />
         {kind === "pm" ? programManagement : null}
-        <section className={styles.insights} aria-label={`${copy.label} analysis`}>
-          {model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}
-          {model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}
-        </section>
-        <ActionQueue model={model} kind={kind} />
-        <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} />
-        {kind === "lifecycle" ? <LifecycleAdministration>{administration}</LifecycleAdministration> : null}
+        {kind === "lifecycle" ? <>
+          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} />
+          <LifecycleContext model={model} />
+          <LifecycleAdministration>{administration}</LifecycleAdministration>
+        </> : <>
+          <section className={styles.insights} aria-label={`${copy.label} analysis`}>
+            {model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}
+            {model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}
+          </section>
+          <ActionQueue model={model} kind={kind} />
+          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} />
+        </>}
       </>}
     </main>
   );

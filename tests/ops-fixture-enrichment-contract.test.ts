@@ -93,8 +93,8 @@ describe("Northline enriched presentation fixture contract", () => {
     expect(fixture.regions).toHaveLength(3);
     expect(fixture.stores).toHaveLength(15);
     expect(fixture.vendors).toHaveLength(5);
-    expect(fixture.workOrders.length).toBeGreaterThanOrEqual(100);
-    expect(fixture.workOrders.length).toBeLessThanOrEqual(125);
+    expect(fixture.workOrders.length).toBeGreaterThanOrEqual(350);
+    expect(fixture.workOrders.length).toBeLessThanOrEqual(425);
     expect(fixture.assets.length).toBeGreaterThanOrEqual(120);
     expect(fixture.assets.length).toBeLessThanOrEqual(160);
     expect(fixture.memberships.filter((membership) => membership.role === "internal_technician")).toHaveLength(2);

@@ -619,8 +619,8 @@ describe("operator issuance route composition", () => {
       "utf8",
     );
 
-    expect(source).toContain("routeAndIssueWorkOrder");
-    expect(source).toMatch(/await\s+routeAndIssueWorkOrder\s*\(/);
+    expect(source).toContain("issueWorkOrderToVendor");
+    expect(source).toMatch(/await\s+issueWorkOrderToVendor\s*\(/);
     expect(source).not.toMatch(/\bassignWorkOrder\s*\(/);
     expect(source).not.toMatch(/\bissueWorkOrder\s*\(/);
   });

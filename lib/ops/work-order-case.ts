@@ -42,8 +42,7 @@ export type WorkOrderServiceSubStage =
   | "scheduled"
   | "onsite"
   | "followup_required"
-  | "closeout_review"
-  | "closed";
+  | "closeout_review";
 
 export interface WorkOrderCaseStageView {
   id: WorkOrderCanonicalStageId;
@@ -101,7 +100,6 @@ export const SERVICE_SUB_STAGE_LABELS: Record<WorkOrderServiceSubStage, string> 
   onsite: "Onsite",
   followup_required: "Follow-up required",
   closeout_review: "Closeout review",
-  closed: "Closed",
 };
 
 const OPEN_TASK_STATUSES = new Set(["open", "in_progress"]);
@@ -181,7 +179,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const unresolvedCheckout = visits.some((row) => row.checkedOutAt && !row.outcome);
   if (fullyClosed) {
     stage = "closed";
-    serviceSubStage = "closed";
+    serviceSubStage = undefined;
   } else if (onsiteNow) {
     stage = "onsite_service";
     serviceSubStage = activeAssignment?.kind === "outside_vendor" ? "onsite" : undefined;
@@ -230,18 +228,22 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
         ? { label: closeoutTask.title, href: `${base}?view=activity#work-control` }
       : { label: "Complete the manager closeout review", href: `${base}?view=visits` },
     cost_invoice_evidence: { label: hasCost ? "Review recorded costs and optional invoice evidence" : "Record the work cost", href: `${base}?view=cost` },
-    closed: { label: "Open the closed record", href: `${base}?view=overview` },
+    closed: { label: "Review the service record", href: `${base}?view=overview` },
   };
 
   // --- Accountability ------------------------------------------------------
   let accountableParty = workOrder.accountableParty;
   if (blockingTask) accountableParty = blockingTask.assigneeName;
   if (stage === "followup_closeout" && closeoutFollowUps[0]) accountableParty = closeoutFollowUps[0].accountableParty;
+  if (fullyClosed) accountableParty = "No active owner";
 
-  let dueAt = blockingTask?.dueAt ?? closeoutFollowUps[0]?.dueAt ?? workOrder.dueAt;
+  let dueAt: string | undefined = blockingTask?.dueAt ?? closeoutFollowUps[0]?.dueAt ?? workOrder.dueAt;
   if (stage === "vendor_response_scheduling" && liveAppointment?.status === "confirmed") dueAt = liveAppointment.startsAt;
+  if (fullyClosed) dueAt = undefined;
 
-  const escalationDestination = blockingTask?.escalationDestination ?? closeoutFollowUps[0]?.escalationTo ?? workOrder.escalationTo ?? "Facilities";
+  const escalationDestination = fullyClosed
+    ? "None"
+    : blockingTask?.escalationDestination ?? closeoutFollowUps[0]?.escalationTo ?? workOrder.escalationTo ?? "Facilities";
 
   let blockingReason: string | undefined;
   if (stage === "vendor_response_scheduling" && liveAppointment?.status === "confirmed") {
@@ -288,7 +290,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     escalationDestination,
     blockingReason,
     alternativeActions: alternativeActions.slice(0, 4),
-    primaryActionOverdue: Boolean(dueAt && Date.parse(input.now) > Date.parse(dueAt)),
+    primaryActionOverdue: !fullyClosed && Boolean(dueAt && Date.parse(input.now) > Date.parse(dueAt)),
   };
 }
 

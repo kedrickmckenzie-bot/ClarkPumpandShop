@@ -344,6 +344,20 @@ a.factCard { padding-right: 38px; }
 .formSectionHeading > span { flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--ops-brand-dark); background: var(--ops-brand-soft); font-size: 13px; font-weight: 800; }
 .formSectionHeading h2 { margin: 1px 0 0; font-size: 18px; }
 .formSectionHeading p { margin: 4px 0 0; color: var(--ops-muted); font-size: 14px; line-height: 1.5; }
+.optionalFormSection { margin-top: 18px; border: 1px solid #dce3df; border-radius: 10px; background: #fafbfa; }
+.optionalFormSection > summary { display: flex; flex-direction: column; gap: 3px; min-height: 60px; padding: 13px 15px; cursor: pointer; list-style: none; }
+.optionalFormSection > summary::-webkit-details-marker, .optionalServiceSection > summary::-webkit-details-marker, .lifecyclePlanningPanel > summary::-webkit-details-marker { display: none; }
+.optionalFormSection > summary strong { font-size: 15px; }
+.optionalFormSection > summary span { color: var(--ops-muted); font-size: 14px; line-height: 1.4; }
+.optionalFormSection > summary::after, .optionalServiceSection > summary::after, .lifecyclePlanningPanel > summary::after { content: "+"; align-self: center; margin-left: auto; color: var(--ops-brand-dark); font-size: 24px; font-weight: 500; line-height: 1; }
+.optionalFormSection > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.optionalFormSection > summary span { grid-column: 1; }
+.optionalFormSection[open] > summary::after, .optionalServiceSection[open] > summary::after, .lifecyclePlanningPanel[open] > summary::after { content: "−"; }
+.optionalFormBody { padding: 0 15px 16px; border-top: 1px solid #e5eae7; }
+.optionalServiceSection > summary { margin: -24px; padding: 24px; cursor: pointer; list-style: none; }
+.optionalServiceSection[open] > summary { margin-bottom: 0; border-bottom: 1px solid #e5eae7; }
+.optionalServiceSection > summary::after { align-self: center; }
+.optionalServiceBody { padding-top: 20px; }
 .field { display: flex; flex-direction: column; gap: 7px; margin-top: 17px; }
 .formSectionHeading + .field, .fieldGrid .field { margin-top: 0; }
 .field > span, .assignmentChoices legend { color: #34423b; font-size: 14px; font-weight: 760; }
@@ -379,14 +393,21 @@ a.factCard { padding-right: 38px; }
 .assignmentChoices label > span { display: flex; flex-direction: column; }
 .assignmentChoices strong { font-size: 14px; }
 .assignmentChoices small { margin-top: 4px; color: var(--ops-muted); font-size: 14px; line-height: 1.45; }
+.providerFieldGrid { grid-template-columns: minmax(0, 1fr); }
+.vendorConditional, .internalConditional, .sendConditional { display: none; }
+.recordForm:has(input[name="assignmentKind"][value="outside_vendor"]:checked) .vendorConditional,
+.recordForm:has(input[name="assignmentKind"][value="outside_vendor"]:checked) .sendConditional,
+.recordForm:has(input[name="assignmentKind"][value="internal"]:checked) .internalConditional { display: flex; }
 .formNotice { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; border: 1px solid #c9dce8; border-radius: 10px; color: #355c71; background: #f0f7fb; }
 .formNotice svg { flex: 0 0 auto; margin-top: 2px; }
 .formNotice p { margin: 0; font-size: 14px; line-height: 1.5; }
 .lifecyclePlanningPanel { margin-top: 18px; padding: 18px; border: 1px solid #cddbd3; border-radius: 12px; background: #f8fbf9; }
-.lifecyclePlanningHeading { display: flex; align-items: flex-start; gap: 10px; color: var(--ops-brand-dark); }
+.lifecyclePlanningHeading { display: flex; align-items: flex-start; gap: 10px; padding: 0; color: var(--ops-brand-dark); cursor: pointer; list-style: none; }
 .lifecyclePlanningHeading svg { flex: 0 0 auto; margin-top: 2px; }
+.lifecyclePlanningHeading > div { min-width: 0; }
 .lifecyclePlanningHeading strong { display: block; font-size: 15px; }
 .lifecyclePlanningHeading p { margin: 3px 0 0; color: var(--ops-muted); font-size: 13px; line-height: 1.45; }
+.lifecyclePlanningBody { padding-top: 2px; }
 .lifecyclePlanningResult { display: flex; align-items: flex-start; gap: 10px; margin-top: 17px; padding: 14px; border: 1px solid var(--ops-border); border-radius: 10px; background: #fff; }
 .lifecyclePlanningResult > svg { flex: 0 0 auto; margin-top: 2px; color: var(--ops-info); }
 .lifecyclePlanningResult > div { min-width: 0; flex: 1; }

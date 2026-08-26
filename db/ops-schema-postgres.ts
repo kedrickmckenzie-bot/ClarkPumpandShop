@@ -988,7 +988,7 @@ export const opsReplacementEvents = pgTable("ops_replacement_events", {
 ]);
 
 export const opsLifecycleRecommendations = pgTable("ops_lifecycle_recommendations", {
-  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), workOrderId: text("work_order_id"), version: integer("version").notNull(), modelVersion: text("model_version").notNull(), recommendation: text("recommendation").notNull(), confidence: text("confidence").notNull(), inputsJson: jsonb("inputs_json").$type<Record<string, unknown>>().notNull(), explanation: text("explanation").notNull(), missingDataJson: jsonb("missing_data_json").$type<string[]>().notNull().default(sql`'[]'::jsonb`), userDecision: text("user_decision").notNull(), userReason: text("user_reason").notNull(), decidedByMembershipId: text("decided_by_membership_id").notNull(), decidedAt: instant("decided_at").notNull(), actualOutcome: text("actual_outcome"), actualOutcomeAt: instant("actual_outcome_at"), replacementEventId: text("replacement_event_id"), createdAt: createdAt(),
+  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), workOrderId: text("work_order_id"), version: integer("version").notNull(), modelVersion: text("model_version").notNull(), recommendation: text("recommendation").notNull(), confidence: text("confidence").notNull(), inputsJson: jsonb("inputs_json").$type<Record<string, unknown>>().notNull(), explanation: text("explanation").notNull(), missingDataJson: jsonb("missing_data_json").$type<string[]>().notNull().default(sql`'[]'::jsonb`), userDecision: text("user_decision").notNull(), userReason: text("user_reason").notNull(), plannedForYear: integer("planned_for_year"), decidedByMembershipId: text("decided_by_membership_id").notNull(), decidedAt: instant("decided_at").notNull(), actualOutcome: text("actual_outcome"), actualOutcomeAt: instant("actual_outcome_at"), replacementEventId: text("replacement_event_id"), createdAt: createdAt(),
 }, (table) => [
   unique("uq_ops_lifecycle_recommendations_org_id").on(table.organizationId, table.id),
   uniqueIndex("uidx_ops_lifecycle_recommendations_org_asset_version").on(table.organizationId, table.assetId, table.version),
@@ -1002,6 +1002,7 @@ export const opsLifecycleRecommendations = pgTable("ops_lifecycle_recommendation
   check("chk_ops_lifecycle_recommendations_recommendation", sql`${table.recommendation} IN ('repair', 'replace', 'capital_review')`),
   check("chk_ops_lifecycle_recommendations_confidence", sql`${table.confidence} IN ('low', 'medium', 'high')`),
   check("chk_ops_lifecycle_recommendations_decision", sql`${table.userDecision} IN ('repair', 'replace', 'defer', 'investigate')`),
+  check("chk_ops_lifecycle_recommendations_plan_year", sql`${table.plannedForYear} IS NULL OR ${table.plannedForYear} BETWEEN 2000 AND 2200`),
   check("chk_ops_lifecycle_recommendations_outcome", sql`${table.actualOutcome} IS NULL OR ${table.actualOutcome} IN ('repaired', 'replaced', 'retired_without_replacement', 'still_in_service')`),
 ]);
 

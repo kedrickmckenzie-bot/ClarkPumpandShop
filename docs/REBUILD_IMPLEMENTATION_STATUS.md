@@ -1,10 +1,39 @@
 # Rebuild Implementation Status
 
-**Snapshot date:** August 24, 2026  
-**Demo implementation status:** reactive loop accepted end to end; PM, Service Runs, warranty, invoice controls, lifecycle planning, and source-linked value are now interactive; transactional-outbox delivery/retry worker and SLA escalation worker added  
+**Snapshot date:** August 26, 2026
+
+**Demo implementation status:** the canonical service loop, public vendor visit, operator queues, PM, equipment lifecycle, invoice safeguards, management reporting, onboarding preview, and outbound-email configuration are connected in the fictional 15-store suite. Production identity, import apply, private document delivery, and production delivery operations remain go-live work.
 **Authority:** the merged Codex master rebuild directive supplied for this rebuild, the user's active Wave 1 acceptance target, and repository `AGENTS.md`. Earlier c-store plans remain useful history only where they do not conflict.
 
 This is an honest inventory of the active worktree. “Complete” below means the step is connected through persisted data, server authorization, product UI, bounded Workflow Tasks, Audit Events, deterministic fixture coverage, and automated tests. The original merged master directive remains the capability authority; demo sequencing does not narrow those requirements.
+
+## Current consolidation pass (August 26, 2026)
+
+This section supersedes older capability and gap statements later in this historical log where they conflict.
+
+- Operator throughput: Review queue, Work orders, and Service visits use dense queue-to-preview workspaces so managers can inspect the selected record without losing their place. Work orders add an atomic multi-record follow-up action with terminal records excluded. The create flow now progressively discloses provider-specific and optional fields; known outside-vendor work can be created and issued in one action, while approval policy still stops an unauthorized send.
+- Plain-language service state: every work-order case projects one stage, accountable party, next action, due time, and escalation destination from persisted facts. Sent, opened, accepted, scheduled, onsite, follow-up, cost review, and closure are distinct; bid requests remain pricing-only records rather than duplicate service work.
+- Technician simplicity: the account-free store flow asks for the operator work, selecting “No work order provided” only when needed; check-in collects one technician name, company, crew count, and conditional reason/notes. Checkout uses six shared outcomes, creates unresolved follow-up automatically, and supports a different checkout channel from check-in. Vehicle IDs, individual crew rosters, technician phone numbers, and technician-authored ownership/escalation fields are not required.
+- Evidence-backed demo data: the fictional tenant remains exactly 15 stores, five approved outside vendors, and two internal technicians. Source fixtures now include recurring landscaping, snow/ice, drains, HVAC PM, and foodservice-cleaning history instead of blanket price multipliers, alongside the deeper refrigeration/HVAC stories. Current fixture generation produces 95 requests, 391 work orders, 386 visits, 138 assets, 76 PM occurrences, and 9,701 D1 seed statements; scale remains separately proven with the approximately 65-store fixture.
+- Invoice truth: invoice intake writes the rich line/allocation model and the lightweight review-reference model together. Safeguards use structural evidence—exact invoice identity, one work order receiving conflicting invoice allocation, authorization, warranty, and observed-visit comparisons. Same-vendor/same-amount activity across stores is not treated as duplicate evidence.
+- Management capital planning: repair screening stays a transparent comparison, never an automatic replacement directive. Replace/defer decisions require a management planning year; history preserves the prior decision, and portfolio capital outlook distinguishes management-planned replacements from age-based planning estimates. D1 is current through `0036`; PostgreSQL is current through `0031`.
+- Reporting and onboarding: management CSV exports include the report definition, scope, source period, and the complete filtered record set rather than only the visible page. Store/vendor/equipment CSV onboarding is deliberately labeled dry-run validation; applying imports to production records is not claimed.
+- Delivery boundary: configured transactional email can send a versioned service authorization to the vendor dispatch address, while a secure manual-share link always remains available. Internal notification rules, retries, and failures are visible. SMS, bounce/webhook processing, production credentials, and production support operations are not implied.
+- Deliberately hidden legacy surface: Service Runs remain in the retained domain for future route-density planning but are removed from normal navigation and role destinations because the current buyer workflow does not justify that operator surface.
+
+Current go-live boundary: preview role switching is not authentication; production CSV apply, identity, private document access, delivery retry/bounce operations for service-authorization email, database/object-store backup and recovery, and production monitoring must be completed before real customer data is onboarded.
+
+### Validation for this pass
+
+| Gate | Result |
+|---|---|
+| `npm run db:seed` | **PASS** — exact 15-store/five-vendor fixture, 391 work orders, 386 visits, 9,701 statements, plus the 65-store scale fixture. |
+| `npm run typecheck` | **PASS** — zero TypeScript errors. |
+| `npm run lint` | **PASS** — zero ESLint findings. |
+| `npm test` | **PASS** — 94 files / 568 tests. |
+| `npm run test:e2e` | **PASS** — 4 files / 36 database-backed journey and boundary tests. |
+| `npm run build` | **PASS** — Vinext production build complete; its existing duplicate emitted-CSS filename warning remains non-fatal. |
+| Browser walkthrough | **PASS** — Overview, Work orders, Service visits, Equipment lifecycle, PM, Vendors, Reports, import preview, Store 104 public QR entry, and the 390×844 technician flow loaded without console errors or horizontal overflow. The refreshed lifecycle view showed one management-planned replacement at $32,853 rather than an empty capital-plan claim. |
 
 ## Active Wave 1 acceptance loop
 

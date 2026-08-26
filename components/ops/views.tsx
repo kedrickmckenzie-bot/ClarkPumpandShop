@@ -334,7 +334,7 @@ function FilterGroups({ filters }: { filters?: FilterGroupViewModel[] }) {
   );
 }
 
-function DataTable({ table }: { table: TableViewModel }) {
+function DataTable({ table, selectedId, rowHref, selection }: { table: TableViewModel; selectedId?: string; rowHref?: (row: TableViewModel["rows"][number]) => string; selection?: { name: string; label: string; isDisabled?: (row: TableViewModel["rows"][number]) => boolean } }) {
   if (!table.rows.length) return <InlineEmpty message="No source records are linked to this section yet." />;
 
   return (
@@ -343,16 +343,17 @@ function DataTable({ table }: { table: TableViewModel }) {
         <table className={styles.dataTable}>
           <caption className={styles.visuallyHidden}>{table.caption}</caption>
           <thead>
-            <tr>{table.columns.map((column) => <th className={column.align === "end" ? styles.alignEnd : undefined} scope="col" key={column.key}>{column.label}</th>)}</tr>
+            <tr>{selection ? <th className={styles.selectColumn} scope="col"><span className={styles.visuallyHidden}>{selection.label}</span></th> : null}{table.columns.map((column) => <th className={column.align === "end" ? styles.alignEnd : undefined} scope="col" key={column.key}>{column.label}</th>)}</tr>
           </thead>
           <tbody>
             {table.rows.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} data-selected={row.id === selectedId || undefined}>
+                {selection ? <td className={styles.selectColumn}><input type="checkbox" name={selection.name} value={row.id} aria-label={`Select ${row.label}`} disabled={selection.isDisabled?.(row)} /></td> : null}
                 {table.columns.map((column, index) => {
                   const cell = row.cells.find((candidate) => candidate.key === column.key);
                   return (
                     <td className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
-                      <Link href={row.href} aria-label={index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
+                      <Link href={rowHref?.(row) ?? row.href} aria-current={row.id === selectedId ? "true" : undefined} aria-label={index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
                         <span>{cell?.value ?? "—"}</span>
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
                         {index === table.columns.length - 1 ? <ChevronRight className={styles.cellChevron} aria-hidden="true" size={15} /> : null}
@@ -373,24 +374,34 @@ type SurfaceViewMode = "tile" | "table";
 
 /** Surfaces whose records read best as summary cards; every operational queue defaults to a dense table. */
 const TILE_DEFAULT_SURFACES = new Set(["stores"]);
+const TRIAGE_SURFACES = new Set(["action-center", "work-orders", "visits"]);
 
 export function ListSurface({ model, surface, searchParams }: { model: ListPageViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
+  const triageMode = TRIAGE_SURFACES.has(surface);
+  const selectedParam = searchParams.selected;
+  const selectedId = typeof selectedParam === "string" ? selectedParam : Array.isArray(selectedParam) ? selectedParam[0] : undefined;
+  const selectedRow = selectedId ? model.table.rows.find((row) => row.id === selectedId) : undefined;
   const viewParam = searchParams.view;
   const requestedView = typeof viewParam === "string" && (viewParam === "table" || viewParam === "tile") ? viewParam : null;
-  const viewMode: SurfaceViewMode = requestedView ?? (TILE_DEFAULT_SURFACES.has(surface) ? "tile" : "table");
+  const viewMode: SurfaceViewMode = triageMode ? "table" : requestedView ?? (TILE_DEFAULT_SURFACES.has(surface) ? "tile" : "table");
   const toggleQuery = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
-    if (key === "view" || value === undefined) continue;
+    if (key === "view" || key === "selected" || value === undefined) continue;
     for (const single of Array.isArray(value) ? value : [value]) toggleQuery.append(key, single);
   }
   const baseQuery = toggleQuery.toString();
   const nextView: SurfaceViewMode = viewMode === "tile" ? "table" : "tile";
   const toggleHref = `/app/${surface}?${baseQuery ? `${baseQuery}&` : ""}view=${nextView}`;
+  const selectionHref = (id?: string) => `/app/${surface}?${[baseQuery, id ? `selected=${encodeURIComponent(id)}` : ""].filter(Boolean).join("&")}`;
+  const workOrderReturnTo = `/app/work-orders${baseQuery ? `?${baseQuery}` : ""}`;
+  const noticeParam = searchParams.notice;
+  const notice = typeof noticeParam === "string" ? noticeParam : Array.isArray(noticeParam) ? noticeParam[0] : undefined;
   return (
     <div className={styles.pageStack}>
       <PageHeader page={model.page} />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
+          {notice ? <div className={styles.successNotice} role="status">{notice}</div> : null}
           {model.metrics ? <MetricStrip metrics={model.metrics} /> : null}
           <section className={styles.listWorkspace}>
             <div className={styles.listToolbar}>
@@ -413,12 +424,33 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
                 {model.clearFiltersHref ? <Link className={styles.clearFilters} href={model.clearFiltersHref}>Clear all</Link> : null}
               </div>
             ) : null}
-            {viewMode === "tile" ? <RecordTileGrid table={model.table} /> : <DataTable table={model.table} />}
-            <nav className={styles.viewToggle} aria-label="Display mode">
-              <Link href={toggleHref} className={styles.viewToggleLink}>
-                {nextView === "table" ? "Switch to table view" : "Switch to card view"}
-              </Link>
-            </nav>
+            {triageMode ? (
+              <div className={styles.triageWorkspace}>
+                <div className={styles.triageList}>{surface === "work-orders" ? (
+                  <form className={styles.bulkForm} action="/api/ops/work-orders/bulk-follow-up" method="post">
+                    <input type="hidden" name="returnTo" value={workOrderReturnTo} />
+                    <DataTable table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} selection={{ name: "workOrderId", label: "Select open work orders for a bulk follow-up", isDisabled: (row) => ["Closed", "Cancelled"].includes(row.cells.find((cell) => cell.key === "status")?.value ?? "") }} />
+                    <div className={styles.bulkToolbar}>
+                      <div><strong>Add the same follow-up to selected work</strong><small>One auditable, non-blocking reminder is added to each selected record.</small></div>
+                      <label><span>Action</span><input name="nextAction" required maxLength={240} defaultValue="Follow up with provider" /></label>
+                      <label><span>Due</span><input name="dueAt" type="datetime-local" required /></label>
+                      <button type="submit">Add follow-ups</button>
+                    </div>
+                  </form>
+                ) : <DataTable table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} />}</div>
+                <aside className={styles.triagePreview} aria-live="polite">
+                  {selectedRow ? <>
+                    <header><div><span>Selected record</span><h2>{selectedRow.label}</h2></div><Link href={selectionHref()} aria-label="Close record preview">×</Link></header>
+                    {selectedRow.cells[0]?.secondary ? <p className={styles.triageSummary}>{selectedRow.cells[0].secondary}</p> : null}
+                    <dl>{model.table.columns.map((column) => { const cell = selectedRow.cells.find((candidate) => candidate.key === column.key); return <div key={column.key}><dt>{column.label}</dt><dd>{cell?.value ?? "—"}{cell?.secondary && cell.secondary !== selectedRow.cells[0]?.secondary ? <small>{cell.secondary}</small> : null}</dd></div>; })}</dl>
+                    <Link className={styles.triageOpen} href={selectedRow.href}>Open full record<ExternalLink aria-hidden="true" size={15} /></Link>
+                  </> : <div className={styles.triageEmpty}><Inbox aria-hidden="true" size={24} /><strong>Select a row</strong><p>Review the key facts here without leaving the queue. Open the full record only when a decision or detailed update is needed.</p></div>}
+                </aside>
+              </div>
+            ) : viewMode === "tile" ? <RecordTileGrid table={model.table} /> : <DataTable table={model.table} />}
+            {!triageMode ? <nav className={styles.viewToggle} aria-label="Display mode">
+              <Link href={toggleHref} className={styles.viewToggleLink}>{nextView === "table" ? "Switch to table view" : "Switch to card view"}</Link>
+            </nav> : null}
             {model.pagination ? (
               <nav className={styles.pagination} aria-label="Result pages">
                 <span>{model.pagination.summary}</span>

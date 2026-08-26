@@ -52,7 +52,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const draft = buildLifecycleRecommendationDraft(fixture, currentAsset, fixture.asOf);
       const userDecision = formText(formData, "userDecision", { required: true, max: 30 });
       if (!["repair", "replace", "defer", "investigate"].includes(userDecision)) throw new OpsDomainError("VALIDATION", "Choose a supported lifecycle decision.");
-      await recordLifecycleRecommendation({ repository: context.repository }, { ...draft, organizationId: context.session.organizationId, assetId: asset.id, userDecision: userDecision as "repair" | "replace" | "defer" | "investigate", userReason: formText(formData, "userReason", { required: true, max: 2_000 }), actor: context.actor });
+      const rawPlanningYear = formText(formData, "plannedForYear", { max: 4 });
+      const plannedForYear = rawPlanningYear ? Number(rawPlanningYear) : undefined;
+      if (plannedForYear !== undefined && !Number.isSafeInteger(plannedForYear)) throw new OpsDomainError("VALIDATION", "Capital-planning year must be a whole year.");
+      await recordLifecycleRecommendation({ repository: context.repository }, { ...draft, organizationId: context.session.organizationId, assetId: asset.id, userDecision: userDecision as "repair" | "replace" | "defer" | "investigate", userReason: formText(formData, "userReason", { required: true, max: 2_000 }), plannedForYear, actor: context.actor });
       return success(request, `/app/equipment/${encodeURIComponent(asset.id)}?updated=lifecycle-recommendation#replacement-intelligence`);
     }
     if (operation === "complete-replacement") {

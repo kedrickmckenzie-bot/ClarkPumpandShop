@@ -44,7 +44,7 @@ export type OperatorDetailRoutePolicyId =
   | "invoice";
 
 export type OperatorPrimaryNavigationId = "home" | "work" | "stores" | "vendors" | "insights" | "reports";
-export type OperatorWorkNavigationId = "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "service-runs" | "invoice-review";
+export type OperatorWorkNavigationId = "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "invoice-review";
 export type OperatorInsightsNavigationId = "spend" | "equipment" | "pm" | "lifecycle";
 
 interface DemoOperatorRolePolicy {
@@ -89,7 +89,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "service-runs", "invoice-review"],
+    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   regional: {
@@ -98,7 +98,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     programRoutes: ["spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "service-runs", "invoice-review"],
+    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "pm", "lifecycle"],
   },
   store_manager: {
@@ -107,7 +107,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     programRoutes: ["spend", "equipment", "pm"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["requests", "work-orders", "visits", "service-runs"],
+    workNavigation: ["requests", "work-orders", "visits"],
     insightsNavigation: ["spend", "equipment", "pm"],
   },
   executive: {
@@ -125,7 +125,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     programRoutes: ["spend", "equipment", "lifecycle"],
     detailRoutes: ["work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "work-orders", "estimates", "service-runs", "invoice-review"],
+    workNavigation: ["needs-attention", "work-orders", "estimates", "invoice-review"],
     insightsNavigation: ["spend", "equipment", "lifecycle"],
   },
 };
@@ -178,7 +178,10 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
   }
   if (area === "estimates") return roleCanAccessListRoute(role, "estimates");
   if (area === "visits") return record ? roleCanAccessDetailRoute(role, "visit") : roleCanAccessListRoute(role, "visits");
-  if (area === "service-runs") return roleCanSeeWorkNavigation(role, "service-runs");
+  // Route-planning internals are not part of the customer-facing c-store suite.
+  // The domain can retain them without teaching a two-person facilities team a
+  // second dispatch vocabulary or exposing dead-end links from normal records.
+  if (area === "service-runs") return false;
   if (area === "stores") {
     if (record === "new") return roleCan(role, "create_store");
     return record ? roleCanAccessDetailRoute(role, "store") : roleCanAccessListRoute(role, "stores");

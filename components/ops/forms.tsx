@@ -32,9 +32,9 @@ function Datalist({ id, options }: { id: string; options: SelectOptionViewModel[
   return <datalist id={id}>{options.map((option) => <option value={option.value} label={option.label} key={option.value}>{option.description}</option>)}</datalist>;
 }
 
-function SelectField({ id, name, label, options, required, helper, defaultValue }: { id: string; name: string; label: string; options: SelectOptionViewModel[]; required?: boolean; helper?: string; defaultValue?: string }) {
+function SelectField({ id, name, label, options, required, helper, defaultValue, className }: { id: string; name: string; label: string; options: SelectOptionViewModel[]; required?: boolean; helper?: string; defaultValue?: string; className?: string }) {
   return (
-    <label className={styles.field} htmlFor={id}>
+    <label className={[styles.field, className].filter(Boolean).join(" ")} htmlFor={id}>
       <span>{label}{required ? <em>Required</em> : <small>Optional</small>}</span>
       <select id={id} name={name} required={required} defaultValue={defaultValue ?? ""}>
         <option value="" disabled={required}>Select an option</option>
@@ -136,15 +136,20 @@ export function CreateWorkOrderForm({ model, componentId, edition = "complete" }
               <span>Problem <em>Required</em></span>
               <textarea id="work-problem" name="problem" rows={5} required minLength={10} placeholder="What needs to be inspected, repaired, or maintained?" defaultValue={model.sourceRequest?.problem ?? model.defaults?.problem} />
             </label>
-            <div className={styles.fieldGrid}>
-              <SelectField id="work-priority" name="priority" label="Priority" required options={model.priorityOptions} />
-              {!accountabilityOnly ? <label className={styles.field} htmlFor="work-category">
-                <span>Category <small>Optional</small></span>
-                <input id="work-category" name="categoryKey" list="work-category-options" placeholder="Classify now or leave blank" autoComplete="off" defaultValue={model.defaults?.categoryKey} />
-                <Datalist id="work-category-options" options={model.categories} />
-              </label> : null}
-            </div>
-            {!accountabilityOnly ? <WorkOrderLifecycleFields assets={model.assetLifecycleInputs} asOf={model.lifecycleAsOf} defaultAssetId={model.defaults?.assetId} /> : null}
+            <SelectField id="work-priority" name="priority" label="Priority" required options={model.priorityOptions} />
+            {!accountabilityOnly ? (
+              <details className={styles.optionalFormSection} open={Boolean(componentId || model.defaults?.assetId || model.defaults?.categoryKey)}>
+                <summary><strong>Classify equipment</strong><span>Optional — add a category or known asset now, or leave it for diagnosis</span></summary>
+                <div className={styles.optionalFormBody}>
+                  <label className={styles.field} htmlFor="work-category">
+                    <span>Category <small>Optional</small></span>
+                    <input id="work-category" name="categoryKey" list="work-category-options" placeholder="Classify now or leave blank" autoComplete="off" defaultValue={model.defaults?.categoryKey} />
+                    <Datalist id="work-category-options" options={model.categories} />
+                  </label>
+                  <WorkOrderLifecycleFields assets={model.assetLifecycleInputs} asOf={model.lifecycleAsOf} defaultAssetId={model.defaults?.assetId} />
+                </div>
+              </details>
+            ) : null}
           </section>
 
           <section className={styles.formSection}>
@@ -164,37 +169,43 @@ export function CreateWorkOrderForm({ model, componentId, edition = "complete" }
               {!accountabilityOnly ? <label htmlFor="assignment-bid" aria-label="Request vendor bids"><input id="assignment-bid" type="radio" name="assignmentKind" value="bid_request" /><span><strong>Request bids first</strong><small>Ask vendors for pricing by a due date. No vendor is assigned and no check-in is available.</small></span></label> : null}
               <label htmlFor="assignment-later" aria-label="Decide later"><input id="assignment-later" type="radio" name="assignmentKind" value="choose_later" defaultChecked={model.defaults?.assignmentKind === "choose_later" || (accountabilityOnly && !model.defaults?.vendorId && model.defaults?.assignmentKind !== "outside_vendor")} /><span><strong>Choose later</strong><small>Save the work order now and select the vendor before sending it.</small></span></label>
             </fieldset>
-            <div className={styles.fieldGrid}>
-              <label className={styles.field} htmlFor="work-vendor">
+            <div className={`${styles.fieldGrid} ${styles.providerFieldGrid}`}>
+              <label className={`${styles.field} ${styles.vendorConditional}`} htmlFor="work-vendor">
                 <span>Service vendor <small>Required only for “Outside vendor”</small></span>
                 <input id="work-vendor" name="vendorId" list="work-vendor-options" placeholder="Search name, specialty, equipment, or coverage" autoComplete="off" defaultValue={model.defaults?.vendorId} />
                 <Datalist id="work-vendor-options" options={model.vendors} />
               </label>
-              {!accountabilityOnly ? <SelectField id="work-internal-assignee" name="internalMembershipId" label="Internal assignee" options={model.internalAssignees} helper="Can be assigned after creation." defaultValue={model.defaults?.internalMembershipId} /> : null}
+              {!accountabilityOnly ? <SelectField id="work-internal-assignee" name="internalMembershipId" label="Internal assignee" options={model.internalAssignees} helper="Can be assigned after creation." defaultValue={model.defaults?.internalMembershipId} className={styles.internalConditional} /> : null}
             </div>
             </>}
           </section>
 
-          <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>3</span><div><h2>Add service details</h2><p>{accountabilityOnly ? "Give the vendor the scope and requested service date they need to act." : "These fields apply to authorized service work. Bid requests use a separate pricing scope and response deadline."}</p></div></div>
-            <label className={styles.field} htmlFor="work-scope">
-              <span>Authorized scope <small>Optional</small></span>
-              <textarea id="work-scope" name="authorizedScope" rows={4} placeholder="Define what is authorized and when approval is required before expanding the work." />
-            </label>
-            <div className={styles.fieldGrid}>
-              {!accountabilityOnly ? <label className={styles.field} htmlFor="work-nte">
-                <span>Not-to-exceed amount <small>Optional</small></span>
-                <input id="work-nte" name="nteAmount" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00" />
-              </label> : null}
-              <label className={styles.field} htmlFor="work-due">
-                <span>Requested by <small>Optional</small></span>
-                <input id="work-due" name="dueAt" type="datetime-local" />
+          <details className={`${styles.formSection} ${styles.optionalServiceSection}`}>
+            <summary className={styles.formSectionHeading}><span>3</span><div><h2>Add service details</h2><p>{accountabilityOnly ? "Optional scope or requested service date." : "Optional scope, spending limit, or requested date. Open this when the vendor needs more than the problem description."}</p></div></summary>
+            <div className={styles.optionalServiceBody}>
+              <label className={styles.field} htmlFor="work-scope">
+                <span>Authorized scope <small>Optional</small></span>
+                <textarea id="work-scope" name="authorizedScope" rows={4} placeholder="Define what is authorized and when approval is required before expanding the work." />
               </label>
+              <div className={styles.fieldGrid}>
+                {!accountabilityOnly ? <label className={styles.field} htmlFor="work-nte">
+                  <span>Not-to-exceed amount <small>Optional</small></span>
+                  <input id="work-nte" name="nteAmount" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00" />
+                </label> : null}
+                <label className={styles.field} htmlFor="work-due">
+                  <span>Requested by <small>Optional</small></span>
+                  <input id="work-due" name="dueAt" type="datetime-local" />
+                </label>
+              </div>
             </div>
-          </section>
+          </details>
 
-          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p>{accountabilityOnly ? <><strong>Creating the work order does not invent a visit.</strong> Send the service authorization, then the technician selects this work order when checking in at the store.</> : <><strong>A bid request and a service authorization are different records.</strong> Bid requests ask for numbers only. Service work is not authorized—and vendor check-in is not enabled—until a service authorization is deliberately sent.</>}</p></div>
-          <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Create work order<ArrowRight aria-hidden="true" size={18} /></button></div>
+          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p>{accountabilityOnly ? <><strong>Creating the work order does not invent a visit.</strong> For outside-vendor work, “Create and send to vendor” issues the authorization immediately; approval policy still stops the send when review is required.</> : <><strong>A bid request and a service authorization are different records.</strong> Bid requests ask for numbers only. “Create and send to vendor” is the short path for known outside-vendor work and still honors configured approval rules.</>}</p></div>
+          <div className={styles.formFooter}>
+            <Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link>
+            <button className={styles.secondaryButton} type="submit" name="intent" value="save">Create only</button>
+            {!model.sourceVisit ? <button className={`${styles.primaryButton} ${styles.sendConditional}`} type="submit" name="intent" value="create_and_send">Create and send to vendor<Send aria-hidden="true" size={18} /></button> : null}
+          </div>
         </form>
       ) : null}
     </div>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   completeVendorReminder,
+  createBulkFollowUps,
   createFollowUp,
   createVendorReminder,
   createWorkOrder,
@@ -119,5 +120,33 @@ describe("multi-obligation follow-up and vendor reminders", () => {
     expect(test.repository.snapshot().workOrders).toHaveLength(startingWorkOrderCount);
     expect(test.repository.snapshot().auditEvents.filter((event) => event.aggregateId === "vendor-northline-summit").map((event) => event.eventType))
       .toEqual(expect.arrayContaining(["vendor.reminder_created", "vendor.reminder_updated", "vendor.reminder_completed"]));
+  });
+
+  it("adds a non-blocking follow-up to multiple work orders in one batch", async () => {
+    const test = harness();
+    const selected = test.repository.snapshot().workOrders
+      .filter((workOrder) => !["closed", "cancelled", "resolved"].includes(workOrder.status))
+      .slice(0, 2);
+    const result = await createBulkFollowUps(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      workOrderIds: selected.map((workOrder) => workOrder.id),
+      accountableParty: "Facilities coordinator",
+      nextAction: "Follow up with provider",
+      dueAt: "2026-08-28T15:00:00.000Z",
+      escalationTo: "Facilities director",
+      actor,
+    });
+
+    expect(result.count).toBe(2);
+    for (const workOrder of selected) {
+      const detail = await test.repository.getWorkOrderDetail({ organizationId: NORTHLINE_ORGANIZATION_ID }, workOrder.id);
+      expect(detail?.followUps).toEqual(expect.arrayContaining([
+        expect.objectContaining({ nextAction: "Follow up with provider", dueAt: "2026-08-28T15:00:00.000Z" }),
+      ]));
+      expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id)).toMatchObject({
+        nextAction: workOrder.nextAction,
+        dueAt: workOrder.dueAt,
+      });
+    }
   });
 });

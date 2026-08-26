@@ -223,6 +223,18 @@ describe("operator presenter drill-through contracts", () => {
     expect(effectiveness?.segments.every((row) => row.link.href.startsWith("/app/pm"))).toBe(true);
   });
 
+  it("keeps interactive lists paginated while allowing a scoped complete export projection", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const session = executiveSession();
+    const interactive = buildListModel(fixture, session, "work-orders");
+    const exported = buildListModel(fixture, session, "work-orders", { export: "all" });
+    const scopedCount = fixture.workOrders.filter((workOrder) => workOrder.organizationId === session.organizationId).length;
+
+    expect(interactive.table.rows).toHaveLength(25);
+    expect(exported.table.rows).toHaveLength(scopedCount);
+    expect(exported.table.rows.every((row) => row.href.startsWith("/app/work-orders/"))).toBe(true);
+  });
+
   it("keeps Store 104's repair economics separate from visit history and opens exact planning-year assets", () => {
     const fixture = buildNorthlinePresentationFixture();
     const session = executiveSession();

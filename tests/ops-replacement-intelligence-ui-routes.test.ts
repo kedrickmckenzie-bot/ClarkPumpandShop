@@ -64,7 +64,8 @@ describe("interactive replacement intelligence", () => {
         currentProfileId: "profile-1", profileName: "Refrigeration", specificationLabel: "Capacity: 5 ton", adjustmentLabel: "None", inheritedPeerCount: 4,
         profiles: [], event: { id: "event-1", approvedAmountLabel: "$30,000", approvedAtLabel: "Aug 9, 2026", workOrderNumber: "NL-2026-001" },
         recommendation: { recommendationLabel: "Capital Review", confidenceLabel: "Medium", explanation: "One transparent threshold is met.", missingData: ["Verified downtime history"] },
-        recommendationHistory: [{ id: "rec-1", version: 1, modelVersion: "transparent-rules-v1", recommendationLabel: "Capital Review", confidenceLabel: "Medium", decisionLabel: "Investigate", reason: "Confirm the compressor scope.", decidedAtLabel: "Aug 9, 2026", explanation: "One transparent threshold is met.", missingData: ["Verified downtime history"], actualOutcomeLabel: "Outcome not recorded yet" }],
+        recommendationHistory: [{ id: "rec-1", version: 1, modelVersion: "transparent-rules-v1", recommendationLabel: "Capital Review", confidenceLabel: "Medium", decisionLabel: "Investigate", planningLabel: "No replacement year committed", reason: "Confirm the compressor scope.", decidedAtLabel: "Aug 9, 2026", explanation: "One transparent threshold is met.", missingData: ["Verified downtime history"], actualOutcomeLabel: "Outcome not recorded yet" }],
+        defaultPlanningYear: 2027,
         assetDefaults: { tag: "BC-01", name: "Beer cave", manufacturer: "Hillphoenix", model: "BC-5", supplier: "Supplier" },
       },
     }));
@@ -73,8 +74,8 @@ describe("interactive replacement intelligence", () => {
     expect(assetMarkup).toContain('action="/api/ops/equipment/asset-1/replacement"');
     expect(assetMarkup).toContain("Save equipment-only estimate");
     expect(assetMarkup).toContain("Retire old equipment and create successor");
-    expect(assetMarkup).toContain("Record versioned recommendation and decision");
-    expect(assetMarkup).toContain("Recommendation history (1)");
+    expect(assetMarkup).toContain("Record decision");
+    expect(assetMarkup).toContain("Decision history (1)");
   });
 
   it("records a server-derived versioned recommendation with the manager decision and audit", async () => {
@@ -91,6 +92,26 @@ describe("interactive replacement intelligence", () => {
     expect(after.lifecycleRecommendations.filter((row) => row.assetId === asset.id)).toHaveLength(before + 1);
     expect(after.lifecycleRecommendations).toContainEqual(expect.objectContaining({ assetId: asset.id, modelVersion: "transparent-rules-v2", userDecision: "investigate", confidence: expect.stringMatching(/low|medium|high/), missingData: expect.any(Array) }));
     expect(after.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: asset.id, eventType: "asset.lifecycle_recommendation_recorded" }));
+  });
+
+  it("requires and preserves a planning year for a replacement decision", async () => {
+    const repository = context();
+    const asset = repository.snapshot().assets.find((row) => row.id === "asset-104-beer-cave")!;
+    const incomplete = new FormData();
+    incomplete.set("operation", "record-recommendation");
+    incomplete.set("userDecision", "replace");
+    incomplete.set("userReason", "Move this unit into the capital plan after the current service visit.");
+    const rejected = await updateAssetReplacement(new Request(`https://ops.test/api/ops/equipment/${asset.id}/replacement`, { method: "POST", body: incomplete }), { params: Promise.resolve({ id: asset.id }) });
+    expect(rejected.status).toBe(422);
+
+    const planned = new FormData();
+    planned.set("operation", "record-recommendation");
+    planned.set("userDecision", "replace");
+    planned.set("plannedForYear", "2028");
+    planned.set("userReason", "Move this unit into the 2028 capital plan after the current service visit.");
+    const recorded = await updateAssetReplacement(new Request(`https://ops.test/api/ops/equipment/${asset.id}/replacement`, { method: "POST", body: planned }), { params: Promise.resolve({ id: asset.id }) });
+    expect(recorded.status).toBe(303);
+    expect(repository.snapshot().lifecycleRecommendations).toContainEqual(expect.objectContaining({ assetId: asset.id, userDecision: "replace", plannedForYear: 2028 }));
   });
 
   it("creates a planning profile through the authorized server route", async () => {

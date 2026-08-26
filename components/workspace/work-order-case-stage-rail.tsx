@@ -9,6 +9,7 @@ import styles from "./owner-brief.module.css";
  * All values are projected from domain records - none are editable state.
  */
 export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
+  const terminal = model.stage === "closed";
   return (
     <section className={styles.brief} aria-labelledby="stage-rail-heading">
       <header className={styles.header}>
@@ -31,18 +32,18 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
 
       <dl className={styles.factsRow}>
         <div>
-          <dt>Owner</dt>
+          <dt>{terminal ? "Record" : "Owner"}</dt>
           <dd>{model.accountableParty}</dd>
         </div>
         <div>
-          <dt>Due</dt>
+          <dt>{terminal ? "Completed" : "Due"}</dt>
           <dd className={model.primaryActionOverdue ? styles.warningText : undefined}>
-            {model.dueAt ? new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: model.timeZone, timeZoneName: "short" }).format(new Date(model.dueAt)) : "No due time recorded"}
+            {model.dueAt ? new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: model.timeZone, timeZoneName: "short" }).format(new Date(model.dueAt)) : terminal ? "No open obligation" : "No due time recorded"}
             {model.primaryActionOverdue ? " · Overdue" : ""}
           </dd>
         </div>
         <div>
-          <dt>If overdue, notify</dt>
+          <dt>{terminal ? "Escalation" : "If overdue, notify"}</dt>
           <dd>{model.escalationDestination}</dd>
         </div>
       </dl>
@@ -53,9 +54,9 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
 
       <div className={styles.moneyRow}>
         <Link className={styles.moneyCell} href={model.primaryNextAction.href}>
-          <span className={styles.moneyLabel}>Next step</span>
+          <span className={styles.moneyLabel}>{terminal ? "Record" : "Next step"}</span>
           <strong>{model.primaryNextAction.label}</strong>
-          <span className={styles.moneyNote}>The one action that moves this work forward.</span>
+          <span className={styles.moneyNote}>{terminal ? "This case has no open action or escalation." : "The one action that moves this work forward."}</span>
         </Link>
         {model.alternativeActions.map((action) => (
           <Link className={styles.moneyCell} key={action.href + action.label} href={action.href}>

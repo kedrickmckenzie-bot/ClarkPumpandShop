@@ -8,9 +8,11 @@ import {
   optionalMoneyMinor,
 } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
+import { issueWorkOrderToVendor } from "@/lib/server/work-order-issuance";
 
 const priorities = new Set(["routine", "urgent", "emergency", "planned"]);
 const assignmentKinds = new Set(["internal", "outside_vendor", "bid_request", "choose_later"]);
+const intents = new Set(["save", "create_and_send"]);
 
 function optionalPositiveInteger(value: string) {
   if (!value) return undefined;
@@ -28,8 +30,16 @@ export async function POST(request: Request) {
     const storeId = formText(formData, "storeId", { required: true, max: 120 });
     const priority = formText(formData, "priority", { required: true, max: 20 });
     const assignmentKind = formText(formData, "assignmentKind", { required: true, max: 30 });
+    const intent = formText(formData, "intent", { max: 30 }) || "save";
     if (!priorities.has(priority) || !assignmentKinds.has(assignmentKind)) {
       throw new OpsDomainError("VALIDATION", "Choose a supported priority and assignment route.");
+    }
+    if (!intents.has(intent)) throw new OpsDomainError("VALIDATION", "Choose a supported work-order action.");
+    if (intent === "create_and_send" && assignmentKind !== "outside_vendor") {
+      throw new OpsDomainError("VALIDATION", "Create and email is available only when an outside vendor is selected.");
+    }
+    if (intent === "create_and_send" && formText(formData, "sourceExceptionId", { max: 120 })) {
+      throw new OpsDomainError("VALIDATION", "A visit-derived work order must be reviewed before a new service authorization is sent.");
     }
     await assertStoreInSessionScope(context.session, storeId);
 
@@ -112,6 +122,22 @@ export async function POST(request: Request) {
           actor: context.actor,
         },
       );
+    }
+    if (intent === "create_and_send" && vendorId) {
+      if (result.approvalRequest) {
+        return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(`${result.number} was created and routed for approval. It will not be sent until approval is recorded.`)}`);
+      }
+      const issued = await issueWorkOrderToVendor({
+        repository: context.repository,
+        organizationId: context.session.organizationId,
+        organizationName: context.session.organizationName,
+        workOrderId: result.id,
+        vendorId,
+        expectedRevision: 0,
+        channel: "email",
+        actor: context.actor,
+      });
+      return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(issued.notice)}`);
     }
     const destination = sourceExceptionId
       ? `/app/work-orders/${encodeURIComponent(result.id)}?view=visits&created=from-unmatched-visit`
