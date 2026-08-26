@@ -133,6 +133,7 @@
 .administration[open] > summary { border-bottom: 1px solid #e4e8ef; }
 .administration[open] > summary > svg { transform: rotate(90deg); }
 .administration > div { padding: 16px; background: #f8fafc; }
+.administration > div :where(p, dd, summary, label, input, select, textarea, br) { font-size: 13px !important; }
 .state,
 .empty { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 140px; padding: 25px; color: #64748b; text-align: center; }
 .state { justify-content: flex-start; border: 1px solid var(--workspace-border); border-radius: var(--workspace-radius-panel); background: #fff; text-align: left; }

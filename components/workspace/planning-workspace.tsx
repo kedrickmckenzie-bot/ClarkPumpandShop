@@ -56,8 +56,8 @@ const workspaceCopy: Record<PlanningWorkspaceKind, {
     label: "Repair or replace",
     basisTitle: "How the comparison works",
     basis: "The platform calculates how long a repair must keep equipment in service to equal the annualized installed-capital cost of replacement. An entered vendor service estimate is shown separately; age, warranty, repeat work, and past costs remain context, and the final decision stays yours.",
-    sourceTitle: "Equipment to review",
-    sourceDescription: "Open a row to see the repair, expected life, replacement estimate, and service history behind the comparison.",
+    sourceTitle: "Lifecycle equipment",
+    sourceDescription: "The default view shows only live repair decisions. Use the view filter to open management-planned capital or the complete equipment register.",
   },
 };
 

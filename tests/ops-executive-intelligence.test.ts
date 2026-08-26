@@ -35,6 +35,24 @@ describe("vendor scorecards", () => {
   });
 });
 
+describe("material invoice safeguards", () => {
+  const fixture = buildNorthlinePresentationFixture();
+
+  it("keeps the review queue to a few material, structurally distinct exposure events", () => {
+    const exposure = fixture.valueEvents.filter((event) => event.organizationId === ORG && event.category === "identified_exposure");
+    expect(exposure.length).toBeGreaterThanOrEqual(3);
+    expect(exposure.length).toBeLessThanOrEqual(5);
+    expect(exposure.every((event) => event.amount.amountMinor >= 200_000)).toBe(true);
+    expect(new Set(exposure.map((event) => event.eventType))).toEqual(new Set([
+      "potential_warranty",
+      "authorization_overage",
+      "billed_trips_exceed_observed_visits",
+      "duplicate_document_fingerprint",
+    ]));
+    expect(fixture.invoiceExceptions.find((exception) => exception.id === "invoice-exception-104-trip")?.status).not.toBe("open");
+  });
+});
+
 describe("owner brief", () => {
   const fixture = buildNorthlinePresentationFixture();
 

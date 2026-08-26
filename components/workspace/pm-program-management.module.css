@@ -1,6 +1,6 @@
 .workspace { overflow: hidden; border: 1px solid #d8dee8; border-radius: 8px; background: #fff; }
 .heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 21px 22px; border-bottom: 1px solid #e2e7ef; background: #f8fafc; }
-.heading p { margin: 0 0 5px; color: #1d4ed8; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.heading p { margin: 0 0 5px; color: #1d4ed8; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .heading h2 { margin: 0; color: #172033; font-size: 20px; }
 .heading span { display: block; margin-top: 5px; color: #5e6a7d; font-size: 14px; line-height: 1.45; }
 .heading > a { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; padding: 10px 13px; border-radius: 6px; color: #fff; background: #2563eb; font-size: 14px; font-weight: 750; }
@@ -29,7 +29,7 @@
 .planHeader h3 { margin: 0; color: #172033; font-size: 17px; }
 .planHeader p { margin: 4px 0 0; color: #64748b; font-size: 13px; }
 .planHeader > strong { color: #475569; font-size: 13px; }
-.inherited,.override { display: inline-flex; align-self: flex-start; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 750; }
+.inherited,.override { display: inline-flex; align-self: flex-start; padding: 4px 8px; border-radius: 999px; font-size: 13px; font-weight: 750; }
 .inherited { color: #166534; background: #ecfdf3; }
 .override { color: #92400e; background: #fff7ed; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

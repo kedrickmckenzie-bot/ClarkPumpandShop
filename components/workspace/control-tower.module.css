@@ -43,7 +43,7 @@
 
 .eyebrow {
   color: var(--enterprise-action) !important;
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -246,7 +246,7 @@
 
 .pipeline a:last-child { border-right: 0; }
 .pipeline a:hover { background: var(--enterprise-surface-subtle); }
-.pipeline span { color: var(--enterprise-copy); font-size: 12px; font-weight: 650; }
+.pipeline span { color: var(--enterprise-copy); font-size: 13px; font-weight: 650; }
 .pipeline strong { font-size: 24px; letter-spacing: -0.03em; }
 .pipeline small { color: var(--enterprise-muted); font-size: 11px; line-height: 1.35; }
 .pipeline a::after { content: ""; position: absolute; inset: auto 0 0; height: 3px; background: var(--enterprise-line-strong); }
@@ -303,13 +303,13 @@
   gap: 6px;
   height: 210px;
   color: var(--enterprise-muted);
-  font-size: 10px;
+  font-size: 13px;
   text-align: center;
 }
 
 .trendPoint i { display: block; border-radius: 2px 2px 0 0; background: var(--enterprise-action); }
 .trendPoint:hover i { background: var(--enterprise-action-hover); }
-.trendPoint strong { color: var(--enterprise-ink); font-size: 11px; font-style: normal; }
+.trendPoint strong { color: var(--enterprise-ink); font-size: 13px; font-style: normal; }
 
 .sourceFooter {
   display: flex;
@@ -319,7 +319,7 @@
   padding: 8px 14px;
   background: var(--enterprise-surface-subtle);
   color: var(--enterprise-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .spotlight {
@@ -336,7 +336,7 @@
 .spotlightCopy p { margin: 0; color: var(--enterprise-copy); font-size: 14px; line-height: 1.55; }
 .spotlightFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 1px solid #cfdaed; }
 .spotlightFacts div { display: grid; align-content: center; gap: 5px; min-height: 88px; padding: 14px; border-bottom: 1px solid #cfdaed; border-right: 1px solid #cfdaed; background: rgba(255, 255, 255, 0.55); }
-.spotlightFacts span { color: var(--enterprise-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.spotlightFacts span { color: var(--enterprise-muted); font-size: 13px; font-weight: 700; text-transform: uppercase; }
 .spotlightFacts strong { font-size: 15px; }
 
 .empty {

@@ -281,6 +281,26 @@ describe("operator presenter drill-through contracts", () => {
     ).toBe(true);
   });
 
+  it("opens lifecycle as a live decision queue while keeping the capital plan and full register one filter away", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const session = executiveSession();
+    const defaultView = buildProgramModel(fixture, session, "lifecycle");
+    const capitalView = buildProgramModel(fixture, session, "lifecycle", { view: "capital" });
+    const allEquipment = buildProgramModel(fixture, session, "lifecycle", { view: "all" });
+    const planned = fixture.lifecycleRecommendations.filter(
+      (recommendation) => recommendation.plannedForYear && ["replace", "defer"].includes(recommendation.userDecision),
+    );
+
+    expect(defaultView.table!.rows).toHaveLength(Number(defaultView.metrics.find((metric) => metric.id === "review")?.value));
+    expect(defaultView.table!.rows.length).toBeLessThan(allEquipment.table!.rows.length);
+    expect(allEquipment.table!.rows).toHaveLength(fixture.assets.length);
+    expect(capitalView.table!.rows).toHaveLength(planned.length);
+    expect(planned.length).toBeGreaterThanOrEqual(5);
+    expect(planned.length).toBeLessThanOrEqual(10);
+    expect(new Set(planned.map((recommendation) => recommendation.plannedForYear)).size).toBeGreaterThanOrEqual(2);
+    expect(defaultView.filters?.[0]?.options.map((option) => option.value)).toEqual(["review", "capital", "all"]);
+  });
+
   it("lands invoice and action-center drill-downs on the promised source rows", () => {
     const fixture = buildNorthlinePresentationFixture();
     const session = executiveSession();

@@ -90,7 +90,7 @@
 .eyebrow {
   margin: 0 0 7px;
   color: var(--workspace-action);
-  font-size: 12px;
+  font-size: var(--ops-font-meta, 13px);
   font-weight: 750;
   letter-spacing: 0.075em;
   line-height: 1.3;
@@ -313,7 +313,7 @@
 }
 
 .metricLabel {
-  font-size: 12px;
+  font-size: var(--ops-font-meta, 13px);
   font-weight: 750;
   letter-spacing: 0.04em;
   line-height: 1.3;
@@ -351,7 +351,7 @@
   margin-top: auto;
   padding-top: 10px;
   color: var(--workspace-action);
-  font-size: 12px;
+  font-size: var(--ops-font-meta, 13px);
   font-weight: 700;
 }
 

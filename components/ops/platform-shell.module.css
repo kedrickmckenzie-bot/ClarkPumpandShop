@@ -17,7 +17,7 @@
   --ops-font-body: 16px;
   --ops-font-table: 15px;
   --ops-font-label: 14px;
-  --ops-font-meta: 12px;
+  --ops-font-meta: 13px;
   --ops-radius-control: 6px;
   --ops-radius-panel: 8px;
   --ops-radius-pill: 999px;
@@ -703,6 +703,13 @@
   margin: 0 auto;
   padding: 30px clamp(20px, 2.7vw, 40px) 60px;
   outline: 0;
+}
+
+/* Operator text must remain readable even inside older record and setup modules
+   that predate the shared typography tokens. Decorative shell chrome is kept
+   separate; this floor applies only to the working canvas. */
+.main :where(small, th, dt, time, caption) {
+  font-size: 13px !important;
 }
 
 .mobileMenu,

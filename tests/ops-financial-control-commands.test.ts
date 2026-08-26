@@ -40,7 +40,7 @@ describe("directive financial safeguard decisions",()=>{
   });
 
   it("creates a deduction and realized event only after an authorized human decision",async()=>{
-    const test=harness();const result=await resolveInvoiceReview({organizationId:NORTHLINE_ORGANIZATION_ID,invoiceId:"invoice-summit-104-compressor",exceptionId:"invoice-exception-104-trip",actor:financeActor,decision:"deduct",reason:"Reviewed the contract, authorization, and visit evidence; the separate trip charge is not supported for this invoice",deductionAmount:{amountMinor:12_500,currency:"USD"}},test.services);
+    const test=harness();const result=await resolveInvoiceReview({organizationId:NORTHLINE_ORGANIZATION_ID,invoiceId:"invoice-summit-104-compressor",exceptionId:"invoice-exception-104-authorization",actor:financeActor,decision:"deduct",reason:"Reviewed the contract, authorization, and change-order evidence; the added controls line is not supported for this invoice",deductionAmount:{amountMinor:212_500,currency:"USD"}},test.services);
     const snapshot=test.repository.snapshot();
     expect(result.adjustment?.kind).toBe("deduction");expect(result.valueEvent?.category).toBe("realized_verified");expect(result.paymentExecuted).toBe(false);expect(result.operationalResolutionChanged).toBe(false);
     expect(snapshot.invoices.find((row)=>row.id==="invoice-summit-104-compressor")?.approvedForPayment.amountMinor).toBe(945_000);
@@ -49,6 +49,6 @@ describe("directive financial safeguard decisions",()=>{
 
   it("enforces segregation of duties for the invoice submitter",async()=>{
     const fixture=buildNorthlinePresentationFixture();const invoice=fixture.invoices.find((row)=>row.id==="invoice-summit-104-compressor")!;invoice.submittedByMembershipId=financeActor.actorId;const repository=createOpsFixtureRepository(fixture);const services:OpsCommandServices={repository,clock:{now:()=>"2026-08-20T15:00:00.000Z"},ids:{next:(prefix)=>`${prefix}-sod-test`}};
-    await expect(resolveInvoiceReview({organizationId:NORTHLINE_ORGANIZATION_ID,invoiceId:invoice.id,exceptionId:"invoice-exception-104-trip",actor:financeActor,decision:"accept_as_billed",reason:"Reviewed against supporting evidence"},services)).rejects.toMatchObject({code:"FORBIDDEN"});
+    await expect(resolveInvoiceReview({organizationId:NORTHLINE_ORGANIZATION_ID,invoiceId:invoice.id,exceptionId:"invoice-exception-104-authorization",actor:financeActor,decision:"accept_as_billed",reason:"Reviewed against supporting evidence"},services)).rejects.toMatchObject({code:"FORBIDDEN"});
   });
 });
