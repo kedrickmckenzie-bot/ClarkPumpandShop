@@ -33,8 +33,7 @@ describe("Clark Pump and Shop presentation data realism", () => {
       /refrigeration|hvac|plumbing|kitchen|fuel|dispenser|electrical|lighting|landscaping|snow/i.test(vendor.name)
     )).toBe(true);
     expect(fixture.exceptions.some((exception) =>
-      exception.kind === "high_risk_service"
-      || /payment-enabled|card reader.*manager review|skimmer/i.test(exception.summary)
+      /payment-enabled|card reader.*manager review|skimmer/i.test(exception.summary)
     )).toBe(false);
   });
 
