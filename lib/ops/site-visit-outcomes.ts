@@ -1,6 +1,7 @@
 import type { SiteVisitWorkOrderOutcome, VisitOutcome } from "./types";
 
 const unresolvedSiteVisitOutcomes = new Set<SiteVisitWorkOrderOutcome>([
+  "temporary_repair",
   "diagnosis_only",
   "quote_required",
   "parts_required",
@@ -18,7 +19,7 @@ export function siteVisitOutcomeRequiresFollowUp(outcome: SiteVisitWorkOrderOutc
 export function siteVisitOutcomeFromLegacy(outcome: VisitOutcome): SiteVisitWorkOrderOutcome {
   const mapping: Record<VisitOutcome, SiteVisitWorkOrderOutcome> = {
     resolved: "completed",
-    temporary_repair: "return_visit_required",
+    temporary_repair: "temporary_repair",
     diagnosed_waiting_parts: "parts_required",
     return_required: "return_visit_required",
     unable_to_complete: "not_addressed",
@@ -35,6 +36,7 @@ export function siteVisitOutcomeFromLegacy(outcome: VisitOutcome): SiteVisitWork
 export function legacyOutcomeFromSiteVisit(outcome: SiteVisitWorkOrderOutcome): VisitOutcome {
   const mapping: Record<SiteVisitWorkOrderOutcome, VisitOutcome> = {
     completed: "resolved",
+    temporary_repair: "temporary_repair",
     diagnosis_only: "other",
     quote_required: "other",
     parts_required: "diagnosed_waiting_parts",

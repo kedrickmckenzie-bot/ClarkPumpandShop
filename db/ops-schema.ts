@@ -83,6 +83,10 @@ export const opsVendorComplianceDocuments = sqliteTable("ops_vendor_compliance_d
   id: id(), organizationId: organizationId(), vendorId: text("vendor_id").notNull(), documentType: text("document_type").notNull(), issuer: text("issuer"), reference: text("reference"), effectiveAt: text("effective_at"), expiresAt: text("expires_at"), reviewStatus: text("review_status").notNull(), blocking: bool("blocking"), storedFileId: text("stored_file_id"), createdAt: createdAt(),
 }, (table) => [index("idx_ops_vendor_compliance_org_vendor_status_expiry").on(table.organizationId, table.vendorId, table.reviewStatus, table.expiresAt)]);
 
+export const opsVendorComplianceAlerts = sqliteTable("ops_vendor_compliance_alerts", {
+  id: id(), organizationId: organizationId(), vendorId: text("vendor_id").notNull(), documentId: text("document_id").notNull(), stage: text("stage").notNull(), expiresAt: text("expires_at").notNull(), reminderId: text("reminder_id"), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_vendor_compliance_alert_doc_stage").on(table.organizationId, table.documentId, table.stage), index("idx_ops_vendor_compliance_alert_org_vendor_created").on(table.organizationId, table.vendorId, table.createdAt)]);
+
 export const opsVendorContracts = sqliteTable("ops_vendor_contracts", {
   id: id(), organizationId: organizationId(), vendorId: text("vendor_id").notNull(), name: text("name").notNull(), ownerMembershipId: text("owner_membership_id").notNull(), status: text("status").notNull(), createdAt: createdAt(),
 }, (table) => [index("idx_ops_vendor_contracts_org_vendor_status").on(table.organizationId, table.vendorId, table.status)]);
@@ -189,6 +193,10 @@ export const opsWorkOrderAssignments = sqliteTable("ops_work_order_assignments",
   index("idx_ops_assignments_org_work_status").on(table.organizationId, table.workOrderId, table.status),
   index("idx_ops_assignments_org_vendor_status").on(table.organizationId, table.vendorId, table.status),
 ]);
+
+export const opsWorkOrderVisitHolds = sqliteTable("ops_work_order_visit_holds", {
+  id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), posture: text("posture").notNull(), status: text("status").notNull(), internalReviewThresholdMinor: integer("internal_review_threshold_minor"), currency: text("currency"), deadlineAt: text("deadline_at").notNull(), version: integer("version").notNull().default(0), claimedVisitId: text("claimed_visit_id"), claimedVendorId: text("claimed_vendor_id"), claimedAt: text("claimed_at"), createdByMembershipId: text("created_by_membership_id"), createdByName: text("created_by_name").notNull(), createdAt: createdAt(), updatedAt: text("updated_at").notNull(),
+}, (table) => [uniqueIndex("uidx_ops_work_order_visit_holds_org_work").on(table.organizationId, table.workOrderId), index("idx_ops_work_order_visit_holds_org_status_deadline").on(table.organizationId, table.status, table.deadlineAt)]);
 
 export const opsApprovalPolicies = sqliteTable("ops_approval_policies", {
   id: id(), organizationId: organizationId(), policyKey: text("policy_key").notNull(), version: integer("version").notNull(), name: text("name").notNull(),
@@ -334,6 +342,8 @@ export const opsSiteVisitWorkOrders = sqliteTable("ops_site_visit_work_orders", 
   linkedByActorId: text("linked_by_actor_id"),
   linkedByActorName: text("linked_by_actor_name").notNull(),
   linkedAt: text("linked_at").notNull(),
+  selectionSource: text("selection_source").notNull().default("assigned_work"),
+  workOrderHoldId: text("work_order_hold_id"),
   outcome: text("outcome"),
   outcomeNotes: text("outcome_notes"),
   outcomeRecordedByActorType: text("outcome_recorded_by_actor_type"),
@@ -341,11 +351,13 @@ export const opsSiteVisitWorkOrders = sqliteTable("ops_site_visit_work_orders", 
   outcomeRecordedByActorName: text("outcome_recorded_by_actor_name"),
   outcomeRecordedAt: text("outcome_recorded_at"),
   followUpId: text("follow_up_id"),
+  vendorFollowUpTiming: text("vendor_follow_up_timing"),
 }, (table) => [
   uniqueIndex("uidx_ops_site_visit_work_org_id").on(table.organizationId, table.id),
   uniqueIndex("uidx_ops_site_visit_work_org_id_work").on(table.organizationId, table.id, table.workOrderId),
   uniqueIndex("uidx_ops_site_visit_work_org_visit_work").on(table.organizationId, table.visitId, table.workOrderId),
   uniqueIndex("uidx_ops_site_visit_work_org_visit_ordinal").on(table.organizationId, table.visitId, table.ordinal),
+  uniqueIndex("uidx_ops_site_visit_work_org_hold_claim").on(table.organizationId, table.workOrderHoldId).where(sql`${table.workOrderHoldId} IS NOT NULL`),
   index("idx_ops_site_visit_work_org_work_time").on(table.organizationId, table.workOrderId, table.linkedAt),
   index("idx_ops_site_visit_work_org_outcome_time").on(table.organizationId, table.outcome, table.outcomeRecordedAt),
   foreignKey({ name: "fk_ops_site_visit_work_visit", columns: [table.organizationId, table.visitId], foreignColumns: [opsVisitSessions.organizationId, opsVisitSessions.id] }),
@@ -353,7 +365,7 @@ export const opsSiteVisitWorkOrders = sqliteTable("ops_site_visit_work_orders", 
   foreignKey({ name: "fk_ops_site_visit_work_followup", columns: [table.organizationId, table.followUpId], foreignColumns: [opsFollowUps.organizationId, opsFollowUps.id] }),
   check("chk_ops_site_visit_work_ordinal", sql`${table.ordinal} > 0`),
   check("chk_ops_site_visit_work_link_actor", sql`${table.linkedByActorType} IN ('user', 'vendor_link', 'technician', 'store_device', 'system', 'support') AND length(trim(${table.linkedByActorName})) > 0`),
-  check("chk_ops_site_visit_work_outcome", sql`${table.outcome} IS NULL OR ${table.outcome} IN ('completed', 'diagnosis_only', 'quote_required', 'parts_required', 'return_visit_required', 'no_issue_found', 'store_access_unavailable', 'work_not_authorized', 'not_addressed')`),
+  check("chk_ops_site_visit_work_outcome", sql`${table.outcome} IS NULL OR ${table.outcome} IN ('completed', 'temporary_repair', 'diagnosis_only', 'quote_required', 'parts_required', 'return_visit_required', 'no_issue_found', 'store_access_unavailable', 'work_not_authorized', 'not_addressed')`),
   check("chk_ops_site_visit_work_outcome_actor", sql`${table.outcomeRecordedByActorType} IS NULL OR ${table.outcomeRecordedByActorType} IN ('user', 'vendor_link', 'technician', 'store_device', 'system', 'support')`),
   check("chk_ops_site_visit_work_outcome_state", sql`(${table.outcome} IS NULL AND ${table.outcomeNotes} IS NULL AND ${table.outcomeRecordedByActorType} IS NULL AND ${table.outcomeRecordedByActorId} IS NULL AND ${table.outcomeRecordedByActorName} IS NULL AND ${table.outcomeRecordedAt} IS NULL AND ${table.followUpId} IS NULL) OR (${table.outcome} IS NOT NULL AND ${table.outcomeRecordedByActorType} IS NOT NULL AND length(trim(${table.outcomeRecordedByActorName})) > 0 AND ${table.outcomeRecordedAt} IS NOT NULL)`),
   check("chk_ops_site_visit_work_followup_outcome", sql`${table.followUpId} IS NULL OR ${table.outcome} NOT IN ('completed', 'no_issue_found')`),
@@ -692,6 +704,7 @@ export const opsSchema = {
   opsVendorCoverage,
   opsVendorQualifications,
   opsVendorComplianceDocuments,
+  opsVendorComplianceAlerts,
   opsVendorContracts,
   opsContractVersions,
   opsContractScopes,
@@ -702,6 +715,7 @@ export const opsSchema = {
   opsRequests,
   opsRequestImpactAssessments,
   opsWorkOrders,
+  opsWorkOrderVisitHolds,
   opsApprovalPolicies,
   opsApprovalRequests,
   opsApprovalDecisions,

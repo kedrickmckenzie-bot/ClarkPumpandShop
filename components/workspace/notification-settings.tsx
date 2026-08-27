@@ -8,6 +8,9 @@ const events: Array<{ key: NotificationEventKey; label: string; description: str
   { key: "workflow_task_escalated", label: "Accountable action escalated", description: "The assigned response window expired and the next owner must act." },
   { key: "follow_up_created", label: "Service follow-up created", description: "A checkout outcome created a required next step." },
   { key: "vendor_reminder_created", label: "Vendor reminder created", description: "A relationship-level reminder was added for a vendor." },
+  { key: "held_work_claimed", label: "Vendor selected held work", description: "One batched notice when a vendor picks up additional approved work during a visit." },
+  { key: "held_work_outcomes_recorded", label: "Held-work results recorded", description: "One batched checkout notice showing completed, temporary, inspected, and unattempted counts—never invented dollars." },
+  { key: "vendor_compliance_due", label: "Vendor compliance renewal due", description: "30-, 14-, 7-day and expired vendor-document notices. The 60-day notice stays quietly on the dashboard." },
 ];
 const roles: Array<{ value: NotificationRecipientRole; label: string }> = [
   { value: "facilities_admin", label: "Maintenance" },

@@ -394,9 +394,10 @@ a.factCard { padding-right: 38px; }
 .assignmentChoices strong { font-size: 14px; }
 .assignmentChoices small { margin-top: 4px; color: var(--ops-muted); font-size: 14px; line-height: 1.45; }
 .providerFieldGrid { grid-template-columns: minmax(0, 1fr); }
-.vendorConditional, .internalConditional, .sendConditional { display: none; }
+.vendorConditional, .internalConditional, .sendConditional, .holdConditional { display: none; }
 .recordForm:has(input[name="assignmentKind"][value="outside_vendor"]:checked) .vendorConditional,
 .recordForm:has(input[name="assignmentKind"][value="outside_vendor"]:checked) .sendConditional,
+.recordForm:has(input[name="assignmentKind"][value="hold_for_visit"]:checked) .holdConditional,
 .recordForm:has(input[name="assignmentKind"][value="internal"]:checked) .internalConditional { display: flex; }
 .formNotice { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; border: 1px solid #c9dce8; border-radius: 10px; color: #355c71; background: #f0f7fb; }
 .formNotice svg { flex: 0 0 auto; margin-top: 2px; }

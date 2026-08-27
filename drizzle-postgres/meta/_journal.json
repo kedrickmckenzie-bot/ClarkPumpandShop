@@ -239,6 +239,13 @@
       "when": 1787798958856,
       "tag": "0033_magenta_zzzax",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1787817034584,
+      "tag": "0034_dark_wildside",
+      "breakpoints": true
     }
   ]
 }

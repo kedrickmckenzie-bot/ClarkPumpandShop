@@ -1,17 +1,17 @@
 import { createWorkOrder, OpsDomainError, reconcileUnmatchedVisit } from "@/lib/ops/commands";
+import { localDateTimeToIso } from "@/lib/ops/local-date-time";
 import {
   assertStoreInSessionScope,
   formText,
   getOpsRequestContext,
   opsApiError,
-  optionalIsoDate,
   optionalMoneyMinor,
 } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { issueWorkOrderToVendor } from "@/lib/server/work-order-issuance";
 
 const priorities = new Set(["routine", "urgent", "emergency", "planned"]);
-const assignmentKinds = new Set(["internal", "outside_vendor", "bid_request", "choose_later"]);
+const assignmentKinds = new Set(["internal", "outside_vendor", "bid_request", "hold_for_visit", "choose_later"]);
 const intents = new Set(["save", "create_and_send"]);
 
 function optionalPositiveInteger(value: string) {
@@ -41,7 +41,13 @@ export async function POST(request: Request) {
     if (intent === "create_and_send" && formText(formData, "sourceExceptionId", { max: 120 })) {
       throw new OpsDomainError("VALIDATION", "A visit-derived work order must be reviewed before a new service authorization is sent.");
     }
-    await assertStoreInSessionScope(context.session, storeId);
+    const store = await assertStoreInSessionScope(context.session, storeId);
+    const storeTimeZone = store.timeZone ?? "UTC";
+    const dueAtInput = formText(formData, "dueAt", { max: 40 });
+    const holdDeadlineInput = formText(formData, "holdDeadlineAt", {
+      required: assignmentKind === "hold_for_visit",
+      max: 40,
+    });
 
     const vendorId = formText(formData, "vendorId", { max: 120 }) || undefined;
     const internalMembershipId = formText(formData, "internalMembershipId", { max: 120 }) || undefined;
@@ -76,6 +82,8 @@ export async function POST(request: Request) {
     const initialAssignmentKind = assignmentKind === "bid_request" ? "choose_later" : assignmentKind;
     const nextAction = assignmentKind === "bid_request"
       ? "Send bid requests and compare responses"
+      : assignmentKind === "hold_for_visit"
+        ? "Wait for a matching vendor visit"
       : assignmentKind === "outside_vendor"
         ? "Generate and send service authorization"
         : assignmentKind === "internal"
@@ -96,18 +104,24 @@ export async function POST(request: Request) {
         priority: priority as "routine" | "urgent" | "emergency" | "planned",
         accountableParty: "Facilities coordinator",
         nextAction,
-        dueAt: optionalIsoDate(formText(formData, "dueAt", { max: 40 })),
+        dueAt: dueAtInput ? localDateTimeToIso(dueAtInput, storeTimeZone) : undefined,
         escalationTo: "Facilities director",
         nteAmountMinor: optionalMoneyMinor(formText(formData, "nteAmount", { max: 30 })),
         currency: "USD",
         repairEstimateAmountMinor: optionalMoneyMinor(formText(formData, "repairEstimateAmount", { max: 30 })),
         repairEstimateCurrency: "USD",
         estimatedServiceExtensionMonths: optionalPositiveInteger(formText(formData, "estimatedServiceExtensionMonths", { max: 5 })),
-        initialAssignment: {
+        initialAssignment: assignmentKind === "hold_for_visit" ? undefined : {
           kind: initialAssignmentKind as "internal" | "outside_vendor" | "choose_later",
           vendorId: assignmentKind === "outside_vendor" ? vendorId : undefined,
           internalMembershipId: assignmentKind === "internal" ? internalMembershipId : undefined,
         },
+        holdForVisit: assignmentKind === "hold_for_visit" ? {
+          posture: formText(formData, "holdPosture", { required: true, max: 80 }) as "complete_using_professional_judgment" | "look_and_report",
+          deadlineAt: localDateTimeToIso(holdDeadlineInput, storeTimeZone),
+          internalReviewThresholdAmountMinor: optionalMoneyMinor(formText(formData, "holdInternalReviewThreshold", { max: 30 })),
+          currency: "USD",
+        } : undefined,
         actor: context.actor,
       },
     );
@@ -143,6 +157,8 @@ export async function POST(request: Request) {
       ? `/app/work-orders/${encodeURIComponent(result.id)}?view=visits&notice=${encodeURIComponent(`${result.number} was created after service began and linked to the preserved visit. No prior written authorization was implied.`)}`
       : assignmentKind === "bid_request"
         ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=bid-request-created#bid-requests`
+        : assignmentKind === "hold_for_visit"
+          ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(`${result.number} is approved to wait for a matching vendor visit.`)}`
         : assignmentKind === "outside_vendor"
           ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=service-work-created#issue-work`
           : `/app/work-orders/${encodeURIComponent(result.id)}?created=true`;

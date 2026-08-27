@@ -167,6 +167,7 @@ export function CreateWorkOrderForm({ model, componentId, edition = "complete" }
               {!accountabilityOnly ? <label htmlFor="assignment-internal" aria-label="Internal maintenance"><input id="assignment-internal" type="radio" name="assignmentKind" value="internal" required defaultChecked={model.defaults?.assignmentKind === "internal"} /><span><strong>Internal maintenance</strong><small>Assign to your own maintenance team.</small></span></label> : null}
               <label htmlFor="assignment-vendor" aria-label="Outside vendor"><input id="assignment-vendor" type="radio" name="assignmentKind" value="outside_vendor" required={accountabilityOnly} defaultChecked={model.defaults?.assignmentKind === "outside_vendor" || (accountabilityOnly && Boolean(model.defaults?.vendorId))} /><span><strong>Outside vendor</strong><small>Choose the vendor now, then send a service authorization. Technician check-in applies after it is issued.</small></span></label>
               {!accountabilityOnly ? <label htmlFor="assignment-bid" aria-label="Request vendor bids"><input id="assignment-bid" type="radio" name="assignmentKind" value="bid_request" /><span><strong>Request bids first</strong><small>Ask vendors for pricing by a due date. No vendor is assigned and no check-in is available.</small></span></label> : null}
+              {!accountabilityOnly ? <label htmlFor="assignment-hold" aria-label="Hold for a future visit"><input id="assignment-hold" type="radio" name="assignmentKind" value="hold_for_visit" /><span><strong>Handle on a future visit</strong><small>Approve this now, then offer it when a matching vendor is already at the store.</small></span></label> : null}
               <label htmlFor="assignment-later" aria-label="Decide later"><input id="assignment-later" type="radio" name="assignmentKind" value="choose_later" defaultChecked={model.defaults?.assignmentKind === "choose_later" || (accountabilityOnly && !model.defaults?.vendorId && model.defaults?.assignmentKind !== "outside_vendor")} /><span><strong>Choose later</strong><small>Save the work order now and select the vendor before sending it.</small></span></label>
             </fieldset>
             <div className={`${styles.fieldGrid} ${styles.providerFieldGrid}`}>
@@ -177,6 +178,14 @@ export function CreateWorkOrderForm({ model, componentId, edition = "complete" }
               </label>
               {!accountabilityOnly ? <SelectField id="work-internal-assignee" name="internalMembershipId" label="Internal assignee" options={model.internalAssignees} helper="Can be assigned after creation." defaultValue={model.defaults?.internalMembershipId} className={styles.internalConditional} /> : null}
             </div>
+            {!accountabilityOnly ? <div className={styles.holdConditional}>
+              <div className={styles.formNotice}><Route aria-hidden="true" size={19} /><p><strong>Approved work, no separate trip yet.</strong> A matching vendor may choose this work when already onsite. The technician is never asked to price it or wait for approval.</p></div>
+              <div className={styles.fieldGrid}>
+                <SelectField id="hold-posture" name="holdPosture" label="What may the vendor do?" options={[{ value: "complete_using_professional_judgment", label: "Complete using professional judgment" }, { value: "look_and_report", label: "Look and report back" }]} defaultValue="complete_using_professional_judgment" />
+                <label className={styles.field} htmlFor="hold-deadline"><span>Review by <em>Required for held work</em></span><input id="hold-deadline" name="holdDeadlineAt" type="datetime-local" /></label>
+                <label className={styles.field} htmlFor="hold-review-threshold"><span>Internal invoice-review threshold <small>Optional</small></span><input id="hold-review-threshold" name="holdInternalReviewThreshold" type="number" inputMode="decimal" min="0" step="0.01" placeholder="Not shown to the vendor" /><small>This is a later review signal—not a price, authorization, or technician stop.</small></label>
+              </div>
+            </div> : null}
             </>}
           </section>
 

@@ -67,6 +67,7 @@ export type VisitOutcome =
   | "other";
 export type SiteVisitWorkOrderOutcome =
   | "completed"
+  | "temporary_repair"
   | "diagnosis_only"
   | "quote_required"
   | "parts_required"
@@ -75,6 +76,10 @@ export type SiteVisitWorkOrderOutcome =
   | "store_access_unavailable"
   | "work_not_authorized"
   | "not_addressed";
+export type SiteVisitWorkSelectionSource = "assigned_work" | "service_run" | "held_work" | "after_the_fact";
+export type HeldWorkPosture = "complete_using_professional_judgment" | "look_and_report";
+export type HeldWorkStatus = "active" | "claimed" | "review_required" | "completed" | "cancelled";
+export type VendorFollowUpTiming = "within_7_days" | "within_30_days" | "within_90_days" | "next_pm" | "unknown";
 export type LocationResult =
   | "verified"
   | "outside_geofence"
@@ -401,6 +406,20 @@ export interface VendorComplianceDocument {
   reviewStatus: "pending" | "approved" | "rejected" | "expired";
   blocking: boolean;
   storedFileId?: OpsId;
+  createdAt: IsoDateTime;
+}
+
+export type VendorComplianceAlertStage = "60_day" | "30_day" | "14_day" | "7_day" | "expired";
+
+/** One idempotent escalation fact for the current version of a vendor document. */
+export interface VendorComplianceAlert {
+  id: OpsId;
+  organizationId: OpsId;
+  vendorId: OpsId;
+  documentId: OpsId;
+  stage: VendorComplianceAlertStage;
+  expiresAt: IsoDateTime;
+  reminderId?: OpsId;
   createdAt: IsoDateTime;
 }
 
@@ -816,6 +835,8 @@ export interface SiteVisitWorkOrder {
   linkedByActorId?: OpsId;
   linkedByActorName: string;
   linkedAt: IsoDateTime;
+  selectionSource?: SiteVisitWorkSelectionSource;
+  workOrderHoldId?: OpsId;
   outcome?: SiteVisitWorkOrderOutcome;
   outcomeNotes?: string;
   outcomeRecordedByActorType?: ActorType;
@@ -823,6 +844,26 @@ export interface SiteVisitWorkOrder {
   outcomeRecordedByActorName?: string;
   outcomeRecordedAt?: IsoDateTime;
   followUpId?: OpsId;
+  vendorFollowUpTiming?: VendorFollowUpTiming;
+}
+
+/** Manager-approved work that may be offered when an appropriate vendor is already onsite. */
+export interface WorkOrderVisitHold {
+  id: OpsId;
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  posture: HeldWorkPosture;
+  status: HeldWorkStatus;
+  internalReviewThreshold?: Money;
+  deadlineAt: IsoDateTime;
+  version: number;
+  claimedVisitId?: OpsId;
+  claimedVendorId?: OpsId;
+  claimedAt?: IsoDateTime;
+  createdByMembershipId?: OpsId;
+  createdByName: string;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
 }
 
 export type WorkOrderVerificationDecision = "verified" | "rejected";
@@ -1766,7 +1807,10 @@ export type NotificationEventKey =
   | "vendor_commitment_received"
   | "workflow_task_escalated"
   | "follow_up_created"
-  | "vendor_reminder_created";
+  | "vendor_reminder_created"
+  | "held_work_claimed"
+  | "held_work_outcomes_recorded"
+  | "vendor_compliance_due";
 
 export type NotificationRecipientRole =
   | "facilities_admin"
@@ -1875,6 +1919,7 @@ export interface OpsFixture {
   vendorCoverage: VendorCoverage[];
   vendorQualifications: VendorQualification[];
   vendorComplianceDocuments: VendorComplianceDocument[];
+  vendorComplianceAlerts?: VendorComplianceAlert[];
   vendorContracts: VendorContract[];
   contractVersions: ContractVersion[];
   contractScopes: ContractScope[];
@@ -1885,6 +1930,7 @@ export interface OpsFixture {
   requests: ServiceRequest[];
   requestImpactAssessments: RequestImpactAssessment[];
   workOrders: WorkOrder[];
+  workOrderVisitHolds?: WorkOrderVisitHold[];
   approvalPolicies: ApprovalPolicy[];
   approvalRequests: ApprovalRequest[];
   approvalDecisions: ApprovalDecision[];

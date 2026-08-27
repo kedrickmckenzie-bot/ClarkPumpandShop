@@ -47,7 +47,7 @@ const session: OperatorSession = {
 };
 
 function requestFor(
-  assignmentKind: "bid_request" | "outside_vendor",
+  assignmentKind: "bid_request" | "outside_vendor" | "hold_for_visit",
   url = "https://operations.test/api/ops/work-orders",
 ) {
   const formData = new FormData();
@@ -57,6 +57,12 @@ function requestFor(
   formData.set("assignmentKind", assignmentKind);
   if (assignmentKind === "outside_vendor") {
     formData.set("vendorId", "vendor-northline-summit");
+  }
+  if (assignmentKind === "hold_for_visit") {
+    formData.set("categoryKey", "plumbing");
+    formData.set("holdPosture", "complete_using_professional_judgment");
+    formData.set("holdDeadlineAt", "2026-10-10T12:30");
+    formData.set("holdInternalReviewThreshold", "250.00");
   }
   return new Request(url, {
     method: "POST",
@@ -76,7 +82,9 @@ function configureContext() {
       organizationId: session.organizationId,
     },
   });
-  requestContextMocks.assertStoreInSessionScope.mockResolvedValue(undefined);
+  requestContextMocks.assertStoreInSessionScope.mockResolvedValue(
+    repository.snapshot().stores.find((store) => store.id === "store-northline-101"),
+  );
   return repository;
 }
 
@@ -223,5 +231,30 @@ describe("work-order vendor path entry", () => {
     expect(after.issuances).toHaveLength(before.issuances.length);
     expect(after.visits).toHaveLength(before.visits.length);
     expect(after.costLines).toHaveLength(before.costLines.length);
+  });
+
+  it("creates manager-approved held work without assigning a vendor or exposing a price", async () => {
+    const repository = configureContext();
+    const before = repository.snapshot();
+
+    const response = await POST(requestFor("hold_for_visit"));
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toContain("approved%20to%20wait%20for%20a%20matching%20vendor%20visit");
+    const after = repository.snapshot();
+    const workOrder = after.workOrders.at(-1)!;
+    expect(workOrder).toMatchObject({
+      status: "approved",
+      categoryKey: "plumbing",
+      accountableParty: "Facilities coordinator",
+      nextAction: "Wait for a matching vendor visit",
+    });
+    expect(after.assignments).toHaveLength(before.assignments.length);
+    expect(after.workOrderVisitHolds?.find((hold) => hold.workOrderId === workOrder.id)).toMatchObject({
+      posture: "complete_using_professional_judgment",
+      status: "active",
+      deadlineAt: "2026-10-10T16:30:00.000Z",
+      internalReviewThreshold: { amountMinor: 25_000, currency: "USD" },
+    });
   });
 });

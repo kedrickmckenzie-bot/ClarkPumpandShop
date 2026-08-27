@@ -162,6 +162,8 @@ export interface RecordWorkOrderVerificationInput {
   expectedSiteVisitWorkOrderId: OpsId;
   expectedOutcomeRecordedAt: IsoDateTime;
   decision: WorkOrderVerificationDecision;
+  /** Optional, explicit manager attestation; never inferred from checkout. */
+  avoidedSeparateTripConfirmed?: boolean;
   reason?: string;
   actor: ActorContext;
 }
@@ -211,6 +213,22 @@ export async function recordWorkOrderVerification(
   }
   if (!outcome.outcome || !reviewableOutcomes.has(outcome.outcome)) {
     throw new OpsDomainError("CONFLICT", "The current technician outcome requires follow-up instead of verification");
+  }
+  const [visitWork, plannedRouteStop] = outcome.selectionSource === "held_work"
+    ? await Promise.all([
+        repository.listSiteVisitWorkOrders(input.organizationId, outcome.visitId),
+        repository.getRouteStopForVisit(input.organizationId, outcome.visitId),
+      ])
+    : [[], undefined];
+  const mayConfirmAvoidedSeparateTrip = outcome.selectionSource === "held_work" && (
+    Boolean(plannedRouteStop)
+    || visitWork.some((link) => link.selectionSource === "assigned_work" || link.selectionSource === "service_run")
+  );
+  if (input.avoidedSeparateTripConfirmed && input.decision !== "verified") {
+    throw new OpsDomainError("VALIDATION", "An avoided-trip confirmation can accompany only an accepted verification");
+  }
+  if (input.avoidedSeparateTripConfirmed && !mayConfirmAvoidedSeparateTrip) {
+    throw new OpsDomainError("VALIDATION", "This visit was not already planned, so a separate avoided trip cannot be verified");
   }
   if (priorVerifications.some((verification) => verification.siteVisitWorkOrderId === outcome.id)) {
     throw new OpsDomainError("CONFLICT", "This technician outcome already has an immutable verification decision");
@@ -356,6 +374,24 @@ export async function recordWorkOrderVerification(
     }),
     ...buildCreateTaskStatements({ task: replacementTask, actor: input.actor, ids }),
     buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, projectedTasks),
+    ...(input.avoidedSeparateTripConfirmed
+      ? auditAndOutbox({
+          organizationId: input.organizationId,
+          aggregateId: workOrder.id,
+          eventType: "work_order.held_work_avoided_trip_verified",
+          actor: input.actor,
+          occurredAt: now,
+          payload: {
+            verificationId: verification.id,
+            siteVisitWorkOrderId: outcome.id,
+            visitId: outcome.visitId,
+            evidenceCategory: "verified_avoided_trip",
+            assertionMeaning: "manager_confirmed_this_approved_item_would_otherwise_have_required_a_separate_vendor_trip",
+            amountMeaning: "no_dollar_value_inferred",
+          },
+          ids,
+        })
+      : []),
     ...auditAndOutbox({
       organizationId: input.organizationId,
       aggregateId: workOrder.id,
@@ -370,6 +406,7 @@ export async function recordWorkOrderVerification(
         outcomeRecordedAt: outcome.outcomeRecordedAt,
         cycle,
         decision: input.decision,
+        avoidedSeparateTripConfirmed: Boolean(input.avoidedSeparateTripConfirmed),
         reason,
         previousStatus: workOrder.status,
         status: nextStatus,

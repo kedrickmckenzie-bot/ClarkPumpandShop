@@ -102,6 +102,29 @@ describe("embedded work-order verification surface", () => {
     expect(markup).toContain('type="hidden" name="decision" value="rejected"');
     expect(markup).toContain(`type="hidden" name="expectedSiteVisitWorkOrderId" value="${outcomeId}"`);
     expect(markup).toContain("It does not close the work order automatically");
+    expect(markup).not.toContain("Confirm a separate trip was avoided");
+  });
+
+  it("offers an optional avoided-trip attestation only for held work completed during an already-planned visit", () => {
+    const fixture = verificationFixture();
+    const heldOutcome = fixture.siteVisitWorkOrders.find((record) => record.id === outcomeId)!;
+    heldOutcome.selectionSource = "held_work";
+    heldOutcome.workOrderHoldId = "hold-verification-ui";
+    fixture.siteVisitWorkOrders.push({
+      ...heldOutcome,
+      id: "site-visit-work-order-planned-ui",
+      workOrderId: "wo-current-113-freezer-service",
+      ordinal: 2,
+      selectionSource: "assigned_work",
+      workOrderHoldId: undefined,
+    });
+    const model = buildWorkOrderVerificationModel(fixture, session(), workOrderId);
+    const markup = renderToStaticMarkup(createElement(WorkOrderVerificationPanel, { model }));
+
+    expect(model.currentOutcome?.canConfirmAvoidedSeparateTrip).toBe(true);
+    expect(markup).toContain("Confirm a separate trip was avoided");
+    expect(markup).toContain("No dollar value is inferred");
+    expect(markup).toContain('name="avoidedSeparateTripConfirmed"');
   });
 
   it("shows immutable rejected history and withholds another decision until a new outcome exists", () => {

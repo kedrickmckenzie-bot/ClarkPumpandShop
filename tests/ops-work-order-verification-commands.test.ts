@@ -232,6 +232,55 @@ describe("append-only work-order verification and closure", () => {
       .toContain("work_order.verified_and_resolved");
   });
 
+  it("records an avoided trip only when a manager explicitly confirms held work completed during planned service", async () => {
+    const fixture = verificationFixture();
+    const heldOutcome = fixture.siteVisitWorkOrders.find((record) => record.id === outcomeId)!;
+    heldOutcome.selectionSource = "held_work";
+    heldOutcome.workOrderHoldId = "hold-verification-command";
+    const workOrder = fixture.workOrders.find((record) => record.id === workOrderId)!;
+    const companion = fixture.workOrders.find((record) => record.storeId === workOrder.storeId && record.id !== workOrderId)!;
+    fixture.siteVisitWorkOrders.push({
+      id: "site-visit-work-order-planned-command",
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      visitId,
+      workOrderId: companion.id,
+      ordinal: 2,
+      linkedByActorType: "technician",
+      linkedByActorName: "Imani Lewis",
+      linkedAt: heldOutcome.linkedAt,
+      selectionSource: "assigned_work",
+    });
+    const test = harness(fixture);
+
+    const verification = await recordWorkOrderVerification(test.services, {
+      ...decisionInput("verified", "The item would otherwise have required its own vendor visit."),
+      avoidedSeparateTripConfirmed: true,
+    });
+
+    const event = test.repository.snapshot().auditEvents.find((candidate) => (
+      candidate.aggregateId === workOrderId
+      && candidate.eventType === "work_order.held_work_avoided_trip_verified"
+    ));
+    expect(JSON.parse(event!.payloadJson)).toMatchObject({
+      verificationId: verification.id,
+      evidenceCategory: "verified_avoided_trip",
+      amountMeaning: "no_dollar_value_inferred",
+    });
+  });
+
+  it("rejects an avoided-trip claim when held work was picked up on an unplanned visit", async () => {
+    const fixture = verificationFixture();
+    const heldOutcome = fixture.siteVisitWorkOrders.find((record) => record.id === outcomeId)!;
+    heldOutcome.selectionSource = "held_work";
+    heldOutcome.workOrderHoldId = "hold-verification-unplanned";
+    const test = harness(fixture);
+
+    await expect(recordWorkOrderVerification(test.services, {
+      ...decisionInput("verified"),
+      avoidedSeparateTripConfirmed: true,
+    })).rejects.toMatchObject({ code: "VALIDATION", message: expect.stringContaining("was not already planned") });
+  });
+
   it("requires a reason to reject and leaves every fact unchanged on validation failure", async () => {
     const test = harness();
     const before = test.repository.snapshot();

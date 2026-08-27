@@ -1,7 +1,7 @@
 import type { OpsCommandServices } from "./commands";
 import { escalateWorkflowTask } from "./workflow-task-commands";
 import { productPresentation } from "../product/presentation";
-import type { WorkflowTask } from "./types";
+import type { VendorComplianceAlertStage, VendorComplianceDocument, WorkflowTask } from "./types";
 
 /**
  * SLA escalation worker.
@@ -195,6 +195,104 @@ export async function runPmRecurrenceCycle(
         failed += 1;
       }
       processed += 1;
+    }
+    await repository.finishJobRun({ organizationId, jobRunId, status: jobRunStatus(processed, failed), finishedAt: clock.now(), processedCount: processed, failedCount: failed });
+  }
+  return summary;
+}
+
+export interface VendorComplianceCycleSummary {
+  slotKey: string;
+  organizationsConsidered: number;
+  organizationsSkipped: number;
+  vendorsConsidered: number;
+  quietNoticesCreated: number;
+  actionNoticesCreated: number;
+  expiredNoticesCreated: number;
+  remindersCreated: number;
+  failedCount: number;
+}
+
+const complianceJobType = "vendor_compliance_expiry";
+const complianceActorName = `${workerName} vendor compliance worker`;
+const dayMs = 24 * 60 * 60 * 1000;
+
+function complianceStage(expiresAt: string, currentTime: string): VendorComplianceAlertStage | undefined {
+  const days = Math.ceil((Date.parse(expiresAt) - Date.parse(currentTime)) / dayMs);
+  if (days <= 0) return "expired";
+  if (days <= 7) return "7_day";
+  if (days <= 14) return "14_day";
+  if (days <= 30) return "30_day";
+  if (days <= 60) return "60_day";
+  return undefined;
+}
+
+function currentApprovedComplianceDocuments(rows: VendorComplianceDocument[]) {
+  const byVendorAndType = new Map<string, VendorComplianceDocument[]>();
+  for (const row of rows.filter((candidate) => candidate.reviewStatus === "approved" && candidate.expiresAt)) {
+    const key = `${row.organizationId}:${row.vendorId}:${row.documentType}`;
+    byVendorAndType.set(key, [...(byVendorAndType.get(key) ?? []), row]);
+  }
+  return [...byVendorAndType.values()].map((records) => [...records]
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))[0]!);
+}
+
+/**
+ * Creates one low-noise vendor-level compliance notice per daily cycle while
+ * preserving document-level facts for audit and routing. Sixty-day notices
+ * are dashboard-only; 30/14/7-day and expired notices enter the outbox.
+ */
+export async function runVendorComplianceCycle(
+  services: OpsCommandServices,
+  options: { slotKey?: string } = {},
+): Promise<VendorComplianceCycleSummary> {
+  const repository = services.repository;
+  const clock = services.clock ?? { now: () => new Date().toISOString() };
+  const ids = services.ids ?? { next: (prefix: string) => `${prefix}-${crypto.randomUUID()}` };
+  const currentTime = clock.now();
+  const slotKey = options.slotKey ?? currentTime.slice(0, 10);
+  const documents = currentApprovedComplianceDocuments(await repository.listAllVendorComplianceDocumentsForWorker());
+  const byOrganization = new Map<string, VendorComplianceDocument[]>();
+  for (const document of documents) byOrganization.set(document.organizationId, [...(byOrganization.get(document.organizationId) ?? []), document]);
+  const summary: VendorComplianceCycleSummary = { slotKey, organizationsConsidered: byOrganization.size, organizationsSkipped: 0, vendorsConsidered: 0, quietNoticesCreated: 0, actionNoticesCreated: 0, expiredNoticesCreated: 0, remindersCreated: 0, failedCount: 0 };
+
+  for (const [organizationId, organizationDocuments] of byOrganization) {
+    const jobRunId = ids.next("job");
+    const began = await repository.tryBeginJobRun({ organizationId, jobRunId, jobType: complianceJobType, slotKey, startedAt: currentTime });
+    if (!began) { summary.organizationsSkipped += 1; continue; }
+    let processed = 0;
+    let failed = 0;
+    const byVendor = new Map<string, VendorComplianceDocument[]>();
+    for (const document of organizationDocuments) byVendor.set(document.vendorId, [...(byVendor.get(document.vendorId) ?? []), document]);
+    summary.vendorsConsidered += byVendor.size;
+    for (const [vendorId, vendorDocuments] of byVendor) {
+      processed += 1;
+      try {
+        const existingAlerts = await repository.listVendorComplianceAlerts(organizationId, vendorId);
+        const existingKeys = new Set(existingAlerts.map((alert) => `${alert.documentId}:${alert.stage}`));
+        const due = vendorDocuments.map((document) => ({ document, stage: complianceStage(document.expiresAt!, currentTime) }))
+          .filter((row): row is { document: VendorComplianceDocument; stage: VendorComplianceAlertStage } => Boolean(row.stage))
+          .filter((row) => !existingKeys.has(`${row.document.id}:${row.stage}`));
+        if (!due.length) continue;
+        const actionable = due.some((row) => row.stage !== "60_day");
+        const existingReminderId = existingAlerts.find((alert) => alert.reminderId)?.reminderId;
+        const reminderId = actionable ? existingReminderId ?? ids.next("vendor-reminder") : undefined;
+        const statements = due.map(({ document, stage }) => insertStatement("ops_vendor_compliance_alerts", { id: ids.next("compliance-alert"), organization_id: organizationId, vendor_id: vendorId, document_id: document.id, stage, expires_at: document.expiresAt, reminder_id: reminderId ?? null, created_at: currentTime }));
+        if (actionable && !existingReminderId) {
+          statements.push(insertStatement("ops_vendor_reminders", { id: reminderId, organization_id: organizationId, vendor_id: vendorId, title: "Renew customer-required vendor documents", note: "Review the expiring document records and record the replacement without deleting prior evidence.", accountable_party: "Facilities administrator", due_at: due.map((row) => row.document.expiresAt!).sort()[0], escalation_to: "Facilities director", status: "open", created_by_actor_type: "system", created_by_name: complianceActorName, created_at: currentTime }));
+          summary.remindersCreated += 1;
+        }
+        const payload = JSON.stringify({ vendorId, documents: due.map(({ document, stage }) => ({ documentId: document.id, documentType: document.documentType, reference: document.reference, expiresAt: document.expiresAt, stage, blocking: document.blocking })), routingEffect: due.some(({ document, stage }) => document.blocking && stage === "expired") ? "new_routine_work_paused_active_jobs_unchanged" : "no_automatic_work_change" });
+        statements.push(insertStatement("ops_audit_events", { id: ids.next("audit"), organization_id: organizationId, aggregate_type: "vendor", aggregate_id: vendorId, event_type: "vendor.compliance_notice_created", actor_type: "system", actor_name: complianceActorName, occurred_at: currentTime, payload_json: payload }));
+        if (actionable) statements.push(insertStatement("ops_outbox_messages", { id: ids.next("outbox"), organization_id: organizationId, topic: "ops.vendor.compliance_due", aggregate_type: "vendor", aggregate_id: vendorId, payload_json: payload, status: "pending", available_at: currentTime, created_at: currentTime, attempt_count: 0 }));
+        await repository.atomicWrite(statements);
+        summary.quietNoticesCreated += due.filter((row) => row.stage === "60_day").length;
+        summary.actionNoticesCreated += due.filter((row) => row.stage !== "60_day").length;
+        summary.expiredNoticesCreated += due.filter((row) => row.stage === "expired").length;
+      } catch {
+        failed += 1;
+        summary.failedCount += 1;
+      }
     }
     await repository.finishJobRun({ organizationId, jobRunId, status: jobRunStatus(processed, failed), finishedAt: clock.now(), processedCount: processed, failedCount: failed });
   }

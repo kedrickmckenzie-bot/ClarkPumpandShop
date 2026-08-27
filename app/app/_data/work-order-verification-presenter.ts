@@ -30,6 +30,7 @@ export interface WorkOrderVerificationViewModel {
     recordedLabel: string;
     visitId: string;
     technicianLabel: string;
+    canConfirmAvoidedSeparateTrip: boolean;
   };
   canDecide: boolean;
   decisionBlockReason?: string;
@@ -46,6 +47,7 @@ export interface WorkOrderVerificationViewModel {
     decidedByLabel: string;
     decidedLabel: string;
     reason?: string;
+    avoidedSeparateTripConfirmed: boolean;
     current: boolean;
   }>;
 }
@@ -61,6 +63,7 @@ const permittedRoles = new Set<OperatorRole>(["facilities", "regional", "store_m
 const reviewableOutcomes = new Set<SiteVisitWorkOrderOutcome>(["completed", "no_issue_found"]);
 const outcomeLabels: Record<SiteVisitWorkOrderOutcome, string> = {
   completed: "Work completed",
+  temporary_repair: "Temporary repair — follow-up needed",
   diagnosis_only: "Diagnosis only",
   quote_required: "Quote required",
   parts_required: "Parts required",
@@ -163,6 +166,13 @@ export function buildWorkOrderVerificationModel(
   const currentDecision = currentOutcome
     ? verifications.find((verification) => verification.siteVisitWorkOrderId === currentOutcome.id)
     : undefined;
+  const visitWork = currentOutcome
+    ? fixture.siteVisitWorkOrders.filter((record) => record.organizationId === session.organizationId && record.visitId === currentOutcome.visitId)
+    : [];
+  const currentOutcomeCanConfirmAvoidedSeparateTrip = currentOutcome?.selectionSource === "held_work" && (
+    fixture.routeStops.some((stop) => stop.organizationId === session.organizationId && stop.siteVisitId === currentOutcome.visitId)
+    || visitWork.some((record) => record.selectionSource === "assigned_work" || record.selectionSource === "service_run")
+  );
   const activeVerifyTask = fixture.workflowTasks.some((task: WorkflowTask) => (
     task.organizationId === session.organizationId
     && task.workOrderId === workOrder.id
@@ -212,6 +222,7 @@ export function buildWorkOrderVerificationModel(
           technicianLabel: visit
             ? `${visit.technicianName} · ${visit.providerName}`
             : "Linked technician visit",
+          canConfirmAvoidedSeparateTrip: currentOutcomeCanConfirmAvoidedSeparateTrip,
         }
       : undefined,
     canDecide,
@@ -230,6 +241,16 @@ export function buildWorkOrderVerificationModel(
         decidedByLabel: verification.decidedByName,
         decidedLabel: dateTime(verification.decidedAt),
         reason: verification.reason,
+        avoidedSeparateTripConfirmed: fixture.auditEvents.some((event) => {
+          if (event.organizationId !== session.organizationId
+            || event.aggregateId !== workOrder.id
+            || event.eventType !== "work_order.held_work_avoided_trip_verified") return false;
+          try {
+            return (JSON.parse(event.payloadJson) as { verificationId?: string }).verificationId === verification.id;
+          } catch {
+            return false;
+          }
+        }),
         current: verification.siteVisitWorkOrderId === currentOutcome?.id,
       })),
   };

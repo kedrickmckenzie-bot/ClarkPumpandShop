@@ -218,8 +218,8 @@ describe("vendor performance workspace", () => {
     const snapshot = repository.snapshot();
     const detail = buildVendorPerformanceDetailModel(snapshot, session(), vendorId);
     expect(detail.summary?.compliance).toMatchObject({ state: "ready", approvedDocumentCount: 3, documentCount: 3, activeQualificationCount: 2 });
-    expect(detail.complianceRows).toHaveLength(4);
-    expect(detail.complianceRows.filter((row) => row.documentTypeLabel === "Insurance").map((row) => row.statusLabel)).toEqual(["Approved", "Superseded record"]);
+    expect(detail.complianceRows).toHaveLength(5);
+    expect(detail.complianceRows.filter((row) => row.documentTypeLabel === "Insurance").map((row) => row.statusLabel)).toEqual(["Approved", "Prior record retained", "Prior record retained"]);
     expect(detail.qualificationRows.some((row) => row.serviceRightsLabel.includes("Emergency") && row.limitLabel === "$7,500")).toBe(true);
     expect(snapshot.auditEvents).toEqual(expect.arrayContaining([
       expect.objectContaining({ aggregateId: vendorId, eventType: "vendor.compliance_document_recorded" }),

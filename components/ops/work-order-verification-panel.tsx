@@ -48,6 +48,10 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
               Verification note <span>Optional</span>
               <textarea name="reason" maxLength={2000} placeholder="What did store operations confirm?" rows={3} />
             </label>
+            {model.currentOutcome?.canConfirmAvoidedSeparateTrip ? <label>
+              <span><input name="avoidedSeparateTripConfirmed" type="checkbox" value="true" /> Confirm a separate trip was avoided</span>
+              <small>Check only if this approved item would have required its own vendor visit. No dollar value is inferred.</small>
+            </label> : null}
             <button type="submit"><CheckCircle2 aria-hidden="true" size={17} />Verify and mark resolved</button>
             <small>This creates a separate closure obligation. It does not close the work order automatically.</small>
           </form>
@@ -82,7 +86,7 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
                 <span aria-hidden="true" />
                 <div>
                   <header><strong>Cycle {decision.cycle} · {decision.decisionLabel}</strong>{decision.current ? <em>Current outcome</em> : null}</header>
-                  <p>{decision.outcomeLabel}{decision.reason ? ` — ${decision.reason}` : ""}</p>
+                  <p>{decision.outcomeLabel}{decision.reason ? ` — ${decision.reason}` : ""}{decision.avoidedSeparateTripConfirmed ? " · Separate trip explicitly confirmed as avoided" : ""}</p>
                   <small>{decision.decidedByLabel} · {decision.decidedLabel}</small>
                 </div>
               </li>

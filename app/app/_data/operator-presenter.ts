@@ -2072,15 +2072,25 @@ function buildVendorEvidenceBundle(
   const vendorDocuments = fixture.vendorComplianceDocuments
     .filter((document) => document.organizationId === scoped.organizationId && document.vendorId === vendor.id)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
+  const asOfMs = Date.parse(fixture.asOf);
   const currentDocumentByType = new Map<string, (typeof vendorDocuments)[number]>();
-  for (const document of vendorDocuments) {
-    if (!currentDocumentByType.has(document.documentType)) currentDocumentByType.set(document.documentType, document);
+  const documentsByType = new Map<string, typeof vendorDocuments>();
+  for (const document of vendorDocuments) documentsByType.set(
+    document.documentType,
+    [...(documentsByType.get(document.documentType) ?? []), document],
+  );
+  for (const [documentType, records] of documentsByType) {
+    // A newly uploaded replacement does not invalidate the approved document
+    // already on file. Keep using the current approved record until it expires
+    // or the replacement is approved; retain every version in the evidence list.
+    const currentApproved = records.find((document) => document.reviewStatus === "approved"
+      && (!document.expiresAt || Date.parse(document.expiresAt) > asOfMs));
+    currentDocumentByType.set(documentType, currentApproved ?? records[0]!);
   }
   const currentVendorDocuments = [...currentDocumentByType.values()];
   const vendorQualifications = fixture.vendorQualifications
     .filter((qualification) => qualification.organizationId === scoped.organizationId && qualification.vendorId === vendor.id)
     .sort((left, right) => left.tradeKey.localeCompare(right.tradeKey) || left.id.localeCompare(right.id));
-  const asOfMs = Date.parse(fixture.asOf);
   const dueSoonMs = asOfMs + 60 * 24 * 60 * 60_000;
   const blockingDocument = currentVendorDocuments.find((document) => document.blocking && (
     document.reviewStatus !== "approved" || (document.expiresAt ? Date.parse(document.expiresAt) <= asOfMs : false)
@@ -2102,10 +2112,17 @@ function buildVendorEvidenceBundle(
       : complianceState === "ready"
         ? "Documents current"
         : "Documents not configured";
+  const latestExpiryAlert = expiringDocument
+    ? (fixture.vendorComplianceAlerts ?? [])
+      .filter((alert) => alert.organizationId === scoped.organizationId && alert.vendorId === vendor.id && alert.documentId === expiringDocument.id)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
+    : undefined;
   const complianceDetail = blockingDocument
-    ? `${sentence(blockingDocument.documentType)} is ${sentence(blockingDocument.reviewStatus)}`
+    ? `${sentence(blockingDocument.documentType)} is not current; new routine routing is paused while active work stays in place`
     : expiringDocument?.expiresAt
-      ? `${sentence(expiringDocument.documentType)} expires ${date(expiringDocument.expiresAt)}`
+      ? latestExpiryAlert && latestExpiryAlert.stage !== "60_day"
+        ? `${sentence(expiringDocument.documentType)} expires ${date(expiringDocument.expiresAt)} · vendor and facilities renewal notice active`
+        : `${sentence(expiringDocument.documentType)} expires ${date(expiringDocument.expiresAt)} · quiet 60-day dashboard notice`
       : currentVendorDocuments.length
         ? `${approvedDocumentCount} of ${currentVendorDocuments.length} document controls current`
         : "Complete required vendor documents before sending work that depends on them";
@@ -2357,6 +2374,12 @@ function buildVendorEvidenceBundle(
 
   const complianceRows: VendorComplianceEvidenceRow[] = vendorDocuments.map((document) => {
     const isCurrent = currentDocumentByType.get(document.documentType)?.id === document.id;
+    const currentOperationalDocument = currentDocumentByType.get(document.documentType);
+    const replacementPending = document.reviewStatus === "pending"
+      && Boolean(currentOperationalDocument)
+      && currentOperationalDocument?.id !== document.id
+      && currentOperationalDocument?.reviewStatus === "approved"
+      && document.createdAt > currentOperationalDocument.createdAt;
     const expiredByDate = Boolean(document.expiresAt && Date.parse(document.expiresAt) <= asOfMs);
     const dueSoon = Boolean(document.expiresAt && Date.parse(document.expiresAt) > asOfMs && Date.parse(document.expiresAt) <= dueSoonMs);
     const effectiveStatus = expiredByDate ? "expired" : document.reviewStatus;
@@ -2364,11 +2387,25 @@ function buildVendorEvidenceBundle(
       id: document.id,
       documentTypeLabel: sentence(document.documentType),
       referenceLabel: [document.issuer, document.reference].filter(Boolean).join(" · ") || "Reference not entered",
-      statusLabel: !isCurrent ? "Superseded record" : dueSoon && effectiveStatus === "approved" ? "Approved · renewal due soon" : sentence(effectiveStatus),
+      statusLabel: replacementPending
+        ? "Replacement pending review"
+        : !isCurrent
+          ? "Prior record retained"
+          : dueSoon && effectiveStatus === "approved"
+            ? "Approved · renewal due soon"
+            : sentence(effectiveStatus),
       effectiveLabel: document.effectiveAt ? date(document.effectiveAt) : "Not entered",
       expiryLabel: document.expiresAt ? date(document.expiresAt) : "No expiration entered",
       blockingLabel: document.blocking ? "Required for routing" : "Non-blocking record",
-      tone: !isCurrent ? "neutral" : effectiveStatus !== "approved" || (document.blocking && expiredByDate) ? "critical" : dueSoon ? "warning" : "positive",
+      tone: replacementPending
+        ? "warning"
+        : !isCurrent
+          ? "neutral"
+          : effectiveStatus !== "approved" || (document.blocking && expiredByDate)
+            ? "critical"
+            : dueSoon
+              ? "warning"
+              : "positive",
     };
   });
 

@@ -102,6 +102,7 @@ describe("work-order verification route", () => {
         expectedSiteVisitWorkOrderId: "site-visit-work-route",
         expectedOutcomeRecordedAt: "2026-08-20T14:00:00.000Z",
         decision: "verified",
+        avoidedSeparateTripConfirmed: false,
         reason: "Store operating condition confirmed",
         actor,
       },

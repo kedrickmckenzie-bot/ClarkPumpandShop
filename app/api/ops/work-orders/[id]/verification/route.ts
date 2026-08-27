@@ -56,6 +56,7 @@ export async function POST(
         ),
         expectedOutcomeRecordedAt,
         decision: decision as WorkOrderVerificationDecision,
+        avoidedSeparateTripConfirmed: formData.get("avoidedSeparateTripConfirmed") === "true",
         reason: formText(formData, "reason", { max: 2_000 }) || undefined,
         actor: context.actor,
       },

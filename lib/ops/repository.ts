@@ -29,6 +29,7 @@ import type {
   ReplacementEvent,
   ReplacementProfile,
   Vendor,
+  VendorSpecialty,
   VendorEstimateProposal,
   VisitSession,
   WorkOrder,
@@ -41,6 +42,8 @@ import type {
   WorkflowTaskSlaResume,
   VendorQualification,
   VendorComplianceDocument,
+  VendorComplianceAlert,
+  WorkOrderVisitHold,
   ContractVersion,
   ContractScope,
   RateCardLine,
@@ -163,6 +166,7 @@ export interface OpsRepository {
   listComponentTemplates(organizationId: OpsId, equipmentTemplateId: OpsId): Promise<ComponentTemplate[]>;
   getStore(organizationId: OpsId, storeId: OpsId): Promise<Store | null>;
   getVendor(organizationId: OpsId, vendorId: OpsId): Promise<Vendor | null>;
+  listVendorSpecialties(organizationId: OpsId, vendorId: OpsId): Promise<VendorSpecialty[]>;
   listNotificationRules(organizationId: OpsId): Promise<NotificationRule[]>;
   upsertNotificationRule(input: { organizationId: OpsId; id: OpsId; eventKey: NotificationEventKey; emailEnabled: boolean; recipientRole: NotificationRecipientRole; updatedByMembershipId?: OpsId; occurredAt: IsoDateTime }): Promise<void>;
   listNotificationRecipients(
@@ -177,6 +181,8 @@ export interface OpsRepository {
   getRequest(organizationId: OpsId, requestId: OpsId): Promise<ServiceRequest | null>;
   listRequestImpactAssessments(organizationId: OpsId, requestId: OpsId): Promise<RequestImpactAssessment[]>;
   getWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrder | null>;
+  getWorkOrderVisitHold(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderVisitHold | null>;
+  listActiveWorkOrderVisitHoldsForStore(organizationId: OpsId, storeId: OpsId): Promise<WorkOrderVisitHold[]>;
   getApprovalPolicy(organizationId: OpsId, policyId: OpsId): Promise<ApprovalPolicy | null>;
   listApprovalPolicies(organizationId: OpsId): Promise<ApprovalPolicy[]>;
   getApprovalRequest(organizationId: OpsId, approvalRequestId: OpsId): Promise<ApprovalRequest | null>;
@@ -202,6 +208,7 @@ export interface OpsRepository {
   listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId): Promise<PmWorkItem[]>;
   listVendorQualifications(organizationId: OpsId, vendorId: OpsId): Promise<VendorQualification[]>;
   listVendorComplianceDocuments(organizationId: OpsId, vendorId: OpsId): Promise<VendorComplianceDocument[]>;
+  listVendorComplianceAlerts(organizationId: OpsId, vendorId: OpsId): Promise<VendorComplianceAlert[]>;
   getContractVersion(organizationId: OpsId, contractVersionId: OpsId): Promise<ContractVersion | null>;
   listContractScopes(organizationId: OpsId, contractVersionId: OpsId): Promise<ContractScope[]>;
   listRateCardLines(organizationId: OpsId, contractVersionId: OpsId): Promise<RateCardLine[]>;
@@ -320,6 +327,8 @@ export interface OpsRepository {
   listPmPlans(organizationId: OpsId): Promise<PmPlan[]>;
   /** Deliberately cross-tenant read reserved for the platform recurrence worker. */
   listAllPmPlansForWorker(): Promise<PmPlan[]>;
+  /** Deliberately cross-tenant read reserved for the compliance worker. */
+  listAllVendorComplianceDocumentsForWorker(): Promise<VendorComplianceDocument[]>;
   listPmOccurrencesForPlan(organizationId: OpsId, planId: OpsId): Promise<PmOccurrence[]>;
   listRecentJobRuns(organizationId: OpsId, limit: number): Promise<JobRun[]>;
   outboxStatusCounts(organizationId: OpsId): Promise<Array<{ status: string; count: number }>>;

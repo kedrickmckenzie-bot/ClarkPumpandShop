@@ -207,7 +207,8 @@
 }
 
 .moneyCell input,
-.moneyCell textarea {
+.moneyCell textarea,
+.moneyCell select {
   width: 100%;
   min-height: 42px;
   margin: 8px 0;
@@ -217,6 +218,27 @@
   background: var(--to-surface);
   color: var(--to-ink);
   font: inherit;
+}
+
+.moneyCell label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--to-copy);
+}
+
+.moneyCell label small {
+  font-weight: 400;
+  color: var(--to-muted);
+}
+
+.moneyCell button.secondaryAction {
+  border-color: var(--to-line-strong);
+  background: var(--to-surface);
+  color: var(--to-copy);
 }
 
 .moneyCell button {

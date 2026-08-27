@@ -35,6 +35,7 @@ import {
 } from "@/lib/server/runtime-identifiers";
 import { DEFAULT_DEMO_EDITION, isDemoEdition } from "@/components/ops/demo-edition";
 import type { OpsFixture } from "@/lib/ops/types";
+import type { HeldWorkActionsModel } from "@/components/workspace/held-work-actions";
 import type { PmProgramManagementModel } from "@/components/workspace/pm-program-management";
 import {
   buildCreateRequestModel,
@@ -638,6 +639,65 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
     estimateRequests,
     estimateProposals: fixture.estimateProposals.filter((row) => requestIds.has(row.requestId)),
   });
+}
+
+function localInputValue(value: string, timeZone: string) {
+  const values = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(value)).map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+}
+
+export async function loadHeldWorkActionsModel(workOrderId: string): Promise<HeldWorkActionsModel> {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
+  const workOrder = context.fixture.workOrders.find((row) => row.organizationId === context.session.organizationId && row.id === workOrderId);
+  if (!workOrder) notFound();
+  const repository = await getServerOpsRepository();
+  const [hold, store] = await Promise.all([
+    repository.getWorkOrderVisitHold(context.session.organizationId, workOrderId),
+    repository.getStore(context.session.organizationId, workOrder.storeId),
+  ]);
+  const organizationTimeZone = context.fixture.organizations.find((row) => row.id === context.session.organizationId)?.timeZone ?? "UTC";
+  const storeTimeZone = store?.timeZone ?? organizationTimeZone;
+  const fallbackDeadlineMs = Date.parse(context.fixture.asOf) + 30 * 24 * 60 * 60_000;
+  const recordedDeadlineMs = Date.parse(workOrder.dueAt ?? "");
+  const defaultDeadline = new Date(Number.isFinite(recordedDeadlineMs)
+    ? Math.max(recordedDeadlineMs, fallbackDeadlineMs)
+    : fallbackDeadlineMs).toISOString();
+  const claimedVendor = hold?.claimedVendorId
+    ? await repository.getVendor(context.session.organizationId, hold.claimedVendorId)
+    : null;
+  const formatMoney = (amountMinor: number, currency: string) => new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+  }).format(amountMinor / 100);
+  return {
+    workOrderId,
+    permitted: roleCan(context.session.role, "control_work_order"),
+    eligible: Boolean(workOrder.categoryKey) && workOrder.status === "approved",
+    categoryLabel: workOrder.categoryKey
+      ? workOrder.categoryKey.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase())
+      : undefined,
+    storeTimeZone,
+    deadlineInputValue: localInputValue(defaultDeadline, storeTimeZone),
+    hold: hold && hold.status !== "cancelled" ? {
+      status: hold.status,
+      posture: hold.posture,
+      deadlineLabel: formatInTimeZone(hold.deadlineAt, storeTimeZone),
+      deadlineInputValue: localInputValue(hold.deadlineAt, storeTimeZone),
+      internalReviewThreshold: hold.internalReviewThreshold
+        ? formatMoney(hold.internalReviewThreshold.amountMinor, hold.internalReviewThreshold.currency)
+        : undefined,
+      claimedVendorName: claimedVendor?.name,
+    } : undefined,
+  };
 }
 export async function loadVendorResponseActionsModel(workOrderId: string) {
   const context = await sessionAndFixture();

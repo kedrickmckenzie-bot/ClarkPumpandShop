@@ -10,6 +10,7 @@ import {
   createServiceRequest,
   createWorkOrder,
   issueWorkOrder,
+  placeWorkOrderOnVisitHold,
   recordVendorResponse,
   updateWorkOrderControl,
   type OpsCommandServices,
@@ -711,4 +712,58 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     expect(replaced.find((view) => view.name === "Open at store 101")!.queryString).toBe("status=open");
 
     await expect(repository.deleteSavedView(organizationId, membershipId, "saved-view-pg-roundtrip-2")).resolves.toBe(true);
-  }, 60_000);});
+  }, 60_000);
+
+  it("persists a held-work revision, atomic claim, and review outcome through PostgreSQL", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const repository = createOpsPostgresRepository(pool);
+    await seedOpsRepository(repository, fixture);
+    const organizationId = fixture.organizations[0].id;
+    let sequence = 0;
+    const services: OpsCommandServices = {
+      repository,
+      clock: { now: () => "2026-08-27T12:00:00.000Z" },
+      ids: { next: (prefix) => `${prefix}-pg-held-${++sequence}` },
+    };
+    const actor = { actorType: "user" as const, actorId: "membership-northline-facilities", actorName: "Jordan Lee", organizationId };
+    const workOrderId = "wo-held-104-restroom-door";
+
+    await placeWorkOrderOnVisitHold(services, {
+      organizationId,
+      workOrderId,
+      posture: "look_and_report",
+      deadlineAt: "2026-10-01T17:00:00.000Z",
+      internalReviewThresholdAmountMinor: 30_000,
+      currency: "USD",
+      actor,
+    });
+    await expect(repository.getWorkOrderVisitHold(organizationId, workOrderId)).resolves.toMatchObject({ posture: "look_and_report", status: "active", internalReviewThreshold: { amountMinor: 30_000, currency: "USD" } });
+
+    const visit = await checkInVisit(services, {
+      organizationId,
+      storeId: "store-northline-104",
+      vendorId: "vendor-northline-cedar",
+      heldWorkOrderIds: [workOrderId],
+      unmatchedReason: "Plumbing vendor onsite without an issued work order.",
+      technicianName: "Postgres Held Work Tech",
+      purpose: "Review approved held work",
+      channel: "qr",
+      location: { result: "permission_denied", capturedAt: "2026-08-27T12:00:00.000Z" },
+      actor: { actorType: "technician", actorName: "Postgres Held Work Tech", organizationId },
+    });
+    await expect(repository.getWorkOrderVisitHold(organizationId, workOrderId)).resolves.toMatchObject({ status: "claimed", claimedVisitId: visit.id });
+
+    await checkOutVisit(services, {
+      organizationId,
+      visitId: visit.id,
+      channel: "qr",
+      location: { result: "permission_denied", capturedAt: "2026-08-27T12:00:00.000Z" },
+      perWorkOrderOutcomes: [{ workOrderId, outcome: "diagnosis_only", outcomeNotes: "Closer body is worn; replacement should be planned." }],
+      actor: { actorType: "technician", actorName: "Postgres Held Work Tech", organizationId },
+    });
+    await expect(repository.getWorkOrderVisitHold(organizationId, workOrderId)).resolves.toMatchObject({ status: "review_required" });
+    await expect(repository.listSiteVisitWorkOrders(organizationId, visit.id)).resolves.toEqual([
+      expect.objectContaining({ workOrderId, selectionSource: "held_work", outcome: "diagnosis_only" }),
+    ]);
+  }, 120_000);
+});

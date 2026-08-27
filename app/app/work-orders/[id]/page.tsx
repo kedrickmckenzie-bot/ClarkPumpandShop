@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { WorkOrderCase } from "@/components/workspace/work-order-case";
 import { WorkOrderStageRail } from "@/components/workspace/work-order-case-stage-rail";
 import { VendorResponseActions } from "@/components/workspace/vendor-response-actions";
-import { loadDetailModel, loadEstimateComparisonModel, loadOperatorSession, loadVendorIssuanceModel, loadWorkOrderCaseModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel, loadVendorResponseActionsModel } from "../../_data/operator-loader";
+import { HeldWorkActions } from "@/components/workspace/held-work-actions";
+import { loadDetailModel, loadEstimateComparisonModel, loadHeldWorkActionsModel, loadOperatorSession, loadVendorIssuanceModel, loadWorkOrderCaseModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel, loadVendorResponseActionsModel } from "../../_data/operator-loader";
 import { loadWorkOrderReplacementIntelligenceModel } from "../../_data/replacement-loader";
 import { loadWorkOrderVerificationModel } from "../../_data/work-order-verification-presenter";
 import caseStyles from "@/components/workspace/owner-brief.module.css";
@@ -27,7 +28,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const notice = Array.isArray(noticeRaw) ? noticeRaw[0] : noticeRaw;
   const errorRaw = query.error;
   const error = Array.isArray(errorRaw) ? errorRaw[0] : errorRaw;
-  const [model, control, recording, estimateComparison, issuance, replacement, verification, stageCase, responseActions, session] = await Promise.all([
+  const [model, control, recording, estimateComparison, issuance, replacement, verification, stageCase, responseActions, heldWork, session] = await Promise.all([
     loadDetailModel("work-order", id),
     loadWorkOrderControlModel(id),
     loadWorkOrderRecordingModel(id),
@@ -37,6 +38,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     loadWorkOrderVerificationModel(id),
     loadWorkOrderCaseModel(id),
     loadVendorResponseActionsModel(id),
+    loadHeldWorkActionsModel(id),
     loadOperatorSession(),
   ]);
   const accountabilityOnly = session.demoEdition === "accountability";
@@ -80,6 +82,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     {view === "service" && responseActions ? (
       <VendorResponseActions model={{ ...responseActions, workOrderId: id }} />
     ) : null}
+    {view === "service" && !accountabilityOnly ? <HeldWorkActions model={heldWork} /> : null}
     <WorkOrderCase
       model={model}
       control={control}

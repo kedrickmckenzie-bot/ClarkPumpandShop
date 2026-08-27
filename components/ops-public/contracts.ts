@@ -192,6 +192,19 @@ export interface EligibleWorkOrderView {
   plannedServiceRun?: { id: string; startsAt: string; stopSequence: number };
 }
 
+export interface HeldWorkView {
+  id: string;
+  holdId: string;
+  number: string;
+  problem: string;
+  category: string;
+  asset?: string;
+  deadlineAt: string;
+  posture: "complete_using_professional_judgment" | "look_and_report";
+  instruction: string;
+  disclosures: string[];
+}
+
 export interface PlannedServiceRunView {
   id: string;
   startsAt: string;
@@ -205,6 +218,8 @@ export interface VisitWorkOrderView {
   id: string;
   number: string;
   problem: string;
+  selectionSource?: "assigned_work" | "service_run" | "held_work" | "after_the_fact";
+  heldWorkPosture?: "complete_using_professional_judgment" | "look_and_report";
 }
 
 export interface ActiveVisitView {
@@ -230,6 +245,7 @@ export interface VendorVisitContextView {
   /** True for a service-authorization capability that is bound to one WO. */
   workOrderSelectionBound: boolean;
   eligibleWorkOrders: EligibleWorkOrderView[];
+  heldWork: HeldWorkView[];
   plannedServiceRuns: PlannedServiceRunView[];
   activeVisits: ActiveVisitView[];
 }
@@ -239,6 +255,7 @@ export interface TechnicianCheckInCommand {
   /** Allowed only for the controlled unmatched path. Matched work infers it. */
   vendorId?: string;
   workOrderIds?: string[];
+  heldWorkOrderIds?: string[];
   /** Temporary one-WO compatibility input. */
   workOrderId?: string;
   serviceRunId?: string;
@@ -277,6 +294,7 @@ export type VisitOutcome = Extract<
 export type WorkOrderVisitOutcome = Extract<
   SiteVisitWorkOrderOutcome,
   | "completed"
+  | "temporary_repair"
   | "diagnosis_only"
   | "quote_required"
   | "parts_required"
@@ -299,6 +317,7 @@ export interface PerWorkOrderVisitOutcome {
   outcome: WorkOrderVisitOutcome;
   outcomeNotes?: string;
   followUp?: PublicVisitFollowUp;
+  vendorFollowUpTiming?: "within_7_days" | "within_30_days" | "within_90_days" | "next_pm" | "unknown";
 }
 
 export interface PublicUpload {
