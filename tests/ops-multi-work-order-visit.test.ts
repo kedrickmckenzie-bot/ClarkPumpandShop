@@ -39,7 +39,7 @@ async function reopenIssuedWork(test: ReturnType<typeof harness>, workOrderId: s
   await test.repository.atomicWrite([
     {
       sql: "UPDATE ops_work_orders SET status = ?, closed_at = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?",
-      params: ["issued", null, "Outside vendor", "Perform authorized service", "2026-08-21T14:00:00.000Z", "Northline Facilities", NORTHLINE_ORGANIZATION_ID, workOrderId],
+      params: ["issued", null, "Outside vendor", "Perform authorized service", "2026-08-21T14:00:00.000Z", "Clark Pump and Shop Facilities", NORTHLINE_ORGANIZATION_ID, workOrderId],
     },
     {
       sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ?",
@@ -202,10 +202,10 @@ describe("one site visit spanning several operator work orders", () => {
           outcome: "parts_required",
           outcomeNotes: "Compressor contactor requires a compatible replacement.",
           followUp: {
-            accountableParty: "Summit Refrigeration",
+            accountableParty: "ColdLine Refrigeration & HVAC",
             nextAction: "Return with the compatible compressor contactor.",
             dueAt: "2026-08-22T18:00:00.000Z",
-            escalationTo: "Northline Facilities",
+            escalationTo: "Clark Pump and Shop Facilities",
           },
         },
       ],

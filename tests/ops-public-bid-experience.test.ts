@@ -6,10 +6,10 @@ import { ServiceAuthorizationPage } from "@/components/ops-public/service-author
 import { VendorEstimatePage } from "@/components/ops-public/vendor-estimate-page";
 
 const bidRequest: VendorEstimateView = {
-  organizationName: "Northline Fuel & Market",
+  organizationName: "Clark Pump and Shop",
   organizationSupport: "facilities@example.test",
-  vendorName: "Cedar Mechanical",
-  operatorWorkOrderNumber: "NL-2026-0117",
+  vendorName: "ClearFlow HVAC, Plumbing & Kitchen Repair",
+  operatorWorkOrderNumber: "CPS-2026-0117",
   status: "submitted",
   statusLabel: "Bid submitted",
   requestKindLabel: "Bid request - pricing only",
@@ -33,10 +33,10 @@ const bidRequest: VendorEstimateView = {
 };
 
 const serviceAuthorization: ServiceAuthorizationView = {
-  organizationName: "Northline Fuel & Market",
+  organizationName: "Clark Pump and Shop",
   organizationSupport: "facilities@example.test",
-  vendorName: "Summit Refrigeration",
-  operatorWorkOrderNumber: "NL-2026-0116",
+  vendorName: "ColdLine Refrigeration & HVAC",
+  operatorWorkOrderNumber: "CPS-2026-0116",
   revision: 1,
   issuedAt: "2026-08-10T14:00:00.000Z",
   opened: true,
@@ -54,7 +54,7 @@ const serviceAuthorization: ServiceAuthorizationView = {
   authorization: {
     notToExceedLabel: "$1,750.00 USD without additional approval",
     requestedBy: "Jordan Lee",
-    billingInstruction: "Reference NL-2026-0116 on the invoice.",
+    billingInstruction: "Reference CPS-2026-0116 on the invoice.",
   },
   technicianVisitUrl: "/public/store/service-token/visit",
   mode: "demo",
@@ -86,7 +86,7 @@ describe("public bid request and service authorization distinction", () => {
     }));
 
     expect(markup).toContain("Work Order / Service Authorization");
-    expect(markup).toContain("Authorized work issued to Summit Refrigeration");
+    expect(markup).toContain("Authorized work issued to ColdLine Refrigeration &amp; HVAC");
     expect(markup).toContain("This is a work order, not a bid request");
     expect(markup).toContain("Your company was selected for this work");
     expect(markup).toContain("Digital acceptance is available when your company uses it");

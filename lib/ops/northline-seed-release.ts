@@ -1,6 +1,8 @@
 import type { OpsStatement } from "./repository";
 import type { OpsFixture } from "./types";
 import {
+  DEMO_ORGANIZATION_NAME,
+  DEMO_VENDOR_NAMES,
   NORTHLINE_AS_OF,
   NORTHLINE_ORGANIZATION_ID,
 } from "./fixtures";
@@ -11,12 +13,12 @@ import {
  * real preview mutations, so a new fixture version never merges or reprojects
  * records underneath an older completed bootstrap.
  */
-export const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-26-v14";
+export const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-27-v15";
 
 /**
  * An older completed fixture is enriched only with missing deterministic rows.
  * Existing IDs and user mutations are never overwritten. This separate
- * receipt remains honest that the database was not freshly seeded as v14.
+ * receipt remains honest that the database was not freshly seeded as v15.
  */
 export const NORTHLINE_SEED_COMPATIBILITY_MARKER = `${NORTHLINE_SEED_VERSION}:enriched-existing`;
 
@@ -125,7 +127,53 @@ export function buildNorthlineCompatibilityMarker(sourceVersion: string): OpsSta
  * exact legacy identity, so user edits and unrelated tenant data are untouched.
  */
 export function buildNorthlineCompatibilityAmendments(): OpsStatement[] {
-  return [{
+  const storeNames = [
+    "Cedar Grove", "Riverside", "Oak Valley", "Ridgeview", "Westgate",
+    "Harbor Point", "Junction City", "Meadow Park", "Lakeview", "Eastfield",
+    "Pine Hills", "Maple Crossing", "Riverbend", "North Market", "Southgate",
+  ];
+  const vendorIdentity = [
+    ["vendor-northline-summit", "summit", "coldline", "Summit Refrigeration", DEMO_VENDOR_NAMES.summit, "service@summit-demo.example", "service@coldline-demo.example"],
+    ["vendor-northline-cedar", "cedar", "clearflow", "Cedar Mechanical", DEMO_VENDOR_NAMES.cedar, "dispatch@cedar-demo.example", "dispatch@clearflow-demo.example"],
+    ["vendor-northline-forecourt", "forecourt", "pumppro", "Forecourt Systems Group", DEMO_VENDOR_NAMES.forecourt, "dispatch@forecourt-demo.example", "dispatch@pumppro-demo.example"],
+    ["vendor-northline-brightpath", "brightpath", "brightline", "BrightPath Electrical", DEMO_VENDOR_NAMES.brightpath, "service@brightpath-demo.example", "service@brightline-demo.example"],
+    ["vendor-northline-four-seasons", "four-seasons", "greenlot", "Four Seasons Site Services", DEMO_VENDOR_NAMES.fourSeasons, "dispatch@four-seasons-demo.example", "dispatch@greenlot-demo.example"],
+  ] as const;
+  const identityAmendments: OpsStatement[] = [
+    {
+      sql: `UPDATE ops_organizations
+        SET name = ?, slug = ?, work_order_prefix = ?
+        WHERE id = ? AND name = ? AND slug = ? AND work_order_prefix = ?`,
+      params: [DEMO_ORGANIZATION_NAME, "clark-pump-shop-demo", "CPS", NORTHLINE_ORGANIZATION_ID, "Northline Fuel & Market", "northline-demo", "NL"],
+    },
+    ...storeNames.map((location): OpsStatement => ({
+      sql: `UPDATE ops_stores
+        SET name = ?, search_text = REPLACE(search_text, ?, ?)
+        WHERE organization_id = ? AND name = ?`,
+      params: [`${DEMO_ORGANIZATION_NAME} - ${location}`, "northline", "clark pump and shop", NORTHLINE_ORGANIZATION_ID, `Northline ${location}`],
+    })),
+    ...vendorIdentity.map(([id, oldCode, newCode, oldName, newName, oldEmail, newEmail]): OpsStatement => ({
+      sql: `UPDATE ops_vendors
+        SET code = ?, name = ?, dispatch_email = ?, search_text = REPLACE(REPLACE(search_text, ?, ?), ?, ?)
+        WHERE organization_id = ? AND id = ? AND code = ? AND name = ? AND dispatch_email = ?`,
+      params: [newCode, newName, newEmail, oldName.toLocaleLowerCase("en-US"), newName.toLocaleLowerCase("en-US"), oldCode, newCode, NORTHLINE_ORGANIZATION_ID, id, oldCode, oldName, oldEmail],
+  })),
+    {
+      // An earlier demo release treated access to payment-enabled fuel
+      // equipment as suspicious by itself. Vendor accountability should flag
+      // the missing authorization and location evidence instead, so remove
+      // only that exact obsolete fixture exception from existing previews.
+      sql: `DELETE FROM ops_exceptions
+        WHERE organization_id = ? AND id = ? AND kind = ? AND summary = ?`,
+      params: [
+        NORTHLINE_ORGANIZATION_ID,
+        "exception-northline-107-high-risk",
+        "high_risk_service",
+        "Unexpected access to payment-enabled fuel equipment requires manager review",
+      ],
+    },
+  ];
+  const workflowAmendments: OpsStatement[] = [{
     sql: `UPDATE ops_asset_components
       SET serial_number = ?, installed_at = ?, warranty_ends_at = ?
       WHERE organization_id = ?
@@ -162,7 +210,7 @@ export function buildNorthlineCompatibilityAmendments(): OpsStatement[] {
             AND c.work_order_id = ops_work_orders.id
         )`,
     params: [
-      "waiting_on_vendor", "Facilities coordinator", "Accept or counter Summit's proposed service date",
+      "waiting_on_vendor", "Facilities coordinator", "Accept or counter ColdLine's proposed service date",
       "2026-08-25T17:15:00.000Z", "Facilities director",
       NORTHLINE_ORGANIZATION_ID, "wo-current-113-freezer-service",
       "scheduled", "Summit Refrigeration", "Arrive for the confirmed service window and record check-in",
@@ -207,12 +255,13 @@ export function buildNorthlineCompatibilityAmendments(): OpsStatement[] {
             AND c.work_order_id = ops_workflow_tasks.work_order_id
         )`,
     params: [
-      "schedule_service", "Accept or counter Summit's proposed service date",
-      "Summit proposed a service window that needs an operator scheduling decision.",
+      "schedule_service", "Accept or counter ColdLine's proposed service date",
+      "ColdLine proposed a service window that needs an operator scheduling decision.",
       "role", "facilities_admin", "Facilities coordinator", "2026-08-25T17:15:00.000Z", "scheduling",
       "The proposed service date is accepted or a store-local counterproposal is sent.", "Facilities director",
       NORTHLINE_ORGANIZATION_ID, "wo-current-113-freezer-service",
       "Arrive for the confirmed service window and record check-in",
     ],
   }];
+  return [...identityAmendments, ...workflowAmendments];
 }

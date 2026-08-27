@@ -8,18 +8,18 @@ The c-store suite is intentionally specific: store and region visibility, refrig
 
 ## Demo contract
 
-The fictional demo operator, **Northline Fuel & Market**, has exactly:
+The fictional demo operator, **Clark Pump and Shop**, has exactly:
 
 - **15 stores** across three regions.
 - **5 approved outside vendors**.
 - A two-person internal maintenance team.
 - Approximately 24 months of coherent HVAC, Refrigeration and supporting all-trades source records.
 
-The five vendors are Summit Refrigeration, Cedar Mechanical, Forecourt Systems Group, BrightPath Electrical and Four Seasons Site Services.
+The five vendors are ColdLine Refrigeration & HVAC, ClearFlow HVAC, Plumbing & Kitchen Repair, PumpPro Fuel & Dispenser Repair, BrightLine Electrical & Lighting and GreenLot Landscaping & Snow Removal.
 
 The hosted showcase seeds the fictional tenant into Cloudflare D1 and writes workflow changes back through the same tenant-scoped repositories and domain commands. Uploaded evidence uses the private R2 binding. Local development uses the same deterministic fixture through an in-memory repository and resets when the local process restarts.
 
-The presentation fixture currently contains **92 intake requests, 117 work orders across 20 months, 115 visits, 138 assets, 835 component records, 75 PM occurrences and 21 invoice references**. It includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
+The presentation fixture currently contains **95 intake requests, 379 work orders across 20 months, 372 visits, 138 assets, 836 component records, 222 PM occurrences and 91 invoice references**. It includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
 
 All charts, counts and narrative claims derive from source records. Summary numbers are never independently hardcoded.
 

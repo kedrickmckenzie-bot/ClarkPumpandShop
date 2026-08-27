@@ -5,7 +5,7 @@
 **Status:** Build blueprint  
 **Product label:** Temporary; the eventual umbrella brand must remain industry-neutral  
 **Initial edition:** Purpose-built convenience retail  
-**Demo tenant:** Northline Fuel & Market, a completely fictional operator  
+**Demo tenant:** Clark Pump and Shop, a completely fictional operator
 **Demo shape:** 15 stores, five outside vendors, one small internal maintenance team
 
 ## 1. Clean-slate decision
@@ -366,7 +366,7 @@ These are starting configurations, not separate products or code branches.
 
 ### Fictional operator
 
-**Northline Fuel & Market** operates 15 synthetic stores across three regions. Store numbers, people, addresses, phone numbers, emails, invoices, photos and financial values must be clearly fictional. The software itself carries a neutral temporary label; Northline is only demo data.
+**Clark Pump and Shop** operates 15 synthetic stores across three regions. Store numbers, people, addresses, phone numbers, emails, invoices, photos and financial values must be clearly fictional. The software itself carries a neutral temporary label; Clark Pump and Shop is only demo data.
 
 Store mix should create believable differences:
 
@@ -381,11 +381,11 @@ Store mix should create believable differences:
 
 | Vendor | Primary specialties | Narrative role |
 |---|---|---|
-| Summit Refrigeration | Commercial refrigeration, walk-ins, beer caves, ice machines and HVAC | Preferred refrigeration vendor; deepest visit/invoice history |
-| Cedar Mechanical | HVAC, plumbing and foodservice equipment | Broad mechanical coverage plus the emergency no-work-order drain visit |
-| Forecourt Systems Group | Dispensers, payment terminals and fuel equipment | Specialized forecourt work across fuel-selling stores |
-| BrightPath Electrical | Electrical, canopy lighting, signs and low-voltage security | Demonstrates electrical/signage service and unmatched-visit review |
-| Four Seasons Site Services | Landscaping, snow, parking lots and exterior facilities | Demonstrates shallow taxonomy and recurring seasonal PM/service |
+| ColdLine Refrigeration & HVAC | Commercial refrigeration, walk-ins, beer caves, ice machines and HVAC | Preferred refrigeration vendor; deepest visit/invoice history |
+| ClearFlow HVAC, Plumbing & Kitchen Repair | HVAC, plumbing and foodservice equipment | Broad mechanical coverage plus the emergency no-work-order drain visit |
+| PumpPro Fuel & Dispenser Repair | Dispensers, payment terminals and fuel equipment | Specialized forecourt work across fuel-selling stores |
+| BrightLine Electrical & Lighting | Electrical, canopy lighting, signs and low-voltage security | Demonstrates electrical/signage service and unmatched-visit review |
+| GreenLot Landscaping & Snow Removal | Landscaping, snow, parking lots and exterior facilities | Demonstrates shallow taxonomy and recurring seasonal PM/service |
 
 The demo also includes a two-person internal maintenance team so internal, external and blended work all have credible stories.
 
@@ -398,10 +398,10 @@ The seed generator must calculate every dashboard value from source records and 
 ### Required demo stories
 
 1. **Trace a refrigeration dollar:** company cost → Metro Region → Store 104 → Refrigeration → Walk-ins → Beer Cave → asset → work order → two visits → invoice allocation.
-2. **Issue work externally:** create a store-only work order, search `beer cave`, choose Summit Refrigeration, send the service authorization, accept through secure link and add the vendor ticket number.
+2. **Issue work externally:** create a store-only work order, search `beer cave`, choose ColdLine Refrigeration & HVAC, send the service authorization, accept through secure link and add the vendor ticket number.
 3. **Cross-channel visit:** technician checks in from the store QR and checks out from the store device with `waiting on parts`; the system creates the follow-up automatically.
-4. **No-WO emergency:** Cedar Mechanical arrives for a drain backup without an operator WO, records an unmatched visit, and a manager later creates/links the work order without pretending it predated arrival.
-5. **Blended work:** internal technician diagnoses an RTU problem and retains history while Summit Refrigeration receives the external assignment.
+4. **No-WO emergency:** ClearFlow HVAC, Plumbing & Kitchen Repair arrives for a drain backup without an operator WO, records an unmatched visit, and a manager later creates/links the work order without pretending it predated arrival.
+5. **Blended work:** internal technician diagnoses an RTU problem and retains history while ColdLine Refrigeration & HVAC receives the external assignment.
 6. **Invoice safeguard:** one invoice correctly carries its operator WO; another omits/mistypes it and exceeds NTE, producing factual review exceptions and a human-confirmed match.
 7. **PM evidence:** seasonal RTU PM moves from occurrence through vendor issuance, visit and completion; the PM card drills to the exact records.
 8. **Lifecycle review:** an older refrigeration asset is flagged for capital review using visible age, repeat reactive work, cost-to-replacement threshold, warranty and PM history—never inferred downtime.

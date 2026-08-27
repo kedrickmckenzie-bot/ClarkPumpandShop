@@ -17,7 +17,7 @@ import { TechnicianVisitFlow } from "@/components/ops-public/technician-visit-fl
 const checkoutToken = "checkoutCapabilityToken_1234567890";
 
 const portal: StorePortalView = {
-  organizationName: "Northline Fuel & Market",
+  organizationName: "Clark Pump and Shop",
   trustedStoreDevice: false,
   store: { number: "104", name: "Northline Market", address: "104 Main Street" },
   vendors: [],
@@ -30,9 +30,9 @@ const portal: StorePortalView = {
 const pendingVisit: PendingVisitCheckout = {
   checkoutUrl: `/public/store/${checkoutToken}/visit`,
   technicianName: "Taylor Morgan",
-  vendorName: "Summit Refrigeration",
+  vendorName: "ColdLine Refrigeration & HVAC",
   checkedInAt: "2026-08-26T14:00:00.000Z",
-  workOrderLabels: ["NL-2026-0116"],
+  workOrderLabels: ["CPS-2026-0116"],
 };
 
 describe("public visit checkout recovery and store QR", () => {

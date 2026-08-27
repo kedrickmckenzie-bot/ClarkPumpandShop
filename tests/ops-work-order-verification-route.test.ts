@@ -33,7 +33,7 @@ const workOrder = {
   id: "wo-verification-route",
   organizationId: NORTHLINE_ORGANIZATION_ID,
   storeId: "store-northline-104",
-  number: "NL-2026-9999",
+  number: "CPS-2026-9999",
 };
 
 function session(role: OperatorSession["role"]): OperatorSession {
@@ -43,11 +43,11 @@ function session(role: OperatorSession["role"]): OperatorSession {
       ? "membership-northline-store-104"
       : "membership-northline-facilities",
     displayName: role === "store_manager" ? "Casey Morgan" : "Jordan Lee",
-    email: `${role}@northline-demo.example`,
+    email: `${role}@clark-demo.example`,
     role,
     organizationId: NORTHLINE_ORGANIZATION_ID,
-    organizationName: "Northline Fuel & Market",
-    scopeLabel: role === "store_manager" ? "Store 104" : "Northline companywide",
+    organizationName: "Clark Pump and Shop",
+    scopeLabel: role === "store_manager" ? "Store 104" : "Clark Pump and Shop companywide",
     ...(role === "store_manager" ? { storeIds: [workOrder.storeId] } : {}),
   };
 }

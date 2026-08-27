@@ -4,9 +4,9 @@ This is a 12-15 minute guided walkthrough of the clean-slate TraceOps c-store su
 
 ## Demo truth
 
-- **Northline Fuel & Market** is fictional and has exactly **15 stores**, **five approved outside vendors** and a two-person internal maintenance team.
+- **Clark Pump and Shop** is fictional and has exactly **15 stores**, **five approved outside vendors** and a two-person internal maintenance team.
 - The hosted project seeds deterministic source records into Cloudflare D1; creates, vendor responses, check-in/out and setup changes are durable hosted writes. Local development resets when its in-memory process restarts.
-- The fixture has 115 work orders across 20 months, 115 visits, 45 assets and 60 PM occurrences. Every displayed metric derives from these source records and later workflow events.
+- The fixture has 379 work orders across 20 months, 372 visits, 138 assets and 222 PM occurrences. Every displayed metric derives from these source records and later workflow events.
 - The role picker is a visible preview control, not production authentication. Outbound email/SMS delivery and accounting APIs are not connected.
 
 ## 1. Open with the immediate problem: who is onsite?
@@ -43,14 +43,14 @@ Create a work order for a warm beer cave.
    - Outside vendor
    - Choose later
 3. Select **Outside vendor** and search `beer cave`.
-4. Show why Summit Refrigeration ranks first: approved, covers the store and is preferred for refrigeration.
+4. Show why ColdLine Refrigeration & HVAC ranks first: approved, covers the store and is preferred for refrigeration.
 5. Issue the versioned **Work Order / Service Authorization** by demo email/link.
 6. Point out the billing instruction requiring the operator work-order number on service documents and invoices.
 
 Keep the identifiers distinct:
 
 ```text
-Operator work order: NL-2026-0116
+Operator work order: CPS-2026-0116
 Vendor service ticket: SUM-26-0704
 Vendor invoice: SUM-260187
 External accounting PO: optional and separate
@@ -71,10 +71,10 @@ If a vendor responds by phone or email instead, the operator can record that res
 
 ## 5. Complete a cross-channel visit
 
-Open the Store 104 QR/mobile flow as a Summit Refrigeration technician.
+Open the Store 104 QR/mobile flow as a ColdLine Refrigeration & HVAC technician.
 
 1. Confirm the store context and technician/vendor identity.
-2. Show that only Summit Refrigeration's eligible work orders appear.
+2. Show that only ColdLine Refrigeration & HVAC's eligible work orders appear.
 3. Select the issued warm-beer-cave work order and check in.
 4. Return to the manager view to show the visit live.
 5. Open the trusted store-device flow, locate the same active visit and check out through that different channel.
@@ -85,7 +85,7 @@ Location evidence, when enabled, is requested only at check-in/out. Denied, inac
 
 ## 6. Show the no-work-order safety valve
 
-Use the Cedar Mechanical plumbing story.
+Use the ClearFlow HVAC, Plumbing & Kitchen Repair story.
 
 1. Start a visit for an emergency drain backup.
 2. Choose **I don't see my work order / No work order provided** and record why the technician is there.
@@ -137,11 +137,11 @@ Close with:
 
 The presentation must contain exactly these five approved vendors:
 
-1. Summit Refrigeration - refrigeration, HVAC, walk-ins, beer caves and ice machines.
-2. Cedar Mechanical - HVAC, plumbing and foodservice equipment.
-3. Forecourt Systems Group - dispensers, payment terminals and fuel systems.
-4. BrightPath Electrical - electrical, canopy lighting, signs and low-voltage security.
-5. Four Seasons Site Services - landscaping, snow, parking lots and exterior facilities.
+1. ColdLine Refrigeration & HVAC - refrigeration, HVAC, walk-ins, beer caves and ice machines.
+2. ClearFlow HVAC, Plumbing & Kitchen Repair - HVAC, plumbing and foodservice equipment.
+3. PumpPro Fuel & Dispenser Repair - dispensers, payment terminals and fuel systems.
+4. BrightLine Electrical & Lighting - electrical, canopy lighting, signs and low-voltage security.
+5. GreenLot Landscaping & Snow Removal - landscaping, snow, parking lots and exterior facilities.
 
 The 15 stores are split across Metro, Lakes and Interstate regions, five stores each. HVAC and Refrigeration have the deepest histories; forecourt, plumbing and exterior work prove that the taxonomy supports other c-store trades.
 

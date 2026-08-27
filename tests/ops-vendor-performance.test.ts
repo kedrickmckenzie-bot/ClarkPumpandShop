@@ -25,7 +25,7 @@ function session(): OperatorSession {
     email: "jordan@example.test",
     role: "facilities",
     organizationId: "org-northline-demo",
-    organizationName: "Northline Fuel & Market",
+    organizationName: "Clark Pump and Shop",
     scopeLabel: "All 15 stores",
     permissions: [],
   };
@@ -172,7 +172,7 @@ describe("vendor performance workspace", () => {
   it("searches vendor specialties through organization-approved plain-language aliases", () => {
     const fixture = buildNorthlinePresentationFixture();
     const plumbing = buildVendorPerformanceListModel(fixture, session(), { q: "plumber" });
-    expect(plumbing.vendors.map((vendor) => vendor.name)).toContain("Cedar Mechanical");
+    expect(plumbing.vendors.map((vendor) => vendor.name)).toContain("ClearFlow HVAC, Plumbing & Kitchen Repair");
   });
 
   it("records audited vendor renewals and routing qualifications without losing prior evidence", async () => {

@@ -71,7 +71,7 @@ At the NACS 2024 average of $5,719 repairs and maintenance per store per month, 
 
 > One service story, one accountable next action, many optional depths.
 
-The platform stores detailed state but translates it into plain language. A user sees “Waiting on Summit Refrigeration to schedule by 4:00 PM,” not a chain of assignment, visit, and workflow codes.
+The platform stores detailed state but translates it into plain language. A user sees “Waiting on ColdLine Refrigeration & HVAC to schedule by 4:00 PM,” not a chain of assignment, visit, and workflow codes.
 
 ## 4. Enterprise visual direction
 
@@ -556,7 +556,7 @@ No feature is “done” as a static mockup disconnected from persisted facts.
 
 ## 17. Presentation data plan
 
-Rebuild Northline source records to demonstrate:
+Rebuild Clark Pump and Shop source records to demonstrate:
 
 - Exactly 15 stores and five outside vendors.
 - Two internal technicians.

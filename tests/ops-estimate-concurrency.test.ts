@@ -41,7 +41,7 @@ const facilitiesActor: ActorContext = {
 const cedarActor: ActorContext = {
   organizationId: NORTHLINE_ORGANIZATION_ID,
   actorType: "vendor_link",
-  actorName: "Cedar Mechanical estimating desk",
+  actorName: "ClearFlow HVAC, Plumbing & Kitchen Repair estimating desk",
 };
 
 function tokenHash(character: string) {
@@ -231,7 +231,7 @@ describe("vendor-estimate concurrency fences", () => {
       actor: {
         organizationId: NORTHLINE_ORGANIZATION_ID,
         actorType: "vendor_link" as const,
-        actorName: "Summit Refrigeration secure link",
+        actorName: "ColdLine Refrigeration & HVAC secure link",
       },
     };
 

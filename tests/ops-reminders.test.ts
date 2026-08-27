@@ -45,7 +45,7 @@ describe("multi-obligation follow-up and vendor reminders", () => {
     const first = await createFollowUp(test.services, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
       workOrderId: workOrder.id,
-      accountableParty: "Summit Refrigeration",
+      accountableParty: "ColdLine Refrigeration & HVAC",
       nextAction: "Confirm compressor availability",
       dueAt: "2026-08-28T15:00:00.000Z",
       escalationTo: "Facilities coordinator",
@@ -65,7 +65,7 @@ describe("multi-obligation follow-up and vendor reminders", () => {
 
     const detail = await test.repository.getWorkOrderDetail({ organizationId: NORTHLINE_ORGANIZATION_ID }, workOrder.id);
     expect(detail?.followUps).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: first.id, accountableParty: "Summit Refrigeration", dueAt: "2026-08-28T15:00:00.000Z" }),
+      expect.objectContaining({ id: first.id, accountableParty: "ColdLine Refrigeration & HVAC", dueAt: "2026-08-28T15:00:00.000Z" }),
       expect.objectContaining({ id: second.id, accountableParty: "Facilities coordinator", dueAt: "2026-08-27T17:00:00.000Z" }),
     ]));
     expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id)).toMatchObject({

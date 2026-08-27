@@ -185,7 +185,7 @@ describe("Northline enriched presentation fixture contract", () => {
     expect(excluded).toEqual([
       expect.objectContaining({
         id: "asset-101-rapid-cook-oven",
-        replacementPlanningExclusionReason: "Landlord-owned foodservice equipment is outside Northline's capital plan.",
+        replacementPlanningExclusionReason: "Landlord-owned foodservice equipment is outside Clark Pump and Shop's capital plan.",
       }),
     ]);
     expect(needsChoice.map((asset) => asset.id).sort()).toEqual([
@@ -383,7 +383,7 @@ describe("Northline enriched presentation fixture contract", () => {
       expect(followUp, `${visit.id} needs an accountable follow-up`).toMatchObject({
         workOrderId: visit.workOrderId,
         status: "open",
-        escalationTo: "Northline Facilities",
+        escalationTo: "Clark Pump and Shop Facilities",
       });
     }
 

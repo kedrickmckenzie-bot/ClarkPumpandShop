@@ -18,7 +18,7 @@ const RESPONSE_OPTIONS: Array<{
   { id: "declined", title: "Decline work", description: "Return the service call to the operator with a reason.", icon: X },
 ];
 
-export function VendorResponseForm({ token, opened, disabled = false }: { token: string; opened: boolean; disabled?: boolean }) {
+export function VendorResponseForm({ token, opened, organizationName, disabled = false }: { token: string; opened: boolean; organizationName: string; disabled?: boolean }) {
   const [response, setResponse] = useState<PublicVendorResponseKind | null>(null);
   const [responderName, setResponderName] = useState("");
   const [proposedArrival, setProposedArrival] = useState("");
@@ -74,7 +74,7 @@ export function VendorResponseForm({ token, opened, disabled = false }: { token:
         body: JSON.stringify({ response, responderName, proposedArrival, detail }),
       });
       const body = (await result.json()) as PublicActionReceipt & { error?: string };
-      if (!result.ok) throw new Error(body.error ?? "Northline could not receive the response. Try again.");
+      if (!result.ok) throw new Error(body.error ?? `${organizationName} could not receive the response. Try again.`);
       setReceipt(body);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The response could not be sent. Try again.");
@@ -88,7 +88,7 @@ export function VendorResponseForm({ token, opened, disabled = false }: { token:
       <section className={styles.card} aria-labelledby="respond-title">
         <div className={styles.cardHeader}>
           <div>
-            <h2 className={styles.cardTitle} id="respond-title">Respond to Northline</h2>
+            <h2 className={styles.cardTitle} id="respond-title">Respond to {organizationName}</h2>
             <p className={styles.helper}>No account or app is required. Choose one action.</p>
           </div>
         </div>
@@ -103,7 +103,7 @@ export function VendorResponseForm({ token, opened, disabled = false }: { token:
             );
           })}
         </div>
-        {disabled ? <p className={styles.notice}>A response has already been recorded. Contact Northline Facilities if it needs to be amended.</p> : null}
+        {disabled ? <p className={styles.notice}>A response has already been recorded. Contact {organizationName} Facilities if it needs to be amended.</p> : null}
       </section>
     );
   }

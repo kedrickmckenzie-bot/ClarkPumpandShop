@@ -155,16 +155,16 @@ async function prepareSelection(test: ReturnType<typeof harness>) {
     },
   ]);
   const cedar = await createEstimateRequest(test, CEDAR, "1", "diagnostic_and_estimate");
-  await openEstimateRequest(test, cedar, CEDAR, "Cedar Mechanical");
-  const cedarFirst = await submitProposal(test, cedar, CEDAR, "Cedar Mechanical", 0, 188_000, "Initial revision.");
-  const cedarLatest = await submitProposal(test, cedar, CEDAR, "Cedar Mechanical", 1, 178_000, "Revised after parts confirmation.");
+  await openEstimateRequest(test, cedar, CEDAR, "ClearFlow HVAC, Plumbing & Kitchen Repair");
+  const cedarFirst = await submitProposal(test, cedar, CEDAR, "ClearFlow HVAC, Plumbing & Kitchen Repair", 0, 188_000, "Initial revision.");
+  const cedarLatest = await submitProposal(test, cedar, CEDAR, "ClearFlow HVAC, Plumbing & Kitchen Repair", 1, 178_000, "Revised after parts confirmation.");
 
   const summit = await createEstimateRequest(test, SUMMIT, "2");
-  await openEstimateRequest(test, summit, SUMMIT, "Summit Refrigeration");
-  const summitLatest = await submitProposal(test, summit, SUMMIT, "Summit Refrigeration", 0, 245_000, "Includes ECM motor and blade.");
+  await openEstimateRequest(test, summit, SUMMIT, "ColdLine Refrigeration & HVAC");
+  const summitLatest = await submitProposal(test, summit, SUMMIT, "ColdLine Refrigeration & HVAC", 0, 245_000, "Includes ECM motor and blade.");
 
   const brightPath = await createEstimateRequest(test, BRIGHTPATH, "3");
-  await openEstimateRequest(test, brightPath, BRIGHTPATH, "BrightPath Electrical");
+  await openEstimateRequest(test, brightPath, BRIGHTPATH, "BrightLine Electrical & Lighting");
   return { cedar, cedarFirst, cedarLatest, summit, summitLatest, brightPath };
 }
 
@@ -275,7 +275,7 @@ describe("vendor estimate request boundary", () => {
       vendorId: SUMMIT,
       workOrderId: PUBLIC_WORK_ORDER_ID,
       technicianName: "Morgan Ellis",
-      providerName: "Summit Refrigeration",
+      providerName: "ColdLine Refrigeration & HVAC",
       purpose: "Existing authorized service",
       status: "active",
       startedChannel: "secure_link",
@@ -348,7 +348,7 @@ describe("vendor estimate request boundary", () => {
       estimateRequestId: created.request.id,
       vendorId: CEDAR,
       tokenHash: created.tokenHash,
-      actor: vendorActor("Cedar Mechanical"),
+      actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
     };
 
     await expect(markEstimateOpened(test.services, { ...base, vendorId: SUMMIT })).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -358,7 +358,7 @@ describe("vendor estimate request boundary", () => {
     await expect(markEstimateOpened(test.services, {
       ...base,
       organizationId: "organization-other",
-      actor: { ...vendorActor("Cedar Mechanical"), organizationId: "organization-other" },
+      actor: { ...vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"), organizationId: "organization-other" },
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(test.repository.snapshot()).toEqual(beforeInvalid);
 
@@ -387,7 +387,7 @@ describe("immutable vendor estimate responses", () => {
       estimateRequestId: created.request.id,
       vendorId: CEDAR,
       tokenHash: created.tokenHash,
-      actor: vendorActor("Cedar Mechanical"),
+      actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
     })).rejects.toMatchObject({ code: "CONFLICT", message: "This bid response deadline has passed" });
     await expect(submitEstimate(lateServices, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
@@ -398,7 +398,7 @@ describe("immutable vendor estimate responses", () => {
       amountMinor: 178_000,
       currency: "USD",
       scope: "Replace the failed fan assembly and verify operation.",
-      actor: vendorActor("Cedar Mechanical"),
+      actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
     })).rejects.toMatchObject({ code: "CONFLICT", message: "This bid response deadline has passed" });
 
     expect(test.repository.snapshot()).toEqual(before);
@@ -418,7 +418,7 @@ describe("immutable vendor estimate responses", () => {
       amountMinor: 178_000,
       currency: "USD",
       scope: "Attempted cross-vendor proposal.",
-      actor: vendorActor("Summit Refrigeration"),
+      actor: vendorActor("ColdLine Refrigeration & HVAC"),
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(submitEstimate(test.services, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
@@ -429,7 +429,7 @@ describe("immutable vendor estimate responses", () => {
       amountMinor: 178_000,
       currency: "USD",
       scope: "Attempted cross-request proposal.",
-      actor: vendorActor("Cedar Mechanical"),
+      actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(declineEstimate(test.services, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
@@ -438,7 +438,7 @@ describe("immutable vendor estimate responses", () => {
       tokenHash: tokenHash("f"),
       expectedRevision: 0,
       reason: "Attempted wrong-token decline.",
-      actor: vendorActor("Cedar Mechanical"),
+      actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(test.repository.snapshot()).toEqual(before);
   });
@@ -446,13 +446,13 @@ describe("immutable vendor estimate responses", () => {
   it("appends revisions and never turns quote money into work cost, invoice value, NTE, or repair planning amount", async () => {
     const test = harness();
     const created = await createEstimateRequest(test, CEDAR, "a");
-    await openEstimateRequest(test, created, CEDAR, "Cedar Mechanical");
+    await openEstimateRequest(test, created, CEDAR, "ClearFlow HVAC, Plumbing & Kitchen Repair");
     const before = test.repository.snapshot();
     const originalWork = before.workOrders.find((work) => work.id === PUBLIC_WORK_ORDER_ID)!;
 
-    const first = await submitProposal(test, created, CEDAR, "Cedar Mechanical", 0, 188_000, "Initial revision.");
+    const first = await submitProposal(test, created, CEDAR, "ClearFlow HVAC, Plumbing & Kitchen Repair", 0, 188_000, "Initial revision.");
     const firstPersisted = test.repository.snapshot().estimateProposals.find((proposal) => proposal.id === first.proposal.id)!;
-    const second = await submitProposal(test, created, CEDAR, "Cedar Mechanical", 1, 178_000, "Revised revision.");
+    const second = await submitProposal(test, created, CEDAR, "ClearFlow HVAC, Plumbing & Kitchen Repair", 1, 178_000, "Revised revision.");
     const after = test.repository.snapshot();
 
     expect(first.proposal).toMatchObject({ revision: 1, amount: { amountMinor: 188_000, currency: "USD" } });
@@ -478,7 +478,7 @@ describe("immutable vendor estimate responses", () => {
     })).toMatchObject({ request: { id: created.request.id, status: "submitted" } });
 
     const beforeStale = test.repository.snapshot();
-    await expect(submitProposal(test, created, CEDAR, "Cedar Mechanical", 1, 165_000, "Stale revision.")).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(submitProposal(test, created, CEDAR, "ClearFlow HVAC, Plumbing & Kitchen Repair", 1, 165_000, "Stale revision.")).rejects.toMatchObject({ code: "CONFLICT" });
     expect(test.repository.snapshot()).toEqual(beforeStale);
   });
 
@@ -496,7 +496,7 @@ describe("immutable vendor estimate responses", () => {
       scope: "Replace the failed fan assembly and verify operation.",
       leadTimeDays: 2,
       validUntil: TOKEN_EXPIRY,
-      actor: vendorActor("Cedar Mechanical"),
+      actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
     };
     const invalidCases: Array<Partial<typeof base>> = [
       { amountMinor: 0 },
@@ -527,7 +527,7 @@ describe("immutable vendor estimate responses", () => {
       tokenHash: created.tokenHash,
       expectedRevision: 0,
       reason: "The required refrigeration part is outside our supported product line.",
-      actor: vendorActor("Cedar Mechanical"),
+      actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
     });
     const after = test.repository.snapshot();
 
@@ -553,7 +553,7 @@ describe("immutable vendor estimate responses", () => {
       tokenHash: created.tokenHash,
       expectedRevision: 0,
       reason: "Repeated decline",
-      actor: vendorActor("Cedar Mechanical"),
+      actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(test.repository.snapshot()).toEqual(beforeRepeat);
   });
@@ -561,7 +561,7 @@ describe("immutable vendor estimate responses", () => {
   it("withdraws an active request, preserves proposal history, and revokes its public capability", async () => {
     const test = harness();
     const created = await createEstimateRequest(test, CEDAR, "a");
-    await submitProposal(test, created, CEDAR, "Cedar Mechanical", 0, 188_000, "Initial revision.");
+    await submitProposal(test, created, CEDAR, "ClearFlow HVAC, Plumbing & Kitchen Repair", 0, 188_000, "Initial revision.");
     const before = test.repository.snapshot();
 
     const result = await withdrawEstimate(test.services, {
@@ -755,7 +755,7 @@ describe("estimate selection and canonical work-order preservation", () => {
       revision: 2,
       channel: "email",
       authorizationSnapshot: {
-        organizationName: "Northline Fuel & Market",
+        organizationName: "Clark Pump and Shop",
         workOrderNumber: workOrder.number,
         store: {
           id: store.id,
@@ -811,7 +811,7 @@ describe("estimate selection and canonical work-order preservation", () => {
           SUMMIT,
           PUBLIC_WORK_ORDER_ID,
           "Active technician",
-          "Summit Refrigeration",
+          "ColdLine Refrigeration & HVAC",
           "Existing authorized service",
           "active",
           "secure_link",

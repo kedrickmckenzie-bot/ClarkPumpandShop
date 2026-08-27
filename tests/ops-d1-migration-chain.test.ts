@@ -85,7 +85,7 @@ describe("D1 migration chain", () => {
       expect(database.prepare("SELECT version FROM ops_requests WHERE id = ? AND organization_id = ?").get("request-current-104-beer-cave-door", "org-northline-demo"))
         .toMatchObject({ version: 0 });
       expect(database.prepare("SELECT replacement_planning_exclusion_reason AS reason FROM ops_assets WHERE id = ? AND organization_id = ?").get("asset-101-rapid-cook-oven", "org-northline-demo"))
-        .toMatchObject({ reason: "Landlord-owned foodservice equipment is outside Northline's capital plan." });
+        .toMatchObject({ reason: "Landlord-owned foodservice equipment is outside Clark Pump and Shop's capital plan." });
       expect(database.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     } finally {
       database.close();

@@ -31,5 +31,5 @@ if (summary.stores !== 15 || summary.regions !== 3 || summary.vendors !== 5 || s
   throw new Error("Ops showcase/scale fixture contract changed; update intentionally.");
 }
 
-console.log("Northline operations fixture is deterministic and causally valid.");
+console.log("Clark Pump and Shop operations fixture is deterministic and causally valid.");
 console.log(JSON.stringify(summary, null, 2));

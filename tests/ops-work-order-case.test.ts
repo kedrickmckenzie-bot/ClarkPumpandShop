@@ -93,13 +93,13 @@ describe("vendor response continuation", () => {
     expect(after.outboxMessages.some((row) => row.topic === "ops.vendor_response.date_accepted")).toBe(true);
     expect(after.workOrders.find((row) => row.id === workOrderId)).toMatchObject({
       status: "scheduled",
-      accountableParty: "Summit Refrigeration",
+      accountableParty: "ColdLine Refrigeration & HVAC",
       nextAction: "Arrive for the confirmed service window and check in",
     });
     expect(after.workflowTasks.find((row) => row.workOrderId === workOrderId && row.status === "open")).toMatchObject({
       taskType: "confirm_store_access",
       assigneeType: "vendor",
-      assigneeName: "Summit Refrigeration",
+      assigneeName: "ColdLine Refrigeration & HVAC",
     });
   });
 
@@ -151,7 +151,7 @@ describe("vendor response continuation", () => {
 
     expect(await repository.getWorkOrder("org-northline-demo", response.workOrderId)).toMatchObject({
       status: "waiting_on_vendor",
-      accountableParty: "Summit Refrigeration",
+      accountableParty: "ColdLine Refrigeration & HVAC",
       nextAction: "Confirm the service plan after the operator reply",
     });
   });
@@ -381,7 +381,7 @@ describe("continuation idempotency", () => {
     expect((await repository.listVendorContinuationsForWorkOrder("org-northline-demo", "wo-current-113-freezer-service")).map((row) => row.action)).toContain("counter_date");
     expect(await repository.getWorkOrder("org-northline-demo", "wo-current-113-freezer-service")).toMatchObject({
       status: "waiting_on_vendor",
-      accountableParty: "Summit Refrigeration",
+      accountableParty: "ColdLine Refrigeration & HVAC",
       nextAction: "Respond to the operator counterproposal",
     });
   });

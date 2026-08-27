@@ -70,7 +70,7 @@ Never monetize PM completion or infer downtime without evidence. Never combine e
 
 ## Customer-caliber and demo truth
 
-The production architecture must support approximately 63-store-caliber operators. The presentation tenant remains fictional Northline Fuel & Market with exactly 15 stores across three regions, exactly five approved outside vendors, and two internal technicians. A separate approximately 65-store synthetic fixture proves scale; it must never be presented as a prospect's network.
+The production architecture must support approximately 63-store-caliber operators. The presentation tenant remains fictional Clark Pump and Shop with exactly 15 stores across three regions, exactly five approved outside vendors, and two internal technicians. A separate approximately 65-store synthetic fixture proves scale; it must never be presented as a prospect's network.
 
 ## Current implementation boundary
 

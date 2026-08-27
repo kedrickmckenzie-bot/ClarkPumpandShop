@@ -132,22 +132,24 @@ async function loadOperatorSessionFromSnapshot(snapshot: OpsFixture): Promise<Op
   const scopedStore = storeIds.length === 1
     ? snapshot.stores.find((store) => store.id === storeIds[0] && store.organizationId === NORTHLINE_ORGANIZATION_ID)
     : undefined;
+  const organization = snapshot.organizations.find((candidate) => candidate.id === NORTHLINE_ORGANIZATION_ID);
+  const organizationName = organization?.name ?? "Demo organization";
   const scopeLabel = scopedStore
     ? `Store ${scopedStore.storeNumber} · ${scopedStore.name}`
     : scopedRegion
       ? `${scopedRegion.name} · ${snapshot.stores.filter((store) => store.organizationId === NORTHLINE_ORGANIZATION_ID && store.regionId === scopedRegion.id).length} stores`
       : role === "finance"
-        ? "Northline companywide · review-only financial scope"
-        : `Northline companywide · ${snapshot.stores.filter((store) => store.organizationId === NORTHLINE_ORGANIZATION_ID).length} stores`;
+        ? `${organizationName} companywide · review-only financial scope`
+        : `${organizationName} companywide · ${snapshot.stores.filter((store) => store.organizationId === NORTHLINE_ORGANIZATION_ID).length} stores`;
 
   return {
     userId: identity?.userId ?? "user-northline-preview",
     membershipId: membership?.id,
     displayName: identity?.displayName ?? "Demo operator",
-    email: identity?.email ?? "operator@northline.example",
+    email: identity?.email ?? "operator@clark-demo.example",
     role,
     organizationId: NORTHLINE_ORGANIZATION_ID,
-    organizationName: "Northline Fuel & Market",
+    organizationName,
     scopeLabel,
     regionIds: regionIds.length ? regionIds : undefined,
     storeIds: storeIds.length ? storeIds : undefined,

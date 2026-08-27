@@ -24,11 +24,11 @@ function session(role: OperatorRole): OperatorSession {
     userId: `path-state-${role}`,
     membershipId: `path-state-membership-${role}`,
     displayName: `${role} path-state reviewer`,
-    email: `${role}@northline-demo.example`,
+    email: `${role}@clark-demo.example`,
     role,
     organizationId: NORTHLINE_ORGANIZATION_ID,
-    organizationName: "Northline Fuel & Market",
-    scopeLabel: "Northline companywide - 15 stores",
+    organizationName: "Clark Pump and Shop",
+    scopeLabel: "Clark Pump and Shop companywide - 15 stores",
   };
 }
 

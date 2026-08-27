@@ -105,7 +105,7 @@ function serviceReadyFixture(): VerificationFixture {
   const workOrder = fixture.workOrders.find((candidate) => candidate.id === workOrderId)!;
   Object.assign(workOrder, {
     status: "accepted",
-    accountableParty: "Cedar Mechanical",
+    accountableParty: "ClearFlow HVAC, Plumbing & Kitchen Repair",
     nextAction: "Begin assigned service",
     dueAt: "2026-08-21T16:00:00.000Z",
     escalationTo: "Facilities director",
@@ -122,7 +122,7 @@ function serviceReadyFixture(): VerificationFixture {
     assigneeType: "vendor",
     assigneeId: "vendor-northline-cedar",
     assigneeRole: undefined,
-    assigneeName: "Cedar Mechanical",
+    assigneeName: "ClearFlow HVAC, Plumbing & Kitchen Repair",
     status: "open",
     blocking: true,
     requiredForProgress: true,
@@ -442,7 +442,7 @@ describe("append-only work-order verification and closure", () => {
         outcome: "return_visit_required",
         outcomeNotes: "A replacement fitting is required to finish the repair.",
         followUp: {
-          accountableParty: "Cedar Mechanical",
+          accountableParty: "ClearFlow HVAC, Plumbing & Kitchen Repair",
           nextAction: "Return with the replacement fitting",
           dueAt: "2026-08-21T18:00:00.000Z",
           escalationTo: "Facilities director",
@@ -550,7 +550,7 @@ describe("append-only work-order verification and closure", () => {
         outcome: "parts_required",
         outcomeNotes: "Replacement fitting must be sourced before return service.",
         followUp: {
-          accountableParty: "Cedar Mechanical",
+          accountableParty: "ClearFlow HVAC, Plumbing & Kitchen Repair",
           nextAction: "Confirm replacement fitting availability",
           dueAt: "2026-08-21T18:00:00.000Z",
           escalationTo: "Facilities director",

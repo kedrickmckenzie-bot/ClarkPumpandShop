@@ -32,11 +32,11 @@ function session(role: OperatorSession["role"] = "facilities"): OperatorSession 
         ? "membership-northline-store-104"
         : "membership-northline-executive",
     displayName: role === "facilities" ? "Jordan Lee" : "Review user",
-    email: `${role}@northline-demo.example`,
+    email: `${role}@clark-demo.example`,
     role,
     organizationId: NORTHLINE_ORGANIZATION_ID,
-    organizationName: "Northline Fuel & Market",
-    scopeLabel: "Northline companywide · 15 stores",
+    organizationName: "Clark Pump and Shop",
+    scopeLabel: "Clark Pump and Shop companywide · 15 stores",
     ...(role === "store_manager" ? { storeIds: ["store-northline-104"] } : {}),
   };
 }

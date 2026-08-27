@@ -34,11 +34,11 @@ function operatorSession(role: OperatorRole): OperatorSession {
     userId: `user-contract-${role}`,
     membershipId: `membership-contract-${role}`,
     displayName: `${role} contract user`,
-    email: `${role}@northline-demo.example`,
+    email: `${role}@clark-demo.example`,
     role,
     organizationId: NORTHLINE_ORGANIZATION_ID,
-    organizationName: "Northline Fuel & Market",
-    scopeLabel: role === "store_manager" ? "Store 104" : role === "regional" ? "North region" : "Northline companywide - 15 stores",
+    organizationName: "Clark Pump and Shop",
+    scopeLabel: role === "store_manager" ? "Store 104" : role === "regional" ? "North region" : "Clark Pump and Shop companywide - 15 stores",
     regionIds: role === "regional" ? ["region-northline-north"] : undefined,
     storeIds: role === "store_manager" ? [NORTHLINE_DEMO_HANDLES.storyStoreId] : undefined,
   };
@@ -297,7 +297,7 @@ describe("enterprise service-control presenter contracts", () => {
       assignmentId: "assignment-northline-104-issued",
       issuanceId: "issuance-northline-104-issued-r1",
       response: "proposed_date",
-      responderName: "Summit Refrigeration dispatch",
+      responderName: "ColdLine Refrigeration & HVAC dispatch",
       proposedAt: "2026-08-15T14:00:00.000Z",
       message: "The first available technician can arrive Friday afternoon.",
       respondedAt: "2026-08-11T13:00:00.000Z",
@@ -305,7 +305,7 @@ describe("enterprise service-control presenter contracts", () => {
     const proposed = buildWorkOrderControlModel(fixture, operatorSession("facilities"), workId);
     expect(proposed.latestVendorResponse).toMatchObject({
       response: "proposed_date",
-      responderName: "Summit Refrigeration dispatch",
+      responderName: "ColdLine Refrigeration & HVAC dispatch",
     });
     expect(proposed.stages.find((stage) => stage.id === "response")?.state).toBe("blocked");
     expect(proposed.canRecordManualVendorResponse).toBe(true);
@@ -391,15 +391,15 @@ describe("enterprise service-control presenter contracts", () => {
     fixture.workOrders.push({
       id: "wo-contract-store-107-forecourt",
       organizationId: NORTHLINE_ORGANIZATION_ID,
-      number: "NL-2026-0999",
+      number: "CPS-2026-0999",
       storeId: "store-northline-107",
       problem: "Inspect dispenser 4 payment-terminal connection",
       priority: "urgent",
       status: "approved",
-      accountableParty: "Forecourt Systems Group",
+      accountableParty: "PumpPro Fuel & Dispenser Repair",
       nextAction: "Generate vendor authorization",
       dueAt: "2026-08-15T18:00:00.000Z",
-      escalationTo: "Northline Facilities",
+      escalationTo: "Clark Pump and Shop Facilities",
       createdAt: "2026-08-11T12:00:00.000Z",
     });
     fixture.assignments.push({
@@ -420,11 +420,11 @@ describe("enterprise service-control presenter contracts", () => {
       submitAction: "/api/ops/action-items/exception-northline-107-no-wo",
     });
     expect(exception.control.reconciliationOptions).toEqual([
-      expect.objectContaining({ value: "wo-contract-store-107-forecourt", label: "NL-2026-0999" }),
+      expect.objectContaining({ value: "wo-contract-store-107-forecourt", label: "CPS-2026-0999" }),
     ]);
     expect(exception.control.unmatchedVisit).toMatchObject({
       createWorkOrderHref: "/app/work-orders/new?sourceException=exception-northline-107-no-wo",
-      providerLabel: "Forecourt Systems Group",
+      providerLabel: "PumpPro Fuel & Dispenser Repair",
     });
     expect(exception.detail.page.primaryAction?.href).toBe(`/app/visits/${NORTHLINE_DEMO_HANDLES.unmatchedVisitId}`);
     expect(exception.detail.sections.map((section) => section.id)).toEqual(["source-evidence", "timeline"]);

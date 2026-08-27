@@ -50,11 +50,11 @@ describe("public service and visit capability boundaries", () => {
 
     const authorization = await getPublicOperationsGateway().loadServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken);
     expect(authorization).not.toBeNull();
-    expect(authorization?.operatorWorkOrderNumber).toBe("NL-2026-0116");
-    expect(authorization?.vendorName).toBe("Summit Refrigeration");
+    expect(authorization?.operatorWorkOrderNumber).toBe("CPS-2026-0116");
+    expect(authorization?.vendorName).toBe("ColdLine Refrigeration & HVAC");
     expect(authorization?.store).toMatchObject({
       number: "104",
-      name: "Northline Ridgeview",
+      name: "Clark Pump and Shop - Ridgeview",
       address: "104 Ridgeview Drive, Ridgeview, MI 49031",
     });
     expect(authorization?.service.problem).toContain("Evaporator fan");
@@ -161,8 +161,8 @@ describe("public service and visit capability boundaries", () => {
     await gateway.openVendorEstimate(rawToken);
     const opened = await gateway.loadVendorEstimate(rawToken);
     expect(opened).toMatchObject({
-      vendorName: "Cedar Mechanical",
-      operatorWorkOrderNumber: "NL-2026-0116",
+      vendorName: "ClearFlow HVAC, Plumbing & Kitchen Repair",
+      operatorWorkOrderNumber: "CPS-2026-0116",
       status: "opened",
       canRespond: true,
     });
@@ -241,15 +241,15 @@ describe("public service and visit capability boundaries", () => {
     expect(await sha256Hex(PUBLIC_DEMO_LINKS.estimate105CedarToken)).toBe(NORTHLINE_DEMO_TOKEN_HASHES.estimate105Cedar);
 
     await expect(gateway.loadVendorEstimate(PUBLIC_DEMO_LINKS.estimate105SummitToken)).resolves.toMatchObject({
-      vendorName: "Summit Refrigeration",
-      operatorWorkOrderNumber: "NL-2026-0117",
+      vendorName: "ColdLine Refrigeration & HVAC",
+      operatorWorkOrderNumber: "CPS-2026-0117",
       status: "submitted",
       canRespond: false,
       latestProposal: { revision: 1, amountLabel: "$2,450.00" },
     });
     await expect(gateway.loadVendorEstimate(PUBLIC_DEMO_LINKS.estimate105CedarToken)).resolves.toMatchObject({
-      vendorName: "Cedar Mechanical",
-      operatorWorkOrderNumber: "NL-2026-0117",
+      vendorName: "ClearFlow HVAC, Plumbing & Kitchen Repair",
+      operatorWorkOrderNumber: "CPS-2026-0117",
       status: "submitted",
       canRespond: false,
       latestProposal: { revision: 1, amountLabel: "$1,780.00" },
@@ -339,7 +339,7 @@ describe("public service and visit capability boundaries", () => {
     expect(portal?.vendors.some((vendor) => vendor.id === vendorId)).toBe(true);
 
     const workContext = await gateway.lookupVendorVisitContext(PUBLIC_DEMO_LINKS.trustedStoreToken, vendorId);
-    expect(workContext.eligibleWorkOrders.some((work) => work.number === "NL-2026-0116")).toBe(true);
+    expect(workContext.eligibleWorkOrders.some((work) => work.number === "CPS-2026-0116")).toBe(true);
 
     const checkIn = await gateway.checkIn(PUBLIC_DEMO_LINKS.trustedStoreToken, {
       submissionKey: "boundary-trusted-store-check-in",

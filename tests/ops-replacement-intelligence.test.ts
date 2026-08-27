@@ -89,13 +89,13 @@ describe("replacement intelligence", () => {
         { assetId: "asset-113-walk-in-freezer", action: "assign", profileId: "replacement-profile-walk-in-freezer" },
         { assetId: "asset-114-ice-machine", action: "exclude" },
       ],
-      exclusionReason: "Vendor-owned ice equipment is not part of Northline's capital plan.",
+      exclusionReason: "Vendor-owned ice equipment is not part of Clark Pump and Shop's capital plan.",
       actor,
     });
     const after = repository.snapshot();
     expect(result).toEqual({ assignedCount: 1, excludedCount: 1 });
     expect(after.assets.find((row) => row.id === "asset-113-walk-in-freezer")).toMatchObject({ replacementProfileId: "replacement-profile-walk-in-freezer", replacementPlanningExcludedAt: null });
-    expect(after.assets.find((row) => row.id === "asset-114-ice-machine")).toMatchObject({ replacementProfileId: null, replacementPlanningExclusionReason: "Vendor-owned ice equipment is not part of Northline's capital plan." });
+    expect(after.assets.find((row) => row.id === "asset-114-ice-machine")).toMatchObject({ replacementProfileId: null, replacementPlanningExclusionReason: "Vendor-owned ice equipment is not part of Clark Pump and Shop's capital plan." });
     expect(after.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: "asset-113-walk-in-freezer", eventType: "asset.replacement_profile_assigned" }));
     expect(after.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: "asset-114-ice-machine", eventType: "asset.replacement_planning_excluded" }));
   });

@@ -26,11 +26,11 @@ function executiveSession(): OperatorSession {
     userId: "user-northline-executive",
     membershipId: "membership-northline-executive",
     displayName: "Alex Morgan",
-    email: "alex.morgan@northline-demo.example",
+    email: "alex.morgan@clark-demo.example",
     role: "executive",
     organizationId: NORTHLINE_ORGANIZATION_ID,
-    organizationName: "Northline Fuel & Market",
-    scopeLabel: "Northline companywide · 15 stores",
+    organizationName: "Clark Pump and Shop",
+    scopeLabel: "Clark Pump and Shop companywide · 15 stores",
     permissions: ["ops:*"],
   };
 }
@@ -350,7 +350,7 @@ describe("operator presenter drill-through contracts", () => {
       ...source,
       id: "invoice-presenter-unmatched",
       invoiceNumber: "INV-REVIEW-401",
-      operatorWorkOrderNumber: "NL-2026-UNKNOWN",
+      operatorWorkOrderNumber: "CPS-2026-UNKNOWN",
       matchStatus: "unmatched",
       grossAmount: { amountMinor: 148_500, currency: "USD" },
     });
@@ -398,7 +398,7 @@ describe("operator presenter drill-through contracts", () => {
     const fixture = buildNorthlinePresentationFixture();
     const dashboard = buildDashboardModel(fixture, executiveSession());
 
-    expect(dashboard.spotlight?.title).toContain("NL-2026-0115");
+    expect(dashboard.spotlight?.title).toContain("CPS-2026-0115");
     expect(dashboard.spotlight?.eyebrow).toBe("Repair or replace");
     expect(dashboard.spotlight?.description).toMatch(/proposed repair.*would need.*continued service/i);
     expect(dashboard.spotlight?.description).toMatch(/entered vendor estimate/i);
@@ -451,13 +451,13 @@ describe("operator presenter drill-through contracts", () => {
     expect(model).toMatchObject({
       available: true,
       permitted: true,
-      workOrderNumber: "NL-2026-0117",
+      workOrderNumber: "CPS-2026-0117",
       activeRequestCount: 2,
       proposalCount: 2,
     });
     expect(model.requests.map((request) => [request.vendorName, request.latestProposal?.amountLabel])).toEqual([
-      ["Cedar Mechanical", "$1,780.00"],
-      ["Summit Refrigeration", "$2,450.00"],
+      ["ClearFlow HVAC, Plumbing & Kitchen Repair", "$1,780.00"],
+      ["ColdLine Refrigeration & HVAC", "$2,450.00"],
     ]);
     expect(model.requests.every((request) => request.kindLabel === "Service bid - pricing only")).toBe(true);
     expect(model.requests.every((request) => request.canSelect)).toBe(true);
@@ -468,7 +468,7 @@ describe("operator presenter drill-through contracts", () => {
 
   it("presents elapsed vendor estimates as expired while preserving withdrawal cleanup", () => {
     const fixture = buildNorthlinePresentationFixture();
-    fixture.asOf = "2026-09-10T00:00:00.000Z";
+    fixture.asOf = "2026-10-01T00:00:00.000Z";
     const session = { ...executiveSession(), role: "facilities" as const };
     const model = buildEstimateComparisonModel(fixture, session, "wo-northline-105-price-check");
 

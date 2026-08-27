@@ -21,11 +21,11 @@ function session(role: OperatorSession["role"]): OperatorSession {
     userId: `user-${role}`,
     membershipId: role === "facilities" ? "membership-northline-facilities" : "membership-northline-executive",
     displayName: role === "facilities" ? "Jordan Lee" : "Avery Chen",
-    email: `${role}@northline-demo.example`,
+    email: `${role}@clark-demo.example`,
     role,
     organizationId: NORTHLINE_ORGANIZATION_ID,
-    organizationName: "Northline Fuel & Market",
-    scopeLabel: "Northline companywide · 15 stores",
+    organizationName: "Clark Pump and Shop",
+    scopeLabel: "Clark Pump and Shop companywide · 15 stores",
   };
 }
 
@@ -90,7 +90,7 @@ describe("embedded work-order Workflow Task surface", () => {
 
     expect(markup).toContain("SLA paused");
     expect(markup).toContain("Approved condenser-fan motor is awaiting confirmed distributor availability");
-    expect(markup).toContain("Cedar Mechanical · Vendor");
+    expect(markup).toContain("ClearFlow HVAC, Plumbing &amp; Kitchen Repair · Vendor");
     expect(markup).toContain("Operational Restoration, Completion");
     expect(markup).toContain("Facilities review completed and the parts request was released");
     expect(markup).toContain('name="operation" value="resume"');

@@ -3,7 +3,7 @@
 **Status:** Approved rebuild target
 **Updated:** August 15, 2026
 **Primary customer:** convenience-retail operators with one to approximately 100 stores
-**Showcase tenant:** fictional Northline Fuel & Market, exactly 15 stores and five outside vendors
+**Showcase tenant:** fictional Clark Pump and Shop, exactly 15 stores and five outside vendors
 
 ## Product definition
 
@@ -92,7 +92,7 @@ Service category
 Examples:
 
 ```text
-Northline Fuel & Market
+Clark Pump and Shop
 └── Central Region
     └── Store 104
 
@@ -324,7 +324,7 @@ Estimate → authorization/NTE → entered work cost → invoice link → reconc
 Every open work order derives one sentence, owner, and deadline from the underlying facts, for example:
 
 - Waiting on regional approval · due in 3 hours.
-- Waiting on Summit Refrigeration to accept · due today at 4:00 PM.
+- Waiting on ColdLine Refrigeration & HVAC to accept · due today at 4:00 PM.
 - Summit is scheduled for Tuesday at 9:00 AM.
 - Technician onsite since 10:18 AM.
 - Waiting on parts; vendor update due Friday.
@@ -808,16 +808,16 @@ The current prototype UX and palette are not a design foundation. Replace the op
 
 ## Demo data contract
 
-The fictional Northline tenant has:
+The fictional Clark Pump and Shop tenant has:
 
 - Exactly 15 stores.
 - Three regions with five stores each.
 - Exactly five approved outside vendors:
-  1. Summit Refrigeration.
-  2. Cedar Mechanical.
-  3. Forecourt Systems Group.
-  4. BrightPath Electrical.
-  5. Four Seasons Site Services.
+  1. ColdLine Refrigeration & HVAC.
+  2. ClearFlow HVAC, Plumbing & Kitchen Repair.
+  3. PumpPro Fuel & Dispenser Repair.
+  4. BrightLine Electrical & Lighting.
+  5. GreenLot Landscaping & Snow Removal.
 - Two internal maintenance technicians.
 - Realistic HVAC/R depth and smaller forecourt, plumbing, foodservice, electrical, exterior, snow, landscaping, and car-wash stories.
 - Work at every meaningful service stage.

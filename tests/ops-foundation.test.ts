@@ -81,7 +81,7 @@ describe("operations fixtures", () => {
   it("keeps the showcase fictional, deterministic, deep, and separate from scale proof", () => {
     const presentation = buildNorthlinePresentationFixture();
     expect(assertOpsFixture(presentation)).toBe(true);
-    expect(presentation.organizations[0].name).toBe("Northline Fuel & Market");
+    expect(presentation.organizations[0].name).toBe("Clark Pump and Shop");
     expect(presentation.stores).toHaveLength(15);
     expect(presentation.regions).toHaveLength(3);
     expect(presentation.divisions).toHaveLength(1);
@@ -119,7 +119,7 @@ describe("operations fixtures", () => {
     expect(workOrder).toMatchObject({
       categoryKey: "forecourt",
       assetId: "asset-109-dispenser-4",
-      accountableParty: "Forecourt Systems Group",
+      accountableParty: "PumpPro Fuel & Dispenser Repair",
     });
     expect(linkedAssignments).not.toHaveLength(0);
     expect(linkedAssignments.every((row) => row.vendorId === "vendor-northline-forecourt")).toBe(true);
@@ -142,7 +142,7 @@ describe("canonical work and provider commands", () => {
     const request = await createServiceRequest(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", reporterName: "Casey Clerk", problem: "Unknown equipment is making a loud vibration", actor });
     await reviewRequestImpact(svc, request);
     const workOrder = await createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-101", requestId: request.id, problem: request.problem, accountableParty: "Facilities coordinator", nextAction: "Choose service provider", actor });
-    expect(workOrder.number).toMatch(/^NL-2026-\d{4}$/);
+    expect(workOrder.number).toMatch(/^CPS-2026-\d{4}$/);
     expect(workOrder.categoryKey).toBeUndefined();
     expect(workOrder.assetId).toBeUndefined();
     const snapshot = (svc.repository as ReturnType<typeof createNorthlineFixtureRepository>).snapshot();
@@ -201,7 +201,7 @@ describe("canonical work and provider commands", () => {
     await reviewRequestImpact(svc, request);
     const workOrder = await createWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: request.storeId, requestId: request.id, problem: request.problem, categoryKey: "refrigeration", assetId: "asset-101-beer-cave", accountableParty: "Facilities", nextAction: "Assign", actor });
     const assignment = await assignWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: workOrder.id, kind: "outside_vendor", vendorId: "vendor-northline-summit", actor });
-    const issuance = await issueWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: workOrder.id, assignmentId: assignment.id, revision: 1, channel: "email", authorizationSnapshot: { organizationName: "Northline Fuel & Market", workOrderNumber: workOrder.number, store: { id: workOrder.storeId, storeNumber: "101", name: "Northline Cedar Grove", formattedAddress: "101 Market Way, Cedar Grove, MI 49001" }, vendor: { id: "vendor-northline-summit", name: "Summit Refrigeration" }, problem: workOrder.problem, priority: "urgent", billingInstruction: `Reference operator work order ${workOrder.number} on all service tickets and invoices.` }, publicToken: { tokenHash: "a".repeat(64), expiresAt: "2026-08-17T19:00:00.000Z" }, actor });
+    const issuance = await issueWorkOrder(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: workOrder.id, assignmentId: assignment.id, revision: 1, channel: "email", authorizationSnapshot: { organizationName: "Clark Pump and Shop", workOrderNumber: workOrder.number, store: { id: workOrder.storeId, storeNumber: "101", name: "Clark Pump and Shop - Cedar Grove", formattedAddress: "101 Market Way, Cedar Grove, MI 49001" }, vendor: { id: "vendor-northline-summit", name: "ColdLine Refrigeration & HVAC" }, problem: workOrder.problem, priority: "urgent", billingInstruction: `Reference operator work order ${workOrder.number} on all service tickets and invoices.` }, publicToken: { tokenHash: "a".repeat(64), expiresAt: "2026-08-17T19:00:00.000Z" }, actor });
     const response = await recordVendorResponse(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: workOrder.id, assignmentId: assignment.id, issuanceId: issuance.id, response: "proposed_date", responderName: "Summit Dispatch", proposedAt: "2026-08-11T14:00:00.000Z", actor: { ...actor, actorType: "vendor_link" } });
     expect(response.response).toBe("proposed_date");
     const updated = await svc.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id);
@@ -229,7 +229,7 @@ describe("visit evidence", () => {
     const capturedAt = "2026-08-10T19:00:00.000Z";
     const visit = await checkInVisit(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-104", vendorId: "vendor-northline-summit", workOrderId: NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId, technicianName: "Pat Morgan", purpose: "Inspect evaporator fan", channel: "secure_link", location: { result: "verified", capturedAt, accuracyM: 16, distanceM: 20 }, actor: { ...actor, actorType: "technician" } });
     await expect(checkOutVisit(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, visitId: visit.id, channel: "qr", outcome: "diagnosed_waiting_parts", location: { result: "verified", capturedAt }, actor: { ...actor, actorType: "technician" } })).rejects.toMatchObject({ code: "VALIDATION" });
-    const checkedOut = await checkOutVisit(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, visitId: visit.id, channel: "qr", outcome: "diagnosed_waiting_parts", location: { result: "verified", capturedAt }, followUp: { accountableParty: "Summit Refrigeration", nextAction: "Return with fan motor", dueAt: "2026-08-12T18:00:00.000Z", escalationTo: "Northline Facilities" }, actor: { ...actor, actorType: "technician" } });
+    const checkedOut = await checkOutVisit(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, visitId: visit.id, channel: "qr", outcome: "diagnosed_waiting_parts", location: { result: "verified", capturedAt }, followUp: { accountableParty: "ColdLine Refrigeration & HVAC", nextAction: "Return with fan motor", dueAt: "2026-08-12T18:00:00.000Z", escalationTo: "Clark Pump and Shop Facilities" }, actor: { ...actor, actorType: "technician" } });
     const snapshot = (svc.repository as ReturnType<typeof createNorthlineFixtureRepository>).snapshot();
     expect(snapshot.followUps.some((row) => row.id === checkedOut.followUpId && row.sourceVisitId === visit.id)).toBe(true);
     expect(snapshot.auditEvents.find((row) => row.aggregateId === visit.id && row.eventType === "visit.checked_out")?.payloadJson).toContain("approximate_presence_not_labor");
@@ -243,7 +243,7 @@ describe("visit evidence", () => {
   it("resolves demo public tokens to narrow immutable views", async () => {
     const repo = createNorthlineFixtureRepository();
     const service = await repo.getServiceAuthorizationByToken({ tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceAuthorization104, purpose: "service_authorization", now: NORTHLINE_AS_OF });
-    expect(service).toMatchObject({ workOrderNumber: "NL-2026-0116", priority: "urgent", revision: 1, latestResponse: undefined });
+    expect(service).toMatchObject({ workOrderNumber: "CPS-2026-0116", priority: "urgent", revision: 1, latestResponse: undefined });
     const active = await repo.getActiveVisitByToken({ tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.activeVisit112, purpose: "active_visit", now: NORTHLINE_AS_OF });
     expect(active).toMatchObject({ organizationId: NORTHLINE_ORGANIZATION_ID, id: NORTHLINE_DEMO_HANDLES.activeVisitId });
     const trusted = await repo.getTrustedStoreDeviceByToken({ tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.trustedStore104, purpose: "trusted_store_device", now: NORTHLINE_AS_OF });

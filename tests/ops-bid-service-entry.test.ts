@@ -39,11 +39,11 @@ const session: OperatorSession = {
   userId: "user-bid-service-entry",
   membershipId: "membership-northline-facilities",
   displayName: "Jordan Lee",
-  email: "jordan.lee@northline-demo.example",
+  email: "jordan.lee@clark-demo.example",
   role: "facilities",
   organizationId: NORTHLINE_ORGANIZATION_ID,
-  organizationName: "Northline Fuel & Market",
-  scopeLabel: "Northline companywide · 15 stores",
+  organizationName: "Clark Pump and Shop",
+  scopeLabel: "Clark Pump and Shop companywide · 15 stores",
 };
 
 function requestFor(
@@ -119,7 +119,7 @@ describe("work-order vendor path entry", () => {
     });
     expect(model.sourceVisit).toMatchObject({
       visitId: "visit-northline-107-no-wo",
-      providerName: "Forecourt Systems Group",
+      providerName: "PumpPro Fuel & Dispenser Repair",
     });
     expect(markup).toContain("After-the-fact service record");
     expect(markup).toContain("Documenting work after service began");
@@ -151,7 +151,7 @@ describe("work-order vendor path entry", () => {
     expect(after.assignments.find((assignment) => assignment.workOrderId === workOrder.id)).toMatchObject({ status: "accepted", vendorId: "vendor-northline-forecourt" });
     expect(after.workflowTasks.find((task) => task.workOrderId === workOrder.id && task.status === "in_progress")).toMatchObject({
       taskType: "record_service_outcome",
-      assigneeName: "Forecourt Systems Group",
+      assigneeName: "PumpPro Fuel & Dispenser Repair",
       title: "Record service outcome",
     });
     expect(after.siteVisitWorkOrders).toContainEqual(expect.objectContaining({ visitId: "visit-northline-107-no-wo", workOrderId: workOrder.id }));

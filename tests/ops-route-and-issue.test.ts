@@ -114,7 +114,7 @@ async function authorizationSnapshot(
   ]);
   if (!store || !vendor) throw new Error("Test fixture is missing routing records");
   return {
-    organizationName: "Northline Fuel & Market",
+    organizationName: "Clark Pump and Shop",
     workOrderNumber: workOrder.number,
     store: {
       id: store.id,

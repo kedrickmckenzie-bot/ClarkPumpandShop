@@ -96,14 +96,14 @@ async function reset() {
       client.query<{ count: string }>("SELECT count(*)::text AS count FROM ops_organizations WHERE id = $1", [NORTHLINE_ORGANIZATION_ID]),
     ]);
     if (Number(stores.rows[0]?.count) !== 15 || Number(vendors.rows[0]?.count) !== 5 || Number(organizations.rows[0]?.count) !== 1) {
-      throw new Error("Reset verification failed: the deterministic Northline tenant does not match its 15-store/five-vendor contract.");
+      throw new Error("Reset verification failed: the deterministic Clark Pump and Shop tenant does not match its 15-store/five-vendor contract.");
     }
     await client.query("COMMIT");
     inTransaction = false;
 
     console.log(`Reset ${target.databaseName} on ${target.host} (${target.environment}).`);
     console.log(`Applied ${migrations.length} migrations and ${seeded.statements} deterministic seed statements.`);
-    console.log("Verified one Northline organization, 15 stores, and five approved outside vendors.");
+    console.log("Verified one Clark Pump and Shop organization, 15 stores, and five approved outside vendors.");
   } catch (error) {
     if (inTransaction) {
       try {

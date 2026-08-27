@@ -84,7 +84,7 @@ Out of scope: full accounting/AP, general ledger, payments, tax, formal purchasi
 
 ## Demo contract
 
-- The presentation tenant is fictional Northline Fuel & Market with **exactly 15 stores and exactly five approved outside vendors**. It also has a two-person internal maintenance team.
+- The presentation tenant is fictional Clark Pump and Shop with **exactly 15 stores and exactly five approved outside vendors**. It also has a two-person internal maintenance team.
 - Use three regions with five stores each and realistic HVAC/Refrigeration depth plus smaller forecourt, plumbing and exterior-service stories.
 - Every demo total must derive from source seed records. Provide explicit unclassified buckets rather than hiding shallow records.
 - The hosted showcase seeds deterministic source records into D1 and persists mutations through the tenant-scoped repository. R2 stores uploaded evidence. Local development uses an in-memory fixture and resets when the local process restarts.
@@ -94,11 +94,11 @@ Out of scope: full accounting/AP, general ledger, payments, tax, formal purchasi
 
 The five seeded vendors are:
 
-1. Summit Refrigeration - refrigeration, HVAC, walk-ins, beer caves and ice machines.
-2. Cedar Mechanical - HVAC, plumbing and foodservice equipment.
-3. Forecourt Systems Group - dispensers, payment terminals and fuel systems.
-4. BrightPath Electrical - electrical, canopy lighting, signs and low-voltage security.
-5. Four Seasons Site Services - landscaping, snow, parking lots and exterior facilities.
+1. ColdLine Refrigeration & HVAC - refrigeration, HVAC, walk-ins, beer caves and ice machines.
+2. ClearFlow HVAC, Plumbing & Kitchen Repair - HVAC, plumbing and foodservice equipment.
+3. PumpPro Fuel & Dispenser Repair - dispensers, payment terminals and fuel systems.
+4. BrightLine Electrical & Lighting - electrical, canopy lighting, signs and low-voltage security.
+5. GreenLot Landscaping & Snow Removal - landscaping, snow, parking lots and exterior facilities.
 
 ## Current hosting and future portability
 

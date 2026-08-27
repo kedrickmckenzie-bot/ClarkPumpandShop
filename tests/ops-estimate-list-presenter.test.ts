@@ -17,11 +17,11 @@ const session: OperatorSession = {
   userId: "user-estimate-list",
   membershipId: "membership-northline-facilities",
   displayName: "Facilities preview",
-  email: "facilities@northline-demo.example",
+  email: "facilities@clark-demo.example",
   role: "facilities",
   organizationId: NORTHLINE_ORGANIZATION_ID,
-  organizationName: "Northline Fuel & Market",
-  scopeLabel: "Northline companywide - 15 stores",
+  organizationName: "Clark Pump and Shop",
+  scopeLabel: "Clark Pump and Shop companywide - 15 stores",
 };
 
 describe("bid-request portfolio presenter", () => {
@@ -39,12 +39,12 @@ describe("bid-request portfolio presenter", () => {
     const fixture = buildNorthlinePresentationFixture();
     const replacement = buildListModel(fixture, session, "estimates", { decision: "replacement_quote" });
     const submitted = buildListModel(fixture, session, "estimates", { status: "submitted" });
-    const summit = buildListModel(fixture, session, "estimates", { q: "Summit Refrigeration" });
+    const summit = buildListModel(fixture, session, "estimates", { q: "ColdLine Refrigeration & HVAC" });
 
     expect(replacement.table.rows).not.toHaveLength(0);
     expect(replacement.table.rows.every((row) => row.cells.find((cell) => cell.key === "request")?.value === "Replacement quote")).toBe(true);
     expect(submitted.table.rows.every((row) => row.cells.find((cell) => cell.key === "status")?.value === "Submitted")).toBe(true);
     expect(summit.table.rows).not.toHaveLength(0);
-    expect(summit.table.rows.every((row) => row.cells.find((cell) => cell.key === "vendor")?.value === "Summit Refrigeration")).toBe(true);
+    expect(summit.table.rows.every((row) => row.cells.find((cell) => cell.key === "vendor")?.value === "ColdLine Refrigeration & HVAC")).toBe(true);
   });
 });

@@ -51,7 +51,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
               <p className={styles.helper}>Received {formatPublicDateTime(authorization.priorResponse.receivedAt)}{authorization.priorResponse.detail ? ` · ${authorization.priorResponse.detail}` : ""}</p>
             </section>
           ) : null}
-          <VendorResponseForm disabled={hasFinalResponse} opened={authorization.opened} token={token} />
+          <VendorResponseForm disabled={hasFinalResponse} opened={authorization.opened} organizationName={authorization.organizationName} token={token} />
         </div>
 
         <aside className={styles.stack} aria-label="Service authorization details">

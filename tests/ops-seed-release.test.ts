@@ -97,7 +97,7 @@ describe("Northline deterministic seed release", () => {
       ]);
   });
 
-  it("writes the complete v14 fixture and full-version marker to a fresh PostgreSQL database", async () => {
+  it("writes the complete v15 fixture and full-version marker to a fresh PostgreSQL database", async () => {
     const fixture = buildNorthlinePresentationFixture();
     const expectedSourceStatements = buildOpsSeedStatements(fixture);
     const client = new RecordingPostgresClient([]);
@@ -147,7 +147,7 @@ describe("Northline deterministic seed release", () => {
     expect(client.released).toBe(true);
   });
 
-  it("enriches a completed v9 database with missing rows and exact guarded amendments without claiming an exact v13 seed", async () => {
+  it("enriches a completed v9 database with missing rows and exact guarded amendments without claiming an exact v15 seed", async () => {
     const legacyVersion = "northline-ops-2026-08-15-v9";
     const client = new RecordingPostgresClient([{
       key: legacyVersion,
@@ -166,13 +166,18 @@ describe("Northline deterministic seed release", () => {
     expect(receipt.values).toContain(NORTHLINE_COMPATIBILITY_COMMAND);
     expect(receipt.values).toContain(legacyVersion);
     expect(receipt.values[1]).not.toBe(NORTHLINE_SEED_VERSION);
-    const updates = client.queries.filter((query) => /^\s*UPDATE/i.test(query.text));
-    expect(updates).toHaveLength(buildNorthlineCompatibilityAmendments().length);
-    expect(updates[0].text).toMatch(/UPDATE ops_asset_components/);
-    expect(updates[0].text).toMatch(/serial_number = \$1/);
-    expect(updates[0].values).toContain("CMP104-88214");
-    expect(updates[0].values).toContain("CMP104-2026-0710");
-    expect(client.queries.some((query) => /^\s*DELETE/i.test(query.text))).toBe(false);
+    const amendments = client.queries.filter((query) => /^\s*(?:UPDATE|DELETE)/i.test(query.text));
+    expect(amendments).toHaveLength(buildNorthlineCompatibilityAmendments().length);
+    const updates = amendments.filter((query) => /^\s*UPDATE/i.test(query.text));
+    const componentUpdate = updates.find((query) => /UPDATE ops_asset_components/.test(query.text));
+    expect(componentUpdate?.text).toMatch(/serial_number = \$1/);
+    expect(componentUpdate?.values).toContain("CMP104-88214");
+    expect(componentUpdate?.values).toContain("CMP104-2026-0710");
+    expect(updates.some((query) => /UPDATE ops_organizations/.test(query.text) && query.values.includes("Clark Pump and Shop"))).toBe(true);
+    expect(updates.filter((query) => /UPDATE ops_vendors/.test(query.text))).toHaveLength(5);
+    const obsoletePaymentAlertDelete = amendments.find((query) => /^\s*DELETE FROM ops_exceptions/i.test(query.text));
+    expect(obsoletePaymentAlertDelete?.values).toContain("exception-northline-107-high-risk");
+    expect(obsoletePaymentAlertDelete?.values).toContain("Unexpected access to payment-enabled fuel equipment requires manager review");
     expect(inserts.some((query) => /INTO ops_component_lifecycle_events/i.test(query.text))).toBe(true);
     expect(client.queries.map((query) => query.text.trim())).toContain("COMMIT");
     expect(client.released).toBe(true);

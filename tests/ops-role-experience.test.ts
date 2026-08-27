@@ -27,17 +27,17 @@ beforeAll(async () => {
 function session(
   role: OperatorRole,
   scope: Pick<OperatorSession, "scopeLabel" | "regionIds" | "storeIds"> = {
-    scopeLabel: "Northline companywide · 15 stores",
+    scopeLabel: "Clark Pump and Shop companywide · 15 stores",
   },
 ): OperatorSession {
   return {
     userId: `user-northline-${role}`,
     membershipId: `membership-northline-${role}`,
     displayName: `${role} preview`,
-    email: `${role}@northline-demo.example`,
+    email: `${role}@clark-demo.example`,
     role,
     organizationId: NORTHLINE_ORGANIZATION_ID,
-    organizationName: "Northline Fuel & Market",
+    organizationName: "Clark Pump and Shop",
     scopeLabel: scope.scopeLabel,
     regionIds: scope.regionIds,
     storeIds: scope.storeIds,

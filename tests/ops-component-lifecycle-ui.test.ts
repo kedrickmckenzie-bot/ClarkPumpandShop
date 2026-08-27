@@ -14,7 +14,7 @@ describe("Component lifecycle experience", () => {
     expect(markup).toContain("62 months");
     expect(markup).toContain("65%");
     expect(markup).toContain("Small sample");
-    expect(markup).toContain("Summit Refrigeration");
+    expect(markup).toContain("ColdLine Refrigeration &amp; HVAC");
     expect(markup).toContain("repair-item-104-compressor-2026-07");
     expect(markup).toContain("Warranty opportunity");
   });

@@ -22,11 +22,11 @@ const facilitiesSession: OperatorSession = {
   userId: "user-route-task",
   membershipId: "membership-northline-facilities",
   displayName: "Jordan Lee",
-  email: "jordan.lee@northline-demo.example",
+  email: "jordan.lee@clark-demo.example",
   role: "facilities",
   organizationId: NORTHLINE_ORGANIZATION_ID,
-  organizationName: "Northline Fuel & Market",
-  scopeLabel: "Northline companywide · 15 stores",
+  organizationName: "Clark Pump and Shop",
+  scopeLabel: "Clark Pump and Shop companywide · 15 stores",
 };
 
 function configure() {

@@ -132,14 +132,14 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
       { storeId: fixture.stores[0].id, regionId: fixture.stores[0].regionId },
     );
     expect(scopedStoreManagers).toHaveLength(1);
-    expect(scopedStoreManagers[0]?.email).toBe(`store${fixture.stores[0].storeNumber}.manager@northline-demo.example`);
+    expect(scopedStoreManagers[0]?.email).toBe(`store${fixture.stores[0].storeNumber}.manager@clark-demo.example`);
     const scopedRegionalManagers = await repository.listNotificationRecipients(
       fixture.organizations[0].id,
       "regional_manager",
       { storeId: fixture.stores[0].id, regionId: fixture.stores[0].regionId },
     );
     expect(scopedRegionalManagers).toHaveLength(1);
-    expect(scopedRegionalManagers[0]?.email).toBe("regional1@northline-demo.example");
+    expect(scopedRegionalManagers[0]?.email).toBe("regional1@clark-demo.example");
     await repository.upsertNotificationRule({ organizationId: fixture.organizations[0].id, id: "notification-rule-vendor-commitment-executive", eventKey: "vendor_commitment_received", emailEnabled: true, recipientRole: "executive", occurredAt: fixture.asOf });
     expect((await repository.listNotificationRules(fixture.organizations[0].id)).filter((rule) => rule.eventKey === "vendor_commitment_received").map((rule) => rule.recipientRole).sort()).toEqual(["executive", "facilities_admin", "regional_manager", "store_manager"]);
 
@@ -300,7 +300,7 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
       },
     });
 
-    expect(workOrder.number).toMatch(/^NL-2026-\d{4}$/);
+    expect(workOrder.number).toMatch(/^CPS-2026-\d{4}$/);
     await expect(repository.getWorkOrder(organizationId, workOrder.id)).resolves.toMatchObject({
       id: workOrder.id,
       status: "accepted",

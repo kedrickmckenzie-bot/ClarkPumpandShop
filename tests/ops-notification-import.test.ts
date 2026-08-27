@@ -10,7 +10,7 @@ describe("transactional email and onboarding previews", () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => { captured = init; return new Response(JSON.stringify({ id: "email-123" }), { status: 200 }); });
     const fixture = buildNorthlinePresentationFixture();
     const workOrder = fixture.workOrders[0]!;
-    const result = await sendVendorServiceAuthorizationEmail({ provider: createResendEmailProvider({ apiKey: "secret", from: "Operations <ops@example.com>", fetcher: fetcher as typeof fetch }), vendorEmail: "dispatch@example.com", vendorName: "Example Vendor", organizationName: "Northline Fuel & Market", workOrder, storeLabel: "Store 101 · Northline", actionUrl: "https://example.com/public/service/token", issuanceId: "issuance-1" });
+    const result = await sendVendorServiceAuthorizationEmail({ provider: createResendEmailProvider({ apiKey: "secret", from: "Operations <ops@example.com>", fetcher: fetcher as typeof fetch }), vendorEmail: "dispatch@example.com", vendorName: "Example Vendor", organizationName: "Clark Pump and Shop", workOrder, storeLabel: "Store 101 · Northline", actionUrl: "https://example.com/public/service/token", issuanceId: "issuance-1" });
     expect(result.messageId).toBe("email-123");
     expect(fetcher).toHaveBeenCalledOnce();
     expect(captured?.headers).toMatchObject({ "Idempotency-Key": "service-authorization/issuance-1/dispatch@example.com" });
@@ -79,7 +79,7 @@ describe("transactional email and onboarding previews", () => {
 
     expect(sent).toHaveLength(1);
     const store = fixture.stores.find((candidate) => candidate.id === workOrder.storeId)!;
-    expect(sent[0]!.to).toBe(`store${store.storeNumber}.manager@northline-demo.example`);
+    expect(sent[0]!.to).toBe(`store${store.storeNumber}.manager@clark-demo.example`);
     expect(sent[0]!.text).toContain(workOrder.number);
     expect(sent[0]!.text).toContain("service date has not been recorded yet");
   });

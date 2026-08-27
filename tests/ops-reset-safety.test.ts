@@ -47,6 +47,6 @@ describe("destructive reset safety", () => {
     expect(dropDrizzleAt).toBeGreaterThan(connectAt);
     expect(dropPublicAt).toBeGreaterThan(dropDrizzleAt);
     expect(source).toContain("SELECT current_database()");
-    expect(source).toContain("Verified one Northline organization, 15 stores, and five approved outside vendors.");
+    expect(source).toContain("Verified one Clark Pump and Shop organization, 15 stores, and five approved outside vendors.");
   });
 });

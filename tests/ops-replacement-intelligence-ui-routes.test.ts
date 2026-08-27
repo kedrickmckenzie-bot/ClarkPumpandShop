@@ -67,7 +67,7 @@ describe("interactive replacement intelligence", () => {
         assetId: "asset-1", permitted: true, action: "/api/ops/equipment/asset-1/replacement",
         currentAmountLabel: "$30,000", rangeLabel: "$27,000–$36,000 planning range", sourceLabel: "Approved quote", effectiveLabel: "Aug 9, 2026", freshnessLabel: "Current", explanation: "One dated source, not a market average.",
         currentProfileId: "profile-1", profileName: "Refrigeration", specificationLabel: "Capacity: 5 ton", adjustmentLabel: "None", inheritedPeerCount: 4,
-        profiles: [], event: { id: "event-1", approvedAmountLabel: "$30,000", approvedAtLabel: "Aug 9, 2026", workOrderNumber: "NL-2026-001" },
+        profiles: [], event: { id: "event-1", approvedAmountLabel: "$30,000", approvedAtLabel: "Aug 9, 2026", workOrderNumber: "CPS-2026-001" },
         recommendation: { recommendationLabel: "Capital Review", confidenceLabel: "Medium", explanation: "One transparent threshold is met.", missingData: ["Verified downtime history"] },
         recommendationHistory: [{ id: "rec-1", version: 1, modelVersion: "transparent-rules-v1", recommendationLabel: "Capital Review", confidenceLabel: "Medium", decisionLabel: "Investigate", planningLabel: "No replacement year committed", reason: "Confirm the compressor scope.", decidedAtLabel: "Aug 9, 2026", explanation: "One transparent threshold is met.", missingData: ["Verified downtime history"], actualOutcomeLabel: "Outcome not recorded yet" }],
         defaultPlanningYear: 2027,

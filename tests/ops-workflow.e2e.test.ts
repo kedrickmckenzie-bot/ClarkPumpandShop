@@ -144,7 +144,7 @@ describe("Wave 1 reactive maintenance loop", () => {
         revision: 1,
         channel: "email",
         authorizationSnapshot: {
-          organizationName: "Northline Fuel & Market",
+          organizationName: "Clark Pump and Shop",
           workOrderNumber: current.number,
           store: {
             id: store.id,
@@ -152,7 +152,7 @@ describe("Wave 1 reactive maintenance loop", () => {
             name: store.name,
             formattedAddress: [store.address1, `${store.city}, ${store.state} ${store.postalCode}`].join(", "),
           },
-          vendor: { id: SUMMIT, name: "Summit Refrigeration" },
+          vendor: { id: SUMMIT, name: "ColdLine Refrigeration & HVAC" },
           problem: current.problem,
           priority: current.priority,
           authorizedScope: current.authorizedScope,

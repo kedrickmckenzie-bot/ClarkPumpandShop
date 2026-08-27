@@ -295,10 +295,10 @@ describe("work-order transition controls", () => {
       revision: 1,
       channel: "manual",
       authorizationSnapshot: {
-        organizationName: "Northline Fuel & Market",
+        organizationName: "Clark Pump and Shop",
         workOrderNumber: workOrder.number,
-        store: { id: workOrder.storeId, storeNumber: "101", name: "Northline Cedar Grove", formattedAddress: "101 Market Way, Cedar Grove, MI 49001" },
-        vendor: { id: "vendor-northline-summit", name: "Summit Refrigeration" },
+        store: { id: workOrder.storeId, storeNumber: "101", name: "Clark Pump and Shop - Cedar Grove", formattedAddress: "101 Market Way, Cedar Grove, MI 49001" },
+        vendor: { id: "vendor-northline-summit", name: "ColdLine Refrigeration & HVAC" },
         problem: workOrder.problem,
         priority: workOrder.priority,
         billingInstruction: `Reference operator work order ${workOrder.number} on all service tickets and invoices.`,
@@ -390,7 +390,7 @@ describe("follow-up accountability", () => {
     const followUp = await createFollowUp(harness.services, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
       workOrderId: workOrder.id,
-      accountableParty: "Forecourt Systems Group",
+      accountableParty: "PumpPro Fuel & Dispenser Repair",
       nextAction: "Confirm replacement terminal availability",
       dueAt: "2026-08-16T15:00:00.000Z",
       escalationTo: "Facilities director",

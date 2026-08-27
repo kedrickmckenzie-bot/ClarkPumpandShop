@@ -13,7 +13,7 @@ async function reopenSecondSummitWork() {
   await repository.atomicWrite([
     {
       sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?",
-      params: ["issued", "Summit Refrigeration", "Perform authorized service", "2026-08-22T18:00:00.000Z", "Northline Facilities", NORTHLINE_ORGANIZATION_ID, SECOND_SUMMIT_WORK],
+      params: ["issued", "ColdLine Refrigeration & HVAC", "Perform authorized service", "2026-08-22T18:00:00.000Z", "Clark Pump and Shop Facilities", NORTHLINE_ORGANIZATION_ID, SECOND_SUMMIT_WORK],
     },
     {
       sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ?",
@@ -78,7 +78,7 @@ describe("public work-order-first multi-work-order visit", () => {
       location: { captureResult: "permission_denied" },
     });
 
-    expect(first).toMatchObject({ vendorName: "Summit Refrigeration", crewCount: 2, additionalTechnicianNames: ["Riley Chen"] });
+    expect(first).toMatchObject({ vendorName: "ColdLine Refrigeration & HVAC", crewCount: 2, additionalTechnicianNames: ["Riley Chen"] });
     expect(first.workOrders.map((workOrder) => workOrder.id)).toEqual([PUBLIC_WORK, SECOND_SUMMIT_WORK]);
     expect(retry).toMatchObject({ replayed: true, visitId: first.visitId });
     expect((await repository.listSiteVisitWorkOrders(NORTHLINE_ORGANIZATION_ID, first.visitId)).map((link) => link.workOrderId)).toEqual([PUBLIC_WORK, SECOND_SUMMIT_WORK]);
@@ -131,10 +131,10 @@ describe("public work-order-first multi-work-order visit", () => {
           outcome: "parts_required" as const,
           outcomeNotes: "A compatible contactor is required.",
           followUp: {
-            accountableParty: "Summit Refrigeration",
+            accountableParty: "ColdLine Refrigeration & HVAC",
             nextAction: "Return with the compatible compressor contactor.",
             dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            escalationTo: "Northline Facilities",
+            escalationTo: "Clark Pump and Shop Facilities",
           },
         },
       ],
