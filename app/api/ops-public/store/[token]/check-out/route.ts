@@ -19,10 +19,11 @@ const followUpSchema = z.object({
 
 const workOrderOutcomeSchema = z.object({
   workOrderId: z.string().min(1).max(120),
-  outcome: z.enum(["completed", "diagnosis_only", "quote_required", "parts_required", "return_visit_required", "no_issue_found", "store_access_unavailable", "work_not_authorized", "not_addressed"]),
+  outcome: z.enum(["completed", "temporary_repair", "diagnosis_only", "quote_required", "parts_required", "return_visit_required", "no_issue_found", "store_access_unavailable", "work_not_authorized", "not_addressed"]),
   outcomeNotes: z.string().max(2000).optional(),
+  vendorFollowUpTiming: z.enum(["within_7_days", "within_30_days", "within_90_days", "next_pm", "unknown"]).optional(),
   followUp: followUpSchema.optional(),
-});
+}).strict();
 
 const checkOutSchema = z.object({
   vendorId: z.string().min(1).max(120).optional(),
@@ -31,7 +32,7 @@ const checkOutSchema = z.object({
   outcome: z.enum(["resolved", "temporary_repair", "diagnosed_waiting_parts", "return_required", "unable_to_complete", "unable_to_reproduce", "other"]).optional(),
   outcomeNotes: z.string().max(2000).optional(),
   location: locationEvidenceSchema,
-}).superRefine((value, context) => {
+}).strict().superRefine((value, context) => {
   if (Boolean(value.perWorkOrderOutcomes?.length) === Boolean(value.outcome)) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: "Provide per-work-order outcomes or one unmatched visit outcome." });
   }

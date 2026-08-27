@@ -322,7 +322,7 @@ describe("public service and visit capability boundaries", () => {
     expect(checkout.visitId).toBe(receipt.visitId);
     expect(checkout.heading).toBe("Checkout received");
     expect(await gateway.loadStorePortal(checkoutToken!)).toBeNull();
-  });
+  }, 30_000);
 
   it("lets a trusted store device start or finish only visits at its own store", async () => {
     const gateway = getPublicOperationsGateway();

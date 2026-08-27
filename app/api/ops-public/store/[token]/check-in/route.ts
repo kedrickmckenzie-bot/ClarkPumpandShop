@@ -6,6 +6,7 @@ import { locationEvidenceSchema, publicApiError, publicApiSuccess, readPublicIde
 const checkInSchema = z.object({
   vendorId: z.string().min(1).max(120).optional(),
   workOrderIds: z.array(z.string().min(1).max(120)).min(1).max(100).optional(),
+  heldWorkOrderIds: z.array(z.string().min(1).max(120)).max(100).optional(),
   workOrderId: z.string().min(1).max(120).optional(),
   serviceRunId: z.string().min(1).max(120).optional(),
   plannedWorkOrderRemovalReason: z.string().max(1000).optional(),
@@ -17,7 +18,7 @@ const checkInSchema = z.object({
   vehicleIdentifier: z.string().max(120).optional(),
   arrivalNote: z.string().max(1000).optional(),
   location: locationEvidenceSchema,
-});
+}).strict();
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   try {
