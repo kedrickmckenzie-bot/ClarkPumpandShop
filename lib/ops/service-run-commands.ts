@@ -538,10 +538,9 @@ export interface CreateStoreSweepInput {
   storeId: OpsId;
   vendorId: OpsId;
   contractVersionId: OpsId;
-  proposedStartsAt: IsoDateTime;
   responseDueAt: IsoDateTime;
   accessRequirements?: string;
-  work: Array<{ workOrderId: OpsId; estimatedDurationMinutes: number }>;
+  work: Array<{ workOrderId: OpsId }>;
   publicToken: { tokenHash: string; expiresAt: IsoDateTime };
   actor: ActorContext;
 }
@@ -560,23 +559,14 @@ export async function createStoreSweep(
 ): Promise<CreateServiceRunRecommendationResult> {
   const { repository, clock, ids } = services(dependencies);
   const now = clock.now();
-  const startMs = instant(input.proposedStartsAt, "Proposed visit start");
   const responseDueMs = instant(input.responseDueAt, "Vendor response deadline");
-  if (startMs <= instant(now, "Current time")) throw new OpsDomainError("VALIDATION", "Proposed visit must be in the future");
-  if (responseDueMs <= instant(now, "Current time") || responseDueMs >= startMs) {
-    throw new OpsDomainError("VALIDATION", "Vendor response deadline must be before the proposed visit");
-  }
+  if (responseDueMs <= instant(now, "Current time")) throw new OpsDomainError("VALIDATION", "Vendor response deadline must be in the future");
   if (!input.work.length) throw new OpsDomainError("VALIDATION", "Select at least one approved job for this store visit");
   if (input.work.length > 50) throw new OpsDomainError("VALIDATION", "A store visit can include at most 50 approved jobs");
   const workIds = new Set(input.work.map((row) => row.workOrderId));
   if (workIds.size !== input.work.length) throw new OpsDomainError("VALIDATION", "Each approved job can be selected only once");
-  input.work.forEach((row) => positiveInteger(row.estimatedDurationMinutes, "Estimated onsite time"));
-  const totalServiceMinutes = input.work.reduce((sum, row) => sum + row.estimatedDurationMinutes, 0);
-  const proposedEndsAt = addMinutes(input.proposedStartsAt, totalServiceMinutes);
   if (!/^[a-f0-9]{64}$/i.test(input.publicToken.tokenHash)) throw new OpsDomainError("VALIDATION", "Vendor response token is invalid");
-  if (input.publicToken.expiresAt <= now || input.publicToken.expiresAt > input.proposedStartsAt) {
-    throw new OpsDomainError("VALIDATION", "Vendor response link must expire after creation and no later than the proposed visit");
-  }
+  if (input.publicToken.expiresAt <= now || input.publicToken.expiresAt > input.responseDueAt) throw new OpsDomainError("VALIDATION", "Vendor response link must expire after creation and no later than the response deadline");
 
   const [organization, store, vendor, contract, documents, workOrders, holds] = await Promise.all([
     repository.getOrganization(input.organizationId),
@@ -590,17 +580,17 @@ export async function createStoreSweep(
   if (!organization || !store) throw new OpsDomainError("NOT_FOUND", "Store or organization was not found");
   if (!vendor || vendor.status !== "approved") throw new OpsDomainError("CONFLICT", "Choose an approved vendor");
   if (!contract || contract.vendorId !== vendor.id || contract.status !== "active") {
-    throw new OpsDomainError("CONFLICT", "Current vendor work terms are required before proposing this visit");
+    throw new OpsDomainError("CONFLICT", "Current vendor work terms are required before sending these jobs");
   }
-  if (contract.effectiveStartsAt > input.proposedStartsAt || (contract.effectiveEndsAt && contract.effectiveEndsAt < input.proposedStartsAt)) {
-    throw new OpsDomainError("CONFLICT", "Vendor work terms are not active for the proposed visit date");
+  if (contract.effectiveStartsAt > now || (contract.effectiveEndsAt && contract.effectiveEndsAt < now)) {
+    throw new OpsDomainError("CONFLICT", "Vendor work terms are not currently active");
   }
   if (!contract.reactiveWorkAllowed) throw new OpsDomainError("CONFLICT", "Vendor work terms do not include reactive work");
   if (!(await repository.vendorCoversStore(input.organizationId, vendor.id, store.id))) {
     throw new OpsDomainError("CONFLICT", `${vendor.name} does not cover this store`);
   }
   await assertSchedulerActor({ repository, actor: input.actor, organizationId: input.organizationId, stores: [store] });
-  assertCompliance({ documents, contract, proposedEndsAt });
+  assertCompliance({ documents, contract, proposedEndsAt: now });
   if (workOrders.some((row) => !row)) throw new OpsDomainError("NOT_FOUND", "One or more selected jobs are no longer available");
   const canonicalWorkOrders = workOrders as WorkOrder[];
   for (let index = 0; index < canonicalWorkOrders.length; index += 1) {
@@ -619,6 +609,8 @@ export async function createStoreSweep(
     });
     if (!eligibility.allowed) throw new OpsDomainError("CONFLICT", `${workOrder.number}: ${eligibility.reason}`);
   }
+  const neededByAt = holds.reduce<string | undefined>((earliest, hold) => !hold ? earliest : !earliest || hold.deadlineAt < earliest ? hold.deadlineAt : earliest, undefined);
+  if (!neededByAt) throw new OpsDomainError("CONFLICT", "The selected jobs no longer have active review dates");
 
   const [activeAssignments, latestIssuances, tasksByWorkOrder] = await Promise.all([
     Promise.all(canonicalWorkOrders.map((workOrder) => repository.getActiveAssignment(input.organizationId, workOrder.id))),
@@ -635,15 +627,14 @@ export async function createStoreSweep(
   const runId = ids.next("store-sweep");
   const stopId = ids.next("route-stop");
   const categories = [...new Set(canonicalWorkOrders.map((workOrder) => workOrder.categoryKey).filter((value): value is string => Boolean(value)))].sort();
-  const recommendationExplanation = `Combines ${canonicalWorkOrders.length} already-approved ${canonicalWorkOrders.length === 1 ? "job" : "jobs"} at Store ${store.storeNumber} into one proposed vendor visit. Each job keeps its own work-order number, outcome, cost, and invoice history. No trip reduction or dollar savings is claimed until later evidence supports it.`;
+  const recommendationExplanation = `Sends ${canonicalWorkOrders.length} already-approved ${canonicalWorkOrders.length === 1 ? "job" : "jobs"} at Store ${store.storeNumber} to ${vendor.name} together. The earliest existing review date remains the customer’s requested completion boundary; the vendor chooses its visit date, crew, route, and time onsite. Each job keeps its own work-order number, outcome, cost, and invoice history. No trip reduction or dollar savings is claimed until later evidence supports it.`;
   const originalRecommendation = {
-    kind: "store_sweep",
+    kind: "combined_work_request",
     vendorId: vendor.id,
     contractVersionId: contract.id,
     storeId: store.id,
-    proposedStartsAt: input.proposedStartsAt,
-    proposedEndsAt,
-    workOrders: input.work.map((selected) => ({ workOrderId: selected.workOrderId, estimatedDurationMinutes: selected.estimatedDurationMinutes })),
+    neededByAt,
+    workOrders: input.work.map((selected) => ({ workOrderId: selected.workOrderId })),
     estimatedTripReduction: 0,
     estimatedOpportunityMinor: 0,
   };
@@ -652,21 +643,24 @@ export async function createStoreSweep(
     organizationId: input.organizationId,
     vendorId: vendor.id,
     contractVersionId: contract.id,
-    schedulingMode: "platform_proposed_vendor_confirmed",
+    schedulingMode: "vendor_planned",
     status: "proposed",
-    proposedStartsAt: input.proposedStartsAt,
-    proposedEndsAt,
+    neededByAt,
+    // Legacy non-null schedule fields retain the request boundary for old readers.
+    // Combined-work screens and commands use neededByAt until the vendor supplies a date.
+    proposedStartsAt: neededByAt,
+    proposedEndsAt: neededByAt,
     responseDueAt: input.responseDueAt,
     estimatedDriveMinutes: 0,
-    estimatedServiceMinutes: totalServiceMinutes,
-    capacityUsedMinutes: totalServiceMinutes,
+    estimatedServiceMinutes: 0,
+    capacityUsedMinutes: 0,
     expectedWorkValue: { amountMinor: 0, currency: contract.currency },
     estimatedTripReduction: 0,
     estimatedOpportunity: { amountMinor: 0, currency: contract.currency },
     recommendationExplanation,
     requiredQualifications: categories,
     constraintsJson: JSON.stringify({ approvedVendor: true, storeCoverage: true, currentCustomerCompliance: true, managerApprovedWork: true, individualWorkOrdersPreserved: true }),
-    confidence: "medium",
+    confidence: "high",
     schedulerVersion: "store-sweep-v1",
     originalRecommendationJson: JSON.stringify(originalRecommendation),
     createdByActorType: input.actor.actorType,
@@ -680,9 +674,9 @@ export async function createStoreSweep(
     serviceRunId: run.id,
     storeId: store.id,
     sequence: 1,
-    proposedArrivalAt: input.proposedStartsAt,
+    proposedArrivalAt: neededByAt,
     estimatedDriveMinutes: 0,
-    estimatedServiceMinutes: totalServiceMinutes,
+    estimatedServiceMinutes: 0,
     accessRequirements: input.accessRequirements?.trim() || undefined,
     status: "planned",
   };
@@ -693,7 +687,7 @@ export async function createStoreSweep(
     routeStopId: routeStop.id,
     workOrderId: selected.workOrderId,
     planned: true,
-    estimatedDurationMinutes: selected.estimatedDurationMinutes,
+    estimatedDurationMinutes: 0,
     addressed: false,
   }));
 
@@ -701,6 +695,7 @@ export async function createStoreSweep(
     insert("ops_service_runs", {
       id: run.id, organization_id: run.organizationId, vendor_id: run.vendorId,
       contract_version_id: run.contractVersionId, scheduling_mode: run.schedulingMode, status: run.status,
+      needed_by_at: run.neededByAt,
       proposed_starts_at: run.proposedStartsAt, proposed_ends_at: run.proposedEndsAt,
       response_due_at: run.responseDueAt, estimated_drive_minutes: run.estimatedDriveMinutes,
       estimated_service_minutes: run.estimatedServiceMinutes, capacity_used_minutes: run.capacityUsedMinutes,
@@ -772,7 +767,8 @@ export async function createStoreSweep(
       priority: workOrder.priority,
       authorizedScope: workOrder.authorizedScope,
       categoryKey: workOrder.categoryKey,
-      requestedTiming: input.proposedStartsAt,
+      neededByAt,
+      schedulingOwner: "vendor",
       billingInstruction: `Include operator work-order number ${workOrder.number} on service paperwork and invoices.`,
       storeSweepId: run.id,
     });
@@ -782,7 +778,7 @@ export async function createStoreSweep(
         assignment_id: assignmentId, revision: (latestIssuance?.revision ?? 0) + 1,
         immutable_payload_json: immutablePayload, channel: "email", issued_at: now,
       }),
-      { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: ["issued", vendor.name, "Review the proposed store visit", input.responseDueAt, "Facilities coordinator", input.organizationId, workOrder.id] },
+      { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: ["issued", vendor.name, "Respond to jobs sent together", input.responseDueAt, "Facilities coordinator", input.organizationId, workOrder.id] },
       ...auditAndOutbox({
         organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id,
         eventType: "work_order.issued", actor: input.actor, occurredAt: now,
@@ -793,30 +789,30 @@ export async function createStoreSweep(
     const tasks = tasksByWorkOrder[index]!;
     const openTasks = tasks.filter(isOpenWorkflowTask);
     for (const task of openTasks) statements.push(...buildCompleteWorkflowTaskStatements({
-      task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Included in proposed store visit ${run.id}`,
+      task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Sent with other approved jobs in request ${run.id}`,
     }));
     const responseTask = buildWorkflowTaskRecord({
       id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
       actor: input.actor, createdAt: now, draft: {
-        taskType: "schedule_service", title: "Respond to proposed store visit",
-        reason: `${workOrder.number} is one of ${canonicalWorkOrders.length} approved jobs proposed for one visit at Store ${store.storeNumber}.`,
+        taskType: "schedule_service", title: "Respond to jobs sent together",
+        reason: `${workOrder.number} is one of ${canonicalWorkOrders.length} approved jobs sent together for Store ${store.storeNumber}. The vendor owns scheduling.`,
         assigneeType: "vendor", assigneeId: vendor.id, assigneeName: vendor.name,
         priority: "normal", blocking: true, requiredForProgress: true,
         dueAt: input.responseDueAt, applicableSlaClock: "scheduling",
-        completionCriteria: "Vendor accepts, proposes another time, asks to remove an item, or declines the proposed visit",
+        completionCriteria: "Vendor supplies its planned date, asks to remove an item, cannot take the work, or declines",
         escalationDestination: "Facilities coordinator",
       },
     });
     statements.push(...buildCreateTaskStatements({ task: responseTask, actor: input.actor, ids }));
     const nextTasks = tasks.map((task) => openTasks.some((open) => open.id === task.id)
-      ? { ...task, status: "completed" as const, completedAt: now, completedByActorType: input.actor.actorType, completedByActorId: input.actor.actorId, completedByActorName: input.actor.actorName, resolutionNote: `Included in proposed store visit ${run.id}` }
+      ? { ...task, status: "completed" as const, completedAt: now, completedByActorType: input.actor.actorType, completedByActorId: input.actor.actorId, completedByActorName: input.actor.actorName, resolutionNote: `Sent with other approved jobs in request ${run.id}` }
       : task);
     statements.push(buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, [...nextTasks, responseTask]));
   }
   statements.push(...auditAndOutbox({
     organizationId: input.organizationId, aggregateType: "service_run", aggregateId: run.id,
     eventType: "service_run.proposed", actor: input.actor, occurredAt: now,
-    payload: { kind: "store_sweep", vendorId: vendor.id, storeId: store.id, workOrderIds: canonicalWorkOrders.map((row) => row.id), estimatedTripReduction: 0, estimatedOpportunity: run.estimatedOpportunity, explanation: recommendationExplanation }, ids,
+    payload: { kind: "combined_work_request", vendorId: vendor.id, storeId: store.id, workOrderIds: canonicalWorkOrders.map((row) => row.id), neededByAt, schedulingOwner: "vendor", estimatedTripReduction: 0, estimatedOpportunity: run.estimatedOpportunity, explanation: recommendationExplanation }, ids,
   }));
   await atomicWorkOrderSetMutation({
     repository,
@@ -889,9 +885,15 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
   const { stops, links, workOrders } = await runBundle(repository, run);
   validateRequestedChanges({ response: input.response, stops, links, requestedStopOrder: input.requestedStopOrder, removeWorkOrderIds: input.removeWorkOrderIds });
   if (input.requestedStartsAt) instant(input.requestedStartsAt, "Requested start");
+  if (storeSweep && ["accepted", "work_order_change_requested"].includes(input.response) && !input.requestedStartsAt) {
+    throw new OpsDomainError("VALIDATION", "The vendor’s planned visit date is required");
+  }
+  if (storeSweep && input.requestedStartsAt && instant(input.requestedStartsAt, "Vendor planned date") <= instant(now, "Current time")) {
+    throw new OpsDomainError("VALIDATION", "The vendor’s planned visit date must be in the future");
+  }
   if (input.response === "countered" && !input.requestedStartsAt && !input.requestedStopOrder?.length && !input.removeWorkOrderIds?.length) throw new OpsDomainError("VALIDATION", "A counterproposal must request a concrete change");
   const requestedStartsAt = input.requestedStartsAt;
-  const shiftMinutes = requestedStartsAt ? Math.round((Date.parse(requestedStartsAt) - Date.parse(run.proposedStartsAt)) / 60_000) : 0;
+  const shiftMinutes = requestedStartsAt && !storeSweep ? Math.round((Date.parse(requestedStartsAt) - Date.parse(run.proposedStartsAt)) / 60_000) : 0;
   const removedLinks = links.filter((link) => input.removeWorkOrderIds?.includes(link.workOrderId));
   const dueWindowImpactCount = await (async () => {
     if (!requestedStartsAt) return 0;
@@ -909,7 +911,7 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
   const removedValue = removedLinks.reduce((sum, link) => sum + Math.floor(run.expectedWorkValue.amountMinor * link.estimatedDurationMinutes / Math.max(1, run.estimatedServiceMinutes)), 0);
   const economicImpact: Money = { amountMinor: Math.max(0, removedValue), currency: run.expectedWorkValue.currency };
   const resultingPlan = {
-    requestedStartsAt: requestedStartsAt ?? run.proposedStartsAt,
+    requestedStartsAt: requestedStartsAt ?? (storeSweep ? undefined : run.proposedStartsAt),
     requestedStopOrder: input.requestedStopOrder ?? stops.sort((a, b) => a.sequence - b.sequence).map((stop) => stop.storeId),
     retainedWorkOrderIds: links.filter((link) => !input.removeWorkOrderIds?.includes(link.workOrderId)).map((link) => link.workOrderId),
     removedWorkOrderIds: input.removeWorkOrderIds ?? [], shiftMinutes,
@@ -922,6 +924,18 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
     responderName, respondedAt: now, resultingPlanJson: JSON.stringify(resultingPlan),
   };
   const accepted = input.response === "accepted";
+  const committedStartsAt = accepted ? (storeSweep ? requestedStartsAt! : run.proposedStartsAt) : undefined;
+  const committedEndsAt = accepted ? (storeSweep ? undefined : run.proposedEndsAt) : undefined;
+  if (accepted && storeSweep) {
+    const [contract, documents] = await Promise.all([
+      repository.getContractVersion(run.organizationId, run.contractVersionId),
+      repository.listVendorComplianceDocuments(run.organizationId, run.vendorId),
+    ]);
+    if (!contract || contract.status !== "active" || contract.effectiveStartsAt > committedStartsAt! || contract.effectiveEndsAt && contract.effectiveEndsAt < committedStartsAt!) {
+      throw new OpsDomainError("CONFLICT", "Current vendor work terms are required for the vendor’s planned date");
+    }
+    assertCompliance({ documents, contract, proposedEndsAt: committedStartsAt! });
+  }
   const sweepUnavailable = storeSweep && ["declined", "insufficient_capacity"].includes(input.response);
   const nextStatus = accepted
     ? "committed"
@@ -948,17 +962,17 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
       command: "service_run.respond", result_id: response.id,
       request_hash: input.tokenHash.toLowerCase(), created_at: now, expires_at: "9999-12-31T23:59:59.999Z",
     }),
-    { sql: "UPDATE ops_service_runs SET status = ?, committed_starts_at = ?, committed_ends_at = ?, accepted_at = ? WHERE organization_id = ? AND id = ? AND status IN ('proposed', 'countered')", params: [nextStatus, accepted ? run.proposedStartsAt : null, accepted ? run.proposedEndsAt : null, accepted ? now : null, run.organizationId, run.id] },
+    { sql: "UPDATE ops_service_runs SET status = ?, committed_starts_at = ?, committed_ends_at = ?, accepted_at = ? WHERE organization_id = ? AND id = ? AND status IN ('proposed', 'countered')", params: [nextStatus, committedStartsAt ?? null, committedEndsAt ?? null, accepted ? now : null, run.organizationId, run.id] },
   ];
   const vendorActor: ActorContext = { ...input.actor, actorName: responderName };
   if (accepted) {
-    for (const stop of stops) statements.push({ sql: "UPDATE ops_route_stops SET committed_arrival_at = ? WHERE organization_id = ? AND id = ? AND service_run_id = ?", params: [stop.proposedArrivalAt, run.organizationId, stop.id, run.id] });
-    for (const link of links) if (link.occurrenceId) statements.push({ sql: "UPDATE ops_pm_occurrences SET status = 'scheduled', committed_at = ? WHERE organization_id = ? AND id = ? AND status = 'proposed'", params: [run.proposedStartsAt, run.organizationId, link.occurrenceId] });
+    for (const stop of stops) statements.push({ sql: "UPDATE ops_route_stops SET committed_arrival_at = ? WHERE organization_id = ? AND id = ? AND service_run_id = ?", params: [committedStartsAt!, run.organizationId, stop.id, run.id] });
+    for (const link of links) if (link.occurrenceId) statements.push({ sql: "UPDATE ops_pm_occurrences SET status = 'scheduled', committed_at = ? WHERE organization_id = ? AND id = ? AND status = 'proposed'", params: [committedStartsAt!, run.organizationId, link.occurrenceId] });
     for (const workOrder of workOrders) {
       const tasks = await repository.listWorkflowTasksForWorkOrder(run.organizationId, workOrder.id);
       const activeAssignment = await repository.getActiveAssignment(run.organizationId, workOrder.id);
-      const runTask = tasks.find((task) => isOpenWorkflowTask(task) && task.taskType === "schedule_service" && (storeSweep ? task.title === "Respond to proposed store visit" : task.reason.includes(run.id)));
-      const acceptedNote = storeSweep ? "Vendor accepted the proposed store visit" : "Vendor accepted the original Service Run recommendation";
+      const runTask = tasks.find((task) => isOpenWorkflowTask(task) && task.taskType === "schedule_service" && (storeSweep ? ["Respond to jobs sent together", "Respond to proposed store visit"].includes(task.title) : task.reason.includes(run.id)));
+      const acceptedNote = storeSweep ? "Vendor accepted the grouped jobs and supplied its planned date" : "Vendor accepted the original Service Run recommendation";
       const nextTasks: WorkflowTask[] = tasks.map((task) => runTask && task.id === runTask.id ? { ...task, status: "completed", completedAt: now, completedByActorType: vendorActor.actorType, completedByActorId: vendorActor.actorId, completedByActorName: vendorActor.actorName, resolutionNote: acceptedNote } : task);
       if (runTask) statements.push(...buildCompleteWorkflowTaskStatements({ task: runTask, actor: vendorActor, occurredAt: now, ids, resolutionNote: acceptedNote }));
       if (storeSweep && activeAssignment?.kind === "outside_vendor" && activeAssignment.vendorId === run.vendorId) statements.push({
@@ -969,10 +983,10 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
         id: ids.next("workflow-task"), organizationId: run.organizationId, workOrderId: workOrder.id,
         actor: vendorActor, createdAt: now, draft: {
           taskType: "confirm_store_access", title: storeSweep ? "Confirm store access for the planned visit" : "Confirm store access for committed Service Run",
-          reason: storeSweep ? `Vendor accepted the planned visit for ${run.proposedStartsAt}` : `Vendor accepted Service Run ${run.id} for ${run.proposedStartsAt}`,
+          reason: storeSweep ? `Vendor supplied its planned visit date of ${committedStartsAt}` : `Vendor accepted Service Run ${run.id} for ${committedStartsAt}`,
           assigneeType: "role", assigneeRole: "store_manager", assigneeName: "Store manager",
           priority: workOrder.priority === "emergency" ? "critical" : "normal", blocking: true,
-          requiredForProgress: true, dueAt: addMinutes(run.proposedStartsAt, -60), applicableSlaClock: "scheduling",
+          requiredForProgress: true, dueAt: addMinutes(committedStartsAt!, -60), applicableSlaClock: "scheduling",
           completionCriteria: "Store access and any shutdown requirements are confirmed",
           escalationDestination: "Facilities coordinator",
         },
@@ -988,8 +1002,8 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
         repository.getWorkOrderVisitHold(run.organizationId, workOrder.id),
         repository.getActiveAssignment(run.organizationId, workOrder.id),
       ]);
-      const runTask = tasks.find((task) => isOpenWorkflowTask(task) && task.taskType === "schedule_service" && task.title === "Respond to proposed store visit");
-      const resolutionNote = "Vendor could not take the proposed store visit; the approved job returned to the future-visit list";
+      const runTask = tasks.find((task) => isOpenWorkflowTask(task) && task.taskType === "schedule_service" && ["Respond to jobs sent together", "Respond to proposed store visit"].includes(task.title));
+      const resolutionNote = "Vendor could not take the grouped jobs; the approved job returned to the future-visit list";
       if (runTask) statements.push(...buildCompleteWorkflowTaskStatements({ task: runTask, actor: vendorActor, occurredAt: now, ids, resolutionNote }));
       if (activeAssignment?.kind === "outside_vendor" && activeAssignment.vendorId === run.vendorId) statements.push({
         sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ? AND work_order_id = ? AND status NOT IN ('completed','cancelled','superseded','declined')",
@@ -999,7 +1013,7 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
         id: ids.next("workflow-task"), organizationId: run.organizationId, workOrderId: workOrder.id,
         actor: vendorActor, createdAt: now, draft: {
           taskType: "choose_service_provider", title: "Approved for a future vendor visit",
-          reason: `${workOrder.number} remains approved after the proposed store visit was declined.`,
+          reason: `${workOrder.number} remains approved after the grouped work request was declined.`,
           assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator",
           priority: "normal", blocking: true, requiredForProgress: true, dueAt: hold?.deadlineAt ?? workOrder.dueAt,
           applicableSlaClock: "scheduling",
@@ -1019,7 +1033,7 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
   statements.push(...auditAndOutbox({
     organizationId: run.organizationId, aggregateType: "service_run", aggregateId: run.id,
     eventType: `service_run.vendor_${input.response}`, actor: vendorActor, occurredAt: now,
-    payload: { responseId: response.id, originalRecommendation: JSON.parse(run.originalRecommendationJson), requestedChange: resultingPlan, travelImpactMinutes, dueWindowImpactCount, economicImpact, finalAcceptedPlan: accepted ? resultingPlan : undefined }, ids,
+    payload: { responseId: response.id, originalRecommendation: JSON.parse(run.originalRecommendationJson), requestedChange: resultingPlan, travelImpactMinutes, dueWindowImpactCount, economicImpact, neededByAt: run.neededByAt, vendorPlannedStartsAt: committedStartsAt, plannedAfterNeededBy: Boolean(storeSweep && committedStartsAt && run.neededByAt && committedStartsAt > run.neededByAt), finalAcceptedPlan: accepted ? resultingPlan : undefined }, ids,
   }));
   await atomicWorkOrderSetMutation({ repository, workOrders, now, statements, conflictMessage: "A bundled Work Order changed while the Vendor response was being recorded" });
   return response;
@@ -1047,9 +1061,20 @@ export async function acceptServiceRunCounter(input: AcceptServiceRunCounterInpu
   if (stores.some((store) => !store)) throw new OpsDomainError("CONFLICT", "A route Store no longer exists");
   await assertSchedulerActor({ repository, actor: input.actor, organizationId: input.organizationId, stores: stores as Store[] });
   const resultingPlan = JSON.parse(response.resultingPlanJson ?? "{}") as { requestedStartsAt?: IsoDateTime; requestedStopOrder?: OpsId[]; retainedWorkOrderIds?: OpsId[]; removedWorkOrderIds?: OpsId[]; shiftMinutes?: number };
+  if (storeSweep && !resultingPlan.requestedStartsAt) throw new OpsDomainError("CONFLICT", "The vendor did not supply a planned visit date");
   const startsAt = resultingPlan.requestedStartsAt ?? run.proposedStartsAt;
-  const shiftMinutes = resultingPlan.shiftMinutes ?? Math.round((Date.parse(startsAt) - Date.parse(run.proposedStartsAt)) / 60_000);
-  const endsAt = addMinutes(run.proposedEndsAt, shiftMinutes);
+  const shiftMinutes = storeSweep ? 0 : resultingPlan.shiftMinutes ?? Math.round((Date.parse(startsAt) - Date.parse(run.proposedStartsAt)) / 60_000);
+  const endsAt = storeSweep ? undefined : addMinutes(run.proposedEndsAt, shiftMinutes);
+  if (storeSweep) {
+    const [contract, documents] = await Promise.all([
+      repository.getContractVersion(run.organizationId, run.contractVersionId),
+      repository.listVendorComplianceDocuments(run.organizationId, run.vendorId),
+    ]);
+    if (!contract || contract.status !== "active" || contract.effectiveStartsAt > startsAt || contract.effectiveEndsAt && contract.effectiveEndsAt < startsAt) {
+      throw new OpsDomainError("CONFLICT", "Current vendor work terms are required for the vendor’s planned date");
+    }
+    assertCompliance({ documents, contract, proposedEndsAt: startsAt });
+  }
   for (const link of links) {
     if (!link.occurrenceId || resultingPlan.removedWorkOrderIds?.includes(link.workOrderId)) continue;
     const occurrence = await repository.getPmOccurrence(input.organizationId, link.occurrenceId);
@@ -1058,12 +1083,12 @@ export async function acceptServiceRunCounter(input: AcceptServiceRunCounterInpu
   const accepted: ServiceRun = { ...run, status: "committed", committedStartsAt: startsAt, committedEndsAt: endsAt, acceptedAt: now };
   const statements: OpsStatement[] = [
     insert("ops_idempotency_keys", { organization_id: input.organizationId, key: `service-run-commit:${run.id}`, command: "service_run.accept_counter", result_id: response.id, request_hash: response.id, created_at: now, expires_at: "9999-12-31T23:59:59.999Z" }),
-    { sql: "UPDATE ops_service_runs SET status = ?, committed_starts_at = ?, committed_ends_at = ?, accepted_at = ? WHERE organization_id = ? AND id = ? AND status = 'countered'", params: ["committed", startsAt, endsAt, now, input.organizationId, run.id] },
+    { sql: "UPDATE ops_service_runs SET status = ?, committed_starts_at = ?, committed_ends_at = ?, accepted_at = ? WHERE organization_id = ? AND id = ? AND status = 'countered'", params: ["committed", startsAt, endsAt ?? null, now, input.organizationId, run.id] },
   ];
   const stopOrder = resultingPlan.requestedStopOrder ?? stops.sort((a, b) => a.sequence - b.sequence).map((stop) => stop.storeId);
   for (const stop of stops) {
     const sequence = stopOrder.indexOf(stop.storeId) + 1;
-    statements.push({ sql: "UPDATE ops_route_stops SET sequence = ?, committed_arrival_at = ? WHERE organization_id = ? AND id = ? AND service_run_id = ?", params: [sequence || stop.sequence, addMinutes(stop.proposedArrivalAt, shiftMinutes), input.organizationId, stop.id, run.id] });
+    statements.push({ sql: "UPDATE ops_route_stops SET sequence = ?, committed_arrival_at = ? WHERE organization_id = ? AND id = ? AND service_run_id = ?", params: [sequence || stop.sequence, storeSweep ? startsAt : addMinutes(stop.proposedArrivalAt, shiftMinutes), input.organizationId, stop.id, run.id] });
   }
   for (const link of links) {
     const removed = resultingPlan.removedWorkOrderIds?.includes(link.workOrderId) ?? false;
@@ -1076,7 +1101,7 @@ export async function acceptServiceRunCounter(input: AcceptServiceRunCounterInpu
       repository.getWorkOrderVisitHold(input.organizationId, workOrder.id),
       repository.getActiveAssignment(input.organizationId, workOrder.id),
     ]);
-    const runTask = tasks.find((task) => isOpenWorkflowTask(task) && task.taskType === "schedule_service" && (storeSweep ? task.title === "Respond to proposed store visit" : task.reason.includes(run.id)));
+    const runTask = tasks.find((task) => isOpenWorkflowTask(task) && task.taskType === "schedule_service" && (storeSweep ? ["Respond to jobs sent together", "Respond to proposed store visit"].includes(task.title) : task.reason.includes(run.id)));
     const removed = resultingPlan.removedWorkOrderIds?.includes(workOrder.id) ?? false;
     const nextTasks = tasks.map((task) => runTask && task.id === runTask.id ? { ...task, status: "completed" as const, completedAt: now, completedByActorType: input.actor.actorType, completedByActorId: input.actor.actorId, completedByActorName: input.actor.actorName, resolutionNote: removed ? "Vendor-requested removal accepted; return to scheduling" : "Vendor counterproposal accepted" } : task);
     if (runTask) statements.push(...buildCompleteWorkflowTaskStatements({ task: runTask, actor: input.actor, occurredAt: now, ids, resolutionNote: removed ? "Vendor-requested removal accepted; return to scheduling" : "Vendor counterproposal accepted" }));
@@ -1088,7 +1113,7 @@ export async function acceptServiceRunCounter(input: AcceptServiceRunCounterInpu
       id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
       actor: input.actor, createdAt: now, draft: removed && storeSweep ? {
         taskType: "choose_service_provider", title: "Approved for a future vendor visit",
-        reason: `${workOrder.number} was removed from this proposed store visit and remains approved.`,
+        reason: `${workOrder.number} was removed from this grouped work request and remains approved.`,
         assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator",
         priority: "normal", blocking: true, requiredForProgress: true, dueAt: hold?.deadlineAt ?? workOrder.dueAt, applicableSlaClock: "scheduling",
         completionCriteria: "Include this job in another planned visit or issue it separately",
@@ -1102,7 +1127,7 @@ export async function acceptServiceRunCounter(input: AcceptServiceRunCounterInpu
         escalationDestination: "Regional facilities manager",
       } : {
         taskType: "confirm_store_access", title: storeSweep ? "Confirm store access for the planned visit" : "Confirm store access for committed Service Run",
-        reason: storeSweep ? `The vendor's proposed time was accepted for ${startsAt}` : `Counterproposal for Service Run ${run.id} was accepted for ${startsAt}`,
+        reason: storeSweep ? `The vendor supplied ${startsAt} as its planned visit date` : `Counterproposal for Service Run ${run.id} was accepted for ${startsAt}`,
         assigneeType: "role", assigneeRole: "store_manager", assigneeName: "Store manager",
         priority: workOrder.priority === "emergency" ? "critical" : "normal", blocking: true,
         requiredForProgress: true, dueAt: addMinutes(startsAt, -60), applicableSlaClock: "scheduling",

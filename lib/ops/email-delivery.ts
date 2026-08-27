@@ -140,22 +140,25 @@ export async function sendVendorStoreSweepEmail(input: {
   replyTo?: string;
 }) {
   const label = `Store ${input.store.storeNumber} · ${input.store.name}`;
-  const when = formatWhen(input.run.proposedStartsAt, input.store.timeZone) ?? input.run.proposedStartsAt;
-  const subject = `${input.organizationName} proposed store visit · Store ${input.store.storeNumber}`;
+  const neededBy = input.run.neededByAt
+    ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: input.store.timeZone }).format(new Date(input.run.neededByAt))
+    : "the earliest job review date";
+  const subject = `${input.organizationName} approved jobs · Store ${input.store.storeNumber}`;
   const jobs = input.workOrders.map((workOrder) => `${workOrder.number} — ${workOrder.problem}`);
   const text = [
     `Hello ${input.vendorName},`,
     "",
-    `${input.organizationName} is proposing one visit to ${label} on ${when}.`,
+    `${input.organizationName} is sending approved jobs for ${label} together.`,
+    `Requested completion by: ${neededBy}. Your company chooses the visit date, crew, route, and time onsite.`,
     `${jobs.length} already-approved ${jobs.length === 1 ? "job is" : "jobs are"} included:`,
     ...jobs.map((job) => `• ${job}`),
     "",
-    `Review the visit and respond: ${input.actionUrl}`,
+    `Review the jobs, choose your planned date, and respond: ${input.actionUrl}`,
     "",
     "Each job keeps its own operator work-order number for service paperwork and invoicing.",
   ].join("\n");
   const jobRows = input.workOrders.map((workOrder) => `<li style="margin:0 0 9px"><strong>${escapeEmailHtml(workOrder.number)}</strong> — ${escapeEmailHtml(workOrder.problem)}</li>`).join("");
-  const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(input.vendorName)},</p><p><strong>${escapeEmailHtml(input.organizationName)}</strong> is proposing one visit to <strong>${escapeEmailHtml(label)}</strong> on ${escapeEmailHtml(when)}.</p><p>${jobs.length} already-approved ${jobs.length === 1 ? "job is" : "jobs are"} included:</p><ul style="padding-left:22px">${jobRows}</ul><p><a href="${escapeEmailHtml(input.actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Review proposed visit</a></p><p style="color:#475569">Each job keeps its own operator work-order number for service paperwork and invoicing.</p></div>`;
+  const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(input.vendorName)},</p><p><strong>${escapeEmailHtml(input.organizationName)}</strong> is sending approved jobs for <strong>${escapeEmailHtml(label)}</strong> together.</p><p>Requested completion by <strong>${escapeEmailHtml(neededBy)}</strong>. Your company chooses the visit date, crew, route, and time onsite.</p><p>${jobs.length} already-approved ${jobs.length === 1 ? "job is" : "jobs are"} included:</p><ul style="padding-left:22px">${jobRows}</ul><p><a href="${escapeEmailHtml(input.actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Review jobs and choose a date</a></p><p style="color:#475569">Each job keeps its own operator work-order number for service paperwork and invoicing.</p></div>`;
   return input.provider.send({
     to: input.vendorEmail,
     subject,
@@ -291,7 +294,7 @@ function notificationCopy(eventKey: NotificationEventKey, message: OutboxDeliver
     const combinedStoreVisit = context.serviceRun?.schedulerVersion === "store-sweep-v1";
     return {
       subject: `${vendorName} accepted work · ${scopeLabel}`,
-      headline: combinedStoreVisit ? "A combined store visit is confirmed" : context.serviceRun ? "A vendor service schedule is confirmed" : "A vendor accepted the service authorization",
+      headline: combinedStoreVisit ? "The vendor supplied its planned visit date" : context.serviceRun ? "A vendor service schedule is confirmed" : "A vendor accepted the service authorization",
       detail: `${vendorName} accepted ${workLabel}${stores.length ? ` for ${scopeLabel}` : ""}${mix ? ` (${mix})` : ""}.${when ? ` Planned start: ${when}.` : " A service date has not been recorded yet."}`,
     };
   }

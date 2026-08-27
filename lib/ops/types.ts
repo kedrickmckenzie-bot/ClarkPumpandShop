@@ -1362,6 +1362,8 @@ export interface ServiceRun {
   contractVersionId: OpsId;
   schedulingMode: SchedulingMode;
   status: ServiceRunStatus;
+  /** Customer-requested completion boundary. The vendor owns the actual visit schedule. */
+  neededByAt?: IsoDateTime;
   proposedStartsAt: IsoDateTime;
   proposedEndsAt: IsoDateTime;
   responseDueAt: IsoDateTime;

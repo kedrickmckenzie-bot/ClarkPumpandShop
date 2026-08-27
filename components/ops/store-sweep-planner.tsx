@@ -12,11 +12,10 @@ function localInputValue(value: Date, timeZone: string) {
 export function StoreSweepPlanner({ model, notice }: { model: StoreSweepPlannerModel; notice?: string }) {
   const selectedStore = model.selectedStore;
   const planningBaseline = Date.parse(model.planningBaseline);
-  const proposed = selectedStore ? localInputValue(new Date(planningBaseline + 7 * 86_400_000), selectedStore.timeZone) : "";
   const respondBy = selectedStore ? localInputValue(new Date(planningBaseline + 3 * 86_400_000), selectedStore.timeZone) : "";
   return <div className={styles.page}>
     <header className={styles.header}>
-      <div><p className={styles.eyebrow}>Work · Approved for a future visit</p><h1>Plan a combined vendor visit</h1><p>Send several already-approved jobs at one store to the same vendor for one proposed visit. Every job keeps its own work-order number, result, cost, and invoice history.</p></div>
+      <div><p className={styles.eyebrow}>Work · Approved for a future visit</p><h1>Send jobs together</h1><p>Send several already-approved jobs at one store to the same vendor. The vendor chooses when to visit and how to run the work. Every job keeps its own work-order number, result, cost, and invoice history.</p></div>
       <Link className={styles.secondaryButton} href="/app/work-orders?visitPlan=ready">Back to future-visit jobs</Link>
     </header>
     {notice ? <p className={styles.notice}>{notice}</p> : null}
@@ -33,23 +32,23 @@ export function StoreSweepPlanner({ model, notice }: { model: StoreSweepPlannerM
       </form>
     </section>
     {selectedStore ? <section className={styles.panel}>
-      <div className={styles.panelHeader}><div><h2>2. Choose a vendor and the jobs to include</h2><p>{selectedStore.label} has {selectedStore.readyCount} approved {selectedStore.readyCount === 1 ? "job" : "jobs"} waiting for a future visit. Different service areas can become separate vendor visits.</p></div></div>
+      <div className={styles.panelHeader}><div><h2>2. Choose a vendor and the jobs to send</h2><p>{selectedStore.label} has {selectedStore.readyCount} approved {selectedStore.readyCount === 1 ? "job" : "jobs"} waiting for a future visit. Different service areas can be sent to different vendors.</p></div></div>
       {model.vendorOptions.length ? <div className={styles.vendorList}>{model.vendorOptions.map((vendor) => <form className={styles.vendorCard} action="/api/ops/store-sweeps" method="post" key={vendor.vendorId}>
         <input type="hidden" name="storeId" value={selectedStore.id} />
         <input type="hidden" name="vendorId" value={vendor.vendorId} />
         <input type="hidden" name="contractVersionId" value={vendor.contractVersionId} />
-        <div className={styles.vendorHeader}><div><p className={styles.eyebrow}>Proposed vendor</p><h3>{vendor.vendorName}</h3><p>{vendor.serviceAreas.join(" · ")}</p></div><span className={styles.count}>{vendor.jobs.length} {vendor.jobs.length === 1 ? "job" : "jobs"} in these service areas</span></div>
+        <div className={styles.vendorHeader}><div><p className={styles.eyebrow}>Vendor</p><h3>{vendor.vendorName}</h3><p>{vendor.serviceAreas.join(" · ")}</p></div><span className={styles.count}>{vendor.jobs.length} {vendor.jobs.length === 1 ? "job" : "jobs"} in these service areas</span></div>
         <p className={styles.explainer}>Shown because this company’s vendor record lists these service areas. This does not certify an individual technician; the vendor decides what its crew can complete.</p>
         <fieldset className={styles.jobList}><legend>Select approved jobs</legend>{vendor.jobs.map((job) => <label className={styles.job} key={job.workOrderId}>
           <input aria-label={`Include ${job.number}: ${job.problem}`} type="checkbox" name="workOrderId" value={job.workOrderId} defaultChecked />
           <span><span className={styles.jobTitle}>{job.number} · {job.problem}</span><span className={styles.jobMeta}>{job.serviceArea} · {job.posture} · {job.reviewLabel}</span><span className={styles.scope}>{job.scope}</span></span>
         </label>)}</fieldset>
         <div className={styles.scheduleGrid}>
-          <label><span>Proposed arrival at the store</span><input required name="proposedStartsAt" type="datetime-local" defaultValue={proposed} /><small>Uses {selectedStore.timeZone.replaceAll("_", " ")}.</small></label>
           <label><span>Ask the vendor to respond by</span><input required name="responseDueAt" type="datetime-local" defaultValue={respondBy} /></label>
+          <div style={{ display: "grid", gap: 6, fontSize: 14, fontWeight: 700 }}><span>Earliest review date</span><strong style={{ fontSize: 16 }}>{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: selectedStore.timeZone }).format(new Date(vendor.earliestReviewAt))}</strong><small>The final request inherits the earliest date from the jobs you select. You do not schedule the vendor.</small></div>
           <label className={styles.wide}><span>Store access notes (optional)</span><textarea name="accessRequirements" rows={2} maxLength={500} placeholder="Example: check in at the front counter; avoid the lunch rush." /></label>
         </div>
-        <div className={styles.actions}><p>No savings amount is created by planning the visit. Results are recorded separately for every job.</p><button type="submit">Send proposed store visit</button></div>
+        <div className={styles.actions}><p>No savings amount is created by sending jobs together. The vendor supplies the visit date; results are recorded separately for every job.</p><button type="submit">Send jobs together</button></div>
       </form>)}</div> : <div className={styles.empty}><h3>No vendor is ready for these service areas</h3><p>Review the vendor’s service areas, store coverage, work terms, and required documents before planning a combined visit.</p></div>}
     </section> : <section className={styles.empty}><h2>No approved work is waiting for a future visit</h2><p>Use “Approve for a future visit” on a low-priority job. It will appear here until it is included in a visit or sent separately.</p></section>}
   </div>;

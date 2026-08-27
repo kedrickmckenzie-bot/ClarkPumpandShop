@@ -25,17 +25,15 @@ export async function POST(request: Request) {
     if (!workOrderIds.length) throw new OpsDomainError("VALIDATION", "Choose at least one approved job for this store visit.");
     if (workOrderIds.length > 50) throw new OpsDomainError("VALIDATION", "Choose no more than 50 approved jobs for one store visit.");
     const store = await assertStoreInSessionScope(context.session, storeId);
-    const [vendor, organization, holds, workOrders] = await Promise.all([
+    const [vendor, organization, workOrders] = await Promise.all([
       context.repository.getVendor(context.session.organizationId, vendorId),
       context.repository.getOrganization(context.session.organizationId),
-      Promise.all(workOrderIds.map((id) => context.repository.getWorkOrderVisitHold(context.session.organizationId, id))),
       Promise.all(workOrderIds.map((id) => context.repository.getWorkOrder(context.session.organizationId, id))),
     ]);
     if (!vendor || vendor.status !== "approved") throw new OpsDomainError("VALIDATION", "Choose an approved vendor.");
     if (!organization) throw new OpsDomainError("NOT_FOUND", "Organization was not found.");
     if (workOrders.some((workOrder) => !workOrder)) throw new OpsDomainError("CONFLICT", "One of the selected jobs is no longer available.");
     const storeTimeZone = store.timeZone ?? "America/New_York";
-    const proposedStartsAt = localDateTimeToIso(formText(formData, "proposedStartsAt", { required: true, max: 40 }), storeTimeZone);
     const responseDueAt = localDateTimeToIso(formText(formData, "responseDueAt", { required: true, max: 40 }), storeTimeZone);
     const rawToken = newActionToken();
     const result = await createStoreSweep({
@@ -43,13 +41,9 @@ export async function POST(request: Request) {
       storeId,
       vendorId,
       contractVersionId,
-      proposedStartsAt,
       responseDueAt,
       accessRequirements: formText(formData, "accessRequirements", { max: 500 }) || undefined,
-      work: workOrderIds.map((workOrderId, index) => ({
-        workOrderId,
-        estimatedDurationMinutes: holds[index]?.posture === "look_and_report" ? 20 : 30,
-      })),
+      work: workOrderIds.map((workOrderId) => ({ workOrderId })),
       publicToken: { tokenHash: await sha256(rawToken), expiresAt: responseDueAt },
       actor: context.actor,
     }, { repository: context.repository });
@@ -61,7 +55,7 @@ export async function POST(request: Request) {
       EMAIL_REPLY_TO: process.env.EMAIL_REPLY_TO,
       NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
     });
-    let notice = `The proposed store visit was created for ${vendor.name}.`;
+    let notice = `The approved jobs were sent together to ${vendor.name}. The vendor will choose the visit date.`;
     if (emailRuntime.provider) {
       try {
         await sendVendorStoreSweepEmail({
@@ -75,7 +69,7 @@ export async function POST(request: Request) {
           actionUrl: `${emailRuntime.baseUrl}${publicPath}`,
           replyTo: process.env.EMAIL_REPLY_TO,
         });
-        notice = `The proposed store visit was emailed to ${vendor.name}.`;
+        notice = `The approved jobs were emailed to ${vendor.name}. The vendor will choose the visit date.`;
       } catch (error) {
         console.error("Store-sweep email delivery failed", error);
         notice = `The visit was saved, but email delivery failed. Use the vendor link shown below.`;

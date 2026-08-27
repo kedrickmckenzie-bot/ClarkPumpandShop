@@ -3022,14 +3022,14 @@ export function buildListModel(
       scopeLabel: activeScopeLabel,
       updatedLabel: `Source data through ${date(fixture.asOf)}`,
       primaryAction,
-      secondaryAction: route === "work-orders" && activeHeldWork.length ? { label: "Plan a combined visit", href: "/app/store-sweeps/new" } : undefined,
+      secondaryAction: route === "work-orders" && activeHeldWork.length ? { label: "Send jobs together", href: "/app/store-sweeps/new" } : undefined,
     },
     metrics: route === "visits"
       ? visitMetrics(fixture, scoped, query)
       : route === "work-orders"
         ? [
             { id: "ready-to-bundle", label: "Approved for a future visit", value: String(activeHeldWork.length), supportingText: "Low-priority work waiting for a practical vendor visit", tone: activeHeldWork.length ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open the list" } },
-            { id: "store-sweep-opportunities", label: "Stores with several approved jobs", value: String([...heldStoreCounts.values()].filter((count) => count >= 2).length), supportingText: "These stores may be good candidates for one combined vendor visit", tone: [...heldStoreCounts.values()].some((count) => count >= 2) ? "warning" : "positive", link: { href: "/app/store-sweeps/new", label: "Plan a combined visit" } },
+            { id: "store-sweep-opportunities", label: "Stores with several approved jobs", value: String([...heldStoreCounts.values()].filter((count) => count >= 2).length), supportingText: "These stores may be good candidates for sending several jobs to one vendor together", tone: [...heldStoreCounts.values()].some((count) => count >= 2) ? "warning" : "positive", link: { href: "/app/store-sweeps/new", label: "Send jobs together" } },
           ]
       : route === "action-center"
         ? [
@@ -4535,7 +4535,7 @@ export function buildDetailModel(
             title: "Approved work for a future visit",
             description: "These jobs can wait for a vendor already onsite or be combined into one planned vendor visit.",
             table: { id: "store-held-work", caption: `Approved work for a future visit at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
-            action: { label: "Plan a combined visit", href: `/app/store-sweeps/new?store=${store.id}` },
+            action: { label: "Send jobs together", href: `/app/store-sweeps/new?store=${store.id}` },
           }] : []),
           { id: "work", title: "Work orders", description: "The customer work-order numbers available for vendor service.", table: { id: "store-work", caption: `Work orders for Store ${store.storeNumber}`, columns: columns["work-orders"].filter((column) => column.key !== "cost"), rows: workRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
           { id: "visits", title: "Check-in and checkout history", description: "Technician, vendor, selected work order, observed times, and checkout outcome.", table: { id: "store-visits", caption: `Visits for Store ${store.storeNumber}`, columns: columns.visits, rows: visitRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
@@ -4608,7 +4608,7 @@ export function buildDetailModel(
           title: "Approved work for a future visit",
           description: "Combine several small jobs into one planned vendor visit, or leave them available for a matching vendor who is already onsite.",
           table: { id: "store-held-work", caption: `Approved work for a future visit at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
-          action: { label: "Plan a combined visit", href: `/app/store-sweeps/new?store=${store.id}` },
+          action: { label: "Send jobs together", href: `/app/store-sweeps/new?store=${store.id}` },
         }] : []),
         {
           id: "preventive-maintenance-plans",

@@ -7,6 +7,7 @@ export interface ServiceRunPublicView {
   vendorName: string;
   runId: OpsId;
   status: string;
+  neededByAt?: string;
   proposedStartsAt: string;
   proposedEndsAt: string;
   responseDueAt: string;
@@ -81,7 +82,7 @@ export async function buildServiceRunPublicView(input: {
   }));
   return {
     planningKind, organizationName: organization.name, vendorName: vendor.name, runId: run.id, status: run.status,
-    proposedStartsAt: run.proposedStartsAt, proposedEndsAt: run.proposedEndsAt, responseDueAt: run.responseDueAt,
+    neededByAt: run.neededByAt, proposedStartsAt: run.proposedStartsAt, proposedEndsAt: run.proposedEndsAt, responseDueAt: run.responseDueAt,
     schedulingMode: run.schedulingMode, contract: { version: contract.version, sourceReference: contract.sourceAgreementReference, effectiveLabel: `${contract.effectiveStartsAt} to ${contract.effectiveEndsAt ?? "open-ended"}` },
     recommendationExplanation: run.recommendationExplanation,
     expectedWorkValueLabel: money(run.expectedWorkValue.amountMinor, run.expectedWorkValue.currency),
@@ -92,11 +93,10 @@ export async function buildServiceRunPublicView(input: {
     confidence: run.confidence, qualifications: run.requiredQualifications,
     stops: stopViews,
     responseOptions: planningKind === "store_sweep" ? [
-      { value: "accepted", label: "Accept this visit", description: "Confirm the proposed date and the approved jobs shown here." },
-      { value: "countered", label: "Propose another time", description: "Suggest another date or time for this store visit." },
-      { value: "work_order_change_requested", label: "Ask to remove a job", description: "Tell the customer which job should not be included in this visit." },
-      { value: "insufficient_capacity", label: "Cannot take this visit", description: "Let the customer know your team is not available for this visit." },
-      { value: "declined", label: "Decline", description: "Decline the proposed visit and explain why." },
+      { value: "accepted", label: "Accept and choose a date", description: "Confirm the jobs and enter the date your company plans to visit." },
+      { value: "work_order_change_requested", label: "Accept after removing a job", description: "Choose your planned date and tell the customer which job should not be included." },
+      { value: "insufficient_capacity", label: "Cannot take these jobs", description: "Let the customer know your team is not available for this work." },
+      { value: "declined", label: "Decline", description: "Decline these jobs and explain why." },
     ] : [
       { value: "accepted", label: "Accept this run", description: "Commit the original date, stops, and Work Order bundle." },
       { value: "countered", label: "Counter the schedule", description: "Propose another start time while preserving the original recommendation." },

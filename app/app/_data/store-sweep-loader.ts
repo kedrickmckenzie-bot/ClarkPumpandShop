@@ -17,6 +17,7 @@ export interface StoreSweepPlannerModel {
     vendorName: string;
     contractVersionId: string;
     serviceAreas: string[];
+    earliestReviewAt: string;
     jobs: Array<{
       workOrderId: string;
       number: string;
@@ -25,6 +26,7 @@ export interface StoreSweepPlannerModel {
       serviceArea: string;
       posture: "Complete if practical" | "Inspect and report back";
       reviewLabel: string;
+      reviewAt: string;
     }>;
   }>;
 }
@@ -94,6 +96,7 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string): Promise<
         serviceArea: fixture.vendorSpecialties.find((row) => row.vendorId === vendor.id && row.canonicalKey === workOrder.categoryKey)?.displayName ?? (workOrder.categoryKey ?? "Service area pending"),
         posture: hold.posture === "look_and_report" ? "Inspect and report back" : "Complete if practical",
         reviewLabel: reviewLabel(hold.deadlineAt, fixture.asOf, storeTimeZone),
+        reviewAt: hold.deadlineAt,
       });
     }
     if (!jobs.length) continue;
@@ -102,6 +105,7 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string): Promise<
       vendorName: vendor.name,
       contractVersionId: contract.id,
       serviceAreas: fixture.vendorSpecialties.filter((row) => row.vendorId === vendor.id).map((row) => row.displayName),
+      earliestReviewAt: jobs.reduce((earliest, job) => job.reviewAt < earliest ? job.reviewAt : earliest, jobs[0]!.reviewAt),
       jobs,
     });
   }
