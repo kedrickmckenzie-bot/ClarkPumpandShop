@@ -26,6 +26,10 @@ describe("summary-first enterprise records", () => {
     expect(markup).toContain("Service history");
     expect(markup).toContain("1 record");
     expect(markup).not.toContain("WO-1 source detail");
+
+    const focusedMarkup = renderToStaticMarkup(createElement(RecordSections, { sections, initialSection: "service-history" }));
+    expect(focusedMarkup).toContain("WO-1 source detail");
+    expect(focusedMarkup).not.toContain("Choose what you want to see");
   });
 
   it("routes each work-order tab to a server-selectable view so anchors never land on unrendered panels", async () => {

@@ -2347,10 +2347,31 @@ export async function reconcileUnmatchedVisit(svc: OpsCommandServices, input: Re
     { sql: "UPDATE ops_exceptions SET status = ?, work_order_id = ?, resolved_at = ? WHERE organization_id = ? AND id = ?", params: ["resolved", workOrder.id, now, input.organizationId, exception.id] },
     insert("ops_visit_evidence", { id: ids.next("evidence"), organization_id: input.organizationId, visit_id: visit.id, kind: "amendment", channel: visit.endedChannel ?? visit.startedChannel, observed_at: now, payload_json: json({ amendment: "linked_to_work_order", workOrderId: workOrder.id, workOrderNumber: workOrder.number, originalUnmatchedReason: visit.unmatchedReason, note }) }),
   ];
+  if (assignment && ["pending", "issued", "opened"].includes(assignment.status)) {
+    statements.push({
+      sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ? AND work_order_id = ? AND status IN (?, ?, ?)",
+      params: ["accepted", input.organizationId, assignment.id, workOrder.id, "pending", "issued", "opened"],
+    });
+  }
   let followUpId: OpsId | undefined;
+  let activeVisitTask: WorkflowTask | undefined;
+  let followUpTask: WorkflowTask | undefined;
   let verificationTask: WorkflowTask | undefined;
   if (visit.status === "active") {
     statements.push({ sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: ["in_progress", visit.providerName, "Record service outcome", workOrder.dueAt ?? addHours(now, 8), workOrder.escalationTo ?? "Facilities director", input.organizationId, workOrder.id] });
+    const visitAssignee = visit.vendorId
+      ? { assigneeType: "vendor" as const, assigneeId: visit.vendorId, assigneeName: visit.providerName }
+      : visit.internalMembershipId
+        ? { assigneeType: "user" as const, assigneeId: visit.internalMembershipId, assigneeName: visit.providerName }
+        : facilitiesAssignee(visit.providerName);
+    activeVisitTask = buildWorkflowTaskRecord({
+      id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
+      draft: taskDraft({ workOrder, taskType: "record_service_outcome", title: "Record service outcome",
+        assignee: visitAssignee, dueAt: nextTaskDueAt(workOrder.dueAt, now, 8), applicableSlaClock: "completion",
+        initialStatus: "in_progress", escalationDestination: workOrder.escalationTo ?? "Facilities director",
+        completionCriteria: "Record checkout evidence and one outcome for this observed visit" }),
+      actor: input.actor, createdAt: now,
+    });
   } else if (linkedOutcome && siteVisitOutcomeRequiresFollowUp(linkedOutcome)) {
     followUpId = ids.next("follow-up");
     const waitingStatus = linkedOutcome === "parts_required" ? "waiting_on_parts" : "waiting_on_vendor";
@@ -2360,6 +2381,13 @@ export async function reconcileUnmatchedVisit(svc: OpsCommandServices, input: Re
       insert("ops_follow_ups", { id: followUpId, organization_id: input.organizationId, work_order_id: workOrder.id, source_visit_id: visit.id, accountable_party: "Facilities coordinator", next_action: nextAction, due_at: dueAt, escalation_to: "Facilities director", status: "open", created_at: now }),
       { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [waitingStatus, "Facilities coordinator", nextAction, dueAt, "Facilities director", input.organizationId, workOrder.id] },
     );
+    followUpTask = buildWorkflowTaskRecord({
+      id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
+      draft: taskDraft({ workOrder, taskType: "schedule_return_visit", title: nextAction,
+        assignee: facilitiesAssignee(), dueAt, applicableSlaClock: "scheduling", sourceFollowUpId: followUpId,
+        escalationDestination: "Facilities director", completionCriteria: `Record resolution of the required follow-up: ${nextAction}` }),
+      actor: input.actor, createdAt: now,
+    });
   } else {
     const verificationDueAt = addHours(now, 24);
     statements.push({ sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: ["completed_pending_review", "Facilities coordinator", "Verify current service outcome", verificationDueAt, "Facilities director", input.organizationId, workOrder.id] });
@@ -2381,13 +2409,19 @@ export async function reconcileUnmatchedVisit(svc: OpsCommandServices, input: Re
     outcome_recorded_by_actor_name: linkedOutcome ? input.actor.actorName : undefined,
     outcome_recorded_at: linkedOutcome ? visit.checkedOutAt ?? now : undefined, follow_up_id: followUpId,
   }));
-  if (verificationTask) statements.push(...buildReplaceMatchingTaskStatements({
-    workOrder, tasks, targetTask: selectPrimaryWorkflowTask(tasks), replacementTask: verificationTask,
-    actor: input.actor, occurredAt: now, ids, resolutionNote: "Checked-out visit reconciled to a completed service outcome",
+  const reconciliationTask = activeVisitTask ?? followUpTask ?? verificationTask;
+  if (reconciliationTask) statements.push(...buildReplaceMatchingTaskStatements({
+    workOrder, tasks, targetTask: selectPrimaryWorkflowTask(tasks), replacementTask: reconciliationTask,
+    actor: input.actor, occurredAt: now, ids,
+    resolutionNote: activeVisitTask
+      ? "Observed onsite visit linked to the after-the-fact work order"
+      : followUpTask
+        ? "Checked-out visit reconciled with an accountable follow-up"
+        : "Checked-out visit reconciled to a completed service outcome",
   }));
   statements.push(
-    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "visit", aggregateId: visit.id, eventType: "visit.reconciled", actor: input.actor, occurredAt: now, payload: { exceptionId: exception.id, siteVisitWorkOrderId, workOrderId: workOrder.id, workOrderNumber: workOrder.number, linkedOutcome, note, followUpId }, ids }),
-    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.visit_reconciled", actor: input.actor, occurredAt: now, payload: { exceptionId: exception.id, siteVisitWorkOrderId, visitId: visit.id, linkedOutcome, note, followUpId }, ids }),
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "visit", aggregateId: visit.id, eventType: "visit.reconciled", actor: input.actor, occurredAt: now, payload: { exceptionId: exception.id, siteVisitWorkOrderId, workOrderId: workOrder.id, workOrderNumber: workOrder.number, linkedOutcome, note, followUpId, authorizationTiming: "recorded_after_service_began" }, ids }),
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.visit_reconciled", actor: input.actor, occurredAt: now, payload: { exceptionId: exception.id, siteVisitWorkOrderId, visitId: visit.id, linkedOutcome, note, followUpId, authorizationTiming: "recorded_after_service_began" }, ids }),
   );
   await atomicWorkOrderMutation({ repository, workOrder, now, statements });
   return { visitId: visit.id, siteVisitWorkOrderId, exceptionId: exception.id, workOrderId: workOrder.id, workOrderNumber: workOrder.number, followUpId, reconciledAt: now };

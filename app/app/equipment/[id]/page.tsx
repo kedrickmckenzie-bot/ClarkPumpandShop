@@ -9,8 +9,12 @@ import { loadAssetReplacementIntelligenceModel } from "../../_data/replacement-l
 
 export const metadata: Metadata = { title: "Equipment detail" };
 
-export default async function EquipmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+type Query = Record<string, string | string[] | undefined>;
+
+export default async function EquipmentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Query> }) {
   const { id } = await params;
+  const query = await searchParams;
+  const requestedSection = Array.isArray(query.section) ? query.section[0] : query.section;
   const session = await loadOperatorSession();
   const [model, fixture, replacement] = await Promise.all([
     loadDetailModel("equipment", id),
@@ -35,6 +39,7 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
   return (
     <DetailView
       model={model}
+      initialSection={requestedSection}
       beforeSections={(
         <>
         {replacement ? <AssetReplacementIntelligencePanel model={replacement} /> : null}

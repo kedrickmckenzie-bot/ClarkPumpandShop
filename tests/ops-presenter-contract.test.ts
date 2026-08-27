@@ -233,14 +233,22 @@ describe("operator presenter drill-through contracts", () => {
     const all = buildProgramModel(fixture, session, "equipment", { view: "all" });
     const serial = fixture.assets.find((asset) => asset.serialNumber)?.serialNumber;
     const searched = buildProgramModel(fixture, session, "equipment", { q: serial });
+    const outOfService = buildProgramModel(fixture, session, "equipment", { view: "all", status: "out_of_service" });
 
     expect(attention.filters?.find((filter) => filter.id === "view")?.options.map((option) => option.value)).toEqual(["attention", "recent", "all"]);
     expect(attention.table?.rows.length).toBeLessThan(fixture.assets.length);
     expect(attention.table?.caption).toMatch(/needing attention/i);
+    expect(attention.resultSummary).toContain(`${fixture.assets.length} total equipment`);
+    expect(attention.metrics.find((metric) => metric.id === "out-of-service")).toMatchObject({ value: "1" });
     expect(all.table?.rows).toHaveLength(25);
     expect(all.pagination?.nextHref).toContain("page=2");
     expect(all.search?.placeholder).toMatch(/serial/i);
     expect(searched.table?.rows.some((row) => row.cells.some((cell) => cell.secondary?.includes(serial!)))).toBe(true);
+    expect(outOfService.table?.rows).toHaveLength(1);
+    expect(outOfService.table?.rows[0]?.cells.find((cell) => cell.key === "status")?.value).toBe("Out of service");
+    expect(outOfService.table?.rows[0]?.href).toContain("section=service-history");
+    expect(outOfService.appliedFilters).toEqual([expect.objectContaining({ id: "status", label: "Status: Out of service" })]);
+    expect(outOfService.breakdowns.find((breakdown) => breakdown.id === "equipment-status")?.segments.find((segment) => segment.id === "out_of_service")?.link.href).toContain("status=out_of_service");
   });
 
   it("keeps interactive lists paginated while allowing a scoped complete export projection", () => {

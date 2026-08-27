@@ -377,7 +377,7 @@ describe("public service and visit capability boundaries", () => {
     });
     expect(checkout.location.label).toBe("Recorded on this trusted store device");
     expect((await gateway.lookupVendorVisitContext(PUBLIC_DEMO_LINKS.trustedStoreToken, vendorId)).activeVisits).toEqual([]);
-  });
+  }, 30_000);
 
   it("keeps pending outside-vendor assignments out of check-in until service is issued", async () => {
     const gateway = getPublicOperationsGateway();

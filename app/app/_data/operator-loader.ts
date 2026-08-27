@@ -508,15 +508,15 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
     plans: filteredPlans,
     planView: {
       mode: enrollmentView,
-      title: enrollmentView === "store" ? "Store PM plans" : enrollmentView === "all" ? "All store enrollments" : "Store exceptions",
+      title: enrollmentView === "store" ? "Store PM schedules" : enrollmentView === "all" ? "All store schedules" : "Store-specific schedule changes",
       description: enrollmentView === "store"
         ? "Company standards and local adjustments for the selected store."
         : enrollmentView === "all"
           ? "Every active company enrollment. Use this register when you need an exact store-by-store record."
-          : "Only local cadence changes and store-created plans are listed here; company-standard enrollments stay summarized above.",
+          : "Stores listed here use a different cadence than the company standard or have a store-only schedule. These are intentional settings, not problems.",
       resultLabel,
       toggleHref: enrollmentView === "store" ? undefined : pmHref({ ...commonPlanQuery, enrollments: enrollmentView === "all" ? "exceptions" : "all" }),
-      toggleLabel: enrollmentView === "store" ? undefined : enrollmentView === "all" ? "Show exceptions only" : "Show all enrollments",
+      toggleLabel: enrollmentView === "store" ? undefined : enrollmentView === "all" ? "Show store-specific changes" : "Show every store schedule",
       previousHref: boundedEnrollmentPage > 1 ? pmHref({ ...commonPlanQuery, enrollments: enrollmentView, enrollmentPage: boundedEnrollmentPage - 1 }) : undefined,
       nextHref: boundedEnrollmentPage < totalEnrollmentPages ? pmHref({ ...commonPlanQuery, enrollments: enrollmentView, enrollmentPage: boundedEnrollmentPage + 1 }) : undefined,
     },

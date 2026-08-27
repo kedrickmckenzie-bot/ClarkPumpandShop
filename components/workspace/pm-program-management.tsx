@@ -75,7 +75,7 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
         <div>
           <p>Company scheduling</p>
           <h2 id="pm-programs-title">Master PM schedules</h2>
-          <span>Define the standard once, automatically cover matching equipment, and keep local exceptions visible.</span>
+          <span>Define the standard once, automatically cover matching equipment, and keep store-specific schedule changes visible.</span>
         </div>
         {model.canCreateMasterSchedule ? <Link href="/app/pm/programs/new">Create master schedule<ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </header>

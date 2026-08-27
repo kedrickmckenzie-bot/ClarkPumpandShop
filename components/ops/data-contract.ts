@@ -247,6 +247,8 @@ export interface DetailPageViewModel {
 
 export interface ProgramPageViewModel extends DashboardPageViewModel {
   filters?: FilterGroupViewModel[];
+  appliedFilters?: AppliedFilterViewModel[];
+  clearFiltersHref?: string;
   table?: TableViewModel;
   resultSummary?: string;
   search?: ListPageViewModel["search"];
@@ -332,6 +334,7 @@ export interface CreateWorkOrderPageViewModel {
     assetId?: string;
     categoryKey?: string;
     problem?: string;
+    priority?: "routine" | "urgent" | "emergency" | "planned";
     assignmentKind?: "internal" | "outside_vendor" | "choose_later";
     vendorId?: string;
     internalMembershipId?: string;

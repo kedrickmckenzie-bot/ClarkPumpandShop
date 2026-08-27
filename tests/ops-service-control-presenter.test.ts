@@ -326,8 +326,15 @@ describe("enterprise service-control presenter contracts", () => {
 
     const detail = buildDetailModel(fixture, operatorSession("facilities"), "visit", NORTHLINE_DEMO_HANDLES.unmatchedVisitId);
     expect(detail.state.kind).toBe("ready");
-    expect(detail.page.primaryAction?.href).toMatch(/^\/app\/action-center\/exception-northline-107-/);
-    expect(detail.sections.map((section) => section.id)).toEqual(["evidence", "exceptions", "timeline"]);
+    expect(detail.page.primaryAction).toMatchObject({
+      label: "Create work order from visit",
+      href: `/app/work-orders/new?sourceException=exception-northline-107-no-wo`,
+    });
+    expect(detail.sections.map((section) => section.id)).toEqual(["missing-work-order", "evidence", "exceptions", "timeline"]);
+    expect(detail.sections.find((section) => section.id === "missing-work-order")).toMatchObject({
+      title: "Create the missing work order",
+      action: { label: "Create and link work order" },
+    });
     expect(detail.sections.find((section) => section.id === "exceptions")?.table?.rows.every(
       (row) => row.href === `/app/action-center/${row.id}`,
     )).toBe(true);

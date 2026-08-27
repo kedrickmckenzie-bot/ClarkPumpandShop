@@ -192,6 +192,7 @@ describe("Northline enriched presentation fixture contract", () => {
       "asset-113-walk-in-freezer",
       "asset-114-ice-machine",
     ]);
+    expect(fixture.assets.find((asset) => asset.id === "asset-113-walk-in-freezer")?.status).toBe("out_of_service");
     expect(fixture.replacementProfiles).toHaveLength(7);
     expect(fixture.replacementBenchmarks).toHaveLength(7);
   });

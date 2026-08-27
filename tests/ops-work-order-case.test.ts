@@ -170,6 +170,7 @@ describe("stage precedence transition matrix", () => {
     });
     expect(view.stage).toBe("onsite_service");
     expect(view.serviceSubStage?.id).toBe("onsite");
+    expect(view.alternativeActions.map((action) => action.label)).not.toContain("Request vendor bids instead");
   });
 
   it("projects Follow-up required for an unresolved checkout and Closeout review once resolved", () => {

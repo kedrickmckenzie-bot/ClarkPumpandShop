@@ -1,0 +1,2 @@
+DROP INDEX `uidx_ops_notification_rules_org_event`;--> statement-breakpoint
+CREATE UNIQUE INDEX `uidx_ops_notification_rules_org_event_role` ON `ops_notification_rules` (`organization_id`,`event_key`,`recipient_role`);

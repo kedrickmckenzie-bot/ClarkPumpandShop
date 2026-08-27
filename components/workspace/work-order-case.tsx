@@ -403,6 +403,7 @@ function CaseOverview({
   invoices,
   recordedCost,
   nte,
+  recordOrigin,
   accountabilityOnly,
 }: {
   control: WorkOrderControlViewModel;
@@ -414,6 +415,7 @@ function CaseOverview({
   invoices?: DetailSectionViewModel;
   recordedCost?: DetailFactViewModel;
   nte?: DetailFactViewModel;
+  recordOrigin?: DetailFactViewModel;
   accountabilityOnly: boolean;
 }) {
   const continuation = continuationFor(control, issuance, estimateComparison, accountabilityOnly);
@@ -425,6 +427,16 @@ function CaseOverview({
 
   return (
     <div className={styles.overviewWorkspace}>
+      {recordOrigin ? (
+        <section className={styles.afterFactNotice} aria-label="Work-order record origin">
+          <History aria-hidden="true" size={19} />
+          <div>
+            <strong>{recordOrigin.value}</strong>
+            <p>{recordOrigin.helperText}</p>
+          </div>
+          {recordOrigin.link ? <Link href={recordOrigin.link.href}>{recordOrigin.link.label}<ArrowRight aria-hidden="true" size={15} /></Link> : null}
+        </section>
+      ) : null}
       <section className={styles.decisionPanel} aria-labelledby="next-decision-heading">
         <div className={styles.decisionCopy}>
           <p>Next accountable move</p>
@@ -502,6 +514,7 @@ export function WorkOrderCase({
   const assigned = factByLabel(model, "Assigned to");
   const classification = factByLabel(model, "Classification");
   const recordedCost = factByLabel(model, "Recorded work cost");
+  const recordOrigin = factByLabel(model, "Record origin");
   const authorization = sectionById(model, "authorization");
   const visits = sectionById(model, "visits");
   const costs = sectionById(model, "cost");
@@ -571,6 +584,7 @@ export function WorkOrderCase({
           <dl className={styles.caseMeta}>
             <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
             <div><dt>Fulfillment</dt><dd>{assigned?.value ?? control.assignment?.providerLabel ?? "Choose later"}</dd></div>
+            {recordOrigin ? <div><dt>{recordOrigin.label}</dt><dd>{recordOrigin.value}</dd></div> : null}
             {!accountabilityOnly ? <div><dt>Authorization limit</dt><dd>{nte?.value ?? "Not set"}</dd></div> : null}
             {!accountabilityOnly ? <div><dt>Classification</dt><dd>{classification?.value ?? "Deferred"}</dd></div> : null}
           </dl>
@@ -596,6 +610,7 @@ export function WorkOrderCase({
           invoices={invoices}
           recordedCost={recordedCost}
           nte={nte}
+          recordOrigin={recordOrigin}
           accountabilityOnly={accountabilityOnly}
         />
       ) : null}

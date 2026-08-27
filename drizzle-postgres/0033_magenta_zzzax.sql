@@ -1,0 +1,6 @@
+ALTER TABLE "ops_notification_rules" DROP CONSTRAINT "chk_ops_notification_rules_event";--> statement-breakpoint
+ALTER TABLE "ops_notification_rules" DROP CONSTRAINT "chk_ops_notification_rules_role";--> statement-breakpoint
+DROP INDEX "uidx_ops_notification_rules_org_event";--> statement-breakpoint
+CREATE UNIQUE INDEX "uidx_ops_notification_rules_org_event_role" ON "ops_notification_rules" USING btree ("organization_id","event_key","recipient_role");--> statement-breakpoint
+ALTER TABLE "ops_notification_rules" ADD CONSTRAINT "chk_ops_notification_rules_event" CHECK ("ops_notification_rules"."event_key" IN ('vendor_response_received', 'vendor_commitment_received', 'workflow_task_escalated', 'follow_up_created', 'vendor_reminder_created'));--> statement-breakpoint
+ALTER TABLE "ops_notification_rules" ADD CONSTRAINT "chk_ops_notification_rules_role" CHECK ("ops_notification_rules"."recipient_role" IN ('facilities_admin', 'store_manager', 'regional_manager', 'executive', 'finance_reviewer'));

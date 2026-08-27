@@ -31,6 +31,8 @@ import styles from "./planning-workspace.module.css";
 export type PlanningWorkspaceKind = "spend" | "pm" | "lifecycle";
 
 const palette = ["#2563eb", "#64748b", "#0f766e", "#7c3aed", "#d97706", "#dc2626", "#475569"];
+const toneColors: Partial<Record<Tone, string>> = { positive: "#16805c", warning: "#d97706", critical: "#dc2626", info: "#2563eb", neutral: "#64748b" };
+const segmentColor = (tone: Tone | undefined, index: number) => tone ? toneColors[tone] ?? palette[index % palette.length] : palette[index % palette.length];
 
 const workspaceCopy: Record<PlanningWorkspaceKind, {
   label: string;
@@ -159,17 +161,19 @@ function Breakdown({ model }: { model: BreakdownViewModel }) {
   const gradient = total ? `conic-gradient(${model.segments.map((segment, index) => {
     const start = cursor;
     cursor += (Math.max(0, segment.value) / total) * 100;
-    return `${palette[index % palette.length]} ${start}% ${cursor}%`;
+    return `${segmentColor(segment.tone, index)} ${start}% ${cursor}%`;
   }).join(", ")})` : "conic-gradient(#e2e8f0 0 100%)";
+  const [centerValue, ...centerLabelParts] = (model.totalLabel ?? String(total)).split(" ");
+  const centerLabel = centerLabelParts.join(" ") || "total";
   return (
     <article className={styles.panel}>
       <header><div><h2>{model.title}</h2>{model.description ? <p>{model.description}</p> : null}</div>{model.totalLabel ? <strong>{model.totalLabel}</strong> : null}</header>
       {model.segments.length ? (
         <div className={styles.breakdown}>
-          <div className={styles.donut} style={{ background: gradient }} role="img" aria-label={model.segments.map((segment) => `${segment.label}: ${segment.formattedValue}`).join("; ")}><span><strong>{model.totalLabel ?? total}</strong><small>total</small></span></div>
+          <div className={styles.donut} style={{ background: gradient }} role="img" aria-label={model.segments.map((segment) => `${segment.label}: ${segment.formattedValue}`).join("; ")}><span><strong>{centerValue}</strong><small>{centerLabel}</small></span></div>
           <div className={styles.segmentList}>{model.segments.map((segment, index) => (
             <Link href={segment.link.href} key={segment.id}>
-              <i style={{ background: palette[index % palette.length] }} aria-hidden="true" />
+              <i style={{ background: segmentColor(segment.tone, index) }} aria-hidden="true" />
               <span><strong>{segment.label}</strong><small>{segment.shareLabel ?? segment.link.label}</small></span>
               <b>{segment.formattedValue}</b><ChevronRight size={15} aria-hidden="true" />
             </Link>
@@ -259,8 +263,8 @@ export function PlanningWorkspace({
         <Filters model={model} />
         <MetricStrip model={model} kind={kind} />
         {kind === "pm" ? <>
-          {programManagement}
           <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
+          {programManagement}
           <PmContext model={model} />
         </> : kind === "lifecycle" ? <>
           <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />

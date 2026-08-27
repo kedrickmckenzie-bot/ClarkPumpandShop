@@ -84,8 +84,8 @@ function SectionCard({ section, onOpen }: { section: DetailSectionViewModel; onO
   );
 }
 
-export function RecordSections({ sections }: { sections: DetailSectionViewModel[] }) {
-  const [activeId, setActiveId] = useState("overview");
+export function RecordSections({ sections, initialSection = "overview" }: { sections: DetailSectionViewModel[]; initialSection?: string }) {
+  const [activeId, setActiveId] = useState(() => sections.some((section) => section.id === initialSection) ? initialSection : "overview");
   const active = useMemo(() => sections.find((section) => section.id === activeId), [activeId, sections]);
   if (!sections.length) return <div className={styles.empty}><FileSearch aria-hidden="true" size={20} /><p>No record history is available yet.</p></div>;
 

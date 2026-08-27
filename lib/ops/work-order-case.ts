@@ -254,7 +254,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
 
   const alternativeActions: WorkOrderCaseAction[] = [];
   if (stage !== "closed") {
-    if (!currentIssuance && activeAssignment?.kind !== "internal") alternativeActions.push({ label: "Request vendor bids instead", href: `${base}?view=service#bid-requests` });
+    if (!currentIssuance && activeAssignment?.kind !== "internal" && visits.length === 0) alternativeActions.push({ label: "Request vendor bids instead", href: `${base}?view=service#bid-requests` });
     if (currentIssuance) alternativeActions.push({ label: "Reissue or revise the authorization", href: `${base}?view=service#issue-work` });
     if (estimateRequests.length > 0 && !selectedEstimateRequest) alternativeActions.push({ label: "Compare received proposals", href: `${base}?view=service#bid-requests` });
     if (visits.some((visit) => visit.checkedOutAt)) alternativeActions.push({ label: "Create a follow-up", href: `${base}?view=activity` });

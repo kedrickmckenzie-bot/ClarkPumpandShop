@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(issued.notice)}`);
     }
     const destination = sourceExceptionId
-      ? `/app/work-orders/${encodeURIComponent(result.id)}?view=visits&created=from-unmatched-visit`
+      ? `/app/work-orders/${encodeURIComponent(result.id)}?view=visits&notice=${encodeURIComponent(`${result.number} was created after service began and linked to the preserved visit. No prior written authorization was implied.`)}`
       : assignmentKind === "bid_request"
         ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=bid-request-created#bid-requests`
         : assignmentKind === "outside_vendor"

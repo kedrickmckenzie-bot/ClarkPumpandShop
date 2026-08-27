@@ -126,6 +126,23 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
       aliases: fixture.stores[0].aliases,
     });
 
+    const scopedStoreManagers = await repository.listNotificationRecipients(
+      fixture.organizations[0].id,
+      "store_manager",
+      { storeId: fixture.stores[0].id, regionId: fixture.stores[0].regionId },
+    );
+    expect(scopedStoreManagers).toHaveLength(1);
+    expect(scopedStoreManagers[0]?.email).toBe(`store${fixture.stores[0].storeNumber}.manager@northline-demo.example`);
+    const scopedRegionalManagers = await repository.listNotificationRecipients(
+      fixture.organizations[0].id,
+      "regional_manager",
+      { storeId: fixture.stores[0].id, regionId: fixture.stores[0].regionId },
+    );
+    expect(scopedRegionalManagers).toHaveLength(1);
+    expect(scopedRegionalManagers[0]?.email).toBe("regional1@northline-demo.example");
+    await repository.upsertNotificationRule({ organizationId: fixture.organizations[0].id, id: "notification-rule-vendor-commitment-executive", eventKey: "vendor_commitment_received", emailEnabled: true, recipientRole: "executive", occurredAt: fixture.asOf });
+    expect((await repository.listNotificationRules(fixture.organizations[0].id)).filter((rule) => rule.eventKey === "vendor_commitment_received").map((rule) => rule.recipientRole).sort()).toEqual(["executive", "facilities_admin", "regional_manager", "store_manager"]);
+
     const estimateRequests = await repository.listEstimateRequestsForWorkOrder(
       fixture.organizations[0].id,
       "wo-northline-105-price-check",

@@ -1763,12 +1763,14 @@ export interface OutboxMessage {
 
 export type NotificationEventKey =
   | "vendor_response_received"
+  | "vendor_commitment_received"
   | "workflow_task_escalated"
   | "follow_up_created"
   | "vendor_reminder_created";
 
 export type NotificationRecipientRole =
   | "facilities_admin"
+  | "store_manager"
   | "regional_manager"
   | "executive"
   | "finance_reviewer";

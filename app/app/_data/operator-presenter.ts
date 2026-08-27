@@ -179,6 +179,10 @@ function sentence(value: string): string {
   return domainLabel(value);
 }
 
+function equipmentStatusLabel(value: string): string {
+  return ({ operational: "Operational", watch: "Watch", out_of_service: "Out of service", retired: "Retired" } as Record<string, string>)[value] ?? sentence(value);
+}
+
 const IMPACT_ESTIMATE_CAVEAT = "Product value, sales impact, capacity, and downtime are optional estimates. They help with planning but are not confirmed losses.";
 
 function impactMoney(value: RequestImpactAssessment["productInventoryValue"]) {
@@ -3466,21 +3470,25 @@ export function buildProgramModel(
       q: searchQuery,
       ...values,
     });
+    const equipmentAppliedFilters = [
+      ...(categoryFilter ? [{ id: "category", label: `Service area: ${sentence(categoryFilter)}`, removeHref: equipmentHref({ category: undefined, page: undefined }) }] : []),
+      ...(statusFilter ? [{ id: "status", label: `Status: ${equipmentStatusLabel(statusFilter)}`, removeHref: equipmentHref({ status: undefined, page: undefined }) }] : []),
+    ];
     const rows = pageAssets.map<TableRowViewModel>((asset) => {
       const store = scoped.stores.find((item) => item.id === asset.storeId);
       const linkedWork = workByAsset.get(asset.id) ?? [];
-      return { id: asset.id, label: asset.name, href: `/app/equipment/${asset.id}`, cells: [
+      return { id: asset.id, label: asset.name, href: asset.status === "out_of_service" ? hrefWithQuery(`/app/equipment/${asset.id}`, { section: "service-history" }) : `/app/equipment/${asset.id}`, cells: [
         { key: "asset", value: asset.name, secondary: asset.assetTag },
         { key: "store", value: storeLabel(store) },
         { key: "category", value: sentence(asset.categoryKey), secondary: assetHierarchyPath(asset).slice(1).join(" › ") || "No deeper grouping" },
         { key: "identity", value: asset.model ?? "Model not entered", secondary: asset.serialNumber ? `S/N ${asset.serialNumber}` : "Serial not entered" },
         { key: "work", value: String(linkedWork.length) },
-        { key: "status", value: sentence(asset.status), tone: asset.status === "watch" ? "warning" : asset.status === "operational" ? "positive" : "critical" },
+        { key: "status", value: equipmentStatusLabel(asset.status), tone: asset.status === "watch" ? "warning" : asset.status === "operational" ? "positive" : "critical" },
       ] };
     });
     return {
       state: { kind: "ready" },
-      page: { title: "Equipment", eyebrow: "Equipment & service history", description: "Start with equipment that needs attention, then search the full register by store, asset tag, model, serial number, or location.", scopeLabel: activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
+      page: { title: "Equipment", eyebrow: "Equipment & service history", description: "The default queue shows equipment needing attention—not the whole register. Switch to All equipment at any time, then search by store, asset tag, model, serial number, or location.", scopeLabel: activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
       filters: [{ id: "view", label: "View", options: [
         { value: "attention", label: `Needs attention (${attentionAssets.length})`, href: hrefWithQuery("/app/equipment", { view: "attention", store: selectedStoreId }), selected: equipmentView === "attention" },
         { value: "recent", label: `Recently serviced (${recentlyServicedAssets.length})`, href: hrefWithQuery("/app/equipment", { view: "recent", store: selectedStoreId }), selected: equipmentView === "recent" },
@@ -3488,23 +3496,31 @@ export function buildProgramModel(
       ] }],
       metrics: [
         { id: "assets", label: "Equipment", value: String(scoped.assets.length), supportingText: "Across the stores in this view", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "View all equipment" } },
-        { id: "watch", label: "Equipment to review", value: String(scoped.assets.filter((asset) => asset.status === "watch").length), supportingText: "Age, repairs, or current cost make these worth a closer look", tone: "warning", link: roleCanAccessProgramRoute(session.role, "lifecycle") ? { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, status: "watch" }), label: "Review repair-or-replace details" } : { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, status: "watch" }), label: "Review equipment" } },
-        { id: "components", label: "Components", value: String(fixture.components.filter((component) => component.organizationId === scoped.organizationId && scoped.assets.some((asset) => asset.id === component.assetId)).length), supportingText: "Optional details inside equipment", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "View equipment and components" } },
-        { id: "unlinked", label: "Equipment not selected", value: String(scoped.workOrders.filter((work) => !work.assetId).length), supportingText: "Classify this work later when it is useful", tone: "info", link: { href: hrefWithQuery("/app/work-orders", { asset: "unlinked", store: selectedStoreId }), label: "Open this work" } },
+        { id: "attention", label: "Needs attention", value: String(attentionAssets.length), supportingText: "Active work or an equipment status that needs review", tone: "warning", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "attention" }), label: "Open the attention queue" } },
+        { id: "out-of-service", label: "Out of service", value: String(scoped.assets.filter((asset) => asset.status === "out_of_service").length), supportingText: "Unavailable now with the related service record one click away", tone: "critical", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, status: "out_of_service", view: "all" }), label: "Open out-of-service equipment" } },
+        { id: "unlinked", label: "Work awaiting equipment", value: String(scoped.workOrders.filter((work) => !work.assetId).length), supportingText: "The equipment choice was deferred or was not needed", tone: "info", link: { href: hrefWithQuery("/app/work-orders", { asset: "unlinked", store: selectedStoreId }), label: "Open unclassified work" } },
       ],
       breakdowns: [
-        { id: "equipment-category", title: "Equipment by service area", totalLabel: `${scoped.assets.length} assets`, segments: [...categoryCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), link: { href: hrefWithQuery("/app/equipment", { category: key, store: selectedStoreId, view: "all" }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "Open equipment list" } },
-        { id: "equipment-status", title: "Equipment status", totalLabel: `${scoped.assets.length} assets`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "watch" ? "warning" : key === "operational" ? "positive" : "critical", link: { href: hrefWithQuery("/app/equipment", { status: key, store: selectedStoreId, view: "all" }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "Open equipment list" } },
+        { id: "equipment-category", title: "Equipment by service area", description: "Select a row to open the exact equipment in that service area.", totalLabel: `${scoped.assets.length} assets`, segments: [...categoryCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), shareLabel: `Open ${value} ${sentence(key).toLocaleLowerCase("en-US")} record${value === 1 ? "" : "s"}`, link: { href: hrefWithQuery("/app/equipment", { category: key, store: selectedStoreId, view: "all" }), label: `Open ${sentence(key)} equipment` } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "Open all equipment" } },
+        { id: "equipment-status", title: "Equipment status", description: "Operational, watch, and out-of-service totals come directly from the equipment register.", totalLabel: `${scoped.assets.length} assets`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: equipmentStatusLabel(key), value, formattedValue: String(value), shareLabel: `Open ${value} ${equipmentStatusLabel(key).toLocaleLowerCase("en-US")} record${value === 1 ? "" : "s"}`, tone: key === "watch" ? "warning" : key === "operational" ? "positive" : "critical", link: { href: hrefWithQuery("/app/equipment", { status: key, store: selectedStoreId, view: "all" }), label: `Open ${equipmentStatusLabel(key)} equipment` } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "Open all equipment" } },
       ],
       trends: [],
-      priorityActions: allActions,
+      priorityActions: [],
       search: { label: "Search equipment", placeholder: "Asset tag, name, model, serial, store, or address", value: first(query.q), action: "/app/equipment", preservedParameters: [
         { name: "view", value: equipmentView },
         ...(selectedStoreId ? [{ name: "store", value: selectedStoreId }] : []),
         ...(categoryFilter ? [{ name: "category", value: categoryFilter }] : []),
         ...(statusFilter ? [{ name: "status", value: statusFilter }] : []),
       ] },
-      resultSummary: filteredAssets.length ? `${pageStart + 1}–${Math.min(pageStart + pageSize, filteredAssets.length)} of ${filteredAssets.length}` : "0 equipment records",
+      appliedFilters: equipmentAppliedFilters,
+      clearFiltersHref: equipmentAppliedFilters.length ? hrefWithQuery("/app/equipment", { view: equipmentView, store: selectedStoreId }) : undefined,
+      resultSummary: filteredAssets.length
+        ? equipmentView === "attention" && !categoryFilter && !statusFilter && !searchQuery
+          ? `${filteredAssets.length} needing attention · ${scoped.assets.length} total equipment`
+          : equipmentView === "recent" && !categoryFilter && !statusFilter && !searchQuery
+            ? `${filteredAssets.length} recently serviced · ${scoped.assets.length} total equipment`
+            : `Showing ${pageStart + 1}–${Math.min(pageStart + pageSize, filteredAssets.length)} of ${filteredAssets.length}`
+        : "0 equipment records",
       pagination: filteredAssets.length > pageSize ? {
         summary: `Page ${currentPage} of ${totalPages}`,
         previousHref: currentPage > 1 ? equipmentHref({ page: String(currentPage - 1) }) : undefined,
@@ -3998,7 +4014,7 @@ export function buildDetailModel(
           ? { label: "Review lifecycle evidence", href: hrefWithQuery("/app/lifecycle", { store: asset.storeId, asset: asset.id }) }
           : undefined,
       },
-      statusLabel: sentence(asset.status),
+      statusLabel: equipmentStatusLabel(asset.status),
       statusTone: asset.status === "operational" ? "positive" : asset.status === "watch" ? "warning" : "critical",
       facts: [
         { label: "Asset tag", value: asset.assetTag },
@@ -4181,6 +4197,9 @@ export function buildDetailModel(
     const assignment = assignmentForWork(fixture, scoped.organizationId, work.id);
     const vendor = assignment?.vendorId ? fixture.vendors.find((item) => item.id === assignment.vendorId && item.organizationId === scoped.organizationId) : undefined;
     const visits = scoped.visits.filter((visit) => visit.workOrderId === work.id);
+    const sourceVisit = visits
+      .filter((visit) => Date.parse(visit.checkedInAt) < Date.parse(work.createdAt))
+      .sort((left, right) => left.checkedInAt.localeCompare(right.checkedInAt))[0];
     const costLines = fixture.costLines.filter((line) => line.organizationId === scoped.organizationId && line.workOrderId === work.id);
     const invoiceLinks = fixture.invoiceAllocations
       .filter((allocation) => allocation.organizationId === scoped.organizationId && allocation.workOrderId === work.id)
@@ -4219,6 +4238,7 @@ export function buildDetailModel(
       facts: [
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { label: "Assigned to", value: vendor?.name ?? (assignment?.kind === "internal" ? "Internal maintenance" : "Choose later") },
+        ...(sourceVisit ? [{ label: "Record origin", value: "Created after service began", helperText: "The observed visit started first; this work order does not imply prior written authorization.", link: { href: `/app/visits/${sourceVisit.id}`, label: "Open original visit" } }] : []),
         { label: "Accountable party", value: work.accountableParty },
         { label: "Next action", value: work.nextAction, helperText: work.dueAt ? `Due ${dateTime(work.dueAt)}` : "No due time entered" },
         approval.fact,
@@ -4228,7 +4248,7 @@ export function buildDetailModel(
       sections: [
         approval.section,
         ...(work.requestId ? [impactEvidenceSection(impactAssessments, `/app/work-orders/${work.id}`)] : []),
-        { id: "authorization", title: "Authorization", description: "The operator work-order number remains the billing reference; vendor ticket, invoice, and external PO stay separate.", action: work.id === NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId ? { label: "Preview vendor authorization", href: `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}` } : undefined, facts: [
+        { id: "authorization", title: sourceVisit ? "Service record and billing reference" : "Authorization", description: sourceVisit ? "This work order was created after the observed visit began. It provides a billing and spend-tracking reference without presenting the record as a prior written service authorization." : "The operator work-order number remains the billing reference; vendor ticket, invoice, and external PO stay separate.", action: work.id === NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId ? { label: "Preview vendor authorization", href: `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}` } : undefined, facts: [
           { label: "Authorized scope", value: work.authorizedScope ?? "No additional scope entered" },
           { label: "Not to exceed", value: work.nte ? money(work.nte.amountMinor) : "Not set" },
           { label: "Issued revisions", value: String(issuances.length), helperText: issuances.length ? `Latest revision ${Math.max(...issuances.map((item) => item.revision))}` : "Not issued yet" },
@@ -4258,6 +4278,13 @@ export function buildDetailModel(
     const exceptions = fixture.exceptions
       .filter((item) => item.organizationId === scoped.organizationId && item.visitId === visit.id)
       .sort((left, right) => right.detectedAt.localeCompare(left.detectedAt));
+    const openUnmatchedException = !visit.workOrderId
+      ? exceptions.find((exception) => exception.kind === "no_work_order" && exception.status !== "resolved")
+      : undefined;
+    const canCreateVisitWorkOrder = Boolean(openUnmatchedException && roleCan(session.role, "create_work_order"));
+    const createFromVisitHref = openUnmatchedException
+      ? `/app/work-orders/new?sourceException=${encodeURIComponent(openUnmatchedException.id)}`
+      : undefined;
     const linkedFiles = fixture.entityFiles.filter(
       (link) => link.organizationId === scoped.organizationId && link.entityType === "visit" && link.entityId === visit.id,
     );
@@ -4272,12 +4299,16 @@ export function buildDetailModel(
         eyebrow: visit.status === "active" ? "Onsite now" : "Observed service visit",
         description: visit.purpose,
         scopeLabel: storeLabel(store),
-        primaryAction: exceptions.find((exception) => exception.status !== "resolved")
-          ? { label: "Review visit exception", href: `/app/action-center/${exceptions.find((exception) => exception.status !== "resolved")!.id}` }
+        primaryAction: canCreateVisitWorkOrder && createFromVisitHref
+          ? { label: "Create work order from visit", href: createFromVisitHref }
+          : exceptions.find((exception) => exception.status !== "resolved")
+            ? { label: "Review visit exception", href: `/app/action-center/${exceptions.find((exception) => exception.status !== "resolved")!.id}` }
           : work
             ? { label: `Open ${work.number}`, href: `/app/work-orders/${work.id}` }
             : undefined,
-        secondaryAction: store ? { label: "Open store", href: `/app/stores/${store.id}` } : undefined,
+        secondaryAction: canCreateVisitWorkOrder && openUnmatchedException
+          ? { label: "Review other options", href: `/app/action-center/${openUnmatchedException.id}` }
+          : store ? { label: "Open store", href: `/app/stores/${store.id}` } : undefined,
       },
       statusLabel: visit.status === "active" ? "Onsite now" : sentence(visit.outcome ?? visit.status),
       statusTone: visit.status === "active" ? "info" : visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome) ? "warning" : "positive",
@@ -4290,6 +4321,19 @@ export function buildDetailModel(
         { label: "Approximate observed time", value: visit.observedDurationSeconds === undefined ? "In progress" : `${Math.round(visit.observedDurationSeconds / 60)} minutes`, helperText: "Presence context, not certified labor" },
       ],
       sections: [
+        ...(openUnmatchedException ? [{
+          id: "missing-work-order",
+          title: "Create the missing work order",
+          description: "Use this when the vendor was called directly and service began before anyone could create the operator record.",
+          facts: [
+            { label: "What stays unchanged", value: "Original check-in and checkout evidence", helperText: "Observed times are never backdated or replaced." },
+            { label: "What gets added", value: "One canonical work order linked to this visit", helperText: "Recorded costs and optional invoice evidence can then use the operator work-order number." },
+            { label: "Authorization treatment", value: "Created after service began", helperText: "The record documents the verbal or emergency path; it does not claim a prior written authorization." },
+          ],
+          action: canCreateVisitWorkOrder && createFromVisitHref
+            ? { label: "Create and link work order", href: createFromVisitHref }
+            : { label: "Open visit review", href: `/app/action-center/${openUnmatchedException.id}` },
+        }] : []),
         {
           id: "evidence",
           title: "Check-in and checkout evidence",
@@ -4670,9 +4714,16 @@ export function buildCreateWorkOrderModel(
     : undefined;
   return {
     state: { kind: "ready" },
-    page: { title: "Create work order", eyebrow: "Service control", description: "Create the canonical record now; assign, classify, and add equipment detail only when it is useful and known.", scopeLabel: `${session.scopeLabel} · Store and problem are the only required work facts` },
+    page: sourceVisit ? {
+      title: "Create work order from visit",
+      eyebrow: "After-the-fact service record",
+      description: "Use the observed check-in to document work that began after a phone call, verbal dispatch, or missing work-order number.",
+      scopeLabel: `${session.scopeLabel} · The original check-in time stays unchanged and no prior written authorization is implied`,
+    } : { title: "Create work order", eyebrow: "Service control", description: "Create the canonical record now; assign, classify, and add equipment detail only when it is useful and known.", scopeLabel: `${session.scopeLabel} · Store and problem are the only required work facts` },
     submitAction: "/api/ops/work-orders",
-    cancelLink: { label: "Back to work orders", href: "/app/work-orders" },
+    cancelLink: sourceVisit
+      ? { label: "Back to service visit", href: `/app/visits/${encodeURIComponent(sourceVisit.id)}` }
+      : { label: "Back to work orders", href: "/app/work-orders" },
     stores: storesAsOptions(scoped),
     vendors: vendors.map((vendor) => ({ value: vendor.id, label: vendor.name, description: fixture.vendorSpecialties.filter((item) => item.vendorId === vendor.id && item.organizationId === scoped.organizationId).flatMap((item) => [item.displayName, ...item.searchAliases]).join(", ") })),
     internalAssignees: internal.map((membership) => ({ value: membership.id, label: userById.get(membership.userId)?.displayName ?? "Internal technician" })),
@@ -4700,6 +4751,7 @@ export function buildCreateWorkOrderModel(
       categoryKey: requestedAsset?.categoryKey,
       ...(sourceVisit ? {
         problem: sourceVisit.purpose,
+        priority: "routine" as const,
         assignmentKind: sourceVisit.providerKind === "outside_vendor" ? "outside_vendor" as const : sourceVisit.providerKind === "internal" ? "internal" as const : "choose_later" as const,
         vendorId: sourceVisit.vendorId,
         internalMembershipId: sourceVisit.internalMembershipId,

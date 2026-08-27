@@ -29,9 +29,10 @@ vi.mock("@/lib/server/ops-request-context", async () => {
 });
 
 let buildCreateWorkOrderModel: typeof import("@/app/app/_data/operator-presenter").buildCreateWorkOrderModel;
+let buildDetailModel: typeof import("@/app/app/_data/operator-presenter").buildDetailModel;
 
 beforeAll(async () => {
-  ({ buildCreateWorkOrderModel } = await import("@/app/app/_data/operator-presenter"));
+  ({ buildCreateWorkOrderModel, buildDetailModel } = await import("@/app/app/_data/operator-presenter"));
 });
 
 const session: OperatorSession = {
@@ -98,11 +99,21 @@ describe("work-order vendor path entry", () => {
 
   it("prefills an unmatched visit and creates its canonical work order with an auditable link", async () => {
     const fixture = buildNorthlinePresentationFixture();
+    const visitModel = buildDetailModel(fixture, session, "visit", "visit-northline-107-no-wo");
+    expect(visitModel.page.primaryAction).toEqual({
+      label: "Create work order from visit",
+      href: "/app/work-orders/new?sourceException=exception-northline-107-no-wo",
+    });
+    expect(visitModel.sections[0]).toMatchObject({
+      id: "missing-work-order",
+      title: "Create the missing work order",
+    });
     const model = buildCreateWorkOrderModel(fixture, session, { sourceException: "exception-northline-107-no-wo" });
     const markup = renderToStaticMarkup(createElement(CreateWorkOrderForm, { model }));
     expect(model.defaults).toMatchObject({
       storeId: "store-northline-107",
       problem: "Inspect intermittent card-reader failure at dispenser 4",
+      priority: "routine",
       assignmentKind: "outside_vendor",
       vendorId: "vendor-northline-forecourt",
     });
@@ -110,7 +121,10 @@ describe("work-order vendor path entry", () => {
       visitId: "visit-northline-107-no-wo",
       providerName: "Forecourt Systems Group",
     });
-    expect(markup).toContain("Creating work from an unmatched visit");
+    expect(markup).toContain("After-the-fact service record");
+    expect(markup).toContain("Documenting work after service began");
+    expect(markup).toContain("It will not backdate authorization");
+    expect(markup).toContain("Create and link work order");
     expect(markup).toContain("sourceExceptionId");
 
     const repository = configureContext();
@@ -125,15 +139,30 @@ describe("work-order vendor path entry", () => {
 
     const response = await POST(new Request("https://operations.test/api/ops/work-orders", { method: "POST", body: formData }));
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toMatch(/view=visits&created=from-unmatched-visit$/);
+    const destination = new URL(response.headers.get("location")!, "https://operations.test");
+    expect(destination.searchParams.get("view")).toBe("visits");
+    expect(destination.searchParams.get("notice")).toContain("created after service began");
     const after = repository.snapshot();
     const beforeIds = new Set(before.workOrders.map((workOrder) => workOrder.id));
     const workOrder = after.workOrders.find((candidate) => !beforeIds.has(candidate.id))!;
     expect(workOrder).toMatchObject({ storeId: "store-northline-107", status: "in_progress" });
     expect(after.visits.find((visit) => visit.id === "visit-northline-107-no-wo")?.workOrderId).toBe(workOrder.id);
     expect(after.exceptions.find((exception) => exception.id === "exception-northline-107-no-wo")).toMatchObject({ status: "resolved", workOrderId: workOrder.id });
+    expect(after.assignments.find((assignment) => assignment.workOrderId === workOrder.id)).toMatchObject({ status: "accepted", vendorId: "vendor-northline-forecourt" });
+    expect(after.workflowTasks.find((task) => task.workOrderId === workOrder.id && task.status === "in_progress")).toMatchObject({
+      taskType: "record_service_outcome",
+      assigneeName: "Forecourt Systems Group",
+      title: "Record service outcome",
+    });
     expect(after.siteVisitWorkOrders).toContainEqual(expect.objectContaining({ visitId: "visit-northline-107-no-wo", workOrderId: workOrder.id }));
     expect(after.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: "visit-northline-107-no-wo", eventType: "visit.reconciled" }));
+    const reconciliation = after.auditEvents.find((event) => event.aggregateId === workOrder.id && event.eventType === "work_order.visit_reconciled");
+    expect(JSON.parse(reconciliation!.payloadJson)).toMatchObject({ authorizationTiming: "recorded_after_service_began" });
+    const createdDetail = buildDetailModel(after, session, "work-order", workOrder.id);
+    expect(createdDetail.facts).toContainEqual(expect.objectContaining({ label: "Record origin", value: "Created after service began" }));
+    expect(createdDetail.sections.find((section) => section.id === "authorization")).toMatchObject({
+      title: "Service record and billing reference",
+    });
   });
 
   it("starts the bid path without assigning a vendor, issuing service, or creating cost", async () => {

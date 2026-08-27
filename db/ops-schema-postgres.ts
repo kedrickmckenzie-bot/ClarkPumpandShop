@@ -1717,15 +1717,15 @@ export const opsNotificationRules = pgTable("ops_notification_rules", {
   updatedAt: instant("updated_at").notNull(),
 }, (table) => [
   unique("uq_ops_notification_rules_org_id").on(table.organizationId, table.id),
-  uniqueIndex("uidx_ops_notification_rules_org_event").on(table.organizationId, table.eventKey),
+  uniqueIndex("uidx_ops_notification_rules_org_event_role").on(table.organizationId, table.eventKey, table.recipientRole),
   index("idx_ops_notification_rules_org_role").on(table.organizationId, table.recipientRole),
   foreignKey({
     name: "fk_ops_notification_rules_org",
     columns: [table.organizationId],
     foreignColumns: [opsOrganizations.id],
   }),
-  check("chk_ops_notification_rules_event", sql`${table.eventKey} IN ('vendor_response_received', 'workflow_task_escalated', 'follow_up_created', 'vendor_reminder_created')`),
-  check("chk_ops_notification_rules_role", sql`${table.recipientRole} IN ('facilities_admin', 'regional_manager', 'executive', 'finance_reviewer')`),
+  check("chk_ops_notification_rules_event", sql`${table.eventKey} IN ('vendor_response_received', 'vendor_commitment_received', 'workflow_task_escalated', 'follow_up_created', 'vendor_reminder_created')`),
+  check("chk_ops_notification_rules_role", sql`${table.recipientRole} IN ('facilities_admin', 'store_manager', 'regional_manager', 'executive', 'finance_reviewer')`),
 ]);
 
 export const opsJobRuns = pgTable("ops_job_runs", {

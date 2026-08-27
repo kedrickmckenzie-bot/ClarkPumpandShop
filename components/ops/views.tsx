@@ -34,6 +34,17 @@ import styles from "./enterprise-workspace.module.css";
 import { RecordSections } from "@/components/workspace/record-sections";
 
 const CHART_PALETTE = ["#2855d9", "#64748b", "#0f766e", "#8b5cf6", "#d97706", "#dc2626", "#475569"];
+const CHART_TONE_COLORS: Partial<Record<Tone, string>> = {
+  positive: "#16805c",
+  warning: "#d97706",
+  critical: "#dc2626",
+  info: "#2855d9",
+  neutral: "#64748b",
+};
+
+function chartColor(tone: Tone | undefined, index: number) {
+  return tone ? CHART_TONE_COLORS[tone] ?? CHART_PALETTE[index % CHART_PALETTE.length] : CHART_PALETTE[index % CHART_PALETTE.length];
+}
 
 function toneClass(tone: Tone = "neutral") {
   const classes: Record<Tone, string> = {
@@ -164,9 +175,11 @@ function BreakdownPanel({ breakdown }: { breakdown: BreakdownViewModel }) {
     ? `conic-gradient(${breakdown.segments.map((segment, index) => {
       const start = cursor;
       cursor += (Math.max(0, segment.value) / total) * 100;
-      return `${CHART_PALETTE[index % CHART_PALETTE.length]} ${start}% ${cursor}%`;
+      return `${chartColor(segment.tone, index)} ${start}% ${cursor}%`;
     }).join(", ")})`
     : "conic-gradient(#e2e8f0 0 100%)";
+  const [centerValue, ...centerLabelParts] = (breakdown.totalLabel ?? String(breakdown.segments.length)).split(" ");
+  const centerLabel = centerLabelParts.join(" ") || (breakdown.totalLabel ? "total" : "groups");
 
   return (
     <article className={styles.analysisPanel}>
@@ -179,15 +192,15 @@ function BreakdownPanel({ breakdown }: { breakdown: BreakdownViewModel }) {
             role="img"
             aria-label={`${breakdown.title}. ${breakdown.segments.map((segment) => `${segment.label}: ${segment.formattedValue}`).join("; ")}`}
           >
-            <span><strong>{breakdown.totalLabel ?? breakdown.segments.length}</strong><small>{breakdown.totalLabel ? "total" : "groups"}</small></span>
+            <span><strong>{centerValue}</strong><small>{centerLabel}</small></span>
           </div>
           <div className={styles.segmentList} role="list">
             {breakdown.segments.map((segment, index) => (
               <Link href={segment.link.href} className={styles.segmentRow} key={segment.id} role="listitem">
-                <span className={styles.segmentSwatch} style={{ background: CHART_PALETTE[index % CHART_PALETTE.length] }} aria-hidden="true" />
+                <span className={styles.segmentSwatch} style={{ background: chartColor(segment.tone, index) }} aria-hidden="true" />
                 <span className={styles.segmentLabels}><strong>{segment.label}</strong><small>{segment.shareLabel ?? segment.link.label}</small></span>
                 <span className={styles.segmentTrack} aria-hidden="true">
-                  <span style={{ width: `${Math.max((segment.value / maximum) * 100, 2)}%` }} />
+                  <span style={{ width: `${Math.max((segment.value / maximum) * 100, 2)}%`, background: chartColor(segment.tone, index) }} />
                 </span>
                 <strong className={styles.segmentValue}>{segment.formattedValue}</strong>
                 <ChevronRight aria-hidden="true" size={16} />
@@ -381,18 +394,21 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
   const selectedParam = searchParams.selected;
   const selectedId = typeof selectedParam === "string" ? selectedParam : Array.isArray(selectedParam) ? selectedParam[0] : undefined;
   const selectedRow = selectedId ? model.table.rows.find((row) => row.id === selectedId) : undefined;
-  const viewParam = searchParams.view;
-  const requestedView = typeof viewParam === "string" && (viewParam === "table" || viewParam === "tile") ? viewParam : null;
+  const layoutParam = searchParams.layout;
+  const requestedView = typeof layoutParam === "string" && (layoutParam === "table" || layoutParam === "tile") ? layoutParam : null;
   const viewMode: SurfaceViewMode = triageMode ? "table" : requestedView ?? (TILE_DEFAULT_SURFACES.has(surface) ? "tile" : "table");
   const toggleQuery = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
-    if (key === "view" || key === "selected" || value === undefined) continue;
+    if (key === "layout" || key === "selected" || value === undefined) continue;
     for (const single of Array.isArray(value) ? value : [value]) toggleQuery.append(key, single);
   }
   const baseQuery = toggleQuery.toString();
   const nextView: SurfaceViewMode = viewMode === "tile" ? "table" : "tile";
-  const toggleHref = `/app/${surface}?${baseQuery ? `${baseQuery}&` : ""}view=${nextView}`;
-  const selectionHref = (id?: string) => `/app/${surface}?${[baseQuery, id ? `selected=${encodeURIComponent(id)}` : ""].filter(Boolean).join("&")}`;
+  const toggleHref = `/app/${surface}?${baseQuery ? `${baseQuery}&` : ""}layout=${nextView}`;
+  const selectionHref = (id?: string) => {
+    const query = [baseQuery, id ? `selected=${encodeURIComponent(id)}` : ""].filter(Boolean).join("&");
+    return query ? `/app/${surface}?${query}` : `/app/${surface}`;
+  };
   const workOrderReturnTo = `/app/work-orders${baseQuery ? `?${baseQuery}` : ""}`;
   const noticeParam = searchParams.notice;
   const notice = typeof noticeParam === "string" ? noticeParam : Array.isArray(noticeParam) ? noticeParam[0] : undefined;
@@ -417,15 +433,9 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
             <FilterGroups filters={model.filters} />
-            {model.appliedFilters?.length ? (
-              <div className={styles.appliedFilters} aria-label="Applied filters">
-                <span>Applied</span>
-                <div>{model.appliedFilters.map((filter) => <Link href={filter.removeHref} key={filter.id} aria-label={`Remove ${filter.label} filter`}>{filter.label}<span aria-hidden="true">×</span></Link>)}</div>
-                {model.clearFiltersHref ? <Link className={styles.clearFilters} href={model.clearFiltersHref}>Clear all</Link> : null}
-              </div>
-            ) : null}
+            <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
             {triageMode ? (
-              <div className={styles.triageWorkspace}>
+              <div className={styles.triageWorkspace} data-has-preview={selectedRow || undefined}>
                 <div className={styles.triageList}>{surface === "work-orders" ? (
                   <form className={styles.bulkForm} action="/api/ops/work-orders/bulk-follow-up" method="post">
                     <input type="hidden" name="returnTo" value={workOrderReturnTo} />
@@ -438,14 +448,14 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
                     </div>
                   </form>
                 ) : <DataTable table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} />}</div>
-                <aside className={styles.triagePreview} aria-live="polite">
-                  {selectedRow ? <>
+                {selectedRow ? <aside className={styles.triagePreview} aria-live="polite">
+                  <>
                     <header><div><span>Selected record</span><h2>{selectedRow.label}</h2></div><Link href={selectionHref()} aria-label="Close record preview">×</Link></header>
                     {selectedRow.cells[0]?.secondary ? <p className={styles.triageSummary}>{selectedRow.cells[0].secondary}</p> : null}
                     <dl>{model.table.columns.map((column) => { const cell = selectedRow.cells.find((candidate) => candidate.key === column.key); return <div key={column.key}><dt>{column.label}</dt><dd>{cell?.value ?? "—"}{cell?.secondary && cell.secondary !== selectedRow.cells[0]?.secondary ? <small>{cell.secondary}</small> : null}</dd></div>; })}</dl>
                     <Link className={styles.triageOpen} href={selectedRow.href}>Open full record<ExternalLink aria-hidden="true" size={15} /></Link>
-                  </> : <div className={styles.triageEmpty}><Inbox aria-hidden="true" size={24} /><strong>Select a row</strong><p>Review the key facts here without leaving the queue. Open the full record only when a decision or detailed update is needed.</p></div>}
-                </aside>
+                  </>
+                </aside> : null}
               </div>
             ) : viewMode === "tile" ? <RecordTileGrid table={model.table} /> : <DataTable table={model.table} />}
             {!triageMode ? <nav className={styles.viewToggle} aria-label="Display mode">
@@ -463,6 +473,17 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+function AppliedFilterBar({ filters, clearFiltersHref }: { filters?: ListPageViewModel["appliedFilters"]; clearFiltersHref?: string }) {
+  if (!filters?.length) return null;
+  return (
+    <div className={styles.appliedFilters} aria-label="Applied filters">
+      <span>Showing</span>
+      <div>{filters.map((filter) => <Link href={filter.removeHref} key={filter.id} aria-label={`Remove ${filter.label} filter`}>{filter.label}<span aria-hidden="true">×</span></Link>)}</div>
+      {clearFiltersHref ? <Link className={styles.clearFilters} href={clearFiltersHref}>Clear filters</Link> : null}
     </div>
   );
 }
@@ -597,6 +618,7 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
         <>
           {beforeContent}
           <FilterGroups filters={model.filters} />
+          <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
           <MetricStrip metrics={model.metrics} />
           {(model.breakdowns.length || model.trends.length) ? (
             <section className={styles.analysisGrid} aria-label="Program intelligence">
@@ -604,7 +626,7 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
               {model.trends.map((trend) => <TrendPanel trend={trend} key={trend.id} />)}
             </section>
           ) : null}
-          <ActionQueue actions={model.priorityActions} />
+          {model.priorityActions.length ? <ActionQueue actions={model.priorityActions} /> : null}
           {model.table ? <section className={styles.listWorkspace}>
             {model.search || model.resultSummary ? <div className={styles.listToolbar}>
               {model.search ? <form className={styles.listSearch} action={model.search.action} method="get" role="search">
@@ -631,7 +653,7 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
   );
 }
 
-export function DetailView({ model, beforeSections, after }: { model: DetailPageViewModel; beforeSections?: ReactNode; after?: ReactNode }) {
+export function DetailView({ model, beforeSections, after, initialSection }: { model: DetailPageViewModel; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string }) {
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={16} />{model.backLink.label}</Link>
@@ -650,7 +672,7 @@ export function DetailView({ model, beforeSections, after }: { model: DetailPage
             </div>
           </section>
           {beforeSections}
-          <RecordSections sections={model.sections} />
+          <RecordSections sections={model.sections} initialSection={initialSection} />
           {after}
         </>
       )}

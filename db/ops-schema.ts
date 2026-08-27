@@ -645,7 +645,7 @@ export const opsOutboxMessages = sqliteTable("ops_outbox_messages", {
 export const opsNotificationRules = sqliteTable("ops_notification_rules", {
   id: id(), organizationId: organizationId(), eventKey: text("event_key").notNull(), emailEnabled: bool("email_enabled"), recipientRole: text("recipient_role").notNull(), updatedByMembershipId: text("updated_by_membership_id"), createdAt: createdAt(), updatedAt: text("updated_at").notNull(),
 }, (table) => [
-  uniqueIndex("uidx_ops_notification_rules_org_event").on(table.organizationId, table.eventKey),
+  uniqueIndex("uidx_ops_notification_rules_org_event_role").on(table.organizationId, table.eventKey, table.recipientRole),
   index("idx_ops_notification_rules_org_role").on(table.organizationId, table.recipientRole),
 ]);
 

@@ -1,5 +1,5 @@
 import type { OpsRepository } from "./repository";
-import type { NotificationEventKey, OutboxMessage, WorkOrder } from "./types";
+import type { NotificationEventKey, NotificationRecipient, NotificationRecipientRole, OutboxMessage, ServiceRun, Store, WorkOrder } from "./types";
 import type { OutboxDeliveryMessage, OutboxDeliveryTransport } from "./outbox-delivery";
 
 export interface TransactionalEmail {
@@ -129,7 +129,8 @@ export async function sendVendorServiceAuthorizationEmail(input: {
 }
 
 const topicRules: Array<{ matches(topic: string): boolean; eventKey: NotificationEventKey }> = [
-  { matches: (topic) => ["ops.vendor.accepted", "ops.vendor.declined", "ops.vendor.proposed_date", "ops.vendor.question"].includes(topic), eventKey: "vendor_response_received" },
+  { matches: (topic) => ["ops.vendor.accepted", "ops.service_run.vendor_accepted", "ops.service_run.counter_accepted"].includes(topic), eventKey: "vendor_commitment_received" },
+  { matches: (topic) => ["ops.vendor.declined", "ops.vendor.proposed_date", "ops.vendor.question"].includes(topic) || topic.startsWith("ops.service_run.vendor_"), eventKey: "vendor_response_received" },
   { matches: (topic) => topic === "ops.workflow_task.escalated", eventKey: "workflow_task_escalated" },
   { matches: (topic) => topic === "ops.follow_up.created", eventKey: "follow_up_created" },
   { matches: (topic) => topic === "ops.vendor.reminder_created", eventKey: "vendor_reminder_created" },
@@ -143,13 +144,102 @@ function payload(message: OutboxDeliveryMessage) {
   try { return JSON.parse(message.payloadJson) as Record<string, unknown>; } catch { return {}; }
 }
 
-function notificationCopy(eventKey: NotificationEventKey, message: OutboxDeliveryMessage, workOrder: WorkOrder | null, storeName?: string) {
+interface NotificationWorkContext {
+  workOrder: WorkOrder;
+  store: Store;
+  kind: "PM" | "Reactive";
+  arrivalAt: string | undefined;
+}
+
+interface NotificationContext {
+  serviceRun?: ServiceRun;
+  vendorName?: string;
+  work: NotificationWorkContext[];
+}
+
+interface RecipientGroup {
+  recipient: NotificationRecipient;
+  work: NotificationWorkContext[];
+}
+
+function uniqueById<T extends { id: string }>(rows: T[]) {
+  return [...new Map(rows.map((row) => [row.id, row])).values()];
+}
+
+async function loadNotificationContext(repository: OpsRepository, message: OutboxDeliveryMessage): Promise<NotificationContext> {
   const values = payload(message);
-  const record = workOrder?.number ?? String(values.workOrderId ?? message.aggregateId);
-  const context = storeName ? `${record} · ${storeName}` : record;
-  if (eventKey === "vendor_response_received") return { subject: `Vendor response received · ${record}`, headline: "A vendor response needs review", detail: `${context}. Response: ${String(values.response ?? message.topic.replace("ops.vendor.", "")).replaceAll("_", " ")}.` };
-  if (eventKey === "workflow_task_escalated") return { subject: `Overdue action escalated · ${record}`, headline: "An accountable action was escalated", detail: `${context}. ${String(values.reason ?? "The response window expired.")}` };
-  if (eventKey === "follow_up_created") return { subject: `Service follow-up created · ${record}`, headline: "A follow-up now has an accountable owner", detail: `${context}. Due ${String(values.dueAt ?? "date recorded in the platform")}.` };
+  if (message.aggregateType === "service_run" || message.topic.startsWith("ops.service_run.")) {
+    const run = await repository.getServiceRun(message.organizationId, message.aggregateId);
+    if (!run) return { work: [] };
+    const [links, stops, vendor] = await Promise.all([
+      repository.listServiceRunWorkOrders(message.organizationId, run.id),
+      repository.listRouteStops(message.organizationId, run.id),
+      repository.getVendor(message.organizationId, run.vendorId),
+    ]);
+    const work = (await Promise.all(links.filter((link) => link.planned).map(async (link) => {
+      const workOrder = await repository.getWorkOrder(message.organizationId, link.workOrderId);
+      if (!workOrder) return null;
+      const store = await repository.getStore(message.organizationId, workOrder.storeId);
+      if (!store) return null;
+      const stop = stops.find((candidate) => candidate.id === link.routeStopId);
+      return { workOrder, store, kind: link.occurrenceId ? "PM" as const : "Reactive" as const, arrivalAt: stop?.committedArrivalAt ?? stop?.proposedArrivalAt };
+    }))).filter((row): row is NotificationWorkContext => row !== null);
+    return { serviceRun: run, vendorName: vendor?.name, work };
+  }
+  const workOrderId = typeof values.workOrderId === "string" ? values.workOrderId : message.aggregateType === "work_order" ? message.aggregateId : undefined;
+  const workOrder = workOrderId ? await repository.getWorkOrder(message.organizationId, workOrderId) : null;
+  const store = workOrder ? await repository.getStore(message.organizationId, workOrder.storeId) : null;
+  const assignment = typeof values.assignmentId === "string" ? await repository.getAssignment(message.organizationId, values.assignmentId) : null;
+  const vendor = assignment?.vendorId ? await repository.getVendor(message.organizationId, assignment.vendorId) : null;
+  return { vendorName: vendor?.name, work: workOrder && store ? [{ workOrder, store, kind: "Reactive", arrivalAt: undefined }] : [] };
+}
+
+async function recipientGroups(repository: OpsRepository, message: OutboxDeliveryMessage, role: NotificationRecipientRole, context: NotificationContext): Promise<RecipientGroup[]> {
+  if (role !== "store_manager" && role !== "regional_manager") {
+    return (await repository.listNotificationRecipients(message.organizationId, role)).map((recipient) => ({ recipient, work: context.work }));
+  }
+  const groups = new Map<string, RecipientGroup>();
+  for (const item of context.work) {
+    const recipients = await repository.listNotificationRecipients(message.organizationId, role, { storeId: item.store.id, regionId: item.store.regionId });
+    for (const recipient of recipients) {
+      const group = groups.get(recipient.membershipId) ?? { recipient, work: [] };
+      group.work.push(item);
+      groups.set(recipient.membershipId, group);
+    }
+  }
+  return [...groups.values()].map((group) => ({ ...group, work: [...new Map(group.work.map((item) => [item.workOrder.id, item])).values()] }));
+}
+
+function storeLabel(store: Store) {
+  return `Store ${store.storeNumber} · ${store.name}`;
+}
+
+function formatWhen(value: string | undefined, timeZone?: string) {
+  if (!value) return undefined;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: timeZone || "America/New_York", timeZoneName: "short" }).format(new Date(value));
+}
+
+function notificationCopy(eventKey: NotificationEventKey, message: OutboxDeliveryMessage, context: NotificationContext, work: NotificationWorkContext[]) {
+  const values = payload(message);
+  const record = work[0]?.workOrder.number ?? String(values.workOrderId ?? message.aggregateId);
+  const stores = uniqueById(work.map((item) => item.store));
+  const scopeLabel = stores.length === 1 ? storeLabel(stores[0]!) : `${stores.length} stores`;
+  const workLabel = work.length === 1 ? record : `${work.length} work orders`;
+  if (eventKey === "vendor_commitment_received") {
+    const vendorName = context.vendorName ?? "The vendor";
+    const startsAt = context.serviceRun?.committedStartsAt ?? context.serviceRun?.proposedStartsAt;
+    const when = formatWhen(startsAt, stores[0]?.timeZone);
+    const mix = [...new Set(work.map((item) => item.kind))].join(" and ");
+    return {
+      subject: `${vendorName} accepted work · ${scopeLabel}`,
+      headline: context.serviceRun ? "A vendor Service Run is confirmed" : "A vendor accepted the service authorization",
+      detail: `${vendorName} accepted ${workLabel}${stores.length ? ` for ${scopeLabel}` : ""}${mix ? ` (${mix})` : ""}.${when ? ` Planned start: ${when}.` : " A service date has not been recorded yet."}`,
+    };
+  }
+  if (eventKey === "vendor_response_received") return { subject: `Vendor response received · ${record}`, headline: "A vendor response needs review", detail: `${workLabel}${stores.length ? ` · ${scopeLabel}` : ""}. Response: ${String(values.response ?? message.topic.replace("ops.vendor.", "").replace("ops.service_run.vendor_", "")).replaceAll("_", " ")}.` };
+  const recordContext = `${workLabel}${stores.length ? ` · ${scopeLabel}` : ""}`;
+  if (eventKey === "workflow_task_escalated") return { subject: `Overdue action escalated · ${record}`, headline: "An accountable action was escalated", detail: `${recordContext}. ${String(values.reason ?? "The response window expired.")}` };
+  if (eventKey === "follow_up_created") return { subject: `Service follow-up created · ${record}`, headline: "A follow-up now has an accountable owner", detail: `${recordContext}. Due ${String(values.dueAt ?? "date recorded in the platform")}.` };
   return { subject: "Vendor relationship reminder created", headline: "A vendor relationship reminder needs follow-up", detail: String(values.title ?? "Open the vendor record for the due date and accountable owner.") };
 }
 
@@ -168,27 +258,33 @@ export function createNotificationEmailTransport(input: {
         sink(JSON.stringify({ channel: "ops.outbox.delivery", transport: "operational-log", messageId: message.id, topic: message.topic, notification: "not_routed" }));
         return;
       }
-      const rule = (await input.repository.listNotificationRules(message.organizationId)).find((candidate) => candidate.eventKey === eventKey);
-      if (!rule?.emailEnabled) {
-        sink(JSON.stringify({ channel: "ops.notification.skipped", messageId: message.id, eventKey, reason: rule ? "email_disabled" : "no_rule" }));
+      const rules = (await input.repository.listNotificationRules(message.organizationId)).filter((candidate) => candidate.eventKey === eventKey && candidate.emailEnabled);
+      if (!rules.length) {
+        sink(JSON.stringify({ channel: "ops.notification.skipped", messageId: message.id, eventKey, reason: "no_enabled_rule" }));
         return;
       }
       if (!input.provider) throw new Error(`Email delivery is enabled for ${eventKey}, but no email provider is configured`);
-      const values = payload(message);
-      const workOrderId = typeof values.workOrderId === "string" ? values.workOrderId : message.aggregateType === "work_order" ? message.aggregateId : undefined;
-      const workOrder = workOrderId ? await input.repository.getWorkOrder(message.organizationId, workOrderId) : null;
-      const store = workOrder ? await input.repository.getStore(message.organizationId, workOrder.storeId) : null;
-      const recipients = await input.repository.listNotificationRecipients(message.organizationId, rule.recipientRole);
-      if (!recipients.length) throw new Error(`No active ${rule.recipientRole} email recipient is configured`);
-      const copy = notificationCopy(eventKey, message, workOrder, store ? `Store ${store.storeNumber} · ${store.name}` : undefined);
-      const href = eventKey === "vendor_reminder_created" ? `/app/vendors/${encodeURIComponent(message.aggregateId)}` : workOrder ? `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service` : "/app/action-center";
-      const actionUrl = new URL(href, input.baseUrl).toString();
-      for (const recipient of recipients) {
-        const text = `${copy.headline}\n\n${copy.detail}\n\nOpen the supporting record: ${actionUrl}`;
-        const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(recipient.displayName)},</p><h2>${escapeEmailHtml(copy.headline)}</h2><p>${escapeEmailHtml(copy.detail)}</p><p><a href="${escapeEmailHtml(actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Open supporting record</a></p><p style="color:#64748b;font-size:13px">This notice was generated from source workflow records. Open the platform for the current accountable state.</p></div>`;
-        const result = await input.provider.send({ to: recipient.email, subject: copy.subject, text, html, idempotencyKey: `${message.id}/${recipient.membershipId}` });
-        sink(JSON.stringify({ channel: "ops.notification.delivered", transport: input.provider.name, messageId: message.id, providerMessageId: result.messageId, eventKey, recipientMembershipId: recipient.membershipId }));
+      const context = await loadNotificationContext(input.repository, message);
+      let delivered = 0;
+      for (const rule of rules) {
+        const groups = await recipientGroups(input.repository, message, rule.recipientRole, context);
+        if (!groups.length) {
+          sink(JSON.stringify({ channel: "ops.notification.missing_recipient", messageId: message.id, eventKey, recipientRole: rule.recipientRole }));
+          continue;
+        }
+        for (const group of groups) {
+          const copy = notificationCopy(eventKey, message, context, group.work);
+          const workOrder = group.work[0]?.workOrder ?? context.work[0]?.workOrder;
+          const href = eventKey === "vendor_reminder_created" ? `/app/vendors/${encodeURIComponent(message.aggregateId)}` : workOrder ? `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service` : "/app/action-center";
+          const actionUrl = new URL(href, input.baseUrl).toString();
+          const text = `${copy.headline}\n\n${copy.detail}\n\nOpen the supporting record: ${actionUrl}`;
+          const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(group.recipient.displayName)},</p><h2>${escapeEmailHtml(copy.headline)}</h2><p>${escapeEmailHtml(copy.detail)}</p><p><a href="${escapeEmailHtml(actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Open supporting record</a></p><p style="color:#64748b;font-size:13px">This notice was generated from source workflow records. Open the platform for the current accountable state.</p></div>`;
+          const result = await input.provider.send({ to: group.recipient.email, subject: copy.subject, text, html, idempotencyKey: `${message.id}/${rule.recipientRole}/${group.recipient.membershipId}` });
+          delivered += 1;
+          sink(JSON.stringify({ channel: "ops.notification.delivered", transport: input.provider.name, messageId: message.id, providerMessageId: result.messageId, eventKey, recipientRole: rule.recipientRole, recipientMembershipId: group.recipient.membershipId }));
+        }
       }
+      if (!delivered) throw new Error(`No scoped email recipient is configured for ${eventKey}`);
     },
   };
 }

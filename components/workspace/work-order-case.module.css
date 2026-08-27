@@ -366,6 +366,48 @@
   gap: 18px;
 }
 
+.afterFactNotice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e3a5f;
+  background: #eff6ff;
+}
+
+.afterFactNotice > svg {
+  color: var(--case-action);
+}
+
+.afterFactNotice strong,
+.afterFactNotice p {
+  margin: 0;
+}
+
+.afterFactNotice strong {
+  font-size: 14px;
+}
+
+.afterFactNotice p {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.afterFactNotice a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--case-action);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .decisionPanel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
