@@ -1140,8 +1140,12 @@
 
 .tableScroller {
   max-width: 100%;
-  overflow: auto;
-  overscroll-behavior: contain;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dataTable {
@@ -1152,6 +1156,35 @@
   color: var(--to-copy);
   font-size: var(--ops-font-table, 14px);
   table-layout: auto;
+}
+
+.dataTable[data-table="work-orders"] {
+  min-width: 1120px;
+}
+
+.dataTable[data-table="work-orders"][data-columns="4"] {
+  min-width: 760px;
+  table-layout: fixed;
+}
+
+.dataTable[data-table="work-orders"][data-columns="4"] [data-column="work"] {
+  width: 34%;
+}
+
+.dataTable[data-table="work-orders"][data-columns="4"] [data-column="store"] {
+  width: 16%;
+}
+
+.dataTable[data-table="work-orders"][data-columns="4"] [data-column="assignment"] {
+  width: 25%;
+}
+
+.dataTable[data-table="work-orders"][data-columns="4"] [data-column="next"] {
+  width: 25%;
+}
+
+.dataTable[data-table="visits"] {
+  min-width: 1280px;
 }
 
 .dataTable thead {
@@ -1176,7 +1209,7 @@
 }
 
 .dataTable td {
-  height: 56px;
+  height: 64px;
   padding: 0;
   border-bottom: 1px solid var(--to-line);
   background: #ffffff;
@@ -1202,7 +1235,7 @@
 .dataTable td a {
   position: relative;
   display: flex;
-  min-height: 56px;
+  min-height: 64px;
   flex-direction: column;
   justify-content: center;
   padding: 9px 15px;
@@ -1223,7 +1256,7 @@
   max-width: 320px;
   margin-top: 2px;
   color: var(--to-muted);
-  font-size: var(--ops-font-meta, 12px);
+  font-size: max(13px, var(--ops-font-meta, 12px));
   text-overflow: ellipsis;
   white-space: nowrap;
 }

@@ -1010,6 +1010,80 @@ function buildFixture(): OpsFixture {
   vendorResponses.push({ id: confirmedResponseId, organizationId: organization.id, workOrderId: confirmedWorkOrderId, assignmentId: confirmedAssignmentId, issuanceId: confirmedIssuanceId, response: "accepted", responderName: "ClearFlow HVAC, Plumbing & Kitchen Repair dispatch", message: "Service window confirmed with the store manager.", respondedAt: at(8, 24, 14, 35) });
   serviceAppointments.push({ id: "appointment-current-107-hvac-confirmed", organizationId: organization.id, workOrderId: confirmedWorkOrderId, assignmentId: confirmedAssignmentId, issuanceId: confirmedIssuanceId, sourceVendorResponseId: confirmedResponseId, status: "confirmed", proposedBy: "operator", startsAt: at(8, 27, 13), createdByMembershipId: "membership-northline-facilities", createdAt: at(8, 24, 14, 40) });
 
+  // A small but credible forward schedule makes the upcoming-visit queue
+  // useful without turning the product into vendor dispatch software. Each
+  // record is a vendor-confirmed customer appointment tied to one canonical
+  // work order; the vendor still controls its crew and routing.
+  const upcomingVisitSeeds = [
+    {
+      key: "102-ice-machine",
+      number: "CPS-2026-0214",
+      storeId: "store-northline-102",
+      vendorId: "vendor-northline-summit",
+      categoryKey: "refrigeration",
+      assetId: "asset-102-ice-machine",
+      problem: "Ice machine is producing thin sheets and dropping ice more slowly than normal",
+      scope: "Inspect the ice machine, diagnose the reduced production, restore normal operation where practical, and document any follow-up work.",
+      startsAt: at(8, 28, 13, 30),
+      nteAmountMinor: 175_000,
+    },
+    {
+      key: "105-dispenser-inspection",
+      number: "CPS-2026-0215",
+      storeId: "store-northline-105",
+      vendorId: "vendor-northline-forecourt",
+      categoryKey: "forecourt",
+      assetId: "asset-105-dispenser-2",
+      problem: "Dispenser 2 nozzle shuts off early during several customer fuelings",
+      scope: "Inspect the nozzle, hose, and dispenser flow path; correct the reported premature shutoff and document the service outcome.",
+      startsAt: at(8, 31, 14),
+      nteAmountMinor: 165_000,
+    },
+    {
+      key: "104-sign-lighting",
+      number: "CPS-2026-0216",
+      storeId: "store-northline-104",
+      vendorId: "vendor-northline-brightpath",
+      categoryKey: "electrical",
+      problem: "One section of the roadside price sign is dark after sunset",
+      scope: "Inspect the dark sign section, restore normal illumination where practical, and document any parts or access needed for follow-up.",
+      startsAt: at(9, 1, 14, 30),
+      nteAmountMinor: 185_000,
+    },
+    {
+      key: "114-lot-drainage",
+      number: "CPS-2026-0217",
+      storeId: "store-northline-114",
+      vendorId: "vendor-northline-four-seasons",
+      categoryKey: "exterior",
+      problem: "Standing water remains beside the north parking-lot drain after moderate rain",
+      scope: "Inspect the drain approach and surrounding pavement, clear routine obstructions, and report any grading or pavement work needed.",
+      startsAt: at(9, 3, 12, 30),
+      nteAmountMinor: 125_000,
+    },
+  ] as const;
+
+  upcomingVisitSeeds.forEach((seed, index) => {
+    const store = stores.find((candidate) => candidate.id === seed.storeId)!;
+    const vendor = vendors.find((candidate) => candidate.id === seed.vendorId)!;
+    const requestId = `request-upcoming-${seed.key}`;
+    const workOrderId = `wo-upcoming-${seed.key}`;
+    const assignmentId = `assignment-upcoming-${seed.key}`;
+    const issuanceId = `issuance-upcoming-${seed.key}-r1`;
+    const responseId = `response-upcoming-${seed.key}`;
+    const createdAt = at(8, 24, 10 + index);
+    const assignedAt = at(8, 24, 11 + index);
+    const issuedAt = at(8, 24, 11 + index, 10);
+    const respondedAt = at(8, 25, 9 + index, 10);
+
+    requests.push({ id: requestId, organizationId: organization.id, reference: `REQ-26-UP-${store.storeNumber}`, storeId: store.id, reporterName: ["Taylor Kim", "Morgan Wells", "Avery Johnson", "Jamie Cole"][index]!, reporterEmployeeId: `E${6302 + index}`, problem: seed.problem, priority: "routine", status: "converted", submittedAt: createdAt, convertedWorkOrderId: workOrderId });
+    workOrders.push({ id: workOrderId, organizationId: organization.id, number: seed.number, storeId: store.id, requestId, problem: seed.problem, authorizedScope: seed.scope, categoryKey: seed.categoryKey, taxonomyNodeId: taxonomyByCategory[seed.categoryKey], assetId: "assetId" in seed ? seed.assetId : undefined, priority: "routine", status: "scheduled", accountableParty: vendor.name, nextAction: "Vendor arrives for the confirmed visit and checks in", dueAt: seed.startsAt, escalationTo: "Facilities coordinator", nte: { amountMinor: seed.nteAmountMinor, currency: "USD" }, createdAt });
+    assignments.push({ id: assignmentId, organizationId: organization.id, workOrderId, kind: "outside_vendor", vendorId: vendor.id, status: "accepted", assignedAt });
+    issuances.push({ id: issuanceId, organizationId: organization.id, workOrderId, assignmentId, revision: 1, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber: seed.number, store: { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: [store.address1, `${store.city}, ${store.state} ${store.postalCode}`].join(", ") }, vendor: { id: vendor.id, name: vendor.name }, problem: seed.problem, priority: "routine", authorizedScope: seed.scope, categoryKey: seed.categoryKey, requestedTiming: seed.startsAt, nte: { amountMinor: seed.nteAmountMinor, currency: "USD" }, billingInstruction: `Reference operator work order ${seed.number} on all service paperwork and invoices.` }), channel: "email", issuedAt });
+    vendorResponses.push({ id: responseId, organizationId: organization.id, workOrderId, assignmentId, issuanceId, response: "accepted", responderName: `${vendor.name} dispatch`, message: "Requested visit date confirmed with the customer.", respondedAt });
+    serviceAppointments.push({ id: `appointment-upcoming-${seed.key}`, organizationId: organization.id, workOrderId, assignmentId, issuanceId, sourceVendorResponseId: responseId, status: "confirmed", proposedBy: "vendor", startsAt: seed.startsAt, note: "Vendor-confirmed service appointment", createdByMembershipId: "membership-northline-facilities", createdAt: respondedAt });
+  });
+
   const declinedRequestId = "request-current-114-canopy-service";
   const declinedWorkOrderId = "wo-current-114-canopy-service";
   const declinedAssignmentId = "assignment-current-114-canopy-declined";

@@ -598,7 +598,7 @@ export async function createStoreSweep(
     const hold = holds[index];
     if (workOrder.storeId !== store.id) throw new OpsDomainError("VALIDATION", `${workOrder.number} belongs to another store`);
     if (workOrder.status !== "approved" || !hold || hold.status !== "active") {
-      throw new OpsDomainError("CONFLICT", `${workOrder.number} is no longer approved for a future visit`);
+      throw new OpsDomainError("CONFLICT", `${workOrder.number} is no longer approved for later`);
     }
     const eligibility = await heldWorkVendorEligibility({
       repository,

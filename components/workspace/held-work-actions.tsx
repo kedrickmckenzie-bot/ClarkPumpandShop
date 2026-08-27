@@ -34,13 +34,13 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
       : hold?.status === "completed"
         ? "Completed during another visit"
         : openHold
-          ? "Approved for a future visit"
-          : "Handle this on a future visit";
+          ? "Approved for later"
+          : "Set this work aside for later";
 
   return (
     <section id="future-visit-hold" className={styles.brief} aria-labelledby="future-visit-hold-heading">
       <header className={styles.header}>
-        <p className={styles.eyebrow}>Handle small work during another visit</p>
+        <p className={styles.eyebrow}>Avoid a separate trip for small work</p>
         <h2 id="future-visit-hold-heading">{stateTitle}</h2>
       </header>
       {hold ? (
@@ -63,7 +63,7 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
         <div className={styles.moneyRow}>
           <form action={`/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/visit-hold`} method="post" className={styles.moneyCell}>
             <input type="hidden" name="operation" value="place" />
-            <span className={styles.moneyLabel}>{openHold ? "Update the held-work instructions" : "Approve for a matching visit"}</span>
+            <span className={styles.moneyLabel}>{openHold ? "Update how this should be handled" : "Approve this work for later"}</span>
             <label>
               <span>What may the vendor do?</span>
               <select name="posture" defaultValue={hold?.posture ?? "complete_using_professional_judgment"}>
@@ -81,7 +81,7 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
               <input type="number" name="internalReviewThreshold" min="0" step="0.01" inputMode="decimal" placeholder="Not shown to the vendor" defaultValue={hold?.internalReviewThreshold?.replace(/[^0-9.]/g, "")} />
               <small>This only flags a later invoice for review. It is not shown to the vendor and is not an approved price.</small>
             </label>
-            <button type="submit">{openHold ? "Save held-work changes" : "Approve for a future visit"}</button>
+            <button type="submit">{openHold ? "Save changes" : "Approve for later"}</button>
           </form>
           {openHold ? (
             <form action={`/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/visit-hold`} method="post" className={styles.moneyCell}>

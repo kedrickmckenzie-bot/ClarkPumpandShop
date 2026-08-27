@@ -353,10 +353,10 @@ function DataTable({ table, selectedId, rowHref, selection }: { table: TableView
   return (
     <div className={styles.tableShell}>
       <div className={styles.tableScroller}>
-        <table className={styles.dataTable}>
+        <table className={styles.dataTable} data-table={table.id} data-columns={table.columns.length}>
           <caption className={styles.visuallyHidden}>{table.caption}</caption>
           <thead>
-            <tr>{selection ? <th className={styles.selectColumn} scope="col"><span className={styles.visuallyHidden}>{selection.label}</span></th> : null}{table.columns.map((column) => <th className={column.align === "end" ? styles.alignEnd : undefined} scope="col" key={column.key}>{column.label}</th>)}</tr>
+            <tr>{selection ? <th className={styles.selectColumn} scope="col"><span className={styles.visuallyHidden}>{selection.label}</span></th> : null}{table.columns.map((column) => <th data-column={column.key} className={column.align === "end" ? styles.alignEnd : undefined} scope="col" key={column.key}>{column.label}</th>)}</tr>
           </thead>
           <tbody>
             {table.rows.map((row) => (
@@ -365,7 +365,7 @@ function DataTable({ table, selectedId, rowHref, selection }: { table: TableView
                 {table.columns.map((column, index) => {
                   const cell = row.cells.find((candidate) => candidate.key === column.key);
                   return (
-                    <td className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
+                    <td data-column={column.key} className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
                       <Link href={rowHref?.(row) ?? row.href} aria-current={row.id === selectedId ? "true" : undefined} aria-label={index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
                         <span>{cell?.value ?? "—"}</span>
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
@@ -391,6 +391,8 @@ const TRIAGE_SURFACES = new Set(["action-center", "work-orders", "visits"]);
 
 export function ListSurface({ model, surface, searchParams }: { model: ListPageViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
   const triageMode = TRIAGE_SURFACES.has(surface);
+  const visitPlanParam = searchParams.visitPlan;
+  const approvedLaterMode = surface === "work-orders" && (Array.isArray(visitPlanParam) ? visitPlanParam[0] : visitPlanParam) === "ready";
   const selectedParam = searchParams.selected;
   const selectedId = typeof selectedParam === "string" ? selectedParam : Array.isArray(selectedParam) ? selectedParam[0] : undefined;
   const selectedRow = selectedId ? model.table.rows.find((row) => row.id === selectedId) : undefined;
@@ -436,7 +438,7 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
             <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
             {triageMode ? (
               <div className={styles.triageWorkspace} data-has-preview={selectedRow || undefined}>
-                <div className={styles.triageList}>{surface === "work-orders" ? (
+                <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode ? (
                   <form className={styles.bulkForm} action="/api/ops/work-orders/bulk-follow-up" method="post">
                     <input type="hidden" name="returnTo" value={workOrderReturnTo} />
                     <DataTable table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} selection={{ name: "workOrderId", label: "Select open work orders for a bulk follow-up", isDisabled: (row) => ["Closed", "Cancelled"].includes(row.cells.find((cell) => cell.key === "status")?.value ?? "") }} />

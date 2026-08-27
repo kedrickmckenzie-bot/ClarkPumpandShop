@@ -34,7 +34,7 @@ export async function POST(
         { organizationId: context.session.organizationId, workOrderId, actor: context.actor },
       );
       return relativeRedirect303(
-        `/app/work-orders/${encodeURIComponent(workOrderId)}?view=service&notice=${encodeURIComponent("Future-visit hold released. Choose the next service path when ready.")}#future-visit-hold`,
+        `/app/work-orders/${encodeURIComponent(workOrderId)}?view=service&notice=${encodeURIComponent("This work is no longer set aside. Choose the next service path when ready.")}#future-visit-hold`,
       );
     }
     if (operation !== "place") throw new OpsDomainError("VALIDATION", "Choose a supported held-work action.");
@@ -58,7 +58,7 @@ export async function POST(
       },
     );
     return relativeRedirect303(
-      `/app/work-orders/${encodeURIComponent(workOrderId)}?view=service&notice=${encodeURIComponent("This work is approved to wait for a matching vendor visit.")}#future-visit-hold`,
+      `/app/work-orders/${encodeURIComponent(workOrderId)}?view=service&notice=${encodeURIComponent("This work is approved for later and will stay visible until it is handled.")}#future-visit-hold`,
     );
   } catch (error) {
     return opsApiError(error);

@@ -720,7 +720,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   }
   const now = clock.now(); const id = ids.next("work-order");
   if (input.holdForVisit) {
-    if (!input.categoryKey) throw new OpsDomainError("VALIDATION", "Choose a service category before holding work for a future visit");
+    if (!input.categoryKey) throw new OpsDomainError("VALIDATION", "Choose a service category before approving work for later");
     if (input.initialAssignment && input.initialAssignment.kind !== "choose_later") throw new OpsDomainError("VALIDATION", "Held work cannot also be assigned to a provider");
     if (!Number.isFinite(Date.parse(input.holdForVisit.deadlineAt)) || input.holdForVisit.deadlineAt <= now) throw new OpsDomainError("VALIDATION", "Held work needs a future review deadline");
     if (!(["complete_using_professional_judgment", "look_and_report"] as const).includes(input.holdForVisit.posture)) throw new OpsDomainError("VALIDATION", "Choose a supported held-work instruction");
@@ -874,7 +874,7 @@ export async function placeWorkOrderOnVisitHold(svc: OpsCommandServices, input: 
   assertActorOrganization(input.actor, input.organizationId);
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order not found");
-  if (terminalWorkOrderStatuses.has(workOrder.status) || workOrder.status === "resolved") throw new OpsDomainError("CONFLICT", "Closed or resolved work cannot be held for a future visit");
+  if (terminalWorkOrderStatuses.has(workOrder.status) || workOrder.status === "resolved") throw new OpsDomainError("CONFLICT", "Closed or resolved work cannot be approved for later");
   if (workOrder.status !== "approved") throw new OpsDomainError("CONFLICT", "Only manager-approved work can be held for a future vendor visit");
   if (!workOrder.categoryKey) throw new OpsDomainError("VALIDATION", "Choose a service category before holding this work");
   const now = clock.now();

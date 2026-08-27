@@ -1550,7 +1550,7 @@ const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
     { key: "store", label: "Store" },
     { key: "vendor", label: "Vendor" },
     { key: "work", label: "Work order" },
-    { key: "observed", label: "Observed window" },
+    { key: "observed", label: "Timing" },
     { key: "evidence", label: "Evidence" },
     { key: "outcome", label: "Outcome" },
   ],
@@ -1620,7 +1620,8 @@ const filterLabels: Record<string, string> = {
   exception: "Exceptions",
   "follow-up": "Follow-ups",
   true: "With recorded cost",
-  ready: "Approved for a future visit",
+  ready: "Approved for later",
+  upcoming: "Upcoming visits",
 };
 
 function heldWorkInstruction(posture: "complete_using_professional_judgment" | "look_and_report") {
@@ -1741,7 +1742,14 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
     .filter((work) => !visitPlan || (visitPlan === "ready" && activeHoldByWork.has(work.id)))
     .filter((work) => !status || (status === "open" ? !["closed", "cancelled"].includes(work.status) : work.status === status))
     .filter((work) => !stage || (stage === "vendor-response" && ["approved", "issued", "waiting_on_vendor"].includes(work.status)))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .sort((a, b) => {
+      if (visitPlan === "ready") {
+        const aDeadline = activeHoldByWork.get(a.id)?.deadlineAt ?? a.dueAt ?? a.createdAt;
+        const bDeadline = activeHoldByWork.get(b.id)?.deadlineAt ?? b.dueAt ?? b.createdAt;
+        return aDeadline.localeCompare(bDeadline) || a.number.localeCompare(b.number);
+      }
+      return b.createdAt.localeCompare(a.createdAt);
+    })
     .map((work) => {
       const assignment = assignmentForWork(fixture, scoped.organizationId, work.id);
       const hold = activeHoldByWork.get(work.id);
@@ -1750,19 +1758,20 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
         : assignment?.kind === "internal"
           ? "Internal maintenance"
           : hold
-            ? "Future vendor visit"
+            ? "Waiting to be grouped"
             : "Choose later";
+      const store = storeById.get(work.storeId);
       return {
         id: work.id,
         label: work.number,
         href: `/app/work-orders/${work.id}`,
         cells: [
           { key: "work", value: work.number, secondary: work.problem },
-          { key: "store", value: storeLabel(storeById.get(work.storeId)) },
+          { key: "store", value: store ? `Store ${store.storeNumber}` : "Store unavailable", secondary: store?.city },
           { key: "assignment", value: assignee ?? "Not assigned", secondary: hold ? heldWorkInstruction(hold.posture) : assignment ? sentence(assignment.status) : "Assignment needed" },
           { key: "next", value: hold ? heldWorkReviewLabel(hold.deadlineAt, fixture.asOf) : work.nextAction, secondary: hold ? `Review by ${date(hold.deadlineAt)}` : work.accountableParty },
           { key: "cost", value: money(costByWork.get(work.id) ?? 0) },
-          { key: "status", value: hold ? "Approved for a future visit" : workStatusLabel(work.status), tone: hold ? "info" : workStatusTone(work.status) },
+          { key: "status", value: hold ? "Approved for later" : workStatusLabel(work.status), tone: hold ? "info" : workStatusTone(work.status) },
         ],
       };
     });
@@ -1786,6 +1795,43 @@ function visitRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
       .filter((item) => item.organizationId === scoped.organizationId && item.status !== "resolved" && item.visitId)
       .map((item) => item.visitId!),
   );
+  if (status === "upcoming") {
+    const assignmentById = new Map(
+      fixture.assignments
+        .filter((assignment) => assignment.organizationId === scoped.organizationId)
+        .map((assignment) => [assignment.id, assignment]),
+    );
+    return (fixture.serviceAppointments ?? [])
+      .filter((appointment) => appointment.organizationId === scoped.organizationId && appointment.status === "confirmed")
+      .filter((appointment) => Date.parse(appointment.startsAt) >= Date.parse(fixture.asOf))
+      .map((appointment) => ({ appointment, work: workById.get(appointment.workOrderId), assignment: assignmentById.get(appointment.assignmentId) }))
+      .filter((item): item is typeof item & { work: NonNullable<typeof item.work> } => Boolean(item.work))
+      .filter(({ work }) => !storeId || work.storeId === storeId)
+      .filter(({ assignment }) => !vendorId || assignment?.vendorId === vendorId)
+      .filter(({ appointment, work, assignment }) => {
+        const store = storeById.get(work.storeId);
+        return !q || searchable(work.number, work.problem, storeLabel(store), vendorName(fixture, scoped.organizationId, assignment?.vendorId), appointment.note).includes(q);
+      })
+      .sort((a, b) => a.appointment.startsAt.localeCompare(b.appointment.startsAt))
+      .map(({ appointment, work, assignment }) => {
+        const store = storeById.get(work.storeId);
+        const storeTimeZone = store?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
+        return {
+          id: appointment.id,
+          label: `${work.number} scheduled service`,
+          href: `/app/work-orders/${work.id}?view=service`,
+          cells: [
+            { key: "visit", value: "Scheduled service", secondary: work.problem },
+            { key: "store", value: store ? `Store ${store.storeNumber}` : "Store unavailable", secondary: store?.city },
+            { key: "vendor", value: vendorName(fixture, scoped.organizationId, assignment?.vendorId) ?? "Vendor not recorded" },
+            { key: "work", value: work.number },
+            { key: "observed", value: dateTime(appointment.startsAt, storeTimeZone), secondary: "Confirmed appointment · store-local time" },
+            { key: "evidence", value: "Confirmed with vendor", tone: "positive" },
+            { key: "outcome", value: "Upcoming", tone: "info" },
+          ],
+        };
+      });
+  }
   return scoped.visits
     .filter((visit) => !status || visit.status === status)
     .filter((visit) => !storeId || visit.storeId === storeId)
@@ -1841,6 +1887,13 @@ function visitMetrics(fixture: OpsFixture, scoped: ScopedFixture, query: Operato
   });
   const active = base.filter((visit) => visit.status === "active").length;
   const completed = base.filter((visit) => visit.status !== "active").length;
+  const scopedWorkIds = new Set(scoped.workOrders.map((work) => work.id));
+  const upcoming = (fixture.serviceAppointments ?? []).filter((appointment) => {
+    if (appointment.organizationId !== scoped.organizationId || appointment.status !== "confirmed" || !scopedWorkIds.has(appointment.workOrderId)) return false;
+    if (Date.parse(appointment.startsAt) < Date.parse(fixture.asOf)) return false;
+    const assignment = fixture.assignments.find((candidate) => candidate.organizationId === scoped.organizationId && candidate.id === appointment.assignmentId);
+    return !selectedVendor || assignment?.vendorId === selectedVendor;
+  }).length;
   const noWorkOrder = base.filter((visit) => !visit.workOrderId).length;
   const needsReviewIds = new Set(
     base
@@ -1848,7 +1901,7 @@ function visitMetrics(fixture: OpsFixture, scoped: ScopedFixture, query: Operato
       .map((visit) => visit.id),
   );
   return [
-    { id: "all-visits", label: "All visits", value: String(base.length), supportingText: "Every observed visit in scope", link: { href: withContext(), label: "Show all visits" } },
+    { id: "upcoming-visits", label: "Upcoming", value: String(upcoming), supportingText: "Vendor-confirmed appointments", tone: upcoming ? "info" : "neutral", link: { href: withContext("upcoming"), label: "Show upcoming" } },
     { id: "active-visits", label: "Onsite now", value: String(active), supportingText: "Active check-ins", tone: active ? "info" : "neutral", link: { href: withContext("active"), label: "Show onsite" } },
     { id: "completed-visits", label: "Completed", value: String(completed), supportingText: "Checked-out visit history", tone: "positive", link: { href: withContext("checked_out"), label: "Show history" } },
     { id: "visit-review", label: "Needs review", value: String(needsReviewIds.size), supportingText: `${noWorkOrder} without a work order`, tone: needsReviewIds.size ? "warning" : "positive", link: { href: hrefWithQuery("/app/visits", { store: selectedStore, vendor: selectedVendor, review: "true" }), label: "Review visits" } },
@@ -2890,23 +2943,44 @@ export function buildListModel(
   const meta = session.demoEdition === "accountability"
     ? accountabilityMeta[route] ?? baseMeta
     : baseMeta;
-  const tableColumns = session.demoEdition === "accountability"
+  const visitPlan = route === "work-orders" ? first(query.visitPlan) : undefined;
+  const defaultTableColumns = session.demoEdition === "accountability"
     ? columns[route].filter((column) => {
         if (route === "work-orders" || route === "stores") return column.key !== "cost";
         return true;
       })
     : columns[route];
+  const tableColumns = route === "work-orders" && visitPlan === "ready"
+    ? [
+        { key: "work", label: "Work order / issue" },
+        { key: "store", label: "Store" },
+        { key: "assignment", label: "How to handle it" },
+        { key: "next", label: "Review timing" },
+      ]
+    : defaultTableColumns;
   const activeFilters = appliedFilters(fixture, scopeFixture(fixture, session), route, query);
   const visitStatus = route === "visits" ? first(query.status) : undefined;
   const visitTotal = route === "visits"
     ? scoped.visits.filter((visit) => !first(query.vendor) || visit.vendorId === first(query.vendor)).length
     : undefined;
+  const upcomingVisitCount = route === "visits"
+    ? (fixture.serviceAppointments ?? []).filter((appointment) => {
+        if (appointment.organizationId !== scoped.organizationId || appointment.status !== "confirmed" || Date.parse(appointment.startsAt) < Date.parse(fixture.asOf)) return false;
+        const work = scoped.workOrders.find((candidate) => candidate.id === appointment.workOrderId);
+        if (!work) return false;
+        const requestedVendorId = first(query.vendor);
+        if (!requestedVendorId) return true;
+        const assignment = fixture.assignments.find((candidate) => candidate.organizationId === scoped.organizationId && candidate.id === appointment.assignmentId);
+        return assignment?.vendorId === requestedVendorId;
+      }).length
+    : 0;
   const visitFilters = route === "visits"
     ? [{
         id: "visit-status",
         label: "Show",
         options: [
-          { value: "all", label: `All (${visitTotal})`, href: hrefWithoutQueryKey(route, query, "status"), selected: !visitStatus },
+          { value: "all", label: `History (${visitTotal})`, href: hrefWithoutQueryKey(route, query, "status"), selected: !visitStatus },
+          { value: "upcoming", label: `Upcoming (${upcomingVisitCount})`, href: hrefWithQuery(routePath(route), { store: first(query.store), vendor: first(query.vendor), status: "upcoming" }), selected: visitStatus === "upcoming" },
           { value: "active", label: `Onsite (${scoped.visits.filter((visit) => visit.status === "active").length})`, href: hrefWithQuery(routePath(route), { store: first(query.store), vendor: first(query.vendor), status: "active" }), selected: visitStatus === "active" },
           { value: "checked_out", label: `Completed (${scoped.visits.filter((visit) => visit.status === "checked_out").length})`, href: hrefWithQuery(routePath(route), { store: first(query.store), vendor: first(query.vendor), status: "checked_out" }), selected: visitStatus === "checked_out" },
         ],
@@ -2920,14 +2994,13 @@ export function buildListModel(
     const work = scoped.workOrders.find((candidate) => candidate.id === hold.workOrderId);
     if (work) heldStoreCounts.set(work.storeId, (heldStoreCounts.get(work.storeId) ?? 0) + 1);
   }
-  const visitPlan = route === "work-orders" ? first(query.visitPlan) : undefined;
   const workFilters = route === "work-orders"
     ? [{
         id: "work-visit-plan",
-        label: "Visit plan",
+        label: "Work timing",
         options: [
           { value: "all", label: `All work (${scoped.workOrders.length})`, href: hrefWithoutQueryKey(route, query, "visitPlan"), selected: !visitPlan },
-          { value: "ready", label: `Future visit (${activeHeldWork.length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), store: first(query.store), status: first(query.status), visitPlan: "ready" }), selected: visitPlan === "ready" },
+          { value: "ready", label: `Approved for later (${activeHeldWork.length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), store: first(query.store), status: first(query.status), visitPlan: "ready" }), selected: visitPlan === "ready" },
         ],
       }]
     : undefined;
@@ -2999,22 +3072,32 @@ export function buildListModel(
   return {
     state: rows.length || !q ? { kind: "ready" } : { kind: "empty", title: "No matching records", message: "Try another store number, address, vendor, or keyword." },
     page: {
-      title: route === "visits" && visitStatus === "active" ? "Vendors onsite now" : meta.title,
-      eyebrow: meta.eyebrow,
+      title: route === "visits" && visitStatus === "active"
+        ? "Vendors onsite now"
+        : route === "visits" && visitStatus === "upcoming"
+          ? "Upcoming visits"
+          : route === "work-orders" && visitPlan === "ready"
+            ? "Approved work to handle later"
+            : meta.title,
+      eyebrow: route === "visits" && visitStatus === "upcoming" ? "Scheduled service" : meta.eyebrow,
       description: route === "visits" && visitStatus === "active"
         ? `${totalRows} active visit${totalRows === 1 ? "" : "s"} · ${visitTotal} total visits in scope. Location and time are presence evidence, not certified labor.`
-        : meta.description,
+        : route === "visits" && visitStatus === "upcoming"
+          ? "Vendor-confirmed appointments that have not started yet. Times display in each store’s local time."
+          : route === "work-orders" && visitPlan === "ready"
+            ? "Low-priority jobs managers approved but do not want a separate vendor trip for. Review deadlines keep the work from being forgotten."
+            : meta.description,
       scopeLabel: activeScopeLabel,
       updatedLabel: `Source data through ${date(fixture.asOf)}`,
       primaryAction,
-      secondaryAction: route === "work-orders" && activeHeldWork.length ? { label: "Send jobs together", href: "/app/store-sweeps/new" } : undefined,
+      secondaryAction: route === "work-orders" && activeHeldWork.length ? { label: "Group approved jobs", href: "/app/store-sweeps/new" } : undefined,
     },
     metrics: route === "visits"
       ? visitMetrics(fixture, scoped, query)
       : route === "work-orders"
         ? [
-            { id: "ready-to-bundle", label: "Approved for a future visit", value: String(activeHeldWork.length), supportingText: "Low-priority work waiting for a practical vendor visit", tone: activeHeldWork.length ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open the list" } },
-            { id: "store-sweep-opportunities", label: "Stores with several approved jobs", value: String([...heldStoreCounts.values()].filter((count) => count >= 2).length), supportingText: "These stores may be good candidates for sending several jobs to one vendor together", tone: [...heldStoreCounts.values()].some((count) => count >= 2) ? "warning" : "positive", link: { href: "/app/store-sweeps/new", label: "Send jobs together" } },
+            { id: "ready-to-bundle", label: "Approved for later", value: String(activeHeldWork.length), supportingText: "Low-priority jobs that can wait for a practical opportunity", tone: activeHeldWork.length ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open the list" } },
+            { id: "store-sweep-opportunities", label: "Stores with several approved jobs", value: String([...heldStoreCounts.values()].filter((count) => count >= 2).length), supportingText: "Consider grouping these jobs for one vendor", tone: [...heldStoreCounts.values()].some((count) => count >= 2) ? "warning" : "positive", link: { href: "/app/store-sweeps/new", label: "Group approved jobs" } },
           ]
       : route === "action-center"
         ? [
@@ -3028,10 +3111,14 @@ export function buildListModel(
     filters: visitFilters ?? workFilters ?? actionFilters ?? estimateFilters,
     appliedFilters: activeFilters,
     clearFiltersHref: activeFilters.length ? routePath(route) : undefined,
-    table: { id: route, caption: meta.title, columns: tableColumns, rows },
-    resultSummary: route === "visits" && visitTotal !== undefined && totalRows !== visitTotal
-      ? `${totalRows} matching of ${visitTotal} visits`
-      : `${totalRows} source record${totalRows === 1 ? "" : "s"}`,
+    table: { id: route, caption: route === "work-orders" && visitPlan === "ready" ? "Approved work to handle later" : route === "visits" && visitStatus === "upcoming" ? "Upcoming visits" : meta.title, columns: tableColumns, rows },
+    resultSummary: route === "work-orders" && visitPlan === "ready"
+      ? `${totalRows} approved job${totalRows === 1 ? "" : "s"} across ${heldStoreCounts.size} store${heldStoreCounts.size === 1 ? "" : "s"}`
+      : route === "visits" && visitStatus === "upcoming"
+        ? `${totalRows} upcoming appointment${totalRows === 1 ? "" : "s"}`
+        : route === "visits" && visitTotal !== undefined && totalRows !== visitTotal
+          ? `${totalRows} matching of ${visitTotal} visits`
+          : `${totalRows} source record${totalRows === 1 ? "" : "s"}`,
     search: meta.placeholder ? {
       label: `Search ${meta.title}`,
       placeholder: meta.placeholder,
@@ -4474,6 +4561,8 @@ export function buildDetailModel(
     const storeWork = scoped.workOrders.filter((work) => work.storeId === store.id);
     const storeVisits = scoped.visits.filter((visit) => visit.storeId === store.id);
     const storeAssets = scoped.assets.filter((asset) => asset.storeId === store.id);
+    const storeScopedFixture = { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets };
+    const storeUpcomingVisits = visitRows(fixture, storeScopedFixture, { status: "upcoming" });
     const storeActiveHolds = (fixture.workOrderVisitHolds ?? [])
       .filter((hold) => hold.organizationId === scoped.organizationId && hold.status === "active" && storeWork.some((work) => work.id === hold.workOrderId && work.status === "approved"))
       .sort((left, right) => left.deadlineAt.localeCompare(right.deadlineAt));
@@ -4507,7 +4596,8 @@ export function buildDetailModel(
         statusTone: store.status === "active" ? "positive" : "neutral",
         facts: [
           { label: "Open work orders", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work orders" } },
-          { label: "Approved for a future visit", value: String(storeActiveHolds.length), link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
+          { label: "Upcoming visits", value: String(storeUpcomingVisits.length), link: { href: `/app/visits?store=${store.id}&status=upcoming`, label: "Open upcoming visits" } },
+          { label: "Approved for later", value: String(storeActiveHolds.length), link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
           { label: "Vendors onsite now", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open active visits" } },
           { label: "Recorded visits", value: String(storeVisits.length), link: { href: `/app/visits?store=${store.id}`, label: "Open visit history" } },
         ],
@@ -4521,15 +4611,22 @@ export function buildDetailModel(
               { label: "Trusted store computer", value: "Check a vendor in or finish an onsite visit", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.trustedStore104}`, label: "Open store check-in" } },
             ],
           }] : []),
+          ...(storeUpcomingVisits.length ? [{
+            id: "upcoming-visits",
+            title: "Upcoming visits",
+            description: "Vendor-confirmed appointments for this store, shown in the store’s local time.",
+            table: { id: "store-upcoming-visits", caption: `Upcoming visits for Store ${store.storeNumber}`, columns: columns.visits, rows: storeUpcomingVisits },
+            action: { label: "Open all upcoming visits", href: `/app/visits?store=${store.id}&status=upcoming` },
+          }] : []),
           ...(storeActiveHolds.length ? [{
             id: "ready-to-bundle",
-            title: "Approved work for a future visit",
-            description: "These jobs can wait for a vendor already onsite or be combined into one planned vendor visit.",
-            table: { id: "store-held-work", caption: `Approved work for a future visit at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
-            action: { label: "Send jobs together", href: `/app/store-sweeps/new?store=${store.id}` },
+            title: "Approved work to handle later",
+            description: "These jobs can wait for a suitable vendor already onsite or be grouped and offered to one vendor.",
+            table: { id: "store-held-work", caption: `Approved work to handle later at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
+            action: { label: "Group approved jobs", href: `/app/store-sweeps/new?store=${store.id}` },
           }] : []),
-          { id: "work", title: "Work orders", description: "The customer work-order numbers available for vendor service.", table: { id: "store-work", caption: `Work orders for Store ${store.storeNumber}`, columns: columns["work-orders"].filter((column) => column.key !== "cost"), rows: workRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
-          { id: "visits", title: "Check-in and checkout history", description: "Technician, vendor, selected work order, observed times, and checkout outcome.", table: { id: "store-visits", caption: `Visits for Store ${store.storeNumber}`, columns: columns.visits, rows: visitRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
+          { id: "work", title: "Work orders", description: "The customer work-order numbers available for vendor service.", table: { id: "store-work", caption: `Work orders for Store ${store.storeNumber}`, columns: columns["work-orders"].filter((column) => column.key !== "cost"), rows: workRows(fixture, storeScopedFixture, {}) } },
+          { id: "visits", title: "Check-in and checkout history", description: "Technician, vendor, selected work order, observed times, and checkout outcome.", table: { id: "store-visits", caption: `Visits for Store ${store.storeNumber}`, columns: columns.visits, rows: visitRows(fixture, storeScopedFixture, {}) } },
         ],
         backLink: { label: "Back to stores", href: "/app/stores" },
       };
@@ -4576,7 +4673,8 @@ export function buildDetailModel(
       statusTone: store.status === "active" ? "positive" : "neutral",
       facts: [
         { label: "Open work", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work" } },
-        { label: "Approved for a future visit", value: String(storeActiveHolds.length), helperText: storeActiveHolds.length ? "Manager-approved work waiting for a practical visit" : "No approved work waiting for a future visit", link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
+        { label: "Upcoming visits", value: String(storeUpcomingVisits.length), helperText: storeUpcomingVisits.length ? "Vendor-confirmed appointments" : "No confirmed appointments", link: { href: `/app/visits?store=${store.id}&status=upcoming`, label: "Open upcoming visits" } },
+        { label: "Approved for later", value: String(storeActiveHolds.length), helperText: storeActiveHolds.length ? "Low-priority work waiting for a practical opportunity" : "No work is currently approved for later", link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
         { label: "Onsite now", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open visits" } },
         { label: "Rolling 12-month cost", value: money(costForWorkIds(rollingCostByWork, storeWork.map((work) => work.id))), link: { href: `/app/spend?store=${store.id}`, label: "Explain cost" } },
         { label: "PM compliance", value: eligiblePm.length ? `${Math.round((completedPm.length / eligiblePm.length) * 100)}%` : "No closed window", helperText: eligiblePm.length ? `${completedPm.length} completed / ${eligiblePm.length} eligible occurrences` : "Future and open windows are excluded", link: { href: `/app/pm?store=${store.id}`, label: "Open PM evidence" } },
@@ -4594,12 +4692,19 @@ export function buildDetailModel(
             { label: "Vendor authorization", value: "Account-free acceptance, scheduling, decline, or question", link: { href: `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}`, label: "Open vendor view" } },
           ],
         }] : []),
+        ...(storeUpcomingVisits.length ? [{
+          id: "upcoming-visits",
+          title: "Upcoming visits",
+          description: "Vendor-confirmed appointments for this store, shown in the store’s local time.",
+          table: { id: "store-upcoming-visits", caption: `Upcoming visits for Store ${store.storeNumber}`, columns: columns.visits, rows: storeUpcomingVisits },
+          action: { label: "Open all upcoming visits", href: `/app/visits?store=${store.id}&status=upcoming` },
+        }] : []),
         ...(storeActiveHolds.length ? [{
           id: "ready-to-bundle",
-          title: "Approved work for a future visit",
-          description: "Combine several small jobs into one planned vendor visit, or leave them available for a matching vendor who is already onsite.",
-          table: { id: "store-held-work", caption: `Approved work for a future visit at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
-          action: { label: "Send jobs together", href: `/app/store-sweeps/new?store=${store.id}` },
+          title: "Approved work to handle later",
+          description: "Group several small jobs for one vendor, or leave them available for a suitable vendor who is already onsite.",
+          table: { id: "store-held-work", caption: `Approved work to handle later at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
+          action: { label: "Group approved jobs", href: `/app/store-sweeps/new?store=${store.id}` },
         }] : []),
         {
           id: "preventive-maintenance-plans",
@@ -4636,8 +4741,8 @@ export function buildDetailModel(
           action: { label: "Open company PM workspace", href: `/app/pm?store=${store.id}` },
         },
         { id: "service-areas", title: "Store systems", description: "Start broad, then open a service area and continue through flexible groups, equipment, components, work orders, and entered cost.", table: { id: "store-service-areas", caption: `Service areas for Store ${store.storeNumber}`, columns: [{ key: "area", label: "Service area" }, { key: "cost", label: "12-month cost", align: "end" }, { key: "open", label: "Open work", align: "end" }, { key: "pm", label: "PM" }, { key: "status", label: "Current signal" }], rows: serviceAreaRows } },
-        { id: "work", title: "Work orders", table: { id: "store-work", caption: `Work orders for Store ${store.storeNumber}`, columns: columns["work-orders"], rows: workRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
-        { id: "visits", title: "Service visits", description: "All channels create the same store visit record.", table: { id: "store-visits", caption: `Visits for Store ${store.storeNumber}`, columns: columns.visits, rows: visitRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
+        { id: "work", title: "Work orders", table: { id: "store-work", caption: `Work orders for Store ${store.storeNumber}`, columns: columns["work-orders"], rows: workRows(fixture, storeScopedFixture, {}) } },
+        { id: "visits", title: "Service visit history", description: "Completed and active check-in records across every channel. Upcoming appointments are shown separately above.", table: { id: "store-visits", caption: `Visit history for Store ${store.storeNumber}`, columns: columns.visits, rows: visitRows(fixture, storeScopedFixture, {}) } },
         { id: "equipment", title: "Equipment & lifecycle", facts: [{ label: "Tracked assets", value: String(storeAssets.length) }, { label: "Marked for review", value: String(storeAssets.filter((asset) => asset.status === "watch").length) }, { label: "Optional components", value: String(fixture.components.filter((component) => component.organizationId === scoped.organizationId && storeAssets.some((asset) => asset.id === component.assetId)).length) }], action: { label: "Open equipment", href: `/app/equipment?store=${store.id}` } },
       ],
       backLink: { label: "Back to stores", href: "/app/stores" },

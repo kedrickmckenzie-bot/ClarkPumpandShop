@@ -45,7 +45,11 @@ describe("operator presenter drill-through contracts", () => {
     const session = executiveSession();
     const allVisits = buildListModel(fixture, session, "visits");
     const onsite = buildListModel(fixture, session, "visits", { status: "active" });
+    const upcoming = buildListModel(fixture, session, "visits", { status: "upcoming" });
     const activeCount = fixture.visits.filter((visit) => visit.status === "active").length;
+    const upcomingCount = (fixture.serviceAppointments ?? []).filter(
+      (appointment) => appointment.status === "confirmed" && Date.parse(appointment.startsAt) >= Date.parse(fixture.asOf),
+    ).length;
 
     expect(allVisits.table.rows).toHaveLength(Math.min(25, fixture.visits.length));
     expect(allVisits.pagination?.summary).toBe(`Showing 1–${Math.min(25, fixture.visits.length)} of ${fixture.visits.length}`);
@@ -57,6 +61,33 @@ describe("operator presenter drill-through contracts", () => {
     expect(onsite.metrics?.find((metric) => metric.id === "completed-visits")?.value).toBe(
       String(fixture.visits.filter((visit) => visit.status !== "active").length),
     );
+    expect(upcoming.page.title).toBe("Upcoming visits");
+    expect(upcoming.table.rows).toHaveLength(upcomingCount);
+    expect(upcoming.table.rows.every((row) => row.href.includes("/app/work-orders/") && row.href.includes("view=service"))).toBe(true);
+    expect(upcoming.table.rows.every((row) => row.cells.find((cell) => cell.key === "outcome")?.value === "Upcoming")).toBe(true);
+    expect(upcoming.metrics?.find((metric) => metric.id === "upcoming-visits")?.value).toBe(String(upcomingCount));
+    expect(upcoming.filters?.[0]?.options.map((option) => option.label)).toEqual(
+      expect.arrayContaining([`History (${fixture.visits.length})`, `Upcoming (${upcomingCount})`]),
+    );
+  });
+
+  it("separates work approved for later from scheduled appointments", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const model = buildListModel(fixture, executiveSession(), "work-orders", { visitPlan: "ready" });
+    const activeHolds = (fixture.workOrderVisitHolds ?? []).filter((hold) => hold.status === "active");
+    const heldStoreCount = new Set(
+      activeHolds.map((hold) => fixture.workOrders.find((workOrder) => workOrder.id === hold.workOrderId)?.storeId).filter(Boolean),
+    ).size;
+
+    expect(model.page.title).toBe("Approved work to handle later");
+    expect(model.page.secondaryAction?.label).toBe("Group approved jobs");
+    expect(model.table.columns.map((column) => column.key)).toEqual(["work", "store", "assignment", "next"]);
+    expect(model.table.rows).toHaveLength(activeHolds.length);
+    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "assignment")?.value === "Waiting to be grouped")).toBe(true);
+    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "store")?.value.startsWith("Store "))).toBe(true);
+    expect(model.resultSummary).toBe(`${activeHolds.length} approved jobs across ${heldStoreCount} stores`);
+    expect(model.filters?.[0]?.label).toBe("Work timing");
+    expect(model.filters?.[0]?.options.some((option) => option.label === `Approved for later (${activeHolds.length})`)).toBe(true);
   });
 
   it("keeps the executive home strategic and searches across operational records", () => {
@@ -425,6 +456,24 @@ describe("operator presenter drill-through contracts", () => {
       `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}`,
     ]);
     expect(section?.facts?.every((fact) => Boolean(fact.link?.label))).toBe(true);
+  });
+
+  it("surfaces confirmed appointments directly on the individual store record", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const storeId = NORTHLINE_DEMO_HANDLES.storyStoreId;
+    const detail = buildDetailModel(fixture, executiveSession(), "store", storeId);
+    const upcomingFact = detail.facts.find((fact) => fact.label === "Upcoming visits");
+    const upcomingSection = detail.sections.find((section) => section.id === "upcoming-visits");
+
+    expect(upcomingFact).toMatchObject({
+      value: "1",
+      link: { href: `/app/visits?store=${storeId}&status=upcoming`, label: "Open upcoming visits" },
+    });
+    expect(upcomingSection?.title).toBe("Upcoming visits");
+    expect(upcomingSection?.table?.rows).toHaveLength(1);
+    expect(upcomingSection?.table?.rows[0]?.cells.find((cell) => cell.key === "work")?.value).toBe("CPS-2026-0216");
+    expect(upcomingSection?.table?.rows[0]?.cells.find((cell) => cell.key === "observed")?.secondary).toBe("Confirmed appointment · store-local time");
+    expect(upcomingSection?.action?.href).toBe(`/app/visits?store=${storeId}&status=upcoming`);
   });
 
   it("reconciles the store PM denominator to its service-area rows", () => {
