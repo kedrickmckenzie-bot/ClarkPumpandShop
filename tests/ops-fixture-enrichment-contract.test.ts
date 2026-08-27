@@ -264,6 +264,14 @@ describe("Northline enriched presentation fixture contract", () => {
 
   it("uses multiple coherent PM periods and connects PM to canonical work", () => {
     const fixture = buildNorthlinePresentationFixture();
+    expect(fixture.maintenancePrograms).toHaveLength(5);
+    expect(fixture.maintenancePrograms.map((program) => program.name)).toEqual(expect.arrayContaining([
+      "Quarterly refrigeration preventive service",
+      "Spring HVAC cooling readiness",
+      "Fall HVAC heating readiness",
+      "Foodservice equipment deep clean",
+      "Monthly pest-control monitoring",
+    ]));
     expect(fixture.pmOccurrences.length).toBeGreaterThan(fixture.pmPlans.length);
     expect(new Set(fixture.pmOccurrences.map((occurrence) => occurrence.dueAt.slice(0, 7))).size).toBeGreaterThanOrEqual(5);
     expect(new Set(fixture.pmOccurrences.map((occurrence) => occurrence.status))).toEqual(
@@ -286,6 +294,14 @@ describe("Northline enriched presentation fixture contract", () => {
     expect(fixture.pmOccurrences.find((occurrence) => occurrence.status === "waived")).toMatchObject({
       storeId: "store-northline-115",
       assetId: "asset-115-beer-cave",
+    });
+    const reconciliation = fixture.serviceDiscrepancies.find((item) => item.id === "service-discrepancy-pm-107-observed-visits");
+    expect(reconciliation).toBeTruthy();
+    expect(JSON.parse(reconciliation!.factsJson)).toMatchObject({
+      reconciliationKind: "pm_billed_vs_observed",
+      billedServiceUnits: 4,
+      observedVisitCount: 2,
+      determination: "review_only",
     });
   });
 

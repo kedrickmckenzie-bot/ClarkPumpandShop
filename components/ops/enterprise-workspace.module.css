@@ -407,7 +407,7 @@
 
 .sectionMeta {
   color: var(--workspace-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -949,7 +949,7 @@
   align-items: center;
   gap: 7px;
   color: var(--to-copy);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 750;
   text-transform: uppercase;
 }
@@ -1467,7 +1467,7 @@
 
 .pagination > span {
   color: var(--workspace-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .pagination > div {
@@ -1486,7 +1486,7 @@
   border-radius: var(--workspace-radius-control);
   background: #ffffff;
   color: var(--to-copy);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 

@@ -1031,6 +1031,10 @@ function buildFixture(): OpsFixture {
   const pmOccurrences: PmOccurrence[] = [];
   const maintenancePrograms: OpsFixture["maintenancePrograms"] = [
     { id: "maintenance-program-quarterly-refrigeration-v1", organizationId: organization.id, programKey: "quarterly-refrigeration", version: 1, name: "Quarterly refrigeration preventive service", tradeKey: "refrigeration", workType: "preventive_maintenance", applicableAssetTypes: ["equipment-template-beer-cave"], frequencyDays: 90, recurrenceKind: "fixed_calendar", dueWindowDays: 7, scheduleAnchorAt: atYear(2026, 3, 14, 12), seasonalStartMonth: 1, seasonalEndMonth: 12, checklistTemplateId: "checklist-quarterly-refrigeration-v1", requiredEvidenceKinds: ["check_in", "check_out", "photo"], expectedDurationMinutes: 75, completionCriteria: "Every Asset-level Work Item has a complete checklist, required evidence, measurements, and a documented result.", correctiveWorkAuthorityMinor: 50_000, currency: "USD", deficiencyHandling: "quote_and_approval", status: "active", createdAt: atYear(2026, 1, 1) },
+    { id: "maintenance-program-spring-hvac-v1", organizationId: organization.id, programKey: "spring-hvac-readiness", version: 1, name: "Spring HVAC cooling readiness", tradeKey: "hvac", workType: "preventive_maintenance", applicableAssetTypes: ["equipment-template-rtu-5ton", "equipment-template-rtu-3ton"], frequencyDays: 365, recurrenceKind: "fixed_calendar", dueWindowDays: 14, scheduleAnchorAt: atYear(2026, 4, 15, 12), seasonalStartMonth: 3, seasonalEndMonth: 5, checklistTemplateId: "checklist-spring-hvac-v1", requiredEvidenceKinds: ["check_in", "check_out", "photo"], expectedDurationMinutes: 60, completionCriteria: "Cooling operation, filters, coils, electrical condition, and temperature split are documented for each rooftop unit.", correctiveWorkAuthorityMinor: 35_000, currency: "USD", deficiencyHandling: "quote_and_approval", status: "active", createdAt: atYear(2026, 1, 2) },
+    { id: "maintenance-program-fall-hvac-v1", organizationId: organization.id, programKey: "fall-hvac-readiness", version: 1, name: "Fall HVAC heating readiness", tradeKey: "hvac", workType: "preventive_maintenance", applicableAssetTypes: ["equipment-template-rtu-5ton", "equipment-template-rtu-3ton"], frequencyDays: 365, recurrenceKind: "fixed_calendar", dueWindowDays: 14, scheduleAnchorAt: atYear(2026, 10, 15, 12), seasonalStartMonth: 9, seasonalEndMonth: 11, checklistTemplateId: "checklist-fall-hvac-v1", requiredEvidenceKinds: ["check_in", "check_out", "photo"], expectedDurationMinutes: 55, completionCriteria: "Heating operation, heat exchanger condition, controls, and safety cutoffs are documented for each rooftop unit.", correctiveWorkAuthorityMinor: 35_000, currency: "USD", deficiencyHandling: "quote_and_approval", status: "active", createdAt: atYear(2026, 1, 2) },
+    { id: "maintenance-program-foodservice-deep-clean-v1", organizationId: organization.id, programKey: "foodservice-deep-clean", version: 1, name: "Foodservice equipment deep clean", tradeKey: "foodservice", workType: "preventive_maintenance", applicableAssetTypes: ["equipment-template-rapid-cook-oven"], frequencyDays: 180, recurrenceKind: "fixed_calendar", dueWindowDays: 10, scheduleAnchorAt: atYear(2026, 2, 15, 12), seasonalStartMonth: 1, seasonalEndMonth: 12, checklistTemplateId: "checklist-foodservice-deep-clean-v1", requiredEvidenceKinds: ["check_in", "check_out", "photo"], expectedDurationMinutes: 50, completionCriteria: "Accessible cooking surfaces, filters, airflow paths, door condition, and operating checks are documented.", correctiveWorkAuthorityMinor: 25_000, currency: "USD", deficiencyHandling: "review", status: "active", createdAt: atYear(2026, 1, 3) },
+    { id: "maintenance-program-pest-monitoring-v1", organizationId: organization.id, programKey: "monthly-pest-monitoring", version: 1, name: "Monthly pest-control monitoring", tradeKey: "store_sanitation", workType: "inspection", applicableAssetTypes: [], frequencyDays: 30, recurrenceKind: "fixed_calendar", dueWindowDays: 5, scheduleAnchorAt: atYear(2026, 1, 28, 12), seasonalStartMonth: 1, seasonalEndMonth: 12, checklistTemplateId: "checklist-pest-monitoring-v1", requiredEvidenceKinds: ["check_in", "check_out"], expectedDurationMinutes: 30, completionCriteria: "Monitoring points, observed activity, corrective recommendations, and service completion are documented for the store.", correctiveWorkAuthorityMinor: 15_000, currency: "USD", deficiencyHandling: "corrective_work_order", status: "active", createdAt: atYear(2026, 1, 3) },
   ];
   const checklistTemplates: OpsFixture["checklistTemplates"] = [
     { id: "checklist-quarterly-refrigeration-v1", organizationId: organization.id, name: "Quarterly refrigeration condition checklist", version: 1, items: [
@@ -1039,7 +1043,49 @@ function buildFixture(): OpsFixture {
       { key: "door-seal", label: "Inspect door seal and closure", responseKind: "pass", required: true },
       { key: "deficiency", label: "Document any deficiency and required follow-up", responseKind: "text", required: true },
     ], status: "active", createdAt: atYear(2026, 1, 1) },
+    { id: "checklist-spring-hvac-v1", organizationId: organization.id, name: "Spring rooftop-unit cooling checklist", version: 1, items: [
+      { key: "filters-coils", label: "Inspect filters and accessible coils", responseKind: "pass", required: true, evidenceRequired: true },
+      { key: "temperature-split", label: "Record supply and return temperature split", responseKind: "measurement", required: true, measurementUnit: "°F", minimumValue: 14, maximumValue: 24 },
+      { key: "deficiency", label: "Document any cooling-readiness deficiency", responseKind: "text", required: true },
+    ], status: "active", createdAt: atYear(2026, 1, 2) },
+    { id: "checklist-fall-hvac-v1", organizationId: organization.id, name: "Fall rooftop-unit heating checklist", version: 1, items: [
+      { key: "heat-operation", label: "Confirm heating operation and safety controls", responseKind: "pass", required: true, evidenceRequired: true },
+      { key: "heat-exchanger", label: "Inspect accessible heat-exchanger surfaces", responseKind: "pass", required: true },
+      { key: "deficiency", label: "Document any heating-readiness deficiency", responseKind: "text", required: true },
+    ], status: "active", createdAt: atYear(2026, 1, 2) },
+    { id: "checklist-foodservice-deep-clean-v1", organizationId: organization.id, name: "Foodservice equipment deep-clean checklist", version: 1, items: [
+      { key: "cleaning", label: "Complete the manufacturer-safe deep-clean procedure", responseKind: "pass", required: true, evidenceRequired: true },
+      { key: "airflow-door", label: "Inspect airflow paths and door condition", responseKind: "pass", required: true },
+      { key: "deficiency", label: "Document any service recommendation", responseKind: "text", required: true },
+    ], status: "active", createdAt: atYear(2026, 1, 3) },
+    { id: "checklist-pest-monitoring-v1", organizationId: organization.id, name: "Store pest-control monitoring checklist", version: 1, items: [
+      { key: "monitoring-points", label: "Inspect documented monitoring points", responseKind: "pass", required: true },
+      { key: "activity", label: "Record observed activity or note none observed", responseKind: "text", required: true },
+      { key: "recommendation", label: "Document any corrective recommendation", responseKind: "text", required: true },
+    ], status: "active", createdAt: atYear(2026, 1, 3) },
   ];
+
+  const addEquipmentProgramPlans = (input: {
+    programId: string;
+    planKey: string;
+    templateKeys: string[];
+    planName: string;
+    cadenceDays: number;
+    completionWindowDays: number;
+    categoryKey: string;
+    preferredVendorId?: string;
+    backupVendorId?: string;
+  }) => {
+    const program = maintenancePrograms.find((candidate) => candidate.id === input.programId)!;
+    assets.filter((asset) => input.templateKeys.includes(assetEquipmentTemplateKeys.get(asset.id) ?? "")).forEach((asset) => {
+      const store = stores.find((candidate) => candidate.id === asset.storeId)!;
+      pmPlans.push({ id: `pm-plan-${store.storeNumber}-${input.planKey}-${asset.assetTag.toLocaleLowerCase("en-US")}`, organizationId: organization.id, name: input.planName, programId: program.id, programVersion: program.version, storeId: store.id, assetId: asset.id, categoryKey: input.categoryKey, cadenceDays: input.cadenceDays, completionWindowDays: input.completionWindowDays, preferredVendorId: input.preferredVendorId, backupVendorId: input.backupVendorId, effectiveStartsAt: atYear(2026, 1, 1), programAuthorizationMinor: program.correctiveWorkAuthorityMinor, currency: "USD", schedulingMode: "platform_proposed_vendor_confirmed", escalationRules: "Escalate any occurrence that remains uncommitted when its due window opens.", active: true, createdAt: at(1, 6, 15) });
+    });
+  };
+  addEquipmentProgramPlans({ programId: "maintenance-program-spring-hvac-v1", planKey: "spring-hvac", templateKeys: ["rtu-5ton", "rtu-3ton"], planName: "Spring HVAC cooling readiness", cadenceDays: 365, completionWindowDays: 14, categoryKey: "hvac", preferredVendorId: "vendor-northline-cedar", backupVendorId: "vendor-northline-brightpath" });
+  addEquipmentProgramPlans({ programId: "maintenance-program-fall-hvac-v1", planKey: "fall-hvac", templateKeys: ["rtu-5ton", "rtu-3ton"], planName: "Fall HVAC heating readiness", cadenceDays: 365, completionWindowDays: 14, categoryKey: "hvac", preferredVendorId: "vendor-northline-cedar", backupVendorId: "vendor-northline-brightpath" });
+  addEquipmentProgramPlans({ programId: "maintenance-program-foodservice-deep-clean-v1", planKey: "foodservice", templateKeys: ["rapid-cook-oven"], planName: "Foodservice equipment deep clean", cadenceDays: 180, completionWindowDays: 10, categoryKey: "foodservice", preferredVendorId: "vendor-northline-cedar" });
+  stores.forEach((store) => pmPlans.push({ id: `pm-plan-${store.storeNumber}-pest-monitoring`, organizationId: organization.id, name: "Monthly pest-control monitoring", programId: "maintenance-program-pest-monitoring-v1", programVersion: 1, storeId: store.id, categoryKey: "store_sanitation", cadenceDays: 30, completionWindowDays: 5, effectiveStartsAt: atYear(2026, 1, 1), programAuthorizationMinor: 15_000, currency: "USD", schedulingMode: "vendor_planned", escalationRules: "Escalate if the monthly service window closes without documented completion.", active: true, createdAt: at(1, 6, 15) }));
   const pmWorkItems: OpsFixture["pmWorkItems"] = [];
   const checklistResponses: OpsFixture["checklistResponses"] = [];
   const serviceRuns: OpsFixture["serviceRuns"] = [];
@@ -1111,7 +1157,7 @@ function buildFixture(): OpsFixture {
     { key: "2026-q3", year: 2026, month: 8, linkWorkOrder: false },
     { key: "2026-q4", year: 2026, month: 11, linkWorkOrder: false },
   ] as const;
-  pmPlans.forEach((plan, storeIndex) => {
+  pmPlans.filter((plan) => plan.programId === "maintenance-program-quarterly-refrigeration-v1").forEach((plan, storeIndex) => {
     const store = stores[storeIndex];
     const asset = assets.find((candidate) => candidate.id === plan.assetId)!;
     pmPeriods.forEach((period, periodIndex) => {
@@ -1146,33 +1192,131 @@ function buildFixture(): OpsFixture {
       const issuedAt = new Date(Date.parse(assignedAt) + 15 * 60_000).toISOString();
       const visitStart = completedAt!;
       const visitEnd = new Date(Date.parse(visitStart) + (55 + storeIndex % 5 * 8) * 60_000).toISOString();
+      const outsideVendorPm = store.storeNumber === "107";
       const internalMembershipId = storeIndex % 2 ? "membership-northline-tech-2" : "membership-northline-tech-1";
       const internalMember = memberships.find((membership) => membership.id === internalMembershipId)!;
       const internalUser = users.find((user) => user.id === internalMember.userId)!;
+      const providerName = outsideVendorPm ? "Summit Refrigeration" : "Northline Internal Maintenance";
+      const technicianName = outsideVendorPm ? "Avery Chen" : internalUser.displayName;
       const assignmentId = `assignment-pm-${store.storeNumber}-${period.key}`;
       const issuanceId = `issuance-pm-${store.storeNumber}-${period.key}-r1`;
       const visitId = `visit-pm-${store.storeNumber}-${period.key}`;
       const problem = "Quarterly refrigeration inspection and documented operating check";
       const nte = { amountMinor: 45_000, currency: "USD" };
-      workOrders.push({ id: workOrderId, organizationId: organization.id, number: workOrderNumber, storeId: store.id, problem, authorizedScope: "Inspect the beer cave refrigeration system, clean accessible coils, record operating condition, and identify follow-up needs.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", assetId: plan.assetId, componentId: store.storeNumber === "104" && period.key === "2025-q4" ? "component-104-beer-cave-condensing-unit" : undefined, priority: "planned", status: "closed", accountableParty: "Northline Internal Maintenance", nextAction: "No action required", nte, createdAt, closedAt: visitEnd });
-      assignments.push({ id: assignmentId, organizationId: organization.id, workOrderId, kind: "internal", internalMembershipId, status: "completed", assignedAt });
-      issuances.push({ id: issuanceId, organizationId: organization.id, workOrderId, assignmentId, revision: 1, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber, store: { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: [store.address1, `${store.city}, ${store.state} ${store.postalCode}`].join(", ") }, vendor: { id: internalMembershipId, name: internalUser.displayName }, problem, priority: "planned", authorizedScope: "Inspect the beer cave refrigeration system, clean accessible coils, record operating condition, and identify follow-up needs.", categoryKey: "refrigeration", asset: { id: asset.id, name: asset.name, assetTag: asset.assetTag }, requestedTiming: due, nte, billingInstruction: `Reference operator work order ${workOrderNumber} on any related service paperwork.` }), channel: "manual", issuedAt });
-      visits.push({ id: visitId, organizationId: organization.id, storeId: store.id, providerKind: "internal", internalMembershipId, workOrderId, technicianName: internalUser.displayName, providerName: "Northline Internal Maintenance", purpose: problem, status: "checked_out", startedChannel: "store_device", endedChannel: "store_device", checkedInAt: visitStart, checkedOutAt: visitEnd, outcome: "pm_complete", outcomeNotes: "Inspection completed; temperatures, coil condition, and controller operation documented.", observedDurationSeconds: durationSeconds(visitStart, visitEnd) });
+      workOrders.push({ id: workOrderId, organizationId: organization.id, number: workOrderNumber, storeId: store.id, problem, authorizedScope: "Inspect the beer cave refrigeration system, clean accessible coils, record operating condition, and identify follow-up needs.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", assetId: plan.assetId, componentId: store.storeNumber === "104" && period.key === "2025-q4" ? "component-104-beer-cave-condensing-unit" : undefined, priority: "planned", status: "closed", accountableParty: providerName, nextAction: "No action required", nte, createdAt, closedAt: visitEnd });
+      assignments.push(outsideVendorPm
+        ? { id: assignmentId, organizationId: organization.id, workOrderId, kind: "outside_vendor", vendorId: "vendor-northline-summit", status: "completed", assignedAt }
+        : { id: assignmentId, organizationId: organization.id, workOrderId, kind: "internal", internalMembershipId, status: "completed", assignedAt });
+      issuances.push({ id: issuanceId, organizationId: organization.id, workOrderId, assignmentId, revision: 1, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber, store: { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: [store.address1, `${store.city}, ${store.state} ${store.postalCode}`].join(", ") }, vendor: outsideVendorPm ? { id: "vendor-northline-summit", name: providerName } : { id: internalMembershipId, name: providerName }, problem, priority: "planned", authorizedScope: "Inspect the beer cave refrigeration system, clean accessible coils, record operating condition, and identify follow-up needs.", categoryKey: "refrigeration", asset: { id: asset.id, name: asset.name, assetTag: asset.assetTag }, requestedTiming: due, nte, billingInstruction: `Reference operator work order ${workOrderNumber} on any related service paperwork.` }), channel: outsideVendorPm ? "email" : "manual", issuedAt });
+      visits.push({ id: visitId, organizationId: organization.id, storeId: store.id, providerKind: outsideVendorPm ? "outside_vendor" : "internal", vendorId: outsideVendorPm ? "vendor-northline-summit" : undefined, internalMembershipId: outsideVendorPm ? undefined : internalMembershipId, workOrderId, technicianName, providerName, purpose: problem, status: "checked_out", startedChannel: outsideVendorPm ? "secure_link" : "store_device", endedChannel: "store_device", checkedInAt: visitStart, checkedOutAt: visitEnd, outcome: "pm_complete", outcomeNotes: "Inspection completed; temperatures, coil condition, and controller operation documented.", observedDurationSeconds: durationSeconds(visitStart, visitEnd) });
       visitEvidence.push(
         { id: `evidence-${visitId}-in`, organizationId: organization.id, visitId, kind: "check_in", channel: "store_device", observedAt: visitStart, location: { result: "trusted_store_device", capturedAt: visitStart }, payloadJson: JSON.stringify({ occurrenceId }) },
         { id: `evidence-${visitId}-out`, organizationId: organization.id, visitId, kind: "check_out", channel: "store_device", observedAt: visitEnd, location: { result: "trusted_store_device", capturedAt: visitEnd }, payloadJson: JSON.stringify({ outcome: "pm_complete", occurrenceId }) },
       );
-      costLines.push({ id: `cost-pm-${store.storeNumber}-${period.key}`, organizationId: organization.id, workOrderId, kind: "labor", description: "Internal preventive-maintenance labor", amount: { amountMinor: 18_500 + storeIndex * 250, currency: "USD" }, serviceDate: visitEnd.slice(0, 10), recordedAt: new Date(Date.parse(visitEnd) + 30 * 60_000).toISOString() });
+      costLines.push({ id: `cost-pm-${store.storeNumber}-${period.key}`, organizationId: organization.id, workOrderId, kind: "labor", description: outsideVendorPm ? "Outside-vendor preventive-maintenance service" : "Internal preventive-maintenance labor", amount: { amountMinor: outsideVendorPm ? 42_500 : 18_500 + storeIndex * 250, currency: "USD" }, serviceDate: visitEnd.slice(0, 10), recordedAt: new Date(Date.parse(visitEnd) + 30 * 60_000).toISOString() });
       const workItemId = `pm-work-item-${store.storeNumber}-${period.key}-beer-cave`;
-      pmWorkItems.push({ id: workItemId, organizationId: organization.id, occurrenceId, workOrderId, assetId: asset.id, requiredTask: "Inspect, clean, measure, and document the beer-cave refrigeration system", checklistTemplateId: "checklist-quarterly-refrigeration-v1", status: "completed", result: "Operating condition documented; no unresolved deficiency", costAllocationMinor: 18_500 + storeIndex * 250, currency: "USD", createdAt, completedAt: visitEnd });
+      pmWorkItems.push({ id: workItemId, organizationId: organization.id, occurrenceId, workOrderId, assetId: asset.id, requiredTask: "Inspect, clean, measure, and document the beer-cave refrigeration system", checklistTemplateId: "checklist-quarterly-refrigeration-v1", status: "completed", result: "Operating condition documented; no unresolved deficiency", costAllocationMinor: outsideVendorPm ? 42_500 : 18_500 + storeIndex * 250, currency: "USD", createdAt, completedAt: visitEnd });
       checklistResponses.push(
-        { id: `${workItemId}-coil`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "coil-condition", responseKind: "pass", passed: true, evidenceFileIds: [], recordedByActorType: "user", recordedByActorId: internalMembershipId, recordedByActorName: internalUser.displayName, recordedAt: visitEnd },
-        { id: `${workItemId}-temp`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "discharge-temperature", responseKind: "measurement", numericValue: 37 + storeIndex % 4, measurementUnit: "°F", evidenceFileIds: [], recordedByActorType: "user", recordedByActorId: internalMembershipId, recordedByActorName: internalUser.displayName, recordedAt: visitEnd },
-        { id: `${workItemId}-door`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "door-seal", responseKind: "pass", passed: true, evidenceFileIds: [], recordedByActorType: "user", recordedByActorId: internalMembershipId, recordedByActorName: internalUser.displayName, recordedAt: visitEnd },
-        { id: `${workItemId}-deficiency`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "deficiency", responseKind: "text", textValue: "No unresolved deficiency observed.", evidenceFileIds: [], recordedByActorType: "user", recordedByActorId: internalMembershipId, recordedByActorName: internalUser.displayName, recordedAt: visitEnd },
+        { id: `${workItemId}-coil`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "coil-condition", responseKind: "pass", passed: true, evidenceFileIds: [], recordedByActorType: outsideVendorPm ? "technician" : "user", recordedByActorId: outsideVendorPm ? undefined : internalMembershipId, recordedByActorName: technicianName, recordedAt: visitEnd },
+        { id: `${workItemId}-temp`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "discharge-temperature", responseKind: "measurement", numericValue: 37 + storeIndex % 4, measurementUnit: "°F", evidenceFileIds: [], recordedByActorType: outsideVendorPm ? "technician" : "user", recordedByActorId: outsideVendorPm ? undefined : internalMembershipId, recordedByActorName: technicianName, recordedAt: visitEnd },
+        { id: `${workItemId}-door`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "door-seal", responseKind: "pass", passed: true, evidenceFileIds: [], recordedByActorType: outsideVendorPm ? "technician" : "user", recordedByActorId: outsideVendorPm ? undefined : internalMembershipId, recordedByActorName: technicianName, recordedAt: visitEnd },
+        { id: `${workItemId}-deficiency`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "deficiency", responseKind: "text", textValue: "No unresolved deficiency observed.", evidenceFileIds: [], recordedByActorType: outsideVendorPm ? "technician" : "user", recordedByActorId: outsideVendorPm ? undefined : internalMembershipId, recordedByActorName: technicianName, recordedAt: visitEnd },
       );
     });
   });
+  const addProgramOccurrence = (input: {
+    plan: PmPlan;
+    key: string;
+    dueAt: string;
+    status: PmOccurrence["status"];
+    completedAt?: string;
+    exceptionReason?: string;
+  }) => {
+    const windowStartsAt = new Date(Date.parse(input.dueAt) - input.plan.completionWindowDays * 86_400_000).toISOString();
+    const windowEndsAt = new Date(Date.parse(input.dueAt) + input.plan.completionWindowDays * 86_400_000).toISOString();
+    pmOccurrences.push({ id: `pm-occurrence-${input.plan.id.replace(/^pm-plan-/, "")}-${input.key}`, organizationId: organization.id, planId: input.plan.id, storeId: input.plan.storeId!, assetId: input.plan.assetId, programId: input.plan.programId, programVersion: input.plan.programVersion, planVersion: 1, dueAt: input.dueAt, windowStartsAt, windowEndsAt, status: input.status, completedAt: input.completedAt, result: input.completedAt ? "Program checklist completion recorded" : undefined, exceptionReason: input.exceptionReason, recurrenceKey: `${input.plan.id}:${input.key}`, createdAt: new Date(Date.parse(input.dueAt) - input.plan.cadenceDays * 86_400_000).toISOString() });
+  };
+
+  const newProgramPlans = pmPlans.filter((plan) => plan.programId !== "maintenance-program-quarterly-refrigeration-v1");
+  const programPlanIndexes = new Map<string, number>();
+  newProgramPlans.forEach((plan) => {
+    const program = maintenancePrograms.find((candidate) => candidate.id === plan.programId)!;
+    const index = programPlanIndexes.get(program.id) ?? 0;
+    programPlanIndexes.set(program.id, index + 1);
+    if (program.id === "maintenance-program-spring-hvac-v1") {
+      const dueAt = atYear(2026, 4, 10 + (index % 10), 12);
+      const missed = index === 3 || index === 17;
+      addProgramOccurrence({ plan, key: "2026-spring", dueAt, status: missed ? "missed" : "completed", completedAt: missed ? undefined : new Date(Date.parse(dueAt) + ((index % 3) - 1) * 86_400_000).toISOString(), exceptionReason: missed ? "Cooling-readiness service was not documented before the seasonal window closed." : undefined });
+      addProgramOccurrence({ plan, key: "2027-spring", dueAt: atYear(2027, 4, 10 + (index % 10), 12), status: "scheduled" });
+    } else if (program.id === "maintenance-program-fall-hvac-v1") {
+      const dueAt = atYear(2025, 10, 10 + (index % 10), 12);
+      const missed = index === 8;
+      addProgramOccurrence({ plan, key: "2025-fall", dueAt, status: missed ? "missed" : "completed", completedAt: missed ? undefined : new Date(Date.parse(dueAt) + ((index % 3) - 1) * 86_400_000).toISOString(), exceptionReason: missed ? "Heating-readiness service was not documented before the seasonal window closed." : undefined });
+      addProgramOccurrence({ plan, key: "2026-fall", dueAt: atYear(2026, 10, 10 + (index % 10), 12), status: "scheduled" });
+    } else if (program.id === "maintenance-program-foodservice-deep-clean-v1") {
+      const dueAt = index === 0 ? atYear(2026, 8, 10, 12) : atYear(2026, 8, 28 + (index % 2), 12);
+      const missed = index === 0;
+      const due = index > 0 && index < 4;
+      addProgramOccurrence({ plan, key: "2026-h2", dueAt, status: missed ? "missed" : due ? "due" : "completed", completedAt: missed || due ? undefined : at(8, 24, 12), exceptionReason: missed ? "The foodservice deep-clean window closed without recorded completion." : undefined });
+      addProgramOccurrence({ plan, key: "2027-h1", dueAt: atYear(2027, 2, 15 + (index % 5), 12), status: "scheduled" });
+    } else {
+      const dueAt = index < 2 ? at(8, 15, 12) : index === 8 ? at(8, 28, 12) : at(8, 22, 12);
+      const missed = index < 2;
+      const due = index === 8;
+      addProgramOccurrence({ plan, key: "2026-08", dueAt, status: missed ? "missed" : due ? "due" : "completed", completedAt: missed || due ? undefined : at(8, 22, 10 + (index % 5)), exceptionReason: missed ? "Monthly pest-control monitoring has no documented completion inside the August service window." : undefined });
+      addProgramOccurrence({ plan, key: "2026-09", dueAt: at(9, 22 + (index % 5), 12), status: "scheduled" });
+    }
+  });
+
+  // Store 107 carries a deliberately reviewable PM billing story. Four exact
+  // PM work orders and invoices exist, while only the first two have observed
+  // vendor check-in/check-out evidence. The gap is a reconciliation fact—not
+  // proof that the undocumented visits did not happen.
+  const pm107Periods = ["2025-q4", "2026-q1", "2026-q2", "2026-q3"] as const;
+  const pm107Unobserved = new Set(["2026-q2", "2026-q3"]);
+  const pm107Plan = pmPlans.find((plan) => plan.id === "pm-plan-107-refrigeration")!;
+  const pm107Store = stores.find((store) => store.storeNumber === "107")!;
+  const pm107Asset = assets.find((asset) => asset.id === pm107Plan.assetId)!;
+  pm107Periods.filter((period) => pm107Unobserved.has(period)).forEach((period, index) => {
+    const occurrence = pmOccurrences.find((candidate) => candidate.planId === pm107Plan.id && candidate.recurrenceKey === `${pm107Plan.id}:${period}`)!;
+    const workOrderId = `wo-pm-107-${period}`;
+    const workOrderNumber = `NL-2026-PM-107-${index + 3}`;
+    const completedAt = occurrence.completedAt!;
+    const createdAt = new Date(Date.parse(occurrence.dueAt) - 5 * 86_400_000).toISOString();
+    const assignedAt = new Date(Date.parse(createdAt) + 30 * 60_000).toISOString();
+    const issuanceId = `issuance-pm-107-${period}-r1`;
+    const assignmentId = `assignment-pm-107-${period}`;
+    occurrence.workOrderId = workOrderId;
+    workOrders.push({ id: workOrderId, organizationId: organization.id, number: workOrderNumber, storeId: pm107Store.id, problem: "Quarterly refrigeration inspection and documented operating check", authorizedScope: "Inspect the beer cave refrigeration system, clean accessible coils, record operating condition, and identify follow-up needs.", categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", assetId: pm107Asset.id, priority: "planned", status: "closed", accountableParty: "Summit Refrigeration", nextAction: "No action required", nte: { amountMinor: 45_000, currency: "USD" }, createdAt, closedAt: completedAt });
+    assignments.push({ id: assignmentId, organizationId: organization.id, workOrderId, kind: "outside_vendor", vendorId: "vendor-northline-summit", status: "completed", assignedAt });
+    issuances.push({ id: issuanceId, organizationId: organization.id, workOrderId, assignmentId, revision: 1, immutablePayloadJson: JSON.stringify({ organizationName: organization.name, workOrderNumber, store: { id: pm107Store.id, storeNumber: pm107Store.storeNumber, name: pm107Store.name, formattedAddress: [pm107Store.address1, `${pm107Store.city}, ${pm107Store.state} ${pm107Store.postalCode}`].join(", ") }, vendor: { id: "vendor-northline-summit", name: "Summit Refrigeration" }, problem: "Quarterly refrigeration inspection and documented operating check", priority: "planned", authorizedScope: "Inspect the beer cave refrigeration system, clean accessible coils, record operating condition, and identify follow-up needs.", categoryKey: "refrigeration", asset: { id: pm107Asset.id, name: pm107Asset.name, assetTag: pm107Asset.assetTag }, requestedTiming: occurrence.dueAt, nte: { amountMinor: 45_000, currency: "USD" }, billingInstruction: `Reference operator work order ${workOrderNumber} on any related service paperwork.` }), channel: "email", issuedAt: new Date(Date.parse(assignedAt) + 15 * 60_000).toISOString() });
+    const workItemId = `pm-work-item-107-${period}-beer-cave`;
+    pmWorkItems.push({ id: workItemId, organizationId: organization.id, occurrenceId: occurrence.id, workOrderId, assetId: pm107Asset.id, requiredTask: "Inspect, clean, measure, and document the beer-cave refrigeration system", checklistTemplateId: "checklist-quarterly-refrigeration-v1", status: "completed", result: "Vendor-submitted checklist was recorded; platform visit evidence was not found", costAllocationMinor: 42_500, currency: "USD", createdAt, completedAt });
+    checklistResponses.push({ id: `${workItemId}-deficiency`, organizationId: organization.id, workItemId, checklistTemplateId: "checklist-quarterly-refrigeration-v1", itemKey: "deficiency", responseKind: "text", textValue: "Vendor service paperwork reported no unresolved deficiency.", evidenceFileIds: [], recordedByActorType: "user", recordedByActorId: "membership-northline-facilities", recordedByActorName: "Jordan Lee", recordedAt: completedAt });
+  });
+
+  const pm107InvoiceIds: string[] = [];
+  const pm107ObservedVisitIds: string[] = [];
+  const pm107MissingOccurrenceIds: string[] = [];
+  pm107Periods.forEach((period) => {
+    const occurrence = pmOccurrences.find((candidate) => candidate.planId === pm107Plan.id && candidate.recurrenceKey === `${pm107Plan.id}:${period}`)!;
+    const workOrder = workOrders.find((candidate) => candidate.id === occurrence.workOrderId)!;
+    const invoiceId = `invoice-summit-107-pm-${period}`;
+    const lineId = `invoice-line-summit-107-pm-${period}`;
+    const visit = visits.find((candidate) => candidate.workOrderId === workOrder.id && candidate.vendorId === "vendor-northline-summit");
+    const invoiceDate = new Date(Date.parse(occurrence.completedAt!) + 86_400_000).toISOString().slice(0, 10);
+    const createdAt = `${invoiceDate}T14:00:00.000Z`;
+    const amount = { amountMinor: 42_500, currency: "USD" } as const;
+    pm107InvoiceIds.push(invoiceId);
+    if (visit) pm107ObservedVisitIds.push(visit.id); else pm107MissingOccurrenceIds.push(occurrence.id);
+    invoiceReferences.push({ id: invoiceId, organizationId: organization.id, vendorId: "vendor-northline-summit", invoiceNumber: `SUM-PM-107-${period.toLocaleUpperCase("en-US")}`, invoiceDate, grossAmount: amount, operatorWorkOrderNumber: workOrder.number, matchStatus: "confirmed", createdAt });
+    invoiceAllocations.push({ id: `invoice-reference-allocation-${invoiceId}`, organizationId: organization.id, invoiceReferenceId: invoiceId, workOrderId: workOrder.id, amount, confirmedByMembershipId: "membership-northline-finance", confirmedAt: createdAt });
+    invoices.push({ id: invoiceId, organizationId: organization.id, vendorId: "vendor-northline-summit", contractVersionId: "contract-version-summit-refrigeration-v1", vendorInvoiceNumber: `SUM-PM-107-${period.toLocaleUpperCase("en-US")}`, invoiceDate, subtotal: amount, tax: { amountMinor: 0, currency: "USD" }, fees: { amountMinor: 0, currency: "USD" }, total: amount, approvedForPayment: { amountMinor: 0, currency: "USD" }, paidAmount: { amountMinor: 0, currency: "USD" }, status: "received", createdAt });
+    invoiceLines.push({ id: lineId, organizationId: organization.id, invoiceId, lineNumber: 1, category: "labor", description: `Quarterly refrigeration preventive service · ${period.toLocaleUpperCase("en-US")}`, quantityThousandths: 1_000, unitAmount: amount, lineAmount: amount, contractRateCardLineId: "rate-summit-pm", createdAt });
+    invoiceLineAllocations.push({ id: `allocation-${lineId}`, organizationId: organization.id, invoiceLineId: lineId, workOrderId: workOrder.id, workItemId: pmWorkItems.find((item) => item.occurrenceId === occurrence.id)?.id, siteVisitWorkOrderId: visit ? `site-visit-work-${visit.id}-${workOrder.id}` : undefined, assetId: pm107Asset.id, storeId: pm107Store.id, tradeKey: "refrigeration", amount, method: "manual", confirmedByMembershipId: "membership-northline-finance", confirmedAt: createdAt });
+  });
+  serviceDiscrepancies.push({ id: "service-discrepancy-pm-107-observed-visits", organizationId: organization.id, workOrderId: "wo-pm-107-2026-q3", invoiceId: "invoice-summit-107-pm-2026-q3", discrepancyType: "evidence", status: "open", factsJson: JSON.stringify({ reconciliationKind: "pm_billed_vs_observed", programId: pm107Plan.programId, storeId: pm107Store.id, periodLabel: "Q4 2025 through Q3 2026", billedServiceUnits: 4, billedInvoiceIds: pm107InvoiceIds, invoicedAmountMinor: 170_000, observedVisitCount: pm107ObservedVisitIds.length, observedVisitIds: pm107ObservedVisitIds, missingOccurrenceIds: pm107MissingOccurrenceIds, reviewAmountMinor: pm107MissingOccurrenceIds.length * 42_500, determination: "review_only", note: "No platform visit evidence found does not prove service was not performed." }), createdAt: at(8, 26, 9) });
+
   exceptions.push(
     { id: "exception-northline-112-overdue-pm", organizationId: organization.id, kind: "overdue_pm", storeId: "store-northline-112", severity: "attention", status: "open", summary: "Quarterly refrigeration inspection is outside its completion window", detectedAt: NORTHLINE_AS_OF },
     { id: "exception-northline-113-overdue-pm", organizationId: organization.id, kind: "overdue_pm", storeId: "store-northline-113", severity: "attention", status: "open", summary: "Quarterly refrigeration inspection is outside its completion window", detectedAt: NORTHLINE_AS_OF },
@@ -1370,7 +1514,7 @@ function buildFixture(): OpsFixture {
   // The same immutable source document is attached to a second invoice record.
   // It remains linked for investigation but is excluded from the lightweight
   // spend projection so the portfolio total cannot double count it.
-  files.push({ id: "file-invoice-history-104-4", organizationId: organization.id, storageKey: "northline-demo/invoices/invoice-history-104-4/source-invoice.pdf", sha256: "f".repeat(64), originalName: "SUMMIT-202603-104-4.pdf", contentType: "application/pdf", byteLength: 198_420, status: "available", createdAt: billedTripInvoice.createdAt });
+  files.push({ id: "file-invoice-history-104-4", organizationId: organization.id, storageKey: "northline-demo/invoices/invoice-history-104-4/source-invoice.pdf", sha256: "f5c0b8e6d9ed63cc6572df4bdda92d02ce6de55a70012f93f426d99b5f991922", originalName: "SUMMIT-202603-104-4.pdf", contentType: "application/pdf", byteLength: 198_420, status: "available", createdAt: billedTripInvoice.createdAt });
   billedTripInvoice.supportingFileId = "file-invoice-history-104-4";
   invoices.push({ id: "invoice-history-104-4-duplicate", organizationId: organization.id, vendorId: billedTripInvoice.vendorId, vendorInvoiceNumber: "SUMMIT-202603-104-4-COPY", invoiceDate: billedTripInvoice.invoiceDate, subtotal: billedTripInvoice.subtotal, tax: billedTripInvoice.tax, fees: billedTripInvoice.fees, total: billedTripInvoice.total, approvedForPayment: { amountMinor: 0, currency: "USD" }, paidAmount: { amountMinor: 0, currency: "USD" }, status: "exception", exceptionReason: "The uploaded file has the same SHA-256 fingerprint as invoice SUMMIT-202603-104-4. Review before any payment approval.", supportingFileId: "file-invoice-history-104-4", createdAt: at(3, 20, 14) });
   invoiceLines.push({ id: "invoice-line-history-104-4-duplicate", organizationId: organization.id, invoiceId: "invoice-history-104-4-duplicate", lineNumber: 1, category: "labor", description: "Duplicate source invoice total", quantityThousandths: 1_000, unitAmount: { amountMinor: 872_500, currency: "USD" }, lineAmount: { amountMinor: 872_500, currency: "USD" }, createdAt: at(3, 20, 14) });
@@ -1385,7 +1529,7 @@ function buildFixture(): OpsFixture {
     { id: "value-event-warranty-104-exposure", organizationId: organization.id, category: "identified_exposure", eventType: "potential_warranty", amount: { amountMinor: 890_000, currency: "USD" }, workOrderId: warrantyCallbackWorkId, invoiceLineId: "invoice-line-104-warranty-callback", warrantyCaseId, assetId: "asset-104-beer-cave", contractVersionId: "contract-version-summit-refrigeration-v1", sourceDecision: "Exact-component potential warranty detection; diagnosis and liability remain pending", deduplicationKey: `warranty-case:${warrantyCaseId}:potential`, occurredAt: at(8, 10, 16, 41) },
     { id: "value-event-invoice-104-authorization-review", organizationId: organization.id, category: "identified_exposure", eventType: "authorization_overage", amount: { amountMinor: 212_500, currency: "USD" }, workOrderId: "wo-northline-104", invoiceLineId: "invoice-line-104-unapproved-controls", contractVersionId: "contract-version-summit-refrigeration-v1", sourceDecision: "Invoice exceeds the latest immutable authorization; change-order evidence and validity require human review", deduplicationKey: "invoice:invoice-summit-104-compressor:authorization-overage", occurredAt: at(7, 11, 14, 6) },
     { id: "value-event-invoice-history-104-4-trip-review", organizationId: organization.id, category: "identified_exposure", eventType: "billed_trips_exceed_observed_visits", amount: { amountMinor: 210_000, currency: "USD" }, workOrderId: "wo-history-104-4", invoiceLineId: "invoice-line-history-104-4-mobilizations", sourceDecision: "Four billed mobilizations versus two observed Visit / Work Order links; validity requires human review", deduplicationKey: "invoice:invoice-history-104-4:visit-count", occurredAt: billedTripInvoice.createdAt },
-    { id: "value-event-invoice-history-104-4-duplicate", organizationId: organization.id, category: "identified_exposure", eventType: "duplicate_document_fingerprint", amount: { amountMinor: 872_500, currency: "USD" }, workOrderId: "wo-history-104-4", invoiceLineId: "invoice-line-history-104-4-duplicate", sourceDecision: "Exact SHA-256 source-document match; second invoice record held for human review", deduplicationKey: "invoice-document-sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", occurredAt: at(3, 20, 14, 1) },
+    { id: "value-event-invoice-history-104-4-duplicate", organizationId: organization.id, category: "identified_exposure", eventType: "duplicate_document_fingerprint", amount: { amountMinor: 872_500, currency: "USD" }, workOrderId: "wo-history-104-4", invoiceLineId: "invoice-line-history-104-4-duplicate", sourceDecision: "Exact source-document match; the second invoice record is held for human review", deduplicationKey: "invoice-document-sha256:f5c0b8e6d9ed63cc6572df4bdda92d02ce6de55a70012f93f426d99b5f991922", occurredAt: at(3, 20, 14, 1) },
   );
   auditEvents.push(
     { id: "audit-warranty-case-104-detected", organizationId: organization.id, aggregateType: "warranty_case", aggregateId: warrantyCaseId, eventType: "warranty_case.detected", actorType: "system", actorName: "Warranty detection", occurredAt: at(8, 10, 16, 41), payloadJson: JSON.stringify({ confidence: "high", liabilityDetermined: false, invoiceHold: true, customerChargeStatus: "undetermined", routingRule: "original_vendor_mandatory", priorRepairItemId: warrantyRepairItemId }) },

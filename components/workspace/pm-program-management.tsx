@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarRange, CheckCircle2, ChevronRight, CircleAlert, Layers3, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, FileSearch, Layers3 } from "lucide-react";
 import styles from "./pm-program-management.module.css";
 
 export interface PmProgramManagementModel {
@@ -11,6 +11,7 @@ export interface PmProgramManagementModel {
     enrolledPlans: number;
     coverageGaps: number;
     localOverrides: number;
+    evidenceReviews: number;
   };
   programs: Array<{
     id: string;
@@ -24,6 +25,9 @@ export interface PmProgramManagementModel {
     enrolledPlans: number;
     coverageGaps: number;
     localOverrides: number;
+    dueOccurrences: number;
+    missedOccurrences: number;
+    nextWindowLabel: string;
     href: string;
     selected: boolean;
   }>;
@@ -37,6 +41,30 @@ export interface PmProgramManagementModel {
     sourceLabel: string;
     overrideReason?: string;
     href: string;
+  }>;
+  planView: {
+    mode: "exceptions" | "all" | "store";
+    title: string;
+    description: string;
+    resultLabel: string;
+    toggleHref?: string;
+    toggleLabel?: string;
+    previousHref?: string;
+    nextHref?: string;
+  };
+  reconciliations: Array<{
+    id: string;
+    programName: string;
+    storeLabel: string;
+    periodLabel: string;
+    billedUnits: number;
+    observedVisits: number;
+    missingEvidence: number;
+    invoicedAmountLabel: string;
+    reviewAmountLabel: string;
+    invoiceHref: string;
+    occurrencesHref: string;
+    note: string;
   }>;
 }
 
@@ -57,29 +85,39 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
         <div><Layers3 size={18} aria-hidden="true" /><span><small>Matching equipment</small><strong>{model.summary.matchingEquipment}</strong></span></div>
         <div><CheckCircle2 size={18} aria-hidden="true" /><span><small>Enrolled plans</small><strong>{model.summary.enrolledPlans}</strong></span></div>
         <div data-alert={model.summary.coverageGaps > 0 || undefined}><CircleAlert size={18} aria-hidden="true" /><span><small>Coverage gaps</small><strong>{model.summary.coverageGaps}</strong></span></div>
-        <div><SlidersHorizontal size={18} aria-hidden="true" /><span><small>Store overrides</small><strong>{model.summary.localOverrides}</strong></span></div>
+        <div data-alert={model.summary.evidenceReviews > 0 || undefined}><FileSearch size={18} aria-hidden="true" /><span><small>Evidence reviews</small><strong>{model.summary.evidenceReviews}</strong></span></div>
       </div>
 
       <div className={styles.tableWrap}>
         <table>
           <caption>Company preventive-maintenance schedules and equipment coverage</caption>
-          <thead><tr><th>Master schedule</th><th>Equipment types</th><th>Default timing</th><th>Coverage</th><th>Store overrides</th><th><span className={styles.srOnly}>Open</span></th></tr></thead>
+          <thead><tr><th>Master schedule</th><th>Coverage rule</th><th>Default timing</th><th>Coverage</th><th>Current obligations</th><th><span className={styles.srOnly}>Open</span></th></tr></thead>
           <tbody>{model.programs.length ? model.programs.map((program) => (
             <tr data-selected={program.selected || undefined} key={program.id}>
               <td><Link href={program.href}><strong>{program.name}</strong><small>{program.serviceAreaLabel}</small></Link></td>
               <td><Link href={program.href}><strong>{program.equipmentTypeLabels.join(", ") || "No equipment types"}</strong><small>Auto-enrollment rule</small></Link></td>
               <td><Link href={program.href}><strong>{program.cadenceLabel}</strong><small>{program.windowLabel} · anchor {program.anchorLabel}</small></Link></td>
               <td><Link href={program.href}><strong>{program.enrolledPlans} of {program.matchingEquipment}</strong><small>{program.coverageGaps ? `${program.coverageGaps} equipment records need a plan` : "All matching equipment covered"}</small></Link></td>
-              <td><Link href={program.href}><strong>{program.localOverrides}</strong><small>Documented store exceptions</small></Link></td>
+              <td><Link href={program.href}><strong>{program.missedOccurrences ? `${program.missedOccurrences} missed` : program.dueOccurrences ? `${program.dueOccurrences} due` : "On track"}</strong><small>{program.dueOccurrences ? `${program.dueOccurrences} currently due · ` : ""}{program.nextWindowLabel}</small></Link></td>
               <td><Link aria-label={`Open ${program.name}`} href={program.href}><ChevronRight size={17} aria-hidden="true" /></Link></td>
             </tr>
           )) : <tr><td className={styles.empty} colSpan={6}><strong>No company schedules yet</strong><small>Create a master schedule to enroll matching equipment across the company automatically.</small></td></tr>}</tbody>
         </table>
       </div>
 
+      {model.reconciliations.length ? <section className={styles.reconciliation} aria-labelledby="pm-evidence-review-title">
+        <header><div><p>Invoice safeguard</p><h3 id="pm-evidence-review-title">PM billed versus observed visits</h3><span>A missing platform visit is a review fact—not proof that service was not performed.</span></div><FileSearch size={22} aria-hidden="true" /></header>
+        {model.reconciliations.map((item) => <article key={item.id}>
+          <div><strong>{item.storeLabel} · {item.programName}</strong><span>{item.periodLabel}</span></div>
+          <dl><div><dt>Billed service units</dt><dd>{item.billedUnits}</dd></div><div><dt>Observed PM visits</dt><dd>{item.observedVisits}</dd></div><div data-alert={item.missingEvidence > 0 || undefined}><dt>Without visit evidence</dt><dd>{item.missingEvidence}</dd></div><div><dt>Amount to reconcile</dt><dd>{item.reviewAmountLabel}</dd></div></dl>
+          <p>{item.note} Total invoiced service in this comparison: {item.invoicedAmountLabel}.</p>
+          <footer><Link href={item.occurrencesHref}>Open PM occurrences<ArrowRight size={15} aria-hidden="true" /></Link><Link href={item.invoiceHref}>Open supporting invoice<ArrowRight size={15} aria-hidden="true" /></Link></footer>
+        </article>)}
+      </section> : null}
+
       <div className={styles.planHeader}>
-        <div><h3>Store plans</h3><p>Every row inherits a company standard or remains visibly store-created. Open a row to adjust that store&apos;s future cadence.</p></div>
-        <strong>{model.plans.length} shown</strong>
+        <div><h3>{model.planView.title}</h3><p>{model.planView.description}</p></div>
+        <div className={styles.planHeaderActions}><strong>{model.planView.resultLabel}</strong>{model.planView.toggleHref && model.planView.toggleLabel ? <Link href={model.planView.toggleHref}>{model.planView.toggleLabel}</Link> : null}</div>
       </div>
       <div className={styles.tableWrap}>
         <table>
@@ -96,6 +134,7 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
           )) : <tr><td className={styles.empty} colSpan={5}><strong>No store plans in this view</strong><small>Create a company schedule or change the current store/program filters.</small></td></tr>}</tbody>
         </table>
       </div>
+      {model.planView.previousHref || model.planView.nextHref ? <nav className={styles.pagination} aria-label="Store plan pages"><span>{model.planView.resultLabel}</span><div>{model.planView.previousHref ? <Link href={model.planView.previousHref}><ChevronLeft size={15} aria-hidden="true" />Previous</Link> : <span aria-disabled="true"><ChevronLeft size={15} aria-hidden="true" />Previous</span>}{model.planView.nextHref ? <Link href={model.planView.nextHref}>Next<ChevronRight size={15} aria-hidden="true" /></Link> : <span aria-disabled="true">Next<ChevronRight size={15} aria-hidden="true" /></span>}</div></nav> : null}
     </section>
   );
 }

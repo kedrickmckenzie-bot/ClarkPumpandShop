@@ -342,6 +342,9 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
   if (!roleCanAccessProgramRoute(session.role, "pm")) notFound();
   const selectedStoreId = Array.isArray(searchParams.store) ? searchParams.store[0] : searchParams.store;
   const selectedProgramId = Array.isArray(searchParams.program) ? searchParams.program[0] : searchParams.program;
+  const requestedEnrollmentView = Array.isArray(searchParams.enrollments) ? searchParams.enrollments[0] : searchParams.enrollments;
+  const requestedEnrollmentPage = Number(Array.isArray(searchParams.enrollmentPage) ? searchParams.enrollmentPage[0] : searchParams.enrollmentPage);
+  const enrollmentPage = Number.isFinite(requestedEnrollmentPage) && requestedEnrollmentPage > 0 ? Math.floor(requestedEnrollmentPage) : 1;
   const visibleStores = fixture.stores.filter((store) => {
     if (store.organizationId !== session.organizationId) return false;
     if (session.storeIds?.length && !session.storeIds.includes(store.id)) return false;
@@ -356,6 +359,22 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
   const programs = fixture.maintenancePrograms.filter((program) => program.organizationId === session.organizationId && program.status === "active");
   const programById = new Map(programs.map((program) => [program.id, program]));
   const visiblePlans = fixture.pmPlans.filter((plan) => plan.organizationId === session.organizationId && plan.active && plan.storeId && visibleStoreIds.has(plan.storeId));
+  const visibleOccurrences = fixture.pmOccurrences.filter((occurrence) => occurrence.organizationId === session.organizationId && visibleStoreIds.has(occurrence.storeId));
+
+  const pmStatus = (occurrence: (typeof visibleOccurrences)[number]) => {
+    if (occurrence.status === "completed" || occurrence.completedAt) return "completed" as const;
+    if (occurrence.status === "waived") return "waived" as const;
+    if (Date.parse(occurrence.windowEndsAt) < Date.parse(fixture.asOf)) return "missed" as const;
+    if (Date.parse(occurrence.windowStartsAt) > Date.parse(fixture.asOf)) return "scheduled" as const;
+    return "due" as const;
+  };
+  const pmHref = (values: Record<string, string | number | undefined>) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(values)) if (value !== undefined && value !== "") params.set(key, String(value));
+    const query = params.toString();
+    return query ? `/app/pm?${query}` : "/app/pm";
+  };
+  const money = (amountMinor: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amountMinor / 100);
 
   const equipmentTypesForProgram = (program: (typeof programs)[number]) => templates.filter((template) => pmProgramMatchesTemplate(program.applicableAssetTypes, template.id, template.name));
   const matchingAssetsForProgram = (program: (typeof programs)[number]) => {
@@ -366,34 +385,60 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
     const programTemplates = equipmentTypesForProgram(program);
     const matchingAssets = matchingAssetsForProgram(program);
     const plans = visiblePlans.filter((plan) => plan.programId === program.id);
+    const isStoreLevelProgram = programTemplates.length === 0;
     const enrolledAssetIds = new Set(plans.map((plan) => plan.assetId).filter((id): id is string => Boolean(id)));
-    const gaps = matchingAssets.filter((asset) => !enrolledAssetIds.has(asset.id)).length;
+    const enrolledStoreIds = new Set(plans.map((plan) => plan.storeId).filter((id): id is string => Boolean(id)));
+    const matchingEquipment = isStoreLevelProgram ? visibleStores.length : matchingAssets.length;
+    const gaps = isStoreLevelProgram
+      ? visibleStores.filter((store) => !enrolledStoreIds.has(store.id)).length
+      : matchingAssets.filter((asset) => !enrolledAssetIds.has(asset.id)).length;
     const overrides = plans.filter((plan) => plan.cadenceDays !== program.frequencyDays || plan.completionWindowDays !== program.dueWindowDays || Boolean(plan.cadenceOverrideReason)).length;
+    const occurrences = visibleOccurrences.filter((occurrence) => plans.some((plan) => plan.id === occurrence.planId));
+    const dueOccurrences = occurrences.filter((occurrence) => pmStatus(occurrence) === "due").length;
+    const missedOccurrences = occurrences.filter((occurrence) => pmStatus(occurrence) === "missed").length;
+    const nextOccurrence = occurrences
+      .filter((occurrence) => pmStatus(occurrence) === "scheduled")
+      .sort((left, right) => left.windowStartsAt.localeCompare(right.windowStartsAt))[0];
     return {
       id: program.id,
       name: program.name,
       serviceAreaLabel: program.tradeKey.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toLocaleUpperCase("en-US")),
-      equipmentTypeLabels: programTemplates.map((template) => template.name),
+      equipmentTypeLabels: isStoreLevelProgram ? ["All stores"] : programTemplates.map((template) => template.name),
       cadenceLabel: `Every ${program.frequencyDays} days`,
       windowLabel: `±${program.dueWindowDays} day window`,
       anchorLabel: shortDate(program.scheduleAnchorAt),
-      matchingEquipment: matchingAssets.length,
+      matchingEquipment,
       enrolledPlans: plans.length,
       coverageGaps: gaps,
       localOverrides: overrides,
-      href: `/app/pm?program=${encodeURIComponent(program.id)}${selectedStoreId ? `&store=${encodeURIComponent(selectedStoreId)}` : ""}`,
+      dueOccurrences,
+      missedOccurrences,
+      nextWindowLabel: nextOccurrence ? `Next window ${shortDate(nextOccurrence.windowStartsAt)}` : "No future window scheduled",
+      href: pmHref({ program: program.id, store: selectedStoreId, view: "attention" }),
       selected: selectedProgramId === program.id,
     };
   });
-  const filteredPlans = visiblePlans
+  const matchingFilteredPlans = visiblePlans
     .filter((plan) => !selectedStoreId || plan.storeId === selectedStoreId)
     .filter((plan) => !selectedProgramId || plan.programId === selectedProgramId)
     .sort((left, right) => {
       const leftStore = storesById.get(left.storeId ?? "")?.storeNumber ?? "";
       const rightStore = storesById.get(right.storeId ?? "")?.storeNumber ?? "";
       return leftStore.localeCompare(rightStore, undefined, { numeric: true }) || left.name.localeCompare(right.name);
-    })
-    .slice(0, 75)
+    });
+  const enrollmentView = selectedStoreId ? "store" : requestedEnrollmentView === "all" ? "all" : "exceptions";
+  const plansForView = enrollmentView === "exceptions"
+    ? matchingFilteredPlans.filter((plan) => {
+        const program = plan.programId ? programById.get(plan.programId) : undefined;
+        return !program || plan.cadenceDays !== program.frequencyDays || plan.completionWindowDays !== program.dueWindowDays || Boolean(plan.cadenceOverrideReason);
+      })
+    : matchingFilteredPlans;
+  const enrollmentPageSize = 20;
+  const totalEnrollmentPages = Math.max(1, Math.ceil(plansForView.length / enrollmentPageSize));
+  const boundedEnrollmentPage = Math.min(enrollmentPage, totalEnrollmentPages);
+  const enrollmentStart = (boundedEnrollmentPage - 1) * enrollmentPageSize;
+  const filteredPlans = plansForView
+    .slice(enrollmentStart, enrollmentStart + enrollmentPageSize)
     .map((plan) => {
       const store = storesById.get(plan.storeId ?? "");
       const asset = plan.assetId ? assetById.get(plan.assetId) : undefined;
@@ -411,7 +456,43 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
         href: `/app/pm/plans/${encodeURIComponent(plan.id)}`,
       };
     });
+
+  const reconciliations = fixture.serviceDiscrepancies
+    .filter((item) => item.organizationId === session.organizationId && item.status !== "resolved" && item.status !== "closed")
+    .flatMap((item) => {
+      let facts: Record<string, unknown>;
+      try {
+        facts = JSON.parse(item.factsJson) as Record<string, unknown>;
+      } catch {
+        return [];
+      }
+      if (facts.reconciliationKind !== "pm_billed_vs_observed" || typeof facts.storeId !== "string" || !visibleStoreIds.has(facts.storeId)) return [];
+      const store = storesById.get(facts.storeId);
+      const program = typeof facts.programId === "string" ? programById.get(facts.programId) : undefined;
+      const invoiceIds = Array.isArray(facts.billedInvoiceIds) ? facts.billedInvoiceIds.filter((value): value is string => typeof value === "string") : [];
+      const billedUnits = typeof facts.billedServiceUnits === "number" ? facts.billedServiceUnits : invoiceIds.length;
+      const observedVisits = typeof facts.observedVisitCount === "number" ? facts.observedVisitCount : 0;
+      const missingEvidence = Array.isArray(facts.missingOccurrenceIds) ? facts.missingOccurrenceIds.length : Math.max(0, billedUnits - observedVisits);
+      return [{
+        id: item.id,
+        programName: program?.name ?? "Preventive maintenance",
+        storeLabel: store ? `Store ${store.storeNumber} · ${store.name}` : "Unknown store",
+        periodLabel: typeof facts.periodLabel === "string" ? facts.periodLabel : "Selected service period",
+        billedUnits,
+        observedVisits,
+        missingEvidence,
+        invoicedAmountLabel: money(typeof facts.invoicedAmountMinor === "number" ? facts.invoicedAmountMinor : 0),
+        reviewAmountLabel: money(typeof facts.reviewAmountMinor === "number" ? facts.reviewAmountMinor : 0),
+        invoiceHref: invoiceIds.length ? `/app/invoices/${encodeURIComponent(invoiceIds.at(-1)!)}` : "/app/invoices",
+        occurrencesHref: pmHref({ program: typeof facts.programId === "string" ? facts.programId : undefined, store: facts.storeId, view: "all" }),
+        note: typeof facts.note === "string" ? facts.note : "No matching platform visit evidence was found; confirm the service record before drawing a conclusion.",
+      }];
+    });
   const matchingEquipment = programRows.reduce((sum, program) => sum + program.matchingEquipment, 0);
+  const resultLabel = plansForView.length
+    ? `${enrollmentStart + 1}–${Math.min(enrollmentStart + enrollmentPageSize, plansForView.length)} of ${plansForView.length}`
+    : "0 plans";
+  const commonPlanQuery = { program: selectedProgramId, store: selectedStoreId };
   return {
     scopeLabel: session.scopeLabel,
     canCreateMasterSchedule: session.role === "executive" || session.role === "facilities",
@@ -421,9 +502,25 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
       enrolledPlans: programRows.reduce((sum, program) => sum + program.enrolledPlans, 0),
       coverageGaps: programRows.reduce((sum, program) => sum + program.coverageGaps, 0),
       localOverrides: programRows.reduce((sum, program) => sum + program.localOverrides, 0),
+      evidenceReviews: reconciliations.length,
     },
     programs: programRows,
     plans: filteredPlans,
+    planView: {
+      mode: enrollmentView,
+      title: enrollmentView === "store" ? "Store PM plans" : enrollmentView === "all" ? "All store enrollments" : "Store exceptions",
+      description: enrollmentView === "store"
+        ? "Company standards and local adjustments for the selected store."
+        : enrollmentView === "all"
+          ? "Every active company enrollment. Use this register when you need an exact store-by-store record."
+          : "Only local cadence changes and store-created plans are listed here; company-standard enrollments stay summarized above.",
+      resultLabel,
+      toggleHref: enrollmentView === "store" ? undefined : pmHref({ ...commonPlanQuery, enrollments: enrollmentView === "all" ? "exceptions" : "all" }),
+      toggleLabel: enrollmentView === "store" ? undefined : enrollmentView === "all" ? "Show exceptions only" : "Show all enrollments",
+      previousHref: boundedEnrollmentPage > 1 ? pmHref({ ...commonPlanQuery, enrollments: enrollmentView, enrollmentPage: boundedEnrollmentPage - 1 }) : undefined,
+      nextHref: boundedEnrollmentPage < totalEnrollmentPages ? pmHref({ ...commonPlanQuery, enrollments: enrollmentView, enrollmentPage: boundedEnrollmentPage + 1 }) : undefined,
+    },
+    reconciliations,
   };
 }
 

@@ -605,7 +605,26 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
             </section>
           ) : null}
           <ActionQueue actions={model.priorityActions} />
-          {model.table ? <section className={styles.listWorkspace}><DataTable table={model.table} /></section> : null}
+          {model.table ? <section className={styles.listWorkspace}>
+            {model.search || model.resultSummary ? <div className={styles.listToolbar}>
+              {model.search ? <form className={styles.listSearch} action={model.search.action} method="get" role="search">
+                <Search aria-hidden="true" size={18} />
+                <label className={styles.visuallyHidden} htmlFor={`${model.table.id}-search`}>{model.search.label}</label>
+                <input id={`${model.table.id}-search`} name="q" type="search" defaultValue={model.search.value} placeholder={model.search.placeholder} />
+                {model.search.preservedParameters?.map((parameter) => <input key={parameter.name} name={parameter.name} type="hidden" value={parameter.value} />)}
+                <button type="submit">Search</button>
+              </form> : <span className={styles.toolbarTitle}>Records</span>}
+              {model.resultSummary ? <strong className={styles.resultSummary}>{model.resultSummary}</strong> : null}
+            </div> : null}
+            <DataTable table={model.table} />
+            {model.pagination ? <nav className={styles.pagination} aria-label="Result pages">
+              <span>{model.pagination.summary}</span>
+              <div>
+                {model.pagination.previousHref ? <Link href={model.pagination.previousHref}><ArrowLeft aria-hidden="true" size={16} />Previous</Link> : <span aria-disabled="true"><ArrowLeft aria-hidden="true" size={16} />Previous</span>}
+                {model.pagination.nextHref ? <Link href={model.pagination.nextHref}>Next<ArrowRight aria-hidden="true" size={16} /></Link> : <span aria-disabled="true">Next<ArrowRight aria-hidden="true" size={16} /></span>}
+              </div>
+            </nav> : null}
+          </section> : null}
         </>
       )}
     </div>

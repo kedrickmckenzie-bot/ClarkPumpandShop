@@ -198,14 +198,17 @@ describe("operator presenter drill-through contracts", () => {
     const session = executiveSession();
     const model = buildProgramModel(fixture, session, "pm");
     expect(model.metrics.map((metric) => metric.id)).toEqual(["due", "scheduled", "completed", "missed", "waived"]);
+    expect(model.filters?.find((filter) => filter.id === "view")?.options.map((option) => option.value)).toEqual(["attention", "upcoming", "all"]);
+    expect(model.table!.rows.every((row) => ["due", "missed"].includes(row.cells.find((cell) => cell.key === "status")?.value.toLocaleLowerCase("en-US") ?? ""))).toBe(true);
     for (const metric of model.metrics) {
       const filtered = buildProgramModel(fixture, session, "pm", { status: metric.id });
-      expect(filtered.table!.rows).toHaveLength(Number(metric.value));
+      expect(filtered.table!.rows).toHaveLength(Math.min(30, Number(metric.value)));
       expect(
         filtered.table!.rows.every(
           (row) => row.cells.find((cell) => cell.key === "status")?.value.toLocaleLowerCase("en-US") === metric.id,
         ),
       ).toBe(true);
+      if (Number(metric.value) > 30) expect(filtered.pagination?.nextHref).toContain("page=2");
     }
 
     const closedOccurrences = fixture.pmOccurrences.filter(
@@ -221,6 +224,23 @@ describe("operator presenter drill-through contracts", () => {
     expect(effectiveness?.description).toMatch(/directional only|descriptive association only/i);
     expect(model.trends.find((row) => row.id === "pm-reactive-cost")?.description).toMatch(/not proof/i);
     expect(effectiveness?.segments.every((row) => row.link.href.startsWith("/app/pm"))).toBe(true);
+  });
+
+  it("opens Equipment as a bounded attention queue with a searchable, paginated full register", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const session = executiveSession();
+    const attention = buildProgramModel(fixture, session, "equipment");
+    const all = buildProgramModel(fixture, session, "equipment", { view: "all" });
+    const serial = fixture.assets.find((asset) => asset.serialNumber)?.serialNumber;
+    const searched = buildProgramModel(fixture, session, "equipment", { q: serial });
+
+    expect(attention.filters?.find((filter) => filter.id === "view")?.options.map((option) => option.value)).toEqual(["attention", "recent", "all"]);
+    expect(attention.table?.rows.length).toBeLessThan(fixture.assets.length);
+    expect(attention.table?.caption).toMatch(/needing attention/i);
+    expect(all.table?.rows).toHaveLength(25);
+    expect(all.pagination?.nextHref).toContain("page=2");
+    expect(all.search?.placeholder).toMatch(/serial/i);
+    expect(searched.table?.rows.some((row) => row.cells.some((cell) => cell.secondary?.includes(serial!)))).toBe(true);
   });
 
   it("keeps interactive lists paginated while allowing a scoped complete export projection", () => {
@@ -399,14 +419,19 @@ describe("operator presenter drill-through contracts", () => {
     expect(section?.facts?.every((fact) => Boolean(fact.link?.label))).toBe(true);
   });
 
-  it("uses the same closed-window PM denominator on the store summary and service-area row", () => {
+  it("reconciles the store PM denominator to its service-area rows", () => {
     const fixture = buildNorthlinePresentationFixture();
     const detail = buildDetailModel(fixture, executiveSession(), "store", NORTHLINE_DEMO_HANDLES.storyStoreId);
     const compliance = detail.facts.find((fact) => fact.label === "PM compliance")!;
     const match = compliance.helperText?.match(/(\d+) completed \/ (\d+) eligible occurrences/);
     expect(match).toBeTruthy();
-    const refrigeration = detail.sections.find((section) => section.id === "service-areas")?.table?.rows.find((row) => row.id === "refrigeration");
-    expect(refrigeration?.cells.find((cell) => cell.key === "pm")?.value).toBe(`${match![1]}/${match![2]} eligible completed`);
+    const serviceAreaRows = detail.sections.find((section) => section.id === "service-areas")?.table?.rows ?? [];
+    const categoryTotals = serviceAreaRows.reduce((totals, row) => {
+      const value = row.cells.find((cell) => cell.key === "pm")?.value ?? "";
+      const categoryMatch = value.match(/(\d+)\/(\d+) eligible completed/);
+      return categoryMatch ? [totals[0] + Number(categoryMatch[1]), totals[1] + Number(categoryMatch[2])] : totals;
+    }, [0, 0]);
+    expect(categoryTotals).toEqual([Number(match![1]), Number(match![2])]);
   });
 
   it("compares multiple vendor bids on one canonical work order without creating spend", () => {

@@ -248,6 +248,9 @@ export interface DetailPageViewModel {
 export interface ProgramPageViewModel extends DashboardPageViewModel {
   filters?: FilterGroupViewModel[];
   table?: TableViewModel;
+  resultSummary?: string;
+  search?: ListPageViewModel["search"];
+  pagination?: ListPageViewModel["pagination"];
 }
 
 export interface OperatorPageModels {

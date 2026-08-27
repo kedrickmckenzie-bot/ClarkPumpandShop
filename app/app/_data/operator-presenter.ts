@@ -3414,9 +3414,61 @@ export function buildProgramModel(
     for (const asset of scoped.assets) statusCounts.set(asset.status, (statusCounts.get(asset.status) ?? 0) + 1);
     const categoryFilter = first(query.category);
     const statusFilter = first(query.status);
-    const rows = scoped.assets.filter((asset) => !categoryFilter || asset.categoryKey === categoryFilter).filter((asset) => !statusFilter || asset.status === statusFilter).map<TableRowViewModel>((asset) => {
+    const searchQuery = first(query.q)?.trim().toLocaleLowerCase("en-US");
+    const requestedView = first(query.view);
+    const equipmentView = requestedView === "all" || requestedView === "recent" || requestedView === "attention"
+      ? requestedView
+      : categoryFilter || statusFilter || searchQuery
+        ? "all"
+        : "attention";
+    const terminalWorkStatuses = new Set(["closed", "cancelled"]);
+    const workByAsset = new Map<string, WorkOrder[]>();
+    for (const work of scoped.workOrders) {
+      if (!work.assetId) continue;
+      const list = workByAsset.get(work.assetId) ?? [];
+      list.push(work);
+      workByAsset.set(work.assetId, list);
+    }
+    const attentionAssets = scoped.assets.filter((asset) =>
+      asset.status !== "operational" || (workByAsset.get(asset.id) ?? []).some((work) => !terminalWorkStatuses.has(work.status)),
+    );
+    const recentThreshold = new Date(Date.parse(fixture.asOf) - 90 * 24 * 60 * 60 * 1_000).toISOString();
+    const recentlyServicedAssets = scoped.assets.filter((asset) =>
+      (workByAsset.get(asset.id) ?? []).some((work) => work.createdAt >= recentThreshold && work.createdAt <= fixture.asOf),
+    );
+    const viewAssets = equipmentView === "attention" ? attentionAssets : equipmentView === "recent" ? recentlyServicedAssets : scoped.assets;
+    const filteredAssets = viewAssets
+      .filter((asset) => !categoryFilter || asset.categoryKey === categoryFilter)
+      .filter((asset) => !statusFilter || asset.status === statusFilter)
+      .filter((asset) => {
+        if (!searchQuery) return true;
+        const store = scoped.stores.find((item) => item.id === asset.storeId);
+        return [asset.name, asset.assetTag, asset.model, asset.serialNumber, store?.storeNumber, store?.name, store?.address1, store?.address2, store?.city, store?.state, store?.postalCode]
+          .filter(Boolean)
+          .some((value) => String(value).toLocaleLowerCase("en-US").includes(searchQuery));
+      })
+      .sort((left, right) => {
+        const leftLatest = (workByAsset.get(left.id) ?? []).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.createdAt ?? "";
+        const rightLatest = (workByAsset.get(right.id) ?? []).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.createdAt ?? "";
+        return Number(left.status === "operational") - Number(right.status === "operational") || rightLatest.localeCompare(leftLatest) || left.name.localeCompare(right.name);
+      });
+    const requestedPage = Number(first(query.page));
+    const pageSize = 25;
+    const totalPages = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
+    const currentPage = Math.min(Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1, totalPages);
+    const pageStart = (currentPage - 1) * pageSize;
+    const pageAssets = filteredAssets.slice(pageStart, pageStart + pageSize);
+    const equipmentHref = (values: Record<string, string | undefined>) => hrefWithQuery("/app/equipment", {
+      view: equipmentView,
+      store: selectedStoreId,
+      category: categoryFilter,
+      status: statusFilter,
+      q: searchQuery,
+      ...values,
+    });
+    const rows = pageAssets.map<TableRowViewModel>((asset) => {
       const store = scoped.stores.find((item) => item.id === asset.storeId);
-      const linkedWork = scoped.workOrders.filter((work) => work.assetId === asset.id);
+      const linkedWork = workByAsset.get(asset.id) ?? [];
       return { id: asset.id, label: asset.name, href: `/app/equipment/${asset.id}`, cells: [
         { key: "asset", value: asset.name, secondary: asset.assetTag },
         { key: "store", value: storeLabel(store) },
@@ -3428,20 +3480,37 @@ export function buildProgramModel(
     });
     return {
       state: { kind: "ready" },
-      page: { title: "Equipment", eyebrow: "Equipment & service history", description: "See installed equipment, optional components, warranties, repair history, and cost. You can still report and authorize work before choosing equipment.", scopeLabel: activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
+      page: { title: "Equipment", eyebrow: "Equipment & service history", description: "Start with equipment that needs attention, then search the full register by store, asset tag, model, serial number, or location.", scopeLabel: activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
+      filters: [{ id: "view", label: "View", options: [
+        { value: "attention", label: `Needs attention (${attentionAssets.length})`, href: hrefWithQuery("/app/equipment", { view: "attention", store: selectedStoreId }), selected: equipmentView === "attention" },
+        { value: "recent", label: `Recently serviced (${recentlyServicedAssets.length})`, href: hrefWithQuery("/app/equipment", { view: "recent", store: selectedStoreId }), selected: equipmentView === "recent" },
+        { value: "all", label: `All equipment (${scoped.assets.length})`, href: hrefWithQuery("/app/equipment", { view: "all", store: selectedStoreId }), selected: equipmentView === "all" },
+      ] }],
       metrics: [
-        { id: "assets", label: "Equipment", value: String(scoped.assets.length), supportingText: "Across the stores in this view", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId }), label: "View equipment" } },
+        { id: "assets", label: "Equipment", value: String(scoped.assets.length), supportingText: "Across the stores in this view", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "View all equipment" } },
         { id: "watch", label: "Equipment to review", value: String(scoped.assets.filter((asset) => asset.status === "watch").length), supportingText: "Age, repairs, or current cost make these worth a closer look", tone: "warning", link: roleCanAccessProgramRoute(session.role, "lifecycle") ? { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, status: "watch" }), label: "Review repair-or-replace details" } : { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, status: "watch" }), label: "Review equipment" } },
-        { id: "components", label: "Components", value: String(fixture.components.filter((component) => component.organizationId === scoped.organizationId && scoped.assets.some((asset) => asset.id === component.assetId)).length), supportingText: "Optional details inside equipment", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId }), label: "View components" } },
+        { id: "components", label: "Components", value: String(fixture.components.filter((component) => component.organizationId === scoped.organizationId && scoped.assets.some((asset) => asset.id === component.assetId)).length), supportingText: "Optional details inside equipment", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "View equipment and components" } },
         { id: "unlinked", label: "Equipment not selected", value: String(scoped.workOrders.filter((work) => !work.assetId).length), supportingText: "Classify this work later when it is useful", tone: "info", link: { href: hrefWithQuery("/app/work-orders", { asset: "unlinked", store: selectedStoreId }), label: "Open this work" } },
       ],
       breakdowns: [
-        { id: "equipment-category", title: "Equipment by service area", totalLabel: `${scoped.assets.length} assets`, segments: [...categoryCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), link: { href: hrefWithQuery("/app/equipment", { category: key, store: selectedStoreId }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId }), label: "Open equipment list" } },
-        { id: "equipment-status", title: "Equipment status", totalLabel: `${scoped.assets.length} assets`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "watch" ? "warning" : key === "operational" ? "positive" : "critical", link: { href: hrefWithQuery("/app/equipment", { status: key, store: selectedStoreId }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId }), label: "Open equipment list" } },
+        { id: "equipment-category", title: "Equipment by service area", totalLabel: `${scoped.assets.length} assets`, segments: [...categoryCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), link: { href: hrefWithQuery("/app/equipment", { category: key, store: selectedStoreId, view: "all" }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "Open equipment list" } },
+        { id: "equipment-status", title: "Equipment status", totalLabel: `${scoped.assets.length} assets`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "watch" ? "warning" : key === "operational" ? "positive" : "critical", link: { href: hrefWithQuery("/app/equipment", { status: key, store: selectedStoreId, view: "all" }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "Open equipment list" } },
       ],
       trends: [],
       priorityActions: allActions,
-      table: { id: "equipment", caption: "Tracked equipment", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "category", label: "Service area" }, { key: "identity", label: "Model / serial" }, { key: "work", label: "Linked work", align: "end" }, { key: "status", label: "Status" }], rows },
+      search: { label: "Search equipment", placeholder: "Asset tag, name, model, serial, store, or address", value: first(query.q), action: "/app/equipment", preservedParameters: [
+        { name: "view", value: equipmentView },
+        ...(selectedStoreId ? [{ name: "store", value: selectedStoreId }] : []),
+        ...(categoryFilter ? [{ name: "category", value: categoryFilter }] : []),
+        ...(statusFilter ? [{ name: "status", value: statusFilter }] : []),
+      ] },
+      resultSummary: filteredAssets.length ? `${pageStart + 1}–${Math.min(pageStart + pageSize, filteredAssets.length)} of ${filteredAssets.length}` : "0 equipment records",
+      pagination: filteredAssets.length > pageSize ? {
+        summary: `Page ${currentPage} of ${totalPages}`,
+        previousHref: currentPage > 1 ? equipmentHref({ page: String(currentPage - 1) }) : undefined,
+        nextHref: currentPage < totalPages ? equipmentHref({ page: String(currentPage + 1) }) : undefined,
+      } : undefined,
+      table: { id: "equipment", caption: equipmentView === "attention" ? "Equipment needing attention" : equipmentView === "recent" ? "Recently serviced equipment" : "Tracked equipment", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "category", label: "Service area" }, { key: "identity", label: "Model / serial" }, { key: "work", label: "Linked work", align: "end" }, { key: "status", label: "Status" }], rows },
     };
   }
 
@@ -3449,13 +3518,30 @@ export function buildProgramModel(
     const occurrences = fixture.pmOccurrences.filter((item) => item.organizationId === scoped.organizationId && scoped.storeIds.has(item.storeId));
     const statusFilter = first(query.status);
     const occurrenceFilter = first(query.occurrence);
+    const programFilter = first(query.program);
+    const planById = new Map(fixture.pmPlans.filter((plan) => plan.organizationId === scoped.organizationId).map((plan) => [plan.id, plan]));
+    const requestedPmView = first(query.view);
+    const pmView = requestedPmView === "all" || requestedPmView === "upcoming" || requestedPmView === "attention"
+      ? requestedPmView
+      : statusFilter || occurrenceFilter
+        ? "all"
+        : "attention";
     const occurrenceStates = occurrences.map((occurrence) => ({
       occurrence,
       status: effectivePmStatus(occurrence, fixture.asOf),
-    }));
-    const visible = occurrenceStates
+    })).filter((item) => !programFilter || planById.get(item.occurrence.planId)?.programId === programFilter);
+    const viewStates = occurrenceStates.filter((item) =>
+      pmView === "all" || (pmView === "attention" ? item.status === "due" || item.status === "missed" : item.status === "due" || item.status === "scheduled"),
+    );
+    const filteredOccurrenceStates = viewStates
       .filter((item) => !statusFilter || item.status === statusFilter)
       .filter((item) => !occurrenceFilter || item.occurrence.id === occurrenceFilter);
+    const requestedPage = Number(first(query.page));
+    const pageSize = pmView === "attention" ? 10 : 30;
+    const totalPages = Math.max(1, Math.ceil(filteredOccurrenceStates.length / pageSize));
+    const currentPage = Math.min(Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1, totalPages);
+    const pageStart = (currentPage - 1) * pageSize;
+    const visible = filteredOccurrenceStates.slice(pageStart, pageStart + pageSize);
     const statusCounts = new Map<string, number>();
     for (const item of occurrenceStates) statusCounts.set(item.status, (statusCounts.get(item.status) ?? 0) + 1);
     const closedWindow = occurrenceStates.filter(
@@ -3478,24 +3564,32 @@ export function buildProgramModel(
     const reactiveCostByMonth = new Map<string, number>();
     for (const work of reactiveAssetWork) reactiveCostByMonth.set(work.createdAt.slice(0, 7), (reactiveCostByMonth.get(work.createdAt.slice(0, 7)) ?? 0) + (costByWork.get(work.id) ?? 0));
     const rows = visible.sort((a, b) => a.occurrence.dueAt.localeCompare(b.occurrence.dueAt)).map<TableRowViewModel>(({ occurrence, status }) => {
-      const plan = fixture.pmPlans.find((item) => item.id === occurrence.planId && item.organizationId === scoped.organizationId);
+      const plan = planById.get(occurrence.planId);
       const store = scoped.stores.find((item) => item.id === occurrence.storeId);
       const asset = scoped.assets.find((item) => item.id === occurrence.assetId);
+      const observedVisitIds = new Set(fixture.siteVisitWorkOrders.filter((link) => link.organizationId === scoped.organizationId && link.workOrderId === occurrence.workOrderId).map((link) => link.visitId));
       return { id: occurrence.id, label: plan?.name ?? "PM occurrence", href: occurrence.workOrderId ? `/app/work-orders/${occurrence.workOrderId}` : asset ? `/app/equipment/${asset.id}#preventive-maintenance` : hrefWithQuery("/app/pm", { status, store: occurrence.storeId }), cells: [
         { key: "plan", value: plan?.name ?? "PM plan", secondary: asset?.name ?? (plan?.categoryKey ? sentence(plan.categoryKey) : "Store-level plan") },
         { key: "store", value: storeLabel(store) },
         { key: "window", value: `${date(occurrence.windowStartsAt)} – ${date(occurrence.windowEndsAt)}`, secondary: `Due ${date(occurrence.dueAt)}` },
         { key: "work", value: occurrence.workOrderId ? scoped.workOrders.find((work) => work.id === occurrence.workOrderId)?.number ?? "Linked" : "Not created" },
+        { key: "visit", value: observedVisitIds.size ? `${observedVisitIds.size} observed visit${observedVisitIds.size === 1 ? "" : "s"}` : "No matching visit recorded", secondary: observedVisitIds.size ? "Server-timestamped store presence" : "Review fact, not proof service was missed", tone: observedVisitIds.size ? "positive" : status === "completed" ? "warning" : "neutral" },
         { key: "status", value: sentence(status), tone: status === "completed" ? "positive" : status === "missed" ? "critical" : status === "due" ? "warning" : "info" },
       ] };
     });
-    const metric = (key: string, label: string, tone: Tone): MetricViewModel => ({ id: key, label, value: String(statusCounts.get(key) ?? 0), supportingText: "Select to filter the occurrence list", tone, link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId }), label: `Show ${label.toLocaleLowerCase("en-US")}` } });
+    const metric = (key: string, label: string, tone: Tone): MetricViewModel => ({ id: key, label, value: String(statusCounts.get(key) ?? 0), supportingText: "Select to open the exact occurrences", tone, link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId, program: programFilter, view: "all" }), label: `Show ${label.toLocaleLowerCase("en-US")}` } });
+    const pmPageHref = (page: number) => hrefWithQuery("/app/pm", { view: pmView, status: statusFilter, occurrence: occurrenceFilter, store: selectedStoreId, program: programFilter, page: String(page) });
     return {
       state: { kind: "ready" },
-      page: { title: "Preventive maintenance", eyebrow: "Planned work", description: "Due, scheduled, completed, missed, and waived occurrences with the exact compliance numerator and denominator.", scopeLabel: activeScopeLabel, periodLabel: "Current PM window", updatedLabel: `Through ${date(fixture.asOf)}` },
+      page: { title: "Preventive maintenance", eyebrow: "Planned work", description: "Manage company standards by exception, see what is due or missed first, and reconcile billed PM service against observed store visits.", scopeLabel: activeScopeLabel, periodLabel: "Current PM window", updatedLabel: `Through ${date(fixture.asOf)}` },
+      filters: [{ id: "view", label: "Occurrence view", options: [
+        { value: "attention", label: `Needs attention (${occurrenceStates.filter((item) => item.status === "due" || item.status === "missed").length})`, href: hrefWithQuery("/app/pm", { view: "attention", store: selectedStoreId, program: programFilter }), selected: pmView === "attention" },
+        { value: "upcoming", label: `Upcoming (${occurrenceStates.filter((item) => item.status === "due" || item.status === "scheduled").length})`, href: hrefWithQuery("/app/pm", { view: "upcoming", store: selectedStoreId, program: programFilter }), selected: pmView === "upcoming" },
+        { value: "all", label: `All occurrences (${occurrenceStates.length})`, href: hrefWithQuery("/app/pm", { view: "all", store: selectedStoreId, program: programFilter }), selected: pmView === "all" },
+      ] }],
       metrics: [metric("due", "Due", "warning"), metric("scheduled", "Scheduled", "info"), metric("completed", "Completed", "positive"), metric("missed", "Missed", "critical"), metric("waived", "Waived", "neutral")],
       breakdowns: [
-        { id: "pm-status", title: "PM occurrence status", description: `Closed-window compliance: ${completed} completed / ${eligible} eligible occurrences = ${eligible ? Math.round((completed / eligible) * 100) : 0}%. Work still inside its completion window is excluded.`, totalLabel: `${occurrences.length} occurrences`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "completed" ? "positive" : key === "missed" ? "critical" : key === "due" ? "warning" : "info", link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId }), label: "Filter occurrences" } })), sourceLink: { href: hrefWithQuery("/app/pm", { store: selectedStoreId }), label: "Open all source occurrences" } },
+        { id: "pm-status", title: "PM occurrence status", description: `Closed-window compliance: ${completed} completed / ${eligible} eligible occurrences = ${eligible ? Math.round((completed / eligible) * 100) : 0}%. Work still inside its completion window is excluded.`, totalLabel: `${occurrenceStates.length} occurrences`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "completed" ? "positive" : key === "missed" ? "critical" : key === "due" ? "warning" : "info", link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId, program: programFilter, view: "all" }), label: "Filter occurrences" } })), sourceLink: { href: hrefWithQuery("/app/pm", { store: selectedStoreId, program: programFilter, view: "all" }), label: "Open all source occurrences" } },
         { id: "pm-effectiveness-cohorts", title: "Reactive work after the latest closed PM window", description: `${cohortCaution} Rates use trailing-12-month reactive Work Orders per 100 equipment-months; PM-generated Work Orders are excluded.`, totalLabel: `${compliantAssetIds.size + noncompliantAssetIds.size} equipment`, segments: [
           { id: "latest-compliant", label: `Latest PM completed (${compliantAssetIds.size})`, value: compliantRate, formattedValue: `${compliantRate.toFixed(1)} / 100`, tone: "positive", link: { href: hrefWithQuery("/app/pm", { status: "completed", store: selectedStoreId }), label: "Open completed occurrence evidence" } },
           { id: "latest-noncompliant", label: `Latest PM missed (${noncompliantAssetIds.size})`, value: noncompliantRate, formattedValue: `${noncompliantRate.toFixed(1)} / 100`, tone: "warning", link: { href: hrefWithQuery("/app/pm", { status: "missed", store: selectedStoreId }), label: "Open missed occurrence evidence" } },
@@ -3503,7 +3597,9 @@ export function buildProgramModel(
       ],
       trends: [{ id: "pm-reactive-cost", title: "Recorded reactive cost for PM-covered equipment", description: "Trailing-12-month recorded work cost only. This is context for cadence review, not proof that PM caused or prevented a repair.", points: [...reactiveCostByMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, value]) => ({ id: month, label: month, value, formattedValue: money(value), link: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: `Open ${month} source Work Orders` } })), sourceLink: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: "Open all supporting cost records" } }],
       priorityActions: allActions,
-      table: { id: "pm-occurrences", caption: "Preventive-maintenance occurrences", columns: [{ key: "plan", label: "Plan / equipment" }, { key: "store", label: "Store" }, { key: "window", label: "Completion window" }, { key: "work", label: "Work order" }, { key: "status", label: "Status" }], rows },
+      resultSummary: filteredOccurrenceStates.length ? `${pageStart + 1}–${Math.min(pageStart + pageSize, filteredOccurrenceStates.length)} of ${filteredOccurrenceStates.length}` : "0 occurrences",
+      pagination: filteredOccurrenceStates.length > pageSize ? { summary: `Page ${currentPage} of ${totalPages}`, previousHref: currentPage > 1 ? pmPageHref(currentPage - 1) : undefined, nextHref: currentPage < totalPages ? pmPageHref(currentPage + 1) : undefined } : undefined,
+      table: { id: "pm-occurrences", caption: pmView === "attention" ? "Preventive-maintenance occurrences needing attention" : pmView === "upcoming" ? "Upcoming preventive-maintenance occurrences" : "Preventive-maintenance occurrences", columns: [{ key: "plan", label: "Plan / equipment" }, { key: "store", label: "Store" }, { key: "window", label: "Completion window" }, { key: "work", label: "Work order" }, { key: "visit", label: "Visit evidence" }, { key: "status", label: "Status" }], rows },
     };
   }
 

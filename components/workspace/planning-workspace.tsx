@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   CalendarCheck2,
@@ -202,12 +203,13 @@ function ActionQueue({ model, kind }: { model: ProgramPageViewModel; kind: Plann
   );
 }
 
-function SourceTable({ table, title, description }: { table?: TableViewModel; title: string; description: string }) {
+function SourceTable({ table, title, description, resultSummary, pagination }: { table?: TableViewModel; title: string; description: string; resultSummary?: string; pagination?: ProgramPageViewModel["pagination"] }) {
   if (!table) return null;
   return (
     <section className={styles.sourceSection}>
-      <header><div><p>Supporting records</p><h2>{title}</h2><span>{description}</span></div><strong>{table.rows.length} shown</strong></header>
+      <header><div><p>Supporting records</p><h2>{title}</h2><span>{description}</span></div><strong>{resultSummary ?? `${table.rows.length} shown`}</strong></header>
       {table.rows.length ? <div className={styles.tableScroller}><table><caption className={styles.visuallyHidden}>{table.caption}</caption><thead><tr>{table.columns.map((column) => <th data-align={column.align} key={column.key}>{column.label}</th>)}</tr></thead><tbody>{table.rows.map((row) => <tr key={row.id}>{table.columns.map((column, index) => { const cell = row.cells.find((candidate) => candidate.key === column.key); return <td data-align={column.align} className={cell?.tone ? toneClass(cell.tone) : undefined} key={column.key}><Link href={row.href}><span><strong>{cell?.value ?? "—"}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</span>{index === table.columns.length - 1 ? <ChevronRight size={14} aria-hidden="true" /> : null}</Link></td>; })}</tr>)}</tbody></table></div> : <div className={styles.empty}><Inbox size={19} aria-hidden="true" />No source records match this context.</div>}
+      {pagination ? <nav className={styles.sourcePagination} aria-label="Supporting record pages"><span>{pagination.summary}</span><div>{pagination.previousHref ? <Link href={pagination.previousHref}><ArrowLeft size={14} aria-hidden="true" />Previous</Link> : <span aria-disabled="true"><ArrowLeft size={14} aria-hidden="true" />Previous</span>}{pagination.nextHref ? <Link href={pagination.nextHref}>Next<ArrowRight size={14} aria-hidden="true" /></Link> : <span aria-disabled="true">Next<ArrowRight size={14} aria-hidden="true" /></span>}</div></nav> : null}
     </section>
   );
 }
@@ -223,6 +225,16 @@ function LifecycleContext({ model }: { model: ProgramPageViewModel }) {
     <details className={styles.administration}>
       <summary><span><BarChart3 size={18} aria-hidden="true" /><span><strong>Capital outlook and comparison method</strong><small>Replacement timing, portfolio totals, and the transparent calculation</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary>
       <div><section className={styles.insights} aria-label="Repair and replacement context">{model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}{model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}</section></div>
+    </details>
+  );
+}
+
+function PmContext({ model }: { model: ProgramPageViewModel }) {
+  if (!model.breakdowns.length && !model.trends.length) return null;
+  return (
+    <details className={styles.administration}>
+      <summary><span><BarChart3 size={18} aria-hidden="true" /><span><strong>PM compliance and repair context</strong><small>Closed-window completion, equipment cohorts, and recorded reactive cost</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary>
+      <div><section className={styles.insights} aria-label="Preventive maintenance analysis">{model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}{model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}</section></div>
     </details>
   );
 }
@@ -246,9 +258,12 @@ export function PlanningWorkspace({
         <BasisBanner kind={kind} />
         <Filters model={model} />
         <MetricStrip model={model} kind={kind} />
-        {kind === "pm" ? programManagement : null}
-        {kind === "lifecycle" ? <>
-          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} />
+        {kind === "pm" ? <>
+          {programManagement}
+          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
+          <PmContext model={model} />
+        </> : kind === "lifecycle" ? <>
+          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
           <LifecycleContext model={model} />
           <LifecycleAdministration>{administration}</LifecycleAdministration>
         </> : <>
@@ -257,7 +272,7 @@ export function PlanningWorkspace({
             {model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}
           </section>
           <ActionQueue model={model} kind={kind} />
-          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} />
+          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
         </>}
       </>}
     </main>

@@ -240,7 +240,7 @@ describe("role-specific operator experiences", () => {
           .filter((allocation) => scopedWorkIds.has(allocation.workOrderId))
           .map((allocation) => allocation.invoiceReferenceId),
       );
-      const invoiceList = buildListModel(fixture, scopedSession, "invoices");
+      const invoiceList = buildListModel(fixture, scopedSession, "invoices", { export: "all" });
       const actualInvoiceIds = new Set(invoiceList.table.rows.map((row) => row.id));
 
       expect(actualInvoiceIds).toEqual(expectedInvoiceIds);
