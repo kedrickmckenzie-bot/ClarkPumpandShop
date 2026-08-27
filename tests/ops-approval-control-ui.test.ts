@@ -78,7 +78,7 @@ describe("work-order pending approval controls", () => {
     expect(markup).toContain("Major repair authorization · version 1");
     expect(markup).toContain("$6,250.00");
     expect(markup).toContain("Maintenance administrator");
-    expect(markup).toContain("Aug 21, 1:00 PM");
+    expect(markup).toContain("Aug 21, 9:00 AM EDT");
     expect(markup).toContain(`action="/api/ops/approvals/${APPROVAL_REQUEST_ID}/decision"`);
     expect(markup).toContain('name="decision"');
     expect(markup).toContain('value="approved"');

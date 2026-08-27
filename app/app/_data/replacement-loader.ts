@@ -6,9 +6,10 @@ import { buildLifecycleRecommendationDraft, replacementBenchmarkPortfolioImpact,
 import type { Asset, OpsFixture, ReplacementProfile } from "@/lib/ops/types";
 import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
 import { loadOperatorSession } from "./operator-loader";
+import { formatOperationsDate } from "@/lib/ops/local-time";
 
 function money(amountMinor: number | undefined, currency = "USD") { return amountMinor === undefined ? "Not available" : new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amountMinor / 100); }
-function date(value: string | undefined) { return value ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(value)) : "No effective date"; }
+function date(value: string | undefined) { return value ? formatOperationsDate(value) : "No effective date"; }
 function sentence(value: string) { return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 
 function profileView(fixture: OpsFixture, profile: ReplacementProfile, currentAsset?: Asset, scopedAssets?: Asset[]): ReplacementProfileViewModel {

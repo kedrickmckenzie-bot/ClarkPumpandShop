@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { OpsFixture, ValueEvent, ValueEventCategory } from "@/lib/ops/types";
+import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import styles from "./warranty-finance-workspace.module.css";
 
 const categories: ValueEventCategory[] = ["realized_verified", "identified_exposure", "estimated_opportunity"];
@@ -46,6 +47,7 @@ export function ValueLedgerWorkspace({
   allEvents: ValueEvent[];
   category?: ValueEventCategory;
 }) {
+  const organizationTimeZone = fixture.organizations.find((organization) => organization.id === events[0]?.organizationId)?.timeZone;
   const totals = new Map(categories.map((item) => [
     item,
     allEvents.filter((event) => event.category === item).reduce((sum, event) => sum + event.amount.amountMinor, 0),
@@ -94,7 +96,7 @@ export function ValueLedgerWorkspace({
                 <td>{money(event.amount.amountMinor, event.amount.currency)}</td>
                 <td>{event.sourceDecision}</td>
                 <td>{records.map((record) => <div key={record.href}><Link href={record.href}>{record.label}</Link></div>)}</td>
-                <td>{new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(event.occurredAt))}</td>
+                <td>{formatOperationsDateTime(event.occurredAt, organizationTimeZone)}</td>
               </tr>;
             })}</tbody>
           </table> : <p className={styles.empty}>No Value Events match this class and scope.</p>}

@@ -4,17 +4,9 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { QrCode } from "lucide-react";
 import QRCode from "qrcode";
+import { useBrowserOrigin } from "@/components/use-browser-origin";
+import { selectPublicQrOrigin } from "@/lib/ops/public-origin";
 import styles from "./public-workflows.module.css";
-
-function safeOrigin(value: string | undefined): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.origin : null;
-  } catch {
-    return null;
-  }
-}
 
 export function PublicStoreQr({
   configuredOrigin,
@@ -26,9 +18,9 @@ export function PublicStoreQr({
   targetPath: string;
 }) {
   const [qrDataUrl, setQrDataUrl] = useState("");
-  const origin = safeOrigin(configuredOrigin);
+  const runtimeOrigin = useBrowserOrigin();
+  const origin = selectPublicQrOrigin(configuredOrigin, runtimeOrigin);
   const publicUrl = useMemo(() => origin ? new URL(targetPath, `${origin}/`).toString() : "", [origin, targetPath]);
-  const localOnly = publicUrl ? ["localhost", "127.0.0.1"].includes(new URL(publicUrl).hostname) : false;
 
   useEffect(() => {
     if (!publicUrl) return;
@@ -53,7 +45,6 @@ export function PublicStoreQr({
       <div className={styles.portalQrImage}>
         {qrDataUrl ? <Image alt={`Store ${storeNumber} vendor check-in QR code`} height={190} priority src={qrDataUrl} unoptimized width={190} /> : <span>Generating QR…</span>}
       </div>
-      {localOnly ? <p className={styles.portalQrNotice}>A phone cannot open localhost. Use the deployed site to scan this from another device.</p> : null}
     </section>
   );
 }

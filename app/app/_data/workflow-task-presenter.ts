@@ -15,15 +15,7 @@ import type {
 } from "@/lib/ops/types";
 import { isDomainManagedReactiveTask, isOpenWorkflowTask } from "@/lib/ops/workflow-task-commands";
 import { domainLabel } from "@/lib/product/domain-label";
-
-const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: "UTC",
-});
+import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
 
 const workflowTaskTypes = [
   "review_issue",
@@ -92,9 +84,9 @@ function options(values: readonly string[]): SelectOptionViewModel[] {
   return values.map((value) => ({ value, label: domainLabel(value) }));
 }
 
-function dateTime(value: string | undefined): string | undefined {
+function dateTime(value: string | undefined, timeZone: string): string | undefined {
   if (!value || !Number.isFinite(Date.parse(value))) return undefined;
-  return dateTimeFormatter.format(new Date(value));
+  return formatOperationsDateTime(value, timeZone);
 }
 
 function taskTone(task: WorkflowTask, asOf: string): Tone {
@@ -109,6 +101,7 @@ function pauseModel(
   fixture: OpsFixture,
   task: WorkflowTask,
   pause: WorkflowTaskSlaPause,
+  timeZone: string,
 ) {
   const resume = fixture.workflowTaskSlaResumes.find((candidate) => (
     candidate.organizationId === task.organizationId
@@ -122,11 +115,11 @@ function pauseModel(
     reasonDetail: pause.reasonDetail,
     ownerLabel: `${pause.ownerName} · ${domainLabel(pause.ownerType)}`,
     affectedClocksLabel: pause.affectedClocks.map((clock) => domainLabel(clock)).join(", "),
-    expectedResumeLabel: dateTime(pause.expectedResumeAt),
+    expectedResumeLabel: dateTime(pause.expectedResumeAt, timeZone),
     pausedByLabel: pause.pausedByActorName,
-    pausedLabel: dateTime(pause.pausedAt) ?? "Time unavailable",
+    pausedLabel: dateTime(pause.pausedAt, timeZone) ?? "Time unavailable",
     resumedByLabel: resume?.resumedByActorName,
-    resumedLabel: dateTime(resume?.resumedAt),
+    resumedLabel: dateTime(resume?.resumedAt, timeZone),
     resumeNote: resume?.note,
   };
 }
@@ -137,6 +130,11 @@ function taskModel(
   genericResolutionLeavesRequiredTask = false,
 ): WorkflowTaskItemViewModel {
   if (!task.workOrderId) throw new Error(`Workflow task ${task.id} is not attached to a work order`);
+  const workOrder = fixture.workOrders.find((candidate) => candidate.organizationId === task.organizationId && candidate.id === task.workOrderId);
+  const store = workOrder ? fixture.stores.find((candidate) => candidate.organizationId === task.organizationId && candidate.id === workOrder.storeId) : undefined;
+  const timeZone = store?.timeZone
+    ?? fixture.organizations.find((organization) => organization.id === task.organizationId)?.timeZone
+    ?? DEFAULT_OPERATIONS_TIME_ZONE;
   const pauses = fixture.workflowTaskSlaPauses
     .filter((pause) => (
       pause.organizationId === task.organizationId
@@ -144,7 +142,7 @@ function taskModel(
       && pause.workOrderId === task.workOrderId
     ))
     .sort((left, right) => right.pausedAt.localeCompare(left.pausedAt) || right.id.localeCompare(left.id))
-    .map((pause) => pauseModel(fixture, task, pause));
+    .map((pause) => pauseModel(fixture, task, pause, timeZone));
   const activePause = pauses.find((pause) => pause.state === "active");
   const terminal = task.status === "completed" || task.status === "cancelled";
   const genericResolutionAvailable = genericResolutionLeavesRequiredTask
@@ -175,17 +173,17 @@ function taskModel(
     blocking: task.blocking,
     requiredForProgress: task.requiredForProgress,
     dueAt: task.dueAt,
-    dueLabel: dateTime(task.dueAt) ?? "No SLA deadline",
+    dueLabel: dateTime(task.dueAt, timeZone) ?? "No SLA deadline",
     noSlaReason: task.noSlaReason,
     slaClockLabel: task.applicableSlaClock ? domainLabel(task.applicableSlaClock) : undefined,
     completionCriteria: task.completionCriteria,
     escalationDestination: task.escalationDestination,
     escalationLevel: task.escalationLevel,
     createdByLabel: task.createdByActorName,
-    createdLabel: dateTime(task.createdAt) ?? "Time unavailable",
-    startedLabel: dateTime(task.startedAt),
-    completedLabel: dateTime(task.completedAt),
-    cancelledLabel: dateTime(task.cancelledAt),
+    createdLabel: dateTime(task.createdAt, timeZone) ?? "Time unavailable",
+    startedLabel: dateTime(task.startedAt, timeZone),
+    completedLabel: dateTime(task.completedAt, timeZone),
+    cancelledLabel: dateTime(task.cancelledAt, timeZone),
     resolutionNote: task.resolutionNote,
     activePauseId: activePause?.id,
     pauses,

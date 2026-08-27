@@ -210,7 +210,7 @@ describe("enterprise service-control presenter contracts", () => {
       policyVersion: 1,
       amountLabel: "$6,250.00",
       requiredRoleLabel: "Maintenance administrator",
-      dueLabel: "Aug 21, 1:00 PM",
+      dueLabel: "Aug 21, 9:00 AM EDT",
       escalationRoleLabel: "Owner / leadership",
       canDecide: true,
     });

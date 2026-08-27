@@ -6,7 +6,7 @@ import { formatPublicDateTime, PublicFrame } from "./public-ui";
 import { PublicStoreQr } from "./public-store-qr";
 import styles from "./public-workflows.module.css";
 
-export function PendingVisitCard({ pendingVisit }: { pendingVisit: PendingVisitCheckout }) {
+export function PendingVisitCard({ pendingVisit, timeZone }: { pendingVisit: PendingVisitCheckout; timeZone?: string }) {
   return (
     <section className={styles.pendingVisit} aria-labelledby="pending-visit-title">
       <span className={styles.pendingVisitIcon}><Clock3 aria-hidden="true" size={23} /></span>
@@ -14,7 +14,7 @@ export function PendingVisitCard({ pendingVisit }: { pendingVisit: PendingVisitC
         <span className={styles.eyebrow}>Visit currently onsite</span>
         <h2 id="pending-visit-title">Ready to check out {pendingVisit.technicianName}?</h2>
         <p>
-          {pendingVisit.vendorName} · Checked in {formatPublicDateTime(pendingVisit.checkedInAt)}
+          {pendingVisit.vendorName} · Checked in {formatPublicDateTime(pendingVisit.checkedInAt, timeZone)}
           {pendingVisit.workOrderLabels.length ? ` · ${pendingVisit.workOrderLabels.join(" · ")}` : " · No work order provided"}
         </p>
       </div>
@@ -36,7 +36,7 @@ export function StorePortalHome({ token, portal, pendingVisit, publicOrigin }: {
           <p className={styles.lede}><MapPin aria-hidden="true" size={18} /> {portal.store.name} · {portal.store.address}</p>
         </div>
       </div>
-      {pendingVisit ? <PendingVisitCard pendingVisit={pendingVisit} /> : null}
+      {pendingVisit ? <PendingVisitCard pendingVisit={pendingVisit} timeZone={portal.store.timeZone} /> : null}
       <div className={styles.portalChoices}>
         {portal.capabilities.reportIssue ? (
           <Link className={styles.portalChoice} href={`${base}/report`}>

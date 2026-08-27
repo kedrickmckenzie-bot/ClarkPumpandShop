@@ -15,6 +15,7 @@ import {
   submitEstimate,
 } from "@/lib/ops/estimate-commands";
 import type { OpsRepository } from "@/lib/ops/repository";
+import { vendorFacingScope } from "@/lib/ops/public-visibility";
 import { siteVisitOutcomeFromLegacy, siteVisitOutcomeRequiresFollowUp } from "@/lib/ops/site-visit-outcomes";
 import { heldWorkVendorEligibility } from "@/lib/ops/held-work-policy";
 import { getServerOpsRepositoryProxy } from "@/lib/server/ops-repository-provider";
@@ -388,7 +389,7 @@ function portalFromAccess(access: PublicAccess): StorePortalView {
           ? access.storeGateway.store.locationPolicyEnabled
           : access.storeRecord.locationPolicyEnabled,
       explanation: access.kind === "trusted_store"
-        ? "This trusted store computer records the exact server time. No PIN or location permission is needed."
+        ? "This trusted store computer records the exact visit time and displays it in the store's local timezone. No PIN or location permission is needed."
         : "Location is requested only when a technician checks in or out. The service does not track anyone continuously.",
     },
     capabilities: {
@@ -408,10 +409,6 @@ function titleCase(value: string | undefined): string | undefined {
 
 function displayPriority(value: string): "Routine" | "Priority" | "Emergency" {
   return value === "emergency" ? "Emergency" : value === "urgent" ? "Priority" : "Routine";
-}
-
-function moneyLabel(amountMinor: number, currency: string): string {
-  return `${new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100)} ${currency} without additional approval`;
 }
 
 function estimateMoneyLabel(amountMinor: number, currency: string): string {
@@ -993,16 +990,16 @@ const gateway: PublicOperationsGateway = {
         number: source.store.storeNumber,
         name: source.store.name,
         address: source.store.formattedAddress,
+        timeZone: source.store.timeZone,
       },
       service: {
         problem: source.problem,
-        requestedWork: source.authorizedScope ?? "Diagnose the reported problem and communicate findings before expanding the scope.",
+        requestedWork: vendorFacingScope(source.authorizedScope),
         category: titleCase(source.categoryKey),
         asset: source.asset ? `${source.asset.name} · ${source.asset.assetTag}` : undefined,
         accessNotes: source.store.accessNotes,
       },
       authorization: {
-        notToExceedLabel: source.nte ? moneyLabel(source.nte.amountMinor, source.nte.currency) : undefined,
         requestedBy: `${source.organizationName} Facilities`,
         billingInstruction: source.billingInstruction,
       },
@@ -1145,6 +1142,7 @@ const gateway: PublicOperationsGateway = {
         number: resolved.store.storeNumber,
         name: resolved.store.name,
         address: [resolved.store.address1, resolved.store.address2, `${resolved.store.city}, ${resolved.store.state} ${resolved.store.postalCode}`].filter(Boolean).join(", "),
+        timeZone: resolved.store.timeZone,
       },
       problem: resolved.workOrder.problem,
       requestedScope: source.requestedScope,

@@ -52,7 +52,6 @@ const serviceAuthorization: ServiceAuthorizationView = {
     requestedWork: "Inspect and repair the evaporator fan assembly.",
   },
   authorization: {
-    notToExceedLabel: "$1,750.00 USD without additional approval",
     requestedBy: "Jordan Lee",
     billingInstruction: "Reference CPS-2026-0116 on the invoice.",
   },
@@ -91,6 +90,8 @@ describe("public bid request and service authorization distinction", () => {
     expect(markup).toContain("Your company was selected for this work");
     expect(markup).toContain("Digital acceptance is available when your company uses it");
     expect(markup).toContain("operator may still allow technician check-in for already-issued work");
+    expect(markup).toContain("Work reference &amp; billing");
+    expect(markup).not.toMatch(/authorization limit|not-to-exceed|\bNTE\b/iu);
     expect(markup).toContain("Technician check-in and checkout");
     expect(markup).toContain("Open technician check-in / checkout");
     expect(markup).toContain("Accept work");

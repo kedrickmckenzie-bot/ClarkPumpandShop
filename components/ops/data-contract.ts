@@ -694,6 +694,7 @@ export interface CreateStorePageViewModel {
   cancelLink: SupportingLink;
   regions: SelectOptionViewModel[];
   timeZones: SelectOptionViewModel[];
+  defaultTimeZone: string;
 }
 
 export interface CreateVendorPageViewModel {

@@ -25,6 +25,7 @@ import type {
 } from "./data-contract";
 import styles from "./ops.module.css";
 import { domainLabel } from "@/lib/product/domain-label";
+import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
 
 type MutationState = { pending: boolean; error?: string };
 
@@ -125,10 +126,10 @@ function SelectField({ id, name, label, options, defaultValue, required = true, 
   );
 }
 
-function textDateTime(value?: string, timeZone = "UTC") {
+function textDateTime(value?: string, timeZone = DEFAULT_OPERATIONS_TIME_ZONE) {
   if (!value || !Number.isFinite(Date.parse(value))) return "Not set";
   const normalized = /(?:Z|[+-]\d{2}:\d{2})$/u.test(value) ? value : `${value}:00Z`;
-  return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone, timeZoneName: "short" }).format(new Date(normalized));
+  return formatOperationsDateTime(normalized, timeZone);
 }
 
 function inputDateTime(value?: string) {

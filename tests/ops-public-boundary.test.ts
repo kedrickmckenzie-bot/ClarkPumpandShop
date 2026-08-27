@@ -59,7 +59,8 @@ describe("public service and visit capability boundaries", () => {
     });
     expect(authorization?.service.problem).toContain("Evaporator fan");
     expect(authorization?.service.requestedWork).toContain("Inspect the evaporator fan assembly");
-    expect(authorization?.authorization.notToExceedLabel).toContain("$1,750.00");
+    expect(authorization?.service.requestedWork).not.toMatch(/authorization limit|exceeding authorization|not-to-exceed|\bNTE\b/iu);
+    expect(authorization?.authorization).not.toHaveProperty("notToExceedLabel");
     expect(authorization?.priority).toBe("Priority");
   });
 

@@ -15,6 +15,7 @@ describe("transactional email and onboarding previews", () => {
     expect(fetcher).toHaveBeenCalledOnce();
     expect(captured?.headers).toMatchObject({ "Idempotency-Key": "service-authorization/issuance-1/dispatch@example.com" });
     expect(String(captured?.body)).toContain(workOrder.number);
+    expect(String(captured?.body)).not.toMatch(/not[- ]?to[- ]?exceed|\bNTE\b|authorization limit/iu);
   });
 
   it("routes accepted multi-store PM and reactive work to Maintenance and only the affected store and region", async () => {

@@ -23,7 +23,7 @@ export async function POST(request: Request) {
         aliases: formText(formData, "aliases", { max: 500 }).split(",").map((value) => value.trim()).filter(Boolean),
         geofenceRadiusM: Number.isFinite(radius) ? radius : undefined,
         locationPolicyEnabled: formData.get("locationPolicyEnabled") === "true",
-        timeZone: formText(formData, "timeZone", { max: 80 }) || undefined,
+        timeZone: formText(formData, "timeZone", { required: true, max: 80 }),
         actor: context.actor,
       },
     );

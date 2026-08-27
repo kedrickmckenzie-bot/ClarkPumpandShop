@@ -170,14 +170,6 @@
   opacity: 0.55;
 }
 
-.localNotice {
-  border-left: 3px solid #c77800;
-  background: #fff8e8;
-  padding: 10px 12px;
-  color: #704400 !important;
-  font-size: 13px !important;
-}
-
 .url {
   overflow-wrap: anywhere;
   color: #6b7484 !important;

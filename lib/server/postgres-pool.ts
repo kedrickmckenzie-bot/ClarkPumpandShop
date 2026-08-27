@@ -36,7 +36,10 @@ export async function getPostgresPool(databaseUrl = process.env.DATABASE_URL): P
       connectionString: resolvedUrl,
       max: 10,
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
+      // Managed PostgreSQL can take longer than five seconds to accept the
+      // first connection after an idle period. Keep this bounded, but do not
+      // fail a Render deployment during an ordinary database cold start.
+      connectionTimeoutMillis: 15_000,
     });
     poolUrl = resolvedUrl;
   }
@@ -45,6 +48,10 @@ export async function getPostgresPool(databaseUrl = process.env.DATABASE_URL): P
 }
 
 export async function resetPostgresPoolForTests() {
+  await closePostgresPool();
+}
+
+export async function closePostgresPool() {
   const current = pool;
   pool = undefined;
   poolUrl = undefined;

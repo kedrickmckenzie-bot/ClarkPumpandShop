@@ -8,27 +8,15 @@ import type {
   TechnicianCheckOutReceipt,
 } from "./contracts";
 import { productFullName, productPresentation } from "@/lib/product/presentation";
+import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import styles from "./public-workflows.module.css";
 
 export function formatPublicDateTime(value: string, timeZone?: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-    timeZone,
-  }).format(new Date(value));
+  return formatOperationsDateTime(value, timeZone);
 }
 
 export function formatPublicDate(value: string, timeZone?: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone,
-  }).format(new Date(value));
+  return formatOperationsDate(value, timeZone);
 }
 
 export function PublicFrame({
@@ -141,7 +129,7 @@ export function ServerReceipt({
         ) : null}
       </div>
       {checkOut ? <p className={styles.disclaimer}>Observed onsite duration is approximate presence evidence. It is not certified labor time or automatic invoice proof.</p> : null}
-      <p className={styles.receiptMeta}>Server receipt {receipt.receiptId} · received {formatPublicDateTime(receipt.receivedAt, timeZone)}</p>
+      <p className={styles.receiptMeta}>Receipt {receipt.receiptId} · recorded {formatPublicDateTime(receipt.receivedAt, timeZone)} local store time</p>
       {restartHref && restartLabel ? <Link className={styles.textLink} href={restartHref}>{restartLabel} <ArrowRight size={16} aria-hidden="true" /></Link> : null}
     </section>
   );

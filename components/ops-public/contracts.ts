@@ -69,6 +69,7 @@ export interface ServiceAuthorizationView {
     name: string;
     address: string;
     phone?: string;
+    timeZone?: string;
   };
   service: {
     problem: string;
@@ -78,7 +79,6 @@ export interface ServiceAuthorizationView {
     accessNotes?: string;
   };
   authorization: {
-    notToExceedLabel?: string;
     requestedBy: string;
     billingInstruction: string;
   };
@@ -106,6 +106,7 @@ export interface VendorEstimateView {
     number: string;
     name: string;
     address: string;
+    timeZone?: string;
   };
   problem: string;
   requestedScope: string;

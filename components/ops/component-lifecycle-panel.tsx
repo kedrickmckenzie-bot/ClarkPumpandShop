@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { Asset, AssetComponent, OpsFixture } from "@/lib/ops/types";
+import { formatOperationsDate } from "@/lib/ops/local-time";
 import styles from "./component-lifecycle-panel.module.css";
 
 const money = (minor: number, currency = "USD") => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(minor / 100);
-const date = (value?: string) => value ? new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(value)) : "Not recorded";
+const date = (value?: string) => value ? formatOperationsDate(value) : "Not recorded";
 const monthsBetween = (start?: string, end?: string) => start && end ? Math.max(0, Math.round((Date.parse(end) - Date.parse(start)) / 2_629_746_000)) : undefined;
 const median = (values: number[]) => { const sorted = [...values].sort((a, b) => a - b); return sorted.length ? sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : Math.round((sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2) : undefined; };
 

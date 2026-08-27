@@ -834,16 +834,6 @@
   height: 190px;
 }
 
-.portalQrNotice {
-  grid-column: 1 / -1;
-  margin: -0.5rem 0 0 !important;
-  border-left: 3px solid #b97300;
-  background: #fff7e4;
-  padding: 0.65rem 0.8rem;
-  color: #724900 !important;
-  font-size: 0.88rem;
-}
-
 .fileInput {
   width: 100%;
   border: 1px dashed #9eb8af;

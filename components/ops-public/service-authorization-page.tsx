@@ -40,7 +40,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
             <div className={styles.detailGrid} style={{ marginTop: "1.2rem" }}>
               <div className={styles.detail}><span className={styles.detailLabel}>Category</span><p className={styles.detailValue}>{authorization.service.category ?? "To be classified"}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Equipment</span><p className={styles.detailValue}>{authorization.service.asset ?? "Not required for this work"}</p></div>
-              <div className={styles.detail}><span className={styles.detailLabel}>Issued</span><p className={styles.detailValue}>{formatPublicDateTime(authorization.issuedAt)}</p></div>
+              <div className={styles.detail}><span className={styles.detailLabel}>Issued</span><p className={styles.detailValue}>{formatPublicDateTime(authorization.issuedAt, authorization.store.timeZone)}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Revision</span><p className={styles.detailValue}>Revision {authorization.revision}</p></div>
             </div>
           </section>
@@ -48,7 +48,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
           {authorization.priorResponse ? (
             <section className={styles.notice} aria-label="Recorded vendor response">
               <strong>{authorization.priorResponse.label}</strong>
-              <p className={styles.helper}>Received {formatPublicDateTime(authorization.priorResponse.receivedAt)}{authorization.priorResponse.detail ? ` · ${authorization.priorResponse.detail}` : ""}</p>
+              <p className={styles.helper}>Received {formatPublicDateTime(authorization.priorResponse.receivedAt, authorization.store.timeZone)}{authorization.priorResponse.detail ? ` · ${authorization.priorResponse.detail}` : ""}</p>
             </section>
           ) : null}
           <VendorResponseForm disabled={hasFinalResponse} opened={authorization.opened} organizationName={authorization.organizationName} token={token} />
@@ -65,9 +65,8 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
           </section>
 
           <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Authorization & billing</h2>
+            <h2 className={styles.cardTitle}>Work reference & billing</h2>
             <div className={styles.stack} style={{ marginTop: "1rem" }}>
-              <div className={styles.detail}><span className={styles.detailLabel}>Authorization limit</span><p className={styles.detailValue}>{authorization.authorization.notToExceedLabel ?? "No limit stated"}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Billing reference</span><p className={styles.detailValue}>{authorization.authorization.billingInstruction}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Issued by</span><p className={styles.detailValue}>{authorization.authorization.requestedBy}</p></div>
             </div>

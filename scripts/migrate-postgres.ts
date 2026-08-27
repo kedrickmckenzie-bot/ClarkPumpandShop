@@ -1,5 +1,6 @@
 import { readMigrationFiles } from "drizzle-orm/migrator";
-import { getPostgresPool } from "../lib/server/postgres-pool";
+import { closePostgresPool, getPostgresPool } from "../lib/server/postgres-pool";
+import { runPostgresStartupStep } from "./postgres-startup-retry";
 
 const MIGRATIONS_FOLDER = "drizzle-postgres";
 const LEGACY_MIGRATION_LOCK_KEY = "traceops-postgres-migrations-v1";
@@ -70,8 +71,7 @@ async function migrate() {
 }
 
 try {
-  await migrate();
+  await runPostgresStartupStep("PostgreSQL migration", migrate);
 } finally {
-  const pool = await getPostgresPool();
-  await pool.end?.();
+  await closePostgresPool();
 }

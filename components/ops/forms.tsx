@@ -295,7 +295,7 @@ export function CreateStoreForm({ model }: { model: CreateStorePageViewModel }) 
               <label className={styles.field} htmlFor="store-state"><span>State <em>Required</em></span><input id="store-state" name="state" required maxLength={2} autoComplete="address-level1" /></label>
               <label className={styles.field} htmlFor="store-postal"><span>Postal code <em>Required</em></span><input id="store-postal" name="postalCode" required autoComplete="postal-code" /></label>
             </div>
-            <SelectField id="store-timezone" name="timeZone" label="Time zone" options={model.timeZones} helper="Defaults to the organization time zone when left blank." />
+            <SelectField id="store-timezone" name="timeZone" label="Store time zone" options={model.timeZones} defaultValue={model.defaultTimeZone} required helper="Confirm the zone at this store address. Visit evidence, camera lookup times, deadlines, and vendor scheduling use this value—never the viewer's device clock." />
           </section>
 
           <section className={styles.formSection}>

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { StoreQrMaterial } from "@/components/ops/store-qr-material";
+import { selectPublicQrOrigin } from "@/lib/ops/public-origin";
 import type { StorePortalView } from "@/components/ops-public/contracts";
 import {
   checkoutTokenFromUrl,
@@ -36,6 +37,20 @@ const pendingVisit: PendingVisitCheckout = {
 };
 
 describe("public visit checkout recovery and store QR", () => {
+  it("uses the deployed browser origin when hosting still supplies localhost", () => {
+    expect(selectPublicQrOrigin(
+      "http://localhost:3000",
+      "https://traceops-convenience-demo.onrender.com/app/stores/store-northline-104",
+    )).toBe("https://traceops-convenience-demo.onrender.com");
+  });
+
+  it("keeps an explicitly configured public origin during local administration", () => {
+    expect(selectPublicQrOrigin(
+      "https://operations.example",
+      "http://localhost:3000",
+    )).toBe("https://operations.example");
+  });
+
   it("sets an HttpOnly same-site recovery cookie from a visit checkout capability", () => {
     const response = Response.json({ ok: true });
     setPendingVisitCookie(

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { Invoice, OpsFixture, WarrantyCase } from "@/lib/ops/types";
+import { formatOperationsDate } from "@/lib/ops/local-time";
 import styles from "./warranty-finance-workspace.module.css";
 
 const money=(amount:number,currency:string)=>new Intl.NumberFormat("en-US",{style:"currency",currency}).format(amount/100);
-const date=(value:string|undefined)=>value?new Intl.DateTimeFormat("en-US",{dateStyle:"medium"}).format(new Date(value)):"—";
+const date=(value:string|undefined)=>value?formatOperationsDate(value):"—";
 const label=(value:string)=>value.replaceAll("_"," ");
 
 export function WarrantyQueueWorkspace({fixture,cases}:{fixture:OpsFixture;cases:WarrantyCase[]}){

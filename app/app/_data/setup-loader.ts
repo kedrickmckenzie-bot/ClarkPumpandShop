@@ -17,6 +17,7 @@ import type {
 } from "@/components/ops/setup-types";
 import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
 import type { OpsFixture, Store, TaxonomyNode } from "@/lib/ops/types";
+import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { loadOperatorSession } from "./operator-loader";
 
 type Query = Record<string, string | string[] | undefined>;
@@ -270,18 +271,12 @@ function sentence(value: string | undefined) {
 
 function date(value: string | undefined) {
   if (!value) return "Not entered";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  return formatOperationsDate(value, DEFAULT_OPERATIONS_TIME_ZONE);
 }
 
-function dateTime(value: string | undefined) {
+function dateTime(value: string | undefined, timeZone = DEFAULT_OPERATIONS_TIME_ZONE) {
   if (!value) return "Not entered";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatOperationsDateTime(value, timeZone);
 }
 
 function money(value: number, currency = "USD") {
@@ -465,7 +460,7 @@ export async function loadComponentDetailModel(
             label: `Visit ${visit.id}`,
             href: `/app/visits?visit=${encodeURIComponent(visit.id)}`,
             cells: [
-              { key: "visit", value: dateTime(visit.checkedInAt), secondary: sentence(visit.startedChannel) },
+              { key: "visit", value: dateTime(visit.checkedInAt, store?.timeZone), secondary: `${sentence(visit.startedChannel)} · store-local time` },
               { key: "provider", value: visit.providerName, secondary: visit.technicianName },
               { key: "work", value: workOrders.find((work) => work.id === visit.workOrderId)?.number ?? "Not linked" },
               { key: "outcome", value: sentence(visit.outcome ?? visit.status), tone: statusTone(visit.outcome ?? visit.status) },

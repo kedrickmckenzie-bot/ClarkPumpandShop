@@ -1,4 +1,5 @@
 import type { OpsRepository } from "./repository";
+import { vendorFacingScope } from "./public-visibility";
 import type { NotificationEventKey, NotificationRecipient, NotificationRecipientRole, OutboxMessage, ServiceRun, Store, WorkOrder } from "./types";
 import type { OutboxDeliveryMessage, OutboxDeliveryTransport } from "./outbox-delivery";
 
@@ -111,20 +112,19 @@ export async function sendVendorServiceAuthorizationEmail(input: {
   issuanceId: string;
 }) {
   const subject = `${input.organizationName} service authorization ${input.workOrder.number}`;
-  const nte = input.workOrder.nte ? new Intl.NumberFormat("en-US", { style: "currency", currency: input.workOrder.nte.currency }).format(input.workOrder.nte.amountMinor / 100) : "Not specified";
+  const publicScope = vendorFacingScope(input.authorizedScope);
   const text = [
     `Hello ${input.vendorName},`,
     "",
     `${input.organizationName} issued service authorization ${input.workOrder.number} for ${input.storeLabel}.`,
     `Problem: ${input.workOrder.problem}`,
-    `Authorized scope: ${input.authorizedScope || "See the authorization"}`,
-    `Not-to-exceed amount: ${nte}`,
+    `Authorized scope: ${publicScope}`,
     "",
     `Open the secure authorization: ${input.actionUrl}`,
     "",
     `Include ${input.workOrder.number} on service paperwork and invoices.`,
   ].join("\n");
-  const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(input.vendorName)},</p><p><strong>${escapeEmailHtml(input.organizationName)}</strong> issued service authorization <strong>${escapeEmailHtml(input.workOrder.number)}</strong> for ${escapeEmailHtml(input.storeLabel)}.</p><table style="border-collapse:collapse;width:100%;margin:20px 0"><tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Problem</td><td style="padding:8px;border-bottom:1px solid #e2e8f0">${escapeEmailHtml(input.workOrder.problem)}</td></tr><tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Authorized scope</td><td style="padding:8px;border-bottom:1px solid #e2e8f0">${escapeEmailHtml(input.authorizedScope || "See the authorization")}</td></tr><tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Not to exceed</td><td style="padding:8px;border-bottom:1px solid #e2e8f0">${escapeEmailHtml(nte)}</td></tr></table><p><a href="${escapeEmailHtml(input.actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Open secure authorization</a></p><p style="color:#475569">Include <strong>${escapeEmailHtml(input.workOrder.number)}</strong> on service paperwork and invoices.</p></div>`;
+  const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(input.vendorName)},</p><p><strong>${escapeEmailHtml(input.organizationName)}</strong> issued service authorization <strong>${escapeEmailHtml(input.workOrder.number)}</strong> for ${escapeEmailHtml(input.storeLabel)}.</p><table style="border-collapse:collapse;width:100%;margin:20px 0"><tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Problem</td><td style="padding:8px;border-bottom:1px solid #e2e8f0">${escapeEmailHtml(input.workOrder.problem)}</td></tr><tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Authorized scope</td><td style="padding:8px;border-bottom:1px solid #e2e8f0">${escapeEmailHtml(publicScope)}</td></tr></table><p><a href="${escapeEmailHtml(input.actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Open secure authorization</a></p><p style="color:#475569">Include <strong>${escapeEmailHtml(input.workOrder.number)}</strong> on service paperwork and invoices.</p></div>`;
   return input.provider.send({ to: input.vendorEmail, subject, text, html, replyTo: input.replyTo, idempotencyKey: `service-authorization/${input.issuanceId}/${input.vendorEmail}` });
 }
 

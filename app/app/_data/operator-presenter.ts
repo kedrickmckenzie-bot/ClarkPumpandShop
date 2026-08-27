@@ -66,6 +66,11 @@ import {
 import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
 import { reportCatalog } from "@/lib/ops/report-catalog";
 import { domainLabel } from "@/lib/product/domain-label";
+import {
+  DEFAULT_OPERATIONS_TIME_ZONE,
+  formatOperationsDate,
+  formatOperationsDateTime,
+} from "@/lib/ops/local-time";
 
 export type OperatorListRoute =
   | "action-center"
@@ -97,20 +102,6 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
 });
-const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  timeZone: "UTC",
-});
-const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: "UTC",
-});
-
 const unresolvedOutcomesForPresentation = new Set<NonNullable<VisitSession["outcome"]>>([
   "temporary_repair",
   "diagnosed_waiting_parts",
@@ -140,25 +131,16 @@ function estimateMoney(amountMinor: number, currency: string): string {
   }).format(amountMinor / 100);
 }
 
-function date(value: string | undefined): string {
-  return value ? dateFormatter.format(new Date(value)) : "Not set";
+function date(value: string | undefined, timeZone = DEFAULT_OPERATIONS_TIME_ZONE): string {
+  return value ? formatOperationsDate(value, timeZone) : "Not set";
 }
 
-function dateTime(value: string | undefined): string {
-  return value ? dateTimeFormatter.format(new Date(value)) : "Not recorded";
+function dateTime(value: string | undefined, timeZone = DEFAULT_OPERATIONS_TIME_ZONE): string {
+  return value ? formatOperationsDateTime(value, timeZone, { year: false }) : "Not recorded";
 }
 
 function dateTimeInZone(value: string | undefined, timeZone: string): string {
-  return value
-    ? new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone,
-        timeZoneName: "short",
-      }).format(new Date(value))
-    : "Not recorded";
+  return value ? formatOperationsDateTime(value, timeZone, { year: false }) : "Not recorded";
 }
 
 function dateTimeInputInZone(value: string, timeZone: string) {
@@ -1814,6 +1796,8 @@ function visitRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
     .filter((visit) => !q || searchable(visit.technicianName, visit.providerName, visit.purpose, workById.get(visit.workOrderId ?? "")?.number, storeLabel(storeById.get(visit.storeId))).includes(q))
     .sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt))
     .map((visit) => {
+      const store = storeById.get(visit.storeId);
+      const storeTimeZone = store?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
       const evidence = fixture.visitEvidence.filter((item) => item.organizationId === scoped.organizationId && item.visitId === visit.id);
       const checkIn = evidence.find((item) => item.kind === "check_in");
       const work = visit.workOrderId ? workById.get(visit.workOrderId) : undefined;
@@ -1823,10 +1807,10 @@ function visitRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
         href: `/app/visits/${visit.id}`,
         cells: [
           { key: "visit", value: visit.technicianName, secondary: visit.purpose },
-          { key: "store", value: storeLabel(storeById.get(visit.storeId)) },
+          { key: "store", value: storeLabel(store) },
           { key: "vendor", value: visit.providerName },
           { key: "work", value: work?.number ?? "No work order", secondary: visit.unmatchedReason },
-          { key: "observed", value: visit.checkedOutAt ? `${dateTime(visit.checkedInAt)} – ${dateTime(visit.checkedOutAt)}` : `Since ${dateTime(visit.checkedInAt)}`, secondary: "Approximate presence, not labor" },
+          { key: "observed", value: visit.checkedOutAt ? `${dateTime(visit.checkedInAt, storeTimeZone)} – ${dateTime(visit.checkedOutAt, storeTimeZone)}` : `Since ${dateTime(visit.checkedInAt, storeTimeZone)}`, secondary: "Store-local time · approximate presence, not labor" },
           { key: "evidence", value: checkIn?.location?.result ? sentence(checkIn.location.result) : "No location evidence", tone: checkIn?.location?.result === "verified" ? "positive" : "warning" },
           { key: "outcome", value: visit.outcome ? sentence(visit.outcome) : "Onsite now", tone: visit.status === "active" ? "info" : "neutral" },
         ],
@@ -1944,7 +1928,7 @@ function buildVendorEvidenceBundle(
   scoped: ScopedFixture,
   vendor: OpsFixture["vendors"][number],
 ): VendorEvidenceBundle {
-  const organizationTimeZone = fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone ?? "UTC";
+  const organizationTimeZone = fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   const allScopedWorkIds = new Set(scoped.workOrders.map((work) => work.id));
   const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
   const workById = new Map(scoped.workOrders.map((work) => [work.id, work]));
@@ -2346,14 +2330,15 @@ function buildVendorEvidenceBundle(
 
   const visitRows: VendorVisitEvidenceRow[] = vendorVisits.map((visit) => {
     const work = visit.workOrderId ? workById.get(visit.workOrderId) : undefined;
+    const storeTimeZone = storeById.get(visit.storeId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
     return {
       id: visit.id,
       technicianName: visit.technicianName,
       storeLabel: storeLabel(storeById.get(visit.storeId)),
       workOrderLabel: work?.number ?? "No work order",
       observedLabel: visit.checkedOutAt
-        ? `${dateTime(visit.checkedInAt)} – ${dateTime(visit.checkedOutAt)}`
-        : `Onsite since ${dateTime(visit.checkedInAt)}`,
+        ? `${dateTime(visit.checkedInAt, storeTimeZone)} – ${dateTime(visit.checkedOutAt, storeTimeZone)}`
+        : `Onsite since ${dateTime(visit.checkedInAt, storeTimeZone)}`,
       outcomeLabel: visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "Onsite now" : "Outcome not recorded",
       isNoWorkOrder: !visit.workOrderId,
       isUnresolved: Boolean(visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome)),
@@ -2569,14 +2554,14 @@ export function buildVendorPerformanceDetailModel(
       complianceRows: [],
       qualificationRows: [],
       vendorReminderRows: [],
-      timeZone: "UTC",
+      timeZone: DEFAULT_OPERATIONS_TIME_ZONE,
       defaultReminderOwner: "",
       defaultReminderEscalation: "Facilities leadership",
       regionLabels: [],
     };
   }
   const bundle = buildVendorEvidenceBundle(fixture, scoped, vendor);
-  const organizationTimeZone = fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone ?? "UTC";
+  const organizationTimeZone = fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   return {
     state: "ready",
     title: vendor.name,
@@ -2793,7 +2778,7 @@ export function buildListModel(
           { key: "work", value: work.number, secondary: storeLabel(store) },
           { key: "vendor", value: vendor?.name ?? "Unknown vendor" },
           { key: "amount", value: proposal ? estimateMoney(proposal.amount.amountMinor, proposal.amount.currency) : "Not submitted", secondary: proposal ? `Revision ${proposal.revision}` : "Pricing evidence pending" },
-          { key: "due", value: request.dueAt ? dateTime(request.dueAt) : "No deadline", secondary: request.respondedAt ? `Responded ${dateTime(request.respondedAt)}` : undefined },
+          { key: "due", value: request.dueAt ? dateTime(request.dueAt, store?.timeZone) : "No deadline", secondary: request.respondedAt ? `Responded ${dateTime(request.respondedAt, store?.timeZone)}` : undefined },
           { key: "status", value: sentence(request.status), tone: request.status === "selected" ? "positive" : ["declined", "expired", "withdrawn", "not_selected"].includes(request.status) ? "neutral" : request.status === "submitted" ? "info" : "warning" },
         ],
       }));
@@ -2812,7 +2797,7 @@ export function buildListModel(
           { key: "request", value: request.reference, secondary: request.problem },
           { key: "store", value: storeLabel(storeById.get(request.storeId)) },
           { key: "priority", value: sentence(request.priority), tone: request.priority === "emergency" ? "critical" : request.priority === "urgent" ? "warning" : "neutral" },
-          { key: "reported", value: dateTime(request.submittedAt), secondary: request.reporterName },
+          { key: "reported", value: dateTime(request.submittedAt, storeById.get(request.storeId)?.timeZone), secondary: request.reporterName },
           { key: "status", value: sentence(request.status), tone: request.status === "converted" ? "positive" : "info" },
         ],
       }));
@@ -3673,7 +3658,7 @@ export function buildProgramModel(
         { key: "store", value: storeLabel(store) },
         { key: "window", value: `${date(occurrence.windowStartsAt)} – ${date(occurrence.windowEndsAt)}`, secondary: `Due ${date(occurrence.dueAt)}` },
         { key: "work", value: occurrence.workOrderId ? scoped.workOrders.find((work) => work.id === occurrence.workOrderId)?.number ?? "Linked" : "Not created" },
-        { key: "visit", value: observedVisitIds.size ? `${observedVisitIds.size} observed visit${observedVisitIds.size === 1 ? "" : "s"}` : "No matching visit recorded", secondary: observedVisitIds.size ? "Server-timestamped store presence" : "Review fact, not proof service was missed", tone: observedVisitIds.size ? "positive" : status === "completed" ? "warning" : "neutral" },
+        { key: "visit", value: observedVisitIds.size ? `${observedVisitIds.size} observed visit${observedVisitIds.size === 1 ? "" : "s"}` : "No matching visit recorded", secondary: observedVisitIds.size ? "Recorded store-presence evidence" : "Review fact, not proof service was missed", tone: observedVisitIds.size ? "positive" : status === "completed" ? "warning" : "neutral" },
         { key: "status", value: sentence(status), tone: status === "completed" ? "positive" : status === "missed" ? "critical" : status === "due" ? "warning" : "info" },
       ] };
     });
@@ -4014,7 +3999,7 @@ export function buildDetailModel(
       facts: [
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { label: "Reported by", value: request.reporterName, helperText: request.reporterEmployeeId ? `Employee ID ${request.reporterEmployeeId}` : "Employee ID not entered" },
-        { label: "Reported", value: dateTime(request.submittedAt) },
+        { label: "Reported", value: dateTime(request.submittedAt, store?.timeZone), helperText: "Store-local time" },
         { label: "Priority", value: sentence(request.priority) },
         { label: "Work order", value: convertedWork?.number ?? "Not created", link: convertedWork ? { href: `/app/work-orders/${convertedWork.id}`, label: "Open work order" } : undefined },
         approval.fact,
@@ -4052,7 +4037,7 @@ export function buildDetailModel(
             id: event.id,
             title: sentence(event.eventType.replaceAll(".", " ")),
             description: auditDescription(event.payloadJson),
-            timestampLabel: dateTime(event.occurredAt),
+            timestampLabel: dateTime(event.occurredAt, store?.timeZone),
             actorLabel: event.actorName,
           })),
         },
@@ -4278,6 +4263,9 @@ export function buildDetailModel(
     const work = scoped.workOrders.find((item) => item.id === id);
     if (!work) return missingDetail("Work order", "/app/work-orders");
     const store = scoped.stores.find((item) => item.id === work.storeId);
+    const storeTimeZone = store?.timeZone
+      ?? fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone
+      ?? DEFAULT_OPERATIONS_TIME_ZONE;
     const assignment = assignmentForWork(fixture, scoped.organizationId, work.id);
     const vendor = assignment?.vendorId ? fixture.vendors.find((item) => item.id === assignment.vendorId && item.organizationId === scoped.organizationId) : undefined;
     const visits = scoped.visits.filter((visit) => visit.workOrderId === work.id);
@@ -4324,7 +4312,7 @@ export function buildDetailModel(
         { label: "Assigned to", value: vendor?.name ?? (assignment?.kind === "internal" ? "Internal maintenance" : "Choose later") },
         ...(sourceVisit ? [{ label: "Record origin", value: "Created after service began", helperText: "The observed visit started first; this work order does not imply prior written authorization.", link: { href: `/app/visits/${sourceVisit.id}`, label: "Open original visit" } }] : []),
         { label: "Accountable party", value: work.accountableParty },
-        { label: "Next action", value: work.nextAction, helperText: work.dueAt ? `Due ${dateTime(work.dueAt)}` : "No due time entered" },
+        { label: "Next action", value: work.nextAction, helperText: work.dueAt ? `Due ${dateTime(work.dueAt, storeTimeZone)}` : "No due time entered" },
         approval.fact,
         { label: "Recorded work cost", value: money(costByWork.get(work.id) ?? 0), helperText: "Entered source lines; not inferred from observed time" },
         { label: "Classification", value: work.categoryKey ? sentence(work.categoryKey) : "Deferred", helperText: work.assetId ? "Equipment linked" : "Equipment not required" },
@@ -4343,7 +4331,7 @@ export function buildDetailModel(
         { id: "visits", title: "Observed visits", description: "Observed onsite duration is approximate presence evidence, not certified labor.", table: { id: "work-visits", caption: "Visits linked to this work order", columns: columns.visits, rows: visitRows(fixture, { ...scoped, visits }, {}) } },
         { id: "cost", title: "Recorded work cost", description: "Cost lines are entered facts. Optional invoice evidence is reviewed separately.", table: { id: "work-cost", caption: "Recorded cost lines", columns: [{ key: "date", label: "Service date" }, { key: "kind", label: "Type" }, { key: "description", label: "Description" }, { key: "amount", label: "Amount", align: "end" }], rows: costLines.map((line) => ({ id: line.id, label: line.description, href: `/app/work-orders/${work.id}`, cells: [{ key: "date", value: date(line.serviceDate) }, { key: "kind", value: sentence(line.kind) }, { key: "description", value: line.description }, { key: "amount", value: money(line.amount.amountMinor) }] })) } },
         { id: "invoice-references", title: "Invoice references", description: "Optional billing evidence is linked for review without making it a prerequisite for maintenance visibility.", table: { id: "work-invoices", caption: `Invoice references linked to ${work.number}`, columns: [{ key: "invoice", label: "Invoice" }, { key: "date", label: "Invoice date" }, { key: "gross", label: "Gross amount", align: "end" }, { key: "allocation", label: "Allocated here", align: "end" }, { key: "status", label: "Match status" }], rows: invoiceLinks.map(({ invoice, allocation }) => ({ id: invoice.id, label: invoice.invoiceNumber, href: `/app/invoices/${invoice.id}`, cells: [{ key: "invoice", value: invoice.invoiceNumber }, { key: "date", value: date(invoice.invoiceDate) }, { key: "gross", value: money(invoice.grossAmount.amountMinor) }, { key: "allocation", value: money(allocation.amount.amountMinor) }, { key: "status", value: sentence(invoice.matchStatus), tone: invoice.matchStatus === "confirmed" ? "positive" : "warning" }] })) } },
-        { id: "timeline", title: "Audit timeline", description: "Issued versions, responses, visits, follow-ups, and corrections remain attributable.", timeline: audit.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt), actorLabel: event.actorName })) },
+        { id: "timeline", title: "Audit timeline", description: "Issued versions, responses, visits, follow-ups, and corrections remain attributable. Times are shown in the store's local timezone.", timeline: audit.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt, storeTimeZone), actorLabel: event.actorName })) },
       ],
       backLink: { label: "Back to work orders", href: "/app/work-orders" },
     };
@@ -4353,6 +4341,9 @@ export function buildDetailModel(
     const visit = scoped.visits.find((item) => item.id === id);
     if (!visit) return missingDetail("Service visit", "/app/visits");
     const store = scoped.stores.find((item) => item.id === visit.storeId);
+    const storeTimeZone = store?.timeZone
+      ?? fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone
+      ?? DEFAULT_OPERATIONS_TIME_ZONE;
     const work = visit.workOrderId ? scoped.workOrders.find((item) => item.id === visit.workOrderId) : undefined;
     const evidence = fixture.visitEvidence
       .filter((item) => item.organizationId === scoped.organizationId && item.visitId === visit.id)
@@ -4400,8 +4391,8 @@ export function buildDetailModel(
         { label: "Technician", value: visit.technicianName, helperText: visit.providerName },
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { label: "Operator work order", value: work?.number ?? "Not linked", helperText: work ? "Canonical service record" : visit.unmatchedReason ?? "Entered without a work order", link: work ? { href: `/app/work-orders/${work.id}`, label: "Open work order" } : undefined },
-        { label: "Observed arrival", value: dateTime(visit.checkedInAt), helperText: `Started via ${sentence(visit.startedChannel)}` },
-        { label: "Observed departure", value: visit.checkedOutAt ? dateTime(visit.checkedOutAt) : "Still onsite", helperText: visit.endedChannel ? `Finished via ${sentence(visit.endedChannel)}` : "No checkout event yet" },
+        { label: "Observed arrival", value: formatOperationsDateTime(visit.checkedInAt, storeTimeZone, { seconds: true }), helperText: `Store-local time · started via ${sentence(visit.startedChannel)}` },
+        { label: "Observed departure", value: visit.checkedOutAt ? formatOperationsDateTime(visit.checkedOutAt, storeTimeZone, { seconds: true }) : "Still onsite", helperText: visit.endedChannel ? `Store-local time · finished via ${sentence(visit.endedChannel)}` : "No checkout event yet" },
         { label: "Approximate observed time", value: visit.observedDurationSeconds === undefined ? "In progress" : `${Math.round(visit.observedDurationSeconds / 60)} minutes`, helperText: "Presence context, not certified labor" },
       ],
       sections: [
@@ -4421,7 +4412,7 @@ export function buildDetailModel(
         {
           id: "evidence",
           title: "Check-in and checkout evidence",
-          description: "Server time, channel, and point-in-time location results stay separate. Location is never tracked continuously.",
+          description: "Authoritative event timestamps are displayed in the store's local timezone with seconds for camera review. Channel and point-in-time location results stay separate; location is never tracked continuously.",
           facts: [
             { label: "Check-in location", value: locationLabel(checkIn), helperText: checkIn?.location?.accuracyM !== undefined ? `${checkIn.location.accuracyM} m accuracy · ${checkIn.location.distanceM ?? "Unknown"} m from store` : "Accuracy or distance not available" },
             { label: "Checkout location", value: locationLabel(checkOut), helperText: checkOut?.location?.accuracyM !== undefined ? `${checkOut.location.accuracyM} m accuracy · ${checkOut.location.distanceM ?? "Unknown"} m from store` : visit.status === "active" ? "Captured only when checkout occurs" : "Accuracy or distance not available" },
@@ -4431,14 +4422,14 @@ export function buildDetailModel(
           table: {
             id: "visit-evidence",
             caption: `Evidence events for ${visit.providerName}`,
-            columns: [{ key: "event", label: "Evidence event" }, { key: "time", label: "Server time" }, { key: "channel", label: "Channel" }, { key: "result", label: "Result" }],
+            columns: [{ key: "event", label: "Evidence event" }, { key: "time", label: "Store-local time" }, { key: "channel", label: "Channel" }, { key: "result", label: "Result" }],
             rows: evidence.map((item) => ({
               id: item.id,
               label: sentence(item.kind),
               href: `/app/visits/${visit.id}#evidence`,
               cells: [
                 { key: "event", value: sentence(item.kind) },
-                { key: "time", value: dateTime(item.observedAt) },
+                { key: "time", value: formatOperationsDateTime(item.observedAt, storeTimeZone, { seconds: true }) },
                 { key: "channel", value: sentence(item.channel) },
                 { key: "result", value: item.location?.result ? sentence(item.location.result) : "Recorded", tone: item.location?.result === "verified" || item.location?.result === "trusted_store_device" ? "positive" : item.location ? "warning" : "neutral" },
               ],
@@ -4459,7 +4450,7 @@ export function buildDetailModel(
               href: `/app/action-center/${exception.id}`,
               cells: [
                 { key: "item", value: exception.summary, secondary: sentence(exception.kind) },
-                { key: "detected", value: dateTime(exception.detectedAt) },
+                { key: "detected", value: dateTime(exception.detectedAt, storeTimeZone) },
                 { key: "severity", value: sentence(exception.severity), tone: exception.severity === "urgent" ? "critical" : "warning" },
                 { key: "status", value: sentence(exception.status), tone: exception.status === "resolved" ? "positive" : "warning" },
               ],
@@ -4470,7 +4461,7 @@ export function buildDetailModel(
           id: "timeline",
           title: "Append-only activity",
           description: "The original timestamps and evidence remain intact when an operator later reconciles or corrects the record.",
-          timeline: audit.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt), actorLabel: event.actorName })),
+          timeline: audit.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt, storeTimeZone), actorLabel: event.actorName })),
         },
       ],
       backLink: { label: "Back to visits", href: "/app/visits" },
@@ -4524,7 +4515,7 @@ export function buildDetailModel(
           ...(isDemoEntryStore ? [{
             id: "demo-entry-points",
             title: "Vendor check-in options",
-            description: "The QR/mobile page and trusted store computer record the same server-timestamped visit.",
+            description: "The QR/mobile page and trusted store computer record the same visit. Times display in the store's local timezone.",
             facts: [
               { label: "QR or mobile web", value: "Vendor check-in and checkout", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}`, label: "Open QR/mobile check-in" } },
               { label: "Trusted store computer", value: "Check a vendor in or finish an onsite visit", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.trustedStore104}`, label: "Open store check-in" } },
@@ -4596,7 +4587,7 @@ export function buildDetailModel(
         ...(store.id === NORTHLINE_DEMO_HANDLES.storyStoreId ? [{
           id: "demo-entry-points",
           title: "Store service entry points",
-          description: "Use any entry point against the same store and work records. QR/mobile requests event-only location; the trusted service desk records exact server time without a PIN or location permission.",
+          description: "Use any entry point against the same store and work records. QR/mobile requests event-only location; the trusted service desk records the exact visit time and displays it in the store's local timezone without requiring a PIN or location permission.",
           facts: [
             { label: "QR or mobile web", value: "Report an issue or start a vendor visit", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}`, label: "Open QR/mobile entry" } },
             { label: "Trusted store computer", value: "Check a vendor in or finish an onsite visit", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.trustedStore104}`, label: "Open store service desk" } },
@@ -4695,11 +4686,11 @@ export function buildDetailModel(
       label: `${sentence(response.response)} - ${work?.number ?? "Work order"}`,
       href: work ? `/app/work-orders/${work.id}` : `/app/vendors/${vendor.id}`,
       cells: [
-        { key: "response", value: sentence(response.response), secondary: response.message ?? (response.proposedAt ? `Proposed ${dateTime(response.proposedAt)}` : undefined), tone: response.response === "accepted" ? "positive" : response.response === "declined" ? "critical" : "warning" },
+        { key: "response", value: sentence(response.response), secondary: response.message ?? (response.proposedAt ? `Proposed ${dateTime(response.proposedAt, store?.timeZone)}` : undefined), tone: response.response === "accepted" ? "positive" : response.response === "declined" ? "critical" : "warning" },
         { key: "work", value: work?.number ?? "Unknown work", secondary: work?.problem },
         { key: "store", value: storeLabel(store) },
         { key: "responder", value: response.responderName },
-        { key: "time", value: dateTime(response.respondedAt) },
+        { key: "time", value: dateTime(response.respondedAt, store?.timeZone) },
       ],
     };
   });
@@ -4724,7 +4715,7 @@ export function buildDetailModel(
         { key: "item", value: followUp.nextAction, secondary: "Accountable follow-up" },
         { key: "work", value: workById.get(followUp.workOrderId)?.number ?? "Linked work" },
         { key: "owner", value: followUp.accountableParty },
-        { key: "due", value: dateTime(followUp.dueAt) },
+        { key: "due", value: dateTime(followUp.dueAt, storeById.get(workById.get(followUp.workOrderId)?.storeId ?? "")?.timeZone) },
         { key: "status", value: Date.parse(followUp.dueAt) < Date.parse(fixture.asOf) ? "Overdue" : "Open", tone: Date.parse(followUp.dueAt) < Date.parse(fixture.asOf) ? "critical" : "warning" },
       ],
     })),
@@ -4829,6 +4820,12 @@ export function buildCreateWorkOrderModel(
   const sourceVisit = sourceException?.visitId
     ? scoped.visits.find((visit) => visit.id === sourceException.visitId && !visit.workOrderId)
     : undefined;
+  const sourceRequestTimeZone = sourceRequest
+    ? scoped.stores.find((store) => store.id === sourceRequest.storeId)?.timeZone
+    : undefined;
+  const sourceVisitTimeZone = sourceVisit
+    ? scoped.stores.find((store) => store.id === sourceVisit.storeId)?.timeZone
+    : undefined;
   return {
     state: { kind: "ready" },
     page: sourceVisit ? {
@@ -4880,20 +4877,21 @@ export function buildCreateWorkOrderModel(
       storeId: sourceRequest.storeId,
       problem: sourceRequest.problem,
       reporterName: sourceRequest.reporterName,
-      submittedLabel: `on ${dateTime(sourceRequest.submittedAt)}`,
+      submittedLabel: `on ${dateTime(sourceRequest.submittedAt, sourceRequestTimeZone)}`,
     } : undefined,
     sourceVisit: sourceVisit && sourceException ? {
       exceptionId: sourceException.id,
       visitId: sourceVisit.id,
       technicianName: sourceVisit.technicianName,
       providerName: sourceVisit.providerName,
-      checkedInLabel: dateTime(sourceVisit.checkedInAt),
+      checkedInLabel: dateTime(sourceVisit.checkedInAt, sourceVisitTimeZone),
       unmatchedReason: sourceVisit.unmatchedReason ?? "No operator work order was provided at check-in",
     } : undefined,
   };
 }
 
 export function buildCreateStoreModel(fixture: OpsFixture, session: OperatorSession): CreateStorePageViewModel {
+  const organizationTimeZone = fixture.organizations.find((organization) => organization.id === session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   return {
     state: { kind: "ready" },
     page: { title: "Add a store", eyebrow: "Network setup", description: "Create the location first, then add equipment, PM, and deeper classification only where it creates value.", scopeLabel: session.scopeLabel },
@@ -4901,6 +4899,7 @@ export function buildCreateStoreModel(fixture: OpsFixture, session: OperatorSess
     cancelLink: { label: "Back to stores", href: "/app/stores" },
     regions: fixture.regions.filter((region) => region.organizationId === session.organizationId).map((region) => ({ value: region.id, label: region.name, description: region.code })),
     timeZones: [{ value: "America/New_York", label: "Eastern time" }, { value: "America/Chicago", label: "Central time" }, { value: "America/Denver", label: "Mountain time" }, { value: "America/Los_Angeles", label: "Pacific time" }],
+    defaultTimeZone: organizationTimeZone,
   };
 }
 
@@ -5151,6 +5150,9 @@ function workOrderStages(
   organizationId: string,
   work: WorkOrder,
 ): WorkOrderControlViewModel["stages"] {
+  const storeTimeZone = fixture.stores.find((store) => store.organizationId === organizationId && store.id === work.storeId)?.timeZone
+    ?? fixture.organizations.find((organization) => organization.id === organizationId)?.timeZone
+    ?? DEFAULT_OPERATIONS_TIME_ZONE;
   const assignment = assignmentForWork(fixture, organizationId, work.id);
   const issuances = fixture.issuances
     .filter((item) => item.organizationId === organizationId && item.workOrderId === work.id)
@@ -5180,7 +5182,7 @@ function workOrderStages(
       label: "Issue captured",
       state: "complete",
       detail: work.requestId ? "Created from a preserved store request" : "Created directly by an operator",
-      timestampLabel: dateTime(work.createdAt),
+      timestampLabel: dateTime(work.createdAt, storeTimeZone),
     },
     {
       id: "authorization",
@@ -5195,7 +5197,7 @@ function workOrderStages(
       label: "Provider selection",
       state: assignment ? (assignment.kind === "choose_later" ? "current" : "complete") : "blocked",
       detail: providerLabelForAssignment(fixture, organizationId, assignment),
-      timestampLabel: assignment ? dateTime(assignment.assignedAt) : undefined,
+      timestampLabel: assignment ? dateTime(assignment.assignedAt, storeTimeZone) : undefined,
     },
     {
       id: "issuance",
@@ -5208,35 +5210,35 @@ function workOrderStages(
           : issuances[0]
             ? `Link generated · revision ${issuances[0].revision} via ${sentence(issuances[0].channel)}`
             : "Generate or record a service authorization",
-      timestampLabel: authorizationOpened ? dateTime(authorizationOpened.occurredAt) : issuances[0] ? dateTime(issuances[0].issuedAt) : undefined,
+      timestampLabel: authorizationOpened ? dateTime(authorizationOpened.occurredAt, storeTimeZone) : issuances[0] ? dateTime(issuances[0].issuedAt, storeTimeZone) : undefined,
     },
     {
       id: "response",
       label: "Provider response",
       state: assignment?.kind === "internal" ? "complete" : vendorNeedsDecision ? "blocked" : responses.length ? "complete" : issuances.length ? "current" : "upcoming",
       detail: assignment?.kind === "internal" ? "Internal provider acknowledged through assignment" : responses[0] ? `${sentence(responses[0].response)} by ${responses[0].responderName}` : "Awaiting or manually record the vendor response",
-      timestampLabel: responses[0] ? dateTime(responses[0].respondedAt) : undefined,
+      timestampLabel: responses[0] ? dateTime(responses[0].respondedAt, storeTimeZone) : undefined,
     },
     {
       id: "visit",
       label: "Service observed",
       state: latestVisit?.status === "active" ? "current" : latestVisit ? "complete" : ["accepted", "scheduled", "in_progress"].includes(work.status) ? "current" : "upcoming",
       detail: latestVisit ? (latestVisit.status === "active" ? `${latestVisit.technicianName} is onsite` : `${visits.length} observed visit${visits.length === 1 ? "" : "s"}`) : "No check-in recorded yet",
-      timestampLabel: latestVisit ? dateTime(latestVisit.checkedInAt) : undefined,
+      timestampLabel: latestVisit ? dateTime(latestVisit.checkedInAt, storeTimeZone) : undefined,
     },
     {
       id: "outcome",
       label: "Outcome recorded",
       state: latestVisit?.outcome ? "complete" : latestVisit?.status === "active" ? "current" : "upcoming",
       detail: latestVisit?.outcome ? sentence(latestVisit.outcome) : "Checkout records the observable service outcome",
-      timestampLabel: latestVisit?.checkedOutAt ? dateTime(latestVisit.checkedOutAt) : undefined,
+      timestampLabel: latestVisit?.checkedOutAt ? dateTime(latestVisit.checkedOutAt, storeTimeZone) : undefined,
     },
     {
       id: "closeout",
       label: "Follow-up / close",
       state: terminal ? "complete" : openFollowUps.length || completedStatus ? "current" : "upcoming",
       detail: terminal ? workStatusLabel(work.status) : openFollowUps.length ? `${openFollowUps.length} accountable follow-up${openFollowUps.length === 1 ? "" : "s"} open` : work.status === "resolved" ? "Accepted verification is ready for explicit closure" : completedStatus ? "Internal verification is required before resolution" : "Outcome determines the next accountable action",
-      timestampLabel: work.closedAt ? dateTime(work.closedAt) : undefined,
+      timestampLabel: work.closedAt ? dateTime(work.closedAt, storeTimeZone) : undefined,
     },
   ];
 }
@@ -5259,7 +5261,7 @@ export function buildWorkOrderControlModel(
       manualResponseAction: "",
       workOrderId,
       workOrderNumber: workOrderId,
-      timeZone: "UTC",
+      timeZone: DEFAULT_OPERATIONS_TIME_ZONE,
       expectedStatus: "draft",
       status: "draft",
       statusOptions: [],
@@ -5347,7 +5349,7 @@ export function buildWorkOrderControlModel(
   const assignment = assignmentForWork(fixture, scoped.organizationId, work.id);
   const storeTimeZone = fixture.stores.find((store) => store.organizationId === scoped.organizationId && store.id === work.storeId)?.timeZone
     ?? fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone
-    ?? "UTC";
+    ?? DEFAULT_OPERATIONS_TIME_ZONE;
   const latestIssuance = fixture.issuances
     .filter((item) => item.organizationId === scoped.organizationId && item.workOrderId === work.id)
     .sort((left, right) => right.issuedAt.localeCompare(left.issuedAt))[0];
@@ -5421,7 +5423,7 @@ export function buildWorkOrderControlModel(
   const closeout = work.status === "resolved" ? {
     ready: closeoutVerification?.decision === "verified" && closeoutFollowUpCount === 0,
     outcomeLabel: closeoutVerification?.decision === "verified"
-      ? `Verified by ${closeoutVerification.decidedByName} on ${dateTime(closeoutVerification.decidedAt)}`
+      ? `Verified by ${closeoutVerification.decidedByName} on ${dateTime(closeoutVerification.decidedAt, storeTimeZone)}`
       : "A verified service outcome is still required",
     visitEvidenceLabel: `${linkedVisitIds.size} visit${linkedVisitIds.size === 1 ? "" : "s"} · ${closeoutEvidenceCount} evidence record${closeoutEvidenceCount === 1 ? "" : "s"}`,
     costEvidenceLabel: closeoutCostMinor ? `${money(closeoutCostMinor)} recorded work cost` : "No work cost entered — deferral is allowed",
@@ -5459,20 +5461,20 @@ export function buildWorkOrderControlModel(
       kind: assignment.kind,
       status: assignment.status,
       providerLabel: providerLabelForAssignment(fixture, scoped.organizationId, assignment),
-      assignedLabel: dateTime(assignment.assignedAt),
+      assignedLabel: dateTime(assignment.assignedAt, storeTimeZone),
     } : undefined,
     latestIssuance: latestIssuance ? {
       id: latestIssuance.id,
       revision: latestIssuance.revision,
       channelLabel: sentence(latestIssuance.channel),
-      issuedLabel: dateTime(latestIssuance.issuedAt),
+      issuedLabel: dateTime(latestIssuance.issuedAt, storeTimeZone),
       deliveryStateLabel,
       deliveryStateDetail,
     } : undefined,
     latestVendorResponse: latestVendorResponse ? {
       response: latestVendorResponse.response,
       responderName: latestVendorResponse.responderName,
-      respondedLabel: dateTime(latestVendorResponse.respondedAt),
+      respondedLabel: dateTime(latestVendorResponse.respondedAt, storeTimeZone),
       proposedAt: latestVendorResponse.proposedAt,
       message: latestVendorResponse.message,
     } : undefined,

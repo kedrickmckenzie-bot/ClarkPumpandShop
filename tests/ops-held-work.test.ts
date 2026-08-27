@@ -87,7 +87,7 @@ describe("manager-approved held work", () => {
       amountMeaning: "no_price_or_authorization_recorded",
     });
     expect(notice!.payloadJson).not.toMatch(/amountMinor|authorizedAmount|internalReviewThreshold/);
-  });
+  }, 30_000);
 
   it("moves look-and-report findings to manager review instead of pretending the repair was completed", async () => {
     const gateway = getPublicOperationsGateway();

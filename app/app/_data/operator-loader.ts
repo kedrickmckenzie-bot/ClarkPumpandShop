@@ -26,6 +26,7 @@ import { getServerOpsRepository, getServerOpsFixtureSnapshot } from "@/lib/serve
 import { buildOwnerBrief } from "@/lib/ops/owner-brief";
 import { buildWorkOrderCase } from "@/lib/ops/work-order-case";
 import { formatInTimeZone } from "@/lib/ops/local-date-time";
+import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate } from "@/lib/ops/local-time";
 import { buildClosedLoopCoverage, buildDataQualityIssues } from "@/lib/ops/coverage-quality";
 import { buildVendorScorecards } from "@/lib/ops/vendor-scorecards";
 import {
@@ -337,7 +338,7 @@ function pmProgramMatchesTemplate(applicableAssetTypes: string[], templateId: st
 
 function shortDate(value: string | undefined) {
   if (!value) return "not set";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  return formatOperationsDate(value, DEFAULT_OPERATIONS_TIME_ZONE);
 }
 
 export async function loadPmProgramManagementModel(searchParams: OperatorSearchParameters = {}): Promise<PmProgramManagementModel> {
@@ -613,7 +614,7 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
   return buildWorkOrderCase({
     now: context.fixture.asOf,
     workOrder,
-    timeZone: store?.timeZone ?? context.fixture.organizations.find((row) => row.id === context.session.organizationId)?.timeZone ?? "UTC",
+    timeZone: store?.timeZone ?? context.fixture.organizations.find((row) => row.id === context.session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE,
     storeName: store ? `${store.storeNumber} - ${store.name}` : undefined,
     assignments: fixture.assignments.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     issuances: fixture.issuances.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
@@ -664,7 +665,7 @@ export async function loadHeldWorkActionsModel(workOrderId: string): Promise<Hel
     repository.getWorkOrderVisitHold(context.session.organizationId, workOrderId),
     repository.getStore(context.session.organizationId, workOrder.storeId),
   ]);
-  const organizationTimeZone = context.fixture.organizations.find((row) => row.id === context.session.organizationId)?.timeZone ?? "UTC";
+  const organizationTimeZone = context.fixture.organizations.find((row) => row.id === context.session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   const storeTimeZone = store?.timeZone ?? organizationTimeZone;
   const fallbackDeadlineMs = Date.parse(context.fixture.asOf) + 30 * 24 * 60 * 60_000;
   const recordedDeadlineMs = Date.parse(workOrder.dueAt ?? "");
@@ -726,7 +727,7 @@ export async function loadVendorResponseActionsModel(workOrderId: string) {
   if (!actionable) return null;
   const store = context.fixture.stores.find((row) => row.organizationId === orgId && row.id === workOrder.storeId);
   const organization = context.fixture.organizations.find((row) => row.id === orgId);
-  const timeZone = store?.timeZone ?? organization?.timeZone ?? "UTC";
+  const timeZone = store?.timeZone ?? organization?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   return {
     responseId: actionable.id,
     kind: actionable.response,

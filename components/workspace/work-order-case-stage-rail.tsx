@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { WorkOrderCaseView } from "@/lib/ops/work-order-case";
+import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import styles from "./owner-brief.module.css";
 
 /**
@@ -38,7 +39,7 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
         <div>
           <dt>{terminal ? "Completed" : "Due"}</dt>
           <dd className={model.primaryActionOverdue ? styles.warningText : undefined}>
-            {model.dueAt ? new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: model.timeZone, timeZoneName: "short" }).format(new Date(model.dueAt)) : terminal ? "No open obligation" : "No due time recorded"}
+            {model.dueAt ? formatOperationsDateTime(model.dueAt, model.timeZone) : terminal ? "No open obligation" : "No due time recorded"}
             {model.primaryActionOverdue ? " · Overdue" : ""}
           </dd>
         </div>

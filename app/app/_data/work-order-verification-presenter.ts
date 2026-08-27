@@ -11,6 +11,7 @@ import type {
 import { persistedWorkOrderVersion } from "@/lib/ops/concurrency";
 import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
 import { loadOperatorSession } from "./operator-loader";
+import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
 
 export interface WorkOrderVerificationViewModel {
   available: boolean;
@@ -74,12 +75,8 @@ const outcomeLabels: Record<SiteVisitWorkOrderOutcome, string> = {
   not_addressed: "Not addressed",
 };
 
-function dateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(new Date(value));
+function dateTime(value: string, timeZone: string) {
+  return formatOperationsDateTime(value, timeZone);
 }
 
 function latestOutcome(records: readonly SiteVisitWorkOrder[]) {
@@ -143,6 +140,10 @@ export function buildWorkOrderVerificationModel(
       history: [],
     };
   }
+  const store = fixture.stores.find((candidate) => candidate.organizationId === session.organizationId && candidate.id === workOrder.storeId);
+  const storeTimeZone = store?.timeZone
+    ?? fixture.organizations.find((organization) => organization.id === session.organizationId)?.timeZone
+    ?? DEFAULT_OPERATIONS_TIME_ZONE;
 
   const membership = session.membershipId
     ? fixture.memberships.find((candidate) => (
@@ -209,7 +210,7 @@ export function buildWorkOrderVerificationModel(
     permissionMessage: permitted
       ? "You can verify or reject the current per-work-order outcome."
       : "This role can review verification history but cannot record a decision.",
-    resolvedLabel: resolvedAt(workOrder) ? dateTime(resolvedAt(workOrder)!) : undefined,
+    resolvedLabel: resolvedAt(workOrder) ? dateTime(resolvedAt(workOrder)!, storeTimeZone) : undefined,
     currentOutcome: currentOutcome?.outcome && currentOutcome.outcomeRecordedAt
       ? {
           siteVisitWorkOrderId: currentOutcome.id,
@@ -217,7 +218,7 @@ export function buildWorkOrderVerificationModel(
           outcomeLabel: outcomeLabels[currentOutcome.outcome],
           notes: currentOutcome.outcomeNotes,
           recordedAt: currentOutcome.outcomeRecordedAt,
-          recordedLabel: dateTime(currentOutcome.outcomeRecordedAt),
+          recordedLabel: dateTime(currentOutcome.outcomeRecordedAt, storeTimeZone),
           visitId: currentOutcome.visitId,
           technicianLabel: visit
             ? `${visit.technicianName} · ${visit.providerName}`
@@ -239,7 +240,7 @@ export function buildWorkOrderVerificationModel(
         tone: verification.decision === "verified" ? "positive" : "critical",
         outcomeLabel: outcomeLabels[verification.outcome],
         decidedByLabel: verification.decidedByName,
-        decidedLabel: dateTime(verification.decidedAt),
+        decidedLabel: dateTime(verification.decidedAt, storeTimeZone),
         reason: verification.reason,
         avoidedSeparateTripConfirmed: fixture.auditEvents.some((event) => {
           if (event.organizationId !== session.organizationId

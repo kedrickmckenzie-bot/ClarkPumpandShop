@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { runPostgresStartupStep } from "../scripts/postgres-startup-retry";
 
 describe("Render runtime contract", () => {
   it("keeps Sites scripts while providing explicit standard Node commands", () => {
@@ -38,5 +39,17 @@ describe("Render runtime contract", () => {
 
     expect(rootLayout).not.toContain("clarks-operations-demo");
     expect(rootLayout).toContain("NEXT_PUBLIC_SITE_URL");
+  });
+
+  it("retries transient PostgreSQL startup failures before the web process exits", async () => {
+    let attempts = 0;
+
+    await expect(runPostgresStartupStep("test database", async () => {
+      attempts += 1;
+      if (attempts < 3) throw new Error("timeout exceeded when trying to connect");
+      return "ready";
+    }, { attempts: 4, baseDelayMillis: 0 })).resolves.toBe("ready");
+
+    expect(attempts).toBe(3);
   });
 });

@@ -26,8 +26,8 @@ export function VendorEstimatePage({ token, estimate }: { token: string; estimat
             <p className={styles.problem}>{estimate.problem}</p>
             <div className={styles.callout} style={{ marginTop: "1rem" }}><strong>Bid scope</strong><p>{estimate.requestedScope}</p></div>
             <div className={styles.detailGrid} style={{ marginTop: "1.2rem" }}>
-              <div className={styles.detail}><span className={styles.detailLabel}>Requested</span><p className={styles.detailValue}>{formatPublicDateTime(estimate.requestedAt)}</p></div>
-              <div className={styles.detail}><span className={styles.detailLabel}>Bid due</span><p className={styles.detailValue}>{estimate.dueAt ? formatPublicDateTime(estimate.dueAt) : "No deadline stated"}</p></div>
+              <div className={styles.detail}><span className={styles.detailLabel}>Requested</span><p className={styles.detailValue}>{formatPublicDateTime(estimate.requestedAt, estimate.store.timeZone)}</p></div>
+              <div className={styles.detail}><span className={styles.detailLabel}>Bid due</span><p className={styles.detailValue}>{estimate.dueAt ? formatPublicDateTime(estimate.dueAt, estimate.store.timeZone) : "No deadline stated"}</p></div>
             </div>
           </section>
 
@@ -39,7 +39,7 @@ export function VendorEstimatePage({ token, estimate }: { token: string; estimat
               </div>
               <div className={styles.detailGrid}>
                 <div className={styles.detail}><span className={styles.detailLabel}>Bid amount</span><p className={styles.detailValue}>{estimate.latestProposal.amountLabel}</p></div>
-                <div className={styles.detail}><span className={styles.detailLabel}>Submitted</span><p className={styles.detailValue}>{formatPublicDateTime(estimate.latestProposal.submittedAt)}</p></div>
+                <div className={styles.detail}><span className={styles.detailLabel}>Submitted</span><p className={styles.detailValue}>{formatPublicDateTime(estimate.latestProposal.submittedAt, estimate.store.timeZone)}</p></div>
                 <div className={`${styles.detail} ${styles.detailWide}`}><span className={styles.detailLabel}>Scope</span><p className={styles.detailValue}>{estimate.latestProposal.scope}</p></div>
                 <div className={`${styles.detail} ${styles.detailWide}`}><span className={styles.detailLabel}>Exclusions</span><p className={styles.detailValue}>{estimate.latestProposal.exclusions ?? "None stated"}</p></div>
               </div>

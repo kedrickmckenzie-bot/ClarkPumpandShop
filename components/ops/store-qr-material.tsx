@@ -5,17 +5,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, Download, ExternalLink, QrCode } from "lucide-react";
 import QRCode from "qrcode";
+import { useBrowserOrigin } from "@/components/use-browser-origin";
+import { selectPublicQrOrigin } from "@/lib/ops/public-origin";
 import styles from "./store-qr-material.module.css";
-
-function normalizedOrigin(configuredOrigin: string | undefined): string | null {
-  if (!configuredOrigin) return null;
-  try {
-    const url = new URL(configuredOrigin);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.origin : null;
-  } catch {
-    return null;
-  }
-}
 
 export function StoreQrMaterial({
   storeNumber,
@@ -30,9 +22,9 @@ export function StoreQrMaterial({
 }) {
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [copied, setCopied] = useState(false);
-  const origin = normalizedOrigin(configuredOrigin);
+  const runtimeOrigin = useBrowserOrigin();
+  const origin = selectPublicQrOrigin(configuredOrigin, runtimeOrigin);
   const publicUrl = useMemo(() => origin ? new URL(targetPath, `${origin}/`).toString() : "", [origin, targetPath]);
-  const localOnly = publicUrl ? ["localhost", "127.0.0.1"].includes(new URL(publicUrl).hostname) : false;
 
   useEffect(() => {
     if (!publicUrl) return;
@@ -87,7 +79,7 @@ export function StoreQrMaterial({
           </div>
           <div>
             <span className={styles.step}>2</span>
-            <p><strong>Check in with server time.</strong> Location is requested only for the arrival event when policy enables it.</p>
+            <p><strong>Record the exact arrival time.</strong> The platform displays it in the store&apos;s local timezone. Location is requested only for the arrival event when policy enables it.</p>
           </div>
           <div>
             <span className={styles.step}>3</span>
@@ -98,7 +90,6 @@ export function StoreQrMaterial({
             <button className={styles.secondaryAction} disabled={!publicUrl} onClick={copyLink} type="button">{copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}{copied ? "Copied" : "Copy link"}</button>
             {qrDataUrl ? <a className={styles.secondaryAction} download={`store-${storeNumber}-vendor-qr.png`} href={qrDataUrl}><Download aria-hidden="true" size={16} />Download QR</a> : null}
           </div>
-          {localOnly ? <p className={styles.localNotice}><strong>Local preview:</strong> a phone cannot open your computer&apos;s localhost address. The same QR automatically uses the public site URL after deployment.</p> : null}
           {publicUrl ? <p className={styles.url}>{publicUrl}</p> : null}
         </div>
       </div>

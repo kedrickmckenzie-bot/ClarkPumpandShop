@@ -50,6 +50,7 @@ import {
 } from "@/components/ops/replacement-intelligence-panel";
 import styles from "./work-order-case.module.css";
 import { domainLabel } from "@/lib/product/domain-label";
+import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
 import type { WorkOrderCaseView } from "@/lib/ops/work-order-case";
 
 interface WorkOrderCaseProps {
@@ -101,17 +102,9 @@ function sentence(value: string | undefined) {
   return domainLabel(value);
 }
 
-function dueLabel(value: string | undefined, timeZone = "UTC") {
+function dueLabel(value: string | undefined, timeZone = DEFAULT_OPERATIONS_TIME_ZONE) {
   if (!value || !Number.isFinite(Date.parse(value))) return "Not set";
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone,
-    timeZoneName: "short",
-  }).format(new Date(value));
+  return formatOperationsDateTime(value, timeZone);
 }
 
 function DataStatePanel({ state }: { state: DataState }) {

@@ -1,12 +1,13 @@
 import { CalendarClock, ClipboardCheck, MapPinned, Route, ShieldCheck } from "lucide-react";
 import type { ServiceRunPublicView } from "@/lib/ops/service-run-presenter";
 import { formatPublicDateTime, PublicFrame } from "./public-ui";
+import { formatOperationsDate } from "@/lib/ops/local-time";
 import { ServiceRunResponseForm } from "./service-run-response-form";
 import styles from "./public-workflows.module.css";
 
 function formatPublicDate(value: string | undefined, timeZone?: string) {
   if (!value) return "No date recorded";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone }).format(new Date(value));
+  return formatOperationsDate(value, timeZone);
 }
 
 export function ServiceRunResponsePage({ token, view }: { token: string; view: ServiceRunPublicView }) {
