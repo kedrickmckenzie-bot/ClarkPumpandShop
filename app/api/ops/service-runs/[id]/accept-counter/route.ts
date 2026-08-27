@@ -11,7 +11,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!run) throw new OpsDomainError("NOT_FOUND", "Service Run was not found in your organization");
     const formData = await request.formData();
     await acceptServiceRunCounter({ organizationId: context.session.organizationId, serviceRunId: run.id, responseId: formText(formData, "responseId", { required: true, max: 160 }), actor: context.actor }, { repository: context.repository });
-    return relativeRedirect303(`/app/service-runs/${encodeURIComponent(run.id)}?updated=counter-accepted`);
+    const destination = run.schedulerVersion === "store-sweep-v1" ? "store-sweeps" : "service-runs";
+    return relativeRedirect303(`/app/${destination}/${encodeURIComponent(run.id)}?updated=counter-accepted`);
   } catch (error) {
     return opsApiError(error);
   }

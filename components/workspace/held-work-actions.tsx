@@ -40,7 +40,7 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
   return (
     <section id="future-visit-hold" className={styles.brief} aria-labelledby="future-visit-hold-heading">
       <header className={styles.header}>
-        <p className={styles.eyebrow}>Avoid a separate service trip</p>
+        <p className={styles.eyebrow}>Handle small work during another visit</p>
         <h2 id="future-visit-hold-heading">{stateTitle}</h2>
       </header>
       {hold ? (
@@ -48,7 +48,7 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
           <div><dt>Vendor instruction</dt><dd>{postureLabel(hold.posture)}</dd></div>
           <div><dt>Review deadline</dt><dd>{hold.deadlineLabel}</dd></div>
           <div><dt>Service category</dt><dd>{model.categoryLabel ?? "Choose a category first"}</dd></div>
-          {hold.internalReviewThreshold ? <div><dt>Internal invoice-review signal</dt><dd>{hold.internalReviewThreshold}</dd><small>Never shown to the technician; not a price or authorization.</small></div> : null}
+          {hold.internalReviewThreshold ? <div><dt>Review invoices above</dt><dd>{hold.internalReviewThreshold}</dd><small>Never shown to the technician; not a price or authorization.</small></div> : null}
         </dl>
       ) : (
         <p className={styles.decisionDetail}>Approve this low-priority work now. When a vendor in a matching service category is already onsite, they may choose whether they can address it. No estimate or manager reply is required during the visit.</p>
@@ -77,9 +77,9 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
               <small>Store-local time ({model.storeTimeZone}). The work returns to manager review if it is not handled by this date.</small>
             </label>
             <label>
-              <span>Internal invoice-review threshold <small>Optional</small></span>
+              <span>Flag the invoice for review above <small>Optional</small></span>
               <input type="number" name="internalReviewThreshold" min="0" step="0.01" inputMode="decimal" placeholder="Not shown to the vendor" defaultValue={hold?.internalReviewThreshold?.replace(/[^0-9.]/g, "")} />
-              <small>A later review signal only—not a vendor-visible NTE or an approved price.</small>
+              <small>This only flags a later invoice for review. It is not shown to the vendor and is not an approved price.</small>
             </label>
             <button type="submit">{openHold ? "Save held-work changes" : "Approve for a future visit"}</button>
           </form>

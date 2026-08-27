@@ -155,6 +155,7 @@ export interface StorePortalView {
     number: string;
     name: string;
     address: string;
+    timeZone?: string;
   };
   vendors: Array<{
     id: string;
@@ -391,9 +392,16 @@ export interface PublicOperationsGateway {
   declineVendorEstimate(token: string, command: VendorEstimateDeclineCommand): Promise<PublicActionReceipt>;
   loadStorePortal(token: string): Promise<StorePortalView | null>;
   lookupVendorVisitContext(token: string, vendorId?: string): Promise<VendorVisitContextView>;
+  addHeldWorkToVisit(token: string, command: AddHeldWorkToVisitCommand): Promise<VendorVisitContextView>;
   checkIn(token: string, command: TechnicianCheckInCommand): Promise<TechnicianCheckInReceipt>;
   checkOut(token: string, command: TechnicianCheckOutCommand): Promise<TechnicianCheckOutReceipt>;
   reportStoreIssue(token: string, command: StoreIssueCommand): Promise<StoreIssueReceipt>;
+}
+
+export interface AddHeldWorkToVisitCommand {
+  submissionKey: string;
+  visitId: string;
+  heldWorkOrderIds: string[];
 }
 
 export class PublicWorkflowError extends Error {

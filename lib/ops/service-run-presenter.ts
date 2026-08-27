@@ -2,6 +2,7 @@ import type { OpsRepository } from "./repository";
 import type { OpsId, ServiceRunResponseKind } from "./types";
 
 export interface ServiceRunPublicView {
+  planningKind: "store_sweep" | "service_run";
   organizationName: string;
   vendorName: string;
   runId: OpsId;
@@ -18,6 +19,7 @@ export interface ServiceRunPublicView {
   estimatedDriveMinutes: number;
   estimatedServiceMinutes: number;
   capacityUsedMinutes: number;
+  timeZone?: string;
   confidence: string;
   qualifications: string[];
   stops: Array<{
@@ -54,6 +56,7 @@ export async function buildServiceRunPublicView(input: {
     input.repository.listServiceRunWorkOrders(run.organizationId, run.id),
   ]);
   if (!organization || !vendor || !contract) return null;
+  const planningKind = run.schedulerVersion === "store-sweep-v1" ? "store_sweep" as const : "service_run" as const;
   const stopViews = await Promise.all(stops.sort((left, right) => left.sequence - right.sequence).map(async (stop) => {
     const store = await input.repository.getStore(run.organizationId, stop.storeId);
     if (!store) throw new Error("Service Run Store is unavailable");
@@ -77,7 +80,7 @@ export async function buildServiceRunPublicView(input: {
     };
   }));
   return {
-    organizationName: organization.name, vendorName: vendor.name, runId: run.id, status: run.status,
+    planningKind, organizationName: organization.name, vendorName: vendor.name, runId: run.id, status: run.status,
     proposedStartsAt: run.proposedStartsAt, proposedEndsAt: run.proposedEndsAt, responseDueAt: run.responseDueAt,
     schedulingMode: run.schedulingMode, contract: { version: contract.version, sourceReference: contract.sourceAgreementReference, effectiveLabel: `${contract.effectiveStartsAt} to ${contract.effectiveEndsAt ?? "open-ended"}` },
     recommendationExplanation: run.recommendationExplanation,
@@ -85,9 +88,16 @@ export async function buildServiceRunPublicView(input: {
     estimatedOpportunityLabel: money(run.estimatedOpportunity.amountMinor, run.estimatedOpportunity.currency),
     estimatedTripReduction: run.estimatedTripReduction, estimatedDriveMinutes: run.estimatedDriveMinutes,
     estimatedServiceMinutes: run.estimatedServiceMinutes, capacityUsedMinutes: run.capacityUsedMinutes,
+    timeZone: stops.length ? (await input.repository.getStore(run.organizationId, stops[0]!.storeId))?.timeZone : undefined,
     confidence: run.confidence, qualifications: run.requiredQualifications,
     stops: stopViews,
-    responseOptions: [
+    responseOptions: planningKind === "store_sweep" ? [
+      { value: "accepted", label: "Accept this visit", description: "Confirm the proposed date and the approved jobs shown here." },
+      { value: "countered", label: "Propose another time", description: "Suggest another date or time for this store visit." },
+      { value: "work_order_change_requested", label: "Ask to remove a job", description: "Tell the customer which job should not be included in this visit." },
+      { value: "insufficient_capacity", label: "Cannot take this visit", description: "Let the customer know your team is not available for this visit." },
+      { value: "declined", label: "Decline", description: "Decline the proposed visit and explain why." },
+    ] : [
       { value: "accepted", label: "Accept this run", description: "Commit the original date, stops, and Work Order bundle." },
       { value: "countered", label: "Counter the schedule", description: "Propose another start time while preserving the original recommendation." },
       { value: "stop_change_requested", label: "Request a stop-order change", description: "Keep every Store but request another order." },

@@ -1,4 +1,5 @@
 import {
+  addHeldWorkToActiveVisit,
   attachPublicEvidence,
   checkInVisitWithCheckoutToken,
   checkOutVisit,
@@ -128,6 +129,7 @@ async function stableCheckoutToken(
 
 const PUBLIC_CHECK_IN_COMMAND = "public_technician_check_in";
 const PUBLIC_CHECK_OUT_COMMAND = "public_technician_check_out";
+const PUBLIC_ADD_HELD_WORK_COMMAND = "public_add_held_work_to_visit";
 const PUBLIC_STORE_ISSUE_COMMAND = "public_store_issue_report";
 const PUBLIC_IDEMPOTENCY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const SUBMISSION_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,120}$/;
@@ -350,6 +352,7 @@ function accessStore(access: PublicAccess) {
       access.storeRecord.address2,
       `${access.storeRecord.city}, ${access.storeRecord.state} ${access.storeRecord.postalCode}`,
     ].filter(Boolean).join(", "),
+    timeZone: access.storeRecord.timeZone,
   };
 }
 
@@ -371,6 +374,7 @@ function portalFromAccess(access: PublicAccess): StorePortalView {
       number: sourceStore.storeNumber,
       name: sourceStore.name,
       address: sourceStore.formattedAddress,
+      timeZone: sourceStore.timeZone,
     },
     vendors: accessVendors(access).map((vendor) => ({
       id: vendor.id,
@@ -641,13 +645,22 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
     const run = plannedByWorkOrder.get(workOrder.id);
     return run ? { ...workOrder, plannedServiceRun: { id: run.id, startsAt: run.startsAt, stopSequence: run.stopSequence } } : workOrder;
   });
-  const heldWork = requestedVendorId && access.kind !== "service"
+  const heldVendorId = requestedVendorId ?? (access.kind === "visit" ? access.activeVisit.vendorId : undefined);
+  const heldWork = heldVendorId && access.kind !== "service"
     ? (await Promise.all((await repository.listActiveWorkOrderVisitHoldsForStore(organizationId, store.id)).map(async (hold) => {
         const workOrder = await repository.getWorkOrder(organizationId, hold.workOrderId);
         if (!workOrder || workOrder.status !== "approved") return null;
-        const eligibility = await heldWorkVendorEligibility({ repository, organizationId, vendorId: requestedVendorId, workOrder, now: now() });
+        const eligibility = await heldWorkVendorEligibility({ repository, organizationId, vendorId: heldVendorId, workOrder, now: now() });
         if (!eligibility.allowed) return null;
         const detail = await repository.getWorkOrderDetail(scope, workOrder.id);
+        const disclosures = detail?.asset
+          ? [
+              `Equipment: ${detail.asset.name} · ${detail.asset.assetTag}`,
+              ...(detail.asset.warrantyEndsAt && detail.asset.warrantyEndsAt > now()
+                ? [`Warranty record through ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: store.timeZone }).format(new Date(detail.asset.warrantyEndsAt))}; preserve any manufacturer service requirements.`]
+                : []),
+            ]
+          : [];
         return {
           id: workOrder.id,
           holdId: hold.id,
@@ -658,7 +671,7 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
           deadlineAt: hold.deadlineAt,
           posture: hold.posture,
           instruction: hold.posture === "look_and_report" ? "Look and report back" : "Complete using professional judgment",
-          disclosures: [workOrder.assetId ? "Equipment record linked" : "No equipment record required"],
+          disclosures,
         };
       }))).filter((row): row is NonNullable<typeof row> => Boolean(row))
     : [];
@@ -1268,6 +1281,51 @@ const gateway: PublicOperationsGateway = {
     const access = await resolvePublicAccess(token);
     if (!access) throw new PublicWorkflowError("This store link is unavailable.", 404, "link_unavailable");
     return getContextFromAccess(access, cleanOptional(vendorId, 120));
+  },
+
+  async addHeldWorkToVisit(token, command) {
+    const access = await resolvePublicAccess(token);
+    if (!access || (access.kind !== "visit" && access.kind !== "trusted_store")) {
+      throw new PublicWorkflowError("Use the active visit link or trusted store computer to add work after check-in.", 403, "active_visit_access_required");
+    }
+    const repository = runtime().repository;
+    const submissionKey = cleanSubmissionKey(command.submissionKey);
+    const visitId = cleanRequired(command.visitId, "Visit", 120);
+    const heldWorkOrderIds = command.heldWorkOrderIds.map((workOrderId) => cleanRequired(workOrderId, "Additional approved work", 120));
+    if (!heldWorkOrderIds.length || heldWorkOrderIds.length > 100 || new Set(heldWorkOrderIds).size !== heldWorkOrderIds.length) {
+      throw new PublicWorkflowError("Choose each additional approved item once, up to 100 items.", 422, "invalid_held_work_selection");
+    }
+    if (access.kind === "visit" && access.activeVisit.id !== visitId) {
+      throw new PublicWorkflowError("That visit does not match this secure link.", 403, "visit_not_available");
+    }
+    const organizationId = accessOrganizationId(access);
+    const store = accessStore(access);
+    const visit = await repository.getVisit(organizationId, visitId);
+    if (!visit || visit.storeId !== store.id || visit.status !== "active" || visit.providerKind !== "outside_vendor" || !visit.vendorId) {
+      throw new PublicWorkflowError("That vendor visit is no longer active at this store.", 409, "visit_not_active");
+    }
+    const requestHash = await hashRequest({ version: 1, tokenHash: access.tokenHash, organizationId, storeId: store.id, visitId, heldWorkOrderIds });
+    const replayed = await idempotentVisitResult({ repository, organizationId, submissionKey, command: PUBLIC_ADD_HELD_WORK_COMMAND, requestHash });
+    if (replayed) return getContextFromAccess(access, visit.vendorId);
+    const vendorContext = await getContextFromAccess(access, visit.vendorId);
+    const availableIds = new Set(vendorContext.heldWork.map((workOrder) => workOrder.id));
+    if (heldWorkOrderIds.some((workOrderId) => !availableIds.has(workOrderId))) {
+      throw new PublicWorkflowError("One or more selected items are no longer available to this vendor.", 409, "held_work_not_available");
+    }
+    try {
+      await addHeldWorkToActiveVisit({ repository }, {
+        organizationId,
+        visitId,
+        heldWorkOrderIds,
+        actor: { actorType: "technician", actorName: visit.technicianName, organizationId },
+        idempotency: { key: submissionKey, command: PUBLIC_ADD_HELD_WORK_COMMAND, requestHash, expiresAt: idempotencyExpiresAt() },
+      });
+      return getContextFromAccess(access, visit.vendorId);
+    } catch (error) {
+      const concurrentReplay = await idempotentVisitResult({ repository, organizationId, submissionKey, command: PUBLIC_ADD_HELD_WORK_COMMAND, requestHash });
+      if (concurrentReplay) return getContextFromAccess(access, visit.vendorId);
+      return publicDomainError(error);
+    }
   },
 
   async checkIn(token, command) {

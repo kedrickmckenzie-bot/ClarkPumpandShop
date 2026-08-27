@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { OpsFixture, ServiceRun } from "@/lib/ops/types";
 import styles from "./service-run-workspace.module.css";
 
-function formatDate(value: string) { return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value)); }
+function formatDate(value: string, timeZone?: string) { return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone, timeZoneName: timeZone ? "short" : undefined }).format(new Date(value)); }
 function money(amountMinor: number, currency: string) { return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amountMinor / 100); }
 
 export function ServiceRunListWorkspace({ fixture, runs }: { fixture: OpsFixture; runs: ServiceRun[] }) {
@@ -15,13 +15,38 @@ export function ServiceRunListWorkspace({ fixture, runs }: { fixture: OpsFixture
   </div>;
 }
 
-export function ServiceRunDetailWorkspace({ fixture, run, publicResponseHref }: { fixture: OpsFixture; run: ServiceRun; publicResponseHref?: string }) {
+function plainStatus(status: ServiceRun["status"]) {
+  return ({ proposed: "Waiting on vendor", countered: "Vendor proposed a change", committed: "Visit confirmed", in_progress: "Onsite", completed: "Completed", declined: "Vendor declined", cancelled: "Cancelled", recommended: "Draft", accepted: "Accepted" } as Record<string, string>)[status] ?? status.replaceAll("_", " ");
+}
+
+export function ServiceRunDetailWorkspace({ fixture, run, publicResponseHref, notice }: { fixture: OpsFixture; run: ServiceRun; publicResponseHref?: string; notice?: string }) {
   const vendor = fixture.vendors.find((row) => row.id === run.vendorId)!;
   const contract = fixture.contractVersions.find((row) => row.id === run.contractVersionId)!;
   const stops = fixture.routeStops.filter((row) => row.serviceRunId === run.id).sort((a, b) => a.sequence - b.sequence);
   const links = fixture.serviceRunWorkOrders.filter((row) => row.serviceRunId === run.id);
   const responses = fixture.serviceRunResponses.filter((row) => row.serviceRunId === run.id).sort((a, b) => a.respondedAt.localeCompare(b.respondedAt));
   const latestCounter = [...responses].reverse().find((row) => ["countered", "stop_change_requested", "work_order_change_requested"].includes(row.response));
+  if (run.schedulerVersion === "store-sweep-v1") {
+    const stop = stops[0]!;
+    const store = fixture.stores.find((row) => row.id === stop.storeId)!;
+    const plannedLinks = links.filter((row) => row.planned);
+    const removedLinks = links.filter((row) => !row.planned);
+    return <div className={styles.page}>
+      <header className={styles.header}><div><p className={styles.eyebrow}>Combined vendor visit · {vendor.name}</p><h1>{plannedLinks.length} approved {plannedLinks.length === 1 ? "job" : "jobs"} at Store {store.storeNumber}</h1><p>{formatDate(run.committedStartsAt ?? run.proposedStartsAt, store.timeZone)} · {store.name} · {plainStatus(run.status)}</p></div>{publicResponseHref && ["proposed", "countered"].includes(run.status) ? <Link className={styles.button} href={publicResponseHref}>Open vendor link</Link> : <Link className={styles.secondaryButton} href="/app/store-sweeps/new">Plan another combined visit</Link>}</header>
+      {notice ? <p className={styles.notice}>{notice}</p> : null}
+      {publicResponseHref ? <section className={styles.panel}><div className={styles.panelHeader}><div><h2>Vendor link</h2><p>Email delivery is optional. This secure link shows only this proposed visit and its approved jobs.</p></div></div><div className={styles.body}><Link href={publicResponseHref}>{publicResponseHref}</Link></div></section> : null}
+      <section className={styles.metrics}><div className={styles.metric}><span>Approved jobs included</span><strong>{plannedLinks.length}</strong></div><div className={styles.metric}><span>Store</span><strong>{store.storeNumber}</strong></div><div className={styles.metric}><span>Vendor response</span><strong>{plainStatus(run.status)}</strong></div><div className={styles.metric}><span>Time reserved for visit</span><strong>{run.estimatedServiceMinutes} min</strong></div></section>
+      <div className={styles.grid}><div className={styles.stack}>
+        <section className={styles.panel}><div className={styles.panelHeader}><div><h2>Visit plan</h2><p>Several approved jobs, one proposed store visit.</p></div><span className={styles.pill}>{plainStatus(run.status)}</span></div><div className={styles.body}><p className={styles.explanation}>{run.recommendationExplanation}</p><div className={styles.detailGrid}><div className={styles.detail}><small>Proposed arrival</small><strong>{formatDate(run.proposedStartsAt, store.timeZone)}</strong></div><div className={styles.detail}><small>Respond by</small><strong>{formatDate(run.responseDueAt, store.timeZone)}</strong></div><div className={styles.detail}><small>Vendor work terms</small><strong>{contract.sourceAgreementReference} · version {contract.version}</strong></div><div className={styles.detail}><small>Store access</small><strong>{stop.accessRequirements ?? "No special access note"}</strong></div></div></div></section>
+        <section className={styles.panel}><div className={styles.panelHeader}><div><h2>Separate work-order records</h2><p>Every job keeps its own outcome, follow-up, cost, invoice link, and audit history.</p></div></div><div className={styles.stop}>{plannedLinks.map((link) => { const workOrder = fixture.workOrders.find((row) => row.id === link.workOrderId)!; return <div className={styles.work} key={link.id}><Link href={`/app/work-orders/${workOrder.id}`}>{workOrder.number}</Link><strong>{workOrder.categoryKey?.replaceAll("_", " ") ?? "Unclassified"}</strong><span>{workOrder.problem}</span></div>; })}{removedLinks.length ? <p className={styles.muted}>{removedLinks.length} {removedLinks.length === 1 ? "job was" : "jobs were"} removed at the vendor’s request and returned to the future-visit list.</p> : null}</div></section>
+      </div><aside className={styles.stack}>
+        <section className={styles.panel}><div className={styles.panelHeader}><div><h2>What the vendor can do</h2><p>The vendor can accept, propose another time, ask to remove a job, or decline.</p></div></div><div className={styles.body}><p>The service-area match comes from the company vendor record. The vendor decides which crew can handle the work.</p></div></section>
+        <section className={styles.panel}><div className={styles.panelHeader}><div><h2>Vendor response history</h2><p>Every response remains attached to this visit plan.</p></div></div><div className={styles.body}>{responses.length ? <ul className={styles.timeline}>{responses.map((response) => <li key={response.id}><strong>{plainStatus(response.response === "accepted" ? "accepted" : response.response === "declined" || response.response === "insufficient_capacity" ? "declined" : "countered")}</strong><span>{response.responderName} · {formatDate(response.respondedAt, store.timeZone)}</span><span>{response.reasonDetail}</span></li>)}</ul> : <p className={styles.muted}>Waiting for the vendor’s first response.</p>}</div></section>
+        {run.status === "countered" && latestCounter ? <section className={styles.panel}><div className={styles.panelHeader}><div><h2>Review the vendor’s change</h2><p>Removed jobs return to the future-visit list with their original review dates.</p></div></div><div className={styles.body}><form className={styles.form} action={`/api/ops/service-runs/${run.id}/accept-counter`} method="post"><input type="hidden" name="responseId" value={latestCounter.id} /><button className={styles.button} type="submit">Accept the vendor’s change</button></form></div></section> : null}
+        <p className={styles.warning}>Planning this visit does not create a savings amount. The platform records what was actually completed and whether a separate planned trip was avoided only when the evidence supports it.</p>
+      </aside></div>
+    </div>;
+  }
   return <div className={styles.page}>
     <header className={styles.header}><div><p className={styles.eyebrow}>Service Run · {vendor.name}</p><h1>{stops.length} stops, {links.filter((row) => row.planned).length} Work Orders</h1><p>{formatDate(run.committedStartsAt ?? run.proposedStartsAt)} · Contract Version {contract.version} · {run.schedulingMode.replaceAll("_", " ")}</p></div>{publicResponseHref && run.status === "proposed" ? <Link className={styles.button} href={publicResponseHref}>Open Vendor response</Link> : <Link className={styles.secondaryButton} href="/app/service-runs">Back to planner</Link>}</header>
     <section className={styles.metrics}><div className={styles.metric}><span>Protected capacity</span><strong>{run.capacityUsedMinutes} min</strong></div><div className={styles.metric}><span>Drive / service</span><strong>{run.estimatedDriveMinutes} / {run.estimatedServiceMinutes}</strong></div><div className={styles.metric}><span>Potential truck rolls avoided</span><strong>{run.estimatedTripReduction}</strong></div><div className={styles.metric}><span>Estimated opportunity</span><strong>{money(run.estimatedOpportunity.amountMinor, run.estimatedOpportunity.currency)}</strong></div></section>

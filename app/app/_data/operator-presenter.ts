@@ -1638,7 +1638,19 @@ const filterLabels: Record<string, string> = {
   exception: "Exceptions",
   "follow-up": "Follow-ups",
   true: "With recorded cost",
+  ready: "Approved for a future visit",
 };
+
+function heldWorkInstruction(posture: "complete_using_professional_judgment" | "look_and_report") {
+  return posture === "look_and_report" ? "Inspect and report back" : "Complete if practical";
+}
+
+function heldWorkReviewLabel(deadlineAt: string, asOf: string) {
+  const dayCount = Math.ceil((Date.parse(deadlineAt) - Date.parse(asOf)) / 86_400_000);
+  if (dayCount < 0) return `${Math.abs(dayCount)} day${Math.abs(dayCount) === 1 ? "" : "s"} past review date`;
+  if (dayCount === 0) return "Review today";
+  return `Review in ${dayCount} day${dayCount === 1 ? "" : "s"}`;
+}
 
 function routePath(route: OperatorListRoute): string {
   return `/app/${route}`;
@@ -1717,7 +1729,13 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
   const asset = first(query.asset);
   const component = first(query.component);
   const path = pathSegments(first(query.path));
+  const visitPlan = first(query.visitPlan);
   const assetById = new Map(scoped.assets.map((candidate) => [candidate.id, candidate]));
+  const activeHoldByWork = new Map(
+    (fixture.workOrderVisitHolds ?? [])
+      .filter((hold) => hold.organizationId === scoped.organizationId && hold.status === "active" && scoped.workOrders.some((work) => work.id === hold.workOrderId && work.status === "approved"))
+      .map((hold) => [hold.workOrderId, hold]),
+  );
   return scoped.workOrders
     .filter((work) => {
       if (!q) return true;
@@ -1738,16 +1756,20 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
     .filter((work) => !asset || (asset === "unlinked" ? !work.assetId : work.assetId === asset))
     .filter((work) => !component || (component === "unlinked" ? !work.componentId : work.componentId === component))
     .filter((work) => path.length === 0 || assetMatchesPath(work.assetId ? assetById.get(work.assetId) : undefined, path))
+    .filter((work) => !visitPlan || (visitPlan === "ready" && activeHoldByWork.has(work.id)))
     .filter((work) => !status || (status === "open" ? !["closed", "cancelled"].includes(work.status) : work.status === status))
     .filter((work) => !stage || (stage === "vendor-response" && ["approved", "issued", "waiting_on_vendor"].includes(work.status)))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((work) => {
       const assignment = assignmentForWork(fixture, scoped.organizationId, work.id);
+      const hold = activeHoldByWork.get(work.id);
       const assignee = assignment?.kind === "outside_vendor"
         ? vendorName(fixture, scoped.organizationId, assignment.vendorId)
         : assignment?.kind === "internal"
           ? "Internal maintenance"
-          : "Choose later";
+          : hold
+            ? "Future vendor visit"
+            : "Choose later";
       return {
         id: work.id,
         label: work.number,
@@ -1755,10 +1777,10 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
         cells: [
           { key: "work", value: work.number, secondary: work.problem },
           { key: "store", value: storeLabel(storeById.get(work.storeId)) },
-          { key: "assignment", value: assignee ?? "Not assigned", secondary: assignment ? sentence(assignment.status) : "Assignment needed" },
-          { key: "next", value: work.nextAction, secondary: work.accountableParty },
+          { key: "assignment", value: assignee ?? "Not assigned", secondary: hold ? heldWorkInstruction(hold.posture) : assignment ? sentence(assignment.status) : "Assignment needed" },
+          { key: "next", value: hold ? heldWorkReviewLabel(hold.deadlineAt, fixture.asOf) : work.nextAction, secondary: hold ? `Review by ${date(hold.deadlineAt)}` : work.accountableParty },
           { key: "cost", value: money(costByWork.get(work.id) ?? 0) },
-          { key: "status", value: workStatusLabel(work.status), tone: workStatusTone(work.status) },
+          { key: "status", value: hold ? "Approved for a future visit" : workStatusLabel(work.status), tone: hold ? "info" : workStatusTone(work.status) },
         ],
       };
     });
@@ -2905,6 +2927,25 @@ export function buildListModel(
         ],
       }]
     : undefined;
+  const activeHeldWork = route === "work-orders"
+    ? (fixture.workOrderVisitHolds ?? []).filter((hold) => hold.organizationId === scoped.organizationId && hold.status === "active" && scoped.workOrders.some((work) => work.id === hold.workOrderId && work.status === "approved"))
+    : [];
+  const heldStoreCounts = new Map<string, number>();
+  for (const hold of activeHeldWork) {
+    const work = scoped.workOrders.find((candidate) => candidate.id === hold.workOrderId);
+    if (work) heldStoreCounts.set(work.storeId, (heldStoreCounts.get(work.storeId) ?? 0) + 1);
+  }
+  const visitPlan = route === "work-orders" ? first(query.visitPlan) : undefined;
+  const workFilters = route === "work-orders"
+    ? [{
+        id: "work-visit-plan",
+        label: "Visit plan",
+        options: [
+          { value: "all", label: `All work (${scoped.workOrders.length})`, href: hrefWithoutQueryKey(route, query, "visitPlan"), selected: !visitPlan },
+          { value: "ready", label: `Future visit (${activeHeldWork.length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), store: first(query.store), status: first(query.status), visitPlan: "ready" }), selected: visitPlan === "ready" },
+        ],
+      }]
+    : undefined;
   const allAttention = route === "action-center" ? actionsForSession(fixture, scoped, session, 200) : [];
   const scopedEstimateRequests = route === "estimates"
     ? (fixture.estimateRequests ?? []).filter((request) => request.organizationId === scoped.organizationId && scoped.workOrders.some((work) => work.id === request.workOrderId))
@@ -2981,9 +3022,15 @@ export function buildListModel(
       scopeLabel: activeScopeLabel,
       updatedLabel: `Source data through ${date(fixture.asOf)}`,
       primaryAction,
+      secondaryAction: route === "work-orders" && activeHeldWork.length ? { label: "Plan a combined visit", href: "/app/store-sweeps/new" } : undefined,
     },
     metrics: route === "visits"
       ? visitMetrics(fixture, scoped, query)
+      : route === "work-orders"
+        ? [
+            { id: "ready-to-bundle", label: "Approved for a future visit", value: String(activeHeldWork.length), supportingText: "Low-priority work waiting for a practical vendor visit", tone: activeHeldWork.length ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open the list" } },
+            { id: "store-sweep-opportunities", label: "Stores with several approved jobs", value: String([...heldStoreCounts.values()].filter((count) => count >= 2).length), supportingText: "These stores may be good candidates for one combined vendor visit", tone: [...heldStoreCounts.values()].some((count) => count >= 2) ? "warning" : "positive", link: { href: "/app/store-sweeps/new", label: "Plan a combined visit" } },
+          ]
       : route === "action-center"
         ? [
             { id: "attention-all", label: "Open decisions", value: String(allAttention.length), supportingText: "Every item has source evidence and a review action", tone: allAttention.length ? "warning" : "positive", link: { href: "/app/action-center", label: "Open full queue" } },
@@ -2993,7 +3040,7 @@ export function buildListModel(
             { id: "attention-urgent", label: "Urgent / overdue", value: String(allAttention.filter((item) => item.tone === "critical").length), supportingText: "Items that should be handled first", tone: allAttention.some((item) => item.tone === "critical") ? "critical" : "positive", link: { href: "/app/action-center?priority=urgent", label: "Open priority work" } },
           ]
         : undefined,
-    filters: visitFilters ?? actionFilters ?? estimateFilters,
+    filters: visitFilters ?? workFilters ?? actionFilters ?? estimateFilters,
     appliedFilters: activeFilters,
     clearFiltersHref: activeFilters.length ? routePath(route) : undefined,
     table: { id: route, caption: meta.title, columns: tableColumns, rows },
@@ -4436,6 +4483,23 @@ export function buildDetailModel(
     const storeWork = scoped.workOrders.filter((work) => work.storeId === store.id);
     const storeVisits = scoped.visits.filter((visit) => visit.storeId === store.id);
     const storeAssets = scoped.assets.filter((asset) => asset.storeId === store.id);
+    const storeActiveHolds = (fixture.workOrderVisitHolds ?? [])
+      .filter((hold) => hold.organizationId === scoped.organizationId && hold.status === "active" && storeWork.some((work) => work.id === hold.workOrderId && work.status === "approved"))
+      .sort((left, right) => left.deadlineAt.localeCompare(right.deadlineAt));
+    const heldWorkRows: TableRowViewModel[] = storeActiveHolds.map((hold) => {
+      const work = storeWork.find((candidate) => candidate.id === hold.workOrderId)!;
+      return {
+        id: hold.id,
+        label: work.number,
+        href: `/app/work-orders/${work.id}`,
+        cells: [
+          { key: "work", value: work.number, secondary: work.problem },
+          { key: "category", value: sentence(work.categoryKey ?? "Service") },
+          { key: "instruction", value: heldWorkInstruction(hold.posture) },
+          { key: "review", value: heldWorkReviewLabel(hold.deadlineAt, fixture.asOf), secondary: date(hold.deadlineAt), tone: hold.deadlineAt < fixture.asOf ? "critical" : "warning" },
+        ],
+      };
+    });
     if (session.demoEdition === "accountability") {
       const isDemoEntryStore = store.id === NORTHLINE_DEMO_HANDLES.storyStoreId;
       return {
@@ -4452,6 +4516,7 @@ export function buildDetailModel(
         statusTone: store.status === "active" ? "positive" : "neutral",
         facts: [
           { label: "Open work orders", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work orders" } },
+          { label: "Approved for a future visit", value: String(storeActiveHolds.length), link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
           { label: "Vendors onsite now", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open active visits" } },
           { label: "Recorded visits", value: String(storeVisits.length), link: { href: `/app/visits?store=${store.id}`, label: "Open visit history" } },
         ],
@@ -4464,6 +4529,13 @@ export function buildDetailModel(
               { label: "QR or mobile web", value: "Vendor check-in and checkout", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}`, label: "Open QR/mobile check-in" } },
               { label: "Trusted store computer", value: "Check a vendor in or finish an onsite visit", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.trustedStore104}`, label: "Open store check-in" } },
             ],
+          }] : []),
+          ...(storeActiveHolds.length ? [{
+            id: "ready-to-bundle",
+            title: "Approved work for a future visit",
+            description: "These jobs can wait for a vendor already onsite or be combined into one planned vendor visit.",
+            table: { id: "store-held-work", caption: `Approved work for a future visit at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
+            action: { label: "Plan a combined visit", href: `/app/store-sweeps/new?store=${store.id}` },
           }] : []),
           { id: "work", title: "Work orders", description: "The customer work-order numbers available for vendor service.", table: { id: "store-work", caption: `Work orders for Store ${store.storeNumber}`, columns: columns["work-orders"].filter((column) => column.key !== "cost"), rows: workRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
           { id: "visits", title: "Check-in and checkout history", description: "Technician, vendor, selected work order, observed times, and checkout outcome.", table: { id: "store-visits", caption: `Visits for Store ${store.storeNumber}`, columns: columns.visits, rows: visitRows(fixture, { ...scoped, stores: [store], storeIds: new Set([store.id]), workOrders: storeWork, visits: storeVisits, assets: storeAssets }, {}) } },
@@ -4513,6 +4585,7 @@ export function buildDetailModel(
       statusTone: store.status === "active" ? "positive" : "neutral",
       facts: [
         { label: "Open work", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work" } },
+        { label: "Approved for a future visit", value: String(storeActiveHolds.length), helperText: storeActiveHolds.length ? "Manager-approved work waiting for a practical visit" : "No approved work waiting for a future visit", link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
         { label: "Onsite now", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open visits" } },
         { label: "Rolling 12-month cost", value: money(costForWorkIds(rollingCostByWork, storeWork.map((work) => work.id))), link: { href: `/app/spend?store=${store.id}`, label: "Explain cost" } },
         { label: "PM compliance", value: eligiblePm.length ? `${Math.round((completedPm.length / eligiblePm.length) * 100)}%` : "No closed window", helperText: eligiblePm.length ? `${completedPm.length} completed / ${eligiblePm.length} eligible occurrences` : "Future and open windows are excluded", link: { href: `/app/pm?store=${store.id}`, label: "Open PM evidence" } },
@@ -4529,6 +4602,13 @@ export function buildDetailModel(
             { label: "Trusted store computer", value: "Check a vendor in or finish an onsite visit", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.trustedStore104}`, label: "Open store service desk" } },
             { label: "Vendor authorization", value: "Account-free acceptance, scheduling, decline, or question", link: { href: `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}`, label: "Open vendor view" } },
           ],
+        }] : []),
+        ...(storeActiveHolds.length ? [{
+          id: "ready-to-bundle",
+          title: "Approved work for a future visit",
+          description: "Combine several small jobs into one planned vendor visit, or leave them available for a matching vendor who is already onsite.",
+          table: { id: "store-held-work", caption: `Approved work for a future visit at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
+          action: { label: "Plan a combined visit", href: `/app/store-sweeps/new?store=${store.id}` },
         }] : []),
         {
           id: "preventive-maintenance-plans",

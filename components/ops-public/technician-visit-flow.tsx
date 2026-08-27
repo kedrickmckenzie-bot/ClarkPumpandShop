@@ -16,11 +16,12 @@ import type {
 } from "./contracts";
 import { LocationEvidenceControl } from "./location-evidence-control";
 import type { PendingVisitCheckout } from "./pending-visit-cookie";
-import { formatPublicDateTime, PublicFrame, ServerReceipt } from "./public-ui";
+import { formatPublicDate, formatPublicDateTime, PublicFrame, ServerReceipt } from "./public-ui";
 import { PendingVisitCard } from "./store-portal-home";
 import styles from "./public-workflows.module.css";
 
 type FlowMode = "check_in" | "check_out";
+type SubmissionAction = FlowMode | "add_work";
 type VisitReceipt = TechnicianCheckInReceipt | TechnicianCheckOutReceipt;
 type OutcomeDraft = {
   outcome: WorkOrderVisitOutcome | "";
@@ -121,7 +122,8 @@ export function TechnicianVisitFlow({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<VisitReceipt | null>(null);
-  const submissionKeys = useRef<Partial<Record<FlowMode, string>>>({});
+  const [addWorkNotice, setAddWorkNotice] = useState<string | null>(null);
+  const submissionKeys = useRef<Partial<Record<SubmissionAction, string>>>({});
   const totalSteps = mode === "check_in" ? 2 : 3;
 
   useEffect(() => {
@@ -159,6 +161,7 @@ export function TechnicianVisitFlow({
   function reset(nextMode: FlowMode = initialMode) {
     clearSubmissionKey("check_in");
     clearSubmissionKey("check_out");
+    clearSubmissionKey("add_work");
     submissionKeys.current = {};
     setMode(nextMode);
     setStep(1);
@@ -184,13 +187,14 @@ export function TechnicianVisitFlow({
     setLocation(null);
     setError(null);
     setReceipt(null);
+    setAddWorkNotice(null);
   }
 
-  function submissionStorageKey(flowMode: FlowMode, namespace = SUBMISSION_STORAGE_NAMESPACE): string {
+  function submissionStorageKey(flowMode: SubmissionAction, namespace = SUBMISSION_STORAGE_NAMESPACE): string {
     return `${namespace}:${token}:${flowMode}`;
   }
 
-  function clearSubmissionKey(flowMode: FlowMode) {
+  function clearSubmissionKey(flowMode: SubmissionAction) {
     delete submissionKeys.current[flowMode];
     try {
       window.sessionStorage.removeItem(submissionStorageKey(flowMode));
@@ -200,7 +204,7 @@ export function TechnicianVisitFlow({
     }
   }
 
-  function submissionKey(flowMode: FlowMode): string {
+  function submissionKey(flowMode: SubmissionAction): string {
     const existing = submissionKeys.current[flowMode];
     if (existing) return existing;
     try {
@@ -271,6 +275,9 @@ export function TechnicianVisitFlow({
 
   function chooseActiveVisit(visit: ActiveVisitView) {
     setActiveVisitId(visit.id);
+    setContextVendorId(context?.vendorId || portal.vendors.find((vendor) => vendor.name === visit.vendorName)?.id || "");
+    setSelectedHeldWorkOrderIds([]);
+    setAddWorkNotice(null);
     setOutcomes(Object.fromEntries(visit.workOrders.map((workOrder) => [workOrder.id, emptyOutcome()])));
   }
 
@@ -284,7 +291,7 @@ export function TechnicianVisitFlow({
     return selectedVisit.workOrders.every((workOrder) => {
       const draft = outcomes[workOrder.id];
       if (!draft?.outcome) return false;
-      if (workOrder.selectionSource === "held_work" && ["temporary_repair", "diagnosis_only"].includes(draft.outcome) && !draft.outcomeNotes.trim()) return false;
+      if (workOrder.heldWorkPosture && ["temporary_repair", "diagnosis_only"].includes(draft.outcome) && !draft.outcomeNotes.trim()) return false;
       return true;
     });
   }
@@ -363,12 +370,38 @@ export function TechnicianVisitFlow({
     }
   }
 
+  async function addSelectedWorkToVisit() {
+    if (!selectedVisit || !selectedHeldWorkOrderIds.length) return;
+    setSubmitting(true);
+    setError(null);
+    setAddWorkNotice(null);
+    try {
+      const result = await fetch(`/api/ops-public/store/${encodeURIComponent(token)}/active-visit-work`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": submissionKey("add_work") },
+        body: JSON.stringify({ visitId: selectedVisit.id, heldWorkOrderIds: selectedHeldWorkOrderIds }),
+      });
+      const body = (await result.json()) as VendorVisitContextView & { error?: string };
+      if (!result.ok) throw new Error(body.error ?? "The additional work could not be added to this visit.");
+      clearSubmissionKey("add_work");
+      setContext(body);
+      setSelectedHeldWorkOrderIds([]);
+      const refreshedVisit = body.activeVisits.find((visit) => visit.id === selectedVisit.id);
+      if (refreshedVisit) chooseActiveVisit(refreshedVisit);
+      setAddWorkNotice("The selected work is now part of this visit. Record one outcome for each item at checkout.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The additional work could not be added to this visit.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (receipt) {
     const checkedIn = "checkedInAt" in receipt;
     return (
       <PublicFrame backHref={storeOptionsHref} organizationName={portal.organizationName} context={`Store ${portal.store.number} · Technician visit`} mode={portal.mode}>
         <div className={styles.hero}><div><span className={styles.eyebrow}>Server-confirmed receipt</span><h1 className={styles.title}>{checkedIn ? "Visit started" : "Visit completed"}</h1></div></div>
-        <ServerReceipt receipt={receipt} />
+        <ServerReceipt receipt={receipt} timeZone={portal.store.timeZone} />
         {checkedIn ? (
           <section className={styles.checkoutNextStep}>
             <div><span className={styles.eyebrow}>Keep this page available</span><h2>When the work is done, finish this visit</h2><p>This secure checkout is now tied only to {receipt.technicianName}&apos;s visit. It will also reappear if this store QR is reopened on this device.</p></div>
@@ -400,20 +433,20 @@ export function TechnicianVisitFlow({
 
           {step === 1 && context && mode === "check_in" ? (
             <fieldset className={styles.fieldset} style={{ marginTop: "1.1rem" }}>
-              <legend className={styles.legend}>Select the operator work first</legend>
-              <p className={styles.helper}>The first work order determines the assigned vendor. You can then add other work at this store assigned to that same vendor.</p>
+              <legend className={styles.legend}>Choose the job you came to complete</legend>
+              <p className={styles.helper}>Select one assigned work order first. The list will then show any other approved work at this store for the same vendor.</p>
               <div className={styles.stack}>
                 {visibleEligibleWork.map((work) => {
                   const selected = selectedWorkOrderIds.includes(work.id);
-                  return <label className={`${styles.choiceCard} ${selected ? styles.choiceCardSelected : ""}`} key={work.id}><input checked={selected} className={styles.choiceInput} onChange={() => toggleWorkOrder(work.id)} type="checkbox" value={work.id} /><span className={styles.choiceTitle}>{work.number} · {work.priority}</span><span className={styles.choiceDescription}>{work.problem}</span><span className={styles.choiceDescription}>{[work.area, work.category, work.asset].filter(Boolean).join(" · ") || "Classification pending"}</span><span className={styles.choiceDescription}>{work.dueOrScheduledAt ? `${work.dueOrScheduledLabel}: ${formatPublicDateTime(work.dueOrScheduledAt)}` : "No due or scheduled date"} · Assigned Vendor: {work.assignedVendor.name}</span>{work.plannedServiceRun ? <span className={styles.choiceDescription}><strong>Planned Service Run · Stop {work.plannedServiceRun.stopSequence} · {formatPublicDateTime(work.plannedServiceRun.startsAt)}</strong></span> : null}</label>;
+                  return <label className={`${styles.choiceCard} ${selected ? styles.choiceCardSelected : ""}`} key={work.id}><input checked={selected} className={styles.choiceInput} onChange={() => toggleWorkOrder(work.id)} type="checkbox" value={work.id} /><span className={styles.choiceTitle}>{work.number} · {work.priority}</span><span className={styles.choiceDescription}>{work.problem}</span><span className={styles.choiceDescription}>{[work.area, work.category, work.asset].filter(Boolean).join(" · ") || "Classification pending"}</span><span className={styles.choiceDescription}>{work.dueOrScheduledAt ? `${work.dueOrScheduledLabel}: ${formatPublicDateTime(work.dueOrScheduledAt, portal.store.timeZone)}` : "No due or scheduled date"} · Assigned Vendor: {work.assignedVendor.name}</span>{work.plannedServiceRun ? <span className={styles.choiceDescription}><strong>Planned visit · Stop {work.plannedServiceRun.stopSequence} · {formatPublicDateTime(work.plannedServiceRun.startsAt, portal.store.timeZone)}</strong></span> : null}</label>;
                 })}
                 {!visibleEligibleWork.length ? <p className={styles.notice}>No eligible outside-vendor work orders are available at this store.</p> : null}
                 {!context.workOrderSelectionBound ? <label className={`${styles.choiceCard} ${unmatched ? styles.choiceCardSelected : ""}`}><input checked={unmatched} className={styles.choiceInput} onChange={chooseUnmatched} type="checkbox" /><span className={styles.choiceTitle}>No work order provided</span><span className={styles.choiceDescription}>Choose this if dispatch did not provide a work-order number or the expected work is not listed. A reason for the visit is required.</span></label> : null}
               </div>
               {inferredVendor ? <div className={styles.callout}><strong>Assigned Vendor (inferred)</strong><p>{inferredVendor.name}. The vendor cannot be changed for matched work.</p></div> : null}
-              {selectedServiceRun ? <div className={styles.callout}><strong>Accepted Service Run · Stop {selectedServiceRun.stopSequence}</strong><p>All {selectedServiceRun.plannedWorkOrderIds.length} planned Work Orders at this Store were offered automatically. Other eligible {inferredVendor?.name} work remains available.</p>{removedPlannedWorkOrderIds.length ? <label className={styles.label} style={{ marginTop: ".8rem" }}>Why is planned work being removed? <span className={styles.required} aria-hidden="true">*</span><textarea className={styles.textarea} maxLength={1000} onChange={(event) => setPlannedWorkOrderRemovalReason(event.target.value)} value={plannedWorkOrderRemovalReason} /></label> : null}</div> : null}
+              {selectedServiceRun ? <div className={styles.callout}><strong>Accepted planned visit · Stop {selectedServiceRun.stopSequence}</strong><p>All {selectedServiceRun.plannedWorkOrderIds.length} work orders planned for this store were added automatically. Other eligible {inferredVendor?.name} work remains available.</p>{removedPlannedWorkOrderIds.length ? <label className={styles.label} style={{ marginTop: ".8rem" }}>Why is planned work being removed? <span className={styles.required} aria-hidden="true">*</span><textarea className={styles.textarea} maxLength={1000} onChange={(event) => setPlannedWorkOrderRemovalReason(event.target.value)} value={plannedWorkOrderRemovalReason} /></label> : null}</div> : null}
               {unmatched ? <div className={styles.form}><label className={styles.label}>Approved vendor <span className={styles.required} aria-hidden="true">*</span><select className={styles.select} onChange={(event) => { setUnmatchedVendorId(event.target.value); setLoadingContext(true); setError(null); setContextVendorId(event.target.value); setSelectedHeldWorkOrderIds([]); }} value={unmatchedVendorId}><option value="">Choose the arriving vendor</option>{portal.vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}</select></label><label className={styles.label}>Reason for visit <span className={styles.required} aria-hidden="true">*</span><textarea className={styles.textarea} maxLength={500} onChange={(event) => setNoWorkOrderReason(event.target.value)} placeholder="Example: Emergency call from the store manager; no operator work-order number was provided." value={noWorkOrderReason} /></label></div> : null}
-              {contextVendorId && context.vendorId === contextVendorId && !context.workOrderSelectionBound ? <section className={styles.callout} aria-labelledby="held-work-title"><strong id="held-work-title">Additional approved work at this store</strong><p>These items were already reviewed by the operator and match this company&apos;s approved service categories. Select anything you can handle today; you are always free to leave an item unselected.</p>{context.heldWork.length ? <div className={styles.stack} style={{ marginTop: ".8rem" }}>{context.heldWork.map((work) => { const selected = selectedHeldWorkOrderIds.includes(work.id); return <label className={`${styles.choiceCard} ${selected ? styles.choiceCardSelected : ""}`} key={work.id}><input checked={selected} className={styles.choiceInput} onChange={() => toggleHeldWork(work.id)} type="checkbox" /><span className={styles.choiceTitle}>{work.number} · {work.category}</span><span className={styles.choiceDescription}>{work.problem}</span><span className={styles.choiceDescription}><strong>{work.instruction}</strong> · Review by {formatPublicDateTime(work.deadlineAt)}</span>{work.disclosures.map((disclosure) => <span className={styles.choiceDescription} key={disclosure}>{disclosure}</span>)}</label>; })}</div> : <p className={styles.helper} style={{ marginTop: ".65rem" }}>No additional approved work is available for this vendor right now.</p>}<p className={styles.helper} style={{ marginTop: ".7rem" }}>This list describes customer needs. It does not certify any individual technician&apos;s trade qualifications.</p></section> : null}
+              {contextVendorId && context.vendorId === contextVendorId && !context.workOrderSelectionBound ? <section className={styles.callout} aria-labelledby="held-work-title"><strong id="held-work-title">Additional approved work at this store</strong><p>These items were already reviewed by the customer and relate to service areas listed on your company&apos;s vendor record. Select anything you can handle today; leave anything you cannot.</p>{context.heldWork.length ? <div className={styles.stack} style={{ marginTop: ".8rem" }}>{context.heldWork.map((work) => { const selected = selectedHeldWorkOrderIds.includes(work.id); return <label className={`${styles.choiceCard} ${selected ? styles.choiceCardSelected : ""}`} key={work.id}><input checked={selected} className={styles.choiceInput} onChange={() => toggleHeldWork(work.id)} type="checkbox" /><span className={styles.choiceTitle}>{work.number} · {work.category}</span><span className={styles.choiceDescription}>{work.problem}</span><span className={styles.choiceDescription}><strong>{work.instruction}</strong> · Review by {formatPublicDate(work.deadlineAt, portal.store.timeZone)}</span>{work.disclosures.map((disclosure) => <span className={styles.choiceDescription} key={disclosure}>{disclosure}</span>)}</label>; })}</div> : <p className={styles.helper} style={{ marginTop: ".65rem" }}>No additional approved work is available for this vendor right now.</p>}<p className={styles.helper} style={{ marginTop: ".7rem" }}>This list describes work the customer already approved. Your company decides what it can handle today.</p></section> : null}
               <div className={styles.actions}><button className={styles.button} disabled={!selectionReady} onClick={() => setStep(2)} type="button">Continue <ArrowRight aria-hidden="true" size={17} /></button></div>
             </fieldset>
           ) : null}
@@ -421,8 +454,10 @@ export function TechnicianVisitFlow({
           {step === 1 && context && mode === "check_out" ? (
             <fieldset className={styles.fieldset} style={{ marginTop: "1.1rem" }}>
               <legend className={styles.legend}>Who is finishing their visit?</legend>
-              {context.activeVisits.length ? <div className={styles.stack}>{context.activeVisits.map((visit) => <label className={`${styles.choiceCard} ${activeVisitId === visit.id ? styles.choiceCardSelected : ""}`} key={visit.id}><input checked={activeVisitId === visit.id} className={styles.choiceInput} name="active-visit" onChange={() => chooseActiveVisit(visit)} type="radio" value={visit.id} /><span className={styles.choiceTitle}>{visit.technicianName} · {visit.vendorName}</span><span className={styles.choiceDescription}>{visit.workOrders.length ? visit.workOrders.map((workOrder) => workOrder.number).join(" · ") : "No work order provided"}</span><span className={styles.choiceDescription}>Crew of {visit.crewCount} · Started {formatPublicDateTime(visit.checkedInAt)} via {startedViaLabel(visit.startedVia)}. {visit.checkInLocationLabel}.</span></label>)}</div> : <p className={styles.notice}>No active outside-vendor visit is available from this link or trusted store device.</p>}
+              {context.activeVisits.length ? <div className={styles.stack}>{context.activeVisits.map((visit) => <label className={`${styles.choiceCard} ${activeVisitId === visit.id ? styles.choiceCardSelected : ""}`} key={visit.id}><input checked={activeVisitId === visit.id} className={styles.choiceInput} name="active-visit" onChange={() => chooseActiveVisit(visit)} type="radio" value={visit.id} /><span className={styles.choiceTitle}>{visit.technicianName} · {visit.vendorName}</span><span className={styles.choiceDescription}>{visit.workOrders.length ? visit.workOrders.map((workOrder) => workOrder.number).join(" · ") : "No work order provided"}</span><span className={styles.choiceDescription}>Crew of {visit.crewCount} · Started {formatPublicDateTime(visit.checkedInAt, portal.store.timeZone)} via {startedViaLabel(visit.startedVia)}. {visit.checkInLocationLabel}.</span></label>)}</div> : <p className={styles.notice}>No active outside-vendor visit is available from this link or trusted store device.</p>}
               {selectedVisit ? <div className={styles.callout}><strong>{selectedVisit.vendorName} · {selectedVisit.technicianName}</strong><p>{selectedVisit.workOrders.length ? selectedVisit.workOrders.map((workOrder) => `${workOrder.number}: ${workOrder.problem}`).join(" · ") : `Reason for visit: ${selectedVisit.noWorkOrderReason}`}</p></div> : null}
+              {selectedVisit && context.heldWork.length ? <section className={styles.callout} aria-labelledby="active-visit-add-work"><strong id="active-visit-add-work">Have time for another approved item?</strong><p>You can add work now without ending or restarting the visit. Select only what your company can handle today.</p><div className={styles.stack} style={{ marginTop: ".8rem" }}>{context.heldWork.map((work) => { const selected = selectedHeldWorkOrderIds.includes(work.id); return <label className={`${styles.choiceCard} ${selected ? styles.choiceCardSelected : ""}`} key={work.id}><input checked={selected} className={styles.choiceInput} onChange={() => toggleHeldWork(work.id)} type="checkbox" /><span className={styles.choiceTitle}>{work.number} · {work.category}</span><span className={styles.choiceDescription}>{work.problem}</span><span className={styles.choiceDescription}><strong>{work.instruction}</strong> · Review by {formatPublicDate(work.deadlineAt, portal.store.timeZone)}</span>{work.disclosures.map((disclosure) => <span className={styles.choiceDescription} key={disclosure}>{disclosure}</span>)}</label>; })}</div><div className={styles.actions}><button className={styles.secondaryButton} disabled={!selectedHeldWorkOrderIds.length || submitting} onClick={addSelectedWorkToVisit} type="button">{submitting ? "Adding…" : `Add ${selectedHeldWorkOrderIds.length || "selected"} to this visit`}</button></div></section> : null}
+              {addWorkNotice ? <p className={styles.notice} role="status">{addWorkNotice}</p> : null}
               <div className={styles.actions}><button className={styles.button} disabled={!selectionReady} onClick={() => { if (selectedVisit) chooseActiveVisit(selectedVisit); setStep(2); }} type="button">Continue <ArrowRight aria-hidden="true" size={17} /></button></div>
             </fieldset>
           ) : null}
@@ -442,13 +477,14 @@ export function TechnicianVisitFlow({
             <div className={styles.form} style={{ marginTop: "1.1rem" }}>
               {selectedVisit.workOrders.length ? selectedVisit.workOrders.map((workOrder) => {
                 const draft = outcomes[workOrder.id] ?? emptyOutcome();
-                const outcomeOptions = workOrder.selectionSource !== "held_work"
-                  ? WORK_ORDER_OUTCOMES
-                  : workOrder.heldWorkPosture === "look_and_report"
+                const outcomeOptions = workOrder.heldWorkPosture === "look_and_report"
                     ? HELD_INSPECT_OUTCOMES
-                    : HELD_COMPLETE_OUTCOMES;
-                const notesRequired = workOrder.selectionSource === "held_work" && ["temporary_repair", "diagnosis_only"].includes(draft.outcome);
-                return <section className={styles.card} key={workOrder.id} aria-labelledby={`outcome-${workOrder.id}`}><h3 className={styles.cardTitle} id={`outcome-${workOrder.id}`}>{workOrder.number}</h3><p className={styles.helper}>{workOrder.problem}</p>{workOrder.selectionSource === "held_work" ? <p className={styles.notice}><strong>Added while onsite</strong><br />{workOrder.heldWorkPosture === "look_and_report" ? "The operator asked for an inspection and findings—not automatic completion." : "The operator approved completion using your professional judgment."}</p> : null}<label className={styles.label} style={{ marginTop: "0.9rem" }}>Outcome <span className={styles.required} aria-hidden="true">*</span><select className={styles.select} onChange={(event) => updateOutcome(workOrder.id, { outcome: event.target.value as WorkOrderVisitOutcome, vendorFollowUpTiming: "" })} value={draft.outcome}><option value="">Choose an outcome</option>{outcomeOptions.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}</select></label><p className={styles.helper}>{outcomeOptions.find((option) => option.id === draft.outcome)?.description ?? "Choose the closest result. The platform creates any required follow-up for the operator."}</p><label className={styles.label}>Visit notes {notesRequired ? <span className={styles.required} aria-hidden="true">*</span> : <span className={styles.helper}>(optional)</span>}<textarea className={styles.textarea} maxLength={2000} onChange={(event) => updateOutcome(workOrder.id, { outcomeNotes: event.target.value })} placeholder={notesRequired ? "Briefly explain the temporary repair or inspection findings." : "Diagnosis, work completed, readings, parts, or access conditions."} value={draft.outcomeNotes} /></label>{draft.outcome === "temporary_repair" ? <label className={styles.label}>When should this be checked again? <span className={styles.helper}>(optional)</span><select className={styles.select} onChange={(event) => updateOutcome(workOrder.id, { vendorFollowUpTiming: event.target.value as OutcomeDraft["vendorFollowUpTiming"] })} value={draft.vendorFollowUpTiming}><option value="">No estimate</option><option value="within_7_days">Within 7 days</option><option value="within_30_days">Within 30 days</option><option value="within_90_days">Within 90 days</option><option value="next_pm">At the next PM visit</option><option value="unknown">Unknown</option></select><span className={styles.helper}>This is guidance for the operator, not a guarantee or a deadline change.</span></label> : null}</section>;
+                    : workOrder.heldWorkPosture === "complete_using_professional_judgment"
+                      ? HELD_COMPLETE_OUTCOMES
+                      : WORK_ORDER_OUTCOMES;
+                const notesRequired = Boolean(workOrder.heldWorkPosture) && ["temporary_repair", "diagnosis_only"].includes(draft.outcome);
+                const heldSourceLabel = workOrder.selectionSource === "service_run" ? "Planned as part of this store visit" : "Added while onsite";
+                return <section className={styles.card} key={workOrder.id} aria-labelledby={`outcome-${workOrder.id}`}><h3 className={styles.cardTitle} id={`outcome-${workOrder.id}`}>{workOrder.number}</h3><p className={styles.helper}>{workOrder.problem}</p>{workOrder.heldWorkPosture ? <p className={styles.notice}><strong>{heldSourceLabel}</strong><br />{workOrder.heldWorkPosture === "look_and_report" ? "The operator asked for an inspection and findings—not automatic completion." : "The operator approved completion using your professional judgment."}</p> : null}<label className={styles.label} style={{ marginTop: "0.9rem" }}>Outcome <span className={styles.required} aria-hidden="true">*</span><select className={styles.select} onChange={(event) => updateOutcome(workOrder.id, { outcome: event.target.value as WorkOrderVisitOutcome, vendorFollowUpTiming: "" })} value={draft.outcome}><option value="">Choose an outcome</option>{outcomeOptions.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}</select></label><p className={styles.helper}>{outcomeOptions.find((option) => option.id === draft.outcome)?.description ?? "Choose the closest result. The platform creates any required follow-up for the operator."}</p><label className={styles.label}>Visit notes {notesRequired ? <span className={styles.required} aria-hidden="true">*</span> : <span className={styles.helper}>(optional)</span>}<textarea className={styles.textarea} maxLength={2000} onChange={(event) => updateOutcome(workOrder.id, { outcomeNotes: event.target.value })} placeholder={notesRequired ? "Briefly explain the temporary repair or inspection findings." : "Diagnosis, work completed, readings, parts, or access conditions."} value={draft.outcomeNotes} /></label>{draft.outcome === "temporary_repair" ? <label className={styles.label}>When should this be checked again? <span className={styles.helper}>(optional)</span><select className={styles.select} onChange={(event) => updateOutcome(workOrder.id, { vendorFollowUpTiming: event.target.value as OutcomeDraft["vendorFollowUpTiming"] })} value={draft.vendorFollowUpTiming}><option value="">No estimate</option><option value="within_7_days">Within 7 days</option><option value="within_30_days">Within 30 days</option><option value="within_90_days">Within 90 days</option><option value="next_pm">At the next PM visit</option><option value="unknown">Unknown</option></select><span className={styles.helper}>This is guidance for the operator, not a guarantee or a deadline change.</span></label> : null}</section>;
               }) : <fieldset className={styles.fieldset}><legend className={styles.legend}>Visit outcome</legend><div className={styles.choiceGrid}>{UNMATCHED_OUTCOMES.map((option) => <label className={`${styles.choiceCard} ${unmatchedOutcome === option.id ? styles.choiceCardSelected : ""}`} key={option.id}><input checked={unmatchedOutcome === option.id} className={styles.choiceInput} name="unmatched-outcome" onChange={() => setUnmatchedOutcome(option.id)} type="radio" /><span className={styles.choiceTitle}>{option.title}</span><span className={styles.helper}>{option.description}</span></label>)}</div><label className={styles.label}>Visit notes <span className={styles.helper}>(optional)</span><textarea className={styles.textarea} maxLength={2000} onChange={(event) => setUnmatchedOutcomeNotes(event.target.value)} value={unmatchedOutcomeNotes} /></label></fieldset>}
               <label className={styles.label}><Camera aria-hidden="true" size={18} /> Shared photos or service files <span className={styles.helper}>(optional, up to 4)</span>{Object.values(outcomes).some((draft) => draft.outcome === "temporary_repair") ? <span className={styles.notice}>A photo is strongly recommended for a temporary repair so the operator can plan the permanent work.</span> : null}<input accept="image/*,application/pdf" className={styles.fileInput} multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []).slice(0, 4))} type="file" /></label>
               {files.length ? <ul className={styles.fileList}>{files.map((file) => <li key={`${file.name}-${file.size}`}>{file.name} · {Math.max(1, Math.round(file.size / 1024))} KB</li>)}</ul> : null}

@@ -128,6 +128,44 @@ export async function sendVendorServiceAuthorizationEmail(input: {
   return input.provider.send({ to: input.vendorEmail, subject, text, html, replyTo: input.replyTo, idempotencyKey: `service-authorization/${input.issuanceId}/${input.vendorEmail}` });
 }
 
+export async function sendVendorStoreSweepEmail(input: {
+  provider: TransactionalEmailProvider;
+  vendorEmail: string;
+  vendorName: string;
+  organizationName: string;
+  run: ServiceRun;
+  store: Store;
+  workOrders: WorkOrder[];
+  actionUrl: string;
+  replyTo?: string;
+}) {
+  const label = `Store ${input.store.storeNumber} · ${input.store.name}`;
+  const when = formatWhen(input.run.proposedStartsAt, input.store.timeZone) ?? input.run.proposedStartsAt;
+  const subject = `${input.organizationName} proposed store visit · Store ${input.store.storeNumber}`;
+  const jobs = input.workOrders.map((workOrder) => `${workOrder.number} — ${workOrder.problem}`);
+  const text = [
+    `Hello ${input.vendorName},`,
+    "",
+    `${input.organizationName} is proposing one visit to ${label} on ${when}.`,
+    `${jobs.length} already-approved ${jobs.length === 1 ? "job is" : "jobs are"} included:`,
+    ...jobs.map((job) => `• ${job}`),
+    "",
+    `Review the visit and respond: ${input.actionUrl}`,
+    "",
+    "Each job keeps its own operator work-order number for service paperwork and invoicing.",
+  ].join("\n");
+  const jobRows = input.workOrders.map((workOrder) => `<li style="margin:0 0 9px"><strong>${escapeEmailHtml(workOrder.number)}</strong> — ${escapeEmailHtml(workOrder.problem)}</li>`).join("");
+  const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(input.vendorName)},</p><p><strong>${escapeEmailHtml(input.organizationName)}</strong> is proposing one visit to <strong>${escapeEmailHtml(label)}</strong> on ${escapeEmailHtml(when)}.</p><p>${jobs.length} already-approved ${jobs.length === 1 ? "job is" : "jobs are"} included:</p><ul style="padding-left:22px">${jobRows}</ul><p><a href="${escapeEmailHtml(input.actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Review proposed visit</a></p><p style="color:#475569">Each job keeps its own operator work-order number for service paperwork and invoicing.</p></div>`;
+  return input.provider.send({
+    to: input.vendorEmail,
+    subject,
+    text,
+    html,
+    replyTo: input.replyTo,
+    idempotencyKey: `store-sweep/${input.run.id}/${input.vendorEmail}`,
+  });
+}
+
 const topicRules: Array<{ matches(topic: string): boolean; eventKey: NotificationEventKey }> = [
   { matches: (topic) => ["ops.vendor.accepted", "ops.service_run.vendor_accepted", "ops.service_run.counter_accepted"].includes(topic), eventKey: "vendor_commitment_received" },
   { matches: (topic) => ["ops.vendor.declined", "ops.vendor.proposed_date", "ops.vendor.question"].includes(topic) || topic.startsWith("ops.service_run.vendor_"), eventKey: "vendor_response_received" },
@@ -250,9 +288,10 @@ function notificationCopy(eventKey: NotificationEventKey, message: OutboxDeliver
     const startsAt = context.serviceRun?.committedStartsAt ?? context.serviceRun?.proposedStartsAt;
     const when = formatWhen(startsAt, stores[0]?.timeZone);
     const mix = [...new Set(work.map((item) => item.kind))].join(" and ");
+    const combinedStoreVisit = context.serviceRun?.schedulerVersion === "store-sweep-v1";
     return {
       subject: `${vendorName} accepted work · ${scopeLabel}`,
-      headline: context.serviceRun ? "A vendor Service Run is confirmed" : "A vendor accepted the service authorization",
+      headline: combinedStoreVisit ? "A combined store visit is confirmed" : context.serviceRun ? "A vendor service schedule is confirmed" : "A vendor accepted the service authorization",
       detail: `${vendorName} accepted ${workLabel}${stores.length ? ` for ${scopeLabel}` : ""}${mix ? ` (${mix})` : ""}.${when ? ` Planned start: ${when}.` : " A service date has not been recorded yet."}`,
     };
   }

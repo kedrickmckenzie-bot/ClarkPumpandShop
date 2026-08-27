@@ -115,13 +115,50 @@ describe("manager-approved held work", () => {
     expect(workOrder).toMatchObject({ status: "approved", accountableParty: "Facilities coordinator", nextAction: "Review the onsite findings and choose the next step" });
   });
 
+  it("lets an active vendor visit add approved work without another check-in", async () => {
+    const gateway = getPublicOperationsGateway();
+    const repository = getNorthlineFixtureRepository();
+    const checkIn = await gateway.checkIn(PUBLIC_DEMO_LINKS.storeToken, {
+      submissionKey: "mid-visit-start-0001",
+      vendorId: CEDAR_VENDOR_ID,
+      noWorkOrderReason: "The vendor arrived for an unrelated service call.",
+      technicianName: "Dana Ruiz",
+      crewCount: 1,
+      location: { captureResult: "permission_denied" },
+    });
+    expect(checkIn.workOrders).toHaveLength(0);
+
+    const activeVisitToken = checkIn.checkoutUrl.split("/public/store/")[1]!.split("/")[0]!;
+    const updated = await gateway.addHeldWorkToVisit(activeVisitToken, {
+      submissionKey: "mid-visit-add-work-0001",
+      visitId: checkIn.visitId,
+      heldWorkOrderIds: [DOOR_WORK_ID],
+    });
+    expect(updated.activeVisits.find((visit) => visit.id === checkIn.visitId)?.workOrders).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: DOOR_WORK_ID, selectionSource: "held_work", heldWorkPosture: "complete_using_professional_judgment" }),
+    ]));
+    expect((await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, DOOR_WORK_ID))?.status).toBe("claimed");
+
+    const replay = await gateway.addHeldWorkToVisit(activeVisitToken, {
+      submissionKey: "mid-visit-add-work-0001",
+      visitId: checkIn.visitId,
+      heldWorkOrderIds: [DOOR_WORK_ID],
+    });
+    expect(replay.activeVisits.find((visit) => visit.id === checkIn.visitId)?.workOrders.filter((row) => row.id === DOOR_WORK_ID)).toHaveLength(1);
+    await expect(gateway.addHeldWorkToVisit(activeVisitToken, {
+      submissionKey: "mid-visit-add-work-second-attempt",
+      visitId: checkIn.visitId,
+      heldWorkOrderIds: [DOOR_WORK_ID],
+    })).rejects.toMatchObject({ code: "held_work_not_available", status: 409 });
+  }, 30_000);
+
   it("keeps the technician and manager language direct and price-free", async () => {
     const [technicianSource, managerSource] = await Promise.all([
       readFile("components/ops-public/technician-visit-flow.tsx", "utf8"),
       readFile("components/workspace/held-work-actions.tsx", "utf8"),
     ]);
     expect(technicianSource).toContain("Select anything you can handle today");
-    expect(technicianSource).toContain("does not certify any individual technician");
+    expect(technicianSource).toContain("Your company decides what it can handle today");
     expect(technicianSource).toContain("A photo is strongly recommended for a temporary repair");
     expect(managerSource).toContain("Never shown to the technician; not a price or authorization");
     expect(managerSource).toContain("No estimate or manager reply is required during the visit");

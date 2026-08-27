@@ -182,6 +182,7 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
   // The domain can retain them without teaching a two-person facilities team a
   // second dispatch vocabulary or exposing dead-end links from normal records.
   if (area === "service-runs") return false;
+  if (area === "store-sweeps") return roleCan(role, "issue_work_order");
   if (area === "stores") {
     if (record === "new") return roleCan(role, "create_store");
     return record ? roleCanAccessDetailRoute(role, "store") : roleCanAccessListRoute(role, "stores");

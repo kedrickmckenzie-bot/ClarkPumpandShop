@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const gatewayMocks = vi.hoisted(() => ({
+  addHeldWorkToVisit: vi.fn(),
   checkIn: vi.fn(),
   checkOut: vi.fn(),
 }));
@@ -16,6 +17,7 @@ vi.mock("@/components/ops-public/pending-visit-cookie", () => ({
 
 import { POST as checkIn } from "@/app/api/ops-public/store/[token]/check-in/route";
 import { POST as checkOut } from "@/app/api/ops-public/store/[token]/check-out/route";
+import { POST as addActiveVisitWork } from "@/app/api/ops-public/store/[token]/active-visit-work/route";
 
 const location = {
   captureResult: "captured" as const,
@@ -27,6 +29,7 @@ const location = {
 
 describe("public held-work HTTP boundary", () => {
   beforeEach(() => {
+    gatewayMocks.addHeldWorkToVisit.mockReset();
     gatewayMocks.checkIn.mockReset();
     gatewayMocks.checkOut.mockReset();
     gatewayMocks.checkIn.mockResolvedValue({
@@ -52,6 +55,14 @@ describe("public held-work HTTP boundary", () => {
       mode: "demo",
       heading: "Checked out",
       message: "Visit recorded.",
+    });
+    gatewayMocks.addHeldWorkToVisit.mockResolvedValue({
+      organizationName: "Clark Pump and Shop",
+      vendorId: "vendor-northline-cedar",
+      eligibleWorkOrders: [],
+      heldWork: [],
+      plannedServiceRuns: [],
+      activeVisits: [],
     });
   });
 
@@ -104,6 +115,24 @@ describe("public held-work HTTP boundary", () => {
       }],
       submissionKey: "held-route-check-out-0001",
     }));
+  });
+
+  it("preserves approved work added after check-in through the HTTP route", async () => {
+    const response = await addActiveVisitWork(new Request("https://operations.example/api/ops-public/store/checkout-token/active-visit-work", {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "held-route-add-work-0001" },
+      body: JSON.stringify({
+        visitId: "visit-held-route-test",
+        heldWorkOrderIds: ["wo-held-104-restroom-door"],
+      }),
+    }), { params: Promise.resolve({ token: "checkout-token" }) });
+
+    expect(response.status).toBe(200);
+    expect(gatewayMocks.addHeldWorkToVisit).toHaveBeenCalledWith("checkout-token", {
+      visitId: "visit-held-route-test",
+      heldWorkOrderIds: ["wo-held-104-restroom-door"],
+      submissionKey: "held-route-add-work-0001",
+    });
   });
 
   it("rejects unsupported workflow fields instead of silently discarding them", async () => {

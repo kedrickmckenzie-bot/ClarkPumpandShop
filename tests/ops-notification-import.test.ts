@@ -89,6 +89,8 @@ describe("transactional email and onboarding previews", () => {
     expect(notificationEventForTopic("ops.service_run.vendor_accepted")).toBe("vendor_commitment_received");
     expect(notificationEventForTopic("ops.vendor.question")).toBe("vendor_response_received");
     expect(notificationEventForTopic("ops.service_run.vendor_countered")).toBe("vendor_response_received");
+    const fixture = buildNorthlinePresentationFixture();
+    expect(fixture.notificationRules?.filter((rule) => rule.eventKey === "vendor_commitment_received" && rule.emailEnabled).map((rule) => rule.recipientRole).sort()).toEqual(["facilities_admin", "regional_manager", "store_manager"]);
   });
 
   it("parses quoted CSV cells and produces a non-writing store dry run", () => {

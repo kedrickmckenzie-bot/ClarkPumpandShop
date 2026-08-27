@@ -10,7 +10,7 @@ import type {
 import { productFullName, productPresentation } from "@/lib/product/presentation";
 import styles from "./public-workflows.module.css";
 
-export function formatPublicDateTime(value: string): string {
+export function formatPublicDateTime(value: string, timeZone?: string): string {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -18,6 +18,16 @@ export function formatPublicDateTime(value: string): string {
     hour: "numeric",
     minute: "2-digit",
     timeZoneName: "short",
+    timeZone,
+  }).format(new Date(value));
+}
+
+export function formatPublicDate(value: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone,
   }).format(new Date(value));
 }
 
@@ -82,10 +92,12 @@ export function ServerReceipt({
   receipt,
   restartHref,
   restartLabel,
+  timeZone,
 }: {
   receipt: PublicActionReceipt | TechnicianCheckInReceipt | TechnicianCheckOutReceipt | StoreIssueReceipt;
   restartHref?: string;
   restartLabel?: string;
+  timeZone?: string;
 }) {
   const checkIn = "checkedInAt" in receipt ? receipt : undefined;
   const checkOut = "checkedOutAt" in receipt ? receipt : undefined;
@@ -100,18 +112,18 @@ export function ServerReceipt({
           <>
             <div className={styles.receiptDetail}><span className={styles.detailLabel}>Technician</span><p className={styles.detailValue}>{checkIn.technicianName}</p></div>
             <div className={styles.receiptDetail}><span className={styles.detailLabel}>Vendor</span><p className={styles.detailValue}>{checkIn.vendorName}</p></div>
-            <div className={styles.receiptDetail}><span className={styles.detailLabel}>Checked in</span><p className={styles.detailValue}>{formatPublicDateTime(checkIn.checkedInAt)}</p></div>
+            <div className={styles.receiptDetail}><span className={styles.detailLabel}>Checked in</span><p className={styles.detailValue}>{formatPublicDateTime(checkIn.checkedInAt, timeZone)}</p></div>
             <div className={`${styles.receiptDetail} ${checkIn.workOrders.length > 1 ? styles.detailWide : ""}`}><span className={styles.detailLabel}>{checkIn.workOrders.length === 1 ? "Work order" : "Work orders"}</span><p className={styles.detailValue}>{checkIn.workOrders.length ? checkIn.workOrders.map((workOrder) => workOrder.number).join(" · ") : "No work order provided"}</p></div>
             <div className={styles.receiptDetail}><span className={styles.detailLabel}>Crew</span><p className={styles.detailValue}>{checkIn.crewCount} {checkIn.crewCount === 1 ? "person" : "people"}{checkIn.additionalTechnicianNames.length ? ` · ${checkIn.additionalTechnicianNames.join(", ")}` : ""}</p></div>
             {checkIn.vehicleIdentifier ? <div className={styles.receiptDetail}><span className={styles.detailLabel}>Vehicle</span><p className={styles.detailValue}>{checkIn.vehicleIdentifier}</p></div> : null}
             {checkIn.arrivalNote ? <div className={`${styles.receiptDetail} ${styles.detailWide}`}><span className={styles.detailLabel}>Arrival note</span><p className={styles.detailValue}>{checkIn.arrivalNote}</p></div> : null}
-            <div className={styles.receiptDetail}><span className={styles.detailLabel}>Secure checkout link</span><p className={styles.detailValue}>Available until {formatPublicDateTime(checkIn.checkoutExpiresAt)}</p></div>
+            <div className={styles.receiptDetail}><span className={styles.detailLabel}>Secure checkout link</span><p className={styles.detailValue}>Available until {formatPublicDateTime(checkIn.checkoutExpiresAt, timeZone)}</p></div>
             <div className={`${styles.receiptDetail} ${styles.detailWide}`}><span className={styles.detailLabel}>Location evidence</span><p className={styles.detailValue}>{checkIn.location.label}</p></div>
           </>
         ) : null}
         {checkOut ? (
           <>
-            <div className={styles.receiptDetail}><span className={styles.detailLabel}>Checked out</span><p className={styles.detailValue}>{formatPublicDateTime(checkOut.checkedOutAt)}</p></div>
+            <div className={styles.receiptDetail}><span className={styles.detailLabel}>Checked out</span><p className={styles.detailValue}>{formatPublicDateTime(checkOut.checkedOutAt, timeZone)}</p></div>
             <div className={`${styles.receiptDetail} ${checkOut.workOrderOutcomes.length > 1 ? styles.detailWide : ""}`}><span className={styles.detailLabel}>Outcome</span><p className={styles.detailValue}>{checkOut.outcomeLabel}</p>{checkOut.workOrderOutcomes.map((workOrder) => <p className={styles.helper} key={workOrder.id}><strong>{workOrder.number}</strong> · {workOrder.outcomeLabel}{workOrder.followUpLabel ? ` · ${workOrder.followUpLabel}` : ""}</p>)}</div>
             <div className={styles.receiptDetail}><span className={styles.detailLabel}>Files received</span><p className={styles.detailValue}>{checkOut.evidenceReceived}</p>{checkOut.evidenceStorageLabel ? <p className={styles.helper}>{checkOut.evidenceStorageLabel}</p> : null}</div>
             <div className={styles.receiptDetail}><span className={styles.detailLabel}>Observed onsite window</span><p className={styles.detailValue}>{checkOut.observedDurationLabel}</p></div>
@@ -129,7 +141,7 @@ export function ServerReceipt({
         ) : null}
       </div>
       {checkOut ? <p className={styles.disclaimer}>Observed onsite duration is approximate presence evidence. It is not certified labor time or automatic invoice proof.</p> : null}
-      <p className={styles.receiptMeta}>Server receipt {receipt.receiptId} · received {formatPublicDateTime(receipt.receivedAt)}</p>
+      <p className={styles.receiptMeta}>Server receipt {receipt.receiptId} · received {formatPublicDateTime(receipt.receivedAt, timeZone)}</p>
       {restartHref && restartLabel ? <Link className={styles.textLink} href={restartHref}>{restartLabel} <ArrowRight size={16} aria-hidden="true" /></Link> : null}
     </section>
   );

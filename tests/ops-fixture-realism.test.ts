@@ -73,13 +73,26 @@ describe("Clark Pump and Shop presentation data realism", () => {
     const openWork = fixture.workOrders.filter((workOrder) => !terminalWorkStatuses.has(workOrder.status));
     const overdueWork = openWork.filter((workOrder) => workOrder.dueAt && Date.parse(workOrder.dueAt) < asOf);
     expect(openWork.length).toBeGreaterThanOrEqual(12);
-    expect(openWork.length).toBeLessThanOrEqual(25);
+    expect(openWork.length).toBeLessThanOrEqual(35);
     expect(overdueWork.length / openWork.length).toBeLessThanOrEqual(0.4);
     expect(openWork.every((workOrder) => workOrder.accountableParty && workOrder.nextAction && workOrder.dueAt && workOrder.escalationTo)).toBe(true);
 
     const openTasks = fixture.workflowTasks.filter((task) => openTaskStatuses.has(task.status));
     const overdueTasks = openTasks.filter((task) => task.dueAt && Date.parse(task.dueAt) < asOf);
     expect(overdueTasks.length / openTasks.length).toBeLessThanOrEqual(0.4);
+  });
+
+  it("shows approved small jobs as a portfolio problem instead of a one-store trick", () => {
+    const activeHolds = (fixture.workOrderVisitHolds ?? []).filter((hold) => hold.status === "active");
+    const workOrders = new Map(fixture.workOrders.map((workOrder) => [workOrder.id, workOrder]));
+    const heldWork = activeHolds.map((hold) => workOrders.get(hold.workOrderId)!);
+    const countsByStore = groupedCounts(heldWork, (workOrder) => workOrder.storeId);
+
+    expect(activeHolds).toHaveLength(12);
+    expect(countsByStore.size).toBe(7);
+    expect(Math.max(...countsByStore.values())).toBeGreaterThanOrEqual(4);
+    expect(new Set(heldWork.map((workOrder) => workOrder.categoryKey))).toEqual(new Set(["plumbing", "electrical", "exterior"]));
+    expect(heldWork.every((workOrder) => workOrder.status === "approved" && workOrder.nextAction === "Approved for a future vendor visit")).toBe(true);
   });
 
   it("keeps spend broad enough for analysis without flattening every store", () => {

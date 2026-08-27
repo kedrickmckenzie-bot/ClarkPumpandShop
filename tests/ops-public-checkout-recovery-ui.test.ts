@@ -19,7 +19,7 @@ const checkoutToken = "checkoutCapabilityToken_1234567890";
 const portal: StorePortalView = {
   organizationName: "Clark Pump and Shop",
   trustedStoreDevice: false,
-  store: { number: "104", name: "Northline Market", address: "104 Main Street" },
+  store: { number: "104", name: "Northline Market", address: "104 Main Street", timeZone: "America/New_York" },
   vendors: [],
   locationPolicy: { enabled: true, explanation: "Event-only location" },
   capabilities: { reportIssue: true, startVisit: true, finishVisit: false },

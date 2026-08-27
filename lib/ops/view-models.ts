@@ -24,6 +24,7 @@ export interface PublicStoreGatewayView {
     storeNumber: string;
     name: string;
     formattedAddress: string;
+    timeZone?: string;
     locationPolicyEnabled: boolean;
   };
   approvedVendors: Array<{ id: OpsId; name: string; specialties: string[] }>;
@@ -87,7 +88,7 @@ export interface VisitListRow {
 export interface WorkOrderDetailView extends WorkOrderListRow {
   request?: RequestListRow;
   authorizedScope?: string;
-  asset?: { id: OpsId; name: string; assetTag: string };
+  asset?: { id: OpsId; name: string; assetTag: string; warrantyEndsAt?: IsoDateTime };
   component?: { id: OpsId; name: string };
   nte?: { amountMinor: number; currency: CurrencyCode };
   vendorServiceTicketNumber?: string;
@@ -192,6 +193,7 @@ export interface ServiceAuthorizationView {
     storeNumber: string;
     name: string;
     formattedAddress: string;
+    timeZone?: string;
     accessNotes?: string;
   };
   vendor: { id: OpsId; name: string };
@@ -291,6 +293,7 @@ export interface TrustedStoreDeviceView {
     storeNumber: string;
     name: string;
     formattedAddress: string;
+    timeZone?: string;
   };
   activeVisits: TrustedStoreActiveVisitRow[];
 }

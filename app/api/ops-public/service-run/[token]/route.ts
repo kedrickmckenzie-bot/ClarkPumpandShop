@@ -26,14 +26,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     const tokenHash = await sha256Hex(token);
     const repository = await getServerOpsRepository();
     const capability = await repository.getServiceRunByPublicToken({ tokenHash, purpose: "service_run_response", now: new Date().toISOString() });
-    if (!capability) throw new OpsDomainError("NOT_FOUND", "Service Run response link is invalid, expired, or already used");
+    if (!capability) throw new OpsDomainError("NOT_FOUND", "This response link is invalid, expired, or already used");
+    const storeSweep = capability.run.schedulerVersion === "store-sweep-v1";
     const response = await respondToServiceRun({
       tokenHash, ...command,
-      actor: { organizationId: capability.run.organizationId, actorType: "vendor_link", actorName: `${command.responderName} via secure Service Run link` },
+      actor: { organizationId: capability.run.organizationId, actorType: "vendor_link", actorName: `${command.responderName} via secure ${storeSweep ? "store-visit" : "Service Run"} link` },
     }, { repository });
     return publicApiSuccess({
-      heading: command.response === "accepted" ? "Service Run accepted" : "Response recorded",
-      message: command.response === "accepted" ? "The operator and Stores now see the committed schedule." : "The original recommendation remains preserved while the operator reviews your requested change.",
+      heading: command.response === "accepted" ? (storeSweep ? "Store visit accepted" : "Service Run accepted") : "Response recorded",
+      message: command.response === "accepted"
+        ? (storeSweep ? "The customer and store team now see the confirmed visit." : "The operator and Stores now see the committed schedule.")
+        : (storeSweep ? "The customer can now review your response. Each approved job remains on its own work-order record." : "The original recommendation remains preserved while the operator reviews your requested change."),
       responseId: response.id, response: response.response, respondedAt: response.respondedAt,
     }, 201);
   } catch (error) {

@@ -1621,6 +1621,12 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
   } else if (input.plannedWorkOrderRemovalReason?.trim()) {
     throw new OpsDomainError("VALIDATION", "A planned-work removal reason requires a Service Run");
   }
+  const serviceRunHeldPairs = serviceRun
+    ? (await Promise.all(assignedWorkOrders.map(async (workOrder) => ({
+        workOrder,
+        hold: await repository.getWorkOrderVisitHold(input.organizationId, workOrder.id),
+      })))).filter((pair) => pair.hold?.status === "active")
+    : [];
   const providerName = vendor?.name ?? "Internal maintenance";
   const technicianName = required(input.technicianName, "Technician name"); const purpose = required(input.purpose, "Visit purpose");
   const crewCount = input.crewCount ?? 1;
@@ -1642,7 +1648,8 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
     ordinal: index + 1, linkedByActorType: input.actor.actorType, linkedByActorId: input.actor.actorId,
     linkedByActorName: input.actor.actorName, linkedAt: now,
     selectionSource: heldWorkOrderIds.includes(workOrder.id) ? "held_work" : serviceRun ? "service_run" : "assigned_work",
-    workOrderHoldId: heldPairs.find((candidate) => candidate.workOrder?.id === workOrder.id)?.hold?.id,
+    workOrderHoldId: heldPairs.find((candidate) => candidate.workOrder?.id === workOrder.id)?.hold?.id
+      ?? serviceRunHeldPairs.find((candidate) => candidate.workOrder.id === workOrder.id)?.hold?.id,
   }));
   const statements: OpsStatement[] = [
     insert("ops_visit_sessions", { id, organization_id: input.organizationId, store_id: input.storeId, provider_kind: vendorId ? "outside_vendor" : "internal", vendor_id: vendorId, internal_membership_id: internalMembershipId, work_order_id: scalarWorkOrderId, unmatched_reason: assignedWorkOrders.length ? undefined : input.unmatchedReason?.trim(), technician_name: technicianName, technician_phone_or_pin: technicianPhoneOrPin, crew_count: crewCount, additional_technician_names_json: json(additionalTechnicianNames), vehicle_identifier: vehicleIdentifier, arrival_note: arrivalNote, provider_name: providerName, purpose, status: "active", started_channel: input.channel, checked_in_at: now }),
@@ -1656,6 +1663,12 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
     );
     for (const removedWorkOrderId of removedPlannedWorkOrderIds) statements.push({ sql: "UPDATE ops_service_run_work_orders SET planned = ?, removal_reason = ? WHERE organization_id = ? AND service_run_id = ? AND route_stop_id = ? AND work_order_id = ? AND planned = ?", params: [false, input.plannedWorkOrderRemovalReason!.trim(), input.organizationId, serviceRun.id, serviceRunStop.id, removedWorkOrderId, true] });
     statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "service_run", aggregateId: serviceRun.id, eventType: "service_run.stop_started", actor: input.actor, occurredAt: now, payload: { routeStopId: serviceRunStop.id, visitId: id, storeId: input.storeId, selectedWorkOrderIds: workOrderIds, removedPlannedWorkOrderIds, plannedWorkOrderRemovalReason: input.plannedWorkOrderRemovalReason?.trim() }, ids }));
+  }
+  for (const { workOrder, hold } of serviceRunHeldPairs) {
+    statements.push(
+      { sql: "UPDATE ops_work_order_visit_holds SET status = ?, claimed_visit_id = ?, claimed_vendor_id = ?, claimed_at = ?, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND status = ? AND version = ?", params: ["claimed", id, vendorId, now, now, input.organizationId, hold!.id, "active", hold!.version] },
+      ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.sweep_work_started", actor: input.actor, occurredAt: now, payload: { holdId: hold!.id, visitId: id, vendorId, serviceRunId: serviceRun!.id, deadlineAt: hold!.deadlineAt }, ids }),
+    );
   }
   if (!assignedWorkOrders.length) statements.push(insert("ops_exceptions", { id: ids.next("exception"), organization_id: input.organizationId, kind: "no_work_order", store_id: input.storeId, visit_id: id, vendor_id: vendorId, severity: "attention", status: "open", summary: heldWorkOrders.length ? `${providerName} arrived without an issued work order and selected ${heldWorkOrders.length} approved held ${heldWorkOrders.length === 1 ? "item" : "items"}` : `${providerName} checked in without an operator work order`, detected_at: now }));
   for (const { workOrder, hold } of heldPairs) {
@@ -1747,6 +1760,101 @@ export async function checkInVisitWithCheckoutToken(
   );
   await atomicWorkOrderSetMutation({ repository: prepared.repository, workOrders: prepared.linkedWorkOrders, now: prepared.now, statements: prepared.statements });
   return { visit: { ...prepared.visit, siteVisitWorkOrders: prepared.visitWorkOrders }, tokenId, expiresAt: input.checkoutToken.expiresAt };
+}
+
+export interface AddHeldWorkToActiveVisitInput {
+  organizationId: OpsId;
+  visitId: OpsId;
+  heldWorkOrderIds: readonly OpsId[];
+  actor: ActorContext;
+  idempotency?: CommandIdempotency;
+}
+
+/** Adds manager-approved work to an active visit without making the technician check in again. */
+export async function addHeldWorkToActiveVisit(svc: OpsCommandServices, input: AddHeldWorkToActiveVisitInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const workOrderIds = [...input.heldWorkOrderIds];
+  if (!workOrderIds.length || workOrderIds.length > 100 || workOrderIds.some((id) => !id.trim()) || new Set(workOrderIds).size !== workOrderIds.length) {
+    throw new OpsDomainError("VALIDATION", "Choose each additional approved item once, up to 100 items");
+  }
+  const visit = await repository.getVisit(input.organizationId, input.visitId);
+  if (!visit || visit.status !== "active" || visit.providerKind !== "outside_vendor" || !visit.vendorId) {
+    throw new OpsDomainError("CONFLICT", "This vendor visit is no longer active");
+  }
+  const existingLinks = await repository.listSiteVisitWorkOrders(input.organizationId, visit.id);
+  if (workOrderIds.some((workOrderId) => existingLinks.some((link) => link.workOrderId === workOrderId))) {
+    throw new OpsDomainError("CONFLICT", "One of these items is already part of this visit");
+  }
+  const pairs = await Promise.all(workOrderIds.map(async (workOrderId) => ({
+    workOrder: await repository.getWorkOrder(input.organizationId, workOrderId),
+    hold: await repository.getWorkOrderVisitHold(input.organizationId, workOrderId),
+  })));
+  if (pairs.some(({ workOrder, hold }) => !workOrder || workOrder.storeId !== visit.storeId || workOrder.status !== "approved" || !hold || hold.status !== "active")) {
+    throw new OpsDomainError("CONFLICT", "One or more additional items are no longer available at this store");
+  }
+  const workOrders = pairs.map((pair) => pair.workOrder!);
+  for (const workOrder of workOrders) {
+    const eligibility = await heldWorkVendorEligibility({ repository, organizationId: input.organizationId, vendorId: visit.vendorId, workOrder, now: clock.now() });
+    if (!eligibility.allowed) throw new OpsDomainError("FORBIDDEN", eligibility.reason ?? "This item is not available to the onsite vendor");
+    const links = await repository.listSiteVisitWorkOrdersForWorkOrder(input.organizationId, workOrder.id);
+    const linkedVisits = await Promise.all([...new Set(links.map((link) => link.visitId))].map((visitId) => repository.getVisit(input.organizationId, visitId)));
+    if (linkedVisits.some((candidate) => candidate?.status === "active")) throw new OpsDomainError("CONFLICT", "One of these items is already part of another active visit");
+  }
+
+  const now = clock.now();
+  const providerName = visit.providerName;
+  const addedLinks: SiteVisitWorkOrder[] = workOrders.map((workOrder, index) => ({
+    id: ids.next("site-visit-work"), organizationId: input.organizationId, visitId: visit.id,
+    workOrderId: workOrder.id, ordinal: existingLinks.length + index + 1,
+    linkedByActorType: input.actor.actorType, linkedByActorId: input.actor.actorId,
+    linkedByActorName: input.actor.actorName, linkedAt: now, selectionSource: "held_work",
+    workOrderHoldId: pairs[index]!.hold!.id,
+  }));
+  const statements: OpsStatement[] = [];
+  if (input.idempotency) statements.push(idempotencyStatement(input.organizationId, visit.id, now, input.idempotency));
+  statements.push(
+    ...addedLinks.map((link) => insert("ops_site_visit_work_orders", {
+      id: link.id, organization_id: link.organizationId, visit_id: link.visitId,
+      work_order_id: link.workOrderId, ordinal: link.ordinal,
+      linked_by_actor_type: link.linkedByActorType, linked_by_actor_id: link.linkedByActorId,
+      linked_by_actor_name: link.linkedByActorName, linked_at: link.linkedAt,
+      selection_source: link.selectionSource, work_order_hold_id: link.workOrderHoldId,
+    })),
+    { sql: "UPDATE ops_visit_sessions SET work_order_id = ? WHERE organization_id = ? AND id = ? AND status = ?", params: [existingLinks.length + addedLinks.length === 1 ? addedLinks[0]!.workOrderId : null, input.organizationId, visit.id, "active"] },
+  );
+  for (let index = 0; index < pairs.length; index += 1) {
+    const { workOrder, hold } = pairs[index]!;
+    const priorAssignment = await repository.getActiveAssignment(input.organizationId, workOrder!.id);
+    const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder!.id);
+    const replacementTask = buildWorkflowTaskRecord({
+      id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder!.id,
+      draft: taskDraft({ workOrder: workOrder!, taskType: "record_service_outcome", title: "Record service outcome",
+        assignee: { assigneeType: "vendor", assigneeId: visit.vendorId, assigneeName: providerName },
+        dueAt: addHours(now, 8), applicableSlaClock: "completion", initialStatus: "in_progress",
+        escalationDestination: workOrder!.escalationTo,
+        completionCriteria: "Record checkout evidence and one outcome for this approved item" }),
+      actor: input.actor, createdAt: now,
+    });
+    if (priorAssignment) statements.push({ sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ? AND status NOT IN ('cancelled','declined','completed','superseded')", params: ["superseded", input.organizationId, priorAssignment.id] });
+    statements.push(
+      insert("ops_work_order_assignments", { id: ids.next("assignment"), organization_id: input.organizationId, work_order_id: workOrder!.id, kind: "outside_vendor", vendor_id: visit.vendorId, status: "accepted", assigned_at: now, supersedes_assignment_id: priorAssignment?.id }),
+      { sql: "UPDATE ops_work_order_visit_holds SET status = ?, claimed_visit_id = ?, claimed_vendor_id = ?, claimed_at = ?, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND status = ? AND version = ?", params: ["claimed", visit.id, visit.vendorId, now, now, input.organizationId, hold!.id, "active", hold!.version] },
+      { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ?", params: ["in_progress", providerName, "Record service outcome", input.organizationId, workOrder!.id] },
+      ...buildReplaceMatchingTaskStatements({
+        workOrder: workOrder!, tasks, targetTask: selectPrimaryWorkflowTask(tasks), replacementTask,
+        actor: input.actor, occurredAt: now, ids, resolutionNote: "Vendor added this approved item during an active visit",
+      }),
+      ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder!.id, eventType: "work_order.held_work_claimed", actor: input.actor, occurredAt: now, payload: { holdId: hold!.id, visitId: visit.id, vendorId: visit.vendorId, posture: hold!.posture, deadlineAt: hold!.deadlineAt, addedAfterCheckIn: true }, ids }),
+    );
+  }
+  statements.push(...auditAndOutbox({
+    organizationId: input.organizationId, aggregateType: "visit", aggregateId: visit.id,
+    eventType: "held_work.added_during_visit", actor: input.actor, occurredAt: now,
+    payload: { storeId: visit.storeId, vendorId: visit.vendorId, workOrderIds, itemCount: workOrderIds.length, amountMeaning: "no_price_or_authorization_recorded" }, ids,
+  }));
+  await atomicWorkOrderSetMutation({ repository, workOrders, now, statements, conflictMessage: "This visit or one of the selected items changed. Refresh before adding work." });
+  return { visit, addedLinks };
 }
 
 export interface VisitFollowUpInput { accountableParty: string; nextAction: string; dueAt: IsoDateTime; escalationTo: string }

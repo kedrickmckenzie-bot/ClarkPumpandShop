@@ -42,6 +42,7 @@
 .timeline strong, .timeline span { display: block; }
 .timeline span { margin-top: .25rem; color: #667085; font-size: .82rem; }
 .warning { padding: .9rem; border-left: 3px solid #d97706; color: #754b0c; background: #fff8e8; line-height: 1.5; }
+.notice { margin: 0; padding: .9rem 1rem; border-left: 3px solid #2855d9; color: #23324d; background: #eef4ff; line-height: 1.5; }
 .form { display: grid; gap: .8rem; }
 .form textarea { width: 100%; min-height: 6rem; padding: .65rem; border: 1px solid #cbd5e1; }
 @media (max-width: 850px) { .metrics { grid-template-columns: repeat(2, 1fr); } .metric:nth-child(2) { border-right: 0; } .grid { grid-template-columns: 1fr; } }

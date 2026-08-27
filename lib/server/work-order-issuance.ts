@@ -55,6 +55,7 @@ export async function issueWorkOrderToVendor(input: {
           storeNumber: store.storeNumber,
           name: store.name,
           formattedAddress: [store.address1, store.address2, `${store.city}, ${store.state} ${store.postalCode}`].filter(Boolean).join(", "),
+          timeZone: store.timeZone,
         },
         vendor: { id: vendor.id, name: vendor.name },
         problem: workOrder.problem,
