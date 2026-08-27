@@ -1,0 +1,3 @@
+ALTER TABLE "ops_assets" ADD COLUMN "replacement_planning_excluded_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "ops_assets" ADD COLUMN "replacement_planning_exclusion_reason" text;--> statement-breakpoint
+ALTER TABLE "ops_assets" ADD CONSTRAINT "chk_ops_assets_replacement_planning_exclusion" CHECK (("ops_assets"."replacement_planning_excluded_at" IS NULL) = ("ops_assets"."replacement_planning_exclusion_reason" IS NULL));

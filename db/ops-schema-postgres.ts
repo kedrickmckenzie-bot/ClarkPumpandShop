@@ -514,6 +514,8 @@ export const opsAssets = pgTable("ops_assets", {
   replacementProfileId: text("replacement_profile_id"),
   replacementAttributesJson: jsonb("replacement_attributes_json").$type<Record<string, string>>().notNull().default(sql`'{}'::jsonb`),
   replacementAdjustmentBps: integer("replacement_adjustment_bps"),
+  replacementPlanningExcludedAt: instant("replacement_planning_excluded_at"),
+  replacementPlanningExclusionReason: text("replacement_planning_exclusion_reason"),
   replacementEstimateMinor: bigint("replacement_estimate_minor", { mode: "number" }),
   replacementCurrency: text("replacement_currency"),
   status: text("status").notNull(),
@@ -548,6 +550,7 @@ export const opsAssets = pgTable("ops_assets", {
   check("chk_ops_assets_status", sql`${table.status} IN ('operational', 'watch', 'out_of_service', 'retired')`),
   check("chk_ops_assets_life", sql`${table.expectedLifeYears} IS NULL OR ${table.expectedLifeYears} > 0`),
   check("chk_ops_assets_replacement_adjustment", sql`${table.replacementAdjustmentBps} IS NULL OR ${table.replacementAdjustmentBps} BETWEEN -9000 AND 50000`),
+  check("chk_ops_assets_replacement_planning_exclusion", sql`(${table.replacementPlanningExcludedAt} IS NULL) = (${table.replacementPlanningExclusionReason} IS NULL)`),
   check("chk_ops_assets_replacement", sql`${table.replacementEstimateMinor} IS NULL OR ${table.replacementEstimateMinor} BETWEEN 0 AND 9007199254740991`),
   check("chk_ops_assets_replacement_money", sql`(${table.replacementEstimateMinor} IS NULL) = (${table.replacementCurrency} IS NULL)`),
 ]);

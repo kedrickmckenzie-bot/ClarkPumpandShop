@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { OPS_CLIENT_HEADER } from "@/lib/ops/http-contract";
-import { ArrowRight, Building2, Calculator, CheckCircle2, DatabaseZap, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, Calculator, CheckCircle2, CircleOff, DatabaseZap, Layers3, ListChecks, MapPin, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
 import styles from "./ops.module.css";
 
 export interface ReplacementProfileViewModel {
@@ -20,6 +20,8 @@ export interface ReplacementProfileViewModel {
   benchmarkEffectiveLabel: string;
   evidenceHistoryLabel: string;
   peerCount: number;
+  impact: { affectedAssetCount: number; affectedStoreCount: number; overrideCount: number };
+  freshness: "current" | "aging" | "stale" | "unavailable";
 }
 
 export interface AssetReplacementIntelligenceViewModel {
@@ -49,6 +51,7 @@ export interface AssetReplacementIntelligenceViewModel {
 export interface WorkOrderReplacementIntelligenceViewModel {
   workOrderId: string;
   permitted: boolean;
+  canPublishGroup: boolean;
   action: string;
   assetName?: string;
   selectedQuote?: { vendorName: string; amountLabel: string; amountInput: string; currency: string; scope: string; submittedLabel: string };
@@ -59,9 +62,34 @@ export interface WorkOrderReplacementIntelligenceViewModel {
 
 export interface ReplacementProfileManagerViewModel {
   permitted: boolean;
+  canManageGroups: boolean;
   action: string;
   profiles: ReplacementProfileViewModel[];
   categories: Array<{ id: string; label: string; taxonomyNodeId?: string }>;
+  coverage: {
+    activeAssetCount: number;
+    lifecycleTrackedCount: number;
+    assignedCount: number;
+    currentEstimateCount: number;
+    needsClassificationCount: number;
+    excludedCount: number;
+    staleProfileCount: number;
+    coveragePercentage: number;
+  };
+  classificationRows: Array<{
+    assetId: string;
+    assetName: string;
+    assetTag: string;
+    storeLabel: string;
+    categoryLabel: string;
+    status: "needs_classification" | "not_tracked";
+    currentEstimateLabel: string;
+    defaultDecision: string;
+    candidates: Array<{ profileId: string; profileName: string; confidenceLabel: string; explanation: string }>;
+    exclusionReason?: string;
+  }>;
+  classificationTotalCount: number;
+  staleProfiles: Array<{ id: string; name: string; effectiveLabel: string; peerCount: number }>;
 }
 
 function useMutation() {
@@ -118,6 +146,9 @@ export function AssetReplacementIntelligencePanel({ model }: { model: AssetRepla
 
 export function WorkOrderReplacementIntelligencePanel({ model }: { model: WorkOrderReplacementIntelligenceViewModel }) {
   const mutation = useMutation();
+  const [profileId, setProfileId] = useState(model.selectedProfileId ?? model.profiles[0]?.id ?? "");
+  const [application, setApplication] = useState<"planning_group" | "asset_only">(model.canPublishGroup ? "planning_group" : "asset_only");
+  const selectedProfile = model.profiles.find((profile) => profile.id === profileId);
   if (!model.assetName) return null;
   return (
     <section className={styles.replacementPanel} id="replacement-intelligence">
@@ -125,7 +156,23 @@ export function WorkOrderReplacementIntelligencePanel({ model }: { model: WorkOr
       {model.existingDecision ? <div className={styles.replacementDecision}><CheckCircle2 aria-hidden="true" size={21} /><div><strong>Replacement decision recorded</strong><span>{model.existingDecision.approvedAmountLabel} approved against {model.existingDecision.profileName}. {model.existingDecision.applicationLabel}</span></div></div> : model.selectedQuote ? (
         <>
           <div className={styles.replacementQuote}><div><small>Selected vendor quote</small><strong>{model.selectedQuote.vendorName} · {model.selectedQuote.amountLabel}</strong><span>{model.selectedQuote.scope}</span></div><span>{model.selectedQuote.submittedLabel}</span></div>
-          {model.permitted ? <form className={styles.replacementApprovalForm} action={model.action} method="post" onSubmit={mutation.submit}><div className={styles.replacementFieldRow}><label>Planning group<select name="profileId" defaultValue={model.selectedProfileId} required>{model.profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select><small>This is the budgeting group, not a technical compatibility certification.</small></label><label>Quote effective date<input name="effectiveAt" type="date" required /></label></div><label>Where should this planning reference apply?<select name="planningApplication" defaultValue="planning_group" required><option value="planning_group">Update this planning group</option><option value="asset_only">This equipment only</option></select><small>Use the group for a normal example. Use equipment only when access, size, or installation scope makes this location unusually expensive.</small></label><div className={styles.replacementCostSplit}><label>Equipment (USD)<input name="equipmentAmount" defaultValue={model.selectedQuote.amountInput} type="number" min="0" step="0.01" required /></label><label>Installation (USD)<input name="installationAmount" defaultValue="0.00" type="number" min="0" step="0.01" required /></label><label>Other (USD)<input name="otherAmount" defaultValue="0.00" type="number" min="0" step="0.01" required /></label></div><label>Decision note <small>Optional</small><textarea name="notes" rows={3} placeholder="Document what the vendor included or any known site-specific scope." /></label><p className={styles.replacementExplanation}><ShieldCheck aria-hidden="true" size={18} />The platform records the vendor’s recommendation and the client’s planning choice. It does not certify the vendor’s technical selection. The three cost fields must equal the selected quote.</p><button className={styles.primaryButton} type="submit" disabled={mutation.state.pending}>{mutation.state.pending ? "Recording..." : "Approve replacement and save planning reference"}<ArrowRight aria-hidden="true" size={17} /></button><ErrorText value={mutation.state.error} /></form> : null}
+          {model.permitted ? <form className={styles.replacementApprovalForm} action={model.action} method="post" onSubmit={mutation.submit}>
+            <div className={styles.replacementFieldRow}><label>Company planning group<select name="profileId" value={profileId} onChange={(event) => setProfileId(event.target.value)} required>{model.profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select><small>A planning group shares one replacement-cost reference. It does not certify technical fit.</small></label><label>Quote effective date<input name="effectiveAt" type="date" required /></label></div>
+            <label>Use this quote for<select name="planningApplication" value={application} onChange={(event) => setApplication(event.target.value as "planning_group" | "asset_only")} required>{model.canPublishGroup ? <option value="planning_group">This equipment and its planning group</option> : null}<option value="asset_only">This equipment only</option></select><small>{model.canPublishGroup ? "Choose equipment only when this store has unusual installation scope, access, or size." : "A companywide planning-group update requires facilities-level review; your decision will stay with this equipment."}</small></label>
+            {application === "planning_group" && selectedProfile ? <div className={styles.replacementImpact}>
+              <div><Layers3 aria-hidden="true" size={21} /><span><small>Equipment updated</small><strong>{selectedProfile.impact.affectedAssetCount}</strong></span></div>
+              <div><MapPin aria-hidden="true" size={21} /><span><small>Stores represented</small><strong>{selectedProfile.impact.affectedStoreCount}</strong></span></div>
+              <div><ShieldCheck aria-hidden="true" size={21} /><span><small>Equipment-only estimates kept</small><strong>{selectedProfile.impact.overrideCount}</strong></span></div>
+              <p>This publishes a new planning reference for the group. Equipment-only estimates remain unchanged and continue to win.</p>
+              <label className={styles.replacementImpactConfirm}><input name="impactConfirmed" value="yes" type="checkbox" required />I reviewed this portfolio impact.</label>
+              <input type="hidden" name="confirmedAffectedAssetCount" value={selectedProfile.impact.affectedAssetCount} />
+              <input type="hidden" name="confirmedOverrideCount" value={selectedProfile.impact.overrideCount} />
+            </div> : <p className={styles.replacementExplanation}><CircleOff aria-hidden="true" size={18} />This quote will remain specific to {model.assetName}. No other store’s planning estimate will change.</p>}
+            <div className={styles.replacementCostSplit}><label>Equipment (USD)<input name="equipmentAmount" defaultValue={model.selectedQuote.amountInput} type="number" min="0" step="0.01" required /></label><label>Installation (USD)<input name="installationAmount" defaultValue="0.00" type="number" min="0" step="0.01" required /></label><label>Other (USD)<input name="otherAmount" defaultValue="0.00" type="number" min="0" step="0.01" required /></label></div>
+            <label>Decision note <small>Optional</small><textarea name="notes" rows={3} placeholder="Document what the vendor included or why this quote is a useful planning reference." /></label>
+            <p className={styles.replacementExplanation}><ShieldCheck aria-hidden="true" size={18} />The vendor remains responsible for technical selection. The platform records the quote, the client’s planning choice, and exactly which equipment records inherit it.</p>
+            <button className={styles.primaryButton} type="submit" disabled={mutation.state.pending}>{mutation.state.pending ? "Recording..." : "Approve replacement and save planning reference"}<ArrowRight aria-hidden="true" size={17} /></button><ErrorText value={mutation.state.error} />
+          </form> : null}
         </>
       ) : <p className={styles.replacementBlank}>Select a submitted vendor bid above before recording a replacement decision. Repair work can continue without using this feature.</p>}
     </section>
@@ -135,11 +182,39 @@ export function WorkOrderReplacementIntelligencePanel({ model }: { model: WorkOr
 export function ReplacementProfileManager({ model }: { model: ReplacementProfileManagerViewModel }) {
   const create = useMutation();
   const publish = useMutation();
+  const classify = useMutation();
   return (
-    <section className={styles.replacementPanel} id="replacement-profiles">
-      <header className={styles.replacementHeading}><span><DatabaseZap aria-hidden="true" size={24} /></span><div><p>Company replacement library</p><h2>One functional profile, many equipment records</h2><span>Whole-equipment capital benchmarks stay separate from component service costs. One dated source can be published; later evidence strengthens the history.</span></div></header>
-      <div className={styles.replacementProfileGrid}>{model.profiles.map((profile) => <article key={profile.id}><small>{profile.code} · {profile.categoryLabel}</small><strong>{profile.name}</strong><p>{profile.description}</p><dl><div><dt>Specification</dt><dd>{profile.specificationLabel}</dd></div><div><dt>Current benchmark</dt><dd>{profile.benchmarkAmountLabel}</dd></div><div><dt>Evidence</dt><dd>{profile.benchmarkSourceLabel} · {profile.benchmarkEffectiveLabel}<br />{profile.evidenceHistoryLabel}</dd></div><div><dt>Active equipment</dt><dd>{profile.peerCount}</dd></div></dl>{model.permitted ? <details><summary>Publish a newer benchmark</summary><form action={model.action} method="post" onSubmit={publish.submit}><input type="hidden" name="operation" value="publish-benchmark" /><input type="hidden" name="profileId" value={profile.id} /><div className={styles.replacementCostSplit}><label>Equipment<input name="equipmentAmount" type="number" min="0" step="0.01" required /></label><label>Installation<input name="installationAmount" type="number" min="0" step="0.01" required /></label><label>Other<input name="otherAmount" type="number" min="0" step="0.01" required /></label></div><label>Effective date<input name="effectiveAt" type="date" required /></label><label>Evidence note<textarea name="notes" rows={2} required /></label><button className={styles.secondaryButton} type="submit" disabled={publish.state.pending}>Publish dated benchmark</button><ErrorText value={publish.state.error} /></form></details> : null}</article>)}</div>
-      {model.permitted ? <details className={styles.replacementCreate}><summary>Create a functional replacement profile</summary><form action={model.action} method="post" onSubmit={create.submit}><input type="hidden" name="operation" value="create-profile" /><div className={styles.replacementFieldRow}><label>Profile code<input name="code" required placeholder="REF-WALKIN-MED" /></label><label>Name<input name="name" required placeholder="Medium walk-in refrigeration system" /></label></div><label>Description<textarea name="description" rows={2} required /></label><div className={styles.replacementFieldRow}><label>Service area<select name="categoryKey" required>{model.categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}</select></label><label>Expected life (years)<input name="expectedLifeYears" type="number" min="1" max="100" defaultValue="15" required /></label></div><label>Known comparison details <small>Optional; one key=value per line</small><textarea name="attributes" rows={4} placeholder={"capacity_tons=5\nvoltage=208-230\nrefrigerant=R-448A"} /><small>Start broad. Add a detail only when it materially changes which equipment is comparable.</small></label><label>Details that must match <small>Optional; comma separated</small><input name="matchKeys" placeholder="capacity_tons, voltage" /><small>If left blank, the known details above are used. If both are blank, this starts as a broad profile you can refine later.</small></label><div className={styles.replacementCostSplit}><label>Annual escalation (basis points)<input name="annualEscalationBps" type="number" defaultValue="300" required /></label><label>Low range (basis points)<input name="lowVarianceBps" type="number" defaultValue="1000" required /></label><label>High range (basis points)<input name="highVarianceBps" type="number" defaultValue="2000" required /></label></div><button className={styles.primaryButton} type="submit" disabled={create.state.pending}>{create.state.pending ? "Creating..." : "Create profile"}</button><ErrorText value={create.state.error} /></form></details> : null}
+    <section className={styles.replacementPanel} id="replacement-coverage">
+      <header className={styles.replacementHeading}><span><ListChecks aria-hidden="true" size={24} /></span><div><p>Replacement planning setup</p><h2>Keep companywide estimates current without updating stores one by one</h2><span>Assign equipment to a plain-language planning group once. New quotes and final installed costs can then refresh that group while unusual stores keep their own estimate.</span></div></header>
+      <div className={styles.replacementCoverageSummary}>
+        <div><small>Shared planning coverage</small><strong>{model.coverage.assignedCount} of {model.coverage.lifecycleTrackedCount}</strong><span>{model.coverage.coveragePercentage}% of equipment included in lifecycle planning</span></div>
+        <div data-tone={model.coverage.needsClassificationCount ? "warning" : "good"}><small>Needs a quick choice</small><strong>{model.coverage.needsClassificationCount}</strong><span>Choose a suggested group or mark it not tracked</span></div>
+        <div><small>Planning estimates available</small><strong>{model.coverage.currentEstimateCount}</strong><span>Current, aging, or equipment-specific sources</span></div>
+        <div><small>Not tracked by choice</small><strong>{model.coverage.excludedCount}</strong><span>Excluded without retiring the equipment record</span></div>
+      </div>
+      {model.classificationRows.length ? <form className={styles.replacementCoverageForm} action={model.action} method="post" onSubmit={classify.submit}>
+        <input type="hidden" name="operation" value="bulk-classify" />
+        <div className={styles.replacementCoverageHeading}><div><h3>Finish the remaining planning choices</h3><p>The best company-group suggestion is selected when the recorded details match. Review the name and location—no technical verification is required.</p></div><strong>{model.classificationTotalCount} to review</strong></div>
+        <div className={styles.replacementCoverageRows}>{model.classificationRows.map((row) => <div className={styles.replacementCoverageRow} key={row.assetId}>
+          <div><small>{row.storeLabel} · {row.assetTag}</small><strong>{row.assetName}</strong><span>{row.categoryLabel} · {row.currentEstimateLabel}</span></div>
+          <label>Planning choice<select name={`assetDecision.${row.assetId}`} defaultValue={row.defaultDecision}>
+            <option value="leave">Leave unchanged</option>
+            {row.candidates.map((candidate) => <option value={`profile:${candidate.profileId}`} key={candidate.profileId}>{candidate.profileName} · {candidate.confidenceLabel}</option>)}
+            <option value="exclude">Do not include in lifecycle planning</option>
+          </select><small>{row.status === "not_tracked" ? row.exclusionReason : row.candidates[0]?.explanation ?? "No company planning group currently matches this equipment."}</small></label>
+        </div>)}</div>
+        {model.classificationTotalCount > model.classificationRows.length ? <p className={styles.replacementCoverageMore}>{model.classificationRows.length} records are shown in this review batch. Save them, then continue with the remaining {model.classificationTotalCount - model.classificationRows.length}.</p> : null}
+        <label className={styles.replacementExclusionReason}>Reason used only for “do not include” choices <small>Optional</small><textarea name="exclusionReason" rows={2} placeholder="Example: landlord-owned equipment is not part of the company capital plan." /></label>
+        <div className={styles.replacementCoverageActions}><p><ShieldCheck aria-hidden="true" size={18} />Nothing is assigned automatically. Every choice stays auditable and can be changed later.</p><button className={styles.primaryButton} type="submit" disabled={classify.state.pending}>{classify.state.pending ? "Saving..." : "Save planning choices"}</button></div>
+        <ErrorText value={classify.state.error} />
+      </form> : <div className={styles.replacementCoverageComplete}><CheckCircle2 aria-hidden="true" size={22} /><div><strong>No equipment is waiting for classification</strong><span>Shared planning coverage is complete for every active equipment record that the company chose to track.</span></div></div>}
+
+      {model.staleProfiles.length ? <div className={styles.replacementStaleReview}><AlertTriangle aria-hidden="true" size={22} /><div><strong>{model.staleProfiles.length} planning group{model.staleProfiles.length === 1 ? "" : "s"} should be refreshed</strong><p>This is one low-noise review per group—not one alert per equipment record.</p>{model.staleProfiles.map((profile) => <a href={`#profile-${profile.id}`} key={profile.id}>{profile.name} · {profile.peerCount} equipment · source dated {profile.effectiveLabel}</a>)}</div></div> : null}
+
+      <details className={styles.replacementLibrary} id="replacement-profiles"><summary><DatabaseZap aria-hidden="true" size={18} /><span><strong>Company planning groups</strong><small>{model.profiles.length} groups · open to review sources or publish a newer benchmark</small></span></summary>
+        <div className={styles.replacementProfileGrid}>{model.profiles.map((profile) => <article id={`profile-${profile.id}`} key={profile.id}><small>{profile.code} · {profile.categoryLabel}</small><strong>{profile.name}</strong><p>{profile.description}</p><dl><div><dt>Comparison details</dt><dd>{profile.specificationLabel}</dd></div><div><dt>Current estimate</dt><dd>{profile.benchmarkAmountLabel}</dd></div><div><dt>Source</dt><dd>{profile.benchmarkSourceLabel} · {profile.benchmarkEffectiveLabel}<br />{profile.evidenceHistoryLabel}</dd></div><div><dt>Portfolio use</dt><dd>{profile.impact.affectedAssetCount} equipment across {profile.impact.affectedStoreCount} stores</dd></div></dl>{model.canManageGroups ? <details><summary>Publish a newer estimate</summary><form action={model.action} method="post" onSubmit={publish.submit}><input type="hidden" name="operation" value="publish-benchmark" /><input type="hidden" name="profileId" value={profile.id} /><input type="hidden" name="confirmedAffectedAssetCount" value={profile.impact.affectedAssetCount} /><input type="hidden" name="confirmedOverrideCount" value={profile.impact.overrideCount} /><div className={styles.replacementCostSplit}><label>Equipment<input name="equipmentAmount" type="number" min="0" step="0.01" required /></label><label>Installation<input name="installationAmount" type="number" min="0" step="0.01" required /></label><label>Other<input name="otherAmount" type="number" min="0" step="0.01" required /></label></div><label>Effective date<input name="effectiveAt" type="date" required /></label><label>Where the estimate came from<textarea name="notes" rows={2} required /></label><label className={styles.replacementImpactConfirm}><input name="impactConfirmed" value="yes" type="checkbox" required />Update {profile.impact.affectedAssetCount} equipment across {profile.impact.affectedStoreCount} stores; keep {profile.impact.overrideCount} equipment-only estimate{profile.impact.overrideCount === 1 ? "" : "s"}.</label><button className={styles.secondaryButton} type="submit" disabled={publish.state.pending}>Publish dated estimate</button><ErrorText value={publish.state.error} /></form></details> : null}</article>)}</div>
+        {model.canManageGroups ? <details className={styles.replacementCreate}><summary>Create another planning group</summary><form action={model.action} method="post" onSubmit={create.submit}><input type="hidden" name="operation" value="create-profile" /><div className={styles.replacementFieldRow}><label>Short code<input name="code" required placeholder="REF-WALKIN-MED" /></label><label>Plain-language name<input name="name" required placeholder="Medium walk-in refrigeration system" /></label></div><label>What belongs in this group<textarea name="description" rows={2} required /></label><div className={styles.replacementFieldRow}><label>Service area<select name="categoryKey" required>{model.categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}</select></label><label>Typical planning life (years)<input name="expectedLifeYears" type="number" min="1" max="100" defaultValue="15" required /></label></div><details className={styles.replacementAdvanced}><summary>Optional comparison details</summary><label>Known details <small>One key=value per line; only use details that materially change replacement cost.</small><textarea name="attributes" rows={4} placeholder={"capacity_tons=5\nrefrigerant=R-448A"} /></label><label>Details that must match <small>Comma separated</small><input name="matchKeys" placeholder="capacity_tons, refrigerant" /></label><div className={styles.replacementCostSplit}><label>Annual escalation (basis points)<input name="annualEscalationBps" type="number" defaultValue="300" required /></label><label>Low range (basis points)<input name="lowVarianceBps" type="number" defaultValue="1000" required /></label><label>High range (basis points)<input name="highVarianceBps" type="number" defaultValue="2000" required /></label></div></details><button className={styles.primaryButton} type="submit" disabled={create.state.pending}>{create.state.pending ? "Creating..." : "Create planning group"}</button><ErrorText value={create.state.error} /></form></details> : null}
+      </details>
     </section>
   );
 }

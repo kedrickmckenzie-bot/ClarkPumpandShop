@@ -10,7 +10,7 @@ import type {
 
 const MILLIS_PER_YEAR = 365.2425 * 24 * 60 * 60 * 1_000;
 
-export type ReplacementEstimateSource = "asset_override" | "profile_benchmark" | "legacy_asset" | "unavailable";
+export type ReplacementEstimateSource = "asset_override" | "profile_benchmark" | "legacy_asset" | "planning_excluded" | "unavailable";
 
 export interface ReplacementEstimateResolution {
   source: ReplacementEstimateSource;
@@ -76,6 +76,14 @@ export function resolveAssetReplacementEstimate(
   asset: Asset,
   asOf: IsoDateTime,
 ): ReplacementEstimateResolution {
+  if (asset.replacementPlanningExcludedAt) {
+    return {
+      source: "planning_excluded",
+      evidenceCount: 0,
+      freshness: "unavailable",
+      explanation: `Not included in company lifecycle planning: ${asset.replacementPlanningExclusionReason ?? "manager choice"}`,
+    };
+  }
   const override = activeOverride(fixture.assetReplacementOverrides, asset.organizationId, asset.id);
   if (override) {
     const months = ageMonths(override.effectiveAt, asOf);
@@ -185,6 +193,66 @@ export function benchmarkPeerImpact(fixture: Pick<OpsFixture, "assets">, profile
     .filter((match) => match.classification !== "not_comparable" || fixture.assets.some((asset) => asset.id === match.assetId && asset.replacementProfileId === profile.id));
 }
 
+export interface ReplacementProfileSuggestion {
+  profile: ReplacementProfile;
+  match: ReplacementProfileMatch;
+  confidence: "strong" | "review";
+  explanation: string;
+}
+
+/**
+ * Suggests plain-language planning groups without auto-assigning equipment.
+ * Exact comparison details win; a shared company equipment classification is
+ * a reviewable fallback. Conflicting comparison details are never suggested.
+ */
+export function suggestReplacementProfilesForAsset(
+  asset: Asset,
+  profiles: readonly ReplacementProfile[],
+): ReplacementProfileSuggestion[] {
+  return profiles
+    .filter((profile) => profile.active && profile.organizationId === asset.organizationId && profile.categoryKey === asset.categoryKey)
+    .map((profile) => {
+      const match = matchAssetToReplacementProfile(asset, profile);
+      const sameCompanyType = Boolean(profile.taxonomyNodeId && asset.taxonomyNodeId === profile.taxonomyNodeId);
+      if (match.classification === "not_comparable") return undefined;
+      const confidence = match.classification === "exact" ? "strong" as const : "review" as const;
+      const explanation = confidence === "strong"
+        ? "The recorded equipment details match this company planning group."
+        : sameCompanyType
+          ? "The company equipment type matches; review the group before saving."
+          : "The service area matches, but the equipment details need a quick review.";
+      return { profile, match, confidence, explanation, sameCompanyType };
+    })
+    .filter((row): row is ReplacementProfileSuggestion & { sameCompanyType: boolean } => Boolean(row))
+    .sort((left, right) => {
+      const score = (row: ReplacementProfileSuggestion & { sameCompanyType: boolean }) => row.confidence === "strong" ? 2 : row.sameCompanyType ? 1 : 0;
+      return score(right) - score(left) || left.profile.name.localeCompare(right.profile.name) || left.profile.id.localeCompare(right.profile.id);
+    })
+    .map((row) => ({
+      profile: row.profile,
+      match: row.match,
+      confidence: row.confidence,
+      explanation: row.explanation,
+    }));
+}
+
+export function replacementBenchmarkPortfolioImpact(
+  fixture: Pick<OpsFixture, "assets" | "assetReplacementOverrides">,
+  profile: ReplacementProfile,
+  currentAsset?: Asset,
+) {
+  const affectedAssets = [...new Map([
+    ...fixture.assets.filter((row) => row.organizationId === profile.organizationId && row.replacementProfileId === profile.id && row.status !== "retired"),
+    ...(currentAsset && currentAsset.status !== "retired" ? [currentAsset] : []),
+  ].map((row) => [row.id, row])).values()];
+  const overrideCount = affectedAssets.filter((row) => Boolean(activeOverride(fixture.assetReplacementOverrides, row.organizationId, row.id))).length;
+  return {
+    affectedAssetCount: affectedAssets.length,
+    affectedStoreCount: new Set(affectedAssets.map((row) => row.storeId)).size,
+    overrideCount,
+  };
+}
+
 export const LIFECYCLE_RECOMMENDATION_MODEL_VERSION = "transparent-rules-v2";
 
 export interface LifecycleRecommendationDraft {
@@ -198,7 +266,7 @@ export interface LifecycleRecommendationDraft {
 }
 
 export function buildLifecycleRecommendationDraft(
-  fixture: Pick<OpsFixture, "replacementProfiles" | "replacementBenchmarks" | "assetReplacementOverrides" | "workOrders" | "costLines" | "components" | "componentLifecycleEvents">,
+  fixture: Pick<OpsFixture, "replacementProfiles" | "replacementBenchmarks" | "assetReplacementOverrides" | "workOrders" | "costLines" | "components" | "componentLifecycleEvents" | "pmWorkItems">,
   asset: Asset,
   asOf: IsoDateTime,
 ): LifecycleRecommendationDraft {
@@ -208,9 +276,11 @@ export function buildLifecycleRecommendationDraft(
   const assetAgeYears = installedAt ? Math.round(yearsBetween(installedAt, asOf) * 10) / 10 : undefined;
   const ageRatio = assetAgeYears !== undefined && expectedLifeYears ? assetAgeYears / expectedLifeYears : undefined;
   const assetWorkOrders = fixture.workOrders.filter((row) => row.organizationId === asset.organizationId && row.assetId === asset.id);
+  const preventiveWorkOrderIds = new Set(fixture.pmWorkItems.filter((row) => row.organizationId === asset.organizationId && row.assetId === asset.id).map((row) => row.workOrderId));
   const trailing36Start = new Date(Date.parse(asOf) - 3 * MILLIS_PER_YEAR).toISOString();
-  const trailingWorkOrders = assetWorkOrders.filter((row) => row.createdAt >= trailing36Start && row.createdAt <= asOf);
-  const trailingRepairSpendMinor = fixture.costLines.filter((row) => row.organizationId === asset.organizationId && trailingWorkOrders.some((work) => work.id === row.workOrderId)).reduce((sum, row) => sum + row.amount.amountMinor, 0);
+  const trailingReactiveWorkOrders = assetWorkOrders.filter((row) => !preventiveWorkOrderIds.has(row.id) && row.createdAt >= trailing36Start && row.createdAt <= asOf);
+  const trailingReactiveWorkOrderIds = new Set(trailingReactiveWorkOrders.map((row) => row.id));
+  const trailingRepairSpendMinor = fixture.costLines.filter((row) => row.organizationId === asset.organizationId && trailingReactiveWorkOrderIds.has(row.workOrderId)).reduce((sum, row) => sum + row.amount.amountMinor, 0);
   const replacementEstimateMinor = estimate.amount?.amountMinor;
   const spendRatio = replacementEstimateMinor ? trailingRepairSpendMinor / replacementEstimateMinor : undefined;
   const warrantyActive = Boolean(asset.warrantyEndsAt && asset.warrantyEndsAt >= asOf);
@@ -228,12 +298,12 @@ export function buildLifecycleRecommendationDraft(
   ].filter((value): value is string => Boolean(value));
   const ageSignal = (ageRatio ?? 0) >= 0.85;
   const spendSignal = (spendRatio ?? 0) >= 0.25;
-  const repeatWorkSignal = trailingWorkOrders.length >= 3;
+  const repeatWorkSignal = trailingReactiveWorkOrders.length >= 3;
   const componentChurnSignal = componentReplacements24Months >= 2;
   const metThresholds = [
     ageSignal ? "Useful-life position is at or beyond 85% of expected life" : undefined,
     spendSignal ? "Trailing 36-month repair spend reached at least 25% of the current replacement estimate" : undefined,
-    repeatWorkSignal ? "Three or more service events were recorded in the last 36 months" : undefined,
+    repeatWorkSignal ? "Three or more reactive service events were recorded in the last 36 months" : undefined,
     componentChurnSignal ? "Two or more components were replaced in the last 24 months" : undefined,
   ].filter((value): value is string => Boolean(value));
   const replacementSignals = metThresholds.length;
@@ -244,7 +314,7 @@ export function buildLifecycleRecommendationDraft(
     warrantyDemoted = true;
   }
   const completeCoreInputs = [installedAt, expectedLifeYears, replacementEstimateMinor].filter((value) => value !== undefined).length;
-  let confidence: LifecycleRecommendationDraft["confidence"] = completeCoreInputs === 3 && trailingWorkOrders.length >= 3 ? "high" : completeCoreInputs >= 2 ? "medium" : "low";
+  let confidence: LifecycleRecommendationDraft["confidence"] = completeCoreInputs === 3 && trailingReactiveWorkOrders.length >= 3 ? "high" : completeCoreInputs >= 2 ? "medium" : "low";
   if (confidence === "high" && profileMatch && profileMatch.classification !== "exact") confidence = "medium";
   const thresholdSentence = metThresholds.length
     ? ` Met thresholds: ${metThresholds.map((item) => `${item}.`).join(" ")}${warrantyDemoted ? " Active warranty coverage favors repair under warranty, so a human must review the capital case." : ""}`
@@ -254,12 +324,12 @@ export function buildLifecycleRecommendationDraft(
     : recommendation === "capital_review"
       ? `One transparent lifecycle threshold is met. Review repair scope, remaining life, warranty, and the dated replacement estimate before choosing; the evidence is not strong enough for an automatic conclusion.${thresholdSentence}`
       : "Current structured evidence favors repair. Continue to monitor repeat work and cost; this conclusion should be revisited when new source records arrive.";
-  const latestWorkOrder = trailingWorkOrders.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0];
+  const latestWorkOrder = trailingReactiveWorkOrders.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0];
   return {
     modelVersion: LIFECYCLE_RECOMMENDATION_MODEL_VERSION,
     recommendation,
     confidence,
-    inputsJson: JSON.stringify({ asOf, assetAgeYears: assetAgeYears ?? null, expectedLifeYears: expectedLifeYears ?? null, trailingRepairSpendMinor, replacementEstimateMinor: replacementEstimateMinor ?? null, replacementCurrency: estimate.amount?.currency ?? null, failureCount36Months: trailingWorkOrders.length, componentReplacements24Months, metThresholds, profileMatchClassification: profileMatch?.classification ?? null, warrantyActive, warrantyEndsAt: asset.warrantyEndsAt ?? null, downtimeMinutes: null }),
+    inputsJson: JSON.stringify({ asOf, assetAgeYears: assetAgeYears ?? null, expectedLifeYears: expectedLifeYears ?? null, trailingRepairSpendMinor, replacementEstimateMinor: replacementEstimateMinor ?? null, replacementCurrency: estimate.amount?.currency ?? null, reactiveServiceEventCount36Months: trailingReactiveWorkOrders.length, excludedPmWorkOrderCount36Months: assetWorkOrders.filter((row) => preventiveWorkOrderIds.has(row.id) && row.createdAt >= trailing36Start && row.createdAt <= asOf).length, componentReplacements24Months, metThresholds, profileMatchClassification: profileMatch?.classification ?? null, warrantyActive, warrantyEndsAt: asset.warrantyEndsAt ?? null, downtimeMinutes: null }),
     explanation,
     missingData,
     workOrderId: latestWorkOrder?.id,

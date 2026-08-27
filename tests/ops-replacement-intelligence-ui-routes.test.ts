@@ -52,9 +52,14 @@ describe("interactive replacement intelligence", () => {
     const profileMarkup = renderToStaticMarkup(createElement(ReplacementProfileManager, {
       model: {
         permitted: true,
+        canManageGroups: true,
         action: "/api/ops/replacement-profiles",
-        profiles: [{ id: "profile-1", code: "REF", name: "Refrigeration", categoryLabel: "Refrigeration", description: "Comparable system", specificationLabel: "Capacity: 5 ton", expectedLifeLabel: "15 years", escalationLabel: "3.00% annually", benchmarkAmountLabel: "$30,000", benchmarkSourceLabel: "Approved quote", benchmarkEffectiveLabel: "Aug 9, 2026", evidenceHistoryLabel: "1 dated source", peerCount: 4 }],
+        profiles: [{ id: "profile-1", code: "REF", name: "Refrigeration", categoryLabel: "Refrigeration", description: "Comparable system", specificationLabel: "Capacity: 5 ton", expectedLifeLabel: "15 years", escalationLabel: "3.00% annually", benchmarkAmountLabel: "$30,000", benchmarkSourceLabel: "Approved quote", benchmarkEffectiveLabel: "Aug 9, 2026", evidenceHistoryLabel: "1 dated source", peerCount: 4, impact: { affectedAssetCount: 4, affectedStoreCount: 4, overrideCount: 1 }, freshness: "current" }],
         categories: [{ id: "refrigeration", label: "Refrigeration" }],
+        coverage: { activeAssetCount: 6, lifecycleTrackedCount: 5, assignedCount: 4, currentEstimateCount: 4, needsClassificationCount: 1, excludedCount: 1, staleProfileCount: 0, coveragePercentage: 80 },
+        classificationRows: [{ assetId: "asset-2", assetName: "Walk-in freezer", assetTag: "FRZ-1", storeLabel: "Store 101", categoryLabel: "Refrigeration", status: "needs_classification", currentEstimateLabel: "$32,000 legacy estimate", defaultDecision: "profile:profile-1", candidates: [{ profileId: "profile-1", profileName: "Refrigeration", confidenceLabel: "recorded details match", explanation: "The recorded equipment details match this company planning group." }] }],
+        classificationTotalCount: 1,
+        staleProfiles: [],
       },
     }));
     const assetMarkup = renderToStaticMarkup(createElement(AssetReplacementIntelligencePanel, {
@@ -70,12 +75,24 @@ describe("interactive replacement intelligence", () => {
       },
     }));
     expect(profileMarkup).toContain('action="/api/ops/replacement-profiles"');
-    expect(profileMarkup).toContain("Publish a newer benchmark");
+    expect(profileMarkup).toContain("Publish a newer estimate");
+    expect(profileMarkup).toContain("Finish the remaining planning choices");
+    expect(profileMarkup).toContain("4 of 5");
     expect(assetMarkup).toContain('action="/api/ops/equipment/asset-1/replacement"');
     expect(assetMarkup).toContain("Save equipment-only estimate");
     expect(assetMarkup).toContain("Retire old equipment and create successor");
     expect(assetMarkup).toContain("Record decision");
     expect(assetMarkup).toContain("Decision history (1)");
+  });
+
+  it("saves regional-manager planning choices through the tenant-scoped bulk route", async () => {
+    const repository = context();
+    const form = new FormData();
+    form.set("operation", "bulk-classify");
+    form.set("assetDecision.asset-113-walk-in-freezer", "profile:replacement-profile-walk-in-freezer");
+    const response = await updateReplacementProfiles(new Request("https://ops.test/api/ops/replacement-profiles", { method: "POST", body: form }));
+    expect(response.status).toBe(303);
+    expect(repository.snapshot().assets.find((row) => row.id === "asset-113-walk-in-freezer")).toMatchObject({ replacementProfileId: "replacement-profile-walk-in-freezer" });
   });
 
   it("records a server-derived versioned recommendation with the manager decision and audit", async () => {

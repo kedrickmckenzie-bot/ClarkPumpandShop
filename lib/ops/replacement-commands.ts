@@ -159,10 +159,73 @@ export async function assignReplacementProfile(svc: OpsCommandServices, input: A
   const adjustmentBps = input.adjustmentBps === undefined ? asset.replacementAdjustmentBps : integer(input.adjustmentBps, "Equipment adjustment", -9_000, 50_000);
   const now = clock.now();
   await repository.atomicWrite([
-    update("ops_assets", { replacement_profile_id: profile.id, replacement_attributes_json: JSON.stringify(attributes), replacement_adjustment_bps: adjustmentBps ?? null }, { organization_id: input.organizationId, id: asset.id }),
+    update("ops_assets", { replacement_profile_id: profile.id, replacement_attributes_json: JSON.stringify(attributes), replacement_adjustment_bps: adjustmentBps ?? null, replacement_planning_excluded_at: null, replacement_planning_exclusion_reason: null }, { organization_id: input.organizationId, id: asset.id }),
     ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "asset", aggregateId: asset.id, eventType: "asset.replacement_profile_assigned", actor: input.actor, occurredAt: now, payload: { profileId: profile.id, attributes, adjustmentBps }, ids }),
   ]);
-  return { ...asset, replacementProfileId: profile.id, replacementAttributes: attributes, replacementAdjustmentBps: adjustmentBps };
+  return { ...asset, replacementProfileId: profile.id, replacementAttributes: attributes, replacementAdjustmentBps: adjustmentBps, replacementPlanningExcludedAt: undefined, replacementPlanningExclusionReason: undefined };
+}
+
+export interface BulkReplacementPlanningDecision {
+  assetId: OpsId;
+  action: "assign" | "exclude";
+  profileId?: OpsId;
+}
+
+export interface BulkClassifyReplacementPlanningInput {
+  organizationId: OpsId;
+  decisions: BulkReplacementPlanningDecision[];
+  exclusionReason?: string;
+  actor: ActorContext;
+}
+
+/**
+ * Applies a manager-reviewed set of lifecycle-planning choices in one atomic
+ * write. Suggestions belong in the presenter; this command only persists the
+ * choices the person explicitly confirmed.
+ */
+export async function bulkClassifyReplacementPlanning(
+  svc: OpsCommandServices,
+  input: BulkClassifyReplacementPlanningInput,
+): Promise<{ assignedCount: number; excludedCount: number }> {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  if (!input.decisions.length || input.decisions.length > 100) throw new OpsDomainError("VALIDATION", "Choose between 1 and 100 equipment records to update");
+  const duplicateIds = input.decisions.map((row) => row.assetId).filter((id, index, rows) => rows.indexOf(id) !== index);
+  if (duplicateIds.length) throw new OpsDomainError("VALIDATION", "Each equipment record can be updated only once");
+  const profileIds = [...new Set(input.decisions.map((row) => row.profileId).filter((value): value is string => Boolean(value)))];
+  const [assets, profiles] = await Promise.all([
+    Promise.all(input.decisions.map((row) => repository.getAsset(input.organizationId, row.assetId))),
+    Promise.all(profileIds.map((profileId) => repository.getReplacementProfile(input.organizationId, profileId))),
+  ]);
+  const profileById = new Map(profiles.filter((row): row is ReplacementProfile => Boolean(row)).map((row) => [row.id, row]));
+  const now = clock.now();
+  const exclusionReason = required(input.exclusionReason ?? "Not included in company lifecycle planning by manager choice.", "Exclusion reason", 1_000);
+  const statements: OpsStatement[] = [];
+  let assignedCount = 0;
+  let excludedCount = 0;
+
+  input.decisions.forEach((decision, index) => {
+    const asset = assets[index];
+    if (!asset || asset.status === "retired") throw new OpsDomainError("CONFLICT", "One or more equipment records are no longer available");
+    if (decision.action === "assign") {
+      const profile = decision.profileId ? profileById.get(decision.profileId) : undefined;
+      if (!profile?.active || profile.categoryKey !== asset.categoryKey) throw new OpsDomainError("VALIDATION", `Choose a compatible planning group for ${asset.name}`);
+      const attributes = cleanAttributes(asset.replacementAttributes ?? profile.attributes, "Equipment attribute");
+      statements.push(
+        update("ops_assets", { replacement_profile_id: profile.id, replacement_attributes_json: JSON.stringify(attributes), replacement_planning_excluded_at: null, replacement_planning_exclusion_reason: null }, { organization_id: input.organizationId, id: asset.id }),
+        ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "asset", aggregateId: asset.id, eventType: "asset.replacement_profile_assigned", actor: input.actor, occurredAt: now, payload: { profileId: profile.id, attributes, source: "bulk_manager_review" }, ids }),
+      );
+      assignedCount += 1;
+      return;
+    }
+    statements.push(
+      update("ops_assets", { replacement_profile_id: null, replacement_planning_excluded_at: now, replacement_planning_exclusion_reason: exclusionReason }, { organization_id: input.organizationId, id: asset.id }),
+      ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "asset", aggregateId: asset.id, eventType: "asset.replacement_planning_excluded", actor: input.actor, occurredAt: now, payload: { reason: exclusionReason, priorProfileId: asset.replacementProfileId }, ids }),
+    );
+    excludedCount += 1;
+  });
+  await repository.atomicWrite(statements);
+  return { assignedCount, excludedCount };
 }
 
 export interface SetAssetReplacementOverrideInput {
@@ -207,14 +270,19 @@ export interface PublishManualReplacementBenchmarkInput extends PublishBenchmark
   profileId: OpsId;
   effectiveAt: IsoDateTime;
   notes: string;
+  confirmedAffectedAssetCount: number;
+  confirmedOverrideCount: number;
   actor: ActorContext;
 }
 
 export async function publishManualReplacementBenchmark(svc: OpsCommandServices, input: PublishManualReplacementBenchmarkInput): Promise<ReplacementBenchmark> {
   const { repository, clock, ids } = services(svc);
   assertActorOrganization(input.actor, input.organizationId);
-  const [profile, current] = await Promise.all([repository.getReplacementProfile(input.organizationId, input.profileId), repository.getPublishedReplacementBenchmark(input.organizationId, input.profileId)]);
+  const [profile, current, affectedAssets] = await Promise.all([repository.getReplacementProfile(input.organizationId, input.profileId), repository.getPublishedReplacementBenchmark(input.organizationId, input.profileId), repository.listAssetsForReplacementProfile(input.organizationId, input.profileId)]);
   if (!profile?.active) throw new OpsDomainError("VALIDATION", "Choose an active replacement profile");
+  const activeAssets = affectedAssets.filter((row) => row.status !== "retired");
+  const overrideCount = (await Promise.all(activeAssets.map((row) => repository.getActiveAssetReplacementOverride(input.organizationId, row.id)))).filter(Boolean).length;
+  if (input.confirmedAffectedAssetCount !== activeAssets.length || input.confirmedOverrideCount !== overrideCount) throw new OpsDomainError("CONFLICT", "The equipment affected by this planning update changed. Review the current impact before publishing");
   const amounts = benchmarkAmounts(input);
   const now = clock.now();
   const benchmark: ReplacementBenchmark = { id: ids.next("replacement-benchmark"), organizationId: input.organizationId, profileId: profile.id, sourceType: "manual", equipmentAmount: { amountMinor: amounts.equipment, currency: amounts.currency }, installationAmount: { amountMinor: amounts.installation, currency: amounts.currency }, otherAmount: { amountMinor: amounts.other, currency: amounts.currency }, totalAmount: { amountMinor: amounts.total, currency: amounts.currency }, effectiveAt: iso(input.effectiveAt, "Effective date"), status: "published", notes: required(input.notes, "Benchmark notes", 2_000), createdAt: now };
@@ -272,11 +340,13 @@ export interface ApproveReplacementFromSelectedQuoteInput extends PublishBenchma
   profileId: OpsId;
   effectiveAt: IsoDateTime;
   planningApplication?: "asset_only" | "planning_group";
+  confirmedAffectedAssetCount?: number;
+  confirmedOverrideCount?: number;
   notes?: string;
   actor: ActorContext;
 }
 
-export async function approveReplacementFromSelectedQuote(svc: OpsCommandServices, input: ApproveReplacementFromSelectedQuoteInput): Promise<{ event: ReplacementEvent; benchmark?: ReplacementBenchmark; affectedAssetCount: number }> {
+export async function approveReplacementFromSelectedQuote(svc: OpsCommandServices, input: ApproveReplacementFromSelectedQuoteInput): Promise<{ event: ReplacementEvent; benchmark?: ReplacementBenchmark; affectedAssetCount: number; overrideCount: number }> {
   const { repository, clock, ids } = services(svc);
   assertActorOrganization(input.actor, input.organizationId);
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
@@ -300,11 +370,17 @@ export async function approveReplacementFromSelectedQuote(svc: OpsCommandService
   const effectiveAt = iso(input.effectiveAt, "Quote effective date");
   const planningApplication = input.planningApplication ?? "planning_group";
   if (planningApplication !== "asset_only" && planningApplication !== "planning_group") throw new OpsDomainError("VALIDATION", "Choose where this planning reference should apply");
+  const currentProfileAssets = planningApplication === "planning_group" ? await repository.listAssetsForReplacementProfile(input.organizationId, profile.id) : [];
+  const affectedAssets = planningApplication === "planning_group"
+    ? [...new Map([...currentProfileAssets.filter((row) => row.status !== "retired"), asset].map((row) => [row.id, row])).values()]
+    : [asset];
+  const overrideCount = (await Promise.all(affectedAssets.map((row) => repository.getActiveAssetReplacementOverride(input.organizationId, row.id)))).filter(Boolean).length;
+  if (planningApplication === "planning_group" && (input.confirmedAffectedAssetCount !== affectedAssets.length || input.confirmedOverrideCount !== overrideCount)) throw new OpsDomainError("CONFLICT", "The portfolio impact changed. Review the affected equipment before approving this replacement quote");
   const benchmark: ReplacementBenchmark | undefined = planningApplication === "planning_group" ? { id: ids.next("replacement-benchmark"), organizationId: input.organizationId, profileId: profile.id, sourceType: "approved_quote", sourceWorkOrderId: workOrder.id, sourceEstimateProposalId: proposal.id, sourceAssetId: asset.id, sourceVendorId: proposal.vendorId, equipmentAmount: { amountMinor: amounts.equipment, currency: amounts.currency }, installationAmount: { amountMinor: amounts.installation, currency: amounts.currency }, otherAmount: { amountMinor: amounts.other, currency: amounts.currency }, totalAmount: { amountMinor: amounts.total, currency: amounts.currency }, effectiveAt, status: "published", notes: optional(input.notes), createdAt: now } : undefined;
   const event: ReplacementEvent = { id: ids.next("replacement-event"), organizationId: input.organizationId, assetId: asset.id, workOrderId: workOrder.id, profileId: profile.id, sourceEstimateProposalId: proposal.id, status: "approved", approvedAmount: proposal.amount, approvedAt: now, createdAt: now };
   const statements: OpsStatement[] = [];
   if (benchmark && currentBenchmark) statements.push(update("ops_replacement_benchmarks", { status: "superseded", superseded_at: now }, { organization_id: input.organizationId, id: currentBenchmark.id, status: "published" }));
-  if (asset.replacementProfileId !== profile.id) statements.push(update("ops_assets", { replacement_profile_id: profile.id, replacement_attributes_json: JSON.stringify(asset.replacementAttributes ?? profile.attributes) }, { organization_id: input.organizationId, id: asset.id }));
+  if (asset.replacementProfileId !== profile.id || asset.replacementPlanningExcludedAt) statements.push(update("ops_assets", { replacement_profile_id: profile.id, replacement_attributes_json: JSON.stringify(asset.replacementAttributes ?? profile.attributes), replacement_planning_excluded_at: null, replacement_planning_exclusion_reason: null }, { organization_id: input.organizationId, id: asset.id }));
   if (benchmark) statements.push(insert("ops_replacement_benchmarks", { id: benchmark.id, organization_id: benchmark.organizationId, profile_id: benchmark.profileId, source_type: benchmark.sourceType, source_work_order_id: benchmark.sourceWorkOrderId, source_estimate_proposal_id: benchmark.sourceEstimateProposalId, source_asset_id: benchmark.sourceAssetId, source_vendor_id: benchmark.sourceVendorId, equipment_amount_minor: amounts.equipment, installation_amount_minor: amounts.installation, other_amount_minor: amounts.other, total_amount_minor: amounts.total, currency: amounts.currency, effective_at: benchmark.effectiveAt, status: benchmark.status, notes: benchmark.notes, created_at: benchmark.createdAt }));
   else {
     const currentOverride = await repository.getActiveAssetReplacementOverride(input.organizationId, asset.id);
@@ -317,8 +393,7 @@ export async function approveReplacementFromSelectedQuote(svc: OpsCommandService
     ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "asset", aggregateId: asset.id, eventType: "asset.replacement_approved", actor: input.actor, occurredAt: now, payload: { replacementEventId: event.id, benchmarkId: benchmark?.id, profileId: profile.id, proposalId: proposal.id, amount: proposal.amount, planningApplication, supersededBenchmarkId: benchmark ? currentBenchmark?.id : undefined }, ids }),
   );
   await repository.atomicWrite(statements);
-  const affectedAssetCount = planningApplication === "asset_only" ? 1 : (await repository.listAssetsForReplacementProfile(input.organizationId, profile.id)).filter((row) => row.status !== "retired").length + (asset.replacementProfileId === profile.id ? 0 : 1);
-  return { event, benchmark, affectedAssetCount };
+  return { event, benchmark, affectedAssetCount: affectedAssets.length, overrideCount };
 }
 
 export interface CompleteReplacementInput {

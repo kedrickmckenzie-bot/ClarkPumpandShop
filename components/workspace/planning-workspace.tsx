@@ -216,13 +216,13 @@ function SourceTable({ table, title, description, resultSummary, pagination }: {
 
 function LifecycleAdministration({ children }: { children?: ReactNode }) {
   if (!children) return null;
-  return <details className={styles.administration}><summary><span><Landmark size={18} aria-hidden="true" /><span><strong>Replacement planning settings</strong><small>Profiles, benchmarks, escalation, and cohort rules</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary><div>{children}</div></details>;
+  return <details className={styles.administration} suppressHydrationWarning><summary><span><Landmark size={18} aria-hidden="true" /><span><strong>Replacement planning settings</strong><small>Profiles, benchmarks, escalation, and cohort rules</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary><div>{children}</div></details>;
 }
 
 function LifecycleContext({ model }: { model: ProgramPageViewModel }) {
   if (!model.breakdowns.length && !model.trends.length) return null;
   return (
-    <details className={styles.administration}>
+    <details className={styles.administration} suppressHydrationWarning>
       <summary><span><BarChart3 size={18} aria-hidden="true" /><span><strong>Capital outlook and comparison method</strong><small>Replacement timing, portfolio totals, and the transparent calculation</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary>
       <div><section className={styles.insights} aria-label="Repair and replacement context">{model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}{model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}</section></div>
     </details>
@@ -232,7 +232,7 @@ function LifecycleContext({ model }: { model: ProgramPageViewModel }) {
 function PmContext({ model }: { model: ProgramPageViewModel }) {
   if (!model.breakdowns.length && !model.trends.length) return null;
   return (
-    <details className={styles.administration}>
+    <details className={styles.administration} suppressHydrationWarning>
       <summary><span><BarChart3 size={18} aria-hidden="true" /><span><strong>PM compliance and repair context</strong><small>Closed-window completion, equipment cohorts, and recorded reactive cost</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary>
       <div><section className={styles.insights} aria-label="Preventive maintenance analysis">{model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}{model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}</section></div>
     </details>

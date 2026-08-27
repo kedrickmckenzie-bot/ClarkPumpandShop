@@ -1010,6 +1010,9 @@ export interface Asset {
   replacementProfileId?: OpsId;
   replacementAttributes?: Record<string, string>;
   replacementAdjustmentBps?: number;
+  /** Explicitly removes this equipment from shared lifecycle planning without retiring it. */
+  replacementPlanningExcludedAt?: IsoDateTime;
+  replacementPlanningExclusionReason?: string;
   replacementEstimate?: Money;
   status: "operational" | "watch" | "out_of_service" | "retired";
   retiredAt?: IsoDateTime;

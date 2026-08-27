@@ -736,6 +736,83 @@ a.factCard { padding-right: 38px; }
 .replacementProfileGrid form { padding: 10px 0 0; }
 .replacementCreate { margin-top: 13px; }
 
+.replacementImpact { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px; border: 1px solid #93c5fd; border-radius: 7px; background: #eff6ff; }
+.replacementImpact > div { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px; border: 1px solid #dbeafe; border-radius: 6px; background: #fff; }
+.replacementImpact > div > svg { flex: 0 0 auto; color: #2563eb; }
+.replacementImpact > div span { min-width: 0; }
+.replacementImpact > div small { display: block; color: #667085; font-size: 13px; line-height: 1.35; }
+.replacementImpact > div strong { display: block; margin-top: 2px; font-size: 20px; }
+.replacementImpact > p { grid-column: 1 / -1; margin: 0; color: #334155; font-size: 14px; line-height: 1.5; }
+.replacementImpactConfirm { grid-column: 1 / -1; display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 9px !important; min-height: 42px; padding: 10px 12px; border: 1px solid #93c5fd; border-radius: 6px; background: #fff; font-size: 14px !important; }
+.replacementImpactConfirm input { width: 18px !important; min-height: 18px !important; height: 18px; margin: 0; }
+
+.replacementCoverageSummary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-top: 20px; overflow: hidden; border: 1px solid #d9dee7; border-radius: 7px; background: #d9dee7; }
+.replacementCoverageSummary > div { min-width: 0; padding: 16px; background: #fff; }
+.replacementCoverageSummary > div[data-tone="warning"] { box-shadow: inset 0 3px 0 #d97706; }
+.replacementCoverageSummary > div[data-tone="good"] { box-shadow: inset 0 3px 0 #15803d; }
+.replacementCoverageSummary small { display: block; color: #667085; font-size: 13px; font-weight: 750; }
+.replacementCoverageSummary strong { display: block; margin-top: 5px; font-size: 24px; letter-spacing: -.02em; }
+.replacementCoverageSummary span { display: block; margin-top: 4px; color: #667085; font-size: 13px; line-height: 1.4; }
+.replacementCoverageForm { display: grid; gap: 14px; margin-top: 18px; padding: 18px; border: 1px solid #d9dee7; border-radius: 7px; background: #f8fafc; }
+.replacementCoverageHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.replacementCoverageHeading h3 { margin: 0; font-size: 18px; }
+.replacementCoverageHeading p { max-width: 760px; margin: 4px 0 0; color: #667085; font-size: 14px; line-height: 1.5; }
+.replacementCoverageHeading > strong { flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; color: #92400e; background: #fef3c7; font-size: 13px; }
+.replacementCoverageRows { display: grid; gap: 8px; }
+.replacementCoverageRow { display: grid; grid-template-columns: minmax(260px, .9fr) minmax(320px, 1.25fr); align-items: center; gap: 18px; padding: 14px; border: 1px solid #d9dee7; border-radius: 7px; background: #fff; }
+.replacementCoverageRow > div { min-width: 0; }
+.replacementCoverageRow > div small { display: block; color: #667085; font-size: 13px; font-weight: 700; }
+.replacementCoverageRow > div strong { display: block; margin-top: 3px; font-size: 15px; }
+.replacementCoverageRow > div span { display: block; margin-top: 3px; color: #667085; font-size: 13px; }
+.replacementCoverageRow label, .replacementExclusionReason { display: grid; gap: 6px; color: #344054; font-size: 13px; font-weight: 750; }
+.replacementCoverageRow select, .replacementExclusionReason textarea { width: 100%; min-height: 42px; padding: 9px 10px; border: 1px solid #b9c3d1; border-radius: 6px; color: #111827; background: #fff; font: inherit; }
+.replacementCoverageRow label small, .replacementExclusionReason small { color: #667085; font-size: 13px; font-weight: 500; line-height: 1.4; }
+.replacementCoverageMore { margin: 0; padding: 10px 12px; border-left: 3px solid #2563eb; color: #475467; background: #eff6ff; font-size: 14px; }
+.replacementCoverageActions { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.replacementCoverageActions p { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: #475467; font-size: 14px; line-height: 1.45; }
+.replacementCoverageActions svg { flex: 0 0 auto; color: #2563eb; }
+.replacementCoverageComplete { display: flex; align-items: flex-start; gap: 11px; margin-top: 18px; padding: 15px; border: 1px solid #bbf7d0; border-radius: 7px; color: #166534; background: #f0fdf4; }
+.replacementCoverageComplete strong, .replacementCoverageComplete span { display: block; }
+.replacementCoverageComplete strong { font-size: 15px; }
+.replacementCoverageComplete span { margin-top: 3px; font-size: 14px; line-height: 1.45; }
+.replacementStaleReview { display: flex; gap: 12px; margin-top: 16px; padding: 15px; border: 1px solid #fde68a; border-radius: 7px; color: #78350f; background: #fffbeb; }
+.replacementStaleReview > svg { flex: 0 0 auto; }
+.replacementStaleReview strong { display: block; font-size: 15px; }
+.replacementStaleReview p { margin: 3px 0 7px; font-size: 14px; }
+.replacementStaleReview a { display: block; margin-top: 4px; color: #92400e; font-size: 14px; font-weight: 700; }
+.replacementLibrary { margin-top: 18px; border: 1px solid #d9dee7; border-radius: 7px; background: #fff; }
+.replacementLibrary > summary { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 12px 15px; cursor: pointer; }
+.replacementLibrary > summary > span { display: grid; gap: 2px; }
+.replacementLibrary > summary strong { font-size: 15px; }
+.replacementLibrary > summary small { color: #667085; font-size: 13px; }
+.replacementLibrary > .replacementProfileGrid, .replacementLibrary > .replacementCreate { margin: 0 15px 15px; }
+.replacementAdvanced { border: 1px solid #d9dee7; border-radius: 6px; }
+.replacementAdvanced > summary { padding: 10px 12px; cursor: pointer; font-size: 13px; font-weight: 750; }
+.replacementAdvanced[open] { padding: 0 12px 12px; }
+
+/* Keep lifecycle administration readable for non-specialists. */
+.replacementHeading p,
+.replacementSummary small,
+.replacementProfileLine small,
+.replacementQuote small,
+.replacementRecommendation small,
+.replacementRecommendation span,
+.replacementRecommendation label,
+.replacementHistory article span,
+.replacementHistory article p,
+.replacementHistory dt,
+.replacementHistory dd,
+.replacementProfileGrid article > small,
+.replacementProfileGrid article > p,
+.replacementProfileGrid dt,
+.replacementProfileGrid dd,
+.replacementProfileGrid summary,
+.replacementForms label,
+.replacementCreate label,
+.replacementProfileGrid label,
+.replacementApprovalForm label { font-size: 13px; }
+.replacementSummary span, .replacementProfileLine span, .replacementQuote span { font-size: 13px; }
+
 
 .visuallyHidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
 .accessUnavailable { min-height: 100dvh; display: grid; place-items: center; padding: 24px; color: var(--ops-ink, #16201c); background: #f4f6f4; }
@@ -756,6 +833,7 @@ a.factCard { padding-right: 38px; }
   .controlSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .estimateGrid { grid-template-columns: 1fr; }
   .replacementProfileGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .replacementCoverageSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 900px) {
@@ -840,7 +918,10 @@ a.factCard { padding-right: 38px; }
   .estimateProgress { grid-template-columns: repeat(4, 132px); overflow-x: auto; padding-bottom: 4px; }
   .estimateProposal { grid-template-columns: 1fr; }
   .replacementPanel { padding: 17px; }
-  .replacementSummary, .replacementProfileLine, .replacementForms, .replacementProfileGrid, .replacementFieldRow, .replacementCostSplit, .replacementRecommendation, .replacementHistory dl { grid-template-columns: 1fr; }
+  .replacementSummary, .replacementProfileLine, .replacementForms, .replacementProfileGrid, .replacementFieldRow, .replacementCostSplit, .replacementRecommendation, .replacementHistory dl, .replacementImpact, .replacementCoverageSummary, .replacementCoverageRow { grid-template-columns: 1fr; }
+  .replacementImpact > p, .replacementImpactConfirm { grid-column: auto; }
+  .replacementCoverageHeading, .replacementCoverageActions { align-items: stretch; flex-direction: column; }
+  .replacementCoverageActions button { width: 100%; }
   .replacementForms details:last-child:nth-child(odd) { grid-column: auto; }
   .replacementQuote { flex-direction: column; }
   .subControlPanel { padding: 15px; }

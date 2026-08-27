@@ -22,7 +22,7 @@ describe("D1 migration chain", () => {
       .sort();
 
     try {
-      expect(migrations).toHaveLength(37);
+      expect(migrations).toHaveLength(38);
       for (const migration of migrations) {
         database.exec("BEGIN");
         try {
@@ -60,6 +60,11 @@ describe("D1 migration chain", () => {
         .toEqual(expect.arrayContaining([expect.objectContaining({ name: "submitted_by_membership_id" })]));
       expect(database.prepare("PRAGMA table_info(ops_warranty_rules)").all())
         .toEqual(expect.arrayContaining([expect.objectContaining({ name: "quote_id" }),expect.objectContaining({ name: "authorization_id" })]));
+      expect(database.prepare("PRAGMA table_info(ops_assets)").all())
+        .toEqual(expect.arrayContaining([
+          expect.objectContaining({ name: "replacement_planning_excluded_at" }),
+          expect.objectContaining({ name: "replacement_planning_exclusion_reason" }),
+        ]));
       expect(database.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 
       database.exec("BEGIN");
@@ -79,6 +84,8 @@ describe("D1 migration chain", () => {
         .toMatchObject({ count: 15 });
       expect(database.prepare("SELECT version FROM ops_requests WHERE id = ? AND organization_id = ?").get("request-current-104-beer-cave-door", "org-northline-demo"))
         .toMatchObject({ version: 0 });
+      expect(database.prepare("SELECT replacement_planning_exclusion_reason AS reason FROM ops_assets WHERE id = ? AND organization_id = ?").get("asset-101-rapid-cook-oven", "org-northline-demo"))
+        .toMatchObject({ reason: "Landlord-owned foodservice equipment is outside Northline's capital plan." });
       expect(database.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     } finally {
       database.close();

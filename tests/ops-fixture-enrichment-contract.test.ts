@@ -171,6 +171,31 @@ describe("Northline enriched presentation fixture contract", () => {
     });
   });
 
+  it("keeps replacement-planning coverage explicit and manager-reviewable", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const activeAssets = fixture.assets.filter((asset) => asset.status !== "retired");
+    const assigned = activeAssets.filter((asset) => asset.replacementProfileId);
+    const excluded = activeAssets.filter((asset) => asset.replacementPlanningExcludedAt);
+    const needsChoice = activeAssets.filter(
+      (asset) => !asset.replacementProfileId && !asset.replacementPlanningExcludedAt,
+    );
+
+    expect(activeAssets).toHaveLength(138);
+    expect(assigned).toHaveLength(135);
+    expect(excluded).toEqual([
+      expect.objectContaining({
+        id: "asset-101-rapid-cook-oven",
+        replacementPlanningExclusionReason: "Landlord-owned foodservice equipment is outside Northline's capital plan.",
+      }),
+    ]);
+    expect(needsChoice.map((asset) => asset.id).sort()).toEqual([
+      "asset-113-walk-in-freezer",
+      "asset-114-ice-machine",
+    ]);
+    expect(fixture.replacementProfiles).toHaveLength(7);
+    expect(fixture.replacementBenchmarks).toHaveLength(7);
+  });
+
   it("keeps unconverted employee reports visible and current work operationally varied", () => {
     const fixture = buildNorthlinePresentationFixture();
     expect(new Set(fixture.requests.map((request) => request.status))).toEqual(

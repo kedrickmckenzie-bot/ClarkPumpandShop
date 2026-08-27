@@ -12,6 +12,7 @@ function emptyFixture() {
     assetReplacementOverrides: [],
     workOrders: [],
     costLines: [],
+    pmWorkItems: [],
     components: [],
     componentLifecycleEvents: [],
   };
@@ -80,8 +81,28 @@ describe("transparent-rules-v2 lifecycle recommendation", () => {
   it("keeps zero-dollar warranty callbacks counting toward the repeat-work threshold", () => {
     const fixture = { ...emptyFixture(), workOrders: [workOrder("wo-1", "2025-01-10T00:00:00.000Z"), workOrder("wo-2", "2025-05-10T00:00:00.000Z"), workOrder("wo-3", "2026-02-10T00:00:00.000Z")] };
     const draft = buildLifecycleRecommendationDraft(fixture, asset({ installedAt: "2024-06-01T00:00:00.000Z", warrantyEndsAt: "2024-12-31T00:00:00.000Z" }), AS_OF);
-    const inputs = JSON.parse(draft.inputsJson) as { failureCount36Months: number };
-    expect(inputs.failureCount36Months).toBe(3);
+    const inputs = JSON.parse(draft.inputsJson) as { reactiveServiceEventCount36Months: number };
+    expect(inputs.reactiveServiceEventCount36Months).toBe(3);
     expect(draft.recommendation).toBe("capital_review");
+  });
+
+  it("excludes preventive-maintenance work orders and costs from reactive replacement pressure", () => {
+    const pmWorkOrders = [
+      workOrder("wo-pm-1", "2025-01-10T00:00:00.000Z"),
+      workOrder("wo-pm-2", "2025-04-10T00:00:00.000Z"),
+      workOrder("wo-pm-3", "2025-07-10T00:00:00.000Z"),
+      workOrder("wo-pm-4", "2025-10-10T00:00:00.000Z"),
+    ];
+    const fixture = {
+      ...emptyFixture(),
+      workOrders: pmWorkOrders,
+      pmWorkItems: pmWorkOrders.map((work, index) => ({ id: `pm-item-${index}`, organizationId: ORG, occurrenceId: `occurrence-${index}`, workOrderId: work.id, assetId: "asset-1" })),
+      costLines: pmWorkOrders.map((work, index) => ({ id: `cost-${index}`, organizationId: ORG, workOrderId: work.id, amount: { amountMinor: 500_000, currency: "USD" } })),
+    } as unknown as Parameters<typeof buildLifecycleRecommendationDraft>[0];
+    const draft = buildLifecycleRecommendationDraft(fixture, asset({ installedAt: "2024-01-01T00:00:00.000Z", replacementEstimate: { amountMinor: 1_000_000, currency: "USD" } }), AS_OF);
+    const inputs = JSON.parse(draft.inputsJson) as { reactiveServiceEventCount36Months: number; excludedPmWorkOrderCount36Months: number; trailingRepairSpendMinor: number; metThresholds: string[] };
+    expect(inputs).toMatchObject({ reactiveServiceEventCount36Months: 0, excludedPmWorkOrderCount36Months: 4, trailingRepairSpendMinor: 0 });
+    expect(inputs.metThresholds).not.toContain(expect.stringMatching(/service events/i));
+    expect(draft.recommendation).toBe("repair");
   });
 });

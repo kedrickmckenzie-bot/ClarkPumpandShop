@@ -3,7 +3,7 @@ import type { OpsCommandServices } from "@/lib/ops/commands";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
-import { approveReplacementFromSelectedQuote, completeReplacement, createReplacementProfile, publishManualReplacementBenchmark } from "@/lib/ops/replacement-commands";
+import { approveReplacementFromSelectedQuote, bulkClassifyReplacementPlanning, completeReplacement, createReplacementProfile, publishManualReplacementBenchmark } from "@/lib/ops/replacement-commands";
 import { selectEstimate } from "@/lib/ops/estimate-commands";
 
 const actor = { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "user" as const, actorId: "membership-northline-facilities", actorName: "Jordan Lee" };
@@ -35,7 +35,7 @@ describe("replacement intelligence", () => {
     const before = repository.snapshot();
     const asset = before.assets.find((row) => row.id === "asset-101-rtu-1")!;
     const prior = resolveAssetReplacementEstimate(before, asset, before.asOf);
-    const benchmark = await publishManualReplacementBenchmark(services, { organizationId: NORTHLINE_ORGANIZATION_ID, profileId: "replacement-profile-rtu-5ton", equipmentAmountMinor: 2_000_000, installationAmountMinor: 750_000, otherAmountMinor: 100_000, currency: "USD", effectiveAt: "2026-08-14T00:00:00.000Z", notes: "Budget quote reviewed with the HVAC contractor.", actor });
+    const benchmark = await publishManualReplacementBenchmark(services, { organizationId: NORTHLINE_ORGANIZATION_ID, profileId: "replacement-profile-rtu-5ton", equipmentAmountMinor: 2_000_000, installationAmountMinor: 750_000, otherAmountMinor: 100_000, currency: "USD", effectiveAt: "2026-08-14T00:00:00.000Z", notes: "Budget quote reviewed with the HVAC contractor.", confirmedAffectedAssetCount: 15, confirmedOverrideCount: 0, actor });
     const after = repository.snapshot();
     const refreshed = resolveAssetReplacementEstimate(after, asset, after.asOf);
 
@@ -65,14 +65,39 @@ describe("replacement intelligence", () => {
     let sequence = 0;
     const services: OpsCommandServices = { repository, clock: { now: () => "2026-08-15T12:00:00.000Z" }, ids: { next: (prefix) => `${prefix}-approval-${++sequence}` } };
     const assignmentCount = fixture.assignments.length;
-    const result = await approveReplacementFromSelectedQuote(services, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: "wo-northline-115", profileId: "replacement-profile-beer-cave-medium", equipmentAmountMinor: 2_310_000, installationAmountMinor: 820_000, otherAmountMinor: 150_000, currency: "USD", effectiveAt: "2026-08-08T16:20:00.000Z", notes: "Selected full replacement quote.", actor });
+    const result = await approveReplacementFromSelectedQuote(services, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: "wo-northline-115", profileId: "replacement-profile-beer-cave-medium", equipmentAmountMinor: 2_310_000, installationAmountMinor: 820_000, otherAmountMinor: 150_000, currency: "USD", effectiveAt: "2026-08-08T16:20:00.000Z", confirmedAffectedAssetCount: 15, confirmedOverrideCount: 1, notes: "Selected full replacement quote.", actor });
     const after = repository.snapshot();
 
     expect(result.event.status).toBe("approved");
     expect(result.affectedAssetCount).toBe(15);
+    expect(result.overrideCount).toBe(1);
     expect(after.assignments).toHaveLength(assignmentCount);
     expect(after.replacementBenchmarks.filter((row) => row.profileId === result.benchmark!.profileId && row.status === "published")).toEqual([expect.objectContaining({ id: result.benchmark!.id, sourceType: "approved_quote" })]);
     expect(after.outboxMessages).toContainEqual(expect.objectContaining({ aggregateId: "asset-115-beer-cave", topic: "ops.asset.replacement_approved" }));
+  });
+
+  it("rejects a group benchmark when the confirmed portfolio impact is stale", async () => {
+    const { services } = harness();
+    await expect(publishManualReplacementBenchmark(services, { organizationId: NORTHLINE_ORGANIZATION_ID, profileId: "replacement-profile-rtu-5ton", equipmentAmountMinor: 2_000_000, installationAmountMinor: 750_000, otherAmountMinor: 100_000, currency: "USD", effectiveAt: "2026-08-14T00:00:00.000Z", notes: "Budget quote reviewed with the HVAC contractor.", confirmedAffectedAssetCount: 14, confirmedOverrideCount: 0, actor })).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("applies manager-reviewed planning choices atomically without technical re-entry", async () => {
+    const { repository, services } = harness();
+    const result = await bulkClassifyReplacementPlanning(services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      decisions: [
+        { assetId: "asset-113-walk-in-freezer", action: "assign", profileId: "replacement-profile-walk-in-freezer" },
+        { assetId: "asset-114-ice-machine", action: "exclude" },
+      ],
+      exclusionReason: "Vendor-owned ice equipment is not part of Northline's capital plan.",
+      actor,
+    });
+    const after = repository.snapshot();
+    expect(result).toEqual({ assignedCount: 1, excludedCount: 1 });
+    expect(after.assets.find((row) => row.id === "asset-113-walk-in-freezer")).toMatchObject({ replacementProfileId: "replacement-profile-walk-in-freezer", replacementPlanningExcludedAt: null });
+    expect(after.assets.find((row) => row.id === "asset-114-ice-machine")).toMatchObject({ replacementProfileId: null, replacementPlanningExclusionReason: "Vendor-owned ice equipment is not part of Northline's capital plan." });
+    expect(after.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: "asset-113-walk-in-freezer", eventType: "asset.replacement_profile_assigned" }));
+    expect(after.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: "asset-114-ice-machine", eventType: "asset.replacement_planning_excluded" }));
   });
 
   it("can keep a vendor replacement quote local to one equipment record without changing the group", async () => {
