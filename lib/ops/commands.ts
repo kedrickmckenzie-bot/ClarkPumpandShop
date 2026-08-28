@@ -1133,8 +1133,11 @@ export async function routeAndIssueWorkOrder(
   if (input.expectedRevision !== currentRevision) {
     throw new OpsDomainError("CONFLICT", "This work order changed. Refresh before issuing a new revision");
   }
-  const activeAssignment = await repository.getActiveAssignment(input.organizationId, workOrder.id);
-  const estimateRequests = await repository.listEstimateRequestsForWorkOrder(input.organizationId, workOrder.id);
+  const [activeAssignment, estimateRequests, visitHold] = await Promise.all([
+    repository.getActiveAssignment(input.organizationId, workOrder.id),
+    repository.listEstimateRequestsForWorkOrder(input.organizationId, workOrder.id),
+    repository.getWorkOrderVisitHold(input.organizationId, workOrder.id),
+  ]);
   assertNoOpenBidRequests(estimateRequests);
   const selectedEstimate = estimateRequests.find((request) => request.status === "selected");
   if (selectedEstimate && selectedEstimate.vendorId !== vendor.id) {
@@ -1185,6 +1188,24 @@ export async function routeAndIssueWorkOrder(
   const revision = currentRevision + 1;
   const payload = json(snapshot);
   const statements: OpsStatement[] = [];
+  if (visitHold && ["active", "review_required"].includes(visitHold.status)) {
+    statements.push(
+      {
+        sql: "UPDATE ops_work_order_visit_holds SET status = ?, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND work_order_id = ? AND status = ? AND version = ?",
+        params: ["cancelled", now, input.organizationId, visitHold.id, workOrder.id, visitHold.status, visitHold.version],
+      },
+      ...auditAndOutbox({
+        organizationId: input.organizationId,
+        aggregateType: "work_order",
+        aggregateId: workOrder.id,
+        eventType: "work_order.visit_hold_released",
+        actor: input.actor,
+        occurredAt: now,
+        payload: { holdId: visitHold.id, reason: "service_authorization_issued", vendorId: vendor.id },
+        ids,
+      }),
+    );
+  }
   if (!reuseAssignment) {
     if (activeAssignment) {
       statements.push({

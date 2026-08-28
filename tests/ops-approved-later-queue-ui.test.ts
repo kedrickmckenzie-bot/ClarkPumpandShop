@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { ListSurface } from "@/components/ops/views";
 import type { OperatorSession } from "@/components/ops/data-contract";
@@ -42,11 +43,29 @@ describe("approved-for-later queue management", () => {
     expect(markup).toContain('aria-modal="true"');
     expect(markup).toContain("Manage this approved job");
     expect(markup).toContain("Assign or send now");
+    expect(markup).toContain("Choose the vendor, review what they will receive, then send");
+    expect(markup).toContain("Assign and send");
+    expect(markup).toContain("Review exactly what will be sent");
+    expect(markup).toContain("Work Order / Service Authorization");
+    expect(markup).toContain("Internal controls stay internal");
+    expect(markup).toContain("Review before sending");
+    expect(markup).not.toContain(`/api/ops/work-orders/${selected.id}/issue`);
+    expect(markup).not.toContain('name="operation" value="release"/><input type="hidden" name="returnTo" value="/app/work-orders/');
     expect(markup).toContain(`store=${storeId}&amp;workOrder=${selected.id}`);
     expect(markup).toContain("Edit what was approved for later");
     expect(markup).toContain('name="deadlineAt"');
     expect(markup).toContain("Remove from approved for later");
     expect(markup).toContain("Cancel work order");
     expect(markup).toContain("never silently deleted");
+  });
+
+  it("posts only the final reviewed confirmation to the canonical issuance route", () => {
+    const source = readFileSync("components/ops/approved-later-issuance-dialog.tsx", "utf8");
+    expect(source).toContain("Review before sending");
+    expect(source).toContain("Review exactly what will be sent");
+    expect(source).toContain("name=\"vendorId\"");
+    expect(source).toContain("name=\"expectedRevision\"");
+    expect(source).toContain("/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/issue");
+    expect(source).toContain("Send work order to {selectedVendor?.label");
   });
 });

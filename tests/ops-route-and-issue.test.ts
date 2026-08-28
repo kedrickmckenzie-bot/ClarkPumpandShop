@@ -4,6 +4,7 @@ import {
   checkInVisit,
   createWorkOrder,
   issueWorkOrder,
+  placeWorkOrderOnVisitHold,
   recordVendorResponse,
   routeAndIssueWorkOrder,
   updateWorkOrderControl,
@@ -256,6 +257,40 @@ describe("atomic vendor routing and issuance", () => {
       .toEqual(["work_order.assigned", "work_order.issued", "workflow_task.completed", "workflow_task.created"]);
     expect(after.outboxMessages.slice(before.outboxMessages.length).map((message) => message.topic))
       .toEqual(["ops.work_order.assigned", "ops.work_order.issued", "ops.workflow_task.completed", "ops.workflow_task.created"]);
+  });
+
+  it("keeps approved-for-later work untouched until final issuance, then releases the hold atomically", async () => {
+    const test = harness();
+    const workOrder = await createRoutingWorkOrder(test.services, { kind: "choose_later" });
+    await placeWorkOrderOnVisitHold(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      workOrderId: workOrder.id,
+      posture: "complete_using_professional_judgment",
+      deadlineAt: "2026-08-28T16:00:00.000Z",
+      internalReviewThresholdAmountMinor: 25_000,
+      currency: "USD",
+      actor: facilitiesActor,
+    });
+    const activeHold = await test.repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, workOrder.id);
+    expect(activeHold).toMatchObject({ status: "active", version: 0 });
+
+    const issued = await routeAndIssueWorkOrder(
+      test.services,
+      await routeInput(test.repository, workOrder, SUMMIT, 0, "0"),
+    );
+
+    expect(issued.assignment).toMatchObject({ vendorId: SUMMIT, status: "issued" });
+    expect(await test.repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, workOrder.id))
+      .toMatchObject({ status: "cancelled", version: 1 });
+    const releaseEvent = test.repository.snapshot().auditEvents.find((event) => (
+      event.aggregateId === workOrder.id && event.eventType === "work_order.visit_hold_released"
+    ));
+    expect(releaseEvent).toBeDefined();
+    expect(JSON.parse(releaseEvent!.payloadJson)).toMatchObject({
+      holdId: activeHold!.id,
+      reason: "service_authorization_issued",
+      vendorId: SUMMIT,
+    });
   });
 
   it("requires an explicit reassignment before issuing a different active vendor", async () => {

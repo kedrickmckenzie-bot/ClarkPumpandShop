@@ -1836,6 +1836,599 @@
   color: #dbeafe;
 }
 
+.issuanceBackdrop {
+  position: fixed;
+  z-index: 110;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(15, 23, 42, .7);
+  cursor: default;
+  backdrop-filter: blur(3px);
+}
+
+.issuanceDialog {
+  position: fixed;
+  z-index: 111;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  width: min(1040px, calc(100vw - 72px));
+  height: min(820px, calc(100dvh - 56px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #c7d0dc;
+  border-radius: 12px;
+  background: #f4f6f9;
+  box-shadow: 0 34px 100px rgba(15, 23, 42, .42);
+  transform: translate(-50%, -50%);
+}
+
+.issuanceDialog[hidden],
+.issuanceBackdrop[hidden],
+.issuanceChooseStep[hidden],
+.issuanceReviewStep[hidden] {
+  display: none;
+}
+
+.issuanceDialogHeader {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 21px 24px 18px;
+  border-bottom: 1px solid #d8dee8;
+  background: #fff;
+}
+
+.issuanceDialogHeader > div {
+  min-width: 0;
+}
+
+.issuanceDialogHeader > div > span,
+.issuanceSectionHeading small,
+.authorizationPreview section > small,
+.authorizationPreview header span small {
+  color: var(--workspace-action);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.issuanceDialogHeader h2 {
+  margin: 4px 0 0;
+  color: var(--workspace-ink);
+  font-size: clamp(23px, 2.4vw, 31px);
+  letter-spacing: -.025em;
+  line-height: 1.18;
+}
+
+.issuanceDialogHeader p {
+  margin: 6px 0 0;
+  color: var(--workspace-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.issuanceDialogHeader > button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--workspace-ink);
+  cursor: pointer;
+}
+
+.issuanceSteps {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid #d8dee8;
+  background: #f8fafc;
+  list-style: none;
+}
+
+.issuanceSteps li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px 13px 0;
+  color: #64748b;
+}
+
+.issuanceSteps li::after {
+  position: absolute;
+  right: 18px;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  background: transparent;
+  content: "";
+}
+
+.issuanceSteps li[data-active]::after,
+.issuanceSteps li[data-complete]::after {
+  background: var(--workspace-action);
+}
+
+.issuanceSteps li > span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #b9c5d6;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.issuanceSteps li[data-active],
+.issuanceSteps li[data-complete] {
+  color: var(--workspace-action);
+}
+
+.issuanceSteps li[data-active] > span,
+.issuanceSteps li[data-complete] > span {
+  border-color: var(--workspace-action);
+  background: var(--workspace-action);
+  color: #fff;
+}
+
+.issuanceSteps li > div {
+  display: grid;
+  gap: 1px;
+}
+
+.issuanceSteps strong {
+  color: var(--workspace-ink);
+  font-size: 13px;
+}
+
+.issuanceSteps small {
+  font-size: 12px;
+}
+
+.issuanceDialogBody {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 24px 24px;
+}
+
+.issuanceChooseStep,
+.issuanceReviewStep {
+  display: grid;
+  gap: 16px;
+}
+
+.issuanceSectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.issuanceSectionHeading h3 {
+  margin: 3px 0 0;
+  color: var(--workspace-ink);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.issuanceSectionHeading p {
+  max-width: 650px;
+  margin: 5px 0 0;
+  color: var(--workspace-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.issuanceStoreContext,
+.issuanceReadyBadge {
+  display: flex;
+  min-width: 255px;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid #d6dde7;
+  border-radius: 7px;
+  background: #fff;
+  padding: 11px 12px;
+  color: var(--workspace-action);
+}
+
+.issuanceStoreContext span,
+.issuanceReadyBadge span {
+  display: grid;
+  gap: 2px;
+  color: var(--workspace-ink);
+}
+
+.issuanceStoreContext strong,
+.issuanceReadyBadge strong {
+  font-size: 13px;
+}
+
+.issuanceStoreContext small,
+.issuanceReadyBadge small {
+  color: var(--workspace-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.issuanceVendorSearch {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #aeb9c8;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0 12px;
+  color: #64748b;
+}
+
+.issuanceVendorSearch:focus-within {
+  border-color: var(--workspace-action);
+  box-shadow: 0 0 0 3px rgba(40, 85, 217, .12);
+}
+
+.issuanceVendorSearch input {
+  width: 100%;
+  min-height: 43px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--workspace-ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.issuanceVendorList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.issuanceVendorList > label {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  border: 1px solid #c7d0dc;
+  border-radius: 7px;
+  background: #fff;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.issuanceVendorList > label[data-selected] {
+  border-color: var(--workspace-action);
+  background: #f3f7ff;
+  box-shadow: inset 0 0 0 1px var(--workspace-action);
+}
+
+.issuanceVendorList input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.issuanceVendorMark {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border: 1px solid #9caabd;
+  border-radius: 50%;
+  background: #fff;
+  color: #fff;
+}
+
+.issuanceVendorList > label[data-selected] .issuanceVendorMark {
+  border-color: var(--workspace-action);
+  background: var(--workspace-action);
+}
+
+.issuanceVendorList > label > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.issuanceVendorList strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--workspace-ink);
+  font-size: 14px;
+}
+
+.issuanceVendorList strong em {
+  border-radius: 999px;
+  background: #e8f1ff;
+  color: #1d4ed8;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.issuanceVendorList small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  color: var(--workspace-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+}
+
+.issuanceNoVendors {
+  grid-column: 1 / -1;
+  margin: 0;
+  border: 1px dashed #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  padding: 20px;
+  color: var(--workspace-muted);
+  text-align: center;
+}
+
+.issuanceDeliveryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+  gap: 12px;
+}
+
+.issuanceDeliveryGrid label {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  color: var(--workspace-ink);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.issuanceDeliveryGrid label > span small {
+  color: var(--workspace-muted);
+  font-weight: 500;
+}
+
+.issuanceDeliveryGrid select,
+.issuanceDeliveryGrid textarea {
+  width: 100%;
+  min-height: 43px;
+  border: 1px solid #aeb9c8;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--workspace-ink);
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.issuanceDeliveryGrid label > small {
+  color: var(--workspace-muted);
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 1.4;
+}
+
+.authorizationPreview {
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .06);
+}
+
+.authorizationPreview > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #dbe2ea;
+  background: #172033;
+  color: #fff;
+}
+
+.authorizationPreview > header > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.authorizationPreview header span {
+  display: grid;
+  gap: 1px;
+}
+
+.authorizationPreview header span small {
+  color: #bfdbfe;
+}
+
+.authorizationPreview header span strong {
+  font-size: 16px;
+}
+
+.authorizationPreview > header > strong {
+  font-size: 15px;
+}
+
+.authorizationParties,
+.authorizationFacts {
+  display: grid;
+  margin: 0;
+}
+
+.authorizationParties {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.authorizationParties > div,
+.authorizationFacts > div {
+  min-width: 0;
+  padding: 13px 16px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.authorizationParties > div:last-child,
+.authorizationFacts > div:last-child {
+  border-right: 0;
+}
+
+.authorizationPreview dt {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.authorizationPreview dd {
+  margin: 4px 0 0;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.authorizationPreview dd small {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 450;
+}
+
+.authorizationPreview > section {
+  padding: 13px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.authorizationPreview h4,
+.authorizationPreview section p {
+  margin: 4px 0 0;
+  color: #172033;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.authorizationFacts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.authorizationPreview > footer {
+  display: grid;
+  gap: 3px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  color: #172033;
+  font-size: 13px;
+}
+
+.authorizationPreview > footer small {
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.issuanceInternalNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  background: #eff6ff;
+  padding: 12px 14px;
+  color: #1d4ed8;
+}
+
+.issuanceInternalNote div {
+  display: grid;
+  gap: 2px;
+}
+
+.issuanceInternalNote strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.issuanceInternalNote p {
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.issuanceDialogFooter {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid #d8dee8;
+  background: #fff;
+}
+
+.issuanceDialogFooter form {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.issuanceDialogFooter button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #b9c5d6;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--workspace-ink);
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.issuanceDialogFooter button:disabled {
+  cursor: not-allowed;
+  opacity: .48;
+}
+
+.issuanceDialogFooter .issuancePrimaryButton {
+  border-color: var(--workspace-action);
+  background: var(--workspace-action);
+  color: #fff;
+}
+
 .approvedLaterEditForm {
   display: grid;
 }
@@ -2450,6 +3043,36 @@ a.factItem:hover {
 }
 
 @media (max-width: 820px) {
+  .issuanceDialog {
+    width: calc(100vw - 28px);
+    height: calc(100dvh - 28px);
+  }
+
+  .issuanceSectionHeading {
+    flex-direction: column;
+  }
+
+  .issuanceStoreContext,
+  .issuanceReadyBadge {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .issuanceVendorList,
+  .issuanceDeliveryGrid,
+  .authorizationFacts {
+    grid-template-columns: 1fr;
+  }
+
+  .authorizationFacts > div {
+    border-right: 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .authorizationFacts > div:last-child {
+    border-bottom: 0;
+  }
+
   .triageWorkspace[data-has-preview] { grid-template-columns: 1fr; }
   .triageList { border-right: 0; border-bottom: 1px solid var(--workspace-border); }
   .triagePreview { position: static; max-height: none; }
@@ -2602,6 +3225,64 @@ a.factItem:hover {
 }
 
 @media (max-width: 560px) {
+  .issuanceDialog {
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .issuanceDialogHeader {
+    padding: 15px;
+  }
+
+  .issuanceDialogHeader h2 {
+    font-size: 22px;
+  }
+
+  .issuanceSteps {
+    padding: 0 15px;
+  }
+
+  .issuanceSteps li {
+    padding-right: 8px;
+  }
+
+  .issuanceSteps small {
+    display: none;
+  }
+
+  .issuanceDialogBody {
+    padding: 14px;
+  }
+
+  .authorizationParties {
+    grid-template-columns: 1fr;
+  }
+
+  .authorizationParties > div {
+    border-right: 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .authorizationParties > div:last-child {
+    border-bottom: 0;
+  }
+
+  .issuanceDialogFooter {
+    padding: 12px 14px;
+  }
+
+  .issuanceDialogFooter,
+  .issuanceDialogFooter form {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .issuanceDialogFooter button {
+    width: 100%;
+  }
+
   .approvedLaterDialog {
     width: 100vw;
     height: 100dvh;

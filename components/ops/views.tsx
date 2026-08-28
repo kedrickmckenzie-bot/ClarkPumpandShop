@@ -15,7 +15,6 @@ import {
   LoaderCircle,
   PencilLine,
   Search,
-  Send,
   Trash2,
 } from "lucide-react";
 import type {
@@ -37,6 +36,7 @@ import type {
 } from "./data-contract";
 import styles from "./enterprise-workspace.module.css";
 import { RecordSections } from "@/components/workspace/record-sections";
+import { ApprovedLaterIssuanceDialog } from "./approved-later-issuance-dialog";
 
 const CHART_PALETTE = ["#2855d9", "#64748b", "#0f766e", "#8b5cf6", "#d97706", "#dc2626", "#475569"];
 const CHART_TONE_COLORS: Partial<Record<Tone, string>> = {
@@ -424,11 +424,7 @@ function ApprovedLaterManagementPanel({
           <section className={styles.managementSection}>
             <header className={styles.managementSectionHeader}><div><small>Next step</small><strong>Choose how this work should move forward</strong></div><span>The work stays approved until you deliberately change its path.</span></header>
             <div className={styles.managementActions}>
-              <form action={holdAction} method="post">
-                <input type="hidden" name="operation" value="release" />
-                <input type="hidden" name="returnTo" value={`${workOrderPath}?view=service#issue-work`} />
-                <button className={styles.managementPrimary} type="submit"><Send aria-hidden="true" size={18} /><span><strong>Assign or send now</strong><small>Remove the hold and open provider selection.</small></span></button>
-              </form>
+              <ApprovedLaterIssuanceDialog model={management} />
               <Link href={groupHref}><Layers3 aria-hidden="true" size={18} /><span><strong>Group with other jobs</strong><small>Start with this job selected and add related work.</small></span></Link>
             </div>
           </section>

@@ -1694,6 +1694,7 @@ function workRows(
   canManageApprovedLater = false,
 ): TableRowViewModel[] {
   const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
+  const organizationName = fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.name ?? "Customer";
   const costFrom = first(query.costFrom);
   const costMonth = first(query.costMonth);
   const costByWork = costMonth
@@ -1766,6 +1767,36 @@ function workRows(
             ? "Waiting to be grouped"
             : "Choose later";
       const store = storeById.get(work.storeId);
+      const storeTimeZone = store?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
+      const coveredVendorIds = new Set(
+        store
+          ? fixture.vendorCoverage
+              .filter((coverage) => {
+                if (coverage.organizationId !== scoped.organizationId) return false;
+                if (coverage.scopeKind === "organization") return coverage.scopeId === scoped.organizationId;
+                if (coverage.scopeKind === "store") return coverage.scopeId === store.id;
+                return coverage.scopeKind === "region" && coverage.scopeId === store.regionId;
+              })
+              .map((coverage) => coverage.vendorId)
+          : [],
+      );
+      const issueVendors = fixture.vendors
+        .filter((vendor) => vendor.organizationId === scoped.organizationId && vendor.status === "approved" && coveredVendorIds.has(vendor.id))
+        .sort((left, right) => Number(right.preferred) - Number(left.preferred) || left.name.localeCompare(right.name))
+        .map((vendor) => ({
+          value: vendor.id,
+          label: vendor.name,
+          description: fixture.vendorSpecialties
+            .filter((specialty) => specialty.organizationId === scoped.organizationId && specialty.vendorId === vendor.id)
+            .map((specialty) => specialty.displayName)
+            .join(", ") || "Approved service vendor",
+          dispatchEmail: vendor.dispatchEmail,
+          preferred: vendor.preferred,
+        }));
+      const currentIssuanceRevision = fixture.issuances
+        .filter((issuance) => issuance.organizationId === scoped.organizationId && issuance.workOrderId === work.id)
+        .reduce((highest, issuance) => Math.max(highest, issuance.revision), 0);
+      const workAsset = work.assetId ? assetById.get(work.assetId) : undefined;
       return {
         id: work.id,
         label: work.number,
@@ -1773,14 +1804,27 @@ function workRows(
         management: hold && store ? {
           kind: "approved_later" as const,
           workOrderId: work.id,
+          workOrderNumber: work.number,
+          organizationName,
           storeId: store.id,
-          storeTimeZone: store.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE,
+          storeLabel: `Store ${store.storeNumber} · ${store.name}`,
+          storeAddress: [store.address1, store.address2, `${store.city}, ${store.state} ${store.postalCode}`].filter(Boolean).join(", "),
+          storeTimeZone,
+          problem: work.problem,
+          workScope: work.authorizedScope ?? work.problem,
+          categoryLabel: work.categoryKey ? sentence(work.categoryKey) : "Not classified",
+          equipmentLabel: workAsset ? `${workAsset.name}${workAsset.assetTag ? ` · ${workAsset.assetTag}` : ""}` : undefined,
+          requestedTimingLabel: work.dueAt ? formatOperationsDateTime(work.dueAt, storeTimeZone) : undefined,
           posture: hold.posture,
           priority: work.priority,
-          deadlineInputValue: dateTimeInputInZone(hold.deadlineAt, store.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE),
+          deadlineInputValue: dateTimeInputInZone(hold.deadlineAt, storeTimeZone),
+          reviewByLabel: formatOperationsDateTime(hold.deadlineAt, storeTimeZone),
           internalReviewThresholdInputValue: hold.internalReviewThreshold
             ? String(hold.internalReviewThreshold.amountMinor / 100)
             : undefined,
+          currentIssuanceRevision,
+          selectedVendorId: assignment?.kind === "outside_vendor" && assignment.status !== "declined" ? assignment.vendorId : undefined,
+          vendors: issueVendors,
           canManage: canManageApprovedLater,
         } : undefined,
         cells: [

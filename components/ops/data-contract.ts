@@ -167,12 +167,31 @@ export interface TableCellViewModel {
 export interface ApprovedLaterManagementViewModel {
   kind: "approved_later";
   workOrderId: string;
+  workOrderNumber: string;
+  organizationName: string;
   storeId: string;
+  storeLabel: string;
+  storeAddress: string;
   storeTimeZone: string;
+  problem: string;
+  workScope: string;
+  categoryLabel: string;
+  equipmentLabel?: string;
+  requestedTimingLabel?: string;
   posture: "complete_using_professional_judgment" | "look_and_report";
   priority: "emergency" | "urgent" | "routine" | "planned";
   deadlineInputValue: string;
+  reviewByLabel: string;
   internalReviewThresholdInputValue?: string;
+  currentIssuanceRevision: number;
+  selectedVendorId?: string;
+  vendors: Array<{
+    value: string;
+    label: string;
+    description: string;
+    dispatchEmail: string;
+    preferred: boolean;
+  }>;
   canManage: boolean;
 }
 
