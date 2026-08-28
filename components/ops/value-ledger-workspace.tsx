@@ -74,7 +74,7 @@ export function ValueLedgerWorkspace({
       <div className={styles.evidence}>
         <p className={styles.safe}><strong>Realized and verified</strong><span>Requires completed evidence or an explicit authorized final decision, such as a recorded invoice adjustment.</span></p>
         <p className={styles.notice}><strong>Identified exposure</strong><span>A reviewable risk or possible recovery. It is not a deduction, credit, or savings claim.</span></p>
-        <p className={styles.fact}><small>Estimated opportunity</small><strong>Planning only</strong><span>Potential future benefit, such as a Service Run recommendation. Acceptance alone does not realize it.</span></p>
+        <p className={styles.fact}><small>Estimated opportunity</small><strong>Planning only</strong><span>Forward-looking scenarios remain separate from realized value and require supporting evidence before they can become a savings claim.</span></p>
       </div>
 
       <section className={styles.panel}>

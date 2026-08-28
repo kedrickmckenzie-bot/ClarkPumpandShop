@@ -61,8 +61,8 @@ function MetricStrip({ metrics }: { metrics: MetricViewModel[] }) {
   return (
     <section className={styles.kpiStrip} aria-label="Network pulse">
       {metrics.slice(0, 4).map((metric) => (
-        <Link href={metric.link.href} className={styles.kpi} key={metric.id}>
-          <span className={styles.kpiLabel}>{metric.label}</span>
+        <Link href={metric.link.href} className={`${styles.kpi} ${toneClass(metric.tone)}`} key={metric.id}>
+          <span className={styles.kpiTopline}><span className={styles.kpiLabel}>{metric.label}</span><ChevronRight aria-hidden="true" size={16} /></span>
           <strong>{metric.value}</strong>
           <small>{metric.supportingText}</small>
           {metric.trendLabel ? <span className={styles.kpiTrend}>{metric.trendLabel}</span> : null}

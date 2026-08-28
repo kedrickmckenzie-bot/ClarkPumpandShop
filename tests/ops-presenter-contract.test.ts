@@ -73,7 +73,13 @@ describe("operator presenter drill-through contracts", () => {
 
   it("separates work approved for later from scheduled appointments", () => {
     const fixture = buildNorthlinePresentationFixture();
-    const model = buildListModel(fixture, executiveSession(), "work-orders", { visitPlan: "ready" });
+    const facilitiesSession: OperatorSession = {
+      ...executiveSession(),
+      userId: "user-northline-facilities",
+      membershipId: "membership-northline-facilities",
+      role: "facilities",
+    };
+    const model = buildListModel(fixture, facilitiesSession, "work-orders", { visitPlan: "ready" });
     const activeHolds = (fixture.workOrderVisitHolds ?? []).filter((hold) => hold.status === "active");
     const heldStoreCount = new Set(
       activeHolds.map((hold) => fixture.workOrders.find((workOrder) => workOrder.id === hold.workOrderId)?.storeId).filter(Boolean),
@@ -85,9 +91,40 @@ describe("operator presenter drill-through contracts", () => {
     expect(model.table.rows).toHaveLength(activeHolds.length);
     expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "assignment")?.value === "Waiting to be grouped")).toBe(true);
     expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "store")?.value.startsWith("Store "))).toBe(true);
+    expect(model.table.rows.every((row) => row.management?.kind === "approved_later" && row.management.canManage)).toBe(true);
+    expect(model.table.rows[0]?.management).toMatchObject({
+      posture: expect.stringMatching(/complete_using_professional_judgment|look_and_report/),
+      priority: expect.stringMatching(/emergency|urgent|routine|planned/),
+      storeTimeZone: expect.any(String),
+      deadlineInputValue: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
+    });
     expect(model.resultSummary).toBe(`${activeHolds.length} approved jobs across ${heldStoreCount} stores`);
     expect(model.filters?.[0]?.label).toBe("Work timing");
     expect(model.filters?.[0]?.options.some((option) => option.label === `Approved for later (${activeHolds.length})`)).toBe(true);
+  });
+
+  it("gives the store directory source-linked network measures before the location register", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const model = buildListModel(fixture, executiveSession(), "stores");
+    const openWork = fixture.workOrders.filter((work) => !["closed", "cancelled"].includes(work.status));
+    const activeVisits = fixture.visits.filter((visit) => visit.status === "active");
+    const workIds = new Set(fixture.workOrders.map((work) => work.id));
+    const recordedCost = fixture.costLines
+      .filter((line) => workIds.has(line.workOrderId))
+      .reduce((sum, line) => sum + line.amount.amountMinor, 0);
+
+    expect(model.metrics?.find((metric) => metric.id === "stores-in-scope")?.value).toBe("15");
+    expect(model.metrics?.find((metric) => metric.id === "store-open-work")).toMatchObject({
+      value: String(openWork.length),
+      link: { href: "/app/work-orders?status=open" },
+    });
+    expect(model.metrics?.find((metric) => metric.id === "store-onsite-now")).toMatchObject({
+      value: String(activeVisits.length),
+      link: { href: "/app/visits?status=active" },
+    });
+    expect(model.metrics?.find((metric) => metric.id === "store-recorded-cost")?.value).toBe(
+      new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(recordedCost / 100),
+    );
   });
 
   it("keeps the executive home strategic and searches across operational records", () => {
@@ -354,6 +391,11 @@ describe("operator presenter drill-through contracts", () => {
     expect(defaultView.table!.rows.length).toBeLessThan(allEquipment.table!.rows.length);
     expect(allEquipment.table!.rows).toHaveLength(fixture.assets.length);
     expect(capitalView.table!.rows).toHaveLength(planned.length);
+    expect(capitalView.table!.columns.find((column) => column.key === "evidence")?.label).toBe("Planning basis");
+    expect(capitalView.table!.columns.find((column) => column.key === "status")?.label).toBe("Planning status");
+    expect(capitalView.table!.rows.every((row) => row.cells.find((cell) => cell.key === "evidence")?.value === "Management-planned replacement")).toBe(true);
+    expect(capitalView.table!.rows.some((row) => row.cells.find((cell) => cell.key === "work")?.value === "No active repair decision")).toBe(true);
+    expect(JSON.stringify(capitalView.table!.rows)).not.toContain("Current comparison inputs needed");
     expect(planned.length).toBeGreaterThanOrEqual(5);
     expect(planned.length).toBeLessThanOrEqual(10);
     expect(new Set(planned.map((recommendation) => recommendation.plannedForYear)).size).toBeGreaterThanOrEqual(2);
@@ -444,18 +486,51 @@ describe("operator presenter drill-through contracts", () => {
     expect(JSON.stringify(dashboard.spotlight)).not.toMatch(/recorded work cost|break-even|economic screening|before issuing|expected to keep/i);
   });
 
-  it("exposes working Store 104 QR, trusted-device, and vendor entry points", () => {
+  it("keeps store-device entry points in the accountability edition without cluttering the full manager record", () => {
     const fixture = buildNorthlinePresentationFixture();
-    const detail = buildDetailModel(fixture, executiveSession(), "store", NORTHLINE_DEMO_HANDLES.storyStoreId);
-    const section = detail.sections.find((candidate) => candidate.id === "demo-entry-points");
+    const full = buildDetailModel(fixture, executiveSession(), "store", NORTHLINE_DEMO_HANDLES.storyStoreId);
+    const accountability = buildDetailModel(fixture, { ...executiveSession(), demoEdition: "accountability" }, "store", NORTHLINE_DEMO_HANDLES.storyStoreId);
+    const section = accountability.sections.find((candidate) => candidate.id === "demo-entry-points");
 
-    expect(section?.facts).toHaveLength(3);
+    expect(full.sections.some((candidate) => candidate.id === "demo-entry-points")).toBe(false);
+    expect(section?.facts).toHaveLength(2);
     expect(section?.facts?.map((fact) => fact.link?.href)).toEqual([
       `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}`,
       `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.trustedStore104}`,
-      `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}`,
     ]);
     expect(section?.facts?.every((fact) => Boolean(fact.link?.label))).toBe(true);
+  });
+
+  it("turns the full store record into six manager drill-downs with decision-ready PM, equipment, and history", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const storeId = NORTHLINE_DEMO_HANDLES.storyStoreId;
+    const detail = buildDetailModel(fixture, executiveSession(), "store", storeId);
+    const pm = detail.sections.find((section) => section.id === "preventive-maintenance-plans");
+    const equipment = detail.sections.find((section) => section.id === "equipment");
+    const history = detail.sections.find((section) => section.id === "work-history");
+    const storeAssets = fixture.assets.filter((asset) => asset.storeId === storeId);
+    const storePlans = fixture.pmPlans.filter((plan) => plan.storeId === storeId && plan.active);
+
+    expect(detail.statusLabel).toBe("Limited operations");
+    expect(detail.sections.map((section) => section.title)).toEqual([
+      "Upcoming visits",
+      "Approved work to handle later",
+      "Preventive maintenance",
+      "Service areas and spending",
+      "Equipment and lifecycle",
+      "Work and visit history",
+    ]);
+    expect(pm?.facts?.map((fact) => fact.label)).toEqual(["Due now", "Missed", "Next due", "Last completed"]);
+    expect(pm?.table?.rows).toHaveLength(storePlans.length);
+    expect(pm?.table?.columns.map((column) => column.key)).toEqual(["plan", "timing", "status", "evidence"]);
+    expect(equipment?.table?.rows).toHaveLength(storeAssets.length);
+    expect(equipment?.table?.rows.every((row) => row.href === `/app/equipment/${row.id}`)).toBe(true);
+    expect(equipment?.table?.columns.map((column) => column.key)).toEqual(["equipment", "area", "age", "cost", "open", "status"]);
+    expect(history?.facts?.map((fact) => fact.label)).toEqual(["Work orders", "Open work", "Recorded visits", "Visits without a work order"]);
+    expect(history?.table?.rows.length).toBeGreaterThan(0);
+    expect(history?.timeline?.length).toBeGreaterThan(0);
+    expect(history?.tableHeading).toBe("Current and recent work orders");
+    expect(history?.timelineHeading).toBe("Latest observed visits");
   });
 
   it("surfaces confirmed appointments directly on the individual store record", () => {

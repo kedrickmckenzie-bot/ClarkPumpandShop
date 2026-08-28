@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { beforeEach, describe, expect, it } from "vitest";
 import { PUBLIC_DEMO_LINKS, getPublicOperationsGateway } from "@/components/ops-public/server-gateway";
+import { placeWorkOrderOnVisitHold, updateWorkOrderControl } from "@/lib/ops/commands";
 import { getNorthlineFixtureRepository, resetNorthlineFixtureRepository } from "@/lib/ops/fixture-repository";
 import { NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 
@@ -23,6 +24,38 @@ describe("manager-approved held work", () => {
     expect(brightline.heldWork.map((row) => row.id)).not.toContain(DOOR_WORK_ID);
     expect(JSON.stringify(cedar.heldWork)).not.toContain("internalReviewThreshold");
     expect(JSON.stringify(cedar.heldWork)).not.toContain("25000");
+  });
+
+  it("lets a manager edit an active later-work approval without recreating the work order", async () => {
+    const repository = getNorthlineFixtureRepository();
+    const before = await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
+    const result = await placeWorkOrderOnVisitHold(
+      { repository, clock: { now: () => "2026-08-27T16:00:00.000Z" } },
+      {
+        organizationId: NORTHLINE_ORGANIZATION_ID,
+        workOrderId: LIGHT_WORK_ID,
+        posture: "complete_using_professional_judgment",
+        deadlineAt: "2026-09-20T17:00:00.000Z",
+        internalReviewThresholdAmountMinor: 35_000,
+        currency: "USD",
+        actor: {
+          actorType: "user",
+          actorId: "membership-northline-facilities",
+          actorName: "Jamie Rivera",
+          organizationId: NORTHLINE_ORGANIZATION_ID,
+        },
+      },
+    );
+
+    expect(result.id).toBe(before?.id);
+    expect(await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID)).toMatchObject({
+      id: before?.id,
+      status: "active",
+      posture: "complete_using_professional_judgment",
+      deadlineAt: "2026-09-20T17:00:00.000Z",
+      internalReviewThreshold: { amountMinor: 35_000, currency: "USD" },
+      version: (before?.version ?? 0) + 1,
+    });
   });
 
   it("atomically claims held work, records temporary-repair advice, and returns it to its original deadline", async () => {
@@ -113,6 +146,34 @@ describe("manager-approved held work", () => {
     const workOrder = await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
     expect(hold?.status).toBe("review_required");
     expect(workOrder).toMatchObject({ status: "approved", accountableParty: "Facilities coordinator", nextAction: "Review the onsite findings and choose the next step" });
+  });
+
+  it("cancels an active later-work approval atomically when the work order is cancelled", async () => {
+    const repository = getNorthlineFixtureRepository();
+    const workOrder = await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
+    expect(workOrder).toMatchObject({ status: "approved" });
+
+    await updateWorkOrderControl(
+      { repository, clock: { now: () => "2026-08-27T16:00:00.000Z" } },
+      {
+        organizationId: NORTHLINE_ORGANIZATION_ID,
+        workOrderId: LIGHT_WORK_ID,
+        expectedStatus: "approved",
+        status: "cancelled",
+        priority: workOrder!.priority,
+        note: "Lighting issue was corrected by store staff before vendor service was needed.",
+        actor: {
+          actorType: "user",
+          actorId: "membership-northline-facilities",
+          actorName: "Jamie Rivera",
+          organizationId: NORTHLINE_ORGANIZATION_ID,
+        },
+      },
+    );
+
+    expect(await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID)).toMatchObject({ status: "cancelled" });
+    expect(await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID)).toMatchObject({ status: "cancelled" });
+    expect(repository.snapshot().auditEvents.some((event) => event.aggregateId === LIGHT_WORK_ID && event.eventType === "work_order.visit_hold_cancelled_with_work_order")).toBe(true);
   });
 
   it("lets an active vendor visit add approved work without another check-in", async () => {

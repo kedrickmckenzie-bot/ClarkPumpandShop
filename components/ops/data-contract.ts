@@ -164,11 +164,24 @@ export interface TableCellViewModel {
   tone?: Tone;
 }
 
+export interface ApprovedLaterManagementViewModel {
+  kind: "approved_later";
+  workOrderId: string;
+  storeId: string;
+  storeTimeZone: string;
+  posture: "complete_using_professional_judgment" | "look_and_report";
+  priority: "emergency" | "urgent" | "routine" | "planned";
+  deadlineInputValue: string;
+  internalReviewThresholdInputValue?: string;
+  canManage: boolean;
+}
+
 export interface TableRowViewModel {
   id: string;
   label: string;
   href: string;
   cells: TableCellViewModel[];
+  management?: ApprovedLaterManagementViewModel;
 }
 
 export interface TableViewModel {
@@ -230,7 +243,9 @@ export interface DetailSectionViewModel {
   title: string;
   description?: string;
   facts?: DetailFactViewModel[];
+  tableHeading?: string;
   table?: TableViewModel;
+  timelineHeading?: string;
   timeline?: TimelineEventViewModel[];
   action?: SupportingLink;
 }

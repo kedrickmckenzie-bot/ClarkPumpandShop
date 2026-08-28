@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import type { WorkOrderCaseView } from "@/lib/ops/work-order-case";
 import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import styles from "./owner-brief.module.css";
@@ -11,6 +12,18 @@ import styles from "./owner-brief.module.css";
  */
 export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
   const terminal = model.stage === "closed";
+  const stageHref = (stageId: WorkOrderCaseView["stages"][number]["id"]) => {
+    const view = stageId === "vendor_response_scheduling" || stageId === "authorization_or_bidding" || stageId === "provider_decision"
+      ? "service"
+      : stageId === "onsite_service"
+        ? "visits"
+        : stageId === "followup_closeout" || stageId === "closed"
+          ? "activity"
+          : stageId === "cost_invoice_evidence"
+            ? "cost"
+            : "overview";
+    return `/app/work-orders/${model.workOrderId}?view=${view}`;
+  };
   return (
     <section className={styles.brief} aria-labelledby="stage-rail-heading">
       <header className={styles.header}>
@@ -24,9 +37,14 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
       <ol className={styles.stageRail} aria-label="Service progress">
         {model.stages.map((stage, index) => (
           <li className={styles.stageStep} data-state={stage.state} key={stage.id} aria-current={stage.state === "current" ? "step" : undefined}>
-            <span className={styles.stageMarker} aria-hidden="true">{stage.state === "complete" ? "✓" : index + 1}</span>
-            <strong>{stage.label}</strong>
-            <small>{stage.state === "complete" ? "Complete" : stage.state === "current" ? "Current" : "Upcoming"}</small>
+            <Link className={styles.stageLink} href={stageHref(stage.id)}>
+              <span className={styles.stageMarker} aria-hidden="true">{stage.state === "complete" ? "✓" : index + 1}</span>
+              <span className={styles.stageCopy}>
+                <strong>{stage.label}</strong>
+                <small>{stage.state === "complete" ? "Complete" : stage.state === "current" ? "Current" : "Upcoming"}</small>
+              </span>
+              <ArrowRight aria-hidden="true" size={14} />
+            </Link>
           </li>
         ))}
       </ol>
@@ -58,11 +76,13 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
           <span className={styles.moneyLabel}>{terminal ? "Record" : "Next step"}</span>
           <strong>{model.primaryNextAction.label}</strong>
           <span className={styles.moneyNote}>{terminal ? "This case has no open action or escalation." : "The one action that moves this work forward."}</span>
+          <span className={styles.actionPrompt}>Open this step<ArrowRight aria-hidden="true" size={14} /></span>
         </Link>
         {model.alternativeActions.map((action) => (
           <Link className={styles.moneyCell} key={action.href + action.label} href={action.href}>
             <span className={styles.moneyLabel}>Another option</span>
             <strong>{action.label}</strong>
+            <span className={styles.actionPrompt}>Open option<ArrowRight aria-hidden="true" size={14} /></span>
           </Link>
         ))}
       </div>

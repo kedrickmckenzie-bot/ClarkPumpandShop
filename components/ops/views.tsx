@@ -11,11 +11,16 @@ import {
   ExternalLink,
   Filter,
   Inbox,
+  Layers3,
   LoaderCircle,
+  PencilLine,
   Search,
+  Send,
+  Trash2,
 } from "lucide-react";
 import type {
   ActionItemViewModel,
+  ApprovedLaterManagementViewModel,
   BreakdownViewModel,
   DashboardPageViewModel,
   DataState,
@@ -73,12 +78,12 @@ function PageActions({ primary, secondary }: { primary?: SupportingLink; seconda
   );
 }
 
-function PageHeader({ page }: { page: DashboardPageViewModel["page"] }) {
+function PageHeader({ page, status }: { page: DashboardPageViewModel["page"]; status?: { label: string; tone?: Tone } }) {
   return (
     <header className={styles.pageHeader}>
       <div className={styles.pageHeadingCopy}>
         {page.eyebrow ? <p className={styles.eyebrow}>{page.eyebrow}</p> : null}
-        <h1>{page.title}</h1>
+        <div className={styles.pageTitleLine}><h1>{page.title}</h1>{status ? <span className={`${styles.headerStatus} ${toneClass(status.tone)}`}><CircleDot aria-hidden="true" size={14} />{status.label}</span> : null}</div>
         <p className={styles.pageDescription}>{page.description}</p>
       </div>
       <PageActions primary={page.primaryAction} secondary={page.secondaryAction} />
@@ -389,6 +394,105 @@ type SurfaceViewMode = "tile" | "table";
 const TILE_DEFAULT_SURFACES = new Set(["stores"]);
 const TRIAGE_SURFACES = new Set(["action-center", "work-orders", "visits"]);
 
+function ApprovedLaterManagementPanel({
+  management,
+  selectedReturnTo,
+  listReturnTo,
+}: {
+  management: ApprovedLaterManagementViewModel;
+  selectedReturnTo: string;
+  listReturnTo: string;
+}) {
+  const workOrderPath = `/app/work-orders/${encodeURIComponent(management.workOrderId)}`;
+  const holdAction = `${workOrderPath.replace("/app/", "/api/ops/")}/visit-hold`;
+  const groupHref = `/app/store-sweeps/new?store=${encodeURIComponent(management.storeId)}&workOrder=${encodeURIComponent(management.workOrderId)}`;
+
+  if (!management.canManage) {
+    return (
+      <section className={styles.approvedLaterManager}>
+        <div className={styles.managementHeading}><PencilLine aria-hidden="true" size={17} /><div><strong>Management actions</strong><span>Your current role can review this job but cannot change it.</span></div></div>
+      </section>
+    );
+  }
+
+  return (
+    <section className={styles.approvedLaterManager} aria-label="Manage approved work">
+      <div className={styles.managementHeading}><PencilLine aria-hidden="true" size={19} /><div><strong>Manage this approved job</strong><span>Choose the next service path, update the approval, or change the underlying work-order record.</span></div></div>
+
+      <div className={styles.managementWorkspace}>
+        <div className={styles.managementMainColumn}>
+          <section className={styles.managementSection}>
+            <header className={styles.managementSectionHeader}><div><small>Next step</small><strong>Choose how this work should move forward</strong></div><span>The work stays approved until you deliberately change its path.</span></header>
+            <div className={styles.managementActions}>
+              <form action={holdAction} method="post">
+                <input type="hidden" name="operation" value="release" />
+                <input type="hidden" name="returnTo" value={`${workOrderPath}?view=service#issue-work`} />
+                <button className={styles.managementPrimary} type="submit"><Send aria-hidden="true" size={18} /><span><strong>Assign or send now</strong><small>Remove the hold and open provider selection.</small></span></button>
+              </form>
+              <Link href={groupHref}><Layers3 aria-hidden="true" size={18} /><span><strong>Group with other jobs</strong><small>Start with this job selected and add related work.</small></span></Link>
+            </div>
+          </section>
+
+          <form action={holdAction} method="post" className={styles.approvedLaterEditForm}>
+            <input type="hidden" name="operation" value="place" />
+            <input type="hidden" name="returnTo" value={selectedReturnTo} />
+            <header className={styles.managementSectionHeader}><div><small>Approval settings</small><strong>Edit what was approved for later</strong></div><span>These settings guide the future visit without creating a vendor price.</span></header>
+            <div className={styles.approvedLaterFieldGrid}>
+              <label>
+                <span>What may the vendor do?</span>
+                <select name="posture" defaultValue={management.posture}>
+                  <option value="complete_using_professional_judgment">Complete if practical</option>
+                  <option value="look_and_report">Look and report back</option>
+                </select>
+                <small>Use “look and report” when the scope may need a separate decision.</small>
+              </label>
+              <label>
+                <span>Review by</span>
+                <input type="datetime-local" name="deadlineAt" required defaultValue={management.deadlineInputValue} />
+                <small>Store-local time ({management.storeTimeZone})</small>
+              </label>
+              <label>
+                <span>Flag an invoice for review above <small>Optional</small></span>
+                <input type="number" name="internalReviewThreshold" min="0" step="0.01" inputMode="decimal" placeholder="No threshold" defaultValue={management.internalReviewThresholdInputValue} />
+                <small>Internal review threshold only—not shown to the vendor.</small>
+              </label>
+            </div>
+            <footer className={styles.managementFormFooter}><span>Saving updates this approval and its audit history.</span><button type="submit">Save approval changes</button></footer>
+          </form>
+        </div>
+
+        <aside className={styles.managementSideColumn} aria-label="Additional work-order controls">
+          <section className={styles.managementLinks}>
+            <header><small>Work-order details</small><strong>Edit the underlying record</strong></header>
+            <Link href={`${workOrderPath}?view=activity#work-control`}><PencilLine aria-hidden="true" size={16} /><span><strong>Priority, owner, due date, or status</strong><small>Open the accountable work controls</small></span></Link>
+            <Link href={`${workOrderPath}?view=cost#work-records`}><PencilLine aria-hidden="true" size={16} /><span><strong>Service area or equipment</strong><small>Update classification with an audit note</small></span></Link>
+          </section>
+
+          <section className={styles.managementRemove}>
+            <header><small>Administrative actions</small><strong>Remove or cancel</strong></header>
+            <form action={holdAction} method="post">
+              <input type="hidden" name="operation" value="release" />
+              <input type="hidden" name="returnTo" value={listReturnTo} />
+              <div><strong>Remove from the later list</strong><span>Keep the work order open and return it to provider selection.</span></div>
+              <button type="submit">Remove from approved for later</button>
+            </form>
+            <form action={`${workOrderPath.replace("/app/", "/api/ops/")}/control`} method="post">
+              <input type="hidden" name="operation" value="update" />
+              <input type="hidden" name="expectedStatus" value="approved" />
+              <input type="hidden" name="status" value="cancelled" />
+              <input type="hidden" name="priority" value={management.priority} />
+              <input type="hidden" name="returnTo" value={listReturnTo} />
+              <label><span>Cancellation reason</span><textarea name="note" required rows={3} maxLength={2000} placeholder="Why is this work no longer needed?" /></label>
+              <button className={styles.managementDanger} type="submit"><Trash2 aria-hidden="true" size={16} />Cancel work order</button>
+              <small>The record remains in history; it is never silently deleted.</small>
+            </form>
+          </section>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
 export function ListSurface({ model, surface, searchParams }: { model: ListPageViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
   const triageMode = TRIAGE_SURFACES.has(surface);
   const visitPlanParam = searchParams.visitPlan;
@@ -396,6 +500,7 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
   const selectedParam = searchParams.selected;
   const selectedId = typeof selectedParam === "string" ? selectedParam : Array.isArray(selectedParam) ? selectedParam[0] : undefined;
   const selectedRow = selectedId ? model.table.rows.find((row) => row.id === selectedId) : undefined;
+  const approvedLaterSelection = approvedLaterMode && selectedRow?.management?.kind === "approved_later";
   const layoutParam = searchParams.layout;
   const requestedView = typeof layoutParam === "string" && (layoutParam === "table" || layoutParam === "tile") ? layoutParam : null;
   const viewMode: SurfaceViewMode = triageMode ? "table" : requestedView ?? (TILE_DEFAULT_SURFACES.has(surface) ? "tile" : "table");
@@ -437,7 +542,7 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
             <FilterGroups filters={model.filters} />
             <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
             {triageMode ? (
-              <div className={styles.triageWorkspace} data-has-preview={selectedRow || undefined}>
+              <div className={styles.triageWorkspace} data-has-preview={selectedRow && !approvedLaterSelection || undefined}>
                 <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode ? (
                   <form className={styles.bulkForm} action="/api/ops/work-orders/bulk-follow-up" method="post">
                     <input type="hidden" name="returnTo" value={workOrderReturnTo} />
@@ -450,13 +555,26 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
                     </div>
                   </form>
                 ) : <DataTable table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} />}</div>
-                {selectedRow ? <aside className={styles.triagePreview} aria-live="polite">
-                  <>
-                    <header><div><span>Selected record</span><h2>{selectedRow.label}</h2></div><Link href={selectionHref()} aria-label="Close record preview">×</Link></header>
-                    {selectedRow.cells[0]?.secondary ? <p className={styles.triageSummary}>{selectedRow.cells[0].secondary}</p> : null}
-                    <dl>{model.table.columns.map((column) => { const cell = selectedRow.cells.find((candidate) => candidate.key === column.key); return <div key={column.key}><dt>{column.label}</dt><dd>{cell?.value ?? "—"}{cell?.secondary && cell.secondary !== selectedRow.cells[0]?.secondary ? <small>{cell.secondary}</small> : null}</dd></div>; })}</dl>
-                    <Link className={styles.triageOpen} href={selectedRow.href}>Open full record<ExternalLink aria-hidden="true" size={15} /></Link>
-                  </>
+                {selectedRow ? approvedLaterSelection ? <>
+                  <Link className={styles.approvedLaterBackdrop} href={selectionHref()} aria-label="Close approved work panel" />
+                  <aside className={styles.approvedLaterDialog} role="dialog" aria-modal="true" aria-labelledby="approved-later-dialog-title">
+                    <header className={styles.approvedLaterDialogHeader}>
+                      <div><span>Approved work to handle later</span><div className={styles.approvedLaterTitleLine}><h2 id="approved-later-dialog-title">{selectedRow.label}</h2><strong>Approved for later</strong></div><p>{selectedRow.cells[0]?.secondary ?? "Review and manage this approved job."}</p></div>
+                      <Link href={selectionHref()} aria-label="Close approved work panel"><span>Close</span><b aria-hidden="true">×</b></Link>
+                    </header>
+                    <div className={styles.approvedLaterDialogBody}>
+                      <section className={styles.approvedLaterOverview} aria-labelledby="approved-later-overview-heading">
+                        <header><div><small>Current record</small><h3 id="approved-later-overview-heading">Work overview</h3></div><Link href={selectedRow.href}>Open complete record<ExternalLink aria-hidden="true" size={15} /></Link></header>
+                        <dl>{model.table.columns.map((column) => { const cell = selectedRow.cells.find((candidate) => candidate.key === column.key); return <div key={column.key}><dt>{column.label}</dt><dd>{cell?.value ?? "—"}{cell?.secondary && cell.secondary !== selectedRow.cells[0]?.secondary ? <small>{cell.secondary}</small> : null}</dd></div>; })}</dl>
+                      </section>
+                      <ApprovedLaterManagementPanel management={selectedRow.management!} selectedReturnTo={selectionHref(selectedRow.id)} listReturnTo={workOrderReturnTo} />
+                    </div>
+                  </aside>
+                </> : <aside className={styles.triagePreview} aria-live="polite">
+                  <header><div><span>Selected record</span><h2>{selectedRow.label}</h2></div><Link href={selectionHref()} aria-label="Close record preview">×</Link></header>
+                  {selectedRow.cells[0]?.secondary ? <p className={styles.triageSummary}>{selectedRow.cells[0].secondary}</p> : null}
+                  <dl>{model.table.columns.map((column) => { const cell = selectedRow.cells.find((candidate) => candidate.key === column.key); return <div key={column.key}><dt>{column.label}</dt><dd>{cell?.value ?? "—"}{cell?.secondary && cell.secondary !== selectedRow.cells[0]?.secondary ? <small>{cell.secondary}</small> : null}</dd></div>; })}</dl>
+                  <Link className={styles.triageOpen} href={selectedRow.href}>Open full record<ExternalLink aria-hidden="true" size={15} /></Link>
                 </aside> : null}
               </div>
             ) : viewMode === "tile" ? <RecordTileGrid table={model.table} /> : <DataTable table={model.table} />}
@@ -659,12 +777,15 @@ export function DetailView({ model, beforeSections, after, initialSection }: { m
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={16} />{model.backLink.label}</Link>
-      <PageHeader page={model.page} />
+      <PageHeader page={model.page} status={{ label: model.statusLabel, tone: model.statusTone }} />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           <section className={styles.recordSummary} aria-label="Record summary">
-            <div className={styles.recordStatus}><small>Current status</small><span className={`${styles.statusPill} ${toneClass(model.statusTone)}`}><CircleDot aria-hidden="true" size={14} />{model.statusLabel}</span></div>
-            <div className={styles.factGrid}>
+            <header className={styles.recordSummaryHeader}>
+              <div><small>Record summary</small><h2>At a glance</h2></div>
+              <p>Open any tile to see the exact work, visits, cost, or equipment behind it.</p>
+            </header>
+            <div className={styles.recordSummaryGrid}>
               {model.facts.map((fact) => {
                 const content = <><span className={styles.factLabel}>{fact.label}</span><strong>{fact.value}</strong>{fact.helperText ? <small>{fact.helperText}</small> : null}</>;
                 return fact.link ? (

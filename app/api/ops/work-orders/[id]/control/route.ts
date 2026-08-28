@@ -39,6 +39,16 @@ const responseSources = new Map([
   ["other", "another documented channel"],
 ]);
 
+function safeReturnTo(value: string) {
+  return value.startsWith("/app/work-orders") && !value.startsWith("//") ? value : undefined;
+}
+
+function withNotice(destination: string, notice: string) {
+  const target = new URL(destination, "https://operations.invalid");
+  target.searchParams.set("notice", notice);
+  return `${target.pathname}${target.search}${target.hash}`;
+}
+
 async function recordOutsideResponse(
   context: Awaited<ReturnType<typeof getOpsRequestContext>>,
   workOrderId: string,
@@ -196,6 +206,14 @@ export async function POST(
         actor: context.actor,
       },
     );
+
+    const returnTo = safeReturnTo(formText(formData, "returnTo", { max: 1_000 }));
+    if (returnTo) {
+      return relativeRedirect303(withNotice(
+        returnTo,
+        status === "cancelled" ? "Work order cancelled. Its history remains available." : "Work order updated.",
+      ));
+    }
 
     return relativeRedirect303(
       `/app/work-orders/${encodeURIComponent(workOrderId)}?view=activity&updated=control#work-control`,

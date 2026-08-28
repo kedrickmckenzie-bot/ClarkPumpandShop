@@ -335,13 +335,32 @@
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
-.caseContextStrip > div {
+.caseContextStrip > div,
+.caseContextStrip > a {
   min-width: 0;
   padding: 13px 16px;
   border-right: 1px solid var(--case-border);
 }
 
-.caseContextStrip > div:last-child { border-right: 0; }
+.caseContextStrip > div:last-child,
+.caseContextStrip > a:last-child { border-right: 0; }
+
+.caseContextStrip > a {
+  color: inherit;
+  text-decoration: none;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.caseContextStrip > a:hover,
+.caseContextStrip > a:focus-visible {
+  background: var(--case-action-soft);
+  box-shadow: inset 0 -3px 0 var(--case-action);
+  outline: none;
+}
+
+.caseContextStrip .contextPrimary {
+  background: #f8faff;
+}
 
 .caseContextStrip span {
   display: block;
@@ -359,6 +378,14 @@
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.caseContextStrip small {
+  display: block;
+  margin-top: 5px;
+  color: var(--case-action-hover);
+  font-size: 12px;
+  font-weight: 680;
 }
 
 .overviewWorkspace {

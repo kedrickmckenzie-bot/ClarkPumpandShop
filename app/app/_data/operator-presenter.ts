@@ -1687,7 +1687,12 @@ function searchable(...values: Array<string | undefined>): string {
   return values.filter(Boolean).join(" ").toLocaleLowerCase("en-US");
 }
 
-function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSearchParameters): TableRowViewModel[] {
+function workRows(
+  fixture: OpsFixture,
+  scoped: ScopedFixture,
+  query: OperatorSearchParameters,
+  canManageApprovedLater = false,
+): TableRowViewModel[] {
   const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
   const costFrom = first(query.costFrom);
   const costMonth = first(query.costMonth);
@@ -1765,6 +1770,19 @@ function workRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSea
         id: work.id,
         label: work.number,
         href: `/app/work-orders/${work.id}`,
+        management: hold && store ? {
+          kind: "approved_later" as const,
+          workOrderId: work.id,
+          storeId: store.id,
+          storeTimeZone: store.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE,
+          posture: hold.posture,
+          priority: work.priority,
+          deadlineInputValue: dateTimeInputInZone(hold.deadlineAt, store.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE),
+          internalReviewThresholdInputValue: hold.internalReviewThreshold
+            ? String(hold.internalReviewThreshold.amountMinor / 100)
+            : undefined,
+          canManage: canManageApprovedLater,
+        } : undefined,
         cells: [
           { key: "work", value: work.number, secondary: work.problem },
           { key: "store", value: store ? `Store ${store.storeNumber}` : "Store unavailable", secondary: store?.city },
@@ -2570,11 +2588,11 @@ export function buildVendorPerformanceListModel(
     resultSummary: `${vendors.length} of ${fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).length} approved vendors`,
     createVendorLink: roleCan(session.role, "onboard_vendor") ? { href: "/app/vendors/new", label: "Add approved vendor" } : undefined,
     portfolioMetrics: [
-      { id: "vendors", label: "Approved vendors", value: String(vendors.length), context: `${vendors.length} vendor${vendors.length === 1 ? "" : "s"} match this view` },
-      { id: "attention", label: "Vendors to review", value: String(vendors.filter((vendor) => vendor.relationshipState !== "stable").length), context: "Open follow-ups, unresolved visits, or missing documents" },
-      { id: "compliance", label: "Documents current", value: `${vendors.filter((vendor) => vendor.compliance.state === "ready").length}/${vendors.length}`, context: "Approved vendor documents that are current" },
-      { id: "visits", label: "Jobs with a recorded visit", value: ratioLabel(visitCovered, visitEligible), context: `${visitCovered} of ${visitEligible} vendor work orders have a linked check-in` },
-      { id: "cost", label: "Recorded work cost", value: money(recordedCostMinor), context: "Entered cost lines on work currently attributed to these vendors" },
+      { id: "vendors", label: "Approved vendors", value: String(vendors.length), context: `${vendors.length} vendor${vendors.length === 1 ? "" : "s"} match this view`, sourceLink: { href: "/app/vendors", label: "Open vendor directory" } },
+      { id: "attention", label: "Vendors to review", value: String(vendors.filter((vendor) => vendor.relationshipState !== "stable").length), context: "Open follow-ups, unresolved visits, or missing documents", sourceLink: { href: "/app/vendors?view=attention", label: "Review these vendors" } },
+      { id: "compliance", label: "Documents current", value: `${vendors.filter((vendor) => vendor.compliance.state === "ready").length}/${vendors.length}`, context: "Approved vendor documents that are current", sourceLink: { href: "/app/vendors?view=attention", label: "Review missing documents" } },
+      { id: "visits", label: "Jobs with a recorded visit", value: ratioLabel(visitCovered, visitEligible), context: `${visitCovered} of ${visitEligible} vendor work orders have a linked check-in`, sourceLink: { href: "/app/visits", label: "Open visit evidence" } },
+      { id: "cost", label: "Recorded work cost", value: money(recordedCostMinor), context: "Entered cost lines on work currently attributed to these vendors", sourceLink: { href: "/app/spend", label: "Open cost records" } },
     ],
     vendors,
   };
@@ -2710,7 +2728,7 @@ export function buildListModel(
   const activeScopeLabel = requestedStore ? storeLabel(requestedStore) : session.scopeLabel;
   const q = cleanSearch(first(query.q));
   let rows: TableRowViewModel[];
-  if (route === "work-orders") rows = workRows(fixture, scoped, query);
+  if (route === "work-orders") rows = workRows(fixture, scoped, query, roleCan(session.role, "control_work_order"));
   else if (route === "visits") rows = visitRows(fixture, scoped, query);
   else if (route === "stores") rows = storeRows(fixture, scoped, query);
   else if (route === "vendors") rows = vendorRows(fixture, scoped, query);
@@ -2989,6 +3007,15 @@ export function buildListModel(
   const activeHeldWork = route === "work-orders"
     ? (fixture.workOrderVisitHolds ?? []).filter((hold) => hold.organizationId === scoped.organizationId && hold.status === "active" && scoped.workOrders.some((work) => work.id === hold.workOrderId && work.status === "approved"))
     : [];
+  const openStoreWork = route === "stores"
+    ? scoped.workOrders.filter((work) => !["closed", "cancelled"].includes(work.status))
+    : [];
+  const storeWorkIds = route === "stores" ? new Set(scoped.workOrders.map((work) => work.id)) : new Set<string>();
+  const storeRecordedCostMinor = route === "stores"
+    ? fixture.costLines
+        .filter((line) => line.organizationId === scoped.organizationId && storeWorkIds.has(line.workOrderId))
+        .reduce((sum, line) => sum + line.amount.amountMinor, 0)
+    : 0;
   const heldStoreCounts = new Map<string, number>();
   for (const hold of activeHeldWork) {
     const work = scoped.workOrders.find((candidate) => candidate.id === hold.workOrderId);
@@ -3098,6 +3125,13 @@ export function buildListModel(
         ? [
             { id: "ready-to-bundle", label: "Approved for later", value: String(activeHeldWork.length), supportingText: "Low-priority jobs that can wait for a practical opportunity", tone: activeHeldWork.length ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open the list" } },
             { id: "store-sweep-opportunities", label: "Stores with several approved jobs", value: String([...heldStoreCounts.values()].filter((count) => count >= 2).length), supportingText: "Consider grouping these jobs for one vendor", tone: [...heldStoreCounts.values()].some((count) => count >= 2) ? "warning" : "positive", link: { href: "/app/store-sweeps/new", label: "Group approved jobs" } },
+          ]
+      : route === "stores"
+        ? [
+            { id: "stores-in-scope", label: "Stores in scope", value: String(scoped.stores.length), supportingText: "Every location available to your role", tone: "neutral", link: { href: "/app/stores", label: "Open store directory" } },
+            { id: "store-open-work", label: "Open work orders", value: String(openStoreWork.length), supportingText: `${new Set(openStoreWork.map((work) => work.storeId)).size} store${new Set(openStoreWork.map((work) => work.storeId)).size === 1 ? "" : "s"} currently have open work`, tone: openStoreWork.length ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open source work" } },
+            { id: "store-onsite-now", label: "Vendors onsite now", value: String(scoped.visits.filter((visit) => visit.status === "active").length), supportingText: "Active, server-timestamped check-ins", tone: scoped.visits.some((visit) => visit.status === "active") ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open active visits" } },
+            { id: "store-recorded-cost", label: "Recorded work cost", value: money(storeRecordedCostMinor), supportingText: "Entered cost lines for these stores", tone: "neutral", link: { href: "/app/spend", label: "Open cost breakdown" } },
           ]
       : route === "action-center"
         ? [
@@ -3831,8 +3865,10 @@ export function buildProgramModel(
       { key: "store", value: storeLabel(scoped.stores.find((store) => store.id === row.asset.storeId)) },
       {
         key: "evidence",
-        value: lifecycleComparisonLabel(row.screening),
-        secondary: row.screening.state === "incomplete"
+        value: lifecycleView === "capital" ? "Management-planned replacement" : lifecycleComparisonLabel(row.screening),
+        secondary: lifecycleView === "capital"
+          ? row.capitalPlanLabel
+          : row.screening.state === "incomplete"
           ? `Needed: ${row.screening.dataGaps.map(lifecycleGapLabel).join(", ")}`
           : row.screening.state === "compare_alternatives"
             ? "Compare the current repair with replacement before issuing work"
@@ -3844,8 +3880,12 @@ export function buildProgramModel(
         key: "work",
         value: row.proposalWork
           ? `${row.proposalWork.number}: ${money(row.screening.comparison.repairEstimateMinor ?? 0)}`
-          : "No current repair estimate",
-        secondary: row.screening.comparison.requiredEconomicRunwayMonths === undefined
+          : lifecycleView === "capital"
+            ? "No active repair decision"
+            : "No current repair estimate",
+        secondary: lifecycleView === "capital" && !row.proposalWork
+          ? "Planning record only"
+          : row.screening.comparison.requiredEconomicRunwayMonths === undefined
           ? "Comparison inputs not complete"
           : selectedAsset
             ? `${formatRunway(row.screening.comparison.requiredEconomicRunwayMonths)} required runway · ${row.screening.comparison.estimatedServiceExtensionMonths === undefined ? "service estimate not entered" : `${formatRunway(row.screening.comparison.estimatedServiceExtensionMonths)} entered service estimate`} · ${Math.round((row.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of replacement estimate`
@@ -3854,8 +3894,8 @@ export function buildProgramModel(
       { key: "replacement", value: row.replacement ? money(row.replacement) : "Not entered", secondary: selectedAsset ? `${row.capitalPlanLabel}. ${row.replacementResolution.explanation}` : row.capitalPlanLabel },
       {
         key: "status",
-        value: lifecycleComparisonLabel(row.screening),
-        tone: row.screening.state === "compare_alternatives" ? "warning" : row.screening.state === "incomplete" ? "info" : "positive",
+        value: lifecycleView === "capital" ? row.capitalPlanLabel : lifecycleComparisonLabel(row.screening),
+        tone: lifecycleView === "capital" ? "info" : row.screening.state === "compare_alternatives" ? "warning" : row.screening.state === "incomplete" ? "info" : "positive",
       },
     ],
   }));
@@ -3887,7 +3927,7 @@ export function buildProgramModel(
       sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "capital" }), label: "Open management-planned capital" },
     }],
     priorityActions: selectedAsset ? [] : allActions,
-    table: { id: "lifecycle", caption: "Equipment lifecycle details", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "evidence", label: "Why it is here" }, { key: "work", label: "Current repair" }, { key: "replacement", label: "Estimated replacement", align: "end" }, { key: "status", label: "Review result" }], rows },
+    table: { id: "lifecycle", caption: "Equipment lifecycle details", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "evidence", label: lifecycleView === "capital" ? "Planning basis" : "Why it is here" }, { key: "work", label: "Current repair" }, { key: "replacement", label: "Estimated replacement", align: "end" }, { key: "status", label: lifecycleView === "capital" ? "Planning status" : "Review result" }], rows },
   };
 }
 
@@ -4580,6 +4620,28 @@ export function buildDetailModel(
         ],
       };
     });
+    const openStoreRequestIds = new Set(
+      fixture.requests
+        .filter((request) => request.organizationId === scoped.organizationId && request.storeId === store.id && ["submitted", "under_review"].includes(request.status))
+        .map((request) => request.id),
+    );
+    const currentOperatingStates = fixture.requestImpactAssessments
+      .filter((assessment) => assessment.organizationId === scoped.organizationId && assessment.storeId === store.id && openStoreRequestIds.has(assessment.requestId))
+      .map((assessment) => assessment.storeOperatingState);
+    const storeStatusLabel = store.status === "inactive"
+      ? "Inactive"
+      : currentOperatingStates.includes("unable_to_operate")
+        ? "Unable to operate"
+        : currentOperatingStates.includes("partially_operational")
+          ? "Limited operations"
+          : "Active";
+    const storeStatusTone: Tone = store.status === "inactive"
+      ? "neutral"
+      : currentOperatingStates.includes("unable_to_operate")
+        ? "critical"
+        : currentOperatingStates.includes("partially_operational")
+          ? "warning"
+          : "positive";
     if (session.demoEdition === "accountability") {
       const isDemoEntryStore = store.id === NORTHLINE_DEMO_HANDLES.storyStoreId;
       return {
@@ -4592,8 +4654,8 @@ export function buildDetailModel(
           primaryAction: roleCan(session.role, "create_work_order") ? { label: "Create work order", href: `/app/work-orders/new?store=${store.id}` } : undefined,
           secondaryAction: isDemoEntryStore ? { label: "Open vendor check-in", href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}` } : { label: "View service visits", href: `/app/visits?store=${store.id}` },
         },
-        statusLabel: sentence(store.status),
-        statusTone: store.status === "active" ? "positive" : "neutral",
+        statusLabel: storeStatusLabel,
+        statusTone: storeStatusTone,
         facts: [
           { label: "Open work orders", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work orders" } },
           { label: "Upcoming visits", value: String(storeUpcomingVisits.length), link: { href: `/app/visits?store=${store.id}&status=upcoming`, label: "Open upcoming visits" } },
@@ -4666,11 +4728,116 @@ export function buildDetailModel(
         ],
       };
     });
+    const storePmStatus = storePm.map((occurrence) => ({ occurrence, status: effectivePmStatus(occurrence, fixture.asOf) }));
+    const duePm = storePmStatus.filter(({ status }) => status === "due");
+    const missedPm = storePmStatus.filter(({ status }) => status === "missed");
+    const nextPm = storePmStatus
+      .filter(({ status }) => !["completed", "waived", "cancelled", "missed"].includes(status))
+      .sort((left, right) => left.occurrence.dueAt.localeCompare(right.occurrence.dueAt))[0]?.occurrence;
+    const lastCompletedPm = storePm
+      .filter((occurrence) => effectivePmStatus(occurrence, fixture.asOf) === "completed")
+      .sort((left, right) => (right.completedAt ?? right.dueAt).localeCompare(left.completedAt ?? left.dueAt))[0];
+    const pmPriority: Record<ReturnType<typeof effectivePmStatus>, number> = {
+      missed: 0,
+      due: 1,
+      proposed: 2,
+      scheduled: 3,
+      upcoming: 4,
+      unscheduled: 5,
+      completed: 6,
+      completed_early: 6,
+      completed_on_time: 6,
+      completed_late: 6,
+      waived: 7,
+      cancelled: 8,
+    };
+    const pmPlanRows: TableRowViewModel[] = storePlans.map((plan) => {
+      const asset = storeAssets.find((candidate) => candidate.id === plan.assetId);
+      const program = plan.programId ? programById.get(plan.programId) : undefined;
+      const occurrences = storePm
+        .filter((occurrence) => occurrence.planId === plan.id)
+        .sort((left, right) => {
+          const leftStatus = effectivePmStatus(left, fixture.asOf);
+          const rightStatus = effectivePmStatus(right, fixture.asOf);
+          return pmPriority[leftStatus] - pmPriority[rightStatus] || left.dueAt.localeCompare(right.dueAt);
+        });
+      const occurrence = occurrences.find((candidate) => !["completed", "waived", "cancelled"].includes(effectivePmStatus(candidate, fixture.asOf)))
+        ?? occurrences.sort((left, right) => (right.completedAt ?? right.dueAt).localeCompare(left.completedAt ?? left.dueAt))[0];
+      const status = occurrence ? effectivePmStatus(occurrence, fixture.asOf) : undefined;
+      const work = occurrence?.workOrderId ? storeWork.find((candidate) => candidate.id === occurrence.workOrderId) : undefined;
+      const source = program && (plan.cadenceDays !== program.frequencyDays || plan.completionWindowDays !== program.dueWindowDays || Boolean(plan.cadenceOverrideReason))
+        ? "Store adjustment"
+        : program
+          ? "Company schedule"
+          : "Store schedule";
+      return {
+        id: plan.id,
+        label: plan.name,
+        href: work ? `/app/work-orders/${work.id}` : roleCan(session.role, "setup_pm") ? `/app/pm/plans/${plan.id}` : `/app/pm?store=${store.id}`,
+        cells: [
+          { key: "plan", value: program?.name ?? plan.name, secondary: asset ? `${asset.name} · ${asset.assetTag}` : plan.name },
+          { key: "timing", value: occurrence ? date(occurrence.dueAt, store.timeZone) : "Not generated", secondary: occurrence ? `${date(occurrence.windowStartsAt, store.timeZone)} – ${date(occurrence.windowEndsAt, store.timeZone)}` : `Every ${plan.cadenceDays} days` },
+          { key: "status", value: status ? sentence(status) : "Schedule only", tone: status === "missed" ? "critical" : status === "due" ? "warning" : status === "completed" ? "positive" : "info" },
+          { key: "evidence", value: work?.number ?? (occurrence?.completedAt ? "Completion recorded" : "No completion yet"), secondary: occurrence?.result ?? source },
+        ],
+      };
+    });
+    const allStoreWorkRows = workRows(fixture, storeScopedFixture, {});
+    const openStoreWorkIds = new Set(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).map((work) => work.id));
+    const storeHistoryRows = [
+      ...allStoreWorkRows.filter((row) => openStoreWorkIds.has(row.id)),
+      ...allStoreWorkRows.filter((row) => !openStoreWorkIds.has(row.id)),
+    ].slice(0, 12);
+    const storeVisitTimeline = [...storeVisits]
+      .sort((left, right) => right.checkedInAt.localeCompare(left.checkedInAt))
+      .slice(0, 8)
+      .map((visit) => {
+        const work = visit.workOrderId ? storeWork.find((candidate) => candidate.id === visit.workOrderId) : undefined;
+        const outcome = visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "Onsite now" : "Outcome not recorded";
+        return {
+          id: visit.id,
+          title: `${visit.providerName} · ${visit.technicianName}`,
+          description: `${work?.number ?? "No work order"} · ${visit.purpose} · ${outcome}`,
+          timestampLabel: dateTime(visit.checkedInAt, store.timeZone),
+          actorLabel: visit.status === "active" ? "Active check-in" : visit.checkedOutAt ? `Checked out ${dateTime(visit.checkedOutAt, store.timeZone)}` : "Checkout not recorded",
+          tone: visit.status === "active" ? "info" as const : visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome) ? "warning" as const : "positive" as const,
+          link: { href: `/app/visits/${visit.id}`, label: "Open visit" },
+        };
+      });
+    const storeLifecycle = lifecycleRows(fixture, storeScopedFixture, recordedCostByWork(fixture, scoped.organizationId));
+    const storeAssetRows: TableRowViewModel[] = storeLifecycle
+      .sort((left, right) => {
+        const rank = { out_of_service: 0, watch: 1, operational: 2, retired: 3 } as const;
+        return rank[left.asset.status] - rank[right.asset.status] || left.asset.name.localeCompare(right.asset.name);
+      })
+      .map((row) => {
+        const openWork = row.work.filter((work) => !["closed", "cancelled"].includes(work.status)).length;
+        const age = row.ageYears === undefined
+          ? "Not recorded"
+          : row.asset.expectedLifeYears
+            ? `${row.ageYears.toFixed(1)} of ${row.asset.expectedLifeYears} years`
+            : `${row.ageYears.toFixed(1)} years`;
+        return {
+          id: row.asset.id,
+          label: row.asset.name,
+          href: `/app/equipment/${row.asset.id}`,
+          cells: [
+            { key: "equipment", value: row.asset.name, secondary: `${row.asset.assetTag} · ${row.asset.groupPath.at(-1) ?? sentence(row.asset.categoryKey)}` },
+            { key: "area", value: sentence(row.asset.categoryKey), secondary: row.asset.groupPath.length ? row.asset.groupPath.join(" › ") : undefined },
+            { key: "age", value: age, secondary: row.asset.expectedLifeYears ? "Expected life is a planning reference" : "Expected life not entered" },
+            { key: "cost", value: money(costForWorkIds(rollingCostByWork, row.work.map((work) => work.id))) },
+            { key: "open", value: String(openWork), tone: openWork ? "warning" : "positive" },
+            { key: "status", value: row.asset.status === "out_of_service" ? "Out of service" : row.asset.status === "watch" ? "Needs review" : sentence(row.asset.status), tone: row.asset.status === "out_of_service" ? "critical" : row.asset.status === "watch" ? "warning" : row.asset.status === "operational" ? "positive" : "neutral" },
+          ],
+        };
+      });
+    const equipmentReviewCount = storeAssets.filter((asset) => asset.status === "watch" || asset.status === "out_of_service").length;
+    const replacementOutlook = storeLifecycle.reduce((sum, row) => sum + (row.replacement ?? 0), 0);
     return {
       state: { kind: "ready" },
       page: { title: `Store ${store.storeNumber}`, eyebrow: store.name, description: storeAddress(store), scopeLabel: session.scopeLabel, primaryAction: roleCan(session.role, "create_work_order") ? { label: "Create work order", href: `/app/work-orders/new?store=${store.id}` } : undefined, secondaryAction: { label: "View recorded cost", href: `/app/spend?store=${store.id}` } },
-      statusLabel: sentence(store.status),
-      statusTone: store.status === "active" ? "positive" : "neutral",
+      statusLabel: storeStatusLabel,
+      statusTone: storeStatusTone,
       facts: [
         { label: "Open work", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work" } },
         { label: "Upcoming visits", value: String(storeUpcomingVisits.length), helperText: storeUpcomingVisits.length ? "Vendor-confirmed appointments" : "No confirmed appointments", link: { href: `/app/visits?store=${store.id}&status=upcoming`, label: "Open upcoming visits" } },
@@ -4682,16 +4849,6 @@ export function buildDetailModel(
         { label: "Capital review", value: String(storeAssets.filter((asset) => asset.status === "watch").length), helperText: "Human review; no automatic replacement", link: { href: `/app/lifecycle?store=${store.id}`, label: "Open lifecycle evidence" } },
       ],
       sections: [
-        ...(store.id === NORTHLINE_DEMO_HANDLES.storyStoreId ? [{
-          id: "demo-entry-points",
-          title: "Store service entry points",
-          description: "Use any entry point against the same store and work records. QR/mobile requests event-only location; the trusted service desk records the exact visit time and displays it in the store's local timezone without requiring a PIN or location permission.",
-          facts: [
-            { label: "QR or mobile web", value: "Report an issue or start a vendor visit", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}`, label: "Open QR/mobile entry" } },
-            { label: "Trusted store computer", value: "Check a vendor in or finish an onsite visit", link: { href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.trustedStore104}`, label: "Open store service desk" } },
-            { label: "Vendor authorization", value: "Account-free acceptance, scheduling, decline, or question", link: { href: `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}`, label: "Open vendor view" } },
-          ],
-        }] : []),
         ...(storeUpcomingVisits.length ? [{
           id: "upcoming-visits",
           title: "Upcoming visits",
@@ -4708,42 +4865,59 @@ export function buildDetailModel(
         }] : []),
         {
           id: "preventive-maintenance-plans",
-          title: "Preventive maintenance plans",
-          description: "This store inherits company schedules. Open any plan to document a faster local cadence without changing the company standard or rewriting prior due dates.",
+          title: "Preventive maintenance",
+          description: "See what is due, missed, and completed at this store. Company schedules remain the default; store adjustments stay visible and auditable.",
+          facts: [
+            { label: "Due now", value: String(duePm.length), link: { href: `/app/pm?store=${store.id}&status=due`, label: "Open due PM" } },
+            { label: "Missed", value: String(missedPm.length), link: { href: `/app/pm?store=${store.id}&status=missed`, label: "Open missed PM" } },
+            { label: "Next due", value: nextPm ? date(nextPm.dueAt, store.timeZone) : "Nothing scheduled", helperText: nextPm ? pmByPlan.get(nextPm.planId)?.name : "No future occurrence is on the calendar" },
+            { label: "Last completed", value: lastCompletedPm ? date(lastCompletedPm.completedAt ?? lastCompletedPm.dueAt, store.timeZone) : "No completion recorded", helperText: lastCompletedPm ? pmByPlan.get(lastCompletedPm.planId)?.name : undefined },
+          ],
+          tableHeading: "Current schedule by program",
           table: {
             id: "store-pm-plans",
-            caption: `Preventive maintenance plans for Store ${store.storeNumber}`,
+            caption: `Preventive maintenance schedule for Store ${store.storeNumber}`,
             columns: [
-              { key: "equipment", label: "Equipment / plan" },
-              { key: "program", label: "Company schedule" },
-              { key: "cadence", label: "Current cadence" },
-              { key: "source", label: "Schedule source" },
+              { key: "plan", label: "Program / equipment" },
+              { key: "timing", label: "Due / service window" },
+              { key: "status", label: "Status" },
+              { key: "evidence", label: "Work or evidence" },
             ],
-            rows: storePlans.map((plan) => {
-              const asset = storeAssets.find((candidate) => candidate.id === plan.assetId);
-              const program = plan.programId ? programById.get(plan.programId) : undefined;
-              const overridden = program
-                ? plan.cadenceDays !== program.frequencyDays || plan.completionWindowDays !== program.dueWindowDays || Boolean(plan.cadenceOverrideReason)
-                : false;
-              return {
-                id: plan.id,
-                label: plan.name,
-                href: roleCan(session.role, "setup_pm") ? `/app/pm/plans/${plan.id}` : `/app/pm?store=${store.id}`,
-                cells: [
-                  { key: "equipment", value: asset?.name ?? plan.name, secondary: asset?.assetTag ?? "Store-level plan" },
-                  { key: "program", value: program?.name ?? "Store-created plan", secondary: program ? `Every ${program.frequencyDays} days` : "No company master" },
-                  { key: "cadence", value: `Every ${plan.cadenceDays} days`, secondary: `±${plan.completionWindowDays}-day completion window` },
-                  { key: "source", value: overridden ? "Store override" : program ? "Company standard" : "Store-created", secondary: plan.cadenceOverrideReason, tone: overridden ? "warning" : "positive" },
-                ],
-              };
-            }),
+            rows: pmPlanRows,
           },
-          action: { label: "Open company PM workspace", href: `/app/pm?store=${store.id}` },
+          action: { label: "Open full PM record", href: `/app/pm?store=${store.id}` },
         },
-        { id: "service-areas", title: "Store systems", description: "Start broad, then open a service area and continue through flexible groups, equipment, components, work orders, and entered cost.", table: { id: "store-service-areas", caption: `Service areas for Store ${store.storeNumber}`, columns: [{ key: "area", label: "Service area" }, { key: "cost", label: "12-month cost", align: "end" }, { key: "open", label: "Open work", align: "end" }, { key: "pm", label: "PM" }, { key: "status", label: "Current signal" }], rows: serviceAreaRows } },
-        { id: "work", title: "Work orders", table: { id: "store-work", caption: `Work orders for Store ${store.storeNumber}`, columns: columns["work-orders"], rows: workRows(fixture, storeScopedFixture, {}) } },
-        { id: "visits", title: "Service visit history", description: "Completed and active check-in records across every channel. Upcoming appointments are shown separately above.", table: { id: "store-visits", caption: `Visit history for Store ${store.storeNumber}`, columns: columns.visits, rows: visitRows(fixture, storeScopedFixture, {}) } },
-        { id: "equipment", title: "Equipment & lifecycle", facts: [{ label: "Tracked assets", value: String(storeAssets.length) }, { label: "Marked for review", value: String(storeAssets.filter((asset) => asset.status === "watch").length) }, { label: "Optional components", value: String(fixture.components.filter((component) => component.organizationId === scoped.organizationId && storeAssets.some((asset) => asset.id === component.assetId)).length) }], action: { label: "Open equipment", href: `/app/equipment?store=${store.id}` } },
+        { id: "service-areas", title: "Service areas and spending", description: "See where this store is spending money, where work remains open, and whether preventive maintenance is current.", table: { id: "store-service-areas", caption: `Service areas and spending for Store ${store.storeNumber}`, columns: [{ key: "area", label: "Service area" }, { key: "cost", label: "12-month cost", align: "end" }, { key: "open", label: "Open work", align: "end" }, { key: "pm", label: "PM" }, { key: "status", label: "Current signal" }], rows: serviceAreaRows } },
+        {
+          id: "equipment",
+          title: "Equipment and lifecycle",
+          description: "Review every tracked equipment record at this store, including age context, recorded cost, open work, and operating state.",
+          facts: [
+            { label: "Tracked equipment", value: String(storeAssets.length), link: { href: `/app/equipment?store=${store.id}`, label: "Open all equipment" } },
+            { label: "Needs review", value: String(equipmentReviewCount), helperText: "Includes equipment marked for review or out of service", link: { href: `/app/lifecycle?store=${store.id}`, label: "Open lifecycle review" } },
+            { label: "Out of service", value: String(storeAssets.filter((asset) => asset.status === "out_of_service").length), link: { href: `/app/equipment?store=${store.id}&status=out_of_service`, label: "Open out-of-service equipment" } },
+            { label: "Replacement outlook", value: replacementOutlook ? money(replacementOutlook) : "Not entered", helperText: "Current planning estimates; not an approved budget", link: { href: `/app/lifecycle?store=${store.id}`, label: "Open replacement evidence" } },
+          ],
+          tableHeading: "All equipment at this store",
+          table: { id: "store-equipment", caption: `Equipment and lifecycle for Store ${store.storeNumber}`, columns: [{ key: "equipment", label: "Equipment" }, { key: "area", label: "Service area" }, { key: "age", label: "Age / expected life" }, { key: "cost", label: "12-month cost", align: "end" }, { key: "open", label: "Open work", align: "end" }, { key: "status", label: "Operating state" }], rows: storeAssetRows },
+          action: { label: "Open equipment workspace", href: `/app/equipment?store=${store.id}` },
+        },
+        {
+          id: "work-history",
+          title: "Work and visit history",
+          description: "Open current work first, then use observed visit records to confirm who came onsite, when they were there, and what outcome they recorded.",
+          facts: [
+            { label: "Work orders", value: String(storeWork.length), link: { href: `/app/work-orders?store=${store.id}`, label: "Open all work orders" } },
+            { label: "Open work", value: String(openStoreWorkIds.size), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open current work" } },
+            { label: "Recorded visits", value: String(storeVisits.length), link: { href: `/app/visits?store=${store.id}`, label: "Open all visits" } },
+            { label: "Visits without a work order", value: String(storeVisits.filter((visit) => !visit.workOrderId).length), helperText: "Reviewable onsite evidence; not hidden from history", link: { href: `/app/visits?store=${store.id}&review=true`, label: "Review unmatched visits" } },
+          ],
+          tableHeading: "Current and recent work orders",
+          table: { id: "store-work", caption: `Current and recent work orders for Store ${store.storeNumber}`, columns: columns["work-orders"], rows: storeHistoryRows },
+          timelineHeading: "Latest observed visits",
+          timeline: storeVisitTimeline,
+          action: { label: "Open full work history", href: `/app/work-orders?store=${store.id}` },
+        },
       ],
       backLink: { label: "Back to stores", href: "/app/stores" },
     };

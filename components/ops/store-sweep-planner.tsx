@@ -32,7 +32,7 @@ export function StoreSweepPlanner({ model, notice }: { model: StoreSweepPlannerM
       </form>
     </section>
     {selectedStore ? <section className={styles.panel}>
-      <div className={styles.panelHeader}><div><h2>2. Choose a vendor and the jobs to group</h2><p>{selectedStore.label} has {selectedStore.readyCount} approved {selectedStore.readyCount === 1 ? "job" : "jobs"} that can wait. Different service areas can be offered to different vendors.</p></div></div>
+      <div className={styles.panelHeader}><div><h2>2. Choose a vendor and the jobs to group</h2><p>{selectedStore.label} has {selectedStore.readyCount} approved {selectedStore.readyCount === 1 ? "job" : "jobs"} that can wait. {model.focusedWorkOrderId ? "The job you opened is selected first; add any other work this vendor should handle." : "Different service areas can be offered to different vendors."}</p></div></div>
       {model.vendorOptions.length ? <div className={styles.vendorList}>{model.vendorOptions.map((vendor) => <form className={styles.vendorCard} action="/api/ops/store-sweeps" method="post" key={vendor.vendorId}>
         <input type="hidden" name="storeId" value={selectedStore.id} />
         <input type="hidden" name="vendorId" value={vendor.vendorId} />
@@ -40,7 +40,7 @@ export function StoreSweepPlanner({ model, notice }: { model: StoreSweepPlannerM
         <div className={styles.vendorHeader}><div><p className={styles.eyebrow}>Vendor</p><h3>{vendor.vendorName}</h3><p>{vendor.serviceAreas.join(" · ")}</p></div><span className={styles.count}>{vendor.jobs.length} {vendor.jobs.length === 1 ? "job" : "jobs"} in these service areas</span></div>
         <p className={styles.explainer}>Shown because this company’s vendor record lists these service areas. This does not certify an individual technician; the vendor decides what its crew can complete.</p>
         <fieldset className={styles.jobList}><legend>Select approved jobs</legend>{vendor.jobs.map((job) => <label className={styles.job} key={job.workOrderId}>
-          <input aria-label={`Include ${job.number}: ${job.problem}`} type="checkbox" name="workOrderId" value={job.workOrderId} defaultChecked />
+          <input aria-label={`Include ${job.number}: ${job.problem}`} type="checkbox" name="workOrderId" value={job.workOrderId} defaultChecked={!model.focusedWorkOrderId || job.workOrderId === model.focusedWorkOrderId} />
           <span><span className={styles.jobTitle}>{job.number} · {job.problem}</span><span className={styles.jobMeta}>{job.serviceArea} · {job.posture} · {job.reviewLabel}</span><span className={styles.scope}>{job.scope}</span></span>
         </label>)}</fieldset>
         <div className={styles.scheduleGrid}>

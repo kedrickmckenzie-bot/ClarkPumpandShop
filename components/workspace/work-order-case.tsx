@@ -584,9 +584,9 @@ export function WorkOrderCase({
         </section>
       ) : (
         <section className={styles.caseContextStrip} aria-label="Current work-order context">
-          <div><span>Service need</span><strong>{model.page.description}</strong></div>
-          <div><span>Next action</span><strong>{canonicalCase.primaryNextAction.label}</strong></div>
-          <div><span>Owner · due</span><strong>{canonicalCase.accountableParty} · {dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
+          <Link href={`/app/work-orders/${control.workOrderId}?view=overview`}><span>Service need</span><strong>{model.page.description}</strong><small>Open work-order summary</small></Link>
+          <Link className={styles.contextPrimary} href={canonicalCase.primaryNextAction.href}><span>Next action</span><strong>{canonicalCase.primaryNextAction.label}</strong><small>Open the step that moves this forward</small></Link>
+          <Link href={`/app/work-orders/${control.workOrderId}?view=activity`}><span>Owner · due</span><strong>{canonicalCase.accountableParty} · {dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong><small>Open follow-up and history</small></Link>
         </section>
       )}
 

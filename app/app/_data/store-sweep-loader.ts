@@ -10,6 +10,7 @@ export interface StoreSweepPlannerModel {
   asOf: string;
   planningBaseline: string;
   selectedStoreId?: string;
+  focusedWorkOrderId?: string;
   stores: Array<{ id: string; label: string; readyCount: number }>;
   selectedStore?: { id: string; label: string; timeZone: string; readyCount: number };
   vendorOptions: Array<{
@@ -42,7 +43,7 @@ function reviewLabel(deadlineAt: string, asOf: string, timeZone: string) {
   return `Review in ${days} ${days === 1 ? "day" : "days"} · ${dateOnly(deadlineAt, timeZone)}`;
 }
 
-export async function loadStoreSweepPlanner(requestedStoreId?: string): Promise<StoreSweepPlannerModel> {
+export async function loadStoreSweepPlanner(requestedStoreId?: string, requestedWorkOrderId?: string): Promise<StoreSweepPlannerModel> {
   const [fixture, repository, session] = await Promise.all([
     getServerOpsFixtureSnapshot(),
     getServerOpsRepository(),
@@ -61,6 +62,9 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string): Promise<
     const workOrder = fixture.workOrders.find((row) => row.organizationId === session.organizationId && row.id === hold.workOrderId && row.status === "approved");
     return workOrder ? [{ hold, workOrder }] : [];
   });
+  const requestedWork = requestedWorkOrderId
+    ? readyWork.find(({ workOrder }) => workOrder.id === requestedWorkOrderId)?.workOrder
+    : undefined;
   const stores = visibleStores.map((store) => ({
     id: store.id,
     label: `Store ${store.storeNumber} · ${store.name}`,
@@ -68,13 +72,14 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string): Promise<
   })).filter((store) => store.readyCount > 0).sort((left, right) => right.readyCount - left.readyCount || left.label.localeCompare(right.label));
   const selectedStoreId = requestedStoreId && stores.some((store) => store.id === requestedStoreId)
     ? requestedStoreId
-    : stores[0]?.id;
+    : requestedWork?.storeId ?? stores[0]?.id;
   const store = selectedStoreId ? visibleStores.find((row) => row.id === selectedStoreId) : undefined;
   if (requestedStoreId && !store) notFound();
   if (!store) return { asOf: fixture.asOf, planningBaseline, stores, selectedStoreId: undefined, vendorOptions: [] };
   const storeTimeZone = store.timeZone ?? "America/New_York";
 
   const storeWork = readyWork.filter(({ workOrder }) => workOrder.storeId === store.id);
+  const focusedWorkOrderId = requestedWork && requestedWork.storeId === store.id ? requestedWork.id : undefined;
   const vendorOptions = [] as StoreSweepPlannerModel["vendorOptions"];
   for (const vendor of fixture.vendors.filter((row) => row.organizationId === session.organizationId && row.status === "approved")) {
     const contract = fixture.contractVersions.find((row) => row.organizationId === session.organizationId
@@ -100,6 +105,7 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string): Promise<
       });
     }
     if (!jobs.length) continue;
+    jobs.sort((left, right) => Number(right.workOrderId === focusedWorkOrderId) - Number(left.workOrderId === focusedWorkOrderId) || left.number.localeCompare(right.number));
     vendorOptions.push({
       vendorId: vendor.id,
       vendorName: vendor.name,
@@ -114,6 +120,7 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string): Promise<
     asOf: fixture.asOf,
     planningBaseline,
     selectedStoreId: store.id,
+    focusedWorkOrderId,
     stores,
     selectedStore: { id: store.id, label: `Store ${store.storeNumber} · ${store.name}`, timeZone: storeTimeZone, readyCount: storeWork.length },
     vendorOptions,

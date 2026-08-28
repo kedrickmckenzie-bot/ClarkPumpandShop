@@ -81,11 +81,11 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
       </header>
 
       <div className={styles.summary} aria-label="PM program coverage summary">
-        <div><CalendarRange size={18} aria-hidden="true" /><span><small>Active schedules</small><strong>{model.summary.activePrograms}</strong></span></div>
-        <div><Layers3 size={18} aria-hidden="true" /><span><small>Matching equipment</small><strong>{model.summary.matchingEquipment}</strong></span></div>
-        <div><CheckCircle2 size={18} aria-hidden="true" /><span><small>Enrolled plans</small><strong>{model.summary.enrolledPlans}</strong></span></div>
-        <div data-alert={model.summary.coverageGaps > 0 || undefined}><CircleAlert size={18} aria-hidden="true" /><span><small>Coverage gaps</small><strong>{model.summary.coverageGaps}</strong></span></div>
-        <div data-alert={model.summary.evidenceReviews > 0 || undefined}><FileSearch size={18} aria-hidden="true" /><span><small>Evidence reviews</small><strong>{model.summary.evidenceReviews}</strong></span></div>
+        <Link href="#pm-programs-title"><CalendarRange size={18} aria-hidden="true" /><span><small>Active schedules</small><strong>{model.summary.activePrograms}</strong><em>Open schedules</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
+        <Link href="#pm-programs-title"><Layers3 size={18} aria-hidden="true" /><span><small>Matching equipment</small><strong>{model.summary.matchingEquipment}</strong><em>Review coverage rules</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
+        <Link href="/app/pm?enrollments=all#store-pm-plans"><CheckCircle2 size={18} aria-hidden="true" /><span><small>Enrolled plans</small><strong>{model.summary.enrolledPlans}</strong><em>Open store schedules</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
+        <Link data-alert={model.summary.coverageGaps > 0 || undefined} href="#pm-programs-title"><CircleAlert size={18} aria-hidden="true" /><span><small>Coverage gaps</small><strong>{model.summary.coverageGaps}</strong><em>Open coverage details</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
+        <Link data-alert={model.summary.evidenceReviews > 0 || undefined} href={model.summary.evidenceReviews ? "#pm-evidence-review-title" : "/app/pm?view=attention"}><FileSearch size={18} aria-hidden="true" /><span><small>Evidence reviews</small><strong>{model.summary.evidenceReviews}</strong><em>{model.summary.evidenceReviews ? "Open evidence review" : "Open PM review"}</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
       </div>
 
       <div className={styles.tableWrap}>
@@ -115,7 +115,7 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
         </article>)}
       </section> : null}
 
-      <div className={styles.planHeader}>
+      <div className={styles.planHeader} id="store-pm-plans">
         <div><h3>{model.planView.title}</h3><p>{model.planView.description}</p></div>
         <div className={styles.planHeaderActions}><strong>{model.planView.resultLabel}</strong>{model.planView.toggleHref && model.planView.toggleLabel ? <Link href={model.planView.toggleHref}>{model.planView.toggleLabel}</Link> : null}</div>
       </div>

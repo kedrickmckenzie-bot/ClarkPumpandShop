@@ -55,16 +55,16 @@ function SectionContent({ section }: { section: DetailSectionViewModel }) {
           ))}
         </dl>
       ) : null}
-      {section.table ? <DataTable table={section.table} /> : null}
+      {section.table ? <>{section.tableHeading ? <h3 className={styles.contentHeading}>{section.tableHeading}</h3> : null}<DataTable table={section.table} /></> : null}
       {section.timeline?.length ? (
-        <ol className={styles.timeline}>
+        <>{section.timelineHeading ? <h3 className={styles.contentHeading}>{section.timelineHeading}</h3> : null}<ol className={styles.timeline}>
           {section.timeline.map((event) => (
             <li key={event.id}>
               <span className={`${styles.timelineDot} ${toneClass[event.tone ?? "neutral"]}`} aria-hidden="true" />
               <div><header><strong>{event.title}</strong><time>{event.timestampLabel}</time></header>{event.description ? <p>{event.description}</p> : null}<footer><span>{event.actorLabel}</span>{event.link ? <Link href={event.link.href}>{event.link.label}<ChevronRight aria-hidden="true" size={14} /></Link> : null}</footer></div>
             </li>
           ))}
-        </ol>
+        </ol></>
       ) : null}
       {!section.facts?.length && !section.table && !section.timeline?.length ? <div className={styles.empty}><FileSearch aria-hidden="true" size={20} /><p>No information has been recorded in this section yet.</p></div> : null}
     </section>

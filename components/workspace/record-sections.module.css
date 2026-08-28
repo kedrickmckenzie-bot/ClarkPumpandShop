@@ -73,10 +73,9 @@
 .overview header > span { display: inline-flex; align-items: center; gap: 6px; color: var(--record-muted); font-size: 12px; font-weight: 650; }
 .sectionHeader > a { min-height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid var(--record-border); border-radius: 6px; color: var(--record-action); background: #fff; font-size: 13px; font-weight: 680; }
 
-.cardGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.sectionCard { min-width: 0; min-height: 190px; display: flex; flex-direction: column; padding: 18px; border: 0; border-right: 1px solid var(--record-border); border-bottom: 1px solid var(--record-border); color: var(--record-ink); background: #fff; font: inherit; text-align: left; cursor: pointer; }
-.sectionCard:nth-child(3n) { border-right: 0; }
-.sectionCard:hover { background: #f7faff; }
+.cardGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px; background: #f4f6f9; }
+.sectionCard { min-width: 0; min-height: 190px; display: flex; flex-direction: column; padding: 18px; border: 1px solid var(--record-border); border-radius: 8px; color: var(--record-ink); background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04); font: inherit; text-align: left; cursor: pointer; transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+.sectionCard:hover { border-color: #9db2ee; box-shadow: 0 5px 14px rgba(16, 24, 40, 0.08); transform: translateY(-1px); }
 .cardHeading { display: flex; align-items: center; gap: 8px; }
 .cardHeading > span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 6px; color: var(--record-action); background: #edf3ff; }
 .cardHeading strong { font-size: 15px; }
@@ -97,6 +96,20 @@
 .factGrid dd > a { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--record-ink); font-size: 14px; font-weight: 680; }
 .factGrid dd > a { color: var(--record-action); }
 .factGrid dd small { display: block; margin-top: 3px; color: var(--record-muted); font-size: 12px; line-height: 1.35; }
+
+.contentHeading {
+  margin: 0;
+  padding: 13px 18px 9px;
+  border-top: 1px solid var(--record-border);
+  color: #344054;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 740;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.factGrid + .contentHeading { border-top: 0; }
 
 .tableFrame { overflow-x: auto; }
 .tableFrame table { width: 100%; min-width: 700px; border-collapse: collapse; }
@@ -134,9 +147,7 @@
 @media (max-width: 980px) {
   .cardGrid,
   .factGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .sectionCard:nth-child(3n),
   .factGrid > div:nth-child(3n) { border-right: 1px solid var(--record-border); }
-  .sectionCard:nth-child(2n),
   .factGrid > div:nth-child(2n) { border-right: 0; }
 }
 

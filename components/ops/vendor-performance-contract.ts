@@ -62,6 +62,7 @@ export interface VendorPortfolioMetric {
   label: string;
   value: string;
   context: string;
+  sourceLink: SupportingLink;
 }
 
 export interface VendorPerformanceListViewModel {

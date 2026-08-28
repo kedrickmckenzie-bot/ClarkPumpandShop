@@ -102,11 +102,16 @@ function VendorPerformanceListComplete({ model }: { model: VendorPerformanceList
 
       <section className={styles.portfolioStrip} aria-label="Vendor portfolio evidence">
         {model.portfolioMetrics.map((metric) => (
-          <article key={metric.id}>
+          <Link
+            aria-label={`${metric.label}: ${metric.value}. ${metric.context}. ${metric.sourceLink.label}`}
+            href={metric.sourceLink.href}
+            key={metric.id}
+          >
             <span>{metric.label}</span>
             <strong>{metric.value}</strong>
             <small>{metric.context}</small>
-          </article>
+            <em>{metric.sourceLink.label}<ArrowRight aria-hidden="true" size={14} /></em>
+          </Link>
         ))}
       </section>
 

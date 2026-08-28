@@ -128,6 +128,9 @@ describe("vendor performance workspace", () => {
   it("renders the enterprise directory with relationship, compliance, and source-linked evidence", () => {
     const fixture = buildNorthlinePresentationFixture();
     const list = buildVendorPerformanceListModel(fixture, session());
+    expect(list.portfolioMetrics.every((metric) => metric.sourceLink.href.startsWith("/app/"))).toBe(true);
+    expect(list.portfolioMetrics.find((metric) => metric.id === "attention")?.sourceLink.href).toBe("/app/vendors?view=attention");
+    expect(list.portfolioMetrics.find((metric) => metric.id === "visits")?.sourceLink.href).toBe("/app/visits");
     const markup = renderToStaticMarkup(createElement(VendorPerformanceList, { model: list }));
     expect(markup).toContain("Vendor network");
     expect(markup).toContain("How vendor measures work");
@@ -135,6 +138,8 @@ describe("vendor performance workspace", () => {
     expect(markup).toContain("Documents current");
     expect(markup).toContain("Recorded work cost only");
     expect(markup).toContain("5 of 5 approved vendors");
+    expect(markup).toContain("Review these vendors");
+    expect(markup).toContain("Open visit evidence");
   });
 
   it("derives onboarding controls and relationship filters from vendor source records", () => {

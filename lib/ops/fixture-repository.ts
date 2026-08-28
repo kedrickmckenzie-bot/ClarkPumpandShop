@@ -372,21 +372,34 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
   const updateMatch = statement.sql.match(/^UPDATE ([a-z0-9_]+) SET (.+) WHERE (.+)$/i);
   if (updateMatch) {
     const table = updateMatch[1]; const setColumns = [...updateMatch[2].matchAll(/([a-z0-9_]+) = \?/gi)].map((match) => match[1]);
+    const nullColumns = [...updateMatch[2].matchAll(/([a-z0-9_]+) = NULL/gi)].map((match) => match[1]);
+    const incrementsVersion = /\bversion\s*=\s*version\s*\+\s*1\b/i.test(updateMatch[2]);
     const whereColumns = [...updateMatch[3].matchAll(/([a-z0-9_]+) = \?/gi)].map((match) => match[1]);
     const setValues = statement.params.slice(0, setColumns.length); const whereValues = statement.params.slice(setColumns.length);
     const rows = mapTable(fixture, table);
-    rows.filter((row) => whereColumns.every((column, index) => row[snakeToCamel(column)] === whereValues[index])).forEach((row) => setColumns.forEach((column, index) => {
-      if (table === "ops_assets" && column === "replacement_attributes_json") row.replacementAttributes = JSON.parse(String(setValues[index] ?? "{}"));
-      else if (table === "ops_replacement_events" && column === "final_amount_minor") row.finalAmount = { amountMinor: setValues[index], currency: (row.approvedAmount as { currency?: string } | undefined)?.currency ?? "USD" };
-      else if (table === "ops_invoices" && column === "approved_for_payment_minor") row.approvedForPayment = { amountMinor: setValues[index], currency: (row.total as { currency?: string } | undefined)?.currency ?? "USD" };
-      else if (
-        (table === "ops_site_visit_work_orders" || table === "ops_vendor_reminders") &&
-        setValues[index] === null
-      ) {
-        row[snakeToCamel(column)] = undefined;
-      }
-      else row[snakeToCamel(column)] = setValues[index];
-    }));
+    rows.filter((row) => whereColumns.every((column, index) => row[snakeToCamel(column)] === whereValues[index])).forEach((row) => {
+      setColumns.forEach((column, index) => {
+        if (table === "ops_assets" && column === "replacement_attributes_json") row.replacementAttributes = JSON.parse(String(setValues[index] ?? "{}"));
+        else if (table === "ops_replacement_events" && column === "final_amount_minor") row.finalAmount = { amountMinor: setValues[index], currency: (row.approvedAmount as { currency?: string } | undefined)?.currency ?? "USD" };
+        else if (table === "ops_invoices" && column === "approved_for_payment_minor") row.approvedForPayment = { amountMinor: setValues[index], currency: (row.total as { currency?: string } | undefined)?.currency ?? "USD" };
+        else if (table === "ops_work_order_visit_holds" && column === "internal_review_threshold_minor") {
+          const currencyIndex = setColumns.indexOf("currency");
+          const amountMinor = setValues[index];
+          row.internalReviewThreshold = amountMinor === null || amountMinor === undefined
+            ? undefined
+            : { amountMinor, currency: currencyIndex < 0 ? "USD" : setValues[currencyIndex] ?? "USD" };
+        }
+        else if (
+          (table === "ops_site_visit_work_orders" || table === "ops_vendor_reminders") &&
+          setValues[index] === null
+        ) {
+          row[snakeToCamel(column)] = undefined;
+        }
+        else if (!(table === "ops_work_order_visit_holds" && column === "currency")) row[snakeToCamel(column)] = setValues[index];
+      });
+      nullColumns.forEach((column) => { row[snakeToCamel(column)] = undefined; });
+      if (incrementsVersion) row.version = Number(row.version ?? 0) + 1;
+    });
     if (table === "ops_work_order_estimate_requests") assertEstimateRequestUniqueness(rows);
     if (table === "ops_work_order_assignments") assertActiveAssignmentUniqueness(rows);
     if (table.startsWith("ops_replacement_") || table === "ops_asset_replacement_overrides") assertReplacementUniqueness(table, rows);

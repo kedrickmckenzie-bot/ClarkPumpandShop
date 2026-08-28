@@ -883,11 +883,44 @@ export async function placeWorkOrderOnVisitHold(svc: OpsCommandServices, input: 
   if (input.internalReviewThresholdAmountMinor !== undefined && (!Number.isInteger(input.internalReviewThresholdAmountMinor) || input.internalReviewThresholdAmountMinor < 0)) throw new OpsDomainError("VALIDATION", "The internal review threshold must be a non-negative amount");
   const existing = await repository.getWorkOrderVisitHold(input.organizationId, workOrder.id);
   if (existing?.status === "claimed") throw new OpsDomainError("CONFLICT", "This work was claimed by an active visit. Review that visit before changing the hold");
+  if (existing?.status === "completed") throw new OpsDomainError("CONFLICT", "Completed work cannot be approved for a future visit again");
   const activeAssignment = await repository.getActiveAssignment(input.organizationId, workOrder.id);
   if (activeAssignment && ["issued", "opened", "accepted"].includes(activeAssignment.status)) throw new OpsDomainError("CONFLICT", "Work already sent to a provider cannot be moved to a future-visit hold");
   const holdId = existing?.id ?? ids.next("visit-hold");
+  const holdStatement: OpsStatement = existing
+    ? {
+        sql: "UPDATE ops_work_order_visit_holds SET posture = ?, status = ?, internal_review_threshold_minor = ?, currency = ?, deadline_at = ?, version = version + 1, claimed_visit_id = NULL, claimed_vendor_id = NULL, claimed_at = NULL, updated_at = ? WHERE organization_id = ? AND id = ? AND work_order_id = ? AND version = ? AND status = ?",
+        params: [
+          input.posture,
+          "active",
+          input.internalReviewThresholdAmountMinor ?? null,
+          input.internalReviewThresholdAmountMinor === undefined ? null : input.currency ?? "USD",
+          input.deadlineAt,
+          now,
+          input.organizationId,
+          existing.id,
+          workOrder.id,
+          existing.version,
+          existing.status,
+        ],
+      }
+    : insert("ops_work_order_visit_holds", {
+        id: holdId,
+        organization_id: input.organizationId,
+        work_order_id: workOrder.id,
+        posture: input.posture,
+        status: "active",
+        internal_review_threshold_minor: input.internalReviewThresholdAmountMinor,
+        currency: input.internalReviewThresholdAmountMinor === undefined ? undefined : input.currency ?? "USD",
+        deadline_at: input.deadlineAt,
+        version: 0,
+        created_by_membership_id: input.actor.actorId,
+        created_by_name: input.actor.actorName,
+        created_at: now,
+        updated_at: now,
+      });
   const statements: OpsStatement[] = [
-    { sql: "INSERT INTO ops_work_order_visit_holds (id, organization_id, work_order_id, posture, status, internal_review_threshold_minor, currency, deadline_at, version, created_by_membership_id, created_by_name, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, 0, ?, ?, ?, ?) ON CONFLICT (organization_id, work_order_id) DO UPDATE SET posture = excluded.posture, status = 'active', internal_review_threshold_minor = excluded.internal_review_threshold_minor, currency = excluded.currency, deadline_at = excluded.deadline_at, version = ops_work_order_visit_holds.version + 1, claimed_visit_id = NULL, claimed_vendor_id = NULL, claimed_at = NULL, updated_at = excluded.updated_at", params: [holdId, input.organizationId, workOrder.id, input.posture, input.internalReviewThresholdAmountMinor ?? null, input.internalReviewThresholdAmountMinor === undefined ? null : input.currency ?? "USD", input.deadlineAt, input.actor.actorId ?? null, input.actor.actorName, existing?.createdAt ?? now, now] },
+    holdStatement,
     { sql: "UPDATE ops_work_orders SET accountable_party = ?, next_action = ?, due_at = ? WHERE organization_id = ? AND id = ?", params: ["Facilities coordinator", "Wait for a matching vendor visit", input.deadlineAt, input.organizationId, workOrder.id] },
   ];
   const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
@@ -2378,19 +2411,24 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
   let estimateRequestsToRetire: WorkOrderEstimateRequest[] = [];
   let serviceAuthorizationIssuanceIds: OpsId[] = [];
   let workflowTasks: WorkflowTask[] = [];
+  let visitHoldToCancel: { id: OpsId; status: string } | undefined;
   const priority = input.priority ?? workOrder.priority;
   let accountableParty: string;
   let nextAction: string;
   let dueAt: IsoDateTime | null;
   let escalationTo: string | null;
   if (terminal) {
-    const [detail, estimateRequests, serviceAuthorizations, tasks] = await Promise.all([
+    const [detail, estimateRequests, serviceAuthorizations, tasks, visitHold] = await Promise.all([
       repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id),
       repository.listEstimateRequestsForWorkOrder(input.organizationId, workOrder.id),
       repository.listIssuancesForWorkOrder(input.organizationId, workOrder.id),
       repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id),
+      repository.getWorkOrderVisitHold(input.organizationId, workOrder.id),
     ]);
     workflowTasks = tasks;
+    if (visitHold && ["active", "review_required"].includes(visitHold.status)) {
+      visitHoldToCancel = { id: visitHold.id, status: visitHold.status };
+    }
     if (detail?.visits.some((visit) => visit.status === "active")) {
       throw new OpsDomainError("CONFLICT", "Finish the active visit before closing or cancelling this work order");
     }
@@ -2426,6 +2464,24 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
     params: [input.status, priority, accountableParty, nextAction, dueAt, escalationTo, closedAt, input.organizationId, workOrder.id, input.expectedStatus],
   }];
   if (terminal) {
+    if (visitHoldToCancel) {
+      statements.push(
+        {
+          sql: "UPDATE ops_work_order_visit_holds SET status = ?, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND status = ?",
+          params: ["cancelled", now, input.organizationId, visitHoldToCancel.id, visitHoldToCancel.status],
+        },
+        ...auditAndOutbox({
+          organizationId: input.organizationId,
+          aggregateType: "work_order",
+          aggregateId: workOrder.id,
+          eventType: "work_order.visit_hold_cancelled_with_work_order",
+          actor: input.actor,
+          occurredAt: now,
+          payload: { holdId: visitHoldToCancel.id, terminalWorkOrderStatus: input.status },
+          ids,
+        }),
+      );
+    }
     statements.push(...buildCompleteTasksForTransition({
       workOrder, tasks: workflowTasks, targetStatus: input.status as "closed" | "cancelled",
       actor: input.actor, occurredAt: now, ids,

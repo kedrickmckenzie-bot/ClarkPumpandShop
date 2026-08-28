@@ -15,6 +15,18 @@ const postures = new Set<HeldWorkPosture>([
   "look_and_report",
 ]);
 
+function safeReturnTo(value: string, workOrderId: string) {
+  const fallback = `/app/work-orders/${encodeURIComponent(workOrderId)}?view=service#future-visit-hold`;
+  if (!value.startsWith("/app/work-orders") || value.startsWith("//")) return fallback;
+  return value;
+}
+
+function withNotice(destination: string, notice: string) {
+  const target = new URL(destination, "https://operations.invalid");
+  target.searchParams.set("notice", notice);
+  return `${target.pathname}${target.search}${target.hash}`;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -27,15 +39,17 @@ export async function POST(
     const store = await assertStoreInSessionScope(context.session, workOrder.storeId);
     const formData = await request.formData();
     const operation = formText(formData, "operation", { required: true, max: 30 });
+    const returnTo = safeReturnTo(formText(formData, "returnTo", { max: 1_000 }), workOrderId);
 
     if (operation === "release") {
       await releaseWorkOrderVisitHold(
         { repository: context.repository },
         { organizationId: context.session.organizationId, workOrderId, actor: context.actor },
       );
-      return relativeRedirect303(
-        `/app/work-orders/${encodeURIComponent(workOrderId)}?view=service&notice=${encodeURIComponent("This work is no longer set aside. Choose the next service path when ready.")}#future-visit-hold`,
-      );
+      return relativeRedirect303(withNotice(
+        returnTo,
+        "This work is no longer set aside. Choose the next service path when ready.",
+      ));
     }
     if (operation !== "place") throw new OpsDomainError("VALIDATION", "Choose a supported held-work action.");
 
@@ -57,9 +71,10 @@ export async function POST(
         actor: context.actor,
       },
     );
-    return relativeRedirect303(
-      `/app/work-orders/${encodeURIComponent(workOrderId)}?view=service&notice=${encodeURIComponent("This work is approved for later and will stay visible until it is handled.")}#future-visit-hold`,
-    );
+    return relativeRedirect303(withNotice(
+      returnTo,
+      "Approved-for-later instructions saved.",
+    ));
   } catch (error) {
     return opsApiError(error);
   }
