@@ -565,8 +565,8 @@ function buildFixture(): OpsFixture {
     auditEvents.push({ id: `audit-${workOrderId}-created`, organizationId: organization.id, aggregateType: "work_order", aggregateId: workOrderId, eventType: "work_order.created", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: workTime, payloadJson: JSON.stringify({ storeId: store.id, requestId }) });
   });
 
-  // Four deterministic reactive records per store establish a real 20-month
-  // trend without turning the presentation tenant into a wall of seed noise.
+  // Four deterministic reactive records per store establish varied repair
+  // history alongside the ordinary contract-service cadence seeded below.
   // Every total shown by the product is still derived from these source facts.
   const historicalCostByCategory: Record<string, { labor: number; parts: number; partsKind: CostLine["kind"] }> = {
     refrigeration: { labor: 34_000, parts: 68_000, partsKind: "parts" },
@@ -641,7 +641,10 @@ function buildFixture(): OpsFixture {
       let labor = Math.round(baseCost.labor * variance / 100);
       let parts = Math.round(baseCost.parts * variance / 100);
       if (store.storeNumber === "104" && categoryKey === "refrigeration") {
-        labor = 95_000;
+        // This source-backed compressor event is intentionally the portfolio's
+        // standout repair: a full-day specialty crew plus commissioning is a
+        // credible companion to the recorded compressor and refrigerant kit.
+        labor = 695_000;
         parts = 765_000;
       }
       const travel = internal ? 0 : (storeIndex + historyIndex) % 3 === 0 ? 12_500 : 0;
@@ -699,6 +702,11 @@ function buildFixture(): OpsFixture {
     scope: string;
     amountMinor: number;
   }> = [
+    // Two older, source-level program records widen the visible operating
+    // history without turning the 15-store presentation fixture into a load
+    // test. The separate 65-store fixture remains the scale proof.
+    { key: "food-oct-2024", year: 2024, month: 10, day: 22, categoryKey: "foodservice", taxonomyNodeId: "taxonomy-northline-ovens", vendorId: "vendor-northline-cedar", problem: "Scheduled hot-food equipment cleaning and safety inspection", scope: "Complete scheduled cleaning and inspection; report repair needs separately.", amountMinor: 57_500 },
+    { key: "refrigeration-dec-2024", year: 2024, month: 12, day: 12, categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", vendorId: "vendor-northline-summit", problem: "Quarterly beer-cave refrigeration inspection", scope: "Inspect and clean accessible coils, verify temperature and controls, and document operating condition.", amountMinor: 42_500 },
     { key: "grounds-apr", month: 4, day: 9, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled spring grounds cleanup and landscape bed service", scope: "Complete scheduled grounds service and document site condition before departure.", amountMinor: 47_500 },
     { key: "grounds-may", month: 5, day: 8, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled landscape and grounds service", scope: "Complete scheduled mowing, trimming, and grounds service.", amountMinor: 39_500 },
     { key: "grounds-jun", month: 6, day: 11, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled landscape and grounds service", scope: "Complete scheduled mowing, trimming, and grounds service.", amountMinor: 39_500 },
@@ -737,9 +745,22 @@ function buildFixture(): OpsFixture {
       const issuanceId = `issuance-recurring-${suffix}`;
       const visitId = `visit-recurring-${suffix}`;
       const vendor = vendors.find((candidate) => candidate.id === service.vendorId)!;
-      const amountMinor = service.amountMinor + (storeIndex % 5) * 2_500;
+      // Include the ordinary dispatch/admin burden that a regional operator
+      // sees on a contracted service call; store variation avoids a flat rate
+      // masquerading as independently observed cost.
+      const amountMinor = service.amountMinor + 16_000 + (storeIndex % 5) * 2_500;
       const workOrderNumber = `CPS-${year}-${String(recurringSequence++).padStart(4, "0")}`;
-      const assetId = service.categoryKey === "hvac" ? `asset-${store.storeNumber}-rtu-1` : undefined;
+      const assetId = service.categoryKey === "hvac"
+        ? `asset-${store.storeNumber}-rtu-1`
+        : service.categoryKey === "forecourt"
+          ? `asset-${store.storeNumber}-dispenser-4`
+          : service.taxonomyNodeId === "taxonomy-northline-beer_caves"
+            ? `asset-${store.storeNumber}-beer-cave`
+            : service.taxonomyNodeId === "taxonomy-northline-ice_machines"
+              ? `asset-${store.storeNumber}-ice-machine`
+              : service.categoryKey === "foodservice"
+                ? `asset-${store.storeNumber}-rapid-cook-oven`
+                : undefined;
       const asset = assetId ? assets.find((candidate) => candidate.id === assetId) : undefined;
       workOrders.push({ id: workOrderId, organizationId: organization.id, number: workOrderNumber, storeId: store.id, problem: service.problem, authorizedScope: service.scope, categoryKey: service.categoryKey, taxonomyNodeId: service.taxonomyNodeId, assetId, priority: "planned", status: "closed", accountableParty: vendor.name, nextAction: "No action required", dueAt: visitStart, nte: { amountMinor: amountMinor + 20_000, currency: "USD" }, vendorServiceTicketNumber: `${vendor.code.toUpperCase()}-${year}-${store.storeNumber}-${String(serviceIndex + 1).padStart(2, "0")}`, createdAt, closedAt: checkedOutAt });
       assignments.push({ id: assignmentId, organizationId: organization.id, workOrderId, kind: "outside_vendor", vendorId: vendor.id, status: "completed", assignedAt });

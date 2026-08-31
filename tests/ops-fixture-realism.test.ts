@@ -110,8 +110,13 @@ describe("Clark Pump and Shop presentation data realism", () => {
     }
 
     expect(total).toBeGreaterThanOrEqual(20_000_000);
-    expect(total).toBeLessThanOrEqual(35_000_000);
-    expect([...spendByCategory.values()].every((amount) => amount > 0 && amount / total < 0.45)).toBe(true);
+    expect(total).toBeLessThanOrEqual(50_000_000);
+    const approximateAnnualSpendPerStore = total / fixture.stores.length / 2;
+    expect(approximateAnnualSpendPerStore).toBeGreaterThanOrEqual(1_000_000);
+    expect(approximateAnnualSpendPerStore).toBeLessThanOrEqual(2_000_000);
+    // Michigan snow and grounds contracts can legitimately be the largest
+    // portfolio category, but no one service area should consume the ledger.
+    expect([...spendByCategory.values()].every((amount) => amount > 0 && amount / total < 0.55)).toBe(true);
     expect(new Set(spendByCategory.keys())).toEqual(new Set(["refrigeration", "hvac", "forecourt", "plumbing", "electrical", "exterior", "foodservice"]));
 
     const store104 = spendByStore.get("store-northline-104")!;

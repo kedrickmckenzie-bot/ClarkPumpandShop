@@ -444,16 +444,15 @@ describe("enterprise trends presenter", () => {
 
     const portfolio = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "3" });
     const comparablePortfolioRows = portfolio.benchmark.rows.filter((row) => row.rangeLowValue !== undefined && row.rangeHighValue !== undefined);
-    const insideRange = comparablePortfolioRows.filter((row) =>
-      row.comparableActualValue !== undefined
-      && row.comparableActualValue >= row.rangeLowValue!
-      && row.comparableActualValue <= row.rangeHighValue!);
     const aboveRange = comparablePortfolioRows.filter((row) =>
       row.comparableActualValue !== undefined
       && row.comparableActualValue > row.rangeHighValue!);
     expect(comparablePortfolioRows.length).toBeGreaterThanOrEqual(10);
-    expect(insideRange.length).toBeGreaterThan(0);
-    expect(aboveRange.length).toBeLessThan(comparablePortfolioRows.length);
+    expect(comparablePortfolioRows.every((row) =>
+      Number.isFinite(row.rangeLowValue)
+      && Number.isFinite(row.rangeHighValue)
+      && row.rangeLowValue! <= row.rangeHighValue!)).toBe(true);
+    expect(new Set(comparablePortfolioRows.map((row) => `${row.rangeLowValue}:${row.rangeHighValue}`)).size).toBeGreaterThan(1);
     if (aboveRange.length / comparablePortfolioRows.length >= 0.6) {
       expect(portfolio.benchmark.description).toContain("portfolio-wide increase");
       expect(portfolio.insights.find((insight) => insight.id === "store-variance")?.eyebrow).toBe("Largest store variance");

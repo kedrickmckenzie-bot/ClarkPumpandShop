@@ -162,17 +162,24 @@ describe("operator presenter drill-through contracts", () => {
     const storeId = NORTHLINE_DEMO_HANDLES.storyStoreId;
     const model = buildProgramModel(fixture, executiveSession(), "spend", { store: storeId });
     const store = fixture.stores.find((candidate) => candidate.id === storeId)!;
+    const asOfDate = new Date(fixture.asOf);
+    const periodStart = new Date(Date.UTC(asOfDate.getUTCFullYear(), asOfDate.getUTCMonth() - 11, 1)).toISOString().slice(0, 10);
     const storeWorkIds = new Set(
       fixture.workOrders
         .filter((workOrder) => workOrder.organizationId === NORTHLINE_ORGANIZATION_ID && workOrder.storeId === storeId)
         .map((workOrder) => workOrder.id),
     );
     const sourceLineCount = fixture.costLines.filter(
-      (line) => line.organizationId === NORTHLINE_ORGANIZATION_ID && storeWorkIds.has(line.workOrderId),
+      (line) => line.organizationId === NORTHLINE_ORGANIZATION_ID && storeWorkIds.has(line.workOrderId) && line.serviceDate >= periodStart,
     ).length;
+    const periodInvoiceIds = new Set(
+      fixture.invoiceReferences
+        .filter((invoice) => invoice.organizationId === NORTHLINE_ORGANIZATION_ID && invoice.invoiceDate >= periodStart)
+        .map((invoice) => invoice.id),
+    );
     const storeInvoiceCount = new Set(
       fixture.invoiceAllocations
-        .filter((allocation) => allocation.organizationId === NORTHLINE_ORGANIZATION_ID && storeWorkIds.has(allocation.workOrderId))
+        .filter((allocation) => allocation.organizationId === NORTHLINE_ORGANIZATION_ID && storeWorkIds.has(allocation.workOrderId) && periodInvoiceIds.has(allocation.invoiceReferenceId))
         .map((allocation) => allocation.invoiceReferenceId),
     ).size;
 

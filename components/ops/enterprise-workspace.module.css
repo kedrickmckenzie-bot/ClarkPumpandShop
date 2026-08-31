@@ -3500,7 +3500,7 @@ a.factItem:hover {
 .tile:hover { border-color: var(--workspace-action); box-shadow: var(--workspace-shadow-panel); transform: translateY(-1px); }
 .tile:focus-visible { outline: 3px solid rgba(42, 92, 199, 0.25); outline-offset: 2px; }
 .tileTitle { display: block; font-weight: 650; font-size: 15px; color: var(--workspace-ink); margin-bottom: 2px; }
-.tileSubtitle { display: block; font-size: 12px; color: var(--workspace-muted); margin-bottom: 8px; }
+.tileSubtitle { display: block; font-size: 13px; color: var(--workspace-muted); margin-bottom: 8px; }
 .tileFacts { display: flex; flex-direction: column; gap: 6px; margin: 0; }
 .tileFacts > div { display: flex; justify-content: space-between; gap: 10px; }
 .tileFacts dt { font-size: 12px; color: var(--workspace-muted); }
