@@ -145,6 +145,7 @@ export type TrendBenchmarkSortId = "store" | "actual" | "comparable" | "expected
 export type TrendDriverSortId = "segment" | "current" | "comparison" | "change" | "evidence";
 export type TrendSourceSortId = "record" | "store" | "service" | "date" | "value";
 export type TrendSortDirection = "asc" | "desc";
+export type TrendAnalysisView = "overview" | "stores" | "drivers" | "records";
 
 export interface TrendBenchmarkSortLinkViewModel {
   id: TrendBenchmarkSortId;
@@ -181,6 +182,9 @@ export interface TrendBenchmarkRowViewModel {
   excludedActualLabel?: string;
   expectedValue?: number;
   expectedLabel: string;
+  rangeLowValue?: number;
+  rangeHighValue?: number;
+  rangeLabel: string;
   varianceValue?: number;
   varianceLabel: string;
   ratioValue?: number;
@@ -259,6 +263,9 @@ export interface TrendAnalysisPageViewModel {
   state: DataState;
   page: PageContext;
   canonicalQuery: string;
+  activeView: TrendAnalysisView;
+  scopeSummary: string;
+  views: Array<{ id: TrendAnalysisView; label: string; description: string; link: SupportingLink }>;
   filterAction: string;
   filters: TrendFilterSelectViewModel[];
   clearFiltersHref: string;

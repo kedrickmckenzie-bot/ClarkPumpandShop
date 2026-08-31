@@ -2085,6 +2085,110 @@ export function buildSyntheticScaleFixture(storeCount = 65): OpsFixture {
   return fixture;
 }
 
+/**
+ * A deliberately dense analytics fixture. Unlike buildSyntheticScaleFixture,
+ * this retains equipment structure and creates enough dated work and cost
+ * history to exercise Trends at a regional-chain scale.
+ */
+export function buildSyntheticTrendScaleFixture(storeCount = 65, monthCount = 36): OpsFixture {
+  if (!Number.isInteger(storeCount) || storeCount < 1) throw new Error("storeCount must be a positive integer");
+  if (!Number.isInteger(monthCount) || monthCount < 18) throw new Error("monthCount must be an integer of at least 18");
+  const source = buildNorthlinePresentationFixture();
+  const fixture = buildSyntheticScaleFixture(storeCount);
+  fixture.replacementProfiles = clone(source.replacementProfiles);
+  fixture.asOf = source.asOf;
+
+  const sourceAssetsByStore = new Map<string, Asset[]>();
+  for (const asset of source.assets) sourceAssetsByStore.set(asset.storeId, [...(sourceAssetsByStore.get(asset.storeId) ?? []), asset]);
+  const sourceComponentsByAsset = new Map<string, AssetComponent[]>();
+  for (const component of source.components) sourceComponentsByAsset.set(component.assetId, [...(sourceComponentsByAsset.get(component.assetId) ?? []), component]);
+  const assetIdsByStore = new Map<string, string[]>();
+
+  fixture.assets = [];
+  fixture.components = [];
+  for (const [storeIndex, store] of fixture.stores.entries()) {
+    const sourceStore = source.stores[storeIndex % source.stores.length];
+    const sourceAssets = sourceAssetsByStore.get(sourceStore.id) ?? [];
+    const ids: string[] = [];
+    for (const [assetIndex, sourceAsset] of sourceAssets.entries()) {
+      const assetId = `asset-scale-${storeIndex + 1}-${assetIndex + 1}`;
+      ids.push(assetId);
+      fixture.assets.push({
+        ...sourceAsset,
+        id: assetId,
+        storeId: store.id,
+        assetTag: `S${store.storeNumber}-${String(assetIndex + 1).padStart(2, "0")}`,
+        serialNumber: `SCALE-${storeIndex + 1}-${assetIndex + 1}`,
+      });
+      for (const [componentIndex, sourceComponent] of (sourceComponentsByAsset.get(sourceAsset.id) ?? []).entries()) {
+        fixture.components.push({
+          ...sourceComponent,
+          id: `component-scale-${storeIndex + 1}-${assetIndex + 1}-${componentIndex + 1}`,
+          assetId,
+          parentComponentId: undefined,
+        });
+      }
+    }
+    assetIdsByStore.set(store.id, ids);
+  }
+
+  const sourceWork = source.workOrders.find((row) => row.organizationId === source.organizations[0].id)!;
+  const sourceCost = source.costLines[0]!;
+  const asOfMonth = source.asOf.slice(0, 7);
+  const [asOfYear, asOfMonthNumber] = asOfMonth.split("-").map(Number);
+  fixture.workOrders = [];
+  fixture.costLines = [];
+  for (const [storeIndex, store] of fixture.stores.entries()) {
+    const assetIds = assetIdsByStore.get(store.id) ?? [];
+    for (let monthIndex = 0; monthIndex < monthCount; monthIndex += 1) {
+      const date = new Date(Date.UTC(asOfYear, asOfMonthNumber - monthCount + monthIndex, 10, 12));
+      const serviceDate = date.toISOString().slice(0, 10);
+      const jobsThisMonth = 1 + ((storeIndex + monthIndex) % 2);
+      for (let jobIndex = 0; jobIndex < jobsThisMonth; jobIndex += 1) {
+        const assetId = assetIds[(monthIndex * 2 + jobIndex) % assetIds.length];
+        const asset = fixture.assets.find((row) => row.id === assetId)!;
+        const workOrderId = `work-scale-${storeIndex + 1}-${monthIndex + 1}-${jobIndex + 1}`;
+        const createdAt = `${serviceDate}T13:00:00.000Z`;
+        const seasonalFactor = [5, 6, 7].includes(date.getUTCMonth()) && (asset.categoryKey === "refrigeration" || asset.categoryKey === "hvac") ? 1.7 : 1;
+        const baseAmountMinor = 38_000 + ((storeIndex * 17 + monthIndex * 29 + jobIndex * 11) % 190_000);
+        const amountMinor = Math.round(baseAmountMinor * seasonalFactor * ((storeIndex + monthIndex) % 29 === 0 ? 2.6 : 1));
+        fixture.workOrders.push({
+          ...sourceWork,
+          id: workOrderId,
+          number: `SCALE-${store.storeNumber}-${String(monthIndex + 1).padStart(2, "0")}-${jobIndex + 1}`,
+          storeId: store.id,
+          requestId: undefined,
+          problem: `${asset.name} service history`,
+          authorizedScope: `Inspect and restore ${asset.name.toLocaleLowerCase("en-US")}`,
+          categoryKey: asset.categoryKey,
+          taxonomyNodeId: asset.taxonomyNodeId,
+          assetId,
+          componentId: undefined,
+          status: "closed",
+          accountableParty: "Closed",
+          nextAction: "No action required",
+          dueAt: undefined,
+          escalationTo: undefined,
+          createdAt,
+          resolvedAt: createdAt,
+          closedAt: createdAt,
+        });
+        fixture.costLines.push({
+          ...sourceCost,
+          id: `cost-scale-${storeIndex + 1}-${monthIndex + 1}-${jobIndex + 1}`,
+          workOrderId,
+          kind: jobIndex % 2 ? "parts" : "labor",
+          description: `${asset.name} recorded service cost`,
+          amount: { ...sourceCost.amount, amountMinor },
+          serviceDate,
+          recordedAt: createdAt,
+        });
+      }
+    }
+  }
+  return fixture;
+}
+
 export function assertOpsFixture(fixture: OpsFixture) {
   const organizationIds = new Set(fixture.organizations.map((row) => row.id));
   const divisionIds = new Set(fixture.divisions.map((row) => row.id));

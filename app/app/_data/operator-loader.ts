@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
@@ -65,6 +66,13 @@ import {
 } from "./operator-presenter";
 import { buildTrendsModel } from "./trends-presenter";
 import { buildApprovedWorkPortfolio } from "./approved-work-presenter";
+
+// Server Component reads share one immutable tenant snapshot during a render.
+// Keep this wrapper in the presentation layer: API commands and mutation paths
+// must continue to call the uncached provider and observe the latest state.
+const getRequestOpsFixtureSnapshot = cache((organizationId: string) =>
+  getServerOpsFixtureSnapshot(organizationId),
+);
 
 function isOperatorRole(value: string | undefined): value is OperatorRole {
   return value === "executive" || value === "facilities" || value === "regional" || value === "store_manager" || value === "finance";
@@ -163,12 +171,12 @@ async function loadOperatorSessionFromSnapshot(snapshot: OpsFixture): Promise<Op
 }
 
 export async function loadOperatorSession(): Promise<OperatorSession> {
-  const snapshot = await getServerOpsFixtureSnapshot();
+  const snapshot = await getRequestOpsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID);
   return loadOperatorSessionFromSnapshot(snapshot);
 }
 
 async function sessionAndFixture() {
-  const fixture = await getServerOpsFixtureSnapshot();
+  const fixture = await getRequestOpsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID);
   const session = await loadOperatorSessionFromSnapshot(fixture);
   return { session, fixture };
 }
@@ -356,6 +364,17 @@ export async function loadTrendsModel(searchParams: OperatorSearchParameters = {
   const context = await sessionAndFixture();
   if (!roleCanAccessProgramRoute(context.session.role, "trends")) notFound();
   return buildTrendsModel(context.fixture, context.session, searchParams);
+}
+
+export async function loadTrendsPageData(searchParams: OperatorSearchParameters = {}) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessProgramRoute(context.session.role, "trends")) notFound();
+  const model = buildTrendsModel(context.fixture, context.session, searchParams);
+  const repository = await getServerOpsRepository();
+  const savedViews = context.session.membershipId
+    ? await repository.listSavedViews(context.session.organizationId, context.session.membershipId, "trends")
+    : [];
+  return { model, savedViews, session: context.session };
 }
 
 function pmTypeKey(value: string) {

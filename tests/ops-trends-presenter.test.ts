@@ -3,6 +3,7 @@ import type { OperatorSession } from "@/components/ops/data-contract";
 import {
   NORTHLINE_ORGANIZATION_ID,
   buildNorthlinePresentationFixture,
+  buildSyntheticTrendScaleFixture,
 } from "@/lib/ops/fixtures";
 
 vi.mock("server-only", () => ({}));
@@ -389,7 +390,7 @@ describe("enterprise trends presenter", () => {
 
     const definedVariances = model.benchmark.rows.flatMap((row) => row.varianceValue === undefined ? [] : [row.varianceValue]);
     expect(definedVariances).toEqual([...definedVariances].sort((left, right) => right - left));
-    expect(model.benchmark.sortLinks.map((link) => link.id)).toEqual(["store", "actual", "comparable", "expected", "variance", "ratio", "signal", "coverage"]);
+    expect(model.benchmark.sortLinks.map((link) => link.id)).toEqual(["store", "comparable", "expected", "variance", "signal", "coverage"]);
     const activeSort = model.benchmark.sortLinks.find((link) => link.id === "variance")!;
     expect(activeSort).toMatchObject({ active: true, direction: "desc" });
     expect(queryFromHref(activeSort.link.href)).toMatchObject({
@@ -410,6 +411,65 @@ describe("enterprise trends presenter", () => {
     expect(rowLink).not.toHaveProperty("store");
     expect(rowLink).not.toHaveProperty("detailMonth");
     expect(queryFromHref(comparable[0].focusLink.href)).toMatchObject({ category: "refrigeration", store: comparable[0].id });
+  });
+
+  it("keeps analysis views in the URL and sends evidence links to source records", () => {
+    const model = buildTrendsModel(buildNorthlinePresentationFixture(), session(), {
+      metric: "recorded_cost",
+      period: "6",
+      category: "refrigeration",
+      view: "drivers",
+    });
+
+    expect(model.activeView).toBe("drivers");
+    expect(queryFromSearch(model.canonicalQuery)).toMatchObject({ view: "drivers", category: "refrigeration" });
+    expect(model.views.map((view) => view.id)).toEqual(["overview", "stores", "drivers", "records"]);
+    expect(model.views.every((view) => queryFromHref(view.link.href).category === "refrigeration")).toBe(true);
+    expect(queryFromHref(summary(model, "current").link.href)).toMatchObject({ view: "records", detailKind: "current" });
+  });
+
+  it("uses a stable long-window peer range and suppresses weak or zero cost baselines", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const threeMonths = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "3", category: "refrigeration" });
+    const twelveMonths = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "12", category: "refrigeration" });
+    const threeSample = threeMonths.benchmark.sampleLabel.match(/(\d+) reference months/)?.[1];
+    const twelveSample = twelveMonths.benchmark.sampleLabel.match(/(\d+) reference months/)?.[1];
+    const reliable = twelveMonths.benchmark.rows.filter((row) => row.expectedValue !== undefined);
+
+    expect(threeSample).toBe(twelveSample);
+    expect(Number(threeSample)).toBeGreaterThanOrEqual(18);
+    expect(reliable.length).toBeGreaterThan(0);
+    expect(reliable.every((row) => (row.rangeHighValue ?? 0) > 0 && row.rangeLabel.includes("–"))).toBe(true);
+    expect(new Set(reliable.map((row) => row.expectedValue)).size).toBeGreaterThan(1);
+
+    fixture.costLines = fixture.costLines.filter((line) => line.serviceDate >= "2026-08-01");
+    const weak = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "3", category: "refrigeration" });
+    expect(weak.benchmark.rows.every((row) => row.ratioValue === undefined)).toBe(true);
+    expect(weak.benchmark.rows.every((row) => row.signalLabel === "No reliable peer comparison yet")).toBe(true);
+  });
+
+  it("increases the equipment-mix baseline when identical equipment is added", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const initial = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "12", category: "refrigeration" });
+    const target = initial.benchmark.rows.find((row) => row.expectedValue !== undefined)!;
+    const sourceAsset = fixture.assets.find((asset) => asset.storeId === target.id && asset.categoryKey === "refrigeration" && asset.replacementProfileId)!;
+    fixture.assets.push({ ...sourceAsset, id: `${sourceAsset.id}-additional`, assetTag: `${sourceAsset.assetTag}-B`, serialNumber: `${sourceAsset.serialNumber ?? "SERIAL"}-B` });
+    const expanded = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "12", category: "refrigeration", store: target.id });
+
+    expect(expanded.benchmark.rows[0].expectedValue).toBeGreaterThan(target.expectedValue!);
+  });
+
+  it("keeps the 65-store, 36-month analysis bounded to the requested page", () => {
+    const fixture = buildSyntheticTrendScaleFixture(65, 36);
+    const startedAt = performance.now();
+    const model = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "12", view: "stores" });
+    const elapsed = performance.now() - startedAt;
+
+    expect(fixture.workOrders.length).toBeGreaterThan(3_000);
+    expect(model.benchmark.rows).toHaveLength(15);
+    expect(model.benchmark.pagination?.totalPages).toBeGreaterThan(4);
+    expect(model.benchmark.rows.some((row) => row.expectedValue !== undefined)).toBe(true);
+    expect(elapsed).toBeLessThan(2_500);
   });
 
   it("keeps focused non-additive store comparisons connected to the other eligible stores", () => {
@@ -493,7 +553,7 @@ describe("enterprise trends presenter", () => {
     expect(detail.sourceTable.rows.length).toBeGreaterThan(0);
     expect(detail.sourceTable.rows.every((source) => source.id.startsWith("benchmark:"))).toBe(true);
     expect(detail.sourceTable.rows.some((source) => source.cells.find((cell) => cell.key === "value")?.value === "$0")).toBe(true);
-    expect(detail.sourceTable.rows.some((source) => source.cells.find((cell) => cell.key === "record")?.secondary?.includes("zero is retained"))).toBe(true);
+    expect(detail.sourceTable.rows.some((source) => source.cells.find((cell) => cell.key === "record")?.secondary?.includes("recorded zero months remain included"))).toBe(true);
     expect(detail.sourceHeading).toBe("Inputs behind this comparison");
     expect(detail.sourceDescription).toMatch(/calculation|peer equipment|underlying records/i);
     expect(row.peerLink?.label).toMatch(/comparison inputs/i);
@@ -748,6 +808,16 @@ describe("enterprise trends presenter", () => {
         workOrderId,
         serviceDate: "2026-08-10",
         amount: { ...sourceLine.amount, amountMinor: (index + 1) * 10_000 },
+      });
+      Array.from({ length: 18 }, (_, monthIndex) => {
+        const date = new Date(Date.UTC(2024, 11 + monthIndex, 10, 12)).toISOString().slice(0, 10);
+        fixture.costLines.push({
+          ...sourceLine,
+          id: `cost-trend-peer-history-${asset.id}-${monthIndex}`,
+          workOrderId,
+          serviceDate: date,
+          amount: { ...sourceLine.amount, amountMinor: (index + 2) * 4_000 },
+        });
       });
     });
 

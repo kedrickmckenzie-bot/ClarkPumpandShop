@@ -4,22 +4,15 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
-  BarChart3,
   ChevronRight,
   CircleGauge,
   Download,
-  Filter,
   Info,
-  Lightbulb,
-  LineChart,
-  Search,
-  RotateCcw,
-  ShieldCheck,
-  SlidersHorizontal,
   TableProperties,
 } from "lucide-react";
 import type { MetricViewModel, Tone, TrendAnalysisPageViewModel } from "@/components/ops/data-contract";
 import { PaginationControls } from "@/components/ops/pagination-controls";
+import { TrendsFilterForm } from "./trends-filter-form";
 import styles from "./trends-workspace.module.css";
 
 function toneClass(tone: Tone = "neutral") {
@@ -98,43 +91,29 @@ function ComparisonChart({ model }: { model: TrendAnalysisPageViewModel }) {
   );
 }
 
-function InsightStrip({ model }: { model: TrendAnalysisPageViewModel }) {
+function ExecutiveResults({ model }: { model: TrendAnalysisPageViewModel }) {
+  const current = model.summary.find((metric) => metric.id === "current");
+  const change = model.summary.find((metric) => metric.id === "change");
+  const peak = model.insights.find((insight) => insight.id === "peak-month");
+  const store = model.insights.find((insight) => insight.id === "store-variance");
   return (
-    <section className={styles.insightStrip} aria-label="Analysis highlights">
-      {model.insights.map((insight) => (
-        <Link className={`${styles.insightCard} ${toneClass(insight.tone)}`} href={insight.link.href} key={insight.id}>
-          <span><Lightbulb size={16} aria-hidden="true" />{insight.eyebrow}<ChevronRight size={16} aria-hidden="true" /></span>
-          <strong>{insight.title}</strong>
-          <p>{insight.detail}</p>
-        </Link>
-      ))}
+    <section className={styles.executiveResults} aria-label="Trend results">
+      {current ? <SummaryCard metric={current} /> : null}
+      {change ? <SummaryCard metric={change} /> : null}
+      {peak ? <Link className={`${styles.resultCard} ${toneClass(peak.tone)}`} href={peak.link.href}><span>{peak.eyebrow}<ChevronRight size={16} aria-hidden="true" /></span><strong>{peak.title}</strong><p>{peak.detail}</p></Link> : null}
+      {store ? <Link className={`${styles.resultCard} ${toneClass(store.tone)}`} href={store.link.href}><span>{store.eyebrow}<ChevronRight size={16} aria-hidden="true" /></span><strong>{store.title}</strong><p>{store.detail}</p></Link> : null}
+      <Link className={`${styles.resultCard} ${styles.outlookResult}`} href={model.outlook.evidenceLink?.href ?? `${model.views.find((view) => view.id === "records")?.link.href ?? "/app/trends"}`}>
+        <span>{model.outlook.eyebrow}<ChevronRight size={16} aria-hidden="true" /></span><strong>{model.outlook.value}</strong><p>{model.outlook.label}</p>
+      </Link>
     </section>
   );
 }
 
-function InvestigationContext({ model }: { model: TrendAnalysisPageViewModel }) {
+function AnalysisViews({ model }: { model: TrendAnalysisPageViewModel }) {
   return (
-    <section className={styles.investigation} aria-label="Current investigation scope">
-      <header><Search size={17} aria-hidden="true" /><div><strong>Investigation scope</strong><span>These trails control every total, chart, driver, and store comparison on this page.</span></div></header>
-      <div className={styles.trails}>
-        {model.investigation.trails.map((trail) => (
-          <div className={styles.trail} key={trail.id}>
-            <small>{trail.label}</small>
-            <nav aria-label={`${trail.label} scope`}>
-              {trail.crumbs.map((crumb, index) => (
-                <span key={crumb.id}>
-                  {index ? <ChevronRight size={14} aria-hidden="true" /> : null}
-                  {crumb.link ? <Link href={crumb.link.href} aria-label={crumb.link.label}>{crumb.label}</Link> : <strong>{crumb.label}</strong>}
-                </span>
-              ))}
-            </nav>
-          </div>
-        ))}
-      </div>
-      {model.investigation.evidence ? (
-        <aside><Info size={16} aria-hidden="true" /><div><strong>Exact records shown: {model.investigation.evidence.label}</strong><span>{model.investigation.evidence.description}</span></div><Link href={model.investigation.evidence.clearLink.href}>{model.investigation.evidence.clearLink.label}</Link></aside>
-      ) : null}
-    </section>
+    <nav className={styles.analysisViews} aria-label="Trend analysis views">
+      {model.views.map((view) => <Link className={view.id === model.activeView ? styles.activeView : undefined} href={view.link.href} key={view.id} aria-current={view.id === model.activeView ? "page" : undefined}><strong>{view.label}</strong><span>{view.description}</span></Link>)}
+    </nav>
   );
 }
 
@@ -221,21 +200,18 @@ function BenchmarkTable({ model }: { model: TrendAnalysisPageViewModel }) {
         <strong>{model.benchmark.sampleLabel}</strong>
       </header>
       <div className={`${styles.tableScroller} ${styles.storeTableScroller}`}>
-        <table>
+        <table className={styles.benchmarkTable}>
           <caption>{model.benchmark.methodology}</caption>
-          <thead><tr><th><SortHeading id="store" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="actual" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="comparable" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="expected" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="variance" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="ratio" links={model.benchmark.sortLinks} /></th><th><SortHeading id="signal" links={model.benchmark.sortLinks} /></th><th><SortHeading id="coverage" links={model.benchmark.sortLinks} /></th><th>Actions</th></tr></thead>
+          <thead><tr><th><SortHeading id="store" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="comparable" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="expected" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="variance" links={model.benchmark.sortLinks} /></th><th><SortHeading id="signal" links={model.benchmark.sortLinks} /></th><th><SortHeading id="coverage" links={model.benchmark.sortLinks} /></th></tr></thead>
           <tbody>
             {model.benchmark.rows.map((row) => (
               <tr key={row.id}>
-                <td><span className={styles.primaryRowLink}><strong>{row.label}</strong><small>{row.context}</small></span></td>
-                <td className={styles.number}><strong>{row.actualLabel}</strong>{row.excludedActualLabel ? <small>{row.excludedActualLabel}</small> : null}</td>
-                <td className={styles.number}>{row.comparableActualLabel}</td>
-                <td className={styles.number}>{row.peerLink ? <Link className={styles.inlineCellLink} href={row.peerLink.href} aria-label={row.peerLink.label}>{row.expectedLabel}</Link> : row.expectedLabel}</td>
+                <td><span className={styles.primaryRowLink}><strong>{row.label}</strong><small>{row.context}</small><span className={styles.rowMiniActions}><Link href={row.focusLink.href}>Focus</Link><Link href={row.recordsLink.href}>Records</Link></span></span></td>
+                <td className={styles.number}><strong>{row.comparableActualLabel}</strong>{row.excludedActualLabel ? <small>{row.excludedActualLabel}</small> : null}</td>
+                <td className={styles.number}>{row.peerLink ? <Link className={styles.inlineCellLink} href={row.peerLink.href} aria-label={row.peerLink.label}>{row.rangeLabel}</Link> : row.rangeLabel}</td>
                 <td className={styles.number}><strong>{row.varianceLabel}</strong></td>
-                <td className={styles.number}>{row.ratioLabel}</td>
                 <td><span className={`${styles.signal} ${toneClass(row.signalTone)}`}>{row.signalLabel}</span></td>
                 <td><small>{row.coverageLabel}</small></td>
-                <td><div className={styles.rowActions}><Link className={styles.focusAction} href={row.focusLink.href} aria-label={row.focusLink.label}>Focus analysis</Link><Link className={styles.recordsAction} href={row.recordsLink.href} aria-label={row.recordsLink.label}>View records</Link></div></td>
               </tr>
             ))}
           </tbody>
@@ -286,12 +262,8 @@ function SourceTable({ model }: { model: TrendAnalysisPageViewModel }) {
 }
 
 export function TrendsWorkspace({ model }: { model: TrendAnalysisPageViewModel }) {
-  const groupedFilters = [
-    { id: "analysis", label: "What to compare", description: "Choose what to track, the dates, and how you want the change grouped." },
-    { id: "operating_scope", label: "Locations", description: "Show the whole company, one region, or one store." },
-    { id: "maintenance_scope", label: "More filters", description: "Optional filters for work type, equipment, component, or vendor." },
-  ] as const;
-  const hasMaintenanceScope = model.filters.some((filter) => filter.group === "maintenance_scope" && Boolean(filter.value));
+  const comparison = model.summary.find((metric) => metric.id === "comparison");
+  const coverage = model.summary.find((metric) => metric.id === "coverage");
   return (
     <main className={styles.workspace}>
       <header className={styles.pageHeader}>
@@ -299,53 +271,28 @@ export function TrendsWorkspace({ model }: { model: TrendAnalysisPageViewModel }
         {model.page.secondaryAction ? <Link className={styles.secondaryButton} href={model.page.secondaryAction.href}>{model.page.secondaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </header>
 
-      <section className={styles.contextBar} aria-label="Current trend context">
-        <span><BarChart3 size={17} aria-hidden="true" /><small>Showing</small><strong>{model.page.scopeLabel}</strong></span>
-        <span><LineChart size={17} aria-hidden="true" /><small>{model.currentPeriodName}</small><strong>{model.currentPeriodLabel}</strong></span>
-        {model.comparisonPeriodLabel ? <span><ArrowUpDown size={17} aria-hidden="true" /><small>{model.comparisonPeriodName}</small><strong>{model.comparisonPeriodLabel}</strong></span> : null}
-        <span><ShieldCheck size={17} aria-hidden="true" /><small>Data through</small><strong>{model.page.updatedLabel}</strong></span>
-      </section>
-
-      <InvestigationContext model={model} />
-
-      <form className={styles.filters} action={model.filterAction} method="get">
-        <header><span><SlidersHorizontal size={18} aria-hidden="true" />Filters</span><Link href={model.clearFiltersHref}><RotateCcw size={15} aria-hidden="true" />Reset</Link></header>
-        <div className={styles.filterGroups}>
-          {groupedFilters.map((group) => group.id === "maintenance_scope" ? (
-            <details className={styles.filterGroup} key={group.id} open={hasMaintenanceScope}>
-              <summary><span><strong>{group.label}</strong><small>{group.description}</small></span><ChevronRight size={16} aria-hidden="true" /></summary>
-              <div className={styles.filterGrid}>{model.filters.filter((filter) => filter.group === group.id).map((filter) => (
-                <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
-              ))}</div>
-            </details>
-          ) : (
-            <fieldset className={styles.filterGroup} key={group.id}>
-              <legend>{group.label}</legend><p>{group.description}</p>
-              <div className={styles.filterGrid}>{model.filters.filter((filter) => filter.group === group.id).map((filter) => (
-                <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
-              ))}</div>
-            </fieldset>
-          ))}
-        </div>
-        <button type="submit"><Filter size={16} aria-hidden="true" />Apply filters</button>
-      </form>
-
-      <section className={styles.summaryStrip} aria-label="Trend summary">{model.summary.map((metric) => <SummaryCard metric={metric} key={metric.id} />)}</section>
-      <InsightStrip model={model} />
-      <RelatedMeasures model={model} />
+      <ExecutiveResults model={model} />
+      <TrendsFilterForm action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} />
+      {model.investigation.evidence ? <aside className={styles.evidenceFocus}><Info size={16} aria-hidden="true" /><span><strong>{model.investigation.evidence.label}</strong>{model.investigation.evidence.description}</span><Link href={model.investigation.evidence.clearLink.href}>{model.investigation.evidence.clearLink.label}</Link></aside> : null}
       <ComparisonChart model={model} />
-      <DriversTable model={model} />
-      <BenchmarkTable model={model} />
-      <SourceTable model={model} />
+      <AnalysisViews model={model} />
 
-      <section className={`${styles.outlookPanel} ${styles[model.outlook.kind]}`}>
+      {model.activeView === "overview" ? <>
+        <section className={styles.contextMetrics} aria-label="Comparison and data coverage">{comparison ? <SummaryCard metric={comparison} /> : null}{coverage ? <SummaryCard metric={coverage} /> : null}</section>
+        <RelatedMeasures model={model} />
+      </> : null}
+      {model.activeView === "drivers" ? <DriversTable model={model} /> : null}
+      {model.activeView === "stores" ? <BenchmarkTable model={model} /> : null}
+      {model.activeView === "records" ? <SourceTable model={model} /> : null}
+
+      {model.activeView === "overview" ? <section className={`${styles.outlookPanel} ${styles[model.outlook.kind]}`}>
         <span><CircleGauge size={23} aria-hidden="true" /></span>
         <div><p>{model.outlook.eyebrow}</p><h2>{model.outlook.label}</h2><small>{model.outlook.description}</small></div>
         <strong>{model.outlook.value}</strong>
         <div className={styles.outlookMeta}>{model.outlook.facts.map((fact) => <span key={fact.label}><small>{fact.label}</small><strong>{fact.value}</strong></span>)}</div>
         <aside><Info size={16} aria-hidden="true" />{model.outlook.caution}</aside>
         {model.outlook.evidenceLink ? <Link className={styles.outlookEvidenceLink} href={model.outlook.evidenceLink.href}>{model.outlook.evidenceLink.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
-      </section>
+      </section> : null}
 
       <details className={styles.notes}>
         <summary><Info size={17} aria-hidden="true" />How these numbers work<ChevronRight size={16} aria-hidden="true" /></summary>

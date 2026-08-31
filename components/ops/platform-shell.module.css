@@ -380,7 +380,7 @@
 
 .previewRole {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   padding: 10px;
@@ -417,6 +417,7 @@
 }
 
 .previewRole button {
+  width: 100%;
   padding: 5px 9px;
   color: #ffffff;
   background: #263548;

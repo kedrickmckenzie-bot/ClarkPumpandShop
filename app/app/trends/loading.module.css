@@ -1,0 +1,14 @@
+.loading { display: grid; gap: 20px; width: min(1500px, 100%); margin: 0 auto; }
+.loading span, .loading div { background: #e7ebf1; }
+.heading { display: grid; gap: 10px; padding-bottom: 22px; border-bottom: 1px solid #d9e0e8; }
+.heading span:first-child { width: 180px; height: 36px; border-radius: 5px; }
+.heading span:last-child { width: min(720px, 80%); height: 18px; border-radius: 4px; }
+.results { display: grid; grid-template-columns: repeat(5, 1fr); overflow: hidden; min-height: 132px; border: 1px solid #d9e0e8; border-radius: 8px; background: #fff; }
+.results span { margin: 17px; border-radius: 5px; }
+.scope { height: 61px; border: 1px solid #d9e0e8; border-radius: 8px; }
+.chart { display: grid; gap: 20px; height: 455px; padding: 20px; border: 1px solid #d9e0e8; border-radius: 8px; background: #fff; }
+.chart span { width: 280px; height: 24px; border-radius: 4px; }
+.chart div { border-radius: 5px; background: repeating-linear-gradient(to top, #f8fafc 0 69px, #e7ebf1 69px 70px); }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); min-height: 64px; gap: 1px; padding: 1px; border-radius: 8px; background: #d9e0e8; }
+.tabs span { background: #f3f5f8; }
+@media (max-width: 800px) { .results { grid-template-columns: repeat(2, 1fr); } .tabs { grid-template-columns: repeat(2, 1fr); } }

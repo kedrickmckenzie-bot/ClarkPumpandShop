@@ -7,6 +7,7 @@ import type {
   TableRowViewModel,
   Tone,
   TrendAnalysisPageViewModel,
+  TrendAnalysisView,
   TrendBenchmarkRowViewModel,
   TrendBenchmarkSortId,
   TrendBreakdownId,
@@ -235,6 +236,29 @@ function median(values: number[]) {
   const sorted = [...values].sort((left, right) => left - right);
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function quantile(values: number[], percentile: number) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const position = (sorted.length - 1) * percentile;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) return sorted[lower];
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+}
+
+function winsorizedDistribution(values: number[]) {
+  if (!values.length) return { mean: 0, low: 0, high: 0, capped: [] as number[] };
+  const lowerFence = quantile(values, values.length >= 20 ? 0.05 : 0.1);
+  const upperFence = quantile(values, values.length >= 20 ? 0.95 : 0.9);
+  const capped = values.map((value) => Math.min(Math.max(value, lowerFence), upperFence));
+  return {
+    mean: capped.reduce((sum, value) => sum + value, 0) / capped.length,
+    low: quantile(capped, 0.25),
+    high: quantile(capped, 0.75),
+    capped,
+  };
 }
 
 function ratioLabel(current: number, comparison: number) {
@@ -624,6 +648,7 @@ export function buildTrendsModel(
     ? requestedSourceDirection
     : sourceSort === "record" || sourceSort === "store" || sourceSort === "service" ? "asc" : "desc";
   const detailKindValue = first(query.detailKind);
+  const requestedViewValue = first(query.view);
   const detailMonthValue = first(query.detailMonth);
   const hasValidDetailMonthShape = Boolean(detailMonthValue && /^\d{4}-(0[1-9]|1[0-2])$/.test(detailMonthValue));
   const hasRecognizedPeriodDetailKind = detailKindValue === "current" || detailKindValue === "comparison" || detailKindValue === "both" || detailKindValue === "unclassified" || detailKindValue === "projection";
@@ -774,6 +799,11 @@ export function buildTrendsModel(
     || (detailDriverBreakdown && detailDriverValue)
     || hasValidBenchmarkFocus,
   );
+  const activeView: TrendAnalysisView = (["overview", "stores", "drivers", "records"] as const).includes(requestedViewValue as TrendAnalysisView)
+    ? requestedViewValue as TrendAnalysisView
+    : hasExplicitEvidenceFocus
+      ? "records"
+      : "overview";
   const currentRecords = records.filter((row) => currentSet.has(row.periodKey) && row.localDate >= currentStart && row.localDate <= currentEnd);
   const baselineRecords = records.filter((row) => baselineStart && baselineEnd && baselineSet.has(row.periodKey) && row.localDate >= baselineStart && row.localDate <= baselineEnd);
   const currentValue = aggregate(safeMetric, currentRecords);
@@ -815,6 +845,7 @@ export function buildTrendsModel(
     driverDirection,
     sourceSort,
     sourceDirection,
+    view: activeView,
     ...(options.preserveEvidence ? evidenceQuery : {}),
     ...values,
   });
@@ -842,8 +873,8 @@ export function buildTrendsModel(
       comparisonSourceCount: comparisonKey ? comparisonMonthRecords.length : undefined,
       comparisonHasData,
       changeLabel: previous === undefined || !currentHasData || !comparisonHasData ? undefined : metricChangeLabel(safeMetric, current, previous),
-      currentLink: { href: `${trendHref({ detailKind: "month", detailMonth: key })}#source-records`, label: `Open exact ${monthLabel(key)} records` },
-      comparisonLink: comparisonKey ? { href: `${trendHref({ detailKind: "month", detailMonth: comparisonKey })}#source-records`, label: `Open exact ${monthLabel(comparisonKey)} records` } : undefined,
+      currentLink: { href: `${trendHref({ view: "records", detailKind: "month", detailMonth: key })}#source-records`, label: `Open exact ${monthLabel(key)} records` },
+      comparisonLink: comparisonKey ? { href: `${trendHref({ view: "records", detailKind: "month", detailMonth: comparisonKey })}#source-records`, label: `Open exact ${monthLabel(comparisonKey)} records` } : undefined,
     };
   });
 
@@ -870,10 +901,10 @@ export function buildTrendsModel(
     label: `Compare with the earlier ${periodMonths} months`,
   };
   const summary: MetricViewModel[] = [
-    { id: "current", label: "Selected dates", value: formatMetric(safeMetric, currentValue, false, currentHasData), supportingText: `${dateLabel(currentStart)}–${dateLabel(currentEnd)} · ${currentEvidence}`, tone: "info", link: { href: `${trendHref({ detailKind: "current", detailMonth: undefined })}#source-records`, label: "Open all records for the selected dates" } },
-    { id: "comparison", label: comparison === "none" ? "Comparison" : "Compared with", value: comparison === "none" ? "Off" : formatMetric(safeMetric, baselineValue, false, baselineHasData), supportingText: comparison === "none" ? "Choose dates to compare" : !baselineHasData ? `${compareLabel} · no recorded data` : `${baselineStart && baselineEnd ? `${dateLabel(baselineStart)}–${dateLabel(baselineEnd)}` : compareLabel} · ${comparisonEvidence}`, tone: comparison === "none" || !baselineHasData ? "neutral" : valueTone(safeMetric, currentValue, baselineValue), link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ detailKind: "comparison", detailMonth: undefined })}#source-records`, label: "Open all comparison-period records" } },
-    { id: "change", label: "Change", value: comparison === "none" ? "—" : !currentHasData || !baselineHasData ? "Not available" : metricChangeLabel(safeMetric, currentValue, baselineValue), supportingText: comparison === "none" ? "Comparison is turned off" : !currentHasData || !baselineHasData ? "Both date ranges need recorded data" : differenceSentence(safeMetric, currentValue, baselineValue), tone: comparison === "none" || !currentHasData || !baselineHasData ? "neutral" : valueTone(safeMetric, currentValue, baselineValue), link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ detailKind: "both", detailMonth: undefined })}#source-records`, label: "Open records from both date ranges" } },
-    { id: "coverage", label: `${sentence(classificationLevel)} detail`, value: coverageHasData ? `${coverage}%` : "No data", supportingText: coverageHasData ? `${classified.length} of ${currentRecords.length} records include ${classificationLevel} information` : "No records are available for these filters and dates", tone: !coverageHasData ? "neutral" : coverage >= 85 ? "positive" : coverage >= 60 ? "warning" : "critical", link: coverageHasData ? { href: `${trendHref({ detailKind: "unclassified", detailMonth: undefined })}#source-records`, label: "Review records missing classification" } : { href: `${trendHref({ detailKind: "current", detailMonth: undefined })}#source-records`, label: "Open the selected-date record set" } },
+    { id: "current", label: "Selected dates", value: formatMetric(safeMetric, currentValue, false, currentHasData), supportingText: `${dateLabel(currentStart)}–${dateLabel(currentEnd)} · ${currentEvidence}`, tone: "info", link: { href: `${trendHref({ view: "records", detailKind: "current", detailMonth: undefined })}#source-records`, label: "Open all records for the selected dates" } },
+    { id: "comparison", label: comparison === "none" ? "Comparison" : "Compared with", value: comparison === "none" ? "Off" : formatMetric(safeMetric, baselineValue, false, baselineHasData), supportingText: comparison === "none" ? "Choose dates to compare" : !baselineHasData ? `${compareLabel} · no recorded data` : `${baselineStart && baselineEnd ? `${dateLabel(baselineStart)}–${dateLabel(baselineEnd)}` : compareLabel} · ${comparisonEvidence}`, tone: comparison === "none" || !baselineHasData ? "neutral" : valueTone(safeMetric, currentValue, baselineValue), link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ view: "records", detailKind: "comparison", detailMonth: undefined })}#source-records`, label: "Open all comparison-period records" } },
+    { id: "change", label: "Change", value: comparison === "none" ? "—" : !currentHasData || !baselineHasData ? "Not available" : metricChangeLabel(safeMetric, currentValue, baselineValue), supportingText: comparison === "none" ? "Comparison is turned off" : !currentHasData || !baselineHasData ? "Both date ranges need recorded data" : differenceSentence(safeMetric, currentValue, baselineValue), tone: comparison === "none" || !currentHasData || !baselineHasData ? "neutral" : valueTone(safeMetric, currentValue, baselineValue), link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined })}#source-records`, label: "Open records from both date ranges" } },
+    { id: "coverage", label: `${sentence(classificationLevel)} detail`, value: coverageHasData ? `${coverage}%` : "No data", supportingText: coverageHasData ? `${classified.length} of ${currentRecords.length} records include ${classificationLevel} information` : "No records are available for these filters and dates", tone: !coverageHasData ? "neutral" : coverage >= 85 ? "positive" : coverage >= 60 ? "warning" : "critical", link: coverageHasData ? { href: `${trendHref({ view: "records", detailKind: "unclassified", detailMonth: undefined })}#source-records`, label: "Review records missing classification" } : { href: `${trendHref({ view: "records", detailKind: "current", detailMonth: undefined })}#source-records`, label: "Open the selected-date record set" } },
   ];
 
   const additive = (["recorded_cost", "linked_invoice", "work_orders", "service_visits"] as TrendMetricId[]).includes(safeMetric);
@@ -914,7 +945,7 @@ export function buildTrendsModel(
               ? "Planning estimate only. It assumes the recent pace continues; it is not a budget or an equipment-failure prediction."
               : "Planning estimate only. It assumes recent activity continues; it is not a workload commitment or staffing forecast.",
           evidenceLink: {
-            href: `${trendHref({ detailKind: "projection", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`,
+            href: `${trendHref({ view: "records", detailKind: "projection", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`,
             label: "Open the complete-month records used in this estimate",
           },
         }
@@ -955,7 +986,6 @@ export function buildTrendsModel(
   const benchmarkTargetRecords = selectedAsset
     ? currentPeerRecords.filter((row) => maintenanceLinkMatches(row, true))
     : currentPeerRecords;
-  const cohortValues = new Map<string, Array<{ assetId: string; storeId: string; value: number }>>();
   const cohortByAsset = new Map<string, string>();
   const benchmarkAssets = fixture.assets.filter((asset) =>
     asset.organizationId === session.organizationId
@@ -969,9 +999,47 @@ export function buildTrendsModel(
   for (const asset of benchmarkAssets) {
     const cohort = asset.replacementProfileId ?? `${asset.categoryKey}|${asset.groupPath.join("|") || "general"}`;
     cohortByAsset.set(asset.id, cohort);
-    const assetRows = currentPeerRecords.filter((row) => benchmarkAssetId(row) === asset.id);
-    const value = aggregate(safeMetric, assetRows);
-    cohortValues.set(cohort, [...(cohortValues.get(cohort) ?? []), { assetId: asset.id, storeId: asset.storeId, value }]);
+  }
+
+  // Store comparisons use a stable 24-month peer reference window that ends
+  // before the current month. Changing the visible 3/6/12-month period never
+  // changes which history establishes the underlying equipment rates.
+  const referenceMonths = Array.from({ length: 24 }, (_, index) => addMonths(monthKey(organizationLocalDate), index - 24));
+  const referenceMonthSet = new Set(referenceMonths);
+  const referenceEnd = endOfMonth(referenceMonths.at(-1)!);
+  const referencePeerRecords = peerRecords.filter((row) => referenceMonthSet.has(row.periodKey) && row.localDate <= referenceEnd);
+  const earliestRecordedDate = allRecords.reduce<string | undefined>((earliest, row) => !earliest || row.localDate < earliest ? row.localDate : earliest, undefined);
+  const observedReferenceMonthCount = earliestRecordedDate
+    ? referenceMonths.filter((month) => endOfMonth(month) >= earliestRecordedDate).length
+    : 0;
+  const referenceRecordsByAssetMonth = new Map<string, TrendSourceRecord[]>();
+  for (const row of referencePeerRecords) {
+    const assetId = benchmarkAssetId(row);
+    if (!assetId) continue;
+    const key = `${assetId}|${row.periodKey}`;
+    referenceRecordsByAssetMonth.set(key, [...(referenceRecordsByAssetMonth.get(key) ?? []), row]);
+  }
+  interface CohortMonthObservation {
+    assetId: string;
+    storeId: string;
+    month: string;
+    calendarMonth: string;
+    value: number;
+  }
+  const observationsByCohortAndCalendarMonth = new Map<string, CohortMonthObservation[]>();
+  for (const asset of benchmarkAssets) {
+    const cohort = cohortByAsset.get(asset.id)!;
+    const storeTimeZone = storeById.get(asset.storeId)?.timeZone ?? organizationTimeZone;
+    const installedDate = asset.installedAt ? localDateKey(asset.installedAt, storeTimeZone) : undefined;
+    const retiredDate = asset.retiredAt ? localDateKey(asset.retiredAt, storeTimeZone) : undefined;
+    for (const month of referenceMonths) {
+      if (installedDate && installedDate > endOfMonth(month)) continue;
+      if (retiredDate && retiredDate < `${month}-01`) continue;
+      const value = aggregate(safeMetric, referenceRecordsByAssetMonth.get(`${asset.id}|${month}`) ?? []);
+      const key = `${cohort}|${month.slice(5)}`;
+      const observation = { assetId: asset.id, storeId: asset.storeId, month, calendarMonth: month.slice(5), value };
+      observationsByCohortAndCalendarMonth.set(key, [...(observationsByCohortAndCalendarMonth.get(key) ?? []), observation]);
+    }
   }
   const selectedAssetCohort = selectedAsset ? cohortByAsset.get(selectedAsset) : undefined;
   const selectedAssetPeerIds = new Set(selectedAssetCohort
@@ -1004,35 +1072,69 @@ export function buildTrendsModel(
       && (!componentName || [...componentById.values()].some((component) => component.assetId === row.id && component.name.toLocaleLowerCase("en-US") === componentName))
     );
     let expected = 0;
+    let rangeLow = 0;
+    let rangeHigh = 0;
     let comparableAssets = 0;
     const basisRecords: TrendSourceRecord[] = [];
     const comparableAssetIds = new Set<string>();
-    for (const asset of storeAssets) {
-      const cohort = cohortByAsset.get(asset.id);
-      const cohortSample = cohort ? (cohortValues.get(cohort) ?? []).filter((entry) => entry.storeId !== store.id) : [];
-      if (new Set(cohortSample.map((entry) => entry.storeId)).size < 3) continue;
-      expected += median(cohortSample.map((entry) => entry.value));
-      comparableAssets += 1;
-      comparableAssetIds.add(asset.id);
-      if (includeBasisRecords) {
-        for (const entry of cohortSample) {
-          const peerAsset = assetById.get(entry.assetId);
-          basisRecords.push({
-            id: `benchmark:${store.id}:${asset.id}:${entry.assetId}`,
-            date: `${currentEnd}T12:00:00.000Z`,
-            localDate: currentEnd,
-            periodKey: monthKey(currentEnd),
-            displayDate: benchmarkDisplayDate,
-            value: entry.value,
-            storeId: entry.storeId,
-            categoryKey: peerAsset?.categoryKey ?? asset.categoryKey,
-            assetId: entry.assetId,
-            label: peerAsset?.name ?? "Peer equipment observation",
-            detail: `Peer result used for ${asset.name} at Store ${store.storeNumber}; zero is retained when no matching activity was recorded`,
-            displayValue: formatMetric(safeMetric, entry.value),
-            href: `${trendHref({ store: entry.storeId, asset: entry.assetId, detailKind: "current", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`,
-          });
+    if (additive) {
+      for (const asset of storeAssets) {
+        const cohort = cohortByAsset.get(asset.id);
+        if (!cohort) continue;
+        let assetExpected = 0;
+        let assetLow = 0;
+        let assetHigh = 0;
+        let comparableAcrossPeriod = true;
+        for (const month of currentMonths) {
+          const observations = observationsByCohortAndCalendarMonth.get(`${cohort}|${month.slice(5)}`) ?? [];
+          const peerValuesByStore = new Map<string, number[]>();
+          for (const observation of observations) {
+            if (observation.storeId === store.id) continue;
+            peerValuesByStore.set(observation.storeId, [...(peerValuesByStore.get(observation.storeId) ?? []), observation.value]);
+          }
+          const peerRates = [...peerValuesByStore.entries()].map(([storeId, values]) => ({
+            storeId,
+            value: values.reduce((sum, value) => sum + value, 0) / values.length,
+          }));
+          if (peerRates.length < 3) {
+            comparableAcrossPeriod = false;
+            break;
+          }
+          const distribution = winsorizedDistribution(peerRates.map((entry) => entry.value));
+          const partialFactor = month === currentMonths.at(-1) && currentEnd !== endOfMonth(month)
+            ? Number(currentEnd.slice(-2)) / Number(endOfMonth(month).slice(-2))
+            : 1;
+          assetExpected += distribution.mean * partialFactor;
+          assetLow += distribution.low * partialFactor;
+          assetHigh += distribution.high * partialFactor;
+          if (includeBasisRecords) {
+            for (const [peerIndex, peerRate] of peerRates.entries()) {
+              const peerStore = storeById.get(peerRate.storeId);
+              const contribution = (distribution.capped[peerIndex] / peerRates.length) * partialFactor;
+              basisRecords.push({
+                id: `benchmark:${store.id}:${asset.id}:${month}:${peerRate.storeId}`,
+                date: `${referenceEnd}T12:00:00.000Z`,
+                localDate: referenceEnd,
+                periodKey: month,
+                displayDate: `${monthLabel(referenceMonths[0])}–${monthLabel(referenceMonths.at(-1)!)}`,
+                value: contribution,
+                storeId: peerRate.storeId,
+                categoryKey: asset.categoryKey,
+                assetId: asset.id,
+                label: `${peerStore ? `Store ${peerStore.storeNumber}` : "Peer store"} · ${asset.name}`,
+                detail: `${monthLabel(month)} weighted peer-rate contribution from the fixed ${observedReferenceMonthCount}-month history; extreme influence is capped, and recorded zero months remain included`,
+                displayValue: formatMetric(safeMetric, contribution),
+                href: trendHref({ view: "records", store: peerRate.storeId, asset: undefined, detailKind: "current", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined }),
+              });
+            }
+          }
         }
+        if (!comparableAcrossPeriod) continue;
+        expected += assetExpected;
+        rangeLow += assetLow;
+        rangeHigh += assetHigh;
+        comparableAssets += 1;
+        comparableAssetIds.add(asset.id);
       }
     }
     let comparableRows = additive ? storeRows.filter((row) => {
@@ -1046,6 +1148,8 @@ export function buildTrendsModel(
         .filter((peer) => peer.rows.length > 0);
       const peerValues = peerStores.map((peer) => aggregate(safeMetric, peer.rows));
       expected = peerValues.length >= 3 ? median(peerValues) : 0;
+      rangeLow = peerValues.length >= 3 ? quantile(peerValues, 0.25) : 0;
+      rangeHigh = peerValues.length >= 3 ? quantile(peerValues, 0.75) : 0;
       comparableAssets = peerValues.length;
       comparableRows = storeRows;
       if (includeBasisRecords) {
@@ -1064,7 +1168,7 @@ export function buildTrendsModel(
             label: `Store ${peerStore?.storeNumber ?? "unknown"} peer result`,
             detail: `${evidenceLabel(safeMetric, peer.rows.length)} used to compare Store ${store.storeNumber}`,
             displayValue: formatMetric(safeMetric, peerValue, false, true),
-            href: `${trendHref({ store: peer.storeId, asset: undefined, detailKind: "current", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`,
+            href: `${trendHref({ view: "records", store: peer.storeId, asset: undefined, detailKind: "current", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`,
           });
         }
       }
@@ -1072,29 +1176,35 @@ export function buildTrendsModel(
     if (includeBasisRecords) benchmarkBasisRecordsByStore.set(store.id, basisRecords);
     const actualHasData = additive || storeRows.length > 0;
     const comparableActual = aggregate(safeMetric, comparableRows);
-    const hasExpected = comparableAssets > 0;
-    const ratio = hasExpected && expected !== 0 && actualHasData ? comparableActual / expected : undefined;
-    const material = hasExpected && actualHasData && (safeMetric === "recorded_cost" || safeMetric === "linked_invoice" ? Math.abs(comparableActual - expected) >= 100_000 : Math.abs(comparableActual - expected) >= 2);
-    const high = hasExpected && material && (expected === 0 ? comparableActual > expected : (ratio ?? 0) >= 1.5);
-    const low = hasExpected && expected !== 0 && (ratio ?? 0) <= 0.65 && material;
-    const noComparison = !hasExpected || !actualHasData;
+    const evidenceFloor = safeMetric === "recorded_cost" || safeMetric === "linked_invoice" ? 10_000 : safeMetric === "vendor_response" ? 0.1 : 1;
+    const coveragePercent = additive && storeAssets.length ? Math.round((comparableAssets / storeAssets.length) * 100) : 0;
+    const baselineReliable = additive
+      ? observedReferenceMonthCount >= 18 && comparableAssets > 0 && expected >= evidenceFloor && coveragePercent >= 60
+      : comparableAssets >= 3;
+    const ratio = baselineReliable && actualHasData && expected > 0 ? comparableActual / expected : undefined;
+    const differenceFromRange = comparableActual > rangeHigh ? comparableActual - rangeHigh : comparableActual < rangeLow ? comparableActual - rangeLow : 0;
+    const material = baselineReliable && actualHasData && (safeMetric === "recorded_cost" || safeMetric === "linked_invoice" ? Math.abs(differenceFromRange) >= 100_000 : Math.abs(differenceFromRange) >= 2);
+    const aboveRange = baselineReliable && actualHasData && comparableActual > rangeHigh;
+    const belowRange = baselineReliable && actualHasData && comparableActual < rangeLow;
+    const high = material && aboveRange;
+    const low = material && belowRange;
+    const noComparison = !baselineReliable || !actualHasData;
     const signalLabel = noComparison
-      ? "Not enough data"
+      ? "No reliable peer comparison yet"
       : safeMetric === "vendor_response"
         ? high ? "Slower than other stores" : low ? "Faster than other stores" : "Near other stores"
         : safeMetric === "pm_completion"
           ? low ? "Lower completion—review" : high ? "Higher completion" : "Near other stores"
-          : high ? "Higher than expected—review" : low ? "Lower than expected" : "Near expected";
+        : high ? "Above peer range—review" : aboveRange ? "Above peer range" : belowRange ? "Below peer range" : "Within peer range";
     const signalTone: Tone = noComparison
       ? "neutral"
       : safeMetric === "vendor_response"
         ? high ? "warning" : low ? "positive" : "neutral"
         : safeMetric === "pm_completion"
           ? low ? "warning" : high ? "positive" : "neutral"
-          : high ? "warning" : low ? "info" : "positive";
-    const signalRank = noComparison ? 0 : safeMetric === "pm_completion" ? low ? 3 : 1 : high ? 3 : low ? 1 : 1;
-    const coveragePercent = additive && storeAssets.length ? Math.round((comparableAssets / storeAssets.length) * 100) : 0;
-    const variance = hasExpected && actualHasData ? comparableActual - expected : undefined;
+          : high ? "warning" : aboveRange || belowRange ? "info" : "positive";
+    const signalRank = noComparison ? 0 : safeMetric === "pm_completion" ? low ? 3 : 1 : high ? 3 : aboveRange ? 2 : 1;
+    const variance = baselineReliable && actualHasData ? comparableActual - expected : undefined;
     const storeFocusLink = {
       href: trendHref({
         store: store.id,
@@ -1111,7 +1221,7 @@ export function buildTrendsModel(
       label: `Focus the full analysis on Store ${store.storeNumber}`,
     };
     const storeRecordsLink = {
-      href: `${trendHref({ detailKind: "current", detailMonth: undefined, driverBreakdown: "store", driverValue: store.id })}#source-records`,
+      href: `${trendHref({ view: "records", detailKind: "current", detailMonth: undefined, driverBreakdown: "store", driverValue: store.id })}#source-records`,
       label: `Open Store ${store.storeNumber} exact records for the selected dates`,
     };
     return {
@@ -1123,14 +1233,19 @@ export function buildTrendsModel(
       comparableActualValue: actualHasData ? comparableActual : undefined,
       comparableActualLabel: formatMetric(safeMetric, comparableActual, false, actualHasData),
       excludedActualLabel: additive && actual !== comparableActual ? `${formatMetric(safeMetric, actual - comparableActual)} outside the equipment match` : undefined,
-      expectedValue: hasExpected ? expected : undefined,
-      expectedLabel: hasExpected ? formatMetric(safeMetric, expected) : "Not available",
+      expectedValue: baselineReliable ? expected : undefined,
+      expectedLabel: baselineReliable ? formatMetric(safeMetric, expected) : "No reliable peer comparison yet",
+      rangeLowValue: baselineReliable ? rangeLow : undefined,
+      rangeHighValue: baselineReliable ? rangeHigh : undefined,
+      rangeLabel: baselineReliable ? `${formatMetric(safeMetric, rangeLow)}–${formatMetric(safeMetric, rangeHigh)}` : "No reliable peer comparison yet",
       varianceValue: variance,
       varianceLabel: variance === undefined
         ? "—"
+        : differenceFromRange === 0
+          ? "Within range"
         : safeMetric === "pm_completion"
-          ? `${variance >= 0 ? "+" : ""}${Math.round(variance)} pts`
-          : formatMetric(safeMetric, variance),
+          ? `${differenceFromRange >= 0 ? "+" : ""}${Math.round(differenceFromRange)} pts`
+          : `${differenceFromRange >= 0 ? "+" : ""}${formatMetric(safeMetric, differenceFromRange)}`,
       ratioValue: ratio,
       ratioLabel: ratio !== undefined ? `${ratio.toFixed(1)}×` : "—",
       signalRank,
@@ -1141,7 +1256,7 @@ export function buildTrendsModel(
       focusLink: storeFocusLink,
       recordsLink: storeRecordsLink,
       link: storeRecordsLink,
-      peerLink: hasExpected ? { href: `${trendHref({ detailKind: "benchmark", benchmarkStore: store.id, detailMonth: undefined })}#source-records`, label: `Open Store ${store.storeNumber} peer comparison inputs` } : undefined,
+      peerLink: baselineReliable ? { href: `${trendHref({ view: "records", detailKind: "benchmark", benchmarkStore: store.id, detailMonth: undefined })}#source-records`, label: `Open Store ${store.storeNumber} peer comparison inputs` } : undefined,
     };
   });
 
@@ -1172,18 +1287,16 @@ export function buildTrendsModel(
   const benchmarkPage = Number.isInteger(requestedStorePage) ? Math.min(Math.max(requestedStorePage, 1), benchmarkTotalPages) : 1;
   const visibleBenchmarkRows = sortedBenchmarkRows.slice((benchmarkPage - 1) * benchmarkPageSize, benchmarkPage * benchmarkPageSize);
   const benchmarkPagination = sortedBenchmarkRows.length > benchmarkPageSize
-    ? paginationModel(sortedBenchmarkRows.length, benchmarkPage, benchmarkPageSize, (page) => `${trendHref({ storePage: String(page) }, { preserveEvidence: true })}#store-comparison`)
+    ? paginationModel(sortedBenchmarkRows.length, benchmarkPage, benchmarkPageSize, (page) => `${trendHref({ view: "stores", storePage: String(page) }, { preserveEvidence: true })}#store-comparison`)
     : undefined;
 
   const defaultDirection = (id: TrendBenchmarkSortId): TrendSortDirection => id === "store" || id === "coverage" || (id === "ratio" && safeMetric === "pm_completion") ? "asc" : "desc";
   const sortLinks = ([
     ["store", "Store"],
-    ["actual", "Total"],
-    ["comparable", "Matched equipment"],
-    ["expected", additive ? "Expected for same equipment" : "Typical at other stores"],
-    ["variance", "Above / below"],
-    ["ratio", "Vs expected"],
-    ["signal", "What it means"],
+    ["comparable", "Comparable actual"],
+    ["expected", additive ? "Peer operating range" : "Peer operating range"],
+    ["variance", "Difference"],
+    ["signal", "Finding"],
     ["coverage", additive ? "Match coverage" : "Peer sample"],
   ] as const).map(([id, label]) => {
     const nextDirection = storeSort === id ? (storeDirection === "asc" ? "desc" : "asc") : defaultDirection(id);
@@ -1193,7 +1306,7 @@ export function buildTrendsModel(
       active: storeSort === id,
       direction: storeSort === id ? storeDirection : undefined,
       link: {
-        href: trendHref({ storeSort: id, storeDirection: nextDirection, storePage: undefined }, { preserveEvidence: true }),
+        href: trendHref({ view: "stores", storeSort: id, storeDirection: nextDirection, storePage: undefined }, { preserveEvidence: true }),
         label: `Sort stores by ${label.toLocaleLowerCase("en-US")} ${nextDirection === "asc" ? "ascending" : "descending"}`,
       },
     };
@@ -1309,7 +1422,7 @@ export function buildTrendsModel(
     const identity = driverIdentity(current[0] ?? prior[0]);
     const changeValue = currentDriverHasData && comparisonDriverHasData ? currentAggregate - comparisonAggregate : undefined;
     const recordsLink = {
-      href: `${trendHref({ detailKind: comparison === "none" ? "current" : "both", detailMonth: undefined, driverBreakdown: breakdown, driverValue: key })}#source-records`,
+      href: `${trendHref({ view: "records", detailKind: comparison === "none" ? "current" : "both", detailMonth: undefined, driverBreakdown: breakdown, driverValue: key })}#source-records`,
       label: `Open exact ${identity.label} records`,
     };
     const focusValues = driverFocusValues(breakdown, key);
@@ -1357,7 +1470,7 @@ export function buildTrendsModel(
   const driverPage = Number.isInteger(requestedDriverPage) ? Math.min(Math.max(requestedDriverPage, 1), driverTotalPages) : 1;
   const visibleDriverRows = driverRows.slice((driverPage - 1) * driverPageSize, driverPage * driverPageSize);
   const driverPagination = driverRows.length > driverPageSize
-    ? paginationModel(driverRows.length, driverPage, driverPageSize, (page) => `${trendHref({ driverPage: String(page) }, { preserveEvidence: true })}#change-drivers`)
+    ? paginationModel(driverRows.length, driverPage, driverPageSize, (page) => `${trendHref({ view: "drivers", driverPage: String(page) }, { preserveEvidence: true })}#change-drivers`)
     : undefined;
   const driverColumnLabel = breakdown === "category" ? "Service area" : breakdown === "profile" ? "Equipment type" : breakdown === "group" ? "Equipment group" : breakdown === "component" ? "Component" : breakdown === "vendor" ? "Vendor" : breakdown === "region" ? "Region" : "Store";
   const driverSortLinks: TrendAnalysisPageViewModel["drivers"]["sortLinks"] = ([
@@ -1375,7 +1488,7 @@ export function buildTrendsModel(
       active: driverSort === id,
       direction: driverSort === id ? driverDirection : undefined,
       link: {
-        href: trendHref({ driverSort: id, driverDirection: nextDirection, driverPage: undefined }, { preserveEvidence: true }),
+        href: trendHref({ view: "drivers", driverSort: id, driverDirection: nextDirection, driverPage: undefined }, { preserveEvidence: true }),
         label: `Sort change details by ${label.toLocaleLowerCase("en-US")} ${nextDirection === "asc" ? "ascending" : "descending"}`,
       },
     };
@@ -1459,6 +1572,7 @@ export function buildTrendsModel(
       direction: sourceSort === id ? sourceDirection : undefined,
       link: {
         href: `${trendHref({
+          view: "records",
           sourceSort: id,
           sourceDirection: nextDirection,
           sourcePage: undefined,
@@ -1473,6 +1587,7 @@ export function buildTrendsModel(
     };
   });
   const sourcePageHref = (page: number) => `${trendHref({
+    view: "records",
     detailKind,
     detailMonth: detailKind === "month" ? detailMonth : undefined,
     driverBreakdown: detailDriverBreakdown,
@@ -1653,7 +1768,7 @@ export function buildTrendsModel(
         ? "Only the calculation-input table is narrowed to this peer comparison. Open an input to inspect the underlying records for that peer equipment or store."
         : "Only the exact-record table is narrowed to this evidence set. The analysis above keeps the scope shown in the trails.",
       clearLink: {
-        href: `${trendHref({ detailKind: undefined, detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`,
+        href: trendHref({ view: "overview", detailKind: undefined, detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined }),
         label: "Clear the exact-record focus",
       },
     } : undefined,
@@ -1662,6 +1777,33 @@ export function buildTrendsModel(
     ? [selectedRegion ? regionById.get(selectedRegion)?.name : undefined, `Store ${storeById.get(selectedStore)?.storeNumber ?? "unknown"}`]
     : [selectedRegion ? regionById.get(selectedRegion)?.name : "Companywide"];
   const scopeParts = [...locationScopeParts, selectedWorkType ? selectedWorkType === "preventive" ? "Preventive maintenance" : "Reactive work" : undefined, selectedCostKind ? `${sentence(selectedCostKind)} cost` : undefined, selectedCategory ? sentence(selectedCategory) : undefined, selectedPath ? trendPathLabel(selectedPath) : undefined, selectedProfile ? profileById.get(selectedProfile)?.name : undefined, selectedAsset ? assetById.get(selectedAsset)?.name : undefined, selectedComponent, selectedVendor ? vendorNameById.get(selectedVendor) : undefined].filter(Boolean);
+  const scopeSummary = [
+    scopeParts.join(" · "),
+    `${dateLabel(currentStart)}–${dateLabel(currentEnd)}`,
+    metricCopy[safeMetric].label,
+    comparison === "none" ? "No date comparison" : `Compared with ${comparison === "previous_year" ? "the same months last year" : `the prior ${periodMonths} months`}`,
+  ].join(" · ");
+  const viewCopy: Array<{ id: TrendAnalysisView; label: string; description: string }> = [
+    { id: "overview", label: "Overview", description: "Headline result and related measures" },
+    { id: "stores", label: "Compare stores", description: "Equipment-matched store comparison" },
+    { id: "drivers", label: "Change drivers", description: `What changed by ${breakdownLabels[breakdown]}` },
+    { id: "records", label: "Source records", description: "Exact records behind each number" },
+  ];
+  const views = viewCopy.map((view) => ({
+    ...view,
+    link: {
+      href: trendHref({
+        view: view.id,
+        detailKind: view.id === "records" ? detailKind : undefined,
+        detailMonth: view.id === "records" && detailKind === "month" ? detailMonth : undefined,
+        driverBreakdown: view.id === "records" ? detailDriverBreakdown : undefined,
+        driverValue: view.id === "records" ? detailDriverValue : undefined,
+        benchmarkStore: view.id === "records" && detailKind === "benchmark" ? benchmarkStore : undefined,
+        sourcePage: undefined,
+      }),
+      label: `Open ${view.label.toLocaleLowerCase("en-US")}`,
+    },
+  }));
   const peakPoint = series.filter((point) => point.currentHasData).reduce<typeof series[number] | undefined>((highest, point) => !highest || point.currentValue > highest.currentValue ? point : highest, undefined);
   const largestVarianceRow = [...benchmarkRows]
     .filter((row) => row.varianceValue !== undefined)
@@ -1676,7 +1818,7 @@ export function buildTrendsModel(
         ? "Choose a previous date range or the same period last year."
         : !currentHasData || !baselineHasData ? "Both date ranges need recorded data before a change can be calculated." : differenceSentence(safeMetric, currentValue, baselineValue),
       tone: changeTone,
-      link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ detailKind: "both", detailMonth: undefined })}#source-records`, label: "Open both supporting periods" },
+      link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined })}#source-records`, label: "Open both supporting periods" },
     },
     {
       id: "peak-month",
@@ -1701,8 +1843,8 @@ export function buildTrendsModel(
       eyebrow: selectedStore ? "Selected store" : "Store to review",
       title: `${largestVarianceRow.label} · ${largestVarianceRow.varianceLabel}`,
       detail: additive
-        ? `${largestVarianceRow.comparableActualLabel} ${safeMetric === "linked_invoice" ? "linked to" : "recorded on"} matched equipment versus ${largestVarianceRow.expectedLabel} typically seen for the same equipment at other stores.`
-        : `${largestVarianceRow.actualLabel} versus ${largestVarianceRow.expectedLabel} typically seen at other stores.`,
+        ? `${largestVarianceRow.comparableActualLabel} ${safeMetric === "linked_invoice" ? "linked to" : "recorded on"} matched equipment versus a ${largestVarianceRow.rangeLabel} peer operating range for the same equipment mix.`
+        : `${largestVarianceRow.actualLabel} versus a ${largestVarianceRow.rangeLabel} peer operating range at other stores.`,
       tone: largestVarianceRow.signalTone,
       link: largestVarianceRow.focusLink,
     });
@@ -1731,6 +1873,9 @@ export function buildTrendsModel(
       secondaryAction: { href: "/app/spend", label: "View spending" },
     },
     canonicalQuery,
+    activeView,
+    scopeSummary,
+    views,
     filterAction: "/app/trends",
     filters: [
       { id: "metric", label: "Track", value: safeMetric, group: "analysis", options: allowedMetricIds.map((value) => filterOption(value, metricCopy[value].label)) },
@@ -1797,9 +1942,9 @@ export function buildTrendsModel(
           ? `Shows whether each store recorded more or less ${safeMetric === "work_orders" ? "work-order activity" : "service-visit activity"} than is typical for the same equipment at other company stores.`
           : "Shows how each store compares with the typical result at other company stores.",
       methodology: additive
-        ? `The expected result uses the typical ${metricCopy[safeMetric].label.toLocaleLowerCase("en-US")} for the same equipment at other stores. Only matched equipment is used to calculate the difference.`
-        : "A store is compared only when at least three other stores have records for the selected measure.",
-      sampleLabel: `${benchmarkRows.length} store${benchmarkRows.length === 1 ? "" : "s"} · ${currentPeerRecords.length} records`,
+        ? `The peer range is built from ${observedReferenceMonthCount} complete months of cost per equipment-month at other stores, aligned to the calendar months selected here. Extreme values are lightly capped, recorded zero months remain included, and the displayed range is the composed 25th–75th percentile for this store's matched equipment mix.`
+        : "The peer range is the 25th–75th percentile at other stores. A comparison appears only when at least three other stores have measured results.",
+      sampleLabel: additive ? `${benchmarkRows.length} stores · ${observedReferenceMonthCount} reference months` : `${benchmarkRows.length} stores · ${currentPeerRecords.length} records`,
       sortLinks,
       pagination: benchmarkPagination,
       rows: visibleBenchmarkRows,
