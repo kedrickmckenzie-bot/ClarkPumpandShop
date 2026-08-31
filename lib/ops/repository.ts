@@ -267,6 +267,7 @@ export interface OpsRepository {
   getLatestVendorResponse(organizationId: OpsId, assignmentId: OpsId): Promise<import("./types").VendorResponse | null>;
   getLatestVendorResponseForIssuance(organizationId: OpsId, issuanceId: OpsId): Promise<import("./types").VendorResponse | null>;
   getVendorResponse(organizationId: OpsId, vendorResponseId: OpsId): Promise<import("./types").VendorResponse | null>;
+  getServiceAppointment(organizationId: OpsId, appointmentId: OpsId): Promise<import("./types").ServiceAppointment | null>;
   listServiceAppointmentsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<import("./types").ServiceAppointment[]>;
   listVendorContinuationsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<import("./types").VendorContinuation[]>;
   findActiveVendorAssignment(organizationId: OpsId, workOrderId: OpsId, vendorId: OpsId): Promise<WorkOrderAssignment | null>;

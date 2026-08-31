@@ -15,18 +15,19 @@ export function StoreSweepPlanner({ model, notice }: { model: StoreSweepPlannerM
   const respondBy = selectedStore ? localInputValue(new Date(planningBaseline + 3 * 86_400_000), selectedStore.timeZone) : "";
   return <div className={styles.page}>
     <header className={styles.header}>
-      <div><p className={styles.eyebrow}>Work · Approved for later</p><h1>Group approved jobs</h1><p>Offer several already-approved jobs at one store to the same vendor. The vendor chooses when to visit and how to run the work. Every job keeps its own work-order number, result, cost, and invoice history.</p></div>
-      <Link className={styles.secondaryButton} href="/app/work-orders?visitPlan=ready">Back to approved jobs</Link>
+      <div><p className={styles.eyebrow}>Work · Approved for next suitable visit</p><h1>Send approved jobs together</h1><p>Offer several already-approved jobs at one store to the same vendor. The vendor chooses when to visit and how to run the work. Every job keeps its own work-order number, result, cost, and invoice history.</p></div>
+      <Link className={styles.secondaryButton} href={model.returnHref}>Back to approved jobs</Link>
     </header>
     {notice ? <p className={styles.notice}>{notice}</p> : null}
     <section className={styles.summary} aria-label="Approved jobs waiting to be handled later">
       <div><span>Stores with approved jobs</span><strong>{model.stores.length}</strong></div>
-      <div><span>Approved jobs waiting to be grouped</span><strong>{model.stores.reduce((sum, store) => sum + store.readyCount, 0)}</strong></div>
+      <div><span>Approved jobs ready to review</span><strong>{model.stores.reduce((sum, store) => sum + store.readyCount, 0)}</strong></div>
       <div><span>Jobs at selected store</span><strong>{selectedStore?.readyCount ?? 0}</strong></div>
     </section>
     <section className={styles.panel}>
       <div className={styles.panelHeader}><div><h2>1. Choose the store</h2><p>Stores with the most approved small jobs appear first.</p></div></div>
       <form className={styles.storePicker} action="/app/store-sweeps/new" method="get">
+        <input type="hidden" name="returnTo" value={model.returnHref} />
         <label><span>Store</span><select name="store" defaultValue={model.selectedStoreId}>{model.stores.map((store) => <option key={store.id} value={store.id}>{store.label} · {store.readyCount} approved {store.readyCount === 1 ? "job" : "jobs"}</option>)}</select></label>
         <button type="submit">Show this store</button>
       </form>
@@ -45,11 +46,11 @@ export function StoreSweepPlanner({ model, notice }: { model: StoreSweepPlannerM
         </label>)}</fieldset>
         <div className={styles.scheduleGrid}>
           <label><span>Ask the vendor to respond by</span><input required name="responseDueAt" type="datetime-local" defaultValue={respondBy} /></label>
-          <div style={{ display: "grid", gap: 6, fontSize: 14, fontWeight: 700 }}><span>Earliest review date</span><strong style={{ fontSize: 16 }}>{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: selectedStore.timeZone }).format(new Date(vendor.earliestReviewAt))}</strong><small>The final request inherits the earliest date from the jobs you select. You do not schedule the vendor.</small></div>
+          <div style={{ display: "grid", gap: 6, fontSize: 14, fontWeight: 700 }}><span>Review timing</span><strong style={{ fontSize: 16 }}>Each selected job keeps its own review date</strong><small>The saved request uses the earliest date among the jobs you submit. You do not schedule the vendor.</small></div>
           <label className={styles.wide}><span>Store access notes (optional)</span><textarea name="accessRequirements" rows={2} maxLength={500} placeholder="Example: check in at the front counter; avoid the lunch rush." /></label>
         </div>
         <div className={styles.actions}><p>No savings amount is created by grouping jobs. The vendor supplies the visit date; results are recorded separately for every job.</p><button type="submit">Group jobs for vendor</button></div>
       </form>)}</div> : <div className={styles.empty}><h3>No vendor is ready for these service areas</h3><p>Review the vendor’s service areas, store coverage, work terms, and required documents before planning a combined visit.</p></div>}
-    </section> : <section className={styles.empty}><h2>No work is approved for later</h2><p>Use “Approve for later” on a low-priority job. It will appear here until it is grouped with other work or sent separately.</p></section>}
+    </section> : <section className={styles.empty}><h2>No work is approved for the next suitable visit</h2><p>Use “Approve for next suitable visit” on a low-priority job. It will appear here until it is handled onsite, sent with other work, or returned to normal service.</p></section>}
   </div>;
 }

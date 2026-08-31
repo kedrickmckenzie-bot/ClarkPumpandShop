@@ -75,8 +75,8 @@ export const operatorNavigation: NavigationItem[] = [
   {
     id: "planning",
     label: "Spending & planning",
-    href: "/app/spend",
-    matchPrefixes: ["/app/spend", "/app/lifecycle", "/app/warranties", "/app/invoices", "/app/reports"],
+    href: "/app/trends",
+    matchPrefixes: ["/app/trends", "/app/spend", "/app/lifecycle", "/app/warranties", "/app/invoices", "/app/reports"],
     contextGroup: "planning",
   },
 ];
@@ -105,6 +105,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
     id: "planning",
     label: "Spending & planning",
     items: [
+      { id: "trends", label: "Trends", href: "/app/trends" },
       { id: "spend", label: "Spending", href: "/app/spend" },
       { id: "lifecycle", label: "Repair or replace", href: "/app/lifecycle" },
       { id: "warranties", label: "Warranties", href: "/app/warranties" },

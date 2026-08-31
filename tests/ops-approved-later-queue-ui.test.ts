@@ -52,9 +52,9 @@ describe("approved-for-later queue management", () => {
     expect(markup).not.toContain(`/api/ops/work-orders/${selected.id}/issue`);
     expect(markup).not.toContain('name="operation" value="release"/><input type="hidden" name="returnTo" value="/app/work-orders/');
     expect(markup).toContain(`store=${storeId}&amp;workOrder=${selected.id}`);
-    expect(markup).toContain("Edit what was approved for later");
+    expect(markup).toContain("Edit the next-suitable-visit instructions");
     expect(markup).toContain('name="deadlineAt"');
-    expect(markup).toContain("Remove from approved for later");
+    expect(markup).toContain("Remove from next-visit list");
     expect(markup).toContain("Cancel work order");
     expect(markup).toContain("never silently deleted");
   });

@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, FileSearch, Layers3 } from "lucide-react";
+import { ArrowRight, CalendarRange, CheckCircle2, ChevronRight, CircleAlert, FileSearch, Layers3 } from "lucide-react";
+import type { PaginationViewModel } from "@/components/ops/data-contract";
+import { PaginationControls } from "@/components/ops/pagination-controls";
 import styles from "./pm-program-management.module.css";
 
 export interface PmProgramManagementModel {
@@ -49,8 +51,7 @@ export interface PmProgramManagementModel {
     resultLabel: string;
     toggleHref?: string;
     toggleLabel?: string;
-    previousHref?: string;
-    nextHref?: string;
+    pagination?: PaginationViewModel;
   };
   reconciliations: Array<{
     id: string;
@@ -134,7 +135,7 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
           )) : <tr><td className={styles.empty} colSpan={5}><strong>No store plans in this view</strong><small>Create a company schedule or change the current store/program filters.</small></td></tr>}</tbody>
         </table>
       </div>
-      {model.planView.previousHref || model.planView.nextHref ? <nav className={styles.pagination} aria-label="Store plan pages"><span>{model.planView.resultLabel}</span><div>{model.planView.previousHref ? <Link href={model.planView.previousHref}><ChevronLeft size={15} aria-hidden="true" />Previous</Link> : <span aria-disabled="true"><ChevronLeft size={15} aria-hidden="true" />Previous</span>}{model.planView.nextHref ? <Link href={model.planView.nextHref}>Next<ChevronRight size={15} aria-hidden="true" /></Link> : <span aria-disabled="true">Next<ChevronRight size={15} aria-hidden="true" /></span>}</div></nav> : null}
+      {model.planView.pagination ? <PaginationControls pagination={model.planView.pagination} label="Store plan pages" /> : null}
     </section>
   );
 }

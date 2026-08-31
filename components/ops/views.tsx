@@ -37,6 +37,9 @@ import type {
 import styles from "./enterprise-workspace.module.css";
 import { RecordSections } from "@/components/workspace/record-sections";
 import { ApprovedLaterIssuanceDialog } from "./approved-later-issuance-dialog";
+import { PaginationControls } from "./pagination-controls";
+import { ApprovedWorkPortfolio } from "@/components/workspace/approved-work-portfolio";
+import type { ApprovedWorkPortfolioViewModel } from "@/app/app/_data/approved-work-presenter";
 
 const CHART_PALETTE = ["#2855d9", "#64748b", "#0f766e", "#8b5cf6", "#d97706", "#dc2626", "#475569"];
 const CHART_TONE_COLORS: Partial<Record<Tone, string>> = {
@@ -425,25 +428,25 @@ function ApprovedLaterManagementPanel({
             <header className={styles.managementSectionHeader}><div><small>Next step</small><strong>Choose how this work should move forward</strong></div><span>The work stays approved until you deliberately change its path.</span></header>
             <div className={styles.managementActions}>
               <ApprovedLaterIssuanceDialog model={management} />
-              <Link href={groupHref}><Layers3 aria-hidden="true" size={18} /><span><strong>Group with other jobs</strong><small>Start with this job selected and add related work.</small></span></Link>
+              <Link href={groupHref}><Layers3 aria-hidden="true" size={18} /><span><strong>Review other approved jobs at this store</strong><small>Choose which jobs to send together in one vendor request.</small></span></Link>
             </div>
           </section>
 
           <form action={holdAction} method="post" className={styles.approvedLaterEditForm}>
             <input type="hidden" name="operation" value="place" />
             <input type="hidden" name="returnTo" value={selectedReturnTo} />
-            <header className={styles.managementSectionHeader}><div><small>Approval settings</small><strong>Edit what was approved for later</strong></div><span>These settings guide the future visit without creating a vendor price.</span></header>
+            <header className={styles.managementSectionHeader}><div><small>Approval settings</small><strong>Edit the next-suitable-visit instructions</strong></div><span>These settings guide a future visit without creating a vendor price.</span></header>
             <div className={styles.approvedLaterFieldGrid}>
               <label>
                 <span>What may the vendor do?</span>
                 <select name="posture" defaultValue={management.posture}>
-                  <option value="complete_using_professional_judgment">Complete if practical</option>
-                  <option value="look_and_report">Look and report back</option>
+                  <option value="complete_using_professional_judgment">Complete during the visit if practical</option>
+                  <option value="look_and_report">Inspect and report back</option>
                 </select>
-                <small>Use “look and report” when the scope may need a separate decision.</small>
+                <small>Use “inspect and report back” when the scope may need a separate decision.</small>
               </label>
               <label>
-                <span>Review by</span>
+                <span>Review if not handled by</span>
                 <input type="datetime-local" name="deadlineAt" required defaultValue={management.deadlineInputValue} />
                 <small>Store-local time ({management.storeTimeZone})</small>
               </label>
@@ -469,8 +472,8 @@ function ApprovedLaterManagementPanel({
             <form action={holdAction} method="post">
               <input type="hidden" name="operation" value="release" />
               <input type="hidden" name="returnTo" value={listReturnTo} />
-              <div><strong>Remove from the later list</strong><span>Keep the work order open and return it to provider selection.</span></div>
-              <button type="submit">Remove from approved for later</button>
+              <div><strong>Remove from the next-visit list</strong><span>Keep the work order open and return it to provider selection.</span></div>
+              <button type="submit">Remove from next-visit list</button>
             </form>
             <form action={`${workOrderPath.replace("/app/", "/api/ops/")}/control`} method="post">
               <input type="hidden" name="operation" value="update" />
@@ -489,7 +492,7 @@ function ApprovedLaterManagementPanel({
   );
 }
 
-export function ListSurface({ model, surface, searchParams }: { model: ListPageViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
+export function ListSurface({ model, approvedWork, surface, searchParams }: { model: ListPageViewModel; approvedWork?: ApprovedWorkPortfolioViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
   const triageMode = TRIAGE_SURFACES.has(surface);
   const visitPlanParam = searchParams.visitPlan;
   const approvedLaterMode = surface === "work-orders" && (Array.isArray(visitPlanParam) ? visitPlanParam[0] : visitPlanParam) === "ready";
@@ -502,7 +505,7 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
   const viewMode: SurfaceViewMode = triageMode ? "table" : requestedView ?? (TILE_DEFAULT_SURFACES.has(surface) ? "tile" : "table");
   const toggleQuery = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
-    if (key === "layout" || key === "selected" || value === undefined) continue;
+    if (["layout", "selected", "matchStore"].includes(key) || value === undefined) continue;
     for (const single of Array.isArray(value) ? value : [value]) toggleQuery.append(key, single);
   }
   const baseQuery = toggleQuery.toString();
@@ -521,7 +524,7 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           {notice ? <div className={styles.successNotice} role="status">{notice}</div> : null}
-          {model.metrics ? <MetricStrip metrics={model.metrics} /> : null}
+          {approvedLaterMode && approvedWork ? <ApprovedWorkPortfolio model={approvedWork} /> : model.metrics ? <MetricStrip metrics={model.metrics} /> : null}
           <section className={styles.listWorkspace}>
             <div className={styles.listToolbar}>
               {model.search ? (
@@ -555,7 +558,7 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
                   <Link className={styles.approvedLaterBackdrop} href={selectionHref()} aria-label="Close approved work panel" />
                   <aside className={styles.approvedLaterDialog} role="dialog" aria-modal="true" aria-labelledby="approved-later-dialog-title">
                     <header className={styles.approvedLaterDialogHeader}>
-                      <div><span>Approved work to handle later</span><div className={styles.approvedLaterTitleLine}><h2 id="approved-later-dialog-title">{selectedRow.label}</h2><strong>Approved for later</strong></div><p>{selectedRow.cells[0]?.secondary ?? "Review and manage this approved job."}</p></div>
+                      <div><span>Approved for next suitable visit</span><div className={styles.approvedLaterTitleLine}><h2 id="approved-later-dialog-title">{selectedRow.label}</h2><strong>Ready for a suitable visit</strong></div><p>{selectedRow.cells[0]?.secondary ?? "Review and manage this approved job."}</p></div>
                       <Link href={selectionHref()} aria-label="Close approved work panel"><span>Close</span><b aria-hidden="true">×</b></Link>
                     </header>
                     <div className={styles.approvedLaterDialogBody}>
@@ -577,15 +580,7 @@ export function ListSurface({ model, surface, searchParams }: { model: ListPageV
             {!triageMode ? <nav className={styles.viewToggle} aria-label="Display mode">
               <Link href={toggleHref} className={styles.viewToggleLink}>{nextView === "table" ? "Switch to table view" : "Switch to card view"}</Link>
             </nav> : null}
-            {model.pagination ? (
-              <nav className={styles.pagination} aria-label="Result pages">
-                <span>{model.pagination.summary}</span>
-                <div>
-                  {model.pagination.previousHref ? <Link href={model.pagination.previousHref}><ArrowLeft aria-hidden="true" size={16} />Previous</Link> : <span aria-disabled="true"><ArrowLeft aria-hidden="true" size={16} />Previous</span>}
-                  {model.pagination.nextHref ? <Link href={model.pagination.nextHref}>Next<ArrowRight aria-hidden="true" size={16} /></Link> : <span aria-disabled="true">Next<ArrowRight aria-hidden="true" size={16} /></span>}
-                </div>
-              </nav>
-            ) : null}
+            {model.pagination ? <PaginationControls pagination={model.pagination} /> : null}
           </section>
         </>
       )}
@@ -669,15 +664,7 @@ export function ListView({ model }: { model: ListPageViewModel }) {
               </div>
             ) : null}
             <DataTable table={model.table} />
-            {model.pagination ? (
-              <nav className={styles.pagination} aria-label="Result pages">
-                <span>{model.pagination.summary}</span>
-                <div>
-                  {model.pagination.previousHref ? <Link href={model.pagination.previousHref}><ArrowLeft aria-hidden="true" size={16} />Previous</Link> : <span aria-disabled="true"><ArrowLeft aria-hidden="true" size={16} />Previous</span>}
-                  {model.pagination.nextHref ? <Link href={model.pagination.nextHref}>Next<ArrowRight aria-hidden="true" size={16} /></Link> : <span aria-disabled="true">Next<ArrowRight aria-hidden="true" size={16} /></span>}
-                </div>
-              </nav>
-            ) : null}
+            {model.pagination ? <PaginationControls pagination={model.pagination} /> : null}
           </section>
         </>
       )}
@@ -755,13 +742,7 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
               {model.resultSummary ? <strong className={styles.resultSummary}>{model.resultSummary}</strong> : null}
             </div> : null}
             <DataTable table={model.table} />
-            {model.pagination ? <nav className={styles.pagination} aria-label="Result pages">
-              <span>{model.pagination.summary}</span>
-              <div>
-                {model.pagination.previousHref ? <Link href={model.pagination.previousHref}><ArrowLeft aria-hidden="true" size={16} />Previous</Link> : <span aria-disabled="true"><ArrowLeft aria-hidden="true" size={16} />Previous</span>}
-                {model.pagination.nextHref ? <Link href={model.pagination.nextHref}>Next<ArrowRight aria-hidden="true" size={16} /></Link> : <span aria-disabled="true">Next<ArrowRight aria-hidden="true" size={16} /></span>}
-              </div>
-            </nav> : null}
+            {model.pagination ? <PaginationControls pagination={model.pagination} /> : null}
           </section> : null}
         </>
       )}

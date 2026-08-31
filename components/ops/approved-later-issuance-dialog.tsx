@@ -132,7 +132,7 @@ export function ApprovedLaterIssuanceDialog({ model }: { model: ApprovedLaterMan
               <footer><strong>Billing reference</strong><span>Include operator work-order number {model.workOrderNumber} on service paperwork and invoices.</span><small>The vendor may accept, decline, propose a date, or ask a question from the secure response link.</small></footer>
             </div>
 
-            <aside className={styles.issuanceInternalNote}><ShieldCheck aria-hidden="true" size={18} /><div><strong>Internal controls stay internal</strong><p>The invoice-review threshold and “approved for later” settings are not included in the vendor copy. Sending releases this job from the later-work list only after the authorization is created.</p></div></aside>
+            <aside className={styles.issuanceInternalNote}><ShieldCheck aria-hidden="true" size={18} /><div><strong>Internal controls stay internal</strong><p>The invoice-review threshold and next-suitable-visit settings are not included in the vendor copy. Sending removes this job from the next-visit list only after the authorization is created.</p></div></aside>
           </section>
         </div>
 
@@ -143,7 +143,7 @@ export function ApprovedLaterIssuanceDialog({ model }: { model: ApprovedLaterMan
               <button className={styles.issuancePrimaryButton} type="button" disabled={!selectedVendor} onClick={() => setStep("review")}>Review before sending<Send aria-hidden="true" size={17} /></button>
             </>
           ) : (
-            <form action={`/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/issue`} method="post" target="_blank">
+            <form action={`/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/issue`} method="post">
               <input type="hidden" name="vendorId" value={vendorId} />
               <input type="hidden" name="channel" value={channel} />
               <input type="hidden" name="message" value={message} />

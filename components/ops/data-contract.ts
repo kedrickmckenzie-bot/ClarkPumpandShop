@@ -92,6 +92,225 @@ export interface TrendViewModel {
   sourceLink: SupportingLink;
 }
 
+export type TrendMetricId =
+  | "recorded_cost"
+  | "linked_invoice"
+  | "work_orders"
+  | "service_visits"
+  | "vendor_response"
+  | "pm_completion";
+
+export type TrendComparisonId = "previous_period" | "previous_year" | "none";
+
+export interface TrendFilterSelectViewModel {
+  id: string;
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  group?: "analysis" | "operating_scope" | "maintenance_scope";
+  helperText?: string;
+}
+
+export interface TrendComparisonPointViewModel {
+  id: string;
+  label: string;
+  currentMonthLabel: string;
+  currentValue: number;
+  currentFormattedValue: string;
+  currentSourceCount: number;
+  currentHasData: boolean;
+  isPartialPeriod?: boolean;
+  comparisonMonthLabel?: string;
+  comparisonValue?: number;
+  comparisonFormattedValue?: string;
+  comparisonSourceCount?: number;
+  comparisonHasData?: boolean;
+  changeLabel?: string;
+  currentLink: SupportingLink;
+  comparisonLink?: SupportingLink;
+}
+
+export interface TrendOutlookViewModel {
+  kind: "projection" | "measured_baseline" | "insufficient_history";
+  eyebrow: string;
+  label: string;
+  value: string;
+  description: string;
+  facts: Array<{ label: string; value: string }>;
+  caution: string;
+  evidenceLink?: SupportingLink;
+}
+
+export type TrendBenchmarkSortId = "store" | "actual" | "comparable" | "expected" | "variance" | "ratio" | "signal" | "coverage";
+export type TrendDriverSortId = "segment" | "current" | "comparison" | "change" | "evidence";
+export type TrendSourceSortId = "record" | "store" | "service" | "date" | "value";
+export type TrendSortDirection = "asc" | "desc";
+
+export interface TrendBenchmarkSortLinkViewModel {
+  id: TrendBenchmarkSortId;
+  label: string;
+  link: SupportingLink;
+  active: boolean;
+  direction?: TrendSortDirection;
+}
+
+export interface TrendDriverSortLinkViewModel {
+  id: TrendDriverSortId;
+  label: string;
+  link: SupportingLink;
+  active: boolean;
+  direction?: TrendSortDirection;
+}
+
+export interface TrendSourceSortLinkViewModel {
+  id: TrendSourceSortId;
+  label: string;
+  link: SupportingLink;
+  active: boolean;
+  direction?: TrendSortDirection;
+}
+
+export interface TrendBenchmarkRowViewModel {
+  id: string;
+  label: string;
+  context: string;
+  actualValue?: number;
+  actualLabel: string;
+  comparableActualValue?: number;
+  comparableActualLabel: string;
+  excludedActualLabel?: string;
+  expectedValue?: number;
+  expectedLabel: string;
+  varianceValue?: number;
+  varianceLabel: string;
+  ratioValue?: number;
+  ratioLabel: string;
+  signalRank: number;
+  signalLabel: string;
+  signalTone: Tone;
+  coverageValue: number;
+  coverageLabel: string;
+  focusLink: SupportingLink;
+  recordsLink: SupportingLink;
+  /** @deprecated Use recordsLink for the exact evidence set. */
+  link: SupportingLink;
+  peerLink?: SupportingLink;
+}
+
+export type TrendBreakdownId = "region" | "store" | "category" | "group" | "profile" | "component" | "vendor";
+
+export interface TrendDriverRowViewModel {
+  id: string;
+  label: string;
+  context?: string;
+  currentValue?: number;
+  currentLabel: string;
+  comparisonValue?: number;
+  comparisonLabel: string;
+  changeValue?: number;
+  changeLabel: string;
+  shareLabel?: string;
+  currentSourceCount: number;
+  comparisonSourceCount: number;
+  focusLink?: SupportingLink;
+  recordsLink: SupportingLink;
+  /** @deprecated Use recordsLink for the exact evidence set. */
+  link: SupportingLink;
+}
+
+export interface TrendInvestigationCrumbViewModel {
+  id: string;
+  label: string;
+  link?: SupportingLink;
+}
+
+export interface TrendInvestigationTrailViewModel {
+  id: "location" | "maintenance" | "vendor";
+  label: string;
+  crumbs: TrendInvestigationCrumbViewModel[];
+}
+
+export interface TrendEvidenceFocusViewModel {
+  label: string;
+  description: string;
+  clearLink: SupportingLink;
+}
+
+export interface TrendRelatedMeasureViewModel {
+  metricId: TrendMetricId;
+  label: string;
+  value: string;
+  comparisonLabel?: string;
+  evidenceLabel: string;
+  description: string;
+  link: SupportingLink;
+}
+
+export interface TrendInsightViewModel {
+  id: string;
+  eyebrow: string;
+  title: string;
+  detail: string;
+  tone: Tone;
+  link: SupportingLink;
+}
+
+export interface TrendAnalysisPageViewModel {
+  state: DataState;
+  page: PageContext;
+  canonicalQuery: string;
+  filterAction: string;
+  filters: TrendFilterSelectViewModel[];
+  clearFiltersHref: string;
+  metricId: TrendMetricId;
+  metricLabel: string;
+  metricDefinition: string;
+  comparisonId: TrendComparisonId;
+  comparisonLabel: string;
+  currentPeriodName: string;
+  comparisonPeriodName?: string;
+  currentPeriodLabel: string;
+  comparisonPeriodLabel?: string;
+  comparisonNote?: string;
+  investigation: {
+    trails: TrendInvestigationTrailViewModel[];
+    evidence?: TrendEvidenceFocusViewModel;
+  };
+  relatedMeasures: TrendRelatedMeasureViewModel[];
+  summary: MetricViewModel[];
+  series: TrendComparisonPointViewModel[];
+  outlook: TrendOutlookViewModel;
+  insights: TrendInsightViewModel[];
+  drivers: {
+    breakdownId: TrendBreakdownId;
+    title: string;
+    description: string;
+    reconciliationLabel: string;
+    sampleLabel: string;
+    sortLinks: TrendDriverSortLinkViewModel[];
+    pagination?: PaginationViewModel;
+    rows: TrendDriverRowViewModel[];
+  };
+  benchmark: {
+    title: string;
+    description: string;
+    methodology: string;
+    sampleLabel: string;
+    sortLinks: TrendBenchmarkSortLinkViewModel[];
+    pagination?: PaginationViewModel;
+    rows: TrendBenchmarkRowViewModel[];
+  };
+  sourceTable: TableViewModel;
+  sourceHeading: string;
+  sourceDescription: string;
+  sourceSortLinks: TrendSourceSortLinkViewModel[];
+  sourceSummary: string;
+  sourcePeriodLabel: string;
+  sourceExportLink: SupportingLink;
+  sourcePagination: PaginationViewModel;
+  notes: string[];
+}
+
 export interface ActionItemViewModel {
   id: string;
   title: string;
@@ -210,6 +429,21 @@ export interface TableViewModel {
   rows: TableRowViewModel[];
 }
 
+export interface PaginationPageLinkViewModel {
+  page: number;
+  href: string;
+  current: boolean;
+}
+
+export interface PaginationViewModel {
+  summary: string;
+  currentPage: number;
+  totalPages: number;
+  pageLinks: PaginationPageLinkViewModel[];
+  previousHref?: string;
+  nextHref?: string;
+}
+
 export interface ListPageViewModel {
   state: DataState;
   page: PageContext;
@@ -226,11 +460,7 @@ export interface ListPageViewModel {
     action: string;
     preservedParameters?: Array<{ name: string; value: string }>;
   };
-  pagination?: {
-    summary: string;
-    previousHref?: string;
-    nextHref?: string;
-  };
+  pagination?: PaginationViewModel;
 }
 
 export interface DashboardPageViewModel {

@@ -69,6 +69,7 @@ export const DEMO_VENDOR_NAMES = {
 export const NORTHLINE_DEMO_ENTRY_TOKENS = {
   store104: "yxXEL85UZIlTAPwVDanaA1n5n2O0Sx5cmQc2s3TQYUM",
   serviceAuthorization104: "zdRfp4QemuXSqKVoHtsMHuwXGz4wlruU89tmDjNk7Ts",
+  upcomingService104: "VR-jsOQgSKTNDLPXl1nv4TCVMSRdVs6TcIvEj8FapGM",
   activeVisit112: "L0HMN2vA08eONSnasubFYbEiklRGSjpQQpbP6Ld6vMo",
   trustedStore104: "wjru_t6__2kW59QM_kQw62VgYgeNZporOvMEzA1Sf5w",
   estimate105Summit: "LvS1x4HpenFPweeAyDmSa4ZRo-zemfa_sZpZrnlQWbw",
@@ -79,6 +80,7 @@ export const NORTHLINE_DEMO_ENTRY_TOKENS = {
 export const NORTHLINE_DEMO_TOKEN_HASHES = {
   store104: "380a766b446fd70df62f1707d101e515b07fb211397c65b5a2f3a26864f79db1",
   serviceAuthorization104: "5682e8cb6a878b9abb5c7b0cfd870af97c933cd79ce9fb2bcb9d8b88ccf20fa8",
+  upcomingService104: "2cdb7abf25bf34445a846272109a0a2245f1022c4074cf757e78990ad42dc54d",
   activeVisit112: "1934698154df94b020ccec22c3cab4023bcd4b0b2c6a5ac62c914d42b395832d",
   trustedStore104: "04ba6edfb1020edc3253848bacd7bf9441371f1dde84d8b4a079f8e0f8b94046",
   estimate105Summit: "1d82353ab0ce89b2414d3763529186420dad5ca03d48b77b39f91113baa1b81a",
@@ -1979,6 +1981,7 @@ function buildFixture(): OpsFixture {
   const publicTokens: PublicActionToken[] = [
     { id: "public-token-northline-store-104", organizationId: organization.id, purpose: "store_gateway", subjectType: "store", subjectId: "store-northline-104", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.store104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
     { id: "public-token-northline-service-104", organizationId: organization.id, purpose: "service_authorization", subjectType: "work_order_issuance", subjectId: publicIssuanceId, tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceAuthorization104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
+    { id: "public-token-northline-upcoming-service-104", organizationId: organization.id, purpose: "service_authorization", subjectType: "work_order_issuance", subjectId: "issuance-upcoming-104-sign-lighting-r1", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.upcomingService104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 24, 11, 12) },
     { id: "public-token-northline-visit-112", organizationId: organization.id, purpose: "active_visit", subjectType: "visit", subjectId: NORTHLINE_DEMO_HANDLES.activeVisitId, tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.activeVisit112, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
     { id: "public-token-northline-trusted-store-104", organizationId: organization.id, purpose: "trusted_store_device", subjectType: "store", subjectId: "store-northline-104", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.trustedStore104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
     { id: "public-token-northline-estimate-105-summit", organizationId: organization.id, purpose: "vendor_estimate", subjectType: "work_order_estimate_request", subjectId: "estimate-request-105-summit", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.estimate105Summit, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 14, 50) },

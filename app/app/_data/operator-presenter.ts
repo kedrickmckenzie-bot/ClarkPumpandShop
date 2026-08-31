@@ -17,6 +17,7 @@ import type {
   ListPageViewModel,
   MetricViewModel,
   OperatorSession,
+  PaginationViewModel,
   ProgramPageViewModel,
   SearchPageViewModel,
   TableColumnViewModel,
@@ -58,6 +59,7 @@ import {
 } from "@/lib/ops/commands";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { buildWorkflowTaskWorkspaceModel } from "./workflow-task-presenter";
+import { buildApprovedWorkPortfolio } from "./approved-work-presenter";
 import { NORTHLINE_DEMO_ENTRY_TOKENS, NORTHLINE_DEMO_HANDLES } from "@/lib/ops/fixtures";
 import {
   calculateRepairReplacementScreening,
@@ -477,6 +479,11 @@ function monthLabel(key: string): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${key}-01T00:00:00Z`));
 }
 
+function monthEndDate(key: string): string {
+  const [year, month] = key.split("-").map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
 function hrefWithQuery(path: string, values: Record<string, string | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) if (value) params.set(key, value);
@@ -487,6 +494,34 @@ function hrefWithQuery(path: string, values: Record<string, string | undefined>)
 function rollingYearStart(asOf: string): string {
   const asOfDate = new Date(asOf);
   return new Date(Date.UTC(asOfDate.getUTCFullYear(), asOfDate.getUTCMonth() - 11, 1)).toISOString().slice(0, 10);
+}
+
+function paginationModel(
+  totalRows: number,
+  currentPage: number,
+  pageSize: number,
+  pageHref: (page: number) => string,
+): PaginationViewModel {
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageEnd = Math.min(pageStart + pageSize, totalRows);
+  const pageNumbers = [...new Set([
+    1,
+    currentPage - 2,
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+    currentPage + 2,
+    totalPages,
+  ].filter((page) => page >= 1 && page <= totalPages))].sort((left, right) => left - right);
+  return {
+    summary: totalRows ? `Showing ${pageStart + 1}–${pageEnd} of ${totalRows}` : "No records",
+    currentPage,
+    totalPages,
+    pageLinks: pageNumbers.map((page) => ({ page, href: pageHref(page), current: page === currentPage })),
+    previousHref: currentPage > 1 ? pageHref(currentPage - 1) : undefined,
+    nextHref: currentPage < totalPages ? pageHref(currentPage + 1) : undefined,
+  };
 }
 
 function spendPeriod(asOf: string, key: string | undefined) {
@@ -1575,7 +1610,7 @@ const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
     { key: "work", label: "Work order" },
     { key: "vendor", label: "Vendor" },
     { key: "store", label: "Store" },
-    { key: "amount", label: "Invoice amount", align: "end" },
+    { key: "amount", label: "Linked in scope / gross", align: "end" },
     { key: "status", label: "Match status" },
   ],
   reports: [
@@ -1620,12 +1655,12 @@ const filterLabels: Record<string, string> = {
   exception: "Exceptions",
   "follow-up": "Follow-ups",
   true: "With recorded cost",
-  ready: "Approved for later",
+  ready: "Approved for next suitable visit",
   upcoming: "Upcoming visits",
 };
 
 function heldWorkInstruction(posture: "complete_using_professional_judgment" | "look_and_report") {
-  return posture === "look_and_report" ? "Inspect and report back" : "Complete if practical";
+  return posture === "look_and_report" ? "Inspect and report back" : "Complete during the visit if practical";
 }
 
 function heldWorkReviewLabel(deadlineAt: string, asOf: string) {
@@ -1665,7 +1700,7 @@ function appliedFilters(
       .map((vendor) => [vendor.id, vendor]),
   );
   const assets = new Map(scoped.assets.map((asset) => [asset.id, asset]));
-  const ignored = new Set(["q", "page"]);
+  const ignored = new Set(["q", "page", "matchStore"]);
   return queryEntries(query)
     .filter(([key]) => !ignored.has(key))
     .map(([key, value]) => {
@@ -1679,8 +1714,13 @@ function appliedFilters(
       else if (key === "exception") label = "Selected exception";
       else if (key === "visit") label = "Selected visit";
       else if (key === "review") label = "Needs review";
+      else if (key === "reviewWindow" && value === "30") label = "Review within 30 days";
+      else if (key === "opportunity" && value === "confirmed") label = "Confirmed visit matches";
+      else if (key === "storeGroup" && value === "multiple") label = "Stores with 2+ approved jobs";
+      else if (key === "matchStore") return undefined;
       return { id: key, label, removeHref: hrefWithoutQueryKey(route, query, key) };
-    });
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 }
 
 function searchable(...values: Array<string | undefined>): string {
@@ -1764,7 +1804,7 @@ function workRows(
         : assignment?.kind === "internal"
           ? "Internal maintenance"
           : hold
-            ? "Waiting to be grouped"
+            ? "Ready for a suitable visit"
             : "Choose later";
       const store = storeById.get(work.storeId);
       const storeTimeZone = store?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
@@ -1830,10 +1870,10 @@ function workRows(
         cells: [
           { key: "work", value: work.number, secondary: work.problem },
           { key: "store", value: store ? `Store ${store.storeNumber}` : "Store unavailable", secondary: store?.city },
-          { key: "assignment", value: assignee ?? "Not assigned", secondary: hold ? heldWorkInstruction(hold.posture) : assignment ? sentence(assignment.status) : "Assignment needed" },
-          { key: "next", value: hold ? heldWorkReviewLabel(hold.deadlineAt, fixture.asOf) : work.nextAction, secondary: hold ? `Review by ${date(hold.deadlineAt)}` : work.accountableParty },
+          { key: "assignment", value: hold ? "Waiting for a suitable visit" : assignee ?? "Not assigned", secondary: hold ? heldWorkInstruction(hold.posture) : assignment ? sentence(assignment.status) : "Assignment needed" },
+          { key: "next", value: hold ? heldWorkReviewLabel(hold.deadlineAt, fixture.asOf) : work.nextAction, secondary: hold ? `Review if not handled by ${date(hold.deadlineAt)}` : work.accountableParty },
           { key: "cost", value: money(costByWork.get(work.id) ?? 0) },
-          { key: "status", value: hold ? "Approved for later" : workStatusLabel(work.status), tone: hold ? "info" : workStatusTone(work.status) },
+          { key: "status", value: hold ? "Approved for next suitable visit" : workStatusLabel(work.status), tone: hold ? "info" : workStatusTone(work.status) },
         ],
       };
     });
@@ -2772,17 +2812,47 @@ export function buildListModel(
   const activeScopeLabel = requestedStore ? storeLabel(requestedStore) : session.scopeLabel;
   const q = cleanSearch(first(query.q));
   let rows: TableRowViewModel[];
-  if (route === "work-orders") rows = workRows(fixture, scoped, query, roleCan(session.role, "control_work_order"));
+  if (route === "work-orders") {
+    rows = workRows(fixture, scoped, query, roleCan(session.role, "control_work_order"));
+    if (first(query.visitPlan) === "ready" && (first(query.opportunity) === "confirmed" || first(query.reviewWindow) === "30" || first(query.storeGroup) === "multiple")) {
+      const approvedPortfolio = buildApprovedWorkPortfolio(fixture, session, {
+        q: first(query.q),
+        storeId: requestedStoreId,
+        regionId: first(query.region),
+        categoryKey: first(query.category),
+        status: first(query.status),
+        stage: first(query.stage),
+        vendorId: first(query.vendor),
+        hasCost: first(query.hasCost) === "true",
+        costFrom: first(query.costFrom),
+        costMonth: first(query.costMonth),
+        assetId: first(query.asset),
+        componentId: first(query.component),
+        path: first(query.path),
+        reviewWindow: first(query.reviewWindow),
+        opportunity: first(query.opportunity),
+        storeGroup: first(query.storeGroup),
+      });
+      const matchingIds = new Set(approvedPortfolio.storeRows.flatMap((store) => store.items.map((item) => item.workOrderId)));
+      rows = rows.filter((row) => matchingIds.has(row.id));
+    }
+  }
   else if (route === "visits") rows = visitRows(fixture, scoped, query);
   else if (route === "stores") rows = storeRows(fixture, scoped, query);
   else if (route === "vendors") rows = vendorRows(fixture, scoped, query);
   else if (route === "invoices") {
     const from = first(query.from);
+    const to = first(query.to);
     const requestedStatus = first(query.status);
     const requestedRegionId = first(query.region);
     const requestedCategory = first(query.category);
+    const requestedPath = pathSegments(first(query.path));
+    const requestedAssetId = first(query.asset);
+    const requestedComponentId = first(query.component);
+    const hasAllocationScope = Boolean(requestedRegionId || requestedStoreId || requestedCategory || requestedPath.length || requestedAssetId || requestedComponentId);
     const workById = new Map(scoped.workOrders.map((work) => [work.id, work]));
     const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
+    const assetById = new Map(scoped.assets.map((asset) => [asset.id, asset]));
     const vendorById = new Map(
       fixture.vendors
         .filter((vendor) => vendor.organizationId === scoped.organizationId)
@@ -2792,37 +2862,36 @@ export function buildListModel(
       .filter(
         (invoice) =>
           invoice.organizationId === scoped.organizationId &&
-          (!from || invoice.invoiceDate >= from),
+          (!from || invoice.invoiceDate >= from) &&
+          (!to || invoice.invoiceDate <= to),
       )
       .map((invoice) => ({
         invoice,
         allocations: fixture.invoiceAllocations.filter(
-          (allocation) =>
-            allocation.organizationId === scoped.organizationId &&
-            allocation.invoiceReferenceId === invoice.id &&
-            workById.has(allocation.workOrderId),
-          ),
+          (allocation) => {
+            if (allocation.organizationId !== scoped.organizationId || allocation.invoiceReferenceId !== invoice.id) return false;
+            const work = workById.get(allocation.workOrderId);
+            const store = work ? storeById.get(work.storeId) : undefined;
+            const asset = work?.assetId ? assetById.get(work.assetId) : undefined;
+            return Boolean(
+              work &&
+              (!requestedRegionId || store?.regionId === requestedRegionId) &&
+              (!requestedStoreId || work.storeId === requestedStoreId) &&
+              (!requestedCategory || work.categoryKey === requestedCategory) &&
+              (!requestedAssetId || (requestedAssetId === "unlinked" ? !work.assetId : work.assetId === requestedAssetId)) &&
+              (!requestedComponentId || (requestedComponentId === "unlinked" ? !work.componentId : work.componentId === requestedComponentId)) &&
+              (requestedPath.length === 0 || assetMatchesPath(asset, requestedPath))
+            );
+          },
+        ),
       }))
-      .filter((item) => scoped.includeCompanywide || item.allocations.length > 0)
+      .filter((item) => (!hasAllocationScope && scoped.includeCompanywide) || item.allocations.length > 0)
       .filter((item) =>
         !requestedStatus ||
         (requestedStatus === "review"
           ? item.invoice.matchStatus !== "confirmed"
           : item.invoice.matchStatus === requestedStatus),
       )
-      .filter((item) => {
-        if (!requestedRegionId && !requestedStoreId && !requestedCategory) return true;
-        return item.allocations.some((allocation) => {
-          const work = workById.get(allocation.workOrderId);
-          const store = work ? storeById.get(work.storeId) : undefined;
-          return Boolean(
-            work &&
-            (!requestedRegionId || store?.regionId === requestedRegionId) &&
-            (!requestedStoreId || work.storeId === requestedStoreId) &&
-            (!requestedCategory || work.categoryKey === requestedCategory)
-          );
-        });
-      })
       .filter((item) => {
         if (!q) return true;
         const work = item.allocations[0] ? workById.get(item.allocations[0].workOrderId) : undefined;
@@ -2835,6 +2904,8 @@ export function buildListModel(
         const primaryWork = allocations[0] ? workById.get(allocations[0].workOrderId) : undefined;
         const store = primaryWork ? storeById.get(primaryWork.storeId) : undefined;
         const vendor = vendorById.get(invoice.vendorId);
+        const scopedAmountMinor = allocations.reduce((sum, allocation) => sum + allocation.amount.amountMinor, 0);
+        const allocationStoreCount = new Set(allocations.map((allocation) => workById.get(allocation.workOrderId)?.storeId).filter(Boolean)).size;
         return {
           id: invoice.id,
           label: invoice.invoiceNumber,
@@ -2843,8 +2914,8 @@ export function buildListModel(
             { key: "invoice", value: invoice.invoiceNumber, secondary: date(invoice.invoiceDate) },
             { key: "work", value: primaryWork?.number ?? invoice.operatorWorkOrderNumber ?? "No work-order reference", secondary: allocations.length ? (allocations.length > 1 ? `${allocations.length} allocations` : "1 linked allocation") : "Not linked to source work" },
             { key: "vendor", value: vendor?.name ?? "Unknown vendor" },
-            { key: "store", value: primaryWork ? storeLabel(store) : "Not attributed" },
-            { key: "amount", value: money(invoice.grossAmount.amountMinor) },
+            { key: "store", value: allocationStoreCount > 1 ? `${allocationStoreCount} stores in this scope` : primaryWork ? storeLabel(store) : "Not attributed" },
+            { key: "amount", value: allocations.length ? money(scopedAmountMinor) : money(invoice.grossAmount.amountMinor), secondary: allocations.length ? `${money(invoice.grossAmount.amountMinor)} invoice gross` : "Invoice gross · no confirmed allocation" },
             { key: "status", value: sentence(invoice.matchStatus), tone: invoice.matchStatus === "confirmed" ? "positive" : ["rejected", "unmatched"].includes(invoice.matchStatus) ? "warning" : "info" },
           ],
         };
@@ -2971,6 +3042,7 @@ export function buildListModel(
   }
 
   rows = rows.filter((row) => roleCanOpenOperatorHref(session.role, row.href));
+  const filteredRowIds = new Set(rows.map((row) => row.id));
   const totalRows = rows.length;
   const exportAll = first(query.export) === "all";
   const pageSize = exportAll ? Math.max(totalRows, 1) : 25;
@@ -2981,7 +3053,7 @@ export function buildListModel(
     : 1;
   const pageStart = (currentPage - 1) * pageSize;
   const pageEnd = Math.min(pageStart + pageSize, totalRows);
-  const pageParameters = Object.fromEntries(queryEntries(query).filter(([key]) => key !== "page"));
+  const pageParameters = Object.fromEntries(queryEntries(query).filter(([key]) => !["page", "selected", "matchStore"].includes(key)));
   const pageHref = (page: number) => hrefWithQuery(routePath(route), { ...pageParameters, page: String(page) });
   rows = rows.slice(pageStart, pageEnd);
   const baseMeta = listMeta[route];
@@ -3049,7 +3121,7 @@ export function buildListModel(
       }]
     : undefined;
   const activeHeldWork = route === "work-orders"
-    ? (fixture.workOrderVisitHolds ?? []).filter((hold) => hold.organizationId === scoped.organizationId && hold.status === "active" && scoped.workOrders.some((work) => work.id === hold.workOrderId && work.status === "approved"))
+    ? (fixture.workOrderVisitHolds ?? []).filter((hold) => hold.organizationId === scoped.organizationId && hold.status === "active" && filteredRowIds.has(hold.workOrderId) && scoped.workOrders.some((work) => work.id === hold.workOrderId && work.status === "approved"))
     : [];
   const openStoreWork = route === "stores"
     ? scoped.workOrders.filter((work) => !["closed", "cancelled"].includes(work.status))
@@ -3065,13 +3137,18 @@ export function buildListModel(
     const work = scoped.workOrders.find((candidate) => candidate.id === hold.workOrderId);
     if (work) heldStoreCounts.set(work.storeId, (heldStoreCounts.get(work.storeId) ?? 0) + 1);
   }
+  const workTimingContext = route === "work-orders"
+    ? Object.fromEntries(queryEntries(query).filter(([key]) => ![
+        "page", "selected", "visitPlan", "reviewWindow", "opportunity", "storeGroup", "matchStore",
+      ].includes(key)))
+    : {};
   const workFilters = route === "work-orders"
     ? [{
         id: "work-visit-plan",
         label: "Work timing",
         options: [
-          { value: "all", label: `All work (${scoped.workOrders.length})`, href: hrefWithoutQueryKey(route, query, "visitPlan"), selected: !visitPlan },
-          { value: "ready", label: `Approved for later (${activeHeldWork.length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), store: first(query.store), status: first(query.status), visitPlan: "ready" }), selected: visitPlan === "ready" },
+          { value: "all", label: `All work (${scoped.workOrders.length})`, href: hrefWithQuery(routePath(route), workTimingContext), selected: !visitPlan },
+          { value: "ready", label: `Approved for next suitable visit (${activeHeldWork.length})`, href: hrefWithQuery(routePath(route), { ...workTimingContext, visitPlan: "ready" }), selected: visitPlan === "ready" },
         ],
       }]
     : undefined;
@@ -3148,7 +3225,7 @@ export function buildListModel(
         : route === "visits" && visitStatus === "upcoming"
           ? "Upcoming visits"
           : route === "work-orders" && visitPlan === "ready"
-            ? "Approved work to handle later"
+            ? "Approved for next suitable visit"
             : meta.title,
       eyebrow: route === "visits" && visitStatus === "upcoming" ? "Scheduled service" : meta.eyebrow,
       description: route === "visits" && visitStatus === "active"
@@ -3156,19 +3233,19 @@ export function buildListModel(
         : route === "visits" && visitStatus === "upcoming"
           ? "Vendor-confirmed appointments that have not started yet. Times display in each store’s local time."
           : route === "work-orders" && visitPlan === "ready"
-            ? "Low-priority jobs managers approved but do not want a separate vendor trip for. Review deadlines keep the work from being forgotten."
+            ? "Small jobs already approved to wait for a suitable visit. Review them by store, use a confirmed visit as a factual opportunity, or send selected jobs together."
             : meta.description,
       scopeLabel: activeScopeLabel,
       updatedLabel: `Source data through ${date(fixture.asOf)}`,
       primaryAction,
-      secondaryAction: route === "work-orders" && activeHeldWork.length ? { label: "Group approved jobs", href: "/app/store-sweeps/new" } : undefined,
+      secondaryAction: route === "work-orders" && activeHeldWork.length ? { label: "Send approved jobs together", href: "/app/store-sweeps/new" } : undefined,
     },
     metrics: route === "visits"
       ? visitMetrics(fixture, scoped, query)
       : route === "work-orders"
         ? [
-            { id: "ready-to-bundle", label: "Approved for later", value: String(activeHeldWork.length), supportingText: "Low-priority jobs that can wait for a practical opportunity", tone: activeHeldWork.length ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open the list" } },
-            { id: "store-sweep-opportunities", label: "Stores with several approved jobs", value: String([...heldStoreCounts.values()].filter((count) => count >= 2).length), supportingText: "Consider grouping these jobs for one vendor", tone: [...heldStoreCounts.values()].some((count) => count >= 2) ? "warning" : "positive", link: { href: "/app/store-sweeps/new", label: "Group approved jobs" } },
+            { id: "ready-to-bundle", label: "Approved for next suitable visit", value: String(activeHeldWork.length), supportingText: "Approved jobs that can wait for a practical opportunity", tone: activeHeldWork.length ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open the list" } },
+            { id: "store-sweep-opportunities", label: "Stores with 2+ approved jobs", value: String([...heldStoreCounts.values()].filter((count) => count >= 2).length), supportingText: "Review these stores before deciding whether one vendor can handle the work", tone: [...heldStoreCounts.values()].some((count) => count >= 2) ? "warning" : "positive", link: { href: "/app/store-sweeps/new", label: "Review jobs by store" } },
           ]
       : route === "stores"
         ? [
@@ -3189,7 +3266,7 @@ export function buildListModel(
     filters: visitFilters ?? workFilters ?? actionFilters ?? estimateFilters,
     appliedFilters: activeFilters,
     clearFiltersHref: activeFilters.length ? routePath(route) : undefined,
-    table: { id: route, caption: route === "work-orders" && visitPlan === "ready" ? "Approved work to handle later" : route === "visits" && visitStatus === "upcoming" ? "Upcoming visits" : meta.title, columns: tableColumns, rows },
+    table: { id: route, caption: route === "work-orders" && visitPlan === "ready" ? "Approved for next suitable visit" : route === "visits" && visitStatus === "upcoming" ? "Upcoming visits" : meta.title, columns: tableColumns, rows },
     resultSummary: route === "work-orders" && visitPlan === "ready"
       ? `${totalRows} approved job${totalRows === 1 ? "" : "s"} across ${heldStoreCounts.size} store${heldStoreCounts.size === 1 ? "" : "s"}`
       : route === "visits" && visitStatus === "upcoming"
@@ -3206,11 +3283,7 @@ export function buildListModel(
         .filter(([key]) => key !== "q" && key !== "page")
         .map(([name, value]) => ({ name, value })),
     } : undefined,
-    pagination: totalRows ? {
-      summary: `Showing ${pageStart + 1}–${pageEnd} of ${totalRows}`,
-      previousHref: currentPage > 1 ? pageHref(currentPage - 1) : undefined,
-      nextHref: currentPage < totalPages ? pageHref(currentPage + 1) : undefined,
-    } : undefined,
+    pagination: totalRows > pageSize ? paginationModel(totalRows, currentPage, pageSize, pageHref) : undefined,
   };
 }
 
@@ -3566,8 +3639,24 @@ export function buildProgramModel(
       const invoiceById = new Map(fixture.invoiceReferences.filter((invoice) => invoice.organizationId === scoped.organizationId).map((invoice) => [invoice.id, invoice]));
       for (const allocation of fixture.invoiceAllocations) { const invoice = invoiceById.get(allocation.invoiceReferenceId); if (allocation.organizationId === scoped.organizationId && scopedWorkIds.has(allocation.workOrderId) && invoice && invoice.invoiceDate >= periodStart) monthly.set(monthKey(invoice.invoiceDate), (monthly.get(monthKey(invoice.invoiceDate)) ?? 0) + allocation.amount.amountMinor); }
     }
-    const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Entered work costs grouped by service month. Invoice amounts are not included in this basis." : "Confirmed invoice allocations grouped by invoice month. Recorded work costs are not included in this basis.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : hrefWithQuery("/app/invoices", { from: `${key}-01`, store: selectedStoreId, category: selectedCategory }), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : hrefWithQuery("/app/invoices", { from: periodStart, store: selectedStoreId, category: selectedCategory }), label: "Open all exact source records" } };
-    const sourceRows = spendWork.filter((work) => (basisAmountByWork.get(work.id) ?? 0) > 0).sort((a, b) => (basisAmountByWork.get(b.id) ?? 0) - (basisAmountByWork.get(a.id) ?? 0)).slice(0, 20).map<TableRowViewModel>((work) => ({ id: work.id, label: work.number, href: `/app/work-orders/${work.id}?view=records`, cells: [
+    const invoiceSourceHref = (from: string, to: string) => hrefWithQuery("/app/invoices", {
+      from,
+      to,
+      region: selectedRegionId,
+      store: selectedStoreId,
+      category: selectedCategory,
+      path: selectedPath.length ? selectedPath.join("|") : undefined,
+      asset: selectedAssetId,
+      component: selectedComponentId,
+    });
+    const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Entered work costs grouped by service month. Invoice amounts are not included in this basis." : "Confirmed invoice allocations grouped by invoice month. Recorded work costs are not included in this basis.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : invoiceSourceHref(`${key}-01`, monthEndDate(key)), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10)), label: "Open all exact source records" } };
+    const sourceWork = spendWork.filter((work) => (basisAmountByWork.get(work.id) ?? 0) > 0).sort((a, b) => (basisAmountByWork.get(b.id) ?? 0) - (basisAmountByWork.get(a.id) ?? 0) || a.number.localeCompare(b.number));
+    const spendPageSize = 25;
+    const requestedSpendPage = Number(first(query.page));
+    const spendTotalPages = Math.max(1, Math.ceil(sourceWork.length / spendPageSize));
+    const spendCurrentPage = Math.min(Number.isFinite(requestedSpendPage) && requestedSpendPage > 0 ? Math.floor(requestedSpendPage) : 1, spendTotalPages);
+    const spendPageStart = (spendCurrentPage - 1) * spendPageSize;
+    const sourceRows = sourceWork.slice(spendPageStart, spendPageStart + spendPageSize).map<TableRowViewModel>((work) => ({ id: work.id, label: work.number, href: `/app/work-orders/${work.id}?view=records`, cells: [
       { key: "work", value: work.number, secondary: work.problem },
       { key: "store", value: storeLabel(storeById.get(work.storeId)) },
       { key: "category", value: work.categoryKey ? sentence(work.categoryKey) : "Unclassified" },
@@ -3607,10 +3696,10 @@ export function buildProgramModel(
       page: { title: selectedComponent?.name ?? selectedAsset?.name ?? selectedPath.at(-1) ?? (selectedCategory ? sentence(selectedCategory) : "Maintenance spend"), eyebrow: "Actual spend visibility", description: "Move from company to region, store, service area, flexible equipment groups, equipment, component, work order, and source record while keeping the selected period and amount basis visible.", scopeLabel: `${activeScopeLabel} · ${hierarchyLabel} · ${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"}`, periodLabel: period.label, updatedLabel: `Through ${date(fixture.asOf)}`, secondaryAction: upHref ? { label: "Up one level", href: upHref } : undefined },
       filters,
       metrics: [
-        { id: "total", label: basis === "recorded" ? "Recorded work cost" : "Linked invoice amount", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} entered source lines` : `${invoiceAmountByWork.size} work orders with confirmed allocations`, link: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : hrefWithQuery("/app/invoices", { region: selectedRegionId, store: selectedStoreId, category: selectedCategory, from: periodStart }), label: "Open exact source records" } },
+        { id: "total", label: basis === "recorded" ? "Recorded work cost" : "Linked invoice amount", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} entered source lines` : `${invoiceAmountByWork.size} work orders with confirmed allocations`, link: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10)), label: "Open exact source records" } },
         comparisonMetric,
         { id: "unclassified", label: selectedAssetId ? "Not mapped to a component" : selectedCategory ? "Not mapped to equipment" : "Unclassified service area", value: String(unclassified.length), supportingText: "Visible rather than forced into a guess", tone: unclassified.length ? "warning" : "positive", link: { href: selectedAssetId ? workLink({ component: "unlinked", hasCost: "true" }) : selectedCategory ? workLink({ asset: "unlinked", hasCost: "true" }) : workLink({ category: "unclassified", hasCost: "true" }), label: "Open source work" } },
-        { id: "invoices", label: "Linked invoice references", value: String(invoiceCount), supportingText: "Optional billing safeguard; not required for cost visibility", link: { href: hrefWithQuery("/app/invoices", { region: selectedRegionId, store: selectedStoreId, category: selectedCategory, from: periodStart }), label: "Review invoice references" } },
+        { id: "invoices", label: "Linked invoice references", value: String(invoiceCount), supportingText: "Optional billing safeguard; not required for cost visibility", link: { href: invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10)), label: "Review invoice references" } },
       ],
       breakdowns: [
         hierarchyBreakdown,
@@ -3641,6 +3730,10 @@ export function buildProgramModel(
       ],
       trends: [spendTrendModel],
       priorityActions: allActions,
+      resultSummary: sourceWork.length ? `Showing ${spendPageStart + 1}–${Math.min(spendPageStart + spendPageSize, sourceWork.length)} of ${sourceWork.length}` : "0 source records",
+      pagination: sourceWork.length > spendPageSize
+        ? paginationModel(sourceWork.length, spendCurrentPage, spendPageSize, (page) => spendHref({ page: String(page) }))
+        : undefined,
       table: { id: "spend-work", caption: `${basis === "recorded" ? "Work orders with recorded cost" : "Work orders with confirmed invoice allocations"} in this scope and period`, columns: [{ key: "work", label: "Work order / problem" }, { key: "store", label: "Store" }, { key: "category", label: "Service area" }, { key: "amount", label: "Amount", align: "end" }, { key: "basis", label: "Source basis" }], rows: sourceRows },
     };
   }
@@ -3755,11 +3848,9 @@ export function buildProgramModel(
             ? `${filteredAssets.length} recently serviced · ${scoped.assets.length} total equipment`
             : `Showing ${pageStart + 1}–${Math.min(pageStart + pageSize, filteredAssets.length)} of ${filteredAssets.length}`
         : "0 equipment records",
-      pagination: filteredAssets.length > pageSize ? {
-        summary: `Page ${currentPage} of ${totalPages}`,
-        previousHref: currentPage > 1 ? equipmentHref({ page: String(currentPage - 1) }) : undefined,
-        nextHref: currentPage < totalPages ? equipmentHref({ page: String(currentPage + 1) }) : undefined,
-      } : undefined,
+      pagination: filteredAssets.length > pageSize
+        ? paginationModel(filteredAssets.length, currentPage, pageSize, (page) => equipmentHref({ page: String(page) }))
+        : undefined,
       table: { id: "equipment", caption: equipmentView === "attention" ? "Equipment needing attention" : equipmentView === "recent" ? "Recently serviced equipment" : "Tracked equipment", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "category", label: "Service area" }, { key: "identity", label: "Model / serial" }, { key: "work", label: "Linked work", align: "end" }, { key: "status", label: "Status" }], rows },
     };
   }
@@ -3848,7 +3939,9 @@ export function buildProgramModel(
       trends: [{ id: "pm-reactive-cost", title: "Recorded reactive cost for PM-covered equipment", description: "Trailing-12-month recorded work cost only. This is context for cadence review, not proof that PM caused or prevented a repair.", points: [...reactiveCostByMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, value]) => ({ id: month, label: month, value, formattedValue: money(value), link: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: `Open ${month} source Work Orders` } })), sourceLink: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: "Open all supporting cost records" } }],
       priorityActions: allActions,
       resultSummary: filteredOccurrenceStates.length ? `${pageStart + 1}–${Math.min(pageStart + pageSize, filteredOccurrenceStates.length)} of ${filteredOccurrenceStates.length}` : "0 occurrences",
-      pagination: filteredOccurrenceStates.length > pageSize ? { summary: `Page ${currentPage} of ${totalPages}`, previousHref: currentPage > 1 ? pmPageHref(currentPage - 1) : undefined, nextHref: currentPage < totalPages ? pmPageHref(currentPage + 1) : undefined } : undefined,
+      pagination: filteredOccurrenceStates.length > pageSize
+        ? paginationModel(filteredOccurrenceStates.length, currentPage, pageSize, pmPageHref)
+        : undefined,
       table: { id: "pm-occurrences", caption: pmView === "attention" ? "Preventive-maintenance occurrences needing attention" : pmView === "upcoming" ? "Upcoming preventive-maintenance occurrences" : "Preventive-maintenance occurrences", columns: [{ key: "plan", label: "Plan / equipment" }, { key: "store", label: "Store" }, { key: "window", label: "Completion window" }, { key: "work", label: "Work order" }, { key: "visit", label: "Visit evidence" }, { key: "status", label: "Status" }], rows },
     };
   }
@@ -3888,6 +3981,23 @@ export function buildProgramModel(
     : lifecycleView === "all"
       ? scopeCandidates
       : liveRepairDecisions;
+  const lifecyclePageSize = 25;
+  const requestedLifecyclePage = Number(first(query.page));
+  const lifecycleTotalPages = Math.max(1, Math.ceil(candidates.length / lifecyclePageSize));
+  const lifecycleCurrentPage = Math.min(Number.isFinite(requestedLifecyclePage) && requestedLifecyclePage > 0 ? Math.floor(requestedLifecyclePage) : 1, lifecycleTotalPages);
+  const lifecyclePageStart = (lifecycleCurrentPage - 1) * lifecyclePageSize;
+  const visibleCandidates = candidates.slice(lifecyclePageStart, lifecyclePageStart + lifecyclePageSize);
+  const lifecyclePageHref = (page: number) => hrefWithQuery("/app/lifecycle", {
+    store: selectedStoreId,
+    asset: selectedAsset,
+    reason: requestedReason,
+    replacementYear: requestedReplacementYear,
+    replacement: requestedReplacement,
+    plan: requestedPlan,
+    status: requestedAssetStatus,
+    view: lifecycleView,
+    page: String(page),
+  });
   const replacementTotal = scopeCandidates.reduce((sum, row) => sum + (row.replacement ?? 0), 0);
   const reasonCounts = new Map<string, number>();
   for (const row of scopeCandidates) {
@@ -3900,7 +4010,7 @@ export function buildProgramModel(
           : "missing inputs";
     reasonCounts.set(key, (reasonCounts.get(key) ?? 0) + 1);
   }
-  const rows = candidates.map<TableRowViewModel>((row) => ({
+  const rows = visibleCandidates.map<TableRowViewModel>((row) => ({
     id: row.asset.id,
     label: row.asset.name,
     href: `/app/equipment/${row.asset.id}`,
@@ -3971,6 +4081,10 @@ export function buildProgramModel(
       sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "capital" }), label: "Open management-planned capital" },
     }],
     priorityActions: selectedAsset ? [] : allActions,
+    resultSummary: candidates.length ? `Showing ${lifecyclePageStart + 1}–${Math.min(lifecyclePageStart + lifecyclePageSize, candidates.length)} of ${candidates.length}` : "0 equipment records",
+    pagination: candidates.length > lifecyclePageSize
+      ? paginationModel(candidates.length, lifecycleCurrentPage, lifecyclePageSize, lifecyclePageHref)
+      : undefined,
     table: { id: "lifecycle", caption: "Equipment lifecycle details", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "evidence", label: lifecycleView === "capital" ? "Planning basis" : "Why it is here" }, { key: "work", label: "Current repair" }, { key: "replacement", label: "Estimated replacement", align: "end" }, { key: "status", label: lifecycleView === "capital" ? "Planning status" : "Review result" }], rows },
   };
 }
@@ -4703,7 +4817,7 @@ export function buildDetailModel(
         facts: [
           { label: "Open work orders", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work orders" } },
           { label: "Upcoming visits", value: String(storeUpcomingVisits.length), link: { href: `/app/visits?store=${store.id}&status=upcoming`, label: "Open upcoming visits" } },
-          { label: "Approved for later", value: String(storeActiveHolds.length), link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
+          { label: "Approved for next suitable visit", value: String(storeActiveHolds.length), link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
           { label: "Vendors onsite now", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open active visits" } },
           { label: "Recorded visits", value: String(storeVisits.length), link: { href: `/app/visits?store=${store.id}`, label: "Open visit history" } },
         ],
@@ -4726,10 +4840,10 @@ export function buildDetailModel(
           }] : []),
           ...(storeActiveHolds.length ? [{
             id: "ready-to-bundle",
-            title: "Approved work to handle later",
-            description: "These jobs can wait for a suitable vendor already onsite or be grouped and offered to one vendor.",
-            table: { id: "store-held-work", caption: `Approved work to handle later at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
-            action: { label: "Group approved jobs", href: `/app/store-sweeps/new?store=${store.id}` },
+            title: "Approved for next suitable visit",
+            description: "These jobs can wait for a suitable vendor already onsite or be sent together after a manager reviews the store’s list.",
+            table: { id: "store-held-work", caption: `Approved for next suitable visit at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
+            action: { label: "Send approved jobs together", href: `/app/store-sweeps/new?store=${store.id}` },
           }] : []),
           { id: "work", title: "Work orders", description: "The customer work-order numbers available for vendor service.", table: { id: "store-work", caption: `Work orders for Store ${store.storeNumber}`, columns: columns["work-orders"].filter((column) => column.key !== "cost"), rows: workRows(fixture, storeScopedFixture, {}) } },
           { id: "visits", title: "Check-in and checkout history", description: "Technician, vendor, selected work order, observed times, and checkout outcome.", table: { id: "store-visits", caption: `Visits for Store ${store.storeNumber}`, columns: columns.visits, rows: visitRows(fixture, storeScopedFixture, {}) } },
@@ -4885,7 +4999,7 @@ export function buildDetailModel(
       facts: [
         { label: "Open work", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work" } },
         { label: "Upcoming visits", value: String(storeUpcomingVisits.length), helperText: storeUpcomingVisits.length ? "Vendor-confirmed appointments" : "No confirmed appointments", link: { href: `/app/visits?store=${store.id}&status=upcoming`, label: "Open upcoming visits" } },
-        { label: "Approved for later", value: String(storeActiveHolds.length), helperText: storeActiveHolds.length ? "Low-priority work waiting for a practical opportunity" : "No work is currently approved for later", link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
+        { label: "Approved for next suitable visit", value: String(storeActiveHolds.length), helperText: storeActiveHolds.length ? "Approved work waiting for a practical opportunity" : "No work is waiting for a suitable visit", link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
         { label: "Onsite now", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open visits" } },
         { label: "Rolling 12-month cost", value: money(costForWorkIds(rollingCostByWork, storeWork.map((work) => work.id))), link: { href: `/app/spend?store=${store.id}`, label: "Explain cost" } },
         { label: "PM compliance", value: eligiblePm.length ? `${Math.round((completedPm.length / eligiblePm.length) * 100)}%` : "No closed window", helperText: eligiblePm.length ? `${completedPm.length} completed / ${eligiblePm.length} eligible occurrences` : "Future and open windows are excluded", link: { href: `/app/pm?store=${store.id}`, label: "Open PM evidence" } },
@@ -4902,10 +5016,10 @@ export function buildDetailModel(
         }] : []),
         ...(storeActiveHolds.length ? [{
           id: "ready-to-bundle",
-          title: "Approved work to handle later",
+          title: "Approved for next suitable visit",
           description: "Group several small jobs for one vendor, or leave them available for a suitable vendor who is already onsite.",
-          table: { id: "store-held-work", caption: `Approved work to handle later at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
-          action: { label: "Group approved jobs", href: `/app/store-sweeps/new?store=${store.id}` },
+          table: { id: "store-held-work", caption: `Approved for next suitable visit at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
+          action: { label: "Send approved jobs together", href: `/app/store-sweeps/new?store=${store.id}` },
         }] : []),
         {
           id: "preventive-maintenance-plans",

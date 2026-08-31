@@ -141,6 +141,11 @@ describe("directive-complete Service Run scheduling contract", () => {
     await respondToServiceRun({ tokenHash: TOKEN_HASH, response: "accepted", responderName: "Morgan Ellis", actor: { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "vendor_link", actorName: "Summit secure link" } }, test.services);
     test.setNow("2026-08-24T13:30:00.000Z");
     const first = await checkInVisit(test.services, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-104", serviceRunId: result.run.id, workOrderIds: ["wo-run-104"], technicianName: "Morgan Ellis", purpose: "Complete the first committed route stop", channel: "secure_link", location: { result: "verified", capturedAt: "2026-08-24T13:30:00.000Z" }, actor: { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "technician", actorName: "Morgan Ellis" } });
+    expect(first.siteVisitWorkOrders).toContainEqual(expect.objectContaining({
+      workOrderId: "wo-run-104",
+      selectionSource: "service_run",
+      workOrderHoldId: undefined,
+    }));
     test.setNow("2026-08-24T14:30:00.000Z");
     await checkOutVisit(test.services, { organizationId: NORTHLINE_ORGANIZATION_ID, visitId: first.id, channel: "secure_link", perWorkOrderOutcomes: [{ workOrderId: "wo-run-104", outcome: "completed", outcomeNotes: "Seal aligned and verified." }], location: { result: "verified", capturedAt: "2026-08-24T14:30:00.000Z" }, actor: { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "technician", actorName: "Morgan Ellis" } });
     expect(test.repository.snapshot().serviceRuns.find((run) => run.id === result.run.id)?.status).toBe("in_progress");

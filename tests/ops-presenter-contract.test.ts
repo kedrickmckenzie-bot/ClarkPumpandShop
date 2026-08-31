@@ -85,11 +85,11 @@ describe("operator presenter drill-through contracts", () => {
       activeHolds.map((hold) => fixture.workOrders.find((workOrder) => workOrder.id === hold.workOrderId)?.storeId).filter(Boolean),
     ).size;
 
-    expect(model.page.title).toBe("Approved work to handle later");
-    expect(model.page.secondaryAction?.label).toBe("Group approved jobs");
+    expect(model.page.title).toBe("Approved for next suitable visit");
+    expect(model.page.secondaryAction?.label).toBe("Send approved jobs together");
     expect(model.table.columns.map((column) => column.key)).toEqual(["work", "store", "assignment", "next"]);
     expect(model.table.rows).toHaveLength(activeHolds.length);
-    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "assignment")?.value === "Waiting to be grouped")).toBe(true);
+    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "assignment")?.value === "Waiting for a suitable visit")).toBe(true);
     expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "store")?.value.startsWith("Store "))).toBe(true);
     expect(model.table.rows.every((row) => row.management?.kind === "approved_later" && row.management.canManage)).toBe(true);
     expect(model.table.rows[0]?.management).toMatchObject({
@@ -100,7 +100,7 @@ describe("operator presenter drill-through contracts", () => {
     });
     expect(model.resultSummary).toBe(`${activeHolds.length} approved jobs across ${heldStoreCount} stores`);
     expect(model.filters?.[0]?.label).toBe("Work timing");
-    expect(model.filters?.[0]?.options.some((option) => option.label === `Approved for later (${activeHolds.length})`)).toBe(true);
+    expect(model.filters?.[0]?.options.some((option) => option.label === `Approved for next suitable visit (${activeHolds.length})`)).toBe(true);
   });
 
   it("gives the store directory source-linked network measures before the location register", () => {
@@ -388,8 +388,10 @@ describe("operator presenter drill-through contracts", () => {
     );
 
     expect(defaultView.table!.rows).toHaveLength(Number(defaultView.metrics.find((metric) => metric.id === "review")?.value));
-    expect(defaultView.table!.rows.length).toBeLessThan(allEquipment.table!.rows.length);
-    expect(allEquipment.table!.rows).toHaveLength(fixture.assets.length);
+    expect(defaultView.table!.rows.length).toBeLessThan(fixture.assets.length);
+    expect(allEquipment.table!.rows).toHaveLength(25);
+    expect(allEquipment.pagination).toMatchObject({ currentPage: 1, totalPages: Math.ceil(fixture.assets.length / 25) });
+    expect(allEquipment.pagination?.summary).toBe(`Showing 1–25 of ${fixture.assets.length}`);
     expect(capitalView.table!.rows).toHaveLength(planned.length);
     expect(capitalView.table!.columns.find((column) => column.key === "evidence")?.label).toBe("Planning basis");
     expect(capitalView.table!.columns.find((column) => column.key === "status")?.label).toBe("Planning status");
@@ -514,7 +516,7 @@ describe("operator presenter drill-through contracts", () => {
     expect(detail.statusLabel).toBe("Limited operations");
     expect(detail.sections.map((section) => section.title)).toEqual([
       "Upcoming visits",
-      "Approved work to handle later",
+      "Approved for next suitable visit",
       "Preventive maintenance",
       "Service areas and spending",
       "Equipment and lifecycle",

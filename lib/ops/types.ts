@@ -860,6 +860,10 @@ export interface WorkOrderVisitHold {
   claimedVisitId?: OpsId;
   claimedVendorId?: OpsId;
   claimedAt?: IsoDateTime;
+  /** Operator intent only; the vendor has not accepted this additional work. */
+  plannedReviewAppointmentId?: OpsId;
+  plannedReviewSelectedAt?: IsoDateTime;
+  plannedReviewSelectedByMembershipId?: OpsId;
   createdByMembershipId?: OpsId;
   createdByName: string;
   createdAt: IsoDateTime;

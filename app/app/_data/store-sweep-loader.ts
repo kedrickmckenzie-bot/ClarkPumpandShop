@@ -9,6 +9,7 @@ import { loadOperatorSession } from "./operator-loader";
 export interface StoreSweepPlannerModel {
   asOf: string;
   planningBaseline: string;
+  returnHref: string;
   selectedStoreId?: string;
   focusedWorkOrderId?: string;
   stores: Array<{ id: string; label: string; readyCount: number }>;
@@ -18,18 +19,29 @@ export interface StoreSweepPlannerModel {
     vendorName: string;
     contractVersionId: string;
     serviceAreas: string[];
-    earliestReviewAt: string;
     jobs: Array<{
       workOrderId: string;
       number: string;
       problem: string;
       scope: string;
       serviceArea: string;
-      posture: "Complete if practical" | "Inspect and report back";
+      posture: "Complete during the visit if practical" | "Inspect and report back";
       reviewLabel: string;
       reviewAt: string;
     }>;
   }>;
+}
+
+function approvedWorkReturnHref(value: string | undefined) {
+  if (!value?.startsWith("/app/work-orders") || value.startsWith("//")) return "/app/work-orders?visitPlan=ready";
+  try {
+    const parsed = new URL(value, "https://operator.invalid");
+    return parsed.origin === "https://operator.invalid" && parsed.pathname === "/app/work-orders"
+      ? `${parsed.pathname}${parsed.search}`
+      : "/app/work-orders?visitPlan=ready";
+  } catch {
+    return "/app/work-orders?visitPlan=ready";
+  }
 }
 
 function dateOnly(value: string, timeZone: string) {
@@ -43,13 +55,14 @@ function reviewLabel(deadlineAt: string, asOf: string, timeZone: string) {
   return `Review in ${days} ${days === 1 ? "day" : "days"} · ${dateOnly(deadlineAt, timeZone)}`;
 }
 
-export async function loadStoreSweepPlanner(requestedStoreId?: string, requestedWorkOrderId?: string): Promise<StoreSweepPlannerModel> {
+export async function loadStoreSweepPlanner(requestedStoreId?: string, requestedWorkOrderId?: string, requestedReturnTo?: string): Promise<StoreSweepPlannerModel> {
   const [fixture, repository, session] = await Promise.all([
     getServerOpsFixtureSnapshot(),
     getServerOpsRepository(),
     loadOperatorSession(),
   ]);
   const planningBaseline = new Date(Math.max(Date.parse(fixture.asOf), Date.now())).toISOString();
+  const returnHref = approvedWorkReturnHref(requestedReturnTo);
   if (!roleCan(session.role, "issue_work_order")) notFound();
   const visibleStores = fixture.stores.filter((store) => {
     if (store.organizationId !== session.organizationId) return false;
@@ -75,7 +88,7 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string, requested
     : requestedWork?.storeId ?? stores[0]?.id;
   const store = selectedStoreId ? visibleStores.find((row) => row.id === selectedStoreId) : undefined;
   if (requestedStoreId && !store) notFound();
-  if (!store) return { asOf: fixture.asOf, planningBaseline, stores, selectedStoreId: undefined, vendorOptions: [] };
+  if (!store) return { asOf: fixture.asOf, planningBaseline, returnHref, stores, selectedStoreId: undefined, vendorOptions: [] };
   const storeTimeZone = store.timeZone ?? "America/New_York";
 
   const storeWork = readyWork.filter(({ workOrder }) => workOrder.storeId === store.id);
@@ -99,7 +112,7 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string, requested
         problem: workOrder.problem,
         scope: workOrder.authorizedScope ?? "Review the reported need and record what was done.",
         serviceArea: fixture.vendorSpecialties.find((row) => row.vendorId === vendor.id && row.canonicalKey === workOrder.categoryKey)?.displayName ?? (workOrder.categoryKey ?? "Service area pending"),
-        posture: hold.posture === "look_and_report" ? "Inspect and report back" : "Complete if practical",
+        posture: hold.posture === "look_and_report" ? "Inspect and report back" : "Complete during the visit if practical",
         reviewLabel: reviewLabel(hold.deadlineAt, fixture.asOf, storeTimeZone),
         reviewAt: hold.deadlineAt,
       });
@@ -111,7 +124,6 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string, requested
       vendorName: vendor.name,
       contractVersionId: contract.id,
       serviceAreas: fixture.vendorSpecialties.filter((row) => row.vendorId === vendor.id).map((row) => row.displayName),
-      earliestReviewAt: jobs.reduce((earliest, job) => job.reviewAt < earliest ? job.reviewAt : earliest, jobs[0]!.reviewAt),
       jobs,
     });
   }
@@ -119,6 +131,7 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string, requested
   return {
     asOf: fixture.asOf,
     planningBaseline,
+    returnHref,
     selectedStoreId: store.id,
     focusedWorkOrderId,
     stores,

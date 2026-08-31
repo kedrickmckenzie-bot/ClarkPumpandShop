@@ -874,7 +874,7 @@ export async function placeWorkOrderOnVisitHold(svc: OpsCommandServices, input: 
   assertActorOrganization(input.actor, input.organizationId);
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order not found");
-  if (terminalWorkOrderStatuses.has(workOrder.status) || workOrder.status === "resolved") throw new OpsDomainError("CONFLICT", "Closed or resolved work cannot be approved for later");
+  if (terminalWorkOrderStatuses.has(workOrder.status) || workOrder.status === "resolved") throw new OpsDomainError("CONFLICT", "Closed or resolved work cannot be approved for the next suitable visit");
   if (workOrder.status !== "approved") throw new OpsDomainError("CONFLICT", "Only manager-approved work can be held for a future vendor visit");
   if (!workOrder.categoryKey) throw new OpsDomainError("VALIDATION", "Choose a service category before holding this work");
   const now = clock.now();
@@ -889,7 +889,7 @@ export async function placeWorkOrderOnVisitHold(svc: OpsCommandServices, input: 
   const holdId = existing?.id ?? ids.next("visit-hold");
   const holdStatement: OpsStatement = existing
     ? {
-        sql: "UPDATE ops_work_order_visit_holds SET posture = ?, status = ?, internal_review_threshold_minor = ?, currency = ?, deadline_at = ?, version = version + 1, claimed_visit_id = NULL, claimed_vendor_id = NULL, claimed_at = NULL, updated_at = ? WHERE organization_id = ? AND id = ? AND work_order_id = ? AND version = ? AND status = ?",
+        sql: "UPDATE ops_work_order_visit_holds SET posture = ?, status = ?, internal_review_threshold_minor = ?, currency = ?, deadline_at = ?, version = version + 1, claimed_visit_id = NULL, claimed_vendor_id = NULL, claimed_at = NULL, planned_review_appointment_id = NULL, planned_review_selected_at = NULL, planned_review_selected_by_membership_id = NULL, updated_at = ? WHERE organization_id = ? AND id = ? AND work_order_id = ? AND version = ? AND status = ?",
         params: [
           input.posture,
           "active",
@@ -933,6 +933,132 @@ export async function placeWorkOrderOnVisitHold(svc: OpsCommandServices, input: 
   statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: existing ? "work_order.visit_hold_updated" : "work_order.visit_hold_created", actor: input.actor, occurredAt: now, payload: { holdId, posture: input.posture, deadlineAt: input.deadlineAt, internalReviewThresholdRecorded: input.internalReviewThresholdAmountMinor !== undefined, thresholdMeaning: "internal_invoice_review_not_vendor_price_or_authorization" }, ids }));
   await atomicWorkOrderMutation({ repository, workOrder, now, statements, conflictMessage: "This work order changed. Refresh before updating its future-visit hold." });
   return { id: holdId, workOrderId: workOrder.id, posture: input.posture, status: "active" as const, deadlineAt: input.deadlineAt };
+}
+
+export interface PlanHeldWorkForConfirmedAppointmentInput {
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  appointmentId: OpsId;
+  expectedHoldVersion: number;
+  actor: ActorContext;
+}
+
+/**
+ * Records a manager's plan to show one held job to the vendor associated with
+ * a confirmed appointment. This does not assign the job or add it to a visit;
+ * only the technician's atomic onsite claim can do that.
+ */
+export async function planHeldWorkForConfirmedAppointment(
+  svc: OpsCommandServices,
+  input: PlanHeldWorkForConfirmedAppointmentInput,
+) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  if (!Number.isInteger(input.expectedHoldVersion) || input.expectedHoldVersion < 0) {
+    throw new OpsDomainError("VALIDATION", "The approved-job version is invalid");
+  }
+  const [workOrder, hold, appointment] = await Promise.all([
+    repository.getWorkOrder(input.organizationId, input.workOrderId),
+    repository.getWorkOrderVisitHold(input.organizationId, input.workOrderId),
+    repository.getServiceAppointment(input.organizationId, input.appointmentId),
+  ]);
+  if (!workOrder || !hold) throw new OpsDomainError("NOT_FOUND", "Approved work was not found");
+  if (!appointment) throw new OpsDomainError("NOT_FOUND", "Confirmed visit was not found");
+  if (workOrder.status !== "approved" || hold.status !== "active") {
+    throw new OpsDomainError("CONFLICT", "This job is no longer available for a suitable visit");
+  }
+  const now = clock.now();
+  if (appointment.status !== "confirmed" || Date.parse(appointment.startsAt) < Date.parse(now)) {
+    throw new OpsDomainError("CONFLICT", "Choose a future confirmed visit");
+  }
+  if (Date.parse(appointment.startsAt) > Date.parse(hold.deadlineAt)) {
+    throw new OpsDomainError("CONFLICT", "The confirmed visit is after this job's review date");
+  }
+  const [scheduledWorkOrder, assignment] = await Promise.all([
+    repository.getWorkOrder(input.organizationId, appointment.workOrderId),
+    repository.getAssignment(input.organizationId, appointment.assignmentId),
+  ]);
+  if (
+    !scheduledWorkOrder
+    || scheduledWorkOrder.id === workOrder.id
+    || scheduledWorkOrder.status !== "scheduled"
+    || scheduledWorkOrder.storeId !== workOrder.storeId
+    || !workOrder.categoryKey
+    || scheduledWorkOrder.categoryKey !== workOrder.categoryKey
+  ) {
+    throw new OpsDomainError("CONFLICT", "The confirmed visit no longer matches this store and service area");
+  }
+  if (
+    !assignment
+    || assignment.id !== appointment.assignmentId
+    || assignment.workOrderId !== scheduledWorkOrder.id
+    || assignment.kind !== "outside_vendor"
+    || assignment.status !== "accepted"
+    || !assignment.vendorId
+  ) {
+    throw new OpsDomainError("CONFLICT", "The confirmed visit no longer has an accepted outside vendor");
+  }
+  const eligibility = await heldWorkVendorEligibility({
+    repository,
+    organizationId: input.organizationId,
+    vendorId: assignment.vendorId,
+    workOrder,
+    now,
+  });
+  if (!eligibility.allowed) {
+    throw new OpsDomainError("FORBIDDEN", eligibility.reason ?? "This job cannot be offered to that vendor");
+  }
+  if (hold.plannedReviewAppointmentId === appointment.id) {
+    return { hold, appointment, vendorId: assignment.vendorId, changed: false };
+  }
+  if (hold.version !== input.expectedHoldVersion) {
+    throw new OpsDomainError("CONFLICT", "This approved job changed. Refresh before planning it for a visit");
+  }
+  const statements: OpsStatement[] = [
+    {
+      sql: "UPDATE ops_work_order_visit_holds SET planned_review_appointment_id = ?, planned_review_selected_at = ?, planned_review_selected_by_membership_id = ?, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND work_order_id = ? AND status = ? AND version = ?",
+      params: [appointment.id, now, input.actor.actorId, now, input.organizationId, hold.id, workOrder.id, "active", hold.version],
+    },
+    ...auditAndOutbox({
+      organizationId: input.organizationId,
+      aggregateType: "work_order",
+      aggregateId: workOrder.id,
+      eventType: hold.plannedReviewAppointmentId
+        ? "work_order.visit_review_plan_changed"
+        : "work_order.visit_review_planned",
+      actor: input.actor,
+      occurredAt: now,
+      payload: {
+        holdId: hold.id,
+        appointmentId: appointment.id,
+        scheduledWorkOrderId: scheduledWorkOrder.id,
+        vendorId: assignment.vendorId,
+        priorAppointmentId: hold.plannedReviewAppointmentId,
+        meaning: "operator_plan_only_vendor_acceptance_not_recorded",
+      },
+      ids,
+    }),
+  ];
+  await atomicWorkOrderMutation({
+    repository,
+    workOrder,
+    now,
+    statements,
+    conflictMessage: "This approved job or confirmed visit changed. Refresh before planning it for vendor review.",
+  });
+  return {
+    hold: {
+      ...hold,
+      version: hold.version + 1,
+      plannedReviewAppointmentId: appointment.id,
+      plannedReviewSelectedAt: now,
+      plannedReviewSelectedByMembershipId: input.actor.actorId,
+      updatedAt: now,
+    },
+    appointment,
+    vendorId: assignment.vendorId,
+    changed: true,
+  };
 }
 
 export async function releaseWorkOrderVisitHold(svc: OpsCommandServices, input: { organizationId: OpsId; workOrderId: OpsId; actor: ActorContext }) {
@@ -1681,6 +1807,10 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
         hold: await repository.getWorkOrderVisitHold(input.organizationId, workOrder.id),
       })))).filter((pair) => pair.hold?.status === "active")
     : [];
+  const visitHoldByWorkOrderId = new Map([
+    ...heldPairs.flatMap(({ workOrder, hold }) => workOrder && hold ? [[workOrder.id, hold] as const] : []),
+    ...serviceRunHeldPairs.map(({ workOrder, hold }) => [workOrder.id, hold!] as const),
+  ]);
   const providerName = vendor?.name ?? "Internal maintenance";
   const technicianName = required(input.technicianName, "Technician name"); const purpose = required(input.purpose, "Visit purpose");
   const crewCount = input.crewCount ?? 1;
@@ -1697,14 +1827,21 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
   assertFreshLocationCapture(input.location, now);
   const id = ids.next("visit"); const evidenceId = ids.next("evidence");
   const scalarWorkOrderId = workOrders.length === 1 ? workOrders[0]!.id : undefined;
-  const visitWorkOrders: SiteVisitWorkOrder[] = workOrders.map((workOrder, index) => ({
-    id: ids.next("site-visit-work"), organizationId: input.organizationId, visitId: id, workOrderId: workOrder.id,
-    ordinal: index + 1, linkedByActorType: input.actor.actorType, linkedByActorId: input.actor.actorId,
-    linkedByActorName: input.actor.actorName, linkedAt: now,
-    selectionSource: heldWorkOrderIds.includes(workOrder.id) ? "held_work" : serviceRun ? "service_run" : "assigned_work",
-    workOrderHoldId: heldPairs.find((candidate) => candidate.workOrder?.id === workOrder.id)?.hold?.id
-      ?? serviceRunHeldPairs.find((candidate) => candidate.workOrder.id === workOrder.id)?.hold?.id,
-  }));
+  const visitWorkOrders: SiteVisitWorkOrder[] = workOrders.map((workOrder, index) => {
+    const hold = visitHoldByWorkOrderId.get(workOrder.id);
+    return {
+      id: ids.next("site-visit-work"), organizationId: input.organizationId, visitId: id, workOrderId: workOrder.id,
+      ordinal: index + 1, linkedByActorType: input.actor.actorType, linkedByActorId: input.actor.actorId,
+      linkedByActorName: input.actor.actorName, linkedAt: now,
+      // Preserve the manager-approved-next-visit origin even when those jobs
+      // were sent together first. The route stop separately proves whether
+      // the visit itself was planned; unrelated Service Run work stays
+      // service_run and can never masquerade as held work.
+      selectionSource: hold ? "held_work" : serviceRun ? "service_run" : "assigned_work",
+      workOrderHoldId: hold?.id,
+    };
+  });
+  const visitWorkByWorkOrderId = new Map(visitWorkOrders.map((link) => [link.workOrderId, link] as const));
   const statements: OpsStatement[] = [
     insert("ops_visit_sessions", { id, organization_id: input.organizationId, store_id: input.storeId, provider_kind: vendorId ? "outside_vendor" : "internal", vendor_id: vendorId, internal_membership_id: internalMembershipId, work_order_id: scalarWorkOrderId, unmatched_reason: assignedWorkOrders.length ? undefined : input.unmatchedReason?.trim(), technician_name: technicianName, technician_phone_or_pin: technicianPhoneOrPin, crew_count: crewCount, additional_technician_names_json: json(additionalTechnicianNames), vehicle_identifier: vehicleIdentifier, arrival_note: arrivalNote, provider_name: providerName, purpose, status: "active", started_channel: input.channel, checked_in_at: now }),
     ...visitWorkOrders.map((link) => insert("ops_site_visit_work_orders", { id: link.id, organization_id: link.organizationId, visit_id: link.visitId, work_order_id: link.workOrderId, ordinal: link.ordinal, linked_by_actor_type: link.linkedByActorType, linked_by_actor_id: link.linkedByActorId, linked_by_actor_name: link.linkedByActorName, linked_at: link.linkedAt, selection_source: link.selectionSource, work_order_hold_id: link.workOrderHoldId })),
@@ -1761,7 +1898,7 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
         resolutionNote: "Technician checked in for onsite service",
       }));
     }
-    statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: linkedWorkOrder.id, eventType: "work_order.visit_started", actor: input.actor, occurredAt: now, payload: { visitId: id, workOrderIds: workOrders.map((row) => row.id), vendorId, internalMembershipId, crewCount, channel: input.channel, selectionSource: heldWorkOrderIds.includes(linkedWorkOrder.id) ? "held_work" : serviceRun ? "service_run" : "assigned_work" }, ids }));
+    statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: linkedWorkOrder.id, eventType: "work_order.visit_started", actor: input.actor, occurredAt: now, payload: { visitId: id, workOrderIds: workOrders.map((row) => row.id), vendorId, internalMembershipId, crewCount, channel: input.channel, selectionSource: visitWorkByWorkOrderId.get(linkedWorkOrder.id)!.selectionSource }, ids }));
   }
   statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "visit", aggregateId: id, eventType: "visit.checked_in", actor: input.actor, occurredAt: now, payload: { storeId: input.storeId, vendorId, internalMembershipId, workOrderIds: workOrders.map((row) => row.id), heldWorkOrderIds, serviceRunId: serviceRun?.id, routeStopId: serviceRunStop?.id, removedPlannedWorkOrderIds, plannedWorkOrderRemovalReason: input.plannedWorkOrderRemovalReason?.trim(), crewCount, additionalTechnicianNames, vehicleIdentifier, arrivalNote, channel: input.channel, locationResult: input.location.result }, ids }));
   const visit = { id, organizationId: input.organizationId, storeId: input.storeId, providerKind: vendorId ? "outside_vendor" as const : "internal" as const, vendorId, internalMembershipId, workOrderId: scalarWorkOrderId, unmatchedReason: assignedWorkOrders.length ? undefined : input.unmatchedReason?.trim(), technicianName, technicianPhoneOrPin, crewCount, additionalTechnicianNames, vehicleIdentifier, arrivalNote, providerName, purpose, status: "active" as const, startedChannel: input.channel, checkedInAt: now };
@@ -2049,7 +2186,7 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
             ? { status: "approved", accountableParty: "Facilities coordinator", nextAction: "Review the temporary repair and plan permanent work", dueAt: normalized.hold.deadlineAt }
             : { status: "approved", accountableParty: "Facilities coordinator", nextAction: "Review the onsite findings and choose the next step", dueAt: addHours(now, 4) };
       statements.push(
-        { sql: "UPDATE ops_work_order_visit_holds SET status = ?, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND status = ? AND claimed_visit_id = ?", params: [holdStatus, now, input.organizationId, normalized.hold.id, "claimed", visit.id] },
+        { sql: "UPDATE ops_work_order_visit_holds SET status = ?, planned_review_appointment_id = NULL, planned_review_selected_at = NULL, planned_review_selected_by_membership_id = NULL, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND status = ? AND claimed_visit_id = ?", params: [holdStatus, now, input.organizationId, normalized.hold.id, "claimed", visit.id] },
         { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [workOrderProjection.status, workOrderProjection.accountableParty, workOrderProjection.nextAction, workOrderProjection.dueAt, "Facilities director", input.organizationId, workOrder.id] },
         { sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND work_order_id = ? AND vendor_id = ? AND status = ?", params: [normalized.outcome === "not_addressed" ? "superseded" : "completed", input.organizationId, workOrder.id, visit.vendorId ?? null, "accepted"] },
       );

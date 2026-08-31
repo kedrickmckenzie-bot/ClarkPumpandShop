@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { beforeEach, describe, expect, it } from "vitest";
 import { PUBLIC_DEMO_LINKS, getPublicOperationsGateway } from "@/components/ops-public/server-gateway";
-import { placeWorkOrderOnVisitHold, updateWorkOrderControl } from "@/lib/ops/commands";
+import { placeWorkOrderOnVisitHold, planHeldWorkForConfirmedAppointment, updateWorkOrderControl } from "@/lib/ops/commands";
 import { getNorthlineFixtureRepository, resetNorthlineFixtureRepository } from "@/lib/ops/fixture-repository";
 import { NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 
@@ -56,6 +56,68 @@ describe("manager-approved held work", () => {
       internalReviewThreshold: { amountMinor: 35_000, currency: "USD" },
       version: (before?.version ?? 0) + 1,
     });
+  });
+
+  it("records a confirmed-visit review plan without assigning or claiming the approved job", async () => {
+    const repository = getNorthlineFixtureRepository();
+    const snapshot = repository.snapshot();
+    const hold = await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
+    const heldWork = await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
+    const appointment = snapshot.serviceAppointments?.find((candidate) => {
+      const scheduledWork = snapshot.workOrders.find((workOrder) => workOrder.id === candidate.workOrderId);
+      const assignment = snapshot.assignments.find((row) => row.id === candidate.assignmentId);
+      return candidate.status === "confirmed"
+        && Date.parse(candidate.startsAt) >= Date.parse(snapshot.asOf)
+        && Date.parse(candidate.startsAt) <= Date.parse(hold!.deadlineAt)
+        && scheduledWork?.status === "scheduled"
+        && scheduledWork.storeId === heldWork?.storeId
+        && scheduledWork.categoryKey === heldWork?.categoryKey
+        && assignment?.kind === "outside_vendor"
+        && assignment.status === "accepted";
+    });
+    expect(appointment).toBeTruthy();
+
+    const result = await planHeldWorkForConfirmedAppointment(
+      { repository, clock: { now: () => snapshot.asOf } },
+      {
+        organizationId: NORTHLINE_ORGANIZATION_ID,
+        workOrderId: LIGHT_WORK_ID,
+        appointmentId: appointment!.id,
+        expectedHoldVersion: hold!.version,
+        actor: {
+          actorType: "user",
+          actorId: "membership-northline-facilities",
+          actorName: "Jamie Rivera",
+          organizationId: NORTHLINE_ORGANIZATION_ID,
+        },
+      },
+    );
+
+    expect(result.changed).toBe(true);
+    const plannedHold = await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
+    expect(plannedHold).toMatchObject({
+      status: "active",
+      version: hold!.version + 1,
+      plannedReviewAppointmentId: appointment!.id,
+    });
+    expect(plannedHold?.claimedVisitId).toBeFalsy();
+    expect(plannedHold?.claimedVendorId).toBeFalsy();
+    expect(await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID)).toMatchObject({ status: "approved" });
+    expect(await repository.getServiceAppointment(NORTHLINE_ORGANIZATION_ID, appointment!.id)).toEqual(appointment);
+    const audit = repository.snapshot().auditEvents.find((event) => event.aggregateId === LIGHT_WORK_ID && event.eventType === "work_order.visit_review_planned");
+    expect(JSON.parse(audit!.payloadJson)).toMatchObject({
+      holdId: hold!.id,
+      appointmentId: appointment!.id,
+      meaning: "operator_plan_only_vendor_acceptance_not_recorded",
+    });
+
+    const vendorView = await getPublicOperationsGateway().lookupVendorVisitContext(PUBLIC_DEMO_LINKS.upcomingService104Token);
+    expect(vendorView.heldWork).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: LIGHT_WORK_ID,
+        plannedForThisVisit: true,
+      }),
+    ]));
   });
 
   it("atomically claims held work, records temporary-repair advice, and returns it to its original deadline", async () => {

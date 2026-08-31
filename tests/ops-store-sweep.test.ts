@@ -3,11 +3,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ServiceRunResponsePage } from "@/components/ops-public/service-run-response-page";
 import type { OpsCommandServices } from "@/lib/ops/commands";
-import { checkInVisit } from "@/lib/ops/commands";
+import { checkInVisit, checkOutVisit } from "@/lib/ops/commands";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 import { acceptServiceRunCounter, createStoreSweep, respondToServiceRun } from "@/lib/ops/service-run-commands";
 import { buildServiceRunPublicView } from "@/lib/ops/service-run-presenter";
+import { recordWorkOrderVerification } from "@/lib/ops/work-order-verification-commands";
 
 const CEDAR = "vendor-northline-cedar";
 const CONTRACT = "contract-version-cedar-work-terms-v1";
@@ -91,7 +92,69 @@ describe("plain-language store sweeps", () => {
     });
     snapshot = test.repository.snapshot();
     expect(snapshot.workOrderVisitHolds?.filter((row) => [DOOR, SINK].includes(row.workOrderId)).every((row) => row.status === "claimed" && row.claimedVisitId === visit.id)).toBe(true);
-    expect(visit.siteVisitWorkOrders.every((row) => row.selectionSource === "service_run" && row.workOrderHoldId)).toBe(true);
+    expect(visit.siteVisitWorkOrders.every((row) => row.selectionSource === "held_work" && row.workOrderHoldId)).toBe(true);
+    expect(snapshot.auditEvents.filter((event) => (
+      [DOOR, SINK].includes(event.aggregateId) && event.eventType === "work_order.visit_started"
+    )).every((event) => JSON.parse(event.payloadJson).selectionSource === "held_work")).toBe(true);
+  });
+
+  it("retains held-work provenance through a planned combined visit for explicit manager verification", async () => {
+    const test = harness();
+    const result = await createStoreSweep(createInput(), test.services);
+    test.setNow("2026-08-28T14:00:00.000Z");
+    await respondToServiceRun({
+      tokenHash: TOKEN_HASH,
+      response: "accepted",
+      responderName: "Morgan Ellis",
+      requestedStartsAt: "2026-09-08T13:00:00.000Z",
+      actor: vendorActor,
+    }, test.services);
+    test.setNow("2026-09-08T13:05:00.000Z");
+    const visit = await checkInVisit(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-104",
+      serviceRunId: result.run.id,
+      workOrderIds: [DOOR, SINK],
+      technicianName: "Morgan Ellis",
+      purpose: "Complete the approved jobs in the planned store visit",
+      channel: "secure_link",
+      location: { result: "permission_denied", capturedAt: "2026-09-08T13:05:00.000Z" },
+      actor: { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "technician", actorName: "Morgan Ellis" },
+    });
+    test.setNow("2026-09-08T14:05:00.000Z");
+    await checkOutVisit(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      visitId: visit.id,
+      channel: "secure_link",
+      perWorkOrderOutcomes: [
+        { workOrderId: DOOR, outcome: "completed", outcomeNotes: "Door closer adjusted and tested." },
+        { workOrderId: SINK, outcome: "completed", outcomeNotes: "Faucet connection tightened and tested." },
+      ],
+      location: { result: "permission_denied", capturedAt: "2026-09-08T14:05:00.000Z" },
+      actor: { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "technician", actorName: "Morgan Ellis" },
+    });
+    const afterCheckout = test.repository.snapshot();
+    const workOrder = afterCheckout.workOrders.find((row) => row.id === DOOR)!;
+    const outcome = afterCheckout.siteVisitWorkOrders.find((row) => row.visitId === visit.id && row.workOrderId === DOOR)!;
+    expect(outcome).toMatchObject({ selectionSource: "held_work", outcome: "completed" });
+    expect(afterCheckout.routeStops).toContainEqual(expect.objectContaining({ siteVisitId: visit.id }));
+
+    test.setNow("2026-09-08T15:00:00.000Z");
+    await recordWorkOrderVerification(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      workOrderId: DOOR,
+      expectedWorkOrderVersion: workOrder.version!,
+      expectedSiteVisitWorkOrderId: outcome.id,
+      expectedOutcomeRecordedAt: outcome.outcomeRecordedAt!,
+      decision: "verified",
+      avoidedSeparateTripConfirmed: true,
+      reason: "This approved item would otherwise have required its own vendor trip.",
+      actor,
+    });
+    expect(test.repository.snapshot().auditEvents).toContainEqual(expect.objectContaining({
+      aggregateId: DOOR,
+      eventType: "work_order.held_work_avoided_trip_verified",
+    }));
   });
 
   it("requires the vendor to supply the planned date instead of inheriting a customer-authored schedule", async () => {

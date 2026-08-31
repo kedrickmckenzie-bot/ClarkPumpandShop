@@ -63,6 +63,8 @@ import {
   type OperatorProgramRoute,
   type OperatorSearchParameters,
 } from "./operator-presenter";
+import { buildTrendsModel } from "./trends-presenter";
+import { buildApprovedWorkPortfolio } from "./approved-work-presenter";
 
 function isOperatorRole(value: string | undefined): value is OperatorRole {
   return value === "executive" || value === "facilities" || value === "regional" || value === "store_manager" || value === "finance";
@@ -208,9 +210,7 @@ function enforceListLinkPolicy<T extends ListPageViewModel>(model: T, role: Oper
   model.table.rows = model.table.rows.filter((row) => roleCanOpenOperatorHref(role, row.href));
   if (model.table.rows.length !== rowCount) {
     model.resultSummary = `${model.table.rows.length} source record${model.table.rows.length === 1 ? "" : "s"}`;
-    model.pagination = model.table.rows.length
-      ? { summary: `Showing 1–${model.table.rows.length} of ${model.table.rows.length}` }
-      : undefined;
+    model.pagination = undefined;
   }
   return model;
 }
@@ -275,6 +275,31 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
   );
 }
 
+export async function loadApprovedWorkPortfolioModel(searchParams: OperatorSearchParameters = {}) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessListRoute(context.session.role, "work-orders")) notFound();
+  const firstValue = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+  return buildApprovedWorkPortfolio(context.fixture, context.session, {
+    q: firstValue(searchParams.q),
+    storeId: firstValue(searchParams.store),
+    regionId: firstValue(searchParams.region),
+    categoryKey: firstValue(searchParams.category),
+    status: firstValue(searchParams.status),
+    stage: firstValue(searchParams.stage),
+    vendorId: firstValue(searchParams.vendor),
+    hasCost: firstValue(searchParams.hasCost) === "true",
+    costFrom: firstValue(searchParams.costFrom),
+    costMonth: firstValue(searchParams.costMonth),
+    assetId: firstValue(searchParams.asset),
+    componentId: firstValue(searchParams.component),
+    path: firstValue(searchParams.path),
+    reviewWindow: firstValue(searchParams.reviewWindow),
+    opportunity: firstValue(searchParams.opportunity),
+    storeGroup: firstValue(searchParams.storeGroup),
+    matchStoreId: firstValue(searchParams.matchStore),
+  });
+}
+
 export async function loadApprovalPolicyWorkspaceModel() {
   const context = await sessionAndFixture();
   requireCapability(context.session.role, "administer");
@@ -325,6 +350,12 @@ export async function loadProgramModel(route: ProgramRouteId, searchParams: Oper
     buildProgramModel(context.fixture, context.session, route, searchParams),
     context.session.role,
   );
+}
+
+export async function loadTrendsModel(searchParams: OperatorSearchParameters = {}) {
+  const context = await sessionAndFixture();
+  if (!roleCanAccessProgramRoute(context.session.role, "trends")) notFound();
+  return buildTrendsModel(context.fixture, context.session, searchParams);
 }
 
 function pmTypeKey(value: string) {
@@ -496,7 +527,21 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
   const resultLabel = plansForView.length
     ? `${enrollmentStart + 1}–${Math.min(enrollmentStart + enrollmentPageSize, plansForView.length)} of ${plansForView.length}`
     : "0 plans";
-  const commonPlanQuery = { program: selectedProgramId, store: selectedStoreId };
+  const queryValue = (key: string) => {
+    const value = searchParams[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  const commonPlanQuery = {
+    program: selectedProgramId,
+    store: selectedStoreId,
+    view: queryValue("view"),
+    status: queryValue("status"),
+    occurrence: queryValue("occurrence"),
+    page: queryValue("page"),
+  };
+  const enrollmentPageHref = (page: number) => pmHref({ ...commonPlanQuery, enrollments: enrollmentView, enrollmentPage: page });
+  const enrollmentPageNumbers = [...new Set([1, boundedEnrollmentPage - 2, boundedEnrollmentPage - 1, boundedEnrollmentPage, boundedEnrollmentPage + 1, boundedEnrollmentPage + 2, totalEnrollmentPages]
+    .filter((page) => page >= 1 && page <= totalEnrollmentPages))].sort((left, right) => left - right);
   return {
     scopeLabel: session.scopeLabel,
     canCreateMasterSchedule: session.role === "executive" || session.role === "facilities",
@@ -521,8 +566,14 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
       resultLabel,
       toggleHref: enrollmentView === "store" ? undefined : pmHref({ ...commonPlanQuery, enrollments: enrollmentView === "all" ? "exceptions" : "all" }),
       toggleLabel: enrollmentView === "store" ? undefined : enrollmentView === "all" ? "Show store-specific changes" : "Show every store schedule",
-      previousHref: boundedEnrollmentPage > 1 ? pmHref({ ...commonPlanQuery, enrollments: enrollmentView, enrollmentPage: boundedEnrollmentPage - 1 }) : undefined,
-      nextHref: boundedEnrollmentPage < totalEnrollmentPages ? pmHref({ ...commonPlanQuery, enrollments: enrollmentView, enrollmentPage: boundedEnrollmentPage + 1 }) : undefined,
+      pagination: plansForView.length > enrollmentPageSize ? {
+        summary: `Showing ${resultLabel}`,
+        currentPage: boundedEnrollmentPage,
+        totalPages: totalEnrollmentPages,
+        pageLinks: enrollmentPageNumbers.map((page) => ({ page, href: enrollmentPageHref(page), current: page === boundedEnrollmentPage })),
+        previousHref: boundedEnrollmentPage > 1 ? enrollmentPageHref(boundedEnrollmentPage - 1) : undefined,
+        nextHref: boundedEnrollmentPage < totalEnrollmentPages ? enrollmentPageHref(boundedEnrollmentPage + 1) : undefined,
+      } : undefined,
     },
     reconciliations,
   };

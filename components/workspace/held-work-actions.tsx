@@ -20,7 +20,7 @@ export interface HeldWorkActionsModel {
 function postureLabel(posture: HeldWorkActionsModel["hold"] extends infer T
   ? T extends { posture: infer P } ? P : never
   : never) {
-  return posture === "look_and_report" ? "Look and report back" : "Complete using professional judgment";
+  return posture === "look_and_report" ? "Inspect and report back" : "Complete during the visit if practical";
 }
 
 export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
@@ -34,13 +34,13 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
       : hold?.status === "completed"
         ? "Completed during another visit"
         : openHold
-          ? "Approved for later"
-          : "Set this work aside for later";
+          ? "Approved for next suitable visit"
+          : "Approve for the next suitable visit";
 
   return (
     <section id="future-visit-hold" className={styles.brief} aria-labelledby="future-visit-hold-heading">
       <header className={styles.header}>
-        <p className={styles.eyebrow}>Avoid a separate trip for small work</p>
+        <p className={styles.eyebrow}>Handle small work on a suitable visit</p>
         <h2 id="future-visit-hold-heading">{stateTitle}</h2>
       </header>
       {hold ? (
@@ -63,16 +63,16 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
         <div className={styles.moneyRow}>
           <form action={`/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/visit-hold`} method="post" className={styles.moneyCell}>
             <input type="hidden" name="operation" value="place" />
-            <span className={styles.moneyLabel}>{openHold ? "Update how this should be handled" : "Approve this work for later"}</span>
+            <span className={styles.moneyLabel}>{openHold ? "Update how this should be handled" : "Approve for the next suitable visit"}</span>
             <label>
               <span>What may the vendor do?</span>
               <select name="posture" defaultValue={hold?.posture ?? "complete_using_professional_judgment"}>
-                <option value="complete_using_professional_judgment">Complete using professional judgment</option>
-                <option value="look_and_report">Look and report back</option>
+                <option value="complete_using_professional_judgment">Complete during the visit if practical</option>
+                <option value="look_and_report">Inspect and report back</option>
               </select>
             </label>
             <label>
-              <span>Review by</span>
+              <span>Review if not handled by</span>
               <input type="datetime-local" name="deadlineAt" required defaultValue={hold?.deadlineInputValue ?? model.deadlineInputValue} />
               <small>Store-local time ({model.storeTimeZone}). The work returns to manager review if it is not handled by this date.</small>
             </label>
@@ -81,15 +81,15 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
               <input type="number" name="internalReviewThreshold" min="0" step="0.01" inputMode="decimal" placeholder="Not shown to the vendor" defaultValue={hold?.internalReviewThreshold?.replace(/[^0-9.]/g, "")} />
               <small>This only flags a later invoice for review. It is not shown to the vendor and is not an approved price.</small>
             </label>
-            <button type="submit">{openHold ? "Save changes" : "Approve for later"}</button>
+            <button type="submit">{openHold ? "Save changes" : "Approve for next suitable visit"}</button>
           </form>
           {openHold ? (
             <form action={`/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/visit-hold`} method="post" className={styles.moneyCell}>
               <input type="hidden" name="operation" value="release" />
               <span className={styles.moneyLabel}>Send it through the normal service path</span>
-              <strong>Release the hold</strong>
+              <strong>Remove from the next-visit list</strong>
               <span className={styles.moneyNote}>The work stays open and returns to facilities for vendor selection. Nothing is deleted.</span>
-              <button type="submit" className={styles.secondaryAction}>Release hold</button>
+              <button type="submit" className={styles.secondaryAction}>Send through normal service</button>
             </form>
           ) : null}
         </div>

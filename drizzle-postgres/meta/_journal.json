@@ -253,6 +253,13 @@
       "when": 1787847599155,
       "tag": "0035_keen_elektra",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788199186336,
+      "tag": "0036_typical_scream",
+      "breakpoints": true
     }
   ]
 }

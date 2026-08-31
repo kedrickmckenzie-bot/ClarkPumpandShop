@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
-  ArrowLeft,
   ArrowRight,
   BarChart3,
   CalendarCheck2,
@@ -26,6 +25,7 @@ import type {
   Tone,
   TrendViewModel,
 } from "@/components/ops/data-contract";
+import { PaginationControls } from "@/components/ops/pagination-controls";
 import styles from "./planning-workspace.module.css";
 
 export type PlanningWorkspaceKind = "spend" | "pm" | "lifecycle";
@@ -213,7 +213,7 @@ function SourceTable({ table, title, description, resultSummary, pagination }: {
     <section className={styles.sourceSection}>
       <header><div><p>Supporting records</p><h2>{title}</h2><span>{description}</span></div><strong>{resultSummary ?? `${table.rows.length} shown`}</strong></header>
       {table.rows.length ? <div className={styles.tableScroller}><table><caption className={styles.visuallyHidden}>{table.caption}</caption><thead><tr>{table.columns.map((column) => <th data-align={column.align} key={column.key}>{column.label}</th>)}</tr></thead><tbody>{table.rows.map((row) => <tr key={row.id}>{table.columns.map((column, index) => { const cell = row.cells.find((candidate) => candidate.key === column.key); return <td data-align={column.align} className={cell?.tone ? toneClass(cell.tone) : undefined} key={column.key}><Link href={row.href}><span><strong>{cell?.value ?? "—"}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</span>{index === table.columns.length - 1 ? <ChevronRight size={14} aria-hidden="true" /> : null}</Link></td>; })}</tr>)}</tbody></table></div> : <div className={styles.empty}><Inbox size={19} aria-hidden="true" />No source records match this context.</div>}
-      {pagination ? <nav className={styles.sourcePagination} aria-label="Supporting record pages"><span>{pagination.summary}</span><div>{pagination.previousHref ? <Link href={pagination.previousHref}><ArrowLeft size={14} aria-hidden="true" />Previous</Link> : <span aria-disabled="true"><ArrowLeft size={14} aria-hidden="true" />Previous</span>}{pagination.nextHref ? <Link href={pagination.nextHref}>Next<ArrowRight size={14} aria-hidden="true" /></Link> : <span aria-disabled="true">Next<ArrowRight size={14} aria-hidden="true" /></span>}</div></nav> : null}
+      {pagination ? <PaginationControls pagination={pagination} label="Supporting record pages" /> : null}
     </section>
   );
 }

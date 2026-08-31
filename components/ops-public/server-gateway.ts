@@ -50,6 +50,7 @@ import { getPublicUploadStore } from "./server-file-store";
 
 export const PUBLIC_DEMO_LINKS = {
   serviceToken: NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104,
+  upcomingService104Token: NORTHLINE_DEMO_ENTRY_TOKENS.upcomingService104,
   storeToken: NORTHLINE_DEMO_ENTRY_TOKENS.store104,
   activeVisitToken: NORTHLINE_DEMO_ENTRY_TOKENS.activeVisit112,
   trustedStoreToken: NORTHLINE_DEMO_ENTRY_TOKENS.trustedStore104,
@@ -642,9 +643,20 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
     const run = plannedByWorkOrder.get(workOrder.id);
     return run ? { ...workOrder, plannedServiceRun: { id: run.id, startsAt: run.startsAt, stopSequence: run.stopSequence } } : workOrder;
   });
-  const heldVendorId = requestedVendorId ?? (access.kind === "visit" ? access.activeVisit.vendorId : undefined);
-  const heldWork = heldVendorId && access.kind !== "service"
+  const heldVendorId = requestedVendorId
+    ?? (access.kind === "service"
+      ? access.serviceAuthorization.vendor.id
+      : access.kind === "visit"
+        ? access.activeVisit.vendorId
+        : undefined);
+  const serviceAppointmentIds = access.kind === "service"
+    ? new Set((await repository.listServiceAppointmentsForWorkOrder(organizationId, access.serviceAuthorization.workOrderId))
+        .filter((appointment) => appointment.status === "confirmed")
+        .map((appointment) => appointment.id))
+    : undefined;
+  const heldWork = heldVendorId
     ? (await Promise.all((await repository.listActiveWorkOrderVisitHoldsForStore(organizationId, store.id)).map(async (hold) => {
+        if (serviceAppointmentIds && (!hold.plannedReviewAppointmentId || !serviceAppointmentIds.has(hold.plannedReviewAppointmentId))) return null;
         const workOrder = await repository.getWorkOrder(organizationId, hold.workOrderId);
         if (!workOrder || workOrder.status !== "approved") return null;
         const eligibility = await heldWorkVendorEligibility({ repository, organizationId, vendorId: heldVendorId, workOrder, now: now() });
@@ -667,8 +679,9 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
           asset: detail?.asset ? `${detail.asset.name} · ${detail.asset.assetTag}` : undefined,
           deadlineAt: hold.deadlineAt,
           posture: hold.posture,
-          instruction: hold.posture === "look_and_report" ? "Look and report back" : "Complete using professional judgment",
+          instruction: hold.posture === "look_and_report" ? "Inspect and report back" : "Complete during the visit if practical",
           disclosures,
+          plannedForThisVisit: Boolean(serviceAppointmentIds),
         };
       }))).filter((row): row is NonNullable<typeof row> => Boolean(row))
     : [];
@@ -1461,9 +1474,6 @@ const gateway: PublicOperationsGateway = {
     const selectedHeldWork = heldWorkOrderIds.map((workOrderId) => heldById.get(workOrderId));
     if (selectedHeldWork.some((workOrder) => !workOrder)) {
       throw new PublicWorkflowError("One or more held items are no longer available to this vendor.", 409, "held_work_not_available");
-    }
-    if (access.kind === "service" && heldWorkOrderIds.length) {
-      throw new PublicWorkflowError("This service-authorization link is limited to its assigned work order.", 403, "service_token_work_order_bound");
     }
     if (serviceRunId) {
       const plannedRun = context.plannedServiceRuns.find((run) => run.id === serviceRunId);

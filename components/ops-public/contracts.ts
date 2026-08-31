@@ -205,6 +205,8 @@ export interface HeldWorkView {
   posture: "complete_using_professional_judgment" | "look_and_report";
   instruction: string;
   disclosures: string[];
+  /** Manager planning context only; the technician must still choose this work onsite. */
+  plannedForThisVisit?: boolean;
 }
 
 export interface PlannedServiceRunView {

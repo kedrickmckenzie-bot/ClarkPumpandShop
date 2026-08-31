@@ -10,9 +10,10 @@ import type { OpsFixture } from "@/lib/ops/types";
 vi.mock("server-only", () => ({}));
 
 let buildListModel: typeof import("@/app/app/_data/operator-presenter").buildListModel;
+let buildProgramModel: typeof import("@/app/app/_data/operator-presenter").buildProgramModel;
 
 beforeAll(async () => {
-  ({ buildListModel } = await import("@/app/app/_data/operator-presenter"));
+  ({ buildListModel, buildProgramModel } = await import("@/app/app/_data/operator-presenter"));
 });
 
 type PaginatedRoute = "work-orders" | "visits" | "requests" | "invoices";
@@ -122,11 +123,34 @@ describe("stable operator-list pagination", () => {
     expect(first.pagination?.previousHref).toBeUndefined();
     expect(query(first.pagination?.nextHref).get("page")).toBe("2");
     expect(query(second.pagination?.previousHref).get("page")).toBe("1");
+    expect(first.pagination).toMatchObject({ currentPage: 1, totalPages: Math.ceil(expected.length / 25) });
+    expect(first.pagination?.pageLinks[0]).toMatchObject({ page: 1, current: true });
+    expect(first.pagination?.pageLinks.at(-1)?.page).toBe(Math.ceil(expected.length / 25));
     expect(firstIds.some((id) => secondIds.includes(id))).toBe(false);
     expect(new Set([...firstIds, ...secondIds]).size).toBe(firstIds.length + secondIds.length);
     expect([...first.table.rows, ...second.table.rows].every(
       (row) => row.href === `/app/${route}/${row.id}`,
     )).toBe(true);
+  });
+
+  it.each([
+    { route: "equipment" as const, parameters: { view: "all" } },
+    { route: "pm" as const, parameters: { view: "all" } },
+    { route: "lifecycle" as const, parameters: { view: "all" } },
+    { route: "spend" as const, parameters: { period: "12m" } },
+  ])("paginates the complete $route register with numbered page links", ({ route, parameters }) => {
+    const fixture = buildNorthlinePresentationFixture();
+    const first = buildProgramModel(fixture, facilitiesSession(), route, parameters);
+    const second = buildProgramModel(fixture, facilitiesSession(), route, { ...parameters, page: "2" });
+
+    expect(first.pagination).toBeDefined();
+    expect(first.pagination?.currentPage).toBe(1);
+    expect(first.pagination?.totalPages).toBeGreaterThan(1);
+    expect(first.pagination?.pageLinks[0]).toMatchObject({ page: 1, current: true });
+    expect(query(first.pagination?.nextHref).get("page")).toBe("2");
+    expect(second.pagination?.currentPage).toBe(2);
+    expect(second.pagination?.pageLinks.some((page) => page.page === 2 && page.current)).toBe(true);
+    expect(new Set(first.table?.rows.map((row) => row.id)).isDisjointFrom(new Set(second.table?.rows.map((row) => row.id)))).toBe(true);
   });
 
   it("preserves each route's search, filter, and scope parameters in page navigation", () => {
