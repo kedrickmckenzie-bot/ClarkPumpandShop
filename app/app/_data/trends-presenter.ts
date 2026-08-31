@@ -1075,6 +1075,7 @@ export function buildTrendsModel(
     let rangeLow = 0;
     let rangeHigh = 0;
     let comparableAssets = 0;
+    let peerScenarioTotals: Map<string, number> | undefined;
     const basisRecords: TrendSourceRecord[] = [];
     const comparableAssetIds = new Set<string>();
     if (additive) {
@@ -1082,8 +1083,7 @@ export function buildTrendsModel(
         const cohort = cohortByAsset.get(asset.id);
         if (!cohort) continue;
         let assetExpected = 0;
-        let assetLow = 0;
-        let assetHigh = 0;
+        let assetPeerScenarioTotals: Map<string, number> | undefined;
         let comparableAcrossPeriod = true;
         for (const month of currentMonths) {
           const observations = observationsByCohortAndCalendarMonth.get(`${cohort}|${month.slice(5)}`) ?? [];
@@ -1105,8 +1105,19 @@ export function buildTrendsModel(
             ? Number(currentEnd.slice(-2)) / Number(endOfMonth(month).slice(-2))
             : 1;
           assetExpected += distribution.mean * partialFactor;
-          assetLow += distribution.low * partialFactor;
-          assetHigh += distribution.high * partialFactor;
+          const monthPeerRates = new Map(peerRates.map((entry, peerIndex) => [
+            entry.storeId,
+            distribution.capped[peerIndex] * partialFactor,
+          ]));
+          if (!assetPeerScenarioTotals) {
+            assetPeerScenarioTotals = monthPeerRates;
+          } else {
+            for (const [peerStoreId, total] of assetPeerScenarioTotals) {
+              const monthRate = monthPeerRates.get(peerStoreId);
+              if (monthRate === undefined) assetPeerScenarioTotals.delete(peerStoreId);
+              else assetPeerScenarioTotals.set(peerStoreId, total + monthRate);
+            }
+          }
           if (includeBasisRecords) {
             for (const [peerIndex, peerRate] of peerRates.entries()) {
               const peerStore = storeById.get(peerRate.storeId);
@@ -1131,10 +1142,22 @@ export function buildTrendsModel(
         }
         if (!comparableAcrossPeriod) continue;
         expected += assetExpected;
-        rangeLow += assetLow;
-        rangeHigh += assetHigh;
         comparableAssets += 1;
         comparableAssetIds.add(asset.id);
+        if (!peerScenarioTotals) {
+          peerScenarioTotals = assetPeerScenarioTotals;
+        } else {
+          for (const [peerStoreId, total] of peerScenarioTotals) {
+            const assetTotal = assetPeerScenarioTotals?.get(peerStoreId);
+            if (assetTotal === undefined) peerScenarioTotals.delete(peerStoreId);
+            else peerScenarioTotals.set(peerStoreId, total + assetTotal);
+          }
+        }
+      }
+      const peerScenarioValues = [...(peerScenarioTotals?.values() ?? [])];
+      if (peerScenarioValues.length >= 3) {
+        rangeLow = quantile(peerScenarioValues, 0.25);
+        rangeHigh = quantile(peerScenarioValues, 0.75);
       }
     }
     let comparableRows = additive ? storeRows.filter((row) => {
@@ -1179,7 +1202,7 @@ export function buildTrendsModel(
     const evidenceFloor = safeMetric === "recorded_cost" || safeMetric === "linked_invoice" ? 10_000 : safeMetric === "vendor_response" ? 0.1 : 1;
     const coveragePercent = additive && storeAssets.length ? Math.round((comparableAssets / storeAssets.length) * 100) : 0;
     const baselineReliable = additive
-      ? observedReferenceMonthCount >= 18 && comparableAssets > 0 && expected >= evidenceFloor && coveragePercent >= 60
+      ? observedReferenceMonthCount >= 18 && comparableAssets > 0 && (peerScenarioTotals?.size ?? 0) >= 3 && expected >= evidenceFloor && coveragePercent >= 60
       : comparableAssets >= 3;
     const ratio = baselineReliable && actualHasData && expected > 0 ? comparableActual / expected : undefined;
     const differenceFromRange = comparableActual > rangeHigh ? comparableActual - rangeHigh : comparableActual < rangeLow ? comparableActual - rangeLow : 0;
@@ -1195,7 +1218,9 @@ export function buildTrendsModel(
         ? high ? "Slower than other stores" : low ? "Faster than other stores" : "Near other stores"
         : safeMetric === "pm_completion"
           ? low ? "Lower completion—review" : high ? "Higher completion" : "Near other stores"
-        : high ? "Above peer range—review" : aboveRange ? "Above peer range" : belowRange ? "Below peer range" : "Within peer range";
+        : additive
+          ? high ? "Above historical peer range—review" : aboveRange ? "Above historical peer range" : belowRange ? "Below historical peer range" : "Within historical peer range"
+          : high ? "Above peer range—review" : aboveRange ? "Above peer range" : belowRange ? "Below peer range" : "Within peer range";
     const signalTone: Tone = noComparison
       ? "neutral"
       : safeMetric === "vendor_response"
@@ -1259,6 +1284,15 @@ export function buildTrendsModel(
       peerLink: baselineReliable ? { href: `${trendHref({ view: "records", detailKind: "benchmark", benchmarkStore: store.id, detailMonth: undefined })}#source-records`, label: `Open Store ${store.storeNumber} peer comparison inputs` } : undefined,
     };
   });
+  const historicalComparisonRows = additive ? benchmarkRows.filter((row) =>
+    row.comparableActualValue !== undefined
+    && row.rangeHighValue !== undefined) : [];
+  const aboveHistoricalCount = historicalComparisonRows.filter((row) => row.comparableActualValue! > row.rangeHighValue!).length;
+  const portfolioWideHistoricalIncrease = historicalComparisonRows.length >= 5
+    && aboveHistoricalCount / historicalComparisonRows.length >= 0.6;
+  const historicalPortfolioContext = portfolioWideHistoricalIncrease
+    ? `${aboveHistoricalCount} of ${historicalComparisonRows.length} comparable stores are above their historical peer range, which points to a portfolio-wide increase rather than one isolated store.`
+    : undefined;
 
   const valueForSort = (row: TrendBenchmarkRowViewModel) => {
     if (storeSort === "store") return row.label;
@@ -1294,7 +1328,7 @@ export function buildTrendsModel(
   const sortLinks = ([
     ["store", "Store"],
     ["comparable", "Comparable actual"],
-    ["expected", additive ? "Peer operating range" : "Peer operating range"],
+    ["expected", additive ? "Historical peer range" : "Peer operating range"],
     ["variance", "Difference"],
     ["signal", "Finding"],
     ["coverage", additive ? "Match coverage" : "Peer sample"],
@@ -1840,10 +1874,10 @@ export function buildTrendsModel(
   if (largestVarianceRow) {
     insights.push({
       id: "store-variance",
-      eyebrow: selectedStore ? "Selected store" : "Store to review",
+      eyebrow: selectedStore ? "Selected store" : portfolioWideHistoricalIncrease ? "Largest store variance" : "Store to review",
       title: `${largestVarianceRow.label} · ${largestVarianceRow.varianceLabel}`,
       detail: additive
-        ? `${largestVarianceRow.comparableActualLabel} ${safeMetric === "linked_invoice" ? "linked to" : "recorded on"} matched equipment versus a ${largestVarianceRow.rangeLabel} peer operating range for the same equipment mix.`
+        ? `${largestVarianceRow.comparableActualLabel} ${safeMetric === "linked_invoice" ? "linked to" : "recorded on"} matched equipment versus a ${largestVarianceRow.rangeLabel} historical peer range for the same equipment mix.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
         : `${largestVarianceRow.actualLabel} versus a ${largestVarianceRow.rangeLabel} peer operating range at other stores.`,
       tone: largestVarianceRow.signalTone,
       link: largestVarianceRow.focusLink,
@@ -1935,14 +1969,14 @@ export function buildTrendsModel(
             ? "Recorded work cost versus similar equipment"
             : additive ? `${metricCopy[safeMetric].label} versus similar equipment` : "Compare stores",
       description: safeMetric === "linked_invoice"
-        ? "Shows whether each store has more or less confirmed invoice amount linked to the same equipment than is typical at other company stores."
+        ? `Shows whether each store has more or less confirmed invoice amount linked to the same equipment than is typical at other company stores.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
         : safeMetric === "recorded_cost"
-          ? "Shows whether each store recorded more or less work cost than is typical for the same equipment at other company stores."
+          ? `Shows whether each store recorded more or less work cost than is typical for the same equipment at other company stores.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
         : additive
-          ? `Shows whether each store recorded more or less ${safeMetric === "work_orders" ? "work-order activity" : "service-visit activity"} than is typical for the same equipment at other company stores.`
+          ? `Shows whether each store recorded more or less ${safeMetric === "work_orders" ? "work-order activity" : "service-visit activity"} than is typical for the same equipment at other company stores.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
           : "Shows how each store compares with the typical result at other company stores.",
       methodology: additive
-        ? `The peer range is built from ${observedReferenceMonthCount} complete months of cost per equipment-month at other stores, aligned to the calendar months selected here. Extreme values are lightly capped, recorded zero months remain included, and the displayed range is the composed 25th–75th percentile for this store's matched equipment mix.`
+        ? `The historical peer range is built from ${observedReferenceMonthCount} complete months per equipment-month at other stores, aligned to the calendar months selected here. Extreme values are lightly capped and recorded zero months remain included. Each peer store's complete scenario is composed for this store's matched equipment mix before the 25th–75th percentile range is calculated.`
         : "The peer range is the 25th–75th percentile at other stores. A comparison appears only when at least three other stores have measured results.",
       sampleLabel: additive ? `${benchmarkRows.length} stores · ${observedReferenceMonthCount} reference months` : `${benchmarkRows.length} stores · ${currentPeerRecords.length} records`,
       sortLinks,

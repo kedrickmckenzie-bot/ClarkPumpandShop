@@ -442,6 +442,23 @@ describe("enterprise trends presenter", () => {
     expect(reliable.every((row) => (row.rangeHighValue ?? 0) > 0 && row.rangeLabel.includes("–"))).toBe(true);
     expect(new Set(reliable.map((row) => row.expectedValue)).size).toBeGreaterThan(1);
 
+    const portfolio = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "3" });
+    const comparablePortfolioRows = portfolio.benchmark.rows.filter((row) => row.rangeLowValue !== undefined && row.rangeHighValue !== undefined);
+    const insideRange = comparablePortfolioRows.filter((row) =>
+      row.comparableActualValue !== undefined
+      && row.comparableActualValue >= row.rangeLowValue!
+      && row.comparableActualValue <= row.rangeHighValue!);
+    const aboveRange = comparablePortfolioRows.filter((row) =>
+      row.comparableActualValue !== undefined
+      && row.comparableActualValue > row.rangeHighValue!);
+    expect(comparablePortfolioRows.length).toBeGreaterThanOrEqual(10);
+    expect(insideRange.length).toBeGreaterThan(0);
+    expect(aboveRange.length).toBeLessThan(comparablePortfolioRows.length);
+    if (aboveRange.length / comparablePortfolioRows.length >= 0.6) {
+      expect(portfolio.benchmark.description).toContain("portfolio-wide increase");
+      expect(portfolio.insights.find((insight) => insight.id === "store-variance")?.eyebrow).toBe("Largest store variance");
+    }
+
     fixture.costLines = fixture.costLines.filter((line) => line.serviceDate >= "2026-08-01");
     const weak = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "3", category: "refrigeration" });
     expect(weak.benchmark.rows.every((row) => row.ratioValue === undefined)).toBe(true);
