@@ -149,7 +149,7 @@ export async function loadAddComponentSetupModel(
     description: "Add only the component depth that helps identify repeat work, warranty coverage, and repair history. Components can be nested to match the equipment.",
     scopeLabel: `${storeLabel(store)} · ${asset.name}`,
     submitAction: `/api/ops/equipment/${encodeURIComponent(asset.id)}/components`,
-    cancelHref: `/app/equipment/${encodeURIComponent(asset.id)}#components`,
+    cancelHref: `/app/equipment/${encodeURIComponent(asset.id)}?section=components`,
     cancelLabel: "Back to equipment",
     assetId: asset.id,
     assetName: asset.name,
@@ -324,25 +324,54 @@ export async function loadComponentDetailModel(
     .filter((work) => work.organizationId === session.organizationId && work.componentId === component.id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const workIds = new Set(workOrders.map((work) => work.id));
+  const visitWorkByVisit = new Map<string, typeof fixture.siteVisitWorkOrders>();
+  fixture.siteVisitWorkOrders
+    .filter((link) => link.organizationId === session.organizationId && workIds.has(link.workOrderId))
+    .forEach((link) => visitWorkByVisit.set(link.visitId, [...(visitWorkByVisit.get(link.visitId) ?? []), link]));
   const visits = fixture.visits
-    .filter((visit) => visit.organizationId === session.organizationId && Boolean(visit.workOrderId && workIds.has(visit.workOrderId)))
+    .filter(
+      (visit) =>
+        visit.organizationId === session.organizationId &&
+        (visitWorkByVisit.has(visit.id) || Boolean(visit.workOrderId && workIds.has(visit.workOrderId))),
+    )
     .sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt));
   const recordedCostMinor = fixture.costLines
     .filter((cost) => cost.organizationId === session.organizationId && workIds.has(cost.workOrderId))
     .reduce((sum, cost) => sum + cost.amount.amountMinor, 0);
+  const replacementEvents = fixture.componentLifecycleEvents.filter(
+    (event) =>
+      event.organizationId === session.organizationId &&
+      (event.removedComponentId === component.id || event.installedComponentId === component.id),
+  );
   const canSetup = roleCan(session.role, "setup_equipment");
   const canCreateWork = roleCan(session.role, "create_work_order");
-  const childRows: TableRowViewModel[] = children.map((child) => ({
-    id: child.id,
-    label: child.name,
-    href: `/app/equipment/${encodeURIComponent(asset.id)}/components/${encodeURIComponent(child.id)}`,
-    cells: [
-      { key: "component", value: child.name },
-      { key: "part", value: child.partNumber ?? "Part not entered", secondary: child.serialNumber ? `S/N ${child.serialNumber}` : "Serial not entered" },
-      { key: "installed", value: date(child.installedAt) },
-      { key: "warranty", value: date(child.warrantyEndsAt) },
-    ],
-  }));
+  const childRows: TableRowViewModel[] = children.map((child) => {
+    const childWork = fixture.workOrders.filter(
+      (work) => work.organizationId === session.organizationId && work.componentId === child.id,
+    );
+    const childWorkIds = new Set(childWork.map((work) => work.id));
+    const childCostMinor = fixture.costLines
+      .filter((cost) => cost.organizationId === session.organizationId && childWorkIds.has(cost.workOrderId))
+      .reduce((sum, cost) => sum + cost.amount.amountMinor, 0);
+    const childReplacementCount = fixture.componentLifecycleEvents.filter(
+      (event) =>
+        event.organizationId === session.organizationId &&
+        (event.removedComponentId === child.id || event.installedComponentId === child.id),
+    ).length;
+    return {
+      id: child.id,
+      label: child.name,
+      href: `/app/equipment/${encodeURIComponent(asset.id)}/components/${encodeURIComponent(child.id)}`,
+      cells: [
+        { key: "component", value: child.name },
+        { key: "part", value: child.partNumber ?? "Part not entered", secondary: child.serialNumber ? `S/N ${child.serialNumber}` : "Serial not entered" },
+        { key: "installed", value: date(child.installedAt) },
+        { key: "warranty", value: date(child.warrantyEndsAt) },
+        { key: "work", value: String(childWork.length), secondary: childReplacementCount ? `${childReplacementCount} replacement record${childReplacementCount === 1 ? "" : "s"}` : "No replacement recorded" },
+        { key: "cost", value: money(childCostMinor), secondary: "Recorded work cost" },
+      ],
+    };
+  });
 
   return {
     state: { kind: "ready" },
@@ -380,8 +409,14 @@ export async function loadComponentDetailModel(
           ? "Expired as of this view"
           : "Review coverage before authorizing work",
       },
-      { label: "Linked work orders", value: String(workOrders.length) },
+      { label: "Linked work orders", value: String(workOrders.length), helperText: "Work explicitly classified to this component" },
       { label: "Recorded work cost", value: money(recordedCostMinor), helperText: "Entered cost lines on component-linked work only" },
+      {
+        label: "Replacement history",
+        value: replacementEvents.length ? `${replacementEvents.length} recorded event${replacementEvents.length === 1 ? "" : "s"}` : "No replacement recorded",
+        helperText: "Removed and installed component identity remains attached to the source work order",
+        link: replacementEvents.length ? { href: `/app/equipment/${asset.id}/components/${component.id}#component-life`, label: "Open replacement history" } : undefined,
+      },
     ],
     sections: [
       {
@@ -401,6 +436,8 @@ export async function loadComponentDetailModel(
             { key: "part", label: "Part / serial" },
             { key: "installed", label: "Installed" },
             { key: "warranty", label: "Warranty" },
+            { key: "work", label: "Linked work", align: "end" },
+            { key: "cost", label: "Recorded cost", align: "end" },
           ],
           rows: childRows,
         } : undefined,
@@ -455,21 +492,32 @@ export async function loadComponentDetailModel(
             { key: "outcome", label: "Outcome" },
             { key: "presence", label: "Observed presence" },
           ],
-          rows: visits.map((visit) => ({
-            id: visit.id,
-            label: `Visit ${visit.id}`,
-            href: `/app/visits?visit=${encodeURIComponent(visit.id)}`,
-            cells: [
-              { key: "visit", value: dateTime(visit.checkedInAt, store?.timeZone), secondary: `${sentence(visit.startedChannel)} · store-local time` },
-              { key: "provider", value: visit.providerName, secondary: visit.technicianName },
-              { key: "work", value: workOrders.find((work) => work.id === visit.workOrderId)?.number ?? "Not linked" },
-              { key: "outcome", value: sentence(visit.outcome ?? visit.status), tone: statusTone(visit.outcome ?? visit.status) },
-              { key: "presence", value: duration(visit.observedDurationSeconds) },
-            ],
-          })),
+          rows: visits.map((visit) => {
+            const links = visitWorkByVisit.get(visit.id) ?? [];
+            const linkedWorkIds = new Set([
+              ...links.map((link) => link.workOrderId),
+              ...(visit.workOrderId && workIds.has(visit.workOrderId) ? [visit.workOrderId] : []),
+            ]);
+            const linkedWorkNumbers = workOrders.filter((work) => linkedWorkIds.has(work.id)).map((work) => work.number);
+            const outcomes = links.map((link) => link.outcome).filter((value): value is NonNullable<typeof value> => Boolean(value));
+            const notes = links.map((link) => link.outcomeNotes?.trim()).filter((value): value is string => Boolean(value));
+            const outcome = outcomes[0] ?? visit.outcome ?? visit.status;
+            return {
+              id: visit.id,
+              label: `Visit ${visit.id}`,
+              href: `/app/visits/${encodeURIComponent(visit.id)}`,
+              cells: [
+                { key: "visit", value: dateTime(visit.checkedInAt, store?.timeZone), secondary: `${sentence(visit.startedChannel)} · store-local time` },
+                { key: "provider", value: visit.providerName, secondary: visit.technicianName },
+                { key: "work", value: linkedWorkNumbers.join(" · ") || "Not linked" },
+                { key: "outcome", value: sentence(outcome), secondary: notes.join(" · ") || visit.outcomeNotes?.trim() || "No checkout note recorded", tone: statusTone(outcome) },
+                { key: "presence", value: duration(visit.observedDurationSeconds) },
+              ],
+            };
+          }),
         },
       },
     ],
-    backLink: { label: `Back to ${asset.name}`, href: `/app/equipment/${asset.id}#components` },
+    backLink: { label: `Back to ${asset.name} components`, href: `/app/equipment/${asset.id}?section=components` },
   };
 }

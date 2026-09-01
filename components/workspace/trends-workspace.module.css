@@ -194,7 +194,7 @@
 .storeTableScroller { max-height: 590px; overflow: auto; scrollbar-gutter: stable; }
 .tablePanel table { width: 100%; min-width: 1060px; border-collapse: separate; border-spacing: 0; }
 .driverTable { min-width: 900px !important; }
-.benchmarkTable { min-width: 880px !important; }
+.benchmarkTable { min-width: 1180px !important; }
 .tablePanel caption { padding: 11px 17px; border-bottom: 1px solid #e5e9ef; background: #f8fafc; color: #657084; font-size: 13px; line-height: 1.45; text-align: left; }
 .tablePanel th { position: sticky; top: 0; z-index: 1; padding: 10px 13px; border-bottom: 1px solid var(--border); background: #f8fafc; color: #657084; font-size: 13px; font-weight: 760; letter-spacing: .025em; text-align: left; text-transform: uppercase; }
 .tablePanel td { padding: 9px 13px; border-bottom: 1px solid #edf0f4; color: #344054; font-size: 14px; vertical-align: middle; }
@@ -237,6 +237,12 @@
 .signal.warning { background: #fff4df; color: #8a4b09; }
 .signal.critical { background: #feeceb; color: #a12622; }
 .signal.info { background: #eaf2ff; color: #1d4ed8; }
+.findingCell { display: grid; gap: 5px; min-width: 280px; max-width: 390px; }
+.findingCell > strong { color: #475569; font-size: 13px; }
+.findingCell > small { color: #657084; font-size: 13px; line-height: 1.4; }
+.findingActions { display: flex; flex-wrap: wrap; gap: 12px; }
+.findingActions a { color: #1d4ed8; font-size: 13px; font-weight: 720; text-decoration: none; }
+.findingActions a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .empty { height: 120px; color: #697386; text-align: center; }
 .notes > summary { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; min-height: 50px; padding: 10px 15px; cursor: pointer; list-style: none; color: #475569; font-size: 14px; font-weight: 720; }
 .notes > summary::-webkit-details-marker { display: none; }

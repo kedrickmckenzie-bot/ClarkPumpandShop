@@ -503,6 +503,27 @@ describe("operator presenter drill-through contracts", () => {
     });
   });
 
+  it("keeps component drill-down, cost, replacement history, and multi-work visits connected", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const detail = buildDetailModel(fixture, executiveSession(), "equipment", "asset-104-beer-cave");
+    const componentSection = detail.sections.find((section) => section.id === "components")!;
+    if (!componentSection.table) throw new Error("Expected the component table");
+    const compressor = componentSection.table.rows.find((row) => row.id === "component-104-compressor")!;
+    const serviceHistory = detail.sections.find((section) => section.id === "service-history")!;
+
+    expect(compressor.href).toBe("/app/equipment/asset-104-beer-cave/components/component-104-compressor");
+    expect(compressor.cells.find((cell) => cell.key === "cost")?.value).toBe("$24,110");
+    expect(compressor.cells.find((cell) => cell.key === "work")?.secondary).toBe("1 replacement record");
+    expect(serviceHistory.description).toBe("6 observed visits connect to this equipment through its work orders.");
+
+    const visitDetail = buildDetailModel(fixture, executiveSession(), "visit", "visit-northline-104-2");
+    expect(visitDetail.facts.find((fact) => fact.label === "Operator work orders")?.value).toBe("CPS-2026-0104 · CPS-2026-0035");
+    const visitWork = visitDetail.sections.find((section) => section.id === "work-orders")!;
+    expect(visitWork.table?.rows).toHaveLength(2);
+    expect(visitWork.table?.rows.find((row) => row.id.includes("wo-northline-104"))?.cells.find((cell) => cell.key === "outcome")?.secondary).toMatch(/compressor replaced/i);
+    expect(visitDetail.sections.find((section) => section.id === "missing-work-order")).toBeUndefined();
+  });
+
   it("promotes a current large repair comparison instead of accumulated historical spend", () => {
     const fixture = buildNorthlinePresentationFixture();
     const dashboard = buildDashboardModel(fixture, executiveSession());

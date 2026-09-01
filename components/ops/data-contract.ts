@@ -192,6 +192,10 @@ export interface TrendBenchmarkRowViewModel {
   signalRank: number;
   signalLabel: string;
   signalTone: Tone;
+  findingExplanation?: string;
+  persistenceLabel?: string;
+  driverLink?: SupportingLink;
+  largestRecordLink?: SupportingLink;
   coverageValue: number;
   coverageLabel: string;
   focusLink: SupportingLink;

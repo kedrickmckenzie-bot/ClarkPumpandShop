@@ -4561,8 +4561,10 @@ export function buildDetailModel(
     if (!asset) return missingDetail("Equipment", "/app/equipment");
     const store = scoped.stores.find((item) => item.id === asset.storeId);
     const assetWork = scoped.workOrders.filter((work) => work.assetId === asset.id);
-    const assetWorkIds = new Set(assetWork.map((work) => work.id));
-    const assetVisits = scoped.visits.filter((visit) => Boolean(visit.workOrderId && assetWorkIds.has(visit.workOrderId)));
+    const assetVisitIds = new Set(
+      assetWork.flatMap((work) => visitsForWorkOrder(fixture, scoped, work.id).map((visit) => visit.id)),
+    );
+    const assetVisits = scoped.visits.filter((visit) => assetVisitIds.has(visit.id));
     const components = fixture.components.filter(
       (component) => component.organizationId === scoped.organizationId && component.assetId === asset.id,
     );
@@ -4640,20 +4642,31 @@ export function buildDetailModel(
               { key: "installed", label: "Installed" },
               { key: "warranty", label: "Warranty" },
               { key: "work", label: "Linked work", align: "end" },
+              { key: "cost", label: "Recorded cost", align: "end" },
             ],
-            rows: components.map((component) => ({
-              id: component.id,
-              label: component.name,
-              href: `/app/equipment/${asset.id}#components`,
-              cells: [
-                { key: "component", value: component.name },
-                { key: "parent", value: component.parentComponentId ? componentById.get(component.parentComponentId)?.name ?? "Unknown parent" : "Equipment" },
-                { key: "part", value: component.partNumber ?? "Part not entered", secondary: component.serialNumber ? `S/N ${component.serialNumber}` : "Serial not entered" },
-                { key: "installed", value: date(component.installedAt) },
-                { key: "warranty", value: date(component.warrantyEndsAt) },
-                { key: "work", value: String(assetWork.filter((work) => work.componentId === component.id).length) },
-              ],
-            })),
+            rows: components.map((component) => {
+              const componentWork = assetWork.filter((work) => work.componentId === component.id);
+              const componentCost = componentWork.reduce((sum, work) => sum + (costByWork.get(work.id) ?? 0), 0);
+              const replacementCount = fixture.componentLifecycleEvents.filter(
+                (event) =>
+                  event.organizationId === scoped.organizationId &&
+                  (event.removedComponentId === component.id || event.installedComponentId === component.id),
+              ).length;
+              return {
+                id: component.id,
+                label: component.name,
+                href: `/app/equipment/${encodeURIComponent(asset.id)}/components/${encodeURIComponent(component.id)}`,
+                cells: [
+                  { key: "component", value: component.name },
+                  { key: "parent", value: component.parentComponentId ? componentById.get(component.parentComponentId)?.name ?? "Unknown parent" : "Equipment" },
+                  { key: "part", value: component.partNumber ?? "Part not entered", secondary: component.serialNumber ? `S/N ${component.serialNumber}` : "Serial not entered" },
+                  { key: "installed", value: date(component.installedAt) },
+                  { key: "warranty", value: date(component.warrantyEndsAt) },
+                  { key: "work", value: String(componentWork.length), secondary: replacementCount ? `${replacementCount} replacement record${replacementCount === 1 ? "" : "s"}` : "No replacement recorded" },
+                  { key: "cost", value: money(componentCost), secondary: "Recorded work cost" },
+                ],
+              };
+            }),
           },
         },
         {
@@ -4907,7 +4920,16 @@ export function buildDetailModel(
     const storeTimeZone = store?.timeZone
       ?? fixture.organizations.find((organization) => organization.id === scoped.organizationId)?.timeZone
       ?? DEFAULT_OPERATIONS_TIME_ZONE;
-    const work = visit.workOrderId ? scoped.workOrders.find((item) => item.id === visit.workOrderId) : undefined;
+    const visitWorkLinks = fixture.siteVisitWorkOrders
+      .filter((link) => link.organizationId === scoped.organizationId && link.visitId === visit.id)
+      .sort((left, right) => left.ordinal - right.ordinal);
+    const linkedWorks = visitWorkLinks.flatMap((link) => {
+      const linkedWork = scoped.workOrders.find((item) => item.id === link.workOrderId);
+      return linkedWork ? [{ link, work: linkedWork }] : [];
+    });
+    const work = visit.workOrderId
+      ? scoped.workOrders.find((item) => item.id === visit.workOrderId) ?? linkedWorks[0]?.work
+      : linkedWorks[0]?.work;
     const evidence = fixture.visitEvidence
       .filter((item) => item.organizationId === scoped.organizationId && item.visitId === visit.id)
       .sort((left, right) => left.observedAt.localeCompare(right.observedAt));
@@ -4916,7 +4938,7 @@ export function buildDetailModel(
     const exceptions = fixture.exceptions
       .filter((item) => item.organizationId === scoped.organizationId && item.visitId === visit.id)
       .sort((left, right) => right.detectedAt.localeCompare(left.detectedAt));
-    const openUnmatchedException = !visit.workOrderId
+    const openUnmatchedException = linkedWorks.length === 0
       ? exceptions.find((exception) => exception.kind === "no_work_order" && exception.status !== "resolved")
       : undefined;
     const canCreateVisitWorkOrder = Boolean(openUnmatchedException && roleCan(session.role, "create_work_order"));
@@ -4927,7 +4949,13 @@ export function buildDetailModel(
       (link) => link.organizationId === scoped.organizationId && link.entityType === "visit" && link.entityId === visit.id,
     );
     const audit = fixture.auditEvents
-      .filter((event) => event.organizationId === scoped.organizationId && (event.aggregateId === visit.id || event.aggregateId === work?.id || exceptions.some((exception) => exception.id === event.aggregateId)))
+      .filter(
+        (event) =>
+          event.organizationId === scoped.organizationId &&
+          (event.aggregateId === visit.id ||
+            linkedWorks.some(({ work: linkedWork }) => linkedWork.id === event.aggregateId) ||
+            exceptions.some((exception) => exception.id === event.aggregateId)),
+      )
       .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
     const locationLabel = (result: typeof checkIn) => result?.location?.result ? sentence(result.location.result) : "Not recorded";
     return {
@@ -4953,12 +4981,45 @@ export function buildDetailModel(
       facts: [
         { label: "Technician", value: visit.technicianName, helperText: visit.providerName },
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
-        { label: "Operator work order", value: work?.number ?? "Not linked", helperText: work ? "Canonical service record" : visit.unmatchedReason ?? "Entered without a work order", link: work ? { href: `/app/work-orders/${work.id}`, label: "Open work order" } : undefined },
+        {
+          label: linkedWorks.length === 1 ? "Operator work order" : "Operator work orders",
+          value: linkedWorks.length ? linkedWorks.map(({ work: linkedWork }) => linkedWork.number).join(" · ") : "Not linked",
+          helperText: linkedWorks.length
+            ? `${linkedWorks.length} canonical service record${linkedWorks.length === 1 ? "" : "s"} covered during this visit`
+            : visit.unmatchedReason ?? "Entered without a work order",
+          link: linkedWorks.length === 1 ? { href: `/app/work-orders/${linkedWorks[0].work.id}`, label: "Open work order" } : undefined,
+        },
         { label: "Observed arrival", value: formatOperationsDateTime(visit.checkedInAt, storeTimeZone, { seconds: true }), helperText: `Store-local time · started via ${sentence(visit.startedChannel)}` },
         { label: "Observed departure", value: visit.checkedOutAt ? formatOperationsDateTime(visit.checkedOutAt, storeTimeZone, { seconds: true }) : "Still onsite", helperText: visit.endedChannel ? `Store-local time · finished via ${sentence(visit.endedChannel)}` : "No checkout event yet" },
         { label: "Approximate observed time", value: visit.observedDurationSeconds === undefined ? "In progress" : `${Math.round(visit.observedDurationSeconds / 60)} minutes`, helperText: "Presence context, not certified labor" },
       ],
       sections: [
+        ...(linkedWorks.length ? [{
+          id: "work-orders",
+          title: "Work orders and checkout notes",
+          description: "A single observed visit can cover more than one operator work order. Each work order keeps its own outcome and technician note.",
+          table: {
+            id: "visit-work-orders",
+            caption: `Work orders covered during this ${visit.providerName} visit`,
+            columns: [
+              { key: "work", label: "Work order" },
+              { key: "problem", label: "Problem" },
+              { key: "outcome", label: "Outcome and technician note" },
+              { key: "status", label: "Work status" },
+            ],
+            rows: linkedWorks.map(({ link, work: linkedWork }) => ({
+              id: link.id,
+              label: linkedWork.number,
+              href: `/app/work-orders/${linkedWork.id}`,
+              cells: [
+                { key: "work", value: linkedWork.number },
+                { key: "problem", value: linkedWork.problem },
+                { key: "outcome", value: link.outcome ? sentence(link.outcome) : "Not recorded", secondary: link.outcomeNotes?.trim() || "No checkout note recorded", tone: link.outcome ? (["completed", "no_issue_found"].includes(link.outcome) ? "positive" : "warning") : workStatusTone(linkedWork.status) },
+                { key: "status", value: workStatusLabel(linkedWork.status), tone: workStatusTone(linkedWork.status) },
+              ],
+            })),
+          },
+        }] : []),
         ...(openUnmatchedException ? [{
           id: "missing-work-order",
           title: "Create the missing work order",
@@ -4980,7 +5041,15 @@ export function buildDetailModel(
           facts: [
             { label: "Check-in location", value: locationLabel(checkIn), helperText: checkIn?.location?.accuracyM !== undefined ? `${checkIn.location.accuracyM} m accuracy · ${checkIn.location.distanceM ?? "Unknown"} m from store` : "Accuracy or distance not available" },
             { label: "Checkout location", value: locationLabel(checkOut), helperText: checkOut?.location?.accuracyM !== undefined ? `${checkOut.location.accuracyM} m accuracy · ${checkOut.location.distanceM ?? "Unknown"} m from store` : visit.status === "active" ? "Captured only when checkout occurs" : "Accuracy or distance not available" },
-            { label: "Outcome", value: visit.outcome ? sentence(visit.outcome) : "Not recorded", helperText: visit.outcomeNotes },
+            {
+              label: "Outcome",
+              value: linkedWorks.length
+                ? `${visitWorkLinks.filter((link) => link.outcome).length} work-order outcome${visitWorkLinks.filter((link) => link.outcome).length === 1 ? "" : "s"} recorded`
+                : visit.outcome ? sentence(visit.outcome) : "Not recorded",
+              helperText: linkedWorks.length
+                ? "Open Work orders and checkout notes for the outcome recorded against each job."
+                : visit.outcomeNotes,
+            },
             { label: "Attached evidence", value: String(linkedFiles.length), helperText: "Photos and documents remain linked to this visit" },
           ],
           table: {

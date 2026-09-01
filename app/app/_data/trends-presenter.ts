@@ -1076,6 +1076,8 @@ export function buildTrendsModel(
     let rangeHigh = 0;
     let comparableAssets = 0;
     let peerScenarioTotals: Map<string, number> | undefined;
+    const expectedByCategory = new Map<string, number>();
+    const peerScenarioTotalsByMonth = new Map<string, Map<string, number>>();
     const basisRecords: TrendSourceRecord[] = [];
     const comparableAssetIds = new Set<string>();
     if (additive) {
@@ -1084,6 +1086,7 @@ export function buildTrendsModel(
         if (!cohort) continue;
         let assetExpected = 0;
         let assetPeerScenarioTotals: Map<string, number> | undefined;
+        const assetPeerScenarioTotalsByMonth = new Map<string, Map<string, number>>();
         let comparableAcrossPeriod = true;
         for (const month of currentMonths) {
           const observations = observationsByCohortAndCalendarMonth.get(`${cohort}|${month.slice(5)}`) ?? [];
@@ -1110,7 +1113,7 @@ export function buildTrendsModel(
             distribution.capped[peerIndex] * partialFactor,
           ]));
           if (!assetPeerScenarioTotals) {
-            assetPeerScenarioTotals = monthPeerRates;
+            assetPeerScenarioTotals = new Map(monthPeerRates);
           } else {
             for (const [peerStoreId, total] of assetPeerScenarioTotals) {
               const monthRate = monthPeerRates.get(peerStoreId);
@@ -1118,6 +1121,7 @@ export function buildTrendsModel(
               else assetPeerScenarioTotals.set(peerStoreId, total + monthRate);
             }
           }
+          assetPeerScenarioTotalsByMonth.set(month, monthPeerRates);
           if (includeBasisRecords) {
             for (const [peerIndex, peerRate] of peerRates.entries()) {
               const peerStore = storeById.get(peerRate.storeId);
@@ -1142,6 +1146,7 @@ export function buildTrendsModel(
         }
         if (!comparableAcrossPeriod) continue;
         expected += assetExpected;
+        expectedByCategory.set(asset.categoryKey, (expectedByCategory.get(asset.categoryKey) ?? 0) + assetExpected);
         comparableAssets += 1;
         comparableAssetIds.add(asset.id);
         if (!peerScenarioTotals) {
@@ -1151,6 +1156,18 @@ export function buildTrendsModel(
             const assetTotal = assetPeerScenarioTotals?.get(peerStoreId);
             if (assetTotal === undefined) peerScenarioTotals.delete(peerStoreId);
             else peerScenarioTotals.set(peerStoreId, total + assetTotal);
+          }
+        }
+        for (const [month, assetMonthRates] of assetPeerScenarioTotalsByMonth) {
+          const storeMonthRates = peerScenarioTotalsByMonth.get(month);
+          if (!storeMonthRates) {
+            peerScenarioTotalsByMonth.set(month, new Map(assetMonthRates));
+            continue;
+          }
+          for (const [peerStoreId, total] of storeMonthRates) {
+            const assetMonthTotal = assetMonthRates.get(peerStoreId);
+            if (assetMonthTotal === undefined) storeMonthRates.delete(peerStoreId);
+            else storeMonthRates.set(peerStoreId, total + assetMonthTotal);
           }
         }
       }
@@ -1229,6 +1246,82 @@ export function buildTrendsModel(
           ? low ? "warning" : high ? "positive" : "neutral"
           : high ? "warning" : aboveRange || belowRange ? "info" : "positive";
     const signalRank = noComparison ? 0 : safeMetric === "pm_completion" ? low ? 3 : 1 : high ? 3 : aboveRange ? 2 : 1;
+    const explainableAdditiveMetric = safeMetric === "recorded_cost" || safeMetric === "linked_invoice" || safeMetric === "work_orders";
+    const actualByCategory = new Map<string, number>();
+    if (explainableAdditiveMetric) {
+      for (const row of comparableRows) {
+        const categories = recordCategoryKeys(row);
+        if (categories.length !== 1 || !expectedByCategory.has(categories[0])) continue;
+        actualByCategory.set(categories[0], (actualByCategory.get(categories[0]) ?? 0) + row.value);
+      }
+    }
+    const categoryDifferences = [...expectedByCategory.entries()].map(([categoryKey, categoryExpected]) => {
+      const categoryActual = actualByCategory.get(categoryKey) ?? 0;
+      return { categoryKey, categoryActual, categoryExpected, difference: categoryActual - categoryExpected };
+    });
+    const categoryDirection = aboveRange ? 1 : belowRange ? -1 : 0;
+    const largestCategoryDifference = baselineReliable && explainableAdditiveMetric
+      ? [...categoryDifferences].sort((left, right) => {
+          const leftScore = categoryDirection ? left.difference * categoryDirection : Math.abs(left.difference);
+          const rightScore = categoryDirection ? right.difference * categoryDirection : Math.abs(right.difference);
+          return rightScore - leftScore;
+        })[0]
+      : undefined;
+    const findingExplanation = largestCategoryDifference
+      ? `${sentence(largestCategoryDifference.categoryKey)} is the largest measured difference: ${formatMetric(safeMetric, Math.abs(largestCategoryDifference.difference))} ${largestCategoryDifference.difference >= 0 ? "above" : "below"} its historical peer expectation (${formatMetric(safeMetric, largestCategoryDifference.categoryActual)} recorded vs ${formatMetric(safeMetric, largestCategoryDifference.categoryExpected)} expected).`
+      : undefined;
+    const driverLink = largestCategoryDifference ? {
+      href: `${trendHref({
+        view: "records",
+        store: store.id,
+        category: largestCategoryDifference.categoryKey,
+        detailKind: "current",
+        detailMonth: undefined,
+        driverBreakdown: undefined,
+        driverValue: undefined,
+        benchmarkStore: undefined,
+        sourcePage: undefined,
+      })}#source-records`,
+      label: `Open ${sentence(largestCategoryDifference.categoryKey)} source records for Store ${store.storeNumber}`,
+    } : undefined;
+    const largestSourceGroup = largestCategoryDifference
+      ? [...comparableRows
+          .filter((row) => recordCategoryKeys(row).includes(largestCategoryDifference.categoryKey))
+          .reduce((groups, row) => {
+            const key = row.workOrderId ?? row.invoiceId ?? row.id;
+            const current = groups.get(key);
+            groups.set(key, current
+              ? { ...current, value: current.value + row.value }
+              : { value: row.value, label: row.label, href: row.href });
+            return groups;
+          }, new Map<string, { value: number; label: string; href: string }>())
+          .values()]
+        .sort((left, right) => right.value - left.value)[0]
+      : undefined;
+    const largestRecordLink = largestSourceGroup ? {
+      href: largestSourceGroup.href,
+      label: `Open ${largestSourceGroup.label}, the largest source record at ${formatMetric(safeMetric, largestSourceGroup.value)}`,
+    } : undefined;
+    const monthlyPositions = currentMonths.flatMap((month) => {
+      const peerValues = [...(peerScenarioTotalsByMonth.get(month)?.values() ?? [])];
+      if (peerValues.length < 3) return [];
+      const monthActual = aggregate(safeMetric, comparableRows.filter((row) => row.periodKey === month));
+      return [{
+        actual: monthActual,
+        low: quantile(peerValues, 0.25),
+        high: quantile(peerValues, 0.75),
+      }];
+    });
+    const monthsAboveRange = monthlyPositions.filter((position) => position.actual > position.high).length;
+    const monthsBelowRange = monthlyPositions.filter((position) => position.actual < position.low).length;
+    const monthsWithinRange = monthlyPositions.length - monthsAboveRange - monthsBelowRange;
+    const persistenceLabel = baselineReliable && monthlyPositions.length >= 3
+      ? aboveRange
+        ? `Above range in ${monthsAboveRange} of ${monthlyPositions.length} months`
+        : belowRange
+          ? `Below range in ${monthsBelowRange} of ${monthlyPositions.length} months`
+          : `Within range in ${monthsWithinRange} of ${monthlyPositions.length} months`
+      : undefined;
     const variance = baselineReliable && actualHasData ? comparableActual - expected : undefined;
     const storeFocusLink = {
       href: trendHref({
@@ -1276,6 +1369,10 @@ export function buildTrendsModel(
       signalRank,
       signalLabel,
       signalTone,
+      findingExplanation,
+      persistenceLabel,
+      driverLink,
+      largestRecordLink,
       coverageValue: additive ? coveragePercent : comparableAssets,
       coverageLabel: additive ? `${coveragePercent}% matched · ${comparableAssets} equipment record${comparableAssets === 1 ? "" : "s"}` : `${comparableAssets} other stores compared`,
       focusLink: storeFocusLink,

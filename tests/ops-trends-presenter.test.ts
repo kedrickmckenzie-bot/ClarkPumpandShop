@@ -442,26 +442,45 @@ describe("enterprise trends presenter", () => {
     expect(reliable.every((row) => (row.rangeHighValue ?? 0) > 0 && row.rangeLabel.includes("–"))).toBe(true);
     expect(new Set(reliable.map((row) => row.expectedValue)).size).toBeGreaterThan(1);
 
-    const portfolio = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "3" });
-    const comparablePortfolioRows = portfolio.benchmark.rows.filter((row) => row.rangeLowValue !== undefined && row.rangeHighValue !== undefined);
-    const insideRange = comparablePortfolioRows.filter((row) =>
-      row.comparableActualValue !== undefined
-      && row.comparableActualValue >= row.rangeLowValue!
-      && row.comparableActualValue <= row.rangeHighValue!);
-    const aboveRange = comparablePortfolioRows.filter((row) =>
-      row.comparableActualValue !== undefined
-      && row.comparableActualValue > row.rangeHighValue!);
-    expect(comparablePortfolioRows.length).toBeGreaterThanOrEqual(10);
-    expect(comparablePortfolioRows.every((row) =>
-      Number.isFinite(row.rangeLowValue)
-      && Number.isFinite(row.rangeHighValue)
-      && row.rangeLowValue! <= row.rangeHighValue!)).toBe(true);
-    expect(new Set(comparablePortfolioRows.map((row) => `${row.rangeLowValue}:${row.rangeHighValue}`)).size).toBeGreaterThan(1);
-    expect(insideRange.length).toBeGreaterThan(0);
-    expect(aboveRange.length).toBeLessThan(comparablePortfolioRows.length);
-    if (aboveRange.length / comparablePortfolioRows.length >= 0.6) {
-      expect(portfolio.benchmark.description).toContain("portfolio-wide increase");
-      expect(portfolio.insights.find((insight) => insight.id === "store-variance")?.eyebrow).toBe("Largest store variance");
+    for (const period of ["3", "6", "12", "24"] as const) {
+      const portfolio = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period });
+      const comparablePortfolioRows = portfolio.benchmark.rows.filter((row) => row.rangeLowValue !== undefined && row.rangeHighValue !== undefined);
+      const insideRange = comparablePortfolioRows.filter((row) =>
+        row.comparableActualValue !== undefined
+        && row.comparableActualValue >= row.rangeLowValue!
+        && row.comparableActualValue <= row.rangeHighValue!);
+      const aboveRange = comparablePortfolioRows.filter((row) =>
+        row.comparableActualValue !== undefined
+        && row.comparableActualValue > row.rangeHighValue!);
+      const belowRange = comparablePortfolioRows.filter((row) =>
+        row.comparableActualValue !== undefined
+        && row.comparableActualValue < row.rangeLowValue!);
+      expect(comparablePortfolioRows.length, `${period}-month comparable stores`).toBeGreaterThanOrEqual(10);
+      expect(comparablePortfolioRows.every((row) =>
+        Number.isFinite(row.rangeLowValue)
+        && Number.isFinite(row.rangeHighValue)
+        && row.rangeLowValue! <= row.rangeHighValue!), `${period}-month finite peer ranges`).toBe(true);
+      expect(new Set(comparablePortfolioRows.map((row) => `${row.rangeLowValue}:${row.rangeHighValue}`)).size, `${period}-month distinct peer ranges`).toBeGreaterThan(1);
+      expect(insideRange.length + belowRange.length, `${period}-month stores not uniformly above range`).toBeGreaterThan(0);
+      expect(aboveRange.length, `${period}-month stores above range`).toBeLessThan(comparablePortfolioRows.length);
+      expect(new Set(comparablePortfolioRows.map((row) => row.signalLabel)).size, `${period}-month finding diversity`).toBeGreaterThan(1);
+      if (period === "6") {
+        expect(insideRange.length, "default six-month stores within range").toBeGreaterThan(0);
+        const explained = comparablePortfolioRows.find((row) => row.findingExplanation && row.persistenceLabel && row.driverLink && row.largestRecordLink);
+        expect(explained?.findingExplanation).toMatch(/recorded vs .* expected/i);
+        expect(explained?.persistenceLabel).toMatch(/range in \d+ of 6 months/i);
+        expect(queryFromHref(explained!.driverLink!.href)).toMatchObject({
+          view: "records",
+          store: explained!.id,
+          detailKind: "current",
+        });
+        expect(queryFromHref(explained!.driverLink!.href).category).toBeTruthy();
+        expect(explained?.largestRecordLink?.href).toMatch(/^\/app\/(work-orders|invoices)\//);
+      }
+      if (aboveRange.length / comparablePortfolioRows.length >= 0.6) {
+        expect(portfolio.benchmark.description).toContain("portfolio-wide increase");
+        expect(portfolio.insights.find((insight) => insight.id === "store-variance")?.eyebrow).toBe("Largest store variance");
+      }
     }
 
     fixture.costLines = fixture.costLines.filter((line) => line.serviceDate >= "2026-08-01");

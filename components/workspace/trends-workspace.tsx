@@ -210,7 +210,14 @@ function BenchmarkTable({ model }: { model: TrendAnalysisPageViewModel }) {
                 <td className={styles.number}><strong>{row.comparableActualLabel}</strong>{row.excludedActualLabel ? <small>{row.excludedActualLabel}</small> : null}</td>
                 <td className={styles.number}>{row.peerLink ? <Link className={styles.inlineCellLink} href={row.peerLink.href} aria-label={row.peerLink.label}>{row.rangeLabel}</Link> : row.rangeLabel}</td>
                 <td className={styles.number}><strong>{row.varianceLabel}</strong></td>
-                <td><span className={`${styles.signal} ${toneClass(row.signalTone)}`}>{row.signalLabel}</span></td>
+                <td>
+                  <span className={styles.findingCell}>
+                    <span className={`${styles.signal} ${toneClass(row.signalTone)}`}>{row.signalLabel}</span>
+                    {row.persistenceLabel ? <strong>{row.persistenceLabel}</strong> : null}
+                    {row.findingExplanation ? <small>{row.findingExplanation}</small> : null}
+                    {row.driverLink || row.largestRecordLink ? <span className={styles.findingActions}>{row.driverLink ? <Link href={row.driverLink.href} aria-label={row.driverLink.label}>Explain</Link> : null}{row.largestRecordLink ? <Link href={row.largestRecordLink.href} aria-label={row.largestRecordLink.label}>Largest record</Link> : null}</span> : null}
+                  </span>
+                </td>
                 <td><small>{row.coverageLabel}</small></td>
               </tr>
             ))}
