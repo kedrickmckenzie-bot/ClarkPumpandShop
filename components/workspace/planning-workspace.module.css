@@ -50,6 +50,7 @@
 .metrics > a.critical { box-shadow: inset 3px 0 #dc2626; }
 .metrics > a.info { box-shadow: inset 3px 0 #2563eb; }
 .insights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.trendPanel { grid-column: 1 / -1; }
 .panel,
 .actions,
 .sourceSection,
@@ -80,7 +81,7 @@
 .panel > footer a { display: inline-flex; align-items: center; gap: 6px; color: #1d4ed8; font-size: var(--ops-font-label, 13px); font-weight: 700; }
 .trend { display: flex; align-items: stretch; gap: 8px; height: 300px; padding: 28px 18px 18px; }
 .trend > a { display: grid; grid-template-rows: 32px 1fr 30px; align-items: end; gap: 5px; flex: 1; min-width: 28px; text-align: center; }
-.trend strong { overflow: hidden; color: #475569; font-size: var(--ops-font-meta, 12px); text-overflow: ellipsis; }
+.trend strong { overflow: hidden; color: #475569; font-size: var(--ops-font-label, 13px); text-overflow: ellipsis; }
 .trend i { position: relative; display: block; height: 100%; border-bottom: 1px solid #cbd5e1; background: repeating-linear-gradient(to top, transparent 0 39px, #f1f5f9 39px 40px); }
 .trend i span { position: absolute; right: 17%; bottom: 0; left: 17%; min-height: 3px; border-radius: 3px 3px 0 0; background: #2563eb; transition: background .15s ease; }
 .trend > a:hover i span { background: #1d4ed8; }

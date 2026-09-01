@@ -973,7 +973,9 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
     incomplete: 0,
   };
   return rows.sort((a, b) =>
-    stateOrder[b.screening.state] - stateOrder[a.screening.state] || b.workCost - a.workCost,
+    stateOrder[b.screening.state] - stateOrder[a.screening.state] ||
+    (b.screening.comparison.repairEstimateMinor ?? 0) - (a.screening.comparison.repairEstimateMinor ?? 0) ||
+    b.workCost - a.workCost,
   );
 }
 
@@ -3998,7 +4000,10 @@ export function buildProgramModel(
     view: lifecycleView,
     page: String(page),
   });
-  const replacementTotal = scopeCandidates.reduce((sum, row) => sum + (row.replacement ?? 0), 0);
+  const pricedReplacementCount = scopeCandidates.filter((row) => row.replacement !== undefined).length;
+  const reviewRepairPriceCount = liveRepairDecisions.filter((row) => row.screening.comparison.repairEstimateMinor !== undefined).length;
+  const reviewReplacementPriceCount = liveRepairDecisions.filter((row) => row.replacement !== undefined).length;
+  const reviewStoreCount = new Set(liveRepairDecisions.map((row) => row.asset.storeId)).size;
   const reasonCounts = new Map<string, number>();
   for (const row of scopeCandidates) {
     const key = row.screening.state === "compare_alternatives"
@@ -4054,38 +4059,74 @@ export function buildProgramModel(
     ],
   }));
   const managementPlannedTotal = managementPlanned.reduce((sum, row) => sum + (row.replacement ?? 0), 0);
+  const managementPlanYears = [...new Set(managementPlanned.map((row) => row.capitalPlanYear).filter((year): year is number => Boolean(year)))].sort((a, b) => a - b);
+  const managementPlanYearLabel = managementPlanYears.length === 0
+    ? "No funding years"
+    : managementPlanYears.length === 1
+      ? String(managementPlanYears[0])
+      : `${managementPlanYears[0]}–${managementPlanYears.at(-1)}`;
+  const managementPlanStoreCount = new Set(managementPlanned.map((row) => row.asset.storeId)).size;
+  const sharedLifecycleParameters = { store: selectedStoreId, asset: selectedAsset };
+  const metrics: MetricViewModel[] = lifecycleView === "review"
+    ? [
+        { id: "review", label: "Decisions needing review", value: String(liveRepairDecisions.length), supportingText: `Current repair-or-replace decisions across ${reviewStoreCount} store${reviewStoreCount === 1 ? "" : "s"}`, tone: liveRepairDecisions.length ? "warning" : "positive", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Open repair decisions" } },
+        { id: "repair-estimates", label: "Repair prices entered", value: `${reviewRepairPriceCount} of ${liveRepairDecisions.length}`, supportingText: "The actual vendor price stays on each decision; prices are not combined", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Review repair prices" } },
+        { id: "replacement-alternatives", label: "Replacement estimates ready", value: `${reviewReplacementPriceCount} of ${liveRepairDecisions.length}`, supportingText: "Each estimate is compared only with the repair for that equipment", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Review replacement estimates" } },
+        { id: "portfolio-context", label: "Portfolio planning", value: `${managementPlanned.length} planned`, supportingText: "Future replacement decisions are kept separate from today's repair review", tone: "info", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "capital" }), label: "Open planned replacements" } },
+      ]
+    : lifecycleView === "capital"
+      ? [
+          { id: "management-plan", label: "Planned replacements", value: String(managementPlanned.length), supportingText: `Management decisions across ${managementPlanStoreCount} store${managementPlanStoreCount === 1 ? "" : "s"}`, tone: managementPlanned.length ? "info" : "neutral", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "capital" }), label: "Open planned replacements" } },
+          { id: "planned-value", label: "Estimated planned cost", value: money(managementPlannedTotal), supportingText: `Replacement estimates for these ${managementPlanned.length} planned decision${managementPlanned.length === 1 ? "" : "s"}; not an approved budget`, link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "capital" }), label: "Review planned costs" } },
+          { id: "funding-years", label: "Funding years", value: managementPlanYearLabel, supportingText: "Years selected by management, not age-based predictions", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "capital" }), label: "Review funding years" } },
+          { id: "repair-context", label: "Repair decisions now", value: String(liveRepairDecisions.length), supportingText: "Current repair choices are reviewed in a separate queue", tone: liveRepairDecisions.length ? "warning" : "positive", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Open repair decisions" } },
+        ]
+      : [
+          { id: "scope", label: "Equipment records", value: String(scopeCandidates.length), supportingText: "All equipment in the selected store and filter scope", tone: "info", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "all" }), label: "Browse equipment records" } },
+          { id: "estimate-coverage", label: "Replacement estimates available", value: `${pricedReplacementCount} of ${scopeCandidates.length}`, supportingText: `${scopeCandidates.length - pricedReplacementCount} equipment record${scopeCandidates.length - pricedReplacementCount === 1 ? " still needs" : "s still need"} a planning estimate`, tone: pricedReplacementCount === scopeCandidates.length ? "positive" : "warning", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, replacement: "entered", view: "all" }), label: "Open priced equipment" } },
+          { id: "repair-context", label: "Repair decisions now", value: String(liveRepairDecisions.length), supportingText: "Open decisions are kept separate and compared one equipment record at a time", tone: liveRepairDecisions.length ? "warning" : "positive", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Open repair decisions" } },
+          { id: "management-plan", label: "Management-planned replacements", value: String(managementPlanned.length), supportingText: `Assigned across ${managementPlanYearLabel}; cost totals appear only in the planned-replacements view`, tone: managementPlanned.length ? "info" : "neutral", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "capital" }), label: "Open planned replacements" } },
+        ];
+  const lifecyclePage = lifecycleView === "review"
+    ? {
+        title: "Repair decisions",
+        description: "Review only the current repairs large enough to compare with replacement. Repair and replacement dollars below refer to the same equipment—portfolio replacement estimates are kept out of this view.",
+      }
+    : lifecycleView === "capital"
+      ? {
+          title: "Planned replacements",
+          description: "See only replacement decisions that management has assigned to a funding year. These are planning estimates, not an approved budget or a prediction that equipment will fail.",
+        }
+      : {
+          title: "Replacement planning register",
+          description: "Review which equipment has a current replacement estimate and open any record for its source, age, warranty, and service history. This register does not total the hypothetical cost of replacing the entire portfolio.",
+        };
   return {
     state: { kind: "ready" },
-    page: { title: "Equipment lifecycle", eyebrow: "Repair or replace", description: "See how long a current repair must keep equipment in service to justify its cost against replacement, then review the vendor estimate, age, warranty, and history. Small repairs are not treated as replacement signals, and the decision remains yours.", scopeLabel: selectedLifecycleAsset ? `${activeScopeLabel} · ${selectedLifecycleAsset.asset.name}` : activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
-    metrics: [
-      { id: "review", label: "Repairs to compare", value: String(liveRepairDecisions.length), supportingText: "Material current repairs that need a human repair-or-replace comparison", tone: "warning", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "review" }), label: "Open repair comparisons" } },
-      { id: "replacement", label: "Estimated replacement cost", value: money(replacementTotal), supportingText: "Current planning estimates across this scope; not an approved budget", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "all" }), label: "Review estimates" } },
-      { id: "management-plan", label: "Management-planned capital", value: money(managementPlannedTotal), supportingText: `${managementPlanned.length} replacement decision${managementPlanned.length === 1 ? "" : "s"} assigned to a funding year`, tone: managementPlanned.length ? "info" : "neutral", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "capital" }), label: "Review management decisions" } },
-      { id: "work-cost", label: "Historical recorded cost", value: money(scopeCandidates.reduce((sum, row) => sum + row.workCost, 0)), supportingText: "Context only; never added to the current repair estimate", link: { href: hrefWithQuery("/app/work-orders", { hasCost: "true", store: selectedStoreId, asset: selectedAsset }), label: "Open cost sources" } },
-      { id: "scope", label: "Equipment in scope", value: String(scopeCandidates.length), supportingText: selectedLifecycleAsset ? "This equipment record and its exact decision evidence" : `${candidates.length} shown in the selected lifecycle view`, tone: "info", link: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "all" }), label: "Browse all equipment" } },
-    ],
+    page: { title: lifecyclePage.title, eyebrow: "Repair or replace", description: lifecyclePage.description, scopeLabel: selectedLifecycleAsset ? `${activeScopeLabel} · ${selectedLifecycleAsset.asset.name}` : activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
+    metrics,
     filters: [{ id: "lifecycle-view", label: "Equipment shown", options: [
       { value: "review", label: `Repair decisions (${liveRepairDecisions.length})`, href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "review" }), selected: lifecycleView === "review" },
-      { value: "capital", label: `Capital plan (${managementPlanned.length})`, href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "capital" }), selected: lifecycleView === "capital" },
-      { value: "all", label: `All equipment (${scopeCandidates.length})`, href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "all" }), selected: lifecycleView === "all" },
+      { value: "capital", label: `Planned replacements (${managementPlanned.length})`, href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "capital" }), selected: lifecycleView === "capital" },
+      { value: "all", label: `Planning register (${scopeCandidates.length})`, href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "all" }), selected: lifecycleView === "all" },
     ] }],
-    breakdowns: [{ id: "lifecycle-reasons", title: "Repair screening across this scope", description: "For each material repair, the platform calculates the minimum continued-service runway needed to justify the repair cost against replacement. Small repairs stay in the equipment record without becoming active review work.", totalLabel: `${scopeCandidates.length} equipment`, segments: [...reasonCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), link: { href: hrefWithQuery("/app/lifecycle", { reason: key, store: selectedStoreId, asset: selectedAsset, view: "all" }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "all" }), label: "Open all equipment" } }],
-    trends: [{
+    breakdowns: lifecycleView === "all" ? [{ id: "lifecycle-reasons", title: "Repair-screening status", description: "This classifies current repair evidence only. It does not predict failure or recommend replacing equipment without a live repair decision.", totalLabel: `${scopeCandidates.length} equipment`, segments: [...reasonCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), link: { href: hrefWithQuery("/app/lifecycle", { reason: key, store: selectedStoreId, asset: selectedAsset, view: "all" }), label: "Filter equipment" } })), sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "all" }), label: "Open planning register" } }] : [],
+    trends: lifecycleView === "capital" ? [{
       id: "capex-horizon",
-      title: "Capital outlook by year",
-      description: "Management decisions use their chosen planning year. Equipment without a recorded decision remains an age-based outlook. Neither is an approved budget.",
-      points: [...scopeCandidates.reduce((years, row) => {
+      title: "Planned replacements by funding year",
+      description: `Only the ${managementPlanned.length} management-planned replacements shown in this view are included. Values are estimates, not an approved budget.`,
+      points: [...managementPlanned.reduce((years, row) => {
         if (row.capitalPlanYear && row.replacement) years.set(String(row.capitalPlanYear), (years.get(String(row.capitalPlanYear)) ?? 0) + row.replacement);
         return years;
-      }, new Map<string, number>()).entries()].sort(([a], [b]) => a.localeCompare(b)).map(([year, value]) => ({ id: year, label: year, value, formattedValue: money(value), link: { href: hrefWithQuery("/app/lifecycle", { replacementYear: year, store: selectedStoreId, asset: selectedAsset }), label: `Review ${year} evidence` } })),
-      sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "capital" }), label: "Open management-planned capital" },
-    }],
+      }, new Map<string, number>()).entries()].sort(([a], [b]) => a.localeCompare(b)).map(([year, value]) => ({ id: year, label: year, value, formattedValue: money(value), link: { href: hrefWithQuery("/app/lifecycle", { replacementYear: year, plan: "management", store: selectedStoreId, asset: selectedAsset, view: "capital" }), label: `Review ${year} planned replacements` } })),
+      sourceLink: { href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "capital" }), label: "Open planned replacements" },
+    }] : [],
     priorityActions: selectedAsset ? [] : allActions,
     resultSummary: candidates.length ? `Showing ${lifecyclePageStart + 1}–${Math.min(lifecyclePageStart + lifecyclePageSize, candidates.length)} of ${candidates.length}` : "0 equipment records",
     pagination: candidates.length > lifecyclePageSize
       ? paginationModel(candidates.length, lifecycleCurrentPage, lifecyclePageSize, lifecyclePageHref)
       : undefined,
-    table: { id: "lifecycle", caption: "Equipment lifecycle details", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "evidence", label: lifecycleView === "capital" ? "Planning basis" : "Why it is here" }, { key: "work", label: "Current repair" }, { key: "replacement", label: "Estimated replacement", align: "end" }, { key: "status", label: lifecycleView === "capital" ? "Planning status" : "Review result" }], rows },
+    table: { id: "lifecycle", caption: lifecycleView === "review" ? "Current repair decisions" : lifecycleView === "capital" ? "Management-planned replacements" : "Replacement planning register", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "evidence", label: lifecycleView === "capital" ? "Why it is planned" : "Why it is here" }, { key: "work", label: "Current repair" }, { key: "replacement", label: "Estimated replacement", align: "end" }, { key: "status", label: lifecycleView === "capital" ? "Funding plan" : "Review result" }], rows },
   };
 }
 
@@ -4686,6 +4727,7 @@ export function buildDetailModel(
           title: "Create the missing work order",
           description: "Use this when the vendor was called directly and service began before anyone could create the operator record.",
           facts: [
+            { label: "Technician checkout", value: visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "Still onsite" : "Outcome not recorded", helperText: visit.outcomeNotes ?? "No technician notes were entered." },
             { label: "What stays unchanged", value: "Original check-in and checkout evidence", helperText: "Observed times are never backdated or replaced." },
             { label: "What gets added", value: "One canonical work order linked to this visit", helperText: "Recorded costs and optional invoice evidence can then use the operator work-order number." },
             { label: "Authorization treatment", value: "Created after service began", helperText: "The record documents the verbal or emergency path; it does not claim a prior written authorization." },
@@ -5322,7 +5364,10 @@ export function buildCreateWorkOrderModel(
       technicianName: sourceVisit.technicianName,
       providerName: sourceVisit.providerName,
       checkedInLabel: dateTime(sourceVisit.checkedInAt, sourceVisitTimeZone),
+      checkedOutLabel: sourceVisit.checkedOutAt ? dateTime(sourceVisit.checkedOutAt, sourceVisitTimeZone) : undefined,
       unmatchedReason: sourceVisit.unmatchedReason ?? "No operator work order was provided at check-in",
+      outcomeLabel: sourceVisit.outcome ? sentence(sourceVisit.outcome) : undefined,
+      outcomeNotes: sourceVisit.outcomeNotes,
     } : undefined,
   };
 }
@@ -6226,6 +6271,7 @@ export function buildAttentionItemModel(
               { label: "Visit status", value: sentence(visit.status) },
               { label: "Unmatched reason", value: visit.unmatchedReason ?? "Not applicable" },
               { label: "Outcome", value: visit.outcome ? sentence(visit.outcome) : "Not recorded" },
+              ...(visit.outcomeNotes ? [{ label: "Technician checkout notes", value: visit.outcomeNotes }] : []),
             ] : [{ label: "Summary", value: exception.summary }],
           },
           {

@@ -709,6 +709,7 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
     })(),
     estimateRequests,
     estimateProposals: fixture.estimateProposals.filter((row) => requestIds.has(row.requestId)),
+    replacementEvents: fixture.replacementEvents.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
   });
 }
 

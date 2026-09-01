@@ -335,6 +335,16 @@ describe("enterprise service-control presenter contracts", () => {
       title: "Create the missing work order",
       action: { label: "Create and link work order" },
     });
+    expect(detail.sections.find((section) => section.id === "missing-work-order")?.facts).toContainEqual(expect.objectContaining({
+      label: "Technician checkout",
+      value: "Resolved",
+      helperText: "Replaced the failed LED driver, secured the junction-box cover, and confirmed the stockroom light remained stable before departure.",
+    }));
+    expect(detail.sections.find((section) => section.id === "evidence")?.facts).toContainEqual(expect.objectContaining({
+      label: "Outcome",
+      value: "Resolved",
+      helperText: "Replaced the failed LED driver, secured the junction-box cover, and confirmed the stockroom light remained stable before departure.",
+    }));
     expect(detail.sections.find((section) => section.id === "exceptions")?.table?.rows.every(
       (row) => row.href === `/app/action-center/${row.id}`,
     )).toBe(true);
@@ -389,25 +399,25 @@ describe("enterprise service-control presenter contracts", () => {
   it("gives exception reconciliation and follow-up control exact evidence and accountable fields", () => {
     const fixture = buildNorthlinePresentationFixture();
     fixture.workOrders.push({
-      id: "wo-contract-store-107-forecourt",
+      id: "wo-contract-store-107-electrical",
       organizationId: NORTHLINE_ORGANIZATION_ID,
       number: "CPS-2026-0999",
       storeId: "store-northline-107",
-      problem: "Inspect dispenser 4 payment-terminal connection",
+      problem: "Document the completed stockroom lighting repair",
       priority: "urgent",
       status: "approved",
-      accountableParty: "PumpPro Fuel & Dispenser Repair",
+      accountableParty: "BrightLine Electrical & Lighting",
       nextAction: "Generate vendor authorization",
       dueAt: "2026-08-15T18:00:00.000Z",
       escalationTo: "Clark Pump and Shop Facilities",
       createdAt: "2026-08-11T12:00:00.000Z",
     });
     fixture.assignments.push({
-      id: "assignment-contract-store-107-forecourt",
+      id: "assignment-contract-store-107-electrical",
       organizationId: NORTHLINE_ORGANIZATION_ID,
-      workOrderId: "wo-contract-store-107-forecourt",
+      workOrderId: "wo-contract-store-107-electrical",
       kind: "outside_vendor",
-      vendorId: "vendor-northline-forecourt",
+      vendorId: "vendor-northline-brightpath",
       status: "accepted",
       assignedAt: "2026-08-11T12:05:00.000Z",
     });
@@ -420,11 +430,11 @@ describe("enterprise service-control presenter contracts", () => {
       submitAction: "/api/ops/action-items/exception-northline-107-no-wo",
     });
     expect(exception.control.reconciliationOptions).toEqual([
-      expect.objectContaining({ value: "wo-contract-store-107-forecourt", label: "CPS-2026-0999" }),
+      expect.objectContaining({ value: "wo-contract-store-107-electrical", label: "CPS-2026-0999" }),
     ]);
     expect(exception.control.unmatchedVisit).toMatchObject({
       createWorkOrderHref: "/app/work-orders/new?sourceException=exception-northline-107-no-wo",
-      providerLabel: "PumpPro Fuel & Dispenser Repair",
+      providerLabel: "BrightLine Electrical & Lighting",
     });
     expect(exception.detail.page.primaryAction?.href).toBe(`/app/visits/${NORTHLINE_DEMO_HANDLES.unmatchedVisitId}`);
     expect(exception.detail.sections.map((section) => section.id)).toEqual(["source-evidence", "timeline"]);

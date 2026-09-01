@@ -395,13 +395,19 @@ describe("operator presenter drill-through contracts", () => {
     );
 
     expect(defaultView.table!.rows).toHaveLength(Number(defaultView.metrics.find((metric) => metric.id === "review")?.value));
+    expect(defaultView.table!.rows).toHaveLength(3);
+    expect(defaultView.table!.rows.map((row) => row.id)).toEqual(expect.arrayContaining([
+      "asset-102-rtu-1",
+      "asset-110-beer-cave",
+      "asset-115-beer-cave",
+    ]));
     expect(defaultView.table!.rows.length).toBeLessThan(fixture.assets.length);
     expect(allEquipment.table!.rows).toHaveLength(25);
     expect(allEquipment.pagination).toMatchObject({ currentPage: 1, totalPages: Math.ceil(fixture.assets.length / 25) });
     expect(allEquipment.pagination?.summary).toBe(`Showing 1–25 of ${fixture.assets.length}`);
     expect(capitalView.table!.rows).toHaveLength(planned.length);
-    expect(capitalView.table!.columns.find((column) => column.key === "evidence")?.label).toBe("Planning basis");
-    expect(capitalView.table!.columns.find((column) => column.key === "status")?.label).toBe("Planning status");
+    expect(capitalView.table!.columns.find((column) => column.key === "evidence")?.label).toBe("Why it is planned");
+    expect(capitalView.table!.columns.find((column) => column.key === "status")?.label).toBe("Funding plan");
     expect(capitalView.table!.rows.every((row) => row.cells.find((cell) => cell.key === "evidence")?.value === "Management-planned replacement")).toBe(true);
     expect(capitalView.table!.rows.some((row) => row.cells.find((cell) => cell.key === "work")?.value === "No active repair decision")).toBe(true);
     expect(JSON.stringify(capitalView.table!.rows)).not.toContain("Current comparison inputs needed");
@@ -409,6 +415,24 @@ describe("operator presenter drill-through contracts", () => {
     expect(planned.length).toBeLessThanOrEqual(10);
     expect(new Set(planned.map((recommendation) => recommendation.plannedForYear)).size).toBeGreaterThanOrEqual(2);
     expect(defaultView.filters?.[0]?.options.map((option) => option.value)).toEqual(["review", "capital", "all"]);
+    expect(defaultView.page.title).toBe("Repair decisions");
+    expect(defaultView.metrics.map((metric) => metric.label)).toEqual([
+      "Decisions needing review",
+      "Repair prices entered",
+      "Replacement estimates ready",
+      "Portfolio planning",
+    ]);
+    expect(defaultView.metrics.map((metric) => metric.value).some((value) => value.startsWith("$"))).toBe(false);
+    expect(defaultView.trends).toHaveLength(0);
+    expect(capitalView.page.title).toBe("Planned replacements");
+    expect(capitalView.metrics.find((metric) => metric.id === "planned-value")?.supportingText).toMatch(/not an approved budget/i);
+    expect(capitalView.trends[0]).toMatchObject({ title: "Planned replacements by funding year" });
+    expect(capitalView.trends[0]?.points.every((point) => point.link.href.includes("plan=management") && point.link.href.includes("view=capital"))).toBe(true);
+    expect(allEquipment.page.title).toBe("Replacement planning register");
+    expect(allEquipment.metrics.map((metric) => metric.label)).not.toContain("Estimated full-scope replacement value");
+    expect(allEquipment.metrics.map((metric) => metric.value).some((value) => value.startsWith("$"))).toBe(false);
+    expect(allEquipment.page.description).toMatch(/does not total.*entire portfolio/i);
+    expect(allEquipment.trends).toHaveLength(0);
   });
 
   it("lands invoice and action-center drill-downs on the promised source rows", () => {

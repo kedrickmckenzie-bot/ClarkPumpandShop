@@ -624,7 +624,10 @@ export interface CreateWorkOrderPageViewModel {
     technicianName: string;
     providerName: string;
     checkedInLabel: string;
+    checkedOutLabel?: string;
     unmatchedReason: string;
+    outcomeLabel?: string;
+    outcomeNotes?: string;
   };
 }
 

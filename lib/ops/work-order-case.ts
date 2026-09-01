@@ -136,6 +136,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     .filter((row) => row.status !== "cancelled")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   const continuations = (input.continuations ?? []).filter((row) => row.workOrderId === workOrder.id);
+  const replacementEvent = latest((input.replacementEvents ?? []).filter((row) => row.workOrderId === workOrder.id), (row) => row.completedAt ?? row.approvedAt);
+  const approvedReplacement = replacementEvent?.status === "approved";
+  const completedReplacement = replacementEvent?.status === "completed";
   const hasContinuation = (action: string, responseId?: string) =>
     continuations.some((row) => row.action === action && (!responseId || row.vendorResponseId === responseId));
   const closeoutTask = openTasks.find((row) => row.taskType === "close_verified_work" || row.taskType === "verify_repair");
@@ -145,10 +148,14 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const fullyClosed = workOrder.status === "closed" || workOrder.status === "cancelled";
   if (fullyClosed) {
     stage = "closed";
+  } else if (completedReplacement) {
+    stage = "cost_invoice_evidence";
   } else if (workOrder.status === "awaiting_approval" || (blockingTask?.taskType ?? "").includes("approval")) {
     stage = "approval";
   } else if (!activeAssignment && blockingTask && blockingTask.serviceRequestId) {
     stage = "intake";
+  } else if (approvedReplacement) {
+    stage = "vendor_response_scheduling";
   } else if (!activeAssignment && estimateRequests.length > 0 && (!selectedEstimateRequest || selectedEstimateRequest.decisionKind === "replacement_quote")) {
     stage = "authorization_or_bidding";
   } else if (!activeAssignment || activeAssignment.kind === "choose_later") {
@@ -211,6 +218,8 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
         ? { label: estimateProposals.length > 0 ? "Review vendor bids" : "Track vendor bid requests", href: `${base}?view=service#bid-requests` }
         : { label: "Issue the service authorization", href: `${base}?view=service#issue-work` },
     vendor_response_scheduling:
+      approvedReplacement ? { label: "Coordinate installation with the selected replacement vendor", href: `${base}?view=service#bid-requests` }
+      :
       liveAppointment?.status === "confirmed" ? { label: "Track the confirmed service appointment", href: `${base}?view=visits` }
       : liveAppointment?.status === "counter_proposed" ? { label: "Track the counterproposal with the vendor", href: `${base}?view=service#vendor-response` }
       : latestResponse?.response === "proposed_date" && !hasContinuation("accept_date", latestResponse.id) && !hasContinuation("counter_date", latestResponse.id) ? { label: "Accept or counter the proposed date", href: `${base}?view=service#vendor-response` }
@@ -246,7 +255,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     : blockingTask?.escalationDestination ?? closeoutFollowUps[0]?.escalationTo ?? workOrder.escalationTo ?? "Facilities";
 
   let blockingReason: string | undefined;
-  if (stage === "vendor_response_scheduling" && liveAppointment?.status === "confirmed") {
+  if (approvedReplacement) {
+    blockingReason = "The replacement quote is approved; installation and final installed cost are not yet recorded.";
+  } else if (stage === "vendor_response_scheduling" && liveAppointment?.status === "confirmed") {
     blockingReason = `${accountableParty || "The vendor"} and the operator confirmed the service appointment.`;
   } else if (blockingTask) blockingReason = blockingTask.reason;
   else if (latestResponse?.response === "declined") blockingReason = "The vendor declined this authorization.";
@@ -254,7 +265,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
 
   const alternativeActions: WorkOrderCaseAction[] = [];
   if (stage !== "closed") {
-    if (!currentIssuance && activeAssignment?.kind !== "internal" && visits.length === 0) alternativeActions.push({ label: "Request vendor bids instead", href: `${base}?view=service#bid-requests` });
+    if (!approvedReplacement && !currentIssuance && activeAssignment?.kind !== "internal" && visits.length === 0) alternativeActions.push({ label: "Request vendor bids instead", href: `${base}?view=service#bid-requests` });
     if (currentIssuance) alternativeActions.push({ label: "Reissue or revise the authorization", href: `${base}?view=service#issue-work` });
     if (estimateRequests.length > 0 && !selectedEstimateRequest) alternativeActions.push({ label: "Compare received proposals", href: `${base}?view=service#bid-requests` });
     if (visits.some((visit) => visit.checkedOutAt)) alternativeActions.push({ label: "Create a follow-up", href: `${base}?view=activity` });
@@ -318,4 +329,6 @@ export interface WorkOrderCaseInput {
   /** Estimate (bid) requests and proposals attached to this work order. */
   estimateRequests?: { id: string; workOrderId: string; status?: string; decisionKind?: "service_bid" | "replacement_quote" }[];
   estimateProposals?: { id: string; requestId: string; kind?: string; status?: string }[];
+  /** Approved/completed replacement facts tied to this canonical work order. */
+  replacementEvents?: Pick<import("./types").ReplacementEvent, "id" | "workOrderId" | "status" | "approvedAt" | "completedAt">[];
 }

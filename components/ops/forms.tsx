@@ -121,10 +121,16 @@ export function CreateWorkOrderForm({ model, componentId, edition = "complete" }
             </div>
           ) : null}
           {model.sourceVisit ? (
-            <div className={styles.formNotice}>
-              <Route aria-hidden="true" size={19} />
-              <p><strong>Documenting work after service began.</strong> {model.sourceVisit.technicianName} from {model.sourceVisit.providerName} checked in {model.sourceVisit.checkedInLabel}. The new work order will be created now and linked by an auditable amendment. It will not backdate authorization or alter the original “{model.sourceVisit.unmatchedReason}” check-in assertion.</p>
-            </div>
+            <>
+              <div className={styles.formNotice}>
+                <Route aria-hidden="true" size={19} />
+                <p><strong>Documenting work after service began.</strong> {model.sourceVisit.technicianName} from {model.sourceVisit.providerName} checked in {model.sourceVisit.checkedInLabel}{model.sourceVisit.checkedOutLabel ? ` and checked out ${model.sourceVisit.checkedOutLabel}` : ""}. The new work order will be linked by an auditable amendment. It will not backdate authorization or alter the original “{model.sourceVisit.unmatchedReason}” check-in assertion.</p>
+              </div>
+              {model.sourceVisit.outcomeNotes ? <div className={styles.formNotice}>
+                <Info aria-hidden="true" size={19} />
+                <p><strong>Technician checkout{model.sourceVisit.outcomeLabel ? ` · ${model.sourceVisit.outcomeLabel}` : ""}.</strong> {model.sourceVisit.outcomeNotes}</p>
+              </div> : null}
+            </>
           ) : null}
           <section className={styles.formSection}>
             <div className={styles.formSectionHeading}><span>1</span><div><h2>Define the work</h2><p>Only the store and problem are required. Classification stays honest when details are not yet known.</p></div></div>

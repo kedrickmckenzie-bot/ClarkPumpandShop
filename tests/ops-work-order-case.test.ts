@@ -270,6 +270,20 @@ describe("stage precedence transition matrix", () => {
     expect(replacement.blockingReason).toMatch(/replacement quote routes to capital review/i);
   });
 
+  it("moves an approved replacement out of provider selection and into installation coordination", () => {
+    const view = buildWorkOrderCase({
+      now: NOW,
+      workOrder: wo("wo-approved-replacement", "issued"),
+      estimateRequests: [{ id: "request-approved-replacement", workOrderId: "wo-approved-replacement", status: "selected", decisionKind: "replacement_quote" }],
+      estimateProposals: [{ id: "proposal-approved-replacement", requestId: "request-approved-replacement", kind: "replacement", status: "received" }],
+      replacementEvents: [{ id: "replacement-approved", workOrderId: "wo-approved-replacement", status: "approved", approvedAt: "2026-08-08T00:00:00.000Z" }],
+    });
+    expect(view.stage).toBe("vendor_response_scheduling");
+    expect(view.primaryNextAction.label).toMatch(/coordinate installation/i);
+    expect(view.blockingReason).toMatch(/replacement quote is approved/i);
+    expect(view.alternativeActions.map((action) => action.label)).not.toContain("Request vendor bids instead");
+  });
+
   it("shows counterproposal pending after an operator counters, and vendor ownership after replying to a question", () => {
     const countered = buildWorkOrderCase({
       now: NOW,

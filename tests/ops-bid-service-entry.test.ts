@@ -120,18 +120,22 @@ describe("work-order vendor path entry", () => {
     const markup = renderToStaticMarkup(createElement(CreateWorkOrderForm, { model }));
     expect(model.defaults).toMatchObject({
       storeId: "store-northline-107",
-      problem: "Inspect intermittent card-reader failure at dispenser 4",
+      problem: "Restore the flickering stockroom light and inspect the loose junction-box cover",
       priority: "routine",
       assignmentKind: "outside_vendor",
-      vendorId: "vendor-northline-forecourt",
+      vendorId: "vendor-northline-brightpath",
     });
     expect(model.sourceVisit).toMatchObject({
       visitId: "visit-northline-107-no-wo",
-      providerName: "PumpPro Fuel & Dispenser Repair",
+      providerName: "BrightLine Electrical & Lighting",
+      outcomeLabel: "Resolved",
+      outcomeNotes: "Replaced the failed LED driver, secured the junction-box cover, and confirmed the stockroom light remained stable before departure.",
     });
     expect(markup).toContain("After-the-fact service record");
     expect(markup).toContain("Documenting work after service began");
     expect(markup).toContain("It will not backdate authorization");
+    expect(markup).toContain("Technician checkout");
+    expect(markup).toContain("Replaced the failed LED driver");
     expect(markup).toContain("Create and link work order");
     expect(markup).toContain("sourceExceptionId");
 
@@ -140,9 +144,9 @@ describe("work-order vendor path entry", () => {
     const formData = new FormData();
     formData.set("storeId", "store-northline-107");
     formData.set("priority", "urgent");
-    formData.set("problem", "Inspect intermittent card-reader failure at dispenser 4");
+    formData.set("problem", "Restore the flickering stockroom light and inspect the loose junction-box cover");
     formData.set("assignmentKind", "outside_vendor");
-    formData.set("vendorId", "vendor-northline-forecourt");
+    formData.set("vendorId", "vendor-northline-brightpath");
     formData.set("sourceExceptionId", "exception-northline-107-no-wo");
 
     const response = await POST(new Request("https://operations.test/api/ops/work-orders", { method: "POST", body: formData }));
@@ -153,16 +157,21 @@ describe("work-order vendor path entry", () => {
     const after = repository.snapshot();
     const beforeIds = new Set(before.workOrders.map((workOrder) => workOrder.id));
     const workOrder = after.workOrders.find((candidate) => !beforeIds.has(candidate.id))!;
-    expect(workOrder).toMatchObject({ storeId: "store-northline-107", status: "in_progress" });
+    expect(workOrder).toMatchObject({ storeId: "store-northline-107", status: "completed_pending_review" });
     expect(after.visits.find((visit) => visit.id === "visit-northline-107-no-wo")?.workOrderId).toBe(workOrder.id);
     expect(after.exceptions.find((exception) => exception.id === "exception-northline-107-no-wo")).toMatchObject({ status: "resolved", workOrderId: workOrder.id });
-    expect(after.assignments.find((assignment) => assignment.workOrderId === workOrder.id)).toMatchObject({ status: "accepted", vendorId: "vendor-northline-forecourt" });
-    expect(after.workflowTasks.find((task) => task.workOrderId === workOrder.id && task.status === "in_progress")).toMatchObject({
-      taskType: "record_service_outcome",
-      assigneeName: "PumpPro Fuel & Dispenser Repair",
-      title: "Record service outcome",
+    expect(after.assignments.find((assignment) => assignment.workOrderId === workOrder.id)).toMatchObject({ status: "accepted", vendorId: "vendor-northline-brightpath" });
+    expect(after.workflowTasks.find((task) => task.workOrderId === workOrder.id && task.status === "open")).toMatchObject({
+      taskType: "verify_repair",
+      assigneeName: "Facilities coordinator",
+      title: "Verify current service outcome",
     });
-    expect(after.siteVisitWorkOrders).toContainEqual(expect.objectContaining({ visitId: "visit-northline-107-no-wo", workOrderId: workOrder.id }));
+    expect(after.siteVisitWorkOrders).toContainEqual(expect.objectContaining({
+      visitId: "visit-northline-107-no-wo",
+      workOrderId: workOrder.id,
+      outcome: "completed",
+      outcomeNotes: "Replaced the failed LED driver, secured the junction-box cover, and confirmed the stockroom light remained stable before departure.",
+    }));
     expect(after.auditEvents).toContainEqual(expect.objectContaining({ aggregateId: "visit-northline-107-no-wo", eventType: "visit.reconciled" }));
     const reconciliation = after.auditEvents.find((event) => event.aggregateId === workOrder.id && event.eventType === "work_order.visit_reconciled");
     expect(JSON.parse(reconciliation!.payloadJson)).toMatchObject({ authorizationTiming: "recorded_after_service_began" });

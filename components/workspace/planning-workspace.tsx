@@ -58,9 +58,9 @@ const workspaceCopy: Record<PlanningWorkspaceKind, {
   lifecycle: {
     label: "Repair or replace",
     basisTitle: "How the comparison works",
-    basis: "The platform calculates how long a repair must keep equipment in service to equal the annualized installed-capital cost of replacement. An entered vendor service estimate is shown separately; age, warranty, repeat work, and past costs remain context, and the final decision stays yours.",
-    sourceTitle: "Lifecycle equipment",
-    sourceDescription: "The default view shows only live repair decisions. Use the view filter to open management-planned capital or the complete equipment register.",
+    basis: "For a current repair, the platform compares the vendor's repair price with that equipment's estimated installed replacement cost and shows the minimum service time the repair would need to justify itself. Replacement estimates remain attached to individual equipment; only management-planned replacements are totaled in the capital view. Age, warranty, repeat work, and past costs remain visible context; the final decision stays yours.",
+    sourceTitle: "Equipment in this view",
+    sourceDescription: "Every row matches the selected view above. Open a row for the repair, replacement estimate, planning source, warranty, and service history behind it.",
   },
 };
 
@@ -188,7 +188,7 @@ function Breakdown({ model }: { model: BreakdownViewModel }) {
 function Trend({ model }: { model: TrendViewModel }) {
   const maximum = Math.max(1, ...model.points.map((point) => Math.max(0, point.value)));
   return (
-    <article className={styles.panel}>
+    <article className={`${styles.panel} ${styles.trendPanel}`}>
       <header><div><h2>{model.title}</h2>{model.description ? <p>{model.description}</p> : null}</div></header>
       {model.points.length ? <div className={styles.trend} role="img" aria-label={model.points.map((point) => `${point.label}: ${point.formattedValue}`).join("; ")}>{model.points.slice(-12).map((point) => <Link href={point.link.href} key={point.id} title={`${point.label}: ${point.formattedValue}`}><strong>{point.formattedValue}</strong><i aria-hidden="true"><span style={{ height: `${Math.max(4, (Math.max(0, point.value) / maximum) * 100)}%` }} /></i><small>{point.label}</small></Link>)}</div> : <div className={styles.empty}><BarChart3 size={19} aria-hidden="true" />No trend records match this context.</div>}
       <footer><Link href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={13} aria-hidden="true" /></Link></footer>
@@ -207,12 +207,12 @@ function ActionQueue({ model, kind }: { model: ProgramPageViewModel; kind: Plann
   );
 }
 
-function SourceTable({ table, title, description, resultSummary, pagination }: { table?: TableViewModel; title: string; description: string; resultSummary?: string; pagination?: ProgramPageViewModel["pagination"] }) {
+function SourceTable({ table, title, description, resultSummary, pagination, preserveScroll = false }: { table?: TableViewModel; title: string; description: string; resultSummary?: string; pagination?: ProgramPageViewModel["pagination"]; preserveScroll?: boolean }) {
   if (!table) return null;
   return (
     <section className={styles.sourceSection}>
       <header><div><p>Supporting records</p><h2>{title}</h2><span>{description}</span></div><strong>{resultSummary ?? `${table.rows.length} shown`}</strong></header>
-      {table.rows.length ? <div className={styles.tableScroller}><table><caption className={styles.visuallyHidden}>{table.caption}</caption><thead><tr>{table.columns.map((column) => <th data-align={column.align} key={column.key}>{column.label}</th>)}</tr></thead><tbody>{table.rows.map((row) => <tr key={row.id}>{table.columns.map((column, index) => { const cell = row.cells.find((candidate) => candidate.key === column.key); return <td data-align={column.align} className={cell?.tone ? toneClass(cell.tone) : undefined} key={column.key}><Link href={row.href}><span><strong>{cell?.value ?? "—"}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</span>{index === table.columns.length - 1 ? <ChevronRight size={14} aria-hidden="true" /> : null}</Link></td>; })}</tr>)}</tbody></table></div> : <div className={styles.empty}><Inbox size={19} aria-hidden="true" />No source records match this context.</div>}
+      {table.rows.length ? <div className={styles.tableScroller}><table><caption className={styles.visuallyHidden}>{table.caption}</caption><thead><tr>{table.columns.map((column) => <th data-align={column.align} key={column.key}>{column.label}</th>)}</tr></thead><tbody>{table.rows.map((row) => <tr key={row.id}>{table.columns.map((column, index) => { const cell = row.cells.find((candidate) => candidate.key === column.key); return <td data-align={column.align} className={cell?.tone ? toneClass(cell.tone) : undefined} key={column.key}><Link href={row.href} scroll={!preserveScroll}><span><strong>{cell?.value ?? "—"}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</span>{index === table.columns.length - 1 ? <ChevronRight size={14} aria-hidden="true" /> : null}</Link></td>; })}</tr>)}</tbody></table></div> : <div className={styles.empty}><Inbox size={19} aria-hidden="true" />No source records match this context.</div>}
       {pagination ? <PaginationControls pagination={pagination} label="Supporting record pages" /> : null}
     </section>
   );
@@ -227,7 +227,7 @@ function LifecycleContext({ model }: { model: ProgramPageViewModel }) {
   if (!model.breakdowns.length && !model.trends.length) return null;
   return (
     <details className={styles.administration} suppressHydrationWarning>
-      <summary><span><BarChart3 size={18} aria-hidden="true" /><span><strong>Capital outlook and comparison method</strong><small>Replacement timing, portfolio totals, and the transparent calculation</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary>
+      <summary><span><BarChart3 size={18} aria-hidden="true" /><span><strong>Planning analysis for this view</strong><small>Only the selected records, with the basis and limits stated</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary>
       <div><section className={styles.insights} aria-label="Repair and replacement context">{model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}{model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}</section></div>
     </details>
   );
@@ -267,7 +267,7 @@ export function PlanningWorkspace({
           {programManagement}
           <PmContext model={model} />
         </> : kind === "lifecycle" ? <>
-          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
+          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} preserveScroll />
           <LifecycleContext model={model} />
           <LifecycleAdministration>{administration}</LifecycleAdministration>
         </> : <>
