@@ -39,7 +39,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
   return (
     <DetailView
       model={model}
-      initialSection={requestedSection}
+      initialSection={requestedSection ?? "service-history"}
       beforeSections={(
         <>
         {replacement ? <AssetReplacementIntelligencePanel model={replacement} /> : null}

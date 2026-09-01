@@ -361,10 +361,10 @@ describe("enterprise service-control presenter contracts", () => {
     expect(all.table.rows.map((row) => row.id).sort()).toEqual([...exceptionIds, ...followUpIds, ...vendorReminderIds].sort());
     expect(all.table.rows.filter((row) => !vendorReminderIds.includes(row.id)).every((row) => row.href === `/app/action-center/${row.id}`)).toBe(true);
     expect(all.table.rows.filter((row) => vendorReminderIds.includes(row.id)).every((row) => row.href.includes("/app/vendors/") && row.href.endsWith("#vendor-reminders"))).toBe(true);
-    expect(all.metrics?.find((metric) => metric.id === "attention-all")?.value).toBe(String(all.table.rows.length));
-    expect(all.metrics?.find((metric) => metric.id === "attention-exceptions")?.value).toBe(String(exceptionIds.length));
+    expect(all.metrics).toHaveLength(4);
+    expect(all.metrics?.find((metric) => metric.id === "attention-service")?.value).toBe(String(exceptionIds.length));
     expect(all.metrics?.find((metric) => metric.id === "attention-followups")?.value).toBe(String(followUpIds.length));
-    expect(all.metrics?.find((metric) => metric.id === "attention-vendor-reminders")?.value).toBe(String(vendorReminderIds.length));
+    expect(all.metrics?.find((metric) => metric.id === "attention-vendor-tasks")?.value).toBe(String(vendorReminderIds.length));
 
     const exceptions = buildListModel(fixture, session, "action-center", { type: "exception" });
     const followUps = buildListModel(fixture, session, "action-center", { type: "follow-up" });
@@ -374,6 +374,12 @@ describe("enterprise service-control presenter contracts", () => {
     expect(exceptions.table.rows.some((row) => followUpIds.includes(row.id))).toBe(false);
     expect(followUps.table.rows.every((row) => followUpIds.includes(row.id))).toBe(true);
     expect(followUps.table.rows.some((row) => exceptionIds.includes(row.id))).toBe(false);
+    const checkoutFollowUp = followUps.table.rows.find((row) => row.id === "follow-up-recent-aug-108-electrical");
+    expect(checkoutFollowUp).toBeDefined();
+    expect(cell(checkoutFollowUp!, "item")).toBe("Send an updated estimate and proposed return date");
+    expect(checkoutFollowUp?.cells.find((item) => item.key === "item")?.secondary).toBe(
+      "Created from a checkout result. Open the visit to read the technician's notes.",
+    );
     expect(vendorReminders.table.rows.every((row) => vendorReminderIds.includes(row.id))).toBe(true);
     expect(urgent.table.rows.every((row) => ["Urgent", "Overdue"].includes(cell(row, "priority") ?? ""))).toBe(true);
 
@@ -392,7 +398,7 @@ describe("enterprise service-control presenter contracts", () => {
     const standardHref = standardOption.href;
     expect(queryValue(followUpHref, "type")).toBe("follow-up");
     expect(queryValue(followUpHref, "priority")).toBe("urgent");
-    expect(queryValue(standardHref, "type")).toBe("exception");
+    expect(queryValue(standardHref, "type")).toBe("service-record");
     expect(queryValue(standardHref, "priority")).toBe("standard");
   });
 
@@ -442,6 +448,7 @@ describe("enterprise service-control presenter contracts", () => {
 
     const followUpId = "follow-up-recent-aug-102-hvac";
     const sourceFollowUp = fixture.followUps.find((candidate) => candidate.id === followUpId)!;
+    const sourceWork = fixture.workOrders.find((candidate) => candidate.id === sourceFollowUp.workOrderId)!;
     const followUp = buildAttentionItemModel(fixture, operatorSession("facilities"), followUpId);
     expect(followUp.control).toMatchObject({
       available: true,
@@ -455,8 +462,74 @@ describe("enterprise service-control presenter contracts", () => {
     expect(followUp.control.dueAt).toBe(sourceFollowUp.dueAt.slice(0, 16));
     expect(followUp.detail.page.primaryAction?.href).toBe(`/app/work-orders/${sourceFollowUp.workOrderId}`);
     expect(followUp.detail.page.secondaryAction?.href).toBe(`/app/visits/${sourceFollowUp.sourceVisitId}`);
-    expect(followUp.detail.sections.map((section) => section.id)).toEqual(["required-action", "timeline"]);
+    expect(followUp.detail.facts.find((fact) => fact.label === "Equipment")?.link?.href).toBe(
+      `/app/equipment/${sourceWork.assetId}?section=service-history`,
+    );
+    expect(followUp.detail.sections.map((section) => section.id)).toEqual(["required-action", "service-visits", "timeline"]);
+    const serviceVisitSection = followUp.detail.sections.find((section) => section.id === "service-visits");
+    expect(serviceVisitSection?.table?.rows).toHaveLength(1);
+    expect(serviceVisitSection?.table?.rows[0]).toMatchObject({
+      id: sourceFollowUp.sourceVisitId,
+      href: `/app/visits/${sourceFollowUp.sourceVisitId}`,
+    });
+    expect(serviceVisitSection?.table?.rows[0]?.cells.find((item) => item.key === "outcome")).toMatchObject({
+      secondary: expect.stringContaining("failed condenser-fan motor"),
+    });
+    expect(serviceVisitSection?.timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: "Technician checkout note",
+        description: expect.stringContaining("failed condenser-fan motor"),
+        link: { href: `/app/visits/${sourceFollowUp.sourceVisitId}`, label: "Open visit" },
+      }),
+    ]));
     expect(buildAttentionItemModel(fixture, operatorSession("executive"), followUpId).control.permitted).toBe(false);
+  });
+
+  it("keeps visit and note history on open and closed work-order records", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const session = operatorSession("facilities");
+
+    for (const workOrderId of ["wo-recent-aug-108-electrical", "wo-recent-aug-103-electrical"]) {
+      const detail = buildDetailModel(fixture, session, "work-order", workOrderId);
+      const originalRequest = detail.sections.find((section) => section.id === "original-request");
+      const history = detail.sections.find((section) => section.id === "visits");
+
+      expect(detail.state.kind).toBe("ready");
+      expect(originalRequest).toMatchObject({
+        title: "Original store report",
+        description: expect.any(String),
+        action: { label: "Open original report", href: expect.stringMatching(/^\/app\/requests\//) },
+      });
+      expect(originalRequest?.facts?.map((fact) => fact.label)).toEqual([
+        "Request",
+        "Reported by",
+        "Reported",
+        "Original priority",
+      ]);
+      expect(history?.title).toBe("Service visits and notes");
+      expect(history?.tableHeading).toBe("Check-in and checkout history");
+      expect(history?.table?.rows.length).toBeGreaterThan(0);
+      expect(history?.table?.rows[0]?.cells.find((item) => item.key === "outcome")?.secondary).not.toBe("No checkout note recorded");
+      expect(history?.timelineHeading).toBe("Notes and updates");
+      expect(history?.timeline).toEqual(expect.arrayContaining([
+        expect.objectContaining({ title: "Technician checkout note", link: expect.objectContaining({ label: "Open visit" }) }),
+      ]));
+    }
+
+    const electrical = buildDetailModel(fixture, session, "work-order", "wo-recent-aug-108-electrical");
+    expect(electrical.sections.find((section) => section.id === "original-request")?.description).toBe(
+      "Two canopy-lighting circuits remain dark after lamp replacement",
+    );
+    expect(electrical.sections.find((section) => section.id === "visits")?.timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: "Technician checkout note",
+        description: expect.stringContaining("underground-feed fault"),
+      }),
+      expect.objectContaining({
+        title: "Vendor response · Question",
+        description: expect.stringContaining("overnight lift access"),
+      }),
+    ]));
   });
 
   it("builds a vendor accountability workspace from responses, work, visits, coverage, and open actions", () => {

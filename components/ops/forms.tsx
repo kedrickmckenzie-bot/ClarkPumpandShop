@@ -94,7 +94,7 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
   );
 }
 
-export function CreateWorkOrderForm({ model, componentId, edition = "complete" }: { model: CreateWorkOrderPageViewModel; componentId?: string; edition?: DemoEdition }) {
+export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-order:test-render", edition = "complete" }: { model: CreateWorkOrderPageViewModel; componentId?: string; submissionKey?: string; edition?: DemoEdition }) {
   const accountabilityOnly = edition === "accountability";
   const sourceStoreLabel = model.sourceVisit ? model.stores.find((store) => store.value === model.defaults?.storeId)?.label : undefined;
   const sourceVendorLabel = model.sourceVisit ? model.vendors.find((vendor) => vendor.value === model.defaults?.vendorId)?.label : undefined;
@@ -105,7 +105,9 @@ export function CreateWorkOrderForm({ model, componentId, edition = "complete" }
       <ModelState state={model.state} />
       {model.state.kind === "ready" ? (
         <form className={styles.recordForm} action={model.submitAction} method="post">
+          <input type="hidden" name="submissionKey" value={submissionKey} />
           {model.sourceRequest ? <input type="hidden" name="requestId" value={model.sourceRequest.id} /> : null}
+          {model.sourcePm ? <input type="hidden" name="pmOccurrenceId" value={model.sourcePm.occurrenceId} /> : null}
           {model.sourceVisit ? <input type="hidden" name="sourceExceptionId" value={model.sourceVisit.exceptionId} /> : null}
           {componentId ? <input type="hidden" name="componentId" value={componentId} /> : null}
           {componentId ? (
@@ -118,6 +120,12 @@ export function CreateWorkOrderForm({ model, componentId, edition = "complete" }
             <div className={styles.formNotice}>
               <Info aria-hidden="true" size={19} />
               <p><strong>Converting {model.sourceRequest.reference}.</strong> Reported by {model.sourceRequest.reporterName} {model.sourceRequest.submittedLabel}. The original request remains in the audit trail.</p>
+            </div>
+          ) : null}
+          {model.sourcePm ? (
+            <div className={styles.formNotice}>
+              <Info aria-hidden="true" size={19} />
+              <p><strong>Creating work for {model.sourcePm.planName}.</strong> This {model.sourcePm.statusLabel.toLocaleLowerCase("en-US")} occurrence was due {model.sourcePm.dueLabel}. The occurrence, work order, visit, outcome, and future cost evidence will stay connected.</p>
             </div>
           ) : null}
           {model.sourceVisit ? (

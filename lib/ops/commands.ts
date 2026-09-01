@@ -69,6 +69,11 @@ function required(value: string, label: string) {
 
 function json(value: unknown) { return JSON.stringify(value); }
 
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 const terminalWorkOrderStatuses = new Set<WorkOrderStatus>(["closed", "cancelled"]);
 
 /**
@@ -617,7 +622,7 @@ export async function createServiceRequest(svc: OpsCommandServices, input: Creat
 }
 
 export interface CreateWorkOrderInput {
-  organizationId: OpsId; number?: string; storeId: OpsId; requestId?: OpsId; problem: string;
+  organizationId: OpsId; number?: string; storeId: OpsId; requestId?: OpsId; pmOccurrenceId?: OpsId; problem: string;
   authorizedScope?: string; categoryKey?: string; taxonomyNodeId?: OpsId; assetId?: OpsId; componentId?: OpsId;
   priority?: WorkOrderPriority; accountableParty: string; nextAction: string; dueAt?: IsoDateTime;
   escalationTo?: string; nteAmountMinor?: number; currency?: string;
@@ -634,15 +639,42 @@ export interface CreateWorkOrderInput {
     internalReviewThresholdAmountMinor?: number;
     currency?: string;
   };
+  idempotency?: CommandIdempotency;
   actor: ActorContext;
 }
 
 export async function createWorkOrder(svc: OpsCommandServices, input: CreateWorkOrderInput) {
   const { repository, clock, ids } = services(svc); assertActorOrganization(input.actor, input.organizationId);
+  const now = clock.now();
+  if (input.idempotency) {
+    const prior = await repository.getIdempotencyKey(input.organizationId, input.idempotency.key);
+    if (prior) {
+      if (prior.command !== input.idempotency.command || prior.requestHash.toLowerCase() !== input.idempotency.requestHash.toLowerCase()) {
+        throw new OpsDomainError("CONFLICT", "This submission key was already used for different work-order details");
+      }
+      const existing = await repository.getWorkOrder(input.organizationId, prior.resultId);
+      if (!existing) throw new OpsDomainError("CONFLICT", "The prior work-order submission cannot be recovered");
+      const [initialAssignment, approvalRequests, visitHold] = await Promise.all([
+        repository.getActiveAssignment(input.organizationId, existing.id),
+        repository.listApprovalRequestsForSubject(input.organizationId, "work_order", existing.id),
+        repository.getWorkOrderVisitHold(input.organizationId, existing.id),
+      ]);
+      return { ...existing, initialAssignment: initialAssignment ?? undefined, approvalRequest: approvalRequests[0], visitHoldId: visitHold?.id, replayed: true as const };
+    }
+  }
   const store = await repository.getStore(input.organizationId, input.storeId);
   if (!store) throw new OpsDomainError("NOT_FOUND", "Store not found in organization");
+  if (input.requestId && input.pmOccurrenceId) throw new OpsDomainError("VALIDATION", "A work order cannot begin from both a store request and a PM occurrence");
   let sourceReviewTasks: WorkflowTask[] = [];
   let sourceRequest: ServiceRequest | undefined;
+  const sourcePmOccurrence = input.pmOccurrenceId
+    ? await repository.getPmOccurrence(input.organizationId, input.pmOccurrenceId)
+    : undefined;
+  if (input.pmOccurrenceId) {
+    if (!sourcePmOccurrence || sourcePmOccurrence.storeId !== input.storeId) throw new OpsDomainError("NOT_FOUND", "PM occurrence not found for this store and organization");
+    if (sourcePmOccurrence.workOrderId) throw new OpsDomainError("CONFLICT", "This PM occurrence already has a canonical work order");
+    if (!["due", "missed", "scheduled", "proposed"].includes(sourcePmOccurrence.status)) throw new OpsDomainError("CONFLICT", "This PM occurrence is not available for work-order creation");
+  }
   if (input.requestId) {
     const request = await repository.getRequest(input.organizationId, input.requestId);
     if (!request || request.storeId !== input.storeId) throw new OpsDomainError("NOT_FOUND", "Request not found for this store and organization");
@@ -718,7 +750,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   if (input.initialAssignment?.kind === "choose_later" && (input.initialAssignment.vendorId || input.initialAssignment.internalMembershipId)) {
     throw new OpsDomainError("VALIDATION", "Choose later cannot include a provider");
   }
-  const now = clock.now(); const id = ids.next("work-order");
+  const id = ids.next("work-order");
   if (input.holdForVisit) {
     if (!input.categoryKey) throw new OpsDomainError("VALIDATION", "Choose a service category before approving work for later");
     if (input.initialAssignment && input.initialAssignment.kind !== "choose_later") throw new OpsDomainError("VALIDATION", "Held work cannot also be assigned to a provider");
@@ -761,6 +793,27 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   const dueAt = approval.request?.dueAt ?? input.holdForVisit?.deadlineAt ?? input.dueAt ?? defaultWorkOrderDueAt(priority, now);
   const escalationTo = required(input.escalationTo ?? "Facilities director", "Escalation destination");
   const statements: OpsStatement[] = [insert("ops_work_orders", { id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
+  if (input.idempotency) statements.unshift(idempotencyStatement(input.organizationId, id, now, input.idempotency));
+  if (sourcePmOccurrence) {
+    const sourceProgram = sourcePmOccurrence.programId
+      ? await repository.getMaintenanceProgram(input.organizationId, sourcePmOccurrence.programId)
+      : null;
+    statements.unshift(idempotencyStatement(input.organizationId, id, now, {
+      key: `pm-occurrence:${sourcePmOccurrence.id}:work-order`,
+      command: "create_pm_work_order",
+      requestHash: await sha256Hex(`${input.organizationId}:${sourcePmOccurrence.id}:${input.storeId}`),
+      expiresAt: "9999-12-31T23:59:59.999Z",
+    }));
+    statements.push({ sql: "UPDATE ops_pm_occurrences SET work_order_id = ? WHERE organization_id = ? AND id = ? AND store_id = ? AND work_order_id IS NULL", params: [id, input.organizationId, sourcePmOccurrence.id, input.storeId] });
+    if (sourcePmOccurrence.assetId && sourceProgram) {
+      statements.push(insert("ops_pm_work_items", {
+        id: ids.next("pm-work-item"), organization_id: input.organizationId,
+        occurrence_id: sourcePmOccurrence.id, work_order_id: id, asset_id: sourcePmOccurrence.assetId,
+        required_task: sourceProgram.completionCriteria, checklist_template_id: sourceProgram.checklistTemplateId,
+        status: "pending", currency: sourceProgram.currency, created_at: now,
+      }));
+    }
+  }
   const visitHoldId = input.holdForVisit ? ids.next("visit-hold") : undefined;
   if (input.holdForVisit) {
     statements.push(insert("ops_work_order_visit_holds", {
@@ -778,7 +831,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   sourceReviewTasks.filter((task) => task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => {
     statements.push(...buildCompleteWorkflowTaskStatements({ task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Impact review completed; converted to ${number}` }));
   });
-  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.created", actor: input.actor, occurredAt: now, payload: { number, storeId: input.storeId, requestId: input.requestId, classified: Boolean(input.categoryKey), assetLinked: Boolean(input.assetId), repairPlanning: input.repairEstimateAmountMinor === undefined && input.estimatedServiceExtensionMonths === undefined ? undefined : { repairEstimateAmountMinor: input.repairEstimateAmountMinor, repairEstimateCurrency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimatedServiceExtensionMonths: input.estimatedServiceExtensionMonths } }, ids }));
+  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.created", actor: input.actor, occurredAt: now, payload: { number, storeId: input.storeId, requestId: input.requestId, pmOccurrenceId: input.pmOccurrenceId, classified: Boolean(input.categoryKey), assetLinked: Boolean(input.assetId), repairPlanning: input.repairEstimateAmountMinor === undefined && input.estimatedServiceExtensionMonths === undefined ? undefined : { repairEstimateAmountMinor: input.repairEstimateAmountMinor, repairEstimateCurrency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimatedServiceExtensionMonths: input.estimatedServiceExtensionMonths } }, ids }));
   if (input.holdForVisit) statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.visit_hold_created", actor: input.actor, occurredAt: now, payload: { holdId: visitHoldId, posture: input.holdForVisit.posture, deadlineAt: input.holdForVisit.deadlineAt, internalReviewThresholdRecorded: input.holdForVisit.internalReviewThresholdAmountMinor !== undefined, thresholdMeaning: "internal_invoice_review_not_vendor_price_or_authorization" }, ids }));
   let initialAssignment: Awaited<ReturnType<typeof assignWorkOrder>> | undefined;
   if (input.initialAssignment) {

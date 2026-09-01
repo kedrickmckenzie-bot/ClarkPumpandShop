@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CreateWorkOrderForm } from "@/components/ops/forms";
 import { loadCreateWorkOrderModel, loadOperatorSession } from "../../_data/operator-loader";
+import { randomUUID } from "node:crypto";
 
 export const metadata: Metadata = { title: "Create work order" };
 
@@ -16,5 +17,5 @@ export default async function NewWorkOrderPage({ searchParams }: { searchParams:
   if (session.demoEdition === "accountability") {
     model.page.description = "Create the customer work-order number the vendor will receive and select during check-in.";
   }
-  return <CreateWorkOrderForm model={model} componentId={componentId} edition={session.demoEdition} />;
+  return <CreateWorkOrderForm model={model} componentId={componentId} submissionKey={`work-order:${randomUUID()}`} edition={session.demoEdition} />;
 }

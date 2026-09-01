@@ -178,6 +178,23 @@ function ContextualNavigation({
   );
 }
 
+const recordDetailRoots = new Set([
+  "action-center",
+  "equipment",
+  "invoices",
+  "requests",
+  "stores",
+  "vendors",
+  "visits",
+  "warranties",
+  "work-orders",
+]);
+
+function isRecordDetailPath(pathname: string) {
+  const parts = pathname.split("/").filter(Boolean);
+  return parts[0] === "app" && parts.length >= 3 && recordDetailRoots.has(parts[1]);
+}
+
 function UserSummary({ session }: { session: OperatorSession }) {
   const initials = session.displayName
     .split(/\s+/)
@@ -327,7 +344,9 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
             </div>
             <CreateMenu role={session.role} edition={edition} />
           </header>
-          <ContextualNavigation session={session} pathname={pathname} edition={edition} />
+          {!isRecordDetailPath(pathname) ? (
+            <ContextualNavigation session={session} pathname={pathname} edition={edition} />
+          ) : null}
         </div>
 
         <main className={styles.main} id="main-content" tabIndex={-1}>{children}</main>

@@ -73,19 +73,24 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
 
       <div className={styles.moneyRow}>
         <Link className={styles.moneyCell} href={model.primaryNextAction.href}>
-          <span className={styles.moneyLabel}>{terminal ? "Record" : "Next step"}</span>
+          <span className={styles.moneyLabel}>{terminal ? "Record" : "Recommended action"}</span>
           <strong>{model.primaryNextAction.label}</strong>
-          <span className={styles.moneyNote}>{terminal ? "This case has no open action or escalation." : "The one action that moves this work forward."}</span>
-          <span className={styles.actionPrompt}>Open this step<ArrowRight aria-hidden="true" size={14} /></span>
+          <span className={styles.moneyNote}>{terminal ? "This case has no open action or escalation." : "The most likely action for this status; supporting records and other tools remain available."}</span>
+          <span className={styles.actionPrompt}>Open action<ArrowRight aria-hidden="true" size={14} /></span>
         </Link>
-        {model.alternativeActions.map((action) => (
-          <Link className={styles.moneyCell} key={action.href + action.label} href={action.href}>
-            <span className={styles.moneyLabel}>Another option</span>
-            <strong>{action.label}</strong>
-            <span className={styles.actionPrompt}>Open option<ArrowRight aria-hidden="true" size={14} /></span>
-          </Link>
-        ))}
       </div>
+      {model.alternativeActions.length ? (
+        <details className={styles.alternativeDisclosure}>
+          <summary>Other actions and supporting records</summary>
+          <div>
+            {model.alternativeActions.map((action) => (
+              <Link key={action.href + action.label} href={action.href}>
+                <span>{action.label}</span><ArrowRight aria-hidden="true" size={14} />
+              </Link>
+            ))}
+          </div>
+        </details>
+      ) : null}
     </section>
   );
 }

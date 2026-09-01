@@ -24,7 +24,7 @@ function postureLabel(posture: HeldWorkActionsModel["hold"] extends infer T
 }
 
 export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
-  if (!model.permitted && !model.hold) return null;
+  if (!model.hold && (!model.permitted || !model.eligible)) return null;
   const hold = model.hold;
   const openHold = hold && ["active", "review_required"].includes(hold.status);
   const stateTitle = hold?.status === "claimed"

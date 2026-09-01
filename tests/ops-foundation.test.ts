@@ -131,7 +131,7 @@ describe("operations fixtures", () => {
   it("keeps PM completion evidence independent of unrelated reactive work", () => {
     const fixture = buildNorthlinePresentationFixture();
     expect(fixture.pmOccurrences.some((row) => row.status === "completed" && row.workOrderId)).toBe(true);
-    expect(fixture.pmOccurrences.some((row) => row.status === "completed" && !row.workOrderId)).toBe(true);
+    expect(fixture.pmOccurrences.some((row) => row.status === "completed" && !row.workOrderId && row.result?.startsWith("Manager-attested historical completion"))).toBe(true);
     expect(fixture.pmOccurrences.filter((row) => row.status === "completed").every((row) => row.completedAt && row.completedAt >= row.windowStartsAt && row.completedAt <= row.windowEndsAt)).toBe(true);
   });
 });
@@ -193,6 +193,34 @@ describe("canonical work and provider commands", () => {
       estimatedServiceExtensionMonths: 12,
       actor,
     })).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("creates one recoverable canonical work order for a PM occurrence", async () => {
+    const svc = commandServices();
+    const fixture = (svc.repository as ReturnType<typeof createNorthlineFixtureRepository>).snapshot();
+    const occurrence = fixture.pmOccurrences.find((row) => row.status === "due" && !row.workOrderId && row.assetId)!;
+    const asset = fixture.assets.find((row) => row.id === occurrence.assetId)!;
+    const input = {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: occurrence.storeId,
+      pmOccurrenceId: occurrence.id,
+      problem: "Complete scheduled preventive maintenance",
+      categoryKey: asset.categoryKey,
+      assetId: asset.id,
+      priority: "planned" as const,
+      accountableParty: "Facilities coordinator",
+      nextAction: "Choose service provider",
+      idempotency: { key: "work-order:pm-test-0001", command: "create_work_order", requestHash: "a".repeat(64), expiresAt: "2027-08-10T19:00:00.000Z" },
+      actor,
+    };
+    const created = await createWorkOrder(svc, input);
+    const replayed = await createWorkOrder(svc, input);
+    expect(replayed.id).toBe(created.id);
+    expect(replayed).toMatchObject({ replayed: true });
+    const snapshot = (svc.repository as ReturnType<typeof createNorthlineFixtureRepository>).snapshot();
+    expect(snapshot.pmOccurrences.find((row) => row.id === occurrence.id)?.workOrderId).toBe(created.id);
+    expect(snapshot.pmWorkItems.some((row) => row.occurrenceId === occurrence.id && row.workOrderId === created.id)).toBe(true);
+    expect(snapshot.workOrders.filter((row) => row.id === created.id)).toHaveLength(1);
   });
 
   it("binds issued links to one immutable revision and keeps proposed dates pending facilities review", async () => {

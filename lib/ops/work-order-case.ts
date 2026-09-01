@@ -209,16 +209,16 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const base = `/app/work-orders/${workOrder.id}`;
   const stageActions: Partial<Record<WorkOrderCanonicalStageId, WorkOrderCaseAction>> = {
     intake: { label: "Review the request", href: blockingTask ? `/app/action-center/${blockingTask.id}` : `${base}?view=overview` },
-    approval: { label: blockingTask ? `Record the ${blockingTask.title.toLowerCase()}` : "Record the approval decision", href: blockingTask ? `/app/action-center/${blockingTask.id}` : `${base}?view=activity` },
+    approval: { label: blockingTask?.title ?? "Review the approval decision", href: blockingTask ? `/app/action-center/${blockingTask.id}` : `${base}?view=activity` },
     provider_decision: { label: activeAssignment?.kind === "choose_later" ? "Choose a provider" : "Choose internal maintenance, direct authorization, or bids", href: `${base}?view=service` },
     authorization_or_bidding:
       selectedEstimateRequest?.decisionKind === "replacement_quote"
-        ? { label: "Advance the selected replacement quote to capital review", href: `${base}?view=service#bid-requests` }
+        ? { label: "Advance the selected replacement quote to capital review", href: `${base}?view=service&path=bids#bid-requests` }
       : estimateRequests.length > 0 && !selectedEstimateRequest
-        ? { label: estimateProposals.length > 0 ? "Review vendor bids" : "Track vendor bid requests", href: `${base}?view=service#bid-requests` }
-        : { label: "Issue the service authorization", href: `${base}?view=service#issue-work` },
+        ? { label: estimateProposals.length > 0 ? "Review vendor bids" : "Track vendor bid requests", href: `${base}?view=service&path=bids#bid-requests` }
+        : { label: "Issue the service authorization", href: `${base}?view=service&path=direct#issue-work` },
     vendor_response_scheduling:
-      approvedReplacement ? { label: "Coordinate installation with the selected replacement vendor", href: `${base}?view=service#bid-requests` }
+      approvedReplacement ? { label: "Coordinate installation with the selected replacement vendor", href: `${base}?view=service&path=bids#bid-requests` }
       :
       liveAppointment?.status === "confirmed" ? { label: "Track the confirmed service appointment", href: `${base}?view=visits` }
       : liveAppointment?.status === "counter_proposed" ? { label: "Track the counterproposal with the vendor", href: `${base}?view=service#vendor-response` }
@@ -232,7 +232,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
         ? { label: blockingTask.title, href: `/app/action-center/${blockingTask.id}` }
         : { label: activeAssignment?.kind === "internal" ? "Start internal service" : "Open visit activity", href: `${base}?view=visits` },
     followup_closeout: closeoutFollowUps.length > 0
-      ? { label: "Complete or transfer the required follow-up", href: `${base}?view=activity` }
+      ? { label: "Complete or transfer the required follow-up", href: `/app/action-center/${closeoutFollowUps[0].id}` }
       : closeoutTask
         ? { label: closeoutTask.title, href: `${base}?view=activity#work-control` }
       : { label: "Complete the manager closeout review", href: `${base}?view=visits` },
@@ -265,9 +265,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
 
   const alternativeActions: WorkOrderCaseAction[] = [];
   if (stage !== "closed") {
-    if (!approvedReplacement && !currentIssuance && activeAssignment?.kind !== "internal" && visits.length === 0) alternativeActions.push({ label: "Request vendor bids instead", href: `${base}?view=service#bid-requests` });
-    if (currentIssuance) alternativeActions.push({ label: "Reissue or revise the authorization", href: `${base}?view=service#issue-work` });
-    if (estimateRequests.length > 0 && !selectedEstimateRequest) alternativeActions.push({ label: "Compare received proposals", href: `${base}?view=service#bid-requests` });
+    if (!approvedReplacement && !currentIssuance && activeAssignment?.kind !== "internal" && visits.length === 0) alternativeActions.push({ label: "Request vendor bids instead", href: `${base}?view=service&path=bids#bid-requests` });
+    if (currentIssuance) alternativeActions.push({ label: "Review the issued authorization", href: `${base}?view=service` });
+    if (estimateRequests.length > 0 && !selectedEstimateRequest) alternativeActions.push({ label: "Compare received proposals", href: `${base}?view=service&path=bids#bid-requests` });
     if (visits.some((visit) => visit.checkedOutAt)) alternativeActions.push({ label: "Create a follow-up", href: `${base}?view=activity` });
     if (hasCost || hasInvoices) alternativeActions.push({ label: "Open cost and invoice evidence", href: `${base}?view=cost` });
     alternativeActions.push({ label: "View full activity history", href: `${base}?view=activity` });

@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { issueWorkOrderToVendor } from "@/lib/server/work-order-issuance";
+import { createHash, randomUUID } from "node:crypto";
 
 const priorities = new Set(["routine", "urgent", "emergency", "planned"]);
 const assignmentKinds = new Set(["internal", "outside_vendor", "bid_request", "hold_for_visit", "choose_later"]);
@@ -27,6 +28,15 @@ export async function POST(request: Request) {
   try {
     const context = await getOpsRequestContext(["facilities", "regional"]);
     const formData = await request.formData();
+    const submissionKey = formText(formData, "submissionKey", { max: 120 }) || `work-order:${randomUUID()}`;
+    const requestHash = createHash("sha256")
+      .update([...formData.entries()]
+        .filter(([key]) => key !== "submissionKey")
+        .map(([key, value]) => `${key}=${typeof value === "string" ? value : `${value.name}:${value.size}`}`)
+        .sort()
+        .join("\n"))
+      .digest("hex");
+    const priorSubmission = await context.repository.getIdempotencyKey(context.session.organizationId, submissionKey);
     const storeId = formText(formData, "storeId", { required: true, max: 120 });
     const priority = formText(formData, "priority", { required: true, max: 20 });
     const assignmentKind = formText(formData, "assignmentKind", { required: true, max: 30 });
@@ -53,13 +63,14 @@ export async function POST(request: Request) {
     const internalMembershipId = formText(formData, "internalMembershipId", { max: 120 }) || undefined;
     const sourceExceptionId = formText(formData, "sourceExceptionId", { max: 120 }) || undefined;
     let sourceVisit: Awaited<ReturnType<typeof context.repository.getVisit>> | undefined;
+    let sourceException: Awaited<ReturnType<typeof context.repository.getException>> | undefined;
     if (sourceExceptionId) {
-      const sourceException = await context.repository.getException(context.session.organizationId, sourceExceptionId);
-      if (!sourceException || sourceException.kind !== "no_work_order" || sourceException.status === "resolved" || !sourceException.visitId) {
+      sourceException = await context.repository.getException(context.session.organizationId, sourceExceptionId) ?? undefined;
+      if (!sourceException || sourceException.kind !== "no_work_order" || (!priorSubmission && sourceException.status === "resolved") || !sourceException.visitId) {
         throw new OpsDomainError("CONFLICT", "The unmatched-visit review item is no longer available.");
       }
       sourceVisit = await context.repository.getVisit(context.session.organizationId, sourceException.visitId) ?? undefined;
-      if (!sourceVisit || sourceVisit.workOrderId || sourceVisit.storeId !== storeId) {
+      if (!sourceVisit || (!priorSubmission && sourceVisit.workOrderId) || sourceVisit.storeId !== storeId) {
         throw new OpsDomainError("CONFLICT", "The visit is already linked or does not belong to the selected store.");
       }
       if (sourceVisit.providerKind === "outside_vendor" && (assignmentKind !== "outside_vendor" || vendorId !== sourceVisit.vendorId)) {
@@ -96,6 +107,7 @@ export async function POST(request: Request) {
         organizationId: context.session.organizationId,
         storeId,
         requestId: formText(formData, "requestId", { max: 120 }) || undefined,
+        pmOccurrenceId: formText(formData, "pmOccurrenceId", { max: 120 }) || undefined,
         problem: formText(formData, "problem", { required: true, max: 2_000 }),
         authorizedScope: formText(formData, "authorizedScope", { max: 2_000 }) || undefined,
         categoryKey: formText(formData, "categoryKey", { max: 120 }) || undefined,
@@ -122,36 +134,54 @@ export async function POST(request: Request) {
           internalReviewThresholdAmountMinor: optionalMoneyMinor(formText(formData, "holdInternalReviewThreshold", { max: 30 })),
           currency: "USD",
         } : undefined,
+        idempotency: {
+          key: submissionKey,
+          command: "create_work_order",
+          requestHash,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
+        },
         actor: context.actor,
       },
     );
-    if (sourceExceptionId && sourceVisit) {
-      await reconcileUnmatchedVisit(
-        { repository: context.repository },
-        {
-          organizationId: context.session.organizationId,
-          exceptionId: sourceExceptionId,
-          workOrderId: result.id,
-          note: `Created ${result.number} from the preserved unmatched visit by ${sourceVisit.technicianName} (${sourceVisit.providerName}).`,
-          actor: context.actor,
-        },
-      );
+    if (sourceExceptionId && sourceVisit && sourceException?.status !== "resolved") {
+      try {
+        await reconcileUnmatchedVisit(
+          { repository: context.repository },
+          {
+            organizationId: context.session.organizationId,
+            exceptionId: sourceExceptionId,
+            workOrderId: result.id,
+            note: `Created ${result.number} from the preserved unmatched visit by ${sourceVisit.technicianName} (${sourceVisit.providerName}).`,
+            actor: context.actor,
+          },
+        );
+      } catch {
+        return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=visits&error=${encodeURIComponent(`${result.number} was created, but the original visit still needs to be linked. The work order was not duplicated; retry from the unmatched-visit review.`)}`);
+      }
     }
     if (intent === "create_and_send" && vendorId) {
       if (result.approvalRequest) {
         return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(`${result.number} was created and routed for approval. It will not be sent until approval is recorded.`)}`);
       }
-      const issued = await issueWorkOrderToVendor({
-        repository: context.repository,
-        organizationId: context.session.organizationId,
-        organizationName: context.session.organizationName,
-        workOrderId: result.id,
-        vendorId,
-        expectedRevision: 0,
-        channel: "email",
-        actor: context.actor,
-      });
-      return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(issued.notice)}`);
+      const priorIssuance = await context.repository.getLatestIssuanceForWorkOrder(context.session.organizationId, result.id);
+      if (priorIssuance) {
+        return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(`${result.number} was already created and sent. The original service authorization remains the source record.`)}`);
+      }
+      try {
+        const issued = await issueWorkOrderToVendor({
+          repository: context.repository,
+          organizationId: context.session.organizationId,
+          organizationName: context.session.organizationName,
+          workOrderId: result.id,
+          vendorId,
+          expectedRevision: 0,
+          channel: "email",
+          actor: context.actor,
+        });
+        return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(issued.notice)}`);
+      } catch {
+        return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&error=${encodeURIComponent(`${result.number} was created, but the vendor handoff was not sent. Review the vendor and send it from this work order; do not create another record.`)}`);
+      }
     }
     const destination = sourceExceptionId
       ? `/app/work-orders/${encodeURIComponent(result.id)}?view=visits&notice=${encodeURIComponent(`${result.number} was created after service began and linked to the preserved visit. No prior written authorization was implied.`)}`

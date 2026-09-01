@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
+  CalendarClock,
   ChevronRight,
   CircleDot,
   Clock3,
@@ -13,9 +14,11 @@ import {
   Inbox,
   Layers3,
   LoaderCircle,
+  MapPin,
   PencilLine,
   Search,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import type {
   ActionItemViewModel,
@@ -30,6 +33,7 @@ import type {
   ProgramPageViewModel,
   SearchPageViewModel,
   SupportingLink,
+  TableRowViewModel,
   TableViewModel,
   Tone,
   TrendViewModel,
@@ -397,6 +401,96 @@ type SurfaceViewMode = "tile" | "table";
 const TILE_DEFAULT_SURFACES = new Set(["stores"]);
 const TRIAGE_SURFACES = new Set(["action-center", "work-orders", "visits"]);
 
+function queueCell(row: TableRowViewModel, key: string) {
+  return row.cells.find((cell) => cell.key === key);
+}
+
+function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
+  return (
+    <div className={styles.pageStack}>
+      <PageHeader page={model.page} />
+      {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
+        <>
+          {model.metrics ? <MetricStrip metrics={model.metrics} /> : null}
+          <section className={`${styles.listWorkspace} ${styles.reviewQueueWorkspace}`}>
+            <div className={styles.listToolbar}>
+              {model.search ? (
+                <form className={styles.listSearch} action={model.search.action} method="get" role="search">
+                  <Search aria-hidden="true" size={18} />
+                  <label className={styles.visuallyHidden} htmlFor={`${model.table.id}-search`}>{model.search.label}</label>
+                  <input id={`${model.table.id}-search`} name="q" type="search" defaultValue={model.search.value} placeholder={model.search.placeholder} />
+                  {model.search.preservedParameters?.map((parameter) => <input key={parameter.name} name={parameter.name} type="hidden" value={parameter.value} />)}
+                  <button type="submit">Search</button>
+                </form>
+              ) : <span className={styles.toolbarTitle}>Review queue</span>}
+              <strong className={styles.resultSummary}>{model.resultSummary}</strong>
+            </div>
+            <FilterGroups filters={model.filters} />
+            <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
+
+            <div className={styles.reviewQueueLayout}>
+              <div className={styles.reviewQueueMain}>
+                <header className={styles.reviewQueueHeading}>
+                  <div>
+                    <h2>To-do list</h2>
+                    <p>Click an item to see the details and take action.</p>
+                  </div>
+                  <span>Most urgent first</span>
+                </header>
+                {model.table.rows.length ? (
+                  <ol className={styles.reviewQueueList} aria-label="Open review items">
+                    {model.table.rows.map((row) => {
+                      const item = queueCell(row, "item");
+                      const store = queueCell(row, "store");
+                      const record = queueCell(row, "record");
+                      const owner = queueCell(row, "owner");
+                      const due = queueCell(row, "due");
+                      const priority = queueCell(row, "priority");
+                      const type = queueCell(row, "type");
+                      return (
+                        <li key={row.id}>
+                          <Link
+                            className={`${styles.reviewQueueItem} ${toneClass(priority?.tone)}`}
+                            href={row.href}
+                          >
+                            <span className={styles.reviewQueueMarker} aria-hidden="true" />
+                            <div className={styles.reviewQueueAction}>
+                              <div className={styles.reviewQueueBadges}>
+                                <span>{type?.value ?? "Review item"}</span>
+                                {priority?.value !== "Review" ? <strong>{priority?.value ?? "Open"}</strong> : null}
+                              </div>
+                              <h3>{item?.value ?? row.label}</h3>
+                              {item?.secondary && type?.value === "Record to check" ? <p>{item.secondary}</p> : null}
+                              <div className={styles.reviewQueueContext}>
+                                <span><MapPin aria-hidden="true" size={15} />{store?.value ?? "Companywide"}</span>
+                                <span><CircleDot aria-hidden="true" size={15} />{record?.value ?? "Related record"}{record?.secondary && record.secondary !== record.value ? ` · ${record.secondary}` : ""}</span>
+                              </div>
+                            </div>
+                            <div className={styles.reviewQueueOwner}>
+                              <span><UserRound aria-hidden="true" size={15} />Owner</span>
+                              <strong>{owner?.value ?? "Unassigned"}</strong>
+                            </div>
+                            <div className={styles.reviewQueueDue}>
+                              <span><CalendarClock aria-hidden="true" size={15} />When</span>
+                              <strong>{due?.value ?? "No deadline"}</strong>
+                            </div>
+                            <ChevronRight className={styles.reviewQueueChevron} aria-hidden="true" size={19} />
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : <InlineEmpty message="No open items match these filters." />}
+              </div>
+            </div>
+            {model.pagination ? <PaginationControls pagination={model.pagination} /> : null}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ApprovedLaterManagementPanel({
   management,
   selectedReturnTo,
@@ -493,6 +587,7 @@ function ApprovedLaterManagementPanel({
 }
 
 export function ListSurface({ model, approvedWork, surface, searchParams }: { model: ListPageViewModel; approvedWork?: ApprovedWorkPortfolioViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
+  if (surface === "action-center") return <ReviewQueueSurface model={model} />;
   const triageMode = TRIAGE_SURFACES.has(surface);
   const visitPlanParam = searchParams.visitPlan;
   const approvedLaterMode = surface === "work-orders" && (Array.isArray(visitPlanParam) ? visitPlanParam[0] : visitPlanParam) === "ready";

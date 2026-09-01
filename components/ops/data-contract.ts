@@ -323,8 +323,11 @@ export interface ActionItemViewModel {
   title: string;
   description: string;
   categoryLabel: string;
+  attentionType?: "service_record" | "follow_up" | "vendor_task";
+  reasonLabel?: string;
   storeLabel?: string;
   recordLabel?: string;
+  dueAt?: string;
   dueLabel: string;
   ownerLabel: string;
   priorityLabel?: string;
@@ -628,6 +631,12 @@ export interface CreateWorkOrderPageViewModel {
     unmatchedReason: string;
     outcomeLabel?: string;
     outcomeNotes?: string;
+  };
+  sourcePm?: {
+    occurrenceId: string;
+    planName: string;
+    dueLabel: string;
+    statusLabel: string;
   };
 }
 

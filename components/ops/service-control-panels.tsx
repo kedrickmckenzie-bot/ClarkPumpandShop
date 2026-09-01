@@ -189,7 +189,7 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
         id="request-review-heading"
         icon={<ClipboardCheck aria-hidden="true" size={19} />}
         title="Review the request"
-        description="Confirm what was reported, then decide whether to create work, escalate it, or close it."
+        description={model.pendingApproval ? "The request facts are preserved. Complete the current approval before creating work." : "Confirm what was reported, then decide whether to create work, escalate it, or close it."}
       />
       <div className={styles.controlSummary}>
         <span><small>Request</small><strong>{model.reference}</strong></span>
@@ -201,7 +201,7 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
       {model.pendingApproval ? <PendingApprovalPanel approval={model.pendingApproval} /> : null}
       {!model.permitted ? <p className={styles.inlineEmpty}>Your role can review this request but cannot record a decision.</p> : (
         <>
-          <div className={styles.subControlPanel}>
+          {!model.pendingApproval ? <div className={styles.subControlPanel}>
             <div className={styles.subControlHeading}><ShieldCheck aria-hidden="true" size={18} /><div><h3>Choose what happens next</h3><p>Most requests can move directly into a work order. Equipment and detailed impact can remain unknown.</p></div></div>
             {model.canCreateWorkOrder && model.createWorkOrderHref ? (
               <div className={styles.formFooter}><span className={styles.formMeta}>The manager review is complete. Define the work and choose the service path next.</span><Link className={styles.primaryButton} href={model.createWorkOrderHref}>Create work order<ShieldCheck aria-hidden="true" size={17} /></Link></div>
@@ -218,7 +218,7 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
                 <div className={styles.formFooter}><span className={styles.formMeta}>Confirm the known facts without inventing details. Unknown answers remain visibly unknown.</span><button className={styles.primaryButton} type="submit" disabled={impactMutation.state.pending}>{impactMutation.state.pending ? "Recording…" : model.canPrepareWorkOrder ? "Confirm & create work order" : "Confirm request facts"}<ShieldCheck aria-hidden="true" size={17} /></button></div>
               </form>
             )}
-          </div>
+          </div> : null}
 
           <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`}>
             <summary className={styles.subControlHeading}><ClipboardCheck aria-hidden="true" size={18} /><div><h3>Add or correct business impact</h3><p>Optional detail for meaningful safety, product, compliance, capacity, or revenue exposure.</p></div></summary>
@@ -523,14 +523,14 @@ function ExceptionControls({ model }: { model: AttentionItemControlViewModel }) 
   const classify = useMutation();
   return (
     <>
-      <form action={model.submitAction} method="post" onSubmit={review.submit} className={styles.controlForm}>
+      {!model.unmatchedVisit ? <form action={model.submitAction} method="post" onSubmit={review.submit} className={styles.controlForm}>
         <div className={styles.fieldGrid}>
           <label className={styles.field} htmlFor={`exception-operation-${model.id}`}><span>Review decision <em>Required</em></span><select id={`exception-operation-${model.id}`} name="operation" required defaultValue="acknowledge"><option value="acknowledge">Acknowledge and keep open</option><option value="resolve">Resolve review item</option></select></label>
           <label className={styles.field} htmlFor={`exception-note-${model.id}`}><span>Review note <em>Required</em></span><textarea id={`exception-note-${model.id}`} name="note" required rows={3} placeholder="Record what you checked and why this decision is appropriate." /></label>
         </div>
         <MutationError message={review.state.error} />
         <div className={styles.formFooter}><button className={styles.primaryButton} type="submit" disabled={review.state.pending}>{review.state.pending ? "Recording…" : "Record review decision"}<ShieldCheck aria-hidden="true" size={17} /></button></div>
-      </form>
+      </form> : null}
       {model.reconciliationOptions?.length ? (
         <div className={styles.subControlPanel}>
           <div className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Link the unmatched visit</h3><p>Select eligible open work at the same store. This adds an amendment; it does not rewrite the original check-in.</p></div></div>
@@ -545,7 +545,7 @@ function ExceptionControls({ model }: { model: AttentionItemControlViewModel }) 
       ) : null}
       {model.unmatchedVisit ? (
         <div className={styles.subControlPanel}>
-          <div className={styles.subControlHeading}><ClipboardCheck aria-hidden="true" size={18} /><div><h3>Finish the unmatched-visit decision</h3><p>Create a canonical work order from the preserved visit, or explicitly resolve it as authorized non-maintenance / recurring service. Neither choice rewrites the original check-in.</p></div></div>
+          <div className={styles.subControlHeading}><ClipboardCheck aria-hidden="true" size={18} /><div><h3>Choose what this visit belongs to</h3><p>Create the missing work order, link an eligible work order above, or record that this was authorized non-maintenance service. This single decision closes the review without rewriting the original check-in.</p></div></div>
           <div className={styles.recoveryChoiceGrid}>
             <div className={styles.recoveryChoice}>
               <strong>Create work from this visit</strong>

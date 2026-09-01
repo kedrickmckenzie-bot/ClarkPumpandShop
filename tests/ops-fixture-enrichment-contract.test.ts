@@ -144,7 +144,7 @@ describe("Northline enriched presentation fixture contract", () => {
     for (const store of fixture.stores) {
       const storeAssets = fixture.assets.filter((asset) => asset.storeId === store.id);
       expect(storeAssets.length, `${store.storeNumber} needs a useful equipment register`).toBeGreaterThanOrEqual(8);
-      expect(storeAssets.length, `${store.storeNumber} should remain presentation-sized`).toBeLessThanOrEqual(10);
+      expect(storeAssets.length, `${store.storeNumber} should remain presentation-sized`).toBeLessThanOrEqual(11);
       expect(storeAssets.filter((asset) => asset.categoryKey === "refrigeration")).toHaveLength(3);
       expect(storeAssets.filter((asset) => asset.categoryKey === "forecourt")).toHaveLength(4);
       expect(storeAssets.some((asset) => asset.name.includes(" - ")), `${store.storeNumber} needs human-readable location names`).toBe(true);
@@ -180,13 +180,21 @@ describe("Northline enriched presentation fixture contract", () => {
       (asset) => !asset.replacementProfileId && !asset.replacementPlanningExcludedAt,
     );
 
-    expect(activeAssets).toHaveLength(138);
+    expect(activeAssets).toHaveLength(144);
     expect(assigned).toHaveLength(135);
-    expect(excluded).toEqual([
-      expect.objectContaining({
-        id: "asset-101-rapid-cook-oven",
-        replacementPlanningExclusionReason: "Landlord-owned foodservice equipment is outside Clark Pump and Shop's capital plan.",
-      }),
+    expect(excluded).toHaveLength(7);
+    expect(excluded).toContainEqual(expect.objectContaining({
+      id: "asset-101-rapid-cook-oven",
+      replacementPlanningExclusionReason: "Landlord-owned foodservice equipment is outside Clark Pump and Shop's capital plan.",
+    }));
+    expect(excluded.map((asset) => asset.id).sort()).toEqual([
+      "asset-101-rapid-cook-oven",
+      "asset-103-stockroom-electrical",
+      "asset-104-roadside-sign-lighting",
+      "asset-108-canopy-lighting",
+      "asset-111-restroom-hand-sink",
+      "asset-113-prep-sink",
+      "asset-114-canopy-lighting",
     ]);
     expect(needsChoice.map((asset) => asset.id).sort()).toEqual([
       "asset-113-walk-in-freezer",

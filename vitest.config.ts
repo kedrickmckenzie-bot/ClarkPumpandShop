@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   // The complete integration matrix exercises several deterministic fixture
-  // transactions in parallel. Individual cases finish in a few seconds, but
-  // Windows CI/desktop contention can push a 5s default over the line.
-  test: { environment: "node", include: ["tests/**/*.test.ts"], testTimeout: 15_000 },
+  // transactions in parallel. Cap workers so Windows CI/desktop contention
+  // does not turn otherwise-fast public workflow tests into false timeouts.
+  test: { environment: "node", include: ["tests/**/*.test.ts"], testTimeout: 15_000, maxWorkers: 4 },
 });

@@ -223,6 +223,7 @@ describe("stage precedence transition matrix", () => {
     });
     expect(serviceFollowUp.stage).toBe("followup_closeout");
     expect(serviceFollowUp.serviceSubStage?.id).toBe("followup_required");
+    expect(serviceFollowUp.primaryNextAction.href).toBe("/app/action-center/follow-up-return");
   });
 
   it("keeps recorded cost from pulling a completed job back into vendor scheduling", () => {

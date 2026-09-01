@@ -314,14 +314,14 @@ describe("operator presenter drill-through contracts", () => {
     expect(attention.table?.rows.length).toBeLessThan(fixture.assets.length);
     expect(attention.table?.caption).toMatch(/needing attention/i);
     expect(attention.resultSummary).toContain(`${fixture.assets.length} total equipment`);
-    expect(attention.metrics.find((metric) => metric.id === "out-of-service")).toMatchObject({ value: "1" });
+    expect(attention.metrics.find((metric) => metric.id === "out-of-service")).toMatchObject({ value: "2" });
     expect(all.table?.rows).toHaveLength(25);
     expect(all.pagination?.nextHref).toContain("page=2");
     expect(all.search?.placeholder).toMatch(/serial/i);
     expect(searched.table?.rows.some((row) => row.cells.some((cell) => cell.secondary?.includes(serial!)))).toBe(true);
-    expect(outOfService.table?.rows).toHaveLength(1);
-    expect(outOfService.table?.rows[0]?.cells.find((cell) => cell.key === "status")?.value).toBe("Out of service");
-    expect(outOfService.table?.rows[0]?.href).toContain("section=service-history");
+    expect(outOfService.table?.rows).toHaveLength(2);
+    expect(outOfService.table?.rows.every((row) => row.cells.find((cell) => cell.key === "status")?.value === "Out of service")).toBe(true);
+    expect(outOfService.table?.rows.every((row) => row.href?.includes("section=service-history"))).toBe(true);
     expect(outOfService.appliedFilters).toEqual([expect.objectContaining({ id: "status", label: "Status: Out of service" })]);
     expect(outOfService.breakdowns.find((breakdown) => breakdown.id === "equipment-status")?.segments.find((segment) => segment.id === "out_of_service")?.link.href).toContain("status=out_of_service");
   });
@@ -574,13 +574,13 @@ describe("operator presenter drill-through contracts", () => {
     const upcomingSection = detail.sections.find((section) => section.id === "upcoming-visits");
 
     expect(upcomingFact).toMatchObject({
-      value: "1",
+      value: "2",
       link: { href: `/app/visits?store=${storeId}&status=upcoming`, label: "Open upcoming visits" },
     });
     expect(upcomingSection?.title).toBe("Upcoming visits");
-    expect(upcomingSection?.table?.rows).toHaveLength(1);
-    expect(upcomingSection?.table?.rows[0]?.cells.find((cell) => cell.key === "work")?.value).toBe("CPS-2026-0216");
-    expect(upcomingSection?.table?.rows[0]?.cells.find((cell) => cell.key === "observed")?.secondary).toBe("Confirmed appointment · store-local time");
+    expect(upcomingSection?.table?.rows).toHaveLength(2);
+    expect(upcomingSection?.table?.rows.some((row) => row.cells.find((cell) => cell.key === "work")?.value === "CPS-2026-0216")).toBe(true);
+    expect(upcomingSection?.table?.rows.every((row) => row.cells.find((cell) => cell.key === "observed")?.secondary === "Confirmed appointment · store-local time")).toBe(true);
     expect(upcomingSection?.action?.href).toBe(`/app/visits?store=${storeId}&status=upcoming`);
   });
 

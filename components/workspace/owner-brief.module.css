@@ -76,6 +76,47 @@
   margin-top: 8px;
 }
 
+.alternativeDisclosure {
+  margin-top: 12px;
+  border-top: 1px solid var(--to-line);
+}
+
+.alternativeDisclosure > summary {
+  width: fit-content;
+  padding: 12px 0 2px;
+  color: var(--to-copy);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.alternativeDisclosure > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.alternativeDisclosure a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--to-line);
+  border-radius: 6px;
+  color: var(--to-copy);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.alternativeDisclosure a:hover,
+.alternativeDisclosure a:focus-visible {
+  border-color: var(--to-cobalt, #2563eb);
+  color: var(--to-cobalt, #2563eb);
+  outline: none;
+}
+
 .positiveText { color: var(--to-green); }
 .warningText { color: var(--to-amber); }
 

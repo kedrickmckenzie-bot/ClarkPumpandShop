@@ -38,9 +38,9 @@ describe("Clark Pump and Shop presentation data realism", () => {
   });
 
   it("represents a credible store equipment register with visible operating exceptions", () => {
-    expect(fixture.assets).toHaveLength(138);
+    expect(fixture.assets).toHaveLength(144);
     const assetsByStore = groupedCounts(fixture.assets, (asset) => asset.storeId);
-    expect([...assetsByStore.values()].every((count) => count >= 8 && count <= 10)).toBe(true);
+    expect([...assetsByStore.values()].every((count) => count >= 8 && count <= 11)).toBe(true);
     const visitsByStore = groupedCounts(fixture.visits, (visit) => visit.storeId);
     expect(new Set(visitsByStore.values()).size).toBeGreaterThan(1);
 
@@ -48,11 +48,77 @@ describe("Clark Pump and Shop presentation data realism", () => {
     expect(statuses.get("out_of_service")).toBeGreaterThanOrEqual(1);
     expect(statuses.get("watch")).toBeGreaterThanOrEqual(4);
     expect(new Set(fixture.assets.map((asset) => asset.categoryKey))).toEqual(
-      new Set(["refrigeration", "hvac", "forecourt", "foodservice"]),
+      new Set(["refrigeration", "hvac", "forecourt", "foodservice", "electrical", "plumbing"]),
     );
     expect(fixture.assets.every((asset) => asset.assetTag && asset.serialNumber && asset.manufacturer && asset.model)).toBe(true);
     for (const workOrder of fixture.workOrders.filter((row) => row.id.startsWith("wo-recurring-") && row.categoryKey === "foodservice")) {
       expect(fixture.assets.some((asset) => asset.storeId === workOrder.storeId && asset.categoryKey === "foodservice")).toBe(true);
+    }
+  });
+
+  it("keeps featured demo service stories connected from complaint through equipment and service evidence", () => {
+    const featuredWorkOrderIds = [
+      "wo-recent-aug-101-refrigeration",
+      "wo-recent-aug-102-hvac",
+      "wo-recent-aug-103-electrical",
+      "wo-recent-aug-105-forecourt",
+      "wo-recent-aug-106-exterior",
+      "wo-recent-aug-108-electrical",
+      "wo-recent-aug-110-refrigeration",
+      "wo-recent-aug-111-plumbing",
+      "wo-current-113-prep-sink",
+      "wo-current-113-freezer-service",
+      "wo-current-107-hvac-scheduled",
+      "wo-upcoming-102-ice-machine",
+      "wo-upcoming-105-dispenser-inspection",
+      "wo-upcoming-104-sign-lighting",
+      "wo-upcoming-114-lot-drainage",
+      "wo-current-114-canopy-service",
+    ];
+    const intentionalSiteConditionRecords = new Set([
+      "wo-recent-aug-106-exterior",
+      "wo-upcoming-114-lot-drainage",
+    ]);
+    const workOrders = new Map(fixture.workOrders.map((workOrder) => [workOrder.id, workOrder]));
+    const requests = new Map(fixture.requests.map((request) => [request.id, request]));
+    const assets = new Map(fixture.assets.map((asset) => [asset.id, asset]));
+    const components = new Map(fixture.components.map((component) => [component.id, component]));
+
+    for (const workOrderId of featuredWorkOrderIds) {
+      const workOrder = workOrders.get(workOrderId);
+      expect(workOrder, `${workOrderId} is missing`).toBeDefined();
+      expect(workOrder?.requestId, `${workOrderId} has no source complaint`).toBeTruthy();
+      const request = requests.get(workOrder!.requestId!);
+      expect(request?.convertedWorkOrderId).toBe(workOrderId);
+      expect(request?.problem).toBe(workOrder?.problem);
+      expect(fixture.assignments.some((assignment) => assignment.workOrderId === workOrderId)).toBe(true);
+      expect(fixture.issuances.some((issuance) => issuance.workOrderId === workOrderId)).toBe(true);
+
+      if (intentionalSiteConditionRecords.has(workOrderId)) {
+        expect(workOrder?.assetId).toBeUndefined();
+        expect(workOrder?.componentId).toBeUndefined();
+        continue;
+      }
+
+      const asset = assets.get(workOrder!.assetId!);
+      expect(asset, `${workOrderId} has no valid equipment link`).toBeDefined();
+      expect(asset?.storeId).toBe(workOrder?.storeId);
+      const component = components.get(workOrder!.componentId!);
+      expect(component, `${workOrderId} has no valid component link`).toBeDefined();
+      expect(component?.assetId).toBe(asset?.id);
+    }
+
+    expect(featuredWorkOrderIds.filter((id) => !workOrders.get(id)?.assetId)).toEqual(
+      [...intentionalSiteConditionRecords],
+    );
+
+    const completedFeaturedIds = featuredWorkOrderIds.filter((id) => id.startsWith("wo-recent-"));
+    for (const workOrderId of completedFeaturedIds) {
+      const visits = fixture.visits.filter((visit) => visit.workOrderId === workOrderId);
+      expect(visits, `${workOrderId} has no observed visit`).toHaveLength(1);
+      expect(visits[0].status).toBe("checked_out");
+      expect(visits[0].outcomeNotes?.trim(), `${workOrderId} has no technician outcome notes`).toBeTruthy();
+      expect(fixture.costLines.some((cost) => cost.workOrderId === workOrderId)).toBe(true);
     }
   });
 
@@ -142,5 +208,21 @@ describe("Clark Pump and Shop presentation data realism", () => {
     expect(pmStatuses).toEqual(new Set(["completed", "scheduled", "missed", "due", "waived", "proposed"]));
     expect(fixture.pmOccurrences.filter((occurrence) => occurrence.status === "completed").length).toBeGreaterThan(100);
     expect(fixture.pmOccurrences.filter((occurrence) => occurrence.status === "missed").length).toBeGreaterThanOrEqual(5);
+
+    const completedOccurrences = fixture.pmOccurrences.filter((occurrence) => occurrence.status === "completed");
+    expect(completedOccurrences.every((occurrence) => occurrence.workOrderId || occurrence.result?.startsWith("Manager-attested historical completion"))).toBe(true);
+    const unobservedPlatformWork = completedOccurrences.filter((occurrence) => occurrence.workOrderId &&
+      !fixture.visits.some((visit) => visit.workOrderId === occurrence.workOrderId)
+      && !fixture.siteVisitWorkOrders.some((link) => link.workOrderId === occurrence.workOrderId),
+    );
+    expect(unobservedPlatformWork.map((occurrence) => occurrence.id).sort()).toEqual([
+      "pm-occurrence-107-2026-q2",
+      "pm-occurrence-107-2026-q3",
+    ]);
+
+    for (const workOrderId of ["wo-service-run-104-reactive", "wo-service-run-105-pm"]) {
+      expect(fixture.issuances.some((issuance) => issuance.workOrderId === workOrderId)).toBe(true);
+      expect((fixture.serviceAppointments ?? []).some((appointment) => appointment.workOrderId === workOrderId && appointment.status === "confirmed")).toBe(true);
+    }
   });
 });

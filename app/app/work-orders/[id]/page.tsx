@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
 import { WorkOrderCase } from "@/components/workspace/work-order-case";
-import { WorkOrderStageRail } from "@/components/workspace/work-order-case-stage-rail";
-import { VendorResponseActions } from "@/components/workspace/vendor-response-actions";
-import { HeldWorkActions } from "@/components/workspace/held-work-actions";
 import { loadDetailModel, loadEstimateComparisonModel, loadHeldWorkActionsModel, loadOperatorSession, loadVendorIssuanceModel, loadWorkOrderCaseModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel, loadVendorResponseActionsModel } from "../../_data/operator-loader";
 import { loadWorkOrderReplacementIntelligenceModel } from "../../_data/replacement-loader";
 import { loadWorkOrderVerificationModel } from "../../_data/work-order-verification-presenter";
 import caseStyles from "@/components/workspace/owner-brief.module.css";
+import type { WorkOrderServicePath } from "@/lib/ops/work-order-workspace";
 
 export const metadata: Metadata = { title: "Work order" };
 
@@ -19,11 +17,17 @@ function selectedView(value: string | string[] | undefined): WorkOrderView {
   return workOrderViews.includes(candidate as WorkOrderView) ? candidate as WorkOrderView : "overview";
 }
 
-export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ updated?: string | string[]; view?: string | string[]; notice?: string | string[]; error?: string | string[] }> }) {
+function selectedServicePath(value: string | string[] | undefined): WorkOrderServicePath | undefined {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate === "direct" || candidate === "bids" ? candidate : undefined;
+}
+
+export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ updated?: string | string[]; view?: string | string[]; path?: string | string[]; notice?: string | string[]; error?: string | string[] }> }) {
   const { id } = await params;
   const query = await searchParams;
   const updated = Array.isArray(query.updated) ? query.updated[0] : query.updated;
   const requestedView = selectedView(query.view);
+  const requestedServicePath = selectedServicePath(query.path);
   const noticeRaw = query.notice;
   const notice = Array.isArray(noticeRaw) ? noticeRaw[0] : noticeRaw;
   const errorRaw = query.error;
@@ -50,11 +54,24 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     && !estimateComparison.workflowBlocked
     && !estimateComparison.selectedVendorName
     && (estimateComparison.activeRequestCount > 0 || control.nextAction.toLowerCase().includes("bid"));
+  const heldStatus = heldWork.hold?.status;
+  const heldCase = heldStatus && ["active", "claimed", "review_required"].includes(heldStatus)
+    ? {
+        ...stageCase,
+        stageLabel: heldStatus === "claimed" ? "Being reviewed onsite" : heldStatus === "review_required" ? "Vendor findings need review" : "Approved for a future visit",
+        accountableParty: heldStatus === "claimed" ? heldWork.hold?.claimedVendorName ?? "Onsite vendor" : "Facilities coordinator",
+        primaryNextAction: {
+          label: heldStatus === "claimed" ? "Track the active visit" : heldStatus === "review_required" ? "Review the vendor findings" : "Wait for a suitable vendor visit",
+          href: `/app/work-orders/${id}?view=service#future-visit-hold`,
+        },
+        blockingReason: heldStatus === "active" ? "This work is approved and waiting to be offered during a suitable vendor visit." : stageCase.blockingReason,
+      }
+    : stageCase;
 
   model.page.eyebrow = hasServiceAuthorization ? "Work Order / Service Authorization" : "Operator work order";
   if (accountabilityOnly) model.page.secondaryAction = undefined;
   if (model.page.primaryAction?.href === "#issue-work") {
-    model.page.primaryAction = { ...model.page.primaryAction, href: `/app/work-orders/${id}?view=service#issue-work` };
+    model.page.primaryAction = { ...model.page.primaryAction, href: `/app/work-orders/${id}?view=service&path=direct#issue-work` };
   }
   if (bidPathIsNext) {
     model.page.primaryAction = {
@@ -63,7 +80,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
         : estimateComparison.activeRequestCount > 0
           ? "Track vendor bids"
           : "Request vendor bids",
-      href: `/app/work-orders/${id}?view=service#bid-requests`,
+      href: `/app/work-orders/${id}?view=service&path=bids#bid-requests`,
     };
   }
   return (
@@ -78,11 +95,6 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
         {error}
       </p>
     ) : null}
-    {!accountabilityOnly ? <WorkOrderStageRail model={stageCase} /> : null}
-    {view === "service" && responseActions ? (
-      <VendorResponseActions model={{ ...responseActions, workOrderId: id }} />
-    ) : null}
-    {view === "service" && !accountabilityOnly ? <HeldWorkActions model={heldWork} /> : null}
     <WorkOrderCase
       model={model}
       control={control}
@@ -91,8 +103,11 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       issuance={issuance}
       replacement={replacement}
       verification={verification}
-      canonicalCase={stageCase}
+      canonicalCase={heldCase}
+      heldWork={heldWork}
+      vendorResponse={responseActions ? { ...responseActions, workOrderId: id } : undefined}
       activeView={view}
+      activeServicePath={requestedServicePath}
       edition={session.demoEdition}
       updated={updated}
     />

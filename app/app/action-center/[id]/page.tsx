@@ -11,5 +11,5 @@ export default async function AttentionItemPage({ params, searchParams }: { para
   const query = await searchParams;
   const updated = Array.isArray(query.updated) ? query.updated[0] : query.updated;
   const model = await loadAttentionItemModel(id);
-  return <DetailView model={model.detail} beforeSections={<div className={styles.controlStack}><MutationReceipt code={updated} /><AttentionItemPanel model={model.control} /></div>} />;
+  return <DetailView model={model.detail} initialSection="service-visits" beforeSections={<div className={styles.controlStack}><MutationReceipt code={updated} /><AttentionItemPanel model={model.control} /></div>} />;
 }

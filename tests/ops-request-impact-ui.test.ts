@@ -61,7 +61,10 @@ describe("request impact presentation", () => {
       requiredRoleLabel: "Maintenance administrator",
     });
     expect(model.canCreateWorkOrder).toBe(false);
-    expect(detail.page.primaryAction).toBeUndefined();
+    expect(detail.page.primaryAction).toEqual({
+      label: "Approval needed: Maintenance administrator",
+      href: "#approval-decision",
+    });
     expect(detail.sections.find((section) => section.id === "source-report")).toMatchObject({
       facts: expect.arrayContaining([
         expect.objectContaining({ label: "Review state", value: "Awaiting approval decision" }),

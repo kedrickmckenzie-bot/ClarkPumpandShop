@@ -1162,9 +1162,9 @@
 .tableScroller {
   max-width: 100%;
   overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  overscroll-behavior-y: auto;
+  overflow-y: visible;
+  overscroll-behavior-inline: contain;
+  overscroll-behavior-block: auto;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
 }
@@ -1311,6 +1311,205 @@
 .triageList {
   min-width: 0;
   border-right: 1px solid var(--workspace-border);
+}
+
+.reviewQueueWorkspace {
+  overflow: visible;
+}
+
+.reviewQueueLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  background: #ffffff;
+}
+
+.reviewQueueMain {
+  min-width: 0;
+}
+
+.reviewQueueHeading {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--workspace-border-strong);
+  background: #f8fafc;
+}
+
+.reviewQueueHeading h2 {
+  margin: 0;
+  color: var(--workspace-ink);
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.reviewQueueHeading p {
+  margin: 4px 0 0;
+  color: var(--workspace-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.reviewQueueHeading > span {
+  flex: 0 0 auto;
+  color: var(--workspace-subtle);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reviewQueueList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reviewQueueList > li {
+  margin: 0;
+  border-bottom: 1px solid var(--workspace-border);
+}
+
+.reviewQueueList > li:last-child {
+  border-bottom: 0;
+}
+
+.reviewQueueItem {
+  position: relative;
+  display: grid;
+  min-height: 132px;
+  grid-template-columns: 5px minmax(280px, 1fr) minmax(145px, .36fr) minmax(130px, .3fr) 24px;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 18px 18px 0;
+  background: #ffffff;
+  color: var(--workspace-muted);
+}
+
+.reviewQueueItem:hover,
+.reviewQueueItem[aria-current="true"] {
+  background: #f6f8fc;
+}
+
+.reviewQueueItem[aria-current="true"] {
+  box-shadow: inset 0 0 0 1px #c8d5f6;
+}
+
+.reviewQueueMarker {
+  width: 5px;
+  height: 100%;
+  min-height: 96px;
+  align-self: stretch;
+  background: var(--tone);
+}
+
+.reviewQueueAction {
+  min-width: 0;
+}
+
+.reviewQueueBadges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.reviewQueueBadges span,
+.reviewQueueBadges strong {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.reviewQueueBadges span {
+  border: 1px solid var(--workspace-border-strong);
+  background: #ffffff;
+  color: var(--workspace-muted);
+  font-weight: 700;
+}
+
+.reviewQueueBadges strong {
+  border: 1px solid var(--tone-border);
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-weight: 800;
+}
+
+.reviewQueueAction h3 {
+  margin: 0;
+  color: var(--workspace-ink);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.reviewQueueAction > p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 5px 0 0;
+  color: var(--workspace-muted);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.reviewQueueContext {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 7px 16px;
+  margin-top: 11px;
+}
+
+.reviewQueueContext span,
+.reviewQueueOwner > span,
+.reviewQueueDue > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--workspace-subtle);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.reviewQueueContext span {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviewQueueContext svg,
+.reviewQueueOwner svg,
+.reviewQueueDue svg {
+  flex: 0 0 auto;
+}
+
+.reviewQueueOwner,
+.reviewQueueDue {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  align-self: center;
+}
+
+.reviewQueueOwner strong,
+.reviewQueueDue strong {
+  overflow: hidden;
+  color: var(--workspace-ink);
+  font-size: 14px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+}
+
+.reviewQueueChevron {
+  color: var(--workspace-subtle);
 }
 
 .selectColumn {
@@ -2996,6 +3195,26 @@ a.factItem:hover {
   white-space: nowrap !important;
 }
 
+@media (max-width: 1400px) {
+  .reviewQueueLayout[data-has-preview] {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+
+  .reviewQueueItem {
+    grid-template-columns: 5px minmax(240px, 1fr) minmax(130px, .38fr) 22px;
+    grid-template-areas:
+      "marker action owner chevron"
+      "marker action due chevron";
+    row-gap: 10px;
+  }
+
+  .reviewQueueMarker { grid-area: marker; }
+  .reviewQueueAction { grid-area: action; }
+  .reviewQueueOwner { grid-area: owner; }
+  .reviewQueueDue { grid-area: due; }
+  .reviewQueueChevron { grid-area: chevron; }
+}
+
 @media (max-width: 1180px) {
   .triageWorkspace[data-has-preview] { grid-template-columns: minmax(0, 1fr) 330px; }
   .analysisGrid,
@@ -3076,6 +3295,26 @@ a.factItem:hover {
   .triageWorkspace[data-has-preview] { grid-template-columns: 1fr; }
   .triageList { border-right: 0; border-bottom: 1px solid var(--workspace-border); }
   .triagePreview { position: static; max-height: none; }
+  .reviewQueueHeading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .reviewQueueItem {
+    grid-template-columns: 5px minmax(0, 1fr) 20px;
+    grid-template-areas:
+      "marker action chevron"
+      "marker owner chevron"
+      "marker due chevron";
+    gap: 9px 13px;
+    padding-right: 14px;
+  }
+
+  .reviewQueueOwner,
+  .reviewQueueDue {
+    padding-top: 2px;
+  }
   .approvedLaterDialog {
     width: calc(100vw - 20px);
     height: calc(100dvh - 20px);
