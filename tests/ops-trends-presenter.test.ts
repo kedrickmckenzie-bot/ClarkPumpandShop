@@ -466,16 +466,22 @@ describe("enterprise trends presenter", () => {
       expect(new Set(comparablePortfolioRows.map((row) => row.signalLabel)).size, `${period}-month finding diversity`).toBeGreaterThan(1);
       if (period === "6") {
         expect(insideRange.length, "default six-month stores within range").toBeGreaterThan(0);
-        const explained = comparablePortfolioRows.find((row) => row.findingExplanation && row.persistenceLabel && row.driverLink && row.largestRecordLink);
-        expect(explained?.findingExplanation).toMatch(/recorded vs .* expected/i);
-        expect(explained?.persistenceLabel).toMatch(/range in \d+ of 6 months/i);
-        expect(queryFromHref(explained!.driverLink!.href)).toMatchObject({
+        const fallback = comparablePortfolioRows.find((row) => row.findingExplanation?.includes("Not enough comparable"));
+        expect(fallback?.findingExplanation).toMatch(/largest recorded contributor: .* of this store's .* recorded work cost/i);
+        expect(fallback).toMatchObject({
+          rangeLowValue: expect.any(Number),
+          rangeHighValue: expect.any(Number),
+          persistenceLabel: expect.stringMatching(/range in \d+ of 6 months/i),
+          largestRecordLink: expect.objectContaining({ href: expect.stringMatching(/^\/app\/(work-orders|invoices)\//) }),
+        });
+        expect(fallback?.driverLink).toBeDefined();
+        expect(queryFromHref(fallback!.driverLink!.href)).toMatchObject({
           view: "records",
-          store: explained!.id,
+          store: fallback!.id,
           detailKind: "current",
         });
-        expect(queryFromHref(explained!.driverLink!.href).category).toBeTruthy();
-        expect(explained?.largestRecordLink?.href).toMatch(/^\/app\/(work-orders|invoices)\//);
+        expect(queryFromHref(fallback!.driverLink!.href).category).toBeTruthy();
+
       }
       if (aboveRange.length / comparablePortfolioRows.length >= 0.6) {
         expect(portfolio.benchmark.description).toContain("portfolio-wide increase");
@@ -487,6 +493,57 @@ describe("enterprise trends presenter", () => {
     const weak = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "3", category: "refrigeration" });
     expect(weak.benchmark.rows.every((row) => row.ratioValue === undefined)).toBe(true);
     expect(weak.benchmark.rows.every((row) => row.signalLabel === "No reliable peer comparison yet")).toBe(true);
+  });
+
+  it("keeps the store comparison independent from the category-expectation evidence gate", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const thin = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "6" });
+    const fallback = thin.benchmark.rows.find((row) => row.findingExplanation?.includes("Not enough comparable"))!;
+
+    expect(fallback.findingExplanation).not.toMatch(/recorded vs .* expected/i);
+    expect(fallback.rangeLowValue).toEqual(expect.any(Number));
+    expect(fallback.rangeHighValue).toEqual(expect.any(Number));
+    expect(fallback.persistenceLabel).toMatch(/range in \d+ of 6 months/i);
+    expect(fallback.largestRecordLink?.href).toMatch(/^\/app\/(work-orders|invoices)\//);
+
+    const referenceMonths = ["2024-08", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2026-03"];
+    const peerStoreIds = fixture.stores.filter((store) => store.id !== "store-northline-104").slice(0, 8).map((store) => store.id);
+    const peerAssets = fixture.assets.filter((asset) => peerStoreIds.includes(asset.storeId) && asset.categoryKey === "refrigeration" && asset.status !== "retired");
+    const workTemplate = fixture.workOrders.find((work) => work.status === "closed" && work.assetId)!;
+    const costTemplate = fixture.costLines[0];
+    for (const [assetIndex, asset] of peerAssets.entries()) {
+      for (const [monthIndex, month] of referenceMonths.entries()) {
+        const suffix = `${assetIndex}-${monthIndex}`;
+        const workOrderId = `wo-category-gate-${suffix}`;
+        const serviceDate = `${month}-12`;
+        fixture.workOrders.push({
+          ...workTemplate,
+          id: workOrderId,
+          number: `CPS-GATE-${suffix}`,
+          storeId: asset.storeId,
+          requestId: undefined,
+          assetId: asset.id,
+          componentId: undefined,
+          categoryKey: "refrigeration",
+          problem: "Recorded refrigeration reference service for category-gate testing",
+          status: "closed",
+          createdAt: `${serviceDate}T14:00:00.000Z`,
+          closedAt: `${serviceDate}T16:00:00.000Z`,
+        });
+        fixture.costLines.push({
+          ...costTemplate,
+          id: `cost-category-gate-${suffix}`,
+          workOrderId,
+          amount: { amountMinor: 50_000, currency: "USD" },
+          serviceDate,
+          recordedAt: `${serviceDate}T16:05:00.000Z`,
+        });
+      }
+    }
+
+    const supported = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "6" });
+    const categoryCompared = supported.benchmark.rows.find((row) => row.findingExplanation?.match(/recorded vs .* expected/i));
+    expect(categoryCompared?.findingExplanation).toMatch(/largest measured difference/i);
   });
 
   it("increases the equipment-mix baseline when identical equipment is added", () => {

@@ -1077,6 +1077,11 @@ export function buildTrendsModel(
     let comparableAssets = 0;
     let peerScenarioTotals: Map<string, number> | undefined;
     const expectedByCategory = new Map<string, number>();
+    const referenceEvidenceByCategory = new Map<string, {
+      positivePeerStores: Set<string>;
+      positiveReferenceMonths: Set<string>;
+      positivePeerStoreMonths: Set<string>;
+    }>();
     const peerScenarioTotalsByMonth = new Map<string, Map<string, number>>();
     const basisRecords: TrendSourceRecord[] = [];
     const comparableAssetIds = new Set<string>();
@@ -1087,6 +1092,9 @@ export function buildTrendsModel(
         let assetExpected = 0;
         let assetPeerScenarioTotals: Map<string, number> | undefined;
         const assetPeerScenarioTotalsByMonth = new Map<string, Map<string, number>>();
+        const assetPositivePeerStores = new Set<string>();
+        const assetPositiveReferenceMonths = new Set<string>();
+        const assetPositivePeerStoreMonths = new Set<string>();
         let comparableAcrossPeriod = true;
         for (const month of currentMonths) {
           const observations = observationsByCohortAndCalendarMonth.get(`${cohort}|${month.slice(5)}`) ?? [];
@@ -1094,6 +1102,11 @@ export function buildTrendsModel(
           for (const observation of observations) {
             if (observation.storeId === store.id) continue;
             peerValuesByStore.set(observation.storeId, [...(peerValuesByStore.get(observation.storeId) ?? []), observation.value]);
+            if (observation.value > 0) {
+              assetPositivePeerStores.add(observation.storeId);
+              assetPositiveReferenceMonths.add(observation.month);
+              assetPositivePeerStoreMonths.add(`${observation.storeId}|${observation.month}`);
+            }
           }
           const peerRates = [...peerValuesByStore.entries()].map(([storeId, values]) => ({
             storeId,
@@ -1147,6 +1160,15 @@ export function buildTrendsModel(
         if (!comparableAcrossPeriod) continue;
         expected += assetExpected;
         expectedByCategory.set(asset.categoryKey, (expectedByCategory.get(asset.categoryKey) ?? 0) + assetExpected);
+        const categoryEvidence = referenceEvidenceByCategory.get(asset.categoryKey) ?? {
+          positivePeerStores: new Set<string>(),
+          positiveReferenceMonths: new Set<string>(),
+          positivePeerStoreMonths: new Set<string>(),
+        };
+        assetPositivePeerStores.forEach((peerStoreId) => categoryEvidence.positivePeerStores.add(peerStoreId));
+        assetPositiveReferenceMonths.forEach((month) => categoryEvidence.positiveReferenceMonths.add(month));
+        assetPositivePeerStoreMonths.forEach((storeMonth) => categoryEvidence.positivePeerStoreMonths.add(storeMonth));
+        referenceEvidenceByCategory.set(asset.categoryKey, categoryEvidence);
         comparableAssets += 1;
         comparableAssetIds.add(asset.id);
         if (!peerScenarioTotals) {
@@ -1247,34 +1269,59 @@ export function buildTrendsModel(
           : high ? "warning" : aboveRange || belowRange ? "info" : "positive";
     const signalRank = noComparison ? 0 : safeMetric === "pm_completion" ? low ? 3 : 1 : high ? 3 : aboveRange ? 2 : 1;
     const explainableAdditiveMetric = safeMetric === "recorded_cost" || safeMetric === "linked_invoice" || safeMetric === "work_orders";
-    const actualByCategory = new Map<string, number>();
+    const comparableActualByCategory = new Map<string, number>();
+    const recordedActualByCategory = new Map<string, number>();
     if (explainableAdditiveMetric) {
       for (const row of comparableRows) {
         const categories = recordCategoryKeys(row);
         if (categories.length !== 1 || !expectedByCategory.has(categories[0])) continue;
-        actualByCategory.set(categories[0], (actualByCategory.get(categories[0]) ?? 0) + row.value);
+        comparableActualByCategory.set(categories[0], (comparableActualByCategory.get(categories[0]) ?? 0) + row.value);
+      }
+      for (const row of storeRows) {
+        const categories = recordCategoryKeys(row);
+        if (categories.length !== 1) continue;
+        recordedActualByCategory.set(categories[0], (recordedActualByCategory.get(categories[0]) ?? 0) + row.value);
       }
     }
+    const minimumPositiveReferenceMonths = Math.min(
+      observedReferenceMonthCount,
+      Math.max(6, Math.ceil(currentMonths.length * 1.25)),
+    );
     const categoryDifferences = [...expectedByCategory.entries()].map(([categoryKey, categoryExpected]) => {
-      const categoryActual = actualByCategory.get(categoryKey) ?? 0;
-      return { categoryKey, categoryActual, categoryExpected, difference: categoryActual - categoryExpected };
+      const categoryActual = comparableActualByCategory.get(categoryKey) ?? 0;
+      const categoryEvidence = referenceEvidenceByCategory.get(categoryKey);
+      const categoryBaselineReliable = Boolean(
+        categoryEvidence &&
+        categoryEvidence.positivePeerStores.size >= 5 &&
+        categoryEvidence.positiveReferenceMonths.size >= minimumPositiveReferenceMonths &&
+        categoryEvidence.positivePeerStoreMonths.size >= 12,
+      );
+      return { categoryKey, categoryActual, categoryExpected, difference: categoryActual - categoryExpected, categoryBaselineReliable };
     });
     const categoryDirection = aboveRange ? 1 : belowRange ? -1 : 0;
     const largestCategoryDifference = baselineReliable && explainableAdditiveMetric
-      ? [...categoryDifferences].sort((left, right) => {
+      ? [...categoryDifferences].filter((category) => category.categoryBaselineReliable).sort((left, right) => {
           const leftScore = categoryDirection ? left.difference * categoryDirection : Math.abs(left.difference);
           const rightScore = categoryDirection ? right.difference * categoryDirection : Math.abs(right.difference);
           return rightScore - leftScore;
         })[0]
       : undefined;
+    const largestRecordedCategory = baselineReliable && explainableAdditiveMetric
+      ? [...recordedActualByCategory.entries()]
+          .map(([categoryKey, categoryActual]) => ({ categoryKey, categoryActual }))
+          .sort((left, right) => right.categoryActual - left.categoryActual)[0]
+      : undefined;
+    const findingCategory = largestCategoryDifference ?? largestRecordedCategory;
     const findingExplanation = largestCategoryDifference
       ? `${sentence(largestCategoryDifference.categoryKey)} is the largest measured difference: ${formatMetric(safeMetric, Math.abs(largestCategoryDifference.difference))} ${largestCategoryDifference.difference >= 0 ? "above" : "below"} its historical peer expectation (${formatMetric(safeMetric, largestCategoryDifference.categoryActual)} recorded vs ${formatMetric(safeMetric, largestCategoryDifference.categoryExpected)} expected).`
-      : undefined;
-    const driverLink = largestCategoryDifference ? {
+      : largestRecordedCategory
+        ? `${sentence(largestRecordedCategory.categoryKey)} is the largest recorded contributor: ${formatMetric(safeMetric, largestRecordedCategory.categoryActual)} of this store's ${formatMetric(safeMetric, actual)} ${metricCopy[safeMetric].label.toLocaleLowerCase("en-US")}. Not enough comparable ${sentence(largestRecordedCategory.categoryKey).toLocaleLowerCase("en-US")} history for a reliable category expectation.`
+        : undefined;
+    const driverLink = findingCategory ? {
       href: `${trendHref({
         view: "records",
         store: store.id,
-        category: largestCategoryDifference.categoryKey,
+        category: findingCategory.categoryKey,
         detailKind: "current",
         detailMonth: undefined,
         driverBreakdown: undefined,
@@ -1282,11 +1329,12 @@ export function buildTrendsModel(
         benchmarkStore: undefined,
         sourcePage: undefined,
       })}#source-records`,
-      label: `Open ${sentence(largestCategoryDifference.categoryKey)} source records for Store ${store.storeNumber}`,
+      label: `Open ${sentence(findingCategory.categoryKey)} source records for Store ${store.storeNumber}`,
     } : undefined;
-    const largestSourceGroup = largestCategoryDifference
-      ? [...comparableRows
-          .filter((row) => recordCategoryKeys(row).includes(largestCategoryDifference.categoryKey))
+    const findingSourceRows = largestCategoryDifference ? comparableRows : storeRows;
+    const largestSourceGroup = findingCategory
+      ? [...findingSourceRows
+          .filter((row) => recordCategoryKeys(row).includes(findingCategory.categoryKey))
           .reduce((groups, row) => {
             const key = row.workOrderId ?? row.invoiceId ?? row.id;
             const current = groups.get(key);
