@@ -67,6 +67,7 @@ import {
   calculateRepairReplacementScreening,
   type RepairReplacementScreening,
 } from "@/lib/ops/lifecycle-analytics";
+import { resolveLifecycleDecisionState } from "@/lib/ops/lifecycle-decision-state";
 import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
 import { reportCatalog } from "@/lib/ops/report-catalog";
 import { domainLabel } from "@/lib/product/domain-label";
@@ -949,30 +950,6 @@ function dashboardShortcut(options: {
   };
 }
 
-function lifecycleComparisonLabel(screening: RepairReplacementScreening): string {
-  if (screening.state === "compare_alternatives") return "Compare repair and replacement";
-  if (screening.state === "below_materiality") return "Small repair; not flagged";
-  if (screening.state === "below_economic_review") return "Below capital-review threshold";
-  return "Current comparison inputs needed";
-}
-
-function lifecycleComparisonExplanation(screening: RepairReplacementScreening): string {
-  const runway = screening.comparison.requiredEconomicRunwayMonths;
-  const runwayLabel = runway === undefined
-    ? "The required service runway cannot be calculated until repair, replacement, and expected-life inputs are entered."
-    : `The repair would need about ${formatRunway(runway)} of continued service to equal the replacement's annualized installed-capital cost.`;
-  if (screening.state === "compare_alternatives") {
-    return `${runwayLabel} Compare the entered repair-service estimate, warranty, and service history before authorizing; this is not a replacement direction.`;
-  }
-  if (screening.state === "below_materiality") {
-    return `${runwayLabel} The current repair remains below the materiality threshold, so a short remaining expected life does not turn it into a replacement signal.`;
-  }
-  if (screening.state === "below_economic_review") {
-    return `${runwayLabel} The available planning runway is above that requirement, so the repair is not flagged for capital review.`;
-  }
-  return "Add the current repair, replacement estimate, and expected-service facts that are still missing.";
-}
-
 function formatRunway(months: number): string {
   if (months < 12) {
     const rounded = Math.max(0.1, Math.round(months * 10) / 10);
@@ -1100,6 +1077,17 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
           },
         },
       );
+      const replacementEvents = fixture.replacementEvents.filter(
+        (event) =>
+          event.organizationId === scoped.organizationId &&
+          event.assetId === asset.id &&
+          (!proposalWork || event.workOrderId === proposalWork.id),
+      );
+      const decisionState = resolveLifecycleDecisionState({
+        screening,
+        latestDecision: latestLifecycleDecision,
+        replacementEvents,
+      });
       const contextFacts = [
         `${reactiveWork.length} reactive work order${reactiveWork.length === 1 ? "" : "s"} recorded`,
         `${observedVisits.length} observed service visit${observedVisits.length === 1 ? "" : "s"}; visit count does not prove repeat failure`,
@@ -1136,6 +1124,7 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
         sameComponentRepeat,
         proposalWork,
         screening,
+        decisionState,
         contextFacts,
       };
     });
@@ -4221,16 +4210,10 @@ export function buildProgramModel(
       { key: "store", value: storeLabel(scoped.stores.find((store) => store.id === row.asset.storeId)) },
       {
         key: "evidence",
-        value: lifecycleView === "capital" ? "Management-planned replacement" : lifecycleComparisonLabel(row.screening),
+        value: lifecycleView === "capital" ? "Management-planned replacement" : row.decisionState.label,
         secondary: lifecycleView === "capital"
           ? row.capitalPlanLabel
-          : row.screening.state === "incomplete"
-          ? `Needed: ${row.screening.dataGaps.map(lifecycleGapLabel).join(", ")}`
-          : row.screening.state === "compare_alternatives"
-            ? "Compare the current repair with replacement before issuing work"
-            : row.hasManagementPlan
-              ? row.capitalPlanLabel
-              : "Open the equipment record for full service-life evidence",
+          : row.decisionState.helper,
       },
       {
         key: "work",
@@ -4250,8 +4233,8 @@ export function buildProgramModel(
       { key: "replacement", value: row.replacement ? money(row.replacement) : "Not entered", secondary: selectedAsset ? `${row.capitalPlanLabel}. ${row.replacementResolution.explanation}` : row.capitalPlanLabel },
       {
         key: "status",
-        value: lifecycleView === "capital" ? row.capitalPlanLabel : lifecycleComparisonLabel(row.screening),
-        tone: lifecycleView === "capital" ? "info" : row.screening.state === "compare_alternatives" ? "warning" : row.screening.state === "incomplete" ? "info" : "positive",
+        value: lifecycleView === "capital" ? row.capitalPlanLabel : row.decisionState.label,
+        tone: lifecycleView === "capital" ? "info" : row.decisionState.tone,
       },
     ],
   }));
@@ -4266,8 +4249,8 @@ export function buildProgramModel(
   const sharedLifecycleParameters = { store: selectedStoreId, asset: selectedAsset };
   const metrics: MetricViewModel[] = lifecycleView === "review"
     ? [
-        { id: "review", label: "Decisions needing review", value: String(liveRepairDecisions.length), supportingText: `Current repair-or-replace decisions across ${reviewStoreCount} store${reviewStoreCount === 1 ? "" : "s"}`, tone: liveRepairDecisions.length ? "warning" : "positive", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Open repair decisions" } },
-        { id: "repair-estimates", label: "Repair prices entered", value: `${reviewRepairPriceCount} of ${liveRepairDecisions.length}`, supportingText: "The actual vendor price stays on each decision; prices are not combined", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Review repair prices" } },
+        { id: "review", label: "Current lifecycle cases", value: String(liveRepairDecisions.length), supportingText: `Active repair-or-replace cases across ${reviewStoreCount} store${reviewStoreCount === 1 ? "" : "s"}; each row shows its recorded decision state`, tone: liveRepairDecisions.some((row) => row.decisionState.kind === "compare_alternatives") ? "warning" : "info", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Open current cases" } },
+        { id: "repair-estimates", label: "Repair prices entered", value: `${reviewRepairPriceCount} of ${liveRepairDecisions.length}`, supportingText: "The actual vendor price stays on each case; prices are not combined", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Review repair prices" } },
         { id: "replacement-alternatives", label: "Replacement estimates ready", value: `${reviewReplacementPriceCount} of ${liveRepairDecisions.length}`, supportingText: "Each estimate is compared only with the repair for that equipment", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "review" }), label: "Review replacement estimates" } },
         { id: "portfolio-context", label: "Portfolio planning", value: `${managementPlanned.length} planned`, supportingText: "Future replacement decisions are kept separate from today's repair review", tone: "info", link: { href: hrefWithQuery("/app/lifecycle", { ...sharedLifecycleParameters, view: "capital" }), label: "Open planned replacements" } },
       ]
@@ -4286,8 +4269,8 @@ export function buildProgramModel(
         ];
   const lifecyclePage = lifecycleView === "review"
     ? {
-        title: "Repair decisions",
-        description: "Review only the current repairs large enough to compare with replacement. Repair and replacement dollars below refer to the same equipment—portfolio replacement estimates are kept out of this view.",
+        title: "Current lifecycle cases",
+        description: "Follow active repair-or-replace cases from comparison through the recorded management decision. Repair and replacement dollars refer to the same equipment; portfolio replacement estimates stay out of this view.",
       }
     : lifecycleView === "capital"
       ? {
@@ -4303,7 +4286,7 @@ export function buildProgramModel(
     page: { title: lifecyclePage.title, eyebrow: "Repair or replace", description: lifecyclePage.description, scopeLabel: selectedLifecycleAsset ? `${activeScopeLabel} · ${selectedLifecycleAsset.asset.name}` : activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
     metrics,
     filters: [{ id: "lifecycle-view", label: "Equipment shown", options: [
-      { value: "review", label: `Repair decisions (${liveRepairDecisions.length})`, href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "review" }), selected: lifecycleView === "review" },
+      { value: "review", label: `Current cases (${liveRepairDecisions.length})`, href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "review" }), selected: lifecycleView === "review" },
       { value: "capital", label: `Planned replacements (${managementPlanned.length})`, href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "capital" }), selected: lifecycleView === "capital" },
       { value: "all", label: `Planning register (${scopeCandidates.length})`, href: hrefWithQuery("/app/lifecycle", { store: selectedStoreId, asset: selectedAsset, view: "all" }), selected: lifecycleView === "all" },
     ] }],
@@ -4323,7 +4306,7 @@ export function buildProgramModel(
     pagination: candidates.length > lifecyclePageSize
       ? paginationModel(candidates.length, lifecycleCurrentPage, lifecyclePageSize, lifecyclePageHref)
       : undefined,
-    table: { id: "lifecycle", caption: lifecycleView === "review" ? "Current repair decisions" : lifecycleView === "capital" ? "Management-planned replacements" : "Replacement planning register", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "evidence", label: lifecycleView === "capital" ? "Why it is planned" : "Why it is here" }, { key: "work", label: "Current repair" }, { key: "replacement", label: "Estimated replacement", align: "end" }, { key: "status", label: lifecycleView === "capital" ? "Funding plan" : "Review result" }], rows },
+    table: { id: "lifecycle", caption: lifecycleView === "review" ? "Current lifecycle cases" : lifecycleView === "capital" ? "Management-planned replacements" : "Replacement planning register", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "evidence", label: lifecycleView === "capital" ? "Why it is planned" : "Recorded decision" }, { key: "work", label: "Current repair" }, { key: "replacement", label: "Estimated replacement", align: "end" }, { key: "status", label: lifecycleView === "capital" ? "Funding plan" : "Current state" }], rows },
   };
 }
 
@@ -4628,7 +4611,7 @@ export function buildDetailModel(
           title: "Repair decision and lifecycle context",
           description: "Age against expected life and the current repair-versus-replacement facts appear together. Small bridge repairs are not treated as replacement signals, historical facts stay separate, and the decision remains human.",
           facts: [
-            { label: "Current comparison", value: lifecycle ? lifecycleComparisonLabel(lifecycle.screening) : "Inputs not available", helperText: lifecycle ? lifecycleComparisonExplanation(lifecycle.screening) : undefined },
+            { label: "Current decision", value: lifecycle?.decisionState.label ?? "Inputs not available", helperText: lifecycle?.decisionState.helper },
             { label: "Current repair estimate", value: lifecycle?.screening.comparison.repairEstimateMinor === undefined ? "Not entered" : money(lifecycle.screening.comparison.repairEstimateMinor), helperText: "Current proposal only; not accumulated historical spend" },
             { label: "Required service runway", value: lifecycle?.screening.comparison.requiredEconomicRunwayMonths === undefined ? "Not calculable" : formatRunway(lifecycle.screening.comparison.requiredEconomicRunwayMonths), helperText: "Calculated from the current repair, installed replacement estimate, and expected life of a replacement; not a promise about repair life" },
             { label: "Entered service estimate", value: lifecycle?.screening.comparison.estimatedServiceExtensionMonths === undefined ? "Not entered" : formatRunway(lifecycle.screening.comparison.estimatedServiceExtensionMonths), helperText: "Vendor or operator planning estimate; kept visibly separate from the calculated runway" },

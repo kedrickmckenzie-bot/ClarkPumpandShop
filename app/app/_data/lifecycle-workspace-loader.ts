@@ -1,8 +1,9 @@
 import "server-only";
 
-import type { DetailPageViewModel, OperatorSession, TimelineEventViewModel, Tone } from "@/components/ops/data-contract";
+import type { DetailPageViewModel, OperatorSession, TimelineEventViewModel } from "@/components/ops/data-contract";
 import type { LifecycleDecisionWorkspaceModel } from "@/components/workspace/lifecycle-record-stack";
 import { calculateRepairReplacementScreening } from "@/lib/ops/lifecycle-analytics";
+import { resolveLifecycleDecisionState } from "@/lib/ops/lifecycle-decision-state";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
 import type { OpsFixture } from "@/lib/ops/types";
@@ -178,7 +179,7 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
     proposalWork ? { proposalId: proposalWork.id, repairEstimateMinor: proposalWork.repairEstimate?.amountMinor, estimatedServiceExtensionMonths: proposalWork.estimatedServiceExtensionMonths, sourceRecordIds: [proposalWork.id] } : undefined,
   );
   const latestDecision = fixture.lifecycleRecommendations.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id).sort((left, right) => right.version - left.version || right.decidedAt.localeCompare(left.decidedAt))[0];
-  const replacementEvent = fixture.replacementEvents.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && (!proposalWork || row.workOrderId === proposalWork.id)).sort((left, right) => right.approvedAt.localeCompare(left.approvedAt))[0];
+  const replacementEvents = fixture.replacementEvents.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && (!proposalWork || row.workOrderId === proposalWork.id));
   const timeZone = store.timeZone ?? fixture.organizations.find((row) => row.id === session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   const record = first(query.record);
   const activeChild = record === "work-order" && proposalWork ? "work-order" : record === "equipment" ? "equipment" : undefined;
@@ -187,17 +188,7 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
   const openWorkOrderHref = proposalWork ? hrefWithQuery(query, { decision: asset.id, record: "work-order" }) : undefined;
   const openEquipmentHref = hrefWithQuery(query, { decision: asset.id, record: "equipment" });
   const workCase = proposalWork ? workOrderCase(fixture, session.organizationId, proposalWork.id, `${store.storeNumber} - ${store.name}`, timeZone) : undefined;
-  const managementDecision = replacementEvent?.status === "completed"
-    ? { label: "Replacement completed", helper: "The installed replacement and its recorded outcome now belong to this equipment history.", tone: "positive" as Tone }
-    : replacementEvent?.status === "approved"
-      ? { label: "Replacement approved", helper: "Management approved the selected vendor quote. The work order remains the source for installation, visits, cost, and closeout.", tone: "warning" as Tone }
-      : latestDecision?.userDecision === "replace"
-        ? { label: `Replacement planned${latestDecision.plannedForYear ? ` for ${latestDecision.plannedForYear}` : ""}`, helper: latestDecision.userReason, tone: "warning" as Tone }
-        : latestDecision?.userDecision === "repair"
-          ? { label: "Repair selected", helper: latestDecision.userReason, tone: "positive" as Tone }
-          : screening.state === "compare_alternatives"
-            ? { label: "Compare repair and replacement", helper: "Review the current vendor repair price against the installed replacement estimate before issuing or changing the work.", tone: "warning" as Tone }
-            : { label: "Complete the missing comparison inputs", helper: screening.dataGaps.length ? `Still needed: ${screening.dataGaps.map(sentence).join(", ")}.` : "Open the source records before making a lifecycle decision.", tone: "info" as Tone };
+  const managementDecision = resolveLifecycleDecisionState({ screening, latestDecision, replacementEvents });
   const recordedCostMinor = fixture.costLines.filter((row) => row.organizationId === session.organizationId && workOrders.some((work) => work.id === row.workOrderId)).reduce((sum, row) => sum + row.amount.amountMinor, 0);
   const observedVisits = fixture.visits.filter((row) => row.organizationId === session.organizationId && row.workOrderId && workOrders.some((work) => work.id === row.workOrderId));
   const pmOccurrences = fixture.pmOccurrences.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id);
@@ -249,7 +240,7 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
       decisionLabel: managementDecision.label,
       decisionHelper: managementDecision.helper,
       ownerLabel: workCase?.accountableParty ?? proposalWork?.accountableParty ?? "Facilities",
-      nextActionLabel: replacementEvent?.status === "approved" ? "Coordinate the approved replacement through the work order" : workCase?.primaryNextAction.label ?? proposalWork?.nextAction ?? "Review the source records",
+      nextActionLabel: managementDecision.kind === "replacement_approved" ? "Coordinate the approved replacement through the work order" : workCase?.primaryNextAction.label ?? proposalWork?.nextAction ?? "Review the source records",
       dueLabel: workCase?.dueAt ? formatOperationsDateTime(workCase.dueAt, timeZone) : "No open due time",
       contextFacts,
       activity,

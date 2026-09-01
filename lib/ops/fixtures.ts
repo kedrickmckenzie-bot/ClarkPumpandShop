@@ -708,6 +708,7 @@ function buildFixture(): OpsFixture {
   const recurringServiceSeeds: ReadonlyArray<{
     key: string;
     year?: number;
+    storeNumbers?: readonly string[];
     month: number;
     day: number;
     categoryKey: string;
@@ -722,6 +723,14 @@ function buildFixture(): OpsFixture {
     // test. The separate 65-store fixture remains the scale proof.
     { key: "food-oct-2024", year: 2024, month: 10, day: 22, categoryKey: "foodservice", taxonomyNodeId: "taxonomy-northline-ovens", vendorId: "vendor-northline-cedar", problem: "Scheduled hot-food equipment cleaning and safety inspection", scope: "Complete scheduled cleaning and inspection; report repair needs separately.", amountMinor: 57_500 },
     { key: "refrigeration-dec-2024", year: 2024, month: 12, day: 12, categoryKey: "refrigeration", taxonomyNodeId: "taxonomy-northline-beer_caves", vendorId: "vendor-northline-summit", problem: "Quarterly beer-cave refrigeration inspection", scope: "Inspect and clean accessible coils, verify temperature and controls, and document operating condition.", amountMinor: 42_500 },
+    // Six ordinary 2025 source records fill real calendar gaps across Jan–Jul
+    // without fabricating an identical all-store cadence or a summary total.
+    { key: "snow-jan-2025", year: 2025, storeNumbers: ["101"], month: 1, day: 18, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-snow_removal", vendorId: "vendor-northline-four-seasons", problem: "Snow and ice response after overnight accumulation", scope: "Clear vehicle and pedestrian areas and apply ice control according to the site service agreement.", amountMinor: 89_500 },
+    { key: "snow-mar-2025", year: 2025, storeNumbers: ["103"], month: 3, day: 4, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-snow_removal", vendorId: "vendor-northline-four-seasons", problem: "Late-season snow and ice response", scope: "Clear priority areas and apply ice control according to the site service agreement.", amountMinor: 66_500 },
+    { key: "drain-jul-2025", year: 2025, storeNumbers: ["106"], month: 7, day: 15, categoryKey: "plumbing", taxonomyNodeId: "taxonomy-northline-drains", vendorId: "vendor-northline-cedar", problem: "Scheduled drain and grease-line service", scope: "Complete scheduled drain service and report any condition requiring separate repair authorization.", amountMinor: 47_500 },
+    { key: "hvac-jun-2025", year: 2025, storeNumbers: ["108"], month: 6, day: 17, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", vendorId: "vendor-northline-cedar", problem: "Quarterly rooftop-unit filter and operating inspection", scope: "Replace filters, inspect belts and drains, and record operating condition.", amountMinor: 65_500 },
+    { key: "grounds-apr-2025", year: 2025, storeNumbers: ["111"], month: 4, day: 10, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled spring grounds cleanup and landscape bed service", scope: "Complete scheduled grounds service and document site condition before departure.", amountMinor: 45_500 },
+    { key: "grounds-may-2025", year: 2025, storeNumbers: ["112"], month: 5, day: 9, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled landscape and grounds service", scope: "Complete scheduled mowing, trimming, and grounds service.", amountMinor: 38_500 },
     { key: "grounds-apr", month: 4, day: 9, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled spring grounds cleanup and landscape bed service", scope: "Complete scheduled grounds service and document site condition before departure.", amountMinor: 47_500 },
     { key: "grounds-may", month: 5, day: 8, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled landscape and grounds service", scope: "Complete scheduled mowing, trimming, and grounds service.", amountMinor: 39_500 },
     { key: "grounds-jun", month: 6, day: 11, categoryKey: "exterior", taxonomyNodeId: "taxonomy-northline-landscaping", vendorId: "vendor-northline-four-seasons", problem: "Scheduled landscape and grounds service", scope: "Complete scheduled mowing, trimming, and grounds service.", amountMinor: 39_500 },
@@ -744,6 +753,7 @@ function buildFixture(): OpsFixture {
   let recurringSequence = 2_000;
   stores.forEach((store, storeIndex) => {
     recurringServiceSeeds.forEach((service, serviceIndex) => {
+      if (service.storeNumbers && !service.storeNumbers.includes(store.storeNumber)) return;
       // Hot-food service belongs only at stores that actually carry the oven.
       // This keeps the register from fabricating identical recurring work at
       // every location merely to make the dashboard look busy.

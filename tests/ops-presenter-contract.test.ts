@@ -401,6 +401,9 @@ describe("operator presenter drill-through contracts", () => {
       "asset-110-beer-cave",
       "asset-115-beer-cave",
     ]));
+    const approvedReplacement = defaultView.table!.rows.find((row) => row.id === "asset-115-beer-cave")!;
+    expect(approvedReplacement.cells.find((cell) => cell.key === "evidence")?.value).toBe("Replacement approved");
+    expect(approvedReplacement.cells.find((cell) => cell.key === "status")?.value).toBe("Replacement approved");
     expect(defaultView.table!.rows.length).toBeLessThan(fixture.assets.length);
     expect(allEquipment.table!.rows).toHaveLength(25);
     expect(allEquipment.pagination).toMatchObject({ currentPage: 1, totalPages: Math.ceil(fixture.assets.length / 25) });
@@ -415,9 +418,9 @@ describe("operator presenter drill-through contracts", () => {
     expect(planned.length).toBeLessThanOrEqual(10);
     expect(new Set(planned.map((recommendation) => recommendation.plannedForYear)).size).toBeGreaterThanOrEqual(2);
     expect(defaultView.filters?.[0]?.options.map((option) => option.value)).toEqual(["review", "capital", "all"]);
-    expect(defaultView.page.title).toBe("Repair decisions");
+    expect(defaultView.page.title).toBe("Current lifecycle cases");
     expect(defaultView.metrics.map((metric) => metric.label)).toEqual([
-      "Decisions needing review",
+      "Current lifecycle cases",
       "Repair prices entered",
       "Replacement estimates ready",
       "Portfolio planning",
