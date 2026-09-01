@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, CheckCircle2, ChevronRight, CircleDot, Clock3, FileSearch } from "lucide-react";
 import type { DetailSectionViewModel, TableViewModel, Tone } from "@/components/ops/data-contract";
 import styles from "./record-sections.module.css";
@@ -85,20 +85,36 @@ function SectionCard({ section, onOpen }: { section: DetailSectionViewModel; onO
 }
 
 export function RecordSections({ sections, initialSection = "overview" }: { sections: DetailSectionViewModel[]; initialSection?: string }) {
-  const [activeId, setActiveId] = useState(() => sections.some((section) => section.id === initialSection) ? initialSection : "overview");
-  const active = useMemo(() => sections.find((section) => section.id === activeId), [activeId, sections]);
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedSection = searchParams.get("section");
+  const validInitialSection = sections.some((section) => section.id === initialSection) ? initialSection : "overview";
+  const activeId = requestedSection && sections.some((section) => section.id === requestedSection)
+    ? requestedSection
+    : validInitialSection;
+  const active = sections.find((section) => section.id === activeId);
+
+  const openSection = (sectionId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (sectionId === validInitialSection) params.delete("section");
+    else params.set("section", sectionId);
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
   if (!sections.length) return <div className={styles.empty}><FileSearch aria-hidden="true" size={20} /><p>No record history is available yet.</p></div>;
 
   return (
     <div className={styles.workspace}>
       <nav className={styles.tabs} aria-label="Record sections">
-        <button aria-current={activeId === "overview" ? "page" : undefined} data-active={activeId === "overview"} onClick={() => setActiveId("overview")} type="button"><CircleDot aria-hidden="true" size={15} />Overview</button>
-        {sections.map((section) => <button aria-current={activeId === section.id ? "page" : undefined} data-active={activeId === section.id} onClick={() => setActiveId(section.id)} type="button" key={section.id}>{section.title}</button>)}
+        <button aria-current={activeId === "overview" ? "page" : undefined} data-active={activeId === "overview"} onClick={() => openSection("overview")} type="button"><CircleDot aria-hidden="true" size={15} />Overview</button>
+        {sections.map((section) => <button aria-current={activeId === section.id ? "page" : undefined} data-active={activeId === section.id} onClick={() => openSection(section.id)} type="button" key={section.id}>{section.title}</button>)}
       </nav>
       {active ? <SectionContent section={active} /> : (
         <section className={styles.overview} aria-labelledby="record-map-heading">
-          <header><div><p>More detail</p><h2 id="record-map-heading">Choose what you want to see</h2><span>The summary stays above while you open the history, related work, or supporting details you need.</span></div><span><Clock3 aria-hidden="true" size={16} />Up to date</span></header>
-          <div className={styles.cardGrid}>{sections.map((section) => <SectionCard section={section} onOpen={() => setActiveId(section.id)} key={section.id} />)}</div>
+          <header><div><p>Record detail</p><h2 id="record-map-heading">Explore this record</h2><span>Open the history, source evidence, or related work you came here to review.</span></div><span><Clock3 aria-hidden="true" size={16} />Current record</span></header>
+          <div className={styles.cardGrid}>{sections.map((section) => <SectionCard section={section} onOpen={() => openSection(section.id)} key={section.id} />)}</div>
         </section>
       )}
     </div>

@@ -136,12 +136,21 @@ export function DataStatePanel({ state }: { state: Exclude<DataState, { kind: "r
   );
 }
 
-function MetricStrip({ metrics }: { metrics: MetricViewModel[] }) {
+function MetricStrip({
+  metrics,
+  heading,
+  description,
+}: {
+  metrics: MetricViewModel[];
+  heading?: string;
+  description?: string;
+}) {
   if (metrics.length === 0) return null;
 
   return (
-    <section aria-label="Key measures" className={styles.metricStrip}>
-      {metrics.map((metric) => (
+    <section aria-label={heading ?? "Key measures"} className={styles.metricExplorer}>
+      {heading ? <header className={styles.metricExplorerHeader}><div><small>Common questions</small><h2>{heading}</h2></div>{description ? <p>{description}</p> : null}</header> : null}
+      <div className={styles.metricStrip}>{metrics.map((metric) => (
         <Link className={`${styles.metricItem} ${toneClass(metric.tone)}`} href={metric.link.href} key={metric.id}>
           <span className={styles.metricTopline}>
             <span className={styles.metricLabel}>{metric.label}</span>
@@ -152,7 +161,7 @@ function MetricStrip({ metrics }: { metrics: MetricViewModel[] }) {
           {metric.trendLabel ? <span className={styles.metricTrend}>{metric.trendLabel}</span> : null}
           <span className={styles.metricLink}>{metric.link.label}</span>
         </Link>
-      ))}
+      ))}</div>
     </section>
   );
 }
@@ -411,7 +420,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
       <PageHeader page={model.page} />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
-          {model.metrics ? <MetricStrip metrics={model.metrics} /> : null}
+          {model.metrics ? <MetricStrip metrics={model.metrics} heading="Choose what to review" description="Each summary opens the exact items behind the count." /> : null}
           <section className={`${styles.listWorkspace} ${styles.reviewQueueWorkspace}`}>
             <div className={styles.listToolbar}>
               {model.search ? (
@@ -588,6 +597,14 @@ function ApprovedLaterManagementPanel({
 
 export function ListSurface({ model, approvedWork, surface, searchParams }: { model: ListPageViewModel; approvedWork?: ApprovedWorkPortfolioViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
   if (surface === "action-center") return <ReviewQueueSurface model={model} />;
+  const metricCopy: Record<string, { heading: string; description: string }> = {
+    stores: { heading: "Explore the store network", description: "Open the locations, work, visits, or recorded costs behind each summary." },
+    "work-orders": { heading: "Choose a work queue", description: "Open the work orders that match the status or responsibility you need to manage." },
+    visits: { heading: "Choose a visit view", description: "Open active visits, completed visits, or records that still need review." },
+    requests: { heading: "Choose an issue queue", description: "Open reported issues by their current review or work-order status." },
+    estimates: { heading: "Choose an estimate queue", description: "Open pricing requests by the decision or vendor response still needed." },
+  };
+  const metricHeading = metricCopy[surface] ?? { heading: "Choose what to review", description: "Each summary opens the matching records without losing your current scope." };
   const triageMode = TRIAGE_SURFACES.has(surface);
   const visitPlanParam = searchParams.visitPlan;
   const approvedLaterMode = surface === "work-orders" && (Array.isArray(visitPlanParam) ? visitPlanParam[0] : visitPlanParam) === "ready";
@@ -619,7 +636,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams }: { mo
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           {notice ? <div className={styles.successNotice} role="status">{notice}</div> : null}
-          {approvedLaterMode && approvedWork ? <ApprovedWorkPortfolio model={approvedWork} /> : model.metrics ? <MetricStrip metrics={model.metrics} /> : null}
+          {approvedLaterMode && approvedWork ? <ApprovedWorkPortfolio model={approvedWork} /> : model.metrics ? <MetricStrip metrics={model.metrics} heading={metricHeading.heading} description={metricHeading.description} /> : null}
           <section className={styles.listWorkspace}>
             <div className={styles.listToolbar}>
               {model.search ? (
@@ -736,7 +753,7 @@ export function ListView({ model }: { model: ListPageViewModel }) {
       <PageHeader page={model.page} />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
-          {model.metrics ? <MetricStrip metrics={model.metrics} /> : null}
+          {model.metrics ? <MetricStrip metrics={model.metrics} heading="Choose what to review" description="Each summary opens the matching records without losing your current scope." /> : null}
           <section className={styles.listWorkspace}>
             <div className={styles.listToolbar}>
               {model.search ? (
@@ -817,7 +834,7 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
           {beforeContent}
           <FilterGroups filters={model.filters} />
           <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
-          <MetricStrip metrics={model.metrics} />
+          <MetricStrip metrics={model.metrics} heading="Explore the equipment register" description="Open a measure to see the exact equipment, stores, planning coverage, or lifecycle records behind it." />
           {(model.breakdowns.length || model.trends.length) ? (
             <section className={styles.analysisGrid} aria-label="Program intelligence">
               {model.breakdowns.map((breakdown) => <BreakdownPanel breakdown={breakdown} key={breakdown.id} />)}
@@ -846,6 +863,8 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
 }
 
 export function DetailView({ model, beforeSections, after, initialSection }: { model: DetailPageViewModel; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string }) {
+  const linkedFacts = model.facts.filter((fact) => fact.link);
+  const summaryFacts = model.facts.filter((fact) => !fact.link);
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={16} />{model.backLink.label}</Link>
@@ -853,18 +872,16 @@ export function DetailView({ model, beforeSections, after, initialSection }: { m
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           <section className={styles.recordSummary} aria-label="Record summary">
-            <header className={styles.recordSummaryHeader}>
-              <div><small>Record summary</small><h2>At a glance</h2></div>
-              <p>Open any tile to see the exact work, visits, cost, or equipment behind it.</p>
-            </header>
-            <div className={styles.recordSummaryGrid}>
-              {model.facts.map((fact) => {
-                const content = <><span className={styles.factLabel}>{fact.label}</span><strong>{fact.value}</strong>{fact.helperText ? <small>{fact.helperText}</small> : null}</>;
-                return fact.link ? (
-                  <Link className={styles.factItem} href={fact.link.href} key={fact.label}>{content}<ChevronRight aria-hidden="true" size={15} /></Link>
-                ) : <div className={styles.factItem} key={fact.label}>{content}</div>;
-              })}
-            </div>
+            {summaryFacts.length ? <><header className={styles.recordSummaryHeader}>
+              <div><small>Record summary</small><h2>Key facts</h2></div>
+              <p>Recorded facts stay separate from the places you can investigate next.</p>
+            </header><div className={styles.recordSummaryGrid}>
+              {summaryFacts.map((fact) => <div className={styles.factItem} key={fact.label}><span className={styles.factLabel}>{fact.label}</span><strong>{fact.value}</strong>{fact.helperText ? <small>{fact.helperText}</small> : null}</div>)}
+            </div></> : null}
+            {linkedFacts.length ? <nav className={styles.recordDrilldowns} aria-label="Related information">
+              <header><div><small>Supporting records</small><h3>Related information</h3></div><p>Open the store, equipment, work, visit, or cost records connected to this item.</p></header>
+              <div>{linkedFacts.map((fact) => <Link href={fact.link!.href} key={fact.label}><span><small>{fact.label}</small><strong>{fact.value}</strong>{fact.helperText ? <em>{fact.helperText}</em> : null}</span><span>{fact.link!.label}<ChevronRight aria-hidden="true" size={15} /></span></Link>)}</div>
+            </nav> : null}
           </section>
           {beforeSections}
           <RecordSections sections={model.sections} initialSection={initialSection} />

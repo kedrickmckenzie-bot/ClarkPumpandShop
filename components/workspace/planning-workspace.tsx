@@ -38,6 +38,8 @@ const workspaceCopy: Record<PlanningWorkspaceKind, {
   label: string;
   basisTitle: string;
   basis: string;
+  metricTitle: string;
+  metricDescription: string;
   sourceTitle: string;
   sourceDescription: string;
 }> = {
@@ -45,6 +47,8 @@ const workspaceCopy: Record<PlanningWorkspaceKind, {
     label: "Spending",
     basisTitle: "What counts in this total",
     basis: "This view totals work costs that were entered in the platform. Approvals, quotes, and invoices stay separate so the numbers are not accidentally combined.",
+    metricTitle: "Choose what you want to explain",
+    metricDescription: "Open a total to see the exact costs and work orders behind it.",
     sourceTitle: "Work costs in this view",
     sourceDescription: "Open any row to see the store, work order, and cost behind it.",
   },
@@ -52,6 +56,8 @@ const workspaceCopy: Record<PlanningWorkspaceKind, {
     label: "Preventive maintenance",
     basisTitle: "How completion is counted",
     basis: "Only maintenance windows that have ended count toward completion. Work that is still in its window—or was waived—is not counted as missed.",
+    metricTitle: "Choose what you want to review",
+    metricDescription: "Open a status to see the exact maintenance windows, stores, and linked work.",
     sourceTitle: "Maintenance schedule",
     sourceDescription: "Each row shows the store, due window, equipment or plan, status, and linked work order when one exists.",
   },
@@ -59,6 +65,8 @@ const workspaceCopy: Record<PlanningWorkspaceKind, {
     label: "Repair or replace",
     basisTitle: "How the comparison works",
     basis: "For a current repair, the platform compares the vendor's repair price with that equipment's estimated installed replacement cost and shows the minimum service time the repair would need to justify itself. Replacement estimates remain attached to individual equipment; only management-planned replacements are totaled in the capital view. Age, warranty, repeat work, and past costs remain visible context; the final decision stays yours.",
+    metricTitle: "Choose the decision set you need",
+    metricDescription: "Open current repair decisions, the capital plan, or the full equipment register without mixing them together.",
     sourceTitle: "Equipment in this view",
     sourceDescription: "Every row matches the selected view above. Open a row for the repair, replacement estimate, planning source, warranty, and service history behind it.",
   },
@@ -141,16 +149,18 @@ function Filters({ model }: { model: ProgramPageViewModel }) {
 }
 
 function MetricStrip({ model, kind }: { model: ProgramPageViewModel; kind: PlanningWorkspaceKind }) {
+  const copy = workspaceCopy[kind];
   return (
-    <section className={styles.metrics} aria-label={kind === "pm" ? "PM status filters" : "Key planning measures"}>
-      {model.metrics.map((metric) => (
+    <section className={styles.metricExplorer} aria-label={kind === "pm" ? "PM status filters" : "Key planning measures"}>
+      <header><div><small>Common questions</small><h2>{copy.metricTitle}</h2></div><p>{copy.metricDescription}</p></header>
+      <div className={styles.metrics}>{model.metrics.map((metric) => (
         <Link href={metric.link.href} className={toneClass(metric.tone)} key={metric.id}>
           <span>{metric.label}<ChevronRight size={15} aria-hidden="true" /></span>
           <strong>{metric.value}</strong>
           <p>{metric.supportingText}</p>
           {metric.trendLabel ? <small>{metric.trendLabel}</small> : null}
         </Link>
-      ))}
+      ))}</div>
     </section>
   );
 }

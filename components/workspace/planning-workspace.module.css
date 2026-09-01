@@ -36,6 +36,12 @@
 .filters nav a { min-height: 30px; padding: 5px 9px; border: 1px solid var(--workspace-border); border-radius: var(--workspace-radius-control); color: #475569; font-size: var(--ops-font-label, 13px); font-weight: 650; }
 .filters nav a:hover { border-color: #94a3b8; background: #f8fafc; }
 .filters nav a[data-selected] { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; }
+.metricExplorer { display: grid; gap: 10px; }
+.metricExplorer > header { display: flex; align-items: end; justify-content: space-between; gap: 22px; padding: 0 2px; }
+.metricExplorer > header > div { display: grid; gap: 2px; }
+.metricExplorer > header small { color: #2563eb; font-size: var(--ops-font-label, 13px); font-weight: 750; letter-spacing: .055em; text-transform: uppercase; }
+.metricExplorer > header h2 { margin: 0; color: #111827; font-size: clamp(18px, 1.6vw, 22px); letter-spacing: -.02em; }
+.metricExplorer > header p { max-width: 560px; margin: 0; color: #697386; font-size: var(--ops-font-table, 14px); line-height: 1.45; text-align: right; }
 .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--workspace-border); border-radius: var(--workspace-radius-panel); background: #fff; box-shadow: var(--workspace-shadow-panel); overflow: hidden; }
 .metrics:has(> a:nth-child(5)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .metrics > a { position: relative; display: grid; align-content: start; gap: 4px; min-height: 134px; padding: 16px 17px; border-left: 3px solid transparent; }
@@ -189,6 +195,8 @@
 }
 
 @media (max-width: 520px) {
+  .metricExplorer > header { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .metricExplorer > header p { text-align: left; }
   .headerActions { align-items: stretch; flex-direction: column-reverse; }
   .primaryButton,
   .secondaryButton { width: 100%; }

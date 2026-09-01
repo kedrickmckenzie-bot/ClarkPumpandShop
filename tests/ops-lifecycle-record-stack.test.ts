@@ -1,8 +1,14 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DetailPageViewModel } from "@/components/ops/data-contract";
 import { LifecycleRecordStack, type LifecycleDecisionWorkspaceModel } from "@/components/workspace/lifecycle-record-stack";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/app/lifecycle",
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams("view=review&decision=asset-115&record=equipment"),
+}));
 
 const detail = (title: string): DetailPageViewModel => ({
   state: { kind: "ready" },

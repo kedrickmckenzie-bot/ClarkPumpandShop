@@ -294,6 +294,48 @@
   to { transform: rotate(360deg); }
 }
 
+.metricExplorer {
+  display: grid;
+  gap: 12px;
+}
+
+.metricExplorerHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 2px;
+}
+
+.metricExplorerHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.metricExplorerHeader small {
+  color: var(--to-blue);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.metricExplorerHeader h2 {
+  margin: 0;
+  color: var(--to-ink);
+  font-size: clamp(18px, 1.6vw, 22px);
+  letter-spacing: -0.02em;
+}
+
+.metricExplorerHeader p {
+  max-width: 560px;
+  margin: 0;
+  color: var(--workspace-muted);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: right;
+}
+
 .metricStrip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -2987,6 +3029,122 @@
   background: #f4f6f9;
 }
 
+.recordDrilldowns {
+  border-top: 1px solid var(--workspace-border);
+  background: #ffffff;
+}
+
+.recordDrilldowns > header {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--workspace-border);
+  background: #f8faff;
+}
+
+.recordDrilldowns > header small {
+  display: block;
+  color: var(--workspace-action);
+  font-size: var(--ops-font-meta, 12px);
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.recordDrilldowns > header h3 {
+  margin: 3px 0 0;
+  color: var(--to-ink);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.recordDrilldowns > header p {
+  max-width: 430px;
+  margin: 0;
+  color: var(--workspace-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.recordDrilldowns > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.recordDrilldowns > div > a {
+  min-width: 0;
+  min-height: 108px;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 18px;
+  padding: 16px 18px;
+  border-right: 1px solid var(--workspace-border);
+  border-bottom: 1px solid var(--workspace-border);
+  color: var(--to-ink);
+  background: #ffffff;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.recordDrilldowns > div > a:hover {
+  position: relative;
+  z-index: 1;
+  background: #f7f9ff;
+  box-shadow: inset 3px 0 0 var(--workspace-action);
+}
+
+.recordDrilldowns > div > a > span:first-child {
+  min-width: 0;
+}
+
+.recordDrilldowns > div > a small,
+.recordDrilldowns > div > a strong,
+.recordDrilldowns > div > a em {
+  display: block;
+}
+
+.recordDrilldowns > div > a small {
+  color: var(--workspace-subtle);
+  font-size: var(--ops-font-meta, 12px);
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.recordDrilldowns > div > a strong {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.recordDrilldowns > div > a em {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--workspace-muted);
+  font-size: var(--ops-font-meta, 12px);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recordDrilldowns > div > a > span:last-child {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--workspace-action);
+  font-size: var(--ops-font-meta, 12px);
+  font-weight: 700;
+  margin-top: auto;
+}
+
 .recordStatus {
   display: flex;
   min-width: 0;
@@ -3750,3 +3908,32 @@ a.factItem:hover {
 .tileToneWarning { color: #96620f; }
 .tileToneCritical { color: #ae4439; }
 .tileToneInfo { color: var(--workspace-action); }
+
+@media (max-width: 680px) {
+  .metricExplorerHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .metricExplorerHeader p {
+    text-align: left;
+  }
+
+  .recordDrilldowns > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .recordDrilldowns > header p {
+    text-align: left;
+  }
+
+  .recordDrilldowns > div {
+    grid-template-columns: 1fr;
+  }
+
+  .recordDrilldowns > div > a {
+    border-right: 0;
+  }
+}
