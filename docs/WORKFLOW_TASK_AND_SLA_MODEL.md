@@ -1,8 +1,8 @@
 # Workflow Task and SLA Model
 
-**Status:** target-state contract; not implemented
+**Status:** first-class reactive-loop implementation is active; advanced calendar/policy versioning remains incremental
 
-The current Work Order fields `accountableParty`, `nextAction`, `dueAt`, and `escalationTo`, plus `FollowUp`, are useful interim evidence. They are not a first-class Workflow Task/SLA engine and must not be represented as one.
+The platform now persists first-class Workflow Tasks, SLA pause/resume facts, task audit events, and a deterministic primary-task projection. Work Order fields `accountableParty`, `nextAction`, `dueAt`, and `escalationTo` are compatibility fields projected from the selected primary obligation; they are not the history ledger. `internalAccountableParty` separately retains operator-side responsibility.
 
 ## Workflow Task
 
@@ -76,6 +76,6 @@ An idempotent scheduler evaluates due clocks and creates an escalation record, v
 
 Escalation rules cover at least unreviewed intake, overdue approval, vendor response, schedule confirmation, PM risk/miss, no-show, verification, warranty response, invoice exception, compliance expiry, and failed delivery/job runs that threaten a must-win workflow.
 
-## Implementation slice
+## Implemented slice and remaining policy depth
 
-The first slice should add the task, policy/version, clock, hold, and escalation-history records required by the reactive loop; migrate current scalar next-action/follow-up facts without destroying history; derive the Work Order header from tasks; enforce invariants in commands; add tenant/role/state tests; and seed overdue, paused, simultaneous, escalated, completed, and no-SLA examples. A recurrence/escalation worker is a separate required part of completion.
+The reactive-loop slice includes task records, deterministic projection, SLA clock identifiers, pause/resume facts, held-work obligations, audit/outbox intent, tenant-scoped commands, idempotent scheduled evaluation, and fixtures covering overdue, paused, simultaneous, escalated, completed, and no-SLA examples. Further calendar/contract policy version depth should extend these records rather than create a parallel task engine.

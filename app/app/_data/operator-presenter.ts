@@ -4794,6 +4794,9 @@ export function buildDetailModel(
     const sourceRequest = work.requestId
       ? fixture.requests.find((request) => request.organizationId === scoped.organizationId && request.id === work.requestId)
       : undefined;
+    const linkedRequests = fixture.requests
+      .filter((request) => request.organizationId === scoped.organizationId && request.convertedWorkOrderId === work.id)
+      .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt));
     const pmOccurrence = fixture.pmOccurrences.find((occurrence) =>
       occurrence.organizationId === scoped.organizationId && occurrence.workOrderId === work.id,
     );
@@ -4851,8 +4854,9 @@ export function buildDetailModel(
             : sourceRequest
               ? [{ label: "Record origin", value: "Store report", helperText: `${sourceRequest.reference} was reviewed before this work order was created.`, link: { href: `/app/requests/${sourceRequest.id}`, label: "Open original report" } }]
               : [{ label: "Record origin", value: "Created directly by a manager", helperText: "No separate store report was required; creation remains visible in the audit history." }]),
-        { label: "Accountable party", value: work.accountableParty },
-        { label: "Next action", value: work.nextAction, helperText: work.dueAt ? `Due ${dateTime(work.dueAt, storeTimeZone)}` : "No due time entered" },
+        { label: "Internal accountable owner", value: work.internalAccountableParty ?? "Facilities coordinator", helperText: "Retains responsibility even while a vendor or store is expected to act." },
+        { label: "Next action owner", value: work.accountableParty },
+        { label: "Next action", value: work.nextAction, helperText: work.dueAt ? `Due ${dateTime(work.dueAt, storeTimeZone)}` : "No deadline applies under the current workflow policy" },
         approval.fact,
         { label: "Recorded work cost", value: money(costByWork.get(work.id) ?? 0), helperText: "Entered source lines; not inferred from observed time" },
         { label: "Classification", value: work.categoryKey ? sentence(work.categoryKey) : "Deferred", helperText: work.assetId
@@ -4873,6 +4877,17 @@ export function buildDetailModel(
             { label: "Original priority", value: sentence(sourceRequest.priority) },
           ],
           action: { label: "Open original report", href: `/app/requests/${sourceRequest.id}` },
+        }] : []),
+        ...(linkedRequests.length ? [{
+          id: "related-reports",
+          title: linkedRequests.length === 1 ? "Linked store report" : "Linked store reports",
+          description: `${linkedRequests.length} original report${linkedRequests.length === 1 ? " is" : "s are"} preserved with this work order. Linking another report did not create another dispatch.`,
+          table: {
+            id: "related-reports",
+            caption: `Reports linked to ${work.number}`,
+            columns: [{ key: "request", label: "Report" }, { key: "reported", label: "Reported" }, { key: "reporter", label: "Reporter" }, { key: "problem", label: "Observed problem" }],
+            rows: linkedRequests.map((request) => ({ id: request.id, label: request.reference, href: `/app/requests/${request.id}`, cells: [{ key: "request", value: request.reference }, { key: "reported", value: dateTime(request.submittedAt, storeTimeZone) }, { key: "reporter", value: request.reporterName }, { key: "problem", value: request.problem }] })),
+          },
         }] : []),
         approval.section,
         ...(work.requestId ? [impactEvidenceSection(impactAssessments, `/app/work-orders/${work.id}`)] : []),
@@ -6434,6 +6449,24 @@ export function buildRequestReviewModel(
     && request?.status === "under_review"
     && impactReviewed,
   );
+  const requestTerms = new Set((request?.problem ?? "").toLocaleLowerCase("en-US").split(/[^a-z0-9]+/).filter((term) => term.length > 3));
+  const relatedOpenWork = request
+    ? scoped.workOrders
+      .filter((work) => work.storeId === request.storeId && !["closed", "cancelled"].includes(work.status))
+      .map((work) => ({
+        work,
+        score: work.problem.toLocaleLowerCase("en-US").split(/[^a-z0-9]+/).filter((term) => requestTerms.has(term)).length,
+      }))
+      .sort((left, right) => right.score - left.score || right.work.createdAt.localeCompare(left.work.createdAt))
+      .slice(0, 5)
+      .map(({ work }) => ({
+        id: work.id,
+        number: work.number,
+        problem: work.problem,
+        statusLabel: sentence(work.status),
+        internalOwner: work.internalAccountableParty ?? "Facilities coordinator",
+      }))
+    : [];
   return {
     available,
     permitted,
@@ -6448,6 +6481,8 @@ export function buildRequestReviewModel(
     createWorkOrderHref: canPrepareWorkOrder && request
       ? `/app/work-orders/new?request=${encodeURIComponent(request.id)}`
       : undefined,
+    linkExistingWorkAction: canCreateWorkOrder && request ? `/api/ops/requests/${encodeURIComponent(request.id)}/link` : undefined,
+    relatedOpenWork,
     impactSubmitAction: request ? `/api/ops/requests/${encodeURIComponent(request.id)}/impact` : "",
     pendingApproval,
     latestImpact: latestImpact ? {

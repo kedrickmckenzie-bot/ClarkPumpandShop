@@ -161,6 +161,7 @@ function WorkflowStages({ stages }: { stages: WorkflowStageViewModel[] }) {
 export function RequestReviewPanel({ model }: { model: RequestReviewViewModel }) {
   const impactMutation = useMutation();
   const decisionMutation = useMutation();
+  const linkMutation = useMutation();
   const [decision, setDecision] = useState("escalate");
   if (!model.available) return null;
   const impact = model.latestImpact;
@@ -203,6 +204,16 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
         <>
           {!model.pendingApproval ? <div className={styles.subControlPanel}>
             <div className={styles.subControlHeading}><ShieldCheck aria-hidden="true" size={18} /><div><h3>Choose what happens next</h3><p>Most requests can move directly into a work order. Equipment and detailed impact can remain unknown.</p></div></div>
+            {model.relatedOpenWork.length ? <div className={styles.controlForm}>
+              <div className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Potentially related open work at this store</h3><p>Review before dispatching again. Linking preserves this report and does not create another assignment or authorization.</p></div></div>
+              <div className={styles.controlSummary}>{model.relatedOpenWork.map((work) => <Link href={`/app/work-orders/${work.id}`} key={work.id}><small>{work.number} · {work.statusLabel}</small><strong>{work.problem}</strong><small>Internal owner: {work.internalOwner}</small></Link>)}</div>
+              {model.linkExistingWorkAction ? <form action={model.linkExistingWorkAction} method="post" onSubmit={linkMutation.submit} className={styles.controlForm}>
+                <input type="hidden" name="expectedStatus" value="under_review" />
+                <SelectField id={`related-work-${model.requestId}`} name="workOrderId" label="Link this report to existing work" options={model.relatedOpenWork.map((work) => ({ value: work.id, label: `${work.number} — ${work.problem}` }))} helper="The original report and manager-reviewed impact remain unchanged and auditable." />
+                <MutationError message={linkMutation.state.error} />
+                <div className={styles.formFooter}><span className={styles.formMeta}>No duplicate dispatch, visit, or cost record will be created.</span><button className={styles.secondaryButton} type="submit" disabled={linkMutation.state.pending}>{linkMutation.state.pending ? "Linking…" : "Link report to this work"}</button></div>
+              </form> : <p className={styles.inlineEmpty}>Confirm the report facts before linking it to existing work.</p>}
+            </div> : null}
             {model.canCreateWorkOrder && model.createWorkOrderHref ? (
               <div className={styles.formFooter}><span className={styles.formMeta}>The manager review is complete. Define the work and choose the service path next.</span><Link className={styles.primaryButton} href={model.createWorkOrderHref}>Create work order<ShieldCheck aria-hidden="true" size={17} /></Link></div>
             ) : model.impactReviewed ? (

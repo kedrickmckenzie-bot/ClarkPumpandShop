@@ -36,7 +36,7 @@ export function OwnerBriefSection({ model }: { model: OwnerBrief }) {
       </header>
 
       <div className={styles.moneyRow}>
-        <Link className={styles.moneyCell} href={model.drillThrough.recordedSpendHref}>
+        <Link className={styles.moneyCell} href={model.drillThrough.verifiedValueHref}>
           <span className={styles.moneyLabel}>Recorded work spend</span>
           <strong>{usd(model.money.recordedSpendMinor)}</strong>
           <span className={styles.moneyNote}>{model.money.currency} · cost lines with service dates in the period — open every cost line</span>

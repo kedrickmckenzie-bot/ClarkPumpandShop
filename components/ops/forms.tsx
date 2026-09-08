@@ -96,7 +96,8 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
 
 export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-order:test-render", edition = "complete" }: { model: CreateWorkOrderPageViewModel; componentId?: string; submissionKey?: string; edition?: DemoEdition }) {
   const accountabilityOnly = edition === "accountability";
-  const sourceStoreLabel = model.sourceVisit ? model.stores.find((store) => store.value === model.defaults?.storeId)?.label : undefined;
+  const boundStoreId = model.sourceRequest?.storeId ?? model.defaults?.storeId;
+  const sourceStoreLabel = model.stores.find((store) => store.value === boundStoreId)?.label;
   const sourceVendorLabel = model.sourceVisit ? model.vendors.find((vendor) => vendor.value === model.defaults?.vendorId)?.label : undefined;
   const sourceInternalLabel = model.sourceVisit ? model.internalAssignees.find((member) => member.value === model.defaults?.internalMembershipId)?.label : undefined;
   return (
@@ -144,7 +145,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
             <div className={styles.formSectionHeading}><span>1</span><div><h2>Define the work</h2><p>Only the store and problem are required. Classification stays honest when details are not yet known.</p></div></div>
             <label className={styles.field} htmlFor="work-store">
               <span>Store <em>Required</em></span>
-              {model.sourceVisit ? <><input name="storeId" type="hidden" value={model.defaults?.storeId} /><input id="work-store" readOnly value={sourceStoreLabel ?? model.defaults?.storeId ?? "Bound store"} /></> : <><input id="work-store" name="storeId" list="work-store-options" required placeholder="Search store number, name, or address" autoComplete="off" defaultValue={model.sourceRequest?.storeId ?? model.defaults?.storeId} /><Datalist id="work-store-options" options={model.stores} /></>}
+              {model.sourceVisit || model.sourceRequest ? <><input name="storeId" type="hidden" value={boundStoreId} /><input id="work-store" readOnly value={sourceStoreLabel ?? "Bound store"} /></> : <><input id="work-store" name="storeId" list="work-store-options" required placeholder="Search store number, name, or address" autoComplete="off" defaultValue={model.defaults?.storeId} /><Datalist id="work-store-options" options={model.stores} /></>}
             </label>
             <label className={styles.field} htmlFor="work-problem">
               <span>Problem <em>Required</em></span>

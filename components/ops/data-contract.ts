@@ -922,6 +922,14 @@ export interface RequestReviewViewModel {
   canPrepareWorkOrder: boolean;
   canCreateWorkOrder: boolean;
   createWorkOrderHref?: string;
+  linkExistingWorkAction?: string;
+  relatedOpenWork: Array<{
+    id: string;
+    number: string;
+    problem: string;
+    statusLabel: string;
+    internalOwner: string;
+  }>;
   impactSubmitAction: string;
   pendingApproval?: ApprovalDecisionViewModel;
   latestImpact?: {

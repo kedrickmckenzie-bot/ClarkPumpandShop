@@ -624,7 +624,7 @@ export async function createServiceRequest(svc: OpsCommandServices, input: Creat
 export interface CreateWorkOrderInput {
   organizationId: OpsId; number?: string; storeId: OpsId; requestId?: OpsId; pmOccurrenceId?: OpsId; problem: string;
   authorizedScope?: string; categoryKey?: string; taxonomyNodeId?: OpsId; assetId?: OpsId; componentId?: OpsId;
-  priority?: WorkOrderPriority; accountableParty: string; nextAction: string; dueAt?: IsoDateTime;
+  priority?: WorkOrderPriority; internalAccountableParty?: string; accountableParty: string; nextAction: string; dueAt?: IsoDateTime;
   escalationTo?: string; nteAmountMinor?: number; currency?: string;
   repairEstimateAmountMinor?: number; repairEstimateCurrency?: string;
   estimatedServiceExtensionMonths?: number;
@@ -789,10 +789,11 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   const accountableParty = approval.request
     ? approval.request.requiredRole === "executive" ? "Executive approver" : approval.request.requiredRole === "facilities_admin" ? "Facilities administrator" : approval.request.requiredRole === "regional_manager" ? "Regional manager" : approval.request.requiredRole === "store_manager" ? "Store manager" : "Finance reviewer"
     : assignmentProjection?.accountableParty ?? required(input.accountableParty, "Accountable party");
+  const internalAccountableParty = required(input.internalAccountableParty ?? "Facilities coordinator", "Internal accountable party");
   const nextAction = approval.request ? "Review authorization" : assignmentProjection?.nextAction ?? required(input.nextAction, "Next action");
   const dueAt = approval.request?.dueAt ?? input.holdForVisit?.deadlineAt ?? input.dueAt ?? defaultWorkOrderDueAt(priority, now);
   const escalationTo = required(input.escalationTo ?? "Facilities director", "Escalation destination");
-  const statements: OpsStatement[] = [insert("ops_work_orders", { id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
+  const statements: OpsStatement[] = [insert("ops_work_orders", { id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
   if (input.idempotency) statements.unshift(idempotencyStatement(input.organizationId, id, now, input.idempotency));
   if (sourcePmOccurrence) {
     const sourceProgram = sourcePmOccurrence.programId
@@ -879,7 +880,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     id, organizationId: input.organizationId, number, storeId: input.storeId, requestId: input.requestId,
     problem, authorizedScope: input.authorizedScope, categoryKey: input.categoryKey,
     taxonomyNodeId: input.taxonomyNodeId, assetId: input.assetId, componentId: input.componentId,
-    priority, status, version: 0, accountableParty, nextAction, dueAt, escalationTo,
+    priority, status, version: 0, internalAccountableParty, accountableParty, nextAction, dueAt, escalationTo,
     nte: input.nteAmountMinor === undefined ? undefined : { amountMinor: input.nteAmountMinor, currency: input.currency ?? "USD" },
     repairEstimate: input.repairEstimateAmountMinor === undefined ? undefined : { amountMinor: input.repairEstimateAmountMinor, currency: input.repairEstimateCurrency ?? "USD" },
     estimatedServiceExtensionMonths: input.estimatedServiceExtensionMonths,
@@ -2587,6 +2588,61 @@ export async function reviewServiceRequest(svc: OpsCommandServices, input: Revie
     conflictMessage: "This request changed. Refresh before recording another decision",
   });
   return { ...request, status: nextStatus, version: persistedRequestVersion(request) + 1, reviewDecision: input.decision, reviewedAt: now, note };
+}
+
+export interface LinkServiceRequestToWorkOrderInput {
+  organizationId: OpsId;
+  requestId: OpsId;
+  workOrderId: OpsId;
+  expectedStatus: "under_review";
+  actor: ActorContext;
+}
+
+/**
+ * Preserves an additional store report while attaching it to existing work.
+ * This never creates a work order, assignment, issuance, or visit.
+ */
+export async function linkServiceRequestToWorkOrder(svc: OpsCommandServices, input: LinkServiceRequestToWorkOrderInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const request = await repository.getRequest(input.organizationId, input.requestId);
+  if (!request) throw new OpsDomainError("NOT_FOUND", "Service request not found");
+  if (request.convertedWorkOrderId) {
+    if (request.convertedWorkOrderId === input.workOrderId) return { ...request, replayed: true as const };
+    throw new OpsDomainError("CONFLICT", "This report is already linked to different work");
+  }
+  if (request.status !== input.expectedStatus) throw new OpsDomainError("CONFLICT", "This report changed. Refresh before linking it");
+  const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
+  if (!workOrder || workOrder.storeId !== request.storeId) throw new OpsDomainError("VALIDATION", "Choose unresolved work from the same store");
+  if (["closed", "cancelled"].includes(workOrder.status)) throw new OpsDomainError("CONFLICT", "A new report cannot be linked to terminal work");
+  const impact = (await repository.listRequestImpactAssessments(input.organizationId, request.id)).at(-1);
+  if (!impact || impact.assessmentKind !== "review" || impact.source !== "manager_review") {
+    throw new OpsDomainError("CONFLICT", "Confirm the report facts before linking it to existing work");
+  }
+  const now = clock.now();
+  const statements: OpsStatement[] = [{
+    sql: "UPDATE ops_requests SET status = ?, converted_work_order_id = ? WHERE organization_id = ? AND id = ? AND store_id = ? AND version = ? AND status = ? AND converted_work_order_id IS NULL",
+    params: ["converted", workOrder.id, input.organizationId, request.id, request.storeId, persistedRequestVersion(request) + 1, input.expectedStatus],
+  }];
+  const tasks = await repository.listWorkflowTasksForRequest(input.organizationId, request.id);
+  tasks.filter((task) => task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => statements.push(...buildCompleteWorkflowTaskStatements({
+    task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Linked to existing work order ${workOrder.number}`,
+  })));
+  statements.push(...auditAndOutbox({
+    organizationId: input.organizationId,
+    aggregateType: "request",
+    aggregateId: request.id,
+    eventType: "request.linked_to_existing_work_order",
+    actor: input.actor,
+    occurredAt: now,
+    payload: { workOrderId: workOrder.id, workOrderNumber: workOrder.number, storeId: request.storeId },
+    ids,
+  }));
+  await atomicRequestMutation({
+    repository, request, now, statements,
+    conflictMessage: "This report changed or was linked elsewhere. Refresh before trying again.",
+  });
+  return { ...request, status: "converted" as const, convertedWorkOrderId: workOrder.id, version: persistedRequestVersion(request) + 1 };
 }
 
 export interface UpdateWorkOrderControlInput {

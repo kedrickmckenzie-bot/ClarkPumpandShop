@@ -30,4 +30,17 @@ describe("organization-first fixture reads", () => {
     expect(snapshot.scope.storeId).toBe("store-northline-104");
     expect(snapshot.sourceCounts.workOrders).toBe((await repo.listWorkOrders(storeScope, { createdFrom: period.startsAt, createdTo: period.endsAt, limit: 100 })).items.length);
   });
+
+  it("treats the unlinked equipment and component filters as null semantics", async () => {
+    const repo = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const scope = { organizationId: "org-northline-demo" };
+    const [unlinkedAssets, unlinkedComponents] = await Promise.all([
+      repo.listWorkOrders(scope, { assetId: "unlinked", limit: 100 }),
+      repo.listWorkOrders(scope, { componentId: "unlinked", limit: 100 }),
+    ]);
+    expect(unlinkedAssets.items.length).toBeGreaterThan(0);
+    expect(unlinkedComponents.items.length).toBeGreaterThan(0);
+    expect(unlinkedAssets.items.every((row) => row.internalAccountableParty.length > 0)).toBe(true);
+    expect(unlinkedAssets.items.some((row) => row.id === "unlinked")).toBe(false);
+  });
 });

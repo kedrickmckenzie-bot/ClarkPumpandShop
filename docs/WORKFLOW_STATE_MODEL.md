@@ -1,6 +1,6 @@
 # Workflow State Model
 
-**Status:** approved target; current Work Order status is transitional
+**Status:** implemented foundation with compatibility lifecycle codes; see `COORDINATED_WORKFLOW_IMPLEMENTATION.md` for the active projection contract
 
 ## Separate four kinds of state
 
@@ -96,4 +96,4 @@ Invalid transitions fail without partial writes. UI visibility is not authorizat
 | `closed` | `CLOSED`; migration must preserve or create explicit resolution evidence rather than infer it silently |
 | `cancelled` | `CANCELED` |
 
-This migration is **not implemented**. Current scalar `accountableParty`, `nextAction`, `dueAt`, and `escalationTo` fields remain an interim compatibility model and must not be described as Workflow Tasks or SLA history.
+The task/SLA foundation and a stable `internalAccountableParty` are implemented. Current scalar `accountableParty`, `nextAction`, `dueAt`, and `escalationTo` remain a denormalized compatibility projection of the selected primary task; append-only Workflow Tasks and SLA pause/resume facts are the source of obligation history. The broader lifecycle-symbol rename in this document remains a compatibility migration, not a prerequisite for the active plain-language projection.

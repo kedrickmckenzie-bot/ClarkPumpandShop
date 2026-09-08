@@ -2323,7 +2323,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
     if (!storeIds.has(row.storeId)) throw new Error(`Request ${row.id} has no store`);
     const convertedWorkOrder = row.convertedWorkOrderId ? fixture.workOrders.find((workOrder) => workOrder.organizationId === row.organizationId && workOrder.id === row.convertedWorkOrderId) : undefined;
     if (row.convertedWorkOrderId && !convertedWorkOrder) throw new Error(`Request ${row.id} has no converted work order`);
-    if (row.status === "converted" && (!convertedWorkOrder || convertedWorkOrder.requestId !== row.id || convertedWorkOrder.storeId !== row.storeId)) throw new Error(`Converted request ${row.id} has an invalid work-order path`);
+    if (row.status === "converted" && (!convertedWorkOrder || convertedWorkOrder.storeId !== row.storeId)) throw new Error(`Converted request ${row.id} has an invalid work-order path`);
   });
   fixture.requestImpactAssessments.forEach((assessment) => {
     const request = fixture.requests.find((candidate) => candidate.organizationId === assessment.organizationId && candidate.id === assessment.requestId);

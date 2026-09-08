@@ -612,6 +612,7 @@ export const opsWorkOrders = pgTable("ops_work_orders", {
   priority: text("priority").notNull(),
   status: text("status").notNull(),
   version: integer("version").notNull().default(0),
+  internalAccountableParty: text("internal_accountable_party").notNull().default("Facilities coordinator"),
   accountableParty: text("accountable_party").notNull(),
   nextAction: text("next_action").notNull(),
   dueAt: instant("due_at"),

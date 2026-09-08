@@ -64,6 +64,47 @@ function hrefWithPage(route: OperatorListRoute, query: OperatorSearchParameters,
   return `/app/${route}?${params.toString()}`;
 }
 
+function hrefWithFilter(route: OperatorListRoute, query: OperatorSearchParameters, key: string, value?: string) {
+  const entries = Object.entries(query).flatMap(([name, raw]) => {
+    if (name === "page" || name === key) return [];
+    const current = first(raw);
+    return current ? [[name, current] as [string, string]] : [];
+  });
+  if (value) entries.push([key, value]);
+  const serialized = new URLSearchParams(entries).toString();
+  return serialized ? `/app/${route}?${serialized}` : `/app/${route}`;
+}
+
+function queryFilters(route: OperatorListRoute, query: OperatorSearchParameters) {
+  const selectedStatus = first(query.status);
+  const statusOptions = route === "visits"
+    ? [{ value: "", label: "All visits" }, { value: "active", label: "Onsite now" }, { value: "checked_out", label: "Completed" }]
+    : route === "work-orders"
+      ? [{ value: "", label: "All work" }, { value: "open", label: "Open" }, { value: "waiting_on_vendor", label: "Waiting on vendor" }, { value: "waiting_on_parts", label: "Waiting on parts" }, { value: "completed_pending_review", label: "Needs verification" }, { value: "closed", label: "Closed" }]
+      : route === "requests"
+        ? [{ value: "", label: "All reports" }, { value: "submitted", label: "New" }, { value: "under_review", label: "Under review" }, { value: "converted", label: "Linked to work" }, { value: "closed", label: "Closed" }]
+        : [];
+  return statusOptions.length ? [{
+    id: "status",
+    label: "Status",
+    options: statusOptions.map((option) => ({ value: option.value || "all", label: option.label, href: hrefWithFilter(route, query, "status", option.value || undefined), selected: (selectedStatus ?? "") === option.value })),
+  }] : undefined;
+}
+
+function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchParameters) {
+  const labels: Record<string, string> = {
+    active: "Onsite now", checked_out: "Completed visits", open: "Open work", waiting_on_vendor: "Waiting on vendor",
+    waiting_on_parts: "Waiting on parts", completed_pending_review: "Needs verification", submitted: "New reports",
+    under_review: "Reports under review", converted: "Reports linked to work", unlinked: "Not linked",
+  };
+  return Object.entries(query).flatMap(([key, raw]) => {
+    if (["q", "page"].includes(key)) return [];
+    const value = first(raw);
+    if (!value) return [];
+    return [{ id: key, label: labels[value] ?? sentence(value), removeHref: hrefWithFilter(route, query, key) }];
+  });
+}
+
 function pagination<T>(route: OperatorListRoute, query: OperatorSearchParameters, result: Page<T>, page: number): PaginationViewModel | undefined {
   const total = result.totalCount;
   const hasNext = Boolean(result.nextCursor) || (total !== undefined && page * PAGE_SIZE < total);
@@ -112,7 +153,7 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
       { key: "work", value: row.number, secondary: row.problem },
       { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName },
       { key: "assignment", value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
-      { key: "next", value: row.nextAction, secondary: row.dueAt ? `Due ${formatOperationsDate(row.dueAt)}` : undefined },
+      { key: "next", value: row.nextAction, secondary: `Next: ${row.accountableParty} · Internal: ${row.internalAccountableParty}${row.dueAt ? ` · Due ${formatOperationsDate(row.dueAt)}` : " · No deadline by policy"}` },
       { key: "cost", value: money(row.recordedCostMinor) },
       { key: "status", value: sentence(row.status), tone: toneForStatus(row.status) },
     ],
@@ -246,6 +287,9 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     table: { id: route, caption: title, columns: columns[route as QueryListRoute], rows },
     resultSummary: summary,
     search: searchControl(route, query, `Search ${title}`, placeholder),
+    filters: queryFilters(route, query),
+    appliedFilters: queryAppliedFilters(route, query),
+    clearFiltersHref: `/app/${route}`,
     pagination: pagination(route, query, result, page),
   };
 }

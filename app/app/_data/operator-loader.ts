@@ -44,6 +44,7 @@ import {
   buildCreateStoreModel,
   buildCreateVendorModel,
   buildCreateWorkOrderModel,
+  buildDashboardModel,
   buildDetailModel,
   buildEstimateComparisonModel,
   buildAttentionItemModel,
@@ -64,7 +65,6 @@ import {
 import { buildTrendsModel } from "./trends-presenter";
 import { buildApprovedWorkPortfolio } from "./approved-work-presenter";
 import {
-  buildQueryDashboardModel,
   buildQueryListModel,
   buildQuerySearchModel,
   QUERY_FIRST_LIST_ROUTES,
@@ -324,8 +324,8 @@ export async function loadImportWorkspaceAccess() {
 }
 
 export async function loadDashboardModel() {
-  const session = await getRequestOperatorSession();
-  return enforceDashboardLinkPolicy(await buildQueryDashboardModel(await getServerOpsRepository(), session), session.role);
+  const context = await sessionAndFixture();
+  return enforceDashboardLinkPolicy(buildDashboardModel(context.fixture, context.session), context.session.role);
 }
 
 export async function loadSearchModel(searchParams: OperatorSearchParameters = {}) {
@@ -669,17 +669,35 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
   const store = fixture.stores.find((row) => row.id === workOrder.storeId);
   const estimateRequests = fixture.estimateRequests.filter((row) => row.workOrderId === workOrderId);
   const requestIds = new Set(estimateRequests.map((row) => row.id));
+  const assignments = fixture.assignments.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId);
+  const currentAssignment = [...assignments].sort((left, right) => right.assignedAt.localeCompare(left.assignedAt))[0];
+  const internalMembership = currentAssignment?.internalMembershipId
+    ? fixture.memberships.find((row) => row.organizationId === context.session.organizationId && row.id === currentAssignment.internalMembershipId)
+    : undefined;
+  const providerName = currentAssignment?.vendorId
+    ? fixture.vendors.find((row) => row.organizationId === context.session.organizationId && row.id === currentAssignment.vendorId)?.name
+    : internalMembership
+      ? fixture.users.find((row) => row.id === internalMembership.userId)?.displayName
+      : undefined;
+  const siteVisitWorkOrders = fixture.siteVisitWorkOrders.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId);
+  const linkedVisitIds = new Set(siteVisitWorkOrders.map((row) => row.visitId));
   return buildWorkOrderCase({
     now: context.fixture.asOf,
     workOrder,
     timeZone: store?.timeZone ?? context.fixture.organizations.find((row) => row.id === context.session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE,
     storeName: store ? `${store.storeNumber} - ${store.name}` : undefined,
-    assignments: fixture.assignments.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
+    providerName,
+    assignments,
     issuances: fixture.issuances.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     vendorResponses: fixture.vendorResponses.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     appointments: await (await getServerOpsRepository()).listServiceAppointmentsForWorkOrder(context.session.organizationId, workOrderId),
     continuations: await (await getServerOpsRepository()).listVendorContinuationsForWorkOrder(context.session.organizationId, workOrderId),
-    visits: fixture.visits.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
+    visits: fixture.visits.filter((row) => row.organizationId === context.session.organizationId && (row.workOrderId === workOrderId || linkedVisitIds.has(row.id))),
+    siteVisitWorkOrders,
+    verifications: fixture.workOrderVerifications.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
+    impactAssessments: workOrder.requestId
+      ? fixture.requestImpactAssessments.filter((row) => row.organizationId === context.session.organizationId && row.requestId === workOrder.requestId)
+      : [],
     workflowTasks: fixture.workflowTasks.filter((row) => row.organizationId === context.session.organizationId && (row.workOrderId === workOrderId || (workOrder.requestId && row.serviceRequestId === workOrder.requestId))),
     followUps: fixture.followUps.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     costLines: fixture.costLines.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),

@@ -185,6 +185,8 @@ export interface WorkOrderListRow {
   assignmentStatus?: AssignmentStatus;
   vendorId?: OpsId;
   vendorName?: string;
+  internalAccountableParty: string;
+  /** Primary next-action owner, retained as accountableParty for repository compatibility. */
   accountableParty: string;
   nextAction: string;
   dueAt?: IsoDateTime;

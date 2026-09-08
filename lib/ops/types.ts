@@ -591,6 +591,9 @@ export interface WorkOrder {
   status: WorkOrderStatus;
   /** Monotonic concurrency token for canonical work-order mutations. */
   version?: number;
+  /** Stable operator-side owner for the unresolved case. This is not replaced when a vendor is expected to act next. */
+  internalAccountableParty?: string;
+  /** Legacy denormalized projection of the primary next-action owner. */
   accountableParty: string;
   nextAction: string;
   dueAt?: IsoDateTime;

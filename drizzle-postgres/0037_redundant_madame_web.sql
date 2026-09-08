@@ -1,0 +1,1 @@
+ALTER TABLE "ops_work_orders" ADD COLUMN "internal_accountable_party" text DEFAULT 'Facilities coordinator' NOT NULL;

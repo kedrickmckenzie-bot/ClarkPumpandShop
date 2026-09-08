@@ -42,6 +42,16 @@ describe("operator query presenter", () => {
     expect(model.table.rows.length).toBeGreaterThan(0);
     expect(model.table.rows.length).toBeLessThanOrEqual(25);
     expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "store")?.value === "Store 104")).toBe(true);
+    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "next")?.secondary?.includes("Internal:"))).toBe(true);
+  });
+
+  it("keeps visit filter controls and applied-filter removal links in the query projection", async () => {
+    const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const model = await buildQueryListModel(repository, session(), "visits", { status: "active", vendor: "vendor-northline-summit" });
+    expect(model.filters?.find((filter) => filter.id === "status")?.options.map((option) => option.label)).toEqual(["All visits", "Onsite now", "Completed"]);
+    expect(model.filters?.find((filter) => filter.id === "status")?.options.find((option) => option.label === "Onsite now")?.selected).toBe(true);
+    expect(model.appliedFilters?.map((filter) => filter.label)).toContain("Onsite now");
+    expect(model.appliedFilters?.find((filter) => filter.id === "status")?.removeHref).toContain("vendor=vendor-northline-summit");
   });
 
   it("keeps global search inside the manager's store scope", async () => {

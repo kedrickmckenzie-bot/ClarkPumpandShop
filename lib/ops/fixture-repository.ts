@@ -126,6 +126,7 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
     storeName: store.name, problem: workOrder.problem, categoryKey: workOrder.categoryKey,
     priority: workOrder.priority, status: workOrder.status, assignmentKind: assignment?.kind ?? "choose_later",
     assignmentStatus: assignment?.status, vendorId: vendor?.id, vendorName: vendor?.name,
+    internalAccountableParty: workOrder.internalAccountableParty ?? "Facilities coordinator",
     accountableParty: workOrder.accountableParty, nextAction: workOrder.nextAction, dueAt: workOrder.dueAt,
     createdAt: workOrder.createdAt, visitCount: new Set(fixture.siteVisitWorkOrders.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).map((row) => row.visitId)).size,
     recordedCostMinor: fixture.costLines.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).reduce((sum, row) => sum + row.amount.amountMinor, 0), currency: "USD",
@@ -623,13 +624,13 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.regionId || this.fixture.stores.find((store) => store.organizationId === scope.organizationId && store.id === row.storeId)?.regionId === query.regionId)
         && (!query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.workOrderId === row.id && assignment.vendorId === query.vendorId))
         && (!query.categoryKey || row.categoryKey === query.categoryKey)
-        && (!query.assetId || row.assetId === query.assetId)
-        && (!query.componentId || row.componentId === query.componentId)
+        && (!query.assetId || (query.assetId === "unlinked" ? !row.assetId : row.assetId === query.assetId))
+        && (!query.componentId || (query.componentId === "unlinked" ? !row.componentId : row.componentId === query.componentId))
         && (!query.hasCost || costLines.length > 0)
         && (!query.costFrom || costLines.some((cost) => cost.serviceDate >= query.costFrom!.slice(0, 10)))
         && (!query.costMonth || costLines.some((cost) => cost.serviceDate.slice(0, 7) === query.costMonth!.slice(0, 7)))
         && (!query.createdFrom || row.createdAt >= query.createdFrom)
-        && (!query.createdTo || row.createdAt <= query.createdTo);
+        && (!query.createdTo || row.createdAt < query.createdTo);
     }).map((row) => workOrderRow(this.fixture, row)).filter((row) => !search || normalize([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName].filter(Boolean).join(" ")).includes(search)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.number.localeCompare(b.number));
     return page(rows, query);
   }

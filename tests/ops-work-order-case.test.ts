@@ -363,6 +363,47 @@ describe("stage precedence transition matrix", () => {
     });
     expect(view.primaryActionOverdue).toBe(true);
   });
+
+  it("keeps stable internal accountability when the vendor owns the next action", () => {
+    const view = buildWorkOrderCase({
+      now: NOW,
+      workOrder: { ...wo("wo-owner", "issued"), internalAccountableParty: "Jordan Lee", accountableParty: "ColdLine Refrigeration & HVAC" },
+      providerName: "ColdLine Refrigeration & HVAC",
+      assignments: [{ id: "a-owner", kind: "outside_vendor", status: "issued", assignedAt: "2026-08-02T00:00:00.000Z" }],
+      issuances: [{ id: "i-owner", assignmentId: "a-owner", revision: 1, issuedAt: "2026-08-03T00:00:00.000Z" }],
+    });
+    expect(view.plainLanguageState).toBe("Waiting for vendor acceptance");
+    expect(view.internalAccountableParty).toBe("Jordan Lee");
+    expect(view.nextActionOwner).toBe("ColdLine Refrigeration & HVAC");
+  });
+
+  it("separates temporary operating evidence from permanent repair and invoice review", () => {
+    const view = buildWorkOrderCase({
+      now: NOW,
+      workOrder: { ...wo("wo-temp", "accepted"), internalAccountableParty: "Jordan Lee" },
+      assignments: [{ id: "a-temp", kind: "outside_vendor", status: "accepted", assignedAt: "2026-08-02T00:00:00.000Z" }],
+      visits: [{ id: "v-temp", status: "checked_out", checkedInAt: "2026-08-19T10:00:00.000Z", checkedOutAt: "2026-08-19T12:00:00.000Z" }],
+      siteVisitWorkOrders: [{ id: "svwo-temp", visitId: "v-temp", workOrderId: "wo-temp", linkedAt: "2026-08-19T10:00:00.000Z", outcome: "temporary_repair", outcomeNotes: "Unit is cooling while a replacement fan is ordered.", outcomeRecordedByActorName: "ColdLine technician", outcomeRecordedAt: "2026-08-19T12:00:00.000Z" }],
+      invoices: [{ id: "invoice-temp", status: "suggested" }],
+    });
+    expect(view.plainLanguageState).toBe("Temporary repair completed; permanent repair pending");
+    expect(view.operatingCondition).toMatchObject({ label: "Provider reports temporary operation", certainty: "reported" });
+    expect(view.financialReview.label).toBe("Invoice evidence needs review");
+    expect(view.internalAccountableParty).toBe("Jordan Lee");
+  });
+
+  it("preserves the completion claim while a rejection makes corrective responsibility clear", () => {
+    const view = buildWorkOrderCase({
+      now: NOW,
+      workOrder: { ...wo("wo-reject", "accepted"), status: "completed_pending_review" },
+      visits: [{ id: "v-reject", status: "checked_out", checkedInAt: NOW, checkedOutAt: NOW }],
+      siteVisitWorkOrders: [{ id: "svwo-reject", visitId: "v-reject", workOrderId: "wo-reject", linkedAt: NOW, outcome: "completed", outcomeNotes: "Repair completed", outcomeRecordedAt: NOW }],
+      verifications: [{ id: "verify-reject", workOrderId: "wo-reject", siteVisitWorkOrderId: "svwo-reject", outcome: "completed", decision: "rejected", reason: "The case is still warm.", decidedByName: "Store manager", decidedAt: "2026-08-20T13:00:00.000Z" }],
+    });
+    expect(view.plainLanguageState).toBe("Completion rejected; corrective work required");
+    expect(view.operatingCondition).toMatchObject({ id: "result_rejected", certainty: "uncertain" });
+    expect(view.operatingCondition.detail).toContain("still warm");
+  });
 });
 describe("continuation idempotency", () => {
   it("rejects handling the same response twice and keeps one appointment", async () => {

@@ -7,6 +7,7 @@ import {
   createServiceRequest,
   createWorkOrder,
   issueWorkOrder,
+  linkServiceRequestToWorkOrder,
   reconcileUnmatchedVisit,
   rescheduleFollowUp,
   reviewException,
@@ -271,6 +272,42 @@ describe("service-request review decisions", () => {
       note: "Stale browser retry",
       actor: facilitiesActor,
     })).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("links an additional reviewed report to existing open work without another dispatch and makes retries harmless", async () => {
+    const harness = commandHarness();
+    const existingWork = await createRoutedWorkOrder(harness, { storeId: "store-northline-101" });
+    const request = await createServiceRequest(harness.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-101",
+      reporterName: "Taylor Store Manager",
+      problem: "The beer cave is still above the safe temperature range.",
+      actor: facilitiesActor,
+    });
+    await reviewImpact(harness, request);
+    const before = snapshot(harness.repository);
+    const linked = await linkServiceRequestToWorkOrder(harness.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      requestId: request.id,
+      workOrderId: existingWork.id,
+      expectedStatus: "under_review",
+      actor: facilitiesActor,
+    });
+    expect(linked).toMatchObject({ status: "converted", convertedWorkOrderId: existingWork.id });
+    expect(snapshot(harness.repository).workOrders).toHaveLength(before.workOrders.length);
+    expect(snapshot(harness.repository).assignments).toHaveLength(before.assignments.length);
+    expect(snapshot(harness.repository).workflowTasks.find((task) => task.serviceRequestId === request.id)).toMatchObject({ status: "completed" });
+    expect(snapshot(harness.repository).auditEvents.some((event) => event.aggregateId === request.id && event.eventType === "request.linked_to_existing_work_order")).toBe(true);
+
+    const retried = await linkServiceRequestToWorkOrder(harness.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      requestId: request.id,
+      workOrderId: existingWork.id,
+      expectedStatus: "under_review",
+      actor: facilitiesActor,
+    });
+    expect(retried).toMatchObject({ replayed: true });
+    expect(snapshot(harness.repository).workOrders).toHaveLength(before.workOrders.length);
   });
 });
 

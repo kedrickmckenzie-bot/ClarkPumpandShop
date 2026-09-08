@@ -83,6 +83,8 @@ const longMonthFormatter = new Intl.DateTimeFormat("en-US", {
 });
 const localDateFormatterByTimeZone = new Map<string, Intl.DateTimeFormat>();
 const displayDateFormatterByTimeZone = new Map<string, Intl.DateTimeFormat>();
+const localDateValueCache = new Map<string, string>();
+const displayDateValueCache = new Map<string, string>();
 
 function localDateFormatter(timeZone: string) {
   const cached = localDateFormatterByTimeZone.get(timeZone);
@@ -173,13 +175,23 @@ function longMonthLabel(key: string) {
 
 function localDateKey(value: string, timeZone = "UTC") {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const cacheKey = `${timeZone}\u0000${value}`;
+  const cached = localDateValueCache.get(cacheKey);
+  if (cached) return cached;
   const parts = localDateFormatter(timeZone).formatToParts(new Date(value));
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
+  const result = `${part("year")}-${part("month")}-${part("day")}`;
+  localDateValueCache.set(cacheKey, result);
+  return result;
 }
 
 function dateLabel(value: string, timeZone = "UTC") {
-  return displayDateFormatter(timeZone).format(new Date(value));
+  const cacheKey = `${timeZone}\u0000${value}`;
+  const cached = displayDateValueCache.get(cacheKey);
+  if (cached) return cached;
+  const result = displayDateFormatter(timeZone).format(new Date(value));
+  displayDateValueCache.set(cacheKey, result);
+  return result;
 }
 
 function addMonths(key: string, delta: number) {
@@ -996,9 +1008,11 @@ export function buildTrendsModel(
     && (!selectedProfile || asset.replacementProfileId === selectedProfile)
     && (!componentName || [...componentById.values()].some((component) => component.assetId === asset.id && component.name.toLocaleLowerCase("en-US") === componentName))
   );
+  const benchmarkAssetsByStore = new Map<string, Asset[]>();
   for (const asset of benchmarkAssets) {
     const cohort = asset.replacementProfileId ?? `${asset.categoryKey}|${asset.groupPath.join("|") || "general"}`;
     cohortByAsset.set(asset.id, cohort);
+    benchmarkAssetsByStore.set(asset.storeId, [...(benchmarkAssetsByStore.get(asset.storeId) ?? []), asset]);
   }
 
   // Store comparisons use a stable 24-month peer reference window that ends
@@ -1041,6 +1055,45 @@ export function buildTrendsModel(
       observationsByCohortAndCalendarMonth.set(key, [...(observationsByCohortAndCalendarMonth.get(key) ?? []), observation]);
     }
   }
+  interface PeerMonthSummary {
+    peerRates: Array<{ storeId: string; value: number }>;
+    distribution: ReturnType<typeof winsorizedDistribution>;
+    positivePeerStores: Set<string>;
+    positiveReferenceMonths: Set<string>;
+    positivePeerStoreMonths: Set<string>;
+  }
+  const peerMonthSummaryCache = new Map<string, PeerMonthSummary>();
+  const peerMonthSummary = (cohort: string, calendarMonth: string, excludedStoreId: string) => {
+    const cacheKey = `${cohort}|${calendarMonth}|${excludedStoreId}`;
+    const cached = peerMonthSummaryCache.get(cacheKey);
+    if (cached) return cached;
+    const peerValuesByStore = new Map<string, number[]>();
+    const positivePeerStores = new Set<string>();
+    const positiveReferenceMonths = new Set<string>();
+    const positivePeerStoreMonths = new Set<string>();
+    for (const observation of observationsByCohortAndCalendarMonth.get(`${cohort}|${calendarMonth}`) ?? []) {
+      if (observation.storeId === excludedStoreId) continue;
+      peerValuesByStore.set(observation.storeId, [...(peerValuesByStore.get(observation.storeId) ?? []), observation.value]);
+      if (observation.value > 0) {
+        positivePeerStores.add(observation.storeId);
+        positiveReferenceMonths.add(observation.month);
+        positivePeerStoreMonths.add(`${observation.storeId}|${observation.month}`);
+      }
+    }
+    const peerRates = [...peerValuesByStore.entries()].map(([storeId, values]) => ({
+      storeId,
+      value: values.reduce((sum, value) => sum + value, 0) / values.length,
+    }));
+    const summary = {
+      peerRates,
+      distribution: winsorizedDistribution(peerRates.map((entry) => entry.value)),
+      positivePeerStores,
+      positiveReferenceMonths,
+      positivePeerStoreMonths,
+    };
+    peerMonthSummaryCache.set(cacheKey, summary);
+    return summary;
+  };
   const selectedAssetCohort = selectedAsset ? cohortByAsset.get(selectedAsset) : undefined;
   const selectedAssetPeerIds = new Set(selectedAssetCohort
     ? benchmarkAssets.filter((asset) => cohortByAsset.get(asset.id) === selectedAssetCohort && asset.id !== selectedAsset).map((asset) => asset.id)
@@ -1061,16 +1114,7 @@ export function buildTrendsModel(
     const includeBasisRecords = detailKind === "benchmark" && benchmarkStore === store.id;
     const storeRows = actualByStore.get(store.id) ?? [];
     const actual = aggregate(safeMetric, storeRows);
-    const storeAssets = fixture.assets.filter((row) =>
-      row.organizationId === session.organizationId
-      && row.storeId === store.id
-      && row.status !== "retired"
-      && (!selectedCategory || row.categoryKey === selectedCategory)
-      && assetMatchesTrendPath(row, selectedPath)
-      && (!selectedProfile || row.replacementProfileId === selectedProfile)
-      && (!selectedAsset || row.id === selectedAsset)
-      && (!componentName || [...componentById.values()].some((component) => component.assetId === row.id && component.name.toLocaleLowerCase("en-US") === componentName))
-    );
+    const storeAssets = (benchmarkAssetsByStore.get(store.id) ?? []).filter((row) => !selectedAsset || row.id === selectedAsset);
     let expected = 0;
     let rangeLow = 0;
     let rangeHigh = 0;
@@ -1097,26 +1141,15 @@ export function buildTrendsModel(
         const assetPositivePeerStoreMonths = new Set<string>();
         let comparableAcrossPeriod = true;
         for (const month of currentMonths) {
-          const observations = observationsByCohortAndCalendarMonth.get(`${cohort}|${month.slice(5)}`) ?? [];
-          const peerValuesByStore = new Map<string, number[]>();
-          for (const observation of observations) {
-            if (observation.storeId === store.id) continue;
-            peerValuesByStore.set(observation.storeId, [...(peerValuesByStore.get(observation.storeId) ?? []), observation.value]);
-            if (observation.value > 0) {
-              assetPositivePeerStores.add(observation.storeId);
-              assetPositiveReferenceMonths.add(observation.month);
-              assetPositivePeerStoreMonths.add(`${observation.storeId}|${observation.month}`);
-            }
-          }
-          const peerRates = [...peerValuesByStore.entries()].map(([storeId, values]) => ({
-            storeId,
-            value: values.reduce((sum, value) => sum + value, 0) / values.length,
-          }));
+          const summary = peerMonthSummary(cohort, month.slice(5), store.id);
+          const { peerRates, distribution } = summary;
+          summary.positivePeerStores.forEach((peerStoreId) => assetPositivePeerStores.add(peerStoreId));
+          summary.positiveReferenceMonths.forEach((referenceMonth) => assetPositiveReferenceMonths.add(referenceMonth));
+          summary.positivePeerStoreMonths.forEach((storeMonth) => assetPositivePeerStoreMonths.add(storeMonth));
           if (peerRates.length < 3) {
             comparableAcrossPeriod = false;
             break;
           }
-          const distribution = winsorizedDistribution(peerRates.map((entry) => entry.value));
           const partialFactor = month === currentMonths.at(-1) && currentEnd !== endOfMonth(month)
             ? Number(currentEnd.slice(-2)) / Number(endOfMonth(month).slice(-2))
             : 1;

@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronRight,
+  ClipboardCheck,
   CircleDollarSign,
   CircleDot,
   Clock3,
@@ -433,8 +434,8 @@ function CurrentStepPanel({ model, mode }: { model: WorkOrderCaseView; mode: Wor
   return (
     <section className={styles.currentStepPanel} aria-labelledby="current-step-heading">
       <div className={styles.currentStepCopy}>
-        <p>{terminal ? "Completed case" : "Current stage"}</p>
-        <h3 id="current-step-heading">{model.serviceSubStage?.label ?? model.stageLabel}</h3>
+        <p>{terminal ? "Completed case" : "What is happening now"}</p>
+        <h3 id="current-step-heading">{model.plainLanguageState}</h3>
         <span>{model.blockingReason ?? (terminal
           ? "This work order is complete. Service controls are read-only; the full record remains available below."
           : waiting
@@ -442,10 +443,35 @@ function CurrentStepPanel({ model, mode }: { model: WorkOrderCaseView; mode: Wor
             : "Complete this step before the work order advances.")}</span>
       </div>
       <dl>
-        <div><dt>{terminal ? "Record" : "Owner"}</dt><dd>{model.accountableParty}</dd></div>
-        <div><dt>{terminal ? "Open obligation" : "Due"}</dt><dd>{terminal ? "None" : dueLabel(model.dueAt, model.timeZone)}</dd></div>
-        <div><dt>{terminal ? "Escalation" : "If overdue, notify"}</dt><dd>{model.escalationDestination}</dd></div>
+        <div><dt>{terminal ? "Record" : "Internal owner"}</dt><dd>{model.internalAccountableParty}</dd></div>
+        <div><dt>{terminal ? "Open obligation" : "Next action owner"}</dt><dd>{model.nextActionOwner}</dd></div>
+        <div><dt>{terminal ? "Deadline" : "Due"}</dt><dd>{terminal ? "None" : dueLabel(model.dueAt, model.timeZone)}<small>{model.deadlinePolicy}</small></dd></div>
+        <div><dt>{terminal ? "Escalation" : "Escalation"}</dt><dd>{model.escalationDestination}<small>{model.escalationTrigger}</small></dd></div>
       </dl>
+    </section>
+  );
+}
+
+function CaseStateDimensions({ model }: { model: WorkOrderCaseView }) {
+  const dimensions = [
+    { eyebrow: "Service progress", value: model.serviceProgress },
+    { eyebrow: "Operating condition", value: model.operatingCondition },
+    { eyebrow: "Financial review", value: model.financialReview },
+  ];
+  return (
+    <section className={styles.stateDimensions} aria-label="Independent work-order states">
+      {dimensions.map(({ eyebrow, value }) => <article key={eyebrow}>
+        <span>{eyebrow}</span>
+        <strong>{value.label}</strong>
+        <p>{value.detail}</p>
+        {value.sourceLabel ? <small>{value.sourceLabel}{value.observedAt ? ` · ${dueLabel(value.observedAt, model.timeZone)}` : ""}{value.certainty ? ` · ${sentence(value.certainty)}` : ""}</small> : null}
+      </article>)}
+      {model.additionalObligations.length ? <details>
+        <summary>{model.additionalObligations.length} additional open obligation{model.additionalObligations.length === 1 ? "" : "s"}<ChevronRight aria-hidden="true" size={16} /></summary>
+        <div>{model.additionalObligations.map((obligation) => <Link href={obligation.href} key={obligation.id}>
+          <strong>{obligation.label}</strong><span>{obligation.owner} · {obligation.dueAt ? dueLabel(obligation.dueAt, model.timeZone) : obligation.deadlinePolicy}</span>
+        </Link>)}</div>
+      </details> : null}
     </section>
   );
 }
@@ -544,6 +570,7 @@ export function WorkOrderCase({
   const recordedCost = factByLabel(model, "Recorded work cost");
   const recordOrigin = factByLabel(model, "Record origin");
   const originalRequest = sectionById(model, "original-request");
+  const relatedReports = sectionById(model, "related-reports");
   const authorization = sectionById(model, "authorization");
   const visits = sectionById(model, "visits");
   const costs = sectionById(model, "cost");
@@ -552,7 +579,7 @@ export function WorkOrderCase({
   const nte = sectionFact(authorization, "Not to exceed");
   const selectedAsset = recording.assets.find((asset) => asset.value === recording.currentAssetId);
   const selectedComponent = recording.components.find((component) => component.value === recording.currentComponentId);
-  const canonicalStatus = canonicalCase.serviceSubStage?.label ?? canonicalCase.stageLabel;
+  const canonicalStatus = canonicalCase.plainLanguageState;
   const canonicalTone: Tone = canonicalCase.stage === "closed"
     ? "positive"
     : canonicalCase.primaryActionOverdue
@@ -628,10 +655,10 @@ export function WorkOrderCase({
             </p>
           </div>
           <div className={styles.accountabilityGrid}>
-            <div><span><UserRound aria-hidden="true" size={16} />Owner</span><strong>{canonicalCase.accountableParty}</strong></div>
-            <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Current stage</span><strong>{canonicalCase.serviceSubStage?.label ?? canonicalCase.stageLabel}</strong></div>
-            <div><span><Clock3 aria-hidden="true" size={16} />Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
-            <div><span><ShieldAlert aria-hidden="true" size={16} />If overdue, notify</span><strong>{canonicalCase.escalationDestination}</strong></div>
+            <div><span><UserRound aria-hidden="true" size={16} />Internal owner</span><strong>{canonicalCase.internalAccountableParty}</strong></div>
+            <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Next action</span><strong>{canonicalCase.primaryNextAction.label}<small>{canonicalCase.nextActionOwner}</small></strong></div>
+            <div><span><Clock3 aria-hidden="true" size={16} />Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}<small>{canonicalCase.deadlinePolicy}</small></strong></div>
+            <div><span><ShieldAlert aria-hidden="true" size={16} />Escalation</span><strong>{canonicalCase.escalationDestination}<small>{canonicalCase.escalationTrigger}</small></strong></div>
           </div>
           <dl className={styles.caseMeta}>
             <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
@@ -644,14 +671,16 @@ export function WorkOrderCase({
       ) : (
         <section className={styles.caseContextStrip} aria-label="Current work-order context">
           <Link href={`/app/work-orders/${control.workOrderId}?view=overview`}><span>Service need</span><strong>{model.page.description}</strong><small>Open work-order summary</small></Link>
-          <Link className={styles.contextPrimary} href={canonicalCase.primaryNextAction.href}><span>Current stage</span><strong>{canonicalCase.serviceSubStage?.label ?? canonicalCase.stageLabel}</strong><small>Recommended: {canonicalCase.primaryNextAction.label}</small></Link>
-          <Link href={`/app/work-orders/${control.workOrderId}?view=activity`}><span>Owner · due</span><strong>{canonicalCase.accountableParty} · {dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong><small>Open follow-up and history</small></Link>
+          <Link className={styles.contextPrimary} href={canonicalCase.primaryNextAction.href}><span>Service progress</span><strong>{canonicalCase.plainLanguageState}</strong><small>Recommended: {canonicalCase.primaryNextAction.label}</small></Link>
+          <Link href={`/app/work-orders/${control.workOrderId}?view=activity`}><span>Internal / next owner</span><strong>{canonicalCase.internalAccountableParty} / {canonicalCase.nextActionOwner}</strong><small>Due {dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</small></Link>
         </section>
       )}
 
       <MutationReceipt code={updated} />
 
       {activeView === "overview" && !accountabilityOnly ? <WorkOrderStageRail model={canonicalCase} /> : null}
+
+      {activeView === "overview" ? <CaseStateDimensions model={canonicalCase} /> : null}
 
       {activeView === "overview" ? (
         <>
@@ -674,6 +703,7 @@ export function WorkOrderCase({
             description="The original report, vendor responses, technician visits, checkout notes, and work-order updates stay together here. Open a visit only when you need its detailed check-in evidence."
             icon={<History aria-hidden="true" size={20} />}
           >
+            <RecordBlock section={relatedReports} icon={<ClipboardCheck aria-hidden="true" size={18} />} keepAnchor={false} />
             <RecordBlock section={visits} icon={<MapPin aria-hidden="true" size={18} />} keepAnchor={false} />
             <RecordBlock section={timeline} icon={<History aria-hidden="true" size={18} />} keepAnchor={false} />
           </WorkspaceSection>
