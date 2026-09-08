@@ -81,6 +81,7 @@ import type {
 } from "./types";
 import type {
   ActiveVisitView,
+  AssetSearchPage,
   AssetDetailView,
   ExceptionQueuePage,
   ExecutiveSnapshotView,
@@ -112,6 +113,12 @@ export interface WorkOrderListQuery extends PageRequest {
   vendorId?: OpsId;
   storeId?: OpsId;
   regionId?: OpsId;
+  categoryKey?: string;
+  assetId?: OpsId;
+  componentId?: OpsId;
+  hasCost?: boolean;
+  costFrom?: string;
+  costMonth?: string;
   createdFrom?: IsoDateTime;
   createdTo?: IsoDateTime;
 }
@@ -279,12 +286,13 @@ export interface OpsRepository {
 
   // Manager-first, server-scoped read models.
   searchStores(scope: OrganizationScope, search: string, page?: PageRequest): Promise<StoreSearchPage>;
+  searchAssets(scope: OrganizationScope, search: string, page?: PageRequest): Promise<AssetSearchPage>;
   getStoreDetail(scope: OrganizationScope, storeId: OpsId): Promise<StoreDetailView | null>;
-  listRequests(scope: OrganizationScope, query?: PageRequest & { status?: string; storeId?: OpsId }): Promise<RequestListPage>;
+  listRequests(scope: OrganizationScope, query?: PageRequest & { search?: string; status?: string; storeId?: OpsId }): Promise<RequestListPage>;
   listWorkOrders(scope: OrganizationScope, query?: WorkOrderListQuery): Promise<WorkOrderListPage>;
   getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null>;
   listVendors(scope: OrganizationScope, search?: string, page?: PageRequest): Promise<VendorDirectoryPage>;
-  listVisits(scope: OrganizationScope, query?: PageRequest & { status?: string; storeId?: OpsId; vendorId?: OpsId }): Promise<VisitListPage>;
+  listVisits(scope: OrganizationScope, query?: PageRequest & { search?: string; status?: string; storeId?: OpsId; vendorId?: OpsId }): Promise<VisitListPage>;
   listExceptions(scope: OrganizationScope, query?: ExceptionQueueQuery): Promise<ExceptionQueuePage>;
   getAssetDetail(scope: OrganizationScope, assetId: OpsId): Promise<AssetDetailView | null>;
   listPmOccurrences(scope: OrganizationScope, query?: PageRequest & { status?: string; storeId?: OpsId }): Promise<PmOccurrencePage>;

@@ -1,6 +1,6 @@
 # As-Is Architecture
 
-**Snapshot date:** August 20, 2026  
+**Snapshot date:** August 20, 2026
 **Purpose:** factual repository inventory, including the active worktree; not a production-readiness claim
 
 The approved direction is in [CSTORE_PLATFORM_REBUILD_BLUEPRINT.md](CSTORE_PLATFORM_REBUILD_BLUEPRINT.md) and [ADR 0001](adr/0001-selective-clean-slate-modular-monolith-and-portable-persistence.md). This document describes what exists now.

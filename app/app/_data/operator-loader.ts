@@ -22,8 +22,9 @@ import {
 } from "@/components/ops/role-policy";
 import {
   NORTHLINE_ORGANIZATION_ID,
+  NORTHLINE_PREVIEW_PERSONAS,
 } from "@/lib/ops/fixtures";
-import { getServerOpsRepository, getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getServerOpsRepository, getServerOpsFixtureSnapshot, getServerOpsTrendsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
 import { buildOwnerBrief } from "@/lib/ops/owner-brief";
 import { buildWorkOrderCase } from "@/lib/ops/work-order-case";
 import { formatInTimeZone } from "@/lib/ops/local-date-time";
@@ -36,7 +37,6 @@ import {
   OPS_PREVIEW_ROLE_COOKIE,
 } from "@/lib/server/runtime-identifiers";
 import { DEFAULT_DEMO_EDITION, isDemoEdition } from "@/components/ops/demo-edition";
-import type { OpsFixture } from "@/lib/ops/types";
 import type { HeldWorkActionsModel } from "@/components/workspace/held-work-actions";
 import type { PmProgramManagementModel } from "@/components/workspace/pm-program-management";
 import {
@@ -44,8 +44,6 @@ import {
   buildCreateStoreModel,
   buildCreateVendorModel,
   buildCreateWorkOrderModel,
-  buildAccountabilityDashboardModel,
-  buildDashboardModel,
   buildDetailModel,
   buildEstimateComparisonModel,
   buildAttentionItemModel,
@@ -53,7 +51,6 @@ import {
   buildListModel,
   buildProgramModel,
   buildRequestReviewModel,
-  buildSearchModel,
   buildVendorIssuanceModel,
   buildVendorPerformanceDetailModel,
   buildVendorPerformanceListModel,
@@ -66,6 +63,12 @@ import {
 } from "./operator-presenter";
 import { buildTrendsModel } from "./trends-presenter";
 import { buildApprovedWorkPortfolio } from "./approved-work-presenter";
+import {
+  buildQueryDashboardModel,
+  buildQueryListModel,
+  buildQuerySearchModel,
+  QUERY_FIRST_LIST_ROUTES,
+} from "./operator-query-presenter";
 
 // Server Component reads share one immutable tenant snapshot during a render.
 // Keep this wrapper in the presentation layer: API commands and mutation paths
@@ -78,45 +81,12 @@ function isOperatorRole(value: string | undefined): value is OperatorRole {
   return value === "executive" || value === "facilities" || value === "regional" || value === "store_manager" || value === "finance";
 }
 
-function previewMembership(role: OperatorRole, snapshot: OpsFixture) {
-  const domainRole = {
-    executive: "executive",
-    facilities: "facilities_admin",
-    regional: "regional_manager",
-    store_manager: "store_manager",
-    finance: "finance_reviewer",
-  }[role];
-  const candidates = snapshot.memberships.filter(
-    (membership) =>
-      membership.organizationId === NORTHLINE_ORGANIZATION_ID &&
-      membership.role === domainRole &&
-      membership.status === "active",
-  );
-  if (role !== "regional") return { snapshot, membership: candidates[0] };
-  const centralRegion = snapshot.regions.find(
-    (region) => region.organizationId === NORTHLINE_ORGANIZATION_ID && region.code === "central",
-  );
-  const centralMembership = candidates.find((membership) =>
-    snapshot.scopeGrants.some(
-      (grant) =>
-        grant.organizationId === NORTHLINE_ORGANIZATION_ID &&
-        grant.membershipId === membership.id &&
-        grant.scopeKind === "region" &&
-        grant.scopeId === centralRegion?.id,
-    ),
-  );
-  return { snapshot, membership: centralMembership ?? candidates[0] };
+export async function loadOperatorSession(): Promise<OperatorSession> {
+  return getRequestOperatorSession();
 }
 
-/**
- * Current Sites-hosted showcase identity boundary.
- *
- * The role picker is an intentionally visible demo control over fictional data.
- * A live tenant must replace this function with membership and scope grants from
- * the production identity provider; presenter filtering is not a substitute for
- * repository authorization.
- */
-async function loadOperatorSessionFromSnapshot(snapshot: OpsFixture): Promise<OperatorSession> {
+const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
+  const repository = await getServerOpsRepository();
   const [identity, cookieStore] = await Promise.all([getChatGPTUser(), cookies()]);
   const requestedRole = cookieStore.get(OPS_PREVIEW_ROLE_COOKIE)?.value
     ?? cookieStore.get(LEGACY_OPS_PREVIEW_ROLE_COOKIE)?.value
@@ -125,35 +95,40 @@ async function loadOperatorSessionFromSnapshot(snapshot: OpsFixture): Promise<Op
   const role: OperatorRole = isOperatorRole(requestedRole) ? requestedRole : "facilities";
   const requestedEdition = cookieStore.get(OPS_PREVIEW_EDITION_COOKIE)?.value
     ?? process.env.OPS_OPERATOR_PREVIEW_EDITION;
-  const demoEdition: DemoEdition = isDemoEdition(requestedEdition)
-    ? requestedEdition
-    : DEFAULT_DEMO_EDITION;
-  const { membership } = previewMembership(role, snapshot);
-  const grants = membership
-    ? snapshot.scopeGrants.filter(
-        (grant) =>
-          grant.organizationId === NORTHLINE_ORGANIZATION_ID &&
-          grant.membershipId === membership.id,
-      )
-    : [];
+  const demoEdition: DemoEdition = isDemoEdition(requestedEdition) ? requestedEdition : DEFAULT_DEMO_EDITION;
+  const persona = role === "executive"
+    ? NORTHLINE_PREVIEW_PERSONAS.executive
+    : role === "regional"
+      // Preserve the original demo picker's Central-region persona. The named
+      // fixture persona is North-only and would silently change the preview
+      // scope during the query-first migration.
+      ? { membershipId: "membership-northline-regional-2" }
+      : role === "store_manager"
+        ? NORTHLINE_PREVIEW_PERSONAS.store_104
+        : role === "finance"
+          ? NORTHLINE_PREVIEW_PERSONAS.finance
+          : NORTHLINE_PREVIEW_PERSONAS.facilities;
+  const [organization, membership, grants] = await Promise.all([
+    repository.getOrganization(NORTHLINE_ORGANIZATION_ID),
+    repository.getMembership(NORTHLINE_ORGANIZATION_ID, persona.membershipId),
+    repository.listScopeGrantsForMembership(NORTHLINE_ORGANIZATION_ID, persona.membershipId),
+  ]);
   const regionIds = grants.filter((grant) => grant.scopeKind === "region").map((grant) => grant.scopeId);
   const storeIds = grants.filter((grant) => grant.scopeKind === "store").map((grant) => grant.scopeId);
-  const scopedRegion = regionIds.length === 1
-    ? snapshot.regions.find((region) => region.id === regionIds[0] && region.organizationId === NORTHLINE_ORGANIZATION_ID)
-    : undefined;
-  const scopedStore = storeIds.length === 1
-    ? snapshot.stores.find((store) => store.id === storeIds[0] && store.organizationId === NORTHLINE_ORGANIZATION_ID)
-    : undefined;
-  const organization = snapshot.organizations.find((candidate) => candidate.id === NORTHLINE_ORGANIZATION_ID);
+  const scopedStores = await repository.searchStores({
+    organizationId: NORTHLINE_ORGANIZATION_ID,
+    regionIds: regionIds.length ? regionIds : undefined,
+    storeIds: storeIds.length ? storeIds : undefined,
+  }, "", { limit: 100 });
   const organizationName = organization?.name ?? "Demo organization";
-  const scopeLabel = scopedStore
-    ? `Store ${scopedStore.storeNumber} · ${scopedStore.name}`
-    : scopedRegion
-      ? `${scopedRegion.name} · ${snapshot.stores.filter((store) => store.organizationId === NORTHLINE_ORGANIZATION_ID && store.regionId === scopedRegion.id).length} stores`
+  const onlyStore = storeIds.length === 1 ? scopedStores.items.find((store) => store.id === storeIds[0]) : undefined;
+  const scopeLabel = onlyStore
+    ? `Store ${onlyStore.storeNumber} · ${onlyStore.name}`
+    : regionIds.length === 1
+      ? `${scopedStores.items[0]?.regionName ?? "Regional scope"} · ${scopedStores.totalCount ?? scopedStores.items.length} stores`
       : role === "finance"
         ? `${organizationName} companywide · review-only financial scope`
-        : `${organizationName} companywide · ${snapshot.stores.filter((store) => store.organizationId === NORTHLINE_ORGANIZATION_ID).length} stores`;
-
+        : `${organizationName} companywide · ${scopedStores.totalCount ?? scopedStores.items.length} stores`;
   return {
     userId: identity?.userId ?? "user-northline-preview",
     membershipId: membership?.id,
@@ -168,16 +143,13 @@ async function loadOperatorSessionFromSnapshot(snapshot: OpsFixture): Promise<Op
     permissions: grants.map((grant) => grant.permission),
     demoEdition,
   };
-}
-
-export async function loadOperatorSession(): Promise<OperatorSession> {
-  const snapshot = await getRequestOpsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID);
-  return loadOperatorSessionFromSnapshot(snapshot);
-}
+});
 
 async function sessionAndFixture() {
-  const fixture = await getRequestOpsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID);
-  const session = await loadOperatorSessionFromSnapshot(fixture);
+  const [fixture, session] = await Promise.all([
+    getRequestOpsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID),
+    getRequestOperatorSession(),
+  ]);
   return { session, fixture };
 }
 
@@ -275,11 +247,26 @@ function enforceDetailLinkPolicy<T extends DetailPageViewModel>(model: T, role: 
 }
 
 export async function loadListModel(route: ListRouteId, searchParams: OperatorSearchParameters = {}) {
-  const context = await sessionAndFixture();
-  if (!roleCanAccessListRoute(context.session.role, route)) notFound();
+  const session = await getRequestOperatorSession();
+  if (!roleCanAccessListRoute(session.role, route)) notFound();
+  const requestedKeys = Object.entries(searchParams).filter(([, value]) => Boolean(Array.isArray(value) ? value[0] : value)).map(([key]) => key);
+  const supportedQueryKeys: Partial<Record<ListRouteId, ReadonlySet<string>>> = {
+    requests: new Set(["q", "page", "status", "store", "selected"]),
+    "work-orders": new Set(["q", "page", "status", "store", "vendor", "region", "category", "asset", "component", "hasCost", "costFrom", "costMonth", "selected"]),
+    visits: new Set(["q", "page", "status", "store", "vendor", "selected"]),
+    stores: new Set(["q", "page", "selected"]),
+    vendors: new Set(["q", "page", "selected"]),
+  };
+  const usesSpecialFixtureProjection = requestedKeys.some((key) => !supportedQueryKeys[route]?.has(key))
+    || route === "visits" && (Array.isArray(searchParams.status) ? searchParams.status[0] : searchParams.status) === "upcoming";
+  if (QUERY_FIRST_LIST_ROUTES.has(route) && !usesSpecialFixtureProjection) {
+    const repository = await getServerOpsRepository();
+    return enforceListLinkPolicy(await buildQueryListModel(repository, session, route, searchParams), session.role);
+  }
+  const fixture = await getRequestOpsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID);
   return enforceListLinkPolicy(
-    buildListModel(context.fixture, context.session, route, searchParams),
-    context.session.role,
+    buildListModel(fixture, session, route, searchParams),
+    session.role,
   );
 }
 
@@ -337,18 +324,13 @@ export async function loadImportWorkspaceAccess() {
 }
 
 export async function loadDashboardModel() {
-  const context = await sessionAndFixture();
-  return enforceDashboardLinkPolicy(
-    context.session.demoEdition === "accountability"
-      ? buildAccountabilityDashboardModel(context.fixture, context.session)
-      : buildDashboardModel(context.fixture, context.session),
-    context.session.role,
-  );
+  const session = await getRequestOperatorSession();
+  return enforceDashboardLinkPolicy(await buildQueryDashboardModel(await getServerOpsRepository(), session), session.role);
 }
 
 export async function loadSearchModel(searchParams: OperatorSearchParameters = {}) {
-  const context = await sessionAndFixture();
-  return buildSearchModel(context.fixture, context.session, searchParams);
+  const session = await getRequestOperatorSession();
+  return buildQuerySearchModel(await getServerOpsRepository(), session, searchParams);
 }
 
 export async function loadProgramModel(route: ProgramRouteId, searchParams: OperatorSearchParameters = {}) {
@@ -361,20 +343,26 @@ export async function loadProgramModel(route: ProgramRouteId, searchParams: Oper
 }
 
 export async function loadTrendsModel(searchParams: OperatorSearchParameters = {}) {
-  const context = await sessionAndFixture();
-  if (!roleCanAccessProgramRoute(context.session.role, "trends")) notFound();
-  return buildTrendsModel(context.fixture, context.session, searchParams);
+  const [session, fixture] = await Promise.all([
+    getRequestOperatorSession(),
+    getServerOpsTrendsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID),
+  ]);
+  if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
+  return buildTrendsModel(fixture, session, searchParams);
 }
 
 export async function loadTrendsPageData(searchParams: OperatorSearchParameters = {}) {
-  const context = await sessionAndFixture();
-  if (!roleCanAccessProgramRoute(context.session.role, "trends")) notFound();
-  const model = buildTrendsModel(context.fixture, context.session, searchParams);
-  const repository = await getServerOpsRepository();
-  const savedViews = context.session.membershipId
-    ? await repository.listSavedViews(context.session.organizationId, context.session.membershipId, "trends")
+  const [session, fixture, repository] = await Promise.all([
+    getRequestOperatorSession(),
+    getServerOpsTrendsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID),
+    getServerOpsRepository(),
+  ]);
+  if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
+  const model = buildTrendsModel(fixture, session, searchParams);
+  const savedViews = session.membershipId
+    ? await repository.listSavedViews(session.organizationId, session.membershipId, "trends")
     : [];
-  return { model, savedViews, session: context.session };
+  return { model, savedViews, session };
 }
 
 function pmTypeKey(value: string) {

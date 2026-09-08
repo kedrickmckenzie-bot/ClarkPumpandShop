@@ -1,6 +1,6 @@
 # Product North Star
 
-**Status:** durable product direction  
+**Status:** durable product direction
 **Primary authority:** [CSTORE_PLATFORM_REBUILD_BLUEPRINT.md](CSTORE_PLATFORM_REBUILD_BLUEPRINT.md)
 
 This document summarizes the approved blueprint and the compatible detail in the merged rebuild directive. If they conflict, the blueprint and repository `AGENTS.md` govern.

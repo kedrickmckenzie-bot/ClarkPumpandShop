@@ -32,6 +32,44 @@ function harness() {
     { id: "assignment-run-104", organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: "wo-run-104", kind: "outside_vendor", vendorId: SUMMIT, status: "accepted", assignedAt: createdAt },
     { id: "assignment-run-105", organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: "wo-run-105", kind: "outside_vendor", vendorId: SUMMIT, status: "accepted", assignedAt: createdAt },
   );
+  fixture.pmPlans.push({
+    id: "pm-plan-run-105",
+    organizationId: NORTHLINE_ORGANIZATION_ID,
+    name: "Run test refrigeration PM",
+    programId: "maintenance-program-quarterly-refrigeration-v1",
+    programVersion: 1,
+    storeId: "store-northline-105",
+    assetId: "asset-105-beer-cave",
+    categoryKey: "refrigeration",
+    cadenceDays: 90,
+    completionWindowDays: 7,
+    preferredVendorId: SUMMIT,
+    contractVersionId: CONTRACT,
+    effectiveStartsAt: "2026-01-01T00:00:00.000Z",
+    effectiveEndsAt: "2026-12-31T23:59:59.999Z",
+    accessRequirements: "Roof hatch key at manager office",
+    programAuthorizationMinor: 95_000,
+    currency: "USD",
+    schedulingMode: "platform_proposed_vendor_confirmed",
+    active: true,
+    createdAt,
+  });
+  fixture.pmOccurrences.push({
+    id: "pm-occurrence-run-105",
+    organizationId: NORTHLINE_ORGANIZATION_ID,
+    planId: "pm-plan-run-105",
+    storeId: "store-northline-105",
+    assetId: "asset-105-beer-cave",
+    workOrderId: "wo-run-105",
+    programId: "maintenance-program-quarterly-refrigeration-v1",
+    programVersion: 1,
+    planVersion: 1,
+    dueAt: "2026-08-24T15:30:00.000Z",
+    windowStartsAt: "2026-08-24T13:00:00.000Z",
+    windowEndsAt: "2026-08-24T18:00:00.000Z",
+    status: "proposed",
+    createdAt,
+  });
   fixture.vendorContracts.push({ id: "contract-summit", organizationId: NORTHLINE_ORGANIZATION_ID, vendorId: SUMMIT, name: "Northline refrigeration services", ownerMembershipId: schedulerActor.actorId, status: "active", createdAt });
   fixture.contractVersions.push({
     id: CONTRACT, organizationId: NORTHLINE_ORGANIZATION_ID, contractId: "contract-summit", vendorId: SUMMIT,
@@ -78,7 +116,7 @@ function recommendationInput() {
     ],
     work: [
       { workOrderId: "wo-run-104", estimatedDurationMinutes: 60, confidence: "high" as const, requiredEquipment: ["refrigerant-recovery"] },
-      { workOrderId: "wo-run-105", estimatedDurationMinutes: 90, confidence: "medium" as const, requiredEquipment: ["refrigerant-recovery"] },
+      { workOrderId: "wo-run-105", occurrenceId: "pm-occurrence-run-105", estimatedDurationMinutes: 90, confidence: "medium" as const, requiredEquipment: ["refrigerant-recovery"] },
     ],
     publicToken: { tokenHash: TOKEN_HASH, expiresAt: "2026-08-22T13:00:00.000Z" },
     actor: schedulerActor,
@@ -124,6 +162,64 @@ describe("directive-complete Service Run scheduling contract", () => {
     expect(snapshot.serviceRuns.find((run) => run.id === result.run.id)?.originalRecommendationJson).toBe(result.run.originalRecommendationJson);
     expect(snapshot.workOrders.filter((workOrder) => ["wo-run-104", "wo-run-105"].includes(workOrder.id)).every((workOrder) => workOrder.status === "scheduled")).toBe(true);
     expect(snapshot.workflowTasks.filter((task) => task.reason.includes(result.run.id) && task.taskType === "confirm_store_access")).toHaveLength(2);
+    const committedStops = snapshot.routeStops.filter((stop) => stop.serviceRunId === result.run.id).sort((left, right) => left.sequence - right.sequence);
+    expect(committedStops.map((stop) => [stop.storeId, stop.committedArrivalAt])).toEqual([
+      ["store-northline-105", "2026-08-24T14:36:00.000Z"],
+      ["store-northline-104", "2026-08-24T16:40:00.000Z"],
+    ]);
+    expect(snapshot.pmOccurrences.find((occurrence) => occurrence.id === "pm-occurrence-run-105")?.committedAt).toBe("2026-08-24T14:36:00.000Z");
+    expect(response.travelImpactMinutes).toBe(0);
+    expect(JSON.parse(response.resultingPlanJson!).travelImpactStatus).toBe("not_calculated");
+  });
+
+  it("validates a counter against each shifted stop arrival rather than the run start", async () => {
+    const test = harness();
+    const result = await createServiceRunRecommendation(recommendationInput(), test.services);
+    await test.repository.atomicWrite([{
+      sql: "UPDATE ops_pm_occurrences SET window_starts_at = ?, window_ends_at = ? WHERE organization_id = ? AND id = ?",
+      params: ["2026-08-24T16:45:00.000Z", "2026-08-24T17:15:00.000Z", NORTHLINE_ORGANIZATION_ID, "pm-occurrence-run-105"],
+    }]);
+    test.setNow("2026-08-21T13:00:00.000Z");
+    const response = await respondToServiceRun({
+      tokenHash: TOKEN_HASH,
+      response: "countered",
+      responderName: "Morgan Ellis",
+      requestedStartsAt: "2026-08-24T14:30:00.000Z",
+      reasonCode: "crew_start_window",
+      reasonDetail: "Crew can start ninety minutes later.",
+      actor: { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "vendor_link", actorName: "Summit secure link" },
+    }, test.services);
+    expect(response.dueWindowImpactCount).toBe(0);
+
+    test.setNow("2026-08-21T14:00:00.000Z");
+    await expect(acceptServiceRunCounter({ organizationId: NORTHLINE_ORGANIZATION_ID, serviceRunId: result.run.id, responseId: response.id, actor: schedulerActor }, test.services)).resolves.toMatchObject({ status: "committed" });
+    expect(test.repository.snapshot().pmOccurrences.find((occurrence) => occurrence.id === "pm-occurrence-run-105")?.committedAt).toBe("2026-08-24T17:10:00.000Z");
+  });
+
+  it("rejects a counter that moves only the PM stop outside its immutable window", async () => {
+    const test = harness();
+    await createServiceRunRecommendation(recommendationInput(), test.services);
+    await test.repository.atomicWrite([{
+      sql: "UPDATE ops_pm_occurrences SET window_starts_at = ?, window_ends_at = ? WHERE organization_id = ? AND id = ?",
+      params: ["2026-08-24T15:15:00.000Z", "2026-08-24T15:45:00.000Z", NORTHLINE_ORGANIZATION_ID, "pm-occurrence-run-105"],
+    }]);
+    test.setNow("2026-08-21T13:00:00.000Z");
+    const response = await respondToServiceRun({
+      tokenHash: TOKEN_HASH,
+      response: "countered",
+      responderName: "Morgan Ellis",
+      requestedStopOrder: ["store-northline-105", "store-northline-104"],
+      reasonCode: "stop_order",
+      reasonDetail: "Crew requested the reverse store order.",
+      actor: { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "vendor_link", actorName: "Summit secure link" },
+    }, test.services);
+    expect(response.dueWindowImpactCount).toBe(1);
+
+    test.setNow("2026-08-21T14:00:00.000Z");
+    await expect(acceptServiceRunCounter({ organizationId: NORTHLINE_ORGANIZATION_ID, serviceRunId: response.serviceRunId, responseId: response.id, actor: schedulerActor }, test.services)).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("outside its due window"),
+    });
   });
 
   it("blocks expired mandatory compliance before a recommendation can become a dead control", async () => {
@@ -139,6 +235,9 @@ describe("directive-complete Service Run scheduling contract", () => {
     const result = await createServiceRunRecommendation(recommendationInput(), test.services);
     test.setNow("2026-08-21T13:00:00.000Z");
     await respondToServiceRun({ tokenHash: TOKEN_HASH, response: "accepted", responderName: "Morgan Ellis", actor: { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "vendor_link", actorName: "Summit secure link" } }, test.services);
+    const committedStops = test.repository.snapshot().routeStops.filter((stop) => stop.serviceRunId === result.run.id).sort((left, right) => left.sequence - right.sequence);
+    expect(committedStops.map((stop) => stop.committedArrivalAt)).toEqual(committedStops.map((stop) => stop.proposedArrivalAt));
+    expect(new Set(committedStops.map((stop) => stop.committedArrivalAt)).size).toBe(2);
     test.setNow("2026-08-24T13:30:00.000Z");
     const first = await checkInVisit(test.services, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-104", serviceRunId: result.run.id, workOrderIds: ["wo-run-104"], technicianName: "Morgan Ellis", purpose: "Complete the first committed route stop", channel: "secure_link", location: { result: "verified", capturedAt: "2026-08-24T13:30:00.000Z" }, actor: { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "technician", actorName: "Morgan Ellis" } });
     expect(first.siteVisitWorkOrders).toContainEqual(expect.objectContaining({

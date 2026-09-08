@@ -1,6 +1,6 @@
 # Owner and Operator UX Principles
 
-**Status:** approved target principles; implementation is partial  
+**Status:** approved target principles; implementation is partial
 **Primary authority:** [CSTORE_PLATFORM_REBUILD_BLUEPRINT.md](CSTORE_PLATFORM_REBUILD_BLUEPRINT.md)
 
 ## Doctrine

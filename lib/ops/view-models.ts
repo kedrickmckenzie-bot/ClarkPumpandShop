@@ -62,6 +62,7 @@ export interface VisitListRow {
   storeId: OpsId;
   storeNumber: string;
   storeName: string;
+  storeTimeZone?: string;
   providerKind: "outside_vendor" | "internal";
   vendorId?: OpsId;
   internalMembershipId?: OpsId;
@@ -153,6 +154,21 @@ export interface StoreSearchRow {
   activeVisitCount: number;
   recordedCostMinor: number;
   currency: CurrencyCode;
+}
+
+export interface AssetSearchRow {
+  id: OpsId;
+  storeId: OpsId;
+  storeNumber: string;
+  storeName: string;
+  assetTag: string;
+  name: string;
+  categoryKey: string;
+  groupPath: string[];
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  status: string;
 }
 
 export interface WorkOrderListRow {
@@ -343,6 +359,7 @@ export interface ExecutiveSnapshotView {
 }
 
 export type StoreSearchPage = Page<StoreSearchRow>;
+export type AssetSearchPage = Page<AssetSearchRow>;
 export type WorkOrderListPage = Page<WorkOrderListRow>;
 export type ExceptionQueuePage = Page<ExceptionQueueRow>;
 export type RequestListPage = Page<RequestListRow>;

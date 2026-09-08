@@ -1,6 +1,6 @@
 # Target Domain Model
 
-**Status:** target model; implement incrementally  
+**Status:** target model; implement incrementally
 **Current comparison:** [AS_IS_ARCHITECTURE.md](AS_IS_ARCHITECTURE.md)
 
 The target is one brand-neutral, tenant-scoped domain inside a modular monolith. Do not create unused tables merely to make this catalog appear complete. Add a concept only with the vertical slice that enforces and exercises it.

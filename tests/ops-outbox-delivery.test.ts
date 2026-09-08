@@ -220,4 +220,3 @@ describe("transactional outbox delivery worker", () => {
     expect(snapshot(harness.repository).outboxMessages).toEqual(before.outboxMessages);
   });
 });
-

@@ -1900,11 +1900,15 @@ export interface IdempotencyKey {
 export interface PageRequest {
   limit?: number;
   cursor?: string;
+  /** Stable zero-based offset for operator pages that expose numbered pagination. */
+  offset?: number;
 }
 
 export interface Page<T> {
   items: T[];
   nextCursor?: string;
+  /** Total rows after tenant, role-scope, and user filters are applied. */
+  totalCount?: number;
 }
 
 export interface OpsFixture {
