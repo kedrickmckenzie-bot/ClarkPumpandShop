@@ -45,6 +45,31 @@ describe("operator query presenter", () => {
     expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "next")?.secondary?.includes("Internal:"))).toBe(true);
   });
 
+  it("restores the facilities journey from default work to held-work bundling without abandoning query-first rows", async () => {
+    const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const model = await buildQueryListModel(repository, session({ role: "facilities", membershipId: "membership-northline-facilities" }), "work-orders", {});
+    const heldMetric = model.metrics?.find((metric) => metric.id === "ready-to-bundle");
+    const multipleMetric = model.metrics?.find((metric) => metric.id === "store-sweep-opportunities");
+    const timing = model.filters?.find((filter) => filter.id === "work-visit-plan");
+
+    expect(model.table.rows.length).toBeLessThanOrEqual(25);
+    expect(heldMetric?.link.href).toBe("/app/work-orders?visitPlan=ready");
+    expect(Number(heldMetric?.value)).toBeGreaterThan(0);
+    expect(multipleMetric?.link.href).toContain("storeGroup=multiple");
+    expect(timing?.options.map((option) => option.label)).toContainEqual(expect.stringContaining("Approved for next suitable visit"));
+    expect(model.page.secondaryAction?.href).toContain("/app/store-sweeps/new");
+    expect(model.page.secondaryAction?.href).toContain("returnTo=");
+  });
+
+  it("hides held-work dispatch actions from store and finance roles", async () => {
+    const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    for (const role of ["store_manager", "finance"] as const) {
+      const model = await buildQueryListModel(repository, session({ role }), "work-orders", {});
+      expect(model.metrics?.some((metric) => metric.id === "ready-to-bundle") ?? false).toBe(false);
+      expect(model.page.secondaryAction).toBeUndefined();
+    }
+  });
+
   it("keeps visit filter controls and applied-filter removal links in the query projection", async () => {
     const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
     const model = await buildQueryListModel(repository, session(), "visits", { status: "active", vendor: "vendor-northline-summit" });

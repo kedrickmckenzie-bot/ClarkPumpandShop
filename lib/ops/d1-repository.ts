@@ -567,6 +567,19 @@ class D1OpsRepository implements OpsRepository {
 
   async listWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery = {}) { const rows = await this.workOrderRows(scope, query); const max = limit(query.limit); const visibleRows = rows.slice(0, max); const items = visibleRows.map((row) => this.workListRow(row)); const last = visibleRows.at(-1); return { items, nextCursor: rows.length > max && last ? encodeCursor(text(last, "created_at"), text(last, "id")) : undefined }; }
 
+  async getHeldWorkPortfolioSummary(scope: OrganizationScope) {
+    const params: unknown[] = [];
+    const scopedStores = scopeWhere(scope, "s", params);
+    const rows = await this.all(`SELECT w.store_id, COUNT(*) AS approved_count
+      FROM ops_work_order_visit_holds h
+      JOIN ops_work_orders w ON w.organization_id = h.organization_id AND w.id = h.work_order_id
+      JOIN ops_stores s ON s.organization_id = w.organization_id AND s.id = w.store_id
+      WHERE ${scopedStores} AND h.status = 'active'
+      GROUP BY w.store_id`, params);
+    const counts = rows.map((row) => Number(row.approved_count ?? 0));
+    return { approvedWorkOrders: counts.reduce((sum, count) => sum + count, 0), storesWithApprovedWork: counts.length, storesWithMultipleApprovedJobs: counts.filter((count) => count >= 2).length };
+  }
+
   async listRequests(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId } = {}) {
     const params: unknown[] = [];
     const clauses = [scopeWhere(scope, "s", params)];

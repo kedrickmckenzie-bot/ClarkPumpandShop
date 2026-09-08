@@ -703,15 +703,28 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
     costLines: fixture.costLines.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     // Invoice evidence is scoped to THIS work order through its allocations;
     // an unrelated tenant invoice must never surface on the case.
-    invoices: (() => {
+    ...(() => {
       const linkedReferenceIds = new Set(
         fixture.invoiceAllocations
           .filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId)
           .map((row) => row.invoiceReferenceId),
       );
-      return fixture.invoiceReferences
+      const legacyInvoices = fixture.invoiceReferences
         .filter((row) => row.organizationId === context.session.organizationId && linkedReferenceIds.has(row.id))
         .map((row) => ({ id: row.id, status: row.matchStatus }));
+      const invoiceLineAllocations = fixture.invoiceLineAllocations.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId);
+      const lineIds = new Set(invoiceLineAllocations.map((row) => row.invoiceLineId));
+      const invoiceLines = fixture.invoiceLines.filter((row) => row.organizationId === context.session.organizationId && lineIds.has(row.id));
+      const invoiceIds = new Set(invoiceLines.map((row) => row.invoiceId));
+      const invoices = fixture.invoices.filter((row) => row.organizationId === context.session.organizationId && invoiceIds.has(row.id));
+      return {
+        invoices: invoices.length ? invoices : legacyInvoices,
+        invoiceLines,
+        invoiceLineAllocations,
+        invoiceExceptions: fixture.invoiceExceptions.filter((row) => row.organizationId === context.session.organizationId && invoiceIds.has(row.invoiceId)),
+        invoiceAdjustments: fixture.invoiceAdjustments.filter((row) => row.organizationId === context.session.organizationId && invoiceIds.has(row.invoiceId)),
+        valueEvents: fixture.valueEvents.filter((row) => row.organizationId === context.session.organizationId && (row.workOrderId === workOrderId || Boolean(row.invoiceLineId && lineIds.has(row.invoiceLineId)))),
+      };
     })(),
     estimateRequests,
     estimateProposals: fixture.estimateProposals.filter((row) => requestIds.has(row.requestId)),

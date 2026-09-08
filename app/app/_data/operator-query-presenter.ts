@@ -240,13 +240,16 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   let description: string;
   let placeholder: string;
   let primaryAction: { label: string; href: string } | undefined;
+  let metrics: ListPageViewModel["metrics"];
+  let secondaryAction: { label: string; href: string } | undefined;
+  let contextualFilters: ListPageViewModel["filters"];
 
   if (route === "work-orders") {
     const requestedStatus = first(query.status);
     const statuses = requestedStatus === "open"
       ? ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"]
       : requestedStatus ? [requestedStatus] : undefined;
-    const work = await repository.listWorkOrders(scope, {
+    const [work, held] = await Promise.all([repository.listWorkOrders(scope, {
       ...request,
       search: q,
       statuses,
@@ -259,9 +262,24 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       hasCost: first(query.hasCost) === "true",
       costFrom: first(query.costFrom),
       costMonth: first(query.costMonth),
-    });
+    }), repository.getHeldWorkPortfolioSummary(scope)]);
     result = work; rows = work.items.map(workRow); title = "Work orders"; eyebrow = "Maintenance work"; description = "Track internal and outside service from creation through visits, follow-up, and recorded cost."; placeholder = "Search number, problem, store, vendor, or category";
     if (roleCan(session.role, "create_work_order")) primaryAction = { label: "Create work order", href: "/app/work-orders/new" };
+    if (session.role === "facilities" || session.role === "regional") {
+      secondaryAction = { label: "Send approved jobs together", href: "/app/store-sweeps/new?returnTo=%2Fapp%2Fwork-orders" };
+      metrics = [
+        { id: "ready-to-bundle", label: "Approved for next suitable visit", value: String(held.approvedWorkOrders), supportingText: `${held.storesWithApprovedWork} store${held.storesWithApprovedWork === 1 ? "" : "s"} across your full operating scope`, tone: held.approvedWorkOrders ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open approved work" } },
+        { id: "store-sweep-opportunities", label: "Stores with 2+ approved jobs", value: String(held.storesWithMultipleApprovedJobs), supportingText: "Portfolio-wide count; filters below apply only to the result list", tone: held.storesWithMultipleApprovedJobs ? "warning" : "positive", link: { href: "/app/work-orders?visitPlan=ready&storeGroup=multiple", label: "Review stores with multiple jobs" } },
+      ];
+      contextualFilters = [{
+        id: "work-visit-plan",
+        label: "Work timing",
+        options: [
+          { value: "all", label: "All work", href: "/app/work-orders", selected: true },
+          { value: "ready", label: `Approved for next suitable visit (${held.approvedWorkOrders})`, href: "/app/work-orders?visitPlan=ready", selected: false },
+        ],
+      }];
+    }
   } else if (route === "requests") {
     const requests = await repository.listRequests(scope, { ...request, search: q, status: first(query.status), storeId: first(query.store) });
     result = requests; rows = requests.items.map(requestRow); title = "Service requests"; eyebrow = "Reported issues"; description = "Review what store teams reported, then create work, escalate it, or close it without changing the original report."; placeholder = "Search problem, reporter, request, or store";
@@ -283,11 +301,12 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   const summary = total === undefined ? `${rows.length}${result.nextCursor ? "+" : ""} matching source records` : `${total} source record${total === 1 ? "" : "s"}`;
   return {
     state: rows.length || !q ? { kind: "ready" } : { kind: "empty", title: "No matching records", message: "Try another store number, address, vendor, or keyword." },
-    page: { ...commonPage(session, title, eyebrow, description), primaryAction },
+    page: { ...commonPage(session, title, eyebrow, description), primaryAction, secondaryAction },
+    metrics,
     table: { id: route, caption: title, columns: columns[route as QueryListRoute], rows },
     resultSummary: summary,
     search: searchControl(route, query, `Search ${title}`, placeholder),
-    filters: queryFilters(route, query),
+    filters: [...(contextualFilters ?? []), ...(queryFilters(route, query) ?? [])],
     appliedFilters: queryAppliedFilters(route, query),
     clearFiltersHref: `/app/${route}`,
     pagination: pagination(route, query, result, page),

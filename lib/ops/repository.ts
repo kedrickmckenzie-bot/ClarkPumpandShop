@@ -123,6 +123,12 @@ export interface WorkOrderListQuery extends PageRequest {
   createdTo?: IsoDateTime;
 }
 
+export interface HeldWorkPortfolioSummary {
+  approvedWorkOrders: number;
+  storesWithApprovedWork: number;
+  storesWithMultipleApprovedJobs: number;
+}
+
 export interface ExceptionQueueQuery extends PageRequest {
   statuses?: readonly string[];
   kinds?: readonly string[];
@@ -262,6 +268,7 @@ export interface OpsRepository {
   getWorkflowTask(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTask | null>;
   listWorkflowTasksForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkflowTask[]>;
   listWorkflowTasksForRequest(organizationId: OpsId, requestId: OpsId): Promise<WorkflowTask[]>;
+  getHeldWorkPortfolioSummary(scope: OrganizationScope): Promise<HeldWorkPortfolioSummary>;
   listWorkflowTaskSlaPauses(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaPause[]>;
   listWorkflowTaskSlaResumes(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaResume[]>;
   getActiveWorkflowTaskSlaPause(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaPause | null>;

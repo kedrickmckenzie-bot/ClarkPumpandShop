@@ -143,6 +143,10 @@ function workOrderCase(fixture: OpsFixture, organizationId: string, workOrderId:
   const estimateRequests = fixture.estimateRequests.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId);
   const requestIds = new Set(estimateRequests.map((row) => row.id));
   const invoiceReferenceIds = new Set(fixture.invoiceAllocations.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).map((row) => row.invoiceReferenceId));
+  const invoiceLineAllocations = fixture.invoiceLineAllocations.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId);
+  const invoiceLineIds = new Set(invoiceLineAllocations.map((row) => row.invoiceLineId));
+  const invoiceLines = fixture.invoiceLines.filter((row) => row.organizationId === organizationId && invoiceLineIds.has(row.id));
+  const invoiceIds = new Set(invoiceLines.map((row) => row.invoiceId));
   return buildWorkOrderCase({
     now: fixture.asOf,
     workOrder,
@@ -157,7 +161,14 @@ function workOrderCase(fixture: OpsFixture, organizationId: string, workOrderId:
     workflowTasks: fixture.workflowTasks.filter((row) => row.organizationId === organizationId && (row.workOrderId === workOrderId || (workOrder.requestId && row.serviceRequestId === workOrder.requestId))),
     followUps: fixture.followUps.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),
     costLines: fixture.costLines.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),
-    invoices: fixture.invoiceReferences.filter((row) => row.organizationId === organizationId && invoiceReferenceIds.has(row.id)).map((row) => ({ id: row.id, status: row.matchStatus })),
+    invoices: invoiceIds.size
+      ? fixture.invoices.filter((row) => row.organizationId === organizationId && invoiceIds.has(row.id))
+      : fixture.invoiceReferences.filter((row) => row.organizationId === organizationId && invoiceReferenceIds.has(row.id)).map((row) => ({ id: row.id, status: row.matchStatus })),
+    invoiceLines,
+    invoiceLineAllocations,
+    invoiceExceptions: fixture.invoiceExceptions.filter((row) => row.organizationId === organizationId && invoiceIds.has(row.invoiceId)),
+    invoiceAdjustments: fixture.invoiceAdjustments.filter((row) => row.organizationId === organizationId && invoiceIds.has(row.invoiceId)),
+    valueEvents: fixture.valueEvents.filter((row) => row.organizationId === organizationId && (row.workOrderId === workOrderId || Boolean(row.invoiceLineId && invoiceLineIds.has(row.invoiceLineId)))),
     estimateRequests,
     estimateProposals: fixture.estimateProposals.filter((row) => row.organizationId === organizationId && requestIds.has(row.requestId)),
     replacementEvents: fixture.replacementEvents.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),

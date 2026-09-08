@@ -464,6 +464,7 @@ function CaseStateDimensions({ model }: { model: WorkOrderCaseView }) {
         <span>{eyebrow}</span>
         <strong>{value.label}</strong>
         <p>{value.detail}</p>
+        {value.facts?.length ? <dl>{value.facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl> : null}
         {value.sourceLabel ? <small>{value.sourceLabel}{value.observedAt ? ` · ${dueLabel(value.observedAt, model.timeZone)}` : ""}{value.certainty ? ` · ${sentence(value.certainty)}` : ""}</small> : null}
       </article>)}
       {model.additionalObligations.length ? <details>

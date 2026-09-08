@@ -1,6 +1,10 @@
 import type {
   CostLine,
   FollowUp,
+  InvoiceAdjustment,
+  InvoiceException,
+  InvoiceLine,
+  InvoiceLineAllocation,
   RequestImpactAssessment,
   ServiceAppointment,
   SiteVisitWorkOrder,
@@ -11,8 +15,10 @@ import type {
   WorkOrderIssuance,
   WorkOrderVerification,
   WorkflowTask,
+  ValueEvent,
 } from "./types";
 import { selectWorkflowTaskProjection } from "./workflow-task-commands";
+import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "./work-order-outcome";
 
 /**
  * The canonical stage rail: one computed plain-language service stage for every
@@ -66,6 +72,8 @@ export interface WorkOrderCaseDimension {
   certainty?: "verified" | "reported" | "uncertain" | "unknown";
   sourceLabel?: string;
   observedAt?: string;
+  facts?: Array<{ label: string; value: string }>;
+  href?: string;
 }
 
 export interface WorkOrderCaseObligation {
@@ -170,9 +178,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const hasCost = (input.costLines ?? []).some((row) => row.workOrderId === workOrder.id);
   const hasInvoices = (input.invoices ?? []).length > 0;
   const workOutcomes = (input.siteVisitWorkOrders ?? []).filter((row) => row.workOrderId === workOrder.id && row.outcome);
-  const latestWorkOutcome = latest(workOutcomes, (row) => row.outcomeRecordedAt ?? row.linkedAt);
+  const latestWorkOutcome = latestRecordedWorkOutcome(workOutcomes);
   const verifications = (input.verifications ?? []).filter((row) => row.workOrderId === workOrder.id);
-  const latestVerification = latest(verifications, (row) => row.decidedAt);
+  const latestVerification = applicableOutcomeVerification(verifications, latestWorkOutcome);
   const latestImpact = latest(input.impactAssessments ?? [], (row) => row.assessedAt);
   const estimateRequests = (input.estimateRequests ?? []).filter((row) => row.workOrderId === workOrder.id);
   const estimateProposals = (input.estimateProposals ?? []).filter((proposal) => estimateRequests.some((request) => request.id === proposal.requestId));
@@ -186,6 +194,11 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const liveAppointment = [...appointments]
     .filter((row) => row.status !== "cancelled")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const appointmentStartsNewCycle = Boolean(
+    liveAppointment?.status === "confirmed"
+    && latestWorkOutcome
+    && liveAppointment.createdAt > (latestWorkOutcome.outcomeRecordedAt ?? latestWorkOutcome.linkedAt),
+  );
   const continuations = (input.continuations ?? []).filter((row) => row.workOrderId === workOrder.id);
   const replacementEvent = latest((input.replacementEvents ?? []).filter((row) => row.workOrderId === workOrder.id), (row) => row.completedAt ?? row.approvedAt);
   const approvedReplacement = replacementEvent?.status === "approved";
@@ -213,6 +226,8 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     stage = "provider_decision";
   } else if (activeVisit && !activeVisit.checkedOutAt) {
     stage = "onsite_service";
+  } else if (appointmentStartsNewCycle) {
+    stage = "vendor_response_scheduling";
   } else if (closeoutFollowUps.length > 0 || closeoutTask || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
     stage = "followup_closeout";
   } else if (!currentIssuance && activeAssignment.kind === "outside_vendor" && visits.length === 0 && !hasCost) {
@@ -241,6 +256,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   } else if (onsiteNow) {
     stage = "onsite_service";
     serviceSubStage = activeAssignment?.kind === "outside_vendor" ? "onsite" : undefined;
+  } else if (appointmentStartsNewCycle) {
+    stage = "vendor_response_scheduling";
+    serviceSubStage = "scheduled";
   } else if (closeoutFollowUps.length > 0 || closeoutTask || unresolvedCheckout || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
     stage = "followup_closeout";
     serviceSubStage = closeoutFollowUps.length > 0 || unresolvedCheckout || closeoutTask?.taskType === "verify_repair" ? "followup_required" : "closeout_review";
@@ -309,7 +327,12 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   if (approvedReplacement) {
     blockingReason = "The replacement quote is approved; installation and final installed cost are not yet recorded.";
   } else if (stage === "vendor_response_scheduling" && liveAppointment?.status === "confirmed") {
-    blockingReason = `${accountableParty || "The vendor"} and the operator confirmed the service appointment.`;
+    const priorBlocker = appointmentStartsNewCycle && latestWorkOutcome?.outcome === "parts_required"
+      ? " Parts delivery still needs confirmation."
+      : appointmentStartsNewCycle && latestWorkOutcome?.outcome === "return_visit_required"
+        ? " The earlier return-visit requirement remains in the history until the visit occurs."
+        : "";
+    blockingReason = `${accountableParty || "The vendor"} and the operator confirmed the service appointment.${priorBlocker}`;
   } else if (blockingTask) blockingReason = blockingTask.reason;
   else if (latestResponse?.response === "declined") blockingReason = "The vendor declined this authorization.";
   else if (stage === "authorization_or_bidding" && selectedEstimateRequest?.decisionKind === "replacement_quote") blockingReason = "The selected replacement quote routes to capital review before any service authorization.";
@@ -327,6 +350,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const plainLanguageState = fullyClosed
     ? workOrder.status === "cancelled" ? "Cancelled" : "Closed"
     : activeVisit && !activeVisit.checkedOutAt ? "Technician onsite"
+    : appointmentStartsNewCycle ? "Return visit scheduled"
     : latestWorkOutcome?.outcome === "completed"
       ? latestVerification?.siteVisitWorkOrderId === latestWorkOutcome.id
         ? latestVerification.decision === "verified" ? "Work verified complete" : "Completion rejected; corrective work required"
@@ -348,7 +372,11 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     : activeAssignment.kind === "internal" ? "Internal maintenance assigned"
     : CANONICAL_STAGE_LABELS[stage];
 
-  const operatingCondition: WorkOrderCaseDimension = latestVerification?.decision === "verified" && latestWorkOutcome?.outcome === "completed"
+  const latestOutcomeVisit = latestWorkOutcome ? visits.find((visit) => visit.id === latestWorkOutcome.visitId) : undefined;
+  const technicalPmWithoutOperatingObservation = latestOutcomeVisit?.outcome === "pm_complete" && !latestImpact;
+  const operatingCondition: WorkOrderCaseDimension = technicalPmWithoutOperatingObservation
+    ? { id: "unknown", label: "Operating condition not assessed", detail: "The preventive-maintenance checklist was completed, but no operating-condition observation was recorded.", certainty: "unknown", sourceLabel: "Technical PM completion only" }
+    : latestVerification?.decision === "verified" && latestWorkOutcome?.outcome === "completed"
     ? { id: "verified_operating", label: "Operating result verified", detail: latestVerification.reason ?? "An authorized reviewer confirmed the reported result.", certainty: "verified", sourceLabel: `Verification by ${latestVerification.decidedByName}`, observedAt: latestVerification.decidedAt }
     : latestVerification?.decision === "rejected"
       ? { id: "result_rejected", label: "Current result not confirmed", detail: latestVerification.reason ?? "The completion claim was rejected and remains preserved in the record.", certainty: "uncertain", sourceLabel: `Verification by ${latestVerification.decidedByName}`, observedAt: latestVerification.decidedAt }
@@ -368,10 +396,37 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
             : { id: "unknown", label: "Operating condition not assessed", detail: "No operating-condition observation is recorded. Work status is not used as a substitute.", certainty: "unknown", sourceLabel: "No source observation" };
 
   const invoiceStatuses = new Set((input.invoices ?? []).map((invoice) => invoice.status).filter(Boolean));
-  const financialReview: WorkOrderCaseDimension = hasInvoices && (invoiceStatuses.has("unmatched") || invoiceStatuses.has("suggested"))
-    ? { id: "invoice_review", label: "Invoice evidence needs review", detail: "Invoice matching is an independent safeguard and does not change the service or operating result." }
+  const invoiceLineIds = new Set((input.invoiceLines ?? []).map((line) => line.id));
+  const allocations = (input.invoiceLineAllocations ?? []).filter((allocation) => allocation.workOrderId === workOrder.id);
+  const allocatedLineIds = new Set(allocations.map((allocation) => allocation.invoiceLineId));
+  const linkedInvoiceIds = new Set((input.invoiceLines ?? []).filter((line) => allocatedLineIds.has(line.id)).map((line) => line.invoiceId));
+  const linkedAmountMinor = allocations.reduce((sum, allocation) => sum + allocation.amount.amountMinor, 0);
+  const linkedCurrency = allocations[0]?.amount.currency ?? "USD";
+  const linkedExceptions = (input.invoiceExceptions ?? []).filter((exception) => linkedInvoiceIds.has(exception.invoiceId));
+  const attributedOpenExceptions = linkedExceptions.filter((exception) => exception.status === "open" && Boolean(exception.invoiceLineId && allocatedLineIds.has(exception.invoiceLineId)));
+  const unattributedOpenExceptions = linkedExceptions.filter((exception) => exception.status === "open" && (!exception.invoiceLineId || !invoiceLineIds.has(exception.invoiceLineId)));
+  const attributedDisputedMinor = attributedOpenExceptions.reduce((sum, exception) => sum + exception.amount.amountMinor, 0);
+  const linkedAdjustments = (input.invoiceAdjustments ?? []).filter((adjustment) => linkedInvoiceIds.has(adjustment.invoiceId));
+  const adjustmentMinor = linkedAdjustments.reduce((sum, adjustment) => sum + adjustment.amount.amountMinor, 0);
+  const realizedMinor = (input.valueEvents ?? []).filter((event) => event.category === "realized_verified" && (
+    event.workOrderId === workOrder.id || Boolean(event.invoiceLineId && allocatedLineIds.has(event.invoiceLineId))
+  )).reduce((sum, event) => sum + event.amount.amountMinor, 0);
+  const hasOpenReview = attributedOpenExceptions.length > 0 || unattributedOpenExceptions.length > 0 || invoiceStatuses.has("unmatched") || invoiceStatuses.has("suggested");
+  const moneyLabel = (amountMinor: number, currency = linkedCurrency) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100);
+  const financialFacts = hasInvoices ? [
+    { label: "Linked invoice allocation", value: moneyLabel(linkedAmountMinor) },
+    { label: "Open attributed dispute", value: moneyLabel(attributedDisputedMinor) },
+    { label: "Recorded adjustments", value: moneyLabel(adjustmentMinor) },
+    { label: "Realized verified value", value: moneyLabel(realizedMinor) },
+  ] : undefined;
+  const financialReview: WorkOrderCaseDimension = hasInvoices && hasOpenReview
+    ? {
+        id: "invoice_review", label: "Invoice evidence needs review",
+        detail: `${attributedOpenExceptions.length} attributed review flag${attributedOpenExceptions.length === 1 ? "" : "s"} remain open.${unattributedOpenExceptions.length ? ` ${unattributedOpenExceptions.length} invoice-level flag${unattributedOpenExceptions.length === 1 ? " is" : "s are"} disclosed but not attributed to this work order.` : ""} Matching does not clear review decisions.`,
+        facts: financialFacts, href: `${base}?view=cost`,
+      }
     : hasInvoices
-      ? { id: "invoice_linked", label: "Invoice evidence linked", detail: "The invoice reference is linked for financial review; it does not prove successful service." }
+      ? { id: "invoice_linked", label: "Invoice evidence linked", detail: "Only confirmed line allocations are counted here. Invoice totals are not multiplied across work orders.", facts: financialFacts, href: `${base}?view=cost` }
       : hasCost
         ? { id: "recorded_cost", label: "Recorded work cost available", detail: "Entered cost is available even though no invoice evidence is required." }
         : { id: "no_financial_evidence", label: "No financial evidence recorded", detail: "Service may proceed or close without an invoice; recorded costs remain a separate fact." };
@@ -469,6 +524,11 @@ export interface WorkOrderCaseInput {
   verifications?: Pick<WorkOrderVerification, "id" | "workOrderId" | "siteVisitWorkOrderId" | "outcome" | "decision" | "reason" | "decidedByName" | "decidedAt">[];
   /** Invoice evidence linked to THIS work order (already scoped by the caller). */
   invoices?: { id: string; status?: string }[];
+  invoiceLines?: Pick<InvoiceLine, "id" | "invoiceId">[];
+  invoiceLineAllocations?: Pick<InvoiceLineAllocation, "invoiceLineId" | "workOrderId" | "amount">[];
+  invoiceExceptions?: Pick<InvoiceException, "invoiceId" | "invoiceLineId" | "status" | "amount">[];
+  invoiceAdjustments?: Pick<InvoiceAdjustment, "invoiceId" | "amount">[];
+  valueEvents?: Pick<ValueEvent, "category" | "workOrderId" | "invoiceLineId" | "amount">[];
   /** Estimate (bid) requests and proposals attached to this work order. */
   estimateRequests?: { id: string; workOrderId: string; status?: string; decisionKind?: "service_bid" | "replacement_quote" }[];
   estimateProposals?: { id: string; requestId: string; kind?: string; status?: string }[];

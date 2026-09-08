@@ -635,6 +635,20 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     return page(rows, query);
   }
 
+  async getHeldWorkPortfolioSummary(scope: OrganizationScope) {
+    const active = (this.fixture.workOrderVisitHolds ?? []).filter((hold) => {
+      if (hold.organizationId !== scope.organizationId || hold.status !== "active") return false;
+      const work = this.fixture.workOrders.find((row) => row.organizationId === scope.organizationId && row.id === hold.workOrderId);
+      return Boolean(work && storeAllowed(this.fixture, scope, work.storeId));
+    });
+    const counts = new Map<string, number>();
+    for (const hold of active) {
+      const storeId = this.fixture.workOrders.find((row) => row.id === hold.workOrderId)?.storeId;
+      if (storeId) counts.set(storeId, (counts.get(storeId) ?? 0) + 1);
+    }
+    return { approvedWorkOrders: active.length, storesWithApprovedWork: counts.size, storesWithMultipleApprovedJobs: [...counts.values()].filter((count) => count >= 2).length };
+  }
+
   async getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null> {
     const workOrder = this.fixture.workOrders.find((row) => row.organizationId === scope.organizationId && row.id === workOrderId);
     if (!workOrder || !storeAllowed(this.fixture, scope, workOrder.storeId)) return null;

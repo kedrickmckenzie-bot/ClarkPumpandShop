@@ -14,13 +14,13 @@ import type {
   IsoDateTime,
   OpsId,
   OrganizationRole,
-  SiteVisitWorkOrder,
   SiteVisitWorkOrderOutcome,
   WorkOrder,
   WorkOrderVerification,
   WorkOrderVerificationDecision,
   WorkflowTask,
 } from "./types";
+import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "./work-order-outcome";
 
 export type { WorkOrderVerificationDecision } from "./types";
 export type WorkOrderVerificationRecord = WorkOrderVerification;
@@ -101,23 +101,6 @@ function auditAndOutbox(input: {
       attempt_count: 0,
     }),
   ];
-}
-
-function latestOutcome(records: readonly SiteVisitWorkOrder[]) {
-  const currentVisitWork = [...records].sort((left, right) => (
-    right.linkedAt.localeCompare(left.linkedAt)
-    || (right.outcomeRecordedAt ?? "").localeCompare(left.outcomeRecordedAt ?? "")
-    || right.id.localeCompare(left.id)
-  ))[0];
-  return currentVisitWork?.outcome && currentVisitWork.outcomeRecordedAt ? currentVisitWork : undefined;
-}
-
-function latestVerification(records: readonly WorkOrderVerificationRecord[]) {
-  return [...records].sort((left, right) => (
-    right.cycle - left.cycle
-    || right.decidedAt.localeCompare(left.decidedAt)
-    || right.id.localeCompare(left.id)
-  ))[0];
 }
 
 function completedTask(
@@ -203,7 +186,7 @@ export async function recordWorkOrderVerification(
     repository.listWorkOrderVerifications(input.organizationId, workOrder.id),
     repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id),
   ]);
-  const outcome = latestOutcome(outcomes);
+  const outcome = latestRecordedWorkOutcome(outcomes);
   if (
     !outcome
     || outcome.id !== input.expectedSiteVisitWorkOrderId
@@ -454,8 +437,8 @@ export async function assertWorkOrderReadyForClosure(
     repository.listWorkflowTasksForWorkOrder(workOrder.organizationId, workOrder.id),
     repository.getWorkOrderDetail({ organizationId: workOrder.organizationId }, workOrder.id),
   ]);
-  const outcome = latestOutcome(outcomes);
-  const verification = latestVerification(verifications);
+  const outcome = latestRecordedWorkOutcome(outcomes);
+  const verification = applicableOutcomeVerification(verifications, outcome);
   if (
     !outcome
     || !verification

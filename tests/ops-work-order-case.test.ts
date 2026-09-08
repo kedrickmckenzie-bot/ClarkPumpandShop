@@ -22,6 +22,61 @@ function wo(id: string, status: "draft" | "issued" | "accepted" | "closed") {
 }
 
 describe("work-order case stage projector", () => {
+  it("does not carry an earlier verification or rejection into a newer outcome cycle", () => {
+    const baseWork = { ...wo("wo-cycle", "accepted"), status: "completed_pending_review" as const };
+    const outcomes = [
+      { id: "cycle-1", visitId: "visit-1", workOrderId: "wo-cycle", linkedAt: "2026-08-10T10:00:00.000Z", outcome: "completed" as const, outcomeRecordedAt: "2026-08-10T11:00:00.000Z" },
+      { id: "cycle-2", visitId: "visit-2", workOrderId: "wo-cycle", linkedAt: "2026-08-20T10:00:00.000Z", outcome: "completed" as const, outcomeRecordedAt: "2026-08-20T11:00:00.000Z" },
+    ];
+    for (const decision of ["verified", "rejected"] as const) {
+      const view = buildWorkOrderCase({
+        now: NOW, workOrder: baseWork, siteVisitWorkOrders: outcomes,
+        verifications: [{ id: `old-${decision}`, workOrderId: "wo-cycle", siteVisitWorkOrderId: "cycle-1", outcome: "completed", decision, decidedByName: "Earlier reviewer", decidedAt: "2026-08-10T12:00:00.000Z" }],
+      });
+      expect(view.plainLanguageState).toBe("Work reported complete; confirmation needed");
+      expect(view.operatingCondition.id).toBe("provider_reported_complete");
+    }
+  });
+
+  it("does not turn technical PM completion into an operating observation", () => {
+    const view = buildWorkOrderCase({
+      now: NOW, workOrder: { ...wo("wo-pm", "accepted"), status: "completed_pending_review" },
+      visits: [{ id: "visit-pm", status: "checked_out", checkedInAt: "2026-08-19T10:00:00.000Z", checkedOutAt: "2026-08-19T11:00:00.000Z", outcome: "pm_complete" }],
+      siteVisitWorkOrders: [{ id: "pm-cycle", visitId: "visit-pm", workOrderId: "wo-pm", linkedAt: "2026-08-19T10:00:00.000Z", outcome: "completed", outcomeRecordedAt: "2026-08-19T11:00:00.000Z" }],
+    });
+    expect(view.operatingCondition).toMatchObject({ id: "unknown", certainty: "unknown" });
+    expect(view.operatingCondition.detail).toContain("preventive-maintenance checklist");
+  });
+
+  it("shows linked invoice evidence and outstanding decisions without multiplying invoice totals", () => {
+    const view = buildWorkOrderCase({
+      now: NOW, workOrder: wo("wo-finance", "accepted"), costLines: [{ workOrderId: "wo-finance" }],
+      invoices: [{ id: "invoice-1", status: "exception" }],
+      invoiceLines: [{ id: "line-1", invoiceId: "invoice-1" }, { id: "line-2", invoiceId: "invoice-1" }],
+      invoiceLineAllocations: [{ invoiceLineId: "line-1", workOrderId: "wo-finance", amount: { amountMinor: 25_000, currency: "USD" } }],
+      invoiceExceptions: [
+        { invoiceId: "invoice-1", invoiceLineId: "line-1", status: "open", amount: { amountMinor: 5_000, currency: "USD" } },
+        { invoiceId: "invoice-1", invoiceLineId: "line-2", status: "resolved", amount: { amountMinor: 8_000, currency: "USD" } },
+        { invoiceId: "invoice-1", status: "open", amount: { amountMinor: 90_000, currency: "USD" } },
+      ],
+    });
+    expect(view.financialReview.label).toBe("Invoice evidence needs review");
+    expect(view.financialReview.facts).toContainEqual({ label: "Linked invoice allocation", value: "$250.00" });
+    expect(view.financialReview.facts).toContainEqual({ label: "Open attributed dispute", value: "$50.00" });
+    expect(view.financialReview.detail).toContain("not attributed to this work order");
+  });
+
+  it("keeps a newer confirmed return appointment primary while retaining an unresolved parts fact", () => {
+    const view = buildWorkOrderCase({
+      now: NOW, workOrder: { ...wo("wo-return", "accepted"), status: "waiting_on_parts" },
+      assignments: [{ id: "assignment-return", kind: "outside_vendor", status: "accepted", assignedAt: "2026-08-01T00:00:00.000Z" }],
+      siteVisitWorkOrders: [{ id: "parts-cycle", visitId: "visit-parts", workOrderId: "wo-return", linkedAt: "2026-08-10T10:00:00.000Z", outcome: "parts_required", outcomeRecordedAt: "2026-08-10T11:00:00.000Z" }],
+      appointments: [{ id: "return-appt", status: "confirmed", startsAt: "2026-08-27T14:00:00.000Z", createdAt: "2026-08-20T10:00:00.000Z", workOrderId: "wo-return", assignmentId: "assignment-return", proposedBy: "operator" }],
+    });
+    expect(view).toMatchObject({ stage: "vendor_response_scheduling", plainLanguageState: "Return visit scheduled", dueAt: "2026-08-27T14:00:00.000Z" });
+    expect(view.primaryNextAction.label).toBe("Track the confirmed service appointment");
+    expect(view.blockingReason).toContain("Parts delivery still needs confirmation");
+  });
   it("projects intake with accountability from the open blocking task", () => {
     const view = buildWorkOrderCase({
       now: NOW,

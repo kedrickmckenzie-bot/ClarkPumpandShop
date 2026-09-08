@@ -3,7 +3,6 @@ import "server-only";
 import type { OperatorRole, OperatorSession, Tone } from "@/components/ops/data-contract";
 import type {
   OpsFixture,
-  SiteVisitWorkOrder,
   SiteVisitWorkOrderOutcome,
   WorkOrder,
   WorkflowTask,
@@ -12,6 +11,7 @@ import { persistedWorkOrderVersion } from "@/lib/ops/concurrency";
 import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
 import { loadOperatorSession } from "./operator-loader";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
+import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "@/lib/ops/work-order-outcome";
 
 export interface WorkOrderVerificationViewModel {
   available: boolean;
@@ -77,15 +77,6 @@ const outcomeLabels: Record<SiteVisitWorkOrderOutcome, string> = {
 
 function dateTime(value: string, timeZone: string) {
   return formatOperationsDateTime(value, timeZone);
-}
-
-function latestOutcome(records: readonly SiteVisitWorkOrder[]) {
-  const currentVisitWork = [...records].sort((left, right) => (
-    right.linkedAt.localeCompare(left.linkedAt)
-    || (right.outcomeRecordedAt ?? "").localeCompare(left.outcomeRecordedAt ?? "")
-    || right.id.localeCompare(left.id)
-  ))[0];
-  return currentVisitWork?.outcome && currentVisitWork.outcomeRecordedAt ? currentVisitWork : undefined;
 }
 
 function storeInScope(fixture: OpsFixture, session: OperatorSession, workOrder: WorkOrder) {
@@ -157,16 +148,14 @@ export function buildWorkOrderVerificationModel(
   const outcomes = fixture.siteVisitWorkOrders.filter((record) => (
     record.organizationId === session.organizationId && record.workOrderId === workOrder.id
   ));
-  const currentOutcome = latestOutcome(outcomes);
+  const currentOutcome = latestRecordedWorkOutcome(outcomes);
   const visit = currentOutcome
     ? fixture.visits.find((candidate) => (
         candidate.organizationId === session.organizationId && candidate.id === currentOutcome.visitId
       ))
     : undefined;
   const verifications = verificationRows(fixture, session.organizationId, workOrder.id);
-  const currentDecision = currentOutcome
-    ? verifications.find((verification) => verification.siteVisitWorkOrderId === currentOutcome.id)
-    : undefined;
+  const currentDecision = applicableOutcomeVerification(verifications, currentOutcome);
   const visitWork = currentOutcome
     ? fixture.siteVisitWorkOrders.filter((record) => record.organizationId === session.organizationId && record.visitId === currentOutcome.visitId)
     : [];
