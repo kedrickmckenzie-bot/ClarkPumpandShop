@@ -280,8 +280,8 @@ function SourceTable({ model }: { model: TrendAnalysisPageViewModel }) {
               <tr key={row.id} id={row.id}>
                 {row.cells.map((cell, index) => (
                   <td className={index === row.cells.length - 1 ? styles.number : undefined} key={cell.key}>
-                    {index === 0
-                      ? <Link className={styles.primaryRowLink} href={row.href}><strong>{cell.value}</strong>{cell.secondary ? <small>{cell.secondary}</small> : null}</Link>
+                    {index === 0 || cell.link
+                      ? <Link className={styles.primaryRowLink} href={cell.link?.href ?? row.href}><strong>{cell.value}</strong>{cell.secondary ? <small>{cell.secondary}</small> : null}</Link>
                       : <span className={styles.plainCell}><strong>{cell.value}</strong>{cell.secondary ? <small>{cell.secondary}</small> : null}</span>}
                   </td>
                 ))}

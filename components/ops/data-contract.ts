@@ -433,6 +433,7 @@ export interface TableColumnViewModel {
 }
 
 export interface TableCellViewModel {
+  link?: SupportingLink;
   key: string;
   value: string;
   secondary?: string;
@@ -629,6 +630,7 @@ export interface AssetLifecycleInputViewModel {
 }
 
 export interface CreateRequestPageViewModel {
+  defaultStoreId?: string;
   state: DataState;
   page: PageContext;
   submitAction: string;

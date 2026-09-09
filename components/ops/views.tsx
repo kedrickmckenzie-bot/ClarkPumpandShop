@@ -387,7 +387,7 @@ function DataTable({ table, selectedId, rowHref, selection }: { table: TableView
                   const cell = row.cells.find((candidate) => candidate.key === column.key);
                   return (
                     <td data-column={column.key} className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
-                      <Link href={rowHref?.(row) ?? row.href} aria-current={row.id === selectedId ? "true" : undefined} aria-label={index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
+                      <Link href={cell?.link?.href ?? rowHref?.(row) ?? row.href} aria-current={!cell?.link && row.id === selectedId ? "true" : undefined} aria-label={cell?.link ? `${cell.link.label}: ${cell.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
                         <span>{cell?.value ?? "—"}</span>
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
                         {index === table.columns.length - 1 ? <ChevronRight className={styles.cellChevron} aria-hidden="true" size={15} /> : null}

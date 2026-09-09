@@ -1,0 +1,8 @@
+.trail { display: flex; align-items: baseline; gap: 12px; padding: 0 0 16px; color: #475569; font-size: 14px; }
+.trail > span { flex-shrink: 0; font-weight: 600; }
+.trail ol { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.trail li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.trail li a { color: var(--product-action, #1d4ed8); text-decoration: underline; text-underline-offset: 3px; }
+.trail a, .trail li > span { overflow-wrap: anywhere; }
+.trail a:focus-visible { outline: 2px solid #2563eb; outline-offset: 4px; }
+@media (max-width: 640px) { .trail { flex-direction: column; gap: 4px; } .trail a { display: inline-flex; align-items: center; min-height: 44px; } }

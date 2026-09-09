@@ -60,9 +60,7 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
             <div className={styles.formSectionHeading}><span>1</span><div><h2>Where is the issue?</h2><p>Choose the store so the request reaches the right manager.</p></div></div>
             <label className={styles.field} htmlFor="request-store">
               <span>Store <em>Required</em></span>
-              <input id="request-store" name="storeId" list="request-store-options" required placeholder="Search by store number, name, or address" autoComplete="off" />
-              <Datalist id="request-store-options" options={model.stores} />
-              <small>Choose one of the stores shown in the search results.</small>
+              <select id="request-store" defaultValue={model.defaultStoreId ?? ""} name="storeId" required><option value="" disabled>Choose a store</option>{model.stores.map((store) => <option value={store.value} key={store.value}>{store.label}</option>)}</select>
             </label>
           </section>
 
@@ -145,7 +143,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
             <div className={styles.formSectionHeading}><span>1</span><div><h2>Define the work</h2><p>Only the store and problem are required. Classification stays honest when details are not yet known.</p></div></div>
             <label className={styles.field} htmlFor="work-store">
               <span>Store <em>Required</em></span>
-              {model.sourceVisit || model.sourceRequest ? <><input name="storeId" type="hidden" value={boundStoreId} /><input id="work-store" readOnly value={sourceStoreLabel ?? "Bound store"} /></> : <><input id="work-store" name="storeId" list="work-store-options" required placeholder="Search store number, name, or address" autoComplete="off" defaultValue={model.defaults?.storeId} /><Datalist id="work-store-options" options={model.stores} /></>}
+              {model.sourceVisit || model.sourceRequest ? <><input name="storeId" type="hidden" value={boundStoreId} /><input id="work-store" readOnly value={sourceStoreLabel ?? "Bound store"} /></> : <select id="work-store" name="storeId" required defaultValue={model.defaults?.storeId ?? ""}><option value="" disabled>Choose a store</option>{model.stores.map((store) => <option value={store.value} key={store.value}>{store.label}</option>)}</select>}
             </label>
             <label className={styles.field} htmlFor="work-problem">
               <span>Problem <em>Required</em></span>

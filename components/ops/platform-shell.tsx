@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import { NavigationTrail } from "@/components/workspace/navigation-trail";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   BarChart3,
   ChevronDown,
@@ -237,6 +238,14 @@ function SidebarFooter({ session, edition }: { session: OperatorSession; edition
 }
 
 function CreateMenu({ session, edition }: { session: OperatorSession; edition: DemoEdition }) {
+  const pathname = usePathname();
+  const query = useSearchParams();
+  const storeMatch = pathname.match(/^\/app\/stores\/([^/]+)$/);
+  const store = storeMatch && storeMatch[1] !== "new" ? storeMatch[1] : query.get("store");
+  const contextualHref = (href: string) => {
+    if (!store || !["/app/requests/new", "/app/work-orders/new", "/app/equipment/new"].includes(href)) return href;
+    return `${href}?${new URLSearchParams({ store })}`;
+  };
   const actions = createActions.filter(
     (action) => roleCan(session, action.capability) && (
       edition === "complete" || action.capability === "create_work_order"
@@ -246,14 +255,14 @@ function CreateMenu({ session, edition }: { session: OperatorSession; edition: D
 
   return (
     <details className={styles.createMenu}>
-      <summary>
+      <summary aria-label="Create a record">
         <Plus aria-hidden="true" size={18} />
         <span>Create</span>
         <ChevronDown aria-hidden="true" size={15} className={styles.createMenuChevron} />
       </summary>
       <nav aria-label="Create a record" className={styles.createMenuPanel}>
         {actions.map((action) => (
-          <Link href={action.href} key={action.href}>
+          <Link href={contextualHref(action.href)} key={action.href} onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}>
             <strong>{action.label}</strong>
             <small>{action.description}</small>
           </Link>
@@ -349,7 +358,7 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
           ) : null}
         </div>
 
-        <main className={styles.main} id="main-content" tabIndex={-1}>{children}</main>
+        <main className={styles.main} id="main-content" tabIndex={-1}><NavigationTrail scopeKey={JSON.stringify([session.organizationId, session.userId, session.role, session.storeIds, session.regionIds, session.effectiveCapabilities, session.demoEdition])} />{children}</main>
       </div>
     </div>
   );

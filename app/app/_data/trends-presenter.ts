@@ -753,7 +753,7 @@ function sourceTableRows(metric: TrendMetricId, rows: TrendSourceRecord[], store
     href: row.href,
     cells: [
       { key: "record", value: row.label, secondary: row.detail },
-      { key: "store", value: storeById.has(row.storeId) ? `Store ${storeById.get(row.storeId)!.storeNumber}` : "Store unavailable", secondary: storeById.get(row.storeId)?.name },
+      { key: "store", value: storeById.has(row.storeId) ? `Store ${storeById.get(row.storeId)!.storeNumber}` : "Store unavailable", secondary: storeById.get(row.storeId)?.name, link: storeById.has(row.storeId) ? { href: `/app/stores/${row.storeId}`, label: "Open store" } : undefined },
       { key: "service", value: recordCategoryKeys(row).length ? recordCategoryKeys(row).map((value) => sentence(value)).join(" + ") : "Unclassified", secondary: [row.sourceKind === "calculated_peer_contribution" ? "Calculated contribution" : row.sourceKind === "raw_peer_observation" ? "Raw historical evidence" : undefined, row.costKind ? sentence(row.costKind) : undefined, recordComponentNames(row).length ? recordComponentNames(row).join(" + ") : row.vendorId ? vendorNameById.get(row.vendorId) : row.providerAttributionLabel].filter(Boolean).join(" · ") || undefined },
       { key: "date", value: row.displayDate },
       { key: "value", value: row.displayValue ?? formatMetric(metric, row.value), secondary: metric === "linked_invoice" && row.grossAmountMinor !== undefined ? `${money(row.grossAmountMinor)} invoice gross` : undefined },

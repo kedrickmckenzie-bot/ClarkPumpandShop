@@ -7,6 +7,7 @@ vi.mock("server-only", () => ({}));
 const mocks = vi.hoisted(() => ({
   getOpsRequestContext: vi.fn(),
   assertStoreInSessionScope: vi.fn(),
+  createServiceRequest: vi.fn(),
   acknowledgeServiceRequest: vi.fn(),
   linkServiceRequestToWorkOrder: vi.fn(),
   unlinkServiceRequestFromWorkOrder: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("@/lib/ops/commands", async () => {
   const actual = await vi.importActual<typeof import("@/lib/ops/commands")>("@/lib/ops/commands");
   return {
     ...actual,
+    createServiceRequest: mocks.createServiceRequest,
     acknowledgeServiceRequest: mocks.acknowledgeServiceRequest,
     linkServiceRequestToWorkOrder: mocks.linkServiceRequestToWorkOrder,
     unlinkServiceRequestFromWorkOrder: mocks.unlinkServiceRequestFromWorkOrder,
@@ -29,6 +31,7 @@ vi.mock("@/lib/ops/commands", async () => {
   };
 });
 
+import { POST as createRequest } from "@/app/api/ops/requests/route";
 import { POST as acknowledge } from "@/app/api/ops/requests/[id]/acknowledge/route";
 import { POST as unlink } from "@/app/api/ops/requests/[id]/unlink/route";
 import { POST as link } from "@/app/api/ops/requests/[id]/link/route";
@@ -58,6 +61,14 @@ describe("request acknowledgment routes", () => {
     mocks.acknowledgeServiceRequest.mockResolvedValue({ ...serviceRequest, status: "acknowledged" });
     mocks.linkServiceRequestToWorkOrder.mockResolvedValue({ ...serviceRequest, status: "acknowledged", linkedWorkOrderId: "wo-route" });
     mocks.requestAcknowledgedServiceRequestFollowUp.mockResolvedValue({ request: { ...serviceRequest, status: "under_review" }, task: { id: "task-route" } });
+  });
+
+  it("opens the newly submitted report directly instead of making the reporter find it in the queue", async () => {
+    mocks.createServiceRequest.mockResolvedValue({ id: "new-report", reference: "REQ-NEW" });
+    const response = await createRequest(post("/api/ops/requests", { storeId: serviceRequest.storeId, problem: "Loose door handle", reporterName: "Jordan", priority: "routine" }));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/app/requests/new-report?created=true");
+    expect(mocks.assertStoreInSessionScope).toHaveBeenCalledWith(session, serviceRequest.storeId);
   });
 
   it("requires review capability and store scope for the one-click acknowledgment", async () => {

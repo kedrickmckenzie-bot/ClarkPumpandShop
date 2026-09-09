@@ -27,7 +27,7 @@ function DataTable({ table }: { table: TableViewModel }) {
               {table.columns.map((column, index) => {
                 const cell = row.cells.find((candidate) => candidate.key === column.key);
                 const value = <><strong className={cell?.tone ? toneClass[cell.tone] : undefined}>{cell?.value ?? "—"}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</>;
-                return <td data-align={column.align ?? "start"} key={column.key}>{index === 0 ? <Link href={row.href}>{value}</Link> : value}</td>;
+                return <td data-align={column.align ?? "start"} key={column.key}>{(cell?.link || index === 0) ? <Link href={cell?.link?.href ?? row.href}>{value}</Link> : value}</td>;
               })}
               <td><Link className={styles.rowAction} href={row.href} aria-label={`Open ${row.label}`}><ChevronRight aria-hidden="true" size={16} /></Link></td>
             </tr>

@@ -9,7 +9,7 @@ import type {
   TableRowViewModel,
   Tone,
 } from "@/components/ops/data-contract";
-import { roleCan } from "@/components/ops/role-policy";
+import { roleCan, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
 import { NORTHLINE_AS_OF } from "@/lib/ops/fixtures";
 import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import type { OpsRepository, OrganizationScope } from "@/lib/ops/repository";
@@ -152,6 +152,15 @@ function searchControl(route: OperatorListRoute, query: OperatorSearchParameters
   };
 }
 
+function creationHref(path: string, query: OperatorSearchParameters) {
+  const params = new URLSearchParams();
+  for (const key of ["store", "asset", "vendor"]) {
+    const value = first(query[key]);
+    if (value && value !== "unlinked") params.set(key, value);
+  }
+  return params.size ? `${path}?${params}` : path;
+}
+
 function workRow(row: WorkOrderListRow): TableRowViewModel {
   return {
     id: row.id,
@@ -159,10 +168,10 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
     href: `/app/work-orders/${row.id}`,
     cells: [
       { key: "work", value: row.number, secondary: row.problem },
-      { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName },
-      { key: "assignment", value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
+      { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
+      { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
       { key: "next", value: row.nextAction, secondary: `Next: ${row.accountableParty} · Internal: ${row.internalAccountableParty}${row.dueAt ? ` · Due ${formatOperationsDate(row.dueAt)}` : " · No deadline by policy"}` },
-      { key: "cost", value: money(row.recordedCostMinor) },
+      { key: "cost", value: money(row.recordedCostMinor), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
       { key: "status", value: sentence(row.status), tone: toneForStatus(row.status) },
     ],
   };
@@ -178,10 +187,10 @@ function heldWorkRow(row: WorkOrderListRow): TableRowViewModel {
     href: `/app/work-orders/${row.id}`,
     cells: [
       { key: "work", value: row.number, secondary: row.problem },
-      { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName },
+      { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
       { key: "assignment", value: posture, secondary: row.vendorName ? `Current provider: ${row.vendorName}` : "Provider can be chosen when the work is sent" },
       { key: "next", value: row.visitHoldDeadlineAt ? `Review by ${formatOperationsDate(row.visitHoldDeadlineAt)}` : "Review date not recorded", secondary: `Internal owner: ${row.internalAccountableParty}` },
-      { key: "cost", value: money(row.recordedCostMinor) },
+      { key: "cost", value: money(row.recordedCostMinor), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
       { key: "status", value: "Approved for next suitable visit", tone: "info" },
     ],
   };
@@ -201,7 +210,7 @@ function workTimingHref(query: OperatorSearchParameters, ready: boolean) {
 function requestRow(row: RequestListRow): TableRowViewModel {
   return { id: row.id, label: row.reference, href: `/app/requests/${row.id}`, cells: [
     { key: "request", value: row.reference, secondary: row.problem },
-    { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName },
+    { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
     { key: "priority", value: sentence(row.priority), tone: toneForStatus(row.priority) },
     { key: "reported", value: formatOperationsDate(row.submittedAt), secondary: row.reporterName },
     { key: "status", value: row.status === "acknowledged" ? "Acknowledged — being handled" : sentence(row.status), tone: toneForStatus(row.status), secondary: row.status === "acknowledged" ? `${row.linkedWorkOrderId ? "Linked to work" : "No linked work order"}${row.acknowledgedByActorName ? ` · ${row.acknowledgedByActorName}` : ""}` : undefined },
@@ -213,9 +222,9 @@ function storeRow(row: StoreSearchRow): TableRowViewModel {
     { key: "store", value: `Store ${row.storeNumber}`, secondary: row.name },
     { key: "region", value: row.regionName ?? "No region" },
     { key: "address", value: row.formattedAddress },
-    { key: "work", value: String(row.openWorkCount) },
-    { key: "onsite", value: String(row.activeVisitCount) },
-    { key: "cost", value: money(row.recordedCostMinor) },
+    { key: "work", value: String(row.openWorkCount), link: { href: `/app/work-orders?store=${row.id}&status=open`, label: "Review open work" } },
+    { key: "onsite", value: String(row.activeVisitCount), link: { href: `/app/visits?store=${row.id}&status=active`, label: "Review onsite visits" } },
+    { key: "cost", value: money(row.recordedCostMinor), link: { href: `/app/work-orders?store=${row.id}&hasCost=true`, label: "Review recorded cost sources" } },
   ] };
 }
 
@@ -224,8 +233,8 @@ function vendorRow(row: VendorDirectoryRow): TableRowViewModel {
     { key: "vendor", value: row.name, secondary: row.preferred ? "Preferred provider" : undefined },
     { key: "specialties", value: row.specialties.join(", ") || "No specialties recorded" },
     { key: "coverage", value: row.coverageLabels.join(", ") || "Coverage recorded by store and region" },
-    { key: "open", value: String(row.openWorkOrders) },
-    { key: "visits", value: String(row.activeVisits), secondary: row.returnVisitWorkOrders ? `${row.returnVisitWorkOrders} with return visits` : undefined },
+    { key: "open", value: String(row.openWorkOrders), link: { href: `/app/work-orders?vendor=${row.id}&status=open`, label: "Review vendor open work" } },
+    { key: "visits", link: { href: `/app/visits?vendor=${row.id}&status=active`, label: "Review vendor onsite visits" }, value: String(row.activeVisits), secondary: row.returnVisitWorkOrders ? `${row.returnVisitWorkOrders} with return visits` : undefined },
     { key: "status", value: sentence(row.status), tone: toneForStatus(row.status) },
   ] };
 }
@@ -236,9 +245,9 @@ function visitRow(row: VisitListRow): TableRowViewModel {
     : `Since ${formatOperationsDateTime(row.checkedInAt, row.storeTimeZone)}`;
   return { id: row.id, label: `${row.providerName} visit`, href: `/app/visits/${row.id}`, cells: [
     { key: "visit", value: row.technicianName, secondary: row.purpose },
-    { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName },
-    { key: "vendor", value: row.providerName },
-    { key: "work", value: row.workOrderNumber ?? "No work order", secondary: row.arrivalNote },
+    { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
+    { key: "vendor", value: row.providerName, link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined },
+    { key: "work", value: row.workOrderNumber ?? "No work order", secondary: row.arrivalNote, link: row.workOrderId ? { href: `/app/work-orders/${row.workOrderId}`, label: "Open work order" } : undefined },
     { key: "observed", value: observed, secondary: "Store-local display · approximate presence, not labor" },
     { key: "evidence", value: sentence(row.locationResult), tone: row.locationResult === "verified" ? "positive" : "warning" },
     { key: "outcome", value: row.outcome ? sentence(row.outcome) : "Onsite now", tone: row.status === "active" ? "info" : "neutral" },
@@ -316,7 +325,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       const currentContext = `/app/work-orders?${new URLSearchParams(paramsWithoutPage(query)).toString()}`;
       primaryAction = { label: "Send approved jobs together", href: `/app/store-sweeps/new?returnTo=${encodeURIComponent(currentContext)}` };
       secondaryAction = { label: "Return to all work", href: workTimingHref(query, false) };
-    } else if (roleCan(session, "create_work_order")) primaryAction = { label: "Create work order", href: "/app/work-orders/new" };
+    } else if (roleCan(session, "create_work_order")) primaryAction = { label: "Create work order", href: creationHref("/app/work-orders/new", query) };
     if (session.role === "facilities" || session.role === "regional") {
       if (!heldPlan) secondaryAction = { label: "Send approved jobs together", href: "/app/store-sweeps/new?returnTo=%2Fapp%2Fwork-orders" };
       metrics = [
@@ -343,7 +352,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   } else if (route === "requests") {
     const requests = await repository.listRequests(scope, { ...request, search: q, status: first(query.status), storeId: first(query.store) });
     result = requests; rows = requests.items.map(requestRow); title = "Service requests"; eyebrow = "Reported issues"; description = "Review what store teams reported, then create work, escalate it, or close it without changing the original report."; placeholder = "Search problem, reporter, request, or store";
-    if (roleCan(session, "create_request")) primaryAction = { label: "Report an issue", href: "/app/requests/new" };
+    if (roleCan(session, "create_request")) primaryAction = { label: "Report an issue", href: creationHref("/app/requests/new", query) };
   } else if (route === "visits") {
     const visitContext = { storeId: first(query.store), vendorId: first(query.vendor) };
     const [visits, visitSummary] = await Promise.all([
@@ -386,6 +395,11 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   const summary = heldPlan
     ? `${rows.length}${result.nextCursor ? "+" : ""} approved job${rows.length === 1 && !result.nextCursor ? "" : "s"} on this page · portfolio counts shown above`
     : total === undefined ? `${rows.length}${result.nextCursor ? "+" : ""} matching source records` : `${total} source record${total === 1 ? "" : "s"}`;
+  for (const row of rows) {
+    for (const cell of row.cells) {
+      if (cell.link && !roleCanOpenOperatorHref(session.role, cell.link.href)) cell.link = undefined;
+    }
+  }
   return {
     state: rows.length || !q ? { kind: "ready" } : { kind: "empty", title: "No matching records", message: "Try another store number, address, vendor, or keyword." },
     page: { ...commonPage(session, title, eyebrow, description), primaryAction, secondaryAction },

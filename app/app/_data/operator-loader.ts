@@ -193,6 +193,11 @@ function enforceVisibleActionPolicy<T extends ModelWithPageActions>(model: T, se
 function enforceListLinkPolicy<T extends ListPageViewModel>(model: T, session: OperatorSession): T {
   enforceVisibleActionPolicy(model, session);
   model.metrics = model.metrics?.filter((metric) => roleCanUseAction(session, metric.link.href));
+  for (const row of model.table.rows) {
+    for (const cell of row.cells) {
+      if (cell.link && !roleCanOpenOperatorHref(session.role, cell.link.href)) cell.link = undefined;
+    }
+  }
   const rowCount = model.table.rows.length;
   model.table.rows = model.table.rows.filter((row) => roleCanOpenOperatorHref(session.role, row.href));
   if (model.table.rows.length !== rowCount) {
@@ -511,6 +516,8 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
         planName: plan.name,
         storeLabel: store ? `Store ${store.storeNumber} · ${store.name}` : "Unknown store",
         assetLabel: asset ? `${asset.name} · ${asset.assetTag}` : "Store-level plan",
+        storeHref: store ? `/app/stores/${store.id}` : undefined,
+        assetHref: asset ? `/app/equipment/${asset.id}?section=preventive-maintenance` : undefined,
         programName: program?.name ?? "Store-created plan",
         cadenceLabel: `Every ${plan.cadenceDays} days · ±${plan.completionWindowDays} days`,
         sourceLabel: inherited ? "Company standard" : program ? "Store override" : "Store-created",
@@ -641,10 +648,10 @@ export async function loadVendorPerformanceDetailModel(vendorId: string) {
   return buildVendorPerformanceDetailModel(context.fixture, context.session, vendorId);
 }
 
-export async function loadCreateRequestModel() {
+export async function loadCreateRequestModel(query: OperatorSearchParameters = {}) {
   const context = await sessionAndFixture();
   requireCapability(context.session, "create_request");
-  return buildCreateRequestModel(context.fixture, context.session);
+  return buildCreateRequestModel(context.fixture, context.session, query);
 }
 
 export async function loadCreateWorkOrderModel(searchParams: OperatorSearchParameters = {}) {

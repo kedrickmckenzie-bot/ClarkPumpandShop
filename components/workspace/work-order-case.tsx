@@ -207,7 +207,7 @@ function EvidenceTable({ table }: { table: TableViewModel }) {
                 );
                 return (
                   <td data-align={column.align ?? "start"} key={column.key}>
-                    {index === 0 ? <Link className={styles.rowLink} href={row.href}>{cellContent}</Link> : cellContent}
+                    {(cell?.link || index === 0) ? <Link className={styles.rowLink} href={cell?.link?.href ?? row.href}>{cellContent}</Link> : cellContent}
                   </td>
                 );
               })}
@@ -665,9 +665,9 @@ export function WorkOrderCase({
           </div>
           <dl className={styles.caseMeta}>
             <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
-            <div><dt>Fulfillment</dt><dd>{assigned?.value ?? control.assignment?.providerLabel ?? "Choose later"}</dd></div>
+            <div><dt>Fulfillment</dt><dd><FactValue fact={assigned} /></dd></div>
             <div><dt>Escalates to</dt><dd>{canonicalCase.escalationDestination}</dd></div>
-            {recordOrigin ? <div><dt>{recordOrigin.label}</dt><dd>{recordOrigin.value}</dd></div> : null}
+            {recordOrigin ? <div><dt>{recordOrigin.label}</dt><dd><FactValue fact={recordOrigin} /></dd></div> : null}
             {!accountabilityOnly ? <div><dt>Authorization limit</dt><dd>{nte?.value ?? "Not set"}</dd></div> : null}
             {!accountabilityOnly ? <div><dt>Classification</dt><dd>{classification?.value ?? "Deferred"}</dd></div> : null}
           </dl>

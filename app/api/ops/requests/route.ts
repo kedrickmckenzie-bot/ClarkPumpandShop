@@ -31,7 +31,7 @@ export async function POST(request: Request) {
         actor: context.actor,
       },
     );
-    return relativeRedirect303(`/app/requests?created=${encodeURIComponent(result.reference)}`);
+    return relativeRedirect303(`/app/requests/${encodeURIComponent(result.id)}?created=true`);
   } catch (error) {
     return opsApiError(error);
   }

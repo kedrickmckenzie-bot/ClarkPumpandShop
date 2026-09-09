@@ -38,6 +38,8 @@ export interface PmProgramManagementModel {
     planName: string;
     storeLabel: string;
     assetLabel: string;
+    storeHref?: string;
+    assetHref?: string;
     programName: string;
     cadenceLabel: string;
     sourceLabel: string;
@@ -126,7 +128,7 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
           <thead><tr><th>Store / equipment</th><th>Master schedule</th><th>Current cadence</th><th>Schedule source</th><th><span className={styles.srOnly}>Open</span></th></tr></thead>
           <tbody>{model.plans.length ? model.plans.map((plan) => (
             <tr key={plan.id}>
-              <td><Link href={plan.href}><strong>{plan.storeLabel}</strong><small>{plan.assetLabel}</small></Link></td>
+              <td><Link href={plan.storeHref ?? plan.href}><strong>{plan.storeLabel}</strong></Link>{plan.assetHref ? <Link href={plan.assetHref}><small>{plan.assetLabel}</small></Link> : <small>{plan.assetLabel}</small>}</td>
               <td><Link href={plan.href}><strong>{plan.programName}</strong><small>{plan.planName}</small></Link></td>
               <td><Link href={plan.href}><strong>{plan.cadenceLabel}</strong>{plan.overrideReason ? <small>{plan.overrideReason}</small> : null}</Link></td>
               <td><Link href={plan.href}><span className={plan.overrideReason ? styles.override : styles.inherited}>{plan.sourceLabel}</span></Link></td>

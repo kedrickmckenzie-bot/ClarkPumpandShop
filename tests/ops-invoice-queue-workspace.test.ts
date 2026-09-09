@@ -1,10 +1,23 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { InvoiceQueueWorkspace } from "@/components/ops/warranty-finance-workspace";
+import { InvoiceDetailWorkspace, InvoiceQueueWorkspace } from "@/components/ops/warranty-finance-workspace";
 import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
 
 describe("invoice review workspace", () => {
+  it("replaces raw allocation identifiers with exact work, store, and visit destinations", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const invoice = fixture.invoices.find((row) => row.id === "invoice-summit-104-compressor")!;
+    const allocation = fixture.invoiceLineAllocations.find((row) => row.siteVisitWorkOrderId && fixture.invoiceLines.some((line) => line.id === row.invoiceLineId && line.invoiceId === invoice.id))!;
+    const outcome = fixture.siteVisitWorkOrders.find((row) => row.id === allocation.siteVisitWorkOrderId)!;
+    const markup = renderToStaticMarkup(createElement(InvoiceDetailWorkspace, { fixture, invoice, canDecide: false }));
+    expect(markup).toContain(`href="/app/visits/${outcome.visitId}?section=work-orders"`);
+    expect(markup).toContain(`href="/app/work-orders/${allocation.workOrderId}"`);
+    expect(markup).toContain(`href="/app/stores/${allocation.storeId}"`);
+    expect(markup).not.toContain(allocation.siteVisitWorkOrderId);
+    expect(markup).not.toContain("/undefined");
+  });
+
   it("makes each principal measure open its exact supporting review set", () => {
     const fixture = buildNorthlinePresentationFixture();
     const markup = renderToStaticMarkup(createElement(InvoiceQueueWorkspace, {

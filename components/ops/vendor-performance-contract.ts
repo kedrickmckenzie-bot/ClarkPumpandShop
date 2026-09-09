@@ -120,6 +120,7 @@ export interface VendorAuthorizationEvidenceRow {
 }
 
 export interface VendorAccountabilityEvidenceRow {
+  workOrderHref?: string;
   id: string;
   kindLabel: string;
   summary: string;
@@ -142,6 +143,8 @@ export interface VendorRepeatVisitEvidenceRow {
 }
 
 export interface VendorVisitEvidenceRow {
+  workOrderHref?: string;
+  storeHref?: string;
   id: string;
   technicianName: string;
   storeLabel: string;

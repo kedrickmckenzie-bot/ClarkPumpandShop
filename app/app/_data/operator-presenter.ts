@@ -2023,10 +2023,10 @@ function workRows(
         } : undefined,
         cells: [
           { key: "work", value: work.number, secondary: work.problem },
-          { key: "store", value: store ? `Store ${store.storeNumber}` : "Store unavailable", secondary: store?.city },
-          { key: "assignment", value: hold ? "Waiting for a suitable visit" : assignee ?? "Not assigned", secondary: hold ? heldWorkInstruction(hold.posture) : assignment ? sentence(assignment.status) : "Assignment needed" },
+          { key: "store", value: store ? `Store ${store.storeNumber}` : "Store unavailable", secondary: store?.city, link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
+          { key: "assignment", link: assignment?.vendorId ? { href: `/app/vendors/${assignment.vendorId}`, label: "Open vendor" } : undefined, value: hold ? "Waiting for a suitable visit" : assignee ?? "Not assigned", secondary: hold ? heldWorkInstruction(hold.posture) : assignment ? sentence(assignment.status) : "Assignment needed" },
           { key: "next", value: hold ? heldWorkReviewLabel(hold.deadlineAt, fixture.asOf) : work.nextAction, secondary: hold ? `Review if not handled by ${date(hold.deadlineAt)}` : work.accountableParty },
-          { key: "cost", value: money(costByWork.get(work.id) ?? 0) },
+          { key: "cost", value: money(costByWork.get(work.id) ?? 0), link: { href: `/app/work-orders/${work.id}?view=cost`, label: "Review recorded cost" } },
           { key: "status", value: hold ? "Approved for next suitable visit" : workStatusLabel(work.status), tone: hold ? "info" : workStatusTone(work.status) },
         ],
       };
@@ -2078,7 +2078,7 @@ function visitRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
           href: `/app/work-orders/${work.id}?view=service`,
           cells: [
             { key: "visit", value: "Scheduled service", secondary: work.problem },
-            { key: "store", value: store ? `Store ${store.storeNumber}` : "Store unavailable", secondary: store?.city },
+            { key: "store", value: store ? `Store ${store.storeNumber}` : "Store unavailable", secondary: store?.city, link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
             { key: "vendor", value: vendorName(fixture, scoped.organizationId, assignment?.vendorId) ?? "Vendor not recorded" },
             { key: "work", value: work.number },
             { key: "observed", value: dateTime(appointment.startsAt, storeTimeZone), secondary: "Confirmed appointment · store-local time" },
@@ -2109,7 +2109,7 @@ function visitRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
         href: `/app/visits/${visit.id}`,
         cells: [
           { key: "visit", value: visit.technicianName, secondary: visit.purpose },
-          { key: "store", value: storeLabel(store) },
+          { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
           { key: "vendor", value: visit.providerName },
           { key: "work", value: work?.number ?? "No work order", secondary: visit.unmatchedReason },
           { key: "observed", value: visit.checkedOutAt ? `${dateTime(visit.checkedInAt, storeTimeZone)} – ${dateTime(visit.checkedOutAt, storeTimeZone)}` : `Since ${dateTime(visit.checkedInAt, storeTimeZone)}`, secondary: "Store-local time · approximate presence, not labor" },
@@ -2601,6 +2601,7 @@ function buildVendorEvidenceBundle(
       kindLabel: sentence(exception.kind),
       summary: exception.summary,
       workOrderLabel: exception.workOrderId ? workById.get(exception.workOrderId)?.number ?? "Linked work" : "Visit evidence",
+      workOrderHref: exception.workOrderId && workById.has(exception.workOrderId) ? `/app/work-orders/${exception.workOrderId}` : undefined,
       ownerLabel: "Facilities review",
       dueLabel: exception.severity === "urgent" ? "Review now" : "Needs review",
       tone: exception.severity === "urgent" ? "critical" : "warning",
@@ -2611,6 +2612,7 @@ function buildVendorEvidenceBundle(
       kindLabel: "Open follow-up",
       summary: followUp.nextAction,
       workOrderLabel: workById.get(followUp.workOrderId)?.number ?? "Linked work",
+      workOrderHref: workById.has(followUp.workOrderId) ? `/app/work-orders/${followUp.workOrderId}` : undefined,
       ownerLabel: followUp.accountableParty,
       dueLabel: dateTimeInZone(followUp.dueAt, organizationTimeZone),
       tone: Date.parse(followUp.dueAt) < Date.parse(fixture.asOf) ? "critical" : "warning",
@@ -2645,6 +2647,8 @@ function buildVendorEvidenceBundle(
       technicianName: visit.technicianName,
       storeLabel: storeLabel(storeById.get(visit.storeId)),
       workOrderLabel: work?.number ?? "No work order",
+      workOrderHref: work ? `/app/work-orders/${work.id}` : undefined,
+      storeHref: `/app/stores/${visit.storeId}`,
       observedLabel: visit.checkedOutAt
         ? `${dateTime(visit.checkedInAt, storeTimeZone)} – ${dateTime(visit.checkedOutAt, storeTimeZone)}`
         : `Onsite since ${dateTime(visit.checkedInAt, storeTimeZone)}`,
@@ -3988,7 +3992,7 @@ export function buildProgramModel(
       const linkedWork = workByAsset.get(asset.id) ?? [];
       return { id: asset.id, label: asset.name, href: asset.status === "out_of_service" ? hrefWithQuery(`/app/equipment/${asset.id}`, { section: "service-history" }) : `/app/equipment/${asset.id}`, cells: [
         { key: "asset", value: asset.name, secondary: asset.assetTag },
-        { key: "store", value: storeLabel(store) },
+        { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { key: "category", value: sentence(asset.categoryKey), secondary: assetHierarchyPath(asset).slice(1).join(" › ") || "No deeper grouping" },
         { key: "identity", value: asset.model ?? "Model not entered", secondary: asset.serialNumber ? `S/N ${asset.serialNumber}` : "Serial not entered" },
         { key: "work", value: String(linkedWork.length) },
@@ -4097,13 +4101,13 @@ export function buildProgramModel(
         : ["due", "missed"].includes(status)
           ? hrefWithQuery("/app/work-orders/new", { pmOccurrence: occurrence.id })
           : asset
-            ? `/app/equipment/${asset.id}#preventive-maintenance`
+            ? `/app/equipment/${asset.id}?section=preventive-maintenance`
             : hrefWithQuery("/app/pm", { status, store: occurrence.storeId }), cells: [
         { key: "plan", value: plan?.name ?? "PM plan", secondary: asset?.name ?? (plan?.categoryKey ? sentence(plan.categoryKey) : "Store-level plan") },
-        { key: "store", value: storeLabel(store) },
+        { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { key: "window", value: `${date(occurrence.windowStartsAt)} – ${date(occurrence.windowEndsAt)}`, secondary: `Due ${date(occurrence.dueAt)}` },
-        { key: "work", value: occurrence.workOrderId ? scoped.workOrders.find((work) => work.id === occurrence.workOrderId)?.number ?? "Linked" : historicalAttestation ? "Imported history" : "Not created", secondary: historicalAttestation ? "Manager-attested completion" : undefined },
-        { key: "visit", value: observedVisitIds.size ? `${observedVisitIds.size} observed visit${observedVisitIds.size === 1 ? "" : "s"}` : historicalAttestation ? "No platform visit expected" : "No matching visit recorded", secondary: observedVisitIds.size ? "Recorded store-presence evidence" : historicalAttestation ? "Imported history; source attestation is explicit" : "Review fact, not proof service was missed", tone: observedVisitIds.size ? "positive" : historicalAttestation ? "info" : status === "completed" ? "warning" : "neutral" },
+        { key: "work", link: occurrence.workOrderId && scoped.workOrders.some((work) => work.id === occurrence.workOrderId) ? { href: `/app/work-orders/${occurrence.workOrderId}`, label: "Open work order" } : undefined, value: occurrence.workOrderId ? scoped.workOrders.find((work) => work.id === occurrence.workOrderId)?.number ?? "Linked" : historicalAttestation ? "Imported history" : "Not created", secondary: historicalAttestation ? "Manager-attested completion" : undefined },
+        { key: "visit", link: occurrence.workOrderId && scoped.workOrders.some((work) => work.id === occurrence.workOrderId) ? { href: `/app/work-orders/${occurrence.workOrderId}?view=visits`, label: "Review PM visit evidence" } : undefined, value: observedVisitIds.size ? `${observedVisitIds.size} observed visit${observedVisitIds.size === 1 ? "" : "s"}` : historicalAttestation ? "No platform visit expected" : "No matching visit recorded", secondary: observedVisitIds.size ? "Recorded store-presence evidence" : historicalAttestation ? "Imported history; source attestation is explicit" : "Review fact, not proof service was missed", tone: observedVisitIds.size ? "positive" : historicalAttestation ? "info" : status === "completed" ? "warning" : "neutral" },
         { key: "status", value: sentence(status), tone: status === "completed" ? "positive" : status === "missed" ? "critical" : status === "due" ? "warning" : "info" },
       ] };
     });
@@ -4445,6 +4449,7 @@ export function buildDetailModel(
     const linkedWork = request.linkedWorkOrderId
       ? scoped.workOrders.find((work) => work.id === request.linkedWorkOrderId)
       : undefined;
+    const reportedAsset = scoped.assets.find((asset) => asset.id === (convertedWork ?? linkedWork)?.assetId && asset.storeId === request.storeId);
     const audit = fixture.auditEvents
       .filter(
         (event) =>
@@ -4518,6 +4523,7 @@ export function buildDetailModel(
       statusTone: ["converted", "acknowledged"].includes(request.status) ? "positive" : request.priority === "emergency" ? "critical" : request.priority === "urgent" ? "warning" : "info",
       facts: [
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
+        ...(reportedAsset ? [{ label: "Linked work equipment", value: reportedAsset.name, link: { href: `/app/equipment/${reportedAsset.id}`, label: "Open equipment history" } }] : []),
         { label: "Reported by", value: request.reporterName, helperText: request.reporterEmployeeId ? `Employee ID ${request.reporterEmployeeId}` : "Employee ID not entered" },
         { label: "Reported", value: dateTime(request.submittedAt, store?.timeZone), helperText: "Store-local time" },
         { label: "Priority", value: sentence(request.priority) },
@@ -4717,7 +4723,7 @@ export function buildDetailModel(
                 cells: [
                   { key: "plan", value: plan?.name ?? "PM plan" },
                   { key: "window", value: `${date(occurrence.windowStartsAt)} – ${date(occurrence.windowEndsAt)}`, secondary: `Due ${date(occurrence.dueAt)}` },
-                  { key: "work", value: occurrence.workOrderId ? assetWork.find((work) => work.id === occurrence.workOrderId)?.number ?? "Linked work outside current scope" : "Not created" },
+                  { key: "work", link: occurrence.workOrderId && assetWork.some((work) => work.id === occurrence.workOrderId) ? { href: `/app/work-orders/${occurrence.workOrderId}`, label: "Open work order" } : undefined, value: occurrence.workOrderId ? assetWork.find((work) => work.id === occurrence.workOrderId)?.number ?? "Linked work outside current scope" : "Not created" },
                   { key: "status", value: sentence(status), tone: status === "completed" ? "positive" : status === "missed" ? "critical" : status === "due" ? "warning" : "info" },
                 ],
               };
@@ -4747,17 +4753,17 @@ export function buildDetailModel(
     const rows: TableRowViewModel[] = visibleAllocations.map((allocation) => {
       const work = scoped.workOrders.find((candidate) => candidate.id === allocation.workOrderId)!;
       const store = scoped.stores.find((candidate) => candidate.id === work.storeId);
-      const visits = scoped.visits.filter((visit) => visit.workOrderId === work.id);
+      const visits = visitsForWorkOrder(fixture, scoped, work.id);
       return {
         id: allocation.id,
         label: work.number,
         href: `/app/work-orders/${work.id}`,
         cells: [
           { key: "work", value: work.number, secondary: work.problem },
-          { key: "store", value: storeLabel(store) },
+          { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
           { key: "allocation", value: money(allocation.amount.amountMinor) },
-          { key: "recorded", value: money(costByWork.get(work.id) ?? 0), secondary: "Entered work cost" },
-          { key: "visits", value: String(visits.length), secondary: visits.length ? "Observed source visits" : "No visit recorded" },
+          { key: "recorded", value: money(costByWork.get(work.id) ?? 0), secondary: "Entered work cost", link: { href: `/app/work-orders/${work.id}?view=cost`, label: "Review recorded cost" } },
+          { key: "visits", value: String(visits.length), secondary: visits.length ? "Observed source visits" : "No visit recorded", link: { href: `/app/work-orders/${work.id}?view=visits`, label: "Review work-order visits" } },
           { key: "authorization", value: work.nte ? money(work.nte.amountMinor) : "Not set", secondary: "Not-to-exceed reference" },
         ],
       };
@@ -4773,7 +4779,7 @@ export function buildDetailModel(
         { label: "Gross amount", value: money(invoice.grossAmount.amountMinor) },
         { label: "Allocated to work", value: money(allocatedMinor), helperText: `${visibleAllocations.length} visible allocation${visibleAllocations.length === 1 ? "" : "s"}` },
         { label: "Unmatched balance", value: money(Math.max(0, invoice.grossAmount.amountMinor - allocatedMinor)), helperText: "Visible for human review; not an automatic rejection" },
-        { label: "Operator WO reference", value: invoice.operatorWorkOrderNumber ?? "Not supplied", helperText: "The operator work-order number is the first match key" },
+        { label: "Operator WO reference", value: invoice.operatorWorkOrderNumber ?? "Not supplied", helperText: "Supplied reference; allocation is confirmed separately", link: scoped.workOrders.filter((work) => work.number === invoice.operatorWorkOrderNumber).length === 1 ? { href: `/app/work-orders/${scoped.workOrders.find((work) => work.number === invoice.operatorWorkOrderNumber)!.id}`, label: "Review referenced work order" } : undefined },
       ],
       sections: [
         {
@@ -4861,7 +4867,7 @@ export function buildDetailModel(
       statusTone: workStatusTone(work.status),
       facts: [
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
-        { label: "Assigned to", value: vendor?.name ?? (assignment?.kind === "internal" ? "Internal maintenance" : "Choose later") },
+        { label: "Assigned to", value: vendor?.name ?? (assignment?.kind === "internal" ? "Internal maintenance" : "Choose later"), link: vendor ? { href: `/app/vendors/${vendor.id}`, label: "Open vendor" } : undefined },
         ...(sourceVisit
           ? [{ label: "Record origin", value: "Created after service began", helperText: "The observed visit started first; this work order does not imply prior written authorization.", link: { href: `/app/visits/${sourceVisit.id}`, label: "Open original visit" } }]
           : pmOccurrence
@@ -5010,6 +5016,7 @@ export function buildDetailModel(
       statusTone: visit.status === "active" ? "info" : visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome) ? "warning" : "positive",
       facts: [
         { label: "Technician", value: visit.technicianName, helperText: visit.providerName },
+        ...(visit.vendorId && fixture.vendors.some((vendor) => vendor.organizationId === scoped.organizationId && vendor.id === visit.vendorId) ? [{ label: "Vendor", value: visit.providerName, link: { href: `/app/vendors/${visit.vendorId}`, label: "Open vendor" } }] : []),
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         {
           label: linkedWorks.length === 1 ? "Operator work order" : "Operator work orders",
@@ -5257,8 +5264,8 @@ export function buildDetailModel(
         href: hrefWithQuery("/app/spend", { store: store.id, category }),
         cells: [
           { key: "area", value: sentence(category), secondary: `${assets.length} tracked equipment record${assets.length === 1 ? "" : "s"}` },
-          { key: "cost", value: money(costForWorkIds(rollingCostByWork, work.map((item) => item.id))) },
-          { key: "open", value: String(open), tone: open ? "warning" : "positive" },
+          { key: "cost", value: money(costForWorkIds(rollingCostByWork, work.map((item) => item.id))), link: { href: hrefWithQuery("/app/work-orders", { store: store.id, category, hasCost: "true", costFrom: rollingYearStart(fixture.asOf) }), label: "Review 12-month recorded cost sources" } },
+          { key: "open", value: String(open), tone: open ? "warning" : "positive", link: { href: hrefWithQuery("/app/work-orders", { store: store.id, category, status: "open" }), label: "Review open work in this service area" } },
           { key: "pm", value: eligibleCategoryPm.length ? `${completedCategoryPm}/${eligibleCategoryPm.length} eligible completed` : pm.length ? "No closed window" : "Not configured", secondary: missed ? `${missed} missed in closed windows` : due ? `${due} due now` : eligibleCategoryPm.length ? "Closed-window compliance basis" : undefined, tone: missed ? "critical" : due ? "warning" : "positive" },
           { key: "status", value: missed ? "PM exception" : open ? "Open work" : "No current exception", tone: missed ? "critical" : open ? "warning" : "positive" },
         ],
@@ -5502,8 +5509,8 @@ export function buildDetailModel(
       href: work ? `/app/work-orders/${work.id}` : `/app/vendors/${vendor.id}`,
       cells: [
         { key: "response", value: sentence(response.response), secondary: response.message ?? (response.proposedAt ? `Proposed ${dateTime(response.proposedAt, store?.timeZone)}` : undefined), tone: response.response === "accepted" ? "positive" : response.response === "declined" ? "critical" : "warning" },
-        { key: "work", value: work?.number ?? "Unknown work", secondary: work?.problem },
-        { key: "store", value: storeLabel(store) },
+        { key: "work", value: work?.number ?? "Unknown work", secondary: work?.problem, link: work ? { href: `/app/work-orders/${work.id}`, label: "Open work order" } : undefined },
+        { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { key: "responder", value: response.responderName },
         { key: "time", value: dateTime(response.respondedAt, store?.timeZone) },
       ],
@@ -5579,11 +5586,12 @@ function storesAsOptions(scoped: ScopedFixture) {
   return scoped.stores.map((store) => ({ value: store.id, label: `Store ${store.storeNumber} · ${store.name}`, description: storeAddress(store) }));
 }
 
-export function buildCreateRequestModel(fixture: OpsFixture, session: OperatorSession): CreateRequestPageViewModel {
+export function buildCreateRequestModel(fixture: OpsFixture, session: OperatorSession, query: OperatorSearchParameters = {}): CreateRequestPageViewModel {
   const scoped = scopeFixture(fixture, session);
   return {
     state: { kind: "ready" },
     page: { title: "Report an issue", eyebrow: "Issue intake", description: "Capture what the store can observe. A store and plain-language problem are enough to begin review.", scopeLabel: `${session.scopeLabel} · Requests remain visible after submission` },
+    defaultStoreId: scoped.storeIds.has(first(query.store) ?? "") ? first(query.store) : scoped.stores.length === 1 ? scoped.stores[0].id : undefined,
     submitAction: "/api/ops/requests",
     cancelLink: { label: "Back to requests", href: "/app/requests" },
     stores: storesAsOptions(scoped),
