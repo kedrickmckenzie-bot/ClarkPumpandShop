@@ -263,7 +263,7 @@ function SourceTable({ model }: { model: TrendAnalysisPageViewModel }) {
       <header>
         <div>
           <p>{model.sourceHeading}</p>
-          <h2 id="source-title">{model.metricLabel} · {model.sourcePeriodLabel}</h2>
+          <h2 id="source-title">{model.sourceMeasureLabel ?? model.metricLabel} · {model.sourcePeriodLabel}</h2>
           <span>{model.sourceDescription}</span>
         </div>
         <div className={styles.tableHeaderActions}>

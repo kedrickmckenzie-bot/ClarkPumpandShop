@@ -351,6 +351,7 @@ export interface TrendAnalysisPageViewModel {
   };
   sourceTable: TableViewModel;
   sourceHeading: string;
+  sourceMeasureLabel?: string;
   sourceDescription: string;
   sourceSortLinks: TrendSourceSortLinkViewModel[];
   sourceSummary: string;
@@ -970,6 +971,8 @@ export interface RequestReviewViewModel {
   expectedStatus: "submitted" | "under_review" | "acknowledged";
   statusLabel: string;
   acknowledgeAction?: string;
+  unlinkAction?: string;
+  expectedVersion?: number;
   followUpAction?: string;
   acknowledgedAtLabel?: string;
   acknowledgedBy?: string;

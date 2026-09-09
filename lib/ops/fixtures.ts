@@ -1,3 +1,4 @@
+import { attestDemoRecordingCoverage } from "./recording-coverage";
 import type {
   Asset,
   ApprovalDecision,
@@ -2085,6 +2086,7 @@ function buildFixture(): OpsFixture {
 }
 
 const presentationFixture = buildFixture();
+attestDemoRecordingCoverage(presentationFixture, "2024-08-01", NORTHLINE_AS_OF.slice(0, 10));
 
 export function buildNorthlinePresentationFixture(): OpsFixture {
   return clone(presentationFixture);
@@ -2278,6 +2280,7 @@ export function buildSyntheticTrendScaleFixture(storeCount = 65, monthCount = 36
       }
     }
   }
+  attestDemoRecordingCoverage(fixture, new Date(Date.UTC(asOfYear, asOfMonthNumber - monthCount, 1)).toISOString().slice(0, 10), fixture.asOf.slice(0, 10));
   return fixture;
 }
 

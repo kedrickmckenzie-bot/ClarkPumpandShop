@@ -2663,7 +2663,8 @@ export async function acknowledgeServiceRequest(svc: OpsCommandServices, input: 
     repository.listWorkflowTasksForRequest(input.organizationId, request.id),
     repository.listRequestImpactAssessments(input.organizationId, request.id),
   ]);
-  const exceptionalReviewPreserved = request.priority === "emergency" || impactAssessments.some((assessment) =>
+  // Repository order matches impact review: assessedAt, then id. Historical concerns remain immutable.
+  const exceptionalReviewPreserved = request.priority === "emergency" || impactAssessments.slice(-1).some((assessment) =>
     ["potential", "immediate"].includes(assessment.safetyConcern)
     || ["potential", "confirmed"].includes(assessment.complianceImpact)
     || assessment.storeOperatingState === "unable_to_operate",
@@ -2720,7 +2721,8 @@ export async function linkServiceRequestToWorkOrder(svc: OpsCommandServices, inp
     repository.listWorkflowTasksForRequest(input.organizationId, request.id),
     repository.listRequestImpactAssessments(input.organizationId, request.id),
   ]);
-  const exceptionalReviewPreserved = request.priority === "emergency" || impactAssessments.some((assessment) =>
+  // Repository order matches impact review: assessedAt, then id. Historical concerns remain immutable.
+  const exceptionalReviewPreserved = request.priority === "emergency" || impactAssessments.slice(-1).some((assessment) =>
     ["potential", "immediate"].includes(assessment.safetyConcern)
     || ["potential", "confirmed"].includes(assessment.complianceImpact)
     || assessment.storeOperatingState === "unable_to_operate",
@@ -2746,6 +2748,32 @@ export async function linkServiceRequestToWorkOrder(svc: OpsCommandServices, inp
 }
 
 export interface RequestAcknowledgedFollowUpInput { organizationId: OpsId; requestId: OpsId; explanation: string; actor: ActorContext }
+
+/** Corrects only the optional association; acknowledgment and service facts survive. */
+export async function unlinkServiceRequestFromWorkOrder(svc: OpsCommandServices, input: {
+  organizationId: OpsId; requestId: OpsId; expectedWorkOrderId: OpsId;
+  expectedVersion: number; correctionReason: string; actor: ActorContext;
+}) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const request = await repository.getRequest(input.organizationId, input.requestId);
+  if (!request) throw new OpsDomainError("NOT_FOUND", "Service request not found");
+  const correctionReason = required(input.correctionReason, "Correction reason");
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) throw new OpsDomainError("VALIDATION", "Refresh before removing this link");
+  if (!request.acknowledgedAt || request.convertedWorkOrderId || request.status !== "acknowledged") {
+    throw new OpsDomainError("CONFLICT", "Only an acknowledged report's optional link can be removed");
+  }
+  if (!request.linkedWorkOrderId && persistedRequestVersion(request) === input.expectedVersion + 1) return { ...request, replayed: true as const };
+  if (!input.expectedWorkOrderId || request.linkedWorkOrderId !== input.expectedWorkOrderId || persistedRequestVersion(request) !== input.expectedVersion) {
+    throw new OpsDomainError("CONFLICT", "This report changed. Refresh before removing its link");
+  }
+  const now = clock.now();
+  await atomicRequestMutation({ repository, request, now, statements: [
+    { sql: "UPDATE ops_requests SET linked_work_order_id = ?, linked_at = ?, linked_by_actor_type = ?, linked_by_actor_id = ?, linked_by_actor_name = ? WHERE organization_id = ? AND id = ? AND version = ? AND linked_work_order_id = ?", params: [null, null, null, null, null, input.organizationId, request.id, persistedRequestVersion(request) + 1, input.expectedWorkOrderId] },
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "request", aggregateId: request.id, eventType: "request.work_order_unlinked", actor: input.actor, occurredAt: now, payload: { previousWorkOrderId: input.expectedWorkOrderId, workOrderId: null, correctionReason, storeId: request.storeId }, ids }),
+  ], conflictMessage: "This report changed. Refresh before removing its link" });
+  return { ...request, linkedWorkOrderId: undefined, linkedAt: undefined, linkedByActorType: undefined, linkedByActorId: undefined, linkedByActorName: undefined, version: persistedRequestVersion(request) + 1 };
+}
 
 /** Deliberately returns an acknowledged report to action; aging alone never calls this command. */
 export async function requestAcknowledgedServiceRequestFollowUp(svc: OpsCommandServices, input: RequestAcknowledgedFollowUpInput) {

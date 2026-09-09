@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   assertStoreInSessionScope: vi.fn(),
   acknowledgeServiceRequest: vi.fn(),
   linkServiceRequestToWorkOrder: vi.fn(),
+  unlinkServiceRequestFromWorkOrder: vi.fn(),
   requestAcknowledgedServiceRequestFollowUp: vi.fn(),
 }));
 
@@ -23,11 +24,13 @@ vi.mock("@/lib/ops/commands", async () => {
     ...actual,
     acknowledgeServiceRequest: mocks.acknowledgeServiceRequest,
     linkServiceRequestToWorkOrder: mocks.linkServiceRequestToWorkOrder,
+    unlinkServiceRequestFromWorkOrder: mocks.unlinkServiceRequestFromWorkOrder,
     requestAcknowledgedServiceRequestFollowUp: mocks.requestAcknowledgedServiceRequestFollowUp,
   };
 });
 
 import { POST as acknowledge } from "@/app/api/ops/requests/[id]/acknowledge/route";
+import { POST as unlink } from "@/app/api/ops/requests/[id]/unlink/route";
 import { POST as link } from "@/app/api/ops/requests/[id]/link/route";
 import { POST as followUp } from "@/app/api/ops/requests/[id]/follow-up/route";
 
@@ -98,5 +101,24 @@ describe("request acknowledgment routes", () => {
     const denied = await acknowledge(post(`/api/ops/requests/${serviceRequest.id}/acknowledge`, { expectedStatus: "submitted" }), { params: Promise.resolve({ id: serviceRequest.id }) });
     expect(denied.status).toBe(403);
     expect(mocks.acknowledgeServiceRequest).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("unlink boundary", () => {
+  it("requires a reason and version, preserves scope checks, and redirects safely", async () => {
+    mocks.getOpsRequestContext.mockResolvedValue({ session, repository: { getRequest: vi.fn().mockResolvedValue(serviceRequest) }, actor });
+    mocks.assertStoreInSessionScope.mockResolvedValue({ id: serviceRequest.storeId });
+    const fields = { expectedVersion: "2", expectedWorkOrderId: "wo-route", correctionReason: "Incorrect association" };
+    const response = await unlink(post("/unlink", fields), { params: Promise.resolve({ id: serviceRequest.id }) });
+    expect(response.status).toBe(303);
+    expect(mocks.getOpsRequestContext).toHaveBeenLastCalledWith(["facilities", "regional", "store_manager"], "review_request");
+    expect(mocks.unlinkServiceRequestFromWorkOrder).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ expectedVersion: 2, expectedWorkOrderId: "wo-route", correctionReason: fields.correctionReason }));
+    mocks.unlinkServiceRequestFromWorkOrder.mockClear();
+    expect((await unlink(post("/unlink", { ...fields, correctionReason: "" }), { params: Promise.resolve({ id: serviceRequest.id }) })).status).toBe(422);
+    expect((await unlink(post("/unlink", { ...fields, expectedVersion: "NaN" }), { params: Promise.resolve({ id: serviceRequest.id }) })).status).toBe(422);
+    mocks.assertStoreInSessionScope.mockRejectedValue(new OpsDomainError("FORBIDDEN", "Outside scope"));
+    expect((await unlink(post("/unlink", fields), { params: Promise.resolve({ id: serviceRequest.id }) })).status).toBe(403);
+    expect(mocks.unlinkServiceRequestFromWorkOrder).not.toHaveBeenCalled();
   });
 });

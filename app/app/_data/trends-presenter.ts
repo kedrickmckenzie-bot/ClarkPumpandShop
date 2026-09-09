@@ -1,4 +1,5 @@
 import "server-only";
+import { supportedRecordingCoverage } from "@/lib/ops/recording-coverage";
 
 import type {
   MetricViewModel,
@@ -71,7 +72,7 @@ interface TrendSourceRecord {
   sourceIds?: string[];
 }
 
-type TrendDetailKind = "current" | "comparison" | "both" | "unclassified" | "benchmark" | "projection" | "month";
+type TrendDetailKind = "current" | "comparison" | "both" | "unclassified" | "benchmark" | "projection" | "month" | "vendor_outstanding";
 
 export interface TrendExportRecord {
   sourceId: string;
@@ -834,7 +835,7 @@ export function buildTrendsModel(
   const requestedViewValue = first(query.view);
   const detailMonthValue = first(query.detailMonth);
   const hasValidDetailMonthShape = Boolean(detailMonthValue && /^\d{4}-(0[1-9]|1[0-2])$/.test(detailMonthValue));
-  const hasRecognizedPeriodDetailKind = detailKindValue === "current" || detailKindValue === "comparison" || detailKindValue === "both" || detailKindValue === "unclassified" || detailKindValue === "projection";
+  const hasRecognizedPeriodDetailKind = detailKindValue === "current" || detailKindValue === "comparison" || detailKindValue === "both" || detailKindValue === "unclassified" || detailKindValue === "projection" || detailKindValue === "vendor_outstanding";
   const detailDriverBreakdownValue = first(query.driverBreakdown);
   let detailDriverBreakdown = (["region", "store", "category", "group", "profile", "component", "vendor"] as const).includes(detailDriverBreakdownValue as TrendBreakdownId)
     ? detailDriverBreakdownValue as TrendBreakdownId
@@ -1061,7 +1062,7 @@ export function buildTrendsModel(
     const storeTimeZone = storeById.get(work.storeId)?.timeZone ?? organizationTimeZone;
     const issuedAt = firstIssuedAtByAssignment.get(assignmentId) ?? latestIssuance.issuedAt;
     const localIssuedDate = localDateKey(issuedAt, storeTimeZone);
-    return [{ assignment, work, latestIssuance, issuedAt, localIssuedDate, response: firstResponseByAssignment.get(assignmentId) }];
+    return [{ assignment, work, scopeProbe, latestIssuance, issuedAt, localIssuedDate, response: firstResponseByAssignment.get(assignmentId) }];
   });
   const currentIssuanceCohort = issuanceCohort.filter((row) => row.localIssuedDate >= currentStart && row.localIssuedDate <= currentEnd);
   const answeredIssuances = currentIssuanceCohort.filter((row) => Boolean(row.response));
@@ -1091,8 +1092,8 @@ export function buildTrendsModel(
       { label: "Closed without response", value: String(closedWithoutResponse.length), description: "The issued assignment was cancelled or superseded without a recorded vendor response; it remains in historical coverage but is not currently outstanding." },
     ],
     outstandingLink: {
-      href: href("/app/work-orders", { stage: "vendor-response", region: selectedRegion, store: selectedStore, vendor: selectedVendor }),
-      label: "Open the work awaiting vendor response",
+      href: "",
+      label: "Open exact outstanding assignments",
     },
     methodology: `One denominator row per outside-vendor assignment, using its first issuance date. Later issuance revisions do not add requests. Cancelled or superseded assignments remain in historical coverage, but are removed from the currently outstanding count. Overdue means an effective assignment has remained unanswered for more than ${responseDueHours} hours. Median response time remains grouped by response date and includes accepted, declined, proposed-date, and question responses.`,
   };
@@ -1137,6 +1138,15 @@ export function buildTrendsModel(
     ...(options.preserveEvidence ? evidenceQuery : {}),
     ...values,
   });
+  vendorAccountability.outstandingLink.href = `${trendHref({ view: "records", detailKind: "vendor_outstanding", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`;
+  const outstandingRecords: TrendSourceRecord[] = unansweredIssuances.map((row) => ({
+    ...row.scopeProbe, id: row.assignment.id, sourceKind: "source_record", units: "count", value: 1,
+    date: row.issuedAt, localDate: row.localIssuedDate, periodKey: row.localIssuedDate.slice(0, 7), displayDate: dateLabel(row.localIssuedDate),
+    displayValue: "Awaiting response", sourceIds: [row.assignment.id, row.latestIssuance.id],
+    detail: `${row.work.problem} · Unanswered effective assignment · First issued ${row.localIssuedDate}`,
+    providerAttribution: "response_assignment", providerAttributionLabel: "Vendor assignment awaiting its first response",
+  }));
+
 
   const series = currentMonths.map((key, index) => {
     const currentMonthRecords = currentRecords.filter((row) => row.periodKey === key);
@@ -1330,6 +1340,9 @@ export function buildTrendsModel(
     coverageStatus: "observed" | "measured_zero";
     records: TrendSourceRecord[];
   }
+  const recordingCoverage = supportedRecordingCoverage(fixture, session.organizationId, safeMetric, allRecords);
+  const monthIsCovered = (asset: Asset, month: string, through = endOfMonth(month)) => recordingCoverage.some((coverage) =>
+    coverage.storeId === asset.storeId && coverage.startsOn <= `${month}-01` && coverage.endsOn >= through);
   const observationsByCohortAndCalendarMonth = new Map<string, CohortMonthObservation[]>();
   for (const asset of benchmarkAssets) {
     const cohort = cohortByAsset.get(asset.id)!;
@@ -1338,11 +1351,9 @@ export function buildTrendsModel(
       const sourceRows = referenceRecordsByAssetMonth.get(`${asset.id}|${month}`) ?? [];
       const exposure = assetMonthExposure(asset, month, storeTimeZone);
       if (exposure.factor === 0) continue;
-      // An absent install date does not prove the equipment existed during a
-      // quiet month. Preserve real linked observations, but never manufacture
-      // a measured zero from undocumented history.
-      if (exposure.factor === undefined && sourceRows.length === 0) continue;
-      const exposureFactor = exposure.factor ?? 1;
+      // Neither equipment exposure nor an isolated transaction proves complete recording.
+      if (exposure.factor === undefined || !monthIsCovered(asset, month)) continue;
+      const exposureFactor = exposure.factor;
       const rawValue = aggregate(safeMetric, sourceRows);
       const value = exposureFactor > 0 ? rawValue / exposureFactor : rawValue;
       const key = `${cohort}|${month.slice(5)}`;
@@ -1445,6 +1456,7 @@ export function buildTrendsModel(
     const basisRecordIds = new Set<string>();
     const comparableAssetIds = new Set<string>();
     let unknownExposureAssets = 0;
+    let unknownRecordingAssets = 0;
     const targetExposureMonths = new Set<string>();
     if (additive) {
       for (const asset of storeAssets) {
@@ -1463,6 +1475,11 @@ export function buildTrendsModel(
           if (targetExposure.factor === 0) continue;
           if (targetExposure.factor === undefined) {
             unknownExposureAssets += 1;
+            comparableAcrossPeriod = false;
+            break;
+          }
+          if (!monthIsCovered(asset, month, currentEnd < endOfMonth(month) ? currentEnd : endOfMonth(month))) {
+            unknownRecordingAssets += 1;
             comparableAcrossPeriod = false;
             break;
           }
@@ -1515,7 +1532,7 @@ export function buildTrendsModel(
                 coverageStatus: measuredZeroOnly ? "measured_zero" : "observed",
                 sourceIds: contributingSourceIds,
                 label: `Calculation · ${peerStore ? `Store ${peerStore.storeNumber}` : "Peer store"} · ${asset.name}`,
-                detail: `${monthLabel(month)} contribution = ${formatMetric(safeMetric, peerRate.value)} uncapped peer rate, capped to ${formatMetric(safeMetric, distribution.capped[peerIndex])}, × ${(1 / peerRates.length).toFixed(6)} peer weight, × ${partialFactor.toFixed(6)} target exposure. Reference ${referenceMonths[0]} through ${referenceMonths.at(-1)}; ${peerObservations.length} comparable calendar-month observations. ${measuredZeroOnly ? "Documented equipment exposure with no linked source activity is retained as a measured zero." : `${contributingSourceIds.length} underlying source record${contributingSourceIds.length === 1 ? "" : "s"}.`}`,
+                detail: `${monthLabel(month)} contribution = ${formatMetric(safeMetric, peerRate.value)} uncapped peer rate, capped to ${formatMetric(safeMetric, distribution.capped[peerIndex])}, × ${(1 / peerRates.length).toFixed(6)} peer weight, × ${partialFactor.toFixed(6)} target exposure. Reference ${referenceMonths[0]} through ${referenceMonths.at(-1)}; ${peerObservations.length} comparable calendar-month observations. ${measuredZeroOnly ? "Explicit store/measure recording coverage and documented equipment exposure support a quiet period retained as a measured zero." : `${contributingSourceIds.length} underlying source record${contributingSourceIds.length === 1 ? "" : "s"}.`}`,
                 displayValue: formatMetric(safeMetric, contribution),
                 href: `${trendHref({ view: "records", detailKind: "benchmark", benchmarkStore: store.id, detailMonth: undefined, sourcePage: undefined })}#${calculationId}`,
               });
@@ -1806,7 +1823,7 @@ export function buildTrendsModel(
       evidenceQualityLabel: additive
         ? unknownExposureAssets
           ? `${unknownExposureAssets} equipment record${unknownExposureAssets === 1 ? " has" : "s have"} an unknown installation date and ${unknownExposureAssets === 1 ? "is" : "are"} excluded from the expectation`
-          : baselineReliable ? "Supported historical comparison" : "Insufficient matched exposure for a reliable comparison"
+          : unknownRecordingAssets ? `${unknownRecordingAssets} equipment records have unknown recording coverage and are excluded from the comparison` : baselineReliable ? "Supported historical comparison" : "Insufficient covered peer observations for a reliable comparison"
         : baselineReliable ? "Supported company peer comparison" : "Insufficient peer results",
       referenceHistoryLabel: additive
         ? `${relevantPeerStores.size} peer stores · ${relevantReferenceMonths.size} applicable reference months · ${targetExposureMonths.size} target equipment-months`
@@ -2061,7 +2078,7 @@ export function buildTrendsModel(
     };
   });
   const breakdownLabels: Record<TrendBreakdownId, string> = { region: "region", store: "store", category: "service area", group: "equipment group", profile: "equipment type", component: "component name", vendor: "vendor" };
-  const detailBaseRecords = detailKind === "current"
+  const detailBaseRecords = detailKind === "vendor_outstanding" ? outstandingRecords : detailKind === "current"
     ? currentRecords
     : detailKind === "comparison"
       ? baselineRecords
@@ -2084,7 +2101,7 @@ export function buildTrendsModel(
   const detailDriverLabel = detailDriverBreakdown && detailDriverValue
     ? detailRecords[0] ? driverIdentity(detailRecords[0], detailDriverBreakdown).label : detailDriverValue === unclassifiedDriverKey ? "Unclassified" : "Selected segment"
     : undefined;
-  const detailPeriodLabel = detailKind === "current"
+  const detailPeriodLabel = detailKind === "vendor_outstanding" ? `Outstanding assignments first issued ${dateLabel(currentStart)}–${dateLabel(currentEnd)}` : detailKind === "current"
     ? `${detailDriverLabel ? `${detailDriverLabel} · ` : ""}${selectedPeriodName} · ${dateLabel(currentStart)}–${dateLabel(currentEnd)}`
     : detailKind === "comparison" && baselineStart && baselineEnd
       ? `${compareLabel} · ${dateLabel(baselineStart)}–${dateLabel(baselineEnd)}`
@@ -2127,7 +2144,7 @@ export function buildTrendsModel(
     store: "Store",
     service: "Work type / detail",
     date: "Date",
-    value: safeMetric === "linked_invoice" ? "Linked amount" : safeMetric === "recorded_cost" ? "Cost" : "Result",
+    value: detailKind === "vendor_outstanding" ? "Response" : safeMetric === "linked_invoice" ? "Linked amount" : safeMetric === "recorded_cost" ? "Cost" : "Result",
   };
   const sourceSortLinks: TrendAnalysisPageViewModel["sourceSortLinks"] = (Object.keys(sourceColumnLabels) as TrendSourceSortId[]).map((id) => {
     const defaultDirection: TrendSortDirection = id === "record" || id === "store" || id === "service" ? "asc" : "desc";
@@ -2559,7 +2576,7 @@ export function buildTrendsModel(
       sourceDate: row.date,
       localDate: row.localDate,
       periodKey: row.periodKey,
-      timeBasis: row.sourceKind === "calculated_peer_contribution" ? "historical peer equipment-month contribution to the selected target month" : measureDateBasis[safeMetric],
+      timeBasis: detailKind === "vendor_outstanding" ? "assignment first issuance date" : row.sourceKind === "calculated_peer_contribution" ? "historical peer equipment-month contribution to the selected target month" : measureDateBasis[safeMetric],
       rawValue: row.value,
       amountMinor: units === "minor_currency" ? row.value : undefined,
       currency: row.currency ?? (units === "minor_currency" ? "USD" : undefined),
@@ -2677,7 +2694,7 @@ export function buildTrendsModel(
           ? `Shows whether each store recorded more or less ${safeMetric === "work_orders" ? "work-order activity" : "service-visit activity"} on matched equipment than other accessible company stores.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
           : "Shows how each store compares with measured results at other stores in the accessible company scope, not with an external benchmark.",
       methodology: additive
-        ? `The historical peer range uses up to ${observedReferenceMonthCount} reference months for the same equipment cohort at other accessible company stores, aligned by calendar month. Peer observations are normalized for documented installation/retirement exposure; the target expectation is prorated by active days. A quiet month is a measured zero only when lifecycle dates demonstrate exposure. Unknown coverage is excluded, not converted to zero. Extreme peer rates are winsorized before equal-store weighting; monthly 25th–75th percentile ranges are then accumulated for the selected equipment exposure. That descriptive range is not a prediction interval or failure probability.`
+        ? `The historical peer range uses up to ${observedReferenceMonthCount} reference months for the same equipment cohort at other accessible company stores, aligned by calendar month. Peer observations are normalized for documented installation/retirement exposure; the target expectation is prorated by active days. A quiet month is a measured zero only when explicit store/measure recording coverage and lifecycle dates both support it. Unknown coverage is excluded, not converted to zero. Extreme peer rates are winsorized before equal-store weighting; monthly 25th–75th percentile ranges are then accumulated for the selected equipment exposure. That descriptive range is not a prediction interval or failure probability.`
         : "The peer range is the descriptive 25th–75th percentile at other accessible company stores. A comparison appears only when at least three other stores have measured results; it is not a prediction interval or external benchmark.",
       sampleLabel: additive ? `${benchmarkRows.length} stores · ${observedReferenceMonthCount} reference months` : `${benchmarkRows.length} stores · ${currentPeerRecords.length} records`,
       sortLinks,
@@ -2686,7 +2703,7 @@ export function buildTrendsModel(
     },
     sourceTable: {
       id: "trend-sources",
-      caption: detailKind === "benchmark"
+      caption: detailKind === "vendor_outstanding" ? detailPeriodLabel : detailKind === "benchmark"
         ? `${metricCopy[safeMetric].label} peer calculation inputs for ${detailPeriodLabel}`
         : `${metricCopy[safeMetric].label} records for ${detailPeriodLabel}`,
       columns: [
@@ -2694,11 +2711,12 @@ export function buildTrendsModel(
         { key: "store", label: "Store" },
         { key: "service", label: "Work type / detail" },
         { key: "date", label: "Date" },
-        { key: "value", label: safeMetric === "linked_invoice" ? "Linked amount" : safeMetric === "recorded_cost" ? "Cost" : "Result", align: "end" },
+        { key: "value", label: detailKind === "vendor_outstanding" ? "Response" : safeMetric === "linked_invoice" ? "Linked amount" : safeMetric === "recorded_cost" ? "Cost" : "Result", align: "end" },
       ],
       rows: sourceRows,
     },
-    sourceHeading: detailKind === "benchmark" ? "Inputs behind this comparison" : "Records behind this number",
+    sourceMeasureLabel: detailKind === "vendor_outstanding" ? "Vendor response evidence" : undefined,
+    sourceHeading: detailKind === "vendor_outstanding" ? "Outstanding assignments in this issuance cohort" : detailKind === "benchmark" ? "Inputs behind this comparison" : "Records behind this number",
     sourceDescription: detailKind === "benchmark"
       ? `${detailRecords.filter((row) => row.sourceKind === "calculated_peer_contribution").length} calculated contribution${detailRecords.filter((row) => row.sourceKind === "calculated_peer_contribution").length === 1 ? "" : "s"} and ${detailRecords.filter((row) => row.sourceKind === "raw_peer_observation").length} raw historical record${detailRecords.filter((row) => row.sourceKind === "raw_peer_observation").length === 1 ? "" : "s"} are included. Calculated rows expose uncapped input, capping, peer weight, and target exposure; raw rows open the actual historical source record.`
       : `${detailRecords.length} record${detailRecords.length === 1 ? "" : "s"} included for the selected filters and dates.`,
@@ -2713,7 +2731,7 @@ export function buildTrendsModel(
       "Use Focus analysis to narrow every chart and comparison. Use View exact records when you only want the evidence behind one number.",
       "The at-the-recent-pace planning scenario uses twelve complete months independently of the displayed chart window. It does not predict equipment failures, set a budget, or claim savings.",
       "Store comparisons use matched equipment at other accessible company stores and never use the selected store to set its own expectation. Spending above or below the range is an investigation fact, not a maintenance-quality judgment.",
-      "A zero observation is included only when source or lifecycle evidence demonstrates the equipment-month was observed. Unknown coverage and periods before installation are not treated as zero.",
+      "A zero observation requires explicit recording coverage for the source measure and store, independently of equipment installation/retirement exposure. Unknown coverage and periods before installation are not treated as zero.",
       "Events are placed in months using each store's local time zone.",
       `Vendor attribution for this measure uses ${vendorBasis[safeMetric]}.`,
     ],

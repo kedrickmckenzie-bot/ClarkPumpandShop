@@ -1,9 +1,11 @@
+import { reviewRequestImpactAssessment } from "@/lib/ops/request-impact-assessment";
 import { describe, expect, it } from "vitest";
 import {
   acknowledgeServiceRequest,
   createServiceRequest,
   createWorkOrder,
   linkServiceRequestToWorkOrder,
+  unlinkServiceRequestFromWorkOrder,
   requestAcknowledgedServiceRequestFollowUp,
   type OpsCommandServices,
 } from "@/lib/ops/commands";
@@ -276,5 +278,75 @@ describe("simple request acknowledgment", () => {
     });
     await acknowledgeServiceRequest(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: safety.id, expectedStatus: "submitted", actor: facilitiesActor });
     expect(h.repository.snapshot().workflowTasks.find((task) => task.serviceRequestId === safety.id)).toMatchObject({ status: "open" });
+  });
+});
+
+
+describe("acknowledgment completion corrections", () => {
+  it.each([false, true])("uses the effective impact assessment when linking=%s", async (linking) => {
+    const h = harness();
+    const request = await report(h, "Routine fixture concern awaiting review");
+    const initial = (await h.repository.listRequestImpactAssessments(NORTHLINE_ORGANIZATION_ID, request.id)).at(-1)!;
+    h.setNow("2026-09-09T14:30:00.000Z");
+    const concern = await reviewRequestImpactAssessment(h.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedRequestStatus: "submitted", expectedLatestAssessmentId: initial.id,
+      disposition: "revised", assessment: { ...initial, safetyConcern: "potential", complianceImpact: "none_reported", storeOperatingState: "open" }, actor: facilitiesActor,
+    });
+    h.setNow("2026-09-09T15:00:00.000Z");
+    await reviewRequestImpactAssessment(h.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedRequestStatus: "under_review", expectedLatestAssessmentId: concern.id,
+      disposition: "revised", assessment: { ...concern, safetyConcern: "none_reported" }, actor: facilitiesActor,
+    });
+    const history = await h.repository.listRequestImpactAssessments(NORTHLINE_ORGANIZATION_ID, request.id);
+    const input = { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedStatus: "under_review" as const, actor: facilitiesActor };
+    if (linking) await linkServiceRequestToWorkOrder(h.services, { ...input, workOrderId: (await openWork(h, "Related routine job")).id });
+    else await acknowledgeServiceRequest(h.services, input);
+    expect(h.repository.snapshot().workflowTasks.filter((task) => task.serviceRequestId === request.id && task.taskType === "review_issue").every((task) => task.status === "completed")).toBe(true);
+    expect(await h.repository.listRequestImpactAssessments(NORTHLINE_ORGANIZATION_ID, request.id)).toEqual(history);
+  });
+
+  it("removes an incorrect link with provenance and audit intact, then permits explicit follow-up and work creation", async () => {
+    const h = harness();
+    const request = await report(h, "Wrongly linked light report");
+    const work = await openWork(h, "Unrelated active work");
+    const linked = await linkServiceRequestToWorkOrder(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, workOrderId: work.id, expectedStatus: "submitted", actor: facilitiesActor });
+    const input = { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedWorkOrderId: work.id, expectedVersion: linked.version!, correctionReason: "This report concerns a different fixture", actor: facilitiesActor };
+    const before = h.repository.snapshot();
+    await expect(unlinkServiceRequestFromWorkOrder(h.services, { ...input, correctionReason: " " })).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(unlinkServiceRequestFromWorkOrder(h.services, { ...input, expectedWorkOrderId: "wrong-work" })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(unlinkServiceRequestFromWorkOrder(h.services, { ...input, organizationId: "other-tenant" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(h.repository.snapshot()).toEqual(before);
+    const result = await unlinkServiceRequestFromWorkOrder(h.services, input);
+    expect(result).toMatchObject({ status: "acknowledged", acknowledgedAt: linked.acknowledgedAt, acknowledgedByActorId: linked.acknowledgedByActorId, version: linked.version! + 1 });
+    const after = h.repository.snapshot();
+    expect(after.requests.find((row) => row.id === request.id)?.linkedWorkOrderId).toBeFalsy();
+    expect(after.workOrders).toEqual(before.workOrders);
+    expect(after.workflowTasks).toEqual(before.workflowTasks);
+    expect(after.assignments).toEqual(before.assignments);
+    expect(after.issuances).toEqual(before.issuances);
+    expect(after.auditEvents.slice(0, before.auditEvents.length)).toEqual(before.auditEvents);
+    const event = after.auditEvents.find((row) => row.eventType === "request.work_order_unlinked")!;
+    expect(JSON.parse(event.payloadJson)).toMatchObject({ previousWorkOrderId: work.id, workOrderId: null, correctionReason: input.correctionReason });
+    expect(await unlinkServiceRequestFromWorkOrder(h.services, input)).toMatchObject({ replayed: true });
+    expect(h.repository.snapshot()).toEqual(after);
+    const model = buildRequestReviewModel(after, facilitiesSession, request.id);
+    expect(model.followUpAction).toBeTruthy();
+    expect(model.linkedWorkOrder).toBeUndefined();
+    await requestAcknowledgedServiceRequestFollowUp(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, explanation: "Inspect the separate light", actor: facilitiesActor });
+    const initial = (await h.repository.listRequestImpactAssessments(NORTHLINE_ORGANIZATION_ID, request.id)).at(-1)!;
+    h.setNow("2026-09-09T16:00:00.000Z");
+    await reviewRequestImpactAssessment(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedRequestStatus: "under_review", expectedLatestAssessmentId: initial.id, disposition: "confirmed", assessment: initial, actor: facilitiesActor });
+    const created = await createWorkOrder(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: request.storeId, requestId: request.id, problem: request.problem, priority: "routine", accountableParty: "Facilities", nextAction: "Choose provider", initialAssignment: { kind: "choose_later" }, actor: facilitiesActor });
+    expect(created.requestId).toBe(request.id);
+    expect(await h.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, work.id)).toEqual(before.workOrders.find((row) => row.id === work.id));
+  });
+
+  it("rejects a stale unlink after correction or a new association", async () => {
+    const h = harness(); const request = await report(h, "Association race");
+    const first = await openWork(h, "First work"); const second = await openWork(h, "Second work");
+    const linked = await linkServiceRequestToWorkOrder(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, workOrderId: first.id, expectedStatus: "submitted", actor: facilitiesActor });
+    await linkServiceRequestToWorkOrder(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, workOrderId: second.id, expectedStatus: "acknowledged", correctionReason: "Correct association", actor: facilitiesActor });
+    await expect(unlinkServiceRequestFromWorkOrder(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedWorkOrderId: first.id, expectedVersion: linked.version!, correctionReason: "Stale removal", actor: facilitiesActor })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect((await h.repository.getRequest(NORTHLINE_ORGANIZATION_ID, request.id))?.linkedWorkOrderId).toBe(second.id);
   });
 });

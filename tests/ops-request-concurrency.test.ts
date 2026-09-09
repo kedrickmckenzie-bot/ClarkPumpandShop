@@ -5,6 +5,7 @@ import {
   createServiceRequest,
   createWorkOrder,
   linkServiceRequestToWorkOrder,
+  unlinkServiceRequestFromWorkOrder,
   requestAcknowledgedServiceRequestFollowUp,
   reviewServiceRequest,
   type OpsCommandServices,
@@ -392,4 +393,21 @@ describe("service-request concurrency fences", () => {
     expect(workOrders.length + approvals.length).toBe(1);
     expect(workOrders.length === 1 ? approvals : workOrders).toHaveLength(0);
   });
+});
+
+
+it("version-fences unlink against a concurrent replacement link", async () => {
+  const h = harness();
+  const storeId = "store-northline-101";
+  const request = await createServiceRequest(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId, reporterName: "Test reporter", problem: "Separate light", actor: facilitiesActor });
+  const workInput = { organizationId: NORTHLINE_ORGANIZATION_ID, storeId, problem: "Existing work", priority: "routine" as const, accountableParty: "Facilities", nextAction: "Review", initialAssignment: { kind: "choose_later" as const }, actor: facilitiesActor };
+  const first = await createWorkOrder(h.services, workInput); const second = await createWorkOrder(h.services, workInput);
+  const linked = await linkServiceRequestToWorkOrder(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, workOrderId: first.id, expectedStatus: "submitted", actor: facilitiesActor });
+  const race = racingServices(h);
+  const results = await Promise.allSettled([
+    unlinkServiceRequestFromWorkOrder(race, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedWorkOrderId: first.id, expectedVersion: linked.version!, correctionReason: "Unrelated work", actor: facilitiesActor }),
+    linkServiceRequestToWorkOrder(race, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, workOrderId: second.id, expectedStatus: "acknowledged", correctionReason: "Correct work", actor: regionalActor }),
+  ]);
+  expectExactlyOneConflict(results);
+  expect(h.repository.snapshot().auditEvents.filter((event) => event.aggregateId === request.id && ["request.work_order_unlinked", "request.work_order_link_corrected"].includes(event.eventType))).toHaveLength(1);
 });

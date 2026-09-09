@@ -68,6 +68,7 @@ const receiptMessages: Record<string, string> = {
   "request-acknowledged": "Request acknowledged and removed from new intake. This does not claim that repair work is complete or linked.",
   "request-follow-up": "One accountable follow-up was created; the original acknowledgment remains in history.",
   "linked-existing-work": "Request acknowledged and linked to existing work without changing its authorization, visits, or verification.",
+  "request-link-removed": "The incorrect link was removed. The acknowledgment and original work order are preserved.",
   "request-link-corrected": "The work-order association was corrected and the earlier link remains in the audit history.",
   control: "Work state, ownership, deadline, and next action updated.",
   "approval-approved": "Authorization approved and the accountable work-order state updated.",
@@ -168,6 +169,7 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
   const decisionMutation = useMutation();
   const linkMutation = useMutation();
   const acknowledgeMutation = useMutation();
+  const unlinkMutation = useMutation();
   const followUpMutation = useMutation();
   const [decision, setDecision] = useState("escalate");
   if (!model.available) return null;
@@ -217,6 +219,13 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
               <MutationError message={acknowledgeMutation.state.error} />
               <div className={styles.formFooter}><span className={styles.formMeta}>Preserves the report and clears routine intake review. Emergency, safety, shutdown, and compliance obligations remain active.</span><button className={styles.primaryButton} type="submit" disabled={acknowledgeMutation.state.pending}>{acknowledgeMutation.state.pending ? "Acknowledging…" : "Aware — being handled"}<ShieldCheck aria-hidden="true" size={17} /></button></div>
             </form> : null}
+            {model.unlinkAction && model.linkedWorkOrder ? <details className={styles.controlDisclosure}><summary>Remove incorrect work-order link</summary><form action={model.unlinkAction} method="post" onSubmit={unlinkMutation.submit} className={styles.controlForm}>
+              <input type="hidden" name="expectedVersion" value={model.expectedVersion} />
+              <input type="hidden" name="expectedWorkOrderId" value={model.linkedWorkOrder.id} />
+              <label className={styles.field}><span>Correction reason <em>Required</em></span><textarea name="correctionReason" required minLength={3} maxLength={1000} rows={2} /></label>
+              <MutationError message={unlinkMutation.state.error} />
+              <div className={styles.formFooter}><span className={styles.formMeta}>Keeps the acknowledgment and original work order.</span><button className={styles.secondaryButton} type="submit" disabled={unlinkMutation.state.pending}>{unlinkMutation.state.pending ? "Removing…" : "Remove link"}</button></div>
+            </form></details> : null}
             {model.linkExistingWorkAction ? <div className={styles.controlForm}>
               <div className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Potentially related work</h3><p>Suggestions are not confirmed duplicates. Select a work order explicitly or browse the store’s full open-work list.</p></div></div>
               {model.relatedOpenWork.length ? <form action={model.linkExistingWorkAction} method="post" onSubmit={linkMutation.submit} className={styles.controlForm}>

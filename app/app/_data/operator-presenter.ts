@@ -6546,6 +6546,8 @@ export function buildRequestReviewModel(
     reference: request?.reference ?? requestId,
     expectedStatus: request?.status === "acknowledged" ? "acknowledged" : request?.status === "under_review" ? "under_review" : "submitted",
     statusLabel: request?.status === "acknowledged" ? "Acknowledged — being handled" : request ? sentence(request.status) : "Unavailable",
+    expectedVersion: request?.version ?? 0,
+    unlinkAction: permitted && request?.status === "acknowledged" && request.linkedWorkOrderId ? `/api/ops/requests/${encodeURIComponent(request.id)}/unlink` : undefined,
     acknowledgeAction: permitted && request && request.status !== "acknowledged" ? `/api/ops/requests/${encodeURIComponent(request.id)}/acknowledge` : undefined,
     followUpAction: permitted && request?.status === "acknowledged" ? `/api/ops/requests/${encodeURIComponent(request.id)}/follow-up` : undefined,
     acknowledgedAtLabel: request?.acknowledgedAt ? dateTime(request.acknowledgedAt, scoped.stores.find((store) => store.id === request.storeId)?.timeZone) : undefined,

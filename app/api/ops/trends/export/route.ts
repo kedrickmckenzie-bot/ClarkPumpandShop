@@ -23,6 +23,7 @@ export async function GET(request: Request) {
     ["Current period", model.currentPeriodLabel],
     ["Comparison", model.comparisonPeriodLabel ? `${model.comparisonLabel} · ${model.comparisonPeriodLabel}` : "Not selected"],
     ["Exported source view", model.sourcePeriodLabel],
+    ["Source evidence measure", model.sourceMeasureLabel ?? model.metricLabel],
     ["Canonical analysis query", model.canonicalQuery],
     ["Peer methodology", model.benchmark.methodology],
     ["Vendor accountability methodology", model.vendorAccountability.methodology],

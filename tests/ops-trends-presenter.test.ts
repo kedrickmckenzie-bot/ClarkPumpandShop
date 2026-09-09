@@ -1,3 +1,4 @@
+import { attestDemoRecordingCoverage, RECORDING_COVERAGE_EVENT } from "@/lib/ops/recording-coverage";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import {
@@ -921,6 +922,7 @@ describe("enterprise trends presenter", () => {
       });
     });
 
+    attestDemoRecordingCoverage(fixture, "2024-08-01", fixture.asOf.slice(0, 10));
     const target = assets[0]!;
     const exact = buildTrendsModel(fixture, session(), {
       metric: "recorded_cost",
@@ -1335,5 +1337,63 @@ describe("enterprise trends presenter", () => {
     expect(model.filterNotice).toMatch(/removed .*out-of-scope store.*unavailable service area/i);
     expect(queryFromSearch(model.canonicalQuery)).not.toHaveProperty("store");
     expect(queryFromSearch(model.canonicalQuery)).not.toHaveProperty("category");
+  });
+});
+
+
+describe("recording coverage and exact issuance evidence", () => {
+  it("does not manufacture zero contributions when older cost history is missing", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    fixture.costLines = fixture.costLines.filter((row) => row.serviceDate >= "2026-07-01");
+    const model = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "6", view: "records", detailKind: "benchmark", benchmarkStore: "store-northline-104" }, { includeExportRows: true });
+    expect(model.exportRows?.filter((row) => row.coverageStatus === "measured_zero")).toHaveLength(0);
+    expect(model.benchmark.rows.every((row) => row.expectedValue === undefined)).toBe(true);
+    expect(model.benchmark.rows.find((row) => row.id === "store-northline-104")?.evidenceQualityLabel).toMatch(/unknown recording coverage/);
+  });
+
+  it("requires measure-specific declarations, not installation dates or individual transactions", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    fixture.auditEvents = fixture.auditEvents.filter((row) => row.eventType !== RECORDING_COVERAGE_EVENT || JSON.parse(row.payloadJson).measure !== "recorded_cost");
+    const cost = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "6" });
+    expect(cost.benchmark.rows.every((row) => row.expectedValue === undefined)).toBe(true);
+    expect(cost.benchmark.rows.some((row) => (row.actualValue ?? 0) > 0)).toBe(true);
+    const work = buildTrendsModel(fixture, session(), { metric: "work_orders", period: "6" });
+    expect(work.benchmark.rows.some((row) => row.expectedValue !== undefined)).toBe(true);
+  });
+
+  it("preserves explicitly covered quiet periods and partial target exposure", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const asset = fixture.assets.find((row) => row.id === "asset-104-beer-cave")!;
+    asset.installedAt = "2026-07-16T12:00:00.000Z";
+    const model = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "3", asset: asset.id, store: asset.storeId, detailKind: "benchmark", benchmarkStore: asset.storeId }, { includeExportRows: true });
+    const contributions = model.exportRows!.filter((row) => row.sourceKind === "calculated_peer_contribution");
+    expect(contributions.length).toBeGreaterThan(0);
+    expect(contributions.some((row) => row.coverageStatus === "measured_zero")).toBe(true);
+    expect(contributions.filter((row) => row.periodKey === "2026-07").every((row) => row.exposureFactor! > 0 && row.exposureFactor! < 1)).toBe(true);
+    expect(contributions.some((row) => row.periodKey === "2026-06")).toBe(false);
+  });
+
+  it("opens the exact unanswered first-issuance cohort with all analysis filters intact", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const issuance = fixture.issuances.find((row) => {
+      const work = fixture.workOrders.find((work) => work.id === row.workOrderId);
+      return work?.assetId && work?.categoryKey === "refrigeration" && row.issuedAt >= "2026-03-01";
+    })!;
+    const assignment = fixture.assignments.find((row) => row.id === issuance.assignmentId)!;
+    const work = fixture.workOrders.find((row) => row.id === issuance.workOrderId)!;
+    fixture.vendorResponses = fixture.vendorResponses.filter((row) => row.assignmentId !== assignment.id);
+    assignment.status = "pending";
+    fixture.issuances.push({ ...issuance, id: "cohort-revision", revision: 99, issuedAt: "2026-08-20T12:00:00.000Z" });
+    const query = { metric: "vendor_response", period: "6", store: work.storeId, category: work.categoryKey!, asset: work.assetId!, vendor: assignment.vendorId!, view: "vendors" };
+    const panel = buildTrendsModel(fixture, session(), query);
+    const parameters = queryFromHref(panel.vendorAccountability.outstandingLink.href);
+    expect(parameters).toMatchObject({ ...query, view: "records", detailKind: "vendor_outstanding" });
+    const detail = buildTrendsModel(fixture, session(), parameters, { includeExportRows: true });
+    expect(detail.exportRows).toHaveLength(panel.vendorAccountability.awaitingCount);
+    expect(detail.exportRows?.filter((row) => row.sourceId === assignment.id)).toHaveLength(1);
+    expect(detail.exportRows?.every((row) => row.units === "count" && row.timeBasis === "assignment first issuance date")).toBe(true);
+    assignment.status = "superseded";
+    const closed = buildTrendsModel(fixture, session(), parameters, { includeExportRows: true });
+    expect(closed.exportRows?.some((row) => row.sourceId === assignment.id)).toBe(false);
   });
 });
