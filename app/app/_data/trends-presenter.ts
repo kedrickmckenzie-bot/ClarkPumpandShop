@@ -55,9 +55,62 @@ interface TrendSourceRecord {
     workType?: "reactive" | "preventive";
   }>;
   costKind?: "labor" | "parts" | "travel" | "materials" | "other";
+  sourceKind?: "source_record" | "raw_peer_observation" | "calculated_peer_contribution";
+  units?: "minor_currency" | "count" | "hours" | "percent";
+  currency?: string;
+  providerAttribution?: "invoice_vendor" | "visit_vendor" | "historical_assignment" | "response_assignment" | "current_assignment" | "internal" | "ambiguous" | "unattributed";
+  providerAttributionLabel?: string;
+  cohortId?: string;
+  referenceStart?: string;
+  referenceEnd?: string;
+  rawValue?: number;
+  cappedValue?: number;
+  weight?: number;
+  exposureFactor?: number;
+  coverageStatus?: "observed" | "measured_zero" | "unknown";
+  sourceIds?: string[];
 }
 
 type TrendDetailKind = "current" | "comparison" | "both" | "unclassified" | "benchmark" | "projection" | "month";
+
+export interface TrendExportRecord {
+  sourceId: string;
+  sourceKind: NonNullable<TrendSourceRecord["sourceKind"]>;
+  recordLabel: string;
+  detail: string;
+  sourceDate: string;
+  localDate: string;
+  periodKey: string;
+  timeBasis: string;
+  rawValue: number;
+  amountMinor?: number;
+  currency?: string;
+  units: NonNullable<TrendSourceRecord["units"]>;
+  storeId: string;
+  storeNumber?: string;
+  workOrderId?: string;
+  invoiceId?: string;
+  visitId?: string;
+  pmOccurrenceId?: string;
+  categoryKeys: string[];
+  assetIds: string[];
+  componentNames: string[];
+  vendorId?: string;
+  providerAttribution?: TrendSourceRecord["providerAttribution"];
+  providerAttributionLabel?: string;
+  cohortId?: string;
+  referenceStart?: string;
+  referenceEnd?: string;
+  uncappedInput?: number;
+  cappedInput?: number;
+  weight?: number;
+  exposureFactor?: number;
+  coverageStatus?: TrendSourceRecord["coverageStatus"];
+  contributingSourceIds: string[];
+  sourcePath: string;
+}
+
+export type TrendAnalysisBuildResult = TrendAnalysisPageViewModel & { exportRows?: TrendExportRecord[] };
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -131,7 +184,7 @@ const metricCopy: Record<TrendMetricId, { label: string; definition: string }> =
   },
   vendor_response: {
     label: "Vendor response time",
-    definition: "Median time between sending a work order and receiving the vendor's first recorded response.",
+    definition: "Median time between sending a work order and receiving the first recorded response among answered requests. Unanswered requests are reported separately by issuance cohort.",
   },
   pm_completion: {
     label: "PM completion",
@@ -279,13 +332,6 @@ function ratioLabel(current: number, comparison: number) {
   return `${change >= 0 ? "+" : ""}${Math.round(change)}%`;
 }
 
-function relativeDirection(current: number, comparison: number) {
-  if (!comparison) return current ? "New activity" : "No change";
-  const change = Math.round(Math.abs(((current - comparison) / comparison) * 100));
-  if (current === comparison) return "No change";
-  return `${change}% ${current > comparison ? "higher" : "lower"}`;
-}
-
 function metricChangeLabel(metric: TrendMetricId, current: number, comparison: number) {
   if (metric === "pm_completion") {
     const points = Math.round(current - comparison);
@@ -344,7 +390,14 @@ function monthlyPattern(values: number[]) {
   return relativeSpread > 1 ? "Uneven" : relativeSpread > 0.5 ? "Variable" : "Consistent";
 }
 
-function workVendorMap(fixture: OpsFixture, organizationId: string) {
+function metricUnits(metric: TrendMetricId): NonNullable<TrendSourceRecord["units"]> {
+  if (metric === "recorded_cost" || metric === "linked_invoice") return "minor_currency";
+  if (metric === "vendor_response") return "hours";
+  if (metric === "pm_completion") return "percent";
+  return "count";
+}
+
+function currentIssuedVendorMap(fixture: OpsFixture, organizationId: string) {
   const assignments = new Map(fixture.assignments
     .filter((row) => row.organizationId === organizationId)
     .map((row) => [row.id, row]));
@@ -356,6 +409,92 @@ function workVendorMap(fixture: OpsFixture, organizationId: string) {
     if (assignment?.kind === "outside_vendor" && assignment.vendorId) result.set(issuance.workOrderId, assignment.vendorId);
   }
   return result;
+}
+
+function historicalCostProvider(
+  indexes: {
+    visitsByWorkId: Map<string, OpsFixture["visits"]>;
+    assignmentsByWorkId: Map<string, OpsFixture["assignments"]>;
+  },
+  work: WorkOrder,
+  serviceDate: string,
+  storeTimeZone: string,
+) {
+  const matchingVisitVendors = new Set((indexes.visitsByWorkId.get(work.id) ?? [])
+    .filter((visit) =>
+      visit.organizationId === work.organizationId
+      && Boolean(visit.vendorId)
+      && [visit.checkedInAt, visit.checkedOutAt].filter(Boolean).some((value) => localDateKey(value!, storeTimeZone) === serviceDate),
+    )
+    .map((visit) => visit.vendorId!)
+  );
+  if (matchingVisitVendors.size === 1) {
+    return {
+      vendorId: [...matchingVisitVendors][0],
+      providerAttribution: "visit_vendor" as const,
+      providerAttributionLabel: "Historical vendor from the linked service visit",
+    };
+  }
+  if (matchingVisitVendors.size > 1) {
+    return {
+      providerAttribution: "ambiguous" as const,
+      providerAttributionLabel: "Ambiguous historical provider: more than one linked vendor visit occurred on the service date",
+    };
+  }
+
+  const assignment = (indexes.assignmentsByWorkId.get(work.id) ?? [])
+    .filter((row) =>
+      row.organizationId === work.organizationId
+      && localDateKey(row.assignedAt, storeTimeZone) <= serviceDate,
+    )
+    .sort((left, right) => right.assignedAt.localeCompare(left.assignedAt) || right.id.localeCompare(left.id))[0];
+  if (assignment?.kind === "outside_vendor" && assignment.vendorId) {
+    return {
+      vendorId: assignment.vendorId,
+      providerAttribution: "historical_assignment" as const,
+      providerAttributionLabel: "Historical vendor from the service assignment in effect by the cost date",
+    };
+  }
+  if (assignment?.kind === "internal") {
+    return {
+      providerAttribution: "internal" as const,
+      providerAttributionLabel: "Internal maintenance assignment in effect by the cost date",
+    };
+  }
+  return {
+    providerAttribution: "unattributed" as const,
+    providerAttributionLabel: "No historical provider relationship can be established for this cost",
+  };
+}
+
+function daysInMonth(key: string) {
+  return Number(endOfMonth(key).slice(-2));
+}
+
+function assetMonthExposure(asset: Asset, key: string, storeTimeZone: string, throughDate?: string) {
+  const start = `${key}-01`;
+  const naturalEnd = endOfMonth(key);
+  const end = throughDate && throughDate.slice(0, 7) === key && throughDate < naturalEnd ? throughDate : naturalEnd;
+  const installed = asset.installedAt ? localDateKey(asset.installedAt, storeTimeZone) : undefined;
+  const retired = asset.retiredAt ? localDateKey(asset.retiredAt, storeTimeZone) : undefined;
+  if (installed && installed > end) return { factor: 0, status: "before_installation" as const };
+  if (retired && retired < start) return { factor: 0, status: "after_retirement" as const };
+  if (!installed) return { factor: undefined, status: "unknown_start" as const };
+  const exposedStart = installed > start ? installed : start;
+  const exposedEnd = retired && retired < end ? retired : end;
+  if (exposedEnd < exposedStart) return { factor: 0, status: "outside_lifecycle" as const };
+  const activeDays = Math.floor((Date.parse(`${exposedEnd}T12:00:00.000Z`) - Date.parse(`${exposedStart}T12:00:00.000Z`)) / 86_400_000) + 1;
+  return {
+    factor: activeDays / daysInMonth(key),
+    status: activeDays === daysInMonth(key) ? "full" as const : "partial" as const,
+    activeDays,
+  };
+}
+
+function assetExposedOnLocalDate(asset: Asset, localDate: string, storeTimeZone: string) {
+  const installed = asset.installedAt ? localDateKey(asset.installedAt, storeTimeZone) : undefined;
+  const retired = asset.retiredAt ? localDateKey(asset.retiredAt, storeTimeZone) : undefined;
+  return Boolean(installed && localDate >= installed && (!retired || localDate <= retired));
 }
 
 function allowedStores(fixture: OpsFixture, session: OperatorSession) {
@@ -427,7 +566,23 @@ function buildAllRecords(fixture: OpsFixture, session: OperatorSession, metric: 
   const assets = fixture.assets.filter((row) => row.organizationId === session.organizationId && storeIds.has(row.storeId));
   const assetById = new Map(assets.map((row) => [row.id, row]));
   const componentById = new Map(fixture.components.filter((row) => row.organizationId === session.organizationId).map((row) => [row.id, row]));
-  const vendorByWork = workVendorMap(fixture, session.organizationId);
+  const vendorByWork = currentIssuedVendorMap(fixture, session.organizationId);
+  const visitsById = new Map(fixture.visits.filter((row) => row.organizationId === session.organizationId).map((row) => [row.id, row]));
+  const visitsByWorkId = new Map<string, OpsFixture["visits"]>();
+  const addVisitForWork = (workOrderId: string, visit: OpsFixture["visits"][number]) => {
+    const current = visitsByWorkId.get(workOrderId) ?? [];
+    if (!current.some((candidate) => candidate.id === visit.id)) visitsByWorkId.set(workOrderId, [...current, visit]);
+  };
+  for (const visit of visitsById.values()) if (visit.workOrderId) addVisitForWork(visit.workOrderId, visit);
+  for (const link of fixture.siteVisitWorkOrders.filter((row) => row.organizationId === session.organizationId)) {
+    const visit = visitsById.get(link.visitId);
+    if (visit) addVisitForWork(link.workOrderId, visit);
+  }
+  const assignmentsByWorkId = new Map<string, OpsFixture["assignments"]>();
+  for (const assignment of fixture.assignments.filter((row) => row.organizationId === session.organizationId)) {
+    assignmentsByWorkId.set(assignment.workOrderId, [...(assignmentsByWorkId.get(assignment.workOrderId) ?? []), assignment]);
+  }
+  const historicalProviderIndexes = { visitsByWorkId, assignmentsByWorkId };
   const invoiceById = new Map(fixture.invoiceReferences.filter((row) => row.organizationId === session.organizationId).map((row) => [row.id, row]));
   const preventiveWorkOrderIds = new Set(fixture.pmWorkItems.filter((row) => row.organizationId === session.organizationId).map((row) => row.workOrderId));
   const records: TrendSourceRecord[] = [];
@@ -455,6 +610,10 @@ function buildAllRecords(fixture: OpsFixture, session: OperatorSession, metric: 
       componentId: work?.componentId,
       componentName,
       vendorId: work ? vendorByWork.get(work.id) : undefined,
+      providerAttribution: work && vendorByWork.has(work.id) ? "current_assignment" as const : "unattributed" as const,
+      providerAttributionLabel: work && vendorByWork.has(work.id)
+        ? "Current issued work-order assignment; this is not historical provider spend"
+        : "No current issued outside-vendor assignment",
       workType,
       taxonomyLinks: work ? [{ categoryKey, assetId: work.assetId, componentId: work.componentId, componentName, workType }] : [],
     };
@@ -464,17 +623,18 @@ function buildAllRecords(fixture: OpsFixture, session: OperatorSession, metric: 
     for (const line of fixture.costLines.filter((row) => row.organizationId === session.organizationId)) {
       const work = workById.get(line.workOrderId);
       if (!work) continue;
-      records.push({ id: line.id, date: line.serviceDate, ...timing(work.storeId, line.serviceDate), value: line.amount.amountMinor, ...common(work), costKind: line.kind, label: work.number, detail: line.description, href: `/app/work-orders/${work.id}?view=cost` });
+      const attribution = historicalCostProvider(historicalProviderIndexes, work, line.serviceDate, storeById.get(work.storeId)?.timeZone ?? "UTC");
+      records.push({ id: line.id, sourceKind: "source_record", units: "minor_currency", currency: line.amount.currency, date: line.serviceDate, ...timing(work.storeId, line.serviceDate), value: line.amount.amountMinor, ...common(work), ...attribution, costKind: line.kind, label: work.number, detail: line.description, href: `/app/work-orders/${work.id}?view=cost` });
     }
   } else if (metric === "linked_invoice") {
     for (const allocation of fixture.invoiceAllocations.filter((row) => row.organizationId === session.organizationId && row.confirmedAt)) {
       const work = workById.get(allocation.workOrderId);
       const invoice = invoiceById.get(allocation.invoiceReferenceId);
       if (!work || !invoice || invoice.matchStatus !== "confirmed") continue;
-      records.push({ id: allocation.id, date: invoice.invoiceDate, ...timing(work.storeId, invoice.invoiceDate), value: allocation.amount.amountMinor, ...common(work), invoiceId: invoice.id, vendorId: invoice.vendorId, label: invoice.invoiceNumber, detail: `${work.number} · ${work.problem}`, href: `/app/invoices/${invoice.id}`, grossAmountMinor: invoice.grossAmount.amountMinor });
+      records.push({ id: allocation.id, sourceKind: "source_record", units: "minor_currency", currency: allocation.amount.currency, date: invoice.invoiceDate, ...timing(work.storeId, invoice.invoiceDate), value: allocation.amount.amountMinor, ...common(work), invoiceId: invoice.id, vendorId: invoice.vendorId, providerAttribution: "invoice_vendor", providerAttributionLabel: "Historical vendor named on the linked invoice", label: invoice.invoiceNumber, detail: `${work.number} · ${work.problem}`, href: `/app/invoices/${invoice.id}`, grossAmountMinor: invoice.grossAmount.amountMinor });
     }
   } else if (metric === "work_orders") {
-    for (const work of workOrders) records.push({ id: work.id, date: work.createdAt, ...timing(work.storeId, work.createdAt), value: 1, ...common(work), label: work.number, detail: work.problem, href: `/app/work-orders/${work.id}` });
+    for (const work of workOrders) records.push({ id: work.id, sourceKind: "source_record", units: "count", date: work.createdAt, ...timing(work.storeId, work.createdAt), value: 1, ...common(work), label: work.number, detail: work.problem, href: `/app/work-orders/${work.id}` });
   } else if (metric === "service_visits") {
     for (const visit of fixture.visits.filter((row) => row.organizationId === session.organizationId && storeIds.has(row.storeId))) {
       const linkedIds = fixture.siteVisitWorkOrders
@@ -504,6 +664,8 @@ function buildAllRecords(fixture: OpsFixture, session: OperatorSession, metric: 
       const workTypes = [...new Set(linkedWork.map((item) => preventiveWorkOrderIds.has(item.id) ? "preventive" as const : "reactive" as const))];
       records.push({
         id: visit.id,
+        sourceKind: "source_record",
+        units: "count",
         date: visit.checkedInAt,
         ...timing(visit.storeId, visit.checkedInAt),
         value: 1,
@@ -518,6 +680,8 @@ function buildAllRecords(fixture: OpsFixture, session: OperatorSession, metric: 
         componentName: components[0]?.[1],
         componentNames: [...new Set(components.map(([, name]) => name))],
         vendorId: visit.vendorId,
+        providerAttribution: visit.vendorId ? "visit_vendor" : visit.providerKind === "internal" ? "internal" : "unattributed",
+        providerAttributionLabel: visit.vendorId ? "Historical vendor recorded at check-in" : visit.providerKind === "internal" ? "Internal maintenance recorded at check-in" : "No vendor recorded at check-in",
         workType: workTypes.length === 1 ? workTypes[0] : undefined,
         workTypes,
         taxonomyLinks,
@@ -538,7 +702,7 @@ function buildAllRecords(fixture: OpsFixture, session: OperatorSession, metric: 
       if (!issuance || !work) continue;
       const hours = Math.max(0, (Date.parse(response.respondedAt) - Date.parse(issuance.issuedAt)) / 3_600_000);
       const assignment = fixture.assignments.find((row) => row.organizationId === session.organizationId && row.id === response.assignmentId);
-      records.push({ id: response.id, date: response.respondedAt, ...timing(work.storeId, response.respondedAt), value: hours, ...common(work), vendorId: assignment?.vendorId, label: work.number, detail: `${sentence(response.response)} · ${response.responderName}`, href: `/app/work-orders/${work.id}?view=service` });
+      records.push({ id: response.id, sourceKind: "source_record", units: "hours", date: response.respondedAt, ...timing(work.storeId, response.respondedAt), value: hours, ...common(work), vendorId: assignment?.vendorId, providerAttribution: assignment?.vendorId ? "response_assignment" : assignment?.kind === "internal" ? "internal" : "unattributed", providerAttributionLabel: assignment?.vendorId ? "Vendor assignment that received this response" : "No outside-vendor assignment is attached to this response", label: work.number, detail: `${sentence(response.response)} · ${response.responderName}`, href: `/app/work-orders/${work.id}?view=service` });
     }
   } else {
     const completedStatuses = new Set(["completed", "completed_early", "completed_on_time", "completed_late"]);
@@ -548,7 +712,7 @@ function buildAllRecords(fixture: OpsFixture, session: OperatorSession, metric: 
       const completed = completedStatuses.has(occurrence.status);
       const categoryKey = work?.categoryKey ?? asset?.categoryKey;
       const componentName = work?.componentId ? componentById.get(work.componentId)?.name : undefined;
-      records.push({ id: occurrence.id, date: occurrence.windowEndsAt, ...timing(occurrence.storeId, occurrence.windowEndsAt), value: completed ? 1 : 0, displayValue: sentence(occurrence.status), storeId: occurrence.storeId, workOrderId: work?.id, pmOccurrenceId: occurrence.id, categoryKey, assetId: occurrence.assetId, componentId: work?.componentId, componentName, vendorId: work ? vendorByWork.get(work.id) : undefined, workType: "preventive", taxonomyLinks: [{ categoryKey, assetId: occurrence.assetId, componentId: work?.componentId, componentName, workType: "preventive" }], label: work?.number ?? "PM occurrence", detail: `${sentence(occurrence.status)} · window ended ${dateLabel(occurrence.windowEndsAt, storeById.get(occurrence.storeId)?.timeZone ?? "UTC")}`, href: work ? `/app/work-orders/${work.id}?view=service` : href("/app/pm", { occurrence: occurrence.id, store: occurrence.storeId, view: "all" }) });
+      records.push({ id: occurrence.id, sourceKind: "source_record", units: "percent", date: occurrence.windowEndsAt, ...timing(occurrence.storeId, occurrence.windowEndsAt), value: completed ? 1 : 0, displayValue: sentence(occurrence.status), storeId: occurrence.storeId, workOrderId: work?.id, pmOccurrenceId: occurrence.id, categoryKey, assetId: occurrence.assetId, componentId: work?.componentId, componentName, vendorId: work ? vendorByWork.get(work.id) : undefined, providerAttribution: work && vendorByWork.has(work.id) ? "current_assignment" : "unattributed", providerAttributionLabel: work && vendorByWork.has(work.id) ? "Current issued work-order assignment; PM completion is not historical vendor spend" : "No current issued outside-vendor assignment", workType: "preventive", taxonomyLinks: [{ categoryKey, assetId: occurrence.assetId, componentId: work?.componentId, componentName, workType: "preventive" }], label: work?.number ?? "PM occurrence", detail: `${sentence(occurrence.status)} · window ended ${dateLabel(occurrence.windowEndsAt, storeById.get(occurrence.storeId)?.timeZone ?? "UTC")}`, href: work ? `/app/work-orders/${work.id}?view=service` : href("/app/pm", { occurrence: occurrence.id, store: occurrence.storeId, view: "all" }) });
     }
   }
 
@@ -589,7 +753,7 @@ function sourceTableRows(metric: TrendMetricId, rows: TrendSourceRecord[], store
     cells: [
       { key: "record", value: row.label, secondary: row.detail },
       { key: "store", value: storeById.has(row.storeId) ? `Store ${storeById.get(row.storeId)!.storeNumber}` : "Store unavailable", secondary: storeById.get(row.storeId)?.name },
-      { key: "service", value: recordCategoryKeys(row).length ? recordCategoryKeys(row).map((value) => sentence(value)).join(" + ") : "Unclassified", secondary: [row.costKind ? sentence(row.costKind) : undefined, recordComponentNames(row).length ? recordComponentNames(row).join(" + ") : row.vendorId ? vendorNameById.get(row.vendorId) : undefined].filter(Boolean).join(" · ") || undefined },
+      { key: "service", value: recordCategoryKeys(row).length ? recordCategoryKeys(row).map((value) => sentence(value)).join(" + ") : "Unclassified", secondary: [row.sourceKind === "calculated_peer_contribution" ? "Calculated contribution" : row.sourceKind === "raw_peer_observation" ? "Raw historical evidence" : undefined, row.costKind ? sentence(row.costKind) : undefined, recordComponentNames(row).length ? recordComponentNames(row).join(" + ") : row.vendorId ? vendorNameById.get(row.vendorId) : row.providerAttributionLabel].filter(Boolean).join(" · ") || undefined },
       { key: "date", value: row.displayDate },
       { key: "value", value: row.displayValue ?? formatMetric(metric, row.value), secondary: metric === "linked_invoice" && row.grossAmountMinor !== undefined ? `${money(row.grossAmountMinor)} invoice gross` : undefined },
     ],
@@ -600,7 +764,9 @@ export function buildTrendsModel(
   fixture: OpsFixture,
   session: OperatorSession,
   query: OperatorSearchParameters = {},
-): TrendAnalysisPageViewModel {
+  options: { includeExportRows?: boolean } = {},
+): TrendAnalysisBuildResult {
+  const removedFilters: string[] = [];
   const metric = (first(query.metric) ?? "recorded_cost") as TrendMetricId;
   const metricIds = Object.keys(metricCopy) as TrendMetricId[];
   const allowedMetricIds = metricIds.filter((candidate) =>
@@ -608,11 +774,14 @@ export function buildTrendsModel(
     && !(session.role === "finance" && candidate === "pm_completion"),
   );
   const safeMetric: TrendMetricId = allowedMetricIds.includes(metric) ? metric : "recorded_cost";
+  if (first(query.metric) && safeMetric !== metric) removedFilters.push("an unavailable measure");
   const periodValue = Number(first(query.period) ?? "6");
   const periodMonths = [3, 6, 12, 24].includes(periodValue) ? periodValue : 12;
+  const comparisonExplicit = first(query.compare) !== undefined;
   const comparisonValue = first(query.compare) ?? "previous_period";
   const requestedComparison: TrendComparisonId = comparisonValue === "none" || comparisonValue === "previous_period" ? comparisonValue : "previous_year";
-  const comparison: TrendComparisonId = requestedComparison === "previous_year" && periodMonths > 12 ? "previous_period" : requestedComparison;
+  let comparison: TrendComparisonId = requestedComparison === "previous_year" && periodMonths > 12 ? "previous_period" : requestedComparison;
+  if (requestedComparison === "previous_year" && comparison !== requestedComparison) removedFilters.push("the overlapping same-year comparison");
   let selectedRegion = first(query.region);
   let selectedStore = first(query.store);
   let selectedCategory = first(query.category);
@@ -625,10 +794,12 @@ export function buildTrendsModel(
   const selectedWorkType = safeMetric === "pm_completion"
     ? workTypeValue === "preventive" ? "preventive" : undefined
     : workTypeValue === "reactive" || workTypeValue === "preventive" ? workTypeValue : undefined;
+  if (workTypeValue && !selectedWorkType) removedFilters.push("the incompatible work-type filter");
   const costKindValue = first(query.costKind);
   const selectedCostKind = safeMetric === "recorded_cost" && (["labor", "parts", "travel", "materials", "other"] as const).includes(costKindValue as NonNullable<TrendSourceRecord["costKind"]>)
     ? costKindValue as NonNullable<TrendSourceRecord["costKind"]>
     : undefined;
+  if (costKindValue && !selectedCostKind) removedFilters.push("the cost-type filter, which does not apply to this measure");
   const requestedBreakdown = first(query.breakdown);
   const hasRequestedBreakdown = (["region", "store", "category", "group", "profile", "component", "vendor"] as const).includes(requestedBreakdown as TrendBreakdownId);
   let breakdown: TrendBreakdownId = hasRequestedBreakdown
@@ -673,16 +844,25 @@ export function buildTrendsModel(
   const requestedSourcePage = Number(first(query.sourcePage) ?? "1");
   const requestedDriverPage = Number(first(query.driverPage) ?? "1");
   const requestedStorePage = Number(first(query.storePage) ?? "1");
-  const { records: allRecords, stores, assetById, componentById } = buildAllRecords(fixture, session, safeMetric);
+  const { records: allRecords, stores, workById, assetById, componentById } = buildAllRecords(fixture, session, safeMetric);
   const storeById = new Map(stores.map((store) => [store.id, store]));
   const regionById = new Map(fixture.regions.filter((row) => row.organizationId === session.organizationId).map((row) => [row.id, row]));
   const vendorNameById = new Map(fixture.vendors.filter((row) => row.organizationId === session.organizationId).map((row) => [row.id, row.name]));
   const profileById = new Map(fixture.replacementProfiles.filter((row) => row.organizationId === session.organizationId).map((row) => [row.id, row]));
-  if (selectedVendor && !vendorNameById.has(selectedVendor)) selectedVendor = undefined;
-  if (selectedRegion && !stores.some((store) => store.regionId === selectedRegion)) selectedRegion = undefined;
+  if (selectedVendor && !vendorNameById.has(selectedVendor)) {
+    selectedVendor = undefined;
+    removedFilters.push("an unavailable vendor");
+  }
+  if (selectedRegion && !stores.some((store) => store.regionId === selectedRegion)) {
+    selectedRegion = undefined;
+    removedFilters.push("an out-of-scope region");
+  }
   if (selectedStore) {
     const store = storeById.get(selectedStore);
-    if (!store || (selectedRegion && store.regionId !== selectedRegion)) selectedStore = undefined;
+    if (!store || (selectedRegion && store.regionId !== selectedRegion)) {
+      selectedStore = undefined;
+      removedFilters.push("an out-of-scope store");
+    }
   }
   if (selectedAsset) {
     const asset = assetById.get(selectedAsset);
@@ -690,6 +870,7 @@ export function buildTrendsModel(
     if (!asset || !assetStore || (selectedRegion && assetStore.regionId !== selectedRegion) || (selectedStore && asset.storeId !== selectedStore)) {
       selectedAsset = undefined;
       selectedComponent = undefined;
+      removedFilters.push("equipment outside the effective location scope");
     } else if (!selectedStore) {
       // One equipment record always belongs to one location. Carry that fact
       // into the visible scope instead of analyzing a store-specific record
@@ -709,6 +890,7 @@ export function buildTrendsModel(
     selectedProfile = undefined;
     selectedAsset = undefined;
     selectedComponent = undefined;
+    removedFilters.push("an unavailable service area and its narrower equipment filters");
   }
   const categoryAssets = locationAssets.filter((asset) => !selectedCategory || asset.categoryKey === selectedCategory);
   if (selectedPath && !categoryAssets.some((asset) => assetMatchesTrendPath(asset, selectedPath))) {
@@ -716,20 +898,26 @@ export function buildTrendsModel(
     selectedProfile = undefined;
     selectedAsset = undefined;
     selectedComponent = undefined;
+    removedFilters.push("an incompatible equipment group and its narrower filters");
   }
   const pathAssets = categoryAssets.filter((asset) => assetMatchesTrendPath(asset, selectedPath));
   if (selectedProfile && !pathAssets.some((asset) => asset.replacementProfileId === selectedProfile)) {
     selectedProfile = undefined;
     selectedAsset = undefined;
     selectedComponent = undefined;
+    removedFilters.push("an incompatible equipment type and its narrower filters");
   }
   const profileAssets = pathAssets.filter((asset) => !selectedProfile || asset.replacementProfileId === selectedProfile);
   if (selectedAsset && !profileAssets.some((asset) => asset.id === selectedAsset)) {
     selectedAsset = undefined;
     selectedComponent = undefined;
+    removedFilters.push("an incompatible equipment record and component filter");
   }
   const componentAssetIds = new Set((selectedAsset ? profileAssets.filter((asset) => asset.id === selectedAsset) : profileAssets).map((asset) => asset.id));
-  if (selectedComponent && ![...componentById.values()].some((component) => componentAssetIds.has(component.assetId) && component.name.toLocaleLowerCase("en-US") === selectedComponent!.toLocaleLowerCase("en-US"))) selectedComponent = undefined;
+  if (selectedComponent && ![...componentById.values()].some((component) => componentAssetIds.has(component.assetId) && component.name.toLocaleLowerCase("en-US") === selectedComponent!.toLocaleLowerCase("en-US"))) {
+    selectedComponent = undefined;
+    removedFilters.push("an incompatible component filter");
+  }
   if (!hasRequestedBreakdown) breakdown = selectedStore ? "category" : "store";
   const componentName = selectedComponent?.toLocaleLowerCase("en-US");
 
@@ -752,14 +940,14 @@ export function buildTrendsModel(
     });
   };
 
-  const scopeRecord = (row: TrendSourceRecord, includeStore = true, includeVendor = true, includeExactAsset = true) => {
+  const scopeRecord = (row: TrendSourceRecord, includeStore = true, includeVendor = true, includeExactAsset = true, includeCostKind = true) => {
     const store = storeById.get(row.storeId);
     if (!store) return false;
     if (selectedRegion && store.regionId !== selectedRegion) return false;
     if (includeStore && selectedStore && row.storeId !== selectedStore) return false;
     if (!maintenanceLinkMatches(row, includeExactAsset)) return false;
     if (includeVendor && selectedVendor && row.vendorId !== selectedVendor) return false;
-    if (selectedCostKind && row.costKind !== selectedCostKind) return false;
+    if (includeCostKind && selectedCostKind && row.costKind !== selectedCostKind) return false;
     return true;
   };
   const records = allRecords.filter((row) => scopeRecord(row));
@@ -767,13 +955,22 @@ export function buildTrendsModel(
   const organizationTimeZone = fixture.organizations.find((row) => row.id === session.organizationId)?.timeZone ?? "UTC";
   const organizationLocalDate = localDateKey(fixture.asOf, organizationTimeZone);
   const currentMonths = rollingMonths(organizationLocalDate, periodMonths);
+  const currentStart = `${currentMonths[0]}-01`;
+  const currentEnd = organizationLocalDate;
+  let comparisonFallbackNote: string | undefined;
+  if (!comparisonExplicit && periodMonths <= 12 && (selectedCategory === "refrigeration" || selectedCategory === "hvac")) {
+    const seasonalMonths = currentMonths.map((key) => addMonths(key, -12));
+    const seasonalStart = `${seasonalMonths[0]}-01`;
+    const seasonalEnd = dayInMonth(seasonalMonths.at(-1)!, Number(currentEnd.slice(-2)));
+    const hasComparableSeasonalHistory = records.some((row) => row.localDate >= seasonalStart && row.localDate <= seasonalEnd && seasonalMonths.includes(row.periodKey));
+    comparison = hasComparableSeasonalHistory ? "previous_year" : "previous_period";
+    if (!hasComparableSeasonalHistory) comparisonFallbackNote = "Same-period-last-year history is not adequate for this scope, so the initial comparison uses the immediately preceding period.";
+  }
   const baselineMonths = comparison === "previous_year"
     ? currentMonths.map((key) => addMonths(key, -12))
     : comparison === "previous_period"
       ? currentMonths.map((key) => addMonths(key, -periodMonths))
       : [];
-  const currentStart = `${currentMonths[0]}-01`;
-  const currentEnd = organizationLocalDate;
   const baselineStart = baselineMonths.length ? `${baselineMonths[0]}-01` : undefined;
   const baselineEnd = baselineMonths.length ? dayInMonth(baselineMonths.at(-1)!, Number(currentEnd.slice(-2))) : undefined;
   const currentSet = new Set(currentMonths);
@@ -811,7 +1008,7 @@ export function buildTrendsModel(
     || (detailDriverBreakdown && detailDriverValue)
     || hasValidBenchmarkFocus,
   );
-  const activeView: TrendAnalysisView = (["overview", "stores", "drivers", "records"] as const).includes(requestedViewValue as TrendAnalysisView)
+  const activeView: TrendAnalysisView = (["overview", "stores", "drivers", "vendors", "planning", "records"] as const).includes(requestedViewValue as TrendAnalysisView)
     ? requestedViewValue as TrendAnalysisView
     : hasExplicitEvidenceFocus
       ? "records"
@@ -820,6 +1017,85 @@ export function buildTrendsModel(
   const baselineRecords = records.filter((row) => baselineStart && baselineEnd && baselineSet.has(row.periodKey) && row.localDate >= baselineStart && row.localDate <= baselineEnd);
   const currentValue = aggregate(safeMetric, currentRecords);
   const baselineValue = aggregate(safeMetric, baselineRecords);
+  const preventiveWorkOrderIds = new Set(fixture.pmWorkItems.filter((row) => row.organizationId === session.organizationId).map((row) => row.workOrderId));
+  const assignmentById = new Map(fixture.assignments.filter((row) => row.organizationId === session.organizationId).map((row) => [row.id, row]));
+  const latestIssuanceByAssignment = new Map<string, OpsFixture["issuances"][number]>();
+  const firstIssuedAtByAssignment = new Map<string, string>();
+  for (const issuance of fixture.issuances.filter((row) => row.organizationId === session.organizationId).sort((left, right) => left.issuedAt.localeCompare(right.issuedAt))) {
+    firstIssuedAtByAssignment.set(issuance.assignmentId, firstIssuedAtByAssignment.get(issuance.assignmentId) ?? issuance.issuedAt);
+    const latest = latestIssuanceByAssignment.get(issuance.assignmentId);
+    if (!latest || issuance.revision > latest.revision || (issuance.revision === latest.revision && issuance.issuedAt > latest.issuedAt)) latestIssuanceByAssignment.set(issuance.assignmentId, issuance);
+  }
+  const firstResponseByAssignment = new Map<string, OpsFixture["vendorResponses"][number]>();
+  for (const response of fixture.vendorResponses.filter((row) => row.organizationId === session.organizationId).sort((left, right) => left.respondedAt.localeCompare(right.respondedAt))) {
+    if (!firstResponseByAssignment.has(response.assignmentId)) firstResponseByAssignment.set(response.assignmentId, response);
+  }
+  const issuanceCohort = [...latestIssuanceByAssignment.entries()].flatMap(([assignmentId, latestIssuance]) => {
+    const assignment = assignmentById.get(assignmentId);
+    const work = workById.get(latestIssuance.workOrderId);
+    if (!assignment || !work || assignment.kind !== "outside_vendor" || !assignment.vendorId) return [];
+    const asset = work.assetId ? assetById.get(work.assetId) : undefined;
+    const componentName = work.componentId ? componentById.get(work.componentId)?.name : undefined;
+    const workType = preventiveWorkOrderIds.has(work.id) ? "preventive" as const : "reactive" as const;
+    const scopeProbe: TrendSourceRecord = {
+      id: latestIssuance.id,
+      date: firstIssuedAtByAssignment.get(assignmentId) ?? latestIssuance.issuedAt,
+      localDate: "",
+      periodKey: "",
+      displayDate: "",
+      value: 0,
+      storeId: work.storeId,
+      workOrderId: work.id,
+      categoryKey: work.categoryKey ?? asset?.categoryKey,
+      assetId: work.assetId,
+      componentId: work.componentId,
+      componentName,
+      vendorId: assignment.vendorId,
+      workType,
+      taxonomyLinks: [{ categoryKey: work.categoryKey ?? asset?.categoryKey, assetId: work.assetId, componentId: work.componentId, componentName, workType }],
+      label: work.number,
+      detail: work.problem,
+      href: `/app/work-orders/${work.id}?view=service`,
+    };
+    if (!scopeRecord(scopeProbe, true, true, true, false)) return [];
+    const storeTimeZone = storeById.get(work.storeId)?.timeZone ?? organizationTimeZone;
+    const issuedAt = firstIssuedAtByAssignment.get(assignmentId) ?? latestIssuance.issuedAt;
+    const localIssuedDate = localDateKey(issuedAt, storeTimeZone);
+    return [{ assignment, work, latestIssuance, issuedAt, localIssuedDate, response: firstResponseByAssignment.get(assignmentId) }];
+  });
+  const currentIssuanceCohort = issuanceCohort.filter((row) => row.localIssuedDate >= currentStart && row.localIssuedDate <= currentEnd);
+  const answeredIssuances = currentIssuanceCohort.filter((row) => Boolean(row.response));
+  const unansweredIssuances = currentIssuanceCohort.filter((row) => !row.response && !["cancelled", "superseded"].includes(row.assignment.status));
+  const closedWithoutResponse = currentIssuanceCohort.filter((row) => !row.response && ["cancelled", "superseded"].includes(row.assignment.status));
+  const responseDueHours = 24;
+  const asOfMillis = Date.parse(fixture.asOf);
+  const overdueUnanswered = unansweredIssuances.filter((row) => asOfMillis - Date.parse(row.issuedAt) > responseDueHours * 3_600_000);
+  const oldestOutstandingHours = unansweredIssuances.length
+    ? Math.max(...unansweredIssuances.map((row) => Math.max(0, (asOfMillis - Date.parse(row.issuedAt)) / 3_600_000)))
+    : 0;
+  const responseMixCount = (kind: OpsFixture["vendorResponses"][number]["response"]) => answeredIssuances.filter((row) => row.response?.response === kind).length;
+  const vendorAccountability: TrendAnalysisPageViewModel["vendorAccountability"] = {
+    title: "Vendor response follow-through",
+    description: "Response speed describes answered requests. Coverage uses the first-issuance cohort; outstanding age includes only assignments still awaiting a response. A fast decline counts as a response but not as accepted service.",
+    cohortLabel: `${currentIssuanceCohort.length} effective outside-vendor authorizations first issued ${dateLabel(currentStart)}–${dateLabel(currentEnd)}`,
+    responseCoverageLabel: currentIssuanceCohort.length ? `${Math.round((answeredIssuances.length / currentIssuanceCohort.length) * 100)}% · ${answeredIssuances.length} of ${currentIssuanceCohort.length} answered` : "No issued requests in this cohort",
+    respondedCount: answeredIssuances.length,
+    awaitingCount: unansweredIssuances.length,
+    overdueCount: overdueUnanswered.length,
+    oldestOutstandingLabel: unansweredIssuances.length ? oldestOutstandingHours < 48 ? `${Math.round(oldestOutstandingHours)} hours` : `${Math.round(oldestOutstandingHours / 24)} days` : "None outstanding",
+    responseMix: [
+      { label: "Accepted", value: String(responseMixCount("accepted")), description: "Vendor accepted the authorization." },
+      { label: "Declined", value: String(responseMixCount("declined")), description: "A response was received, but service was not accepted." },
+      { label: "Proposed a date", value: String(responseMixCount("proposed_date")), description: "Scheduling was proposed and still needs its own confirmation state." },
+      { label: "Asked a question", value: String(responseMixCount("question")), description: "The vendor responded with an information request." },
+      { label: "Closed without response", value: String(closedWithoutResponse.length), description: "The issued assignment was cancelled or superseded without a recorded vendor response; it remains in historical coverage but is not currently outstanding." },
+    ],
+    outstandingLink: {
+      href: href("/app/work-orders", { stage: "vendor-response", region: selectedRegion, store: selectedStore, vendor: selectedVendor }),
+      label: "Open the work awaiting vendor response",
+    },
+    methodology: `One denominator row per outside-vendor assignment, using its first issuance date. Later issuance revisions do not add requests. Cancelled or superseded assignments remain in historical coverage, but are removed from the currently outstanding count. Overdue means an effective assignment has remained unanswered for more than ${responseDueHours} hours. Median response time remains grouped by response date and includes accepted, declined, proposed-date, and question responses.`,
+  };
   const selectedPeriodName = `Selected ${periodMonths} months`;
   const compareLabel = comparison === "previous_year"
     ? `Same ${periodMonths} months last year`
@@ -930,7 +1206,10 @@ export function buildTrendsModel(
         : "recorded work cost";
   const currentMonthIsComplete = currentEnd === endOfMonth(monthKey(currentEnd));
   const lastCompleteMonth = currentMonthIsComplete ? monthKey(currentEnd) : addMonths(monthKey(currentEnd), -1);
-  const projectionMonthCount = Math.min(periodMonths, 12);
+  // Planning history is intentionally independent from the chart window. A
+  // three-month view can still use a supported twelve-month complete-history
+  // scenario without claiming those extra months are part of the chart.
+  const projectionMonthCount = 12;
   const projectionMonths = rollingMonths(`${lastCompleteMonth}-01`, projectionMonthCount);
   const projectionRecords = records.filter((row) => projectionMonths.includes(row.periodKey) && row.localDate <= endOfMonth(lastCompleteMonth));
   const monthlyValues = projectionMonths.map((key) => aggregate(safeMetric, projectionRecords.filter((row) => row.periodKey === key)));
@@ -938,24 +1217,32 @@ export function buildTrendsModel(
   const annualized = additive ? (projectionValue / Math.max(projectionMonthCount, 1)) * 12 : currentValue;
   const activeMonths = monthlyValues.filter((value) => value > 0).length;
   const enoughProjectionHistory = additive && projectionMonthCount >= 6 && activeMonths >= 3 && projectionRecords.length >= 6;
+  const projectionBySource = new Map<string, number>();
+  for (const row of projectionRecords) {
+    const sourceId = row.workOrderId ?? row.invoiceId ?? row.visitId ?? row.id;
+    projectionBySource.set(sourceId, (projectionBySource.get(sourceId) ?? 0) + row.value);
+  }
+  const largestProjectionSource = [...projectionBySource.values()].sort((left, right) => right - left)[0] ?? 0;
+  const largestProjectionShare = projectionValue > 0 ? Math.round((largestProjectionSource / projectionValue) * 100) : 0;
   const outlook = additive
     ? enoughProjectionHistory
       ? {
           kind: "projection" as const,
-          eyebrow: "Simple planning estimate",
-          label: `12-month ${projectionNoun} at the recent pace`,
+          eyebrow: "At the recent pace",
+          label: `12-month ${projectionNoun} scenario`,
           value: formatMetric(safeMetric, annualized),
-          description: `Based on ${formatMetric(safeMetric, projectionValue / projectionMonthCount)} per month across the last ${projectionMonthCount} complete months.`,
+          description: `Annualizes an average of ${formatMetric(safeMetric, projectionValue / projectionMonthCount)} per month across ${projectionMonthCount} complete months; it does not alter recorded totals.`,
           facts: [
-            { label: "Versus previous", value: comparison === "none" ? "Not compared" : relativeDirection(currentValue, baselineValue) },
-            { label: "Months with activity", value: `${activeMonths} of ${projectionMonthCount}` },
-            { label: "Month-to-month pattern", value: monthlyPattern(monthlyValues) },
+            { label: "History used", value: `${monthLabel(projectionMonths[0])}–${monthLabel(projectionMonths.at(-1)!)}` },
+            { label: "Coverage", value: `${activeMonths} of ${projectionMonthCount} months with activity` },
+            { label: "Pattern", value: monthlyPattern(monthlyValues) },
+            { label: "Largest-job sensitivity", value: largestProjectionShare ? `${largestProjectionShare}% of the history` : "No concentrated source" },
           ],
           caution: safeMetric === "linked_invoice"
             ? "Planning estimate only. It assumes the recent pace of confirmed invoice links continues; it is not a budget, cash forecast, or payment forecast."
             : moneyMetric
-              ? "Planning estimate only. It assumes the recent pace continues; it is not a budget or an equipment-failure prediction."
-              : "Planning estimate only. It assumes recent activity continues; it is not a workload commitment or staffing forecast.",
+              ? "Planning scenario only. It assumes the recent mix, recording coverage, and large-job influence continue; it is not a budget, forecast, savings claim, or equipment-failure prediction."
+              : "Planning scenario only. It assumes the recent mix and recording coverage continue; it is not a workload commitment or staffing forecast.",
           evidenceLink: {
             href: `${trendHref({ view: "records", detailKind: "projection", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`,
             label: "Open the complete-month records used in this estimate",
@@ -963,15 +1250,15 @@ export function buildTrendsModel(
         }
       : {
           kind: "insufficient_history" as const,
-          eyebrow: "Simple planning estimate",
-          label: "Not enough history for a 12-month estimate",
+          eyebrow: "At the recent pace",
+          label: "Not enough history for a 12-month scenario",
           value: "Not available",
           description: "The estimate appears after at least six complete months, activity in three months, and six records.",
           facts: [
             { label: "Months with activity", value: `${activeMonths} of ${projectionMonthCount}` },
             { label: "Records available", value: integer.format(projectionRecords.length) },
           ],
-          caution: "The platform will not create a forward-looking number from too little history.",
+          caution: "The platform will not create a pace scenario from too little observed history.",
         }
     : {
         kind: "measured_baseline" as const,
@@ -981,11 +1268,16 @@ export function buildTrendsModel(
         description: !currentHasData
           ? safeMetric === "vendor_response" ? "No vendor responses were recorded for these filters and dates." : "No PM windows ended during these dates."
           : safeMetric === "vendor_response"
-            ? "This is the median response time recorded during the selected dates."
+            ? "This is the median elapsed time for requests whose first response was recorded during the selected dates; unanswered requests are shown separately."
             : "This is the completion rate for PM windows that ended during the selected dates.",
         facts: [
           { label: "Versus previous", value: comparison === "none" ? "Not compared" : !currentHasData || !baselineHasData ? "Not enough data" : metricChangeLabel(safeMetric, currentValue, baselineValue) },
           { label: "Records included", value: safeMetric === "pm_completion" ? currentEvidence : evidenceLabel(safeMetric, currentRecords.length) },
+          ...(safeMetric === "vendor_response" ? [
+            { label: "Issuance-cohort coverage", value: vendorAccountability.responseCoverageLabel },
+            { label: "Awaiting response", value: String(vendorAccountability.awaitingCount) },
+            { label: "Overdue unanswered", value: String(vendorAccountability.overdueCount) },
+          ] : []),
         ],
         caution: "This is a measured result, not a forecast.",
       };
@@ -1002,7 +1294,6 @@ export function buildTrendsModel(
   const benchmarkAssets = fixture.assets.filter((asset) =>
     asset.organizationId === session.organizationId
     && benchmarkPeerStoreIds.has(asset.storeId)
-    && asset.status !== "retired"
     && (!selectedCategory || asset.categoryKey === selectedCategory)
     && assetMatchesTrendPath(asset, selectedPath)
     && (!selectedProfile || asset.replacementProfileId === selectedProfile)
@@ -1022,10 +1313,6 @@ export function buildTrendsModel(
   const referenceMonthSet = new Set(referenceMonths);
   const referenceEnd = endOfMonth(referenceMonths.at(-1)!);
   const referencePeerRecords = peerRecords.filter((row) => referenceMonthSet.has(row.periodKey) && row.localDate <= referenceEnd);
-  const earliestRecordedDate = allRecords.reduce<string | undefined>((earliest, row) => !earliest || row.localDate < earliest ? row.localDate : earliest, undefined);
-  const observedReferenceMonthCount = earliestRecordedDate
-    ? referenceMonths.filter((month) => endOfMonth(month) >= earliestRecordedDate).length
-    : 0;
   const referenceRecordsByAssetMonth = new Map<string, TrendSourceRecord[]>();
   for (const row of referencePeerRecords) {
     const assetId = benchmarkAssetId(row);
@@ -1039,28 +1326,47 @@ export function buildTrendsModel(
     month: string;
     calendarMonth: string;
     value: number;
+    exposureFactor: number;
+    coverageStatus: "observed" | "measured_zero";
+    records: TrendSourceRecord[];
   }
   const observationsByCohortAndCalendarMonth = new Map<string, CohortMonthObservation[]>();
   for (const asset of benchmarkAssets) {
     const cohort = cohortByAsset.get(asset.id)!;
     const storeTimeZone = storeById.get(asset.storeId)?.timeZone ?? organizationTimeZone;
-    const installedDate = asset.installedAt ? localDateKey(asset.installedAt, storeTimeZone) : undefined;
-    const retiredDate = asset.retiredAt ? localDateKey(asset.retiredAt, storeTimeZone) : undefined;
     for (const month of referenceMonths) {
-      if (installedDate && installedDate > endOfMonth(month)) continue;
-      if (retiredDate && retiredDate < `${month}-01`) continue;
-      const value = aggregate(safeMetric, referenceRecordsByAssetMonth.get(`${asset.id}|${month}`) ?? []);
+      const sourceRows = referenceRecordsByAssetMonth.get(`${asset.id}|${month}`) ?? [];
+      const exposure = assetMonthExposure(asset, month, storeTimeZone);
+      if (exposure.factor === 0) continue;
+      // An absent install date does not prove the equipment existed during a
+      // quiet month. Preserve real linked observations, but never manufacture
+      // a measured zero from undocumented history.
+      if (exposure.factor === undefined && sourceRows.length === 0) continue;
+      const exposureFactor = exposure.factor ?? 1;
+      const rawValue = aggregate(safeMetric, sourceRows);
+      const value = exposureFactor > 0 ? rawValue / exposureFactor : rawValue;
       const key = `${cohort}|${month.slice(5)}`;
-      const observation = { assetId: asset.id, storeId: asset.storeId, month, calendarMonth: month.slice(5), value };
+      const observation = {
+        assetId: asset.id,
+        storeId: asset.storeId,
+        month,
+        calendarMonth: month.slice(5),
+        value,
+        exposureFactor,
+        coverageStatus: sourceRows.length ? "observed" as const : "measured_zero" as const,
+        records: sourceRows,
+      };
       observationsByCohortAndCalendarMonth.set(key, [...(observationsByCohortAndCalendarMonth.get(key) ?? []), observation]);
     }
   }
+  const observedReferenceMonthCount = new Set([...observationsByCohortAndCalendarMonth.values()].flatMap((rows) => rows.map((row) => row.month))).size;
   interface PeerMonthSummary {
     peerRates: Array<{ storeId: string; value: number }>;
     distribution: ReturnType<typeof winsorizedDistribution>;
     positivePeerStores: Set<string>;
     positiveReferenceMonths: Set<string>;
     positivePeerStoreMonths: Set<string>;
+    observations: CohortMonthObservation[];
   }
   const peerMonthSummaryCache = new Map<string, PeerMonthSummary>();
   const peerMonthSummary = (cohort: string, calendarMonth: string, excludedStoreId: string) => {
@@ -1071,14 +1377,13 @@ export function buildTrendsModel(
     const positivePeerStores = new Set<string>();
     const positiveReferenceMonths = new Set<string>();
     const positivePeerStoreMonths = new Set<string>();
-    for (const observation of observationsByCohortAndCalendarMonth.get(`${cohort}|${calendarMonth}`) ?? []) {
+    const observations = (observationsByCohortAndCalendarMonth.get(`${cohort}|${calendarMonth}`) ?? []).filter((observation) => observation.storeId !== excludedStoreId);
+    for (const observation of observations) {
       if (observation.storeId === excludedStoreId) continue;
       peerValuesByStore.set(observation.storeId, [...(peerValuesByStore.get(observation.storeId) ?? []), observation.value]);
-      if (observation.value > 0) {
-        positivePeerStores.add(observation.storeId);
-        positiveReferenceMonths.add(observation.month);
-        positivePeerStoreMonths.add(`${observation.storeId}|${observation.month}`);
-      }
+      positivePeerStores.add(observation.storeId);
+      positiveReferenceMonths.add(observation.month);
+      positivePeerStoreMonths.add(`${observation.storeId}|${observation.month}`);
     }
     const peerRates = [...peerValuesByStore.entries()].map(([storeId, values]) => ({
       storeId,
@@ -1090,6 +1395,7 @@ export function buildTrendsModel(
       positivePeerStores,
       positiveReferenceMonths,
       positivePeerStoreMonths,
+      observations,
     };
     peerMonthSummaryCache.set(cacheKey, summary);
     return summary;
@@ -1114,33 +1420,53 @@ export function buildTrendsModel(
     const includeBasisRecords = detailKind === "benchmark" && benchmarkStore === store.id;
     const storeRows = actualByStore.get(store.id) ?? [];
     const actual = aggregate(safeMetric, storeRows);
-    const storeAssets = (benchmarkAssetsByStore.get(store.id) ?? []).filter((row) => !selectedAsset || row.id === selectedAsset);
+    const storeAssets = (benchmarkAssetsByStore.get(store.id) ?? [])
+      .filter((row) => !selectedAsset || row.id === selectedAsset)
+      .filter((asset) => {
+        const storeTimeZone = storeById.get(asset.storeId)?.timeZone ?? organizationTimeZone;
+        return currentMonths.some((month) => {
+          const exposure = assetMonthExposure(asset, month, storeTimeZone, currentEnd);
+          if (exposure.factor !== undefined) return exposure.factor > 0;
+          return currentPeerRecords.some((record) => record.periodKey === month && recordAssetIds(record).includes(asset.id));
+        });
+      });
     let expected = 0;
     let rangeLow = 0;
     let rangeHigh = 0;
     let comparableAssets = 0;
-    let peerScenarioTotals: Map<string, number> | undefined;
     const expectedByCategory = new Map<string, number>();
     const referenceEvidenceByCategory = new Map<string, {
       positivePeerStores: Set<string>;
       positiveReferenceMonths: Set<string>;
       positivePeerStoreMonths: Set<string>;
     }>();
-    const peerScenarioTotalsByMonth = new Map<string, Map<string, number>>();
+    const expectedRangeByMonth = new Map<string, { low: number; high: number }>();
     const basisRecords: TrendSourceRecord[] = [];
+    const basisRecordIds = new Set<string>();
     const comparableAssetIds = new Set<string>();
+    let unknownExposureAssets = 0;
+    const targetExposureMonths = new Set<string>();
     if (additive) {
       for (const asset of storeAssets) {
         const cohort = cohortByAsset.get(asset.id);
         if (!cohort) continue;
         let assetExpected = 0;
-        let assetPeerScenarioTotals: Map<string, number> | undefined;
-        const assetPeerScenarioTotalsByMonth = new Map<string, Map<string, number>>();
+        let assetRangeLow = 0;
+        let assetRangeHigh = 0;
+        const assetExpectedRangeByMonth = new Map<string, { low: number; high: number }>();
         const assetPositivePeerStores = new Set<string>();
         const assetPositiveReferenceMonths = new Set<string>();
         const assetPositivePeerStoreMonths = new Set<string>();
         let comparableAcrossPeriod = true;
         for (const month of currentMonths) {
+          const targetExposure = assetMonthExposure(asset, month, store.timeZone ?? organizationTimeZone, currentEnd);
+          if (targetExposure.factor === 0) continue;
+          if (targetExposure.factor === undefined) {
+            unknownExposureAssets += 1;
+            comparableAcrossPeriod = false;
+            break;
+          }
+          targetExposureMonths.add(`${asset.id}|${month}`);
           const summary = peerMonthSummary(cohort, month.slice(5), store.id);
           const { peerRates, distribution } = summary;
           summary.positivePeerStores.forEach((peerStoreId) => assetPositivePeerStores.add(peerStoreId));
@@ -1150,30 +1476,27 @@ export function buildTrendsModel(
             comparableAcrossPeriod = false;
             break;
           }
-          const partialFactor = month === currentMonths.at(-1) && currentEnd !== endOfMonth(month)
-            ? Number(currentEnd.slice(-2)) / Number(endOfMonth(month).slice(-2))
-            : 1;
+          const partialFactor = targetExposure.factor;
           assetExpected += distribution.mean * partialFactor;
-          const monthPeerRates = new Map(peerRates.map((entry, peerIndex) => [
-            entry.storeId,
-            distribution.capped[peerIndex] * partialFactor,
-          ]));
-          if (!assetPeerScenarioTotals) {
-            assetPeerScenarioTotals = new Map(monthPeerRates);
-          } else {
-            for (const [peerStoreId, total] of assetPeerScenarioTotals) {
-              const monthRate = monthPeerRates.get(peerStoreId);
-              if (monthRate === undefined) assetPeerScenarioTotals.delete(peerStoreId);
-              else assetPeerScenarioTotals.set(peerStoreId, total + monthRate);
-            }
-          }
-          assetPeerScenarioTotalsByMonth.set(month, monthPeerRates);
+          assetRangeLow += distribution.low * partialFactor;
+          assetRangeHigh += distribution.high * partialFactor;
+          assetExpectedRangeByMonth.set(month, {
+            low: distribution.low * partialFactor,
+            high: distribution.high * partialFactor,
+          });
           if (includeBasisRecords) {
             for (const [peerIndex, peerRate] of peerRates.entries()) {
               const peerStore = storeById.get(peerRate.storeId);
               const contribution = (distribution.capped[peerIndex] / peerRates.length) * partialFactor;
+              const peerObservations = summary.observations.filter((observation) => observation.storeId === peerRate.storeId);
+              const measuredZeroOnly = peerObservations.every((observation) => observation.coverageStatus === "measured_zero");
+              const contributingSourceIds = peerObservations.flatMap((observation) => observation.records.map((record) => record.id));
+              const calculationId = `benchmark:${store.id}:${asset.id}:${month}:${peerRate.storeId}`;
               basisRecords.push({
-                id: `benchmark:${store.id}:${asset.id}:${month}:${peerRate.storeId}`,
+                id: calculationId,
+                sourceKind: "calculated_peer_contribution",
+                units: metricUnits(safeMetric),
+                currency: moneyMetric ? "USD" : undefined,
                 date: `${referenceEnd}T12:00:00.000Z`,
                 localDate: referenceEnd,
                 periodKey: month,
@@ -1182,16 +1505,49 @@ export function buildTrendsModel(
                 storeId: peerRate.storeId,
                 categoryKey: asset.categoryKey,
                 assetId: asset.id,
-                label: `${peerStore ? `Store ${peerStore.storeNumber}` : "Peer store"} · ${asset.name}`,
-                detail: `${monthLabel(month)} weighted peer-rate contribution from the fixed ${observedReferenceMonthCount}-month history; extreme influence is capped, and recorded zero months remain included`,
+                cohortId: cohort,
+                referenceStart: `${referenceMonths[0]}-01`,
+                referenceEnd,
+                rawValue: peerRate.value,
+                cappedValue: distribution.capped[peerIndex],
+                weight: 1 / peerRates.length,
+                exposureFactor: partialFactor,
+                coverageStatus: measuredZeroOnly ? "measured_zero" : "observed",
+                sourceIds: contributingSourceIds,
+                label: `Calculation · ${peerStore ? `Store ${peerStore.storeNumber}` : "Peer store"} · ${asset.name}`,
+                detail: `${monthLabel(month)} contribution = ${formatMetric(safeMetric, peerRate.value)} uncapped peer rate, capped to ${formatMetric(safeMetric, distribution.capped[peerIndex])}, × ${(1 / peerRates.length).toFixed(6)} peer weight, × ${partialFactor.toFixed(6)} target exposure. Reference ${referenceMonths[0]} through ${referenceMonths.at(-1)}; ${peerObservations.length} comparable calendar-month observations. ${measuredZeroOnly ? "Documented equipment exposure with no linked source activity is retained as a measured zero." : `${contributingSourceIds.length} underlying source record${contributingSourceIds.length === 1 ? "" : "s"}.`}`,
                 displayValue: formatMetric(safeMetric, contribution),
-                href: trendHref({ view: "records", store: peerRate.storeId, asset: undefined, detailKind: "current", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined }),
+                href: `${trendHref({ view: "records", detailKind: "benchmark", benchmarkStore: store.id, detailMonth: undefined, sourcePage: undefined })}#${calculationId}`,
               });
+              basisRecordIds.add(calculationId);
+              for (const observation of peerObservations) {
+                for (const raw of observation.records) {
+                  const rawId = `benchmark-raw:${asset.id}:${month}:${raw.id}`;
+                  if (basisRecordIds.has(rawId)) continue;
+                  basisRecordIds.add(rawId);
+                  basisRecords.push({
+                    ...raw,
+                    id: rawId,
+                    sourceKind: "raw_peer_observation",
+                    rawValue: raw.value,
+                    cohortId: cohort,
+                    referenceStart: `${referenceMonths[0]}-01`,
+                    referenceEnd,
+                    exposureFactor: observation.exposureFactor,
+                    coverageStatus: observation.coverageStatus,
+                    sourceIds: [raw.id],
+                    label: `Raw evidence · ${raw.label}`,
+                    detail: `${raw.detail} · ${monthLabel(observation.month)} historical observation for ${peerStore ? `Store ${peerStore.storeNumber}` : "the peer store"}; ${observation.exposureFactor.toFixed(6)} documented equipment-month exposure`,
+                  });
+                }
+              }
             }
           }
         }
         if (!comparableAcrossPeriod) continue;
         expected += assetExpected;
+        rangeLow += assetRangeLow;
+        rangeHigh += assetRangeHigh;
         expectedByCategory.set(asset.categoryKey, (expectedByCategory.get(asset.categoryKey) ?? 0) + assetExpected);
         const categoryEvidence = referenceEvidenceByCategory.get(asset.categoryKey) ?? {
           positivePeerStores: new Set<string>(),
@@ -1204,37 +1560,25 @@ export function buildTrendsModel(
         referenceEvidenceByCategory.set(asset.categoryKey, categoryEvidence);
         comparableAssets += 1;
         comparableAssetIds.add(asset.id);
-        if (!peerScenarioTotals) {
-          peerScenarioTotals = assetPeerScenarioTotals;
-        } else {
-          for (const [peerStoreId, total] of peerScenarioTotals) {
-            const assetTotal = assetPeerScenarioTotals?.get(peerStoreId);
-            if (assetTotal === undefined) peerScenarioTotals.delete(peerStoreId);
-            else peerScenarioTotals.set(peerStoreId, total + assetTotal);
-          }
+        for (const [month, assetMonthRange] of assetExpectedRangeByMonth) {
+          const currentRange = expectedRangeByMonth.get(month) ?? { low: 0, high: 0 };
+          expectedRangeByMonth.set(month, {
+            low: currentRange.low + assetMonthRange.low,
+            high: currentRange.high + assetMonthRange.high,
+          });
         }
-        for (const [month, assetMonthRates] of assetPeerScenarioTotalsByMonth) {
-          const storeMonthRates = peerScenarioTotalsByMonth.get(month);
-          if (!storeMonthRates) {
-            peerScenarioTotalsByMonth.set(month, new Map(assetMonthRates));
-            continue;
-          }
-          for (const [peerStoreId, total] of storeMonthRates) {
-            const assetMonthTotal = assetMonthRates.get(peerStoreId);
-            if (assetMonthTotal === undefined) storeMonthRates.delete(peerStoreId);
-            else storeMonthRates.set(peerStoreId, total + assetMonthTotal);
-          }
-        }
-      }
-      const peerScenarioValues = [...(peerScenarioTotals?.values() ?? [])];
-      if (peerScenarioValues.length >= 3) {
-        rangeLow = quantile(peerScenarioValues, 0.25);
-        rangeHigh = quantile(peerScenarioValues, 0.75);
       }
     }
     let comparableRows = additive ? storeRows.filter((row) => {
       const assetId = benchmarkAssetId(row);
-      return Boolean(assetId && comparableAssetIds.has(assetId));
+      const asset = assetId ? assetById.get(assetId) : undefined;
+      return Boolean(
+        assetId
+        && asset
+        && comparableAssetIds.has(assetId)
+        && targetExposureMonths.has(`${assetId}|${row.periodKey}`)
+        && assetExposedOnLocalDate(asset, row.localDate, store.timeZone ?? organizationTimeZone),
+      );
     }) : storeRows;
     if (!additive) {
       const peerStores = benchmarkPeerStores
@@ -1273,8 +1617,11 @@ export function buildTrendsModel(
     const comparableActual = aggregate(safeMetric, comparableRows);
     const evidenceFloor = safeMetric === "recorded_cost" || safeMetric === "linked_invoice" ? 10_000 : safeMetric === "vendor_response" ? 0.1 : 1;
     const coveragePercent = additive && storeAssets.length ? Math.round((comparableAssets / storeAssets.length) * 100) : 0;
+    const relevantReferenceMonths = new Set([...referenceEvidenceByCategory.values()].flatMap((evidence) => [...evidence.positiveReferenceMonths]));
+    const relevantPeerStores = new Set([...referenceEvidenceByCategory.values()].flatMap((evidence) => [...evidence.positivePeerStores]));
+    const requiredReferenceMonths = Math.min(18, currentMonths.length * 2);
     const baselineReliable = additive
-      ? observedReferenceMonthCount >= 18 && comparableAssets > 0 && (peerScenarioTotals?.size ?? 0) >= 3 && expected >= evidenceFloor && coveragePercent >= 60
+      ? relevantReferenceMonths.size >= requiredReferenceMonths && comparableAssets > 0 && relevantPeerStores.size >= 3 && expected >= evidenceFloor
       : comparableAssets >= 3;
     const ratio = baselineReliable && actualHasData && expected > 0 ? comparableActual / expected : undefined;
     const differenceFromRange = comparableActual > rangeHigh ? comparableActual - rangeHigh : comparableActual < rangeLow ? comparableActual - rangeLow : 0;
@@ -1384,13 +1731,13 @@ export function buildTrendsModel(
       label: `Open ${largestSourceGroup.label}, the largest source record at ${formatMetric(safeMetric, largestSourceGroup.value)}`,
     } : undefined;
     const monthlyPositions = currentMonths.flatMap((month) => {
-      const peerValues = [...(peerScenarioTotalsByMonth.get(month)?.values() ?? [])];
-      if (peerValues.length < 3) return [];
+      const monthRange = expectedRangeByMonth.get(month);
+      if (!monthRange) return [];
       const monthActual = aggregate(safeMetric, comparableRows.filter((row) => row.periodKey === month));
       return [{
         actual: monthActual,
-        low: quantile(peerValues, 0.25),
-        high: quantile(peerValues, 0.75),
+        low: monthRange.low,
+        high: monthRange.high,
       }];
     });
     const monthsAboveRange = monthlyPositions.filter((position) => position.actual > position.high).length;
@@ -1455,7 +1802,15 @@ export function buildTrendsModel(
       driverLink,
       largestRecordLink,
       coverageValue: additive ? coveragePercent : comparableAssets,
-      coverageLabel: additive ? `${coveragePercent}% matched · ${comparableAssets} equipment record${comparableAssets === 1 ? "" : "s"}` : `${comparableAssets} other stores compared`,
+      coverageLabel: additive ? `${coveragePercent}% matched · ${comparableAssets} of ${storeAssets.length} equipment record${storeAssets.length === 1 ? "" : "s"}` : `${comparableAssets} other stores compared`,
+      evidenceQualityLabel: additive
+        ? unknownExposureAssets
+          ? `${unknownExposureAssets} equipment record${unknownExposureAssets === 1 ? " has" : "s have"} an unknown installation date and ${unknownExposureAssets === 1 ? "is" : "are"} excluded from the expectation`
+          : baselineReliable ? "Supported historical comparison" : "Insufficient matched exposure for a reliable comparison"
+        : baselineReliable ? "Supported company peer comparison" : "Insufficient peer results",
+      referenceHistoryLabel: additive
+        ? `${relevantPeerStores.size} peer stores · ${relevantReferenceMonths.size} applicable reference months · ${targetExposureMonths.size} target equipment-months`
+        : `${comparableAssets} peer stores with measured results`,
       focusLink: storeFocusLink,
       recordsLink: storeRecordsLink,
       link: storeRecordsLink,
@@ -1853,12 +2208,12 @@ export function buildTrendsModel(
     pm_completion: "PM window end dates",
   };
   const vendorBasis: Record<TrendMetricId, string> = {
-    recorded_cost: "the latest issued work-order vendor",
+    recorded_cost: "the vendor on a same-date linked visit, then the assignment in effect by the cost date; otherwise the cost remains historically unattributed or ambiguous",
     linked_invoice: "the vendor named on the linked invoice",
-    work_orders: "the latest issued work-order vendor",
+    work_orders: "the current issued work-order assignment (not historical spend)",
     service_visits: "the vendor recorded at check-in",
     vendor_response: "the vendor assignment that sent the response",
-    pm_completion: "the latest issued work-order vendor",
+    pm_completion: "the current issued work-order assignment (not historical spend)",
   };
   const relatedMeasures = relatedMetricMap[safeMetric].filter((relatedMetric) => allowedMetricIds.includes(relatedMetric)).slice(0, 3).map((relatedMetric) => {
     const related = buildAllRecords(fixture, session, relatedMetric).records;
@@ -1907,12 +2262,17 @@ export function buildTrendsModel(
     };
   });
 
+  const accessibleLocationLabel = session.storeIds?.length === 1 && stores.length === 1
+    ? `Store ${stores[0].storeNumber}`
+    : session.regionIds?.length
+      ? session.regionIds.map((id) => regionById.get(id)?.name).filter(Boolean).join(" + ") || "Regional scope"
+      : "Companywide";
   const locationCrumbs = [
     {
       id: "company",
-      label: "Companywide",
+      label: accessibleLocationLabel,
       link: selectedRegion || selectedStore
-        ? { href: trendHref({ region: undefined, store: undefined }), label: "Return to all locations" }
+        ? { href: trendHref({ region: undefined, store: undefined }), label: `Return to ${accessibleLocationLabel.toLocaleLowerCase("en-US")}` }
         : undefined,
     },
     ...(selectedRegion ? [{
@@ -1987,7 +2347,7 @@ export function buildTrendsModel(
   };
   const locationScopeParts = selectedStore
     ? [selectedRegion ? regionById.get(selectedRegion)?.name : undefined, `Store ${storeById.get(selectedStore)?.storeNumber ?? "unknown"}`]
-    : [selectedRegion ? regionById.get(selectedRegion)?.name : "Companywide"];
+    : [selectedRegion ? regionById.get(selectedRegion)?.name : accessibleLocationLabel];
   const scopeParts = [...locationScopeParts, selectedWorkType ? selectedWorkType === "preventive" ? "Preventive maintenance" : "Reactive work" : undefined, selectedCostKind ? `${sentence(selectedCostKind)} cost` : undefined, selectedCategory ? sentence(selectedCategory) : undefined, selectedPath ? trendPathLabel(selectedPath) : undefined, selectedProfile ? profileById.get(selectedProfile)?.name : undefined, selectedAsset ? assetById.get(selectedAsset)?.name : undefined, selectedComponent, selectedVendor ? vendorNameById.get(selectedVendor) : undefined].filter(Boolean);
   const scopeSummary = [
     scopeParts.join(" · "),
@@ -1996,9 +2356,11 @@ export function buildTrendsModel(
     comparison === "none" ? "No date comparison" : `Compared with ${comparison === "previous_year" ? "the same months last year" : `the prior ${periodMonths} months`}`,
   ].join(" · ");
   const viewCopy: Array<{ id: TrendAnalysisView; label: string; description: string }> = [
-    { id: "overview", label: "Overview", description: "Headline result and related measures" },
-    { id: "stores", label: "Compare stores", description: "Equipment-matched store comparison" },
+    { id: "overview", label: "Overview", description: "Result, findings, and monthly pattern" },
     { id: "drivers", label: "Change drivers", description: `What changed by ${breakdownLabels[breakdown]}` },
+    { id: "stores", label: "Compare stores", description: "Equipment-matched company peers" },
+    { id: "vendors", label: "Vendor follow-through", description: "Response speed, coverage, and nonresponse" },
+    { id: "planning", label: "Planning", description: "At-the-recent-pace scenario" },
     { id: "records", label: "Source records", description: "Exact records behind each number" },
   ];
   const views = viewCopy.map((view) => ({
@@ -2016,51 +2378,157 @@ export function buildTrendsModel(
       label: `Open ${view.label.toLocaleLowerCase("en-US")}`,
     },
   }));
-  const peakPoint = series.filter((point) => point.currentHasData).reduce<typeof series[number] | undefined>((highest, point) => !highest || point.currentValue > highest.currentValue ? point : highest, undefined);
   const largestVarianceRow = [...benchmarkRows]
     .filter((row) => row.varianceValue !== undefined)
     .sort((left, right) => Math.abs(right.varianceValue ?? 0) - Math.abs(left.varianceValue ?? 0))[0];
   const changeTone = comparison === "none" || !currentHasData || !baselineHasData ? "neutral" : valueTone(safeMetric, currentValue, baselineValue);
-  const insights: TrendAnalysisPageViewModel["insights"] = [
-    {
-      id: "period-movement",
-      eyebrow: "Overall change",
-      title: comparison === "none" ? "No comparison is selected" : !currentHasData || !baselineHasData ? "Both periods need measured data" : `${formatMetric(safeMetric, currentValue)} · ${metricChangeLabel(safeMetric, currentValue, baselineValue)}`,
-      detail: comparison === "none"
-        ? "Choose a previous date range or the same period last year."
-        : !currentHasData || !baselineHasData ? "Both date ranges need recorded data before a change can be calculated." : differenceSentence(safeMetric, currentValue, baselineValue),
-      tone: changeTone,
-      link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined })}#source-records`, label: "Open both supporting periods" },
-    },
-    {
-      id: "peak-month",
-      eyebrow: safeMetric === "vendor_response"
-        ? "Slowest-response month"
-        : safeMetric === "pm_completion"
-          ? "Best completion month"
-          : safeMetric === "recorded_cost"
-            ? "Highest-cost month"
-            : safeMetric === "linked_invoice"
-              ? "Highest linked-invoice month"
-            : "Busiest month",
-      title: peakPoint ? `${peakPoint.currentMonthLabel} · ${formatMetric(safeMetric, peakPoint.currentValue)}` : "No recorded month",
-      detail: peakPoint ? evidenceLabel(safeMetric, peakPoint.currentSourceCount) : "No records match the selected filters.",
-      tone: "info",
-      link: peakPoint?.currentLink ?? { href: trendHref({ detailMonth: undefined }), label: "Review the selected trend" },
-    },
-  ];
-  if (largestVarianceRow) {
+  const insights: TrendAnalysisPageViewModel["insights"] = [];
+  if (largestVarianceRow && (largestVarianceRow.signalRank >= 2 || Boolean(selectedStore))) {
     insights.push({
-      id: "store-variance",
-      eyebrow: selectedStore ? "Selected store" : portfolioWideHistoricalIncrease ? "Largest store variance" : "Store to review",
-      title: `${largestVarianceRow.label} · ${largestVarianceRow.varianceLabel}`,
-      detail: additive
-        ? `${largestVarianceRow.comparableActualLabel} ${safeMetric === "linked_invoice" ? "linked to" : "recorded on"} matched equipment versus a ${largestVarianceRow.rangeLabel} historical peer range for the same equipment mix.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
-        : `${largestVarianceRow.actualLabel} versus a ${largestVarianceRow.rangeLabel} peer operating range at other stores.`,
+      id: `store-difference:${largestVarianceRow.id}:${safeMetric}:${currentStart}:${currentEnd}`,
+      findingType: "store_difference",
+      eyebrow: portfolioWideHistoricalIncrease ? "Largest store difference in a broader increase" : "Store to investigate",
+      title: `${largestVarianceRow.label} · ${largestVarianceRow.signalLabel}`,
+      detail: largestVarianceRow.findingExplanation ?? (additive
+        ? `${largestVarianceRow.comparableActualLabel} on matched equipment versus a ${largestVarianceRow.rangeLabel} historical company-peer range.`
+        : `${largestVarianceRow.actualLabel} versus a ${largestVarianceRow.rangeLabel} company-peer operating range.`),
+      magnitudeLabel: largestVarianceRow.varianceLabel,
+      patternLabel: largestVarianceRow.persistenceLabel,
+      evidenceLabel: `${largestVarianceRow.coverageLabel}${largestVarianceRow.referenceHistoryLabel ? ` · ${largestVarianceRow.referenceHistoryLabel}` : ""}`,
+      evidenceLimit: largestVarianceRow.evidenceQualityLabel,
+      sourceIds: currentRecords.filter((record) => record.storeId === largestVarianceRow.id).map((record) => record.id),
+      actionLabel: `Investigate ${largestVarianceRow.label}`,
       tone: largestVarianceRow.signalTone,
       link: largestVarianceRow.focusLink,
     });
   }
+
+  const groupedCurrentSources = [...currentRecords.reduce((groups, row) => {
+    const id = row.workOrderId ?? row.invoiceId ?? row.visitId ?? row.pmOccurrenceId ?? row.id;
+    const existing = groups.get(id);
+    groups.set(id, existing
+      ? { ...existing, value: existing.value + row.value, sourceIds: [...existing.sourceIds, row.id] }
+      : { id, value: row.value, label: row.label, href: row.href, storeId: row.storeId, sourceIds: [row.id] });
+    return groups;
+  }, new Map<string, { id: string; value: number; label: string; href: string; storeId: string; sourceIds: string[] }>()).values()]
+    .sort((left, right) => Math.abs(right.value) - Math.abs(left.value));
+  const largestCurrentSource = groupedCurrentSources[0];
+  const largestSourceShare = largestCurrentSource && currentValue ? Math.round(Math.abs((largestCurrentSource.value / currentValue) * 100)) : 0;
+  if (additive && largestCurrentSource && largestSourceShare >= 35) {
+    const sourceStore = storeById.get(largestCurrentSource.storeId);
+    insights.push({
+      id: `large-source:${largestCurrentSource.id}:${safeMetric}:${currentStart}:${currentEnd}`,
+      findingType: "large_job",
+      eyebrow: "Concentrated in a large job",
+      title: `${largestCurrentSource.label} · ${formatMetric(safeMetric, largestCurrentSource.value)}`,
+      detail: `${largestSourceShare}% of the selected result comes from this one source record${sourceStore ? ` at Store ${sourceStore.storeNumber}` : ""}. That concentration is an investigation fact, not proof the work was avoidable or nonrecurring.`,
+      magnitudeLabel: `${largestSourceShare}% of selected result`,
+      patternLabel: "Individual-job concentration",
+      evidenceLabel: `${largestCurrentSource.sourceIds.length} source ${largestCurrentSource.sourceIds.length === 1 ? "entry" : "entries"}`,
+      sourceIds: largestCurrentSource.sourceIds,
+      actionLabel: "Open the major work record",
+      tone: "info",
+      link: { href: largestCurrentSource.href, label: `Open ${largestCurrentSource.label}` },
+    });
+  }
+
+  const recurringByAsset = new Map<string, { records: TrendSourceRecord[]; workOrderIds: Set<string> }>();
+  for (const record of currentRecords.filter((row) => row.workType === "reactive" && recordAssetIds(row).length === 1)) {
+    const assetId = recordAssetIds(record)[0];
+    const existing = recurringByAsset.get(assetId) ?? { records: [], workOrderIds: new Set<string>() };
+    existing.records.push(record);
+    if (record.workOrderId) existing.workOrderIds.add(record.workOrderId);
+    recurringByAsset.set(assetId, existing);
+  }
+  const recurring = [...recurringByAsset.entries()]
+    .filter(([, value]) => value.workOrderIds.size >= 3)
+    .sort((left, right) => right[1].workOrderIds.size - left[1].workOrderIds.size)[0];
+  if (recurring && insights.length < 3) {
+    const [assetId, evidence] = recurring;
+    const asset = assetById.get(assetId);
+    insights.push({
+      id: `recurring-work:${assetId}:${currentStart}:${currentEnd}`,
+      findingType: "recurring_work",
+      eyebrow: "Repeated reactive work",
+      title: `${asset?.name ?? "Equipment"} · ${evidence.workOrderIds.size} work orders`,
+      detail: "Several reactive jobs are linked to the same equipment during the selected dates. Planned return work and PM remain separate; this pattern warrants equipment-history review but does not by itself establish a vendor failure.",
+      magnitudeLabel: `${evidence.workOrderIds.size} reactive work orders`,
+      patternLabel: "Repeated equipment-linked activity",
+      evidenceLabel: `${evidence.records.length} source records`,
+      sourceIds: evidence.records.map((record) => record.id),
+      actionLabel: "Review the equipment history",
+      tone: "warning",
+      link: { href: `/app/equipment/${assetId}`, label: `Open ${asset?.name ?? "equipment"} history` },
+    });
+  }
+  if (vendorAccountability.overdueCount > 0 && insights.length < 3) {
+    insights.push({
+      id: `vendor-nonresponse:${currentStart}:${currentEnd}:${selectedVendor ?? "all"}`,
+      findingType: "vendor_follow_through",
+      eyebrow: "Vendor follow-through",
+      title: `${vendorAccountability.overdueCount} overdue unanswered request${vendorAccountability.overdueCount === 1 ? "" : "s"}`,
+      detail: `${vendorAccountability.responseCoverageLabel}. The oldest outstanding request is ${vendorAccountability.oldestOutstandingLabel} old. Response coverage and median speed use different, explicitly labeled time bases.`,
+      magnitudeLabel: `${vendorAccountability.awaitingCount} awaiting response`,
+      patternLabel: "Unanswered issuance cohort",
+      evidenceLabel: vendorAccountability.cohortLabel,
+      sourceIds: overdueUnanswered.map((row) => row.latestIssuance.id),
+      actionLabel: "Review outstanding commitments",
+      tone: "warning",
+      link: { href: trendHref({ view: "vendors" }), label: "Open vendor follow-through" },
+    });
+  }
+  const absoluteChange = currentValue - baselineValue;
+  const materialChangeThreshold = moneyMetric ? 100_000 : safeMetric === "vendor_response" ? 2 : safeMetric === "pm_completion" ? 5 : 2;
+  const materialPeriodChange = comparison !== "none" && currentHasData && baselineHasData && Math.abs(absoluteChange) >= materialChangeThreshold;
+  if (materialPeriodChange && insights.length < 3) {
+    insights.push({
+      id: `period-change:${safeMetric}:${currentStart}:${currentEnd}:${comparison}`,
+      findingType: "period_change",
+      eyebrow: "Material period change",
+      title: differenceSentence(safeMetric, currentValue, baselineValue),
+      detail: historicalPortfolioContext ?? "Open the reconciled change view to see which locations or maintenance segments account for the net movement.",
+      magnitudeLabel: `${absoluteChange >= 0 ? "+" : "−"}${formatMetric(safeMetric, Math.abs(absoluteChange))}`,
+      patternLabel: "Period-over-period movement",
+      evidenceLabel: `${currentEvidence} now · ${comparisonEvidence} in the comparison`,
+      sourceIds: [...currentRecords, ...baselineRecords].map((record) => record.id),
+      actionLabel: "Explain the change",
+      tone: changeTone,
+      link: { href: trendHref({ view: "drivers" }), label: "Open the reconciled change drivers" },
+    });
+  }
+  if (!insights.length) {
+    insights.push({
+      id: `calm:${safeMetric}:${currentStart}:${currentEnd}`,
+      findingType: "calm_state",
+      eyebrow: "No material finding",
+      title: currentHasData ? "No supported exception stands out in this scope" : "No measured result is available",
+      detail: currentHasData
+        ? "The selected result does not cross the material-change or evidence-quality rules used for findings. The chart and source records remain available for routine review."
+        : "Broaden the dates or scope, or review classification coverage. Missing observations are not treated as measured zero.",
+      evidenceLabel: currentEvidence,
+      actionLabel: "Review the source records",
+      tone: "positive",
+      link: { href: `${trendHref({ view: "records", detailKind: "current" })}#source-records`, label: "Open the selected source records" },
+    });
+  }
+  const selectedPeriodEvidenceLink = comparison === "none"
+    ? summary.find((item) => item.id === "current")!.link
+    : summary.find((item) => item.id === "change")!.link;
+  const mainResult: TrendAnalysisPageViewModel["mainResult"] = {
+    value: formatMetric(safeMetric, currentValue, false, currentHasData),
+    absoluteChangeLabel: comparison === "none"
+      ? "No comparison selected"
+      : !currentHasData || !baselineHasData
+        ? "Absolute change unavailable"
+        : `${absoluteChange >= 0 ? "+" : "−"}${formatMetric(safeMetric, Math.abs(absoluteChange))}`,
+    relativeChangeLabel: comparison !== "none" && currentHasData && baselineHasData && baselineValue !== 0 && safeMetric !== "vendor_response" && safeMetric !== "pm_completion"
+      ? ratioLabel(currentValue, baselineValue)
+      : undefined,
+    comparisonBasis: compareLabel,
+    evidenceLabel: currentEvidence,
+    tone: changeTone,
+    link: selectedPeriodEvidenceLink,
+  };
 
   const canonicalQuery = trendHref({
     detailKind: undefined,
@@ -2072,13 +2540,61 @@ export function buildTrendsModel(
     driverPage: undefined,
     storePage: undefined,
   }).split("?")[1] ?? "";
+  const partialPeriodNote = baselineStart && baselineEnd && currentEnd !== endOfMonth(monthKey(currentEnd))
+    ? `${longMonthLabel(monthKey(currentEnd)).split(" ")[0]} is not complete, so both ranges compare the first ${Number(currentEnd.slice(-2))} days of their final month.`
+    : undefined;
+  const comparisonNote = [comparisonFallbackNote, partialPeriodNote].filter(Boolean).join(" ") || undefined;
+  const filterNotice = [...new Set(removedFilters)].length
+    ? `The analysis removed ${[...new Set(removedFilters)].join(", ")} instead of silently broadening the result.`
+    : undefined;
+  const exportRows = options.includeExportRows ? sortedDetailRecords.map((row): TrendExportRecord => {
+    const store = storeById.get(row.storeId);
+    const units = row.units ?? metricUnits(safeMetric);
+    const sourceId = row.sourceKind === "raw_peer_observation" && row.sourceIds?.length === 1 ? row.sourceIds[0] : row.id;
+    return {
+      sourceId,
+      sourceKind: row.sourceKind ?? "source_record",
+      recordLabel: row.label,
+      detail: row.detail,
+      sourceDate: row.date,
+      localDate: row.localDate,
+      periodKey: row.periodKey,
+      timeBasis: row.sourceKind === "calculated_peer_contribution" ? "historical peer equipment-month contribution to the selected target month" : measureDateBasis[safeMetric],
+      rawValue: row.value,
+      amountMinor: units === "minor_currency" ? row.value : undefined,
+      currency: row.currency ?? (units === "minor_currency" ? "USD" : undefined),
+      units,
+      storeId: row.storeId,
+      storeNumber: store?.storeNumber,
+      workOrderId: row.workOrderId,
+      invoiceId: row.invoiceId,
+      visitId: row.visitId,
+      pmOccurrenceId: row.pmOccurrenceId,
+      categoryKeys: recordCategoryKeys(row),
+      assetIds: recordAssetIds(row),
+      componentNames: recordComponentNames(row),
+      vendorId: row.vendorId,
+      providerAttribution: row.providerAttribution,
+      providerAttributionLabel: row.providerAttributionLabel,
+      cohortId: row.cohortId,
+      referenceStart: row.referenceStart,
+      referenceEnd: row.referenceEnd,
+      uncappedInput: row.rawValue,
+      cappedInput: row.cappedValue,
+      weight: row.weight,
+      exposureFactor: row.exposureFactor,
+      coverageStatus: row.coverageStatus,
+      contributingSourceIds: row.sourceIds ?? [sourceId],
+      sourcePath: row.href,
+    };
+  }) : undefined;
 
   return {
     state: { kind: "ready" },
     page: {
       title: "Trends",
       eyebrow: "What changed and where",
-      description: "Start with the companywide signal, focus on the store or service area that changed, and verify every conclusion against its exact records.",
+      description: "See the main result and evidence-backed findings first, then investigate the location, equipment, vendor follow-through, or exact source records.",
       scopeLabel: scopeParts.join(" · "),
       periodLabel: `${dateLabel(currentStart)}–${dateLabel(currentEnd)}`,
       updatedLabel: dateLabel(currentEnd),
@@ -2087,6 +2603,14 @@ export function buildTrendsModel(
     canonicalQuery,
     activeView,
     scopeSummary,
+    filterNotice,
+    analysisContext: [
+      { label: "Locations", value: locationScopeParts.filter(Boolean).join(" · ") },
+      { label: "Measure", value: metricCopy[safeMetric].label },
+      { label: "Dates", value: `${dateLabel(currentStart)}–${dateLabel(currentEnd)}` },
+      { label: "Comparison", value: compareLabel },
+    ],
+    mainResult,
     views,
     filterAction: "/app/trends",
     filters: [
@@ -2115,15 +2639,14 @@ export function buildTrendsModel(
     comparisonPeriodName: comparison === "none" ? undefined : comparison === "previous_year" ? "Same months last year" : `Previous ${periodMonths} months`,
     currentPeriodLabel: `${dateLabel(currentStart)}–${dateLabel(currentEnd)}`,
     comparisonPeriodLabel: baselineStart && baselineEnd ? `${dateLabel(baselineStart)}–${dateLabel(baselineEnd)}` : undefined,
-    comparisonNote: baselineStart && baselineEnd && currentEnd !== endOfMonth(monthKey(currentEnd))
-      ? `${longMonthLabel(monthKey(currentEnd)).split(" ")[0]} is not complete, so both ranges compare the first ${Number(currentEnd.slice(-2))} days of their final month.`
-      : undefined,
+    comparisonNote,
     investigation,
     relatedMeasures,
     summary,
     series,
     outlook,
     insights,
+    vendorAccountability,
     drivers: {
       breakdownId: breakdown,
       title: `What changed by ${breakdownLabels[breakdown]}`,
@@ -2147,15 +2670,15 @@ export function buildTrendsModel(
             ? "Recorded work cost versus similar equipment"
             : additive ? `${metricCopy[safeMetric].label} versus similar equipment` : "Compare stores",
       description: safeMetric === "linked_invoice"
-        ? `Shows whether each store has more or less confirmed invoice amount linked to the same equipment than is typical at other company stores.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
+        ? `Shows whether each store has more or less confirmed invoice amount linked to matched equipment than other stores in this user's accessible company scope—not an external industry benchmark.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
         : safeMetric === "recorded_cost"
-          ? `Shows whether each store recorded more or less work cost than is typical for the same equipment at other company stores.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
-        : additive
-          ? `Shows whether each store recorded more or less ${safeMetric === "work_orders" ? "work-order activity" : "service-visit activity"} than is typical for the same equipment at other company stores.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
-          : "Shows how each store compares with the typical result at other company stores.",
+          ? `Shows whether each store recorded more or less work cost on matched equipment than other stores in this user's accessible company scope—not an external industry benchmark.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
+          : additive
+          ? `Shows whether each store recorded more or less ${safeMetric === "work_orders" ? "work-order activity" : "service-visit activity"} on matched equipment than other accessible company stores.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
+          : "Shows how each store compares with measured results at other stores in the accessible company scope, not with an external benchmark.",
       methodology: additive
-        ? `The historical peer range is built from ${observedReferenceMonthCount} complete months per equipment-month at other stores, aligned to the calendar months selected here. Extreme values are lightly capped and recorded zero months remain included. Each peer store's complete scenario is composed for this store's matched equipment mix before the 25th–75th percentile range is calculated.`
-        : "The peer range is the 25th–75th percentile at other stores. A comparison appears only when at least three other stores have measured results.",
+        ? `The historical peer range uses up to ${observedReferenceMonthCount} reference months for the same equipment cohort at other accessible company stores, aligned by calendar month. Peer observations are normalized for documented installation/retirement exposure; the target expectation is prorated by active days. A quiet month is a measured zero only when lifecycle dates demonstrate exposure. Unknown coverage is excluded, not converted to zero. Extreme peer rates are winsorized before equal-store weighting; monthly 25th–75th percentile ranges are then accumulated for the selected equipment exposure. That descriptive range is not a prediction interval or failure probability.`
+        : "The peer range is the descriptive 25th–75th percentile at other accessible company stores. A comparison appears only when at least three other stores have measured results; it is not a prediction interval or external benchmark.",
       sampleLabel: additive ? `${benchmarkRows.length} stores · ${observedReferenceMonthCount} reference months` : `${benchmarkRows.length} stores · ${currentPeerRecords.length} records`,
       sortLinks,
       pagination: benchmarkPagination,
@@ -2177,7 +2700,7 @@ export function buildTrendsModel(
     },
     sourceHeading: detailKind === "benchmark" ? "Inputs behind this comparison" : "Records behind this number",
     sourceDescription: detailKind === "benchmark"
-      ? `${allSourceRows.length} peer equipment or store input${allSourceRows.length === 1 ? "" : "s"} are included. Open an input to inspect its underlying records; a measured zero means no matching activity was recorded.`
+      ? `${detailRecords.filter((row) => row.sourceKind === "calculated_peer_contribution").length} calculated contribution${detailRecords.filter((row) => row.sourceKind === "calculated_peer_contribution").length === 1 ? "" : "s"} and ${detailRecords.filter((row) => row.sourceKind === "raw_peer_observation").length} raw historical record${detailRecords.filter((row) => row.sourceKind === "raw_peer_observation").length === 1 ? "" : "s"} are included. Calculated rows expose uncapped input, capping, peer weight, and target exposure; raw rows open the actual historical source record.`
       : `${detailRecords.length} record${detailRecords.length === 1 ? "" : "s"} included for the selected filters and dates.`,
     sourceSortLinks,
     sourceSummary: detailKind === "benchmark"
@@ -2188,10 +2711,12 @@ export function buildTrendsModel(
     sourcePagination,
     notes: [
       "Use Focus analysis to narrow every chart and comparison. Use View exact records when you only want the evidence behind one number.",
-      "The 12-month planning estimate uses complete months only. It does not predict equipment failures, set a budget, or claim savings.",
-      "Store comparisons use the typical result at other stores and never use the selected store to set its own expectation.",
+      "The at-the-recent-pace planning scenario uses twelve complete months independently of the displayed chart window. It does not predict equipment failures, set a budget, or claim savings.",
+      "Store comparisons use matched equipment at other accessible company stores and never use the selected store to set its own expectation. Spending above or below the range is an investigation fact, not a maintenance-quality judgment.",
+      "A zero observation is included only when source or lifecycle evidence demonstrates the equipment-month was observed. Unknown coverage and periods before installation are not treated as zero.",
       "Events are placed in months using each store's local time zone.",
       `Vendor attribution for this measure uses ${vendorBasis[safeMetric]}.`,
     ],
+    exportRows,
   };
 }

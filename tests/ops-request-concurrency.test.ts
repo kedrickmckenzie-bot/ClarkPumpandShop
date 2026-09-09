@@ -1,8 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  acknowledgeServiceRequest,
   createServiceRequest,
   createWorkOrder,
+  linkServiceRequestToWorkOrder,
+  requestAcknowledgedServiceRequestFollowUp,
   reviewServiceRequest,
   type OpsCommandServices,
 } from "@/lib/ops/commands";
@@ -297,6 +300,61 @@ describe("service-request concurrency fences", () => {
       version: 2,
     });
     expect(snapshot.auditEvents.filter((event) => event.aggregateId === request.id && event.eventType === "request.escalated")).toHaveLength(1);
+  });
+
+  it("allows only one manager to link a report when two different work orders are chosen concurrently", async () => {
+    const test = harness();
+    const request = await createServiceRequest(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-101",
+      reporterName: "Taylor Brooks",
+      problem: "The east beverage cooler display is dark.",
+      priority: "routine",
+      actor: facilitiesActor,
+    });
+    const firstWork = await createWorkOrder(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID, storeId: request.storeId,
+      problem: "Inspect beverage cooler power.", accountableParty: "Facilities coordinator",
+      nextAction: "Choose provider", initialAssignment: { kind: "choose_later" }, actor: facilitiesActor,
+    });
+    const secondWork = await createWorkOrder(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID, storeId: request.storeId,
+      problem: "Repair beverage cooler lighting.", accountableParty: "Facilities coordinator",
+      nextAction: "Choose provider", initialAssignment: { kind: "choose_later" }, actor: facilitiesActor,
+    });
+    const services = racingServices(test);
+    const results = await Promise.allSettled([
+      linkServiceRequestToWorkOrder(services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, workOrderId: firstWork.id, expectedStatus: "submitted", actor: facilitiesActor }),
+      linkServiceRequestToWorkOrder(services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, workOrderId: secondWork.id, expectedStatus: "submitted", actor: regionalActor }),
+    ]);
+
+    expectExactlyOneConflict(results);
+    const stored = await test.repository.getRequest(NORTHLINE_ORGANIZATION_ID, request.id);
+    expect(stored).toMatchObject({ status: "acknowledged", linkedWorkOrderId: expect.stringMatching(new RegExp(`${firstWork.id}|${secondWork.id}`)) });
+    expect(test.repository.snapshot().auditEvents.filter((event) => event.aggregateId === request.id && event.eventType === "request.linked_to_existing_work_order")).toHaveLength(1);
+  });
+
+  it("creates exactly one follow-up task when two managers reactivate the same acknowledgment", async () => {
+    const test = harness();
+    const request = await createServiceRequest(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeId: "store-northline-101",
+      reporterName: "Taylor Brooks",
+      problem: "The stockroom door latch is loose.",
+      priority: "routine",
+      actor: facilitiesActor,
+    });
+    await acknowledgeServiceRequest(test.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedStatus: "submitted", actor: facilitiesActor });
+    const services = racingServices(test);
+    const results = await Promise.allSettled([
+      requestAcknowledgedServiceRequestFollowUp(services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, explanation: "The latch has detached.", actor: facilitiesActor }),
+      requestAcknowledgedServiceRequestFollowUp(services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, explanation: "The door can no longer secure.", actor: regionalActor }),
+    ]);
+
+    expectExactlyOneConflict(results);
+    const activeTasks = test.repository.snapshot().workflowTasks.filter((task) => task.serviceRequestId === request.id && ["open", "in_progress"].includes(task.status));
+    expect(activeTasks).toHaveLength(1);
+    expect(await test.repository.getRequest(NORTHLINE_ORGANIZATION_ID, request.id)).toMatchObject({ status: "under_review", version: 2 });
   });
 
   it("serializes a new request approval against conversion so neither can bypass the other", async () => {

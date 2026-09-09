@@ -42,6 +42,9 @@ export interface RequestListRow {
   priority: WorkOrderPriority;
   status: string;
   submittedAt: IsoDateTime;
+  acknowledgedAt?: IsoDateTime;
+  acknowledgedByActorName?: string;
+  linkedWorkOrderId?: OpsId;
   convertedWorkOrderId?: OpsId;
 }
 

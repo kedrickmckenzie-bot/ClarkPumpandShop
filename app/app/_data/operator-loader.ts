@@ -11,6 +11,7 @@ import type {
   ListPageViewModel,
   OperatorRole,
   OperatorSession,
+  RequestWorkLinkPageViewModel,
 } from "@/components/ops/data-contract";
 import {
   roleCan,
@@ -357,6 +358,17 @@ export async function loadTrendsModel(searchParams: OperatorSearchParameters = {
   ]);
   if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
   return buildTrendsModel(fixture, session, searchParams);
+}
+
+/** One analysis pass for CSV export. The presenter returns its complete,
+ * consistently scoped source projection only on this server-only path. */
+export async function loadTrendsExportModel(searchParams: OperatorSearchParameters = {}) {
+  const [session, fixture] = await Promise.all([
+    getRequestOperatorSession(),
+    getServerOpsTrendsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID),
+  ]);
+  if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
+  return buildTrendsModel(fixture, session, searchParams, { includeExportRows: true });
 }
 
 export async function loadTrendsPageData(searchParams: OperatorSearchParameters = {}) {
@@ -859,6 +871,54 @@ export async function loadRequestReviewModel(requestId: string) {
   const context = await sessionAndFixture();
   if (!roleCanAccessDetailRoute(context.session.role, "request")) notFound();
   return buildRequestReviewModel(context.fixture, context.session, requestId);
+}
+
+export async function loadRequestWorkLinkModel(
+  requestId: string,
+  searchParams: { q?: string | string[]; page?: string | string[]; returnTo?: string | string[] },
+): Promise<RequestWorkLinkPageViewModel> {
+  const session = await getRequestOperatorSession();
+  if (!roleCanAccessDetailRoute(session.role, "request") || !roleCan(session, "review_request")) notFound();
+  const repository = await getServerOpsRepository();
+  const request = await repository.getRequest(session.organizationId, requestId);
+  if (!request || !["submitted", "under_review", "acknowledged"].includes(request.status)) notFound();
+  const store = await repository.getStore(session.organizationId, request.storeId);
+  if (!store
+    || (session.storeIds?.length && !session.storeIds.includes(store.id))
+    || (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId)))) notFound();
+  const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+  const q = first(searchParams.q)?.trim() ?? "";
+  const requestedPage = Number(first(searchParams.page) ?? "1");
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const pageSize = 10;
+  const result = await repository.listWorkOrders(
+    { organizationId: session.organizationId, regionIds: session.regionIds, storeIds: session.storeIds },
+    { storeId: request.storeId, search: q, statuses: ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"], limit: pageSize, offset: (page - 1) * pageSize },
+  );
+  const resultSummary = result.totalCount === undefined
+    ? `${result.items.length} active work order${result.items.length === 1 ? "" : "s"} on this page${result.nextCursor ? " · more available" : ""}`
+    : `${result.totalCount} matching active work order${result.totalCount === 1 ? "" : "s"}`;
+  const totalPages = result.totalCount === undefined ? page + Number(Boolean(result.nextCursor)) : Math.max(1, Math.ceil(result.totalCount / pageSize));
+  const rawReturn = first(searchParams.returnTo);
+  const returnHref = rawReturn?.startsWith(`/app/requests/${request.id}`) && !rawReturn.startsWith("//") ? rawReturn : `/app/requests/${request.id}`;
+  const hrefForPage = (nextPage: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    params.set("page", String(nextPage));
+    params.set("returnTo", returnHref);
+    return `/app/requests/${encodeURIComponent(request.id)}/link?${params}`;
+  };
+  return {
+    requestId: request.id, reference: request.reference, problem: request.problem,
+    expectedStatus: request.status as "submitted" | "under_review" | "acknowledged",
+    currentLinkedWorkOrderId: request.linkedWorkOrderId, returnHref, searchValue: q,
+    searchAction: `/app/requests/${encodeURIComponent(request.id)}/link`,
+    rows: result.items.map((work) => ({ id: work.id, number: work.number, problem: work.problem, statusLabel: work.status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toLocaleUpperCase("en-US")), serviceContext: `${work.categoryKey ? work.categoryKey.replaceAll("_", " ") : "Unclassified"} · ${work.vendorName ?? (work.assignmentKind === "internal" ? "Internal maintenance" : "Provider not chosen")}` })),
+    currentPage: page, totalPages, resultSummary,
+    previousHref: page > 1 ? hrefForPage(page - 1) : undefined,
+    nextHref: result.nextCursor ? hrefForPage(page + 1) : undefined,
+    linkAction: `/api/ops/requests/${encodeURIComponent(request.id)}/link`,
+  };
 }
 
 export async function loadAttentionItemModel(itemId: string) {

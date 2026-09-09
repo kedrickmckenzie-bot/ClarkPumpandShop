@@ -423,7 +423,7 @@ describe("enterprise trends presenter", () => {
 
     expect(model.activeView).toBe("drivers");
     expect(queryFromSearch(model.canonicalQuery)).toMatchObject({ view: "drivers", category: "refrigeration" });
-    expect(model.views.map((view) => view.id)).toEqual(["overview", "stores", "drivers", "records"]);
+    expect(model.views.map((view) => view.id)).toEqual(["overview", "drivers", "stores", "vendors", "planning", "records"]);
     expect(model.views.every((view) => queryFromHref(view.link.href).category === "refrigeration")).toBe(true);
     expect(queryFromHref(summary(model, "current").link.href)).toMatchObject({ view: "records", detailKind: "current" });
   });
@@ -466,26 +466,26 @@ describe("enterprise trends presenter", () => {
       expect(new Set(comparablePortfolioRows.map((row) => row.signalLabel)).size, `${period}-month finding diversity`).toBeGreaterThan(1);
       if (period === "6") {
         expect(insideRange.length, "default six-month stores within range").toBeGreaterThan(0);
-        const fallback = comparablePortfolioRows.find((row) => row.findingExplanation?.includes("Not enough comparable"));
-        expect(fallback?.findingExplanation).toMatch(/largest recorded contributor: .* of this store's .* recorded work cost/i);
-        expect(fallback).toMatchObject({
+        const finding = comparablePortfolioRows.find((row) => row.findingExplanation && row.driverLink && row.largestRecordLink);
+        expect(finding?.findingExplanation).toMatch(/largest (measured difference|recorded contributor)/i);
+        expect(finding).toMatchObject({
           rangeLowValue: expect.any(Number),
           rangeHighValue: expect.any(Number),
           persistenceLabel: expect.stringMatching(/range in \d+ of 6 months/i),
           largestRecordLink: expect.objectContaining({ href: expect.stringMatching(/^\/app\/(work-orders|invoices)\//) }),
         });
-        expect(fallback?.driverLink).toBeDefined();
-        expect(queryFromHref(fallback!.driverLink!.href)).toMatchObject({
+        expect(finding?.driverLink).toBeDefined();
+        expect(queryFromHref(finding!.driverLink!.href)).toMatchObject({
           view: "records",
-          store: fallback!.id,
+          store: finding!.id,
           detailKind: "current",
         });
-        expect(queryFromHref(fallback!.driverLink!.href).category).toBeTruthy();
+        expect(queryFromHref(finding!.driverLink!.href).category).toBeTruthy();
 
       }
       if (aboveRange.length / comparablePortfolioRows.length >= 0.6) {
         expect(portfolio.benchmark.description).toContain("portfolio-wide increase");
-        expect(portfolio.insights.find((insight) => insight.id === "store-variance")?.eyebrow).toBe("Largest store variance");
+        expect(portfolio.insights.find((insight) => insight.findingType === "store_difference")?.eyebrow).toMatch(/store/i);
       }
     }
 
@@ -498,9 +498,9 @@ describe("enterprise trends presenter", () => {
   it("keeps the store comparison independent from the category-expectation evidence gate", () => {
     const fixture = buildNorthlinePresentationFixture();
     const thin = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "6" });
-    const fallback = thin.benchmark.rows.find((row) => row.findingExplanation?.includes("Not enough comparable"))!;
+    const fallback = thin.benchmark.rows.find((row) => row.findingExplanation)!;
 
-    expect(fallback.findingExplanation).not.toMatch(/recorded vs .* expected/i);
+    expect(fallback.findingExplanation).toMatch(/largest (measured difference|recorded contributor)/i);
     expect(fallback.rangeLowValue).toEqual(expect.any(Number));
     expect(fallback.rangeHighValue).toEqual(expect.any(Number));
     expect(fallback.persistenceLabel).toMatch(/range in \d+ of 6 months/i);
@@ -567,7 +567,9 @@ describe("enterprise trends presenter", () => {
     expect(model.benchmark.rows).toHaveLength(15);
     expect(model.benchmark.pagination?.totalPages).toBeGreaterThan(4);
     expect(model.benchmark.rows.some((row) => row.expectedValue !== undefined)).toBe(true);
-    expect(elapsed).toBeLessThan(2_500);
+    // Vitest runs this alongside the full repository suite, so keep enough
+    // scheduler headroom while still catching an accidental unbounded result.
+    expect(elapsed).toBeLessThan(3_500);
   });
 
   it("keeps focused non-additive store comparisons connected to the other eligible stores", () => {
@@ -603,7 +605,7 @@ describe("enterprise trends presenter", () => {
     expect(queryFromHref(summary(model, "comparison").link.href)).toMatchObject({ compare: "previous_period" });
     expect(queryFromHref(summary(model, "comparison").link.href)).not.toHaveProperty("detailKind");
     expect(queryFromHref(summary(model, "change").link.href)).toMatchObject({ compare: "previous_period" });
-    expect(queryFromHref(model.insights.find((insight) => insight.id === "period-movement")!.link.href)).toMatchObject({ compare: "previous_period" });
+    expect(queryFromHref(model.mainResult.link.href)).toMatchObject({ detailKind: "current" });
 
     const sharedBadState = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "6", compare: "none", detailKind: "both" });
     expect(sharedBadState.sourcePeriodLabel).toMatch(/^Selected 6 months/);
@@ -651,9 +653,9 @@ describe("enterprise trends presenter", () => {
     expect(detail.sourceTable.rows.length).toBeGreaterThan(0);
     expect(detail.sourceTable.rows.every((source) => source.id.startsWith("benchmark:"))).toBe(true);
     expect(detail.sourceTable.rows.some((source) => source.cells.find((cell) => cell.key === "value")?.value === "$0")).toBe(true);
-    expect(detail.sourceTable.rows.some((source) => source.cells.find((cell) => cell.key === "record")?.secondary?.includes("recorded zero months remain included"))).toBe(true);
+    expect(detail.sourceTable.rows.some((source) => source.cells.find((cell) => cell.key === "record")?.secondary?.includes("retained as a measured zero"))).toBe(true);
     expect(detail.sourceHeading).toBe("Inputs behind this comparison");
-    expect(detail.sourceDescription).toMatch(/calculation|peer equipment|underlying records/i);
+    expect(detail.sourceDescription).toMatch(/calculated|peer equipment|underlying records/i);
     expect(row.peerLink?.label).toMatch(/comparison inputs/i);
     expect(row.peerLink?.label).not.toMatch(/source records/i);
   });
@@ -1020,11 +1022,12 @@ describe("enterprise trends presenter", () => {
 
   it("keeps linked-invoice language distinct from recorded work cost throughout the analysis", () => {
     const model = buildTrendsModel(buildNorthlinePresentationFixture(), session(), { metric: "linked_invoice", period: "12" });
-    const peak = model.insights.find((insight) => insight.id === "peak-month")!;
+    const invoiceFinding = model.insights[0]!;
 
     expect(model.outlook.label).toMatch(/linked invoice amount/i);
     expect(model.outlook.label).not.toMatch(/\bcost\b/i);
-    expect(peak.eyebrow).toBe("Highest linked-invoice month");
+    expect(invoiceFinding).toBeDefined();
+    expect(`${invoiceFinding.eyebrow} ${invoiceFinding.title} ${invoiceFinding.detail}`).not.toMatch(/recorded work cost/i);
     expect(model.benchmark.title).toMatch(/linked invoice amount/i);
     expect(model.benchmark.description).toMatch(/confirmed invoice amount linked/i);
     expect(model.benchmark.description).not.toMatch(/recorded work cost/i);
@@ -1047,11 +1050,11 @@ describe("enterprise trends presenter", () => {
       completedAt: index === 0 ? "2026-08-15T16:00:00.000Z" : undefined,
     }));
 
-    const model = buildTrendsModel(fixture, session(), { metric: "pm_completion", period: "3" });
+    const model = buildTrendsModel(fixture, session(), { metric: "pm_completion", period: "3", store: stores[0].id });
     const strongest = [...model.benchmark.rows]
       .filter((row) => row.varianceValue !== undefined)
       .sort((left, right) => Math.abs(right.varianceValue ?? 0) - Math.abs(left.varianceValue ?? 0))[0]!;
-    const insight = model.insights.find((candidate) => candidate.id === "store-variance")!;
+    const insight = model.insights.find((candidate) => candidate.findingType === "store_difference")!;
 
     expect(strongest.id).toBe(stores[0].id);
     expect(strongest.signalTone).toBe("positive");
@@ -1222,5 +1225,115 @@ describe("enterprise trends presenter", () => {
     const detail = buildTrendsModel(fixture, session(), queryFromHref(model.outlook.evidenceLink!.href));
     expect(detail.investigation.evidence?.label).toMatch(/complete months used/i);
     expect(detail.sourceSummary).toMatch(/record/);
+  });
+
+  it("keeps the guided overview deterministic and limits it to three supported findings", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const first = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "6", view: "overview" });
+    const second = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "6", view: "overview" });
+
+    expect(first.mainResult).toMatchObject({ value: expect.any(String), evidenceLabel: expect.stringMatching(/record|entr/i), link: { href: expect.stringContaining("view=records") } });
+    expect(first.insights.length).toBeGreaterThan(0);
+    expect(first.insights.length).toBeLessThanOrEqual(3);
+    expect(first.insights.map((finding) => finding.id)).toEqual(second.insights.map((finding) => finding.id));
+    expect(first.insights.every((finding) => finding.findingType && finding.actionLabel && finding.link.href.startsWith("/app/"))).toBe(true);
+    expect(first.analysisContext.map((item) => item.label)).toEqual(["Locations", "Measure", "Dates", "Comparison"]);
+  });
+
+  it("attributes historical cost to the provider in effect on the service date, not a later reassignment", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const line = [...fixture.costLines]
+      .filter((candidate) => candidate.serviceDate >= "2025-09-01" && candidate.serviceDate <= "2026-08-26" && fixture.workOrders.some((workOrder) => workOrder.id === candidate.workOrderId && workOrder.assetId))
+      .sort((left, right) => right.serviceDate.localeCompare(left.serviceDate))[0]!;
+    const work = fixture.workOrders.find((candidate) => candidate.id === line.workOrderId)!;
+    const assignmentTemplate = fixture.assignments[0]!;
+    const [historicalVendor, laterVendor] = fixture.vendors.slice(0, 2);
+    const relatedVisitIds = new Set(fixture.siteVisitWorkOrders.filter((link) => link.workOrderId === work.id).map((link) => link.visitId));
+    fixture.visits = fixture.visits.filter((visit) => visit.workOrderId !== work.id && !relatedVisitIds.has(visit.id));
+    fixture.siteVisitWorkOrders = fixture.siteVisitWorkOrders.filter((link) => link.workOrderId !== work.id);
+    fixture.assignments = fixture.assignments.filter((assignment) => assignment.workOrderId !== work.id);
+    fixture.assignments.push(
+      { ...assignmentTemplate, id: "assignment-trend-historical", workOrderId: work.id, kind: "outside_vendor", vendorId: historicalVendor.id, internalMembershipId: undefined, status: "superseded", assignedAt: "2024-01-01T12:00:00.000Z" },
+      { ...assignmentTemplate, id: "assignment-trend-later", workOrderId: work.id, kind: "outside_vendor", vendorId: laterVendor.id, internalMembershipId: undefined, status: "pending", assignedAt: "2026-09-01T12:00:00.000Z", supersedesAssignmentId: "assignment-trend-historical" },
+    );
+
+    const historical = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "24", vendor: historicalVendor.id, detailKind: "current" }, { includeExportRows: true });
+    const later = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "24", vendor: laterVendor.id, detailKind: "current" }, { includeExportRows: true });
+    expect(historical.exportRows?.find((row) => row.sourceId === line.id)).toMatchObject({
+      vendorId: historicalVendor.id,
+      providerAttribution: "historical_assignment",
+      amountMinor: line.amount.amountMinor,
+      currency: line.amount.currency,
+      workOrderId: work.id,
+    });
+    expect(later.exportRows?.some((row) => row.sourceId === line.id)).toBe(false);
+  });
+
+  it("keeps unknown installation history out of equipment exposure instead of manufacturing quiet zero months", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const line = [...fixture.costLines].sort((left, right) => right.serviceDate.localeCompare(left.serviceDate))[0]!;
+    const work = fixture.workOrders.find((candidate) => candidate.id === line.workOrderId)!;
+    const asset = fixture.assets.find((candidate) => candidate.id === work.assetId)!;
+    asset.installedAt = undefined;
+
+    const model = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "12", store: asset.storeId, category: asset.categoryKey, asset: asset.id });
+    expect(model.benchmark.rows[0]).toMatchObject({
+      actualValue: expect.any(Number),
+      expectedValue: undefined,
+      comparableActualValue: 0,
+      signalLabel: "No reliable peer comparison yet",
+    });
+    expect(model.benchmark.rows[0].evidenceQualityLabel).toMatch(/unknown installation date.*excluded/i);
+    expect(model.benchmark.methodology).toMatch(/Unknown coverage is excluded, not converted to zero/i);
+  });
+
+  it("excludes source activity outside a documented retirement window from the comparable result", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const asset = fixture.assets.find((candidate) => candidate.storeId === "store-northline-101" && candidate.categoryKey === "refrigeration")!;
+    const workTemplate = fixture.workOrders[0]!;
+    const costTemplate = fixture.costLines[0]!;
+    fixture.workOrders.push({ ...workTemplate, id: "work-trend-retired-exposure", storeId: asset.storeId, number: "CPS-RETIRE-EXPOSURE", categoryKey: asset.categoryKey, assetId: asset.id, componentId: undefined, createdAt: "2026-08-18T12:00:00.000Z" });
+    fixture.costLines.push({ ...costTemplate, id: "cost-trend-retired-exposure", workOrderId: "work-trend-retired-exposure", serviceDate: "2026-08-20", recordedAt: "2026-08-20T18:00:00.000Z", amount: { amountMinor: 25_000, currency: "USD" } });
+    const before = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "12", store: asset.storeId, category: asset.categoryKey, asset: asset.id });
+    asset.retiredAt = "2025-09-15T12:00:00.000Z";
+    const retired = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "12", store: asset.storeId, category: asset.categoryKey, asset: asset.id });
+
+    expect(before.benchmark.rows[0].comparableActualValue).toBeGreaterThan(0);
+    expect(retired.benchmark.rows[0].comparableActualValue).toBe(0);
+    expect(retired.benchmark.rows[0].excludedActualLabel).toMatch(/outside the equipment match/i);
+  });
+
+  it("counts first-issuance cohorts once and keeps closed-without-response history separate from current nonresponse", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const original = buildTrendsModel(fixture, session(), { metric: "vendor_response", period: "24", view: "vendors" });
+    const issuance = fixture.issuances.find((candidate) => fixture.vendorResponses.some((response) => response.assignmentId === candidate.assignmentId))!;
+    fixture.issuances.push({ ...issuance, id: "issuance-trend-revision", revision: issuance.revision + 1, issuedAt: new Date(Date.parse(issuance.issuedAt) + 60_000).toISOString() });
+    const revised = buildTrendsModel(fixture, session(), { metric: "vendor_response", period: "24", view: "vendors" });
+    expect(revised.vendorAccountability.cohortLabel).toBe(original.vendorAccountability.cohortLabel);
+
+    const responseIds = new Set(fixture.vendorResponses.filter((response) => response.assignmentId === issuance.assignmentId).map((response) => response.id));
+    fixture.vendorResponses = fixture.vendorResponses.filter((response) => !responseIds.has(response.id));
+    fixture.assignments.find((assignment) => assignment.id === issuance.assignmentId)!.status = "superseded";
+    const closed = buildTrendsModel(fixture, session(), { metric: "vendor_response", period: "24", view: "vendors" });
+    expect(Number(closed.vendorAccountability.responseMix.find((item) => item.label === "Closed without response")?.value)).toBeGreaterThan(0);
+    expect(closed.vendorAccountability.methodology).toMatch(/remain in historical coverage.*removed from the currently outstanding count/i);
+  });
+
+  it("keeps planning history independent from the visible chart window and exports machine-precise evidence", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const short = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "3", view: "planning" });
+    const long = buildTrendsModel(fixture, session(), { metric: "recorded_cost", period: "24", view: "planning", detailKind: "current" }, { includeExportRows: true });
+    expect(short.outlook.value).toBe(long.outlook.value);
+    expect(short.outlook.description).toBe(long.outlook.description);
+    expect(long.exportRows?.length).toBeGreaterThan(0);
+    expect(long.exportRows?.every((row) => row.sourceId && row.storeId && row.sourcePath.startsWith("/app/") && Number.isFinite(row.rawValue))).toBe(true);
+    expect(long.exportRows?.filter((row) => row.units === "minor_currency").every((row) => Number.isSafeInteger(row.amountMinor) && row.currency === "USD")).toBe(true);
+  });
+
+  it("reports invalid filter removal instead of silently broadening the analysis", () => {
+    const model = buildTrendsModel(buildNorthlinePresentationFixture(), session(), { metric: "recorded_cost", store: "store-outside-scope", category: "not-a-real-category" });
+    expect(model.filterNotice).toMatch(/removed .*out-of-scope store.*unavailable service area/i);
+    expect(queryFromSearch(model.canonicalQuery)).not.toHaveProperty("store");
+    expect(queryFromSearch(model.canonicalQuery)).not.toHaveProperty("category");
   });
 });

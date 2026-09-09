@@ -2345,8 +2345,12 @@ export function assertOpsFixture(fixture: OpsFixture) {
   fixture.requests.forEach((row) => {
     if (!storeIds.has(row.storeId)) throw new Error(`Request ${row.id} has no store`);
     const convertedWorkOrder = row.convertedWorkOrderId ? fixture.workOrders.find((workOrder) => workOrder.organizationId === row.organizationId && workOrder.id === row.convertedWorkOrderId) : undefined;
+    const linkedWorkOrder = row.linkedWorkOrderId ? fixture.workOrders.find((workOrder) => workOrder.organizationId === row.organizationId && workOrder.id === row.linkedWorkOrderId) : undefined;
     if (row.convertedWorkOrderId && !convertedWorkOrder) throw new Error(`Request ${row.id} has no converted work order`);
     if (row.status === "converted" && (!convertedWorkOrder || convertedWorkOrder.storeId !== row.storeId)) throw new Error(`Converted request ${row.id} has an invalid work-order path`);
+    if (row.linkedWorkOrderId && (!linkedWorkOrder || linkedWorkOrder.storeId !== row.storeId)) throw new Error(`Acknowledged request ${row.id} has an invalid related-work path`);
+    if (row.convertedWorkOrderId && row.linkedWorkOrderId) throw new Error(`Request ${row.id} cannot be both converted and linked as an additional report`);
+    if (row.status === "acknowledged" && (!row.acknowledgedAt || !row.acknowledgedByActorName)) throw new Error(`Acknowledged request ${row.id} has no acknowledgment provenance`);
   });
   fixture.requestImpactAssessments.forEach((assessment) => {
     const request = fixture.requests.find((candidate) => candidate.organizationId === assessment.organizationId && candidate.id === assessment.requestId);
@@ -2362,7 +2366,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
   fixture.requests.forEach((request) => {
     const assessments = fixture.requestImpactAssessments.filter((assessment) => assessment.organizationId === request.organizationId && assessment.requestId === request.id);
     if (assessments.filter((assessment) => assessment.assessmentKind === "initial_report").length !== 1) throw new Error(`Request ${request.id} must have exactly one initial impact assessment`);
-    if (request.status !== "submitted" && !assessments.some((assessment) => assessment.assessmentKind === "review")) throw new Error(`Reviewed request ${request.id} has no manager impact review`);
+    if (["under_review", "converted", "closed"].includes(request.status) && !assessments.some((assessment) => assessment.assessmentKind === "review")) throw new Error(`Reviewed request ${request.id} has no manager impact review`);
   });
   fixture.workOrders.forEach((row) => {
     if (!storeIds.has(row.storeId)) throw new Error(`Work order ${row.id} has no store`);

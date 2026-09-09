@@ -148,7 +148,7 @@ export type TrendBenchmarkSortId = "store" | "actual" | "comparable" | "expected
 export type TrendDriverSortId = "segment" | "current" | "comparison" | "change" | "evidence";
 export type TrendSourceSortId = "record" | "store" | "service" | "date" | "value";
 export type TrendSortDirection = "asc" | "desc";
-export type TrendAnalysisView = "overview" | "stores" | "drivers" | "records";
+export type TrendAnalysisView = "overview" | "stores" | "drivers" | "vendors" | "planning" | "records";
 
 export interface TrendBenchmarkSortLinkViewModel {
   id: TrendBenchmarkSortId;
@@ -201,6 +201,8 @@ export interface TrendBenchmarkRowViewModel {
   largestRecordLink?: SupportingLink;
   coverageValue: number;
   coverageLabel: string;
+  evidenceQualityLabel?: string;
+  referenceHistoryLabel?: string;
   focusLink: SupportingLink;
   recordsLink: SupportingLink;
   /** @deprecated Use recordsLink for the exact evidence set. */
@@ -259,11 +261,32 @@ export interface TrendRelatedMeasureViewModel {
 
 export interface TrendInsightViewModel {
   id: string;
+  findingType?: "period_change" | "store_difference" | "large_job" | "recurring_work" | "vendor_follow_through" | "calm_state";
   eyebrow: string;
   title: string;
   detail: string;
+  magnitudeLabel?: string;
+  patternLabel?: string;
+  evidenceLabel?: string;
+  evidenceLimit?: string;
+  sourceIds?: string[];
+  actionLabel?: string;
   tone: Tone;
   link: SupportingLink;
+}
+
+export interface TrendVendorAccountabilityViewModel {
+  title: string;
+  description: string;
+  cohortLabel: string;
+  responseCoverageLabel: string;
+  respondedCount: number;
+  awaitingCount: number;
+  overdueCount: number;
+  oldestOutstandingLabel: string;
+  responseMix: Array<{ label: string; value: string; description: string }>;
+  outstandingLink: SupportingLink;
+  methodology: string;
 }
 
 export interface TrendAnalysisPageViewModel {
@@ -272,6 +295,17 @@ export interface TrendAnalysisPageViewModel {
   canonicalQuery: string;
   activeView: TrendAnalysisView;
   scopeSummary: string;
+  filterNotice?: string;
+  analysisContext: Array<{ label: string; value: string }>;
+  mainResult: {
+    value: string;
+    absoluteChangeLabel: string;
+    relativeChangeLabel?: string;
+    comparisonBasis: string;
+    evidenceLabel: string;
+    tone: Tone;
+    link: SupportingLink;
+  };
   views: Array<{ id: TrendAnalysisView; label: string; description: string; link: SupportingLink }>;
   filterAction: string;
   filters: TrendFilterSelectViewModel[];
@@ -295,6 +329,7 @@ export interface TrendAnalysisPageViewModel {
   series: TrendComparisonPointViewModel[];
   outlook: TrendOutlookViewModel;
   insights: TrendInsightViewModel[];
+  vendorAccountability: TrendVendorAccountabilityViewModel;
   drivers: {
     breakdownId: TrendBreakdownId;
     title: string;
@@ -932,8 +967,14 @@ export interface RequestReviewViewModel {
   submitAction: string;
   requestId: string;
   reference: string;
-  expectedStatus: "submitted" | "under_review";
+  expectedStatus: "submitted" | "under_review" | "acknowledged";
   statusLabel: string;
+  acknowledgeAction?: string;
+  followUpAction?: string;
+  acknowledgedAtLabel?: string;
+  acknowledgedBy?: string;
+  linkedWorkOrder?: { id: string; number: string; problem: string; statusLabel: string };
+  browseOpenWorkHref?: string;
   impactReviewed: boolean;
   canPrepareWorkOrder: boolean;
   canCreateWorkOrder: boolean;
@@ -945,6 +986,7 @@ export interface RequestReviewViewModel {
     problem: string;
     statusLabel: string;
     internalOwner: string;
+    equipmentLabel?: string;
   }>;
   impactSubmitAction: string;
   pendingApproval?: ApprovalDecisionViewModel;
@@ -975,6 +1017,24 @@ export interface RequestReviewViewModel {
     provenanceLabel: string;
   }>;
   impactCaveat: string;
+}
+
+export interface RequestWorkLinkPageViewModel {
+  requestId: string;
+  reference: string;
+  problem: string;
+  expectedStatus: "submitted" | "under_review" | "acknowledged";
+  currentLinkedWorkOrderId?: string;
+  returnHref: string;
+  searchValue: string;
+  searchAction: string;
+  rows: Array<{ id: string; number: string; problem: string; statusLabel: string; serviceContext: string }>;
+  currentPage: number;
+  totalPages: number;
+  resultSummary: string;
+  previousHref?: string;
+  nextHref?: string;
+  linkAction: string;
 }
 
 export interface AttentionItemControlViewModel {

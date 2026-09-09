@@ -97,6 +97,10 @@ The ordinary intake path is Store → observed problem → impact → manager re
 - Authorized managers can route to internal maintenance, a direct outside vendor, competitive bids, approved-for-later, or choose later.
 - Vendor suggestions use approved status, specialty/aliases, store or region coverage, preferred relationships, and restrictions. The UI explains the matching facts; the operator chooses.
 - Related open Work Orders are displayed before creation. Linking adds the new report to the existing Work Order while preserving both source reports; records are never silently merged.
+- An authorized manager can record **Aware — being handled** directly from submitted or under-review intake. This persists acknowledgment actor/time without requiring a note, classification, approval, assignment, visit, cost, or new Work Order.
+- Acknowledgment and work linkage are separate facts. The manager may acknowledge with no link, explicitly choose same-store active work while acknowledging, link later, or replace an incorrect link with a required audited reason. No work is preselected.
+- Routine acknowledgment completes only the intake-review task. Emergency, reported safety/compliance, and store-shutdown obligations remain active even though the report leaves the new-intake status.
+- Acknowledged reports return to an accountable queue only through a deliberate, reasoned follow-up action. That action creates or reuses exactly one due review task; age by itself does not reactivate intake.
 - Authorization/NTE and approval safeguards remain enforced by commands.
 
 ## 4. Visit outcome rules

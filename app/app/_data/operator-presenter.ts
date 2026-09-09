@@ -4442,11 +4442,14 @@ export function buildDetailModel(
     const convertedWork = request.convertedWorkOrderId
       ? scoped.workOrders.find((work) => work.id === request.convertedWorkOrderId)
       : undefined;
+    const linkedWork = request.linkedWorkOrderId
+      ? scoped.workOrders.find((work) => work.id === request.linkedWorkOrderId)
+      : undefined;
     const audit = fixture.auditEvents
       .filter(
         (event) =>
           event.organizationId === scoped.organizationId &&
-          (event.aggregateId === request.id || event.aggregateId === convertedWork?.id),
+          (event.aggregateId === request.id || event.aggregateId === convertedWork?.id || event.aggregateId === linkedWork?.id),
       )
       .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     const linkedFiles = fixture.entityFiles.filter(
@@ -4478,6 +4481,10 @@ export function buildDetailModel(
     );
     const conversionState = convertedWork
       ? `Converted to ${convertedWork.number}`
+      : request.status === "acknowledged"
+        ? linkedWork
+          ? `Acknowledged — being handled · Linked to ${linkedWork.number}`
+          : "Acknowledged — being handled · No linked work order"
       : !impactReviewed
         ? "Awaiting manager impact review"
         : latestApprovalState === "pending" || latestApprovalState === "escalated"
@@ -4496,6 +4503,8 @@ export function buildDetailModel(
         scopeLabel: storeLabel(store),
         primaryAction: convertedWork
           ? { label: `Open ${convertedWork.number}`, href: `/app/work-orders/${convertedWork.id}` }
+          : linkedWork
+            ? { label: `Open ${linkedWork.number}`, href: `/app/work-orders/${linkedWork.id}` }
           : canConvert
             ? { label: "Create work order", href: `/app/work-orders/new?request=${request.id}` }
             : latestApprovalState === "pending" || latestApprovalState === "escalated"
@@ -4505,14 +4514,15 @@ export function buildDetailModel(
                 : undefined,
         secondaryAction: store ? { label: "Open store", href: `/app/stores/${store.id}` } : undefined,
       },
-      statusLabel: sentence(request.status),
-      statusTone: request.status === "converted" ? "positive" : request.priority === "emergency" ? "critical" : request.priority === "urgent" ? "warning" : "info",
+      statusLabel: request.status === "acknowledged" ? "Acknowledged — being handled" : sentence(request.status),
+      statusTone: ["converted", "acknowledged"].includes(request.status) ? "positive" : request.priority === "emergency" ? "critical" : request.priority === "urgent" ? "warning" : "info",
       facts: [
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { label: "Reported by", value: request.reporterName, helperText: request.reporterEmployeeId ? `Employee ID ${request.reporterEmployeeId}` : "Employee ID not entered" },
         { label: "Reported", value: dateTime(request.submittedAt, store?.timeZone), helperText: "Store-local time" },
         { label: "Priority", value: sentence(request.priority) },
-        { label: "Work order", value: convertedWork?.number ?? "Not created", link: convertedWork ? { href: `/app/work-orders/${convertedWork.id}`, label: "Open work order" } : undefined },
+        { label: "Work order", value: convertedWork?.number ?? linkedWork?.number ?? "No linked work order", helperText: linkedWork ? "Factual association only; not proof this report is resolved" : undefined, link: convertedWork || linkedWork ? { href: `/app/work-orders/${(convertedWork ?? linkedWork)!.id}`, label: "Open work order" } : undefined },
+        ...(request.acknowledgedAt ? [{ label: "Acknowledged", value: dateTime(request.acknowledgedAt, store?.timeZone), helperText: `By ${request.acknowledgedByActorName ?? "authorized manager"}` }] : []),
         approval.fact,
         { label: "Attached evidence", value: String(linkedFiles.length), helperText: "Original evidence remains tied to this report" },
       ],
@@ -4534,7 +4544,11 @@ export function buildDetailModel(
           title: "What happens next",
           description: convertedWork
             ? "This report is linked to its work order, where vendor activity, visits, outcomes, costs, and follow-up continue."
-            : "Review what was reported, then create a work order when service is approved. Equipment can be added later.",
+            : linkedWork
+              ? "This report is associated with existing work as evidence. The link does not change authorization, vendor scope, visits, or repair verification."
+              : request.status === "acknowledged"
+                ? "Responsibility is recorded and intake is clear. No linked work order is visible, and aging alone will not return this report to the action queue."
+                : "Review what was reported, then create a work order when service is approved. Equipment can be added later.",
           facts: [
             { label: "Original report", value: "Cannot be deleted", helperText: "Later corrections are recorded separately" },
             { label: "Equipment", value: "Optional at intake", helperText: "Link it now or after diagnosis" },
@@ -4796,7 +4810,7 @@ export function buildDetailModel(
       ? fixture.requests.find((request) => request.organizationId === scoped.organizationId && request.id === work.requestId)
       : undefined;
     const linkedRequests = fixture.requests
-      .filter((request) => request.organizationId === scoped.organizationId && request.convertedWorkOrderId === work.id)
+      .filter((request) => request.organizationId === scoped.organizationId && (request.linkedWorkOrderId === work.id || request.convertedWorkOrderId === work.id))
       .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt));
     const pmOccurrence = fixture.pmOccurrences.find((occurrence) =>
       occurrence.organizationId === scoped.organizationId && occurrence.workOrderId === work.id,
@@ -4882,7 +4896,7 @@ export function buildDetailModel(
         ...(linkedRequests.length ? [{
           id: "related-reports",
           title: linkedRequests.length === 1 ? "Linked store report" : "Linked store reports",
-          description: `${linkedRequests.length} original report${linkedRequests.length === 1 ? " is" : "s are"} preserved with this work order. Linking another report did not create another dispatch.`,
+          description: `${linkedRequests.length} original report${linkedRequests.length === 1 ? " is" : "s are"} preserved with this work order. These are factual associations, not confirmed duplicates, scope authorization, or proof of resolution. Linking another report did not create another dispatch.`,
           table: {
             id: "related-reports",
             caption: `Reports linked to ${work.number}`,
@@ -6402,7 +6416,7 @@ export function buildRequestReviewModel(
   const request = fixture.requests.find(
     (item) => item.id === requestId && item.organizationId === scoped.organizationId && scoped.storeIds.has(item.storeId),
   );
-  const available = Boolean(request && (request.status === "submitted" || request.status === "under_review"));
+  const available = Boolean(request && ["submitted", "under_review", "acknowledged"].includes(request.status));
   const permitted = available && roleCan(session, "review_request");
   const impactHistory = request
     ? fixture.requestImpactAssessments
@@ -6490,6 +6504,7 @@ export function buildRequestReviewModel(
   const canPrepareWorkOrder = Boolean(
     request
     && !request.convertedWorkOrderId
+    && !request.linkedWorkOrderId
     && (!latestApprovalRequest || latestApprovalState === "approved")
     && roleCan(session, "create_work_order"),
   );
@@ -6499,6 +6514,9 @@ export function buildRequestReviewModel(
     && request?.status === "under_review"
     && impactReviewed,
   );
+  const linkedWorkOrder = request?.linkedWorkOrderId
+    ? scoped.workOrders.find((work) => work.id === request.linkedWorkOrderId)
+    : undefined;
   const requestTerms = new Set((request?.problem ?? "").toLocaleLowerCase("en-US").split(/[^a-z0-9]+/).filter((term) => term.length > 3));
   const relatedOpenWork = request
     ? scoped.workOrders
@@ -6515,6 +6533,9 @@ export function buildRequestReviewModel(
         problem: work.problem,
         statusLabel: sentence(work.status),
         internalOwner: work.internalAccountableParty ?? "Facilities coordinator",
+        equipmentLabel: work.assetId
+          ? scoped.assets.find((asset) => asset.id === work.assetId)?.name ?? "Equipment reference unavailable"
+          : undefined,
       }))
     : [];
   return {
@@ -6523,15 +6544,21 @@ export function buildRequestReviewModel(
     submitAction: request ? `/api/ops/requests/${encodeURIComponent(request.id)}/review` : "",
     requestId,
     reference: request?.reference ?? requestId,
-    expectedStatus: request?.status === "under_review" ? "under_review" : "submitted",
-    statusLabel: request ? sentence(request.status) : "Unavailable",
+    expectedStatus: request?.status === "acknowledged" ? "acknowledged" : request?.status === "under_review" ? "under_review" : "submitted",
+    statusLabel: request?.status === "acknowledged" ? "Acknowledged — being handled" : request ? sentence(request.status) : "Unavailable",
+    acknowledgeAction: permitted && request && request.status !== "acknowledged" ? `/api/ops/requests/${encodeURIComponent(request.id)}/acknowledge` : undefined,
+    followUpAction: permitted && request?.status === "acknowledged" ? `/api/ops/requests/${encodeURIComponent(request.id)}/follow-up` : undefined,
+    acknowledgedAtLabel: request?.acknowledgedAt ? dateTime(request.acknowledgedAt, scoped.stores.find((store) => store.id === request.storeId)?.timeZone) : undefined,
+    acknowledgedBy: request?.acknowledgedByActorName,
+    linkedWorkOrder: linkedWorkOrder ? { id: linkedWorkOrder.id, number: linkedWorkOrder.number, problem: linkedWorkOrder.problem, statusLabel: sentence(linkedWorkOrder.status) } : undefined,
+    browseOpenWorkHref: request ? `/app/requests/${encodeURIComponent(request.id)}/link?returnTo=${encodeURIComponent(`/app/requests/${request.id}`)}` : undefined,
     impactReviewed,
     canPrepareWorkOrder,
     canCreateWorkOrder,
     createWorkOrderHref: canPrepareWorkOrder && request
       ? `/app/work-orders/new?request=${encodeURIComponent(request.id)}`
       : undefined,
-    linkExistingWorkAction: canCreateWorkOrder && request ? `/api/ops/requests/${encodeURIComponent(request.id)}/link` : undefined,
+    linkExistingWorkAction: permitted && request && !request.convertedWorkOrderId ? `/api/ops/requests/${encodeURIComponent(request.id)}/link` : undefined,
     relatedOpenWork,
     impactSubmitAction: request ? `/api/ops/requests/${encodeURIComponent(request.id)}/impact` : "",
     pendingApproval,

@@ -690,6 +690,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     const request = await repository.getRequest(input.organizationId, input.requestId);
     if (!request || request.storeId !== input.storeId) throw new OpsDomainError("NOT_FOUND", "Request not found for this store and organization");
     if (request.status === "converted" || request.convertedWorkOrderId) throw new OpsDomainError("CONFLICT", "Request already has a canonical work order");
+    if (request.linkedWorkOrderId) throw new OpsDomainError("CONFLICT", "This report is already linked to existing work; correct or review that link before creating separate work");
     if (request.status !== "under_review") throw new OpsDomainError("CONFLICT", "Review and confirm the request impact before creating its work order");
     const assessments = await repository.listRequestImpactAssessments(input.organizationId, request.id);
     const latestAssessment = assessments.at(-1);
@@ -2636,11 +2637,55 @@ export async function reviewServiceRequest(svc: OpsCommandServices, input: Revie
   return { ...request, status: nextStatus, version: persistedRequestVersion(request) + 1, reviewDecision: input.decision, reviewedAt: now, note };
 }
 
+export interface AcknowledgeServiceRequestInput {
+  organizationId: OpsId;
+  requestId: OpsId;
+  expectedStatus: "submitted" | "under_review";
+  actor: ActorContext;
+}
+
+/** Records ownership of intake without creating service work or implying repair. */
+export async function acknowledgeServiceRequest(svc: OpsCommandServices, input: AcknowledgeServiceRequestInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const request = await repository.getRequest(input.organizationId, input.requestId);
+  if (!request) throw new OpsDomainError("NOT_FOUND", "Service request not found");
+  if (request.status === "acknowledged" && request.acknowledgedAt) return { ...request, replayed: true as const };
+  if (request.status !== input.expectedStatus || request.convertedWorkOrderId) {
+    throw new OpsDomainError("CONFLICT", "This request changed. Refresh before acknowledging it");
+  }
+  const now = clock.now();
+  const statements: OpsStatement[] = [{
+    sql: "UPDATE ops_requests SET status = ?, acknowledged_at = ?, acknowledged_by_actor_type = ?, acknowledged_by_actor_id = ?, acknowledged_by_actor_name = ? WHERE organization_id = ? AND id = ? AND version = ? AND status = ? AND converted_work_order_id IS NULL",
+    params: ["acknowledged", now, input.actor.actorType, input.actor.actorId ?? null, input.actor.actorName, input.organizationId, request.id, persistedRequestVersion(request) + 1, input.expectedStatus],
+  }];
+  const [tasks, impactAssessments] = await Promise.all([
+    repository.listWorkflowTasksForRequest(input.organizationId, request.id),
+    repository.listRequestImpactAssessments(input.organizationId, request.id),
+  ]);
+  const exceptionalReviewPreserved = request.priority === "emergency" || impactAssessments.some((assessment) =>
+    ["potential", "immediate"].includes(assessment.safetyConcern)
+    || ["potential", "confirmed"].includes(assessment.complianceImpact)
+    || assessment.storeOperatingState === "unable_to_operate",
+  );
+  tasks.filter((task) => !exceptionalReviewPreserved && task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => statements.push(...buildCompleteWorkflowTaskStatements({
+    task, actor: input.actor, occurredAt: now, ids, resolutionNote: "Acknowledged — being handled",
+  })));
+  statements.push(...auditAndOutbox({
+    organizationId: input.organizationId, aggregateType: "request", aggregateId: request.id,
+    eventType: "request.acknowledged", actor: input.actor, occurredAt: now,
+    payload: { previousStatus: request.status, status: "acknowledged", linkedWorkOrderId: null, exceptionalReviewPreserved }, ids,
+  }));
+  await atomicRequestMutation({ repository, request, now, statements, conflictMessage: "This request changed. Refresh before acknowledging it." });
+  return { ...request, status: "acknowledged" as const, acknowledgedAt: now, acknowledgedByActorType: input.actor.actorType, acknowledgedByActorId: input.actor.actorId, acknowledgedByActorName: input.actor.actorName, version: persistedRequestVersion(request) + 1 };
+}
+
 export interface LinkServiceRequestToWorkOrderInput {
   organizationId: OpsId;
   requestId: OpsId;
   workOrderId: OpsId;
-  expectedStatus: "under_review";
+  expectedStatus: "submitted" | "under_review" | "acknowledged";
+  correctionReason?: string;
   actor: ActorContext;
 }
 
@@ -2653,42 +2698,90 @@ export async function linkServiceRequestToWorkOrder(svc: OpsCommandServices, inp
   assertActorOrganization(input.actor, input.organizationId);
   const request = await repository.getRequest(input.organizationId, input.requestId);
   if (!request) throw new OpsDomainError("NOT_FOUND", "Service request not found");
-  if (request.convertedWorkOrderId) {
-    if (request.convertedWorkOrderId === input.workOrderId) return { ...request, replayed: true as const };
-    throw new OpsDomainError("CONFLICT", "This report is already linked to different work");
-  }
+  if (request.convertedWorkOrderId) throw new OpsDomainError("CONFLICT", "This report was converted into its canonical work order and cannot be re-associated here");
+  if (request.linkedWorkOrderId === input.workOrderId) return { ...request, replayed: true as const };
   if (request.status !== input.expectedStatus) throw new OpsDomainError("CONFLICT", "This report changed. Refresh before linking it");
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
   if (!workOrder || workOrder.storeId !== request.storeId) throw new OpsDomainError("VALIDATION", "Choose unresolved work from the same store");
   if (["closed", "cancelled"].includes(workOrder.status)) throw new OpsDomainError("CONFLICT", "A new report cannot be linked to terminal work");
-  const impact = (await repository.listRequestImpactAssessments(input.organizationId, request.id)).at(-1);
-  if (!impact || impact.assessmentKind !== "review" || impact.source !== "manager_review") {
-    throw new OpsDomainError("CONFLICT", "Confirm the report facts before linking it to existing work");
-  }
+  const correcting = Boolean(request.linkedWorkOrderId);
+  const correctionReason = input.correctionReason?.trim();
+  if (correcting && !correctionReason) throw new OpsDomainError("VALIDATION", "Explain why the work-order link is being corrected");
   const now = clock.now();
+  const acknowledgedAt = request.acknowledgedAt ?? now;
+  const acknowledgedBy = request.acknowledgedAt ? {
+    type: request.acknowledgedByActorType, id: request.acknowledgedByActorId, name: request.acknowledgedByActorName,
+  } : { type: input.actor.actorType, id: input.actor.actorId, name: input.actor.actorName };
   const statements: OpsStatement[] = [{
-    sql: "UPDATE ops_requests SET status = ?, converted_work_order_id = ? WHERE organization_id = ? AND id = ? AND store_id = ? AND version = ? AND status = ? AND converted_work_order_id IS NULL",
-    params: ["converted", workOrder.id, input.organizationId, request.id, request.storeId, persistedRequestVersion(request) + 1, input.expectedStatus],
+    sql: "UPDATE ops_requests SET status = ?, acknowledged_at = ?, acknowledged_by_actor_type = ?, acknowledged_by_actor_id = ?, acknowledged_by_actor_name = ?, linked_work_order_id = ?, linked_at = ?, linked_by_actor_type = ?, linked_by_actor_id = ?, linked_by_actor_name = ? WHERE organization_id = ? AND id = ? AND store_id = ? AND version = ? AND status = ? AND converted_work_order_id IS NULL",
+    params: ["acknowledged", acknowledgedAt, acknowledgedBy.type ?? null, acknowledgedBy.id ?? null, acknowledgedBy.name ?? input.actor.actorName, workOrder.id, now, input.actor.actorType, input.actor.actorId ?? null, input.actor.actorName, input.organizationId, request.id, request.storeId, persistedRequestVersion(request) + 1, input.expectedStatus],
   }];
-  const tasks = await repository.listWorkflowTasksForRequest(input.organizationId, request.id);
-  tasks.filter((task) => task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => statements.push(...buildCompleteWorkflowTaskStatements({
-    task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Linked to existing work order ${workOrder.number}`,
+  const [tasks, impactAssessments] = await Promise.all([
+    repository.listWorkflowTasksForRequest(input.organizationId, request.id),
+    repository.listRequestImpactAssessments(input.organizationId, request.id),
+  ]);
+  const exceptionalReviewPreserved = request.priority === "emergency" || impactAssessments.some((assessment) =>
+    ["potential", "immediate"].includes(assessment.safetyConcern)
+    || ["potential", "confirmed"].includes(assessment.complianceImpact)
+    || assessment.storeOperatingState === "unable_to_operate",
+  );
+  tasks.filter((task) => !exceptionalReviewPreserved && task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => statements.push(...buildCompleteWorkflowTaskStatements({
+    task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Acknowledged and linked to existing work order ${workOrder.number}`,
   })));
   statements.push(...auditAndOutbox({
     organizationId: input.organizationId,
     aggregateType: "request",
     aggregateId: request.id,
-    eventType: "request.linked_to_existing_work_order",
+    eventType: correcting ? "request.work_order_link_corrected" : "request.linked_to_existing_work_order",
     actor: input.actor,
     occurredAt: now,
-    payload: { workOrderId: workOrder.id, workOrderNumber: workOrder.number, storeId: request.storeId },
+    payload: { previousWorkOrderId: request.linkedWorkOrderId ?? null, workOrderId: workOrder.id, workOrderNumber: workOrder.number, storeId: request.storeId, correctionReason, exceptionalReviewPreserved },
     ids,
   }));
   await atomicRequestMutation({
     repository, request, now, statements,
     conflictMessage: "This report changed or was linked elsewhere. Refresh before trying again.",
   });
-  return { ...request, status: "converted" as const, convertedWorkOrderId: workOrder.id, version: persistedRequestVersion(request) + 1 };
+  return { ...request, status: "acknowledged" as const, acknowledgedAt, acknowledgedByActorType: acknowledgedBy.type, acknowledgedByActorId: acknowledgedBy.id, acknowledgedByActorName: acknowledgedBy.name, linkedWorkOrderId: workOrder.id, linkedAt: now, linkedByActorType: input.actor.actorType, linkedByActorId: input.actor.actorId, linkedByActorName: input.actor.actorName, version: persistedRequestVersion(request) + 1 };
+}
+
+export interface RequestAcknowledgedFollowUpInput { organizationId: OpsId; requestId: OpsId; explanation: string; actor: ActorContext }
+
+/** Deliberately returns an acknowledged report to action; aging alone never calls this command. */
+export async function requestAcknowledgedServiceRequestFollowUp(svc: OpsCommandServices, input: RequestAcknowledgedFollowUpInput) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const request = await repository.getRequest(input.organizationId, input.requestId);
+  if (!request) throw new OpsDomainError("NOT_FOUND", "Service request not found");
+  if (!request.acknowledgedAt || !["acknowledged", "under_review"].includes(request.status)) throw new OpsDomainError("CONFLICT", "Only an acknowledged report can be returned for follow-up");
+  const explanation = required(input.explanation, "Follow-up explanation");
+  const tasks = await repository.listWorkflowTasksForRequest(input.organizationId, request.id);
+  const existing = tasks.find((task) => task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status));
+  if (existing) return { request, task: existing, replayed: true as const };
+  const now = clock.now();
+  const dueAt = addHours(now, ({ emergency: 1, urgent: 4, routine: 24, planned: 72 } as const)[request.priority]);
+  const task: WorkflowTask = {
+    id: ids.next("workflow-task"), organizationId: input.organizationId, serviceRequestId: request.id,
+    taskType: "review_issue", title: `Follow up on ${request.reference}`, reason: explanation,
+    assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities review",
+    priority: workflowTaskPriority(request.priority), status: "open", blocking: true, requiredForProgress: true,
+    dueAt, applicableSlaClock: "intake_review", completionCriteria: "Review the stated follow-up reason and record the next request disposition",
+    escalationDestination: request.priority === "emergency" ? "Regional maintenance leader" : "Facilities director", escalationLevel: 0,
+    createdByActorType: input.actor.actorType, createdByActorId: input.actor.actorId, createdByActorName: input.actor.actorName, createdAt: now,
+  };
+  const statements: OpsStatement[] = [];
+  if (request.status === "acknowledged") statements.push({ sql: "UPDATE ops_requests SET status = ? WHERE organization_id = ? AND id = ? AND version = ? AND status = ?", params: ["under_review", input.organizationId, request.id, persistedRequestVersion(request) + 1, "acknowledged"] });
+  statements.push(insert("ops_workflow_tasks", {
+    id: task.id, organization_id: task.organizationId, service_request_id: task.serviceRequestId, task_type: task.taskType,
+    title: task.title, reason: task.reason, assignee_type: task.assigneeType, assignee_role: task.assigneeRole, assignee_name: task.assigneeName,
+    priority: task.priority, status: task.status, blocking: 1, required_for_progress: 1, due_at: task.dueAt, applicable_sla_clock: task.applicableSlaClock,
+    completion_criteria: task.completionCriteria, escalation_destination: task.escalationDestination, escalation_level: 0,
+    created_by_actor_type: task.createdByActorType, created_by_actor_id: task.createdByActorId, created_by_actor_name: task.createdByActorName, created_at: task.createdAt,
+  }));
+  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "workflow_task", aggregateId: task.id, eventType: "workflow_task.created", actor: input.actor, occurredAt: now, payload: { serviceRequestId: request.id, taskType: task.taskType, reason: explanation, dueAt }, ids }));
+  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "request", aggregateId: request.id, eventType: "request.follow_up_requested", actor: input.actor, occurredAt: now, payload: { taskId: task.id, explanation, previousStatus: request.status, status: "under_review" }, ids }));
+  await atomicRequestMutation({ repository, request, now, statements, conflictMessage: "This request changed or already has an open follow-up. Refresh before trying again." });
+  return { request: { ...request, status: "under_review" as const, version: persistedRequestVersion(request) + 1 }, task };
 }
 
 export interface UpdateWorkOrderControlInput {

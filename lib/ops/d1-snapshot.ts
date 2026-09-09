@@ -368,7 +368,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     serviceLevelPolicies: serviceLevelRows as OpsFixture["serviceLevelPolicies"],
     schedulingPolicies: schedulingPolicyRows as OpsFixture["schedulingPolicies"],
     vendorCapacity: vendorCapacityRows.map((row) => ({ ...row, specialEquipment: parseStringArray(row.specialEquipmentJson) })) as OpsFixture["vendorCapacity"],
-    requests: requestRows.map((row) => ({ ...row, version: Number(row.version ?? 0), reporterEmployeeId: optional(row.reporterEmployeeId), convertedWorkOrderId: optional(row.convertedWorkOrderId) })) as OpsFixture["requests"],
+    requests: requestRows.map((row) => ({ ...row, version: Number(row.version ?? 0), reporterEmployeeId: optional(row.reporterEmployeeId), acknowledgedAt: optional(row.acknowledgedAt), acknowledgedByActorType: optional(row.acknowledgedByActorType), acknowledgedByActorId: optional(row.acknowledgedByActorId), acknowledgedByActorName: optional(row.acknowledgedByActorName), linkedWorkOrderId: optional(row.linkedWorkOrderId), linkedAt: optional(row.linkedAt), linkedByActorType: optional(row.linkedByActorType), linkedByActorId: optional(row.linkedByActorId), linkedByActorName: optional(row.linkedByActorName), convertedWorkOrderId: optional(row.convertedWorkOrderId) })) as OpsFixture["requests"],
     requestImpactAssessments: requestImpactRows.map((row) => ({
       ...row,
       reviewDisposition: optional(row.reviewDisposition),

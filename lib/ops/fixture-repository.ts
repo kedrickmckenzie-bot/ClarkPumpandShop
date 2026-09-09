@@ -138,7 +138,7 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
 
 function requestRow(fixture: OpsFixture, request: OpsFixture["requests"][number]): RequestListRow {
   const store = fixture.stores.find((row) => row.organizationId === request.organizationId && row.id === request.storeId)!;
-  return { id: request.id, reference: request.reference, storeId: store.id, storeNumber: store.storeNumber, storeName: store.name, reporterName: request.reporterName, problem: request.problem, priority: request.priority, status: request.status, submittedAt: request.submittedAt, convertedWorkOrderId: request.convertedWorkOrderId };
+  return { id: request.id, reference: request.reference, storeId: store.id, storeNumber: store.storeNumber, storeName: store.name, reporterName: request.reporterName, problem: request.problem, priority: request.priority, status: request.status, submittedAt: request.submittedAt, acknowledgedAt: request.acknowledgedAt, acknowledgedByActorName: request.acknowledgedByActorName, linkedWorkOrderId: request.linkedWorkOrderId, convertedWorkOrderId: request.convertedWorkOrderId };
 }
 
 function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unknown>> {
@@ -620,7 +620,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
 
   async listRequests(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId } = {}) {
     const search = normalize(query.search ?? "");
-    const rows = this.fixture.requests.filter((row) => storeAllowed(this.fixture, scope, row.storeId)).filter((row) => (!query.status || row.status === query.status) && (!query.storeId || row.storeId === query.storeId)).map((row) => requestRow(this.fixture, row)).filter((row) => !search || normalize([row.reference, row.problem, row.reporterName, row.storeNumber, row.storeName].join(" ")).includes(search)).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+    const rows = this.fixture.requests.filter((row) => storeAllowed(this.fixture, scope, row.storeId)).filter((row) => (!query.status || (query.status === "acknowledged_unlinked" ? row.status === "acknowledged" && !row.linkedWorkOrderId : row.status === query.status)) && (!query.storeId || row.storeId === query.storeId)).map((row) => requestRow(this.fixture, row)).filter((row) => !search || normalize([row.reference, row.problem, row.reporterName, row.storeNumber, row.storeName].join(" ")).includes(search)).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
     return page(rows, query);
   }
 

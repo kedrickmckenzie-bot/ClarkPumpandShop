@@ -316,6 +316,13 @@
       "when": 1788921343638,
       "tag": "0044_foamy_daredevil",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1788929771575,
+      "tag": "0045_magical_dorian_gray",
+      "breakpoints": true
     }
   ]
 }

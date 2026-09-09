@@ -402,6 +402,15 @@ export const opsRequests = pgTable("ops_requests", {
   status: text("status").notNull(),
   version: integer("version").notNull().default(0),
   submittedAt: instant("submitted_at").notNull(),
+  acknowledgedAt: instant("acknowledged_at"),
+  acknowledgedByActorType: text("acknowledged_by_actor_type"),
+  acknowledgedByActorId: text("acknowledged_by_actor_id"),
+  acknowledgedByActorName: text("acknowledged_by_actor_name"),
+  linkedWorkOrderId: text("linked_work_order_id"),
+  linkedAt: instant("linked_at"),
+  linkedByActorType: text("linked_by_actor_type"),
+  linkedByActorId: text("linked_by_actor_id"),
+  linkedByActorName: text("linked_by_actor_name"),
   convertedWorkOrderId: text("converted_work_order_id"),
 }, (table): PgTableExtraConfigValue[] => [
   unique("uq_ops_requests_org_id").on(table.organizationId, table.id),
@@ -425,8 +434,13 @@ export const opsRequests = pgTable("ops_requests", {
     columns: [table.organizationId, table.convertedWorkOrderId],
     foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id],
   }),
+  foreignKey({
+    name: "fk_ops_requests_linked_work",
+    columns: [table.organizationId, table.linkedWorkOrderId],
+    foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id],
+  }),
   check("chk_ops_requests_priority", sql`${table.priority} IN ('emergency', 'urgent', 'routine', 'planned')`),
-  check("chk_ops_requests_status", sql`${table.status} IN ('submitted', 'under_review', 'converted', 'closed')`),
+  check("chk_ops_requests_status", sql`${table.status} IN ('submitted', 'under_review', 'acknowledged', 'converted', 'closed')`),
 ]);
 
 export const opsRequestImpactAssessments = pgTable("ops_request_impact_assessments", {

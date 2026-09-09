@@ -46,7 +46,7 @@ export interface OrganizationWorkflowPolicy {
 }
 
 export type ScopeKind = "organization" | "division" | "region" | "store" | "vendor";
-export type RequestStatus = "submitted" | "under_review" | "converted" | "closed";
+export type RequestStatus = "submitted" | "under_review" | "acknowledged" | "converted" | "closed";
 export type WorkOrderPriority = "emergency" | "urgent" | "routine" | "planned";
 export type WorkOrderStatus =
   | "draft"
@@ -373,6 +373,16 @@ export interface ServiceRequest {
   /** Monotonic optimistic-concurrency token for request lifecycle mutations. */
   version?: number;
   submittedAt: IsoDateTime;
+  acknowledgedAt?: IsoDateTime;
+  acknowledgedByActorType?: ActorType;
+  acknowledgedByActorId?: OpsId;
+  acknowledgedByActorName?: string;
+  /** A factual association to existing work; this is not conversion or proof of repair. */
+  linkedWorkOrderId?: OpsId;
+  linkedAt?: IsoDateTime;
+  linkedByActorType?: ActorType;
+  linkedByActorId?: OpsId;
+  linkedByActorName?: string;
   convertedWorkOrderId?: OpsId;
 }
 

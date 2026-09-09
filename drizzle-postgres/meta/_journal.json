@@ -281,6 +281,13 @@
       "when": 1788921350971,
       "tag": "0039_skinny_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788929775438,
+      "tag": "0040_faithful_magus",
+      "breakpoints": true
     }
   ]
 }

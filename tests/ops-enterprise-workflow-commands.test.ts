@@ -293,7 +293,8 @@ describe("service-request review decisions", () => {
       expectedStatus: "under_review",
       actor: facilitiesActor,
     });
-    expect(linked).toMatchObject({ status: "converted", convertedWorkOrderId: existingWork.id });
+    expect(linked).toMatchObject({ status: "acknowledged", linkedWorkOrderId: existingWork.id });
+    expect(linked.convertedWorkOrderId).toBeUndefined();
     expect(snapshot(harness.repository).workOrders).toHaveLength(before.workOrders.length);
     expect(snapshot(harness.repository).assignments).toHaveLength(before.assignments.length);
     expect(snapshot(harness.repository).workflowTasks.find((task) => task.serviceRequestId === request.id)).toMatchObject({ status: "completed" });
