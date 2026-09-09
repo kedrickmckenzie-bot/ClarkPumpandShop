@@ -73,7 +73,7 @@ describe("operator bid-request route", () => {
 
   it.each([
     { label: "missing", dueAt: undefined, message: "dueAt is required." },
-    { label: "not in the future", dueAt: "2020-01-01T12:00:00.000Z", message: "Bid response due date must be in the future" },
+    { label: "not in the future", dueAt: "2020-01-01T12:00:00.000Z", message: "Quote response due date must be in the future" },
   ])("rejects a $label response deadline without creating bid evidence", async ({ dueAt, message }) => {
     const repository = configureContext();
     const before = repository.snapshot();

@@ -284,6 +284,9 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
 
   if (route === "work-orders") {
     const heldPlan = first(query.visitPlan) === "ready";
+    const upcomingAppointments = first(query.appointment) === "upcoming";
+    const heldReviewWindow = first(query.reviewWindow);
+    const heldOpportunity = first(query.opportunity);
     const heldStoreGroup = first(query.storeGroup) === "multiple" ? "multiple" as const : undefined;
     const requestedStatus = first(query.status);
     const statuses = requestedStatus === "open"
@@ -304,13 +307,16 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       costMonth: first(query.costMonth),
       heldOnly: heldPlan,
       heldStoreGroup,
+      heldReviewDeadlineTo: heldPlan && heldReviewWindow === "30" ? new Date(Date.parse(NORTHLINE_AS_OF) + 30 * 86_400_000).toISOString() : undefined,
+      heldConfirmedOpportunityAfter: heldPlan && heldOpportunity === "confirmed" ? NORTHLINE_AS_OF : undefined,
+      upcomingAppointmentAfter: upcomingAppointments ? NORTHLINE_AS_OF : undefined,
     }), repository.getHeldWorkPortfolioSummary(scope)]);
-    result = work; rows = work.items.map(heldPlan ? heldWorkRow : workRow); title = heldPlan ? "Approved work waiting for a suitable visit" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : "Track internal and outside service from creation through visits, follow-up, and recorded cost."; placeholder = "Search number, problem, store, vendor, or category";
-    if (heldPlan && roleCan(session.role, "issue_work_order")) {
+    result = work; rows = work.items.map(heldPlan ? heldWorkRow : workRow); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "Track internal and outside service from creation through visits, follow-up, and recorded cost."; placeholder = "Search number, problem, store, vendor, or category";
+    if (heldPlan && roleCan(session, "issue_work_order")) {
       const currentContext = `/app/work-orders?${new URLSearchParams(paramsWithoutPage(query)).toString()}`;
       primaryAction = { label: "Send approved jobs together", href: `/app/store-sweeps/new?returnTo=${encodeURIComponent(currentContext)}` };
       secondaryAction = { label: "Return to all work", href: workTimingHref(query, false) };
-    } else if (roleCan(session.role, "create_work_order")) primaryAction = { label: "Create work order", href: "/app/work-orders/new" };
+    } else if (roleCan(session, "create_work_order")) primaryAction = { label: "Create work order", href: "/app/work-orders/new" };
     if (session.role === "facilities" || session.role === "regional") {
       if (!heldPlan) secondaryAction = { label: "Send approved jobs together", href: "/app/store-sweeps/new?returnTo=%2Fapp%2Fwork-orders" };
       metrics = [
@@ -324,12 +330,20 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
           { value: "all", label: "All work", href: workTimingHref(query, false), selected: !heldPlan },
           { value: "ready", label: `Approved for next suitable visit (${held.approvedWorkOrders})`, href: workTimingHref(query, true), selected: heldPlan },
         ],
-      }];
+      }, ...(heldPlan ? [{
+        id: "held-analysis",
+        label: "Portfolio review",
+        options: [
+          { value: "all", label: "All approved work", href: hrefWithFilter("work-orders", { ...query, reviewWindow: undefined, opportunity: undefined }, "reviewWindow"), selected: !heldReviewWindow && !heldOpportunity },
+          { value: "due", label: "Review due within 30 days", href: hrefWithFilter("work-orders", { ...query, opportunity: undefined }, "reviewWindow", "30"), selected: heldReviewWindow === "30" },
+          { value: "confirmed", label: "Confirmed visit opportunities", href: hrefWithFilter("work-orders", { ...query, reviewWindow: undefined }, "opportunity", "confirmed"), selected: heldOpportunity === "confirmed" },
+        ],
+      }] : [])];
     }
   } else if (route === "requests") {
     const requests = await repository.listRequests(scope, { ...request, search: q, status: first(query.status), storeId: first(query.store) });
     result = requests; rows = requests.items.map(requestRow); title = "Service requests"; eyebrow = "Reported issues"; description = "Review what store teams reported, then create work, escalate it, or close it without changing the original report."; placeholder = "Search problem, reporter, request, or store";
-    if (roleCan(session.role, "create_request")) primaryAction = { label: "Report an issue", href: "/app/requests/new" };
+    if (roleCan(session, "create_request")) primaryAction = { label: "Report an issue", href: "/app/requests/new" };
   } else if (route === "visits") {
     const visitContext = { storeId: first(query.store), vendorId: first(query.vendor) };
     const [visits, visitSummary] = await Promise.all([
@@ -341,9 +355,9 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       const params = new URLSearchParams(Object.entries({ store: visitContext.storeId, vendor: visitContext.vendorId, status, review }).filter((entry): entry is [string, string] => Boolean(entry[1])));
       return `/app/visits${params.size ? `?${params}` : ""}`;
     };
-    const upcomingWork = new URLSearchParams(Object.entries({ store: visitContext.storeId, vendor: visitContext.vendorId, status: "scheduled" }).filter((entry): entry is [string, string] => Boolean(entry[1])));
+    const upcomingWork = new URLSearchParams(Object.entries({ store: visitContext.storeId, vendor: visitContext.vendorId, appointment: "upcoming" }).filter((entry): entry is [string, string] => Boolean(entry[1])));
     metrics = [
-      { id: "upcoming-visits", label: "Upcoming", value: String(visitSummary.upcoming), supportingText: "Vendor-confirmed appointments in the selected scope", tone: visitSummary.upcoming ? "info" : "neutral", link: { href: `/app/work-orders?${upcomingWork}`, label: "Open scheduled work" } },
+      { id: "upcoming-visits", label: "Upcoming work", value: String(visitSummary.upcoming), supportingText: "Distinct work orders with a vendor-confirmed future appointment in the selected scope", tone: visitSummary.upcoming ? "info" : "neutral", link: { href: `/app/work-orders?${upcomingWork}`, label: "Open the exact work orders" } },
       { id: "active-visits", label: "Onsite now", value: String(visitSummary.active), supportingText: "Active check-ins in the selected scope", tone: visitSummary.active ? "info" : "neutral", link: { href: withContext("active"), label: "Show onsite" } },
       { id: "completed-visits", label: "Completed", value: String(visitSummary.completed), supportingText: "Checked-out history; filters below affect the result list", tone: "positive", link: { href: withContext("checked_out"), label: "Show history" } },
       { id: "visit-review", label: "Needs review", value: String(visitSummary.needsReview), supportingText: `${visitSummary.withoutWorkOrder} without a work order`, tone: visitSummary.needsReview ? "warning" : "positive", link: { href: withContext(undefined, "true"), label: "Review visits" } },
@@ -354,17 +368,17 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       repository.getStorePortfolioSummary(scope),
     ]);
     result = stores; rows = stores.items.map(storeRow); title = "Stores"; eyebrow = "Operating network"; description = "Find any location by store number, address, name, city, or alias and open its maintenance history."; placeholder = "Search store number, name, address, city, or alias";
-    if (roleCan(session.role, "create_store")) primaryAction = { label: "Add store", href: "/app/stores/new" };
+    if (roleCan(session, "create_store")) primaryAction = { label: "Add store", href: "/app/stores/new" };
     metrics = [
       { id: "stores-in-scope", label: "Stores in scope", value: String(storeSummary.stores), supportingText: "Portfolio-wide for your operating scope; search below filters the directory", tone: "neutral", link: { href: "/app/stores", label: "Open full directory" } },
       { id: "store-open-work", label: "Open work orders", value: String(storeSummary.openWorkOrders), supportingText: "Current open work across the scoped store portfolio", tone: storeSummary.openWorkOrders ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open source work" } },
       { id: "store-onsite-now", label: "Vendors onsite now", value: String(storeSummary.activeVisits), supportingText: "Active server-timestamped check-ins across the scoped portfolio", tone: storeSummary.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open active visits" } },
-      { id: "store-recorded-cost", label: "Recorded work cost", value: money(storeSummary.recordedCostMinor), supportingText: "Entered cost lines across the scoped portfolio; not invoice totals", tone: "neutral", link: { href: "/app/spend", label: "Open cost breakdown" } },
+      { id: "store-recorded-cost", label: "Recorded work cost · all history", value: money(storeSummary.recordedCostMinor), supportingText: "Entered cost lines across the full scoped history; not invoice totals", tone: "neutral", link: { href: "/app/work-orders?hasCost=true", label: "Open every work order with recorded cost" } },
     ];
   } else {
     const vendors = await repository.listVendors(scope, q, request);
     result = vendors; rows = vendors.items.map(vendorRow); title = "Approved vendors"; eyebrow = "Vendor network"; description = "Search by name, specialty, plain-language alias, equipment type, and coverage."; placeholder = "Search vendor, plumber, refrigeration, dispenser, or equipment";
-    if (roleCan(session.role, "onboard_vendor")) primaryAction = { label: "Add vendor", href: "/app/vendors/new" };
+    if (roleCan(session, "onboard_vendor")) primaryAction = { label: "Add vendor", href: "/app/vendors/new" };
   }
 
   const total = result.totalCount;

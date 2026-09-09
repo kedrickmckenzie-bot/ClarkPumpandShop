@@ -69,6 +69,7 @@ import {
 } from "@/lib/ops/lifecycle-analytics";
 import { resolveLifecycleDecisionState } from "@/lib/ops/lifecycle-decision-state";
 import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
+import { projectAttentionItems } from "@/lib/ops/attention-projection";
 import { reportCatalog } from "@/lib/ops/report-catalog";
 import { domainLabel } from "@/lib/product/domain-label";
 import {
@@ -812,94 +813,6 @@ const reviewQueueExceptionCopy: Record<ExceptionKind, { label: string; title: st
   },
 };
 
-function actions(fixture: OpsFixture, scoped: ScopedFixture, limit = 6): ActionItemViewModel[] {
-  const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
-  const workById = new Map(scoped.workOrders.map((workOrder) => [workOrder.id, workOrder]));
-  const exceptionActions = fixture.exceptions
-    .filter(
-      (exception) =>
-        exception.organizationId === scoped.organizationId &&
-        exception.status !== "resolved" &&
-        (exception.storeId ? scoped.storeIds.has(exception.storeId) : scoped.includeCompanywide),
-    )
-    .map<ActionItemViewModel>((exception) => {
-      const workNumber = exception.workOrderId ? workById.get(exception.workOrderId)?.number : undefined;
-      const copy = reviewQueueExceptionCopy[exception.kind];
-      return {
-        id: exception.id,
-        title: copy.title,
-        description: exception.summary,
-        categoryLabel: "Record to check",
-        attentionType: "service_record",
-        reasonLabel: copy.label,
-        storeLabel: exception.storeId ? storeLabel(storeById.get(exception.storeId)) : "Companywide",
-        recordLabel: exception.workOrderId
-          ? workNumber ?? "Linked work"
-          : exception.visitId
-            ? "Service visit"
-            : copy.label,
-        dueAt: exception.detectedAt,
-        dueLabel: exception.severity === "urgent" ? "Review now" : `Open since ${date(exception.detectedAt)}`,
-        ownerLabel: "Facilities coordinator",
-        priorityLabel: exception.severity === "urgent" ? "Urgent" : "Review",
-        tone: exception.severity === "urgent" ? "critical" : "warning",
-        link: { href: `/app/action-center/${exception.id}`, label: "Review and resolve" },
-      };
-    });
-  const followUpActions = fixture.followUps
-    .filter(
-      (followUp) =>
-        followUp.organizationId === scoped.organizationId &&
-        followUp.status === "open" &&
-        Boolean(workById.get(followUp.workOrderId)),
-    )
-    .map<ActionItemViewModel>((followUp) => {
-      const work = workById.get(followUp.workOrderId)!;
-      return {
-        id: followUp.id,
-        title: followUp.nextAction,
-        description: followUp.sourceVisitId
-          ? "Created from a checkout result. Open the visit to read the technician's notes."
-          : "A manager-created follow-up is still open.",
-        categoryLabel: "Follow-up",
-        attentionType: "follow_up",
-        reasonLabel: "Work-order follow-up",
-        storeLabel: storeLabel(storeById.get(work.storeId)),
-        recordLabel: work.number,
-        dueAt: followUp.dueAt,
-        dueLabel: `Due ${date(followUp.dueAt)}`,
-        ownerLabel: followUp.accountableParty,
-        priorityLabel: Date.parse(followUp.dueAt) < Date.parse(fixture.asOf) ? "Overdue" : "Due soon",
-        tone: Date.parse(followUp.dueAt) < Date.parse(fixture.asOf) ? "critical" : "warning",
-        link: { href: `/app/action-center/${followUp.id}`, label: "Complete or reassign" },
-      };
-    });
-  const vendorById = new Map(fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).map((vendor) => [vendor.id, vendor]));
-  const vendorReminderActions = scoped.includeCompanywide
-    ? fixture.vendorReminders
-        .filter((reminder) => reminder.organizationId === scoped.organizationId && reminder.status === "open" && vendorById.has(reminder.vendorId))
-        .map<ActionItemViewModel>((reminder) => ({
-          id: reminder.id,
-          title: reminder.title,
-          description: "A companywide vendor task is still open.",
-          categoryLabel: "Vendor task",
-          attentionType: "vendor_task",
-          reasonLabel: "Vendor relationship task",
-          storeLabel: "Companywide",
-          recordLabel: vendorById.get(reminder.vendorId)?.name ?? "Vendor",
-          dueAt: reminder.dueAt,
-          dueLabel: `Due ${date(reminder.dueAt)}`,
-          ownerLabel: reminder.accountableParty,
-          priorityLabel: Date.parse(reminder.dueAt) < Date.parse(fixture.asOf) ? "Overdue" : "Due soon",
-          tone: Date.parse(reminder.dueAt) < Date.parse(fixture.asOf) ? "critical" : "warning",
-          link: { href: `/app/vendors/${reminder.vendorId}#vendor-reminders`, label: "Open vendor reminder" },
-        }))
-    : [];
-  return [...exceptionActions, ...followUpActions, ...vendorReminderActions]
-    .sort((left, right) => Number(right.tone === "critical") - Number(left.tone === "critical") || (Date.parse(left.dueAt ?? "9999-12-31") - Date.parse(right.dueAt ?? "9999-12-31")) || left.title.localeCompare(right.title))
-    .slice(0, limit);
-}
-
 const accountabilityExceptionKinds = new Set([
   "no_work_order",
   "unexpected_visit",
@@ -915,7 +828,72 @@ function actionsForSession(
   session: OperatorSession,
   limit = 6,
 ) {
-  const source = actions(fixture, scoped, 200);
+  const role = session.role === "facilities"
+    ? "facilities_admin" as const
+    : session.role === "regional"
+      ? "regional_manager" as const
+      : session.role === "finance"
+        ? "finance_reviewer" as const
+        : session.role;
+  const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
+  const workById = new Map(scoped.workOrders.map((work) => [work.id, work]));
+  const requestById = new Map(fixture.requests.filter((request) => request.organizationId === scoped.organizationId).map((request) => [request.id, request]));
+  const vendorById = new Map(fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).map((vendor) => [vendor.id, vendor]));
+  const source = projectAttentionItems({
+    fixture,
+    organizationId: scoped.organizationId,
+    storeIds: scoped.storeIds,
+    includeCompanywide: scoped.includeCompanywide,
+    role,
+    membershipId: session.membershipId,
+    asOf: fixture.asOf,
+  }).map<ActionItemViewModel>((item) => {
+    const exception = item.sourceKind === "exception"
+      ? fixture.exceptions.find((candidate) => candidate.organizationId === scoped.organizationId && candidate.id === item.id)
+      : undefined;
+    const exceptionCopy = exception ? reviewQueueExceptionCopy[exception.kind] : undefined;
+    const work = item.workOrderId ? workById.get(item.workOrderId) : undefined;
+    const request = item.serviceRequestId ? requestById.get(item.serviceRequestId) : undefined;
+    const vendor = item.vendorId ? vendorById.get(item.vendorId) : undefined;
+    const overdue = Boolean(item.dueAt && Date.parse(item.dueAt) <= Date.parse(fixture.asOf));
+    const externalWait = item.lane === "waiting";
+    const categoryLabel = item.group === "financial"
+      ? "Financial review"
+      : item.group === "completion"
+        ? "Completion check"
+        : item.sourceKind === "exception"
+          ? "Service-record exception"
+          : item.sourceKind === "vendor_reminder"
+            ? "Vendor relationship"
+            : "Work and vendor decision";
+    return {
+      id: item.id,
+      title: exceptionCopy?.title ?? item.title,
+      description: exception?.summary ?? item.reason,
+      categoryLabel,
+      attentionType: item.sourceKind === "exception" ? "service_record" : item.sourceKind === "vendor_reminder" ? "vendor_task" : "follow_up",
+      attentionLane: item.lane,
+      attentionGroup: item.group,
+      sourceCount: item.sourceIds.length,
+      reasonLabel: exceptionCopy?.label ?? (externalWait ? "Waiting on another party" : item.lane === "mine" ? "Needs my action" : item.lane === "upcoming" ? "Upcoming review" : "Team work"),
+      storeLabel: item.storeId ? storeLabel(storeById.get(item.storeId)) : "Companywide",
+      recordLabel: work?.number ?? request?.reference ?? vendor?.name ?? categoryLabel,
+      dueAt: item.dueAt,
+      dueLabel: item.sourceKind === "exception"
+        ? `Open since ${date(item.dueAt!)}`
+        : !item.dueAt
+          ? "No SLA — reason recorded"
+          : overdue && externalWait
+            ? `Commitment missed ${date(item.dueAt)}`
+            : overdue
+              ? `Overdue since ${date(item.dueAt)}`
+              : `Due ${date(item.dueAt)}`,
+      ownerLabel: item.owner,
+      priorityLabel: overdue ? "Overdue" : item.priority === "critical" ? "Critical" : sentence(item.priority),
+      tone: overdue || item.priority === "critical" ? "critical" : item.priority === "high" ? "warning" : "neutral",
+      link: { href: item.linkHref, label: item.sourceKind === "exception" ? "Review and decide" : "Open required action" },
+    };
+  });
   if (session.demoEdition !== "accountability") return source.slice(0, limit);
   const accountabilityExceptionIds = new Set(
     fixture.exceptions
@@ -1175,7 +1153,7 @@ function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession
     row.screening.state === "compare_alternatives",
   );
 
-  const reviewItems = actions(fixture, scoped, 200);
+  const reviewItems = actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER);
   const metrics: MetricViewModel[] = [
     {
       id: "active-visits",
@@ -1267,7 +1245,7 @@ function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession
       },
     ],
     metrics,
-    priorityActions: actions(fixture, scoped),
+    priorityActions: actionsForSession(fixture, scoped, session),
     breakdowns: [
       costBreakdown(
         "Recorded cost by service area",
@@ -1488,7 +1466,15 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     if (visit.vendorId) observedVisitCounts.set(visit.vendorId, (observedVisitCounts.get(visit.vendorId) ?? 0) + 1);
   }
 
-  const reviewItems = actions(fixture, scoped, 200);
+  const reviewItems = actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER);
+  const storeManagerActions = reviewItems.filter((item) => item.attentionLane === "mine");
+  const dashboardWorkIds = new Set(scoped.workOrders.map((work) => work.id));
+  const upcomingAppointments = (fixture.serviceAppointments ?? []).filter((appointment) => (
+    appointment.organizationId === scoped.organizationId
+    && appointment.status === "confirmed"
+    && Date.parse(appointment.startsAt) >= Date.parse(fixture.asOf)
+    && dashboardWorkIds.has(appointment.workOrderId)
+  ));
   const categoryCost = new Map<string, number>();
   const storeCost = new Map<string, number>();
   for (const work of scoped.workOrders) {
@@ -1656,11 +1642,11 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
       ],
       priorityActions: [
         dashboardShortcut({ id: "store-report", title: "Report a new store issue", description: "Capture the problem, reporter, priority, and optional photos. Equipment can be classified later.", categoryLabel: "Issue intake", dueLabel: "When needed", ownerLabel: "Store team", tone: "info", href: "/app/requests/new", linkLabel: "Report an issue" }),
-        dashboardShortcut({ id: "store-work", title: `Review ${openWork.length} open work order${openWork.length === 1 ? "" : "s"}`, description: "See who owns the work, what happens next, and when it is due.", categoryLabel: "Current work", dueLabel: "Current", ownerLabel: "Store and maintenance", tone: openWork.length ? "warning" : "positive", href: "/app/work-orders?status=open", linkLabel: "Open current work" }),
-        dashboardShortcut({ id: "store-visits", title: `Review ${completedVisits.length} completed service visit${completedVisits.length === 1 ? "" : "s"}`, description: "See arrival, checkout, outcome, photos, and any follow-up tied to this store.", categoryLabel: "Vendor visits", dueLabel: "History", ownerLabel: "Store team", href: "/app/visits?status=checked_out", linkLabel: "Open visit history" }),
-        dashboardShortcut({ id: "store-record", title: "Open the complete store record", description: "Move between cost, issues, work, visits, equipment, PM, and public entry points from one place.", categoryLabel: "Store record", dueLabel: "Available now", ownerLabel: "Store manager", href: store ? `/app/stores/${store.id}` : "/app/stores", linkLabel: "Open store" }),
+        dashboardShortcut({ id: "store-response", title: `${storeManagerActions.length} need${storeManagerActions.length === 1 ? "s" : ""} your response`, description: storeManagerActions.length ? "These are decisions or confirmations assigned to the store-manager role, not every item facilities is handling." : "No decision or observable-result confirmation is assigned to you right now.", categoryLabel: "Needs your response", dueLabel: storeManagerActions.length ? "Review now" : "Nothing waiting", ownerLabel: "Store manager", tone: storeManagerActions.length ? "warning" : "positive", href: "/app/action-center?lane=mine", linkLabel: "Open your actions" }),
+        dashboardShortcut({ id: "store-work", title: `${openWork.length} work order${openWork.length === 1 ? " is" : "s are"} being handled`, description: "See the responsible person or team, the next expected event, and when it is due without taking over facilities work.", categoryLabel: "Being handled", dueLabel: "Current", ownerLabel: "Store and maintenance", tone: openWork.length ? "info" : "positive", href: "/app/work-orders?status=open", linkLabel: "Open current work" }),
+        dashboardShortcut({ id: "store-upcoming", title: `${upcomingAppointments.length} upcoming confirmed appointment${upcomingAppointments.length === 1 ? "" : "s"}`, description: "Review agreed service timing and the authorized work before the vendor arrives.", categoryLabel: "Upcoming visits", dueLabel: upcomingAppointments.length ? "Scheduled" : "None scheduled", ownerLabel: "Vendor and facilities", href: "/app/visits?status=upcoming", linkLabel: "Open upcoming visits" }),
       ],
-      prioritySection: { title: "Your store workflow", description: "The four places a store manager should need most often.", link: { href: store ? `/app/stores/${store.id}` : "/app/stores", label: "Open complete store record" } },
+      prioritySection: { title: "Your store workflow", description: "Report a problem, respond only when a decision is assigned to you, and follow work that maintenance is already handling.", link: { href: store ? `/app/stores/${store.id}` : "/app/stores", label: "Open complete store record" } },
       breakdowns: [categoryBreakdown],
       trends: [trend],
     };
@@ -1738,7 +1724,7 @@ const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
     { key: "status", label: "Status" },
   ],
   estimates: [
-    { key: "request", label: "Bid request" },
+    { key: "request", label: "Quote request" },
     { key: "work", label: "Work order / store" },
     { key: "vendor", label: "Vendor" },
     { key: "amount", label: "Latest proposal", align: "end" },
@@ -1797,7 +1783,7 @@ const listMeta: Record<OperatorListRoute, { title: string; eyebrow: string; desc
   "action-center": { title: "Needs attention", eyebrow: "Review queue", description: "This is your to-do list. Start at the top, open an item, and take the next step.", placeholder: "Search this list" },
   requests: { title: "Service requests", eyebrow: "Reported issues", description: "Review what store teams reported, then create work, escalate it, or close it without changing the original report.", placeholder: "Search problem, reporter, request, or store" },
   "work-orders": { title: "Work orders", eyebrow: "Maintenance work", description: "Track internal and outside service from creation through visits, follow-up, and recorded cost.", placeholder: "Search number, problem, store, vendor, or category" },
-  estimates: { title: "Bid requests", eyebrow: "Request pricing", description: "Ask one or more vendors for pricing without creating duplicate work orders, visits, or costs.", placeholder: "Search work order, store, vendor, scope, or amount" },
+  estimates: { title: "Quote requests", eyebrow: "Request pricing", description: "Ask one or more vendors for pricing without creating duplicate work orders, visits, or costs.", placeholder: "Search work order, store, vendor, scope, or amount" },
   visits: { title: "Service visits", eyebrow: "Observed service", description: "See who arrived, why, the evidence captured, and which visits need review—without treating presence as certified labor.", placeholder: "Search technician, vendor, store, or work order" },
   stores: { title: "Stores", eyebrow: "Operating network", description: "Find any location by store number, address, name, city, or alias and open its maintenance history.", placeholder: "Search store number, name, address, city, or alias" },
   vendors: { title: "Approved vendors", eyebrow: "Vendor network", description: "Search by name, specialty, plain-language alias, equipment type, and coverage.", placeholder: "Search vendor, plumber, refrigeration, dispenser, or equipment" },
@@ -2838,7 +2824,7 @@ export function buildVendorPerformanceListModel(
     specialtyOptions,
     sort,
     resultSummary: `${vendors.length} of ${fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).length} approved vendors`,
-    createVendorLink: roleCan(session.role, "onboard_vendor") ? { href: "/app/vendors/new", label: "Add approved vendor" } : undefined,
+    createVendorLink: roleCan(session, "onboard_vendor") ? { href: "/app/vendors/new", label: "Add approved vendor" } : undefined,
     portfolioMetrics: [
       { id: "vendors", label: "Approved vendors", value: String(vendors.length), context: `${vendors.length} vendor${vendors.length === 1 ? "" : "s"} match this view`, sourceLink: { href: "/app/vendors", label: "Open vendor directory" } },
       { id: "attention", label: "Vendors to review", value: String(vendors.filter((vendor) => vendor.relationshipState !== "stable").length), context: "Open follow-ups, unresolved visits, or missing documents", sourceLink: { href: "/app/vendors?view=attention", label: "Review these vendors" } },
@@ -2892,13 +2878,13 @@ export function buildVendorPerformanceDetailModel(
     scopeLabel: session.scopeLabel,
     updatedLabel: `Through ${date(fixture.asOf)}`,
     backLink: { href: "/app/vendors", label: "Back to vendor network" },
-    createWorkOrderLink: roleCan(session.role, "create_work_order")
+    createWorkOrderLink: roleCan(session, "create_work_order")
       ? { href: `/app/work-orders/new?vendor=${vendor.id}`, label: "Create work order" }
       : undefined,
-    manageRelationshipAction: roleCan(session.role, "onboard_vendor")
+    manageRelationshipAction: roleCan(session, "onboard_vendor")
       ? `/api/ops/vendors/${encodeURIComponent(vendor.id)}/relationship`
       : undefined,
-    manageRemindersAction: roleCan(session.role, "onboard_vendor")
+    manageRemindersAction: roleCan(session, "onboard_vendor")
       ? `/api/ops/vendors/${encodeURIComponent(vendor.id)}/reminders`
       : undefined,
     timeZone: organizationTimeZone,
@@ -2981,7 +2967,7 @@ export function buildListModel(
   const q = cleanSearch(first(query.q));
   let rows: TableRowViewModel[];
   if (route === "work-orders") {
-    rows = workRows(fixture, scoped, query, roleCan(session.role, "control_work_order"));
+    rows = workRows(fixture, scoped, query, roleCan(session, "control_work_order"));
     if (first(query.visitPlan) === "ready" && (first(query.opportunity) === "confirmed" || first(query.reviewWindow) === "30" || first(query.storeGroup) === "multiple")) {
       const approvedPortfolio = buildApprovedWorkPortfolio(fixture, session, {
         q: first(query.q),
@@ -3128,7 +3114,7 @@ export function buildListModel(
         label: `${work.number} - ${vendor?.name ?? "Unknown vendor"}`,
         href: `/app/work-orders/${work.id}?view=service#bid-requests`,
         cells: [
-          { key: "request", value: request.decisionKind === "replacement_quote" ? "Replacement quote" : "Service bid", secondary: request.requestedScope },
+          { key: "request", value: request.decisionKind === "replacement_quote" ? "Replacement quote" : "Service quote", secondary: request.requestedScope },
           { key: "work", value: work.number, secondary: storeLabel(store) },
           { key: "vendor", value: vendor?.name ?? "Unknown vendor" },
           { key: "amount", value: proposal ? estimateMoney(proposal.amount.amountMinor, proposal.amount.currency) : "Not submitted", secondary: proposal ? `Revision ${proposal.revision}` : "Pricing evidence pending" },
@@ -3158,9 +3144,11 @@ export function buildListModel(
   } else if (route === "action-center") {
     const requestedType = first(query.type);
     const requestedPriority = first(query.priority);
-    rows = actionsForSession(fixture, scoped, session, 200)
+    const requestedLane = first(query.lane);
+    rows = actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER)
       .filter((action) => !requestedType || (["service-record", "exception"].includes(requestedType) ? action.attentionType === "service_record" : ["vendor-task", "vendor-reminder"].includes(requestedType) ? action.attentionType === "vendor_task" : action.attentionType === "follow_up"))
       .filter((action) => !requestedPriority || (requestedPriority === "urgent" ? action.tone === "critical" : action.tone !== "critical"))
+      .filter((action) => !requestedLane || action.attentionLane === requestedLane)
       .filter((action) => !q || searchable(action.title, action.description, action.reasonLabel, action.ownerLabel, action.storeLabel, action.recordLabel).includes(q))
       .map((action) => ({
         id: action.id,
@@ -3204,6 +3192,7 @@ export function buildListModel(
       { id: "vendors", label: "Vendors", href: "/app/vendors", cells: [{ key: "area", value: "Approved vendor network" }, { key: "summary", value: `${fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).length} approved vendors` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configured", tone: "positive" }] },
       { id: "taxonomy", label: "Service areas and equipment templates", href: "/app/admin/service-areas", cells: [{ key: "area", value: "Company equipment setup" }, { key: "summary", value: `${(fixture.equipmentTemplates ?? []).filter((template) => template.organizationId === scoped.organizationId && template.active).length} reusable equipment types` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Ready to reuse", tone: "positive" }] },
       { id: "approval-policies", label: "Approval policies", href: "/app/admin/approval-policies", cells: [{ key: "area", value: "Authorization governance" }, { key: "summary", value: `${fixture.approvalPolicies.filter((policy) => policy.organizationId === scoped.organizationId && policy.status === "active").length} active policies · ${fixture.approvalRequests.filter((request) => request.organizationId === scoped.organizationId && approvalRequestState(request, fixture.approvalDecisions) === "pending").length} pending decisions` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Auditable", tone: "positive" }] },
+      { id: "maintenance-responsibilities", label: "Maintenance responsibilities", href: "/app/admin/maintenance-responsibilities", cells: [{ key: "area", value: "Role permissions and closure policy" }, { key: "summary", value: "Configure store confirmation, routine creation, dispatch, and eligible auto-close" }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Organization-specific", tone: "info" }] },
       { id: "notifications", label: "Notification delivery", href: "/app/admin/notifications", cells: [{ key: "area", value: "Email and escalation rules" }, { key: "summary", value: `${(fixture.notificationRules ?? []).filter((rule) => rule.organizationId === scoped.organizationId && rule.emailEnabled).length} email rules enabled` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configurable", tone: "info" }] },
       { id: "imports", label: "Data imports", href: "/app/admin/imports", cells: [{ key: "area", value: "Store, vendor, and equipment onboarding" }, { key: "summary", value: "Validate CSV files before any records are written" }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Dry-run preview", tone: "info" }] },
     ];
@@ -3321,7 +3310,7 @@ export function buildListModel(
         ],
       }]
     : undefined;
-  const allAttention = route === "action-center" ? actionsForSession(fixture, scoped, session, 200) : [];
+  const allAttention = route === "action-center" ? actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER) : [];
   const scopedEstimateRequests = route === "estimates"
     ? (fixture.estimateRequests ?? []).filter((request) => request.organizationId === scoped.organizationId && scoped.workOrders.some((work) => work.id === request.workOrderId))
     : [];
@@ -3345,7 +3334,7 @@ export function buildListModel(
           label: "Purpose",
           options: [
             { value: "all", label: "All", href: hrefWithoutQueryKey(route, query, "decision"), selected: !estimateDecision },
-            { value: "service_bid", label: "Service bids", href: hrefWithQuery(routePath(route), { q: first(query.q), status: estimateStatus, decision: "service_bid" }), selected: estimateDecision === "service_bid" },
+            { value: "service_bid", label: "Service quotes", href: hrefWithQuery(routePath(route), { q: first(query.q), status: estimateStatus, decision: "service_bid" }), selected: estimateDecision === "service_bid" },
             { value: "replacement_quote", label: "Replacement quotes", href: hrefWithQuery(routePath(route), { q: first(query.q), status: estimateStatus, decision: "replacement_quote" }), selected: estimateDecision === "replacement_quote" },
           ],
         },
@@ -3358,16 +3347,28 @@ export function buildListModel(
       ? "vendor-task"
       : requestedActionType;
   const actionPriority = route === "action-center" ? first(query.priority) : undefined;
+  const actionLane = route === "action-center" ? first(query.lane) : undefined;
   const actionFilters = route === "action-center"
     ? [
+        {
+          id: "attention-lane",
+          label: "Responsibility",
+          options: [
+            { value: "all", label: `All (${allAttention.length})`, href: hrefWithoutQueryKey(route, query, "lane"), selected: !actionLane },
+            { value: "mine", label: `Needs my action (${allAttention.filter((item) => item.attentionLane === "mine").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "mine" }), selected: actionLane === "mine" },
+            { value: "team", label: `Team work (${allAttention.filter((item) => item.attentionLane === "team").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "team" }), selected: actionLane === "team" },
+            { value: "waiting", label: `Waiting on others (${allAttention.filter((item) => item.attentionLane === "waiting").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "waiting" }), selected: actionLane === "waiting" },
+            { value: "upcoming", label: `Upcoming (${allAttention.filter((item) => item.attentionLane === "upcoming").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "upcoming" }), selected: actionLane === "upcoming" },
+          ],
+        },
         {
           id: "attention-type",
           label: "Show",
           options: [
             { value: "all", label: `All (${allAttention.length})`, href: hrefWithoutQueryKey(route, query, "type"), selected: !actionType },
-            { value: "service-record", label: `Records to check (${allAttention.filter((item) => item.attentionType === "service_record").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, type: "service-record" }), selected: actionType === "service-record" },
-            { value: "follow-up", label: `Follow-ups (${allAttention.filter((item) => item.attentionType === "follow_up").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, type: "follow-up" }), selected: actionType === "follow-up" },
-            { value: "vendor-task", label: `Vendor tasks (${allAttention.filter((item) => item.attentionType === "vendor_task").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, type: "vendor-task" }), selected: actionType === "vendor-task" },
+            { value: "service-record", label: `Records to check (${allAttention.filter((item) => item.attentionType === "service_record").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, lane: actionLane, type: "service-record" }), selected: actionType === "service-record" },
+            { value: "follow-up", label: `Follow-ups (${allAttention.filter((item) => item.attentionType === "follow_up").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, lane: actionLane, type: "follow-up" }), selected: actionType === "follow-up" },
+            { value: "vendor-task", label: `Vendor tasks (${allAttention.filter((item) => item.attentionType === "vendor_task").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), priority: actionPriority, lane: actionLane, type: "vendor-task" }), selected: actionType === "vendor-task" },
           ],
         },
         {
@@ -3375,19 +3376,19 @@ export function buildListModel(
           label: "Priority",
           options: [
             { value: "all", label: "All", href: hrefWithoutQueryKey(route, query, "priority"), selected: !actionPriority },
-            { value: "urgent", label: `Do now (${allAttention.filter((item) => item.tone === "critical").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: "urgent" }), selected: actionPriority === "urgent" },
-            { value: "standard", label: `Other items (${allAttention.filter((item) => item.tone !== "critical").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: "standard" }), selected: actionPriority === "standard" },
+            { value: "urgent", label: `Do now (${allAttention.filter((item) => item.tone === "critical").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, lane: actionLane, priority: "urgent" }), selected: actionPriority === "urgent" },
+            { value: "standard", label: `Other items (${allAttention.filter((item) => item.tone !== "critical").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, lane: actionLane, priority: "standard" }), selected: actionPriority === "standard" },
           ],
         },
       ]
     : undefined;
-  const primaryAction = route === "requests" && roleCan(session.role, "create_request")
+  const primaryAction = route === "requests" && roleCan(session, "create_request")
     ? { label: "Report an issue", href: "/app/requests/new" }
-    : route === "work-orders" && roleCan(session.role, "create_work_order")
+    : route === "work-orders" && roleCan(session, "create_work_order")
       ? { label: "Create work order", href: "/app/work-orders/new" }
-      : route === "stores" && roleCan(session.role, "create_store")
+      : route === "stores" && roleCan(session, "create_store")
         ? { label: "Add store", href: "/app/stores/new" }
-        : route === "vendors" && roleCan(session.role, "onboard_vendor")
+        : route === "vendors" && roleCan(session, "onboard_vendor")
           ? { label: "Add vendor", href: "/app/vendors/new" }
           : undefined;
 
@@ -3589,7 +3590,7 @@ export function buildProgramModel(
       ? `${selectedRegion.name} · ${scoped.stores.length} stores`
       : session.scopeLabel;
   const costByWork = recordedCostByWork(fixture, scoped.organizationId);
-  const allActions = actions(fixture, scoped, 6);
+  const allActions = actionsForSession(fixture, scoped, session, 6);
 
   if (route === "spend") {
     const period = spendPeriod(fixture.asOf, first(query.period));
@@ -4473,7 +4474,7 @@ export function buildDetailModel(
       && request.status === "under_review"
       && impactReviewed
       && approvalAllowsConversion
-      && roleCan(session.role, "create_work_order"),
+      && roleCan(session, "create_work_order"),
     );
     const conversionState = convertedWork
       ? `Converted to ${convertedWork.number}`
@@ -4580,7 +4581,7 @@ export function buildDetailModel(
     const expectedReplacementYear = asset.installedAt && asset.expectedLifeYears
       ? new Date(asset.installedAt).getUTCFullYear() + asset.expectedLifeYears
       : undefined;
-    const canCreateWork = roleCan(session.role, "create_work_order");
+    const canCreateWork = roleCan(session, "create_work_order");
     return {
       state: { kind: "ready" },
       page: {
@@ -4830,7 +4831,7 @@ export function buildDetailModel(
         eyebrow: "Operator work order",
         description: work.problem,
         scopeLabel: storeLabel(store),
-        primaryAction: roleCan(session.role, "issue_work_order")
+        primaryAction: roleCan(session, "issue_work_order")
           && canRouteAndIssueWorkOrder(work.status)
           && assignment?.kind !== "internal"
           && (!assignment || !["completed", "cancelled", "superseded"].includes(assignment.status))
@@ -4956,7 +4957,7 @@ export function buildDetailModel(
     const openUnmatchedException = linkedWorks.length === 0
       ? exceptions.find((exception) => exception.kind === "no_work_order" && exception.status !== "resolved")
       : undefined;
-    const canCreateVisitWorkOrder = Boolean(openUnmatchedException && roleCan(session.role, "create_work_order"));
+    const canCreateVisitWorkOrder = Boolean(openUnmatchedException && roleCan(session, "create_work_order"));
     const createFromVisitHref = openUnmatchedException
       ? `/app/work-orders/new?sourceException=${encodeURIComponent(openUnmatchedException.id)}`
       : undefined;
@@ -5172,7 +5173,7 @@ export function buildDetailModel(
           eyebrow: store.name,
           description: storeAddress(store),
           scopeLabel: session.scopeLabel,
-          primaryAction: roleCan(session.role, "create_work_order") ? { label: "Create work order", href: `/app/work-orders/new?store=${store.id}` } : undefined,
+          primaryAction: roleCan(session, "create_work_order") ? { label: "Create work order", href: `/app/work-orders/new?store=${store.id}` } : undefined,
           secondaryAction: isDemoEntryStore ? { label: "Open vendor check-in", href: `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}` } : { label: "View service visits", href: `/app/visits?store=${store.id}` },
         },
         statusLabel: storeStatusLabel,
@@ -5294,7 +5295,7 @@ export function buildDetailModel(
       return {
         id: plan.id,
         label: plan.name,
-        href: work ? `/app/work-orders/${work.id}` : roleCan(session.role, "setup_pm") ? `/app/pm/plans/${plan.id}` : `/app/pm?store=${store.id}`,
+        href: work ? `/app/work-orders/${work.id}` : roleCan(session, "setup_pm") ? `/app/pm/plans/${plan.id}` : `/app/pm?store=${store.id}`,
         cells: [
           { key: "plan", value: program?.name ?? plan.name, secondary: asset ? `${asset.name} · ${asset.assetTag}` : plan.name },
           { key: "timing", value: occurrence ? date(occurrence.dueAt, store.timeZone) : "Not generated", secondary: occurrence ? `${date(occurrence.windowStartsAt, store.timeZone)} – ${date(occurrence.windowEndsAt, store.timeZone)}` : `Every ${plan.cadenceDays} days` },
@@ -5356,7 +5357,7 @@ export function buildDetailModel(
     const replacementOutlook = storeLifecycle.reduce((sum, row) => sum + (row.replacement ?? 0), 0);
     return {
       state: { kind: "ready" },
-      page: { title: `Store ${store.storeNumber}`, eyebrow: store.name, description: storeAddress(store), scopeLabel: session.scopeLabel, primaryAction: roleCan(session.role, "create_work_order") ? { label: "Create work order", href: `/app/work-orders/new?store=${store.id}` } : undefined, secondaryAction: { label: "View recorded cost", href: `/app/spend?store=${store.id}` } },
+      page: { title: `Store ${store.storeNumber}`, eyebrow: store.name, description: storeAddress(store), scopeLabel: session.scopeLabel, primaryAction: roleCan(session, "create_work_order") ? { label: "Create work order", href: `/app/work-orders/new?store=${store.id}` } : undefined, secondaryAction: { label: "View recorded cost", href: `/app/spend?store=${store.id}` } },
       statusLabel: storeStatusLabel,
       statusTone: storeStatusTone,
       facts: [
@@ -5522,7 +5523,7 @@ export function buildDetailModel(
   ];
   return {
     state: { kind: "ready" },
-    page: { title: vendor.name, eyebrow: vendor.preferred ? "Preferred approved vendor" : "Approved vendor", description: specialties.map((item) => item.displayName).join(" · "), scopeLabel: session.scopeLabel, primaryAction: roleCan(session.role, "create_work_order") ? { label: "Create work order", href: `/app/work-orders/new?vendor=${vendor.id}` } : undefined },
+    page: { title: vendor.name, eyebrow: vendor.preferred ? "Preferred approved vendor" : "Approved vendor", description: specialties.map((item) => item.displayName).join(" · "), scopeLabel: session.scopeLabel, primaryAction: roleCan(session, "create_work_order") ? { label: "Create work order", href: `/app/work-orders/new?vendor=${vendor.id}` } : undefined },
     statusLabel: sentence(vendor.status),
     statusTone: vendor.status === "approved" ? "positive" : "warning",
     facts: [
@@ -5765,7 +5766,7 @@ export function buildVendorIssuanceModel(fixture: OpsFixture, session: OperatorS
     ["requested", "opened", "submitted"].includes(item.status)
   ));
   const workflowBlockMessage = workflowBlocked
-    ? "Bid sourcing is still open. Select a bid for service authorization, or withdraw every open bid request before sending service directly to a vendor."
+    ? "Quote sourcing is still open. Select a quote for service authorization, or withdraw every open quote request before sending service directly to a vendor."
     : undefined;
   const selectedEstimateVendor = selectedEstimate
     ? fixture.vendors.find((vendor) => vendor.organizationId === scoped.organizationId && vendor.id === selectedEstimate.vendorId)
@@ -5776,7 +5777,7 @@ export function buildVendorIssuanceModel(fixture: OpsFixture, session: OperatorS
     assignment?.kind !== "internal" &&
     (!assignment || !["completed", "cancelled", "superseded"].includes(assignment.status)),
   );
-  const rolePermitted = Boolean(work && roleCan(session.role, "issue_work_order"));
+  const rolePermitted = Boolean(work && roleCan(session, "issue_work_order"));
   const previewDeliveryText = "A secure response link is always generated. When email delivery is configured in Setup, choosing email sends it to the vendor dispatch address; otherwise the link remains available for manual sharing. SMS requires a later integration.";
   return {
     available,
@@ -5800,12 +5801,12 @@ export function buildVendorIssuanceModel(fixture: OpsFixture, session: OperatorS
     channels: [{ value: "email", label: "Generate email-ready link" }, { value: "sms", label: "Generate SMS-ready link" }, { value: "print", label: "Print / PDF handoff" }, { value: "manual", label: "Record phone or manual handoff" }],
     currentRevision: revisions.length ? Math.max(...revisions.map((item) => item.revision)) : 0,
     helperText: workflowBlocked
-      ? "Service issuance is paused while vendor bid requests remain open."
+      ? "Service issuance is paused while vendor quote requests remain open."
       : selectedEstimate
-      ? `${selectedEstimateVendor?.name ?? "The selected vendor"} is locked to this service authorization because its bid was deliberately selected. The bid remains pricing evidence and does not become recorded cost. ${previewDeliveryText}`
+      ? `${selectedEstimateVendor?.name ?? "The selected vendor"} is locked to this service authorization because its quote was deliberately selected. The quote remains pricing evidence and does not become recorded cost. ${previewDeliveryText}`
       : assignment?.status === "declined"
         ? `The prior vendor declined the service work. Choose another approved vendor and create a new immutable service-authorization revision. ${previewDeliveryText}`
-        : `Send authorized service work to one chosen vendor. This creates an immutable service-authorization revision and account-free response link—not a bid request. ${previewDeliveryText}`,
+        : `Send authorized service work to one chosen vendor. This creates a versioned service-authorization record and account-free response link—not a quote request. ${previewDeliveryText}`,
   };
 }
 
@@ -5832,7 +5833,7 @@ export function buildEstimateComparisonModel(
     )),
   );
   const workflowBlockMessage = workflowBlocked
-    ? "Authorized outside service is active. That service authorization must be cancelled or declined before you can source vendor bids."
+    ? "Authorized outside service is active. That service authorization must be cancelled or declined before you can request vendor quotes."
     : undefined;
   const hasActiveVisit = Boolean(work && fixture.visits.some((visit) => (
     visit.organizationId === scoped.organizationId && visit.workOrderId === work.id && visit.status === "active"
@@ -5862,14 +5863,14 @@ export function buildEstimateComparisonModel(
   );
   const rolePermitted = Boolean(
     work
-    && roleCan(session.role, "request_estimate")
-    && roleCan(session.role, "select_estimate"),
+    && roleCan(session, "request_estimate")
+    && roleCan(session, "select_estimate"),
   );
   const permitted = canManage && rolePermitted;
   const statusLabels = {
     requested: "Link generated",
     opened: "Opened by vendor",
-    submitted: "Bid received",
+    submitted: "Quote received",
     declined: "Vendor declined",
     expired: "Expired",
     withdrawn: "Withdrawn",
@@ -5879,9 +5880,20 @@ export function buildEstimateComparisonModel(
 
   const requests = estimateRequests.map((request) => {
     const vendor = fixture.vendors.find((item) => item.organizationId === scoped.organizationId && item.id === request.vendorId);
-    const proposal = (fixture.estimateProposals ?? [])
+    const proposals = (fixture.estimateProposals ?? [])
       .filter((item) => item.organizationId === scoped.organizationId && item.requestId === request.id)
-      .sort((left, right) => right.revision - left.revision || right.submittedAt.localeCompare(left.submittedAt))[0];
+      .sort((left, right) => right.revision - left.revision || right.submittedAt.localeCompare(left.submittedAt));
+    const proposal = proposals[0];
+    const proposalView = (item: NonNullable<typeof proposal>) => ({
+      id: item.id,
+      revision: item.revision,
+      amountLabel: estimateMoney(item.amount.amountMinor, item.amount.currency),
+      scope: item.scope,
+      exclusions: item.exclusions,
+      leadTimeLabel: item.leadTimeDays === undefined ? undefined : `${item.leadTimeDays} day${item.leadTimeDays === 1 ? "" : "s"}`,
+      validUntilLabel: item.validUntil ? date(item.validUntil) : undefined,
+      submittedLabel: dateTime(item.submittedAt),
+    });
     const proposalExpiresAt = proposal?.validUntil ? Date.parse(proposal.validUntil) : Number.NaN;
     const proposalExpired = Boolean(
       proposal
@@ -5903,8 +5915,8 @@ export function buildEstimateComparisonModel(
       kindLabel: request.decisionKind === "replacement_quote"
         ? "Replacement quote - capital pricing only"
         : request.kind === "diagnostic_and_estimate"
-          ? "Bid request - onsite diagnosis requires separate authorization"
-          : "Service bid - pricing only",
+          ? "Quote request - onsite diagnosis requires separate authorization"
+          : "Service quote - pricing only",
       requestedScope: request.requestedScope,
       status: presentedStatus,
       statusLabel: statusLabels[presentedStatus],
@@ -5913,16 +5925,8 @@ export function buildEstimateComparisonModel(
       openedLabel: request.openedAt ? dateTime(request.openedAt) : undefined,
       respondedLabel: request.respondedAt ? dateTime(request.respondedAt) : proposal ? dateTime(proposal.submittedAt) : undefined,
       decisionLabel: request.decisionAt ? `${statusLabels[request.status]} ${dateTime(request.decisionAt)}` : undefined,
-      latestProposal: proposal ? {
-        id: proposal.id,
-        revision: proposal.revision,
-        amountLabel: estimateMoney(proposal.amount.amountMinor, proposal.amount.currency),
-        scope: proposal.scope,
-        exclusions: proposal.exclusions,
-        leadTimeLabel: proposal.leadTimeDays === undefined ? undefined : `${proposal.leadTimeDays} day${proposal.leadTimeDays === 1 ? "" : "s"}`,
-        validUntilLabel: proposal.validUntil ? date(proposal.validUntil) : undefined,
-        submittedLabel: dateTime(proposal.submittedAt),
-      } : undefined,
+      latestProposal: proposal ? proposalView(proposal) : undefined,
+      previousProposals: proposals.slice(1).map(proposalView),
       canSelect: Boolean(permitted && !selectedEstimate && !proposalExpired && ["submitted", "not_selected"].includes(request.status) && proposal),
       canWithdraw: Boolean(permitted && !selectedEstimate && ["requested", "opened", "submitted"].includes(request.status)),
       canReopen: Boolean(permitted && request.status === "selected" && proposal && (!assignment || assignment.status === "pending")),
@@ -6024,7 +6028,7 @@ function workOrderStages(
       label: "Operator approval",
       state: work.status === "draft" || work.status === "awaiting_approval" ? "current" : "complete",
       detail: work.status === "draft" || work.status === "awaiting_approval"
-        ? "A manager decision is required before routing or requesting bids"
+        ? "A manager decision is required before routing or requesting quotes"
         : `Internal approval recorded · Priority: ${sentence(work.priority)}`,
     },
     {
@@ -6085,7 +6089,7 @@ export function buildWorkOrderControlModel(
 ): WorkOrderControlViewModel {
   const scoped = scopeFixture(fixture, session);
   const work = scoped.workOrders.find((item) => item.id === workOrderId);
-  const permitted = roleCan(session.role, "control_work_order");
+  const permitted = roleCan(session, "control_work_order");
   const workflowTasks = buildWorkflowTaskWorkspaceModel(fixture, session, workOrderId);
   if (!work) {
     return {
@@ -6399,7 +6403,7 @@ export function buildRequestReviewModel(
     (item) => item.id === requestId && item.organizationId === scoped.organizationId && scoped.storeIds.has(item.storeId),
   );
   const available = Boolean(request && (request.status === "submitted" || request.status === "under_review"));
-  const permitted = available && roleCan(session.role, "review_request");
+  const permitted = available && roleCan(session, "review_request");
   const impactHistory = request
     ? fixture.requestImpactAssessments
       .filter((assessment) => assessment.organizationId === scoped.organizationId && assessment.requestId === request.id)
@@ -6487,7 +6491,7 @@ export function buildRequestReviewModel(
     request
     && !request.convertedWorkOrderId
     && (!latestApprovalRequest || latestApprovalState === "approved")
-    && roleCan(session.role, "create_work_order"),
+    && roleCan(session, "create_work_order"),
   );
   const impactReviewed = latestImpact?.assessmentKind === "review" && latestImpact.source === "manager_review";
   const canCreateWorkOrder = Boolean(
@@ -6600,8 +6604,8 @@ export function buildWorkOrderRecordingModel(
   const costLines = fixture.costLines.filter((line) => line.organizationId === scoped.organizationId && line.workOrderId === work.id);
   return {
     available: true,
-    canClassify: roleCan(session.role, "classify_work_order"),
-    canRecordCost: roleCan(session.role, "record_work_cost"),
+    canClassify: roleCan(session, "classify_work_order"),
+    canRecordCost: roleCan(session, "record_work_cost"),
     submitAction: `/api/ops/work-orders/${encodeURIComponent(work.id)}/records`,
     workOrderId: work.id,
     workOrderNumber: work.number,
@@ -6637,7 +6641,7 @@ export function buildAttentionItemModel(
   itemId: string,
 ): { detail: DetailPageViewModel; control: AttentionItemControlViewModel } {
   const scoped = scopeFixture(fixture, session);
-  const permitted = roleCan(session.role, "review_attention");
+  const permitted = roleCan(session, "review_attention");
   const exception = fixture.exceptions.find(
     (item) => item.id === itemId && item.organizationId === scoped.organizationId && (!item.storeId || scoped.storeIds.has(item.storeId)),
   );

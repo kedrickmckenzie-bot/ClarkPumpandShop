@@ -46,8 +46,8 @@ describe("operator bid and service path states", () => {
     });
     expect(markup).toContain("Service path");
     expect(markup).toContain("Service path paused");
-    expect(markup).toContain("Select a bid for service authorization");
-    expect(markup).toContain("withdraw every open bid request");
+    expect(markup).toContain("Select a quote for service authorization");
+    expect(markup).toContain("withdraw every open quote request");
     expect(markup).not.toContain("Generate service authorization");
   });
 
@@ -66,10 +66,10 @@ describe("operator bid and service path states", () => {
       rolePermitted: true,
       workflowBlocked: true,
     });
-    expect(markup).toContain("Bid path");
-    expect(markup).toContain("Bid path paused");
+    expect(markup).toContain("Quote path");
+    expect(markup).toContain("Quote path paused");
     expect(markup).toContain("service authorization must be cancelled or declined");
-    expect(markup).not.toContain("Send another bid request");
+    expect(markup).not.toContain("Send another quote request");
   });
 
   it("shows role denial separately from a workflow lock", () => {
@@ -87,8 +87,8 @@ describe("operator bid and service path states", () => {
     expect(bidModel).toMatchObject({ rolePermitted: false, workflowBlocked: true });
     expect(serviceMarkup).toContain("Your role can review the service path but cannot send a service authorization");
     expect(serviceMarkup).not.toContain("Service path paused");
-    expect(bidMarkup).toContain("Your role can review the bid path but cannot send bid requests");
-    expect(bidMarkup).not.toContain("Bid path paused");
+    expect(bidMarkup).toContain("Your role can review the quote path but cannot send quote requests");
+    expect(bidMarkup).not.toContain("Quote path paused");
   });
 
   it("labels preview bid creation without claiming outbound delivery", () => {

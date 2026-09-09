@@ -445,6 +445,8 @@ export async function loadOpsFixtureSnapshotFromD1(
     workOrderVerifications: workOrderVerificationRows.map((row) => ({
       ...row,
       cycle: Number(row.cycle),
+      basis: optional(row.basis),
+      verificationScope: optional(row.verificationScope),
       reason: optional(row.reason),
     })) as OpsFixture["workOrderVerifications"],
     visitEvidence: evidenceRows.map((row) => ({

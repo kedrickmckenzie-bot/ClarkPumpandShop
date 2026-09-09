@@ -3,6 +3,8 @@ import { atomicRequestMutation, atomicWorkOrderMutation, atomicWorkOrderSetMutat
 import { OpsDomainError } from "./errors";
 import { assertWorkOrderReadyForClosure } from "./work-order-verification-commands";
 import { prepareApprovalRequestForWorkOrder } from "./approval-governance";
+import { membershipHasCapability } from "./capability-policy";
+import { resolveInternalAccountability } from "./internal-accountability";
 import {
   buildInitialRequestImpactAssessment,
   buildInitialRequestReviewTask,
@@ -131,7 +133,7 @@ function assertNoOpenBidRequests(requests: WorkOrderEstimateRequest[]) {
   if (requests.some((request) => openBidRequestStatuses.has(request.status))) {
     throw new OpsDomainError(
       "CONFLICT",
-      "Open bid requests must be selected or withdrawn before service work can be issued",
+      "Open quote requests must be selected or withdrawn before service work can be issued",
     );
   }
 }
@@ -315,10 +317,10 @@ async function assertSelectedEstimateIsCurrent(
     selectedEstimate.id,
   );
   if (!proposal) {
-    throw new OpsDomainError("CONFLICT", "The selected bid is missing its proposal evidence. Reopen the provider decision before issuing service work.");
+    throw new OpsDomainError("CONFLICT", "The selected quote is missing its proposal evidence. Reopen the provider decision before issuing service work.");
   }
   if (proposal.validUntil && Date.parse(proposal.validUntil) <= Date.parse(now)) {
-    throw new OpsDomainError("CONFLICT", "The selected vendor bid has expired. Reopen the bid decision before issuing work.");
+    throw new OpsDomainError("CONFLICT", "The selected vendor quote has expired. Reopen the quote decision before issuing work.");
   }
 }
 
@@ -645,6 +647,15 @@ export interface CreateWorkOrderInput {
 
 export async function createWorkOrder(svc: OpsCommandServices, input: CreateWorkOrderInput) {
   const { repository, clock, ids } = services(svc); assertActorOrganization(input.actor, input.organizationId);
+  const actorMembership = input.actor.actorType === "user" && input.actor.actorId
+    ? await repository.getMembership(input.organizationId, input.actor.actorId)
+    : null;
+  if (actorMembership?.role === "store_manager") {
+    if (!await membershipHasCapability(repository, input.organizationId, actorMembership.id, "create_work_order")) throw new OpsDomainError("FORBIDDEN", "Work-order creation is not enabled for store managers");
+    if ((input.priority ?? "routine") !== "routine") throw new OpsDomainError("FORBIDDEN", "Store managers can create only routine work orders");
+    const grants = await repository.listScopeGrantsForMembership(input.organizationId, actorMembership.id);
+    if (!grants.some((grant) => grant.scopeKind === "organization" || (grant.scopeKind === "store" && grant.scopeId === input.storeId))) throw new OpsDomainError("FORBIDDEN", "Store is outside the manager's assigned scope");
+  }
   const now = clock.now();
   if (input.idempotency) {
     const prior = await repository.getIdempotencyKey(input.organizationId, input.idempotency.key);
@@ -932,6 +943,15 @@ export async function placeWorkOrderOnVisitHold(svc: OpsCommandServices, input: 
   assertActorOrganization(input.actor, input.organizationId);
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order not found");
+  const actorMembership = input.actor.actorType === "user" && input.actor.actorId
+    ? await repository.getMembership(input.organizationId, input.actor.actorId)
+    : null;
+  if (actorMembership?.role === "store_manager") {
+    if (!await membershipHasCapability(repository, input.organizationId, actorMembership.id, "issue_work_order")) throw new OpsDomainError("FORBIDDEN", "Dispatch is not enabled for store managers");
+    if (workOrder.priority !== "routine") throw new OpsDomainError("FORBIDDEN", "Store managers can dispatch only routine work orders");
+    const grants = await repository.listScopeGrantsForMembership(input.organizationId, actorMembership.id);
+    if (!grants.some((grant) => grant.scopeKind === "organization" || (grant.scopeKind === "store" && grant.scopeId === workOrder.storeId))) throw new OpsDomainError("FORBIDDEN", "Work order is outside the manager's assigned scope");
+  }
   if (terminalWorkOrderStatuses.has(workOrder.status) || workOrder.status === "resolved") throw new OpsDomainError("CONFLICT", "Closed or resolved work cannot be approved for the next suitable visit");
   if (workOrder.status !== "approved") throw new OpsDomainError("CONFLICT", "Only manager-approved work can be held for a future vendor visit");
   if (!workOrder.categoryKey) throw new OpsDomainError("VALIDATION", "Choose a service category before holding this work");
@@ -1127,11 +1147,12 @@ export async function releaseWorkOrderVisitHold(svc: OpsCommandServices, input: 
   if (hold.status === "claimed") throw new OpsDomainError("CONFLICT", "This work is already part of an active visit");
   if (!["active", "review_required"].includes(hold.status)) throw new OpsDomainError("CONFLICT", "This hold is no longer active");
   const now = clock.now();
+  const internalAccountability = await resolveInternalAccountability(repository, workOrder);
   const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
-  const replacementTask = buildWorkflowTaskRecord({ id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id, draft: taskDraft({ workOrder, taskType: "choose_service_provider", title: "Choose service provider", assignee: facilitiesAssignee(), dueAt: workOrder.dueAt, applicableSlaClock: "scheduling", escalationDestination: workOrder.escalationTo }), actor: input.actor, createdAt: now });
+  const replacementTask = buildWorkflowTaskRecord({ id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id, draft: taskDraft({ workOrder, taskType: "choose_service_provider", title: "Choose service provider", assignee: { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName }, dueAt: workOrder.dueAt, applicableSlaClock: "scheduling", escalationDestination: internalAccountability.escalationDestination }), actor: input.actor, createdAt: now });
   const statements: OpsStatement[] = [
     { sql: "UPDATE ops_work_order_visit_holds SET status = ?, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND status IN ('active','review_required')", params: ["cancelled", now, input.organizationId, hold.id] },
-    { sql: "UPDATE ops_work_orders SET accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ?", params: ["Facilities coordinator", "Choose service provider", input.organizationId, workOrder.id] },
+    { sql: "UPDATE ops_work_orders SET accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ?", params: [internalAccountability.assigneeName, "Choose service provider", input.organizationId, workOrder.id] },
     ...buildReplaceMatchingTaskStatements({ workOrder, tasks, targetTask: selectPrimaryWorkflowTask(tasks), replacementTask, actor: input.actor, occurredAt: now, ids, resolutionNote: "Future-visit hold released" }),
     ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.visit_hold_released", actor: input.actor, occurredAt: now, payload: { holdId: hold.id }, ids }),
   ];
@@ -1165,7 +1186,7 @@ export async function assignWorkOrder(svc: OpsCommandServices, input: AssignWork
   const selectedEstimate = (await repository.listEstimateRequestsForWorkOrder(input.organizationId, input.workOrderId))
     .find((request) => request.status === "selected");
   if (selectedEstimate) {
-    throw new OpsDomainError("CONFLICT", "This work order has a selected bid. Issue that vendor or reopen the bid decision before reassigning it.");
+    throw new OpsDomainError("CONFLICT", "This work order has a selected quote. Issue that vendor or reopen the quote decision before reassigning it.");
   }
   const statements: OpsStatement[] = [];
   if (prior) statements.push(
@@ -1214,7 +1235,7 @@ export async function issueWorkOrder(svc: OpsCommandServices, input: IssueWorkOr
   assertNoOpenBidRequests(estimateRequests);
   const selectedEstimate = estimateRequests.find((request) => request.status === "selected");
   if (selectedEstimate && (assignment.kind !== "outside_vendor" || assignment.vendorId !== selectedEstimate.vendorId)) {
-    throw new OpsDomainError("CONFLICT", "Only the vendor selected from the bid comparison can receive this service authorization.");
+    throw new OpsDomainError("CONFLICT", "Only the vendor selected from the quote comparison can receive this service authorization.");
   }
   await assertSelectedEstimateIsCurrent(repository, selectedEstimate, now);
   const [latest, priorIssuances] = await Promise.all([
@@ -1294,6 +1315,15 @@ export async function routeAndIssueWorkOrder(
   const now = clock.now();
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order not found");
+  const actorMembership = input.actor.actorType === "user" && input.actor.actorId
+    ? await repository.getMembership(input.organizationId, input.actor.actorId)
+    : null;
+  if (actorMembership?.role === "store_manager") {
+    if (!await membershipHasCapability(repository, input.organizationId, actorMembership.id, "issue_work_order")) throw new OpsDomainError("FORBIDDEN", "Dispatch is not enabled for store managers");
+    if (workOrder.priority !== "routine") throw new OpsDomainError("FORBIDDEN", "Store managers can dispatch only routine work orders");
+    const grants = await repository.listScopeGrantsForMembership(input.organizationId, actorMembership.id);
+    if (!grants.some((grant) => grant.scopeKind === "organization" || (grant.scopeKind === "store" && grant.scopeId === workOrder.storeId))) throw new OpsDomainError("FORBIDDEN", "Work order is outside the manager's assigned scope");
+  }
   if (!canRouteAndIssueWorkOrder(workOrder.status)) throw new OpsDomainError("CONFLICT", "Work is not eligible for issuance in its current state");
   const [organization, vendor, store, asset] = await Promise.all([
     repository.getOrganization(input.organizationId),
@@ -1325,7 +1355,7 @@ export async function routeAndIssueWorkOrder(
   assertNoOpenBidRequests(estimateRequests);
   const selectedEstimate = estimateRequests.find((request) => request.status === "selected");
   if (selectedEstimate && selectedEstimate.vendorId !== vendor.id) {
-    throw new OpsDomainError("CONFLICT", "Only the vendor selected from the bid comparison can receive this service authorization.");
+    throw new OpsDomainError("CONFLICT", "Only the vendor selected from the quote comparison can receive this service authorization.");
   }
   await assertSelectedEstimateIsCurrent(repository, selectedEstimate, now);
   if (activeAssignment?.kind === "internal") {
@@ -1621,6 +1651,7 @@ export async function recordVendorResponse(svc: OpsCommandServices, input: Recor
   const assignmentStatus = input.response === "accepted" ? "accepted" : input.response === "declined" ? "declined" : assignment.status;
   const workStatus = input.response === "accepted" ? "accepted" : input.response === "declined" ? "approved" : "issued";
   const facilitiesOwnsNext = ["declined", "proposed_date", "question"].includes(input.response);
+  const internalAccountability = await resolveInternalAccountability(repository, workOrder);
   const nextAction = input.response === "declined" ? "Select another provider" : input.response === "proposed_date" ? "Review proposed service date" : input.response === "question" ? "Answer vendor question" : "Complete onsite service";
   const selectedEstimate = input.response === "declined"
     ? (await repository.listEstimateRequestsForWorkOrder(input.organizationId, input.workOrderId))
@@ -1648,7 +1679,7 @@ export async function recordVendorResponse(svc: OpsCommandServices, input: Recor
     },
     {
       sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ?",
-      params: [workStatus, facilitiesOwnsNext ? "Facilities coordinator" : "Outside vendor", nextAction, input.organizationId, input.workOrderId],
+      params: [workStatus, facilitiesOwnsNext ? internalAccountability.assigneeName : "Outside vendor", nextAction, input.organizationId, input.workOrderId],
     },
   ];
   if (selectedEstimate) {
@@ -1709,13 +1740,18 @@ export async function recordVendorResponse(svc: OpsCommandServices, input: Recor
         : "other";
   const responseAssignee = input.response === "accepted" && assignment.vendorId
     ? { assigneeType: "vendor" as const, assigneeId: assignment.vendorId, assigneeName: "Outside vendor" }
-    : facilitiesAssignee();
+    : {
+        assigneeType: internalAccountability.assigneeType,
+        assigneeId: internalAccountability.assigneeId,
+        assigneeRole: internalAccountability.assigneeRole,
+        assigneeName: internalAccountability.assigneeName,
+      };
   const replacementTask = buildWorkflowTaskRecord({
     id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
     draft: taskDraft({ workOrder, taskType: responseTaskType, title: nextAction, assignee: responseAssignee,
       dueAt: nextTaskDueAt(input.proposedAt ?? workOrder.dueAt, now),
       applicableSlaClock: input.response === "accepted" ? "scheduling" : "vendor_response",
-      escalationDestination: workOrder.escalationTo }),
+      escalationDestination: internalAccountability.escalationDestination }),
     actor: input.actor, createdAt: now,
   });
   statements.push(...buildReplaceMatchingTaskStatements({
@@ -2220,8 +2256,14 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
   };
   for (const normalized of normalizedOutcomes) {
     const workOrder = linkedWorkOrders.find((candidate) => candidate.id === normalized.link.workOrderId)!;
-    const followUpId = normalized.followUp ? ids.next("follow-up") : undefined;
-    if (normalized.followUp) statements.push(insert("ops_follow_ups", { id: followUpId, organization_id: input.organizationId, work_order_id: workOrder.id, source_visit_id: visit.id, accountable_party: normalized.followUp.accountableParty, next_action: normalized.followUp.nextAction, due_at: normalized.followUp.dueAt, escalation_to: normalized.followUp.escalationTo, status: "open", created_at: now }));
+    const internalAccountability = await resolveInternalAccountability(repository, workOrder);
+    const accountableFollowUp = normalized.followUp ? {
+      ...normalized.followUp,
+      accountableParty: internalAccountability.assigneeName,
+      escalationTo: internalAccountability.escalationDestination,
+    } : undefined;
+    const followUpId = accountableFollowUp ? ids.next("follow-up") : undefined;
+    if (accountableFollowUp) statements.push(insert("ops_follow_ups", { id: followUpId, organization_id: input.organizationId, work_order_id: workOrder.id, source_visit_id: visit.id, accountable_party: accountableFollowUp.accountableParty, next_action: accountableFollowUp.nextAction, due_at: accountableFollowUp.dueAt, escalation_to: accountableFollowUp.escalationTo, status: "open", created_at: now }));
     statements.push({ sql: "UPDATE ops_site_visit_work_orders SET outcome = ?, outcome_notes = ?, outcome_recorded_by_actor_type = ?, outcome_recorded_by_actor_id = ?, outcome_recorded_by_actor_name = ?, outcome_recorded_at = ?, follow_up_id = ?, vendor_follow_up_timing = ? WHERE organization_id = ? AND id = ?", params: [normalized.outcome, normalized.outcomeNotes ?? null, input.actor.actorType, input.actor.actorId ?? null, input.actor.actorName, now, followUpId ?? null, normalized.vendorFollowUpTiming ?? null, input.organizationId, normalized.link.id] });
     if (normalized.hold) {
       const valueCategory = normalized.outcome === "not_addressed"
@@ -2237,15 +2279,15 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
           ? "active"
           : "review_required";
       const workOrderProjection = normalized.outcome === "completed"
-        ? { status: "completed_pending_review", accountableParty: "Facilities coordinator", nextAction: "Verify the completed held work", dueAt: addHours(now, 24) }
+        ? { status: "completed_pending_review", accountableParty: internalAccountability.assigneeName, nextAction: "Verify the completed held work", dueAt: addHours(now, 24) }
         : normalized.outcome === "not_addressed"
-          ? { status: "approved", accountableParty: "Facilities coordinator", nextAction: "Wait for a matching vendor visit", dueAt: normalized.hold.deadlineAt }
+          ? { status: "approved", accountableParty: internalAccountability.assigneeName, nextAction: "Wait for a matching vendor visit", dueAt: normalized.hold.deadlineAt }
           : normalized.outcome === "temporary_repair"
-            ? { status: "approved", accountableParty: "Facilities coordinator", nextAction: "Review the temporary repair and plan permanent work", dueAt: normalized.hold.deadlineAt }
-            : { status: "approved", accountableParty: "Facilities coordinator", nextAction: "Review the onsite findings and choose the next step", dueAt: addHours(now, 4) };
+            ? { status: "approved", accountableParty: internalAccountability.assigneeName, nextAction: "Review the temporary repair and plan permanent work", dueAt: normalized.hold.deadlineAt }
+            : { status: "approved", accountableParty: internalAccountability.assigneeName, nextAction: "Review the onsite findings and choose the next step", dueAt: addHours(now, 4) };
       statements.push(
         { sql: "UPDATE ops_work_order_visit_holds SET status = ?, planned_review_appointment_id = NULL, planned_review_selected_at = NULL, planned_review_selected_by_membership_id = NULL, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND status = ? AND claimed_visit_id = ?", params: [holdStatus, now, input.organizationId, normalized.hold.id, "claimed", visit.id] },
-        { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [workOrderProjection.status, workOrderProjection.accountableParty, workOrderProjection.nextAction, workOrderProjection.dueAt, "Facilities director", input.organizationId, workOrder.id] },
+        { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [workOrderProjection.status, workOrderProjection.accountableParty, workOrderProjection.nextAction, workOrderProjection.dueAt, internalAccountability.escalationDestination, input.organizationId, workOrder.id] },
         { sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND work_order_id = ? AND vendor_id = ? AND status = ?", params: [normalized.outcome === "not_addressed" ? "superseded" : "completed", input.organizationId, workOrder.id, visit.vendorId ?? null, "accepted"] },
       );
       const tasks = tasksByWorkOrder.get(workOrder.id) ?? [];
@@ -2257,11 +2299,11 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
           workOrder,
           taskType: normalized.outcome === "completed" ? "verify_repair" : normalized.outcome === "not_addressed" ? "choose_service_provider" : "schedule_return_visit",
           title: taskTitle,
-          assignee: facilitiesAssignee(),
+          assignee: { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName },
           dueAt: workOrderProjection.dueAt,
           applicableSlaClock: normalized.outcome === "completed" ? "verification" : "scheduling",
           sourceFollowUpId: followUpId,
-          escalationDestination: "Facilities director",
+          escalationDestination: internalAccountability.escalationDestination,
           completionCriteria: normalized.outcome === "not_addressed"
             ? "A matching vendor claims the approved held work before its original deadline"
             : "Facilities reviews the recorded result and chooses the next step",
@@ -2289,8 +2331,8 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
     }
     const unresolved = siteVisitOutcomeRequiresFollowUp(normalized.outcome);
     statements.push(unresolved
-      ? { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [normalized.outcome === "parts_required" ? "waiting_on_parts" : "waiting_on_vendor", normalized.followUp!.accountableParty, normalized.followUp!.nextAction, normalized.followUp!.dueAt, normalized.followUp!.escalationTo, input.organizationId, workOrder.id] }
-      : { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ?", params: ["completed_pending_review", "Facilities coordinator", "Verify current service outcome", input.organizationId, workOrder.id] });
+      ? { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [normalized.outcome === "parts_required" ? "waiting_on_parts" : "waiting_on_vendor", accountableFollowUp!.accountableParty, accountableFollowUp!.nextAction, accountableFollowUp!.dueAt, accountableFollowUp!.escalationTo, input.organizationId, workOrder.id] }
+      : { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ?", params: ["completed_pending_review", internalAccountability.assigneeName, "Verify current service outcome", input.organizationId, workOrder.id] });
     const tasks = tasksByWorkOrder.get(workOrder.id) ?? [];
     const sourceTask = selectPrimaryWorkflowTask(tasks.filter((task) => task.taskType === "record_service_outcome"));
     const originatingReturnTask = [...tasks]
@@ -2320,17 +2362,17 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
         ? { ...task, status: "completed", completedByActorType: input.actor.actorType, completedByActorId: input.actor.actorId, completedByActorName: input.actor.actorName, completedAt: now }
         : task);
     }
-    const taskTitle = normalized.followUp?.nextAction ?? "Verify current service outcome";
+    const taskTitle = accountableFollowUp?.nextAction ?? "Verify current service outcome";
     const replacementTask = buildWorkflowTaskRecord({
       id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
       draft: taskDraft({ workOrder,
         taskType: unresolved ? "schedule_return_visit" : "verify_repair",
         title: taskTitle,
-        assignee: facilitiesAssignee(normalized.followUp?.accountableParty ?? "Facilities coordinator"),
-        dueAt: normalized.followUp?.dueAt ?? addHours(now, 24),
+        assignee: { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName },
+        dueAt: accountableFollowUp?.dueAt ?? addHours(now, 24),
         applicableSlaClock: unresolved ? "scheduling" : "verification",
         sourceFollowUpId: followUpId,
-        escalationDestination: normalized.followUp?.escalationTo ?? workOrder.escalationTo,
+        escalationDestination: accountableFollowUp?.escalationTo ?? internalAccountability.escalationDestination,
         completionCriteria: unresolved
           ? `Record resolution of the required follow-up: ${taskTitle}`
           : "Record store or facilities verification of the reported service outcome",
@@ -3101,6 +3143,7 @@ export async function completeFollowUp(svc: OpsCommandServices, input: CompleteF
     .sort((left, right) => left.dueAt.localeCompare(right.dueAt));
   const next = remaining[0];
   const now = clock.now();
+  const internalAccountability = await resolveInternalAccountability(repository, workOrder);
   const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
   const sourceTask = tasks.find((task) => task.sourceFollowUpId === followUp.id && ["open", "in_progress"].includes(task.status));
   const sourceOutcome = visitWorkOrders.find((candidate) => candidate.followUpId === followUp.id);
@@ -3115,8 +3158,8 @@ export async function completeFollowUp(svc: OpsCommandServices, input: CompleteF
     : activeVisit
       ? { status: "in_progress" as const, accountableParty: workOrder.accountableParty, nextAction: "Record service outcome", dueAt: workOrder.dueAt ?? addHours(now, 8), escalationTo: workOrder.escalationTo ?? "Facilities director" }
       : unresolvedSourceOutcome
-        ? { status: "waiting_on_vendor" as const, accountableParty: "Facilities coordinator", nextAction: returnTaskTitle, dueAt: returnTaskDueAt, escalationTo: followUp.escalationTo }
-        : { status: "completed_pending_review" as const, accountableParty: "Facilities coordinator", nextAction: "Verify current service outcome", dueAt: addHours(now, 24), escalationTo: "Facilities director" };
+        ? { status: "waiting_on_vendor" as const, accountableParty: internalAccountability.assigneeName, nextAction: returnTaskTitle, dueAt: returnTaskDueAt, escalationTo: internalAccountability.escalationDestination }
+        : { status: "completed_pending_review" as const, accountableParty: internalAccountability.assigneeName, nextAction: "Verify current service outcome", dueAt: addHours(now, 24), escalationTo: internalAccountability.escalationDestination };
   const resolvedTasks = tasks.map((task): WorkflowTask => task.id === sourceTask?.id
     ? { ...task, status: "completed", completedByActorType: input.actor.actorType,
         completedByActorId: input.actor.actorId, completedByActorName: input.actor.actorName,
@@ -3126,12 +3169,12 @@ export async function completeFollowUp(svc: OpsCommandServices, input: CompleteF
     id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
     draft: unresolvedSourceOutcome
       ? taskDraft({ workOrder, taskType: "schedule_return_visit", title: returnTaskTitle,
-          assignee: facilitiesAssignee(), dueAt: returnTaskDueAt, applicableSlaClock: "scheduling",
-          escalationDestination: followUp.escalationTo,
+          assignee: { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName }, dueAt: returnTaskDueAt, applicableSlaClock: "scheduling",
+          escalationDestination: internalAccountability.escalationDestination,
           completionCriteria: "Observe a new onsite return visit and record its per-work-order outcome" })
       : taskDraft({ workOrder, taskType: "verify_repair", title: "Verify current service outcome",
-          assignee: facilitiesAssignee(), dueAt: addHours(now, 24), applicableSlaClock: "verification",
-          escalationDestination: "Facilities director",
+          assignee: { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName }, dueAt: addHours(now, 24), applicableSlaClock: "verification",
+          escalationDestination: internalAccountability.escalationDestination,
           completionCriteria: "Record store or facilities verification before resolving the work order" }),
     actor: input.actor, createdAt: now,
   });
@@ -3197,6 +3240,7 @@ export async function reconcileUnmatchedVisit(svc: OpsCommandServices, input: Re
   }
   const note = required(input.note, "Reconciliation note");
   const now = clock.now();
+  const internalAccountability = await resolveInternalAccountability(repository, workOrder);
   const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
   const siteVisitWorkOrderId = ids.next("site-visit-work");
   const linkedOutcome = visit.status === "active"
@@ -3240,24 +3284,24 @@ export async function reconcileUnmatchedVisit(svc: OpsCommandServices, input: Re
     const nextAction = linkedOutcome === "parts_required" ? "Confirm parts and return date" : visit.outcome ? "Coordinate required follow-up service" : "Record the missing service outcome";
     const dueAt = addHours(now, 48);
     statements.push(
-      insert("ops_follow_ups", { id: followUpId, organization_id: input.organizationId, work_order_id: workOrder.id, source_visit_id: visit.id, accountable_party: "Facilities coordinator", next_action: nextAction, due_at: dueAt, escalation_to: "Facilities director", status: "open", created_at: now }),
-      { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [waitingStatus, "Facilities coordinator", nextAction, dueAt, "Facilities director", input.organizationId, workOrder.id] },
+      insert("ops_follow_ups", { id: followUpId, organization_id: input.organizationId, work_order_id: workOrder.id, source_visit_id: visit.id, accountable_party: internalAccountability.assigneeName, next_action: nextAction, due_at: dueAt, escalation_to: internalAccountability.escalationDestination, status: "open", created_at: now }),
+      { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: [waitingStatus, internalAccountability.assigneeName, nextAction, dueAt, internalAccountability.escalationDestination, input.organizationId, workOrder.id] },
     );
     followUpTask = buildWorkflowTaskRecord({
       id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
       draft: taskDraft({ workOrder, taskType: "schedule_return_visit", title: nextAction,
-        assignee: facilitiesAssignee(), dueAt, applicableSlaClock: "scheduling", sourceFollowUpId: followUpId,
-        escalationDestination: "Facilities director", completionCriteria: `Record resolution of the required follow-up: ${nextAction}` }),
+        assignee: { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName }, dueAt, applicableSlaClock: "scheduling", sourceFollowUpId: followUpId,
+        escalationDestination: internalAccountability.escalationDestination, completionCriteria: `Record resolution of the required follow-up: ${nextAction}` }),
       actor: input.actor, createdAt: now,
     });
   } else {
     const verificationDueAt = addHours(now, 24);
-    statements.push({ sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: ["completed_pending_review", "Facilities coordinator", "Verify current service outcome", verificationDueAt, "Facilities director", input.organizationId, workOrder.id] });
+    statements.push({ sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ?", params: ["completed_pending_review", internalAccountability.assigneeName, "Verify current service outcome", verificationDueAt, internalAccountability.escalationDestination, input.organizationId, workOrder.id] });
     verificationTask = buildWorkflowTaskRecord({
       id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
       draft: taskDraft({ workOrder, taskType: "verify_repair", title: "Verify current service outcome",
-        assignee: facilitiesAssignee(), dueAt: verificationDueAt, applicableSlaClock: "verification",
-        escalationDestination: "Facilities director",
+        assignee: { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName }, dueAt: verificationDueAt, applicableSlaClock: "verification",
+        escalationDestination: internalAccountability.escalationDestination,
         completionCriteria: "Record an accepted or rejected internal decision against the exact reconciled visit outcome" }),
       actor: input.actor, createdAt: now,
     });

@@ -359,9 +359,9 @@ export async function approveReplacementFromSelectedQuote(svc: OpsCommandService
   if (!profile?.active || profile.categoryKey !== asset.categoryKey) throw new OpsDomainError("VALIDATION", "Choose a compatible active replacement profile");
   const selected = requests.find((row) => row.status === "selected");
   if (!selected) throw new OpsDomainError("CONFLICT", "Select a vendor quote before approving an equipment replacement");
-  if (selected.decisionKind !== "replacement_quote") throw new OpsDomainError("CONFLICT", "The selected bid is for service work, not an equipment-replacement quote");
+  if (selected.decisionKind !== "replacement_quote") throw new OpsDomainError("CONFLICT", "The selected quote is for service work, not an equipment-replacement quote");
   const proposal = await repository.getLatestEstimateProposal(input.organizationId, selected.id);
-  if (!proposal) throw new OpsDomainError("CONFLICT", "The selected bid has no submitted quote");
+  if (!proposal) throw new OpsDomainError("CONFLICT", "The selected quote has no submitted proposal");
   const existing = await repository.getReplacementEventForProposal(input.organizationId, proposal.id);
   if (existing) throw new OpsDomainError("CONFLICT", "This selected quote is already recorded as a replacement decision");
   const amounts = benchmarkAmounts(input);

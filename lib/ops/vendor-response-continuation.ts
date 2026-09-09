@@ -7,6 +7,7 @@ import {
 } from "./workflow-task-commands";
 import type { OpsStatement } from "./repository";
 import type { ActorContext, ServiceAppointment, VendorResponse, WorkOrderPriority } from "./types";
+import { resolveInternalAccountability } from "./internal-accountability";
 
 /**
  * Operator-side continuation of an outside vendor's response.
@@ -177,6 +178,7 @@ export async function resolveVendorResponse(
     ? await repository.getVendor(input.organizationId, activeAssignment.vendorId)
     : null;
   if (!vendor) throw new OpsDomainError("CONFLICT", "The active outside-vendor assignment is incomplete");
+  const internalAccountability = await resolveInternalAccountability(repository, workOrder);
   const responseDueAt = new Date(Date.parse(now) + RESPONSE_SLA_HOURS[workOrder.priority] * 60 * 60_000).toISOString();
   const replacementTask = buildWorkflowTaskRecord({
     id: ids.next("workflow-task"),
@@ -197,7 +199,7 @@ export async function resolveVendorResponse(
       dueAt: appointment!.startsAt,
       applicableSlaClock: "arrival",
       completionCriteria: "A technician starts an observed visit for this work order at the store.",
-      escalationDestination: workOrder.escalationTo ?? "Facilities director",
+      escalationDestination: internalAccountability.assigneeName,
     } : {
       taskType: input.decision === "counter_proposed_date" ? "schedule_service" : "vendor_response_required",
       title: input.decision === "counter_proposed_date"
@@ -215,7 +217,7 @@ export async function resolveVendorResponse(
       dueAt: responseDueAt,
       applicableSlaClock: input.decision === "counter_proposed_date" ? "scheduling" : "vendor_response",
       completionCriteria: "The vendor accepts, proposes another date, asks a follow-up question, or declines.",
-      escalationDestination: workOrder.escalationTo ?? "Facilities director",
+      escalationDestination: internalAccountability.assigneeName,
     },
   });
   statements.push(

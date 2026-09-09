@@ -169,7 +169,7 @@ describe("manager-approved held work", () => {
     const link = snapshot.siteVisitWorkOrders.find((row) => row.visitId === checkIn.visitId && row.workOrderId === DOOR_WORK_ID);
     expect(link).toMatchObject({ outcome: "temporary_repair", vendorFollowUpTiming: "within_90_days" });
     const followUp = snapshot.followUps.find((row) => row.id === link?.followUpId);
-    expect(followUp).toMatchObject({ accountableParty: "Facilities coordinator", status: "open" });
+    expect(followUp).toMatchObject({ accountableParty: "Jordan Lee", status: "open" });
     const notice = snapshot.outboxMessages.find((row) => row.topic === "ops.held_work.outcomes_recorded" && row.aggregateId === checkIn.visitId);
     expect(notice).toBeTruthy();
     expect(JSON.parse(notice!.payloadJson)).toMatchObject({
@@ -207,7 +207,7 @@ describe("manager-approved held work", () => {
     const hold = await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
     const workOrder = await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
     expect(hold?.status).toBe("review_required");
-    expect(workOrder).toMatchObject({ status: "approved", accountableParty: "Facilities coordinator", nextAction: "Review the onsite findings and choose the next step" });
+    expect(workOrder).toMatchObject({ status: "approved", accountableParty: "Jordan Lee", nextAction: "Review the onsite findings and choose the next step" });
   });
 
   it("cancels an active later-work approval atomically when the work order is cancelled", async () => {

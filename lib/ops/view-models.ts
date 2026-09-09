@@ -227,6 +227,7 @@ export interface ServiceAuthorizationView {
   billingInstruction: string;
   issuedAt: IsoDateTime;
   latestResponse?: {
+    id: OpsId;
     response: VendorResponseKind;
     responderName: string;
     proposedAt?: IsoDateTime;

@@ -18,5 +18,5 @@ export default async function ComponentDetailPage({
   const [model, fixture] = await Promise.all([loadComponentDetailModel(id, componentId), getServerOpsFixtureSnapshot(session.organizationId)]);
   const asset = fixture.assets.find((item) => item.id === id && item.organizationId === session.organizationId);
   const component = fixture.components.find((item) => item.id === componentId && item.assetId === id && item.organizationId === session.organizationId);
-  return <DetailView model={model} beforeSections={asset && component ? <ComponentLifecyclePanel fixture={fixture} asset={asset} component={component} canManage={roleCan(session.role, "manage_lifecycle")} /> : null} />;
+  return <DetailView model={model} beforeSections={asset && component ? <ComponentLifecyclePanel fixture={fixture} asset={asset} component={component} canManage={roleCan(session, "manage_lifecycle")} /> : null} />;
 }

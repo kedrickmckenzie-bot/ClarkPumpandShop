@@ -19,6 +19,7 @@ import type {
   WorkflowTaskSlaResume,
   WorkflowTaskType,
 } from "./types";
+import { evaluateWorkOrderClosureEligibility, isCloseVerifiedWorkTask } from "./work-order-closure";
 
 const systemClock: OpsClock = { now: () => new Date().toISOString() };
 const randomIds: OpsIdSource = { next: (prefix) => `${prefix}-${crypto.randomUUID()}` };
@@ -93,6 +94,7 @@ function insert(table: string, values: Record<string, unknown>): OpsStatement {
 
 function auditAndOutbox(input: {
   organizationId: OpsId;
+  aggregateType?: "workflow_task" | "work_order";
   aggregateId: OpsId;
   eventType: string;
   actor: ActorContext;
@@ -101,16 +103,17 @@ function auditAndOutbox(input: {
   ids: OpsIdSource;
 }): OpsStatement[] {
   const payloadJson = JSON.stringify(input.payload);
+  const aggregateType = input.aggregateType ?? "workflow_task";
   return [
     insert("ops_audit_events", {
-      id: input.ids.next("audit"), organization_id: input.organizationId, aggregate_type: "workflow_task",
+      id: input.ids.next("audit"), organization_id: input.organizationId, aggregate_type: aggregateType,
       aggregate_id: input.aggregateId, event_type: input.eventType, actor_type: input.actor.actorType,
       actor_id: input.actor.actorId, actor_name: input.actor.actorName, occurred_at: input.occurredAt,
       payload_json: payloadJson,
     }),
     insert("ops_outbox_messages", {
       id: input.ids.next("outbox"), organization_id: input.organizationId, topic: `ops.${input.eventType}`,
-      aggregate_type: "workflow_task", aggregate_id: input.aggregateId, payload_json: payloadJson,
+      aggregate_type: aggregateType, aggregate_id: input.aggregateId, payload_json: payloadJson,
       status: "pending", available_at: input.occurredAt, created_at: input.occurredAt, attempt_count: 0,
     }),
   ];
@@ -532,17 +535,74 @@ async function resolveWorkflowTask(svc: OpsCommandServices, input: ResolveWorkfl
   }
   const resolved = outcome === "completed" ? completedTask(task, input.actor, now, note) : cancelledTask(task, input.actor, now, note);
   const projected = tasks.map((candidate) => candidate.id === task.id ? resolved : candidate).concat(replacementTask ? [replacementTask] : []);
-  if (!projected.some((candidate) => isOpenWorkflowTask(candidate) && candidate.requiredForProgress)) {
+  let automaticClosure: Awaited<ReturnType<typeof evaluateWorkOrderClosureEligibility>> | undefined;
+  if (outcome === "completed" && !replacementTask && workOrder.status === "resolved") {
+    const [policy, outcomes, verifications, detail] = await Promise.all([
+      repository.getActiveWorkflowPolicy(input.organizationId),
+      repository.listSiteVisitWorkOrdersForWorkOrder(input.organizationId, workOrder.id),
+      repository.listWorkOrderVerifications(input.organizationId, workOrder.id),
+      repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id),
+    ]);
+    const visitIds = [...new Set(outcomes.map((record) => record.visitId))];
+    const visits = await Promise.all(visitIds.map((visitId) => repository.getVisit(input.organizationId, visitId)));
+    automaticClosure = evaluateWorkOrderClosureEligibility({
+      mode: "automatic",
+      workOrder,
+      policy,
+      outcomes,
+      verifications,
+      tasks: projected,
+      visits: [...visits, ...(detail?.visits.some((visit) => visit.status === "active") ? [{ status: "active" }] : [])],
+      openFollowUpIds: new Set(detail?.followUps.filter((followUp) => followUp.status === "open").map((followUp) => followUp.id) ?? []),
+    });
+  }
+  const autoClosed = Boolean(automaticClosure?.eligible);
+  if (!autoClosed && !projected.some((candidate) => isOpenWorkflowTask(candidate) && candidate.requiredForProgress)) {
     throw new OpsDomainError("CONFLICT", "A nonterminal work order must retain a required open workflow task; create its replacement atomically");
   }
+  const openClosureTasks = autoClosed ? projected.filter((candidate) => isOpenWorkflowTask(candidate) && isCloseVerifiedWorkTask(candidate)) : [];
+  const finalTasks = autoClosed
+    ? projected.map((candidate) => openClosureTasks.some((closureTask) => closureTask.id === candidate.id)
+        ? completedTask(candidate, input.actor, now, "Automatically closed after the final required operational obligation was completed")
+        : candidate)
+    : projected;
   await atomicWorkOrderMutation({ repository, workOrder, now, statements: [
     ...(outcome === "completed"
       ? buildCompleteWorkflowTaskStatements({ task, actor: input.actor, occurredAt: now, ids, resolutionNote: note })
       : buildCancelWorkflowTaskStatements({ task, actor: input.actor, occurredAt: now, ids, resolutionNote: note })),
     ...(replacementTask ? buildCreateTaskStatements({ task: replacementTask, actor: input.actor, ids }) : []),
-    buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, projected),
+    ...openClosureTasks.flatMap((closureTask) => buildCompleteWorkflowTaskStatements({
+      task: closureTask,
+      actor: input.actor,
+      occurredAt: now,
+      ids,
+      resolutionNote: "Automatically closed after the final required operational obligation was completed",
+    })),
+    ...(autoClosed
+      ? [{
+          sql: "UPDATE ops_work_orders SET status = ?, closed_at = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ? AND status = ?",
+          params: ["closed", now, "No active owner", "No further operational action", null, null, input.organizationId, workOrder.id, "resolved"],
+        } satisfies OpsStatement]
+      : [buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, finalTasks)]),
+    ...(autoClosed ? auditAndOutbox({
+      organizationId: input.organizationId,
+      aggregateType: "work_order",
+      aggregateId: workOrder.id,
+      eventType: "work_order.auto_closed_after_operational_task",
+      actor: input.actor,
+      occurredAt: now,
+      payload: {
+        triggeringWorkflowTaskId: task.id,
+        completedClosureTaskIds: openClosureTasks.map((candidate) => candidate.id),
+        workflowPolicyId: automaticClosure?.policyId,
+        workflowPolicyVersion: automaticClosure?.policyVersion,
+        previousStatus: workOrder.status,
+        status: "closed",
+      },
+      ids,
+    }) : []),
   ] });
-  return { ...resolved, replacementTask };
+  return { ...resolved, replacementTask, autoClosed };
 }
 
 export function completeWorkflowTask(svc: OpsCommandServices, input: ResolveWorkflowTaskInput) {

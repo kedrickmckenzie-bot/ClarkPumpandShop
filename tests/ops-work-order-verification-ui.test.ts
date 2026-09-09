@@ -96,12 +96,18 @@ describe("embedded work-order verification surface", () => {
       expectedSiteVisitWorkOrderId: outcomeId,
       expectedOutcomeRecordedAt: outcomeTime,
     });
-    expect(markup).toContain("Verification, resolution, and closure");
+    expect(markup).toContain("Is the reported problem fixed?");
     expect(markup).toContain("Work completed");
-    expect(markup).toContain('type="hidden" name="decision" value="verified"');
-    expect(markup).toContain('type="hidden" name="decision" value="rejected"');
+    expect(markup).toContain('value="verified" name="decision"');
+    expect(markup).toContain('value="rejected" name="decision"');
+    expect(markup).toContain('value="inconclusive" name="decision"');
+    expect(markup).toContain("Yes, it&#x27;s fixed");
+    expect(markup).toContain("No, it&#x27;s not fixed");
+    expect(markup).toContain("I&#x27;m not sure");
+    expect(markup).toContain('name="verificationScope"');
+    expect(markup).toContain('name="basis"');
     expect(markup).toContain(`type="hidden" name="expectedSiteVisitWorkOrderId" value="${outcomeId}"`);
-    expect(markup).toContain("It does not close the work order automatically");
+    expect(markup).toContain("Eligible routine work may close automatically");
     expect(markup).not.toContain("Confirm a separate trip was avoided");
   });
 
@@ -149,10 +155,39 @@ describe("embedded work-order verification surface", () => {
 
     expect(model.canDecide).toBe(false);
     expect(model.history).toHaveLength(1);
-    expect(markup).toContain("Cycle 1 · Rejected");
+    expect(markup).toContain("Cycle 1 · Not fixed");
     expect(markup).toContain("The sink cabinet is still wet after normal use.");
     expect(markup).toContain("A new observed visit and outcome are required");
     expect(markup).not.toContain("Verify and mark resolved");
+  });
+
+  it("labels an inconclusive observation as facilities review rather than rejection", () => {
+    const fixture = verificationFixture();
+    fixture.workOrderVerifications.push({
+      id: "verification-ui-inconclusive",
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      workOrderId,
+      siteVisitWorkOrderId: outcomeId,
+      outcome: "completed",
+      outcomeRecordedAt: outcomeTime,
+      cycle: 1,
+      decision: "inconclusive",
+      basis: "observable_result",
+      verificationScope: "reported_problem",
+      reason: "The store has not observed a normal operating period yet.",
+      decidedByMembershipId: "membership-northline-facilities",
+      decidedByName: "Jordan Lee",
+      decidedAt: "2026-08-10T15:00:00.000Z",
+    });
+    fixture.workOrders.find((candidate) => candidate.id === workOrderId)!.status = "in_progress";
+
+    const model = buildWorkOrderVerificationModel(fixture, session(), workOrderId);
+    const markup = renderToStaticMarkup(createElement(WorkOrderVerificationPanel, { model }));
+
+    expect(model.canDecide).toBe(false);
+    expect(markup).toContain("Cycle 1 · Not sure");
+    expect(markup).toContain("Facilities review is required before closing or arranging return work.");
+    expect(markup).not.toContain("This outcome was rejected");
   });
 
   it("shows the current outcome read-only when a store manager is outside store scope", () => {

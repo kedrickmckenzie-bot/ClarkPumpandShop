@@ -52,6 +52,8 @@ export interface PublicActionReceipt {
   heading: string;
   message: string;
   replayed?: boolean;
+  nextHref?: string;
+  nextLabel?: string;
 }
 
 export interface ServiceAuthorizationView {
@@ -61,6 +63,7 @@ export interface ServiceAuthorizationView {
   operatorWorkOrderNumber: string;
   revision: number;
   issuedAt: string;
+  responseDueAt?: string;
   opened: boolean;
   status: "awaiting_response" | "accepted" | "declined" | "date_proposed" | "question_received";
   priority: "Routine" | "Priority" | "Emergency";
@@ -87,6 +90,17 @@ export interface ServiceAuthorizationView {
     receivedAt: string;
     detail?: string;
   };
+  operatorContinuation?: {
+    label: string;
+    receivedAt: string;
+    detail?: string;
+  };
+  appointment?: {
+    status: "proposed_by_vendor" | "confirmed" | "counter_proposed" | "cancelled";
+    startsAt: string;
+    note?: string;
+  };
+  nextStep: string;
   technicianVisitUrl?: string;
   mode: PublicRuntimeMode;
 }
@@ -113,12 +127,24 @@ export interface VendorEstimateView {
   latestProposal?: {
     revision: number;
     amountLabel: string;
+    amount: string;
+    currency: string;
     scope: string;
     exclusions?: string;
     leadTimeDays?: number;
     validUntil?: string;
     submittedAt: string;
   };
+  previousProposals: Array<{
+    revision: number;
+    amountLabel: string;
+    scope: string;
+    exclusions?: string;
+    leadTimeDays?: number;
+    validUntil?: string;
+    submittedAt: string;
+    changed: string[];
+  }>;
   canRespond: boolean;
   mode: PublicRuntimeMode;
 }

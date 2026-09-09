@@ -15,12 +15,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], "issue_work_order");
     const { id: workOrderId } = await params;
     const formData = await request.formData();
     const workOrder = await context.repository.getWorkOrder(context.session.organizationId, workOrderId);
     if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order was not found in your organization.");
     await assertStoreInSessionScope(context.session, workOrder.storeId);
+    if (context.session.role === "store_manager" && workOrder.priority !== "routine") {
+      throw new OpsDomainError("FORBIDDEN", "Store managers can dispatch only routine work within their assigned store and approval limits.");
+    }
     if (["closed", "cancelled", "completed_pending_review", "resolved"].includes(workOrder.status)) {
       throw new OpsDomainError("CONFLICT", "Closed or completed work cannot be issued again.");
     }

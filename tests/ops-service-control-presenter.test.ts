@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { OperatorRole, OperatorSession, TableRowViewModel } from "@/components/ops/data-contract";
+import { projectAttentionItems } from "@/lib/ops/attention-projection";
 import { allowedWorkOrderControlTransitions } from "@/lib/ops/commands";
 import {
   NORTHLINE_DEMO_HANDLES,
@@ -354,13 +355,23 @@ describe("enterprise service-control presenter contracts", () => {
     const fixture = buildNorthlinePresentationFixture();
     const session = operatorSession("facilities");
     const all = buildListModel(fixture, session, "action-center");
-    const exceptionIds = fixture.exceptions.filter((item) => item.status !== "resolved").map((item) => item.id);
-    const followUpIds = fixture.followUps.filter((item) => item.status === "open").map((item) => item.id);
-    const vendorReminderIds = fixture.vendorReminders.filter((item) => item.status === "open").map((item) => item.id);
+    const projected = projectAttentionItems({
+      fixture,
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      storeIds: new Set(fixture.stores.map((store) => store.id)),
+      includeCompanywide: true,
+      role: "facilities_admin",
+      membershipId: session.membershipId,
+      asOf: fixture.asOf,
+    });
+    const exceptionIds = projected.filter((item) => item.sourceKind === "exception").map((item) => item.id);
+    const followUpIds = projected.filter((item) => !["exception", "vendor_reminder"].includes(item.sourceKind)).map((item) => item.id);
+    const vendorReminderIds = projected.filter((item) => item.sourceKind === "vendor_reminder").map((item) => item.id);
 
-    expect(all.table.rows.map((row) => row.id).sort()).toEqual([...exceptionIds, ...followUpIds, ...vendorReminderIds].sort());
-    expect(all.table.rows.filter((row) => !vendorReminderIds.includes(row.id)).every((row) => row.href === `/app/action-center/${row.id}`)).toBe(true);
-    expect(all.table.rows.filter((row) => vendorReminderIds.includes(row.id)).every((row) => row.href.includes("/app/vendors/") && row.href.endsWith("#vendor-reminders"))).toBe(true);
+    expect(all.resultSummary).toBe(`${projected.length} items`);
+    expect(all.table.rows.map((row) => row.id)).toEqual(projected.slice(0, 25).map((item) => item.id));
+    expect(all.table.rows.map((row) => row.href)).toEqual(projected.slice(0, 25).map((item) => item.linkHref));
+    if (projected.length > 25) expect(all.pagination?.summary).toContain(`of ${projected.length}`);
     expect(all.metrics).toHaveLength(4);
     expect(all.metrics?.find((metric) => metric.id === "attention-service")?.value).toBe(String(exceptionIds.length));
     expect(all.metrics?.find((metric) => metric.id === "attention-followups")?.value).toBe(String(followUpIds.length));
@@ -374,12 +385,11 @@ describe("enterprise service-control presenter contracts", () => {
     expect(exceptions.table.rows.some((row) => followUpIds.includes(row.id))).toBe(false);
     expect(followUps.table.rows.every((row) => followUpIds.includes(row.id))).toBe(true);
     expect(followUps.table.rows.some((row) => exceptionIds.includes(row.id))).toBe(false);
-    const checkoutFollowUp = followUps.table.rows.find((row) => row.id === "follow-up-recent-aug-108-electrical");
+    const checkoutProjection = projected.find((item) => item.sourceIds.includes("follow-up-recent-aug-108-electrical"));
+    expect(checkoutProjection).toBeDefined();
+    const checkoutFollowUp = followUps.table.rows.find((row) => row.id === checkoutProjection?.id);
     expect(checkoutFollowUp).toBeDefined();
-    expect(cell(checkoutFollowUp!, "item")).toBe("Send an updated estimate and proposed return date");
-    expect(checkoutFollowUp?.cells.find((item) => item.key === "item")?.secondary).toBe(
-      "Created from a checkout result. Open the visit to read the technician's notes.",
-    );
+    expect(checkoutFollowUp?.href).toBe(checkoutProjection?.linkHref);
     expect(vendorReminders.table.rows.every((row) => vendorReminderIds.includes(row.id))).toBe(true);
     expect(urgent.table.rows.every((row) => ["Urgent", "Overdue"].includes(cell(row, "priority") ?? ""))).toBe(true);
 

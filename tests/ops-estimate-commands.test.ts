@@ -238,11 +238,11 @@ describe("vendor estimate request boundary", () => {
     await expect(requestEstimate(test.services, {
       ...base,
       dueAt: undefined as never,
-    })).rejects.toMatchObject({ code: "VALIDATION", message: "Bid response due date is required" });
+    })).rejects.toMatchObject({ code: "VALIDATION", message: "Quote response due date is required" });
     await expect(requestEstimate(test.services, {
       ...base,
       dueAt: NOW,
-    })).rejects.toMatchObject({ code: "VALIDATION", message: "Bid response due date must be in the future" });
+    })).rejects.toMatchObject({ code: "VALIDATION", message: "Quote response due date must be in the future" });
 
     expect(test.repository.snapshot()).toEqual(before);
   });
@@ -262,7 +262,7 @@ describe("vendor estimate request boundary", () => {
 
     await expect(createEstimateRequest(liveService, CEDAR, "e")).rejects.toMatchObject({
       code: "CONFLICT",
-      message: "Active service authorization must be explicitly ended before requesting vendor bids",
+      message: "Active service authorization must be explicitly ended before requesting vendor quotes",
     });
     expect(liveService.repository.snapshot()).toEqual(beforeLiveService);
 
@@ -296,7 +296,7 @@ describe("vendor estimate request boundary", () => {
 
     await expect(createEstimateRequest(activeVisit, CEDAR, "f")).rejects.toMatchObject({
       code: "CONFLICT",
-      message: "Vendor bids cannot be requested while a technician is onsite",
+      message: "Vendor quotes cannot be requested while a technician is onsite",
     });
     expect(activeVisit.repository.snapshot()).toEqual(beforeActiveVisit);
   });
@@ -388,7 +388,7 @@ describe("immutable vendor estimate responses", () => {
       vendorId: CEDAR,
       tokenHash: created.tokenHash,
       actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
-    })).rejects.toMatchObject({ code: "CONFLICT", message: "This bid response deadline has passed" });
+    })).rejects.toMatchObject({ code: "CONFLICT", message: "This quote response deadline has passed" });
     await expect(submitEstimate(lateServices, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
       estimateRequestId: created.request.id,
@@ -399,7 +399,7 @@ describe("immutable vendor estimate responses", () => {
       currency: "USD",
       scope: "Replace the failed fan assembly and verify operation.",
       actor: vendorActor("ClearFlow HVAC, Plumbing & Kitchen Repair"),
-    })).rejects.toMatchObject({ code: "CONFLICT", message: "This bid response deadline has passed" });
+    })).rejects.toMatchObject({ code: "CONFLICT", message: "This quote response deadline has passed" });
 
     expect(test.repository.snapshot()).toEqual(before);
   });
@@ -704,7 +704,7 @@ describe("estimate selection and canonical work-order preservation", () => {
     expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, PUBLIC_WORK_ORDER_ID)).toMatchObject({
       status: "awaiting_approval",
       accountableParty: "Facilities coordinator",
-      nextAction: "Review vendor bids and select a service provider",
+      nextAction: "Review vendor quotes and select a service provider",
     });
     expect(test.repository.snapshot()).toMatchObject({
       workOrders: expect.arrayContaining([expect.objectContaining({ id: PUBLIC_WORK_ORDER_ID })]),

@@ -989,6 +989,29 @@ const gateway: PublicOperationsGateway = {
     const resolved = await resolveServiceAuthorization(token);
     if (!resolved) return null;
     const source = resolved.view;
+    const [tasks, appointments, continuations] = await Promise.all([
+      runtime().repository.listWorkflowTasksForWorkOrder(source.organizationId, source.workOrderId),
+      runtime().repository.listServiceAppointmentsForWorkOrder(source.organizationId, source.workOrderId),
+      runtime().repository.listVendorContinuationsForWorkOrder(source.organizationId, source.workOrderId),
+    ]);
+    const currentVendorTask = tasks.find((task) => (
+      ["open", "in_progress"].includes(task.status)
+      && task.assigneeType === "vendor"
+      && task.assigneeId === source.vendor.id
+    ));
+    const appointment = appointments.find((item) => item.assignmentId === source.assignmentId && item.status !== "cancelled");
+    const continuation = source.latestResponse
+      ? continuations.find((item) => item.vendorResponseId === source.latestResponse!.id)
+      : undefined;
+    const nextStep = appointment?.status === "confirmed"
+      ? "The visit time is confirmed. The technician should check in on arrival using this work-order link."
+      : appointment?.status === "counter_proposed"
+        ? "Review the operator's proposed time below, then accept the work, propose another time, ask a question, or decline."
+        : source.latestResponse?.response === "question" && continuation?.action === "reply"
+          ? "The operator answered your question. Review the answer, then accept, propose a visit time, ask a follow-up question, or decline."
+          : source.latestResponse?.response === "accepted"
+            ? "The work is accepted, but no visit time is confirmed yet. Coordinate timing or use the technician check-in when arriving under the operator's instructions."
+            : "Review the authorized scope, then accept, propose a visit time, ask a question, or decline.";
     return {
       organizationName: source.organizationName,
       organizationSupport: "Contact the facilities team through the original service message if you need help.",
@@ -996,6 +1019,7 @@ const gateway: PublicOperationsGateway = {
       operatorWorkOrderNumber: source.workOrderNumber,
       revision: source.revision,
       issuedAt: source.issuedAt,
+      responseDueAt: currentVendorTask?.dueAt,
       opened: source.assignmentStatus !== "issued",
       status: responseStatus(source),
       priority: displayPriority(source.priority),
@@ -1021,6 +1045,13 @@ const gateway: PublicOperationsGateway = {
         receivedAt: source.latestResponse.respondedAt,
         detail: source.latestResponse.message,
       } : undefined,
+      operatorContinuation: continuation ? {
+        label: continuation.action === "reply" ? "Operator answered your question" : continuation.action === "counter_date" ? "Operator proposed another visit time" : "Operator confirmed the proposed visit time",
+        receivedAt: continuation.createdAt,
+        detail: continuation.message,
+      } : undefined,
+      appointment: appointment ? { status: appointment.status, startsAt: appointment.startsAt, note: appointment.note } : undefined,
+      nextStep,
       technicianVisitUrl: `/public/store/${encodeURIComponent(token)}/visit`,
       mode: runtime().mode,
     };
@@ -1111,6 +1142,10 @@ const gateway: PublicOperationsGateway = {
         mode: runtime().mode,
         heading: "Response received",
         message: messages[command.response],
+        nextHref: `/public/service/${encodeURIComponent(token)}`,
+        nextLabel: command.response === "accepted"
+          ? "Return to work order and technician check-in"
+          : "Return to work order and see what happens next",
       };
     } catch (error) {
       return publicDomainError(error);
@@ -1121,11 +1156,12 @@ const gateway: PublicOperationsGateway = {
     const resolved = await resolveVendorEstimate(token);
     if (!resolved) return null;
     const source = resolved.estimateRequest;
-    const proposal = await runtime().repository.getLatestEstimateProposal(source.organizationId, source.id);
+    const proposals = await runtime().repository.listEstimateProposalsForRequest(source.organizationId, source.id);
+    const proposal = proposals[0];
     const statusLabels: Record<typeof source.status, string> = {
       requested: "Link generated",
       opened: "Opened",
-      submitted: "Bid submitted",
+      submitted: "Quote submitted",
       declined: "Declined",
       expired: "Expired",
       withdrawn: "Withdrawn",
@@ -1138,7 +1174,7 @@ const gateway: PublicOperationsGateway = {
       : source.status;
     return {
       organizationName: resolved.organization.name,
-      organizationSupport: "Contact the facilities team through the original bid-request message if you need clarification.",
+      organizationSupport: "Contact the facilities team through the original quote-request message if you need clarification.",
       vendorName: resolved.vendor.name,
       operatorWorkOrderNumber: resolved.workOrder.number,
       status: presentedStatus,
@@ -1146,8 +1182,8 @@ const gateway: PublicOperationsGateway = {
       requestKindLabel: source.decisionKind === "replacement_quote"
         ? "Replacement quote - capital pricing only"
         : source.kind === "diagnostic_and_estimate"
-          ? "Bid request - onsite diagnosis requires separate authorization"
-          : "Bid request - pricing only",
+          ? "Quote request - onsite diagnosis requires separate authorization"
+          : "Quote request - pricing only",
       decisionKind: source.decisionKind ?? "service_bid",
       requestedAt: source.requestedAt,
       dueAt: source.dueAt,
@@ -1162,12 +1198,34 @@ const gateway: PublicOperationsGateway = {
       latestProposal: proposal ? {
         revision: proposal.revision,
         amountLabel: estimateMoneyLabel(proposal.amount.amountMinor, proposal.amount.currency),
+        amount: (proposal.amount.amountMinor / 100).toFixed(2),
+        currency: proposal.amount.currency,
         scope: proposal.scope,
         exclusions: proposal.exclusions,
         leadTimeDays: proposal.leadTimeDays,
         validUntil: proposal.validUntil,
         submittedAt: proposal.submittedAt,
       } : undefined,
+      previousProposals: proposals.slice(1).map((previous, index) => {
+        const newer = proposals[index]!;
+        const changed = [
+          previous.amount.amountMinor !== newer.amount.amountMinor || previous.amount.currency !== newer.amount.currency ? "amount" : undefined,
+          previous.scope !== newer.scope ? "scope" : undefined,
+          previous.exclusions !== newer.exclusions ? "exclusions" : undefined,
+          previous.leadTimeDays !== newer.leadTimeDays ? "lead time" : undefined,
+          previous.validUntil !== newer.validUntil ? "validity" : undefined,
+        ].filter((value): value is string => Boolean(value));
+        return {
+          revision: previous.revision,
+          amountLabel: estimateMoneyLabel(previous.amount.amountMinor, previous.amount.currency),
+          scope: previous.scope,
+          exclusions: previous.exclusions,
+          leadTimeDays: previous.leadTimeDays,
+          validUntil: previous.validUntil,
+          submittedAt: previous.submittedAt,
+          changed,
+        };
+      }),
       canRespond: !responseDeadlinePassed && ["opened", "submitted"].includes(source.status),
       mode: runtime().mode,
     };
@@ -1175,7 +1233,7 @@ const gateway: PublicOperationsGateway = {
 
   async openVendorEstimate(token) {
     const resolved = await resolveVendorEstimate(token);
-    if (!resolved) throw new PublicWorkflowError("This bid-request link is unavailable.", 404, "link_unavailable");
+    if (!resolved) throw new PublicWorkflowError("This quote-request link is unavailable.", 404, "link_unavailable");
     try {
       const result = await markEstimateOpened(
         { repository: runtime().repository },
@@ -1186,7 +1244,7 @@ const gateway: PublicOperationsGateway = {
           tokenHash: resolved.tokenHash,
           actor: {
             actorType: "vendor_link",
-            actorName: `${resolved.vendor.name} bid-request reviewer`,
+            actorName: `${resolved.vendor.name} quote-request reviewer`,
             organizationId: resolved.estimateRequest.organizationId,
           },
         },
@@ -1195,8 +1253,8 @@ const gateway: PublicOperationsGateway = {
         receiptId: result.request.id,
         receivedAt: result.request.openedAt ?? now(),
         mode: runtime().mode,
-        heading: "Bid request opened",
-        message: `You can now review and respond to ${resolved.organization.name} bid request for operator work order ${resolved.workOrder.number}. This is pricing only, not service authorization.`,
+        heading: "Quote request opened",
+        message: `You can now review and respond to ${resolved.organization.name}'s quote request for operator work order ${resolved.workOrder.number}. This is pricing only, not service authorization.`,
       };
     } catch (error) {
       return publicDomainError(error);
@@ -1205,22 +1263,22 @@ const gateway: PublicOperationsGateway = {
 
   async submitVendorEstimate(token, command) {
     const resolved = await resolveVendorEstimate(token);
-    if (!resolved) throw new PublicWorkflowError("This bid-request link is unavailable.", 404, "link_unavailable");
+    if (!resolved) throw new PublicWorkflowError("This quote-request link is unavailable.", 404, "link_unavailable");
     const responderName = cleanRequired(command.responderName, "Your name", 100);
     const scope = cleanRequired(command.scope, "Proposed scope", 4_000);
     const exclusions = cleanOptional(command.exclusions, 4_000);
     const normalizedAmount = command.amount.trim().replaceAll(",", "");
     if (!/^\d+(?:\.\d{1,2})?$/.test(normalizedAmount)) {
-      throw new PublicWorkflowError("Enter a valid bid amount with no more than two decimal places.", 422, "invalid_amount");
+      throw new PublicWorkflowError("Enter a valid quote amount with no more than two decimal places.", 422, "invalid_amount");
     }
     const amountMinor = Math.round(Number(normalizedAmount) * 100);
     if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
-      throw new PublicWorkflowError("Bid amount must be greater than zero.", 422, "invalid_amount");
+      throw new PublicWorkflowError("Quote amount must be greater than zero.", 422, "invalid_amount");
     }
     let validUntil: string | undefined;
     if (command.validUntil) {
       const parsed = Date.parse(`${command.validUntil}T23:59:59.999Z`);
-      if (!Number.isFinite(parsed)) throw new PublicWorkflowError("Choose a valid bid expiration date.", 422, "invalid_date");
+      if (!Number.isFinite(parsed)) throw new PublicWorkflowError("Choose a valid quote expiration date.", 422, "invalid_date");
       validUntil = new Date(parsed).toISOString();
     }
     try {
@@ -1245,8 +1303,8 @@ const gateway: PublicOperationsGateway = {
         receiptId: result.proposal.id,
         receivedAt: result.proposal.submittedAt,
         mode: runtime().mode,
-        heading: "Bid received",
-        message: `${resolved.organization.name} received bid revision ${result.proposal.revision} from ${resolved.vendor.name}. This is pricing evidence only; it does not assign work or authorize travel, check-in, service, or billing.`,
+        heading: "Quote received",
+        message: `${resolved.organization.name} received quote revision ${result.proposal.revision} from ${resolved.vendor.name}. This is pricing evidence only; it does not assign work or authorize travel, check-in, service, or billing.`,
       };
     } catch (error) {
       return publicDomainError(error);
@@ -1255,7 +1313,7 @@ const gateway: PublicOperationsGateway = {
 
   async declineVendorEstimate(token, command) {
     const resolved = await resolveVendorEstimate(token);
-    if (!resolved) throw new PublicWorkflowError("This bid-request link is unavailable.", 404, "link_unavailable");
+    if (!resolved) throw new PublicWorkflowError("This quote-request link is unavailable.", 404, "link_unavailable");
     const responderName = cleanRequired(command.responderName, "Your name", 100);
     const reason = cleanRequired(command.reason, "Reason for declining", 2_000);
     try {
@@ -1275,7 +1333,7 @@ const gateway: PublicOperationsGateway = {
         receiptId: result.request.id,
         receivedAt: result.request.respondedAt ?? now(),
         mode: runtime().mode,
-        heading: "Bid request declined",
+        heading: "Quote request declined",
         message: `${resolved.organization.name} received the decline reason. No assignment, service authorization, visit, cost, invoice, or billable work was created.`,
       };
     } catch (error) {

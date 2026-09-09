@@ -28,6 +28,28 @@ function facilitiesSession(): OperatorSession {
 }
 
 describe("approved-for-later queue management", () => {
+  it("shows the bulk follow-up control only when the viewer can manage workflow tasks", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const model = buildListModel(fixture, facilitiesSession(), "work-orders", { status: "open" });
+    const hidden = renderToStaticMarkup(createElement(ListSurface, {
+      model,
+      surface: "work-orders",
+      searchParams: { status: "open" },
+      canManageWorkflowTasks: false,
+    }));
+    const visible = renderToStaticMarkup(createElement(ListSurface, {
+      model,
+      surface: "work-orders",
+      searchParams: { status: "open" },
+      canManageWorkflowTasks: true,
+    }));
+
+    expect(hidden).not.toContain("Add the same follow-up to selected work");
+    expect(hidden).not.toContain("/api/ops/work-orders/bulk-follow-up");
+    expect(visible).toContain("Add the same follow-up to selected work");
+    expect(visible).toContain("/api/ops/work-orders/bulk-follow-up");
+  });
+
   it("renders usable edit, assignment, grouping, removal, and cancellation controls in the selected-record panel", () => {
     const fixture = buildNorthlinePresentationFixture();
     const model = buildListModel(fixture, facilitiesSession(), "work-orders", { visitPlan: "ready" });

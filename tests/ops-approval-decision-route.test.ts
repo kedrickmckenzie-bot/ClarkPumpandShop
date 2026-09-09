@@ -125,7 +125,7 @@ describe("operator approval-decision route", () => {
     });
     expect(snapshot.workOrders.find((candidate) => candidate.id === workOrder.id)).toMatchObject({
       status: "approved",
-      nextAction: "Compare vendor bids and choose the service provider",
+      nextAction: "Compare vendor quotes and choose the service provider",
     });
   });
 

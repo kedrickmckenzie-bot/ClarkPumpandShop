@@ -233,7 +233,7 @@ describe("canonical work and provider commands", () => {
     const response = await recordVendorResponse(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: workOrder.id, assignmentId: assignment.id, issuanceId: issuance.id, response: "proposed_date", responderName: "Summit Dispatch", proposedAt: "2026-08-11T14:00:00.000Z", actor: { ...actor, actorType: "vendor_link" } });
     expect(response.response).toBe("proposed_date");
     const updated = await svc.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id);
-    expect(updated?.accountableParty).toBe("Facilities coordinator");
+    expect(updated?.accountableParty).toBe("Facilities coordination team");
     expect((await svc.repository.getAssignment(NORTHLINE_ORGANIZATION_ID, assignment.id))?.status).toBe("issued");
   });
 });

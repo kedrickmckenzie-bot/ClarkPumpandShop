@@ -24,7 +24,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
             <div className={styles.cardHeader}>
               <div>
                 <span className={styles.eyebrow}>Customer-authorized service</span>
-                <h2 className={styles.cardTitle} id="service-request-title">This is a work order, not a bid request</h2>
+                <h2 className={styles.cardTitle} id="service-request-title">This is authorized work, not a quote request</h2>
               </div>
               <FileCheck2 aria-hidden="true" color="#0d6b62" size={24} />
             </div>
@@ -41,14 +41,22 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
               <div className={styles.detail}><span className={styles.detailLabel}>Category</span><p className={styles.detailValue}>{authorization.service.category ?? "To be classified"}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Equipment</span><p className={styles.detailValue}>{authorization.service.asset ?? "Not required for this work"}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Issued</span><p className={styles.detailValue}>{formatPublicDateTime(authorization.issuedAt, authorization.store.timeZone)}</p></div>
+              <div className={styles.detail}><span className={styles.detailLabel}>Response due</span><p className={styles.detailValue}>{authorization.responseDueAt ? formatPublicDateTime(authorization.responseDueAt, authorization.store.timeZone) : "No response deadline stated"}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Revision</span><p className={styles.detailValue}>Revision {authorization.revision}</p></div>
             </div>
+            <div className={styles.callout} style={{ marginTop: "1rem" }}><strong>What to do next</strong><p>{authorization.nextStep}</p></div>
           </section>
 
           {authorization.priorResponse ? (
             <section className={styles.notice} aria-label="Recorded vendor response">
               <strong>{authorization.priorResponse.label}</strong>
               <p className={styles.helper}>Received {formatPublicDateTime(authorization.priorResponse.receivedAt, authorization.store.timeZone)}{authorization.priorResponse.detail ? ` · ${authorization.priorResponse.detail}` : ""}</p>
+            </section>
+          ) : null}
+          {authorization.operatorContinuation ? (
+            <section className={styles.notice} aria-label="Operator follow-up">
+              <strong>{authorization.operatorContinuation.label}</strong>
+              <p className={styles.helper}>Recorded {formatPublicDateTime(authorization.operatorContinuation.receivedAt, authorization.store.timeZone)}{authorization.operatorContinuation.detail ? ` · ${authorization.operatorContinuation.detail}` : ""}</p>
             </section>
           ) : null}
           <VendorResponseForm disabled={hasFinalResponse} opened={authorization.opened} organizationName={authorization.organizationName} token={token} />
@@ -63,6 +71,14 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
               {authorization.service.accessNotes ? <div className={styles.detail}><span className={styles.detailLabel}>Access notes</span><p className={styles.detailValue}>{authorization.service.accessNotes}</p></div> : null}
             </div>
           </section>
+
+          {authorization.appointment ? (
+            <section className={styles.card}>
+              <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Visit timing</h2><CalendarDays aria-hidden="true" color="#0d6b62" size={22} /></div>
+              <div className={styles.detail} style={{ marginTop: ".8rem" }}><span className={styles.detailLabel}>{authorization.appointment.status === "confirmed" ? "Confirmed appointment" : authorization.appointment.status === "counter_proposed" ? "Operator counterproposal" : "Proposed appointment"}</span><p className={styles.detailValue}>{formatPublicDateTime(authorization.appointment.startsAt, authorization.store.timeZone)}</p>{authorization.appointment.note ? <p className={styles.helper}>{authorization.appointment.note}</p> : null}</div>
+              <p className={styles.muted} style={{ marginTop: ".65rem" }}>{authorization.appointment.status === "confirmed" ? "This is the agreed service timing." : "This time remains a proposal until both sides confirm it."}</p>
+            </section>
+          ) : null}
 
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>Work reference & billing</h2>

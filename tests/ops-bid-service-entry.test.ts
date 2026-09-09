@@ -100,9 +100,9 @@ describe("work-order vendor path entry", () => {
 
     expect(markup).toContain("Choose the service path");
     expect(markup).toContain("Outside vendor");
-    expect(markup).toContain("Request bids first");
+    expect(markup).toContain("Request quotes first");
     expect(markup).toContain("No vendor is assigned and no check-in is available");
-    expect(markup).toContain("Bid requests ask for numbers only");
+    expect(markup).toContain("Quote requests ask for pricing only");
   });
 
   it("prefills an unmatched visit and creates its canonical work order with an auditable link", async () => {
@@ -163,7 +163,7 @@ describe("work-order vendor path entry", () => {
     expect(after.assignments.find((assignment) => assignment.workOrderId === workOrder.id)).toMatchObject({ status: "accepted", vendorId: "vendor-northline-brightpath" });
     expect(after.workflowTasks.find((task) => task.workOrderId === workOrder.id && task.status === "open")).toMatchObject({
       taskType: "verify_repair",
-      assigneeName: "Facilities coordinator",
+      assigneeName: "Facilities coordination team",
       title: "Verify current service outcome",
     });
     expect(after.siteVisitWorkOrders).toContainEqual(expect.objectContaining({
@@ -197,7 +197,7 @@ describe("work-order vendor path entry", () => {
     expect(response.headers.get("location")).not.toContain("0.0.0.0");
     const after = repository.snapshot();
     const workOrder = after.workOrders.at(-1)!;
-    expect(workOrder.nextAction).toBe("Send bid requests and compare responses");
+    expect(workOrder.nextAction).toBe("Send quote requests and compare responses");
     const newAssignments = after.assignments.slice(before.assignments.length);
     expect(newAssignments).toEqual([
       expect.objectContaining({

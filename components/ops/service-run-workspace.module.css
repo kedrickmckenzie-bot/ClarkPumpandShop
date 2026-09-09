@@ -3,6 +3,7 @@
 .eyebrow { margin: 0 0 .35rem; color: #3155a5; font-size: .76rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
 .header h1 { margin: 0; color: #101828; font-size: clamp(1.75rem, 3vw, 2.5rem); letter-spacing: -.035em; }
 .header p { max-width: 62rem; margin: .65rem 0 0; color: #667085; line-height: 1.55; }
+.headerActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .65rem; }
 .button, .secondaryButton { display: inline-flex; align-items: center; justify-content: center; min-height: 2.6rem; padding: .68rem 1rem; border-radius: .42rem; font-weight: 720; text-decoration: none; }
 .button { border: 1px solid #2855d9; color: #fff; background: #2855d9; }
 .secondaryButton { border: 1px solid #cbd5e1; color: #23324d; background: #fff; }
@@ -46,4 +47,4 @@
 .form { display: grid; gap: .8rem; }
 .form textarea { width: 100%; min-height: 6rem; padding: .65rem; border: 1px solid #cbd5e1; }
 @media (max-width: 850px) { .metrics { grid-template-columns: repeat(2, 1fr); } .metric:nth-child(2) { border-right: 0; } .grid { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .header { display: grid; } .metrics { grid-template-columns: 1fr; } .metric { border-right: 0; border-bottom: 1px solid #e4e7ec; } .detailGrid { grid-template-columns: 1fr; } .work { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .header { display: grid; } .headerActions { display: grid; justify-content: stretch; } .metrics { grid-template-columns: 1fr; } .metric { border-right: 0; border-bottom: 1px solid #e4e7ec; } .detailGrid { grid-template-columns: 1fr; } .work { grid-template-columns: 1fr; } }

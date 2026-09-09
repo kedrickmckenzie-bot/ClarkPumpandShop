@@ -76,6 +76,9 @@ import type {
   NotificationRecipient,
   NotificationRecipientRole,
   NotificationRule,
+  RoleCapabilityOverride,
+  OrganizationWorkflowPolicy,
+  ConfigurableMaintenanceCapability,
   JobRun,
   SavedView,
 } from "./types";
@@ -123,6 +126,9 @@ export interface WorkOrderListQuery extends PageRequest {
   createdTo?: IsoDateTime;
   heldOnly?: boolean;
   heldStoreGroup?: "multiple";
+  upcomingAppointmentAfter?: IsoDateTime;
+  heldReviewDeadlineTo?: IsoDateTime;
+  heldConfirmedOpportunityAfter?: IsoDateTime;
 }
 
 export interface HeldWorkPortfolioSummary {
@@ -209,6 +215,10 @@ export interface OpsRepository {
   listVendorReminders(organizationId: OpsId, vendorId: OpsId): Promise<import("./types").VendorReminder[]>;
   getMembership(organizationId: OpsId, membershipId: OpsId): Promise<Membership | null>;
   listScopeGrantsForMembership(organizationId: OpsId, membershipId: OpsId): Promise<ScopeGrant[]>;
+  listRoleCapabilityOverrides(organizationId: OpsId): Promise<RoleCapabilityOverride[]>;
+  upsertRoleCapabilityOverride(input: { organizationId: OpsId; id: OpsId; role: RoleCapabilityOverride["role"]; capability: ConfigurableMaintenanceCapability; enabled: boolean; updatedByMembershipId: OpsId; updatedByName: string; occurredAt: IsoDateTime }): Promise<void>;
+  getActiveWorkflowPolicy(organizationId: OpsId): Promise<OrganizationWorkflowPolicy | null>;
+  listWorkflowPolicies(organizationId: OpsId): Promise<OrganizationWorkflowPolicy[]>;
   getRequest(organizationId: OpsId, requestId: OpsId): Promise<ServiceRequest | null>;
   listRequestImpactAssessments(organizationId: OpsId, requestId: OpsId): Promise<RequestImpactAssessment[]>;
   getWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrder | null>;
@@ -275,6 +285,7 @@ export interface OpsRepository {
   getIssuance(organizationId: OpsId, issuanceId: OpsId): Promise<WorkOrderIssuance | null>;
   getEstimateRequest(organizationId: OpsId, estimateRequestId: OpsId): Promise<WorkOrderEstimateRequest | null>;
   getLatestEstimateProposal(organizationId: OpsId, estimateRequestId: OpsId): Promise<VendorEstimateProposal | null>;
+  listEstimateProposalsForRequest(organizationId: OpsId, estimateRequestId: OpsId): Promise<VendorEstimateProposal[]>;
   listEstimateRequestsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderEstimateRequest[]>;
   getVisit(organizationId: OpsId, visitId: OpsId): Promise<VisitSession | null>;
   getSiteVisitWorkOrderById(organizationId: OpsId, siteVisitWorkOrderId: OpsId): Promise<SiteVisitWorkOrder | null>;

@@ -477,6 +477,30 @@ describe("stage precedence transition matrix", () => {
     expect(view.operatingCondition).toMatchObject({ id: "result_rejected", certainty: "uncertain" });
     expect(view.operatingCondition.detail).toContain("still warm");
   });
+
+  it("keeps an inconclusive observation in operational review ahead of financial evidence", () => {
+    const view = buildWorkOrderCase({
+      now: NOW,
+      workOrder: { ...wo("wo-inconclusive", "accepted"), status: "in_progress", internalAccountableParty: "Jordan Lee" },
+      visits: [{ id: "v-inconclusive", status: "checked_out", checkedInAt: NOW, checkedOutAt: NOW }],
+      siteVisitWorkOrders: [{ id: "svwo-inconclusive", visitId: "v-inconclusive", workOrderId: "wo-inconclusive", linkedAt: NOW, outcome: "completed", outcomeNotes: "Repair completed", outcomeRecordedAt: NOW }],
+      verifications: [{ id: "verify-inconclusive", workOrderId: "wo-inconclusive", siteVisitWorkOrderId: "svwo-inconclusive", outcome: "completed", decision: "inconclusive", reason: "The store has not observed a normal operating period yet.", decidedByName: "Store manager", decidedAt: "2026-08-20T13:00:00.000Z" }],
+      workflowTasks: [{
+        id: "task-review-inconclusive", workOrderId: "wo-inconclusive", taskType: "other" as never,
+        title: "Review an inconclusive store confirmation", assigneeName: "Jordan Lee", status: "open",
+        dueAt: "2026-08-20T17:00:00.000Z", escalationDestination: "Facilities director",
+        blocking: true, requiredForProgress: true, reason: "The operating result could not be confirmed",
+      }],
+      costLines: [{ workOrderId: "wo-inconclusive" }],
+      invoices: [{ id: "invoice-inconclusive", status: "suggested" }],
+    });
+
+    expect(view.stage).toBe("followup_closeout");
+    expect(view.plainLanguageState).toBe("Result could not be confirmed; review required");
+    expect(view.primaryNextAction).toMatchObject({ label: "Review an inconclusive store confirmation", href: expect.stringContaining("view=activity#workflow-tasks") });
+    expect(view.operatingCondition).toMatchObject({ id: "result_inconclusive", certainty: "uncertain" });
+    expect(view.financialReview.label).toBe("Invoice evidence needs review");
+  });
 });
 describe("continuation idempotency", () => {
   it("rejects handling the same response twice and keeps one appointment", async () => {

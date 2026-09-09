@@ -8,8 +8,8 @@ export default async function PublicVendorEstimateRoute({ params }: { params: Pr
   try {
     estimate = await getPublicOperationsGateway().loadVendorEstimate(token);
   } catch {
-    return <PublicLinkUnavailable kind="bid request" />;
+    return <PublicLinkUnavailable kind="quote request" />;
   }
-  if (!estimate) return <PublicLinkUnavailable kind="bid request" />;
+  if (!estimate) return <PublicLinkUnavailable kind="quote request" />;
   return <VendorEstimatePage estimate={estimate} token={token} />;
 }

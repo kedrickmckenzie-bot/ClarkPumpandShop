@@ -74,13 +74,13 @@ function futureInstant(value: IsoDateTime, now: IsoDateTime, label: string) {
 
 function currency(value: string) {
   const clean = value.trim().toUpperCase();
-  if (!/^[A-Z]{3}$/.test(clean)) throw new OpsDomainError("VALIDATION", "Bid currency must be a three-letter code");
+  if (!/^[A-Z]{3}$/.test(clean)) throw new OpsDomainError("VALIDATION", "Quote currency must be a three-letter code");
   return clean;
 }
 
 function amountMinor(value: number) {
   if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_MONEY_MINOR) {
-    throw new OpsDomainError("VALIDATION", "Bid amount must be a positive safe integer in minor units");
+    throw new OpsDomainError("VALIDATION", "Quote amount must be a positive safe integer in minor units");
   }
   return value;
 }
@@ -88,13 +88,13 @@ function amountMinor(value: number) {
 function expectedRevision(value: number, allowZero: boolean) {
   const minimum = allowZero ? 0 : 1;
   if (!Number.isSafeInteger(value) || value < minimum) {
-    throw new OpsDomainError("VALIDATION", `Expected bid revision must be an integer of at least ${minimum}`);
+    throw new OpsDomainError("VALIDATION", `Expected quote revision must be an integer of at least ${minimum}`);
   }
   return value;
 }
 
 function assertTokenHash(value: string) {
-  if (!/^[a-f0-9]{64}$/i.test(value)) throw new OpsDomainError("VALIDATION", "Bid-request token SHA-256 is invalid");
+  if (!/^[a-f0-9]{64}$/i.test(value)) throw new OpsDomainError("VALIDATION", "Quote-request token SHA-256 is invalid");
   return value.toLowerCase();
 }
 
@@ -164,7 +164,7 @@ async function resolveVendorEstimateRequest(
 ) {
   assertActorOrganization(input.actor, input.organizationId);
   if (input.actor.actorType !== "vendor_link") {
-    throw new OpsDomainError("FORBIDDEN", "Vendor bid actions require a secure bid-request link");
+    throw new OpsDomainError("FORBIDDEN", "Vendor quote actions require a secure quote-request link");
   }
   const capability = await repository.getEstimateRequestByPublicToken({
     tokenHash: assertTokenHash(input.tokenHash),
@@ -179,11 +179,11 @@ async function resolveVendorEstimateRequest(
     || capabilityRequest.id !== input.estimateRequestId
     || capabilityRequest.vendorId !== input.vendorId
   ) {
-    throw new OpsDomainError("FORBIDDEN", "Bid-request link is invalid, expired, consumed, or not valid for this vendor");
+    throw new OpsDomainError("FORBIDDEN", "Quote-request link is invalid, expired, consumed, or not valid for this vendor");
   }
   const request = await repository.getEstimateRequest(capabilityRequest.organizationId, capabilityRequest.id);
   if (!request || request.vendorId !== capabilityRequest.vendorId || request.workOrderId !== capabilityRequest.workOrderId) {
-    throw new OpsDomainError("FORBIDDEN", "Bid request no longer matches the vendor capability");
+    throw new OpsDomainError("FORBIDDEN", "Quote request no longer matches the vendor capability");
   }
   return { request, tokenId: capability.tokenId, tokenExpiresAt: capability.expiresAt };
 }
@@ -195,7 +195,7 @@ async function requireEstimateWorkOrder(
   const workOrder = await repository.getWorkOrder(request.organizationId, request.workOrderId);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Canonical work order not found");
   if (terminalWorkOrderStatuses.has(workOrder.status)) {
-    throw new OpsDomainError("CONFLICT", "Closed or cancelled work cannot accept a bid response");
+    throw new OpsDomainError("CONFLICT", "Closed or cancelled work cannot accept a quote response");
   }
   return workOrder;
 }
@@ -212,7 +212,7 @@ async function atomicEstimateWorkOrderMutation(input: {
     workOrder: input.workOrder,
     now: input.now,
     statements: input.statements,
-    conflictMessage: input.conflictMessage ?? "This bid request or its work order changed. Refresh before trying again.",
+    conflictMessage: input.conflictMessage ?? "This quote request or its work order changed. Refresh before trying again.",
   });
 }
 
@@ -238,23 +238,23 @@ export async function requestEstimate(svc: EstimateCommandServices, input: Reque
   ]);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Canonical work order not found");
   if (terminalWorkOrderStatuses.has(workOrder.status)) {
-    throw new OpsDomainError("CONFLICT", "Closed or cancelled work cannot receive a bid request");
+    throw new OpsDomainError("CONFLICT", "Closed or cancelled work cannot receive a quote request");
   }
   if (!vendor || vendor.status !== "approved") throw new OpsDomainError("VALIDATION", "Approved vendor is required");
   if (!(await repository.vendorCoversStore(input.organizationId, vendor.id, workOrder.storeId))) {
     throw new OpsDomainError("FORBIDDEN", "Vendor does not cover this work-order store");
   }
-  if (!requestKinds.has(input.kind)) throw new OpsDomainError("VALIDATION", "Bid-request kind is invalid");
-  if (input.decisionKind && !["service_bid", "replacement_quote"].includes(input.decisionKind)) throw new OpsDomainError("VALIDATION", "Bid decision kind is invalid");
-  if (!requestChannels.has(input.channel)) throw new OpsDomainError("VALIDATION", "Bid-request channel is invalid");
+  if (!requestKinds.has(input.kind)) throw new OpsDomainError("VALIDATION", "Quote-request kind is invalid");
+  if (input.decisionKind && !["service_bid", "replacement_quote"].includes(input.decisionKind)) throw new OpsDomainError("VALIDATION", "Quote decision kind is invalid");
+  if (!requestChannels.has(input.channel)) throw new OpsDomainError("VALIDATION", "Quote-request channel is invalid");
   const now = clock.now();
-  const scope = required(input.requestedScope, "Bid scope", MAX_SCOPE_LENGTH);
-  if (!input.dueAt) throw new OpsDomainError("VALIDATION", "Bid response due date is required");
-  const dueAt = futureInstant(input.dueAt, now, "Bid response due date");
+  const scope = required(input.requestedScope, "Quote scope", MAX_SCOPE_LENGTH);
+  if (!input.dueAt) throw new OpsDomainError("VALIDATION", "Quote response due date is required");
+  const dueAt = futureInstant(input.dueAt, now, "Quote response due date");
   const tokenHash = assertTokenHash(input.publicToken.tokenHash);
-  const expiresAt = futureInstant(input.publicToken.expiresAt, now, "Bid-request link expiry");
+  const expiresAt = futureInstant(input.publicToken.expiresAt, now, "Quote-request link expiry");
   if (Date.parse(expiresAt) < Date.parse(dueAt)) {
-    throw new OpsDomainError("VALIDATION", "Bid-request link must remain valid through the response due date");
+    throw new OpsDomainError("VALIDATION", "Quote-request link must remain valid through the response due date");
   }
   const [existing, activeAssignment, workDetail] = await Promise.all([
     repository.listEstimateRequestsForWorkOrder(input.organizationId, workOrder.id),
@@ -267,17 +267,17 @@ export async function requestEstimate(svc: EstimateCommandServices, input: Reque
   ) {
     throw new OpsDomainError(
       "CONFLICT",
-      "Active service authorization must be explicitly ended before requesting vendor bids",
+      "Active service authorization must be explicitly ended before requesting vendor quotes",
     );
   }
   if (workDetail?.visits.some((visit) => visit.status === "active")) {
-    throw new OpsDomainError("CONFLICT", "Vendor bids cannot be requested while a technician is onsite");
+    throw new OpsDomainError("CONFLICT", "Vendor quotes cannot be requested while a technician is onsite");
   }
   if (existing.some((request) => request.status === "selected")) {
-    throw new OpsDomainError("CONFLICT", "This work order already has a selected provider. Reopen that decision before requesting another bid.");
+    throw new OpsDomainError("CONFLICT", "This work order already has a selected provider. Reopen that decision before requesting another quote.");
   }
   if (existing.some((request) => request.vendorId === vendor.id && activeEstimateRequestStatuses.has(request.status))) {
-    throw new OpsDomainError("CONFLICT", "This vendor already has an active bid request for the work order");
+    throw new OpsDomainError("CONFLICT", "This vendor already has an active quote request for the work order");
   }
 
   const requestId = ids.next("estimate-request");
@@ -350,10 +350,10 @@ export async function markEstimateOpened(svc: EstimateCommandServices, input: Ma
   const { request } = await resolveVendorEstimateRequest(repository, now, input);
   if (request.status === "opened") return { request, changed: false };
   if (request.status !== "requested") {
-    throw new OpsDomainError("CONFLICT", "Only a newly created bid request can transition to opened");
+    throw new OpsDomainError("CONFLICT", "Only a newly created quote request can transition to opened");
   }
   if (request.dueAt && Date.parse(request.dueAt) <= Date.parse(now)) {
-    throw new OpsDomainError("CONFLICT", "This bid response deadline has passed");
+    throw new OpsDomainError("CONFLICT", "This quote response deadline has passed");
   }
   const workOrder = await requireEstimateWorkOrder(repository, request);
   const opened: WorkOrderEstimateRequest = { ...request, status: "opened", openedAt: now };
@@ -408,29 +408,29 @@ export async function submitEstimate(svc: EstimateCommandServices, input: Submit
   const now = clock.now();
   const { request } = await resolveVendorEstimateRequest(repository, now, input);
   if (!activeEstimateRequestStatuses.has(request.status)) {
-    throw new OpsDomainError("CONFLICT", "This bid request no longer accepts proposals");
+    throw new OpsDomainError("CONFLICT", "This quote request no longer accepts proposals");
   }
   if (request.dueAt && Date.parse(request.dueAt) <= Date.parse(now)) {
-    throw new OpsDomainError("CONFLICT", "This bid response deadline has passed");
+    throw new OpsDomainError("CONFLICT", "This quote response deadline has passed");
   }
   const workOrder = await requireEstimateWorkOrder(repository, request);
   const latest = await repository.getLatestEstimateProposal(request.organizationId, request.id);
   const currentRevision = latest?.revision ?? 0;
   expectedRevision(input.expectedRevision, true);
   if (input.expectedRevision !== currentRevision) {
-    throw new OpsDomainError("CONFLICT", "The bid changed. Refresh before submitting another revision");
+    throw new OpsDomainError("CONFLICT", "The quote changed. Refresh before submitting another revision");
   }
   if (request.status === "submitted" && !latest) {
-    throw new OpsDomainError("CONFLICT", "Submitted bid request is missing its immutable proposal revision");
+    throw new OpsDomainError("CONFLICT", "Submitted quote request is missing its immutable proposal revision");
   }
   const cleanAmount = amountMinor(input.amountMinor);
   const cleanCurrency = currency(input.currency);
-  const scope = required(input.scope, "Bid scope", MAX_SCOPE_LENGTH);
-  const exclusions = optionalText(input.exclusions, "Bid exclusions", MAX_SCOPE_LENGTH);
+  const scope = required(input.scope, "Quote scope", MAX_SCOPE_LENGTH);
+  const exclusions = optionalText(input.exclusions, "Quote exclusions", MAX_SCOPE_LENGTH);
   if (input.leadTimeDays !== undefined && (!Number.isSafeInteger(input.leadTimeDays) || input.leadTimeDays < 0 || input.leadTimeDays > 3_650)) {
-    throw new OpsDomainError("VALIDATION", "Bid lead time must be a whole number from 0 to 3,650 days");
+    throw new OpsDomainError("VALIDATION", "Quote lead time must be a whole number from 0 to 3,650 days");
   }
-  const validUntil = input.validUntil ? futureInstant(input.validUntil, now, "Bid validity date") : undefined;
+  const validUntil = input.validUntil ? futureInstant(input.validUntil, now, "Quote validity date") : undefined;
   const proposal: VendorEstimateProposal = {
     id: ids.next("estimate-proposal"),
     organizationId: request.organizationId,
@@ -489,7 +489,7 @@ export async function submitEstimate(svc: EstimateCommandServices, input: Submit
       ids,
     }),
     ],
-    conflictMessage: "The bid request changed. Refresh before submitting another bid revision.",
+    conflictMessage: "The quote request changed. Refresh before submitting another quote revision.",
   });
   return { request: submitted, proposal };
 }
@@ -504,14 +504,14 @@ export async function declineEstimate(svc: EstimateCommandServices, input: Decli
   const now = clock.now();
   const { request, tokenId } = await resolveVendorEstimateRequest(repository, now, input);
   if (!activeEstimateRequestStatuses.has(request.status)) {
-    throw new OpsDomainError("CONFLICT", "This bid request no longer accepts a decline response");
+    throw new OpsDomainError("CONFLICT", "This quote request no longer accepts a decline response");
   }
   const workOrder = await requireEstimateWorkOrder(repository, request);
   const latest = await repository.getLatestEstimateProposal(request.organizationId, request.id);
   const currentRevision = latest?.revision ?? 0;
   expectedRevision(input.expectedRevision, true);
   if (input.expectedRevision !== currentRevision) {
-    throw new OpsDomainError("CONFLICT", "The bid changed. Refresh before declining the request");
+    throw new OpsDomainError("CONFLICT", "The quote changed. Refresh before declining the request");
   }
   const reason = required(input.reason, "Decline reason", MAX_NOTE_LENGTH);
   const declined: WorkOrderEstimateRequest = { ...request, status: "declined", respondedAt: now, decisionAt: now };
@@ -560,16 +560,16 @@ export async function withdrawEstimate(svc: EstimateCommandServices, input: With
   const { repository, clock, ids } = services(svc);
   assertActorOrganization(input.actor, input.organizationId);
   const request = await repository.getEstimateRequest(input.organizationId, input.estimateRequestId);
-  if (!request) throw new OpsDomainError("NOT_FOUND", "Bid request not found");
+  if (!request) throw new OpsDomainError("NOT_FOUND", "Quote request not found");
   if (!activeEstimateRequestStatuses.has(request.status)) {
-    throw new OpsDomainError("CONFLICT", "Only an active bid request can be withdrawn");
+    throw new OpsDomainError("CONFLICT", "Only an active quote request can be withdrawn");
   }
   const workOrder = await requireEstimateWorkOrder(repository, request);
   const latest = await repository.getLatestEstimateProposal(request.organizationId, request.id);
   const currentRevision = latest?.revision ?? 0;
   expectedRevision(input.expectedRevision, true);
   if (input.expectedRevision !== currentRevision) {
-    throw new OpsDomainError("CONFLICT", "The bid changed. Refresh before withdrawing this request");
+    throw new OpsDomainError("CONFLICT", "The quote changed. Refresh before withdrawing this request");
   }
   const note = required(input.note, "Withdrawal note", MAX_NOTE_LENGTH);
   const now = clock.now();
@@ -618,9 +618,9 @@ export async function reopenEstimateSelection(
   assertActorOrganization(input.actor, input.organizationId);
   expectedRevision(input.expectedRevision, false);
   const request = await repository.getEstimateRequest(input.organizationId, input.estimateRequestId);
-  if (!request) throw new OpsDomainError("NOT_FOUND", "Selected bid request not found");
+  if (!request) throw new OpsDomainError("NOT_FOUND", "Selected quote request not found");
   if (request.status !== "selected") {
-    throw new OpsDomainError("CONFLICT", "Only the currently selected bid can be reopened");
+    throw new OpsDomainError("CONFLICT", "Only the currently selected quote can be reopened");
   }
   const workOrder = await requireEstimateWorkOrder(repository, request);
   const [latestProposal, activeAssignment, priorIssuances] = await Promise.all([
@@ -629,13 +629,13 @@ export async function reopenEstimateSelection(
     repository.listIssuancesForWorkOrder(input.organizationId, workOrder.id),
   ]);
   if (!latestProposal || latestProposal.revision !== input.expectedRevision) {
-    throw new OpsDomainError("CONFLICT", "The selected bid changed. Refresh before reopening the decision");
+    throw new OpsDomainError("CONFLICT", "The selected quote changed. Refresh before reopening the decision");
   }
   if (activeAssignment && ["issued", "opened", "accepted"].includes(activeAssignment.status)) {
     throw new OpsDomainError("CONFLICT", "Decline or cancel the current service authorization before reopening the vendor decision");
   }
   if (activeAssignment?.kind === "outside_vendor" && activeAssignment.vendorId !== request.vendorId) {
-    throw new OpsDomainError("CONFLICT", "The active provider no longer matches the selected bid");
+    throw new OpsDomainError("CONFLICT", "The active provider no longer matches the selected quote");
   }
   const note = required(input.note, "Reopen reason", MAX_NOTE_LENGTH);
   const now = clock.now();
@@ -660,7 +660,7 @@ export async function reopenEstimateSelection(
   statements.push(
     {
       sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ? AND status = ?",
-      params: ["awaiting_approval", "Facilities coordinator", "Review vendor bids and select a service provider", request.organizationId, workOrder.id, workOrder.status],
+      params: ["awaiting_approval", "Facilities coordinator", "Review vendor quotes and select a service provider", request.organizationId, workOrder.id, workOrder.status],
     },
     ...auditAndOutbox({
       organizationId: request.organizationId,
@@ -685,7 +685,7 @@ export async function reopenEstimateSelection(
     workOrder,
     now,
     statements,
-    conflictMessage: "The work order or selected bid changed. Refresh before reopening the decision.",
+    conflictMessage: "The work order or selected quote changed. Refresh before reopening the decision.",
   });
   return {
     request: { ...request, status: "not_selected" as const, decisionAt: now },
@@ -708,14 +708,14 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
   assertActorOrganization(input.actor, input.organizationId);
   expectedRevision(input.expectedRevision, false);
   const request = await repository.getEstimateRequest(input.organizationId, input.estimateRequestId);
-  if (!request) throw new OpsDomainError("NOT_FOUND", "Bid request not found");
+  if (!request) throw new OpsDomainError("NOT_FOUND", "Quote request not found");
   if (!["submitted", "not_selected"].includes(request.status)) {
-    throw new OpsDomainError("CONFLICT", "Only a submitted bid can be selected or reconsidered");
+    throw new OpsDomainError("CONFLICT", "Only a submitted quote can be selected or reconsidered");
   }
   const workOrder = await repository.getWorkOrder(input.organizationId, request.workOrderId);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Canonical work order not found");
   if (selectableBlockedWorkOrderStatuses.has(workOrder.status)) {
-    throw new OpsDomainError("CONFLICT", "Work in progress, completed, closed, or cancelled cannot change vendors through bid selection");
+    throw new OpsDomainError("CONFLICT", "Work in progress, completed, closed, or cancelled cannot change vendors through quote selection");
   }
   const selectedVendor = await repository.getVendor(input.organizationId, request.vendorId);
   if (!selectedVendor || selectedVendor.status !== "approved") {
@@ -732,10 +732,10 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
     repository.getLatestIssuanceForWorkOrder(input.organizationId, workOrder.id),
     repository.listIssuancesForWorkOrder(input.organizationId, workOrder.id),
   ]);
-  if (!latestProposal) throw new OpsDomainError("CONFLICT", "Submitted bid is missing its immutable proposal");
+  if (!latestProposal) throw new OpsDomainError("CONFLICT", "Submitted quote is missing its immutable proposal");
   if (!workDetail) throw new OpsDomainError("NOT_FOUND", "Canonical work-order detail not found");
   if (latestProposal.id !== input.proposalId || latestProposal.revision !== input.expectedRevision) {
-    throw new OpsDomainError("CONFLICT", "Select the latest submitted bid revision");
+    throw new OpsDomainError("CONFLICT", "Select the latest submitted quote revision");
   }
   if (
     latestProposal.organizationId !== request.organizationId
@@ -743,7 +743,7 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
     || latestProposal.workOrderId !== request.workOrderId
     || latestProposal.vendorId !== request.vendorId
   ) {
-    throw new OpsDomainError("CONFLICT", "Bid proposal does not match its vendor request and canonical work order");
+    throw new OpsDomainError("CONFLICT", "Quote proposal does not match its vendor request and canonical work order");
   }
   if (
     !Number.isSafeInteger(latestProposal.amount.amountMinor)
@@ -757,25 +757,25 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
         || latestProposal.leadTimeDays < 0
         || latestProposal.leadTimeDays > 3_650))
   ) {
-    throw new OpsDomainError("CONFLICT", "The latest bid revision contains invalid selection evidence");
+    throw new OpsDomainError("CONFLICT", "The latest quote revision contains invalid selection evidence");
   }
   const now = clock.now();
   if (latestProposal.validUntil) {
     if (!Number.isFinite(Date.parse(latestProposal.validUntil))) {
-      throw new OpsDomainError("CONFLICT", "The latest bid revision has an invalid validity date");
+      throw new OpsDomainError("CONFLICT", "The latest quote revision has an invalid validity date");
     }
     if (Date.parse(latestProposal.validUntil) <= Date.parse(now)) {
-      throw new OpsDomainError("CONFLICT", "This bid revision is no longer valid");
+      throw new OpsDomainError("CONFLICT", "This quote revision is no longer valid");
     }
   }
   if (workDetail.visits.some((visit) => visit.status === "active")) {
-    throw new OpsDomainError("CONFLICT", "Finish the active visit before selecting another vendor bid");
+    throw new OpsDomainError("CONFLICT", "Finish the active visit before selecting another vendor quote");
   }
   if (activeAssignment && ["issued", "opened", "accepted"].includes(activeAssignment.status)) {
     throw new OpsDomainError("CONFLICT", "The current service authorization must be declined or cancelled before selecting another vendor");
   }
   if (requests.some((candidate) => candidate.id !== request.id && candidate.status === "selected")) {
-    throw new OpsDomainError("CONFLICT", "This work order already has a selected bid");
+    throw new OpsDomainError("CONFLICT", "This work order already has a selected quote");
   }
   const note = required(input.note, "Selection note", MAX_NOTE_LENGTH);
   const competing = requests.filter(
@@ -898,7 +898,7 @@ export async function selectEstimate(svc: EstimateCommandServices, input: Select
       repository.getLatestEstimateProposal(request.organizationId, request.id),
     ]);
     if (currentRequest?.status !== request.status || currentProposal?.revision !== latestProposal.revision) {
-      throw new OpsDomainError("CONFLICT", "This bid changed while the vendor decision was being recorded. Refresh before selecting it.");
+      throw new OpsDomainError("CONFLICT", "This quote changed while the vendor decision was being recorded. Refresh before selecting it.");
     }
     throw error;
   }

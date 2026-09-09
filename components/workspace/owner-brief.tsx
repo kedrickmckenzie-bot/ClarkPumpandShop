@@ -36,7 +36,7 @@ export function OwnerBriefSection({ model }: { model: OwnerBrief }) {
       </header>
 
       <div className={styles.moneyRow}>
-        <Link className={styles.moneyCell} href={model.drillThrough.verifiedValueHref}>
+        <Link className={styles.moneyCell} href={model.drillThrough.recordedSpendHref}>
           <span className={styles.moneyLabel}>Recorded work spend</span>
           <strong>{usd(model.money.recordedSpendMinor)}</strong>
           <span className={styles.moneyNote}>{model.money.currency} · cost lines with service dates in the period — open every cost line</span>
@@ -46,7 +46,7 @@ export function OwnerBriefSection({ model }: { model: OwnerBrief }) {
           <strong className={styles.warningText}>{usd(model.money.invoiceReviewAmountMinor)}</strong>
           <span className={styles.moneyNote}>{model.money.invoiceReviewCount} invoice{model.money.invoiceReviewCount === 1 ? "" : "s"} with open review flags, each counted once at its full total{model.money.otherIdentifiedExposureMinor > 0 ? ` · other exposure ${usd(model.money.otherIdentifiedExposureMinor)}` : ""}</span>
         </Link>
-        <Link className={styles.moneyCell} href={model.drillThrough.recordedSpendHref}>
+        <Link className={styles.moneyCell} href={model.drillThrough.verifiedValueHref}>
           <span className={styles.moneyLabel}>Verified savings recovered</span>
           <strong className={styles.positiveText}>{usd(model.money.realizedVerifiedMinor)}</strong>
           <span className={styles.moneyNote}>Deductions, credits, and warranty recoveries backed by source records</span>

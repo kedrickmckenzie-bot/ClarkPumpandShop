@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { issueWorkOrderToVendor } from "@/lib/server/work-order-issuance";
+import { roleCan } from "@/components/ops/role-policy";
 import { createHash, randomUUID } from "node:crypto";
 
 const priorities = new Set(["routine", "urgent", "emergency", "planned"]);
@@ -26,7 +27,7 @@ function optionalPositiveInteger(value: string) {
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], "create_work_order");
     const formData = await request.formData();
     const submissionKey = formText(formData, "submissionKey", { max: 120 }) || `work-order:${randomUUID()}`;
     const requestHash = createHash("sha256")
@@ -45,6 +46,12 @@ export async function POST(request: Request) {
       throw new OpsDomainError("VALIDATION", "Choose a supported priority and assignment route.");
     }
     if (!intents.has(intent)) throw new OpsDomainError("VALIDATION", "Choose a supported work-order action.");
+    if (context.session.role === "store_manager" && priority !== "routine") {
+      throw new OpsDomainError("FORBIDDEN", "Store managers can create only routine work. Escalate urgent or emergency issues to facilities.");
+    }
+    if (intent === "create_and_send" && !roleCan(context.session, "issue_work_order")) {
+      throw new OpsDomainError("FORBIDDEN", "Dispatch is not enabled for your role.");
+    }
     if (intent === "create_and_send" && assignmentKind !== "outside_vendor") {
       throw new OpsDomainError("VALIDATION", "Create and email is available only when an outside vendor is selected.");
     }
@@ -92,7 +99,7 @@ export async function POST(request: Request) {
     }
     const initialAssignmentKind = assignmentKind === "bid_request" ? "choose_later" : assignmentKind;
     const nextAction = assignmentKind === "bid_request"
-      ? "Send bid requests and compare responses"
+      ? "Send quote requests and compare responses"
       : assignmentKind === "hold_for_visit"
         ? "Wait for a matching vendor visit"
       : assignmentKind === "outside_vendor"

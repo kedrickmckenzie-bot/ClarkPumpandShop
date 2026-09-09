@@ -10,10 +10,10 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Pr
   const query = await searchParams;
   const [model, session] = await Promise.all([loadProgramModel("equipment", query), loadOperatorSession()]);
   const store = Array.isArray(query.store) ? query.store[0] : query.store;
-  if (roleCan(session.role, "setup_equipment")) {
+  if (roleCan(session, "setup_equipment")) {
     model.page.primaryAction = { label: "Add equipment", href: store ? `/app/equipment/new?store=${encodeURIComponent(store)}` : "/app/equipment/new" };
   }
-  if (roleCan(session.role, "setup_pm")) {
+  if (roleCan(session, "setup_pm")) {
     model.page.secondaryAction = { label: "Create PM plan", href: store ? `/app/pm/new?store=${encodeURIComponent(store)}` : "/app/pm/new" };
   }
   return <ProgramView model={model} />;

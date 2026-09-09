@@ -59,6 +59,14 @@ export const opsScopeGrants = sqliteTable("ops_scope_grants", {
   id: id(), organizationId: organizationId(), membershipId: text("membership_id").notNull(), scopeKind: text("scope_kind").notNull(), scopeId: text("scope_id").notNull(), permission: text("permission").notNull(), createdAt: createdAt(),
 }, (table) => [uniqueIndex("uidx_ops_scopes_org_member_scope_perm").on(table.organizationId, table.membershipId, table.scopeKind, table.scopeId, table.permission), index("idx_ops_scopes_org_kind_id").on(table.organizationId, table.scopeKind, table.scopeId)]);
 
+export const opsRoleCapabilityOverrides = sqliteTable("ops_role_capability_overrides", {
+  id: id(), organizationId: organizationId(), role: text("role").notNull(), capability: text("capability").notNull(), enabled: bool("enabled"), updatedByMembershipId: text("updated_by_membership_id").notNull(), updatedByName: text("updated_by_name").notNull(), createdAt: createdAt(), updatedAt: text("updated_at").notNull(),
+}, (table) => [uniqueIndex("uidx_ops_role_capability_org_role_cap").on(table.organizationId, table.role, table.capability), index("idx_ops_role_capability_org_role").on(table.organizationId, table.role)]);
+
+export const opsWorkflowPolicies = sqliteTable("ops_workflow_policies", {
+  id: id(), organizationId: organizationId(), version: integer("version").notNull(), status: text("status").notNull(), autoCloseRoutineAfterVerification: bool("auto_close_routine_after_verification"), appliesToActiveWork: bool("applies_to_active_work"), createdByMembershipId: text("created_by_membership_id").notNull(), createdByName: text("created_by_name").notNull(), createdAt: createdAt(),
+}, (table) => [uniqueIndex("uidx_ops_workflow_policy_org_version").on(table.organizationId, table.version), uniqueIndex("uidx_ops_workflow_policy_active").on(table.organizationId).where(sql`${table.status} = 'active'`)]);
+
 export const opsVendors = sqliteTable("ops_vendors", {
   id: id(), organizationId: organizationId(), code: text("code").notNull(), name: text("name").notNull(), dispatchEmail: text("dispatch_email").notNull(), dispatchPhone: text("dispatch_phone"), status: text("status").notNull().default("approved"), preferred: bool("preferred"), searchText: text("search_text").notNull(), createdAt: createdAt(),
 }, (table) => [uniqueIndex("uidx_ops_vendors_org_id").on(table.organizationId, table.id), uniqueIndex("uidx_ops_vendors_org_code").on(table.organizationId, table.code), index("idx_ops_vendors_org_status_name").on(table.organizationId, table.status, table.name)]);
@@ -380,6 +388,8 @@ export const opsWorkOrderVerifications = sqliteTable("ops_work_order_verificatio
   outcomeRecordedAt: text("outcome_recorded_at").notNull(),
   cycle: integer("cycle").notNull(),
   decision: text("decision").notNull(),
+  basis: text("basis"),
+  verificationScope: text("verification_scope"),
   reason: text("reason"),
   decidedByMembershipId: text("decided_by_membership_id").notNull(),
   decidedByName: text("decided_by_name").notNull(),
@@ -394,8 +404,10 @@ export const opsWorkOrderVerifications = sqliteTable("ops_work_order_verificatio
   foreignKey({ name: "fk_ops_work_verifications_member", columns: [table.organizationId, table.decidedByMembershipId], foreignColumns: [opsMemberships.organizationId, opsMemberships.id] }),
   check("chk_ops_work_verifications_outcome", sql`${table.outcome} IN ('completed', 'diagnosis_only', 'quote_required', 'parts_required', 'return_visit_required', 'no_issue_found', 'store_access_unavailable', 'work_not_authorized', 'not_addressed')`),
   check("chk_ops_work_verifications_cycle", sql`${table.cycle} > 0`),
-  check("chk_ops_work_verifications_decision", sql`${table.decision} IN ('verified', 'rejected')`),
-  check("chk_ops_work_verifications_reason", sql`${table.decision} <> 'rejected' OR (${table.reason} IS NOT NULL AND length(trim(${table.reason})) > 0)`),
+  check("chk_ops_work_verifications_decision", sql`${table.decision} IN ('verified', 'rejected', 'inconclusive')`),
+  check("chk_ops_work_verifications_reason", sql`${table.decision} = 'verified' OR (${table.reason} IS NOT NULL AND length(trim(${table.reason})) > 0)`),
+  check("chk_ops_work_verifications_basis", sql`${table.basis} IS NULL OR ${table.basis} IN ('observable_result', 'technical_evidence', 'operational_review')`),
+  check("chk_ops_work_verifications_scope", sql`${table.verificationScope} IS NULL OR ${table.verificationScope} IN ('reported_problem', 'pm_task', 'technical_work')`),
   check("chk_ops_work_verifications_actor", sql`length(trim(${table.decidedByName})) > 0`),
   check("chk_ops_work_verifications_time", sql`${table.decidedAt} >= ${table.outcomeRecordedAt}`),
 ]);
@@ -698,6 +710,8 @@ export const opsSchema = {
   opsUsers,
   opsMemberships,
   opsScopeGrants,
+  opsRoleCapabilityOverrides,
+  opsWorkflowPolicies,
   opsVendors,
   opsVendorReminders,
   opsVendorSpecialties,
@@ -777,6 +791,9 @@ export const opsSchema = {
   opsOutboxMessages,
   opsNotificationRules,
   opsJobRuns,
+  opsVendorContinuations,
+  opsServiceAppointments,
+  opsSavedViews,
   opsPublicTokens,
   opsIdempotencyKeys,
   opsWorkOrderCounters,

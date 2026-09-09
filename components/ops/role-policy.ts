@@ -1,4 +1,4 @@
-import type { OperatorRole } from "./data-contract";
+import type { OperatorRole, OperatorSession } from "./data-contract";
 
 export type OperatorCapability =
   | "create_request"
@@ -17,6 +17,7 @@ export type OperatorCapability =
   | "request_estimate"
   | "select_estimate"
   | "issue_work_order"
+  | "confirm_observable_result"
   | "administer";
 
 export type OperatorListRoutePolicyId =
@@ -83,6 +84,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
       "request_estimate",
       "select_estimate",
       "issue_work_order",
+      "confirm_observable_result",
       "administer",
     ],
     listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "warranties", "invoices", "reports", "admin"],
@@ -93,7 +95,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     insightsNavigation: ["trends", "spend", "equipment", "pm", "lifecycle"],
   },
   regional: {
-    capabilities: ["create_request", "review_request", "create_work_order", "control_work_order", "manage_workflow_tasks", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "manage_lifecycle", "request_estimate", "select_estimate", "issue_work_order"],
+    capabilities: ["create_request", "review_request", "create_work_order", "control_work_order", "manage_workflow_tasks", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "manage_lifecycle", "request_estimate", "select_estimate", "issue_work_order", "confirm_observable_result"],
     listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "warranties", "invoices", "reports"],
     programRoutes: ["trends", "spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
@@ -102,7 +104,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     insightsNavigation: ["trends", "spend", "equipment", "pm", "lifecycle"],
   },
   store_manager: {
-    capabilities: ["create_request", "review_request", "setup_equipment", "setup_pm"],
+    capabilities: ["create_request", "review_request", "setup_equipment", "setup_pm", "confirm_observable_result"],
     listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "reports"],
     programRoutes: ["trends", "spend", "equipment", "pm"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment"],
@@ -130,7 +132,11 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
   },
 };
 
-export function roleCan(role: OperatorRole, capability: OperatorCapability) {
+export function roleCan(subject: OperatorRole | Pick<OperatorSession, "role" | "effectiveCapabilities">, capability: OperatorCapability) {
+  if (typeof subject !== "string" && subject.effectiveCapabilities) {
+    return subject.effectiveCapabilities.includes(capability);
+  }
+  const role = typeof subject === "string" ? subject : subject.role;
   return demoOperatorRolePolicy[role].capabilities.includes(capability);
 }
 

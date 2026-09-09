@@ -38,6 +38,7 @@ export function StoreSweepPlanner({ model, notice }: { model: StoreSweepPlannerM
         <input type="hidden" name="storeId" value={selectedStore.id} />
         <input type="hidden" name="vendorId" value={vendor.vendorId} />
         <input type="hidden" name="contractVersionId" value={vendor.contractVersionId} />
+        <input type="hidden" name="returnTo" value={model.returnHref} />
         <div className={styles.vendorHeader}><div><p className={styles.eyebrow}>Vendor</p><h3>{vendor.vendorName}</h3><p>{vendor.serviceAreas.join(" · ")}</p></div><span className={styles.count}>{vendor.jobs.length} {vendor.jobs.length === 1 ? "job" : "jobs"} in these service areas</span></div>
         <p className={styles.explainer}>Shown because this company’s vendor record lists these service areas. This does not certify an individual technician; the vendor decides what its crew can complete.</p>
         <fieldset className={styles.jobList}><legend>Select approved jobs</legend>{vendor.jobs.map((job) => <label className={styles.job} key={job.workOrderId}>

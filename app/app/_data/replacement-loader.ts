@@ -51,7 +51,7 @@ export async function loadAssetReplacementIntelligenceModel(assetId: string): Pr
   const latestRecommendation = recommendationHistory[0];
   const workOrder = event ? fixture.workOrders.find((row) => row.organizationId === session.organizationId && row.id === event.workOrderId) : undefined;
   return {
-    assetId: asset.id, permitted: roleCan(session.role, "manage_lifecycle"), action: `/api/ops/equipment/${encodeURIComponent(asset.id)}/replacement`,
+    assetId: asset.id, permitted: roleCan(session, "manage_lifecycle"), action: `/api/ops/equipment/${encodeURIComponent(asset.id)}/replacement`,
     currentAmountLabel: money(resolution.amount?.amountMinor, resolution.amount?.currency), rangeLabel: resolution.lowAmount && resolution.highAmount ? `${money(resolution.lowAmount.amountMinor, resolution.lowAmount.currency)}–${money(resolution.highAmount.amountMinor, resolution.highAmount.currency)} planning range` : "No range available",
     sourceLabel: sentence(resolution.source), effectiveLabel: date(resolution.effectiveAt), freshnessLabel: sentence(resolution.freshness), explanation: resolution.explanation,
     currentProfileId: profile?.id, profileName: profile?.name, specificationLabel: profile ? profile.matchKeys.map((key) => `${sentence(key)}: ${asset.replacementAttributes?.[key] ?? profile.attributes[key] ?? "not set"}`).join(" · ") : "Assign a functional profile to inherit current comparable evidence.",
@@ -79,7 +79,7 @@ export async function loadWorkOrderReplacementIntelligenceModel(workOrderId: str
   const existingProfile = existing ? fixture.replacementProfiles.find((row) => row.organizationId === session.organizationId && row.id === existing.profileId) : undefined;
   const benchmark = existing ? fixture.replacementBenchmarks.find((row) => row.organizationId === session.organizationId && row.sourceEstimateProposalId === proposal?.id) : undefined;
   return {
-    workOrderId: workOrder.id, permitted: roleCan(session.role, "manage_lifecycle"), canPublishGroup: session.role === "facilities", action: `/api/ops/work-orders/${encodeURIComponent(workOrder.id)}/replacement`, assetName: asset?.name,
+    workOrderId: workOrder.id, permitted: roleCan(session, "manage_lifecycle"), canPublishGroup: session.role === "facilities", action: `/api/ops/work-orders/${encodeURIComponent(workOrder.id)}/replacement`, assetName: asset?.name,
     selectedQuote: proposal && vendor ? { vendorName: vendor.name, amountLabel: money(proposal.amount.amountMinor, proposal.amount.currency), amountInput: (proposal.amount.amountMinor / 100).toFixed(2), currency: proposal.amount.currency, scope: proposal.scope, submittedLabel: `Submitted ${date(proposal.submittedAt)}` } : undefined,
     profiles: asset ? fixture.replacementProfiles.filter((row) => row.organizationId === session.organizationId && row.active && row.categoryKey === asset.categoryKey).map((row) => profileView(fixture, row, asset)) : [],
     selectedProfileId: asset?.replacementProfileId,
@@ -125,7 +125,7 @@ export async function loadReplacementProfileManagerModel(): Promise<ReplacementP
   });
   const staleProfiles = profileModels.filter((profile) => profile.freshness === "stale" && profile.peerCount > 0).map((profile) => ({ id: profile.id, name: profile.name, effectiveLabel: profile.benchmarkEffectiveLabel, peerCount: profile.peerCount }));
   return {
-    permitted: roleCan(session.role, "manage_lifecycle"),
+    permitted: roleCan(session, "manage_lifecycle"),
     canManageGroups: session.role === "facilities",
     action: "/api/ops/replacement-profiles",
     profiles: profileModels,

@@ -12,7 +12,7 @@ import { loadOperatorSession } from "./operator-loader";
 
 export async function loadStoreEquipmentSetupModel(storeId: string): Promise<StoreEquipmentSetupViewModel> {
   const session = await loadOperatorSession();
-  if (!roleCan(session.role, "setup_equipment")) notFound();
+  if (!roleCan(session, "setup_equipment")) notFound();
   const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
   const equipmentTemplates = fixture.equipmentTemplates ?? [];
   const componentTemplates = fixture.componentTemplates ?? [];
@@ -39,7 +39,7 @@ export async function loadStoreEquipmentNamingModel(
   requestedAssetIds: readonly string[],
 ): Promise<StoreEquipmentNamingViewModel> {
   const session = await loadOperatorSession();
-  if (!roleCan(session.role, "setup_equipment")) notFound();
+  if (!roleCan(session, "setup_equipment")) notFound();
   const uniqueAssetIds = [...new Set(requestedAssetIds.map((id) => id.trim()).filter(Boolean))];
   if (!uniqueAssetIds.length || uniqueAssetIds.length > 100) notFound();
 

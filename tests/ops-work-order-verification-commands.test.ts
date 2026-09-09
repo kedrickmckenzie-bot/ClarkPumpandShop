@@ -17,6 +17,7 @@ import {
   recordWorkOrderVerification,
   type WorkOrderVerificationRecord,
 } from "@/lib/ops/work-order-verification-commands";
+import { completeWorkflowTask } from "@/lib/ops/workflow-task-commands";
 import type {
   OpsFixture,
   SiteVisitWorkOrder,
@@ -205,7 +206,12 @@ describe("append-only work-order verification and closure", () => {
       decidedAt: NOW,
     });
     const after = test.repository.snapshot() as VerificationFixture;
-    expect(after.workOrderVerifications).toContainEqual(verification);
+    expect(after.workOrderVerifications).toContainEqual(expect.objectContaining({
+      id: verification.id,
+      decision: verification.decision,
+      basis: verification.basis,
+      verificationScope: verification.verificationScope,
+    }));
     expect(after.workOrders.find((record) => record.id === workOrderId)).toMatchObject({
       status: "resolved",
       resolvedAt: NOW,
@@ -230,6 +236,103 @@ describe("append-only work-order verification and closure", () => {
     }
     expect(after.auditEvents.filter((event) => event.aggregateId === workOrderId).map((event) => event.eventType))
       .toContain("work_order.verified_and_resolved");
+  });
+
+  it("automatically closes eligible routine work while preserving an open financial review", async () => {
+    const fixture = verificationFixture();
+    fixture.workflowPolicies = fixture.workflowPolicies?.map((policy) => ({
+      ...policy,
+      autoCloseRoutineAfterVerification: true,
+      appliesToActiveWork: true,
+    }));
+    const sourceTask = fixture.workflowTasks.find((task) => task.workOrderId === workOrderId)!;
+    fixture.workflowTasks.push({
+      ...sourceTask,
+      id: "workflow-task-finance-after-service-close",
+      taskType: "resolve_invoice_exception",
+      title: "Review the linked invoice exception",
+      assigneeType: "role",
+      assigneeId: undefined,
+      assigneeRole: "finance_reviewer",
+      assigneeName: "Finance review",
+      blocking: true,
+      requiredForProgress: true,
+      sourceFollowUpId: undefined,
+      createdAt: "2026-08-20T15:00:00.000Z",
+      status: "open",
+    });
+    const test = harness(fixture);
+
+    const result = await recordWorkOrderVerification(test.services, decisionInput("verified", "The reported leak has stopped during normal use."));
+
+    expect(result).toMatchObject({ autoClosed: true, resultingStatus: "closed" });
+    const after = test.repository.snapshot();
+    expect(after.workOrders.find((record) => record.id === workOrderId)).toMatchObject({
+      status: "closed",
+      resolvedAt: NOW,
+      closedAt: NOW,
+    });
+    expect(after.workflowTasks.find((task) => task.id === "workflow-task-finance-after-service-close"))
+      .toMatchObject({ status: "open", taskType: "resolve_invoice_exception" });
+    expect(after.workflowTasks.some((task) => task.workOrderId === workOrderId && task.taskType === "close_verified_work" && task.status === "open"))
+      .toBe(false);
+    const event = after.auditEvents.find((candidate) => candidate.aggregateId === workOrderId && candidate.eventType === "work_order.verified_and_closed");
+    expect(JSON.parse(event!.payloadJson)).toMatchObject({
+      autoClosed: true,
+      workflowPolicyId: "workflow-policy-northline-v1",
+      workflowPolicyVersion: 1,
+    });
+  });
+
+  it("re-evaluates automatic closure when the final required operational task is completed", async () => {
+    const fixture = verificationFixture();
+    fixture.workflowPolicies = fixture.workflowPolicies?.map((policy) => ({
+      ...policy,
+      autoCloseRoutineAfterVerification: true,
+      appliesToActiveWork: true,
+    }));
+    const sourceTask = fixture.workflowTasks.find((task) => task.workOrderId === workOrderId)!;
+    fixture.workflowTasks.push({
+      ...sourceTask,
+      id: "workflow-task-final-operational-review",
+      taskType: "other",
+      title: "Confirm the final operational note",
+      reason: "A required operational note remains after observable verification.",
+      sourceFollowUpId: undefined,
+      createdAt: "2026-08-20T15:00:00.000Z",
+      status: "open",
+    });
+    const test = harness(fixture);
+
+    const verification = await recordWorkOrderVerification(
+      test.services,
+      decisionInput("verified", "The reported leak has stopped during normal use."),
+    );
+    expect(verification).toMatchObject({ autoClosed: false, resultingStatus: "resolved" });
+
+    const completion = await completeWorkflowTask(test.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      workflowTaskId: "workflow-task-final-operational-review",
+      resolutionNote: "The final operational note is recorded.",
+      actor: facilitiesActor,
+    });
+
+    expect(completion).toMatchObject({ status: "completed", autoClosed: true });
+    const after = test.repository.snapshot();
+    expect(after.workOrders.find((record) => record.id === workOrderId)).toMatchObject({
+      status: "closed",
+      closedAt: NOW,
+      accountableParty: "No active owner",
+      nextAction: "No further operational action",
+    });
+    expect(after.workflowTasks.filter((task) => task.workOrderId === workOrderId && task.taskType === "close_verified_work"))
+      .toEqual([expect.objectContaining({ status: "completed" })]);
+    const event = after.auditEvents.find((candidate) => candidate.aggregateId === workOrderId && candidate.eventType === "work_order.auto_closed_after_operational_task");
+    expect(JSON.parse(event!.payloadJson)).toMatchObject({
+      triggeringWorkflowTaskId: "workflow-task-final-operational-review",
+      workflowPolicyId: "workflow-policy-northline-v1",
+      workflowPolicyVersion: 1,
+    });
   });
 
   it("records an avoided trip only when a manager explicitly confirms held work completed during planned service", async () => {
@@ -289,6 +392,33 @@ describe("append-only work-order verification and closure", () => {
       .rejects.toMatchObject({ code: "VALIDATION" });
 
     expect(test.repository.snapshot()).toEqual(before);
+  });
+
+  it("records an inconclusive observation without treating it as success or rejection and routes review to the current internal owner", async () => {
+    const test = harness();
+
+    const result = await recordWorkOrderVerification(test.services, {
+      ...decisionInput("verified"),
+      decision: "inconclusive",
+      reason: "The sink was not available for a normal-use test during the shift change.",
+      basis: "observable_result",
+      verificationScope: "reported_problem",
+    });
+
+    expect(result).toMatchObject({ decision: "inconclusive", autoClosed: false, resultingStatus: "in_progress" });
+    const after = test.repository.snapshot();
+    expect(after.workOrders.find((record) => record.id === workOrderId)).toMatchObject({
+      status: "in_progress",
+      accountableParty: "Jordan Lee",
+    });
+    expect(after.workflowTasks.find((task) => task.workOrderId === workOrderId && task.status === "open"))
+      .toMatchObject({
+        title: "Review an inconclusive store confirmation",
+        assigneeType: "user",
+        assigneeId: "membership-northline-facilities",
+        assigneeName: "Jordan Lee",
+      });
+    expect(after.auditEvents.map((event) => event.eventType)).toContain("work_order.verification_inconclusive");
   });
 
   it("rejects completion into a new active cycle without rewriting the prior visit or outcome", async () => {
@@ -384,6 +514,33 @@ describe("append-only work-order verification and closure", () => {
       expectedSiteVisitWorkOrderId: "site-visit-work-order-other-tenant",
     })).rejects.toMatchObject({ code: "CONFLICT" });
 
+    expect(test.repository.snapshot()).toEqual(before);
+  });
+
+  it("keeps store-manager confirmation observable and inside the assigned store", async () => {
+    const test = harness();
+    const before = test.repository.snapshot();
+    const store111Actor = {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      actorType: "user" as const,
+      actorId: "membership-northline-store-111",
+      actorName: "Store 111 manager",
+    };
+
+    await expect(recordWorkOrderVerification(test.services, {
+      ...decisionInput("verified"),
+      basis: "technical_evidence",
+      verificationScope: "technical_work",
+      actor: store111Actor,
+    })).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("observable result") });
+    await expect(recordWorkOrderVerification(test.services, {
+      ...decisionInput("verified"),
+      actor: {
+        ...store111Actor,
+        actorId: "membership-northline-store-104",
+        actorName: "Casey Morgan",
+      },
+    })).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("assigned operating scope") });
     expect(test.repository.snapshot()).toEqual(before);
   });
 

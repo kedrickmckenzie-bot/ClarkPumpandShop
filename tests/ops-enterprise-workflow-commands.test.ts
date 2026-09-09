@@ -468,10 +468,10 @@ describe("follow-up accountability", () => {
       completedAt: "2026-08-18T16:00:00.000Z",
       nextProjection: {
         status: "completed_pending_review",
-        accountableParty: "Facilities coordinator",
+        accountableParty: "Facilities coordination team",
         nextAction: "Verify current service outcome",
         dueAt: "2026-08-19T16:00:00.000Z",
-        escalationTo: "Facilities director",
+        escalationTo: "Regional operations manager",
       },
     });
     expect(await harness.repository.getFollowUp(NORTHLINE_ORGANIZATION_ID, followUp.id)).toMatchObject({
@@ -549,7 +549,7 @@ describe("unmatched visit review", () => {
     });
     expect(await harness.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id)).toMatchObject({
       status: "waiting_on_parts",
-      accountableParty: "Facilities coordinator",
+      accountableParty: "Facilities coordination team",
       nextAction: "Confirm parts and return date",
     });
     const after = snapshot(harness.repository);

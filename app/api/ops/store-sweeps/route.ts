@@ -5,6 +5,12 @@ import { emailRuntimeFromEnvironment, sendVendorStoreSweepEmail } from "@/lib/op
 import { assertStoreInSessionScope, formText, getOpsRequestContext, opsApiError } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
+function safeReturnTo(value: string) {
+  if (!value.startsWith("/app/work-orders") || value.startsWith("//")) return "/app/work-orders?visitPlan=ready";
+  const parsed = new URL(value, "https://operator.invalid");
+  return parsed.origin === "https://operator.invalid" && parsed.pathname === "/app/work-orders" ? `${parsed.pathname}${parsed.search}` : "/app/work-orders?visitPlan=ready";
+}
+
 function newActionToken() {
   return `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "")}`;
 }
@@ -21,6 +27,7 @@ export async function POST(request: Request) {
     const storeId = formText(formData, "storeId", { required: true, max: 120 });
     const vendorId = formText(formData, "vendorId", { required: true, max: 120 });
     const contractVersionId = formText(formData, "contractVersionId", { required: true, max: 120 });
+    const returnTo = safeReturnTo(formText(formData, "returnTo", { max: 2_000 }));
     const workOrderIds = [...new Set(formData.getAll("workOrderId").filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean))];
     if (!workOrderIds.length) throw new OpsDomainError("VALIDATION", "Choose at least one approved job for this store visit.");
     if (workOrderIds.length > 50) throw new OpsDomainError("VALIDATION", "Choose no more than 50 approved jobs for one store visit.");
@@ -77,7 +84,7 @@ export async function POST(request: Request) {
     } else {
       notice = `The visit was saved. Email delivery is not configured, so use the vendor link shown below.`;
     }
-    return relativeRedirect303(`/app/store-sweeps/${encodeURIComponent(result.run.id)}?vendorLink=${encodeURIComponent(publicPath)}&notice=${encodeURIComponent(notice)}`);
+    return relativeRedirect303(`/app/store-sweeps/${encodeURIComponent(result.run.id)}?vendorLink=${encodeURIComponent(publicPath)}&notice=${encodeURIComponent(notice)}&returnTo=${encodeURIComponent(returnTo)}`);
   } catch (error) {
     return opsApiError(error);
   }

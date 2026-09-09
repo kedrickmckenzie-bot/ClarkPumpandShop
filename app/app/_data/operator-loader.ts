@@ -37,6 +37,7 @@ import {
   OPS_PREVIEW_ROLE_COOKIE,
 } from "@/lib/server/runtime-identifiers";
 import { DEFAULT_DEMO_EDITION, isDemoEdition } from "@/components/ops/demo-edition";
+import { resolveRoleCapabilities } from "@/lib/ops/capability-policy";
 import type { HeldWorkActionsModel } from "@/components/workspace/held-work-actions";
 import type { PmProgramManagementModel } from "@/components/workspace/pm-program-management";
 import {
@@ -108,11 +109,13 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
         : role === "finance"
           ? NORTHLINE_PREVIEW_PERSONAS.finance
           : NORTHLINE_PREVIEW_PERSONAS.facilities;
-  const [organization, membership, grants] = await Promise.all([
+  const [organization, membership, grants, capabilityOverrides] = await Promise.all([
     repository.getOrganization(NORTHLINE_ORGANIZATION_ID),
     repository.getMembership(NORTHLINE_ORGANIZATION_ID, persona.membershipId),
     repository.listScopeGrantsForMembership(NORTHLINE_ORGANIZATION_ID, persona.membershipId),
+    repository.listRoleCapabilityOverrides(NORTHLINE_ORGANIZATION_ID),
   ]);
+  const effectivePolicy = resolveRoleCapabilities(membership?.role ?? "support", capabilityOverrides);
   const regionIds = grants.filter((grant) => grant.scopeKind === "region").map((grant) => grant.scopeId);
   const storeIds = grants.filter((grant) => grant.scopeKind === "store").map((grant) => grant.scopeId);
   const scopedStores = await repository.searchStores({
@@ -141,6 +144,8 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
     regionIds: regionIds.length ? regionIds : undefined,
     storeIds: storeIds.length ? storeIds : undefined,
     permissions: grants.map((grant) => grant.permission),
+    effectiveCapabilities: effectivePolicy.capabilities,
+    capabilityWarnings: effectivePolicy.warnings,
     demoEdition,
   };
 });
@@ -157,8 +162,8 @@ export type ListRouteId = OperatorListRoute;
 export type ProgramRouteId = OperatorProgramRoute;
 export type DetailRouteId = OperatorDetailRoute;
 
-function requireCapability(role: OperatorRole, capability: OperatorCapability) {
-  if (!roleCan(role, capability)) notFound();
+function requireCapability(session: OperatorSession, capability: OperatorCapability) {
+  if (!roleCan(session, capability)) notFound();
 }
 
 type ModelWithPageActions = {
@@ -168,26 +173,27 @@ type ModelWithPageActions = {
   };
 };
 
-function roleCanUseAction(role: OperatorRole, href: string) {
-  if (href === "#issue-work") return roleCan(role, "issue_work_order");
-  return roleCanOpenOperatorHref(role, href);
+function roleCanUseAction(session: OperatorSession, href: string) {
+  if (href === "#issue-work" || href.startsWith("/app/store-sweeps")) return roleCan(session, "issue_work_order");
+  if (href === "/app/work-orders/new" || href.startsWith("/app/work-orders/new?")) return roleCan(session, "create_work_order");
+  return roleCanOpenOperatorHref(session.role, href);
 }
 
-function enforceVisibleActionPolicy<T extends ModelWithPageActions>(model: T, role: OperatorRole): T {
-  if (model.page.primaryAction && !roleCanUseAction(role, model.page.primaryAction.href)) {
+function enforceVisibleActionPolicy<T extends ModelWithPageActions>(model: T, session: OperatorSession): T {
+  if (model.page.primaryAction && !roleCanUseAction(session, model.page.primaryAction.href)) {
     model.page.primaryAction = undefined;
   }
-  if (model.page.secondaryAction && !roleCanUseAction(role, model.page.secondaryAction.href)) {
+  if (model.page.secondaryAction && !roleCanUseAction(session, model.page.secondaryAction.href)) {
     model.page.secondaryAction = undefined;
   }
   return model;
 }
 
-function enforceListLinkPolicy<T extends ListPageViewModel>(model: T, role: OperatorRole): T {
-  enforceVisibleActionPolicy(model, role);
-  model.metrics = model.metrics?.filter((metric) => roleCanOpenOperatorHref(role, metric.link.href));
+function enforceListLinkPolicy<T extends ListPageViewModel>(model: T, session: OperatorSession): T {
+  enforceVisibleActionPolicy(model, session);
+  model.metrics = model.metrics?.filter((metric) => roleCanUseAction(session, metric.link.href));
   const rowCount = model.table.rows.length;
-  model.table.rows = model.table.rows.filter((row) => roleCanOpenOperatorHref(role, row.href));
+  model.table.rows = model.table.rows.filter((row) => roleCanOpenOperatorHref(session.role, row.href));
   if (model.table.rows.length !== rowCount) {
     model.resultSummary = `${model.table.rows.length} source record${model.table.rows.length === 1 ? "" : "s"}`;
     model.pagination = undefined;
@@ -195,8 +201,9 @@ function enforceListLinkPolicy<T extends ListPageViewModel>(model: T, role: Oper
   return model;
 }
 
-function enforceDashboardLinkPolicy<T extends DashboardPageViewModel>(model: T, role: OperatorRole): T {
-  enforceVisibleActionPolicy(model, role);
+function enforceDashboardLinkPolicy<T extends DashboardPageViewModel>(model: T, session: OperatorSession): T {
+  const role = session.role;
+  enforceVisibleActionPolicy(model, session);
   model.metrics = model.metrics.filter((metric) => roleCanOpenOperatorHref(role, metric.link.href));
   model.journey = model.journey?.filter((stage) => roleCanOpenOperatorHref(role, stage.link.href));
   model.priorityActions = model.priorityActions.filter((action) => roleCanOpenOperatorHref(role, action.link.href));
@@ -221,8 +228,9 @@ function enforceDashboardLinkPolicy<T extends DashboardPageViewModel>(model: T, 
   return model;
 }
 
-function enforceDetailLinkPolicy<T extends DetailPageViewModel>(model: T, role: OperatorRole): T {
-  enforceVisibleActionPolicy(model, role);
+function enforceDetailLinkPolicy<T extends DetailPageViewModel>(model: T, session: OperatorSession): T {
+  const role = session.role;
+  enforceVisibleActionPolicy(model, session);
   model.facts = model.facts.filter((fact) => !fact.link || roleCanOpenOperatorHref(role, fact.link.href));
   model.sections = model.sections
     .filter((section) => {
@@ -252,7 +260,7 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
   const requestedKeys = Object.entries(searchParams).filter(([, value]) => Boolean(Array.isArray(value) ? value[0] : value)).map(([key]) => key);
   const supportedQueryKeys: Partial<Record<ListRouteId, ReadonlySet<string>>> = {
     requests: new Set(["q", "page", "status", "store", "selected"]),
-    "work-orders": new Set(["q", "page", "status", "store", "vendor", "region", "category", "asset", "component", "hasCost", "costFrom", "costMonth", "selected", "visitPlan", "storeGroup"]),
+    "work-orders": new Set(["q", "page", "status", "store", "vendor", "region", "category", "asset", "component", "hasCost", "costFrom", "costMonth", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity"]),
     visits: new Set(["q", "page", "status", "store", "vendor", "review", "selected"]),
     stores: new Set(["q", "page", "selected"]),
     vendors: new Set(["q", "page", "selected"]),
@@ -261,12 +269,12 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
     || route === "visits" && (Array.isArray(searchParams.status) ? searchParams.status[0] : searchParams.status) === "upcoming";
   if (QUERY_FIRST_LIST_ROUTES.has(route) && !usesSpecialFixtureProjection) {
     const repository = await getServerOpsRepository();
-    return enforceListLinkPolicy(await buildQueryListModel(repository, session, route, searchParams), session.role);
+    return enforceListLinkPolicy(await buildQueryListModel(repository, session, route, searchParams), session);
   }
   const fixture = await getRequestOpsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID);
   return enforceListLinkPolicy(
     buildListModel(fixture, session, route, searchParams),
-    session.role,
+    session,
   );
 }
 
@@ -297,16 +305,16 @@ export async function loadApprovedWorkPortfolioModel(searchParams: OperatorSearc
 
 export async function loadApprovalPolicyWorkspaceModel() {
   const context = await sessionAndFixture();
-  requireCapability(context.session.role, "administer");
+  requireCapability(context.session, "administer");
   return enforceDetailLinkPolicy(
     buildApprovalPolicyWorkspaceModel(context.fixture, context.session),
-    context.session.role,
+    context.session,
   );
 }
 
 export async function loadNotificationSettingsModel() {
   const context = await sessionAndFixture();
-  requireCapability(context.session.role, "administer");
+  requireCapability(context.session, "administer");
   const repository = await getServerOpsRepository();
   return {
     organizationName: context.session.organizationName,
@@ -319,13 +327,13 @@ export async function loadNotificationSettingsModel() {
 
 export async function loadImportWorkspaceAccess() {
   const context = await sessionAndFixture();
-  requireCapability(context.session.role, "administer");
+  requireCapability(context.session, "administer");
   return { organizationName: context.session.organizationName };
 }
 
 export async function loadDashboardModel() {
   const context = await sessionAndFixture();
-  return enforceDashboardLinkPolicy(buildDashboardModel(context.fixture, context.session), context.session.role);
+  return enforceDashboardLinkPolicy(buildDashboardModel(context.fixture, context.session), context.session);
 }
 
 export async function loadSearchModel(searchParams: OperatorSearchParameters = {}) {
@@ -338,7 +346,7 @@ export async function loadProgramModel(route: ProgramRouteId, searchParams: Oper
   if (!roleCanAccessProgramRoute(context.session.role, route)) notFound();
   return enforceDashboardLinkPolicy(
     buildProgramModel(context.fixture, context.session, route, searchParams),
-    context.session.role,
+    context.session,
   );
 }
 
@@ -590,7 +598,7 @@ export async function loadDetailModel(route: DetailRouteId, id: string) {
   const context = await sessionAndFixture();
   if (!roleCanAccessDetailRoute(context.session.role, route)) notFound();
   const model = buildDetailModel(context.fixture, context.session, route, id);
-  if (route === "work-order" && roleCan(context.session.role, "issue_work_order")) {
+  if (route === "work-order" && roleCan(context.session, "issue_work_order")) {
     const issuance = buildVendorIssuanceModel(context.fixture, context.session, id);
     if (issuance.available) {
       model.page.primaryAction = {
@@ -605,7 +613,7 @@ export async function loadDetailModel(route: DetailRouteId, id: string) {
   }
   return enforceDetailLinkPolicy(
     model,
-    context.session.role,
+    context.session,
   );
 }
 
@@ -623,32 +631,32 @@ export async function loadVendorPerformanceDetailModel(vendorId: string) {
 
 export async function loadCreateRequestModel() {
   const context = await sessionAndFixture();
-  requireCapability(context.session.role, "create_request");
+  requireCapability(context.session, "create_request");
   return buildCreateRequestModel(context.fixture, context.session);
 }
 
 export async function loadCreateWorkOrderModel(searchParams: OperatorSearchParameters = {}) {
   const context = await sessionAndFixture();
-  requireCapability(context.session.role, "create_work_order");
+  requireCapability(context.session, "create_work_order");
   return buildCreateWorkOrderModel(context.fixture, context.session, searchParams);
 }
 
 export async function loadCreateStoreModel() {
   const context = await sessionAndFixture();
-  requireCapability(context.session.role, "create_store");
+  requireCapability(context.session, "create_store");
   return buildCreateStoreModel(context.fixture, context.session);
 }
 
 export async function loadCreateVendorModel() {
   const context = await sessionAndFixture();
-  requireCapability(context.session.role, "onboard_vendor");
+  requireCapability(context.session, "onboard_vendor");
   return buildCreateVendorModel(context.fixture, context.session);
 }
 
 export async function loadVendorIssuanceModel(workOrderId: string) {
   const context = await sessionAndFixture();
   const model = buildVendorIssuanceModel(context.fixture, context.session, workOrderId);
-  model.permitted = model.available && roleCan(context.session.role, "issue_work_order");
+  model.permitted = model.available && roleCan(context.session, "issue_work_order");
   return model;
 }
 
@@ -772,7 +780,7 @@ export async function loadHeldWorkActionsModel(workOrderId: string): Promise<Hel
   }).format(amountMinor / 100);
   return {
     workOrderId,
-    permitted: roleCan(context.session.role, "control_work_order"),
+    permitted: roleCan(context.session, "control_work_order"),
     eligible: Boolean(workOrder.categoryKey) && workOrder.status === "approved",
     categoryLabel: workOrder.categoryKey
       ? workOrder.categoryKey.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase())
@@ -794,7 +802,7 @@ export async function loadHeldWorkActionsModel(workOrderId: string): Promise<Hel
 export async function loadVendorResponseActionsModel(workOrderId: string) {
   const context = await sessionAndFixture();
   if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
-  if (!roleCan(context.session.role, "control_work_order")) return null;
+  if (!roleCan(context.session, "control_work_order")) return null;
   const orgId = context.session.organizationId;
   const workOrder = context.fixture.workOrders.find((row) => row.organizationId === orgId && row.id === workOrderId);
   if (!workOrder || ["completed_pending_review", "resolved", "closed", "cancelled"].includes(workOrder.status)) return null;
@@ -858,7 +866,7 @@ export async function loadAttentionItemModel(itemId: string) {
   if (!roleCanAccessListRoute(context.session.role, "action-center")) notFound();
   const model = buildAttentionItemModel(context.fixture, context.session, itemId);
   if (!model.control.available) notFound();
-  model.detail = enforceDetailLinkPolicy(model.detail, context.session.role);
+  model.detail = enforceDetailLinkPolicy(model.detail, context.session);
   return model;
 }
 

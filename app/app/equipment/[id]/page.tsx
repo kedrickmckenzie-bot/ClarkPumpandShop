@@ -29,12 +29,12 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
       ...row,
       href: `/app/equipment/${encodeURIComponent(id)}/components/${encodeURIComponent(row.id)}`,
     }));
-    if (roleCan(session.role, "setup_equipment")) {
+    if (roleCan(session, "setup_equipment")) {
       componentSection.action = { label: "Add component", href: `/app/equipment/${encodeURIComponent(id)}/components/new` };
     }
   }
-  const canSetupEquipment = roleCan(session.role, "setup_equipment");
-  const canSetupPm = roleCan(session.role, "setup_pm");
+  const canSetupEquipment = roleCan(session, "setup_equipment");
+  const canSetupPm = roleCan(session, "setup_pm");
   const storeId = model.facts.find((fact) => fact.label === "Store")?.link?.href.split("/").at(-1);
   return (
     <DetailView

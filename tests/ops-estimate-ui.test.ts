@@ -20,7 +20,7 @@ describe("vendor bid presentation", () => {
         id: "estimate-request-declined",
         vendorId: "vendor-declined",
         vendorName: "Example Vendor",
-        kindLabel: "Bid request - pricing only",
+        kindLabel: "Quote request - pricing only",
         requestedScope: "Price the reported repair.",
         status: "declined",
         statusLabel: "Vendor declined",
@@ -42,7 +42,7 @@ describe("vendor bid presentation", () => {
 
     expect(markup).toContain("Vendor response");
     expect(markup).toContain("Declined Aug 10, 2026, 10:15 AM");
-    expect(markup).toContain("Bid request - pricing only");
+    expect(markup).toContain("Quote request - pricing only");
     expect(markup).not.toContain("Estimate only");
     expect(markup).not.toContain("Price check");
   });
@@ -62,10 +62,10 @@ describe("vendor bid presentation", () => {
         id: "estimate-request-submitted",
         vendorId: "vendor-submitted",
         vendorName: "Example Vendor",
-        kindLabel: "Bid request - pricing only",
-        requestedScope: "Provide a fixed-price bid for the compressor repair.",
+        kindLabel: "Quote request - pricing only",
+        requestedScope: "Provide a fixed-price quote for the compressor repair.",
         status: "submitted",
-        statusLabel: "Bid received",
+        statusLabel: "Quote received",
         requestedLabel: "Aug 10, 2026, 10:00 AM",
         dueLabel: "Aug 12, 2026, 5:00 PM",
         openedLabel: "Aug 10, 2026, 10:05 AM",
@@ -89,12 +89,12 @@ describe("vendor bid presentation", () => {
 
     const markup = renderToStaticMarkup(createElement(EstimateComparisonPanel, { model }));
 
-    expect(markup).toContain("Request and compare vendor bids");
-    expect(markup).toContain("Bid requests are pricing only");
-    expect(markup).toContain("Bid scope");
-    expect(markup).toContain("Bid due Aug 12, 2026, 5:00 PM");
+    expect(markup).toContain("Request and compare vendor quotes");
+    expect(markup).toContain("Quote requests are pricing only");
+    expect(markup).toContain("Requested quote scope");
+    expect(markup).toContain("Quote due Aug 12, 2026, 5:00 PM");
     expect(markup).toContain("Select provider — authorization is next");
-    expect(markup).toContain("Send another bid request");
+    expect(markup).toContain("Create quote request &amp; link");
     expect(markup).toContain("no assignment, site visit, check-in, recorded cost, or billing is created");
     expect(markup).not.toContain("Estimate only");
     expect(markup).not.toContain("Price check");
@@ -119,7 +119,7 @@ describe("vendor bid presentation", () => {
 
     const markup = renderToStaticMarkup(createElement(EstimateComparisonPanel, { model }));
 
-    expect(markup).toContain("Bid due <em>Required</em>");
+    expect(markup).toContain("Quote due <em>Required</em>");
     const dueInput = markup.match(/<input[^>]*name="dueAt"[^>]*>/)?.[0];
     expect(dueInput).toContain('type="datetime-local"');
     expect(dueInput).toContain('required=""');

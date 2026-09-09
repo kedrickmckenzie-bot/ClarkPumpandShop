@@ -40,13 +40,13 @@ function useMutation() {
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null;
-        setState({ pending: false, error: payload?.error ?? "The bid-request update could not be recorded." });
+        setState({ pending: false, error: payload?.error ?? "The quote-request update could not be recorded." });
         return;
       }
       const payload = await response.json().catch(() => null) as { redirectTo?: string } | null;
       window.location.assign(payload?.redirectTo ?? window.location.href);
     } catch {
-      setState({ pending: false, error: "The bid-request update could not be recorded. Check your connection and try again." });
+      setState({ pending: false, error: "The quote-request update could not be recorded. Check your connection and try again." });
     }
   }
 
@@ -62,11 +62,11 @@ function EstimateProgress({ request }: { request: EstimateRequestComparisonViewM
     ? {
         label: "Vendor response",
         complete: true,
-        detail: request.respondedLabel ? `Declined ${request.respondedLabel}` : "Declined without a bid",
+        detail: request.respondedLabel ? `Declined ${request.respondedLabel}` : "Declined without a quote",
         icon: X,
       }
     : {
-        label: "Bid received",
+        label: "Quote received",
         complete: hasProposal,
         detail: request.respondedLabel ?? "Awaiting response",
         icon: FileText,
@@ -78,7 +78,7 @@ function EstimateProgress({ request }: { request: EstimateRequestComparisonViewM
     { label: "Decision", complete: isDecided, detail: request.decisionLabel ?? "No decision yet", icon: Check },
   ];
   return (
-    <ol className={styles.estimateProgress} aria-label={`${request.vendorName} bid-request progress`}>
+    <ol className={styles.estimateProgress} aria-label={`${request.vendorName} quote-request progress`}>
       {steps.map((step) => {
         const Icon = step.complete ? step.icon : Circle;
         return (
@@ -104,7 +104,7 @@ function EstimateDecisionControls({ request }: { request: EstimateRequestCompari
           <input type="hidden" name="operation" value="withdraw" />
           <input type="hidden" name="expectedRevision" value={request.latestProposal?.revision ?? 0} />
           <label className={styles.visuallyHidden} htmlFor={`withdraw-note-${request.id}`}>Reason for withdrawing this request</label>
-          <input id={`withdraw-note-${request.id}`} name="note" type="hidden" value="Bid request withdrawn by operator" readOnly />
+          <input id={`withdraw-note-${request.id}`} name="note" type="hidden" value="Quote request withdrawn by operator" readOnly />
           <button className={styles.secondaryButton} type="submit" disabled={withdraw.state.pending}>
             <X aria-hidden="true" size={16} />{withdraw.state.pending ? "Withdrawing..." : "Withdraw request"}
           </button>
@@ -115,7 +115,7 @@ function EstimateDecisionControls({ request }: { request: EstimateRequestCompari
           <input type="hidden" name="operation" value="select" />
           <input type="hidden" name="proposalId" value={request.latestProposal.id} />
           <input type="hidden" name="expectedRevision" value={request.latestProposal.revision} />
-          <input type="hidden" name="note" value="Selected after operator bid and scope review" />
+          <input type="hidden" name="note" value="Selected after operator quote and scope review" />
           <button className={styles.primaryButton} type="submit" disabled={select.state.pending}>
             <ShieldCheck aria-hidden="true" size={16} />{select.state.pending ? "Selecting..." : request.decisionKind === "replacement_quote" ? "Select quote for capital review" : "Select provider — authorization is next"}
           </button>
@@ -150,14 +150,14 @@ function EstimateRequestCard({ request }: { request: EstimateRequestComparisonVi
       </header>
       <EstimateProgress request={request} />
       <div className={styles.estimateScope}>
-        <small>Bid scope</small>
+        <small>Requested quote scope</small>
         <p>{request.requestedScope}</p>
-        {request.dueLabel ? <span><Clock3 aria-hidden="true" size={14} />Bid due {request.dueLabel}</span> : null}
+        {request.dueLabel ? <span><Clock3 aria-hidden="true" size={14} />Quote due {request.dueLabel}</span> : null}
       </div>
       {request.latestProposal ? (
         <div className={styles.estimateProposal}>
           <div className={styles.estimateAmount}>
-            <small>Vendor bid</small>
+            <small>Vendor quote</small>
             <strong>{request.latestProposal.amountLabel}</strong>
             <span>Revision {request.latestProposal.revision} · {request.latestProposal.submittedLabel}</span>
           </div>
@@ -167,11 +167,17 @@ function EstimateRequestCard({ request }: { request: EstimateRequestComparisonVi
             <div><dt>Lead time</dt><dd>{request.latestProposal.leadTimeLabel ?? "Not stated"}</dd></div>
             <div><dt>Valid through</dt><dd>{request.latestProposal.validUntilLabel ?? "Not stated"}</dd></div>
           </dl>
+          {request.previousProposals?.length ? (
+            <details>
+              <summary>Previous revisions ({request.previousProposals.length})</summary>
+              {request.previousProposals.map((proposal) => <p key={proposal.id}>Revision {proposal.revision} · {proposal.amountLabel} · {proposal.scope}</p>)}
+            </details>
+          ) : null}
         </div>
       ) : request.status === "declined" ? (
-        <p className={styles.estimateEmpty}>The vendor declined this bid request. No assignment, service authorization, visit, or cost was created.</p>
+        <p className={styles.estimateEmpty}>The vendor declined this quote request. No assignment, service authorization, visit, or cost was created.</p>
       ) : (
-        <p className={styles.estimateEmpty}>No bid has been submitted. This pricing request does not authorize work or a site visit.</p>
+        <p className={styles.estimateEmpty}>No quote has been submitted. This pricing request does not authorize work or a site visit.</p>
       )}
       <EstimateDecisionControls request={request} />
     </article>
@@ -183,7 +189,7 @@ function RequestEstimateForm({ model }: { model: EstimateComparisonViewModel }) 
     <details className={styles.controlDisclosure}>
       <summary className={styles.controlDisclosureSummary}>
         <CircleDollarSign aria-hidden="true" size={18} />
-        <span><strong>Send another bid request</strong><small>Invite a qualified vendor to price the same scope before service is authorized.</small></span>
+        <span><strong>Request another quote</strong><small>Invite a qualified vendor to price the same scope before service is authorized.</small></span>
       </summary>
       <form action={model.submitAction} method="post" target="_blank" className={styles.controlForm}>
         <input name="kind" type="hidden" value="estimate_only" />
@@ -194,7 +200,7 @@ function RequestEstimateForm({ model }: { model: EstimateComparisonViewModel }) 
               <option value="service_bid">Price this service work</option>
               <option value="replacement_quote">Price equipment replacement</option>
             </select>
-            <small>A service bid can become a service authorization. A replacement quote goes to capital review and cannot create a technician assignment.</small>
+            <small>A service quote can support a later service authorization. A replacement quote goes to capital review and cannot create a technician assignment.</small>
           </label>
           <label className={styles.field} htmlFor={`estimate-vendor-${model.workOrderId}`}>
             <span>Vendor to invite <em>Required</em></span>
@@ -211,7 +217,7 @@ function RequestEstimateForm({ model }: { model: EstimateComparisonViewModel }) 
         </label>
         <div className={styles.fieldGrid}>
           <label className={styles.field} htmlFor={`estimate-due-${model.workOrderId}`}>
-            <span>Bid due <em>Required</em></span>
+            <span>Quote due <em>Required</em></span>
             <input id={`estimate-due-${model.workOrderId}`} name="dueAt" type="datetime-local" required />
           </label>
           <label className={styles.field} htmlFor={`estimate-channel-${model.workOrderId}`}>
@@ -227,7 +233,7 @@ function RequestEstimateForm({ model }: { model: EstimateComparisonViewModel }) 
         <div className={styles.formFooter}>
           <span className={styles.formMeta}>Pricing only—no assignment, site visit, check-in, recorded cost, or billing is created.</span>
           <button className={styles.primaryButton} type="submit">
-            <Send aria-hidden="true" size={16} />Create bid request & link
+            <Send aria-hidden="true" size={16} />Create quote request & link
           </button>
         </div>
       </form>
@@ -242,29 +248,29 @@ export function EstimateComparisonPanel({ model }: { model: EstimateComparisonVi
       <div className={styles.controlHeading}>
         <span><CircleDollarSign aria-hidden="true" size={19} /></span>
         <div>
-          <h2 id="bid-requests-heading">Request and compare vendor bids</h2>
-          <p>Request and compare service bids or replacement quotes, with a separate next step for each.</p>
+          <h2 id="bid-requests-heading">Request and compare vendor quotes</h2>
+          <p>Request one quote or compare several service or replacement quotes, with a separate next step for each.</p>
         </div>
       </div>
       <div className={styles.estimateGuardrail}>
         <ShieldCheck aria-hidden="true" size={19} />
-        <p><strong>Bid requests are pricing only.</strong> Vendors are not assigned, should not travel to the store, and cannot check in. A selected service bid requires a separate service authorization; a selected replacement quote requires a capital decision.</p>
+        <p><strong>Quote requests are pricing only.</strong> Vendors are not assigned, should not travel to the store, and cannot check in. A selected service quote requires a separate service authorization; a selected replacement quote requires a capital decision.</p>
       </div>
       <div className={styles.controlSummary}>
         <span><small>Operator work order</small><strong>{model.workOrderNumber}</strong></span>
-        <span><small>Open bid requests</small><strong>{model.activeRequestCount}</strong></span>
-        <span><small>Bids received</small><strong>{model.proposalCount}</strong></span>
+        <span><small>Open quote requests</small><strong>{model.activeRequestCount}</strong></span>
+        <span><small>Quotes received</small><strong>{model.proposalCount}</strong></span>
         <span><small>{model.selectedDecisionKind === "replacement_quote" ? "Selected replacement quote" : "Selected service provider"}</small><strong>{model.selectedVendorName ?? "No selection yet"}</strong></span>
       </div>
       {model.requests.length ? (
         <div className={styles.estimateGrid}>{model.requests.map((request) => <EstimateRequestCard request={request} key={request.id} />)}</div>
       ) : (
-        <div className={styles.estimateBlank}><CheckCircle2 aria-hidden="true" size={20} /><p>No vendor bids have been requested. You can still send service work directly to a known vendor.</p></div>
+        <div className={styles.estimateBlank}><CheckCircle2 aria-hidden="true" size={20} /><p>No vendor quotes have been requested. You can still send service work directly to a known vendor.</p></div>
       )}
       {!model.rolePermitted ? (
-        <p className={styles.inlineEmpty}>Your role can review the bid path but cannot send bid requests or select a service provider.</p>
+        <p className={styles.inlineEmpty}>Your role can review the quote path but cannot send quote requests or select a service provider.</p>
       ) : model.workflowBlocked ? (
-        <p className={styles.inlineEmpty} role="status"><strong>Bid path paused.</strong> {model.workflowBlockMessage}</p>
+        <p className={styles.inlineEmpty} role="status"><strong>Quote path paused.</strong> {model.workflowBlockMessage}</p>
       ) : model.comparisonClosed ? (
         <div className={styles.estimateContinuation}>
           <CheckCircle2 aria-hidden="true" size={20} />
@@ -279,9 +285,9 @@ export function EstimateComparisonPanel({ model }: { model: EstimateComparisonVi
       ) : model.permitted && model.vendors.length ? (
         <RequestEstimateForm model={model} />
       ) : model.permitted ? (
-        <p className={styles.inlineEmpty}>Every currently qualified vendor is already represented. Select a bid or withdraw an open request before inviting another vendor.</p>
+        <p className={styles.inlineEmpty}>Every currently qualified vendor is already represented. Select a quote or withdraw an open request before inviting another vendor.</p>
       ) : (
-        <p className={styles.inlineEmpty}>Bid actions are unavailable while this work order is in its current service state.</p>
+        <p className={styles.inlineEmpty}>Quote actions are unavailable while this work order is in its current service state.</p>
       )}
     </section>
   );

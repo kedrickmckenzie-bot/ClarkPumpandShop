@@ -89,7 +89,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
       { id: "needs-attention", label: "Review queue", href: "/app/action-center" },
       { id: "requests", label: "Requests", href: "/app/requests" },
       { id: "work-orders", label: "Work orders", href: "/app/work-orders" },
-      { id: "estimates", label: "Bid requests", href: "/app/estimates" },
+      { id: "estimates", label: "Quote requests", href: "/app/estimates" },
       { id: "visits", label: "Service visits", href: "/app/visits" },
     ],
   },

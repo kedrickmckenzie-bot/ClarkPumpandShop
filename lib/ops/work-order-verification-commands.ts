@@ -17,10 +17,27 @@ import type {
   SiteVisitWorkOrderOutcome,
   WorkOrder,
   WorkOrderVerification,
+  WorkOrderVerificationBasis,
   WorkOrderVerificationDecision,
+  WorkOrderVerificationScope,
   WorkflowTask,
 } from "./types";
-import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "./work-order-outcome";
+import { latestRecordedWorkOutcome } from "./work-order-outcome";
+import { membershipHasCapability } from "./capability-policy";
+import { resolveInternalAccountability } from "./internal-accountability";
+import {
+  evaluateWorkOrderClosureEligibility,
+  type WorkOrderClosureBlocker,
+} from "./work-order-closure";
+
+export {
+  evaluateWorkOrderClosureEligibility,
+  isCloseVerifiedWorkTask,
+} from "./work-order-closure";
+export type {
+  WorkOrderClosureBlocker,
+  WorkOrderClosureEvaluation,
+} from "./work-order-closure";
 
 export type { WorkOrderVerificationDecision } from "./types";
 export type WorkOrderVerificationRecord = WorkOrderVerification;
@@ -34,8 +51,6 @@ const decisionRoles = new Set<OrganizationRole>([
 ]);
 const closureRoles = new Set<OrganizationRole>(["facilities_admin", "regional_manager"]);
 const reviewableOutcomes = new Set<SiteVisitWorkOrderOutcome>(["completed", "no_issue_found"]);
-const openTaskStatuses = new Set<WorkflowTask["status"]>(["open", "in_progress"]);
-
 export const CLOSE_VERIFIED_WORK_TASK_TITLE = "Close verified work";
 export const RETURN_REJECTED_WORK_TASK_TITLE = "Coordinate return work after rejected verification";
 
@@ -135,7 +150,27 @@ async function assertDecisionMembership(
   if (!membership || membership.status !== "active" || !decisionRoles.has(membership.role)) {
     throw new OpsDomainError("FORBIDDEN", "This membership cannot verify or reject store repair evidence");
   }
+  if (!await membershipHasCapability(repository, organizationId, membership.id, "confirm_observable_result")) {
+    throw new OpsDomainError("FORBIDDEN", "Observable result confirmation is not enabled for this role");
+  }
   return membership;
+}
+
+async function assertMembershipCoversWorkOrder(
+  repository: OpsRepository,
+  membership: NonNullable<Awaited<ReturnType<OpsRepository["getMembership"]>>>,
+  workOrder: WorkOrder,
+) {
+  const [grants, store] = await Promise.all([
+    repository.listScopeGrantsForMembership(workOrder.organizationId, membership.id),
+    repository.getStore(workOrder.organizationId, workOrder.storeId),
+  ]);
+  const covered = grants.some((grant) => (
+    (grant.scopeKind === "organization" && grant.scopeId === workOrder.organizationId)
+    || (grant.scopeKind === "store" && grant.scopeId === workOrder.storeId)
+    || (grant.scopeKind === "region" && Boolean(store?.regionId) && grant.scopeId === store?.regionId)
+  ));
+  if (!covered) throw new OpsDomainError("FORBIDDEN", "This work order is outside the member's assigned operating scope");
 }
 
 export interface RecordWorkOrderVerificationInput {
@@ -145,6 +180,8 @@ export interface RecordWorkOrderVerificationInput {
   expectedSiteVisitWorkOrderId: OpsId;
   expectedOutcomeRecordedAt: IsoDateTime;
   decision: WorkOrderVerificationDecision;
+  basis?: WorkOrderVerificationBasis;
+  verificationScope?: WorkOrderVerificationScope;
   /** Optional, explicit manager attestation; never inferred from checkout. */
   avoidedSeparateTripConfirmed?: boolean;
   reason?: string;
@@ -153,27 +190,40 @@ export interface RecordWorkOrderVerificationInput {
 
 /**
  * Accepts or rejects only the latest immutable per-work-order checkout result.
- * It never rewrites visit evidence and it never closes work automatically.
+ * It never rewrites visit evidence. An active organization policy may close
+ * eligible routine operational work while leaving financial review open.
  */
 export async function recordWorkOrderVerification(
   svc: OpsCommandServices,
   input: RecordWorkOrderVerificationInput,
-): Promise<WorkOrderVerificationRecord> {
+): Promise<WorkOrderVerificationRecord & { resultingStatus: WorkOrder["status"]; autoClosed: boolean }> {
   const { repository, clock, ids } = services(svc);
   const membership = await assertDecisionMembership(repository, input.organizationId, input.actor);
   if (!Number.isInteger(input.expectedWorkOrderVersion) || input.expectedWorkOrderVersion < 0) {
     throw new OpsDomainError("VALIDATION", "Expected work-order version is invalid");
   }
-  if (input.decision !== "verified" && input.decision !== "rejected") {
+  if (input.decision !== "verified" && input.decision !== "rejected" && input.decision !== "inconclusive") {
     throw new OpsDomainError("VALIDATION", "Verification decision is invalid");
   }
   const reason = clean(input.reason);
-  if (input.decision === "rejected" && !reason) {
-    throw new OpsDomainError("VALIDATION", "A rejection reason is required");
+  const basis = input.basis ?? "observable_result";
+  const verificationScope = input.verificationScope ?? "reported_problem";
+  if (input.decision !== "verified" && !reason) {
+    throw new OpsDomainError("VALIDATION", "Explain what is still wrong or what could not be confirmed");
+  }
+  if (!(["observable_result", "technical_evidence", "operational_review"] as const).includes(basis)) {
+    throw new OpsDomainError("VALIDATION", "Confirmation basis is invalid");
+  }
+  if (!(["reported_problem", "pm_task", "technical_work"] as const).includes(verificationScope)) {
+    throw new OpsDomainError("VALIDATION", "Confirmation scope is invalid");
+  }
+  if (membership.role === "store_manager" && (basis !== "observable_result" || verificationScope === "technical_work")) {
+    throw new OpsDomainError("FORBIDDEN", "Store managers can confirm only the observable result for the reported problem or PM task");
   }
 
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order not found");
+  await assertMembershipCoversWorkOrder(repository, membership, workOrder);
   if (workOrder.status !== "completed_pending_review") {
     throw new OpsDomainError("CONFLICT", "Only work awaiting internal verification can receive this decision");
   }
@@ -248,6 +298,8 @@ export async function recordWorkOrderVerification(
     outcomeRecordedAt: outcome.outcomeRecordedAt!,
     cycle,
     decision: input.decision,
+    basis,
+    verificationScope,
     reason,
     decidedByMembershipId: membership.id,
     decidedByName: input.actor.actorName,
@@ -255,8 +307,32 @@ export async function recordWorkOrderVerification(
   };
   const resolutionNote = input.decision === "verified"
     ? reason ?? `Accepted ${outcome.outcome} outcome from visit work ${outcome.id}`
-    : `Rejected ${outcome.outcome} outcome: ${reason}`;
+    : input.decision === "rejected"
+      ? `Rejected ${outcome.outcome} outcome: ${reason}`
+      : `Could not confirm ${outcome.outcome} outcome: ${reason}`;
   const resolvedVerifyTask = completedTask(verifyTask, input.actor, now, resolutionNote);
+  const accountability = await resolveInternalAccountability(repository, workOrder);
+  const [policy, detail] = await Promise.all([
+    repository.getActiveWorkflowPolicy(input.organizationId),
+    repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id),
+  ]);
+  const sourceFollowUpWillClose = sourceFollowUp?.status === "open";
+  const visitIds = [...new Set(outcomes.map((record) => record.visitId))];
+  const relatedVisits = await Promise.all(visitIds.map((visitId) => repository.getVisit(input.organizationId, visitId)));
+  const closureEvaluation = evaluateWorkOrderClosureEligibility({
+    mode: "automatic",
+    workOrder,
+    policy,
+    outcomes,
+    verifications: priorVerifications,
+    verificationOverride: verification,
+    tasks,
+    visits: relatedVisits,
+    openFollowUpIds: new Set(detail?.followUps.filter((followUp) => followUp.status === "open").map((followUp) => followUp.id) ?? []),
+    ignoredTaskIds: new Set([verifyTask.id]),
+    ignoredFollowUpIds: sourceFollowUpWillClose && sourceFollowUp ? new Set([sourceFollowUp.id]) : undefined,
+  });
+  const autoClosed = input.decision === "verified" && closureEvaluation.eligible;
   const replacementTask = buildWorkflowTaskRecord({
     id: ids.next("workflow-task"),
     organizationId: input.organizationId,
@@ -266,39 +342,41 @@ export async function recordWorkOrderVerification(
           taskType: "close_verified_work" as WorkflowTask["taskType"],
           title: CLOSE_VERIFIED_WORK_TASK_TITLE,
           reason: `The latest repair outcome for ${workOrder.number} has accepted internal verification`,
-          assigneeType: "role",
-          assigneeRole: "facilities_admin",
-          assigneeName: "Facilities coordinator",
+          assigneeType: accountability.assigneeType,
+          assigneeId: accountability.assigneeId,
+          assigneeRole: accountability.assigneeRole,
+          assigneeName: accountability.assigneeName,
           priority: workOrder.priority === "emergency" ? "critical" : workOrder.priority === "urgent" ? "high" : "normal",
           blocking: true,
           requiredForProgress: true,
           dueAt: addHours(now, 24),
           applicableSlaClock: "verification",
           completionCriteria: "Close the resolved work order after confirming no active visit, open follow-up, or other required task remains",
-          escalationDestination: "Facilities director",
+          escalationDestination: accountability.escalationDestination,
         }
       : {
-          taskType: "schedule_return_visit",
-          title: RETURN_REJECTED_WORK_TASK_TITLE,
-          reason: `Internal verification rejected the latest repair outcome for ${workOrder.number}`,
-          assigneeType: "role",
-          assigneeRole: "facilities_admin",
-          assigneeName: "Facilities coordinator",
+          taskType: input.decision === "inconclusive" ? "other" : "schedule_return_visit",
+          title: input.decision === "inconclusive" ? "Review an inconclusive store confirmation" : RETURN_REJECTED_WORK_TASK_TITLE,
+          reason: input.decision === "inconclusive" ? `The observable result for ${workOrder.number} could not be confirmed` : `Internal verification rejected the latest repair outcome for ${workOrder.number}`,
+          assigneeType: accountability.assigneeType,
+          assigneeId: accountability.assigneeId,
+          assigneeRole: accountability.assigneeRole,
+          assigneeName: accountability.assigneeName,
           priority: workOrder.priority === "emergency" ? "critical" : "high",
           blocking: true,
           requiredForProgress: true,
           dueAt: addHours(now, workOrder.priority === "emergency" ? 1 : 4),
           applicableSlaClock: "operational_restoration",
-          completionCriteria: "Coordinate and observe return work, then record a new per-work-order visit outcome",
-          escalationDestination: "Facilities director",
+          completionCriteria: input.decision === "inconclusive" ? "Review the provider evidence and decide whether to close or arrange return work" : "Coordinate and observe return work, then record a new per-work-order visit outcome",
+          escalationDestination: accountability.escalationDestination,
         },
     actor: input.actor,
     createdAt: now,
   });
   const projectedTasks = tasks
     .map((task) => task.id === verifyTask.id ? resolvedVerifyTask : task)
-    .concat(replacementTask);
-  const nextStatus = input.decision === "verified" ? "resolved" : "in_progress";
+    .concat(autoClosed ? [] : replacementTask);
+  const nextStatus: WorkOrder["status"] = autoClosed ? "closed" : input.decision === "verified" ? "resolved" : "in_progress";
 
   const statements: OpsStatement[] = [
     insert("ops_work_order_verifications", {
@@ -310,16 +388,19 @@ export async function recordWorkOrderVerification(
       outcome_recorded_at: verification.outcomeRecordedAt,
       cycle: verification.cycle,
       decision: verification.decision,
+      basis: verification.basis,
+      verification_scope: verification.verificationScope,
       reason: verification.reason,
       decided_by_membership_id: verification.decidedByMembershipId,
       decided_by_name: verification.decidedByName,
       decided_at: verification.decidedAt,
     }),
     {
-      sql: "UPDATE ops_work_orders SET status = ?, resolved_at = ? WHERE organization_id = ? AND id = ? AND status = ?",
+      sql: "UPDATE ops_work_orders SET status = ?, resolved_at = ?, closed_at = ? WHERE organization_id = ? AND id = ? AND status = ?",
       params: [
         nextStatus,
         input.decision === "verified" ? now : null,
+        autoClosed ? now : null,
         input.organizationId,
         workOrder.id,
         "completed_pending_review",
@@ -355,7 +436,7 @@ export async function recordWorkOrderVerification(
       ids,
       resolutionNote,
     }),
-    ...buildCreateTaskStatements({ task: replacementTask, actor: input.actor, ids }),
+    ...(autoClosed ? [] : buildCreateTaskStatements({ task: replacementTask, actor: input.actor, ids })),
     buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, projectedTasks),
     ...(input.avoidedSeparateTripConfirmed
       ? auditAndOutbox({
@@ -378,7 +459,7 @@ export async function recordWorkOrderVerification(
     ...auditAndOutbox({
       organizationId: input.organizationId,
       aggregateId: workOrder.id,
-      eventType: input.decision === "verified" ? "work_order.verified_and_resolved" : "work_order.verification_rejected",
+      eventType: autoClosed ? "work_order.verified_and_closed" : input.decision === "verified" ? "work_order.verified_and_resolved" : input.decision === "rejected" ? "work_order.verification_rejected" : "work_order.verification_inconclusive",
       actor: input.actor,
       occurredAt: now,
       payload: {
@@ -389,11 +470,17 @@ export async function recordWorkOrderVerification(
         outcomeRecordedAt: outcome.outcomeRecordedAt,
         cycle,
         decision: input.decision,
+        basis,
+        verificationScope,
+        autoClosed,
+        workflowPolicyId: autoClosed ? policy?.id : undefined,
+        workflowPolicyVersion: autoClosed ? policy?.version : undefined,
+        closureBlockers: autoClosed ? [] : closureEvaluation.blockers,
         avoidedSeparateTripConfirmed: Boolean(input.avoidedSeparateTripConfirmed),
         reason,
         previousStatus: workOrder.status,
         status: nextStatus,
-        nextWorkflowTaskId: replacementTask.id,
+        nextWorkflowTaskId: autoClosed ? undefined : replacementTask.id,
       },
       ids,
     }),
@@ -405,11 +492,7 @@ export async function recordWorkOrderVerification(
     statements,
     conflictMessage: "This work order or technician outcome changed. Refresh before recording verification.",
   });
-  return verification;
-}
-
-export function isCloseVerifiedWorkTask(task: WorkflowTask) {
-  return (task.taskType as string) === "close_verified_work";
+  return { ...verification, resultingStatus: nextStatus, autoClosed };
 }
 
 /**
@@ -437,38 +520,30 @@ export async function assertWorkOrderReadyForClosure(
     repository.listWorkflowTasksForWorkOrder(workOrder.organizationId, workOrder.id),
     repository.getWorkOrderDetail({ organizationId: workOrder.organizationId }, workOrder.id),
   ]);
-  const outcome = latestRecordedWorkOutcome(outcomes);
-  const verification = applicableOutcomeVerification(verifications, outcome);
-  if (
-    !outcome
-    || !verification
-    || verification.decision !== "verified"
-    || verification.siteVisitWorkOrderId !== outcome.id
-    || verification.outcome !== outcome.outcome
-    || verification.outcomeRecordedAt !== outcome.outcomeRecordedAt
-  ) {
-    throw new OpsDomainError("CONFLICT", "The current technician outcome does not have accepted internal verification");
-  }
-
   const visitIds = [...new Set(outcomes.map((record) => record.visitId))];
   const visits = await Promise.all(visitIds.map((visitId) => repository.getVisit(workOrder.organizationId, visitId)));
-  if (visits.some((visit) => visit?.status === "active") || detail?.visits.some((visit) => visit.status === "active")) {
-    throw new OpsDomainError("CONFLICT", "Finish the active visit before closing this work order");
-  }
-  if (detail?.followUps.some((followUp) => followUp.status === "open")) {
-    throw new OpsDomainError("CONFLICT", "Complete or cancel open follow-ups before closing this work order");
-  }
-
-  const openTasks = tasks.filter((task) => openTaskStatuses.has(task.status));
-  const closeTasks = openTasks.filter(isCloseVerifiedWorkTask);
-  if (closeTasks.length !== 1) {
-    throw new OpsDomainError("CONFLICT", "Exactly one open verified-work closure obligation is required");
-  }
-  const otherRequiredTasks = openTasks.filter((task) => (
-    !isCloseVerifiedWorkTask(task) && (task.blocking || task.requiredForProgress)
-  ));
-  if (otherRequiredTasks.length) {
-    throw new OpsDomainError("CONFLICT", "Complete every other blocking or required task before closing this work order");
+  const evaluation = evaluateWorkOrderClosureEligibility({
+    mode: "manual",
+    workOrder,
+    outcomes,
+    verifications,
+    tasks,
+    visits: [...visits, ...(detail?.visits.some((visit) => visit.status === "active") ? [{ status: "active" }] : [])],
+    openFollowUpIds: new Set(detail?.followUps.filter((followUp) => followUp.status === "open").map((followUp) => followUp.id) ?? []),
+  });
+  if (!evaluation.eligible) {
+    const blocker = evaluation.blockers[0];
+    const messages: Record<WorkOrderClosureBlocker, string> = {
+      latest_outcome_not_verified: "The current technician outcome does not have accepted internal verification",
+      active_visit: "Finish the active visit before closing this work order",
+      open_follow_up: "Complete or cancel open follow-ups before closing this work order",
+      open_operational_task: "Complete every other blocking or required operational task before closing this work order",
+      closure_task_missing: "Exactly one open verified-work closure obligation is required",
+      policy_disabled: "Automatic closure is not enabled",
+      policy_not_applicable: "The active automatic-closure policy does not apply to this work order",
+      priority_not_routine: "Only routine work is eligible for automatic closure",
+    };
+    throw new OpsDomainError("CONFLICT", messages[blocker!]);
   }
 }
 

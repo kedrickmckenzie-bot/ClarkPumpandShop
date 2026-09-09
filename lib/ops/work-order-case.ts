@@ -125,7 +125,7 @@ export const CANONICAL_STAGE_LABELS: Record<WorkOrderCanonicalStageId, string> =
   intake: "Intake",
   approval: "Approval",
   provider_decision: "Provider decision",
-  authorization_or_bidding: "Authorization or bidding",
+  authorization_or_bidding: "Authorization or quotes",
   vendor_response_scheduling: "Vendor response and scheduling",
   onsite_service: "Onsite service",
   followup_closeout: "Follow-up and closeout",
@@ -184,6 +184,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const latestWorkOutcome = latestRecordedWorkOutcome(workCycles);
   const verifications = (input.verifications ?? []).filter((row) => row.workOrderId === workOrder.id);
   const latestVerification = applicableOutcomeVerification(verifications, latestWorkOutcome);
+  const verificationNeedsOperationalReview = latestVerification?.decision === "rejected" || latestVerification?.decision === "inconclusive";
   const latestImpact = latest(input.impactAssessments ?? [], (row) => row.assessedAt);
   const estimateRequests = (input.estimateRequests ?? []).filter((row) => row.workOrderId === workOrder.id);
   const estimateProposals = (input.estimateProposals ?? []).filter((proposal) => estimateRequests.some((request) => request.id === proposal.requestId));
@@ -231,7 +232,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     stage = "onsite_service";
   } else if (appointmentStartsNewCycle) {
     stage = "vendor_response_scheduling";
-  } else if (closeoutFollowUps.length > 0 || closeoutTask || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
+  } else if (closeoutFollowUps.length > 0 || closeoutTask || verificationNeedsOperationalReview || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
     stage = "followup_closeout";
   } else if (!currentIssuance && activeAssignment.kind === "outside_vendor" && visits.length === 0 && !hasCost) {
     stage = "authorization_or_bidding";
@@ -262,7 +263,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   } else if (appointmentStartsNewCycle) {
     stage = "vendor_response_scheduling";
     serviceSubStage = "scheduled";
-  } else if (closeoutFollowUps.length > 0 || closeoutTask || unresolvedCheckout || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
+  } else if (closeoutFollowUps.length > 0 || closeoutTask || verificationNeedsOperationalReview || unresolvedCheckout || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
     stage = "followup_closeout";
     serviceSubStage = closeoutFollowUps.length > 0 || unresolvedCheckout || closeoutTask?.taskType === "verify_repair" ? "followup_required" : "closeout_review";
   } else if (stage === "cost_invoice_evidence") {
@@ -280,14 +281,14 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
 
   const base = `/app/work-orders/${workOrder.id}`;
   const stageActions: Partial<Record<WorkOrderCanonicalStageId, WorkOrderCaseAction>> = {
-    intake: { label: "Review the request", href: blockingTask ? `/app/action-center/${blockingTask.id}` : `${base}?view=overview` },
-    approval: { label: blockingTask?.title ?? "Review the approval decision", href: blockingTask ? `/app/action-center/${blockingTask.id}` : `${base}?view=activity` },
-    provider_decision: { label: activeAssignment?.kind === "choose_later" ? "Choose a provider" : "Choose internal maintenance, direct authorization, or bids", href: `${base}?view=service` },
+    intake: { label: "Review the request", href: blockingTask ? `${base}?view=activity#workflow-tasks` : `${base}?view=overview` },
+    approval: { label: blockingTask?.title ?? "Review the approval decision", href: blockingTask ? `${base}?view=activity#workflow-tasks` : `${base}?view=activity` },
+    provider_decision: { label: activeAssignment?.kind === "choose_later" ? "Choose a provider" : "Choose internal maintenance, direct authorization, or vendor quotes", href: `${base}?view=service` },
     authorization_or_bidding:
       selectedEstimateRequest?.decisionKind === "replacement_quote"
         ? { label: "Advance the selected replacement quote to capital review", href: `${base}?view=service&path=bids#bid-requests` }
       : estimateRequests.length > 0 && !selectedEstimateRequest
-        ? { label: estimateProposals.length > 0 ? "Review vendor bids" : "Track vendor bid requests", href: `${base}?view=service&path=bids#bid-requests` }
+        ? { label: estimateProposals.length > 0 ? "Review vendor quotes" : "Track vendor quote requests", href: `${base}?view=service&path=bids#bid-requests` }
         : { label: "Issue the service authorization", href: `${base}?view=service&path=direct#issue-work` },
     vendor_response_scheduling:
       approvedReplacement ? { label: "Coordinate installation with the selected replacement vendor", href: `${base}?view=service&path=bids#bid-requests` }
@@ -296,17 +297,19 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
       : liveAppointment?.status === "counter_proposed" ? { label: "Track the counterproposal with the vendor", href: `${base}?view=service#vendor-response` }
       : latestResponse?.response === "proposed_date" && !hasContinuation("accept_date", latestResponse.id) && !hasContinuation("counter_date", latestResponse.id) ? { label: "Accept or counter the proposed date", href: `${base}?view=service#vendor-response` }
       : latestResponse?.response === "question" && !hasContinuation("reply", latestResponse.id) ? { label: "Reply to the vendor question", href: `${base}?view=service#vendor-response` }
-      : latestResponse?.response === "declined" ? { label: "Select another provider or convert to bids", href: `${base}?view=service` }
+      : latestResponse?.response === "declined" ? { label: "Select another provider or request quotes", href: `${base}?view=service` }
       : { label: "Track the vendor response", href: `${base}?view=service#vendor-response` },
     onsite_service: activeVisit
       ? { label: "Follow the onsite visit", href: `/app/visits/${activeVisit.id}` }
       : blockingTask
-        ? { label: blockingTask.title, href: `/app/action-center/${blockingTask.id}` }
+        ? { label: blockingTask.title, href: `${base}?view=activity#workflow-tasks` }
         : { label: activeAssignment?.kind === "internal" ? "Start internal service" : "Open visit activity", href: `${base}?view=visits` },
     followup_closeout: closeoutFollowUps.length > 0
       ? { label: "Complete or transfer the required follow-up", href: `/app/action-center/${closeoutFollowUps[0].id}` }
       : closeoutTask
         ? { label: closeoutTask.title, href: `${base}?view=activity#work-control` }
+      : verificationNeedsOperationalReview && blockingTask
+        ? { label: blockingTask.title, href: `${base}?view=activity#workflow-tasks` }
       : { label: "Complete the manager closeout review", href: `${base}?view=visits` },
     cost_invoice_evidence: { label: hasCost ? "Review recorded costs and optional invoice evidence" : "Record the work cost", href: `${base}?view=cost` },
     closed: { label: "Review the service record", href: `${base}?view=overview` },
@@ -342,7 +345,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
 
   const alternativeActions: WorkOrderCaseAction[] = [];
   if (stage !== "closed") {
-    if (!approvedReplacement && !currentIssuance && activeAssignment?.kind !== "internal" && visits.length === 0) alternativeActions.push({ label: "Request vendor bids instead", href: `${base}?view=service&path=bids#bid-requests` });
+    if (!approvedReplacement && !currentIssuance && activeAssignment?.kind !== "internal" && visits.length === 0) alternativeActions.push({ label: "Request vendor quotes instead", href: `${base}?view=service&path=bids#bid-requests` });
     if (currentIssuance) alternativeActions.push({ label: "Review the issued authorization", href: `${base}?view=service` });
     if (estimateRequests.length > 0 && !selectedEstimateRequest) alternativeActions.push({ label: "Compare received proposals", href: `${base}?view=service&path=bids#bid-requests` });
     if (visits.some((visit) => visit.checkedOutAt)) alternativeActions.push({ label: "Create a follow-up", href: `${base}?view=activity` });
@@ -356,7 +359,11 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     : appointmentStartsNewCycle ? "Return visit scheduled"
     : latestWorkOutcome?.outcome === "completed"
       ? latestVerification?.siteVisitWorkOrderId === latestWorkOutcome.id
-        ? latestVerification.decision === "verified" ? "Work verified complete" : "Completion rejected; corrective work required"
+        ? latestVerification.decision === "verified"
+          ? "Work verified complete"
+          : latestVerification.decision === "rejected"
+            ? "Completion rejected; corrective work required"
+            : "Result could not be confirmed; review required"
         : "Work reported complete; confirmation needed"
     : latestWorkOutcome?.outcome === "temporary_repair" ? "Temporary repair completed; permanent repair pending"
     : latestWorkOutcome?.outcome === "parts_required" ? "Waiting on parts"
@@ -383,6 +390,8 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     ? { id: "verified_operating", label: "Operating result verified", detail: latestVerification.reason ?? "An authorized reviewer confirmed the reported result.", certainty: "verified", sourceLabel: `Verification by ${latestVerification.decidedByName}`, observedAt: latestVerification.decidedAt }
     : latestVerification?.decision === "rejected"
       ? { id: "result_rejected", label: "Current result not confirmed", detail: latestVerification.reason ?? "The completion claim was rejected and remains preserved in the record.", certainty: "uncertain", sourceLabel: `Verification by ${latestVerification.decidedByName}`, observedAt: latestVerification.decidedAt }
+      : latestVerification?.decision === "inconclusive"
+        ? { id: "result_inconclusive", label: "Operating result could not be confirmed", detail: latestVerification.reason ?? "The observable result was inconclusive and requires an operational review.", certainty: "uncertain", sourceLabel: `Verification by ${latestVerification.decidedByName}`, observedAt: latestVerification.decidedAt }
       : latestWorkOutcome?.outcome === "completed"
         ? { id: "provider_reported_complete", label: "Provider reports the problem corrected", detail: latestWorkOutcome.outcomeNotes ?? "Confirmation is still required under the applicable verification policy.", certainty: "reported", sourceLabel: latestWorkOutcome.outcomeRecordedByActorName ?? input.providerName ?? "Service provider", observedAt: latestWorkOutcome.outcomeRecordedAt }
         : latestWorkOutcome?.outcome === "temporary_repair"
@@ -457,7 +466,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
       owner: task.assigneeName,
       dueAt: task.dueAt,
       deadlinePolicy: task.dueAt ? "Task deadline" : task.noSlaReason ?? "No SLA applies",
-      href: `/app/action-center/${task.id}`,
+      href: `${base}?view=activity#workflow-tasks`,
     }));
 
   const stageIds: WorkOrderCanonicalStageId[] = [

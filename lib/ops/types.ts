@@ -13,6 +13,38 @@ export type OrganizationRole =
   | "vendor_user"
   | "support";
 
+/** The deliberately small set of maintenance powers a customer may delegate by role. */
+export type ConfigurableMaintenanceCapability =
+  | "create_work_order"
+  | "issue_work_order"
+  | "confirm_observable_result";
+
+/** Organization-owned override. Missing rows use the product's conservative role default. */
+export interface RoleCapabilityOverride {
+  id: OpsId;
+  organizationId: OpsId;
+  role: OrganizationRole;
+  capability: ConfigurableMaintenanceCapability;
+  enabled: boolean;
+  updatedByMembershipId: OpsId;
+  updatedByName: string;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+/** Append-only, versioned policy for the operational close decision. */
+export interface OrganizationWorkflowPolicy {
+  id: OpsId;
+  organizationId: OpsId;
+  version: number;
+  status: "active" | "superseded";
+  autoCloseRoutineAfterVerification: boolean;
+  appliesToActiveWork: boolean;
+  createdByMembershipId: OpsId;
+  createdByName: string;
+  createdAt: IsoDateTime;
+}
+
 export type ScopeKind = "organization" | "division" | "region" | "store" | "vendor";
 export type RequestStatus = "submitted" | "under_review" | "converted" | "closed";
 export type WorkOrderPriority = "emergency" | "urgent" | "routine" | "planned";
@@ -876,7 +908,9 @@ export interface WorkOrderVisitHold {
   updatedAt: IsoDateTime;
 }
 
-export type WorkOrderVerificationDecision = "verified" | "rejected";
+export type WorkOrderVerificationDecision = "verified" | "rejected" | "inconclusive";
+export type WorkOrderVerificationBasis = "observable_result" | "technical_evidence" | "operational_review";
+export type WorkOrderVerificationScope = "reported_problem" | "pm_task" | "technical_work";
 
 /** Append-only internal decision over one exact per-work-order visit outcome. */
 export interface WorkOrderVerification {
@@ -888,6 +922,10 @@ export interface WorkOrderVerification {
   outcomeRecordedAt: IsoDateTime;
   cycle: number;
   decision: WorkOrderVerificationDecision;
+  /** What the reviewer was qualified and able to evaluate. Compatibility records may omit it. */
+  basis?: WorkOrderVerificationBasis;
+  /** The bounded subject of the decision. Compatibility records may omit it. */
+  verificationScope?: WorkOrderVerificationScope;
   reason?: string;
   decidedByMembershipId: OpsId;
   decidedByName: string;
@@ -1929,6 +1967,8 @@ export interface OpsFixture {
   users: User[];
   memberships: Membership[];
   scopeGrants: ScopeGrant[];
+  roleCapabilityOverrides?: RoleCapabilityOverride[];
+  workflowPolicies?: OrganizationWorkflowPolicy[];
   vendors: Vendor[];
   vendorReminders: VendorReminder[];
   vendorSpecialties: VendorSpecialty[];

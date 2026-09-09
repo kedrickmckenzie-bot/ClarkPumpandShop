@@ -174,7 +174,7 @@ export function WorkOrderReplacementIntelligencePanel({ model }: { model: WorkOr
             <button className={styles.primaryButton} type="submit" disabled={mutation.state.pending}>{mutation.state.pending ? "Recording..." : "Approve replacement and save planning reference"}<ArrowRight aria-hidden="true" size={17} /></button><ErrorText value={mutation.state.error} />
           </form> : null}
         </>
-      ) : <p className={styles.replacementBlank}>Select a submitted vendor bid above before recording a replacement decision. Repair work can continue without using this feature.</p>}
+      ) : <p className={styles.replacementBlank}>Select a submitted vendor quote above before recording a replacement decision. Repair work can continue without using this feature.</p>}
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ListSurface } from "@/components/ops/views";
+import { roleCan } from "@/components/ops/role-policy";
 import { SavedViewsBar } from "@/components/workspace/saved-views";
 import { loadApprovedWorkPortfolioModel, loadListModel, loadOperatorSession, loadSavedViewsModel } from "../_data/operator-loader";
 
@@ -27,7 +28,13 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   return (
     <>
       {session.demoEdition === "complete" ? <SavedViewsBar model={{ surface: "work-orders", currentQuery, views: savedViews }} /> : null}
-      <ListSurface model={model} approvedWork={approvedWork} surface="work-orders" searchParams={params} />
+      <ListSurface
+        model={model}
+        approvedWork={approvedWork}
+        surface="work-orders"
+        searchParams={params}
+        canManageWorkflowTasks={roleCan(session, "manage_workflow_tasks")}
+      />
     </>
   );
 }

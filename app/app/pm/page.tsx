@@ -13,10 +13,10 @@ export default async function PreventiveMaintenancePage({ searchParams }: { sear
   if (session.role === "executive" || session.role === "facilities") {
     model.page.primaryAction = { label: "Create company schedule", href: "/app/pm/programs/new" };
     model.page.secondaryAction = { label: "Create one store plan", href: store ? `/app/pm/new?store=${encodeURIComponent(store)}` : "/app/pm/new" };
-  } else if (roleCan(session.role, "setup_pm")) {
+  } else if (roleCan(session, "setup_pm")) {
     model.page.primaryAction = { label: "Create store plan", href: store ? `/app/pm/new?store=${encodeURIComponent(store)}` : "/app/pm/new" };
   }
-  if (!model.page.secondaryAction && roleCan(session.role, "setup_equipment")) {
+  if (!model.page.secondaryAction && roleCan(session, "setup_equipment")) {
     model.page.secondaryAction = { label: "Add equipment", href: store ? `/app/equipment/new?store=${encodeURIComponent(store)}` : "/app/equipment/new" };
   }
   return <PlanningWorkspace kind="pm" model={model} programManagement={<PmProgramManagement model={programManagement} />} />;

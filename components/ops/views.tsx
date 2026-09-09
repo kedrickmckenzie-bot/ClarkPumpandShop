@@ -595,7 +595,7 @@ function ApprovedLaterManagementPanel({
   );
 }
 
-export function ListSurface({ model, approvedWork, surface, searchParams }: { model: ListPageViewModel; approvedWork?: ApprovedWorkPortfolioViewModel; surface: string; searchParams: Record<string, string | string[] | undefined> }) {
+export function ListSurface({ model, approvedWork, surface, searchParams, canManageWorkflowTasks = false }: { model: ListPageViewModel; approvedWork?: ApprovedWorkPortfolioViewModel; surface: string; searchParams: Record<string, string | string[] | undefined>; canManageWorkflowTasks?: boolean }) {
   if (surface === "action-center") return <ReviewQueueSurface model={model} />;
   const metricCopy: Record<string, { heading: string; description: string }> = {
     stores: { heading: "Explore the store network", description: "Open the locations, work, visits, or recorded costs behind each summary." },
@@ -654,7 +654,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams }: { mo
             <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
             {triageMode ? (
               <div className={styles.triageWorkspace} data-has-preview={selectedRow && !approvedLaterSelection || undefined}>
-                <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode ? (
+                <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode && canManageWorkflowTasks ? (
                   <form className={styles.bulkForm} action="/api/ops/work-orders/bulk-follow-up" method="post">
                     <input type="hidden" name="returnTo" value={workOrderReturnTo} />
                     <DataTable table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} selection={{ name: "workOrderId", label: "Select open work orders for a bulk follow-up", isDisabled: (row) => ["Closed", "Cancelled"].includes(row.cells.find((cell) => cell.key === "status")?.value ?? "") }} />

@@ -144,6 +144,16 @@ describe("role-specific operator experiences", () => {
     expect(hrefs.some((href) => href.startsWith("/app/lifecycle"))).toBe(false);
     expect(hrefs).not.toContain("/app/work-orders/new");
     expect(dashboard.spotlight).toBeUndefined();
+    expect(dashboard.priorityActions.map((action) => action.categoryLabel)).toEqual([
+      "Issue intake",
+      "Needs your response",
+      "Being handled",
+      "Upcoming visits",
+    ]);
+    expect(dashboard.priorityActions.find((action) => action.categoryLabel === "Needs your response")?.link.href)
+      .toBe("/app/action-center?lane=mine");
+    expect(dashboard.priorityActions.find((action) => action.categoryLabel === "Upcoming visits")?.link.href)
+      .toBe("/app/visits?status=upcoming");
 
     for (const route of ["stores", "requests", "work-orders", "visits"] as const) {
       const source = buildListModel(fixture, storeManager, route);

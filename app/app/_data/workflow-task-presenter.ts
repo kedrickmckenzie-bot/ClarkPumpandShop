@@ -217,7 +217,7 @@ export function buildWorkflowTaskWorkspaceModel(
   session: OperatorSession,
   workOrderId: string,
 ): WorkflowTaskWorkspaceViewModel {
-  const permitted = roleCan(session.role, "manage_workflow_tasks");
+  const permitted = roleCan(session, "manage_workflow_tasks");
   const workOrder = fixture.workOrders.find((candidate) => (
     candidate.organizationId === session.organizationId && candidate.id === workOrderId
   ));

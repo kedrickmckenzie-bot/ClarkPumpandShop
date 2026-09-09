@@ -11,8 +11,8 @@ export const metadata: Metadata = { title: "Store" };
 export default async function StoreDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [model, session] = await Promise.all([loadDetailModel("store", id), loadOperatorSession()]);
-  const canSetupEquipment = session.demoEdition === "complete" && roleCan(session.role, "setup_equipment");
-  const canSetupPm = session.demoEdition === "complete" && roleCan(session.role, "setup_pm");
+  const canSetupEquipment = session.demoEdition === "complete" && roleCan(session, "setup_equipment");
+  const canSetupPm = session.demoEdition === "complete" && roleCan(session, "setup_pm");
   const hasDemoVendorQr = id === NORTHLINE_DEMO_HANDLES.storyStoreId;
   return (
     <DetailView

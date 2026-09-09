@@ -176,12 +176,12 @@ describe("public service and visit capability boundaries", () => {
       leadTimeDays: 2,
       validUntil: new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10),
     });
-    expect(receipt.heading).toBe("Bid received");
+    expect(receipt.heading).toBe("Quote received");
     expect(receipt.message).toMatch(/pricing evidence only.*does not assign work.*travel, check-in, service, or billing/i);
     expect(await gateway.loadVendorEstimate(rawToken)).toMatchObject({
       status: "submitted",
-      statusLabel: "Bid submitted",
-      requestKindLabel: "Bid request - pricing only",
+      statusLabel: "Quote submitted",
+      requestKindLabel: "Quote request - pricing only",
       latestProposal: { revision: 1 },
     });
     expect((await gateway.loadVendorEstimate(rawToken))?.latestProposal?.amountLabel).toContain("$1,825.00");
@@ -454,7 +454,7 @@ describe("public service and visit capability boundaries", () => {
     expect(checkout.followUpLabel).toMatch(/Facilities coordinator now owns/i);
     expect(await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId)).toMatchObject({
       status: "waiting_on_vendor",
-      accountableParty: "Facilities coordinator",
+      accountableParty: "Jordan Lee",
       nextAction: "Review the unable-to-reproduce outcome and decide whether to monitor, reassign, or close",
     });
   });

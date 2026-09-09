@@ -9,7 +9,7 @@ function safeReturnTo(value: string) {
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional"], "manage_workflow_tasks");
     const formData = await request.formData();
     const workOrderIds = formData.getAll("workOrderId").map(String);
     if (!workOrderIds.length) throw new OpsDomainError("VALIDATION", "Select at least one work order before adding a follow-up.");

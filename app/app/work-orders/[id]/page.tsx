@@ -53,13 +53,13 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const bidPathIsNext = !accountabilityOnly && estimateComparison.permitted
     && !estimateComparison.workflowBlocked
     && !estimateComparison.selectedVendorName
-    && (estimateComparison.activeRequestCount > 0 || control.nextAction.toLowerCase().includes("bid"));
+    && (estimateComparison.activeRequestCount > 0 || control.nextAction.toLowerCase().includes("bid") || control.nextAction.toLowerCase().includes("quote"));
   const heldStatus = heldWork.hold?.status;
   const heldCase = heldStatus && ["active", "claimed", "review_required"].includes(heldStatus)
     ? {
         ...stageCase,
         stageLabel: heldStatus === "claimed" ? "Being reviewed onsite" : heldStatus === "review_required" ? "Vendor findings need review" : "Approved for a future visit",
-        accountableParty: heldStatus === "claimed" ? heldWork.hold?.claimedVendorName ?? "Onsite vendor" : "Facilities coordinator",
+        accountableParty: heldStatus === "claimed" ? heldWork.hold?.claimedVendorName ?? "Onsite vendor" : stageCase.internalAccountableParty,
         primaryNextAction: {
           label: heldStatus === "claimed" ? "Track the active visit" : heldStatus === "review_required" ? "Review the vendor findings" : "Wait for a suitable vendor visit",
           href: `/app/work-orders/${id}?view=service#future-visit-hold`,
@@ -76,13 +76,23 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   if (bidPathIsNext) {
     model.page.primaryAction = {
       label: estimateComparison.proposalCount > 0
-        ? "Review vendor bids"
+        ? "Review vendor quotes"
         : estimateComparison.activeRequestCount > 0
-          ? "Track vendor bids"
-          : "Request vendor bids",
+          ? "Track vendor quotes"
+          : "Request vendor quotes",
       href: `/app/work-orders/${id}?view=service&path=bids#bid-requests`,
     };
   }
+  const viewerAction = verification.canDecide
+    ? { label: "Confirm whether the problem is resolved", href: `/app/work-orders/${id}?view=visits#work-verification` }
+    : responseActions
+      ? { label: responseActions.kind === "question" ? "Answer the vendor question" : responseActions.kind === "proposed_date" ? "Review the proposed visit time" : responseActions.kind === "declined" ? "Choose another provider" : "Review vendor response", href: `/app/work-orders/${id}?view=service#vendor-response` }
+      : heldStatus && ["active", "claimed", "review_required"].includes(heldStatus)
+        ? heldCase.primaryNextAction
+        : model.page.primaryAction
+          ?? (session.role === "finance"
+            ? { label: "Review financial evidence", href: `/app/work-orders/${id}?view=cost` }
+            : { label: "Review current status", href: `/app/work-orders/${id}?view=overview` });
   return (
     <>
     {notice ? (
@@ -104,6 +114,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       replacement={replacement}
       verification={verification}
       canonicalCase={heldCase}
+      viewerAction={viewerAction}
       heldWork={heldWork}
       vendorResponse={responseActions ? { ...responseActions, workOrderId: id } : undefined}
       activeView={view}

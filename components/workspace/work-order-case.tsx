@@ -71,6 +71,7 @@ interface WorkOrderCaseProps {
   replacement: WorkOrderReplacementIntelligenceViewModel;
   verification: WorkOrderVerificationViewModel;
   canonicalCase: WorkOrderCaseView;
+  viewerAction?: { href: string; label: string };
   heldWork: HeldWorkActionsModel;
   vendorResponse?: VendorResponseActionsModel;
   activeView: WorkOrderView;
@@ -312,7 +313,7 @@ function ServicePathChoice({
   const directState = issuance.currentRevision
     ? `Authorization revision ${issuance.currentRevision} issued`
     : issuance.workflowBlocked
-      ? "Paused while bid sourcing is open"
+      ? "Paused while quote sourcing is open"
       : issuance.permitted
         ? "Available now"
         : "Review only in the current state";
@@ -321,7 +322,7 @@ function ServicePathChoice({
     : estimateComparison.activeRequestCount
       ? `${estimateComparison.activeRequestCount} open request${estimateComparison.activeRequestCount === 1 ? "" : "s"}`
       : estimateComparison.proposalCount
-        ? `${estimateComparison.proposalCount} bid${estimateComparison.proposalCount === 1 ? "" : "s"} received`
+        ? `${estimateComparison.proposalCount} quote${estimateComparison.proposalCount === 1 ? "" : "s"} received`
         : estimateComparison.permitted
           ? "Available now"
           : "Review only in the current state";
@@ -336,7 +337,7 @@ function ServicePathChoice({
       ) : null}
       <div className={styles.choiceGuardrail}>
         <ShieldAlert aria-hidden="true" size={18} />
-        <p><strong>Choose how you want to handle this work.</strong> A service authorization permits work and technician check-in. A bid request asks for pricing only and creates no assignment, visit, or billable service.</p>
+        <p><strong>Choose how you want to handle this work.</strong> A service authorization permits work and technician check-in. A quote request asks for pricing only and creates no assignment, visit, or billable service.</p>
       </div>
       <div className={styles.pathGrid}>
         <article className={styles.pathCard} data-path="service">
@@ -345,7 +346,7 @@ function ServicePathChoice({
           <footer><span><CircleDot aria-hidden="true" size={14} />{directState}</span>{issuance.available ? <Link href={`/app/work-orders/${workOrderId}?view=service&path=direct#issue-work`}>Choose direct service<ArrowRight aria-hidden="true" size={15} /></Link> : null}</footer>
         </article>
         <article className={styles.pathCard} data-path="pricing">
-          <header><span><CircleDollarSign aria-hidden="true" size={19} /></span><div><small>Pricing only</small><h3>Request and compare bids</h3></div></header>
+          <header><span><CircleDollarSign aria-hidden="true" size={19} /></span><div><small>Pricing only</small><h3>Request and compare quotes</h3></div></header>
           <p>Use this before selecting a provider or when replacement pricing is needed. Vendors are not authorized to travel or check in.</p>
           <footer><span><CircleDot aria-hidden="true" size={14} />{bidState}</span>{estimateComparison.available ? <Link href={`/app/work-orders/${workOrderId}?view=service&path=bids#bid-requests`}>Choose pricing first<ArrowRight aria-hidden="true" size={15} /></Link> : null}</footer>
         </article>
@@ -536,7 +537,7 @@ function ServiceRecordHistory({
 
 function workspaceHeading(mode: WorkOrderWorkspaceMode, accountabilityOnly: boolean) {
   if (mode === "held") return { eyebrow: "Approved work", title: "Approved for a future visit", description: "This work stays open until a suitable onsite vendor accepts it, or a manager returns it to normal service." };
-  if (mode === "closed") return { eyebrow: "Completed case", title: "Service record", description: "Review what happened. No authorization, bidding, or routing action is available on a closed work order." };
+  if (mode === "closed") return { eyebrow: "Completed case", title: "Service record", description: "Review what happened. No authorization, quote, or routing action is available on a closed work order." };
   if (mode === "vendor_response") return { eyebrow: "Vendor response", title: "Respond to the vendor", description: "Resolve the vendor's current response before any later service step becomes available." };
   if (mode === "waiting_on_vendor") return { eyebrow: "Vendor handoff", title: "Waiting on the current vendor step", description: "The work is already routed. Track the current response or confirmed appointment without starting another sourcing path." };
   if (mode === "choose_path") return { eyebrow: "Provider decision", title: accountabilityOnly ? "Choose the vendor" : "Choose how this work should be sourced", description: accountabilityOnly ? "Select the outside vendor that should receive this work order." : "Authorize a known provider or request pricing first. Choosing one opens only that workflow." };
@@ -554,6 +555,7 @@ export function WorkOrderCase({
   replacement,
   verification,
   canonicalCase,
+  viewerAction,
   heldWork,
   vendorResponse,
   activeView,
@@ -624,7 +626,7 @@ export function WorkOrderCase({
           <span className={`${styles.statusPill} ${toneStyles[canonicalTone]}`}><CircleDot aria-hidden="true" size={14} />{canonicalStatus}</span>
           <div className={styles.headerActions}>
             <CaseAction action={model.page.secondaryAction} />
-            <CaseAction action={canonicalCase.primaryNextAction} primary />
+            <CaseAction action={viewerAction} primary />
           </div>
         </div>
         <nav className={styles.caseTabs} aria-label="Work-order sections">
@@ -656,14 +658,15 @@ export function WorkOrderCase({
             </p>
           </div>
           <div className={styles.accountabilityGrid}>
-            <div><span><UserRound aria-hidden="true" size={16} />Internal owner</span><strong>{canonicalCase.internalAccountableParty}<small>{canonicalCase.internalAccountabilityStructured ? canonicalCase.internalAccountableType === "team" ? "Persisted team" : "Persisted membership" : "Legacy label — assign a persisted owner"}</small></strong></div>
-            <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Next action</span><strong>{canonicalCase.primaryNextAction.label}<small>{canonicalCase.nextActionOwner}</small></strong></div>
-            <div><span><Clock3 aria-hidden="true" size={16} />Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}<small>{canonicalCase.deadlinePolicy}</small></strong></div>
-            <div><span><ShieldAlert aria-hidden="true" size={16} />Escalation</span><strong>{canonicalCase.escalationDestination}<small>{canonicalCase.escalationTrigger}</small></strong></div>
+            <div><span><UserRound aria-hidden="true" size={16} />Responsible person or team</span><strong>{canonicalCase.internalAccountableParty}<small>{canonicalCase.internalAccountabilityStructured ? canonicalCase.internalAccountableType === "team" ? "Accountable team" : "Named accountable person" : "Compatibility owner — facilities can assign a named person or team"}</small></strong></div>
+            <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Workflow requires</span><strong>{canonicalCase.primaryNextAction.label}<small>{canonicalCase.nextActionOwner}</small></strong></div>
+            <div><span><Gauge aria-hidden="true" size={16} />Latest operating observation</span><strong>{canonicalCase.operatingCondition.label}<small>{canonicalCase.operatingCondition.sourceLabel ?? "No source observation"}{canonicalCase.operatingCondition.observedAt ? ` · ${dueLabel(canonicalCase.operatingCondition.observedAt, canonicalCase.timeZone)}` : ""}</small></strong></div>
+            <div><span><Clock3 aria-hidden="true" size={16} />Expected by</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}<small>{canonicalCase.deadlinePolicy}</small></strong></div>
           </div>
           <dl className={styles.caseMeta}>
             <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
             <div><dt>Fulfillment</dt><dd>{assigned?.value ?? control.assignment?.providerLabel ?? "Choose later"}</dd></div>
+            <div><dt>Escalates to</dt><dd>{canonicalCase.escalationDestination}</dd></div>
             {recordOrigin ? <div><dt>{recordOrigin.label}</dt><dd>{recordOrigin.value}</dd></div> : null}
             {!accountabilityOnly ? <div><dt>Authorization limit</dt><dd>{nte?.value ?? "Not set"}</dd></div> : null}
             {!accountabilityOnly ? <div><dt>Classification</dt><dd>{classification?.value ?? "Deferred"}</dd></div> : null}

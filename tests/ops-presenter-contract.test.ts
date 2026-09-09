@@ -640,7 +640,7 @@ describe("operator presenter drill-through contracts", () => {
       ["ClearFlow HVAC, Plumbing & Kitchen Repair", "$1,780.00"],
       ["ColdLine Refrigeration & HVAC", "$2,450.00"],
     ]);
-    expect(model.requests.every((request) => request.kindLabel === "Service bid - pricing only")).toBe(true);
+    expect(model.requests.every((request) => request.kindLabel === "Service quote - pricing only")).toBe(true);
     expect(model.requests.every((request) => request.canSelect)).toBe(true);
     expect(fixture.workOrders.filter((workOrder) => workOrder.id === workOrderId)).toHaveLength(1);
     expect(fixture.costLines.filter((line) => line.workOrderId === workOrderId)).toHaveLength(0);

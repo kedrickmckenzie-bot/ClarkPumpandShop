@@ -12,6 +12,7 @@ import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provide
 import { loadOperatorSession } from "./operator-loader";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "@/lib/ops/work-order-outcome";
+import { roleCan } from "@/components/ops/role-policy";
 
 export interface WorkOrderVerificationViewModel {
   available: boolean;
@@ -21,6 +22,8 @@ export interface WorkOrderVerificationViewModel {
   workOrderId: string;
   workOrderNumber: string;
   workOrderStatus: string;
+  originalProblem?: string;
+  canUseTechnicalBasis: boolean;
   resolvedLabel?: string;
   currentOutcome?: {
     siteVisitWorkOrderId: string;
@@ -41,13 +44,15 @@ export interface WorkOrderVerificationViewModel {
   history: Array<{
     id: string;
     cycle: number;
-    decision: "verified" | "rejected";
+    decision: "verified" | "rejected" | "inconclusive";
     decisionLabel: string;
     tone: Tone;
     outcomeLabel: string;
     decidedByLabel: string;
     decidedLabel: string;
     reason?: string;
+    basisLabel: string;
+    scopeLabel: string;
     avoidedSeparateTripConfirmed: boolean;
     current: boolean;
   }>;
@@ -60,7 +65,6 @@ const domainRoleByOperatorRole: Record<OperatorRole, string> = {
   store_manager: "store_manager",
   finance: "finance_reviewer",
 };
-const permittedRoles = new Set<OperatorRole>(["facilities", "regional", "store_manager"]);
 const reviewableOutcomes = new Set<SiteVisitWorkOrderOutcome>(["completed", "no_issue_found"]);
 const outcomeLabels: Record<SiteVisitWorkOrderOutcome, string> = {
   completed: "Work completed",
@@ -119,6 +123,8 @@ export function buildWorkOrderVerificationModel(
     workOrderId,
     workOrderNumber: workOrder?.number ?? workOrderId,
     workOrderStatus: workOrder?.status ?? "unavailable",
+    originalProblem: workOrder?.problem,
+    canUseTechnicalBasis: session.role === "facilities" || session.role === "regional",
     expectedWorkOrderVersion: workOrder ? persistedWorkOrderVersion(workOrder) : 0,
   };
   if (!workOrder) {
@@ -144,7 +150,7 @@ export function buildWorkOrderVerificationModel(
         && candidate.role === domainRoleByOperatorRole[session.role]
       ))
     : undefined;
-  const permitted = permittedRoles.has(session.role) && Boolean(membership);
+  const permitted = roleCan(session, "confirm_observable_result") && Boolean(membership);
   const outcomes = fixture.siteVisitWorkOrders.filter((record) => (
     record.organizationId === session.organizationId && record.workOrderId === workOrder.id
   ));
@@ -180,11 +186,13 @@ export function buildWorkOrderVerificationModel(
   const decisionBlockReason = canDecide
     ? undefined
     : !permitted
-      ? "An active facilities, regional, or scoped store-manager membership must record verification."
+      ? "Your role can review this history, but observable result confirmation is not enabled for it."
       : (workOrder.status as string) === "resolved"
         ? "The current outcome is verified and resolved. Facilities can close it after the remaining closure checks pass."
         : currentDecision?.decision === "rejected"
           ? "This outcome was rejected. A new observed visit and outcome are required before another verification."
+          : currentDecision?.decision === "inconclusive"
+            ? "This result could not be confirmed. Facilities review is required before closing or arranging return work."
           : currentDecision?.decision === "verified"
             ? "This outcome already has an accepted immutable verification decision."
             : workOrder.status !== "completed_pending_review"
@@ -197,7 +205,7 @@ export function buildWorkOrderVerificationModel(
     ...base,
     permitted,
     permissionMessage: permitted
-      ? "You can verify or reject the current per-work-order outcome."
+      ? "Confirm only what you can observe about the reported problem. Provider evidence remains separate."
       : "This role can review verification history but cannot record a decision.",
     resolvedLabel: resolvedAt(workOrder) ? dateTime(resolvedAt(workOrder)!, storeTimeZone) : undefined,
     currentOutcome: currentOutcome?.outcome && currentOutcome.outcomeRecordedAt
@@ -225,12 +233,14 @@ export function buildWorkOrderVerificationModel(
         id: verification.id,
         cycle: verification.cycle,
         decision: verification.decision,
-        decisionLabel: verification.decision === "verified" ? "Verified" : "Rejected",
-        tone: verification.decision === "verified" ? "positive" : "critical",
+        decisionLabel: verification.decision === "verified" ? "Fixed" : verification.decision === "rejected" ? "Not fixed" : "Not sure",
+        tone: verification.decision === "verified" ? "positive" : verification.decision === "rejected" ? "critical" : "warning",
         outcomeLabel: outcomeLabels[verification.outcome],
         decidedByLabel: verification.decidedByName,
         decidedLabel: dateTime(verification.decidedAt, storeTimeZone),
         reason: verification.reason,
+        basisLabel: verification.basis === "technical_evidence" ? "Technical evidence" : verification.basis === "operational_review" ? "Operations review" : "Observable result",
+        scopeLabel: verification.verificationScope === "pm_task" ? "PM task" : verification.verificationScope === "technical_work" ? "Technical work" : "Reported problem",
         avoidedSeparateTripConfirmed: fixture.auditEvents.some((event) => {
           if (event.organizationId !== session.organizationId
             || event.aggregateId !== workOrder.id

@@ -72,8 +72,8 @@ export function VendorResponseActions({ model }: { model: VendorResponseActionsM
         <div className={styles.moneyRow}>
           <Link className={styles.moneyCell} href={`/app/work-orders/${model.workOrderId}?view=service`}>
             <span className={styles.moneyLabel}>Recover from the decline</span>
-            <strong>Select another provider or invite bids</strong>
-            <span className={styles.moneyNote}>Choose a different approved vendor, or open the bid request panel on this case</span>
+            <strong>Select another provider or request quotes</strong>
+            <span className={styles.moneyNote}>Choose a different approved vendor, or open the quote request panel on this case</span>
           </Link>
         </div>
       ) : (

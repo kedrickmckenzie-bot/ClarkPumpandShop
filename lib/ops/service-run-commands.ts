@@ -1,6 +1,7 @@
 import { atomicWorkOrderSetMutation } from "./concurrency";
 import { OpsDomainError } from "./errors";
 import { heldWorkVendorEligibility } from "./held-work-policy";
+import { resolveInternalAccountability } from "./internal-accountability";
 import type { OpsRepository, OpsStatement } from "./repository";
 import type { OpsClock, OpsCommandServices, OpsIdSource } from "./commands";
 import {
@@ -1067,6 +1068,7 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
     }
   } else if (sweepUnavailable) {
     for (const workOrder of workOrders) {
+      const internalAccountability = await resolveInternalAccountability(repository, workOrder);
       const [tasks, hold, activeAssignment] = await Promise.all([
         repository.listWorkflowTasksForWorkOrder(run.organizationId, workOrder.id),
         repository.getWorkOrderVisitHold(run.organizationId, workOrder.id),
@@ -1084,11 +1086,11 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
         actor: vendorActor, createdAt: now, draft: {
           taskType: "choose_service_provider", title: "Approved for a future vendor visit",
           reason: `${workOrder.number} remains approved after the grouped work request was declined.`,
-          assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator",
+          assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName,
           priority: "normal", blocking: true, requiredForProgress: true, dueAt: hold?.deadlineAt ?? workOrder.dueAt,
           applicableSlaClock: "scheduling",
           completionCriteria: "Include this job in another planned visit or issue it separately",
-          escalationDestination: "Regional facilities manager",
+          escalationDestination: internalAccountability.escalationDestination,
         },
       });
       statements.push(...buildCreateTaskStatements({ task: readyTask, actor: vendorActor, ids }));
@@ -1096,7 +1098,7 @@ export async function respondToServiceRun(input: RespondToServiceRunInput, depen
       statements.push(buildWorkflowTaskProjectionStatement(run.organizationId, workOrder.id, [...nextTasks, readyTask]));
       statements.push({
         sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ? AND status NOT IN ('closed','cancelled')",
-        params: ["approved", "Facilities coordinator", "Approved for a future vendor visit", hold?.deadlineAt ?? workOrder.dueAt, "Regional facilities manager", run.organizationId, workOrder.id],
+        params: ["approved", internalAccountability.assigneeName, "Approved for a future vendor visit", hold?.deadlineAt ?? workOrder.dueAt, internalAccountability.escalationDestination, run.organizationId, workOrder.id],
       });
     }
   }
@@ -1175,6 +1177,7 @@ export async function acceptServiceRunCounter(input: AcceptServiceRunCounterInpu
     }
   }
   for (const workOrder of workOrders) {
+    const internalAccountability = await resolveInternalAccountability(repository, workOrder);
     const [tasks, hold, activeAssignment] = await Promise.all([
       repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id),
       repository.getWorkOrderVisitHold(input.organizationId, workOrder.id),
@@ -1195,17 +1198,17 @@ export async function acceptServiceRunCounter(input: AcceptServiceRunCounterInpu
       actor: input.actor, createdAt: now, draft: removed && storeSweep ? {
         taskType: "choose_service_provider", title: "Approved for a future vendor visit",
         reason: `${workOrder.number} was removed from this grouped work request and remains approved.`,
-        assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator",
+        assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName,
         priority: "normal", blocking: true, requiredForProgress: true, dueAt: hold?.deadlineAt ?? workOrder.dueAt, applicableSlaClock: "scheduling",
         completionCriteria: "Include this job in another planned visit or issue it separately",
-        escalationDestination: "Regional facilities manager",
+        escalationDestination: internalAccountability.escalationDestination,
       } : removed ? {
         taskType: "schedule_service", title: "Reschedule work removed from Service Run",
         reason: `Work Order was removed from Service Run ${run.id} through an accepted Vendor counterproposal`,
-        assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator",
+        assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName,
         priority: "high", blocking: true, requiredForProgress: true, dueAt: addMinutes(now, 240), applicableSlaClock: "scheduling",
         completionCriteria: "Work is committed on another valid Service Run or separately scheduled",
-        escalationDestination: "Regional facilities manager",
+        escalationDestination: internalAccountability.escalationDestination,
       } : {
         taskType: "confirm_store_access", title: storeSweep ? "Confirm store access for the planned visit" : "Confirm store access for committed Service Run",
         reason: storeSweep ? `The vendor supplied ${startsAt} as its planned visit date` : `Counterproposal for Service Run ${run.id} was accepted for ${startsAt}`,
@@ -1220,7 +1223,7 @@ export async function acceptServiceRunCounter(input: AcceptServiceRunCounterInpu
     statements.push(buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, [...nextTasks, replacement]));
     if (removed && storeSweep) statements.push({
       sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ? AND status NOT IN ('closed','cancelled')",
-      params: ["approved", "Facilities coordinator", "Approved for a future vendor visit", hold?.deadlineAt ?? workOrder.dueAt, "Regional facilities manager", input.organizationId, workOrder.id],
+      params: ["approved", internalAccountability.assigneeName, "Approved for a future vendor visit", hold?.deadlineAt ?? workOrder.dueAt, internalAccountability.escalationDestination, input.organizationId, workOrder.id],
     });
     else statements.push({ sql: "UPDATE ops_work_orders SET status = ? WHERE organization_id = ? AND id = ? AND status NOT IN ('closed', 'cancelled')", params: [removed ? "waiting_on_vendor" : "scheduled", input.organizationId, workOrder.id] });
   }

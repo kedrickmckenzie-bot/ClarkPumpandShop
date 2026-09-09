@@ -70,6 +70,8 @@ function configure(role: OperatorSession["role"] = "facilities") {
 function request(decision = "verified", reason = "Store operating condition confirmed") {
   const formData = new FormData();
   formData.set("decision", decision);
+  formData.set("basis", "observable_result");
+  formData.set("verificationScope", "reported_problem");
   formData.set("reason", reason);
   formData.set("expectedWorkOrderVersion", "7");
   formData.set("expectedSiteVisitWorkOrderId", "site-visit-work-route");
@@ -91,7 +93,10 @@ describe("work-order verification route", () => {
     expect(response.headers.get("location")).toBe(
       `/app/work-orders/${workOrder.id}?view=visits&updated=verification-verified#work-verification`,
     );
-    expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(["facilities", "regional", "store_manager"]);
+    expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(
+      ["facilities", "regional", "store_manager"],
+      "confirm_observable_result",
+    );
     expect(mocks.assertStoreInSessionScope).toHaveBeenCalledWith(currentSession, workOrder.storeId);
     expect(mocks.recordWorkOrderVerification).toHaveBeenCalledWith(
       { repository },
@@ -102,6 +107,8 @@ describe("work-order verification route", () => {
         expectedSiteVisitWorkOrderId: "site-visit-work-route",
         expectedOutcomeRecordedAt: "2026-08-20T14:00:00.000Z",
         decision: "verified",
+        basis: "observable_result",
+        verificationScope: "reported_problem",
         avoidedSeparateTripConfirmed: false,
         reason: "Store operating condition confirmed",
         actor,
@@ -131,7 +138,7 @@ describe("work-order verification route", () => {
     expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
       code: "VALIDATION",
-      error: "Choose verify or reject.",
+      error: "Choose fixed, not fixed, or not sure.",
     });
     expect(mocks.recordWorkOrderVerification).not.toHaveBeenCalled();
   });

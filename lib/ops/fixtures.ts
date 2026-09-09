@@ -835,7 +835,7 @@ function buildFixture(): OpsFixture {
   const estimateScope = "Replace the failing rooftop-unit condenser fan motor and capacitor, verify rotation and amperage, and confirm the sales floor reaches setpoint. Include labor, materials, travel, and earliest available service date.";
   const priceCheckProblem = "Sales-floor rooftop unit is cooling intermittently and the condenser fan motor is overheating";
   requests.push({ id: priceCheckRequestId, organizationId: organization.id, reference: "REQ-26-105C", storeId: "store-northline-105", reporterName: "Jamie Collins", reporterEmployeeId: "E4105", problem: priceCheckProblem, priority: "routine", status: "converted", submittedAt: at(8, 25, 14, 40), convertedWorkOrderId: priceCheckWorkOrderId });
-  workOrders.push({ id: priceCheckWorkOrderId, organizationId: organization.id, number: "CPS-2026-0117", storeId: "store-northline-105", requestId: priceCheckRequestId, problem: priceCheckProblem, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", assetId: "asset-105-rtu-1", priority: "routine", status: "awaiting_approval", accountableParty: "Facilities coordinator", nextAction: "Compare vendor bids and choose the service provider", dueAt: at(8, 26, 16), escalationTo: "Facilities director", createdAt: at(8, 25, 14, 45) });
+  workOrders.push({ id: priceCheckWorkOrderId, organizationId: organization.id, number: "CPS-2026-0117", storeId: "store-northline-105", requestId: priceCheckRequestId, problem: priceCheckProblem, categoryKey: "hvac", taxonomyNodeId: "taxonomy-northline-rooftop_units", assetId: "asset-105-rtu-1", priority: "routine", status: "awaiting_approval", accountableParty: "Facilities coordinator", nextAction: "Compare vendor quotes and choose the service provider", dueAt: at(8, 26, 16), escalationTo: "Facilities director", createdAt: at(8, 25, 14, 45) });
   assignments.push({ id: priceCheckAssignmentId, organizationId: organization.id, workOrderId: priceCheckWorkOrderId, kind: "choose_later", status: "pending", assignedAt: at(8, 25, 14, 46) });
   estimateRequests.push(
     { id: "estimate-request-105-summit", organizationId: organization.id, workOrderId: priceCheckWorkOrderId, vendorId: "vendor-northline-summit", kind: "estimate_only", requestedScope: estimateScope, status: "submitted", channel: "email", requestedAt: at(8, 25, 14, 50), dueAt: at(8, 26, 16), openedAt: at(8, 25, 15, 2), respondedAt: at(8, 25, 15, 31) },
@@ -2055,6 +2055,21 @@ function buildFixture(): OpsFixture {
     { id: "notification-rule-compliance-facilities", organizationId: organization.id, eventKey: "vendor_compliance_due", emailEnabled: true, recipientRole: "facilities_admin", updatedByMembershipId: "membership-northline-facilities", createdAt: at(8, 1, 8), updatedAt: at(8, 1, 8) },
   ];
 
+  // Product defaults already let store managers report and confirm observable
+  // results. Creation/dispatch remain opt-in and therefore have no override row.
+  const roleCapabilityOverrides: NonNullable<OpsFixture["roleCapabilityOverrides"]> = [];
+  const workflowPolicies: NonNullable<OpsFixture["workflowPolicies"]> = [{
+    id: "workflow-policy-northline-v1",
+    organizationId: organization.id,
+    version: 1,
+    status: "active",
+    autoCloseRoutineAfterVerification: false,
+    appliesToActiveWork: true,
+    createdByMembershipId: "membership-northline-facilities",
+    createdByName: "Jordan Lee",
+    createdAt: at(8, 1, 8),
+  }];
+
   const publicTokens: PublicActionToken[] = [
     { id: "public-token-northline-store-104", organizationId: organization.id, purpose: "store_gateway", subjectType: "store", subjectId: "store-northline-104", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.store104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
     { id: "public-token-northline-service-104", organizationId: organization.id, purpose: "service_authorization", subjectType: "work_order_issuance", subjectId: publicIssuanceId, tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceAuthorization104, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 1, 12) },
@@ -2066,7 +2081,7 @@ function buildFixture(): OpsFixture {
     { id: "public-token-northline-service-run-summit", organizationId: organization.id, purpose: "service_run_response", subjectType: "service_run", subjectId: "service-run-summit-north-2026-08-24", tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceRunSummit, expiresAt: atYear(2027, 8, 10), createdAt: at(8, 10, 16) },
   ];
 
-  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, vendors, vendorReminders, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorComplianceAlerts, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, workOrderVisitHolds, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, serviceAppointments, vendorContinuations, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, componentLifecycleEvents, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, notificationRules, outboxMessages, publicTokens };
+  return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, roleCapabilityOverrides, workflowPolicies, vendors, vendorReminders, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorComplianceAlerts, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, workOrderVisitHolds, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, serviceAppointments, vendorContinuations, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, componentLifecycleEvents, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, notificationRules, outboxMessages, publicTokens };
 }
 
 const presentationFixture = buildFixture();

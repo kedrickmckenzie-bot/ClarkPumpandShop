@@ -82,7 +82,7 @@ export function ApprovedLaterIssuanceDialog({ model }: { model: ApprovedLaterMan
         <div className={styles.issuanceDialogBody}>
           <section className={styles.issuanceChooseStep} hidden={step !== "vendor"} aria-label="Choose an approved vendor">
             <div className={styles.issuanceSectionHeading}>
-              <div><small>Step 1</small><h3>Who should receive this work?</h3><p>Only approved vendors that cover this store are shown. Choose one provider; this is service work, not a request for bids.</p></div>
+              <div><small>Step 1</small><h3>Who should receive this work?</h3><p>Only approved vendors that cover this store are shown. Choose one provider; this is service work, not a quote request.</p></div>
               <div className={styles.issuanceStoreContext}><Building2 aria-hidden="true" size={18} /><span><strong>{model.storeLabel}</strong><small>{model.storeAddress}</small></span></div>
             </div>
 

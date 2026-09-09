@@ -62,7 +62,7 @@ export function PublicFrame({
   );
 }
 
-export function PublicLinkUnavailable({ kind = "link" }: { kind?: "link" | "service authorization" | "store link" | "bid request" }) {
+export function PublicLinkUnavailable({ kind = "link" }: { kind?: "link" | "service authorization" | "store link" | "quote request" }) {
   return (
     <PublicFrame organizationName={productFullName} context="Secure public workflow" mode="live">
       <section className={styles.errorCard} aria-labelledby="unavailable-title">
@@ -131,6 +131,7 @@ export function ServerReceipt({
       {checkOut ? <p className={styles.disclaimer}>Observed onsite duration is approximate presence evidence. It is not certified labor time or automatic invoice proof.</p> : null}
       <p className={styles.receiptMeta}>Receipt {receipt.receiptId} · recorded {formatPublicDateTime(receipt.receivedAt, timeZone)} local store time</p>
       {restartHref && restartLabel ? <Link className={styles.textLink} href={restartHref}>{restartLabel} <ArrowRight size={16} aria-hidden="true" /></Link> : null}
+      {"nextHref" in receipt && receipt.nextHref && receipt.nextLabel ? <Link className={styles.textLink} href={receipt.nextHref}>{receipt.nextLabel} <ArrowRight size={16} aria-hidden="true" /></Link> : null}
     </section>
   );
 }

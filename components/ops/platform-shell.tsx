@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { productPresentation, productThemeVariables } from "@/lib/product/presentation";
-import type { DemoEdition, OperatorRole, OperatorSession } from "./data-contract";
+import type { DemoEdition, OperatorSession } from "./data-contract";
 import { DEFAULT_DEMO_EDITION, demoEditionPresentation } from "./demo-edition";
 import {
   contextualNavigationForPath,
@@ -218,7 +218,7 @@ function SidebarFooter({ session, edition }: { session: OperatorSession; edition
   return (
     <div className={styles.sidebarFooter}>
       <nav aria-label="Workspace settings" className={styles.secondaryNavigation}>
-        {edition === "complete" && roleCan(session.role, "administer") ? (
+        {edition === "complete" && roleCan(session, "administer") ? (
           <Link className={styles.setupLink} href="/app/admin">
             <Settings2 aria-hidden="true" size={18} />
             <span>Setup</span>
@@ -236,9 +236,9 @@ function SidebarFooter({ session, edition }: { session: OperatorSession; edition
   );
 }
 
-function CreateMenu({ role, edition }: { role: OperatorRole; edition: DemoEdition }) {
+function CreateMenu({ session, edition }: { session: OperatorSession; edition: DemoEdition }) {
   const actions = createActions.filter(
-    (action) => roleCan(role, action.capability) && (
+    (action) => roleCan(session, action.capability) && (
       edition === "complete" || action.capability === "create_work_order"
     ),
   );
@@ -342,7 +342,7 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
                 <small>{session.scopeLabel}</small>
               </span>
             </div>
-            <CreateMenu role={session.role} edition={edition} />
+            <CreateMenu session={session} edition={edition} />
           </header>
           {!isRecordDetailPath(pathname) ? (
             <ContextualNavigation session={session} pathname={pathname} edition={edition} />

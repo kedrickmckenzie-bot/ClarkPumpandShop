@@ -148,12 +148,17 @@ The existing Work Order status and `accountableParty`/`nextAction` scalar projec
 
 The coordinated review and implementation pass closed the identified correctness and navigation regressions without returning the ordinary list experience to tenant-wide fixture loading.
 
-- A newer visit cycle without an outcome now invalidates an older verified completion. The case header, verification command, and closure rules all evaluate the complete ordered set of per-work visit cycles.
+- Organization-specific maintenance responsibility overrides now persist through fixture, D1, and PostgreSQL adapters. One effective-capability set controls links, pages, APIs, and configurable commands. Store managers report and confirm observable results by default; routine creation/dispatch is opt-in, scope-bound, and dispatch depends on create.
+- Observable confirmation now records **Yes**, **No**, or **Not sure** against the exact current provider outcome with basis and scope. A newer visit cycle invalidates older success, technical work stays with an authorized reviewer, and rejected/inconclusive results create distinct owner-routed obligations.
+- Versioned workflow policy supports conservative optional auto-close. One evaluator is used at verification, guarded manual close, and completion of the final required operational task. Active visits, new/unverified outcomes, open required operational follow-up/tasks, priority, and policy applicability block closure; financial review remains open.
 - Work-order financial review attributes only the current work order's allocated invoice-line exceptions to that job. Other invoice-line findings stay with their own jobs, while invoice-level adjustments are labeled as shared and are not silently included in realized value.
-- Default Work Orders, Visits, and Stores use scoped repository aggregates for summary bands. Counts describe the scoped portfolio while result counts describe the active filter or search. Visit review links now execute a real bounded query.
-- Facilities users can discover approved held work, switch into the held portfolio, identify stores with several eligible jobs, open the combined-visit planner, and return to the exact prior list context. The normal held-work path remains query-first and shows authorization posture, review deadline, and persisted internal owner.
-- Work orders now persist a structured internal accountable membership or supported team identity. Reassignment validates role and store scope, fences stale versions, moves internally owned tasks, preserves vendor-owned next actions, redirects escalation, and writes the record, tasks, projection, audit event, and outbox event in one transaction.
-- The stale-cycle, invoice attribution, held-work journey, scoped ownership, vendor-preservation, stale-version, forbidden-role, and out-of-scope cases have direct behavioral regression coverage.
+- Default Work Orders, Visits, and Stores use scoped repository aggregates for summary bands. Counts describe the scoped portfolio while result counts describe the active filter or search. Visit review and upcoming-appointment links execute real bounded queries.
+- Facilities users can discover approved held work, switch into the held portfolio, identify multi-job stores, open due-review or confirmed-opportunity analysis, start a combined request, and return to the exact prior list context. The normal held-work path remains query-first and shows authorization posture, review deadline, and persisted internal owner.
+- Work orders persist a structured internal accountable membership or supported team identity. Reassignment validates role/store scope, fences stale versions, moves only owner-following internal tasks, preserves vendor/store/technical/approval/finance delegation, redirects escalation, and writes record/tasks/projection/audit/outbox atomically.
+- The work-order header now separates the shared state from the viewer's available action and puts unresolved operational review ahead of financial review. The store-manager home exposes Report, Needs your response, Being handled, and Upcoming visits; facilities-only bulk controls are permission-gated.
+- Public quote and authorization views distinguish pricing, provider choice, authorization, appointment, attendance, and outcome. Quote revisions prepopulate the latest amount and scope, preserve immutable history, label the latest valid revision, and reject stale selection.
+- Action Center uses one role-aware complete projection over workflow tasks, follow-ups, exceptions, vendor reminders, held review, quote rounds, and role-appropriate finance work. Counts precede pagination, quote rounds group related responses, and independent same-work-order obligations remain distinct.
+- The stale-cycle, invoice attribution, held-work journey, scoped ownership, vendor-preservation, stale-version, forbidden-role, out-of-scope, >200-source attention, exact metric-link, auto-close, and permission-dependency cases have direct behavioral regression coverage.
 
 ### Checks run
 
@@ -164,24 +169,29 @@ All required repository gates ran successfully on September 8, 2026:
 | `npm run db:seed` | Passed; deterministic 15-store/5-vendor presentation data and 65-store scale fixture seeded |
 | `npm run typecheck` | Passed |
 | `npm run lint` | Passed |
-| `npm test` | Passed; 111 files and 733 tests |
+| `npm test` | Passed; 113 files and 747 tests |
 | `npm run test:e2e` | Passed; 4 files and 44 tests |
 | `npm run build` | Passed with the Vinext duplicate emitted-CSS filename warning |
 | `npm run build:render` | Passed with Next.js 16.3, including type checking and static generation |
 
-The browser walkthrough covered:
+The browser walkthrough used disposable local mutations and covered:
 
-- Facilities Work Orders, the held-work portfolio, combined-visit creation, preserved return context, Visits summaries, and persisted owner reassignment controls.
-- Store manager Overview and Work Orders at Store 104 scope, including the absence of facilities-only held-work controls.
-- Finance invoice review language, exact source rows and amount bases, and the explicit boundary that review does not approve or execute payment.
-- Executive Overview and the recorded-cost drill-through to its exact Spend source records, with routine dispatch controls suppressed.
-- Central regional Stores search, where one filtered result remained distinct from five portfolio-wide stores.
-- Narrow/mobile navigation and role switching.
-- The external vendor authorization and technician check-in path, including the operator work-order billing reference, assigned-vendor scope, no-account access, one-result-per-job explanation, and check-in/out-only location disclosure.
+- Default Work Orders, the held-work portfolio, combined-visit planner, a recoverable stale/duplicate `409`, successful combined request creation, and exact return to the originating `visitPlan=ready` list.
+- Setup denial outside the authorized facilities role, an audited store-manager create override save, restoration of the default, and effective role switching.
+- Store-manager Overview and Work Orders at Store 104 scope, including Report/Needs response/Being handled/Upcoming paths and removal of the facilities-only bulk follow-up control.
+- Operator quote list/comparison and public latest-valid quote detail, with pricing explicitly separated from authorization.
+- Public service authorization, deliberate open, vendor question submission, useful receipt/return path, and the resulting owner task in Action Center.
+- A persisted **Not sure** store observation. The walkthrough found and drove correction of a state-precedence defect; the refreshed case and queue put inconclusive operational review ahead of financial evidence.
+- Action Center's 61-item complete scoped count, 25-row pagination, responsibility/type views, grouped quote round, vendor-question task, and inconclusive-verification task.
+- Collapsed navigation and public/store-manager responsive layouts. Exact phone-width resizing was unavailable in the automation surface.
 
 ### Remaining limitations
 
 - The advanced confirmed-opportunity and review-window analysis modes still use a compatibility snapshot. Default lists and the ordinary multi-store held-work workflow are bounded and query-first; those specialized projections should move to dedicated aggregate read models before production-scale use.
 - The additive D1 migration stores the structured owner pair without a database `CHECK` constraint because rebuilding the referenced work-order table would make this compatibility migration destructive. Domain commands enforce the invariant, and PostgreSQL has the database constraint.
+- The attention projection retains and counts grouped source identities, but the current row UI does not expand to every source obligation and has no completed/history lane or **Save and open next** control.
+- Immutable quote proposal revisions do not yet associate an uploaded quote file. Existing private upload storage cannot be exposed with a superficial file input without a proposal/file evidence model.
+- Public quote revision was not manually submitted because the deterministic link's response deadline had passed. Revision, stale-selection, and retry behavior are covered by command/route tests; proposed-date countering, phone/email attribution, and >200-row live browser state also rely on automated coverage.
 - The visible role picker, deterministic tokens, outbox delivery, production identity, accounting integration, and native applications remain demonstration boundaries described by the blueprint.
-- Automated end-to-end tests exercise mutations; the manual browser pass intentionally avoided changing the shared deterministic demo state.
+
+The detailed capability, verification, ownership, metric, journey, and acceptance matrices are in `USABILITY_PERMISSIONS_VENDOR_COMPLETION.md`. That document deliberately does not label the entire broad brief complete while the explicit UI/evidence gaps above remain.

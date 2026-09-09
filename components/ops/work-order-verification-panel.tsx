@@ -1,4 +1,4 @@
-import { CheckCircle2, ClipboardCheck, RotateCcw, ShieldAlert } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, HelpCircle, RotateCcw, ShieldAlert } from "lucide-react";
 import type { WorkOrderVerificationViewModel } from "@/app/app/_data/work-order-verification-presenter";
 import styles from "./work-order-verification-panel.module.css";
 
@@ -20,16 +20,20 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
       <header className={styles.header}>
         <span><ClipboardCheck aria-hidden="true" size={20} /></span>
         <div>
-          <p>Internal operating check</p>
-          <h3 id="work-verification-heading">Verification, resolution, and closure</h3>
-          <small>Technician evidence stays immutable. Internal review accepts or rejects one exact per-work-order outcome.</small>
+          <p>Store result check</p>
+          <h3 id="work-verification-heading">Is the reported problem fixed?</h3>
+          <small>Confirm only what you can observe. This does not certify the technician&apos;s methods, labor, or invoice.</small>
         </div>
       </header>
 
       {model.currentOutcome ? (
         <article className={styles.outcome}>
           <div>
-            <small>Current technician outcome</small>
+            <small>Original reported problem</small>
+            <strong>{model.originalProblem}</strong>
+          </div>
+          <div>
+            <small>Latest provider result</small>
             <strong>{model.currentOutcome.outcomeLabel}</strong>
             <span>{model.currentOutcome.technicianLabel} · {model.currentOutcome.recordedLabel}</span>
           </div>
@@ -43,28 +47,36 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
         <div className={styles.decisions}>
           <form action={model.action} method="post" className={styles.acceptForm}>
             <DecisionFence model={model} />
-            <input name="decision" type="hidden" value="verified" />
             <label>
-              Verification note <span>Optional</span>
-              <textarea name="reason" maxLength={2000} placeholder="What did store operations confirm?" rows={3} />
+              What are you confirming?
+              <select name="verificationScope" defaultValue="reported_problem">
+                <option value="reported_problem">The reported problem</option>
+                <option value="pm_task">The visible PM result</option>
+                {model.canUseTechnicalBasis ? <option value="technical_work">Technical work and evidence</option> : null}
+              </select>
+            </label>
+            {model.canUseTechnicalBasis ? <label>
+              Basis for this decision
+              <select name="basis" defaultValue="observable_result">
+                <option value="observable_result">What can be observed now</option>
+                <option value="technical_evidence">Technical evidence</option>
+                <option value="operational_review">Facilities operations review</option>
+              </select>
+            </label> : <input name="basis" type="hidden" value="observable_result" />}
+            <label>
+              What did you observe? <span>Required for “not fixed” or “not sure”</span>
+              <textarea name="reason" maxLength={2000} placeholder="For example: case temperature is holding at 36°F, or the alarm returned after 20 minutes." rows={3} />
             </label>
             {model.currentOutcome?.canConfirmAvoidedSeparateTrip ? <label>
               <span><input name="avoidedSeparateTripConfirmed" type="checkbox" value="true" /> Confirm a separate trip was avoided</span>
               <small>Check only if this approved item would have required its own vendor visit. No dollar value is inferred.</small>
             </label> : null}
-            <button type="submit"><CheckCircle2 aria-hidden="true" size={17} />Verify and mark resolved</button>
-            <small>This creates a separate closure obligation. It does not close the work order automatically.</small>
-          </form>
-
-          <form action={model.action} method="post" className={styles.rejectForm}>
-            <DecisionFence model={model} />
-            <input name="decision" type="hidden" value="rejected" />
-            <label>
-              Rejection reason <span>Required</span>
-              <textarea name="reason" maxLength={2000} required placeholder="What is still not operating correctly?" rows={3} />
-            </label>
-            <button type="submit"><RotateCcw aria-hidden="true" size={17} />Reject and require return work</button>
-            <small>The prior visit and outcome remain visible; the work returns to an active service cycle.</small>
+            <div className={styles.decisions}>
+              <button type="submit" name="decision" value="verified"><CheckCircle2 aria-hidden="true" size={17} />Yes, it&apos;s fixed</button>
+              <button type="submit" name="decision" value="rejected"><RotateCcw aria-hidden="true" size={17} />No, it&apos;s not fixed</button>
+              <button type="submit" name="decision" value="inconclusive"><HelpCircle aria-hidden="true" size={17} />I&apos;m not sure</button>
+            </div>
+            <small>Eligible routine work may close automatically. Invoice or cost review remains open and separate.</small>
           </form>
         </div>
       ) : (
@@ -76,7 +88,7 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
 
       <section className={styles.history} aria-labelledby="verification-history-heading">
         <header>
-          <h4 id="verification-history-heading">Immutable decision history</h4>
+          <h4 id="verification-history-heading">Confirmation history</h4>
           <span>{model.history.length} decision{model.history.length === 1 ? "" : "s"}</span>
         </header>
         {model.history.length ? (
@@ -86,7 +98,7 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
                 <span aria-hidden="true" />
                 <div>
                   <header><strong>Cycle {decision.cycle} · {decision.decisionLabel}</strong>{decision.current ? <em>Current outcome</em> : null}</header>
-                  <p>{decision.outcomeLabel}{decision.reason ? ` — ${decision.reason}` : ""}{decision.avoidedSeparateTripConfirmed ? " · Separate trip explicitly confirmed as avoided" : ""}</p>
+                  <p>{decision.outcomeLabel} · {decision.scopeLabel} · {decision.basisLabel}{decision.reason ? ` — ${decision.reason}` : ""}{decision.avoidedSeparateTripConfirmed ? " · Separate trip explicitly confirmed as avoided" : ""}</p>
                   <small>{decision.decidedByLabel} · {decision.decidedLabel}</small>
                 </div>
               </li>

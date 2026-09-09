@@ -29,7 +29,7 @@ describe("bid-request portfolio presenter", () => {
     const fixture = buildNorthlinePresentationFixture();
     const model = buildListModel(fixture, session, "estimates");
 
-    expect(model.page.title).toBe("Bid requests");
+    expect(model.page.title).toBe("Quote requests");
     expect(model.table.rows).toHaveLength(fixture.estimateRequests.length);
     expect(model.table.rows.every((row) => /^\/app\/work-orders\/[^?]+\?view=service#bid-requests$/.test(row.href))).toBe(true);
     expect(new Set(model.table.rows.map((row) => row.href.split("#")[0])).size).toBeLessThan(model.table.rows.length);

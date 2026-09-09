@@ -29,7 +29,7 @@ export async function POST(
       context.repository.getEstimateRequest(context.session.organizationId, estimateId),
     ]);
     if (!workOrder || !estimateRequest || estimateRequest.workOrderId !== workOrder.id) {
-      throw new OpsDomainError("NOT_FOUND", "Bid request was not found on this work order.");
+      throw new OpsDomainError("NOT_FOUND", "Quote request was not found on this work order.");
     }
     await assertStoreInSessionScope(context.session, workOrder.storeId);
     const formData = await request.formData();
@@ -37,7 +37,7 @@ export async function POST(
     if (operation === "reopen") {
       const expectedRevision = Number(formText(formData, "expectedRevision", { required: true, max: 12 }));
       if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
-        throw new OpsDomainError("VALIDATION", "Bid revision is invalid.");
+        throw new OpsDomainError("VALIDATION", "Quote revision is invalid.");
       }
       await reopenEstimateSelection(
         { repository: context.repository },
@@ -57,7 +57,7 @@ export async function POST(
     if (operation === "withdraw") {
       const expectedRevision = Number(formText(formData, "expectedRevision", { required: true, max: 12 }));
       if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
-        throw new OpsDomainError("VALIDATION", "Bid revision is invalid.");
+        throw new OpsDomainError("VALIDATION", "Quote revision is invalid.");
       }
       await withdrawEstimate(
         { repository: context.repository },
@@ -74,10 +74,10 @@ export async function POST(
         `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service&updated=estimate-withdrawn#bid-requests`,
       );
     }
-    if (operation !== "select") throw new OpsDomainError("VALIDATION", "Choose a supported bid decision.");
+    if (operation !== "select") throw new OpsDomainError("VALIDATION", "Choose a supported quote decision.");
     const expectedRevision = Number(formText(formData, "expectedRevision", { required: true, max: 12 }));
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
-      throw new OpsDomainError("VALIDATION", "Bid revision is invalid.");
+      throw new OpsDomainError("VALIDATION", "Quote revision is invalid.");
     }
     await selectEstimate(
       { repository: context.repository },

@@ -143,8 +143,8 @@ describe("demo package switch", () => {
 
     expect(accountabilityMarkup).toContain("Choose the vendor");
     expect(accountabilityMarkup).not.toContain("Internal maintenance");
-    expect(accountabilityMarkup).not.toContain("Request bids first");
+    expect(accountabilityMarkup).not.toContain("Request quotes first");
     expect(accountabilityMarkup).not.toContain("Not-to-exceed amount");
-    expect(completeMarkup).toContain("Request bids first");
+    expect(completeMarkup).toContain("Request quotes first");
   });
 });

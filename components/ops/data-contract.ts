@@ -21,6 +21,9 @@ export interface OperatorSession {
   regionIds?: string[];
   storeIds?: string[];
   permissions?: string[];
+  /** Server-resolved organization policy; UI visibility mirrors command authorization. */
+  effectiveCapabilities?: string[];
+  capabilityWarnings?: string[];
   /** Visible showcase packaging only; production entitlements remain server-enforced separately. */
   demoEdition?: DemoEdition;
 }
@@ -328,6 +331,9 @@ export interface ActionItemViewModel {
   description: string;
   categoryLabel: string;
   attentionType?: "service_record" | "follow_up" | "vendor_task";
+  attentionLane?: "mine" | "team" | "waiting" | "upcoming";
+  attentionGroup?: "work_vendor" | "completion" | "service_record" | "financial" | "vendor_relationship";
+  sourceCount?: number;
   reasonLabel?: string;
   storeLabel?: string;
   recordLabel?: string;
@@ -698,6 +704,7 @@ export interface EstimateRequestComparisonViewModel {
   respondedLabel?: string;
   decisionLabel?: string;
   latestProposal?: EstimateProposalViewModel;
+  previousProposals?: EstimateProposalViewModel[];
   canSelect: boolean;
   canWithdraw: boolean;
   canReopen: boolean;

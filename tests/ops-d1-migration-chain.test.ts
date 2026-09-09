@@ -22,7 +22,7 @@ describe("D1 migration chain", () => {
       .sort();
 
     try {
-      expect(migrations).toHaveLength(44);
+      expect(migrations).toHaveLength(45);
       for (const migration of migrations) {
         database.exec("BEGIN");
         try {

@@ -1,4 +1,4 @@
-import type { JobRun, NotificationRecipient, NotificationRule, OutboxMessage, PmOccurrence, PmPlan, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
+import type { JobRun, NotificationRecipient, NotificationRule, OrganizationWorkflowPolicy, OutboxMessage, PmOccurrence, PmPlan, RoleCapabilityOverride, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
 import {
   NORTHLINE_AS_OF,
@@ -146,7 +146,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
     ops_equipment_templates: "equipmentTemplates", ops_component_templates: "componentTemplates",
     ops_stores: "stores", ops_users: "users", ops_memberships: "memberships",
-    ops_scope_grants: "scopeGrants", ops_vendors: "vendors", ops_vendor_specialties: "vendorSpecialties",
+    ops_scope_grants: "scopeGrants", ops_role_capability_overrides: "roleCapabilityOverrides", ops_workflow_policies: "workflowPolicies", ops_vendors: "vendors", ops_vendor_specialties: "vendorSpecialties",
     ops_vendor_reminders: "vendorReminders",
     ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
@@ -189,6 +189,8 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_stores") { row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.locationPolicyEnabled = Boolean(row.locationPolicyEnabled); delete row.aliasesJson; delete row.searchText; }
   if (table === "ops_vendors") { row.preferred = Boolean(row.preferred); delete row.searchText; }
   if (table === "ops_notification_rules") row.emailEnabled = Boolean(row.emailEnabled);
+  if (table === "ops_role_capability_overrides") row.enabled = Boolean(row.enabled);
+  if (table === "ops_workflow_policies") { row.autoCloseRoutineAfterVerification = Boolean(row.autoCloseRoutineAfterVerification); row.appliesToActiveWork = Boolean(row.appliesToActiveWork); }
   if (table === "ops_vendor_specialties") { row.searchAliases = JSON.parse(String(row.searchAliasesJson ?? "[]")); delete row.searchAliasesJson; }
   if (table === "ops_vendor_qualifications") { row.pmWork = Boolean(row.pmWork); row.emergencyResponse = Boolean(row.emergencyResponse); row.warrantyWork = Boolean(row.warrantyWork); row.afterHours = Boolean(row.afterHours); if (row.maximumJobAmountMinor !== undefined) row.maximumJobAmount = { amountMinor: row.maximumJobAmountMinor, currency: row.currency ?? "USD" }; delete row.maximumJobAmountMinor; delete row.currency; }
   if (table === "ops_vendor_compliance_documents") row.blocking = Boolean(row.blocking);
@@ -302,7 +304,7 @@ function assertEstimateRequestUniqueness(rows: Array<Record<string, unknown>>) {
     }
     if (row.status === "selected") {
       const key = `${String(row.organizationId)}:${String(row.workOrderId)}`;
-      if (selected.has(key)) throw new Error("Work order already has a selected vendor bid");
+      if (selected.has(key)) throw new Error("Work order already has a selected vendor quote");
       selected.add(key);
     }
   }
@@ -447,6 +449,10 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listNotificationRecipients(organizationId: OpsId, role: NotificationRule["recipientRole"], scope?: { storeId: OpsId; regionId?: OpsId }): Promise<NotificationRecipient[]> { return clone(this.fixture.memberships.filter((membership) => membership.organizationId === organizationId && membership.role === role && membership.status === "active").filter((membership) => !scope || this.fixture.scopeGrants.some((grant) => grant.organizationId === organizationId && grant.membershipId === membership.id && (grant.scopeKind === "organization" && grant.scopeId === organizationId || grant.scopeKind === "store" && grant.scopeId === scope.storeId || grant.scopeKind === "region" && grant.scopeId === scope.regionId))).flatMap((membership) => { const user = this.fixture.users.find((candidate) => candidate.id === membership.userId && candidate.status === "active"); return user ? [{ membershipId: membership.id, userId: user.id, email: user.email, displayName: user.displayName, role }] : []; })); }
   async getMembership(organizationId: OpsId, membershipId: OpsId) { return clone(this.fixture.memberships.find((row) => row.organizationId === organizationId && row.id === membershipId) ?? null); }
   async listScopeGrantsForMembership(organizationId: OpsId, membershipId: OpsId) { return clone(this.fixture.scopeGrants.filter((row) => row.organizationId === organizationId && row.membershipId === membershipId).sort((left, right) => left.scopeKind.localeCompare(right.scopeKind) || left.scopeId.localeCompare(right.scopeId) || left.id.localeCompare(right.id))); }
+  async listRoleCapabilityOverrides(organizationId: OpsId): Promise<RoleCapabilityOverride[]> { return clone((this.fixture.roleCapabilityOverrides ?? []).filter((row) => row.organizationId === organizationId).sort((a, b) => a.role.localeCompare(b.role) || a.capability.localeCompare(b.capability))); }
+  async upsertRoleCapabilityOverride(input: Parameters<OpsRepository["upsertRoleCapabilityOverride"]>[0]) { const candidate = clone(this.fixture); candidate.roleCapabilityOverrides ??= []; const existing = candidate.roleCapabilityOverrides.find((row) => row.organizationId === input.organizationId && row.role === input.role && row.capability === input.capability); if (existing) Object.assign(existing, { enabled: input.enabled, updatedByMembershipId: input.updatedByMembershipId, updatedByName: input.updatedByName, updatedAt: input.occurredAt }); else candidate.roleCapabilityOverrides.push({ id: input.id, organizationId: input.organizationId, role: input.role, capability: input.capability, enabled: input.enabled, updatedByMembershipId: input.updatedByMembershipId, updatedByName: input.updatedByName, createdAt: input.occurredAt, updatedAt: input.occurredAt }); this.fixture = candidate; }
+  async getActiveWorkflowPolicy(organizationId: OpsId): Promise<OrganizationWorkflowPolicy | null> { return clone((this.fixture.workflowPolicies ?? []).filter((row) => row.organizationId === organizationId && row.status === "active").sort((a, b) => b.version - a.version)[0] ?? null); }
+  async listWorkflowPolicies(organizationId: OpsId): Promise<OrganizationWorkflowPolicy[]> { return clone((this.fixture.workflowPolicies ?? []).filter((row) => row.organizationId === organizationId).sort((a, b) => b.version - a.version)); }
   async getRequest(organizationId: OpsId, requestId: OpsId) { return clone(this.fixture.requests.find((row) => row.organizationId === organizationId && row.id === requestId) ?? null); }
   async listRequestImpactAssessments(organizationId: OpsId, requestId: OpsId): Promise<RequestImpactAssessment[]> { return clone(this.fixture.requestImpactAssessments.filter((row) => row.organizationId === organizationId && row.requestId === requestId).sort((left, right) => left.assessedAt.localeCompare(right.assessedAt) || left.id.localeCompare(right.id))); }
   async getWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.workOrders.find((row) => row.organizationId === organizationId && row.id === workOrderId) ?? null); }
@@ -513,6 +519,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async getIssuance(organizationId: OpsId, issuanceId: OpsId) { return clone(this.fixture.issuances.find((row) => row.organizationId === organizationId && row.id === issuanceId) ?? null); }
   async getEstimateRequest(organizationId: OpsId, estimateRequestId: OpsId) { return clone(this.fixture.estimateRequests.find((row) => row.organizationId === organizationId && row.id === estimateRequestId) ?? null); }
   async getLatestEstimateProposal(organizationId: OpsId, estimateRequestId: OpsId) { return clone(this.fixture.estimateProposals.filter((row) => row.organizationId === organizationId && row.requestId === estimateRequestId).sort((a, b) => b.revision - a.revision || b.submittedAt.localeCompare(a.submittedAt) || b.id.localeCompare(a.id)).at(0) ?? null); }
+  async listEstimateProposalsForRequest(organizationId: OpsId, estimateRequestId: OpsId) { return clone(this.fixture.estimateProposals.filter((row) => row.organizationId === organizationId && row.requestId === estimateRequestId).sort((a, b) => b.revision - a.revision || b.submittedAt.localeCompare(a.submittedAt) || b.id.localeCompare(a.id))); }
   async listEstimateRequestsForWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.estimateRequests.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt) || b.id.localeCompare(a.id))); }
   async getVisit(organizationId: OpsId, visitId: OpsId) { return clone(this.fixture.visits.find((row) => row.organizationId === organizationId && row.id === visitId) ?? null); }
   async getSiteVisitWorkOrderById(organizationId: OpsId, siteVisitWorkOrderId: OpsId): Promise<SiteVisitWorkOrder | null> { return clone(this.fixture.siteVisitWorkOrders.find((row) => row.organizationId === organizationId && row.id === siteVisitWorkOrderId) ?? null); }
@@ -646,6 +653,15 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.createdFrom || row.createdAt >= query.createdFrom)
         && (!query.createdTo || row.createdAt < query.createdTo)
         && (!query.heldOnly || activeHeldWork.has(row.id))
+        && (!query.heldReviewDeadlineTo || (this.fixture.workOrderVisitHolds ?? []).some((hold) => hold.organizationId === scope.organizationId && hold.workOrderId === row.id && hold.status === "active" && hold.deadlineAt <= query.heldReviewDeadlineTo!))
+        && (!query.heldConfirmedOpportunityAfter || (this.fixture.serviceAppointments ?? []).some((appointment) => {
+          if (appointment.organizationId !== scope.organizationId || appointment.status !== "confirmed" || appointment.startsAt < query.heldConfirmedOpportunityAfter!) return false;
+          const scheduled = this.fixture.workOrders.find((candidate) => candidate.organizationId === scope.organizationId && candidate.id === appointment.workOrderId);
+          const assignment = this.fixture.assignments.find((candidate) => candidate.organizationId === scope.organizationId && candidate.id === appointment.assignmentId);
+          const hold = (this.fixture.workOrderVisitHolds ?? []).find((candidate) => candidate.organizationId === scope.organizationId && candidate.workOrderId === row.id && candidate.status === "active");
+          return Boolean(scheduled && scheduled.id !== row.id && scheduled.storeId === row.storeId && scheduled.categoryKey && scheduled.categoryKey === row.categoryKey && scheduled.status === "scheduled" && assignment?.kind === "outside_vendor" && assignment.status === "accepted" && appointment.startsAt <= (hold?.deadlineAt ?? ""));
+        }))
+        && (!query.upcomingAppointmentAfter || (this.fixture.serviceAppointments ?? []).some((appointment) => appointment.organizationId === scope.organizationId && appointment.workOrderId === row.id && appointment.status === "confirmed" && appointment.startsAt >= query.upcomingAppointmentAfter!))
         && (!query.heldStoreGroup || query.heldStoreGroup !== "multiple" || (heldCountByStore.get(row.storeId) ?? 0) >= 2);
     }).map((row) => workOrderRow(this.fixture, row)).filter((row) => !search || normalize([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName].filter(Boolean).join(" ")).includes(search)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.number.localeCompare(b.number));
     return page(rows, query);
@@ -672,8 +688,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     const reviewVisitIds = new Set(this.fixture.exceptions.filter((exception) => exception.organizationId === scope.organizationId && exception.status !== "resolved" && exception.visitId).map((exception) => exception.visitId!));
     const linkedVisitIds = new Set(this.fixture.siteVisitWorkOrders.filter((link) => link.organizationId === scope.organizationId).map((link) => link.visitId));
     const scopedWorkIds = new Set(this.fixture.workOrders.filter((work) => storeAllowed(this.fixture, scope, work.storeId) && (!query.storeId || work.storeId === query.storeId)).map((work) => work.id));
-    const upcoming = (this.fixture.serviceAppointments ?? []).filter((appointment) => appointment.organizationId === scope.organizationId && appointment.status === "confirmed" && appointment.startsAt >= query.now && scopedWorkIds.has(appointment.workOrderId))
-      .filter((appointment) => !query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.id === appointment.assignmentId && assignment.vendorId === query.vendorId)).length;
+    const upcoming = new Set((this.fixture.serviceAppointments ?? []).filter((appointment) => appointment.organizationId === scope.organizationId && appointment.status === "confirmed" && appointment.startsAt >= query.now && scopedWorkIds.has(appointment.workOrderId))
+      .filter((appointment) => !query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.id === appointment.assignmentId && assignment.vendorId === query.vendorId)).map((appointment) => appointment.workOrderId)).size;
     return { upcoming, active: visits.filter((visit) => visit.status === "active").length, completed: visits.filter((visit) => visit.status !== "active").length, needsReview: visits.filter((visit) => !visit.workOrderId && !linkedVisitIds.has(visit.id) || reviewVisitIds.has(visit.id)).length, withoutWorkOrder: visits.filter((visit) => !visit.workOrderId && !linkedVisitIds.has(visit.id)).length };
   }
 
@@ -769,7 +785,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       nte: snapshot.nte,
       billingInstruction: snapshot.billingInstruction ?? `Reference operator work order ${snapshot.workOrderNumber ?? workOrder.number} on all service tickets and invoices.`,
       issuedAt: issuance.issuedAt,
-      latestResponse: response ? { response: response.response, responderName: response.responderName, proposedAt: response.proposedAt, message: response.message, respondedAt: response.respondedAt } : undefined,
+      latestResponse: response ? { id: response.id, response: response.response, responderName: response.responderName, proposedAt: response.proposedAt, message: response.message, respondedAt: response.respondedAt } : undefined,
     };
   }
 

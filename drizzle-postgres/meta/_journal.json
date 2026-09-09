@@ -274,6 +274,13 @@
       "when": 1788911297828,
       "tag": "0038_lovely_sumo",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788921350971,
+      "tag": "0039_skinny_viper",
+      "breakpoints": true
     }
   ]
 }

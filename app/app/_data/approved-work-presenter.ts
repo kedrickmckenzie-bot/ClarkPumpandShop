@@ -435,11 +435,11 @@ export function buildApprovedWorkPortfolio(
           : `/app/work-orders/${encodeURIComponent(match.workOrder.id)}?view=service`,
         visitLinkLabel: canOpenVisitList ? "Open confirmed visit" : "Open scheduled work order",
         plannedForReview: source.hold.plannedReviewAppointmentId === match.appointment.id,
-        planAction: roleCan(session.role, "issue_work_order")
+        planAction: roleCan(session, "issue_work_order")
           ? `/api/ops/work-orders/${encodeURIComponent(source.workOrder.id)}/visit-hold/appointment-plan`
           : undefined,
-        planReturnTo: roleCan(session.role, "issue_work_order") ? matchReturnTo : undefined,
-        expectedHoldVersion: roleCan(session.role, "issue_work_order") ? source.hold.version : undefined,
+        planReturnTo: roleCan(session, "issue_work_order") ? matchReturnTo : undefined,
+        expectedHoldVersion: roleCan(session, "issue_work_order") ? source.hold.version : undefined,
       };
     });
     const item: ApprovedWorkItemViewModel = {
@@ -502,7 +502,7 @@ export function buildApprovedWorkPortfolio(
         ? hrefWithQuery("/app/work-orders", { ...rowFilters, matchStore: store.id })
         : undefined,
       storeHref: `/app/stores/${encodeURIComponent(store.id)}`,
-      sendTogetherHref: roleCan(session.role, "issue_work_order")
+      sendTogetherHref: roleCan(session, "issue_work_order")
         ? hrefWithQuery("/app/store-sweeps/new", {
             store: store.id,
             workOrder: firstVisibleWorkOrderId,
@@ -535,7 +535,7 @@ export function buildApprovedWorkPortfolio(
     confirmedOpportunityItemCount,
     confirmedOpportunityMatchCount,
     confirmedOpportunityStoreCount,
-    canSendTogether: roleCan(session.role, "issue_work_order"),
+    canSendTogether: roleCan(session, "issue_work_order"),
     summaryLinks: {
       all: hrefWithQuery("/app/work-orders", activeFilterValues(options, { storeGroup: undefined, reviewWindow: undefined, opportunity: undefined })),
       multipleStores: hrefWithQuery("/app/work-orders", activeFilterValues(options, { storeGroup: "multiple", reviewWindow: undefined, opportunity: undefined })),

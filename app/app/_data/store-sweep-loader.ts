@@ -63,7 +63,7 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string, requested
   ]);
   const planningBaseline = new Date(Math.max(Date.parse(fixture.asOf), Date.now())).toISOString();
   const returnHref = approvedWorkReturnHref(requestedReturnTo);
-  if (!roleCan(session.role, "issue_work_order")) notFound();
+  if (!roleCan(session, "issue_work_order")) notFound();
   const visibleStores = fixture.stores.filter((store) => {
     if (store.organizationId !== session.organizationId) return false;
     if (session.storeIds?.length && !session.storeIds.includes(store.id)) return false;

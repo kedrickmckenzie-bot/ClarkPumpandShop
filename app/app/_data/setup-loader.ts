@@ -37,7 +37,7 @@ function storeAllowed(session: OperatorSession, store: Store) {
 
 async function setupContext(capability: OperatorCapability) {
   const session = await loadOperatorSession();
-  if (!roleCan(session.role, capability)) notFound();
+  if (!roleCan(session, capability)) notFound();
   const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
   return { session, fixture };
 }
@@ -343,8 +343,8 @@ export async function loadComponentDetailModel(
       event.organizationId === session.organizationId &&
       (event.removedComponentId === component.id || event.installedComponentId === component.id),
   );
-  const canSetup = roleCan(session.role, "setup_equipment");
-  const canCreateWork = roleCan(session.role, "create_work_order");
+  const canSetup = roleCan(session, "setup_equipment");
+  const canCreateWork = roleCan(session, "create_work_order");
   const childRows: TableRowViewModel[] = children.map((child) => {
     const childWork = fixture.workOrders.filter(
       (work) => work.organizationId === session.organizationId && work.componentId === child.id,

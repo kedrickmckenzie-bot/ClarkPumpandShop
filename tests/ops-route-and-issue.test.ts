@@ -178,7 +178,7 @@ describe("atomic vendor routing and issuance", () => {
       await routeInput(routed.repository, routedWork, SUMMIT, 0, "b"),
     )).rejects.toMatchObject({
       code: "CONFLICT",
-      message: "Open bid requests must be selected or withdrawn before service work can be issued",
+      message: "Open quote requests must be selected or withdrawn before service work can be issued",
     });
     expect(routed.repository.snapshot()).toEqual(beforeRoutedIssue);
 
@@ -210,7 +210,7 @@ describe("atomic vendor routing and issuance", () => {
       actor: facilitiesActor,
     })).rejects.toMatchObject({
       code: "CONFLICT",
-      message: "Open bid requests must be selected or withdrawn before service work can be issued",
+      message: "Open quote requests must be selected or withdrawn before service work can be issued",
     });
     expect(direct.repository.snapshot()).toEqual(beforeDirectIssue);
   });

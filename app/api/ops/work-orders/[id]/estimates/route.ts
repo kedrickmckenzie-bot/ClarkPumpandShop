@@ -38,10 +38,10 @@ export async function POST(
     const kind = formText(formData, "kind", { required: true, max: 40 }) as EstimateRequestKind;
     const channel = formText(formData, "channel", { required: true, max: 20 }) as EstimateRequestChannel;
     if (!requestKinds.has(kind) || !requestChannels.has(channel)) {
-      throw new OpsDomainError("VALIDATION", "Choose a supported bid-request delivery channel.");
+      throw new OpsDomainError("VALIDATION", "Choose a supported quote-request delivery channel.");
     }
     const dueAt = optionalIsoDate(formText(formData, "dueAt", { required: true, max: 40 }));
-    if (!dueAt) throw new OpsDomainError("VALIDATION", "Bid response due date is required.");
+    if (!dueAt) throw new OpsDomainError("VALIDATION", "Quote response due date is required.");
     const rawToken = createRawToken();
     const tokenHash = await sha256Hex(rawToken);
     const standardExpiry = Date.now() + 30 * 86_400_000;

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { OperatorRole } from "@/components/ops/data-contract";
+import { roleCan, type OperatorCapability } from "@/components/ops/role-policy";
 import { loadOperatorSession } from "@/app/app/_data/operator-loader";
 import { OpsDomainError } from "@/lib/ops/commands";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
@@ -33,13 +34,16 @@ export async function assertActiveOperatorMembership(
   return membership;
 }
 
-export async function getOpsRequestContext(allowedRoles: readonly OperatorRole[]) {
+export async function getOpsRequestContext(allowedRoles: readonly OperatorRole[], requiredCapability?: OperatorCapability) {
   const session = await loadOperatorSession();
   if (!allowedRoles.includes(session.role)) {
     throw new OpsDomainError("FORBIDDEN", "Your current role cannot perform this action.");
   }
   const repository = await getServerOpsRepository();
   const membership = await assertActiveOperatorMembership(repository, session);
+  if (requiredCapability && !roleCan(session, requiredCapability)) {
+    throw new OpsDomainError("FORBIDDEN", "This maintenance responsibility is not enabled for your role.");
+  }
   const actor: ActorContext = {
     actorType: "user",
     actorId: membership.id,
