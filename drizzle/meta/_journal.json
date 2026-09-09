@@ -302,6 +302,13 @@
       "when": 1788904787977,
       "tag": "0042_loving_power_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1788911848124,
+      "tag": "0043_fluffy_nomad",
+      "breakpoints": true
     }
   ]
 }

@@ -2004,6 +2004,14 @@ function buildFixture(): OpsFixture {
     occurredAt: assessment.assessedAt,
     payloadJson: JSON.stringify({ assessmentId: assessment.id, storeId: assessment.storeId, assessmentKind: assessment.assessmentKind, reviewDisposition: assessment.reviewDisposition, confidence: assessment.confidence, source: assessment.source, estimateCaveat: "Exposure and downtime estimates are not verified losses" }),
   }));
+  // The presentation data uses a real active membership as the durable
+  // customer-side owner. Labels remain useful display projections, but are
+  // never the only identity carried by a seeded work order.
+  workOrders.forEach((workOrder) => {
+    workOrder.internalAccountableType = "membership";
+    workOrder.internalAccountableId = "membership-northline-facilities";
+    workOrder.internalAccountableParty = "Jordan Lee";
+  });
   workOrders.forEach((workOrder) => addAudit({ id: `audit-source-work-order-${workOrder.id}`, organizationId: organization.id, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.created", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: workOrder.createdAt, payloadJson: JSON.stringify({ storeId: workOrder.storeId, requestId: workOrder.requestId }) }));
   assignments.forEach((assignment) => addAudit({ id: `audit-source-assignment-${assignment.id}`, organizationId: organization.id, aggregateType: "work_order_assignment", aggregateId: assignment.id, eventType: "work_order.assigned", actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: assignment.assignedAt, payloadJson: JSON.stringify({ workOrderId: assignment.workOrderId, kind: assignment.kind, vendorId: assignment.vendorId, internalMembershipId: assignment.internalMembershipId }) }));
   issuances.forEach((issuance) => addAudit({ id: `audit-source-issuance-${issuance.id}`, organizationId: organization.id, aggregateType: "work_order", aggregateId: issuance.workOrderId, eventType: `work_order.issued.r${issuance.revision}`, actorType: "user", actorId: "membership-northline-facilities", actorName: "Jordan Lee", occurredAt: issuance.issuedAt, payloadJson: JSON.stringify({ issuanceId: issuance.id, assignmentId: issuance.assignmentId, revision: issuance.revision, channel: issuance.channel }) }));

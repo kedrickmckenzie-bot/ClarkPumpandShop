@@ -656,7 +656,7 @@ export function WorkOrderCase({
             </p>
           </div>
           <div className={styles.accountabilityGrid}>
-            <div><span><UserRound aria-hidden="true" size={16} />Internal owner</span><strong>{canonicalCase.internalAccountableParty}</strong></div>
+            <div><span><UserRound aria-hidden="true" size={16} />Internal owner</span><strong>{canonicalCase.internalAccountableParty}<small>{canonicalCase.internalAccountabilityStructured ? canonicalCase.internalAccountableType === "team" ? "Persisted team" : "Persisted membership" : "Legacy label — assign a persisted owner"}</small></strong></div>
             <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Next action</span><strong>{canonicalCase.primaryNextAction.label}<small>{canonicalCase.nextActionOwner}</small></strong></div>
             <div><span><Clock3 aria-hidden="true" size={16} />Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}<small>{canonicalCase.deadlinePolicy}</small></strong></div>
             <div><span><ShieldAlert aria-hidden="true" size={16} />Escalation</span><strong>{canonicalCase.escalationDestination}<small>{canonicalCase.escalationTrigger}</small></strong></div>

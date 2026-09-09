@@ -38,6 +38,21 @@ describe("work-order case stage projector", () => {
     }
   });
 
+  it("invalidates an earlier verification when a newer linked visit has not recorded an outcome yet", () => {
+    const view = buildWorkOrderCase({
+      now: NOW,
+      workOrder: { ...wo("wo-new-visit", "accepted"), status: "in_progress" },
+      siteVisitWorkOrders: [
+        { id: "verified-cycle", visitId: "visit-1", workOrderId: "wo-new-visit", linkedAt: "2026-08-10T10:00:00.000Z", outcome: "completed", outcomeRecordedAt: "2026-08-10T11:00:00.000Z" },
+        { id: "current-cycle", visitId: "visit-2", workOrderId: "wo-new-visit", linkedAt: "2026-08-20T10:00:00.000Z" },
+      ],
+      visits: [{ id: "visit-2", status: "active", checkedInAt: "2026-08-20T10:00:00.000Z" }],
+      verifications: [{ id: "old-verification", workOrderId: "wo-new-visit", siteVisitWorkOrderId: "verified-cycle", outcome: "completed", decision: "verified", decidedByName: "Earlier reviewer", decidedAt: "2026-08-10T12:00:00.000Z" }],
+    });
+    expect(view.plainLanguageState).toContain("onsite");
+    expect(view.operatingCondition.id).not.toBe("verified_operating");
+  });
+
   it("does not turn technical PM completion into an operating observation", () => {
     const view = buildWorkOrderCase({
       now: NOW, workOrder: { ...wo("wo-pm", "accepted"), status: "completed_pending_review" },
@@ -56,13 +71,16 @@ describe("work-order case stage projector", () => {
       invoiceLineAllocations: [{ invoiceLineId: "line-1", workOrderId: "wo-finance", amount: { amountMinor: 25_000, currency: "USD" } }],
       invoiceExceptions: [
         { invoiceId: "invoice-1", invoiceLineId: "line-1", status: "open", amount: { amountMinor: 5_000, currency: "USD" } },
-        { invoiceId: "invoice-1", invoiceLineId: "line-2", status: "resolved", amount: { amountMinor: 8_000, currency: "USD" } },
+        { invoiceId: "invoice-1", invoiceLineId: "line-2", status: "open", amount: { amountMinor: 8_000, currency: "USD" } },
         { invoiceId: "invoice-1", status: "open", amount: { amountMinor: 90_000, currency: "USD" } },
       ],
+      invoiceAdjustments: [{ invoiceId: "invoice-1", amount: { amountMinor: -12_500, currency: "USD" } }],
     });
     expect(view.financialReview.label).toBe("Invoice evidence needs review");
     expect(view.financialReview.facts).toContainEqual({ label: "Linked invoice allocation", value: "$250.00" });
     expect(view.financialReview.facts).toContainEqual({ label: "Open attributed dispute", value: "$50.00" });
+    expect(view.financialReview.facts).toContainEqual({ label: "Shared invoice adjustments", value: "-$125.00 · invoice-level, not attributed to this job" });
+    expect(view.financialReview.detail).toContain("another invoice line or job");
     expect(view.financialReview.detail).toContain("not attributed to this work order");
   });
 

@@ -613,6 +613,8 @@ export const opsWorkOrders = pgTable("ops_work_orders", {
   status: text("status").notNull(),
   version: integer("version").notNull().default(0),
   internalAccountableParty: text("internal_accountable_party").notNull().default("Facilities coordinator"),
+  internalAccountableType: text("internal_accountable_type"),
+  internalAccountableId: text("internal_accountable_id"),
   accountableParty: text("accountable_party").notNull(),
   nextAction: text("next_action").notNull(),
   dueAt: instant("due_at"),
@@ -635,6 +637,7 @@ export const opsWorkOrders = pgTable("ops_work_orders", {
   index("idx_ops_work_orders_org_status_due").on(table.organizationId, table.status, table.dueAt),
   index("idx_ops_work_orders_org_store_created").on(table.organizationId, table.storeId, table.createdAt),
   index("idx_ops_work_orders_org_category_created").on(table.organizationId, table.categoryKey, table.createdAt),
+  check("chk_ops_work_orders_internal_owner", sql`(${table.internalAccountableType} IS NULL AND ${table.internalAccountableId} IS NULL) OR (${table.internalAccountableType} IN ('membership', 'team') AND length(trim(${table.internalAccountableId})) > 0)`),
   foreignKey({
     name: "fk_ops_work_orders_org",
     columns: [table.organizationId],

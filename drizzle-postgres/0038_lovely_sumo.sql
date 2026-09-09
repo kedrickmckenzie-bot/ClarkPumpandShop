@@ -1,0 +1,3 @@
+ALTER TABLE "ops_work_orders" ADD COLUMN "internal_accountable_type" text;--> statement-breakpoint
+ALTER TABLE "ops_work_orders" ADD COLUMN "internal_accountable_id" text;--> statement-breakpoint
+ALTER TABLE "ops_work_orders" ADD CONSTRAINT "chk_ops_work_orders_internal_owner" CHECK (("ops_work_orders"."internal_accountable_type" IS NULL AND "ops_work_orders"."internal_accountable_id" IS NULL) OR ("ops_work_orders"."internal_accountable_type" IN ('membership', 'team') AND length(trim("ops_work_orders"."internal_accountable_id")) > 0));

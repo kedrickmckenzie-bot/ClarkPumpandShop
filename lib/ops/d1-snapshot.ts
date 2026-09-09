@@ -389,6 +389,8 @@ export async function loadOpsFixtureSnapshotFromD1(
       taxonomyNodeId: optional(row.taxonomyNodeId),
       assetId: optional(row.assetId),
       componentId: optional(row.componentId),
+      internalAccountableType: optional(row.internalAccountableType),
+      internalAccountableId: optional(row.internalAccountableId),
       dueAt: optional(row.dueAt),
       escalationTo: optional(row.escalationTo),
       nte: row.nteAmountMinor == null ? undefined : { amountMinor: row.nteAmountMinor, currency: row.nteCurrency ?? "USD" },

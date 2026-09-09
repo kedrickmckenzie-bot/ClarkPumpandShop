@@ -252,8 +252,8 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
   const requestedKeys = Object.entries(searchParams).filter(([, value]) => Boolean(Array.isArray(value) ? value[0] : value)).map(([key]) => key);
   const supportedQueryKeys: Partial<Record<ListRouteId, ReadonlySet<string>>> = {
     requests: new Set(["q", "page", "status", "store", "selected"]),
-    "work-orders": new Set(["q", "page", "status", "store", "vendor", "region", "category", "asset", "component", "hasCost", "costFrom", "costMonth", "selected"]),
-    visits: new Set(["q", "page", "status", "store", "vendor", "selected"]),
+    "work-orders": new Set(["q", "page", "status", "store", "vendor", "region", "category", "asset", "component", "hasCost", "costFrom", "costMonth", "selected", "visitPlan", "storeGroup"]),
+    visits: new Set(["q", "page", "status", "store", "vendor", "review", "selected"]),
     stores: new Set(["q", "page", "selected"]),
     vendors: new Set(["q", "page", "selected"]),
   };
@@ -714,8 +714,9 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
         .map((row) => ({ id: row.id, status: row.matchStatus }));
       const invoiceLineAllocations = fixture.invoiceLineAllocations.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId);
       const lineIds = new Set(invoiceLineAllocations.map((row) => row.invoiceLineId));
-      const invoiceLines = fixture.invoiceLines.filter((row) => row.organizationId === context.session.organizationId && lineIds.has(row.id));
-      const invoiceIds = new Set(invoiceLines.map((row) => row.invoiceId));
+      const allocatedLines = fixture.invoiceLines.filter((row) => row.organizationId === context.session.organizationId && lineIds.has(row.id));
+      const invoiceIds = new Set(allocatedLines.map((row) => row.invoiceId));
+      const invoiceLines = fixture.invoiceLines.filter((row) => row.organizationId === context.session.organizationId && invoiceIds.has(row.invoiceId));
       const invoices = fixture.invoices.filter((row) => row.organizationId === context.session.organizationId && invoiceIds.has(row.id));
       return {
         invoices: invoices.length ? invoices : legacyInvoices,

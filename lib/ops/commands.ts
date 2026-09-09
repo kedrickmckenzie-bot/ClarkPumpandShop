@@ -1,5 +1,5 @@
 import type { OpsRepository, OpsStatement } from "./repository";
-import { atomicRequestMutation, atomicWorkOrderMutation, atomicWorkOrderSetMutation, persistedRequestVersion } from "./concurrency";
+import { atomicRequestMutation, atomicWorkOrderMutation, atomicWorkOrderSetMutation, persistedRequestVersion, persistedWorkOrderVersion } from "./concurrency";
 import { OpsDomainError } from "./errors";
 import { assertWorkOrderReadyForClosure } from "./work-order-verification-commands";
 import { prepareApprovalRequestForWorkOrder } from "./approval-governance";
@@ -624,7 +624,7 @@ export async function createServiceRequest(svc: OpsCommandServices, input: Creat
 export interface CreateWorkOrderInput {
   organizationId: OpsId; number?: string; storeId: OpsId; requestId?: OpsId; pmOccurrenceId?: OpsId; problem: string;
   authorizedScope?: string; categoryKey?: string; taxonomyNodeId?: OpsId; assetId?: OpsId; componentId?: OpsId;
-  priority?: WorkOrderPriority; internalAccountableParty?: string; accountableParty: string; nextAction: string; dueAt?: IsoDateTime;
+  priority?: WorkOrderPriority; accountableParty: string; nextAction: string; dueAt?: IsoDateTime;
   escalationTo?: string; nteAmountMinor?: number; currency?: string;
   repairEstimateAmountMinor?: number; repairEstimateCurrency?: string;
   estimatedServiceExtensionMonths?: number;
@@ -789,11 +789,15 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   const accountableParty = approval.request
     ? approval.request.requiredRole === "executive" ? "Executive approver" : approval.request.requiredRole === "facilities_admin" ? "Facilities administrator" : approval.request.requiredRole === "regional_manager" ? "Regional manager" : approval.request.requiredRole === "store_manager" ? "Store manager" : "Finance reviewer"
     : assignmentProjection?.accountableParty ?? required(input.accountableParty, "Accountable party");
-  const internalAccountableParty = required(input.internalAccountableParty ?? "Facilities coordinator", "Internal accountable party");
+  // New work begins with a durable team identity. The display label remains a
+  // projection for compatibility; it is not treated as proof of named staffing.
+  const internalAccountableParty = "Facilities coordination team";
+  const internalAccountableType = "team" as const;
+  const internalAccountableId = "facilities-coordination";
   const nextAction = approval.request ? "Review authorization" : assignmentProjection?.nextAction ?? required(input.nextAction, "Next action");
   const dueAt = approval.request?.dueAt ?? input.holdForVisit?.deadlineAt ?? input.dueAt ?? defaultWorkOrderDueAt(priority, now);
   const escalationTo = required(input.escalationTo ?? "Facilities director", "Escalation destination");
-  const statements: OpsStatement[] = [insert("ops_work_orders", { id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
+  const statements: OpsStatement[] = [insert("ops_work_orders", { id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
   if (input.idempotency) statements.unshift(idempotencyStatement(input.organizationId, id, now, input.idempotency));
   if (sourcePmOccurrence) {
     const sourceProgram = sourcePmOccurrence.programId
@@ -880,7 +884,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     id, organizationId: input.organizationId, number, storeId: input.storeId, requestId: input.requestId,
     problem, authorizedScope: input.authorizedScope, categoryKey: input.categoryKey,
     taxonomyNodeId: input.taxonomyNodeId, assetId: input.assetId, componentId: input.componentId,
-    priority, status, version: 0, internalAccountableParty, accountableParty, nextAction, dueAt, escalationTo,
+    priority, status, version: 0, internalAccountableParty, internalAccountableType, internalAccountableId, accountableParty, nextAction, dueAt, escalationTo,
     nte: input.nteAmountMinor === undefined ? undefined : { amountMinor: input.nteAmountMinor, currency: input.currency ?? "USD" },
     repairEstimate: input.repairEstimateAmountMinor === undefined ? undefined : { amountMinor: input.repairEstimateAmountMinor, currency: input.repairEstimateCurrency ?? "USD" },
     estimatedServiceExtensionMonths: input.estimatedServiceExtensionMonths,
@@ -2657,6 +2661,185 @@ export interface UpdateWorkOrderControlInput {
   escalationTo?: string;
   note: string;
   actor: ActorContext;
+}
+
+export type InternalAccountabilityTarget =
+  | { type: "team"; id: "facilities-coordination" }
+  | { type: "membership"; id: OpsId };
+
+export interface ReassignWorkOrderInternalAccountabilityInput {
+  organizationId: OpsId;
+  workOrderId: OpsId;
+  expectedVersion: number;
+  target: InternalAccountabilityTarget;
+  reason: string;
+  actor: ActorContext;
+}
+
+const internalAccountabilityActorRoles = new Set(["facilities_admin", "regional_manager"]);
+const internalAccountabilityOwnerRoles = new Set(["facilities_admin", "regional_manager"]);
+
+/**
+ * Reassigns the durable internal owner without pretending that the current
+ * provider owns the customer's service record. Facilities-owned tasks follow
+ * the new owner, and vendor tasks keep their vendor next action while routing
+ * their escalation back to the new internal owner.
+ */
+export async function reassignWorkOrderInternalAccountability(
+  svc: OpsCommandServices,
+  input: ReassignWorkOrderInternalAccountabilityInput,
+) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  if (input.actor.actorType !== "user" || !input.actor.actorId) {
+    throw new OpsDomainError("FORBIDDEN", "An active facilities or regional membership is required");
+  }
+  const actorMembership = await repository.getMembership(input.organizationId, input.actor.actorId);
+  if (!actorMembership || actorMembership.status !== "active" || !internalAccountabilityActorRoles.has(actorMembership.role)) {
+    throw new OpsDomainError("FORBIDDEN", "Facilities or regional access is required to reassign internal accountability");
+  }
+  const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
+  if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order not found");
+  const [workStore, actorGrants] = await Promise.all([
+    repository.getStore(input.organizationId, workOrder.storeId),
+    repository.listScopeGrantsForMembership(input.organizationId, actorMembership.id),
+  ]);
+  const actorCoversWork = actorGrants.some((grant) => (
+    (grant.scopeKind === "organization" && grant.scopeId === input.organizationId)
+    || (grant.scopeKind === "store" && grant.scopeId === workOrder.storeId)
+    || (grant.scopeKind === "region" && grant.scopeId === workStore?.regionId)
+  ));
+  if (!actorCoversWork) throw new OpsDomainError("FORBIDDEN", "This work order is outside the actor's operating scope");
+  if (terminalWorkOrderStatuses.has(workOrder.status)) {
+    throw new OpsDomainError("CONFLICT", "Closed or cancelled work does not have an active internal owner");
+  }
+  if (!Number.isInteger(input.expectedVersion) || input.expectedVersion !== persistedWorkOrderVersion(workOrder)) {
+    throw new OpsDomainError("CONFLICT", "This work order changed. Refresh before reassigning its internal owner");
+  }
+
+  let ownerName: string;
+  if (input.target.type === "team") {
+    if (input.target.id !== "facilities-coordination") {
+      throw new OpsDomainError("VALIDATION", "Choose a supported internal accountability team");
+    }
+    ownerName = "Facilities coordination team";
+  } else {
+    const membership = await repository.getMembership(input.organizationId, input.target.id);
+    if (!membership || membership.status !== "active" || !internalAccountabilityOwnerRoles.has(membership.role)) {
+      throw new OpsDomainError("FORBIDDEN", "Choose an active facilities or regional owner in this organization");
+    }
+    const grants = await repository.listScopeGrantsForMembership(input.organizationId, membership.id);
+    const coversWork = grants.some((grant) => (
+      (grant.scopeKind === "organization" && grant.scopeId === input.organizationId)
+      || (grant.scopeKind === "store" && grant.scopeId === workOrder.storeId)
+      || (grant.scopeKind === "region" && grant.scopeId === workStore?.regionId)
+    ));
+    if (!coversWork) throw new OpsDomainError("FORBIDDEN", "The selected owner does not cover this work order's store");
+    const candidates = await repository.listNotificationRecipients(
+      input.organizationId,
+      membership.role as "facilities_admin" | "regional_manager",
+    );
+    const identity = candidates.find((candidate) => candidate.membershipId === membership.id);
+    if (!identity) throw new OpsDomainError("NOT_FOUND", "The selected owner does not have an active user identity");
+    ownerName = identity.displayName;
+  }
+
+  const reason = required(input.reason, "Reassignment reason");
+  if (workOrder.internalAccountableType === input.target.type && workOrder.internalAccountableId === input.target.id) {
+    return { workOrder, ownerName, changedTaskIds: [] as string[], vendorNextActionPreserved: true };
+  }
+
+  const now = clock.now();
+  const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
+  const openTasks = tasks.filter((task) => ["open", "in_progress"].includes(task.status));
+  const previousOwnerMatches = (task: WorkflowTask) => (
+    workOrder.internalAccountableType === "membership"
+      ? task.assigneeType === "user" && task.assigneeId === workOrder.internalAccountableId
+      : workOrder.internalAccountableType === "team"
+        ? task.assigneeType === "team" && task.assigneeId === workOrder.internalAccountableId
+        : false
+  );
+  const changedTaskIds: string[] = [];
+  const projectedTasks = tasks.map((task) => {
+    if (!["open", "in_progress"].includes(task.status)) return task;
+    const followsInternalOwner = previousOwnerMatches(task)
+      || task.assigneeType === "role" && task.assigneeRole === "facilities_admin";
+    const routesVendorEscalation = task.assigneeType === "vendor";
+    if (!followsInternalOwner && !routesVendorEscalation) return task;
+    changedTaskIds.push(task.id);
+    return {
+      ...task,
+      ...(followsInternalOwner ? {
+        assigneeType: input.target.type === "membership" ? "user" as const : "team" as const,
+        assigneeId: input.target.id,
+        assigneeRole: undefined,
+        assigneeName: ownerName,
+      } : {}),
+      escalationDestination: routesVendorEscalation ? ownerName : task.escalationDestination,
+    };
+  });
+  const statements: OpsStatement[] = [{
+    sql: "UPDATE ops_work_orders SET internal_accountable_type = ?, internal_accountable_id = ?, internal_accountable_party = ? WHERE organization_id = ? AND id = ?",
+    params: [input.target.type, input.target.id, ownerName, input.organizationId, workOrder.id],
+  }];
+  for (const task of projectedTasks) {
+    const original = openTasks.find((candidate) => candidate.id === task.id);
+    if (!original || !changedTaskIds.includes(task.id)) continue;
+    statements.push(workflowTaskUpdateStatement({
+      organizationId: input.organizationId,
+      workflowTaskId: task.id,
+      patch: {
+        ...(task.assigneeType !== original.assigneeType || task.assigneeId !== original.assigneeId
+          ? { assigneeType: task.assigneeType, assigneeId: task.assigneeId, assigneeRole: null, assigneeName: task.assigneeName }
+          : {}),
+        ...(task.escalationDestination !== original.escalationDestination
+          ? { escalationDestination: task.escalationDestination }
+          : {}),
+      },
+    }));
+  }
+  statements.push(
+    buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, projectedTasks),
+    ...auditAndOutbox({
+      organizationId: input.organizationId,
+      aggregateType: "work_order",
+      aggregateId: workOrder.id,
+      eventType: "work_order.internal_accountability_reassigned",
+      actor: input.actor,
+      occurredAt: now,
+      payload: {
+        previous: {
+          type: workOrder.internalAccountableType,
+          id: workOrder.internalAccountableId,
+          name: workOrder.internalAccountableParty,
+        },
+        next: { type: input.target.type, id: input.target.id, name: ownerName },
+        reason,
+        changedTaskIds,
+        vendorNextActionPreserved: true,
+      },
+      ids,
+    }),
+  );
+  await atomicWorkOrderMutation({
+    repository,
+    workOrder,
+    now,
+    statements,
+    conflictMessage: "This work order changed. Refresh before reassigning its internal owner.",
+  });
+  return {
+    workOrder: {
+      ...workOrder,
+      version: persistedWorkOrderVersion(workOrder) + 1,
+      internalAccountableType: input.target.type,
+      internalAccountableId: input.target.id,
+      internalAccountableParty: ownerName,
+    },
+    ownerName,
+    changedTaskIds,
+    vendorNextActionPreserved: true,
+  };
 }
 
 export async function updateWorkOrderControl(svc: OpsCommandServices, input: UpdateWorkOrderControlInput) {

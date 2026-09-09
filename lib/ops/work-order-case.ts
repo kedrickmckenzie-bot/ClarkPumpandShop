@@ -100,6 +100,9 @@ export interface WorkOrderCaseView {
   /** Prominent conclusion derived from service evidence, not a manually selected lifecycle code. */
   plainLanguageState: string;
   internalAccountableParty: string;
+  internalAccountableType?: "membership" | "team";
+  internalAccountableId?: string;
+  internalAccountabilityStructured: boolean;
   nextActionOwner: string;
   /** Compatibility alias for the primary next-action owner. */
   accountableParty: string;
@@ -177,8 +180,8 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     ?? [...visits].sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt))[0];
   const hasCost = (input.costLines ?? []).some((row) => row.workOrderId === workOrder.id);
   const hasInvoices = (input.invoices ?? []).length > 0;
-  const workOutcomes = (input.siteVisitWorkOrders ?? []).filter((row) => row.workOrderId === workOrder.id && row.outcome);
-  const latestWorkOutcome = latestRecordedWorkOutcome(workOutcomes);
+  const workCycles = (input.siteVisitWorkOrders ?? []).filter((row) => row.workOrderId === workOrder.id);
+  const latestWorkOutcome = latestRecordedWorkOutcome(workCycles);
   const verifications = (input.verifications ?? []).filter((row) => row.workOrderId === workOrder.id);
   const latestVerification = applicableOutcomeVerification(verifications, latestWorkOutcome);
   const latestImpact = latest(input.impactAssessments ?? [], (row) => row.assessedAt);
@@ -404,25 +407,26 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const linkedCurrency = allocations[0]?.amount.currency ?? "USD";
   const linkedExceptions = (input.invoiceExceptions ?? []).filter((exception) => linkedInvoiceIds.has(exception.invoiceId));
   const attributedOpenExceptions = linkedExceptions.filter((exception) => exception.status === "open" && Boolean(exception.invoiceLineId && allocatedLineIds.has(exception.invoiceLineId)));
-  const unattributedOpenExceptions = linkedExceptions.filter((exception) => exception.status === "open" && (!exception.invoiceLineId || !invoiceLineIds.has(exception.invoiceLineId)));
+  const otherLineOpenExceptions = linkedExceptions.filter((exception) => exception.status === "open" && Boolean(exception.invoiceLineId && invoiceLineIds.has(exception.invoiceLineId) && !allocatedLineIds.has(exception.invoiceLineId)));
+  const invoiceLevelOpenExceptions = linkedExceptions.filter((exception) => exception.status === "open" && !exception.invoiceLineId);
   const attributedDisputedMinor = attributedOpenExceptions.reduce((sum, exception) => sum + exception.amount.amountMinor, 0);
   const linkedAdjustments = (input.invoiceAdjustments ?? []).filter((adjustment) => linkedInvoiceIds.has(adjustment.invoiceId));
-  const adjustmentMinor = linkedAdjustments.reduce((sum, adjustment) => sum + adjustment.amount.amountMinor, 0);
+  const sharedAdjustmentMinor = linkedAdjustments.reduce((sum, adjustment) => sum + adjustment.amount.amountMinor, 0);
   const realizedMinor = (input.valueEvents ?? []).filter((event) => event.category === "realized_verified" && (
     event.workOrderId === workOrder.id || Boolean(event.invoiceLineId && allocatedLineIds.has(event.invoiceLineId))
   )).reduce((sum, event) => sum + event.amount.amountMinor, 0);
-  const hasOpenReview = attributedOpenExceptions.length > 0 || unattributedOpenExceptions.length > 0 || invoiceStatuses.has("unmatched") || invoiceStatuses.has("suggested");
+  const hasOpenReview = attributedOpenExceptions.length > 0 || otherLineOpenExceptions.length > 0 || invoiceLevelOpenExceptions.length > 0 || invoiceStatuses.has("unmatched") || invoiceStatuses.has("suggested");
   const moneyLabel = (amountMinor: number, currency = linkedCurrency) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100);
   const financialFacts = hasInvoices ? [
     { label: "Linked invoice allocation", value: moneyLabel(linkedAmountMinor) },
     { label: "Open attributed dispute", value: moneyLabel(attributedDisputedMinor) },
-    { label: "Recorded adjustments", value: moneyLabel(adjustmentMinor) },
+    { label: "Shared invoice adjustments", value: sharedAdjustmentMinor ? `${moneyLabel(sharedAdjustmentMinor)} · invoice-level, not attributed to this job` : moneyLabel(0) },
     { label: "Realized verified value", value: moneyLabel(realizedMinor) },
   ] : undefined;
   const financialReview: WorkOrderCaseDimension = hasInvoices && hasOpenReview
     ? {
         id: "invoice_review", label: "Invoice evidence needs review",
-        detail: `${attributedOpenExceptions.length} attributed review flag${attributedOpenExceptions.length === 1 ? "" : "s"} remain open.${unattributedOpenExceptions.length ? ` ${unattributedOpenExceptions.length} invoice-level flag${unattributedOpenExceptions.length === 1 ? " is" : "s are"} disclosed but not attributed to this work order.` : ""} Matching does not clear review decisions.`,
+        detail: `${attributedOpenExceptions.length} review flag${attributedOpenExceptions.length === 1 ? " is" : "s are"} attributed to this work order.${otherLineOpenExceptions.length ? ` ${otherLineOpenExceptions.length} open flag${otherLineOpenExceptions.length === 1 ? " belongs" : "s belong"} to another invoice line or job and is not attributed to this work order.` : ""}${invoiceLevelOpenExceptions.length ? ` ${invoiceLevelOpenExceptions.length} invoice-level flag${invoiceLevelOpenExceptions.length === 1 ? " is" : "s are"} shared context and not attributed to this work order.` : ""} Matching does not clear review decisions.`,
         facts: financialFacts, href: `${base}?view=cost`,
       }
     : hasInvoices
@@ -432,6 +436,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
         : { id: "no_financial_evidence", label: "No financial evidence recorded", detail: "Service may proceed or close without an invoice; recorded costs remain a separate fact." };
 
   const internalAccountableParty = fullyClosed ? "No active internal owner" : workOrder.internalAccountableParty ?? "Facilities coordinator";
+  const internalAccountabilityStructured = Boolean(workOrder.internalAccountableType && workOrder.internalAccountableId);
   const nextActionOwner = fullyClosed ? "No active next action" : accountableParty || input.providerName || internalAccountableParty;
   const deadlinePolicy = dueAt
     ? "Deadline set by the current primary obligation."
@@ -479,6 +484,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     serviceSubStage: serviceSubStage ? { id: serviceSubStage, label: SERVICE_SUB_STAGE_LABELS[serviceSubStage] } : undefined,
     plainLanguageState,
     internalAccountableParty,
+    internalAccountableType: workOrder.internalAccountableType,
+    internalAccountableId: workOrder.internalAccountableId,
+    internalAccountabilityStructured,
     nextActionOwner,
     accountableParty: fullyClosed ? "No active owner" : nextActionOwner,
     primaryNextAction: stageActions[stage] ?? { label: "Open the work order", href: base },
@@ -506,7 +514,7 @@ type CaseWorkflowTask = Pick<WorkflowTask, "id" | "workOrderId" | "serviceReques
 export interface WorkOrderCaseInput {
   now: string;
   timeZone?: string;
-  workOrder: Pick<WorkOrder, "id" | "organizationId" | "number" | "storeId" | "problem" | "priority" | "status" | "internalAccountableParty" | "accountableParty" | "nextAction" | "dueAt" | "escalationTo" | "createdAt" | "closedAt">;
+  workOrder: Pick<WorkOrder, "id" | "organizationId" | "number" | "storeId" | "problem" | "priority" | "status" | "internalAccountableParty" | "internalAccountableType" | "internalAccountableId" | "accountableParty" | "nextAction" | "dueAt" | "escalationTo" | "createdAt" | "closedAt">;
   storeName?: string;
   providerName?: string;
   assignments?: Pick<WorkOrderAssignment, "id" | "kind" | "status" | "assignedAt" | "supersedesAssignmentId">[];

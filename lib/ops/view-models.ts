@@ -194,6 +194,8 @@ export interface WorkOrderListRow {
   visitCount: number;
   recordedCostMinor: number;
   currency: CurrencyCode;
+  visitHoldPosture?: "complete_using_professional_judgment" | "look_and_report";
+  visitHoldDeadlineAt?: IsoDateTime;
 }
 
 export interface ServiceAuthorizationView {

@@ -101,7 +101,15 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
     if (["q", "page"].includes(key)) return [];
     const value = first(raw);
     if (!value) return [];
-    return [{ id: key, label: labels[value] ?? sentence(value), removeHref: hrefWithFilter(route, query, key) }];
+    const label = key === "review" && value === "true"
+      ? "Needs review"
+      : key === "visitPlan" && value === "ready"
+        ? "Approved for next suitable visit"
+        : key === "storeGroup" && value === "multiple"
+          ? "Stores with 2+ approved jobs"
+          : labels[value] ?? sentence(value);
+    const removeHref = key === "visitPlan" && value === "ready" ? workTimingHref(query, false) : hrefWithFilter(route, query, key);
+    return [{ id: key, label, removeHref }];
   });
 }
 
@@ -158,6 +166,36 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
       { key: "status", value: sentence(row.status), tone: toneForStatus(row.status) },
     ],
   };
+}
+
+function heldWorkRow(row: WorkOrderListRow): TableRowViewModel {
+  const posture = row.visitHoldPosture === "look_and_report"
+    ? "Inspect and report back"
+    : "Complete during the visit if practical";
+  return {
+    id: row.id,
+    label: row.number,
+    href: `/app/work-orders/${row.id}`,
+    cells: [
+      { key: "work", value: row.number, secondary: row.problem },
+      { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName },
+      { key: "assignment", value: posture, secondary: row.vendorName ? `Current provider: ${row.vendorName}` : "Provider can be chosen when the work is sent" },
+      { key: "next", value: row.visitHoldDeadlineAt ? `Review by ${formatOperationsDate(row.visitHoldDeadlineAt)}` : "Review date not recorded", secondary: `Internal owner: ${row.internalAccountableParty}` },
+      { key: "cost", value: money(row.recordedCostMinor) },
+      { key: "status", value: "Approved for next suitable visit", tone: "info" },
+    ],
+  };
+}
+
+function workTimingHref(query: OperatorSearchParameters, ready: boolean) {
+  const excluded = new Set(["page", "selected", "visitPlan", "storeGroup", "reviewWindow", "opportunity", "matchStore"]);
+  const parameters = new URLSearchParams(Object.entries(query).flatMap(([key, raw]) => {
+    if (excluded.has(key)) return [];
+    const value = first(raw);
+    return value ? [[key, value] as [string, string]] : [];
+  }));
+  if (ready) parameters.set("visitPlan", "ready");
+  return `/app/work-orders${parameters.size ? `?${parameters}` : ""}`;
 }
 
 function requestRow(row: RequestListRow): TableRowViewModel {
@@ -245,6 +283,8 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   let contextualFilters: ListPageViewModel["filters"];
 
   if (route === "work-orders") {
+    const heldPlan = first(query.visitPlan) === "ready";
+    const heldStoreGroup = first(query.storeGroup) === "multiple" ? "multiple" as const : undefined;
     const requestedStatus = first(query.status);
     const statuses = requestedStatus === "open"
       ? ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"]
@@ -262,11 +302,17 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       hasCost: first(query.hasCost) === "true",
       costFrom: first(query.costFrom),
       costMonth: first(query.costMonth),
+      heldOnly: heldPlan,
+      heldStoreGroup,
     }), repository.getHeldWorkPortfolioSummary(scope)]);
-    result = work; rows = work.items.map(workRow); title = "Work orders"; eyebrow = "Maintenance work"; description = "Track internal and outside service from creation through visits, follow-up, and recorded cost."; placeholder = "Search number, problem, store, vendor, or category";
-    if (roleCan(session.role, "create_work_order")) primaryAction = { label: "Create work order", href: "/app/work-orders/new" };
+    result = work; rows = work.items.map(heldPlan ? heldWorkRow : workRow); title = heldPlan ? "Approved work waiting for a suitable visit" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : "Track internal and outside service from creation through visits, follow-up, and recorded cost."; placeholder = "Search number, problem, store, vendor, or category";
+    if (heldPlan && roleCan(session.role, "issue_work_order")) {
+      const currentContext = `/app/work-orders?${new URLSearchParams(paramsWithoutPage(query)).toString()}`;
+      primaryAction = { label: "Send approved jobs together", href: `/app/store-sweeps/new?returnTo=${encodeURIComponent(currentContext)}` };
+      secondaryAction = { label: "Return to all work", href: workTimingHref(query, false) };
+    } else if (roleCan(session.role, "create_work_order")) primaryAction = { label: "Create work order", href: "/app/work-orders/new" };
     if (session.role === "facilities" || session.role === "regional") {
-      secondaryAction = { label: "Send approved jobs together", href: "/app/store-sweeps/new?returnTo=%2Fapp%2Fwork-orders" };
+      if (!heldPlan) secondaryAction = { label: "Send approved jobs together", href: "/app/store-sweeps/new?returnTo=%2Fapp%2Fwork-orders" };
       metrics = [
         { id: "ready-to-bundle", label: "Approved for next suitable visit", value: String(held.approvedWorkOrders), supportingText: `${held.storesWithApprovedWork} store${held.storesWithApprovedWork === 1 ? "" : "s"} across your full operating scope`, tone: held.approvedWorkOrders ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open approved work" } },
         { id: "store-sweep-opportunities", label: "Stores with 2+ approved jobs", value: String(held.storesWithMultipleApprovedJobs), supportingText: "Portfolio-wide count; filters below apply only to the result list", tone: held.storesWithMultipleApprovedJobs ? "warning" : "positive", link: { href: "/app/work-orders?visitPlan=ready&storeGroup=multiple", label: "Review stores with multiple jobs" } },
@@ -275,8 +321,8 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
         id: "work-visit-plan",
         label: "Work timing",
         options: [
-          { value: "all", label: "All work", href: "/app/work-orders", selected: true },
-          { value: "ready", label: `Approved for next suitable visit (${held.approvedWorkOrders})`, href: "/app/work-orders?visitPlan=ready", selected: false },
+          { value: "all", label: "All work", href: workTimingHref(query, false), selected: !heldPlan },
+          { value: "ready", label: `Approved for next suitable visit (${held.approvedWorkOrders})`, href: workTimingHref(query, true), selected: heldPlan },
         ],
       }];
     }
@@ -285,12 +331,36 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     result = requests; rows = requests.items.map(requestRow); title = "Service requests"; eyebrow = "Reported issues"; description = "Review what store teams reported, then create work, escalate it, or close it without changing the original report."; placeholder = "Search problem, reporter, request, or store";
     if (roleCan(session.role, "create_request")) primaryAction = { label: "Report an issue", href: "/app/requests/new" };
   } else if (route === "visits") {
-    const visits = await repository.listVisits(scope, { ...request, search: q, status: first(query.status), storeId: first(query.store), vendorId: first(query.vendor) });
-    result = visits; rows = visits.items.map(visitRow); title = first(query.status) === "active" ? "Vendors onsite now" : "Service visits"; eyebrow = "Observed service"; description = "See who arrived, why, the evidence captured, and which visits need review—without treating presence as certified labor."; placeholder = "Search technician, vendor, store, or work order";
+    const visitContext = { storeId: first(query.store), vendorId: first(query.vendor) };
+    const [visits, visitSummary] = await Promise.all([
+      repository.listVisits(scope, { ...request, search: q, status: first(query.status), review: first(query.review) === "true", ...visitContext }),
+      repository.getVisitPortfolioSummary(scope, { ...visitContext, now: NORTHLINE_AS_OF }),
+    ]);
+    result = visits; rows = visits.items.map(visitRow); title = first(query.review) === "true" ? "Visits needing review" : first(query.status) === "active" ? "Vendors onsite now" : "Service visits"; eyebrow = "Observed service"; description = "See who arrived, why, the evidence captured, and which visits need review—without treating presence as certified labor."; placeholder = "Search technician, vendor, store, or work order";
+    const withContext = (status?: string, review?: string) => {
+      const params = new URLSearchParams(Object.entries({ store: visitContext.storeId, vendor: visitContext.vendorId, status, review }).filter((entry): entry is [string, string] => Boolean(entry[1])));
+      return `/app/visits${params.size ? `?${params}` : ""}`;
+    };
+    const upcomingWork = new URLSearchParams(Object.entries({ store: visitContext.storeId, vendor: visitContext.vendorId, status: "scheduled" }).filter((entry): entry is [string, string] => Boolean(entry[1])));
+    metrics = [
+      { id: "upcoming-visits", label: "Upcoming", value: String(visitSummary.upcoming), supportingText: "Vendor-confirmed appointments in the selected scope", tone: visitSummary.upcoming ? "info" : "neutral", link: { href: `/app/work-orders?${upcomingWork}`, label: "Open scheduled work" } },
+      { id: "active-visits", label: "Onsite now", value: String(visitSummary.active), supportingText: "Active check-ins in the selected scope", tone: visitSummary.active ? "info" : "neutral", link: { href: withContext("active"), label: "Show onsite" } },
+      { id: "completed-visits", label: "Completed", value: String(visitSummary.completed), supportingText: "Checked-out history; filters below affect the result list", tone: "positive", link: { href: withContext("checked_out"), label: "Show history" } },
+      { id: "visit-review", label: "Needs review", value: String(visitSummary.needsReview), supportingText: `${visitSummary.withoutWorkOrder} without a work order`, tone: visitSummary.needsReview ? "warning" : "positive", link: { href: withContext(undefined, "true"), label: "Review visits" } },
+    ];
   } else if (route === "stores") {
-    const stores = await repository.searchStores(scope, q, request);
+    const [stores, storeSummary] = await Promise.all([
+      repository.searchStores(scope, q, request),
+      repository.getStorePortfolioSummary(scope),
+    ]);
     result = stores; rows = stores.items.map(storeRow); title = "Stores"; eyebrow = "Operating network"; description = "Find any location by store number, address, name, city, or alias and open its maintenance history."; placeholder = "Search store number, name, address, city, or alias";
     if (roleCan(session.role, "create_store")) primaryAction = { label: "Add store", href: "/app/stores/new" };
+    metrics = [
+      { id: "stores-in-scope", label: "Stores in scope", value: String(storeSummary.stores), supportingText: "Portfolio-wide for your operating scope; search below filters the directory", tone: "neutral", link: { href: "/app/stores", label: "Open full directory" } },
+      { id: "store-open-work", label: "Open work orders", value: String(storeSummary.openWorkOrders), supportingText: "Current open work across the scoped store portfolio", tone: storeSummary.openWorkOrders ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open source work" } },
+      { id: "store-onsite-now", label: "Vendors onsite now", value: String(storeSummary.activeVisits), supportingText: "Active server-timestamped check-ins across the scoped portfolio", tone: storeSummary.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open active visits" } },
+      { id: "store-recorded-cost", label: "Recorded work cost", value: money(storeSummary.recordedCostMinor), supportingText: "Entered cost lines across the scoped portfolio; not invoice totals", tone: "neutral", link: { href: "/app/spend", label: "Open cost breakdown" } },
+    ];
   } else {
     const vendors = await repository.listVendors(scope, q, request);
     result = vendors; rows = vendors.items.map(vendorRow); title = "Approved vendors"; eyebrow = "Vendor network"; description = "Search by name, specialty, plain-language alias, equipment type, and coverage."; placeholder = "Search vendor, plumber, refrigeration, dispenser, or equipment";
@@ -298,17 +368,22 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   }
 
   const total = result.totalCount;
-  const summary = total === undefined ? `${rows.length}${result.nextCursor ? "+" : ""} matching source records` : `${total} source record${total === 1 ? "" : "s"}`;
+  const heldPlan = route === "work-orders" && first(query.visitPlan) === "ready";
+  const summary = heldPlan
+    ? `${rows.length}${result.nextCursor ? "+" : ""} approved job${rows.length === 1 && !result.nextCursor ? "" : "s"} on this page · portfolio counts shown above`
+    : total === undefined ? `${rows.length}${result.nextCursor ? "+" : ""} matching source records` : `${total} source record${total === 1 ? "" : "s"}`;
   return {
     state: rows.length || !q ? { kind: "ready" } : { kind: "empty", title: "No matching records", message: "Try another store number, address, vendor, or keyword." },
     page: { ...commonPage(session, title, eyebrow, description), primaryAction, secondaryAction },
     metrics,
-    table: { id: route, caption: title, columns: columns[route as QueryListRoute], rows },
+    table: { id: route, caption: title, columns: heldPlan ? [
+      { key: "work", label: "Approved work" }, { key: "store", label: "Store" }, { key: "assignment", label: "Authorized during visit" }, { key: "next", label: "Review and owner" }, { key: "cost", label: "Recorded cost", align: "end" as const }, { key: "status", label: "Timing" },
+    ] : columns[route as QueryListRoute], rows },
     resultSummary: summary,
     search: searchControl(route, query, `Search ${title}`, placeholder),
     filters: [...(contextualFilters ?? []), ...(queryFilters(route, query) ?? [])],
     appliedFilters: queryAppliedFilters(route, query),
-    clearFiltersHref: `/app/${route}`,
+    clearFiltersHref: heldPlan ? "/app/work-orders?visitPlan=ready" : `/app/${route}`,
     pagination: pagination(route, query, result, page),
   };
 }

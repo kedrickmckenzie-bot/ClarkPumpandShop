@@ -827,6 +827,7 @@ export interface WorkOrderControlViewModel {
   workOrderId: string;
   workOrderNumber: string;
   timeZone: string;
+  expectedVersion: number;
   expectedStatus: string;
   status: string;
   statusOptions: SelectOptionViewModel[];
@@ -837,6 +838,14 @@ export interface WorkOrderControlViewModel {
   dueAt?: string;
   dueInputValue?: string;
   escalationTo?: string;
+  internalAccountability: {
+    structured: boolean;
+    ownerName: string;
+    ownerType?: "membership" | "team";
+    ownerId?: string;
+    reassignAction: string;
+    options: SelectOptionViewModel[];
+  };
   isTerminal: boolean;
   pendingApproval?: ApprovalDecisionViewModel;
   stages: WorkflowStageViewModel[];

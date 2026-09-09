@@ -121,6 +121,7 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
   const store = fixture.stores.find((row) => row.organizationId === workOrder.organizationId && row.id === workOrder.storeId)!;
   const assignment = fixture.assignments.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).at(-1);
   const vendor = assignment?.vendorId ? fixture.vendors.find((row) => row.organizationId === workOrder.organizationId && row.id === assignment.vendorId) : undefined;
+  const visitHold = (fixture.workOrderVisitHolds ?? []).find((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id && row.status === "active");
   return {
     id: workOrder.id, number: workOrder.number, storeId: store.id, storeNumber: store.storeNumber,
     storeName: store.name, problem: workOrder.problem, categoryKey: workOrder.categoryKey,
@@ -130,6 +131,8 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
     accountableParty: workOrder.accountableParty, nextAction: workOrder.nextAction, dueAt: workOrder.dueAt,
     createdAt: workOrder.createdAt, visitCount: new Set(fixture.siteVisitWorkOrders.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).map((row) => row.visitId)).size,
     recordedCostMinor: fixture.costLines.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).reduce((sum, row) => sum + row.amount.amountMinor, 0), currency: "USD",
+    visitHoldPosture: visitHold?.posture,
+    visitHoldDeadlineAt: visitHold?.deadlineAt,
   };
 }
 
@@ -616,6 +619,17 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
 
   async listWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery = {}) {
     const search = normalize(query.search ?? "");
+    const approvedWorkIds = new Set(this.fixture.workOrders.filter((workOrder) => workOrder.organizationId === scope.organizationId && workOrder.status === "approved").map((workOrder) => workOrder.id));
+    const activeHeldWork = new Set((this.fixture.workOrderVisitHolds ?? [])
+      .filter((hold) => hold.organizationId === scope.organizationId && hold.status === "active")
+      .filter((hold) => approvedWorkIds.has(hold.workOrderId))
+      .map((hold) => hold.workOrderId));
+    const heldCountByStore = new Map<string, number>();
+    for (const workOrder of this.fixture.workOrders) {
+      if (workOrder.organizationId === scope.organizationId && activeHeldWork.has(workOrder.id) && storeAllowed(this.fixture, scope, workOrder.storeId)) {
+        heldCountByStore.set(workOrder.storeId, (heldCountByStore.get(workOrder.storeId) ?? 0) + 1);
+      }
+    }
     const rows = this.fixture.workOrders.filter((row) => storeAllowed(this.fixture, scope, row.storeId)).filter((row) => {
       const costLines = this.fixture.costLines.filter((cost) => cost.organizationId === scope.organizationId && cost.workOrderId === row.id);
       return (!query.statuses?.length || query.statuses.includes(row.status))
@@ -630,7 +644,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.costFrom || costLines.some((cost) => cost.serviceDate >= query.costFrom!.slice(0, 10)))
         && (!query.costMonth || costLines.some((cost) => cost.serviceDate.slice(0, 7) === query.costMonth!.slice(0, 7)))
         && (!query.createdFrom || row.createdAt >= query.createdFrom)
-        && (!query.createdTo || row.createdAt < query.createdTo);
+        && (!query.createdTo || row.createdAt < query.createdTo)
+        && (!query.heldOnly || activeHeldWork.has(row.id))
+        && (!query.heldStoreGroup || query.heldStoreGroup !== "multiple" || (heldCountByStore.get(row.storeId) ?? 0) >= 2);
     }).map((row) => workOrderRow(this.fixture, row)).filter((row) => !search || normalize([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName].filter(Boolean).join(" ")).includes(search)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.number.localeCompare(b.number));
     return page(rows, query);
   }
@@ -639,7 +655,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     const active = (this.fixture.workOrderVisitHolds ?? []).filter((hold) => {
       if (hold.organizationId !== scope.organizationId || hold.status !== "active") return false;
       const work = this.fixture.workOrders.find((row) => row.organizationId === scope.organizationId && row.id === hold.workOrderId);
-      return Boolean(work && storeAllowed(this.fixture, scope, work.storeId));
+      return Boolean(work && work.status === "approved" && storeAllowed(this.fixture, scope, work.storeId));
     });
     const counts = new Map<string, number>();
     for (const hold of active) {
@@ -647,6 +663,32 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       if (storeId) counts.set(storeId, (counts.get(storeId) ?? 0) + 1);
     }
     return { approvedWorkOrders: active.length, storesWithApprovedWork: counts.size, storesWithMultipleApprovedJobs: [...counts.values()].filter((count) => count >= 2).length };
+  }
+
+  async getVisitPortfolioSummary(scope: OrganizationScope, query: { storeId?: OpsId; vendorId?: OpsId; now: string }) {
+    const visits = this.fixture.visits.filter((visit) => storeAllowed(this.fixture, scope, visit.storeId))
+      .filter((visit) => !query.storeId || visit.storeId === query.storeId)
+      .filter((visit) => !query.vendorId || visit.vendorId === query.vendorId);
+    const reviewVisitIds = new Set(this.fixture.exceptions.filter((exception) => exception.organizationId === scope.organizationId && exception.status !== "resolved" && exception.visitId).map((exception) => exception.visitId!));
+    const linkedVisitIds = new Set(this.fixture.siteVisitWorkOrders.filter((link) => link.organizationId === scope.organizationId).map((link) => link.visitId));
+    const scopedWorkIds = new Set(this.fixture.workOrders.filter((work) => storeAllowed(this.fixture, scope, work.storeId) && (!query.storeId || work.storeId === query.storeId)).map((work) => work.id));
+    const upcoming = (this.fixture.serviceAppointments ?? []).filter((appointment) => appointment.organizationId === scope.organizationId && appointment.status === "confirmed" && appointment.startsAt >= query.now && scopedWorkIds.has(appointment.workOrderId))
+      .filter((appointment) => !query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.id === appointment.assignmentId && assignment.vendorId === query.vendorId)).length;
+    return { upcoming, active: visits.filter((visit) => visit.status === "active").length, completed: visits.filter((visit) => visit.status !== "active").length, needsReview: visits.filter((visit) => !visit.workOrderId && !linkedVisitIds.has(visit.id) || reviewVisitIds.has(visit.id)).length, withoutWorkOrder: visits.filter((visit) => !visit.workOrderId && !linkedVisitIds.has(visit.id)).length };
+  }
+
+  async getStorePortfolioSummary(scope: OrganizationScope) {
+    const stores = this.fixture.stores.filter((store) => storeAllowed(this.fixture, scope, store.id));
+    const storeIds = new Set(stores.map((store) => store.id));
+    const workOrders = this.fixture.workOrders.filter((work) => work.organizationId === scope.organizationId && storeIds.has(work.storeId));
+    const workIds = new Set(workOrders.map((work) => work.id));
+    return {
+      stores: stores.length,
+      openWorkOrders: workOrders.filter((work) => !["closed", "cancelled"].includes(work.status)).length,
+      activeVisits: this.fixture.visits.filter((visit) => visit.organizationId === scope.organizationId && storeIds.has(visit.storeId) && visit.status === "active").length,
+      recordedCostMinor: this.fixture.costLines.filter((cost) => cost.organizationId === scope.organizationId && workIds.has(cost.workOrderId)).reduce((sum, cost) => sum + cost.amount.amountMinor, 0),
+      currency: "USD",
+    };
   }
 
   async getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null> {
@@ -672,7 +714,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     return page(rows, request);
   }
 
-  async listVisits(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId; vendorId?: OpsId } = {}) { const search = normalize(query.search ?? ""); const rows = this.fixture.visits.filter((row) => storeAllowed(this.fixture, scope, row.storeId)).filter((row) => (!query.status || row.status === query.status) && (!query.storeId || row.storeId === query.storeId) && (!query.vendorId || row.vendorId === query.vendorId)).sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt)).map((row) => visitRow(this.fixture, row)).filter((row) => !search || normalize([row.technicianName, row.providerName, row.purpose, row.storeNumber, row.storeName, row.workOrderNumber].filter(Boolean).join(" ")).includes(search)); return page(rows, query); }
+  async listVisits(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId; vendorId?: OpsId; review?: boolean } = {}) { const search = normalize(query.search ?? ""); const reviewIds = new Set(this.fixture.exceptions.filter((exception) => exception.organizationId === scope.organizationId && exception.status !== "resolved" && exception.visitId).map((exception) => exception.visitId!)); const linkedIds = new Set(this.fixture.siteVisitWorkOrders.filter((link) => link.organizationId === scope.organizationId).map((link) => link.visitId)); const rows = this.fixture.visits.filter((row) => storeAllowed(this.fixture, scope, row.storeId)).filter((row) => (!query.status || row.status === query.status) && (!query.storeId || row.storeId === query.storeId) && (!query.vendorId || row.vendorId === query.vendorId) && (!query.review || ((!row.workOrderId && !linkedIds.has(row.id)) || reviewIds.has(row.id)))).sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt)).map((row) => visitRow(this.fixture, row)).filter((row) => !search || normalize([row.technicianName, row.providerName, row.purpose, row.storeNumber, row.storeName, row.workOrderNumber].filter(Boolean).join(" ")).includes(search)); return page(rows, query); }
 
   async listExceptions(scope: OrganizationScope, query: ExceptionQueueQuery = {}) { const rows = this.fixture.exceptions.filter((row) => row.organizationId === scope.organizationId && exceptionAllowed(this.fixture, scope, row.storeId)).filter((row) => (!query.statuses?.length || query.statuses.includes(row.status)) && (!query.kinds?.length || query.kinds.includes(row.kind)) && (!query.storeId || row.storeId === query.storeId) && (!query.vendorId || row.vendorId === query.vendorId)).sort((a, b) => b.detectedAt.localeCompare(a.detectedAt)).map((row): ExceptionQueueRow => ({ id: row.id, kind: row.kind, status: row.status, severity: row.severity, summary: row.summary, storeId: row.storeId, storeNumber: this.fixture.stores.find((store) => store.organizationId === scope.organizationId && store.id === row.storeId)?.storeNumber, workOrderId: row.workOrderId, workOrderNumber: this.fixture.workOrders.find((workOrder) => workOrder.organizationId === scope.organizationId && workOrder.id === row.workOrderId)?.number, visitId: row.visitId, detectedAt: row.detectedAt })); return page(rows, query); }
 

@@ -8,9 +8,15 @@ type Query = Record<string, string | string[] | undefined>;
 
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<Query> }) {
   const params = await searchParams;
+  const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+  // The ordinary list and held-work portfolio stay on bounded repository reads.
+  // Load the richer legacy matching projection only when a user explicitly asks
+  // for confirmed-opportunity or review-window analysis.
+  const needsSpecializedOpportunityProjection = first(params.visitPlan) === "ready"
+    && Boolean(first(params.opportunity) || first(params.reviewWindow) || first(params.matchStore));
   const [model, approvedWork, savedViews, session] = await Promise.all([
     loadListModel("work-orders", params),
-    loadApprovedWorkPortfolioModel(params),
+    needsSpecializedOpportunityProjection ? loadApprovedWorkPortfolioModel(params) : Promise.resolve(undefined),
     loadSavedViewsModel("work-orders"),
     loadOperatorSession(),
   ]);

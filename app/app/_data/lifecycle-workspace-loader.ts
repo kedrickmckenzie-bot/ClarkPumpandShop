@@ -145,8 +145,9 @@ function workOrderCase(fixture: OpsFixture, organizationId: string, workOrderId:
   const invoiceReferenceIds = new Set(fixture.invoiceAllocations.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).map((row) => row.invoiceReferenceId));
   const invoiceLineAllocations = fixture.invoiceLineAllocations.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId);
   const invoiceLineIds = new Set(invoiceLineAllocations.map((row) => row.invoiceLineId));
-  const invoiceLines = fixture.invoiceLines.filter((row) => row.organizationId === organizationId && invoiceLineIds.has(row.id));
-  const invoiceIds = new Set(invoiceLines.map((row) => row.invoiceId));
+  const allocatedInvoiceLines = fixture.invoiceLines.filter((row) => row.organizationId === organizationId && invoiceLineIds.has(row.id));
+  const invoiceIds = new Set(allocatedInvoiceLines.map((row) => row.invoiceId));
+  const invoiceLines = fixture.invoiceLines.filter((row) => row.organizationId === organizationId && invoiceIds.has(row.invoiceId));
   return buildWorkOrderCase({
     now: fixture.asOf,
     workOrder,

@@ -1,6 +1,7 @@
 import {
   OpsDomainError,
   recordVendorResponse,
+  reassignWorkOrderInternalAccountability,
   updateWorkOrderControl,
 } from "@/lib/ops/commands";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
@@ -129,6 +130,35 @@ export async function POST(
       await recordOutsideResponse(context, workOrderId, formData);
       return relativeRedirect303(
         `/app/work-orders/${encodeURIComponent(workOrderId)}?view=activity&updated=vendor-response#work-control`,
+      );
+    }
+    if (operation === "reassign_internal_owner") {
+      const expectedVersion = Number(formText(formData, "expectedVersion", { required: true, max: 20 }));
+      if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+        throw new OpsDomainError("VALIDATION", "Expected work-order version is invalid.");
+      }
+      const ownerValue = formText(formData, "internalOwner", { required: true, max: 240 });
+      const separator = ownerValue.indexOf(":");
+      const ownerType = ownerValue.slice(0, separator);
+      const ownerId = ownerValue.slice(separator + 1);
+      if (separator < 1 || !ownerId || !["team", "membership"].includes(ownerType)) {
+        throw new OpsDomainError("VALIDATION", "Choose a supported internal owner.");
+      }
+      await reassignWorkOrderInternalAccountability(
+        { repository: context.repository },
+        {
+          organizationId: context.session.organizationId,
+          workOrderId,
+          expectedVersion,
+          target: ownerType === "team"
+            ? { type: "team", id: ownerId as "facilities-coordination" }
+            : { type: "membership", id: ownerId },
+          reason: formText(formData, "reason", { required: true, max: 2_000 }),
+          actor: context.actor,
+        },
+      );
+      return relativeRedirect303(
+        `/app/work-orders/${encodeURIComponent(workOrderId)}?view=activity&updated=internal-owner#work-control`,
       );
     }
     if (operation === "closeout") {

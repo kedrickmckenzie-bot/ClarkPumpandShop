@@ -6097,6 +6097,7 @@ export function buildWorkOrderControlModel(
       workOrderId,
       workOrderNumber: workOrderId,
       timeZone: DEFAULT_OPERATIONS_TIME_ZONE,
+      expectedVersion: 0,
       expectedStatus: "draft",
       status: "draft",
       statusOptions: [],
@@ -6104,6 +6105,12 @@ export function buildWorkOrderControlModel(
       priorityOptions: [],
       accountableParty: "",
       nextAction: "",
+      internalAccountability: {
+        structured: false,
+        ownerName: "Not available",
+        reassignAction: "",
+        options: [],
+      },
       isTerminal: false,
       stages: [],
       workflowTasks,
@@ -6266,6 +6273,36 @@ export function buildWorkOrderControlModel(
     classificationLabel: [work.categoryKey ? sentence(work.categoryKey) : "Category deferred", work.assetId ? "Equipment linked" : "Equipment deferred", work.componentId ? "Component linked" : "Component deferred"].join(" · "),
     openFollowUpCount: closeoutFollowUpCount,
   } : undefined;
+  const internalOwnerOptions: WorkOrderControlViewModel["internalAccountability"]["options"] = [
+    {
+      value: "team:facilities-coordination",
+      label: "Facilities coordination team",
+      description: "Durable shared team ownership",
+    },
+    ...fixture.memberships
+      .filter((membership) => (
+        membership.organizationId === scoped.organizationId
+        && membership.status === "active"
+        && ["facilities_admin", "regional_manager"].includes(membership.role)
+      ))
+      .filter((membership) => {
+        const grants = fixture.scopeGrants.filter((grant) => grant.organizationId === scoped.organizationId && grant.membershipId === membership.id);
+        return grants.some((grant) => (
+          grant.scopeKind === "organization" && grant.scopeId === scoped.organizationId
+          || grant.scopeKind === "store" && grant.scopeId === work.storeId
+          || grant.scopeKind === "region" && grant.scopeId === fixture.stores.find((store) => store.id === work.storeId)?.regionId
+        ));
+      })
+      .flatMap((membership) => {
+        const user = fixture.users.find((candidate) => candidate.id === membership.userId && candidate.status === "active");
+        return user ? [{
+          value: `membership:${membership.id}`,
+          label: user.displayName,
+          description: membership.role === "regional_manager" ? "Regional facilities owner" : "Facilities owner",
+        }] : [];
+      })
+      .sort((left, right) => left.label.localeCompare(right.label)),
+  ];
   return {
     available: true,
     permitted,
@@ -6275,6 +6312,7 @@ export function buildWorkOrderControlModel(
     workOrderId: work.id,
     workOrderNumber: work.number,
     timeZone: storeTimeZone,
+    expectedVersion: work.version ?? 0,
     expectedStatus: work.status,
     status: work.status,
     statusOptions: statuses.map((status) => ({ value: status, label: sentence(status), description: status === work.status ? "Current state" : "Administrative closeout" })),
@@ -6288,6 +6326,14 @@ export function buildWorkOrderControlModel(
     dueAt: work.dueAt,
     dueInputValue: work.dueAt ? dateTimeInputInZone(work.dueAt, storeTimeZone) : undefined,
     escalationTo: work.escalationTo,
+    internalAccountability: {
+      structured: Boolean(work.internalAccountableType && work.internalAccountableId),
+      ownerName: work.internalAccountableParty ?? "Facilities coordinator",
+      ownerType: work.internalAccountableType,
+      ownerId: work.internalAccountableId,
+      reassignAction: `/api/ops/work-orders/${encodeURIComponent(work.id)}/control`,
+      options: internalOwnerOptions,
+    },
     isTerminal: terminal,
     pendingApproval,
     stages: workOrderStages(fixture, scoped.organizationId, work),

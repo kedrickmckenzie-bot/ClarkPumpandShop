@@ -593,6 +593,9 @@ export interface WorkOrder {
   version?: number;
   /** Stable operator-side owner for the unresolved case. This is not replaced when a vendor is expected to act next. */
   internalAccountableParty?: string;
+  /** Durable owner identity. Missing values identify compatibility records that predate structured ownership. */
+  internalAccountableType?: "membership" | "team";
+  internalAccountableId?: OpsId;
   /** Legacy denormalized projection of the primary next-action owner. */
   accountableParty: string;
   nextAction: string;

@@ -61,6 +61,34 @@ describe("operator query presenter", () => {
     expect(model.page.secondaryAction?.href).toContain("returnTo=");
   });
 
+  it("keeps the normal held-work portfolio on bounded repository rows with context-preserving planning", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const repository = createOpsFixtureRepository(fixture);
+    const facilities = session({ role: "facilities", membershipId: "membership-northline-facilities" });
+    const model = await buildQueryListModel(repository, facilities, "work-orders", {
+      visitPlan: "ready",
+      storeGroup: "multiple",
+      region: "region-northline-north",
+    });
+    const activeHeldIds = new Set((fixture.workOrderVisitHolds ?? [])
+      .filter((hold) => hold.status === "active")
+      .filter((hold) => fixture.workOrders.some((work) => work.id === hold.workOrderId && work.status === "approved"))
+      .map((hold) => hold.workOrderId));
+
+    expect(model.page.eyebrow).toBe("Held-work portfolio");
+    expect(model.page.primaryAction?.label).toBe("Send approved jobs together");
+    expect(model.page.primaryAction?.href).toContain(encodeURIComponent("/app/work-orders?visitPlan=ready&storeGroup=multiple&region=region-northline-north"));
+    expect(model.page.secondaryAction?.href).toBe("/app/work-orders?region=region-northline-north");
+    expect(model.table.rows.length).toBeGreaterThan(0);
+    expect(model.table.rows.every((row) => activeHeldIds.has(row.id))).toBe(true);
+    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "next")?.secondary?.startsWith("Internal owner:"))).toBe(true);
+    expect(model.filters?.find((filter) => filter.id === "work-visit-plan")?.options.find((option) => option.value === "ready")?.selected).toBe(true);
+    expect(model.appliedFilters?.find((filter) => filter.id === "visitPlan")?.label).toBe("Approved for next suitable visit");
+    expect(model.appliedFilters?.find((filter) => filter.id === "storeGroup")?.label).toBe("Stores with 2+ approved jobs");
+    expect(model.clearFiltersHref).toBe("/app/work-orders?visitPlan=ready");
+    expect(model.resultSummary).toContain("portfolio counts shown above");
+  });
+
   it("hides held-work dispatch actions from store and finance roles", async () => {
     const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
     for (const role of ["store_manager", "finance"] as const) {
@@ -77,6 +105,31 @@ describe("operator query presenter", () => {
     expect(model.filters?.find((filter) => filter.id === "status")?.options.find((option) => option.label === "Onsite now")?.selected).toBe(true);
     expect(model.appliedFilters?.map((filter) => filter.label)).toContain("Onsite now");
     expect(model.appliedFilters?.find((filter) => filter.id === "status")?.removeHref).toContain("vendor=vendor-northline-summit");
+  });
+
+  it("restores scoped visit summaries and makes the review metric a real bounded filter", async () => {
+    const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const summary = await buildQueryListModel(repository, session({ role: "facilities" }), "visits", { store: "store-northline-107" });
+    const review = summary.metrics?.find((metric) => metric.id === "visit-review");
+    expect(summary.metrics?.map((metric) => metric.id)).toEqual(["upcoming-visits", "active-visits", "completed-visits", "visit-review"]);
+    expect(review?.link.href).toContain("store=store-northline-107");
+    expect(review?.link.href).toContain("review=true");
+    expect(Number(review?.value)).toBeGreaterThan(0);
+
+    const filtered = await buildQueryListModel(repository, session({ role: "facilities" }), "visits", { store: "store-northline-107", review: "true" });
+    expect(filtered.page.title).toBe("Visits needing review");
+    expect(filtered.appliedFilters?.find((filter) => filter.id === "review")?.label).toBe("Needs review");
+    expect(filtered.table.rows.length).toBeGreaterThan(0);
+    expect(filtered.table.rows.every((row) => row.cells.find((cell) => cell.key === "store")?.value === "Store 107")).toBe(true);
+  });
+
+  it("restores portfolio-wide store summaries without deriving them from the current page", async () => {
+    const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const model = await buildQueryListModel(repository, session({ role: "regional", regionIds: ["region-northline-north"] }), "stores", { q: "Ridgeview" });
+    expect(model.table.rows).toHaveLength(1);
+    expect(model.metrics?.find((metric) => metric.id === "stores-in-scope")?.value).toBe("5");
+    expect(model.metrics?.find((metric) => metric.id === "stores-in-scope")?.supportingText).toContain("Portfolio-wide");
+    expect(model.metrics?.every((metric) => metric.link.href.startsWith("/app/"))).toBe(true);
   });
 
   it("keeps global search inside the manager's store scope", async () => {

@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Route,
   ShieldCheck,
+  UserRound,
 } from "lucide-react";
 import type {
   ApprovalDecisionViewModel,
@@ -468,6 +469,39 @@ function CreateFollowUpForm({ model }: { model: WorkOrderControlViewModel }) {
   );
 }
 
+function InternalAccountabilityForm({ model }: { model: WorkOrderControlViewModel }) {
+  const { state, submit } = useMutation();
+  const owner = model.internalAccountability;
+  const defaultValue = owner.ownerType && owner.ownerId
+    ? `${owner.ownerType}:${owner.ownerId}`
+    : "team:facilities-coordination";
+  return (
+    <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`}>
+      <summary className={styles.subControlHeading}>
+        <UserRound aria-hidden="true" size={18} />
+        <div>
+          <h3>Internal accountability</h3>
+          <p>{owner.structured ? "A persisted membership or team owns the customer-side follow-through." : "This older record has only a display label. Assign a persisted owner before relying on named accountability."}</p>
+        </div>
+      </summary>
+      <form action={owner.reassignAction} method="post" onSubmit={submit} className={styles.controlForm}>
+        <input type="hidden" name="operation" value="reassign_internal_owner" />
+        <input type="hidden" name="expectedVersion" value={model.expectedVersion} />
+        <SelectField id={`internal-owner-${model.workOrderId}`} name="internalOwner" label="Customer-side owner" defaultValue={defaultValue} options={owner.options} />
+        <label className={styles.field} htmlFor={`internal-owner-reason-${model.workOrderId}`}>
+          <span>Reassignment reason <em>Required</em></span>
+          <textarea id={`internal-owner-reason-${model.workOrderId}`} name="reason" required minLength={3} rows={3} placeholder="Explain why this membership or team now owns internal follow-through." />
+        </label>
+        <MutationError message={state.error} />
+        <div className={styles.formFooter}>
+          <span className={styles.formMeta}>Vendor-owned next actions stay with the vendor; their escalation route follows the internal owner.</span>
+          <button className={styles.secondaryButton} type="submit" disabled={state.pending}>{state.pending ? "Reassigning…" : "Reassign internal owner"}</button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
 export function WorkOrderControlPanel({ model }: { model: WorkOrderControlViewModel }) {
   if (!model.available) return null;
   return (
@@ -504,6 +538,7 @@ export function WorkOrderControlPanel({ model }: { model: WorkOrderControlViewMo
           <span><small>Response detail</small><strong>{model.latestVendorResponse.proposedAt ? `Proposed ${model.latestVendorResponse.proposedAt.replace("T", " ")}` : "No proposed date"}</strong><p>{model.latestVendorResponse.message ?? "No additional message recorded"}</p></span>
         </div>
       ) : null}
+      {model.permitted && !model.isTerminal ? <InternalAccountabilityForm model={model} /> : null}
       {!model.permitted || model.isTerminal ? <p className={styles.inlineEmpty}>{model.isTerminal ? "This work order is terminal. Its service history remains available for review." : "Your role can review this control record but cannot change it."}</p> : model.closeout ? (
         <CloseoutChecklistForm model={model} />
       ) : (

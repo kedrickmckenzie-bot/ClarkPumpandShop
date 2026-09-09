@@ -121,12 +121,30 @@ export interface WorkOrderListQuery extends PageRequest {
   costMonth?: string;
   createdFrom?: IsoDateTime;
   createdTo?: IsoDateTime;
+  heldOnly?: boolean;
+  heldStoreGroup?: "multiple";
 }
 
 export interface HeldWorkPortfolioSummary {
   approvedWorkOrders: number;
   storesWithApprovedWork: number;
   storesWithMultipleApprovedJobs: number;
+}
+
+export interface VisitPortfolioSummary {
+  upcoming: number;
+  active: number;
+  completed: number;
+  needsReview: number;
+  withoutWorkOrder: number;
+}
+
+export interface StorePortfolioSummary {
+  stores: number;
+  openWorkOrders: number;
+  activeVisits: number;
+  recordedCostMinor: number;
+  currency: string;
 }
 
 export interface ExceptionQueueQuery extends PageRequest {
@@ -269,6 +287,8 @@ export interface OpsRepository {
   listWorkflowTasksForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkflowTask[]>;
   listWorkflowTasksForRequest(organizationId: OpsId, requestId: OpsId): Promise<WorkflowTask[]>;
   getHeldWorkPortfolioSummary(scope: OrganizationScope): Promise<HeldWorkPortfolioSummary>;
+  getVisitPortfolioSummary(scope: OrganizationScope, query: { storeId?: OpsId; vendorId?: OpsId; now: IsoDateTime }): Promise<VisitPortfolioSummary>;
+  getStorePortfolioSummary(scope: OrganizationScope): Promise<StorePortfolioSummary>;
   listWorkflowTaskSlaPauses(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaPause[]>;
   listWorkflowTaskSlaResumes(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaResume[]>;
   getActiveWorkflowTaskSlaPause(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaPause | null>;
@@ -299,7 +319,7 @@ export interface OpsRepository {
   listWorkOrders(scope: OrganizationScope, query?: WorkOrderListQuery): Promise<WorkOrderListPage>;
   getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null>;
   listVendors(scope: OrganizationScope, search?: string, page?: PageRequest): Promise<VendorDirectoryPage>;
-  listVisits(scope: OrganizationScope, query?: PageRequest & { search?: string; status?: string; storeId?: OpsId; vendorId?: OpsId }): Promise<VisitListPage>;
+  listVisits(scope: OrganizationScope, query?: PageRequest & { search?: string; status?: string; storeId?: OpsId; vendorId?: OpsId; review?: boolean }): Promise<VisitListPage>;
   listExceptions(scope: OrganizationScope, query?: ExceptionQueueQuery): Promise<ExceptionQueuePage>;
   getAssetDetail(scope: OrganizationScope, assetId: OpsId): Promise<AssetDetailView | null>;
   listPmOccurrences(scope: OrganizationScope, query?: PageRequest & { status?: string; storeId?: OpsId }): Promise<PmOccurrencePage>;
