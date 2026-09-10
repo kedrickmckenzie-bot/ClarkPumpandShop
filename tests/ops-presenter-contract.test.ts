@@ -296,7 +296,7 @@ describe("operator presenter drill-through contracts", () => {
     const effectiveness = model.breakdowns.find((row) => row.id === "pm-effectiveness-cohorts");
     expect(effectiveness?.segments.map((row) => row.id)).toEqual(["latest-compliant", "latest-noncompliant"]);
     expect(effectiveness?.description).toMatch(/per 100 equipment-months/i);
-    expect(effectiveness?.description).toMatch(/directional only|descriptive association only/i);
+    expect(effectiveness?.description).toMatch(/not enough data|does not prove/i);
     expect(model.trends.find((row) => row.id === "pm-reactive-cost")?.description).toMatch(/not proof/i);
     expect(effectiveness?.segments.every((row) => row.link.href.startsWith("/app/pm"))).toBe(true);
   });

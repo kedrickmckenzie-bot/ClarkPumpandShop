@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { CircleDollarSign, FileCheck2, X } from "lucide-react";
 import type { PublicActionReceipt, VendorEstimateView } from "./contracts";
 import { ServerReceipt } from "./public-ui";
@@ -9,6 +10,7 @@ import styles from "./public-workflows.module.css";
 type ResponseMode = "submit" | "decline";
 
 export function VendorEstimateForm({ token, estimate }: { token: string; estimate: VendorEstimateView }) {
+  const router = useRouter();
   const [mode, setMode] = useState<ResponseMode>("submit");
   const [responderName, setResponderName] = useState("");
   const [amount, setAmount] = useState(estimate.latestProposal?.amount ?? "");
@@ -16,12 +18,13 @@ export function VendorEstimateForm({ token, estimate }: { token: string; estimat
   const [exclusions, setExclusions] = useState(estimate.latestProposal?.exclusions ?? "");
   const [leadTimeDays, setLeadTimeDays] = useState(estimate.latestProposal?.leadTimeDays?.toString() ?? "");
   const [validUntil, setValidUntil] = useState(estimate.latestProposal?.validUntil?.slice(0, 10) ?? "");
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<PublicActionReceipt | null>(null);
 
-  if (receipt) return <ServerReceipt receipt={receipt} />;
+  if (receipt) return <><ServerReceipt receipt={receipt} /><div className={styles.actions}><button className={styles.button} type="button" onClick={() => window.location.reload()}>Review submitted quote and files</button></div></>;
   if (estimate.status === "requested") {
     async function openRequest() {
       setSubmitting(true);
@@ -44,7 +47,7 @@ export function VendorEstimateForm({ token, estimate }: { token: string; estimat
       <section className={styles.card} aria-labelledby="open-estimate-title">
         <span className={styles.eyebrow}>Vendor response</span>
         <h2 className={styles.cardTitle} id="open-estimate-title">Review this quote request</h2>
-        <p className={styles.helper}>Opening records that a person reviewed it. Automated link previews and operator test views do not change its status. This requests price, scope, and availability; it does not authorize an onsite service call.</p>
+        <p className={styles.helper}>Review the requested work and send your price and availability. This is a quote request; service is not yet authorized.</p>
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
         <div className={styles.actions}>
           <button className={styles.button} disabled={submitting} onClick={openRequest} type="button">
@@ -81,14 +84,16 @@ export function VendorEstimateForm({ token, estimate }: { token: string; estimat
             leadTimeDays: leadTimeDays ? Number(leadTimeDays) : undefined,
             validUntil: validUntil || undefined,
           };
+      const form = new FormData();
+      form.set("command", JSON.stringify(payload));
+      if (mode === "submit") attachments.forEach((file) => form.append("attachments", file));
       const response = await fetch(`/api/ops-public/estimate/${encodeURIComponent(token)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        method: "POST", body: form,
       });
       const body = (await response.json()) as PublicActionReceipt & { error?: string };
       if (!response.ok) throw new Error(body.error ?? "The quote response could not be recorded.");
       setReceipt(body);
+      router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The quote response could not be recorded.");
     } finally {
@@ -102,7 +107,7 @@ export function VendorEstimateForm({ token, estimate }: { token: string; estimat
         <div>
           <span className={styles.eyebrow}>Vendor response</span>
           <h2 className={styles.cardTitle} id="estimate-response-title">{estimate.latestProposal ? "Submit a revised quote" : "Submit a quote or decline the request"}</h2>
-          <p className={styles.helper}>No account is required. A submitted quote does not assign your company or authorize travel, check-in, service, or billing.</p>
+          <p className={styles.helper}>Send your price and scope. Wait for work approval before making a service call.</p>
         </div>
       </div>
       <div className={styles.tabs} role="group" aria-label="Quote response type">
@@ -129,6 +134,10 @@ export function VendorEstimateForm({ token, estimate }: { token: string; estimat
             <label className={styles.label}>Exclusions or assumptions <span className={styles.helper}>Optional</span>
               <textarea className={styles.textarea} maxLength={2000} onChange={(event) => setExclusions(event.target.value)} value={exclusions} />
             </label>
+            <label className={styles.label}>Files for this quote version <span className={styles.helper}>Optional · up to 4 PDF or image files, 10 MB each. Add the files for this version; earlier versions keep their own files.</span>
+              <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple onChange={(event) => setAttachments(Array.from(event.target.files ?? []))} />
+            </label>
+            {estimate.localFileStorage ? <p className={styles.helper}>Local demo files are available until this server restarts.</p> : null}
             <label className={styles.label}>Quote valid through <span className={styles.helper}>Optional</span>
               <input className={styles.input} onChange={(event) => setValidUntil(event.target.value)} type="date" value={validUntil} />
             </label>
@@ -141,7 +150,7 @@ export function VendorEstimateForm({ token, estimate }: { token: string; estimat
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
         <div className={styles.callout}>
           <strong>Pricing only - no service authorization</strong>
-          <p>This quote stays attached to operator work order {estimate.operatorWorkOrderNumber} as comparison evidence. It does not create a second work order, recorded cost, invoice, assignment, technician visit, or permission to perform the repair.</p>
+          <p>Your quote is for work order {estimate.operatorWorkOrderNumber}. The operator will review it before approving work.</p>
         </div>
         <div className={styles.actions}>
           <button className={mode === "decline" ? styles.dangerButton : styles.button} disabled={submitting} type="submit">

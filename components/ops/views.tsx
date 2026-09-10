@@ -441,13 +441,13 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
               <div className={styles.reviewQueueMain}>
                 <header className={styles.reviewQueueHeading}>
                   <div>
-                    <h2>To-do list</h2>
+                    <h2>Review items</h2>
                     <p>Click an item to see the details and take action.</p>
                   </div>
-                  <span>Most urgent first</span>
+                  <span>{model.filters?.some((filter) => filter.options.some((option) => option.value === "history" && option.selected)) ? "Most recently completed first" : "Most urgent first"}</span>
                 </header>
                 {model.table.rows.length ? (
-                  <ol className={styles.reviewQueueList} aria-label="Open review items">
+                  <ol className={styles.reviewQueueList} aria-label="Review items">
                     {model.table.rows.map((row) => {
                       const item = queueCell(row, "item");
                       const store = queueCell(row, "store");
@@ -485,6 +485,14 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                             </div>
                             <ChevronRight className={styles.reviewQueueChevron} aria-hidden="true" size={19} />
                           </Link>
+                          {row.sources?.length ? <details className={styles.controlDisclosure}>
+                            <summary>Tasks and supporting records ({row.sources.length})</summary>
+                            <ul>{row.sources.map((source) => <li key={source.id}>
+                              <Link href={source.href}>{source.label}</Link>
+                              <p>Responsible: {source.owner} · {source.dueLabel}</p>
+                              <p>Done when: {source.doneWhen}</p>
+                            </li>)}</ul>
+                          </details> : null}
                         </li>
                       );
                     })}

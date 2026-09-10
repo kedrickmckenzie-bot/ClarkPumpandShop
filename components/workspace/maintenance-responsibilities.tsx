@@ -5,7 +5,7 @@ import styles from "./setup-workspaces.module.css";
 
 const capabilityRows: Array<{ value: ConfigurableMaintenanceCapability; label: string; description: string }> = [
   { value: "confirm_observable_result", label: "Confirm the store result", description: "Answer fixed, not fixed, or not sure for the reported problem. This is not technical certification." },
-  { value: "create_work_order", label: "Create routine work orders", description: "Turn a store issue into a canonical work order within the role's assigned stores." },
+  { value: "create_work_order", label: "Create routine work orders", description: "Create a work order for a reported problem within the role's assigned stores." },
   { value: "issue_work_order", label: "Dispatch routine work", description: "Send routine work within existing approval and NTE limits. Requires work-order creation." },
 ];
 

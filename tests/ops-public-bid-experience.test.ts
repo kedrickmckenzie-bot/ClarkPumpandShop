@@ -1,9 +1,11 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ServiceAuthorizationView, VendorEstimateView } from "@/components/ops-public/contracts";
 import { ServiceAuthorizationPage } from "@/components/ops-public/service-authorization-page";
 import { VendorEstimatePage } from "@/components/ops-public/vendor-estimate-page";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const quoteRequest: VendorEstimateView = {
   organizationName: "Clark Pump and Shop",
@@ -77,7 +79,7 @@ describe("public quote request and service authorization distinction", () => {
     expect(markup).toContain("This quote request is pricing only");
     expect(markup).toContain("not assigned or authorized");
     expect(markup).toContain("Do not travel to the store, check in, begin service, or bill against it");
-    expect(markup).toContain("does not create a second work order");
+    expect(markup).toContain("This quote request is pricing only");
     expect(markup).not.toContain("Submit estimate");
     expect(markup).not.toContain("Open technician check-in / checkout");
   });

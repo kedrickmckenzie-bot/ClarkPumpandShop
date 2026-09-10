@@ -141,3 +141,13 @@ describe("shared role-aware attention projection", () => {
     );
   });
 });
+
+
+it("keeps completed task history separate from active tasks and within the same role and store scope", () => {
+  const input = projectionInput();
+  const base = input.fixture.workflowTasks.find((task) => task.workOrderId)!;
+  input.fixture.workflowTasks = [{ ...base, id: "done", status: "completed", completedAt: input.asOf }, { ...base, id: "active", status: "open" }, { ...base, id: "foreign", organizationId: "other-org", status: "completed", completedAt: input.asOf }];
+  expect(projectAttentionItems({ ...input, history: true }).map((item) => item.id)).toEqual(["done"]);
+  expect(projectAttentionItems(input).some((item) => item.id === "done")).toBe(false);
+  expect(projectAttentionItems({ ...input, history: true, storeIds: new Set() })).toEqual([]);
+});

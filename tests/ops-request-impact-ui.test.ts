@@ -77,7 +77,7 @@ describe("request impact presentation", () => {
     expect(markup).toContain('name="decision"');
     expect(markup).toContain('value="approved"');
     expect(markup).toContain('value="rejected"');
-    expect(markup).toContain("The policy version and presented amount remain immutable.");
+    expect(markup).toContain("Review the amount and approval requirements above.");
   });
 
   it("offers conversion only after impact review when no approval is required", () => {
@@ -111,6 +111,6 @@ describe("request impact presentation", () => {
     }
     expect(intake).toMatch(/do not need equipment details or a diagnosis/i);
     expect(review).toContain("expectedLatestAssessmentId");
-    expect(review).toMatch(/optional detail/i);
+    expect(review).toMatch(/<details/i);
   });
 });

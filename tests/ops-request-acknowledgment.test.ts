@@ -251,6 +251,21 @@ describe("simple request acknowledgment", () => {
     expect(h.repository.snapshot().workflowTasks.filter((task) => task.serviceRequestId === request.id && ["open", "in_progress"].includes(task.status))).toHaveLength(1);
   });
 
+  it("audits a new follow-up explanation while reusing an unresolved exceptional intake task", async () => {
+    const h = harness();
+    const request = await report(h, "Emergency access concern remains open", "emergency");
+    await acknowledgeServiceRequest(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedStatus: "submitted", actor: facilitiesActor });
+    const before = h.repository.snapshot();
+    const input = { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, explanation: "Additional access detail for the existing reviewer", actor: facilitiesActor };
+    const result = await requestAcknowledgedServiceRequestFollowUp(h.services, input);
+    expect(result.request.status).toBe("under_review");
+    expect(h.repository.snapshot().workflowTasks).toEqual(before.workflowTasks);
+    expect(h.repository.snapshot().auditEvents.some((event) => event.aggregateId === request.id && event.eventType === "request.follow_up_requested" && JSON.parse(event.payloadJson).explanation === input.explanation)).toBe(true);
+    const after = h.repository.snapshot();
+    expect(await requestAcknowledgedServiceRequestFollowUp(h.services, input)).toMatchObject({ replayed: true });
+    expect(h.repository.snapshot()).toEqual(after);
+  });
+
   it("preserves emergency and reported safety review obligations after acknowledgment", async () => {
     const h = harness();
     const emergency = await report(h, "Fuel-island emergency stop cover is damaged.", "emergency");
@@ -348,5 +363,34 @@ describe("acknowledgment completion corrections", () => {
     await linkServiceRequestToWorkOrder(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, workOrderId: second.id, expectedStatus: "acknowledged", correctionReason: "Correct association", actor: facilitiesActor });
     await expect(unlinkServiceRequestFromWorkOrder(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, expectedWorkOrderId: first.id, expectedVersion: linked.version!, correctionReason: "Stale removal", actor: facilitiesActor })).rejects.toMatchObject({ code: "CONFLICT" });
     expect((await h.repository.getRequest(NORTHLINE_ORGANIZATION_ID, request.id))?.linkedWorkOrderId).toBe(second.id);
+  });
+});
+
+
+describe("link correction during explicit follow-up", () => {
+  it("preserves the pending review, its task, acknowledgment, and former work when correcting then unlinking", async () => {
+    const h = harness();
+    const request = await report(h, "A lighting report needing follow-up");
+    const first = await openWork(h, "First possible work");
+    const second = await openWork(h, "Correct work");
+    const secondBefore = await h.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, second.id);
+    const common = { organizationId: NORTHLINE_ORGANIZATION_ID, requestId: request.id, actor: facilitiesActor };
+    const linked = await linkServiceRequestToWorkOrder(h.services, { ...common, workOrderId: first.id, expectedStatus: "submitted" });
+    const followUp = await requestAcknowledgedServiceRequestFollowUp(h.services, { ...common, explanation: "Please check which lights are affected" });
+    const corrected = await linkServiceRequestToWorkOrder(h.services, { ...common, workOrderId: second.id, expectedStatus: "under_review", correctionReason: "Wrong lighting job" });
+    expect(corrected.status).toBe("under_review");
+    expect(corrected.acknowledgedAt).toBe(linked.acknowledgedAt);
+    expect(h.repository.snapshot().workflowTasks.find((task) => task.id === followUp.task.id)).toEqual(followUp.task);
+    const model = buildRequestReviewModel(h.repository.snapshot(), facilitiesSession, request.id);
+    expect(model.unlinkAction).toContain("/unlink");
+    const input = { ...common, expectedWorkOrderId: second.id, expectedVersion: corrected.version!, correctionReason: "No confirmed association" };
+    const unlinked = await unlinkServiceRequestFromWorkOrder(h.services, input);
+    expect(unlinked.status).toBe("under_review");
+    expect(unlinked.linkedWorkOrderId).toBeUndefined();
+    expect(unlinked.acknowledgedAt).toBe(linked.acknowledgedAt);
+    expect(h.repository.snapshot().workflowTasks.find((task) => task.id === followUp.task.id)).toEqual(followUp.task);
+    expect(await h.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, second.id)).toEqual(secondBefore);
+    expect(await unlinkServiceRequestFromWorkOrder(h.services, input)).toMatchObject({ replayed: true });
+    expect(buildRequestReviewModel(h.repository.snapshot(), facilitiesSession, request.id).canPrepareWorkOrder).toBe(true);
   });
 });

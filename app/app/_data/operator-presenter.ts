@@ -1,3 +1,4 @@
+import { reviewItemHref } from "@/lib/ops/review-navigation";
 import "server-only";
 
 import type {
@@ -808,8 +809,8 @@ const reviewQueueExceptionCopy: Record<ExceptionKind, { label: string; title: st
     title: "Review a cost above the approved amount",
   },
   overdue_pm: {
-    label: "PM missed its due date",
-    title: "Decide what to do with overdue PM",
+    label: "Scheduled maintenance is overdue",
+    title: "Review overdue preventive maintenance",
   },
 };
 
@@ -827,6 +828,7 @@ function actionsForSession(
   scoped: ScopedFixture,
   session: OperatorSession,
   limit = 6,
+  history = false,
 ) {
   const role = session.role === "facilities"
     ? "facilities_admin" as const
@@ -847,6 +849,7 @@ function actionsForSession(
     role,
     membershipId: session.membershipId,
     asOf: fixture.asOf,
+    history,
   }).map<ActionItemViewModel>((item) => {
     const exception = item.sourceKind === "exception"
       ? fixture.exceptions.find((candidate) => candidate.organizationId === scoped.organizationId && candidate.id === item.id)
@@ -862,7 +865,7 @@ function actionsForSession(
       : item.group === "completion"
         ? "Completion check"
         : item.sourceKind === "exception"
-          ? "Service-record exception"
+          ? "Service record to check"
           : item.sourceKind === "vendor_reminder"
             ? "Vendor relationship"
             : "Work and vendor decision";
@@ -875,23 +878,39 @@ function actionsForSession(
       attentionLane: item.lane,
       attentionGroup: item.group,
       sourceCount: item.sourceIds.length,
+      sources: item.sourceIds.map((id) => {
+        const task = fixture.workflowTasks.find((row) => row.organizationId === scoped.organizationId && row.id === id);
+        const follow = fixture.followUps.find((row) => row.organizationId === scoped.organizationId && row.id === id);
+        const approval = fixture.approvalRequests.find((row) => row.organizationId === scoped.organizationId && row.id === id);
+        const quote = fixture.estimateRequests.find((row) => row.organizationId === scoped.organizationId && row.id === id);
+        const proposal = fixture.estimateProposals.find((row) => row.organizationId === scoped.organizationId && row.id === id);
+        const vendorId = quote?.vendorId ?? proposal?.vendorId;
+        const vendorName = vendorId ? vendorById.get(vendorId)?.name : undefined;
+        return {
+          id, label: task?.title ?? follow?.nextAction ?? (quote ? `Quote request · ${vendorName}` : proposal ? `Quote version ${proposal.revision} · ${vendorName}` : approval ? "Approval request" : item.title),
+          href: proposal ? `${item.linkHref.split("#")[0]}#quote-proposal-${proposal.id}` : quote ? `${item.linkHref.split("#")[0]}#quote-request-${quote.id}` : follow ? `/app/action-center/${encodeURIComponent(follow.id)}` : task?.workOrderId ? `${item.linkHref.split("#")[0]}#workflow-task-${task.id}` : item.linkHref,
+          owner: task?.assigneeName ?? follow?.accountableParty ?? (quote ? vendorName ?? item.owner : item.owner),
+          dueLabel: task?.dueAt || follow?.dueAt || quote?.dueAt ? dateTime((task?.dueAt ?? follow?.dueAt ?? quote?.dueAt)!) : task?.noSlaReason ?? "No deadline recorded",
+          doneWhen: task?.completionCriteria ?? (follow ? "Record the follow-up result" : quote ? "Vendor submits a quote or declines" : proposal ? "Review this version when choosing a quote" : approval ? "Authorized reviewer records a decision" : item.reason),
+        };
+      }),
       reasonLabel: exceptionCopy?.label ?? (externalWait ? "Waiting on another party" : item.lane === "mine" ? "Needs my action" : item.lane === "upcoming" ? "Upcoming review" : "Team work"),
       storeLabel: item.storeId ? storeLabel(storeById.get(item.storeId)) : "Companywide",
       recordLabel: work?.number ?? request?.reference ?? vendor?.name ?? categoryLabel,
       dueAt: item.dueAt,
-      dueLabel: item.sourceKind === "exception"
+      dueLabel: history ? `Completed ${dateTime(item.completedAt!)}` : item.sourceKind === "exception"
         ? `Open since ${date(item.dueAt!)}`
         : !item.dueAt
-          ? "No SLA — reason recorded"
+          ? "No deadline — reason recorded"
           : overdue && externalWait
             ? `Commitment missed ${date(item.dueAt)}`
             : overdue
               ? `Overdue since ${date(item.dueAt)}`
               : `Due ${date(item.dueAt)}`,
       ownerLabel: item.owner,
-      priorityLabel: overdue ? "Overdue" : item.priority === "critical" ? "Critical" : sentence(item.priority),
-      tone: overdue || item.priority === "critical" ? "critical" : item.priority === "high" ? "warning" : "neutral",
-      link: { href: item.linkHref, label: item.sourceKind === "exception" ? "Review and decide" : "Open required action" },
+      priorityLabel: history ? "Completed / canceled" : overdue ? "Overdue" : item.priority === "critical" ? "Critical" : sentence(item.priority),
+      tone: history ? "neutral" : overdue || item.priority === "critical" ? "critical" : item.priority === "high" ? "warning" : "neutral",
+      link: { href: item.linkHref, label: item.sourceKind === "exception" ? "Review and decide" : "Open review" },
     };
   });
   if (session.demoEdition !== "accountability") return source.slice(0, limit);
@@ -1598,7 +1617,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
         dashboardShortcut({ id: "finance-invoices", title: `Review ${rollingInvoices.length} recorded invoice reference${rollingInvoices.length === 1 ? "" : "s"}`, description: "Use operator work-order references and confirmed allocations as an optional safeguard; the platform does not approve or pay invoices.", categoryLabel: "Invoice safeguard", dueLabel: "Optional review", ownerLabel: "Finance", tone: invoiceToReview ? "warning" : "positive", href: hrefWithQuery("/app/invoices", { from: periodStart }), linkLabel: "Open invoice references" }),
         dashboardShortcut({ id: "finance-store-cost", title: "Compare recorded cost by store", description: "Move from each store total through service area, equipment, component, work order, and entered cost lines.", categoryLabel: "Cost visibility", dueLabel: "Rolling 12 months", ownerLabel: "Finance and operations", tone: "info", href: "/app/stores?sort=cost", linkLabel: "Open store ranking" }),
         dashboardShortcut({ id: "finance-capital", title: "Review replacement planning evidence", description: `${money(replacementEstimateTotal)} is the current benchmark-based outlook, not an approved budget.`, categoryLabel: "Lifecycle & CapEx", dueLabel: "Planning view", ownerLabel: "Finance and facilities", href: "/app/lifecycle?replacement=entered", linkLabel: "Open capital outlook" }),
-        dashboardShortcut({ id: "finance-reports", title: "Open finance-relevant source views", description: "Recorded cost, work obligations, invoice references, and lifecycle evidence remain separate and traceable.", categoryLabel: "Reporting", dueLabel: "Available now", ownerLabel: "Finance", href: "/app/reports", linkLabel: "Open reports" }),
+        dashboardShortcut({ id: "finance-reports", title: "View financial reports", description: "Recorded cost, work obligations, invoice references, and lifecycle evidence remain separate and traceable.", categoryLabel: "Reporting", dueLabel: "Available now", ownerLabel: "Finance", href: "/app/reports", linkLabel: "Open reports" }),
       ],
       prioritySection: { title: "Financial review paths", description: "Cost and evidence stay distinct so no amount is silently combined or treated as approved.", link: { href: "/app/reports", label: "Open source reports" } },
       breakdowns: [storeBreakdown, categoryBreakdown],
@@ -1635,7 +1654,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
       },
       journey: base.journey,
       metrics: [
-        { id: "open-work", label: "Open work", value: String(openWork.length), supportingText: "Current maintenance obligations for this store", tone: openWork.length ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open current work" } },
+        { id: "open-work", label: "Open work", value: String(openWork.length), supportingText: "Open work orders at this store", tone: openWork.length ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open current work" } },
         { id: "vendor-response", label: "Awaiting vendor response", value: String(awaitingVendor.length), supportingText: "Approved, issued, or waiting on vendor", tone: awaitingVendor.length ? "warning" : "positive", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
         { id: "recorded-visits", label: "Recorded service visits", value: String(scoped.visits.length), supportingText: `${activeVisits.length} onsite now · ${completedVisits.length} completed`, tone: activeVisits.length ? "info" : "neutral", link: { href: "/app/visits", label: "Open visit history" } },
         { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Rolling source cost for this store", link: { href: "/app/spend", label: "Explain the total" } },
@@ -1690,7 +1709,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     prioritySection: { title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" }, display: "summary" },
     breakdowns: isFacilities
       ? [
-          countBreakdown("open-work-status", "Open work by status", workStatusCounts, (key) => hrefWithQuery("/app/work-orders", { status: key }), { description: "Every segment opens the work orders currently carrying that status.", labelFor: (key) => workStatusLabel(key as WorkOrder["status"]), totalNoun: "open work orders", sourceLink: { href: "/app/work-orders?status=open", label: "Open every maintenance obligation" } }),
+          countBreakdown("open-work-status", "Open work by status", workStatusCounts, (key) => hrefWithQuery("/app/work-orders", { status: key }), { description: "Every segment opens the work orders currently carrying that status.", labelFor: (key) => workStatusLabel(key as WorkOrder["status"]), totalNoun: "open work orders", sourceLink: { href: "/app/work-orders?status=open", label: "View all open work orders" } }),
           countBreakdown("onsite-vendor", "Who is onsite now", activeVendorCounts, (key) => hrefWithQuery("/app/visits", { status: "active", vendor: key }), { description: "Observed active visits by outside vendor; time and location are presence evidence, not certified labor.", labelFor: (key) => vendorById.get(key)?.name ?? "Unknown vendor", totalNoun: "active visits", sourceLink: { href: "/app/visits?status=active", label: "Open all live visits" } }),
         ]
       : [storeBreakdown, categoryBreakdown],
@@ -3071,7 +3090,7 @@ export function buildListModel(
           cells: [
             { key: "invoice", value: invoice.invoiceNumber, secondary: date(invoice.invoiceDate) },
             { key: "work", value: primaryWork?.number ?? invoice.operatorWorkOrderNumber ?? "No work-order reference", secondary: allocations.length ? (allocations.length > 1 ? `${allocations.length} allocations` : "1 linked allocation") : "Not linked to source work" },
-            { key: "vendor", value: vendor?.name ?? "Unknown vendor" },
+            { key: "vendor", value: vendor?.name ?? "Unknown vendor", link: vendor ? { href: `/app/vendors/${vendor.id}`, label: "Open vendor" } : undefined },
             { key: "store", value: allocationStoreCount > 1 ? `${allocationStoreCount} stores in this scope` : primaryWork ? storeLabel(store) : "Not attributed" },
             { key: "amount", value: allocations.length ? money(scopedAmountMinor) : money(invoice.grossAmount.amountMinor), secondary: allocations.length ? `${money(invoice.grossAmount.amountMinor)} invoice gross` : "Invoice gross · no confirmed allocation" },
             { key: "status", value: sentence(invoice.matchStatus), tone: invoice.matchStatus === "confirmed" ? "positive" : ["rejected", "unmatched"].includes(invoice.matchStatus) ? "warning" : "info" },
@@ -3116,12 +3135,12 @@ export function buildListModel(
       .map(({ request, work, store, vendor, proposal }) => ({
         id: request.id,
         label: `${work.number} - ${vendor?.name ?? "Unknown vendor"}`,
-        href: `/app/work-orders/${work.id}?view=service#bid-requests`,
+        href: `/app/work-orders/${work.id}?view=service&path=bids#quote-request-${request.id}`,
         cells: [
           { key: "request", value: request.decisionKind === "replacement_quote" ? "Replacement quote" : "Service quote", secondary: request.requestedScope },
           { key: "work", value: work.number, secondary: storeLabel(store) },
-          { key: "vendor", value: vendor?.name ?? "Unknown vendor" },
-          { key: "amount", value: proposal ? estimateMoney(proposal.amount.amountMinor, proposal.amount.currency) : "Not submitted", secondary: proposal ? `Revision ${proposal.revision}` : "Pricing evidence pending" },
+          { key: "vendor", value: vendor?.name ?? "Unknown vendor", link: vendor ? { href: `/app/vendors/${vendor.id}`, label: "Open vendor" } : undefined },
+          { key: "amount", value: proposal ? estimateMoney(proposal.amount.amountMinor, proposal.amount.currency) : "Not submitted", secondary: proposal ? `Version ${proposal.revision}` : "Pricing evidence pending", link: proposal ? { href: `/app/work-orders/${work.id}?view=service&path=bids#quote-proposal-${proposal.id}`, label: "Open this quote version" } : undefined },
           { key: "due", value: request.dueAt ? dateTime(request.dueAt, store?.timeZone) : "No deadline", secondary: request.respondedAt ? `Responded ${dateTime(request.respondedAt, store?.timeZone)}` : undefined },
           { key: "status", value: sentence(request.status), tone: request.status === "selected" ? "positive" : ["declined", "expired", "withdrawn", "not_selected"].includes(request.status) ? "neutral" : request.status === "submitted" ? "info" : "warning" },
         ],
@@ -3149,15 +3168,16 @@ export function buildListModel(
     const requestedType = first(query.type);
     const requestedPriority = first(query.priority);
     const requestedLane = first(query.lane);
-    rows = actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER)
+    rows = actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER, requestedLane === "history")
       .filter((action) => !requestedType || (["service-record", "exception"].includes(requestedType) ? action.attentionType === "service_record" : ["vendor-task", "vendor-reminder"].includes(requestedType) ? action.attentionType === "vendor_task" : action.attentionType === "follow_up"))
       .filter((action) => !requestedPriority || (requestedPriority === "urgent" ? action.tone === "critical" : action.tone !== "critical"))
       .filter((action) => !requestedLane || action.attentionLane === requestedLane)
       .filter((action) => !q || searchable(action.title, action.description, action.reasonLabel, action.ownerLabel, action.storeLabel, action.recordLabel).includes(q))
-      .map((action) => ({
+      .map((action, index, actions) => ({
         id: action.id,
         label: action.title,
-        href: action.link.href,
+        href: reviewItemHref(action.link.href, hrefWithQuery("/app/action-center", Object.fromEntries(Object.entries(query).map(([key, value]) => [key, first(value)]))), action.id, actions.slice(index + 1, index + 26).map((row) => row.id)),
+        sources: action.sources?.map((source) => ({ ...source, href: reviewItemHref(source.href, hrefWithQuery("/app/action-center", Object.fromEntries(Object.entries(query).map(([key, value]) => [key, first(value)]))), action.id, actions.slice(index + 1, index + 26).map((row) => row.id)) })),
         cells: [
           { key: "item", value: action.title, secondary: action.description },
           { key: "store", value: action.storeLabel ?? "Companywide" },
@@ -3222,7 +3242,7 @@ export function buildListModel(
   const accountabilityMeta: Partial<Record<OperatorListRoute, typeof baseMeta>> = {
     "work-orders": {
       ...baseMeta,
-      description: "Create vendor work orders and track each one through issuance, check-in, checkout, and closure.",
+      description: "Send work to vendors and track their responses, visits, and completed repairs.",
       placeholder: "Search work-order number, problem, store, or vendor",
     },
     visits: {
@@ -3362,6 +3382,7 @@ export function buildListModel(
             { value: "mine", label: `Needs my action (${allAttention.filter((item) => item.attentionLane === "mine").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "mine" }), selected: actionLane === "mine" },
             { value: "team", label: `Team work (${allAttention.filter((item) => item.attentionLane === "team").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "team" }), selected: actionLane === "team" },
             { value: "waiting", label: `Waiting on others (${allAttention.filter((item) => item.attentionLane === "waiting").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "waiting" }), selected: actionLane === "waiting" },
+            { value: "history", label: "Completed task history", href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "history" }), selected: actionLane === "history" },
             { value: "upcoming", label: `Upcoming (${allAttention.filter((item) => item.attentionLane === "upcoming").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "upcoming" }), selected: actionLane === "upcoming" },
           ],
         },
@@ -4087,7 +4108,7 @@ export function buildProgramModel(
     const compliantRate = cohortRate(compliantAssetIds);
     const noncompliantRate = cohortRate(noncompliantAssetIds);
     const minimumCohort = Math.min(compliantAssetIds.size || Number.POSITIVE_INFINITY, noncompliantAssetIds.size || Number.POSITIVE_INFINITY);
-    const cohortCaution = Number.isFinite(minimumCohort) && minimumCohort >= 10 ? "Descriptive association only; review source records before changing cadence." : "Directional only: at least one cohort has fewer than 10 equipment records, so no effectiveness conclusion is made.";
+    const cohortCaution = Number.isFinite(minimumCohort) && minimumCohort >= 10 ? "This comparison does not show that scheduled maintenance caused the difference. Review the work history before changing the schedule." : "One comparison group has fewer than 10 pieces of equipment. There is not enough data to judge whether the maintenance schedule is helping.";
     const reactiveCostByMonth = new Map<string, number>();
     for (const work of reactiveAssetWork) reactiveCostByMonth.set(work.createdAt.slice(0, 7), (reactiveCostByMonth.get(work.createdAt.slice(0, 7)) ?? 0) + (costByWork.get(work.id) ?? 0));
     const rows = visible.sort((a, b) => a.occurrence.dueAt.localeCompare(b.occurrence.dueAt)).map<TableRowViewModel>(({ occurrence, status }) => {
@@ -4107,7 +4128,7 @@ export function buildProgramModel(
         { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { key: "window", value: `${date(occurrence.windowStartsAt)} – ${date(occurrence.windowEndsAt)}`, secondary: `Due ${date(occurrence.dueAt)}` },
         { key: "work", link: occurrence.workOrderId && scoped.workOrders.some((work) => work.id === occurrence.workOrderId) ? { href: `/app/work-orders/${occurrence.workOrderId}`, label: "Open work order" } : undefined, value: occurrence.workOrderId ? scoped.workOrders.find((work) => work.id === occurrence.workOrderId)?.number ?? "Linked" : historicalAttestation ? "Imported history" : "Not created", secondary: historicalAttestation ? "Manager-attested completion" : undefined },
-        { key: "visit", link: occurrence.workOrderId && scoped.workOrders.some((work) => work.id === occurrence.workOrderId) ? { href: `/app/work-orders/${occurrence.workOrderId}?view=visits`, label: "Review PM visit evidence" } : undefined, value: observedVisitIds.size ? `${observedVisitIds.size} observed visit${observedVisitIds.size === 1 ? "" : "s"}` : historicalAttestation ? "No platform visit expected" : "No matching visit recorded", secondary: observedVisitIds.size ? "Recorded store-presence evidence" : historicalAttestation ? "Imported history; source attestation is explicit" : "Review fact, not proof service was missed", tone: observedVisitIds.size ? "positive" : historicalAttestation ? "info" : status === "completed" ? "warning" : "neutral" },
+        { key: "visit", link: occurrence.workOrderId && scoped.workOrders.some((work) => work.id === occurrence.workOrderId) ? { href: `/app/work-orders/${occurrence.workOrderId}?view=visits`, label: "Review PM visit evidence" } : undefined, value: observedVisitIds.size ? `${observedVisitIds.size} observed visit${observedVisitIds.size === 1 ? "" : "s"}` : historicalAttestation ? "No platform visit expected" : "No matching visit recorded", secondary: observedVisitIds.size ? "Recorded store-presence evidence" : historicalAttestation ? "Imported maintenance history" : "Review fact, not proof service was missed", tone: observedVisitIds.size ? "positive" : historicalAttestation ? "info" : status === "completed" ? "warning" : "neutral" },
         { key: "status", value: sentence(status), tone: status === "completed" ? "positive" : status === "missed" ? "critical" : status === "due" ? "warning" : "info" },
       ] };
     });
@@ -4553,7 +4574,7 @@ export function buildDetailModel(
             : linkedWork
               ? "This report is associated with existing work as evidence. The link does not change authorization, vendor scope, visits, or repair verification."
               : request.status === "acknowledged"
-                ? "Responsibility is recorded and intake is clear. No linked work order is visible, and aging alone will not return this report to the action queue."
+                ? "This report is acknowledged with no linked work order. Any outstanding approval or safety follow-up still needs review. Time passing alone will not create a new follow-up."
                 : "Review what was reported, then create a work order when service is approved. Equipment can be added later.",
           facts: [
             { label: "Original report", value: "Cannot be deleted", helperText: "Later corrections are recorded separately" },
@@ -4915,7 +4936,7 @@ export function buildDetailModel(
         { id: "authorization", title: sourceVisit ? "Service record and billing reference" : "Authorization", description: sourceVisit ? "This work order was created after the observed visit began. It provides a billing and spend-tracking reference without presenting the record as a prior written service authorization." : "The operator work-order number remains the billing reference; vendor ticket, invoice, and external PO stay separate.", action: work.id === NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId ? { label: "Preview vendor authorization", href: `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}` } : undefined, facts: [
           { label: "Authorized scope", value: work.authorizedScope ?? "No additional scope entered" },
           { label: "Not to exceed", value: work.nte ? money(work.nte.amountMinor) : "Not set" },
-          { label: "Issued revisions", value: String(issuances.length), helperText: issuances.length ? `Latest revision ${Math.max(...issuances.map((item) => item.revision))}` : "Not issued yet" },
+          { label: "Versions sent", value: String(issuances.length), helperText: issuances.length ? `Latest revision ${Math.max(...issuances.map((item) => item.revision))}` : "Not issued yet" },
           { label: "Vendor service ticket", value: work.vendorServiceTicketNumber ?? "Not entered" },
           { label: "Vendor invoice", value: work.vendorInvoiceNumber ?? (invoiceLinks.map((item) => item.invoice.invoiceNumber).join(", ") || "Not entered"), helperText: invoiceLinks.length ? "Optional invoice reference linked below" : undefined, link: invoiceLinks.length === 1 ? { href: `/app/invoices/${invoiceLinks[0].invoice.id}`, label: "Open invoice reference" } : undefined },
           { label: "External accounting PO", value: work.externalAccountingPo ?? "Not entered" },
@@ -5064,7 +5085,7 @@ export function buildDetailModel(
           facts: [
             { label: "Technician checkout", value: visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "Still onsite" : "Outcome not recorded", helperText: visit.outcomeNotes ?? "No technician notes were entered." },
             { label: "What stays unchanged", value: "Original check-in and checkout evidence", helperText: "Observed times are never backdated or replaced." },
-            { label: "What gets added", value: "One canonical work order linked to this visit", helperText: "Recorded costs and optional invoice evidence can then use the operator work-order number." },
+            { label: "What gets added", value: "One work order linked to this visit", helperText: "Recorded costs and optional invoice evidence can then use the operator work-order number." },
             { label: "Authorization treatment", value: "Created after service began", helperText: "The record documents the verbal or emergency path; it does not claim a prior written authorization." },
           ],
           action: canCreateVisitWorkOrder && createFromVisitHref
@@ -5675,9 +5696,9 @@ export function buildCreateWorkOrderModel(
     } : sourcePmOccurrence ? {
       title: "Create PM work order",
       eyebrow: "Preventive maintenance",
-      description: "Create the canonical service record for this scheduled maintenance occurrence, then choose who will perform it.",
+      description: "Create a work order for this scheduled maintenance, then choose who will do it.",
       scopeLabel: `${session.scopeLabel} · PM occurrence, work order, visit, and outcome remain linked`,
-    } : { title: "Create work order", eyebrow: "Service control", description: "Create the canonical record now; assign, classify, and add equipment detail only when it is useful and known.", scopeLabel: `${session.scopeLabel} · Store and problem are the only required work facts` },
+    } : { title: "Create work order", eyebrow: "Service control", description: "Choose the store and describe the problem. You can add the other details later.", scopeLabel: `${session.scopeLabel} · Store and problem are the only required work facts` },
     submitAction: "/api/ops/work-orders",
     cancelLink: sourceVisit
       ? { label: "Back to service visit", href: `/app/visits/${encodeURIComponent(sourceVisit.id)}` }
@@ -5823,7 +5844,7 @@ export function buildVendorIssuanceModel(fixture: OpsFixture, session: OperatorS
     channels: [{ value: "email", label: "Generate email-ready link" }, { value: "sms", label: "Generate SMS-ready link" }, { value: "print", label: "Print / PDF handoff" }, { value: "manual", label: "Record phone or manual handoff" }],
     currentRevision: revisions.length ? Math.max(...revisions.map((item) => item.revision)) : 0,
     helperText: workflowBlocked
-      ? "Service issuance is paused while vendor quote requests remain open."
+      ? "Finish reviewing the open quote requests before sending this work to a vendor."
       : selectedEstimate
       ? `${selectedEstimateVendor?.name ?? "The selected vendor"} is locked to this service authorization because its quote was deliberately selected. The quote remains pricing evidence and does not become recorded cost. ${previewDeliveryText}`
       : assignment?.status === "declined"
@@ -5907,6 +5928,10 @@ export function buildEstimateComparisonModel(
       .sort((left, right) => right.revision - left.revision || right.submittedAt.localeCompare(left.submittedAt));
     const proposal = proposals[0];
     const proposalView = (item: NonNullable<typeof proposal>) => ({
+      attachments: fixture.entityFiles.filter((link) => link.organizationId === scoped.organizationId && link.entityType === "estimate_proposal" && link.entityId === item.id).flatMap((link) => {
+        const file = fixture.files.find((file) => file.organizationId === scoped.organizationId && file.id === link.fileId && file.status === "available");
+        return file ? [{ name: file.originalName, href: `/api/ops/work-orders/${encodeURIComponent(workOrderId)}/quotes/${encodeURIComponent(request.id)}/${encodeURIComponent(item.id)}/files/${encodeURIComponent(file.id)}` }] : [];
+      }),
       id: item.id,
       revision: item.revision,
       amountLabel: estimateMoney(item.amount.amountMinor, item.amount.currency),
@@ -6098,7 +6123,7 @@ function workOrderStages(
       id: "closeout",
       label: "Follow-up / close",
       state: terminal ? "complete" : openFollowUps.length || completedStatus ? "current" : "upcoming",
-      detail: terminal ? workStatusLabel(work.status) : openFollowUps.length ? `${openFollowUps.length} accountable follow-up${openFollowUps.length === 1 ? "" : "s"} open` : work.status === "resolved" ? "Accepted verification is ready for explicit closure" : completedStatus ? "Internal verification is required before resolution" : "Outcome determines the next accountable action",
+      detail: terminal ? workStatusLabel(work.status) : openFollowUps.length ? `${openFollowUps.length} accountable follow-up${openFollowUps.length === 1 ? "" : "s"} open` : work.status === "resolved" ? "Repair confirmed. Ready for final closure checks." : completedStatus ? "Internal verification is required before resolution" : "Outcome determines the next accountable action",
       timestampLabel: work.closedAt ? dateTime(work.closedAt, storeTimeZone) : undefined,
     },
   ];
@@ -6555,7 +6580,7 @@ export function buildRequestReviewModel(
     expectedStatus: request?.status === "acknowledged" ? "acknowledged" : request?.status === "under_review" ? "under_review" : "submitted",
     statusLabel: request?.status === "acknowledged" ? "Acknowledged — being handled" : request ? sentence(request.status) : "Unavailable",
     expectedVersion: request?.version ?? 0,
-    unlinkAction: permitted && request?.status === "acknowledged" && request.linkedWorkOrderId ? `/api/ops/requests/${encodeURIComponent(request.id)}/unlink` : undefined,
+    unlinkAction: permitted && request?.acknowledgedAt && ["acknowledged", "under_review"].includes(request.status) && request.linkedWorkOrderId ? `/api/ops/requests/${encodeURIComponent(request.id)}/unlink` : undefined,
     acknowledgeAction: permitted && request && request.status !== "acknowledged" ? `/api/ops/requests/${encodeURIComponent(request.id)}/acknowledge` : undefined,
     followUpAction: permitted && request?.status === "acknowledged" ? `/api/ops/requests/${encodeURIComponent(request.id)}/follow-up` : undefined,
     acknowledgedAtLabel: request?.acknowledgedAt ? dateTime(request.acknowledgedAt, scoped.stores.find((store) => store.id === request.storeId)?.timeZone) : undefined,

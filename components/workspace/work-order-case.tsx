@@ -311,7 +311,7 @@ function ServicePathChoice({
   workOrderId: string;
 }) {
   const directState = issuance.currentRevision
-    ? `Authorization revision ${issuance.currentRevision} issued`
+    ? `Authorization version ${issuance.currentRevision} sent`
     : issuance.workflowBlocked
       ? "Paused while quote sourcing is open"
       : issuance.permitted
@@ -433,7 +433,7 @@ function CurrentStepPanel({ model, mode }: { model: WorkOrderCaseView; mode: Wor
   const terminal = mode === "closed";
   const waiting = mode === "waiting_on_vendor" || mode === "current_record";
   return (
-    <section className={styles.currentStepPanel} aria-labelledby="current-step-heading">
+    <section id={mode === "waiting_on_vendor" ? "vendor-response" : undefined} className={styles.currentStepPanel} aria-labelledby="current-step-heading">
       <div className={styles.currentStepCopy}>
         <p>{terminal ? "Completed case" : "What is happening now"}</p>
         <h3 id="current-step-heading">{model.plainLanguageState}</h3>
@@ -445,7 +445,7 @@ function CurrentStepPanel({ model, mode }: { model: WorkOrderCaseView; mode: Wor
       </div>
       <dl>
         <div><dt>{terminal ? "Record" : "Internal owner"}</dt><dd>{model.internalAccountableParty}</dd></div>
-        <div><dt>{terminal ? "Open obligation" : "Next action owner"}</dt><dd>{model.nextActionOwner}</dd></div>
+        <div><dt>{terminal ? "Open task" : "Next action owner"}</dt><dd>{model.nextActionOwner}</dd></div>
         <div><dt>{terminal ? "Deadline" : "Due"}</dt><dd>{terminal ? "None" : dueLabel(model.dueAt, model.timeZone)}<small>{model.deadlinePolicy}</small></dd></div>
         <div><dt>{terminal ? "Escalation" : "Escalation"}</dt><dd>{model.escalationDestination}<small>{model.escalationTrigger}</small></dd></div>
       </dl>
@@ -469,7 +469,7 @@ function CaseStateDimensions({ model }: { model: WorkOrderCaseView }) {
         {value.sourceLabel ? <small>{value.sourceLabel}{value.observedAt ? ` · ${dueLabel(value.observedAt, model.timeZone)}` : ""}{value.certainty ? ` · ${sentence(value.certainty)}` : ""}</small> : null}
       </article>)}
       {model.additionalObligations.length ? <details>
-        <summary>{model.additionalObligations.length} additional open obligation{model.additionalObligations.length === 1 ? "" : "s"}<ChevronRight aria-hidden="true" size={16} /></summary>
+        <summary>{model.additionalObligations.length} additional open task{model.additionalObligations.length === 1 ? "" : "s"}<ChevronRight aria-hidden="true" size={16} /></summary>
         <div>{model.additionalObligations.map((obligation) => <Link href={obligation.href} key={obligation.id}>
           <strong>{obligation.label}</strong><span>{obligation.owner} · {obligation.dueAt ? dueLabel(obligation.dueAt, model.timeZone) : obligation.deadlinePolicy}</span>
         </Link>)}</div>
@@ -521,7 +521,7 @@ function ServiceRecordHistory({
 }) {
   if (!authorization && !estimateComparison.requests.length) return null;
   return (
-    <details className={styles.historyDisclosure}>
+    <details id="service-authorization-history" className={styles.historyDisclosure}>
       <summary>
         <span><History aria-hidden="true" size={18} /></span>
         <div><strong>Earlier authorization and pricing</strong><small>Read-only records from completed or inactive steps</small></div>
@@ -658,8 +658,8 @@ export function WorkOrderCase({
             </p>
           </div>
           <div className={styles.accountabilityGrid}>
-            <div><span><UserRound aria-hidden="true" size={16} />Responsible person or team</span><strong>{canonicalCase.internalAccountableParty}<small>{canonicalCase.internalAccountabilityStructured ? canonicalCase.internalAccountableType === "team" ? "Accountable team" : "Named accountable person" : "Compatibility owner — facilities can assign a named person or team"}</small></strong></div>
-            <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Workflow requires</span><strong>{canonicalCase.primaryNextAction.label}<small>{canonicalCase.nextActionOwner}</small></strong></div>
+            <div><span><UserRound aria-hidden="true" size={16} />Responsible person or team</span><strong>{canonicalCase.internalAccountableParty}<small>{canonicalCase.internalAccountabilityStructured ? canonicalCase.internalAccountableType === "team" ? "Accountable team" : "Named accountable person" : "Facilities can assign a named person or team"}</small></strong></div>
+            <div className={styles.nextAction}><span><CheckCircle2 aria-hidden="true" size={16} />Next action</span><strong>{canonicalCase.primaryNextAction.label}<small>{canonicalCase.nextActionOwner}</small></strong></div>
             <div><span><Gauge aria-hidden="true" size={16} />Latest operating observation</span><strong>{canonicalCase.operatingCondition.label}<small>{canonicalCase.operatingCondition.sourceLabel ?? "No source observation"}{canonicalCase.operatingCondition.observedAt ? ` · ${dueLabel(canonicalCase.operatingCondition.observedAt, canonicalCase.timeZone)}` : ""}</small></strong></div>
             <div><span><Clock3 aria-hidden="true" size={16} />Expected by</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}<small>{canonicalCase.deadlinePolicy}</small></strong></div>
           </div>
@@ -725,7 +725,7 @@ export function WorkOrderCase({
       >
         {hasDedicatedFollowUpAction ? <CurrentStepPanel model={canonicalCase} mode={workspaceMode} /> : null}
         {hasDedicatedFollowUpAction ? (
-          <details className={styles.historyDisclosure}>
+          <details id="service-authorization-history" className={styles.historyDisclosure}>
             <summary>
               <span><Wrench aria-hidden="true" size={17} /></span>
               <div><strong>Additional work-order controls</strong><small>Create another task, record a status update, or add a separate follow-up only when needed.</small></div>

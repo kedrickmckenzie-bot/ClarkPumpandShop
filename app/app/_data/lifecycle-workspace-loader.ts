@@ -1,3 +1,4 @@
+import { approvalRequestState } from "@/lib/ops/approval-governance";
 import "server-only";
 
 import type { DetailPageViewModel, OperatorSession, TimelineEventViewModel } from "@/components/ops/data-contract";
@@ -149,6 +150,7 @@ function workOrderCase(fixture: OpsFixture, organizationId: string, workOrderId:
   const invoiceIds = new Set(allocatedInvoiceLines.map((row) => row.invoiceId));
   const invoiceLines = fixture.invoiceLines.filter((row) => row.organizationId === organizationId && invoiceIds.has(row.invoiceId));
   return buildWorkOrderCase({
+    hasPendingApproval: fixture.approvalRequests.some((row) => row.organizationId === organizationId && (row.subjectType === "work_order" && row.subjectId === workOrderId || row.subjectType === "service_request" && row.subjectId === workOrder.requestId) && approvalRequestState(row, fixture.approvalDecisions) === "pending"),
     now: fixture.asOf,
     workOrder,
     storeName,

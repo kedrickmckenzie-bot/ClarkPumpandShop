@@ -14,6 +14,7 @@ type WorkOrderView = (typeof workOrderViews)[number];
 
 function selectedView(value: string | string[] | undefined): WorkOrderView {
   const candidate = Array.isArray(value) ? value[0] : value;
+  if (candidate === "accountability") return "activity";
   return workOrderViews.includes(candidate as WorkOrderView) ? candidate as WorkOrderView : "overview";
 }
 
@@ -71,7 +72,9 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   model.page.eyebrow = hasServiceAuthorization ? "Work Order / Service Authorization" : "Operator work order";
   if (accountabilityOnly) model.page.secondaryAction = undefined;
   if (model.page.primaryAction?.href === "#issue-work") {
-    model.page.primaryAction = { ...model.page.primaryAction, href: `/app/work-orders/${id}?view=service&path=direct#issue-work` };
+    model.page.primaryAction = hasServiceAuthorization
+      ? { label: "Review service authorization", href: `/app/work-orders/${id}?view=service#service-authorization-history` }
+      : { ...model.page.primaryAction, href: `/app/work-orders/${id}?view=service&path=direct#issue-work` };
   }
   if (bidPathIsNext) {
     model.page.primaryAction = {

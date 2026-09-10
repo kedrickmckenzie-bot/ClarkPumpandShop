@@ -218,7 +218,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     stage = "closed";
   } else if (completedReplacement) {
     stage = "cost_invoice_evidence";
-  } else if (workOrder.status === "awaiting_approval" || (blockingTask?.taskType ?? "").includes("approval")) {
+  } else if (input.hasPendingApproval ?? (workOrder.status === "awaiting_approval" || (blockingTask?.taskType ?? "").includes("approval"))) {
     stage = "approval";
   } else if (!activeAssignment && blockingTask && blockingTask.serviceRequestId) {
     stage = "intake";
@@ -521,6 +521,8 @@ type CaseWorkflowTask = Pick<WorkflowTask, "id" | "workOrderId" | "serviceReques
   & Partial<Pick<WorkflowTask, "organizationId" | "assigneeType" | "assigneeId" | "assigneeRole" | "priority" | "noSlaReason" | "completionCriteria" | "escalationLevel" | "createdByActorType" | "createdByActorId" | "createdByActorName" | "createdAt">>;
 
 export interface WorkOrderCaseInput {
+  /** Explicit current approval evidence; omitted only by compatibility callers. */
+  hasPendingApproval?: boolean;
   now: string;
   timeZone?: string;
   workOrder: Pick<WorkOrder, "id" | "organizationId" | "number" | "storeId" | "problem" | "priority" | "status" | "internalAccountableParty" | "internalAccountableType" | "internalAccountableId" | "accountableParty" | "nextAction" | "dueAt" | "escalationTo" | "createdAt" | "closedAt">;

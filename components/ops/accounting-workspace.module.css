@@ -1,0 +1,14 @@
+.page { min-width: 0; display: grid; gap: 24px; font-size: 16px; line-height: 1.5; color: #243247; }
+.page h1 { font-size: 28px; font-weight: 650; margin: 8px 0; }
+.page h2 { font-size: 20px; font-weight: 650; margin: 0 0 12px; }
+.page > section { min-width: 0; padding: 24px; background: white; border: 1px solid #dce2e9; border-radius: 6px; }
+.page p { margin: 10px 0; }
+.page a { color: #2458bf; text-decoration: underline; text-underline-offset: 3px; }
+.page fieldset { padding: 16px; border: 1px solid #dce2e9; min-width: 0; }
+.page legend { font-weight: 600; padding: 0 6px; }
+.tableScroll { overflow: auto; max-width: 100%; }
+.tableScroll table { width: 100%; border-collapse: collapse; text-align: left; }
+.tableScroll th, .tableScroll td { padding: 12px; border-bottom: 1px solid #dce2e9; vertical-align: top; min-width: 120px; }
+.tableScroll th { background: #f4f6f9; font-size: 14px; }
+.tableScroll caption { text-align: left; padding: 8px 0; font-size: 14px; color: #526176; }
+@media (max-width: 600px) { .page > section { padding: 16px; } .page h1 { font-size: 25px; } }

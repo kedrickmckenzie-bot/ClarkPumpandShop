@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useState } from "react";
+import Link from "next/link";
 import { OPS_CLIENT_HEADER } from "@/lib/ops/http-contract";
 import {
   AlertTriangle,
@@ -24,7 +25,7 @@ import styles from "./ops.module.css";
 
 type MutationState = { pending: boolean; error?: string };
 
-function useMutation() {
+function useMutation(onSuccess?: (href: string) => void) {
   const [state, setState] = useState<MutationState>({ pending: false });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -44,7 +45,8 @@ function useMutation() {
         return;
       }
       const payload = await response.json().catch(() => null) as { redirectTo?: string } | null;
-      window.location.assign(payload?.redirectTo ?? window.location.href);
+      if (onSuccess && payload?.redirectTo) { onSuccess(payload.redirectTo); setState({ pending: false }); }
+      else window.location.assign(payload?.redirectTo ?? window.location.href);
     } catch {
       setState({ pending: false, error: "The quote-request update could not be recorded. Check your connection and try again." });
     }
@@ -140,7 +142,7 @@ function EstimateDecisionControls({ request }: { request: EstimateRequestCompari
 
 function EstimateRequestCard({ request }: { request: EstimateRequestComparisonViewModel }) {
   return (
-    <article className={styles.estimateCard} data-status={request.status}>
+    <article id={`quote-request-${request.id}`} className={styles.estimateCard} data-status={request.status}>
       <header>
         <div>
           <span className={styles.estimateVendorIcon}><CircleDollarSign aria-hidden="true" size={18} /></span>
@@ -155,7 +157,7 @@ function EstimateRequestCard({ request }: { request: EstimateRequestComparisonVi
         {request.dueLabel ? <span><Clock3 aria-hidden="true" size={14} />Quote due {request.dueLabel}</span> : null}
       </div>
       {request.latestProposal ? (
-        <div className={styles.estimateProposal}>
+        <div id={`quote-proposal-${request.latestProposal.id}`} className={styles.estimateProposal}>
           <div className={styles.estimateAmount}>
             <small>Vendor quote</small>
             <strong>{request.latestProposal.amountLabel}</strong>
@@ -167,10 +169,11 @@ function EstimateRequestCard({ request }: { request: EstimateRequestComparisonVi
             <div><dt>Lead time</dt><dd>{request.latestProposal.leadTimeLabel ?? "Not stated"}</dd></div>
             <div><dt>Valid through</dt><dd>{request.latestProposal.validUntilLabel ?? "Not stated"}</dd></div>
           </dl>
+          {request.latestProposal.attachments?.map((file) => <p key={file.href}><a href={file.href}>{file.name}</a></p>)}
           {request.previousProposals?.length ? (
             <details>
               <summary>Previous revisions ({request.previousProposals.length})</summary>
-              {request.previousProposals.map((proposal) => <p key={proposal.id}>Revision {proposal.revision} · {proposal.amountLabel} · {proposal.scope}</p>)}
+              {request.previousProposals.map((proposal) => <p id={`quote-proposal-${proposal.id}`} key={proposal.id}>Revision {proposal.revision} · {proposal.amountLabel} · {proposal.scope}{proposal.attachments?.map((file) => <span key={file.href}> · <a href={file.href}>{file.name}</a></span>)}</p>)}
             </details>
           ) : null}
         </div>
@@ -185,13 +188,16 @@ function EstimateRequestCard({ request }: { request: EstimateRequestComparisonVi
 }
 
 function RequestEstimateForm({ model }: { model: EstimateComparisonViewModel }) {
+  const [createdLink, setCreatedLink] = useState<string>();
+  const mutation = useMutation(setCreatedLink);
+  if (createdLink) return <div className={styles.controlSuccess} role="status"><div><strong>Quote request created.</strong><p><a href={createdLink} target="_blank" rel="noreferrer">Open the vendor’s quote link</a></p><p><Link href={`/app/work-orders/${model.workOrderId}?view=service&path=bids#bid-requests`}>Return to the updated quote comparison</Link></p></div></div>;
   return (
     <details className={styles.controlDisclosure}>
       <summary className={styles.controlDisclosureSummary}>
         <CircleDollarSign aria-hidden="true" size={18} />
         <span><strong>Request another quote</strong><small>Invite a qualified vendor to price the same scope before service is authorized.</small></span>
       </summary>
-      <form action={model.submitAction} method="post" target="_blank" className={styles.controlForm}>
+      <form action={model.submitAction} method="post" onSubmit={mutation.submit} className={styles.controlForm}>
         <input name="kind" type="hidden" value="estimate_only" />
         <div className={styles.fieldGrid}>
           <label className={styles.field} htmlFor={`estimate-purpose-${model.workOrderId}`}>
@@ -232,8 +238,9 @@ function RequestEstimateForm({ model }: { model: EstimateComparisonViewModel }) 
         </div>
         <div className={styles.formFooter}>
           <span className={styles.formMeta}>Pricing only—no assignment, site visit, check-in, recorded cost, or billing is created.</span>
-          <button className={styles.primaryButton} type="submit">
-            <Send aria-hidden="true" size={16} />Create quote request & link
+          {mutation.state.error ? <p role="alert" className={styles.controlError}>{mutation.state.error}</p> : null}
+          <button className={styles.primaryButton} type="submit" disabled={mutation.state.pending}>
+            <Send aria-hidden="true" size={16} />{mutation.state.pending ? "Creating…" : "Create quote request & link"}
           </button>
         </div>
       </form>

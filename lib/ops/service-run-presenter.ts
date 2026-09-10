@@ -102,7 +102,7 @@ export async function buildServiceRunPublicView(input: {
       { value: "countered", label: "Counter the schedule", description: "Propose another start time while preserving the original recommendation." },
       { value: "stop_change_requested", label: "Request a stop-order change", description: "Keep every Store but request another order." },
       { value: "work_order_change_requested", label: "Request a Work Order change", description: "Ask the operator to remove specific work from this run." },
-      { value: "insufficient_capacity", label: "Report insufficient capacity", description: "Keep the obligations visible and explain the capacity constraint." },
+      { value: "insufficient_capacity", label: "Report that you cannot take more work", description: "Explain which work you cannot take and why." },
       { value: "declined", label: "Decline", description: "Decline with a structured reason for operator review." },
     ],
   };

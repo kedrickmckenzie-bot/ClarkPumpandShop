@@ -1,0 +1,2 @@
+ALTER TABLE "ops_entity_files" DROP CONSTRAINT "chk_ops_entity_files_type";--> statement-breakpoint
+ALTER TABLE "ops_entity_files" ADD CONSTRAINT "chk_ops_entity_files_type" CHECK ("ops_entity_files"."entity_type" IN ('request', 'work_order', 'visit', 'asset', 'invoice_reference', 'invoice', 'estimate_proposal'));

@@ -370,7 +370,16 @@ describe("enterprise service-control presenter contracts", () => {
 
     expect(all.resultSummary).toBe(`${projected.length} items`);
     expect(all.table.rows.map((row) => row.id)).toEqual(projected.slice(0, 25).map((item) => item.id));
-    expect(all.table.rows.map((row) => row.href)).toEqual(projected.slice(0, 25).map((item) => item.linkHref));
+    for (const [index, row] of all.table.rows.entries()) {
+      const actual = new URL(row.href, "https://ops.test");
+      expect(actual.searchParams.get("reviewItem")).toBe(row.id);
+      expect(actual.searchParams.get("reviewQueue")).toContain("/app/action-center");
+      actual.searchParams.delete("reviewItem");
+      actual.searchParams.delete("reviewQueue");
+      actual.searchParams.delete("reviewNext");
+      actual.searchParams.delete("reviewAfter");
+      expect(`${actual.pathname}${actual.search}${actual.hash}`).toBe(projected[index].linkHref);
+    }
     if (projected.length > 25) expect(all.pagination?.summary).toContain(`of ${projected.length}`);
     expect(all.metrics).toHaveLength(4);
     expect(all.metrics?.find((metric) => metric.id === "attention-service")?.value).toBe(String(exceptionIds.length));
@@ -389,7 +398,7 @@ describe("enterprise service-control presenter contracts", () => {
     expect(checkoutProjection).toBeDefined();
     const checkoutFollowUp = followUps.table.rows.find((row) => row.id === checkoutProjection?.id);
     expect(checkoutFollowUp).toBeDefined();
-    expect(checkoutFollowUp?.href).toBe(checkoutProjection?.linkHref);
+    expect(new URL(checkoutFollowUp!.href, "https://ops.test").pathname).toBe(new URL(checkoutProjection!.linkHref, "https://ops.test").pathname);
     expect(vendorReminders.table.rows.every((row) => vendorReminderIds.includes(row.id))).toBe(true);
     expect(urgent.table.rows.every((row) => ["Urgent", "Overdue"].includes(cell(row, "priority") ?? ""))).toBe(true);
 

@@ -861,3 +861,19 @@ describe("estimate selection and canonical work-order preservation", () => {
     expect(test.repository.snapshot()).toEqual(before);
   });
 });
+
+
+it("commits files with the exact quote revision, preserves earlier files and rejects a stale approval", async () => {
+  const h = harness();
+  const request = await createEstimateRequest(h, SUMMIT, "c");
+  const common = { organizationId: NORTHLINE_ORGANIZATION_ID, estimateRequestId: request.request.id, vendorId: SUMMIT, tokenHash: request.tokenHash, amountMinor: 12000, currency: "USD", scope: "Replace the fan", actor: vendorActor("ColdLine") };
+  const file = (id: string) => ({ id, storageKey: `private/${id}`, sha256: "a".repeat(64), originalName: `${id}.pdf`, contentType: "application/pdf", byteLength: 120 });
+  const first = await submitEstimate(h.services, { ...common, expectedRevision: 0, attachments: [file("quote-file-one")] });
+  const second = await submitEstimate(h.services, { ...common, expectedRevision: 1, amountMinor: 13000, attachments: [file("quote-file-two")] });
+  expect((await h.repository.listFilesForEntity(NORTHLINE_ORGANIZATION_ID, "estimate_proposal", first.proposal.id)).map((item) => item.id)).toEqual(["quote-file-one"]);
+  expect((await h.repository.listFilesForEntity(NORTHLINE_ORGANIZATION_ID, "estimate_proposal", second.proposal.id)).map((item) => item.id)).toEqual(["quote-file-two"]);
+  expect(await h.repository.listFilesForEntity("other-org", "estimate_proposal", first.proposal.id)).toEqual([]);
+  await expect(selectEstimate(h.services, { organizationId: NORTHLINE_ORGANIZATION_ID, estimateRequestId: request.request.id, proposalId: first.proposal.id, expectedRevision: 1, note: "Review old version", actor: facilitiesActor })).rejects.toMatchObject({ code: "CONFLICT" });
+  await expect(submitEstimate(h.services, { ...common, expectedRevision: 1, attachments: [file("stale-file")] })).rejects.toMatchObject({ code: "CONFLICT" });
+  expect(h.repository.snapshot().files.some((item) => item.id === "stale-file")).toBe(false);
+});

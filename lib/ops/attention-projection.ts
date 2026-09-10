@@ -7,7 +7,7 @@ import type {
 } from "./types";
 
 export type AttentionSourceKind = "workflow_task" | "follow_up" | "exception" | "vendor_reminder" | "held_work" | "quote_round";
-export type AttentionLane = "mine" | "team" | "waiting" | "upcoming";
+export type AttentionLane = "mine" | "team" | "waiting" | "upcoming" | "history";
 export type AttentionGroup = "work_vendor" | "completion" | "service_record" | "financial" | "vendor_relationship";
 
 export interface AttentionProjectionItem {
@@ -15,6 +15,7 @@ export interface AttentionProjectionItem {
   sourceKind: AttentionSourceKind;
   /** Every durable record represented by the row. Used to prove grouping without losing identity. */
   sourceIds: OpsId[];
+  completedAt?: string;
   workOrderId?: OpsId;
   serviceRequestId?: OpsId;
   vendorId?: OpsId;
@@ -83,6 +84,7 @@ export interface AttentionProjectionInput {
   role: OrganizationRole;
   membershipId?: OpsId;
   asOf: string;
+  history?: boolean;
 }
 
 /**
@@ -104,7 +106,7 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
   const representedFollowUps = new Set<OpsId>();
 
   const taskItems = fixture.workflowTasks
-    .filter((task) => task.organizationId === organizationId && ["open", "in_progress"].includes(task.status))
+    .filter((task) => task.organizationId === organizationId && (input.history ? ["completed", "cancelled"] : ["open", "in_progress"]).includes(task.status))
     .filter((task) => (task.workOrderId ? workById.has(task.workOrderId) : Boolean(task.serviceRequestId && requestById.has(task.serviceRequestId))))
     .filter((task) => isTaskVisible(task, input.role))
     .map<AttentionProjectionItem>((task) => {
@@ -124,7 +126,8 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
         owner: task.assigneeName,
         dueAt: task.dueAt,
         priority: task.priority,
-        lane: laneForTask(task, input),
+        lane: input.history ? "history" : laneForTask(task, input),
+        completedAt: task.completedAt ?? task.cancelledAt,
         group: groupForTask(task),
         linkHref: task.workOrderId
           ? `/app/work-orders/${encodeURIComponent(task.workOrderId)}?view=accountability#workflow-tasks`
@@ -252,6 +255,8 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
           linkHref: `/app/work-orders/${encodeURIComponent(hold.workOrderId)}?view=service#visit-hold`,
         }))
     : [];
+
+  if (input.history) return taskItems.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? "") || a.id.localeCompare(b.id));
 
   return [...taskItems, ...followUpItems, ...exceptionItems, ...vendorReminderItems, ...quoteRoundItems, ...heldWorkItems]
     .sort((left, right) => {

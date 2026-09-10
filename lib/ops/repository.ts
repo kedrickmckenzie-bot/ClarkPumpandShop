@@ -272,7 +272,12 @@ export interface OpsRepository {
   listWarrantyCases(organizationId: OpsId): Promise<WarrantyCase[]>;
   listQuotesForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<Quote[]>;
   listAuthorizationsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<Authorization[]>;
+  listAccountingInvoiceHistory(organizationId: OpsId, sourceId: OpsId): Promise<import("./types").AuditEvent[]>;
+  listAccountingSourcesForInvoice(organizationId: OpsId, invoiceId: OpsId): Promise<import("./types").AccountingInvoiceSource[]>;
+  getAccountingInvoiceSource(organizationId: OpsId, id: OpsId): Promise<import("./types").AccountingInvoiceSource | null>;
+  listAccountingInvoiceSources(organizationId: OpsId, limit: number, offset: number): Promise<import("./types").AccountingInvoiceSource[]>;
   getInvoice(organizationId: OpsId, invoiceId: OpsId): Promise<Invoice | null>;
+  findInvoicesByVendorReference(organizationId: OpsId, vendorId: OpsId, number: string): Promise<Invoice[]>;
   listInvoices(organizationId: OpsId): Promise<Invoice[]>;
   listInvoiceLines(organizationId: OpsId, invoiceId: OpsId): Promise<InvoiceLine[]>;
   listInvoiceLineAllocations(organizationId: OpsId, invoiceLineId: OpsId): Promise<InvoiceLineAllocation[]>;
@@ -305,6 +310,7 @@ export interface OpsRepository {
   getActiveWorkflowTaskSlaPause(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTaskSlaPause | null>;
   getException(organizationId: OpsId, exceptionId: OpsId): Promise<OpsException | null>;
   getIdempotencyKey(organizationId: OpsId, key: string): Promise<IdempotencyKey | null>;
+  listFilesForEntity(organizationId: OpsId, entityType: string, entityId: OpsId, visibility?: "vendor_shared"): Promise<StoredFile[]>;
   getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null>;
   getActiveAssignment(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderAssignment | null>;
   getLatestIssuanceForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderIssuance | null>;

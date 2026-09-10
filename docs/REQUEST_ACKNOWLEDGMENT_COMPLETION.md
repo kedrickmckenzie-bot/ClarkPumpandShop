@@ -72,3 +72,9 @@ Desktop and 390×844 mobile browser checks exercised acknowledgment without note
 - Broader browser inspection covered manager search, the store creation form, successful work creation with classification and provider deferred, vendor response controls, service-link/QR/trusted-device visit entry, the no-WO reason path, invoice safeguards, PM/lifecycle views and responsive store detail. Cross-channel visit completion was verified by the automated workflow suite; live geolocation was not requested during this browser pass.
 
 No push or deployment was performed. `dev4.log` was preserved. The separate Render build was not rerun for this correction.
+
+## Coordinated completion follow-on
+
+Reasoned correction and unlink now preserve an explicit `under_review` follow-up instead of forcing the request back to acknowledged or completing its open review task. They require the acknowledged provenance, expected request version and expected old link. The former work order remains unchanged. The unlinked request retains normal explicit follow-up and work-creation eligibility under its existing approval and store permissions.
+
+A new follow-up explanation is also audited when a safety/approval intake task already exists. That task is reused without overwriting its original reason; replay does not add another task or explanation. Genuine current approval/safety obligations stay open. Superseded impact concerns still do not keep routine intake active. Browser checks covered acknowledgment without note/link, continuation within the same filtered queue, ordinary end-of-selection behavior, linking, explicit follow-up, unlink after that follow-up, retained acknowledgment and pending approval. Full results are in `WORKFLOW_ACCOUNTING_COMPLETION.md`.

@@ -65,7 +65,7 @@ describe("enterprise trends presenter", () => {
     expect(model.series.every((point) => new URL(point.currentLink.href, "https://operations.test").searchParams.get("detailMonth") === point.id)).toBe(true);
     expect(model.outlook.label).toMatch(/12-month recorded work cost|not enough history/i);
     expect(model.outlook.caution).toMatch(/not a budget|will not create/i);
-    expect(model.benchmark.methodology).toMatch(/same equipment|other stores/i);
+    expect(model.benchmark.methodology).toMatch(/same kinds of equipment/i);
     expect(model.sourceTable.columns.at(-1)?.label).toBe("Cost");
     expect(queryFromHref(model.drivers.sortLinks[0].link.href)).not.toHaveProperty("detailKind");
   });
@@ -1286,7 +1286,7 @@ describe("enterprise trends presenter", () => {
       signalLabel: "No reliable peer comparison yet",
     });
     expect(model.benchmark.rows[0].evidenceQualityLabel).toMatch(/unknown installation date.*excluded/i);
-    expect(model.benchmark.methodology).toMatch(/Unknown coverage is excluded, not converted to zero/i);
+    expect(model.benchmark.methodology).toMatch(/missing history is left out/i);
   });
 
   it("excludes source activity outside a documented retirement window from the comparable result", () => {
@@ -1391,7 +1391,7 @@ describe("recording coverage and exact issuance evidence", () => {
     const detail = buildTrendsModel(fixture, session(), parameters, { includeExportRows: true });
     expect(detail.exportRows).toHaveLength(panel.vendorAccountability.awaitingCount);
     expect(detail.exportRows?.filter((row) => row.sourceId === assignment.id)).toHaveLength(1);
-    expect(detail.exportRows?.every((row) => row.units === "count" && row.timeBasis === "assignment first issuance date")).toBe(true);
+    expect(detail.exportRows?.every((row) => row.units === "count" && row.timeBasis === "Date first sent to vendor")).toBe(true);
     assignment.status = "superseded";
     const closed = buildTrendsModel(fixture, session(), parameters, { includeExportRows: true });
     expect(closed.exportRows?.some((row) => row.sourceId === assignment.id)).toBe(false);

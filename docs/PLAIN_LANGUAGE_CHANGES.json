@@ -1,0 +1,871 @@
+[
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Request review decision recorded in the audit history.",
+    "after": "Review saved.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Business impact confirmed or revised; the request review task and audit history were updated atomically.",
+    "after": "Impact review saved.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "One accountable follow-up was created; the original acknowledgment remains in history.",
+    "after": "Follow-up created.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Authorization rejected with an immutable decision record.",
+    "after": "Approval request declined.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Attributed vendor response recorded against the current authorization.",
+    "after": "Vendor response saved.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Visit linked by an auditable amendment; the original unmatched check-in remains preserved.",
+    "after": "Visit linked. The original check-in is saved in history.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Workflow Task created without overwriting any simultaneous obligation.",
+    "after": "Task created.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Workflow Task started and its accountable projection refreshed.",
+    "after": "Task started.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Workflow Task completed with an immutable resolution note.",
+    "after": "Task completed. Your note was saved.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Workflow Task cancelled with its reason preserved in history.",
+    "after": "Task canceled. Your reason was saved.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Deliberately return this report to an accountable queue. Aging alone never does this.",
+    "after": "Ask someone to follow up on this report.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Creates one due, assigned intake obligation and preserves the acknowledgment.",
+    "after": "Creates a follow-up task. The earlier acknowledgment stays in history.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Link visit with amendment",
+    "after": "Link visit",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Completion criteria",
+    "after": "Done when",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "State the observable fact that makes this obligation complete.",
+    "after": "What needs to happen before this task is done?",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Explain why this obligation needs a higher level of attention.",
+    "after": "Why does this need additional help or approval?",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Explain why this obligation no longer applies. The task remains in history.",
+    "after": "Why is this task no longer needed?",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Non-blocking supporting obligation",
+    "after": "Other work can continue while this task is open.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Open finance-relevant source views",
+    "after": "View financial reports",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Current maintenance obligations for this store",
+    "after": "Open work orders at this store",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Open every maintenance obligation",
+    "after": "View all open work orders",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Create vendor work orders and track each one through issuance, check-in, checkout, and closure.",
+    "after": "Send work to vendors and track their responses, visits, and completed repairs.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "One canonical work order linked to this visit",
+    "after": "One work order linked to this visit",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Create the canonical service record for this scheduled maintenance occurrence, then choose who will perform it.",
+    "after": "Create a work order for this scheduled maintenance, then choose who will do it.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Create the canonical record now; assign, classify, and add equipment detail only when it is useful and known.",
+    "after": "Choose the store and describe the problem. You can add the other details later.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Service issuance is paused while vendor quote requests remain open.",
+    "after": "Finish reviewing the open quote requests before sending this work to a vendor.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Issued revisions",
+    "after": "Versions sent",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Descriptive association only; review source records before changing cadence.",
+    "after": "This comparison does not show that scheduled maintenance caused the difference. Review the work history before changing the schedule.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Directional only: at least one cohort has fewer than 10 equipment records, so no effectiveness conclusion is made.",
+    "after": "One comparison group has fewer than 10 pieces of equipment. There is not enough data to judge whether the maintenance schedule is helping.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Imported history; source attestation is explicit",
+    "after": "Imported maintenance history",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Accepted verification is ready for explicit closure",
+    "after": "Repair confirmed. Ready for final closure checks.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/work-order-verification-presenter.ts",
+    "before": "Your role can review this history, but observable result confirmation is not enabled for it.",
+    "after": "You can view the repair history, but you do not have permission to confirm the repair.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/work-order-verification-presenter.ts",
+    "before": "This outcome already has an accepted immutable verification decision.",
+    "after": "This repair result has already been confirmed.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/work-order-verification-presenter.ts",
+    "before": "The current outcome requires provider follow-up rather than internal verification.",
+    "after": "The vendor needs to follow up before this repair can be confirmed.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "Issuance-cohort coverage",
+    "after": "Vendor requests answered",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "Unanswered issuance cohort",
+    "after": "Vendor requests still awaiting a response",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "No issued requests in this cohort",
+    "after": "No requests were sent during this period.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "Outstanding assignments in this issuance cohort",
+    "after": "Still awaiting a response",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "Open the reconciled change drivers",
+    "after": "See what changed",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "Open the reconciled change view to see which locations or maintenance segments account for the net movement.",
+    "after": "See which stores and types of work contributed to the change.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "The rows below reconcile to the selected and comparison totals above.",
+    "after": "The rows below add up to the totals shown above.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "assignment first issuance date",
+    "after": "Date first sent to vendor",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/forms.tsx",
+    "before": "Add access timing or a service note. The authorization record remains the source of truth.",
+    "after": "Add access instructions, preferred arrival times, or other details for the vendor.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Source invoice lines and exact allocation",
+    "after": "Invoice items and linked work",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Immutable financial decisions",
+    "after": "Financial review history",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Human decision",
+    "after": "Review decision",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "lib/ops/service-run-presenter.ts",
+    "before": "Report insufficient capacity",
+    "after": "Report that you cannot take more work",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "lib/ops/service-run-presenter.ts",
+    "before": "Keep the obligations visible and explain the capacity constraint.",
+    "after": "Explain which work you cannot take and why.",
+    "reason": "Use familiar action and review language without changing behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Request acknowledged and removed from new intake. This does not claim that repair work is complete or linked.",
+    "after": "Acknowledged — being handled. The repair is not marked complete.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Request acknowledged and linked to existing work without changing its authorization, visits, or verification.",
+    "after": "Report linked to the selected work order.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "The incorrect link was removed. The acknowledgment and original work order are preserved.",
+    "after": "Work-order link removed.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "The work-order association was corrected and the earlier link remains in the audit history.",
+    "after": "Work-order link corrected.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Authorization approved and the accountable work-order state updated.",
+    "after": "Work approval saved.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Authorization escalated and the next accountable approval review created.",
+    "after": "Approval sent for further review.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Workflow Task escalated one level with a recorded reason.",
+    "after": "Task sent for additional help.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "SLA pause recorded with its reason, owner, and affected clocks.",
+    "after": "The selected response or completion timers are paused.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "SLA clock resumed; the original hold remains in history.",
+    "after": "The paused response or completion timer has resumed.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "The original report is preserved. Acknowledgment records responsibility; it does not prove repair or work-order coverage.",
+    "after": "This report has been acknowledged. Review the linked work or request a follow-up if needed.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Acknowledge it quickly, associate relevant work explicitly, or continue with a fuller service decision.",
+    "after": "Acknowledge the report, link related work, or decide what should happen next.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Clear intake without claiming the repair is complete",
+    "after": "Acknowledge this report",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "No note, equipment classification, or spending authority is required to take responsibility for the report.",
+    "after": "Acknowledge that this is being handled. No note or work-order link is needed.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Factual association; not proof of resolution",
+    "after": "Linked work does not mean the repair is complete",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "The acknowledgment remains in searchable request history and will not return to the queue merely because time passes.",
+    "after": "You can link related work or ask for a follow-up below.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Preserves the report and clears routine intake review. Emergency, safety, shutdown, and compliance obligations remain active.",
+    "after": "Clears routine intake. Safety and emergency follow-ups stay open.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "No assignment, authorization, visit, or cost is created or changed.",
+    "after": "Links this report to the selected work order.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Optional detail for meaningful safety, product, compliance, capacity, or revenue exposure.",
+    "after": "Add what you know about safety, affected products, store operations, or sales.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Estimated daily revenue exposure",
+    "after": "Estimated sales at risk per day",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "The policy version and presented amount remain immutable.",
+    "after": "Review the amount and approval requirements above.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "This adds a distinct obligation; it does not replace another open follow-up.",
+    "after": "Other open follow-ups remain in place.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "The Workflow Task update could not be recorded.",
+    "after": "The task could not be saved.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Deadline and SLA",
+    "after": "Deadline and response target",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Due date and SLA clock apply",
+    "after": "Set a deadline and timer",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Explicitly outside an SLA",
+    "after": "No deadline applies",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Applicable SLA clock",
+    "after": "Timer to use",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "No-SLA policy reason",
+    "after": "Why no deadline applies",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Name the policy or scheduled-event condition that makes a deadline inapplicable.",
+    "after": "Explain why this task does not need a deadline.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Creating another task preserves simultaneous obligations.",
+    "after": "Other tasks stay open.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Create Workflow Task",
+    "after": "Create task",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Resume SLA",
+    "after": "Resume timer",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Pause SLA",
+    "after": "Pause response or completion timer",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "SLA clocks paused",
+    "after": "Timers to pause",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Record SLA pause",
+    "after": "Pause selected timers",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "SLA pause and resume history",
+    "after": "Timer history",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "No-SLA reason:",
+    "after": "No deadline:",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Workflow Tasks and SLA accountability",
+    "after": "Tasks and follow-ups",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Each simultaneous obligation preserves who must act, what must happen, when it is due or why no SLA applies, and why the work cannot move forward.",
+    "after": "See who needs to act, the deadline, and what is needed to finish each task.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Open obligations",
+    "after": "Open tasks",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "SLA paused",
+    "after": "Timer paused",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Create another obligation",
+    "after": "Add a task",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Add work without overwriting another owner, deadline, blocker, or SLA clock.",
+    "after": "Assign additional work with its own owner and deadline.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Completed and cancelled task history",
+    "after": "Completed and canceled tasks",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Terminal task records, resolution notes, and SLA hold evidence remain immutable and reviewable.",
+    "after": "Review completed tasks, notes, and timer changes.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/workspace/work-order-case.tsx",
+    "before": "Open obligation",
+    "after": "Open task",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/workspace/work-order-case.tsx",
+    "before": "additional open obligation",
+    "after": "additional open task",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/workspace/work-order-case.tsx",
+    "before": "Authorization revision ${issuance.currentRevision} issued",
+    "after": "Authorization version ${issuance.currentRevision} sent",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops-public/vendor-estimate-form.tsx",
+    "before": "Opening records that a person reviewed it. Automated link previews and operator test views do not change its status. This requests price, scope, and availability; it does not authorize an onsite service call.",
+    "after": "Review the requested work and send your price and availability. This is a quote request; service is not yet authorized.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops-public/vendor-estimate-form.tsx",
+    "before": "No account is required. A submitted quote does not assign your company or authorize travel, check-in, service, or billing.",
+    "after": "Send your price and scope. Wait for work approval before making a service call.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "components/ops-public/vendor-estimate-form.tsx",
+    "before": "This quote stays attached to operator work order {estimate.operatorWorkOrderNumber} as comparison evidence. It does not create a second work order, recorded cost, invoice, assignment, technician visit, or permission to perform the repair.",
+    "after": "Your quote is for work order {estimate.operatorWorkOrderNumber}. The operator will review it before approving work.",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "No SLA — reason recorded",
+    "after": "No deadline — reason recorded",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "PM missed its due date",
+    "after": "Scheduled maintenance is overdue",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Decide what to do with overdue PM",
+    "after": "Review overdue preventive maintenance",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Service-record exception",
+    "after": "Service record to check",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Open required action",
+    "after": "Open review",
+    "reason": "Describe the practical task or consequence; retain records and command behavior."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "Unanswered requests are reported separately by issuance cohort.",
+    "after": "Requests still awaiting a response are grouped separately by when they were first sent.",
+    "reason": "Explain the evidence in plain language without changing the calculation or source records."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "Response speed describes answered requests. Coverage uses the first-issuance cohort; outstanding age includes only assignments still awaiting a response. A fast decline counts as a response but not as accepted service.",
+    "after": "Response times cover answered requests. The counts show requests first sent during this period that are still assigned to the same vendor. A decline counts as a response, but does not mean the vendor accepted the work.",
+    "reason": "Explain the evidence in plain language without changing the calculation or source records."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "effective outside-vendor authorizations first issued",
+    "after": "current vendor requests first sent",
+    "reason": "Explain the evidence in plain language without changing the calculation or source records."
+  },
+  {
+    "file": "app/app/_data/trends-presenter.ts",
+    "before": "The historical peer range uses up to ${observedReferenceMonthCount} reference months for the same equipment cohort at other accessible company stores, aligned by calendar month. Peer observations are normalized for documented installation/retirement exposure; the target expectation is prorated by active days. A quiet month is a measured zero only when explicit store/measure recording coverage and lifecycle dates both support it. Unknown coverage is excluded, not converted to zero. Extreme peer rates are winsorized before equal-store weighting; monthly 25th–75th percentile ranges are then accumulated for the selected equipment exposure. That descriptive range is not a prediction interval or failure probability.",
+    "after": "Compare the same kinds of equipment at other company stores you can access, using up to ${observedReferenceMonthCount} months of earlier records matched by calendar month. We adjust for how long equipment was in service. Quiet periods count as zero only when the recording history is explicitly covered; missing history is left out. We limit unusually high or low results and give each store equal weight. The range summarizes past differences; it does not predict failures or prove that a store is overspending. Calculation details: peer rates are capped at the 10th and 90th percentiles, or the 5th and 95th with at least 20 peers. Monthly 25th–75th percentile ranges are added after adjusting for the selected equipment’s active days.",
+    "reason": "Explain the evidence in plain language without changing the calculation or source records."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Every line reconciles to source records without double counting.",
+    "after": "See how each charge is split between work orders.",
+    "reason": "Explain the evidence in plain language without changing the calculation or source records."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "<small>System authority</small><strong>Flag and explain only</strong><span>No deduction, payment approval, realized savings, or operational status change.</span>",
+    "after": "<small>What this flag means</small><strong>This flag has not changed the invoice amount.</strong><span>Review the charge and its service evidence before deciding.</span>",
+    "reason": "Explain the evidence in plain language without changing the calculation or source records."
+  },
+  {
+    "file": "components/workspace/maintenance-responsibilities.tsx",
+    "before": "Turn a store issue into a canonical work order within the role's assigned stores.",
+    "after": "Create a work order for a reported problem within the role's assigned stores.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/workspace/work-order-case.tsx",
+    "before": "Compatibility owner — facilities can assign a named person or team",
+    "after": "Facilities can assign a named person or team",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/workspace/work-order-case.tsx",
+    "before": "Workflow requires",
+    "after": "Next action",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "Open Workflow Tasks",
+    "after": "Open tasks",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "No open Workflow Tasks",
+    "after": "No open tasks",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": "A nonterminal work order still needs an accountable task or documented scheduled future event.",
+    "after": "Open work needs a responsible person and a next action or planned date.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/service-run-workspace.tsx",
+    "before": "The original recommendation is immutable.",
+    "after": "Earlier recommendations remain in history.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "realized/verified Value Event recorded from explicit decisions.",
+    "after": "confirmed financial benefit recorded. Review its source below.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "No realized value is claimed from open flags.",
+    "after": "Open review flags do not count as confirmed savings.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Invoice source evidence and allocations are ready for review.",
+    "after": "Review the invoice items and the work they cover.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Governing agreement",
+    "after": "Vendor agreement",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "exact Visit / Work Order outcome",
+    "after": "linked visit outcome",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Invoice review cannot change Work Order resolution.",
+    "after": "The repair status is reviewed separately.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Record deduction after review",
+    "after": "Request a deduction after review",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/value-ledger-workspace.tsx",
+    "before": "Management proof · Source-linked economics",
+    "after": "Financial review",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/value-ledger-workspace.tsx",
+    "before": "Value ledger",
+    "after": "Financial benefits and opportunities",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/value-ledger-workspace.tsx",
+    "before": "Every amount comes from a persisted event and opens its supporting operational or financial record. The three classes are deliberately never combined into one inflated savings number.",
+    "after": "Review confirmed benefits, possible recoveries, and planning estimates separately. Open each amount’s source to check the evidence.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/value-ledger-workspace.tsx",
+    "before": "Open exact events",
+    "after": "Review supporting records",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/value-ledger-workspace.tsx",
+    "before": "Realized and verified",
+    "after": "Confirmed financial benefits",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/value-ledger-workspace.tsx",
+    "before": "Requires completed evidence or an explicit authorized final decision, such as a recorded invoice adjustment.",
+    "after": "Requires evidence of an applied credit or other verified benefit. A requested deduction, deferred purchase, or expected avoided trip does not qualify.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/value-ledger-workspace.tsx",
+    "before": "All source-linked Value Events",
+    "after": "All financial benefits and opportunities",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/value-ledger-workspace.tsx",
+    "before": "Internal controls keep one source decision from appearing more than once in the totals.",
+    "after": "Each entry keeps its source and review history. Corrections remain visible.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "components/ops/value-ledger-workspace.tsx",
+    "before": "No Value Events match this class and scope.",
+    "after": "No financial entries match these filters.",
+    "reason": "Make the next action or financial evidence clear without rewriting source records."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Responsibility is recorded and intake is clear. No linked work order is visible, and aging alone will not return this report to the action queue.",
+    "after": "This report is acknowledged with no linked work order. Any outstanding approval or safety follow-up still needs review. Time passing alone will not create a new follow-up.",
+    "reason": "Do not imply acknowledgment clears outstanding approvals or safety obligations."
+  },
+  {
+    "file": "lib/product/domain-label.ts",
+    "before": "Realized Verified",
+    "after": "Confirmed financial benefits",
+    "reason": "Use a financial benefit category, not an implementation enum."
+  },
+  {
+    "file": "lib/product/domain-label.ts",
+    "before": "Identified Exposure",
+    "after": "Possible recoveries and risks",
+    "reason": "Distinguish potential exposure from a realized credit."
+  },
+  {
+    "file": "lib/product/domain-label.ts",
+    "before": "Invoice Deduction Requested",
+    "after": "Deduction requested — awaiting confirmation",
+    "reason": "Do not imply an unconfirmed deduction is money saved."
+  },
+  {
+    "file": "lib/product/domain-label.ts",
+    "before": "Approved For Payment",
+    "after": "Approved for payment — payment not confirmed",
+    "reason": "Preserve the distinction between approval and payment."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Raw work-order and exception status values",
+    "after": "Human-readable status labels",
+    "reason": "Render states clearly while retaining original stored codes."
+  },
+  {
+    "file": "components/ops/estimate-comparison-panel.tsx",
+    "before": null,
+    "after": "Quote request created.",
+    "reason": "Make success and the continuation explicit; keep errors on the form.",
+    "changeKind": "added control"
+  },
+  {
+    "file": "components/ops-public/vendor-estimate-form.tsx",
+    "before": null,
+    "after": "Review submitted quote and files",
+    "reason": "Let the vendor reopen exact submitted evidence and revise it.",
+    "changeKind": "added control"
+  },
+  {
+    "file": "components/ops/views.tsx",
+    "before": null,
+    "after": "Tasks and supporting records",
+    "reason": "Expose each source and its owner, deadline and completion requirement.",
+    "changeKind": "added control"
+  },
+  {
+    "file": "components/ops/workflow-task-panel.tsx",
+    "before": null,
+    "after": "Save and open next",
+    "reason": "Advance only after the current save succeeds.",
+    "changeKind": "added control"
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": null,
+    "after": "Save and open next",
+    "reason": "Keep the active selection through supported review actions.",
+    "changeKind": "added control"
+  },
+  {
+    "file": "app/app/work-orders/[id]/page.tsx",
+    "before": "Create vendor handoff",
+    "after": "Review service authorization",
+    "reason": "For already-issued work, open the existing authorization and its vendor link instead of offering a hidden issuance control."
+  }
+]

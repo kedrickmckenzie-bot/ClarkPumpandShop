@@ -34,11 +34,29 @@ function restoreTrail(scopeKey: string): NavigationStop[] {
 export function NavigationTrail({ scopeKey }: { scopeKey: string }) {
   const pathname = usePathname();
   const query = useSearchParams().toString();
+  useEffect(() => {
+    const reveal = () => {
+      let id: string;
+      try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { return; }
+      const target = id ? document.getElementById(id) : null;
+      if (!target) return;
+      let parent: HTMLElement | null = target;
+      let expanded = false;
+      while (parent) {
+        if (parent instanceof HTMLDetailsElement && !parent.open) { parent.open = true; expanded = true; }
+        parent = parent.parentElement;
+      }
+      if (expanded) target.scrollIntoView({ block: "start" });
+    };
+    const frame = requestAnimationFrame(reveal);
+    window.addEventListener("hashchange", reveal);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("hashchange", reveal); };
+  }, [pathname, query]);
   const trail = useSyncExternalStore(subscribe, () => activeScope === scopeKey ? stops : empty, serverSnapshot);
   useEffect(() => {
     const parameters = new URLSearchParams(query);
     // Mutation receipts are transient; filters, pagination and selected sections are retained.
-    for (const key of ["updated", "error", "success", "created", "notice"]) parameters.delete(key);
+    for (const key of ["saved", "updated", "error", "success", "created", "notice"]) parameters.delete(key);
     const href = `${pathname}${parameters.size ? `?${parameters}` : ""}`;
     const record = () => {
       const title = document.querySelector("main h1")?.textContent?.trim();

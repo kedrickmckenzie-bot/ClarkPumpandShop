@@ -1,3 +1,4 @@
+import { approvalRequestState } from "@/lib/ops/approval-governance";
 import "server-only";
 
 import { cache } from "react";
@@ -357,32 +358,27 @@ export async function loadProgramModel(route: ProgramRouteId, searchParams: Oper
 }
 
 export async function loadTrendsModel(searchParams: OperatorSearchParameters = {}) {
-  const [session, fixture] = await Promise.all([
-    getRequestOperatorSession(),
-    getServerOpsTrendsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID),
-  ]);
+  const session = await getRequestOperatorSession();
   if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
+  const fixture = await getServerOpsTrendsFixtureSnapshot(session.organizationId);
   return buildTrendsModel(fixture, session, searchParams);
 }
 
 /** One analysis pass for CSV export. The presenter returns its complete,
  * consistently scoped source projection only on this server-only path. */
 export async function loadTrendsExportModel(searchParams: OperatorSearchParameters = {}) {
-  const [session, fixture] = await Promise.all([
-    getRequestOperatorSession(),
-    getServerOpsTrendsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID),
-  ]);
+  const session = await getRequestOperatorSession();
   if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
+  const fixture = await getServerOpsTrendsFixtureSnapshot(session.organizationId);
   return buildTrendsModel(fixture, session, searchParams, { includeExportRows: true });
 }
 
 export async function loadTrendsPageData(searchParams: OperatorSearchParameters = {}) {
-  const [session, fixture, repository] = await Promise.all([
-    getRequestOperatorSession(),
-    getServerOpsTrendsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID),
-    getServerOpsRepository(),
-  ]);
+  const session = await getRequestOperatorSession();
   if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
+  const [fixture, repository] = await Promise.all([
+    getServerOpsTrendsFixtureSnapshot(session.organizationId), getServerOpsRepository(),
+  ]);
   const model = buildTrendsModel(fixture, session, searchParams);
   const savedViews = session.membershipId
     ? await repository.listSavedViews(session.organizationId, session.membershipId, "trends")
@@ -709,6 +705,7 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
   const siteVisitWorkOrders = fixture.siteVisitWorkOrders.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId);
   const linkedVisitIds = new Set(siteVisitWorkOrders.map((row) => row.visitId));
   return buildWorkOrderCase({
+    hasPendingApproval: fixture.approvalRequests.some((row) => row.organizationId === context.session.organizationId && (row.subjectType === "work_order" && row.subjectId === workOrderId || row.subjectType === "service_request" && row.subjectId === workOrder.requestId) && approvalRequestState(row, fixture.approvalDecisions) === "pending"),
     now: context.fixture.asOf,
     workOrder,
     timeZone: store?.timeZone ?? context.fixture.organizations.find((row) => row.id === context.session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE,

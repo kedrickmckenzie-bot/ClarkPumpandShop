@@ -46,7 +46,7 @@ import type {
   WorkOrderVisitOutcome,
 } from "./contracts";
 import { PublicWorkflowError } from "./contracts";
-import { getPublicUploadStore } from "./server-file-store";
+import { getPublicUploadStore, getQuoteUploadStore, usesLocalQuoteStorage } from "./server-file-store";
 
 export const PUBLIC_DEMO_LINKS = {
   serviceToken: NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104,
@@ -1158,6 +1158,7 @@ const gateway: PublicOperationsGateway = {
     const source = resolved.estimateRequest;
     const proposals = await runtime().repository.listEstimateProposalsForRequest(source.organizationId, source.id);
     const proposal = proposals[0];
+    const files = new Map(await Promise.all(proposals.map(async (item) => [item.id, (await runtime().repository.listFilesForEntity(source.organizationId, "estimate_proposal", item.id, "vendor_shared")).map((file) => ({ name: file.originalName, href: `/api/ops-public/estimate/${encodeURIComponent(token)}/files/${encodeURIComponent(item.id)}/${encodeURIComponent(file.id)}` }))] as const)));
     const statusLabels: Record<typeof source.status, string> = {
       requested: "Link generated",
       opened: "Opened",
@@ -1196,6 +1197,7 @@ const gateway: PublicOperationsGateway = {
       problem: resolved.workOrder.problem,
       requestedScope: source.requestedScope,
       latestProposal: proposal ? {
+        attachments: files.get(proposal.id),
         revision: proposal.revision,
         amountLabel: estimateMoneyLabel(proposal.amount.amountMinor, proposal.amount.currency),
         amount: (proposal.amount.amountMinor / 100).toFixed(2),
@@ -1216,6 +1218,7 @@ const gateway: PublicOperationsGateway = {
           previous.validUntil !== newer.validUntil ? "validity" : undefined,
         ].filter((value): value is string => Boolean(value));
         return {
+          attachments: files.get(previous.id),
           revision: previous.revision,
           amountLabel: estimateMoneyLabel(previous.amount.amountMinor, previous.amount.currency),
           scope: previous.scope,
@@ -1226,6 +1229,7 @@ const gateway: PublicOperationsGateway = {
           changed,
         };
       }),
+      localFileStorage: usesLocalQuoteStorage(runtime().mode === "demo"),
       canRespond: !responseDeadlinePassed && ["opened", "submitted"].includes(source.status),
       mode: runtime().mode,
     };
@@ -1282,6 +1286,16 @@ const gateway: PublicOperationsGateway = {
       validUntil = new Date(parsed).toISOString();
     }
     try {
+      const uploads = command.attachments ?? [];
+      if (uploads.length > 4) throw new PublicWorkflowError("Attach up to four files.", 422, "too_many_files");
+      for (const upload of uploads) {
+        const bytes = new Uint8Array(upload.bytes);
+        const header = new TextDecoder().decode(bytes.slice(0, 12));
+        const valid = upload.mediaType === "application/pdf" ? header.startsWith("%PDF-") : upload.mediaType === "image/png" ? bytes[0] === 137 && header.slice(1, 4) === "PNG" : upload.mediaType === "image/jpeg" ? bytes[0] === 255 && bytes[1] === 216 : upload.mediaType === "image/webp" && header.startsWith("RIFF") && header.slice(8) === "WEBP";
+        if (!valid || upload.size !== bytes.length || bytes.length === 0 || bytes.length > 10 * 1024 * 1024) throw new PublicWorkflowError("Choose a valid PDF, JPEG, PNG, or WebP file up to 10 MB.", 422, "invalid_file");
+      }
+      const stored = await getQuoteUploadStore(runtime().mode === "demo").store({ organizationId: resolved.estimateRequest.organizationId, subjectType: "estimate_proposal", subjectId: `${resolved.estimateRequest.id}:${command.expectedRevision + 1}`, uploads, idempotencyKey: `${resolved.estimateRequest.id}:${command.expectedRevision + 1}` });
+      if (stored.some((file) => !file.stored)) throw new PublicWorkflowError("Files could not be saved. Retry your quote with the files attached.", 422, "storage_unavailable");
       const result = await submitEstimate(
         { repository: runtime().repository },
         {
@@ -1290,6 +1304,7 @@ const gateway: PublicOperationsGateway = {
           vendorId: resolved.estimateRequest.vendorId,
           tokenHash: resolved.tokenHash,
           expectedRevision: command.expectedRevision,
+          attachments: stored.map((file) => ({ id: `file-${crypto.randomUUID()}`, storageKey: file.key, sha256: file.sha256, originalName: file.originalName, contentType: file.mediaType, byteLength: file.size })),
           amountMinor,
           currency: command.currency ?? "USD",
           scope,
@@ -1969,4 +1984,14 @@ export function getPublicOperationsGateway(): PublicOperationsGateway {
   // All public channels resolve a purpose-bound token, then invoke the same
   // lib/ops repository and domain commands used by authenticated operator UI.
   return gateway;
+}
+
+
+export async function resolveVendorQuoteFile(token: string, proposalId: string, fileId: string) {
+  const resolved = await resolveVendorEstimate(token);
+  if (!resolved) return null;
+  const source = resolved.estimateRequest;
+  const proposals = await runtime().repository.listEstimateProposalsForRequest(source.organizationId, source.id);
+  if (!proposals.some((proposal) => proposal.id === proposalId && proposal.vendorId === source.vendorId)) return null;
+  return (await runtime().repository.listFilesForEntity(source.organizationId, "estimate_proposal", proposalId, "vendor_shared")).find((file) => file.id === fileId) ?? null;
 }

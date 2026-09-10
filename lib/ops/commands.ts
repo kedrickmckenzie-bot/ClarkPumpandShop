@@ -2709,13 +2709,16 @@ export async function linkServiceRequestToWorkOrder(svc: OpsCommandServices, inp
   const correctionReason = input.correctionReason?.trim();
   if (correcting && !correctionReason) throw new OpsDomainError("VALIDATION", "Explain why the work-order link is being corrected");
   const now = clock.now();
+  // Correcting an association must not complete an explicitly requested follow-up.
+  const nextStatus = request.acknowledgedAt ? request.status : "acknowledged" as const;
+  const preserveFollowUp = Boolean(request.acknowledgedAt && request.status === "under_review");
   const acknowledgedAt = request.acknowledgedAt ?? now;
   const acknowledgedBy = request.acknowledgedAt ? {
     type: request.acknowledgedByActorType, id: request.acknowledgedByActorId, name: request.acknowledgedByActorName,
   } : { type: input.actor.actorType, id: input.actor.actorId, name: input.actor.actorName };
   const statements: OpsStatement[] = [{
     sql: "UPDATE ops_requests SET status = ?, acknowledged_at = ?, acknowledged_by_actor_type = ?, acknowledged_by_actor_id = ?, acknowledged_by_actor_name = ?, linked_work_order_id = ?, linked_at = ?, linked_by_actor_type = ?, linked_by_actor_id = ?, linked_by_actor_name = ? WHERE organization_id = ? AND id = ? AND store_id = ? AND version = ? AND status = ? AND converted_work_order_id IS NULL",
-    params: ["acknowledged", acknowledgedAt, acknowledgedBy.type ?? null, acknowledgedBy.id ?? null, acknowledgedBy.name ?? input.actor.actorName, workOrder.id, now, input.actor.actorType, input.actor.actorId ?? null, input.actor.actorName, input.organizationId, request.id, request.storeId, persistedRequestVersion(request) + 1, input.expectedStatus],
+    params: [nextStatus, acknowledgedAt, acknowledgedBy.type ?? null, acknowledgedBy.id ?? null, acknowledgedBy.name ?? input.actor.actorName, workOrder.id, now, input.actor.actorType, input.actor.actorId ?? null, input.actor.actorName, input.organizationId, request.id, request.storeId, persistedRequestVersion(request) + 1, input.expectedStatus],
   }];
   const [tasks, impactAssessments] = await Promise.all([
     repository.listWorkflowTasksForRequest(input.organizationId, request.id),
@@ -2727,7 +2730,7 @@ export async function linkServiceRequestToWorkOrder(svc: OpsCommandServices, inp
     || ["potential", "confirmed"].includes(assessment.complianceImpact)
     || assessment.storeOperatingState === "unable_to_operate",
   );
-  tasks.filter((task) => !exceptionalReviewPreserved && task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => statements.push(...buildCompleteWorkflowTaskStatements({
+  tasks.filter((task) => !preserveFollowUp && !exceptionalReviewPreserved && task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => statements.push(...buildCompleteWorkflowTaskStatements({
     task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Acknowledged and linked to existing work order ${workOrder.number}`,
   })));
   statements.push(...auditAndOutbox({
@@ -2744,7 +2747,7 @@ export async function linkServiceRequestToWorkOrder(svc: OpsCommandServices, inp
     repository, request, now, statements,
     conflictMessage: "This report changed or was linked elsewhere. Refresh before trying again.",
   });
-  return { ...request, status: "acknowledged" as const, acknowledgedAt, acknowledgedByActorType: acknowledgedBy.type, acknowledgedByActorId: acknowledgedBy.id, acknowledgedByActorName: acknowledgedBy.name, linkedWorkOrderId: workOrder.id, linkedAt: now, linkedByActorType: input.actor.actorType, linkedByActorId: input.actor.actorId, linkedByActorName: input.actor.actorName, version: persistedRequestVersion(request) + 1 };
+  return { ...request, status: nextStatus, acknowledgedAt, acknowledgedByActorType: acknowledgedBy.type, acknowledgedByActorId: acknowledgedBy.id, acknowledgedByActorName: acknowledgedBy.name, linkedWorkOrderId: workOrder.id, linkedAt: now, linkedByActorType: input.actor.actorType, linkedByActorId: input.actor.actorId, linkedByActorName: input.actor.actorName, version: persistedRequestVersion(request) + 1 };
 }
 
 export interface RequestAcknowledgedFollowUpInput { organizationId: OpsId; requestId: OpsId; explanation: string; actor: ActorContext }
@@ -2760,7 +2763,7 @@ export async function unlinkServiceRequestFromWorkOrder(svc: OpsCommandServices,
   if (!request) throw new OpsDomainError("NOT_FOUND", "Service request not found");
   const correctionReason = required(input.correctionReason, "Correction reason");
   if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) throw new OpsDomainError("VALIDATION", "Refresh before removing this link");
-  if (!request.acknowledgedAt || request.convertedWorkOrderId || request.status !== "acknowledged") {
+  if (!request.acknowledgedAt || request.convertedWorkOrderId || !["acknowledged", "under_review"].includes(request.status)) {
     throw new OpsDomainError("CONFLICT", "Only an acknowledged report's optional link can be removed");
   }
   if (!request.linkedWorkOrderId && persistedRequestVersion(request) === input.expectedVersion + 1) return { ...request, replayed: true as const };
@@ -2785,7 +2788,17 @@ export async function requestAcknowledgedServiceRequestFollowUp(svc: OpsCommandS
   const explanation = required(input.explanation, "Follow-up explanation");
   const tasks = await repository.listWorkflowTasksForRequest(input.organizationId, request.id);
   const existing = tasks.find((task) => task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status));
-  if (existing) return { request, task: existing, replayed: true as const };
+  if (existing) {
+    const requestHash = await sha256Hex(JSON.stringify([request.id, existing.id, explanation, input.actor.actorId]));
+    const key = `__ops_internal__/request-follow-up:${requestHash}`;
+    if (request.status === "under_review" && (existing.reason === explanation || await repository.getIdempotencyKey(input.organizationId, key))) return { request, task: existing, replayed: true as const };
+    const now = clock.now();
+    const statements: OpsStatement[] = [insert("ops_idempotency_keys", { organization_id: input.organizationId, key, command: "request.follow_up_requested", result_id: existing.id, request_hash: requestHash, created_at: now, expires_at: "9999-12-31T23:59:59.999Z" })];
+    if (request.status === "acknowledged") statements.push({ sql: "UPDATE ops_requests SET status = ? WHERE organization_id = ? AND id = ? AND version = ? AND status = ?", params: ["under_review", input.organizationId, request.id, persistedRequestVersion(request) + 1, "acknowledged"] });
+    statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "request", aggregateId: request.id, eventType: "request.follow_up_requested", actor: input.actor, occurredAt: now, payload: { taskId: existing.id, explanation, reusedOpenTask: true, previousStatus: request.status, status: "under_review" }, ids }));
+    await atomicRequestMutation({ repository, request, now, statements, conflictMessage: "This request changed. Refresh before requesting follow-up again." });
+    return { request: { ...request, status: "under_review" as const, version: persistedRequestVersion(request) + 1 }, task: existing };
+  }
   const now = clock.now();
   const dueAt = addHours(now, ({ emergency: 1, urgent: 4, routine: 24, planned: 72 } as const)[request.priority]);
   const task: WorkflowTask = {

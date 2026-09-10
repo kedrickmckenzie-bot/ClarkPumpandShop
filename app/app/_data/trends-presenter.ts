@@ -185,7 +185,7 @@ const metricCopy: Record<TrendMetricId, { label: string; definition: string }> =
   },
   vendor_response: {
     label: "Vendor response time",
-    definition: "Median time between sending a work order and receiving the first recorded response among answered requests. Unanswered requests are reported separately by issuance cohort.",
+    definition: "Median time between sending a work order and receiving the first recorded response among answered requests. Requests still awaiting a response are grouped separately by when they were first sent.",
   },
   pm_completion: {
     label: "PM completion",
@@ -1077,9 +1077,9 @@ export function buildTrendsModel(
   const responseMixCount = (kind: OpsFixture["vendorResponses"][number]["response"]) => answeredIssuances.filter((row) => row.response?.response === kind).length;
   const vendorAccountability: TrendAnalysisPageViewModel["vendorAccountability"] = {
     title: "Vendor response follow-through",
-    description: "Response speed describes answered requests. Coverage uses the first-issuance cohort; outstanding age includes only assignments still awaiting a response. A fast decline counts as a response but not as accepted service.",
-    cohortLabel: `${currentIssuanceCohort.length} effective outside-vendor authorizations first issued ${dateLabel(currentStart)}–${dateLabel(currentEnd)}`,
-    responseCoverageLabel: currentIssuanceCohort.length ? `${Math.round((answeredIssuances.length / currentIssuanceCohort.length) * 100)}% · ${answeredIssuances.length} of ${currentIssuanceCohort.length} answered` : "No issued requests in this cohort",
+    description: "Response times cover answered requests. The counts show requests first sent during this period that are still assigned to the same vendor. A decline counts as a response, but does not mean the vendor accepted the work.",
+    cohortLabel: `${currentIssuanceCohort.length} current vendor requests first sent ${dateLabel(currentStart)}–${dateLabel(currentEnd)}`,
+    responseCoverageLabel: currentIssuanceCohort.length ? `${Math.round((answeredIssuances.length / currentIssuanceCohort.length) * 100)}% · ${answeredIssuances.length} of ${currentIssuanceCohort.length} answered` : "No requests were sent during this period.",
     respondedCount: answeredIssuances.length,
     awaitingCount: unansweredIssuances.length,
     overdueCount: overdueUnanswered.length,
@@ -1284,7 +1284,7 @@ export function buildTrendsModel(
           { label: "Versus previous", value: comparison === "none" ? "Not compared" : !currentHasData || !baselineHasData ? "Not enough data" : metricChangeLabel(safeMetric, currentValue, baselineValue) },
           { label: "Records included", value: safeMetric === "pm_completion" ? currentEvidence : evidenceLabel(safeMetric, currentRecords.length) },
           ...(safeMetric === "vendor_response" ? [
-            { label: "Issuance-cohort coverage", value: vendorAccountability.responseCoverageLabel },
+            { label: "Vendor requests answered", value: vendorAccountability.responseCoverageLabel },
             { label: "Awaiting response", value: String(vendorAccountability.awaitingCount) },
             { label: "Overdue unanswered", value: String(vendorAccountability.overdueCount) },
           ] : []),
@@ -2486,7 +2486,7 @@ export function buildTrendsModel(
       title: `${vendorAccountability.overdueCount} overdue unanswered request${vendorAccountability.overdueCount === 1 ? "" : "s"}`,
       detail: `${vendorAccountability.responseCoverageLabel}. The oldest outstanding request is ${vendorAccountability.oldestOutstandingLabel} old. Response coverage and median speed use different, explicitly labeled time bases.`,
       magnitudeLabel: `${vendorAccountability.awaitingCount} awaiting response`,
-      patternLabel: "Unanswered issuance cohort",
+      patternLabel: "Vendor requests still awaiting a response",
       evidenceLabel: vendorAccountability.cohortLabel,
       sourceIds: overdueUnanswered.map((row) => row.latestIssuance.id),
       actionLabel: "Review outstanding commitments",
@@ -2503,14 +2503,14 @@ export function buildTrendsModel(
       findingType: "period_change",
       eyebrow: "Material period change",
       title: differenceSentence(safeMetric, currentValue, baselineValue),
-      detail: historicalPortfolioContext ?? "Open the reconciled change view to see which locations or maintenance segments account for the net movement.",
+      detail: historicalPortfolioContext ?? "See which stores and types of work contributed to the change.",
       magnitudeLabel: `${absoluteChange >= 0 ? "+" : "−"}${formatMetric(safeMetric, Math.abs(absoluteChange))}`,
       patternLabel: "Period-over-period movement",
       evidenceLabel: `${currentEvidence} now · ${comparisonEvidence} in the comparison`,
       sourceIds: [...currentRecords, ...baselineRecords].map((record) => record.id),
       actionLabel: "Explain the change",
       tone: changeTone,
-      link: { href: trendHref({ view: "drivers" }), label: "Open the reconciled change drivers" },
+      link: { href: trendHref({ view: "drivers" }), label: "See what changed" },
     });
   }
   if (!insights.length) {
@@ -2576,7 +2576,7 @@ export function buildTrendsModel(
       sourceDate: row.date,
       localDate: row.localDate,
       periodKey: row.periodKey,
-      timeBasis: detailKind === "vendor_outstanding" ? "assignment first issuance date" : row.sourceKind === "calculated_peer_contribution" ? "historical peer equipment-month contribution to the selected target month" : measureDateBasis[safeMetric],
+      timeBasis: detailKind === "vendor_outstanding" ? "Date first sent to vendor" : row.sourceKind === "calculated_peer_contribution" ? "historical peer equipment-month contribution to the selected target month" : measureDateBasis[safeMetric],
       rawValue: row.value,
       amountMinor: units === "minor_currency" ? row.value : undefined,
       currency: row.currency ?? (units === "minor_currency" ? "USD" : undefined),
@@ -2671,7 +2671,7 @@ export function buildTrendsModel(
         ? `See which ${breakdownLabels[breakdown]}s pushed the total up or down. Focus the analysis to keep investigating, or open only the exact records.`
         : `Compare the measured result for each ${breakdownLabels[breakdown]}. Focus the analysis to keep investigating, or open only the exact records.`,
       reconciliationLabel: additive
-        ? "The rows below reconcile to the selected and comparison totals above."
+        ? "The rows below add up to the totals shown above."
         : "Each row is an independent segment result. Rates and medians do not add up to the overall result.",
       sampleLabel: `${driverRows.length} ${breakdownLabels[breakdown]}${driverRows.length === 1 ? "" : "s"}`,
       sortLinks: driverSortLinks,
@@ -2694,7 +2694,7 @@ export function buildTrendsModel(
           ? `Shows whether each store recorded more or less ${safeMetric === "work_orders" ? "work-order activity" : "service-visit activity"} on matched equipment than other accessible company stores.${historicalPortfolioContext ? ` ${historicalPortfolioContext}` : ""}`
           : "Shows how each store compares with measured results at other stores in the accessible company scope, not with an external benchmark.",
       methodology: additive
-        ? `The historical peer range uses up to ${observedReferenceMonthCount} reference months for the same equipment cohort at other accessible company stores, aligned by calendar month. Peer observations are normalized for documented installation/retirement exposure; the target expectation is prorated by active days. A quiet month is a measured zero only when explicit store/measure recording coverage and lifecycle dates both support it. Unknown coverage is excluded, not converted to zero. Extreme peer rates are winsorized before equal-store weighting; monthly 25th–75th percentile ranges are then accumulated for the selected equipment exposure. That descriptive range is not a prediction interval or failure probability.`
+        ? `Compare the same kinds of equipment at other company stores you can access, using up to ${observedReferenceMonthCount} months of earlier records matched by calendar month. We adjust for how long equipment was in service. Quiet periods count as zero only when the recording history is explicitly covered; missing history is left out. We limit unusually high or low results and give each store equal weight. The range summarizes past differences; it does not predict failures or prove that a store is overspending. Calculation details: peer rates are capped at the 10th and 90th percentiles, or the 5th and 95th with at least 20 peers. Monthly 25th–75th percentile ranges are added after adjusting for the selected equipment’s active days.`
         : "The peer range is the descriptive 25th–75th percentile at other accessible company stores. A comparison appears only when at least three other stores have measured results; it is not a prediction interval or external benchmark.",
       sampleLabel: additive ? `${benchmarkRows.length} stores · ${observedReferenceMonthCount} reference months` : `${benchmarkRows.length} stores · ${currentPeerRecords.length} records`,
       sortLinks,
@@ -2716,7 +2716,7 @@ export function buildTrendsModel(
       rows: sourceRows,
     },
     sourceMeasureLabel: detailKind === "vendor_outstanding" ? "Vendor response evidence" : undefined,
-    sourceHeading: detailKind === "vendor_outstanding" ? "Outstanding assignments in this issuance cohort" : detailKind === "benchmark" ? "Inputs behind this comparison" : "Records behind this number",
+    sourceHeading: detailKind === "vendor_outstanding" ? "Still awaiting a response" : detailKind === "benchmark" ? "Inputs behind this comparison" : "Records behind this number",
     sourceDescription: detailKind === "benchmark"
       ? `${detailRecords.filter((row) => row.sourceKind === "calculated_peer_contribution").length} calculated contribution${detailRecords.filter((row) => row.sourceKind === "calculated_peer_contribution").length === 1 ? "" : "s"} and ${detailRecords.filter((row) => row.sourceKind === "raw_peer_observation").length} raw historical record${detailRecords.filter((row) => row.sourceKind === "raw_peer_observation").length === 1 ? "" : "s"} are included. Calculated rows expose uncapped input, capping, peer weight, and target exposure; raw rows open the actual historical source record.`
       : `${detailRecords.length} record${detailRecords.length === 1 ? "" : "s"} included for the selected filters and dates.`,

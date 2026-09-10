@@ -1,3 +1,4 @@
+import { TREND_SOURCE_TABLES } from "@/lib/ops/trends-source-tables";
 import "server-only";
 
 import { createOpsD1Repository } from "@/lib/ops/d1-repository";
@@ -218,25 +219,7 @@ export async function getServerOpsFixtureSnapshot(
   return loadOpsFixtureSnapshotFromD1(binding, organizationId, NORTHLINE_AS_OF);
 }
 
-const TREND_SOURCE_TABLES = new Set([
-  "ops_regions",
-  "ops_stores",
-  "ops_vendors",
-  "ops_work_orders",
-  "ops_work_order_assignments",
-  "ops_work_order_issuances",
-  "ops_vendor_responses",
-  "ops_visit_sessions",
-  "ops_site_visit_work_orders",
-  "ops_replacement_profiles",
-  "ops_assets",
-  "ops_asset_components",
-  "ops_pm_occurrences",
-  "ops_pm_work_items",
-  "ops_cost_lines",
-  "ops_invoice_references",
-  "ops_invoice_allocations",
-]);
+
 
 /**
  * Compatibility projection for the Trends presenter.
@@ -253,7 +236,7 @@ export async function getServerOpsTrendsFixtureSnapshot(
     const pool = await getPostgresPool();
     await getServerOpsRepository();
     const { loadOpsFixtureSnapshotFromPostgres } = await import("@/lib/ops/postgres-snapshot");
-    return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, NORTHLINE_AS_OF, { includedTables: TREND_SOURCE_TABLES });
+    return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, NORTHLINE_AS_OF, { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] });
   }
   return getServerOpsFixtureSnapshot(organizationId);
 }

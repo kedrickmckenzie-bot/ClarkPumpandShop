@@ -33,3 +33,12 @@ describe("PostgreSQL presenter snapshots", () => {
     expect(statements.some((statement) => statement.includes("ops_audit_events"))).toBe(false);
   });
 });
+
+
+it("loads only coverage events with both organization and event-type predicates", async () => {
+  const calls: Array<{ sql: string; values: readonly unknown[] }> = [];
+  const pool = { async query(sql: string, values: readonly unknown[] = []) { calls.push({ sql, values }); return { rows: [] }; }, async connect() { throw new Error("unused"); } } as PostgresPoolLike;
+  await loadOpsFixtureSnapshotFromPostgres(pool, "org-one", "2026-08-25T18:00:00Z", { includedTables: new Set(["ops_stores"]), auditEventTypes: ["recording.coverage_attested"] });
+  expect(calls.filter((call) => call.sql.includes("ops_audit_events"))).toEqual([{ sql: "SELECT * FROM ops_audit_events WHERE organization_id = $1 AND event_type = ANY($2::text[])", values: ["org-one", ["recording.coverage_attested"]] }]);
+  expect(calls).toHaveLength(3);
+});

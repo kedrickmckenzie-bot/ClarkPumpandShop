@@ -31,7 +31,9 @@ describe("bid-request portfolio presenter", () => {
 
     expect(model.page.title).toBe("Quote requests");
     expect(model.table.rows).toHaveLength(fixture.estimateRequests.length);
-    expect(model.table.rows.every((row) => /^\/app\/work-orders\/[^?]+\?view=service#bid-requests$/.test(row.href))).toBe(true);
+    expect(model.table.rows.every((row) => /^\/app\/work-orders\/[^?]+\?view=service&path=bids#quote-request-/.test(row.href))).toBe(true);
+    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "vendor")?.link?.href.startsWith("/app/vendors/"))).toBe(true);
+    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "amount")?.link?.href.includes("#quote-proposal-"))).toBe(true);
     expect(new Set(model.table.rows.map((row) => row.href.split("#")[0])).size).toBeLessThan(model.table.rows.length);
   });
 

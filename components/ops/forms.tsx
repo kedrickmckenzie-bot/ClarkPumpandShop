@@ -272,7 +272,7 @@ export function VendorIssuancePanel({ model, edition = "complete" }: { model: Ve
             </div>
             <label className={styles.field} htmlFor="issuance-message">
               <span>Service note <small>Optional</small></span>
-              <textarea id="issuance-message" name="message" rows={3} placeholder="Add access timing or a service note. The authorization record remains the source of truth." />
+              <textarea id="issuance-message" name="message" rows={3} placeholder="Add access instructions, preferred arrival times, or other details for the vendor." />
             </label>
             <div className={styles.formFooter}><span className={styles.formMeta}>{model.workOrderNumber}{model.currentRevision ? ` · next revision ${model.currentRevision + 1}` : ""}</span><button className={styles.primaryButton} type="submit">Generate service authorization<Send aria-hidden="true" size={17} /></button></div>
           </form>

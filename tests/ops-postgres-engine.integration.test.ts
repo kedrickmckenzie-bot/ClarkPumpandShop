@@ -1,3 +1,8 @@
+import { loadOpsFixtureSnapshotFromPostgres } from "@/lib/ops/postgres-snapshot";
+import { TREND_SOURCE_TABLES } from "@/lib/ops/trends-source-tables";
+import { buildTrendsModel } from "@/app/app/_data/trends-presenter";
+import { importAccountingInvoice, reviewAccountingInvoice } from "@/lib/ops/accounting-import";
+import { accountingDemoDelivery } from "@/lib/ops/accounting-demo-adapter";
 import { readFile, readdir } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -766,4 +771,35 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
       expect.objectContaining({ workOrderId, selectionSource: "held_work", outcome: "diagnosis_only" }),
     ]);
   }, 120_000);
+  it("loads persisted coverage through narrow reads and imports accounting corrections on PostgreSQL", async () => {
+    const started = performance.now();
+    const fixture = await loadOpsFixtureSnapshotFromPostgres(pool, "org-northline-demo", "2026-08-25T18:00:00.000Z", { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] });
+    const loaded = performance.now();
+    expect(fixture.auditEvents.length).toBeGreaterThan(0);
+    expect(fixture.auditEvents.every((event) => event.eventType === "recording.coverage_attested")).toBe(true);
+    const session = { userId: "user-northline-facilities", organizationId: "org-northline-demo", membershipId: "membership-northline-facilities", displayName: "Jordan Lee", email: "demo@example.com", role: "facilities" as const, organizationName: "Clark Pump and Shop", scopeLabel: "Companywide" };
+    const model = buildTrendsModel(fixture, session, { metric: "recorded_cost", period: "6", view: "records", detailKind: "benchmark", benchmarkStore: "store-northline-104" }, { includeExportRows: true });
+    const modeled = performance.now();
+    process.stdout.write(`Persisted Trends: load ${Math.round(loaded - started)} ms; model ${Math.round(modeled - loaded)} ms; combined ${Math.round(modeled - started)} ms\n`);
+    expect(model.benchmark.rows.some((row) => row.evidenceQualityLabel?.includes("Supported"))).toBe(true);
+    const repository = createOpsPostgresRepository(pool);
+    const actor = { organizationId: "org-northline-demo", actorType: "user" as const, actorId: "membership-northline-facilities", actorName: "Jordan Lee" };
+    const source = (await importAccountingInvoice({ repository }, actor, accountingDemoDelivery("new"))).source;
+    const reviewed = await reviewAccountingInvoice({ repository }, actor, { sourceId: source.id, expectedVersion: source.version, vendorId: "vendor-northline-summit", splits: [{ lineId: "repair", workOrderId: "wo-northline-104", amountMinor: 35000 }, { lineId: "travel", workOrderId: "wo-northline-104", amountMinor: 10000 }], reason: "PostgreSQL source review" });
+    await importAccountingInvoice({ repository }, actor, accountingDemoDelivery("correction"));
+    expect((await repository.getInvoice(actor.organizationId, reviewed.invoiceId!))?.total.amountMinor).toBe(40000);
+    expect((await repository.listInvoiceExceptions(actor.organizationId, reviewed.invoiceId!)).some((row) => row.kind === "allocation_mismatch")).toBe(true);
+    expect((await repository.listAccountingInvoiceSources(actor.organizationId, 25, 0)).filter((row) => row.id === source.id)).toHaveLength(1);
+    await repository.atomicWrite([
+      { sql: "INSERT INTO ops_files (id, organization_id, storage_key, sha256, original_name, content_type, byte_length, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", params: ["pg-quote-file", actor.organizationId, "pg-private-quote", "a".repeat(64), "quote.pdf", "application/pdf", 12, "available", fixture.asOf] },
+      { sql: "INSERT INTO ops_entity_files (id, organization_id, file_id, entity_type, entity_id, purpose, visibility, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", params: ["pg-quote-link", actor.organizationId, "pg-quote-file", "estimate_proposal", "estimate-proposal-105-summit-r1", "service_document", "vendor_shared", fixture.asOf] },
+    ]);
+    expect(await repository.listFilesForEntity(actor.organizationId, "estimate_proposal", "estimate-proposal-105-summit-r1", "vendor_shared")).toHaveLength(1);
+    expect(await repository.listFilesForEntity("foreign", "estimate_proposal", "estimate-proposal-105-summit-r1", "vendor_shared")).toHaveLength(0);
+    await repository.atomicWrite([{ sql: "UPDATE ops_entity_files SET visibility = ? WHERE organization_id = ? AND id = ?", params: ["internal", actor.organizationId, "pg-quote-link"] }]);
+    expect(await repository.listFilesForEntity(actor.organizationId, "estimate_proposal", "estimate-proposal-105-summit-r1", "vendor_shared")).toHaveLength(0);
+    expect(await repository.listFilesForEntity(actor.organizationId, "estimate_proposal", "estimate-proposal-105-summit-r1")).toHaveLength(1);
+
+  });
+
 });

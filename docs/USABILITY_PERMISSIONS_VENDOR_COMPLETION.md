@@ -144,11 +144,11 @@ The mutation-capable browser pass used disposable local fixture state and verifi
 | Quote terminology, latest revision, comparison, and stale selection | Implemented and verified | Command/route/public/operator tests; read-only public browser review |
 | Vendor authorization question/date continuation | Implemented and verified | Continuation/case/public tests; question submission and operator task verified manually |
 | Complete attention population, grouping, lanes, stable order, pagination | Implemented and verified | >225-source regression, independent-obligation regression, 61-item browser queue |
-| Public quote file attachment | Incomplete | Existing private evidence storage is visit/intake/invoice-oriented; quote proposal/file association is not yet modeled, so adding only a file input would create untraceable evidence |
-| Expand a grouped queue row into every source obligation | Incomplete | Projection retains all source IDs and displays the count, but the current row UI does not expose the requested source-by-source expansion |
-| Completed/history attention lane | Incomplete | Open/current lanes are implemented; completed obligations remain in record history rather than a queue history view |
-| **Save and open next** review command | Incomplete | Return filters are preserved, but no atomic/contextual next-item action was added |
+| Public quote file attachment | Completed in September pass | Exact proposal/file association, authorized download, revision/stale-selection tests and mobile upload/download |
+| Expand a grouped queue row into every source obligation | Completed in September pass | Every retained source has a link, owner, deadline and completion requirement |
+| Completed/history attention lane | Completed for workflow tasks | Dated completed/canceled task history; other history remains on source records |
+| **Save and open next** review command | Completed for supported review forms | Save must succeed; server reload checks scope and eligibility, skips changed candidates and provides an end state |
 | Manual browser execution of every 1–18 and A–O mutation | Implemented but not fully verified | High-risk representative mutations ran; date counterproposal, multi-vendor selection, phone attribution, >200-row live browser fixture, and vendor mobile error retry rely on automated coverage |
 | Advanced confirmed-opportunity/review-window read model | Implemented but not production-scaled | Default list and ordinary held portfolio are bounded/query-first; explicit advanced analysis still uses the compatibility snapshot |
 
-Because the final four product capabilities above remain incomplete, this document does not label the entire broad brief complete. The implemented coordinated core is committed as a coherent improvement pass, and the boundaries are kept visible rather than hidden behind passing aggregate tests.
+The four previously missing UI/evidence capabilities were addressed in the September completion pass. `WORKFLOW_ACCOUNTING_COMPLETION.md` records the new acceptance evidence and remaining production/connector boundaries; the older validation above remains a historical record.

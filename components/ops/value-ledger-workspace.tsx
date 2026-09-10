@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { domainLabel as label } from "@/lib/product/domain-label";
 import type { OpsFixture, ValueEvent, ValueEventCategory } from "@/lib/ops/types";
 import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import styles from "./warranty-finance-workspace.module.css";
@@ -9,9 +10,6 @@ function money(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount / 100);
 }
 
-function label(value: string) {
-  return value.replaceAll("_", " ");
-}
 
 function supportingRecords(fixture: OpsFixture, event: ValueEvent) {
   if (event.invoiceLineId) {
@@ -24,6 +22,7 @@ function supportingRecords(fixture: OpsFixture, event: ValueEvent) {
       return relatedInvoices.map((item) => ({ href: `/app/invoices/${item.id}`, label: `Invoice ${item.vendorInvoiceNumber}` }));
     }
   }
+  if (event.serviceRunId) return [{ href: `/app/service-runs/${event.serviceRunId}`, label: "Combined service visit review" }];
   if (event.warrantyCaseId) return [{ href: `/app/warranties/${event.warrantyCaseId}`, label: "Warranty case" }];
   if (event.workOrderId) {
     const work = fixture.workOrders.find((item) => item.id === event.workOrderId);
@@ -48,17 +47,18 @@ export function ValueLedgerWorkspace({
   category?: ValueEventCategory;
 }) {
   const organizationTimeZone = fixture.organizations.find((organization) => organization.id === events[0]?.organizationId)?.timeZone;
-  const totals = new Map(categories.map((item) => [
-    item,
-    allEvents.filter((event) => event.category === item).reduce((sum, event) => sum + event.amount.amountMinor, 0),
-  ]));
+  const totalLabel = (category: ValueEventCategory) => {
+    const currencies = new Map<string, number>();
+    for (const event of allEvents.filter((event) => event.category === category)) currencies.set(event.amount.currency, (currencies.get(event.amount.currency) ?? 0) + event.amount.amountMinor);
+    return currencies.size ? [...currencies].map(([currency, total]) => money(total, currency)).join(" · ") : "No recorded amount";
+  };
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>Management proof · Source-linked economics</p>
-          <h1>Value ledger</h1>
-          <p>Every amount comes from a persisted event and opens its supporting operational or financial record. The three classes are deliberately never combined into one inflated savings number.</p>
+          <p className={styles.eyebrow}>Financial review</p>
+          <h1>Financial benefits and opportunities</h1>
+          <p>Review confirmed benefits, possible recoveries, and planning estimates separately. Open each amount’s source to check the evidence.</p>
         </div>
         <Link className={styles.secondaryButton} href="/app/reports">Reports</Link>
       </header>
@@ -66,13 +66,13 @@ export function ValueLedgerWorkspace({
       <section className={styles.metrics}>
         {categories.map((item) => <div className={styles.metric} key={item}>
           <span>{label(item)}</span>
-          <strong>{money(totals.get(item) ?? 0, "USD")}</strong>
-          <Link className={styles.sectionLink} href={`/app/reports/value?category=${item}`}>Open exact events</Link>
+          <strong>{totalLabel(item)}</strong>
+          <Link className={styles.sectionLink} href={`/app/reports/value?category=${item}`}>Review supporting records</Link>
         </div>)}
       </section>
 
       <div className={styles.evidence}>
-        <p className={styles.safe}><strong>Realized and verified</strong><span>Requires completed evidence or an explicit authorized final decision, such as a recorded invoice adjustment.</span></p>
+        <p className={styles.safe}><strong>Confirmed financial benefits</strong><span>Requires evidence of an applied credit or other verified benefit. A requested deduction, deferred purchase, or expected avoided trip does not qualify.</span></p>
         <p className={styles.notice}><strong>Identified exposure</strong><span>A reviewable risk or possible recovery. It is not a deduction, credit, or savings claim.</span></p>
         <p className={styles.fact}><small>Estimated opportunity</small><strong>Planning only</strong><span>Forward-looking scenarios remain separate from realized value and require supporting evidence before they can become a savings claim.</span></p>
       </div>
@@ -80,8 +80,8 @@ export function ValueLedgerWorkspace({
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
           <div>
-            <h2>{category ? label(category) : "All source-linked Value Events"}</h2>
-            <p>Internal controls keep one source decision from appearing more than once in the totals.</p>
+            <h2>{category ? label(category) : "All financial benefits and opportunities"}</h2>
+            <p>Each entry keeps its source and review history. Corrections remain visible.</p>
           </div>
           {category ? <Link className={styles.sectionLink} href="/app/reports/value">Clear filter</Link> : null}
         </div>
@@ -99,7 +99,7 @@ export function ValueLedgerWorkspace({
                 <td>{formatOperationsDateTime(event.occurredAt, organizationTimeZone)}</td>
               </tr>;
             })}</tbody>
-          </table> : <p className={styles.empty}>No Value Events match this class and scope.</p>}
+          </table> : <p className={styles.empty}>No financial entries match these filters.</p>}
         </div>
       </section>
     </div>

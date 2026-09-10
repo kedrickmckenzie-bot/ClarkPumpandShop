@@ -1226,7 +1226,7 @@ export const opsEntityFiles = pgTable("ops_entity_files", {
     columns: [table.organizationId, table.fileId],
     foreignColumns: [opsFiles.organizationId, opsFiles.id],
   }),
-  check("chk_ops_entity_files_type", sql`${table.entityType} IN ('request', 'work_order', 'visit', 'asset', 'invoice_reference', 'invoice')`),
+  check("chk_ops_entity_files_type", sql`${table.entityType} IN ('request', 'work_order', 'visit', 'asset', 'invoice_reference', 'invoice', 'estimate_proposal')`),
   check("chk_ops_entity_files_purpose", sql`${table.purpose} IN ('photo', 'service_document', 'invoice', 'warranty', 'other')`),
   check("chk_ops_entity_files_visibility", sql`${table.visibility} IN ('internal', 'vendor_shared', 'public_receipt')`),
 ]);
@@ -2023,3 +2023,15 @@ export const opsPostgresSchema = {
   opsIdempotencyKeys,
   opsWorkOrderCounters,
 } as const;
+
+
+export const opsAccountingInvoiceSources = pgTable("ops_accounting_invoice_sources", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(),
+  connectionKey: text("connection_key").notNull(), companyKey: text("company_key").notNull(), externalInvoiceId: text("external_invoice_id").notNull(),
+  sourceRevision: integer("source_revision").notNull(), version: integer("version").notNull(),
+  payloadJson: text("payload_json").notNull(), invoiceId: text("invoice_id"),
+  matchState: text("match_state").notNull(), updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_ops_accounting_source_identity").on(table.organizationId, table.connectionKey, table.companyKey, table.externalInvoiceId),
+  index("idx_ops_accounting_source_updated").on(table.organizationId, table.updatedAt, table.id),
+]);

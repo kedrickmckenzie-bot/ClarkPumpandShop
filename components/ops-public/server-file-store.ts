@@ -12,7 +12,7 @@ export interface StoredPublicUpload {
 export interface PublicUploadStore {
   store(input: {
     organizationId: string;
-    subjectType: "request" | "visit" | "invoice";
+    subjectType: "request" | "visit" | "invoice" | "estimate_proposal";
     subjectId: string;
     uploads: PublicUpload[];
     idempotencyKey?: string;
@@ -23,6 +23,7 @@ type RuntimeEnvironment = Record<string, string | undefined>;
 type StorageProvider = "r2" | "s3";
 
 interface R2BucketLike {
+  get?(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
   put(
     key: string,
     value: ArrayBuffer,
@@ -169,7 +170,7 @@ function encodePath(value: string): string {
 
 async function privateObjectKey(input: {
   organizationId: string;
-  subjectType: "request" | "visit" | "invoice";
+  subjectType: "request" | "visit" | "invoice" | "estimate_proposal";
   subjectId: string;
   randomUUID: () => string;
   stableSuffix?: string;
@@ -210,7 +211,7 @@ class SitesR2PublicUploadStore implements PublicUploadStore {
 
   async store(input: {
     organizationId: string;
-    subjectType: "request" | "visit" | "invoice";
+    subjectType: "request" | "visit" | "invoice" | "estimate_proposal";
     subjectId: string;
     uploads: PublicUpload[];
     idempotencyKey?: string;
@@ -264,7 +265,7 @@ function canonicalHeaderValue(value: string): string {
 
 async function authorizationHeader(input: {
   configuration: S3Configuration;
-  method: "PUT";
+  method: "PUT" | "GET";
   canonicalUri: string;
   headers: Record<string, string>;
   payloadHash: string;
@@ -321,7 +322,7 @@ class S3PublicUploadStore implements PublicUploadStore {
 
   async store(input: {
     organizationId: string;
-    subjectType: "request" | "visit" | "invoice";
+    subjectType: "request" | "visit" | "invoice" | "estimate_proposal";
     subjectId: string;
     uploads: PublicUpload[];
     idempotencyKey?: string;
@@ -399,4 +400,44 @@ export function createPublicUploadStore(dependencies: PublicUploadStoreDependenc
 
 export function getPublicUploadStore(): PublicUploadStore {
   return createPublicUploadStore();
+}
+
+
+// Local quote evidence is deliberately process-local, just like the demo records.
+const quoteFileRuntime = globalThis as typeof globalThis & { opsQuoteFileMemory?: Map<string, ArrayBuffer> };
+const quoteMemory = quoteFileRuntime.opsQuoteFileMemory ??= new Map<string, ArrayBuffer>();
+export function usesLocalQuoteStorage(demo: boolean): boolean {
+  return demo && process.env.NODE_ENV !== "production" && !process.env.DATABASE_URL?.trim() && process.env.OPS_LOCAL_D1 !== "1";
+}
+export function getQuoteUploadStore(demo: boolean): PublicUploadStore {
+  if (!usesLocalQuoteStorage(demo)) return getPublicUploadStore();
+  return { async store(input) {
+    return Promise.all(input.uploads.map(async (upload, index) => {
+      const digest = await sha256Hex(upload.bytes);
+      const key = await privateObjectKey({ ...input, randomUUID: () => crypto.randomUUID(), stableSuffix: await stableUploadSuffix(input.idempotencyKey, index, digest) });
+      quoteMemory.set(key, upload.bytes.slice(0));
+      return { key, originalName: upload.name, mediaType: upload.mediaType, size: upload.size, sha256: digest, stored: true };
+    }));
+  } };
+}
+
+/** Call only after checking the tenant and entity permission. Keys never come from client input. */
+export async function readPrivateUpload(key: string): Promise<ArrayBuffer | null> {
+  if (quoteMemory.has(key)) return quoteMemory.get(key)!.slice(0);
+  const environment = currentEnvironment();
+  if (configuredProvider(environment) === "r2") {
+    const bucket = await defaultR2BindingLoader();
+    return (await bucket?.get?.(key))?.arrayBuffer() ?? null;
+  }
+  const configuration = readS3Configuration(environment);
+  const { url, canonicalUri } = s3ObjectLocation(configuration, key);
+  const { timestamp, dateStamp } = amzDate(new Date());
+  const payloadHash = await sha256Hex("");
+  const headers: Record<string, string> = { host: url.host, "x-amz-content-sha256": payloadHash, "x-amz-date": timestamp };
+  if (configuration.sessionToken) headers["x-amz-security-token"] = configuration.sessionToken;
+  headers.authorization = await authorizationHeader({ configuration, method: "GET", canonicalUri, headers, payloadHash, timestamp, dateStamp });
+  const response = await fetch(url, { method: "GET", headers, redirect: "error" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error("The stored file could not be opened. Try again.");
+  return response.arrayBuffer();
 }

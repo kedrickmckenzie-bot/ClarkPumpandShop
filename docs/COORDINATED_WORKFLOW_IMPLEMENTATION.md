@@ -189,7 +189,9 @@ The browser walkthrough used disposable local mutations and covered:
 - Action Center's 61-item complete scoped count, 25-row pagination, responsibility/type views, grouped quote round, vendor-question task, and inconclusive-verification task.
 - Collapsed navigation and public/store-manager responsive layouts. Exact phone-width resizing was unavailable in the automation surface.
 
-### Remaining limitations
+### Limitations at the earlier commit
+
+The attention UI and quote-file limitations listed below were completed in the September follow-on. They remain here to explain the earlier validation record. See `WORKFLOW_ACCOUNTING_COMPLETION.md` for current limitations.
 
 - The advanced confirmed-opportunity and review-window analysis modes still use a compatibility snapshot. Default lists and the ordinary multi-store held-work workflow are bounded and query-first; those specialized projections should move to dedicated aggregate read models before production-scale use.
 - The additive D1 migration stores the structured owner pair without a database `CHECK` constraint because rebuilding the referenced work-order table would make this compatibility migration destructive. Domain commands enforce the invariant, and PostgreSQL has the database constraint.
@@ -198,4 +200,8 @@ The browser walkthrough used disposable local mutations and covered:
 - Public quote revision was not manually submitted because the deterministic link's response deadline had passed. Revision, stale-selection, and retry behavior are covered by command/route tests; proposed-date countering, phone/email attribution, and >200-row live browser state also rely on automated coverage.
 - The visible role picker, deterministic tokens, outbox delivery, production identity, accounting integration, and native applications remain demonstration boundaries described by the blueprint.
 
-The detailed capability, verification, ownership, metric, journey, and acceptance matrices are in `USABILITY_PERMISSIONS_VENDOR_COMPLETION.md`. That document deliberately does not label the entire broad brief complete while the explicit UI/evidence gaps above remain.
+The detailed capability, verification, ownership, metric, journey, and acceptance matrices are in `USABILITY_PERMISSIONS_VENDOR_COMPLETION.md`. The September follow-on addresses the UI/evidence gaps; see `WORKFLOW_ACCOUNTING_COMPLETION.md` for current acceptance and operating limits.
+
+## September completion follow-on
+
+Completed-task history, grouped-source expansion, supported Save and open next, and exact quote revision attachments are implemented in the current pass. Current results and accounting-readiness boundaries are in `WORKFLOW_ACCOUNTING_COMPLETION.md`; older validation in this document describes the earlier commit.

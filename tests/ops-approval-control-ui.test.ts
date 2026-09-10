@@ -86,7 +86,7 @@ describe("work-order pending approval controls", () => {
     expect(markup).toContain('value="escalated"');
     expect(markup).toContain('name="reason"');
     expect(markup).toContain("A reason is required for rejection or escalation and optional for approval.");
-    expect(markup).toContain("The policy version and presented amount remain immutable.");
+    expect(markup).toContain("Review the amount and approval requirements above.");
   });
 
   it("keeps the pending approval visible but withholds the form from a different membership role", () => {

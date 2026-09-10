@@ -142,6 +142,7 @@ function requestRow(fixture: OpsFixture, request: OpsFixture["requests"][number]
 }
 
 function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unknown>> {
+  if (table === "ops_accounting_invoice_sources") fixture.accountingInvoiceSources ??= [];
   const mapping: Record<string, keyof OpsFixture> = {
     ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
     ops_equipment_templates: "equipmentTemplates", ops_component_templates: "componentTemplates",
@@ -168,7 +169,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_vendor_warranty_profiles: "vendorWarrantyProfiles", ops_warranty_rules: "warrantyRules", ops_warranty_coverage_lines: "warrantyCoverageLines",
     ops_repair_items: "repairItems", ops_applied_warranties: "appliedWarranties", ops_warranty_amendments: "warrantyAmendments",
     ops_manufacturer_warranties: "manufacturerWarranties", ops_warranty_cases: "warrantyCases", ops_quotes: "quotes", ops_authorizations: "authorizations",
-    ops_invoices: "invoices", ops_invoice_lines: "invoiceLines", ops_invoice_line_allocations: "invoiceLineAllocations", ops_invoice_exceptions: "invoiceExceptions",
+    ops_accounting_invoice_sources: "accountingInvoiceSources", ops_invoices: "invoices", ops_invoice_lines: "invoiceLines", ops_invoice_line_allocations: "invoiceLineAllocations", ops_invoice_exceptions: "invoiceExceptions",
     ops_invoice_adjustments: "invoiceAdjustments", ops_service_discrepancies: "serviceDiscrepancies", ops_value_events: "valueEvents",
     ops_cost_lines: "costLines", ops_invoice_references: "invoiceReferences", ops_invoice_allocations: "invoiceAllocations",
     ops_vendor_compliance_alerts: "vendorComplianceAlerts", ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_notification_rules: "notificationRules", ops_job_runs: "jobRuns", ops_service_appointments: "serviceAppointments", ops_vendor_continuations: "vendorContinuations", ops_saved_views: "savedViews", ops_public_tokens: "publicTokens",
@@ -393,7 +394,11 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
       setColumns.forEach((column, index) => {
         if (table === "ops_assets" && column === "replacement_attributes_json") row.replacementAttributes = JSON.parse(String(setValues[index] ?? "{}"));
         else if (table === "ops_replacement_events" && column === "final_amount_minor") row.finalAmount = { amountMinor: setValues[index], currency: (row.approvedAmount as { currency?: string } | undefined)?.currency ?? "USD" };
-        else if (table === "ops_invoices" && column === "approved_for_payment_minor") row.approvedForPayment = { amountMinor: setValues[index], currency: (row.total as { currency?: string } | undefined)?.currency ?? "USD" };
+        else if ((table === "ops_invoices" && ["subtotal_minor", "tax_minor", "fees_minor", "total_minor", "approved_for_payment_minor", "paid_amount_minor"].includes(column)) || (table === "ops_invoice_lines" && ["unit_amount_minor", "line_amount_minor"].includes(column)) || (table === "ops_invoice_line_allocations" && column === "amount_minor")) {
+          const key = column === "amount_minor" ? "amount" : snakeToCamel(column.replace(/_minor$/, ""));
+          const currencyIndex = setColumns.indexOf("currency");
+          row[key] = { amountMinor: setValues[index], currency: currencyIndex >= 0 ? setValues[currencyIndex] : (row[key] as { currency?: string } | undefined)?.currency ?? "USD" };
+        }
         else if (table === "ops_work_order_visit_holds" && column === "internal_review_threshold_minor") {
           const currencyIndex = setColumns.indexOf("currency");
           const amountMinor = setValues[index];
@@ -425,6 +430,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   private counters = new Map<string, number>();
   private idempotencyKeys: IdempotencyKey[] = [];
   constructor(private fixture: OpsFixture) {
+    this.fixture.accountingInvoiceSources ??= [];
     this.fixture.requests.forEach((request) => { request.version ??= 0; });
     this.fixture.workOrders.forEach((workOrder) => { workOrder.version ??= 0; });
     for (const organization of fixture.organizations) {
@@ -506,7 +512,12 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listWarrantyCases(organizationId: OpsId) { return clone(this.fixture.warrantyCases.filter((row)=>row.organizationId===organizationId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt))); }
   async listQuotesForWorkOrder(organizationId:OpsId,workOrderId:OpsId){return clone(this.fixture.quotes.filter((row)=>row.organizationId===organizationId&&row.workOrderId===workOrderId).sort((a,b)=>b.version-a.version||b.submittedAt.localeCompare(a.submittedAt)))}
   async listAuthorizationsForWorkOrder(organizationId:OpsId,workOrderId:OpsId){return clone(this.fixture.authorizations.filter((row)=>row.organizationId===organizationId&&row.workOrderId===workOrderId).sort((a,b)=>b.authorizedAt.localeCompare(a.authorizedAt)))}
+  async listAccountingInvoiceHistory(organizationId: OpsId, sourceId: OpsId) { return clone(this.fixture.auditEvents.filter((row) => row.organizationId === organizationId && row.aggregateType === "accounting_invoice_source" && row.aggregateId === sourceId).slice(-50).reverse()); }
+  async listAccountingSourcesForInvoice(organizationId: OpsId, invoiceId: OpsId) { return clone((this.fixture.accountingInvoiceSources ?? []).filter((row) => row.organizationId === organizationId && row.invoiceId === invoiceId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)).slice(0, 100)); }
+  async getAccountingInvoiceSource(organizationId: OpsId, id: OpsId) { return clone((this.fixture.accountingInvoiceSources ?? []).find((row) => row.organizationId === organizationId && row.id === id) ?? null); }
+  async listAccountingInvoiceSources(organizationId: OpsId, limit: number, offset: number) { return clone((this.fixture.accountingInvoiceSources ?? []).filter((row) => row.organizationId === organizationId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)).slice(offset, offset + limit)); }
   async getInvoice(organizationId: OpsId, invoiceId: OpsId) { return clone(this.fixture.invoices.find((row)=>row.organizationId===organizationId&&row.id===invoiceId)??null); }
+  async findInvoicesByVendorReference(organizationId: OpsId, vendorId: OpsId, number: string) { return clone(this.fixture.invoices.filter((row) => row.organizationId === organizationId && row.vendorId === vendorId && row.vendorInvoiceNumber === number).slice(0, 25)); }
   async listInvoices(organizationId: OpsId) { return clone(this.fixture.invoices.filter((row)=>row.organizationId===organizationId).sort((a,b)=>b.invoiceDate.localeCompare(a.invoiceDate))); }
   async listInvoiceLines(organizationId: OpsId, invoiceId: OpsId) { return clone(this.fixture.invoiceLines.filter((row)=>row.organizationId===organizationId&&row.invoiceId===invoiceId).sort((a,b)=>a.lineNumber-b.lineNumber)); }
   async listInvoiceLineAllocations(organizationId: OpsId, invoiceLineId: OpsId) { return clone(this.fixture.invoiceLineAllocations.filter((row)=>row.organizationId===organizationId&&row.invoiceLineId===invoiceLineId)); }
@@ -538,6 +549,10 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async getActiveWorkflowTaskSlaPause(organizationId: OpsId, workflowTaskId: OpsId) { const resumes = new Set(this.fixture.workflowTaskSlaResumes.filter((row) => row.organizationId === organizationId && row.workflowTaskId === workflowTaskId).map((row) => row.pauseId)); return clone(this.fixture.workflowTaskSlaPauses.filter((row) => row.organizationId === organizationId && row.workflowTaskId === workflowTaskId && !resumes.has(row.id)).sort((left, right) => right.pausedAt.localeCompare(left.pausedAt) || right.id.localeCompare(left.id)).at(0) ?? null); }
   async getException(organizationId: OpsId, exceptionId: OpsId) { return clone(this.fixture.exceptions.find((row) => row.organizationId === organizationId && row.id === exceptionId) ?? null); }
   async getIdempotencyKey(organizationId: OpsId, key: string) { return clone(this.idempotencyKeys.find((row) => row.organizationId === organizationId && row.key === key) ?? null); }
+  async listFilesForEntity(organizationId: OpsId, entityType: string, entityId: OpsId, visibility?: "vendor_shared"): Promise<StoredFile[]> {
+    const ids = new Set(this.fixture.entityFiles.filter((row) => row.organizationId === organizationId && row.entityType === entityType && row.entityId === entityId && (!visibility || row.visibility === visibility)).map((row) => row.fileId));
+    return clone(this.fixture.files.filter((row) => row.organizationId === organizationId && row.status === "available" && ids.has(row.id)));
+  }
   async getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null> { return clone(this.fixture.files.find((row) => row.organizationId === organizationId && row.storageKey === storageKey) ?? null); }
   async getActiveAssignment(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.assignments.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId && !["cancelled", "declined", "completed", "superseded"].includes(row.status)).at(-1) ?? null); }
   async getLatestIssuanceForWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.issuances.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((a, b) => b.revision - a.revision).at(0) ?? null); }
@@ -868,6 +883,8 @@ export function getNorthlineFixtureRepository(): MutableOpsFixtureRepository {
   const repository = fixtureGlobal[OPS_PRESENTATION_RUNTIME_KEY]
     ?? fixtureGlobal[LEGACY_PRESENTATION_RUNTIME_KEY]
     ?? setPresentationRuntimeRepository(createNorthlineFixtureRepository());
+  // Refresh command/read methods after local hot reload without replacing source records.
+  if (Object.getPrototypeOf(repository) !== FixtureOpsRepository.prototype) Object.setPrototypeOf(repository, FixtureOpsRepository.prototype);
   setPresentationRuntimeRepository(repository);
   const snapshot = repository.snapshot() as Partial<OpsFixture>;
   if (!Array.isArray(snapshot.equipmentTemplates) || !Array.isArray(snapshot.componentTemplates) || !Array.isArray(snapshot.replacementProfiles) || !Array.isArray(snapshot.requestImpactAssessments) || !Array.isArray(snapshot.siteVisitWorkOrders)) {

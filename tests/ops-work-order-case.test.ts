@@ -22,6 +22,13 @@ function wo(id: string, status: "draft" | "issued" | "accepted" | "closed") {
 }
 
 describe("work-order case stage projector", () => {
+  it("opens provider review when a legacy approval status has no pending approval", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const workOrder = fixture.workOrders.find((work) => work.id === "wo-northline-105-price-check")!;
+    const input = { now: NOW, workOrder, hasPendingApproval: false, workflowTasks: fixture.workflowTasks.filter((row) => row.workOrderId === workOrder.id), assignments: fixture.assignments.filter((row) => row.workOrderId === workOrder.id) };
+    expect(buildWorkOrderCase(input).stage).toBe("provider_decision");
+    expect(buildWorkOrderCase({ ...input, hasPendingApproval: true }).stage).toBe("approval");
+  });
   it("does not carry an earlier verification or rejection into a newer outcome cycle", () => {
     const baseWork = { ...wo("wo-cycle", "accepted"), status: "completed_pending_review" as const };
     const outcomes = [

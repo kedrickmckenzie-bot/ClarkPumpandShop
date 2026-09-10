@@ -969,7 +969,7 @@ export interface EntityFileLink {
   id: OpsId;
   organizationId: OpsId;
   fileId: OpsId;
-  entityType: "request" | "work_order" | "visit" | "asset" | "invoice_reference" | "invoice";
+  entityType: "request" | "work_order" | "visit" | "asset" | "invoice_reference" | "invoice" | "estimate_proposal";
   entityId: OpsId;
   purpose: "photo" | "service_document" | "invoice" | "warranty" | "other";
   visibility: "internal" | "vendor_shared" | "public_receipt";
@@ -1966,6 +1966,7 @@ export interface Page<T> {
 }
 
 export interface OpsFixture {
+  accountingInvoiceSources?: AccountingInvoiceSource[];
   asOf: IsoDateTime;
   organizations: Organization[];
   divisions: Division[];
@@ -2062,4 +2063,11 @@ export interface OpsFixture {
   outboxMessages: OutboxMessage[];
   jobRuns?: JobRun[];
   publicTokens: PublicActionToken[];
+}
+
+
+export interface AccountingInvoiceSource {
+  id: OpsId; organizationId: OpsId; connectionKey: string; companyKey: string; externalInvoiceId: string;
+  sourceRevision: number; version: number; payloadJson: string; invoiceId?: OpsId;
+  matchState: "needs_review" | "matched" | "excluded"; updatedAt: IsoDateTime;
 }

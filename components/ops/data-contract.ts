@@ -367,9 +367,10 @@ export interface ActionItemViewModel {
   description: string;
   categoryLabel: string;
   attentionType?: "service_record" | "follow_up" | "vendor_task";
-  attentionLane?: "mine" | "team" | "waiting" | "upcoming";
+  attentionLane?: "mine" | "team" | "waiting" | "upcoming" | "history";
   attentionGroup?: "work_vendor" | "completion" | "service_record" | "financial" | "vendor_relationship";
   sourceCount?: number;
+  sources?: AttentionSourceDetail[];
   reasonLabel?: string;
   storeLabel?: string;
   recordLabel?: string;
@@ -471,7 +472,12 @@ export interface ApprovedLaterManagementViewModel {
   canManage: boolean;
 }
 
+export interface AttentionSourceDetail {
+  id: string; label: string; href: string; owner: string; dueLabel: string; doneWhen: string;
+}
+
 export interface TableRowViewModel {
+  sources?: AttentionSourceDetail[];
   id: string;
   label: string;
   href: string;
@@ -717,6 +723,7 @@ export type EstimateRequestStatusViewModel =
   | "not_selected";
 
 export interface EstimateProposalViewModel {
+  attachments?: Array<{ name: string; href: string }>;
   id: string;
   revision: number;
   amountLabel: string;

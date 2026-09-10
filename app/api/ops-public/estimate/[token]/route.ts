@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getPublicOperationsGateway } from "@/components/ops-public/server-gateway";
-import { publicApiError, publicApiSuccess } from "@/components/ops-public/server-http";
+import { publicApiError, publicApiSuccess, readPublicUploads } from "@/components/ops-public/server-http";
 
 const commandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("open") }),
@@ -26,12 +26,15 @@ const commandSchema = z.discriminatedUnion("action", [
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   try {
     const { token } = await params;
-    const command = commandSchema.parse(await request.json());
+    const multipart = request.headers.get("content-type")?.includes("multipart/form-data");
+    const form = multipart ? await request.formData() : undefined;
+    const command = commandSchema.parse(form ? JSON.parse(String(form.get("command"))) : await request.json());
+    const attachments = form && command.action === "submit" ? await readPublicUploads(form, { field: "attachments", maxFiles: 4, maxFileBytes: 10 * 1024 * 1024, allowedMediaTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp"] }) : [];
     const gateway = getPublicOperationsGateway();
     const receipt = command.action === "open"
       ? await gateway.openVendorEstimate(token)
       : command.action === "submit"
-        ? await gateway.submitVendorEstimate(token, command)
+        ? await gateway.submitVendorEstimate(token, { ...command, attachments })
         : await gateway.declineVendorEstimate(token, command);
     return publicApiSuccess(receipt, 201);
   } catch (error) {

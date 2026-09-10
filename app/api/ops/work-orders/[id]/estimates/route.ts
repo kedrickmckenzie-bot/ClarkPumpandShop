@@ -1,3 +1,4 @@
+import { OPS_CLIENT_HEADER } from "@/lib/ops/http-contract";
 import { OpsDomainError } from "@/lib/ops/commands";
 import { requestEstimate } from "@/lib/ops/estimate-commands";
 import type { EstimateRequestChannel, EstimateRequestKind } from "@/lib/ops/types";
@@ -64,7 +65,8 @@ export async function POST(
       },
     );
 
-    return relativeRedirect303(`/public/estimate/${encodeURIComponent(rawToken)}`);
+    const redirectTo = `/public/estimate/${encodeURIComponent(rawToken)}`;
+    return request.headers.has(OPS_CLIENT_HEADER) ? Response.json({ redirectTo }) : relativeRedirect303(redirectTo);
   } catch (error) {
     return opsApiError(error);
   }

@@ -14,6 +14,7 @@ import type {
   IsoDateTime,
   OpsId,
   VendorEstimateProposal,
+  StoredFile,
   WorkOrder,
   WorkOrderAssignment,
   WorkOrderEstimateRequest,
@@ -394,6 +395,7 @@ export async function markEstimateOpened(svc: EstimateCommandServices, input: Ma
 }
 
 export interface SubmitEstimateInput extends VendorEstimateTokenInput {
+  attachments?: Omit<StoredFile, "organizationId" | "createdAt" | "status">[];
   expectedRevision: number;
   amountMinor: number;
   currency: string;
@@ -445,12 +447,22 @@ export async function submitEstimate(svc: EstimateCommandServices, input: Submit
     validUntil,
     submittedAt: now,
   };
+  const attachments = input.attachments ?? [];
+  if (attachments.length > 4 || new Set(attachments.map((file) => file.id)).size !== attachments.length) throw new OpsDomainError("VALIDATION", "Attach up to four different quote files");
+  for (const file of attachments) {
+    if (!file.id || !file.storageKey || !/^[a-f0-9]{64}$/.test(file.sha256) || !file.originalName.trim() || file.originalName.length > 180 || !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(file.contentType) || !Number.isSafeInteger(file.byteLength) || file.byteLength <= 0 || file.byteLength > 10 * 1024 * 1024) throw new OpsDomainError("VALIDATION", "Quote files must be PDF or images up to 10 MB");
+  }
+  const attachmentStatements = attachments.flatMap((file) => [
+    insert("ops_files", { id: file.id, organization_id: request.organizationId, storage_key: file.storageKey, sha256: file.sha256, original_name: file.originalName, content_type: file.contentType, byte_length: file.byteLength, status: "available", created_at: now }),
+    insert("ops_entity_files", { id: ids.next("entity-file"), organization_id: request.organizationId, file_id: file.id, entity_type: "estimate_proposal", entity_id: proposal.id, purpose: "service_document", visibility: "vendor_shared", created_at: now }),
+  ]);
   const submitted: WorkOrderEstimateRequest = { ...request, status: "submitted", respondedAt: now };
   await atomicEstimateWorkOrderMutation({
     repository,
     workOrder,
     now,
     statements: [
+    ...attachmentStatements,
     insert("ops_vendor_estimate_proposals", {
       id: proposal.id,
       organization_id: proposal.organizationId,
@@ -482,6 +494,7 @@ export async function submitEstimate(svc: EstimateCommandServices, input: Submit
         workOrderId: request.workOrderId,
         vendorId: request.vendorId,
         revision: proposal.revision,
+        attachmentFileIds: attachments.map((file) => file.id),
         amountMinor: proposal.amount.amountMinor,
         currency: proposal.amount.currency,
         validUntil: proposal.validUntil,

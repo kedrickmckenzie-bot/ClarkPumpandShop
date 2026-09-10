@@ -186,7 +186,7 @@ export function buildWorkOrderVerificationModel(
   const decisionBlockReason = canDecide
     ? undefined
     : !permitted
-      ? "Your role can review this history, but observable result confirmation is not enabled for it."
+      ? "You can view the repair history, but you do not have permission to confirm the repair."
       : (workOrder.status as string) === "resolved"
         ? "The current outcome is verified and resolved. Facilities can close it after the remaining closure checks pass."
         : currentDecision?.decision === "rejected"
@@ -194,12 +194,12 @@ export function buildWorkOrderVerificationModel(
           : currentDecision?.decision === "inconclusive"
             ? "This result could not be confirmed. Facilities review is required before closing or arranging return work."
           : currentDecision?.decision === "verified"
-            ? "This outcome already has an accepted immutable verification decision."
+            ? "This repair result has already been confirmed."
             : workOrder.status !== "completed_pending_review"
               ? "Verification becomes available after checkout records a completed result for this work order."
               : !activeVerifyTask
                 ? "The required repair-verification task is missing or already complete."
-                : "The current outcome requires provider follow-up rather than internal verification.";
+                : "The vendor needs to follow up before this repair can be confirmed.";
 
   return {
     ...base,

@@ -46,6 +46,7 @@ export function VendorEstimatePage({ token, estimate }: { token: string; estimat
             </section>
           ) : null}
 
+          {estimate.latestProposal?.attachments?.map((file) => <p key={file.href}><a href={file.href}>{file.name}</a></p>)}
           {estimate.previousProposals.length ? (
             <details className={styles.card}>
               <summary><strong>Previous quote revisions ({estimate.previousProposals.length})</strong></summary>
@@ -54,7 +55,7 @@ export function VendorEstimatePage({ token, estimate }: { token: string; estimat
                   <div className={styles.detail} key={proposal.revision}>
                     <span className={styles.detailLabel}>Revision {proposal.revision} · superseded</span>
                     <p className={styles.detailValue}>{proposal.amountLabel} · submitted {formatPublicDateTime(proposal.submittedAt, estimate.store.timeZone)}</p>
-                    <p className={styles.helper}>Scope: {proposal.scope}{proposal.changed.length ? ` · Changed in the next revision: ${proposal.changed.join(", ")}` : " · No structured field changes recorded"}</p>
+                    <p className={styles.helper}>Scope: {proposal.scope}{proposal.attachments?.map((file) => <span key={file.href}> · <a href={file.href}>{file.name}</a></span>)}{proposal.changed.length ? ` · Changed in the next revision: ${proposal.changed.join(", ")}` : " · No structured field changes recorded"}</p>
                   </div>
                 ))}
               </div>

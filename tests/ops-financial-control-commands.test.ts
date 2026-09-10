@@ -39,10 +39,10 @@ describe("directive financial safeguard decisions",()=>{
     expect(snapshot.valueEvents.some((row)=>row.category==="realized_verified"&&row.invoiceLineId==="invoice-line-104-trip")).toBe(false);
   });
 
-  it("creates a deduction and realized event only after an authorized human decision",async()=>{
+  it("records a reviewed deduction as an opportunity until the credit or settled amount is confirmed",async()=>{
     const test=harness();const result=await resolveInvoiceReview({organizationId:NORTHLINE_ORGANIZATION_ID,invoiceId:"invoice-summit-104-compressor",exceptionId:"invoice-exception-104-authorization",actor:financeActor,decision:"deduct",reason:"Reviewed the contract, authorization, and change-order evidence; the added controls line is not supported for this invoice",deductionAmount:{amountMinor:212_500,currency:"USD"}},test.services);
     const snapshot=test.repository.snapshot();
-    expect(result.adjustment?.kind).toBe("deduction");expect(result.valueEvent?.category).toBe("realized_verified");expect(result.paymentExecuted).toBe(false);expect(result.operationalResolutionChanged).toBe(false);
+    expect(result.adjustment?.kind).toBe("deduction");expect(result.valueEvent?.category).toBe("estimated_opportunity");expect(result.paymentExecuted).toBe(false);expect(result.operationalResolutionChanged).toBe(false);
     expect(snapshot.invoices.find((row)=>row.id==="invoice-summit-104-compressor")?.approvedForPayment.amountMinor).toBe(945_000);
     expect(snapshot.workOrders.find((row)=>row.id==="wo-northline-104")?.status).toBe("closed");
   });

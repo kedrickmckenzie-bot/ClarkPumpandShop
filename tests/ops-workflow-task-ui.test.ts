@@ -9,6 +9,7 @@ import {
 } from "@/lib/ops/fixtures";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
 
 let buildWorkflowTaskWorkspaceModel: typeof import("@/app/app/_data/workflow-task-presenter").buildWorkflowTaskWorkspaceModel;
 
@@ -36,7 +37,7 @@ describe("embedded work-order Workflow Task surface", () => {
     const markup = renderToStaticMarkup(createElement(WorkflowTaskPanel, { model }));
 
     expect(model.activeTasks).toHaveLength(2);
-    expect(markup).toContain("Workflow Tasks and SLA accountability");
+    expect(markup).toContain("Tasks and follow-ups");
     expect(markup).toContain("Record service outcome");
     expect(markup).toContain("Verify operating condition after technician checkout");
     expect(markup).toContain("Who acts");
@@ -150,7 +151,7 @@ describe("embedded work-order Workflow Task surface", () => {
       resolutionNote: "Commissioning review added to the reopening calendar",
     });
     expect(markup).toContain("No SLA deadline");
-    expect(markup).toContain("No-SLA reason: Scheduled event is governed by the store reopening plan");
+    expect(markup).toContain("No deadline: Scheduled event is governed by the store reopening plan");
     expect(markup).toContain("Commissioning review added to the reopening calendar");
   });
 });

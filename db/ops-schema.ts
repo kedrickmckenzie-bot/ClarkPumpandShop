@@ -798,3 +798,15 @@ export const opsSchema = {
   opsIdempotencyKeys,
   opsWorkOrderCounters,
 } as const;
+
+
+export const opsAccountingInvoiceSources = sqliteTable("ops_accounting_invoice_sources", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(),
+  connectionKey: text("connection_key").notNull(), companyKey: text("company_key").notNull(), externalInvoiceId: text("external_invoice_id").notNull(),
+  sourceRevision: integer("source_revision").notNull(), version: integer("version").notNull(),
+  payloadJson: text("payload_json").notNull(), invoiceId: text("invoice_id"),
+  matchState: text("match_state").notNull(), updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_ops_accounting_source_identity").on(table.organizationId, table.connectionKey, table.companyKey, table.externalInvoiceId),
+  index("idx_ops_accounting_source_updated").on(table.organizationId, table.updatedAt, table.id),
+]);

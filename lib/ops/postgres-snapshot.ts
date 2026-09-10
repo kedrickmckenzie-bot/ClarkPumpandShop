@@ -74,7 +74,7 @@ export async function loadOpsFixtureSnapshotFromPostgres(
   pool: PostgresPoolLike,
   organizationId: OpsId,
   asOf: IsoDateTime,
-  options: { includedTables?: ReadonlySet<string> } = {},
+  options: { includedTables?: ReadonlySet<string>; auditEventTypes?: readonly string[] } = {},
 ): Promise<OpsFixture> {
   const organizationResult = await pool.query("SELECT * FROM ops_organizations WHERE id = $1", [organizationId]);
   const rows = (table: string) => tenantRows(pool, table, organizationId, options.includedTables);
@@ -250,7 +250,9 @@ export async function loadOpsFixtureSnapshotFromPostgres(
     rows("ops_cost_lines"),
     rows("ops_invoice_references"),
     rows("ops_invoice_allocations"),
-    rows("ops_audit_events"),
+    options.auditEventTypes
+      ? pool.query("SELECT * FROM ops_audit_events WHERE organization_id = $1 AND event_type = ANY($2::text[])", [organizationId, [...options.auditEventTypes]]).then((result) => result.rows.map(camelRow))
+      : rows("ops_audit_events"),
     rows("ops_outbox_messages"),
     rows("ops_notification_rules"),
     rows("ops_public_tokens"),

@@ -106,6 +106,7 @@ export interface ServiceAuthorizationView {
 }
 
 export interface VendorEstimateView {
+  localFileStorage?: boolean;
   organizationName: string;
   organizationSupport: string;
   vendorName: string;
@@ -125,6 +126,7 @@ export interface VendorEstimateView {
   problem: string;
   requestedScope: string;
   latestProposal?: {
+    attachments?: Array<{ name: string; href: string }>;
     revision: number;
     amountLabel: string;
     amount: string;
@@ -136,6 +138,7 @@ export interface VendorEstimateView {
     submittedAt: string;
   };
   previousProposals: Array<{
+    attachments?: Array<{ name: string; href: string }>;
     revision: number;
     amountLabel: string;
     scope: string;
@@ -150,6 +153,7 @@ export interface VendorEstimateView {
 }
 
 export interface VendorEstimateSubmissionCommand {
+  attachments?: PublicUpload[];
   responderName: string;
   expectedRevision: number;
   amount: string;

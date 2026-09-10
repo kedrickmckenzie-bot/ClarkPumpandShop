@@ -95,3 +95,9 @@ Regression coverage includes removed history with stale declarations, absent mea
 - Broader browser inspection covered manager search, the store creation form, successful work creation with classification and provider deferred, vendor response controls, service-link/QR/trusted-device visit entry, the no-WO reason path, invoice safeguards, PM/lifecycle views and responsive store detail. Cross-channel visit completion was verified by the automated workflow suite; live geolocation was not requested during this browser pass.
 
 No push or deployment was performed. `dev4.log` was preserved. The separate Render build was not rerun for this correction.
+
+## Coordinated completion follow-on
+
+The PostgreSQL narrow snapshot now loads tenant-scoped `recording.coverage_attested` audit events explicitly rather than omitting the fixture declarations or loading general audit history. All three Trends entry loaders resolve the session organization before querying. Installation/retirement still describe equipment exposure only; the source measure and declared recording interval independently determine whether a quiet period is supported zero. Missing declarations, missing manifest rows, and incomplete older histories remain unsupported. The original July-only reproduction and neighboring legitimate quiet/partial-exposure cases remain regression-covered.
+
+The persisted PostgreSQL-engine integration now exercises the bounded loader and benchmark model together with export rows. One local run measured 153 ms load + 144 ms model = 297 ms combined for the 15-store persisted fixture. This is not hosted network timing. Existing timing thresholds were not increased. Plain methodology was shortened while optional calculation details retain the percentile caps, quartile range, exposure and source definitions. See `WORKFLOW_ACCOUNTING_COMPLETION.md` for final check results.
