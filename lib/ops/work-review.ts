@@ -1,3 +1,4 @@
+import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE } from "./warranty-review";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import { roleCanAccessDetailRoute, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
 import { invoiceReporting } from "./invoice-reporting";
@@ -128,7 +129,7 @@ export async function loadWorkReview(repository: OpsRepository, session: Operato
   const obligations: ReviewEvidence[] = work.followUps.filter((row) => row.status === "open").map((row) => ({ id: row.id, label: row.nextAction, detail: `${row.accountableParty} · Due ${dateTime(row.dueAt)}`, href: `${base}?view=service` }));
   const followUpIds = new Set(obligations.map((row) => row.id));
   const effectiveTasks = [...new Map([...tasks, ...requestTasks].map((task) => [task.id, task])).values()];
-  for (const task of effectiveTasks.filter((row) => !["completed", "cancelled"].includes(row.status) && (!row.sourceFollowUpId || !followUpIds.has(row.sourceFollowUpId)))) obligations.push({ id: task.id, label: task.title, detail: `${task.assigneeName}${task.dueAt ? ` · Due ${dateTime(task.dueAt)}` : ""} · ${task.completionCriteria}`, href: `${base}?view=activity` });
+  for (const task of effectiveTasks.filter((row) => !["completed", "cancelled"].includes(row.status) && (!row.sourceFollowUpId || !followUpIds.has(row.sourceFollowUpId)))) obligations.push({ id: task.id, label: task.taskType === "review_warranty" ? WARRANTY_REVIEW_TITLE : task.title, detail: `${task.assigneeName}${task.dueAt ? ` · Due ${dateTime(task.dueAt)}` : ""} · ${task.taskType === "review_warranty" ? WARRANTY_REVIEW_DONE : task.completionCriteria}`, href: task.taskType === "review_warranty" && equipment?.warrantyCases.filter((row) => row.workOrderId === work.id && !row.closedAt).length === 1 ? `/app/warranties/${equipment.warrantyCases.find((row) => row.workOrderId === work.id && !row.closedAt)!.id}#diagnosis` : `${base}?view=activity` });
   if (!obligations.length && !["closed", "cancelled", "resolved"].includes(work.status)) obligations.push({ id: "next", label: work.nextAction, detail: `${work.accountableParty}${work.dueAt ? ` · Due ${dateTime(work.dueAt)}` : ""}`, href: base });
   const history: ReviewEvidence[] = [];
   for (const visit of work.visits) {

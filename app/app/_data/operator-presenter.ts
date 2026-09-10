@@ -1,3 +1,4 @@
+import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE, warrantyTaskHref } from "@/lib/ops/warranty-review";
 import { buildPmReactiveReview } from "./pm-reactive-review";
 import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
@@ -891,11 +892,11 @@ function actionsForSession(
         const vendorId = quote?.vendorId ?? proposal?.vendorId;
         const vendorName = vendorId ? vendorById.get(vendorId)?.name : undefined;
         return {
-          id, label: task?.title ?? follow?.nextAction ?? (quote ? `Quote request · ${vendorName}` : proposal ? `Quote version ${proposal.revision} · ${vendorName}` : approval ? "Approval request" : item.title),
-          href: proposal ? `${item.linkHref.split("#")[0]}#quote-proposal-${proposal.id}` : quote ? `${item.linkHref.split("#")[0]}#quote-request-${quote.id}` : follow ? `/app/action-center/${encodeURIComponent(follow.id)}` : task?.workOrderId ? `${item.linkHref.split("#")[0]}#workflow-task-${task.id}` : item.linkHref,
+          id, label: (task?.taskType === "review_warranty" ? WARRANTY_REVIEW_TITLE : task?.title) ?? follow?.nextAction ?? (quote ? `Quote request · ${vendorName}` : proposal ? `Quote version ${proposal.revision} · ${vendorName}` : approval ? "Approval request" : item.title),
+          href: task && warrantyTaskHref(fixture, task) ? warrantyTaskHref(fixture, task)! : proposal ? `${item.linkHref.split("#")[0]}#quote-proposal-${proposal.id}` : quote ? `${item.linkHref.split("#")[0]}#quote-request-${quote.id}` : follow ? `/app/action-center/${encodeURIComponent(follow.id)}` : task?.workOrderId ? `${item.linkHref.split("#")[0]}#workflow-task-${task.id}` : item.linkHref,
           owner: task?.assigneeName ?? follow?.accountableParty ?? (quote ? vendorName ?? item.owner : item.owner),
           dueLabel: task?.dueAt || follow?.dueAt || quote?.dueAt ? dateTime((task?.dueAt ?? follow?.dueAt ?? quote?.dueAt)!) : task?.noSlaReason ?? "No deadline recorded",
-          doneWhen: task?.completionCriteria ?? (follow ? "Record the follow-up result" : quote ? "Vendor submits a quote or declines" : proposal ? "Review this version when choosing a quote" : approval ? "Authorized reviewer records a decision" : item.reason),
+          doneWhen: (task?.taskType === "review_warranty" ? WARRANTY_REVIEW_DONE : task?.completionCriteria) ?? (follow ? "Record the follow-up result" : quote ? "Vendor submits a quote or declines" : proposal ? "Review this version when choosing a quote" : approval ? "Authorized reviewer records a decision" : item.reason),
         };
       }),
       reasonLabel: exceptionCopy?.label ?? (externalWait ? "Waiting on another party" : item.lane === "mine" ? "Needs my action" : item.lane === "upcoming" ? "Upcoming review" : "Team work"),

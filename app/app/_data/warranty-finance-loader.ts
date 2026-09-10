@@ -5,13 +5,15 @@ import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 
 export async function loadWarrantyFinanceWorkspace(input: { warrantyCaseId?: string; invoiceId?: string } = {}) {
-  const [fixture, session] = await Promise.all([getRequestOpsFixtureSnapshot(), loadOperatorSession()]);
+  const session = await loadOperatorSession();
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   const organizationId = session.organizationId;
   const allowedStore = (storeId: string) => {
     const store = fixture.stores.find((row) => row.organizationId === organizationId && row.id === storeId);
     if (!store) return false;
-    if (session.storeIds?.length && !session.storeIds.includes(store.id)) return false;
-    if (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
+    if (session.role === "store_manager" && !session.storeIds?.length || session.role === "regional" && !session.regionIds?.length) return false;
+    if (session.storeIds !== undefined && !session.storeIds.includes(store.id)) return false;
+    if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
     return true;
   };
   const warrantyCases = fixture.warrantyCases.filter((item) => {

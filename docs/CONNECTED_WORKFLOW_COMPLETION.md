@@ -51,3 +51,7 @@ Three local development HTTP samples during implementation returned the review i
 This provides a common evidence review across the principal maintenance and data-review surfaces. It does not claim that every specialized screen now answers every possible question. Unmatched visits/invoices still require their explicit reconciliation workflows; the platform does not infer a missing relationship. Public vendor/store actions and setup forms retain their existing specialized journeys. Complete histories and management actions remain available through the full records.
 
 No push or deployment is part of this pass. The prior local implementation and user-owned `dev4.log` are preserved.
+
+## Repair-or-replace and warranty follow-up
+
+The lifecycle decision now uses an ordinary full page instead of the earlier stacked modal. Approved replacement price, its exact quote, related repair evidence, and lower history are reachable without clipped rows. Warranty tasks open the diagnosis and terms together in a dedicated case workspace. See [the rebuild completion record](DECISION_WARRANTY_REBUILD_COMPLETION.md) for evidence rules and validation. The in-place work review elsewhere remains available.

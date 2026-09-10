@@ -277,6 +277,7 @@ function WorkflowTaskRecord({ task, model, active }: { task: WorkflowTaskItemVie
           </div>
         </div>
         <p>{task.reason}</p>
+        {task.evidenceHref ? <a href={task.evidenceHref}>Open the diagnosis, prior repair and warranty terms →</a> : null}
       </header>
       <dl className={styles.taskFacts}>
         <div><dt><UserRound aria-hidden="true" size={14} />Who acts</dt><dd>{task.assigneeLabel}<small>{task.assigneeTypeLabel}</small></dd></div>

@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { PlanningWorkspace } from "@/components/workspace/planning-workspace";
 import { loadProgramModel } from "../_data/operator-loader";
@@ -11,10 +12,14 @@ type Query = Record<string, string | string[] | undefined>;
 export default async function LifecyclePage({ searchParams }: { searchParams: Promise<Query> }) {
   const query = await searchParams;
   const selectedDecision = Array.isArray(query.decision) ? query.decision[0] : query.decision;
-  const [model, profiles, recordStack] = await Promise.all([
+  if (selectedDecision) {
+    const record = await loadLifecycleRecordStack(selectedDecision, query);
+    if (!record) notFound();
+    return <LifecycleRecordStack {...record} />;
+  }
+  const [model, profiles] = await Promise.all([
     loadProgramModel("lifecycle", query),
     loadReplacementProfileManagerModel(),
-    selectedDecision ? loadLifecycleRecordStack(selectedDecision, query) : Promise.resolve(null),
   ]);
   if (model.table) {
     model.table.rows = model.table.rows.map((row) => ({
@@ -24,6 +29,5 @@ export default async function LifecyclePage({ searchParams }: { searchParams: Pr
   }
   return <>
     <PlanningWorkspace kind="lifecycle" model={model} administration={<ReplacementProfileManager model={profiles} />} />
-    {recordStack ? <LifecycleRecordStack {...recordStack} /> : null}
   </>;
 }

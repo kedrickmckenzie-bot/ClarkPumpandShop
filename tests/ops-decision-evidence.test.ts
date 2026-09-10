@@ -1,0 +1,73 @@
+import { describe, expect, it, vi } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
+import { lifecyclePriceEvidence } from "@/lib/ops/lifecycle-price-evidence";
+import { recordedWarrantyDiagnosis, warrantyTaskHref, WARRANTY_REVIEW_DONE } from "@/lib/ops/warranty-review";
+import { WarrantyCaseWorkspace } from "@/components/ops/warranty-case-workspace";
+import { projectAttentionItems } from "@/lib/ops/attention-projection";
+vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({ usePathname: () => "/app/warranties", useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+
+describe("decision evidence and warranty task continuity", () => {
+  it("preserves an approved quote revision and amount separately from a newer quote and planning estimate", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const work = fixture.workOrders.find((row) => row.id === "wo-northline-115")!;
+    const approved = fixture.estimateProposals.find((row) => row.id === "estimate-proposal-115-summit-r1")!;
+    fixture.estimateProposals.push({ ...approved, id: "later-revision", revision: 2, amount: { amountMinor: 9999999, currency: "USD" }, scope: "Different unapproved work" });
+    const evidence = lifecyclePriceEvidence(fixture, work, { amountMinor: 4000000, currency: "USD" });
+    expect(evidence.replacementLabel).toBe("$32,800.00");
+    expect(evidence.planningLabel).toBe("$40,000.00");
+    expect(evidence.scope).toBe(approved.scope);
+    expect(evidence.quotes.find((row) => row.status === "Approved quote")?.href).toContain(`#quote-proposal-${approved.id}`);
+    expect(evidence.quotes.find((row) => row.status === "Not selected")?.amount).toBe("$35,450.00");
+  });
+  it("keeps missing prices missing, preserves a genuine zero, and does not revive cancelled approvals", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const work = fixture.workOrders.find((row) => row.id === "wo-northline-115")!;
+    fixture.replacementEvents.forEach((row) => { if (row.workOrderId === work.id) row.status = "cancelled"; });
+    fixture.estimateRequests.forEach((row) => { if (row.workOrderId === work.id) row.status = "withdrawn"; });
+    expect(lifecyclePriceEvidence(fixture, work, { amountMinor: 4000000, currency: "USD" }).replacementLabel).toBe("Price needed");
+    const event = fixture.replacementEvents.find((row) => row.workOrderId === work.id)!;
+    event.status = "approved"; event.approvedAmount.amountMinor = 0;
+    expect(lifecyclePriceEvidence(fixture, work).replacementLabel).toBe("$0.00");
+    fixture.estimateProposals = fixture.estimateProposals.filter((row) => row.id !== event.sourceEstimateProposalId);
+    const missing = lifecyclePriceEvidence(fixture, work);
+    expect(missing.replacementLabel).toBe("$0.00");
+    expect(missing.missing).toMatch(/original quote details are unavailable/);
+  });
+  it("opens the exact warranty case from the task and reads only its current audited diagnosis", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const item = fixture.warrantyCases[0];
+    const task = fixture.workflowTasks.find((row) => row.workOrderId === item.workOrderId && row.taskType === "review_warranty")!;
+    expect(warrantyTaskHref(fixture, task)).toBe(`/app/warranties/${item.id}#diagnosis`);
+    const queue = projectAttentionItems({ fixture, organizationId: NORTHLINE_ORGANIZATION_ID, storeIds: new Set(fixture.stores.map((row) => row.id)), includeCompanywide: true, role: "facilities_admin", asOf: fixture.asOf });
+    expect(queue.find((row) => row.id === task.id)?.linkHref).toBe(warrantyTaskHref(fixture, task));
+    expect(WARRANTY_REVIEW_DONE).not.toContain("routing");
+    expect(recordedWarrantyDiagnosis(fixture, item)).toBeUndefined();
+    const audit = fixture.auditEvents[0];
+    fixture.auditEvents.push({ ...audit, id: "old", organizationId: item.organizationId, aggregateId: item.id, eventType: "warranty.coverage_decided", occurredAt: "2026-08-20T00:00:00Z", payloadJson: JSON.stringify({ diagnosis: "Earlier diagnosis", reason: "Earlier reasoning" }) }, { ...audit, id: "latest", organizationId: item.organizationId, aggregateId: item.id, eventType: "warranty.coverage_decided", occurredAt: "2026-08-21T00:00:00Z", payloadJson: JSON.stringify({ diagnosis: "Loose connection; compressor tested correctly", reason: "Labor covered under the repair warranty" }) }, { ...audit, id: "foreign", organizationId: "foreign", aggregateId: item.id, eventType: "warranty.coverage_decided", occurredAt: "2026-08-22T00:00:00Z", payloadJson: JSON.stringify({ diagnosis: "Other tenant" }) });
+    expect(recordedWarrantyDiagnosis(fixture, item)?.diagnosis).toBe("Loose connection; compressor tested correctly");
+    item.coverageDecision = "covered"; item.diagnosisRequired = false;
+    const html = renderToStaticMarkup(createElement(WarrantyCaseWorkspace, { fixture, warrantyCase: item, canManage: false }));
+    expect(html).toContain("Loose connection; compressor tested correctly");
+    expect(html).not.toContain("Earlier diagnosis");
+    expect(html).not.toContain("Other tenant");
+    expect(html).not.toContain("Save diagnosis and warranty decision");
+  });
+  it("shows a missing diagnosis, real earlier work number, and prevents contradictory charge choices", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const item = fixture.warrantyCases[0];
+    const repair = fixture.repairItems.find((row) => row.id === item.priorRepairItemId)!;
+    const prior = fixture.workOrders.find((row) => row.id === repair.workOrderId)!;
+    const html = renderToStaticMarkup(createElement(WarrantyCaseWorkspace, { fixture, warrantyCase: item, canManage: true }));
+    expect(html).toContain("No diagnosis has been recorded");
+    expect(html).toContain(prior.number);
+    expect(html).toContain('id="diagnosis"');
+    expect(html).toContain('id="warranty-terms"');
+    expect(html).not.toContain('name="customerChargeStatus"');
+    expect(html).not.toContain('<select name="customerChargeStatus"');
+    expect(html).toContain("keep it on hold");
+    expect(html).not.toContain("each coverage category is decided independently");
+  });
+});

@@ -809,6 +809,7 @@ export interface WorkflowTaskPauseViewModel {
 }
 
 export interface WorkflowTaskItemViewModel {
+  evidenceHref?: string;
   id: string;
   action: string;
   typeLabel: string;

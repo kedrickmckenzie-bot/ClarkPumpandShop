@@ -1,7 +1,11 @@
+import { roleCanAccessProgramRoute } from "@/components/ops/role-policy";
+import { lifecyclePriceEvidence, priceLabel } from "@/lib/ops/lifecycle-price-evidence";
+import { loadWorkReview, recordedMoneyLabel } from "@/lib/ops/work-review";
+import { createOpsFixtureReadRepository } from "@/lib/ops/fixture-repository";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import "server-only";
 
-import type { DetailPageViewModel, OperatorSession, TimelineEventViewModel } from "@/components/ops/data-contract";
+import type { OperatorSession, TimelineEventViewModel } from "@/components/ops/data-contract";
 import type { LifecycleDecisionWorkspaceModel } from "@/components/workspace/lifecycle-record-stack";
 import { calculateRepairReplacementScreening } from "@/lib/ops/lifecycle-analytics";
 import { resolveLifecycleDecisionState } from "@/lib/ops/lifecycle-decision-state";
@@ -10,15 +14,12 @@ import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intellige
 import type { OpsFixture } from "@/lib/ops/types";
 import { buildWorkOrderCase, type WorkOrderCaseView } from "@/lib/ops/work-order-case";
 import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
-import { buildDetailModel } from "./operator-presenter";
 import { loadOperatorSession } from "./operator-loader";
 
 type WorkspaceQuery = Record<string, string | string[] | undefined>;
 
 export interface LoadedLifecycleRecordStack {
   model: LifecycleDecisionWorkspaceModel;
-  equipmentDetail: DetailPageViewModel;
-  workOrderDetail?: DetailPageViewModel;
   workOrderCase?: WorkOrderCaseView;
 }
 
@@ -68,6 +69,7 @@ function visibleAsset(fixture: OpsFixture, session: OperatorSession, assetId: st
   if (!asset) return undefined;
   const store = fixture.stores.find((row) => row.organizationId === session.organizationId && row.id === asset.storeId);
   if (!store) return undefined;
+  if (session.role === "store_manager" && !session.storeIds?.length || session.role === "regional" && !session.regionIds?.length) return undefined;
   if (session.storeIds && !session.storeIds.includes(store.id)) return undefined;
   if (session.regionIds && (!store.regionId || !session.regionIds.includes(store.regionId))) return undefined;
   return { asset, store };
@@ -187,63 +189,52 @@ function workOrderCase(fixture: OpsFixture, organizationId: string, workOrderId:
 
 export async function loadLifecycleRecordStack(assetId: string, query: WorkspaceQuery): Promise<LoadedLifecycleRecordStack | null> {
   const session = await loadOperatorSession();
+  if (!roleCanAccessProgramRoute(session.role, "lifecycle")) return null;
   const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   const found = visibleAsset(fixture, session, assetId);
   if (!found) return null;
   const { asset, store } = found;
-  const workOrders = fixture.workOrders.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id);
+  const workOrders = fixture.workOrders.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && row.storeId === store.id);
   const reactiveWork = workOrders.filter((row) => row.priority !== "planned");
-  const proposalWork = reactiveWork.filter((row) => !["closed", "cancelled", "completed_pending_review", "resolved"].includes(row.status) && Boolean(row.repairEstimate)).sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  const currentRepair = reactiveWork.filter((row) => !["closed", "cancelled", "completed_pending_review", "resolved"].includes(row.status) && Boolean(row.repairEstimate)).sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  const recordedReplacement = fixture.replacementEvents.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && row.status !== "cancelled").sort((a,b) => b.approvedAt.localeCompare(a.approvedAt))[0];
+  const proposalWork = currentRepair ?? workOrders.find((row) => row.id === recordedReplacement?.workOrderId);
   const replacement = resolveAssetReplacementEstimate(fixture, asset, fixture.asOf);
+  const prices = lifecyclePriceEvidence(fixture, proposalWork, replacement.amount);
+  const comparisonAmount = prices.replacement ?? replacement.amount;
+  const comparable = !proposalWork?.repairEstimate || !comparisonAmount || proposalWork.repairEstimate.currency === comparisonAmount.currency;
   const screening = calculateRepairReplacementScreening(
-    { ...asset, replacementEstimate: replacement.amount },
+    { ...asset, replacementEstimate: comparable ? prices.replacement ?? replacement.amount : undefined },
     proposalWork ? { proposalId: proposalWork.id, repairEstimateMinor: proposalWork.repairEstimate?.amountMinor, estimatedServiceExtensionMonths: proposalWork.estimatedServiceExtensionMonths, sourceRecordIds: [proposalWork.id] } : undefined,
   );
-  const latestDecision = fixture.lifecycleRecommendations.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id).sort((left, right) => right.version - left.version || right.decidedAt.localeCompare(left.decidedAt))[0];
+  const latestDecision = fixture.lifecycleRecommendations.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && (!row.workOrderId || !proposalWork || row.workOrderId === proposalWork.id)).sort((left, right) => right.version - left.version || right.decidedAt.localeCompare(left.decidedAt))[0];
   const replacementEvents = fixture.replacementEvents.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && (!proposalWork || row.workOrderId === proposalWork.id));
   const timeZone = store.timeZone ?? fixture.organizations.find((row) => row.id === session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   const record = first(query.record);
   const activeChild = record === "work-order" && proposalWork ? "work-order" : record === "equipment" ? "equipment" : undefined;
   const closeHref = hrefWithQuery(query, { decision: undefined, record: undefined });
   const childCloseHref = hrefWithQuery(query, { decision: asset.id, record: undefined });
-  const openWorkOrderHref = proposalWork ? hrefWithQuery(query, { decision: asset.id, record: "work-order" }) : undefined;
-  const openEquipmentHref = hrefWithQuery(query, { decision: asset.id, record: "equipment" });
+  const openWorkOrderHref = proposalWork ? `/app/work-orders/${proposalWork.id}?view=service` : undefined;
+  const openEquipmentHref = `/app/equipment/${asset.id}#equipment-review`;
   const workCase = proposalWork ? workOrderCase(fixture, session.organizationId, proposalWork.id, `${store.storeNumber} - ${store.name}`, timeZone) : undefined;
   const managementDecision = resolveLifecycleDecisionState({ screening, latestDecision, replacementEvents });
-  const recordedCostMinor = fixture.costLines.filter((row) => row.organizationId === session.organizationId && workOrders.some((work) => work.id === row.workOrderId)).reduce((sum, row) => sum + row.amount.amountMinor, 0);
-  const observedVisits = fixture.visits.filter((row) => row.organizationId === session.organizationId && row.workOrderId && workOrders.some((work) => work.id === row.workOrderId));
+  const observedIds = new Set(fixture.siteVisitWorkOrders.filter((row) => row.organizationId === session.organizationId && workOrders.some((work) => work.id === row.workOrderId)).map((row) => row.visitId));
+  const observedVisits = fixture.visits.filter((row) => row.organizationId === session.organizationId && row.storeId === store.id && (observedIds.has(row.id) || row.workOrderId && workOrders.some((work) => work.id === row.workOrderId)));
   const pmOccurrences = fixture.pmOccurrences.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id);
   const contextFacts = [
     `${reactiveWork.length} reactive work order${reactiveWork.length === 1 ? "" : "s"} in the equipment history`,
     `${observedVisits.length} observed service visit${observedVisits.length === 1 ? "" : "s"}; presence is evidence, not certified labor`,
-    `${money(recordedCostMinor)} in recorded work cost across this equipment history`,
+    `${recordedMoneyLabel(fixture.costLines.filter((row) => row.organizationId === session.organizationId && workOrders.some((work) => work.id === row.workOrderId)).map((row) => row.amount))} in recorded work cost across this equipment history`,
     asset.warrantyEndsAt ? `Warranty reference ${Date.parse(asset.warrantyEndsAt) >= Date.parse(fixture.asOf) ? "active through" : "expired"} ${formatOperationsDate(asset.warrantyEndsAt, timeZone)}` : "No warranty end date is recorded",
     `${pmOccurrences.length} preventive-maintenance occurrence${pmOccurrences.length === 1 ? "" : "s"} tied to this equipment`,
     replacement.explanation,
   ];
-  const equipmentDetail = buildDetailModel(fixture, session, "equipment", asset.id);
-  const workOrderDetail = proposalWork ? buildDetailModel(fixture, session, "work-order", proposalWork.id) : undefined;
   const activity = activityForDecision(fixture, session.organizationId, asset.id, proposalWork?.id, timeZone);
-  if (workOrderDetail) {
-    const auditSection = workOrderDetail.sections.find((section) => section.id === "audit");
-    if (auditSection) {
-      auditSection.title = "Updates and communications";
-      auditSection.description = "Vendor pricing, messages, scheduling, visits, decisions, and audit facts in one time-ordered history.";
-      auditSection.timelineHeading = "Recorded case history";
-      auditSection.timeline = activity;
-    } else {
-      workOrderDetail.sections.push({
-        id: "audit",
-        title: "Updates and communications",
-        description: "Vendor pricing, messages, scheduling, visits, decisions, and audit facts in one time-ordered history.",
-        timelineHeading: "Recorded case history",
-        timeline: activity,
-      });
-    }
-  }
-
+  const review = proposalWork ? await loadWorkReview(createOpsFixtureReadRepository(fixture), session, proposalWork.id, fixture.asOf) : null;
   return {
     model: {
+      prices,
+      review: review ?? undefined,
       assetId: asset.id,
       assetName: asset.name,
       assetTag: asset.assetTag,
@@ -253,26 +244,24 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
       description: proposalWork?.problem ?? "No active repair proposal is attached to this equipment.",
       workOrderId: proposalWork?.id,
       workOrderNumber: proposalWork?.number,
-      repairAmountLabel: money(screening.comparison.repairEstimateMinor, proposalWork?.repairEstimate?.currency),
-      replacementAmountLabel: money(screening.comparison.replacementEstimateMinor, replacement.amount?.currency),
+      repairAmountLabel: priceLabel(proposalWork?.repairEstimate),
+      replacementAmountLabel: prices.replacementLabel,
       repairShareLabel: screening.comparison.repairToReplacementRatio === undefined ? "Not calculable" : `${Math.round(screening.comparison.repairToReplacementRatio * 100)}%`,
       requiredRunwayLabel: runway(screening.comparison.requiredEconomicRunwayMonths),
       enteredServiceLabel: runway(screening.comparison.estimatedServiceExtensionMonths),
       decisionLabel: managementDecision.label,
-      decisionHelper: managementDecision.helper,
+      decisionHelper: latestDecision?.userReason ?? managementDecision.helper,
       ownerLabel: workCase?.accountableParty ?? proposalWork?.accountableParty ?? "Facilities",
-      nextActionLabel: managementDecision.kind === "replacement_approved" ? "Coordinate the approved replacement through the work order" : workCase?.primaryNextAction.label ?? proposalWork?.nextAction ?? "Review the source records",
+      nextActionLabel: workCase?.primaryNextAction.label ?? proposalWork?.nextAction ?? "Review the equipment history and obtain the missing prices",
       dueLabel: workCase?.dueAt ? formatOperationsDateTime(workCase.dueAt, timeZone) : "No open due time",
       contextFacts,
       activity,
       closeHref,
-      openWorkOrderHref,
+      openWorkOrderHref: workCase?.primaryNextAction.href ?? openWorkOrderHref,
       openEquipmentHref,
       childCloseHref,
       activeChild,
     },
-    equipmentDetail,
-    workOrderDetail,
     workOrderCase: workCase,
   };
 }

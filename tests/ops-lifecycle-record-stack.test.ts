@@ -49,28 +49,31 @@ const model: LifecycleDecisionWorkspaceModel = {
 };
 
 describe("lifecycle stacked record workspace", () => {
-  it("keeps both source-record actions inside the decision context", () => {
+  it("shows readable prices and evidence on a normal page", () => {
     const markup = renderToStaticMarkup(createElement(LifecycleRecordStack, {
       model,
       equipmentDetail: detail("Beer cave"),
       workOrderDetail: detail("CPS-2026-0115"),
     }));
-    expect(markup).toContain("Repair or replace decision");
-    expect(markup).toContain("Open work order");
+    expect(markup).toContain("Repair or replace");
+    expect(markup).toContain("$18,000");
+    expect(markup).toContain("$32,853");
+    expect(markup).not.toContain('role="dialog"');
+    expect(markup).toContain("Continue CPS-2026-0115");
     expect(markup).toContain("record=work-order");
-    expect(markup).toContain("Open equipment");
+    expect(markup).toContain("Open the complete equipment history");
     expect(markup).toContain("record=equipment");
-    expect(markup).toContain("Updates and communications");
+    expect(markup).toContain("Decision history");
   });
 
-  it("opens equipment above the decision and closes only the child layer", () => {
+  it("keeps legacy child query links usable without stacking modal layers", () => {
     const markup = renderToStaticMarkup(createElement(LifecycleRecordStack, {
       model: { ...model, activeChild: "equipment" },
       equipmentDetail: detail("Beer cave"),
       workOrderDetail: detail("CPS-2026-0115"),
     }));
-    expect(markup).toContain('aria-label="Open equipment record"');
-    expect(markup).toContain('href="/app/lifecycle?view=review&amp;decision=asset-115"');
-    expect(markup).toContain('href="/app/equipment/asset-115"');
+    expect(markup).not.toContain('aria-modal="true"');
+    expect(markup).toContain('href="/app/lifecycle?view=review"');
+    expect(markup).toContain("record=equipment");
   });
 });

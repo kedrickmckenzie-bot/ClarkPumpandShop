@@ -406,3 +406,14 @@ a.metric:focus-visible {
 
 .allocationEvidence { display: block; padding: 6px 0; scroll-margin-top: 100px; }
 .allocationEvidence:target { background: #eff6ff; outline: 2px solid #2563eb; outline-offset: 3px; }
+
+.warrantyReview { font-size:16px; line-height:1.55; }
+.warrantyReview .metric strong { font-size:19px; line-height:1.4; overflow-wrap:anywhere; }
+.warrantyReview section { scroll-margin-top:90px; }
+.reviewNav { display:flex; flex-wrap:wrap; gap:12px 24px; padding:16px 0; }
+.reviewNav a { color:#2452a1; text-decoration:underline; text-underline-offset:3px; }
+.coverageTerm { padding:18px 0; border-top:1px solid #dce3ec; }
+.coverageTerm p { margin:6px 0; }
+.warrantyReview summary { cursor:pointer; padding:12px 0; font-weight:600; }
+.warrantyReview .form { max-width:780px; }
+.warrantyReview .form select { max-width:100%; }

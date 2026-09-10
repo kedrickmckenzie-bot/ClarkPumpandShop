@@ -1,3 +1,4 @@
+import { WARRANTY_REVIEW_TITLE, warrantyTaskHref } from "./warranty-review";
 import type {
   ExceptionKind,
   OpsFixture,
@@ -121,7 +122,7 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
         workOrderId: task.workOrderId,
         serviceRequestId: task.serviceRequestId,
         storeId: work?.storeId ?? request?.storeId,
-        title: task.title,
+        title: task.taskType === "review_warranty" ? WARRANTY_REVIEW_TITLE : task.title,
         reason: task.reason,
         owner: task.assigneeName,
         dueAt: task.dueAt,
@@ -129,9 +130,9 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
         lane: input.history ? "history" : laneForTask(task, input),
         completedAt: task.completedAt ?? task.cancelledAt,
         group: groupForTask(task),
-        linkHref: task.workOrderId
+        linkHref: warrantyTaskHref(fixture, task) ?? (task.workOrderId
           ? `/app/work-orders/${encodeURIComponent(task.workOrderId)}?view=accountability#workflow-tasks`
-          : `/app/requests/${encodeURIComponent(task.serviceRequestId!)}`,
+          : `/app/requests/${encodeURIComponent(task.serviceRequestId!)}`),
       };
     });
 

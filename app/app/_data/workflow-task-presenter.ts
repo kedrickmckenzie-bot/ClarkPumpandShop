@@ -1,3 +1,4 @@
+import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE, warrantyTaskHref } from "@/lib/ops/warranty-review";
 import "server-only";
 
 import type {
@@ -162,7 +163,8 @@ function taskModel(
     id: task.id,
     action: `/api/ops/work-orders/${encodeURIComponent(task.workOrderId)}/tasks/${encodeURIComponent(task.id)}`,
     typeLabel: domainLabel(task.taskType),
-    title: task.title,
+    title: task.taskType === "review_warranty" ? WARRANTY_REVIEW_TITLE : task.title,
+    evidenceHref: warrantyTaskHref(fixture, task),
     reason: task.reason,
     assigneeTypeLabel: domainLabel(task.assigneeType),
     assigneeLabel: task.assigneeName,
@@ -176,7 +178,7 @@ function taskModel(
     dueLabel: dateTime(task.dueAt, timeZone) ?? "No SLA deadline",
     noSlaReason: task.noSlaReason,
     slaClockLabel: task.applicableSlaClock ? domainLabel(task.applicableSlaClock) : undefined,
-    completionCriteria: task.completionCriteria,
+    completionCriteria: task.taskType === "review_warranty" ? WARRANTY_REVIEW_DONE : task.completionCriteria,
     escalationDestination: task.escalationDestination,
     escalationLevel: task.escalationLevel,
     createdByLabel: task.createdByActorName,

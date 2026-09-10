@@ -1,24 +1,14 @@
 import Link from "next/link";
-import {
-  ArrowUpRight,
-  Building2,
-  CalendarClock,
-  CheckCircle2,
-  ClipboardList,
-  History,
-  MessageSquareText,
-  PackageOpen,
-  Scale,
-  Wrench,
-  X,
-} from "lucide-react";
-import type { DetailFactViewModel, DetailPageViewModel, TimelineEventViewModel, Tone } from "@/components/ops/data-contract";
+import type { DetailPageViewModel, TimelineEventViewModel, Tone } from "@/components/ops/data-contract";
 import type { WorkOrderCaseView } from "@/lib/ops/work-order-case";
-import { RecordSections } from "./record-sections";
-import { WorkOrderStageRail } from "./work-order-case-stage-rail";
+import type { lifecyclePriceEvidence } from "@/lib/ops/lifecycle-price-evidence";
+import type { WorkReviewModel } from "@/lib/ops/work-review";
+import { WorkReviewButton } from "./work-review";
 import styles from "./lifecycle-record-stack.module.css";
 
 export interface LifecycleDecisionWorkspaceModel {
+  prices?: ReturnType<typeof lifecyclePriceEvidence>;
+  review?: WorkReviewModel;
   assetId: string;
   assetName: string;
   assetTag: string;
@@ -47,151 +37,36 @@ export interface LifecycleDecisionWorkspaceModel {
   activeChild?: "work-order" | "equipment";
 }
 
-const toneClass: Record<Tone, string> = {
-  neutral: styles.neutral,
-  positive: styles.positive,
-  warning: styles.warning,
-  critical: styles.critical,
-  info: styles.info,
-};
-
-function FactGrid({ facts }: { facts: DetailFactViewModel[] }) {
-  return (
-    <dl className={styles.recordFacts}>
-      {facts.map((fact) => (
-        <div key={fact.label}>
-          <dt>{fact.label}</dt>
-          <dd>{fact.value}</dd>
-          {fact.helperText ? <small>{fact.helperText}</small> : null}
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function ActivityTimeline({ events }: { events: TimelineEventViewModel[] }) {
-  return (
-    <section className={styles.activity} aria-labelledby="decision-activity-heading">
-      <header>
-        <span><History aria-hidden="true" size={19} /></span>
-        <div><p>Recorded history</p><h3 id="decision-activity-heading">Updates and communications</h3></div>
-        <strong>{events.length} events</strong>
-      </header>
-      {events.length ? <ol>{events.map((event) => (
-        <li key={event.id}>
-          <i className={toneClass[event.tone ?? "neutral"]} aria-hidden="true" />
-          <div>
-            <header><strong>{event.title}</strong><time>{event.timestampLabel}</time></header>
-            {event.description ? <p>{event.description}</p> : null}
-            <footer>{event.actorLabel}</footer>
-          </div>
-        </li>
-      ))}</ol> : <p className={styles.empty}>No communication or status history has been recorded yet.</p>}
+export function LifecycleRecordStack({ model }: { model: LifecycleDecisionWorkspaceModel; equipmentDetail?: DetailPageViewModel; workOrderDetail?: DetailPageViewModel; workOrderCase?: WorkOrderCaseView }) {
+  const prices = model.prices;
+  const review = model.review;
+  return <main className={styles.page}>
+    <Link className={styles.back} href={model.closeHref}>← Back to replacement planning</Link>
+    <header className={styles.heading}>
+      <div><p>Repair or replace</p><h1>{model.assetName}</h1><span>{model.storeLabel} · {model.assetTag}{model.workOrderNumber ? ` · ${model.workOrderNumber}` : ""}</span></div>
+      <strong className={styles.status}>{model.statusLabel}</strong>
+    </header>
+    <p className={styles.problem}>{model.description}</p>
+    <section className={styles.prices} aria-label="Repair and replacement prices">
+      <div><h2>Repair price</h2><strong>{model.repairAmountLabel}</strong><p>Estimate entered on this work order.</p>{model.workOrderId ? <Link href={`/app/work-orders/${model.workOrderId}?view=overview`}>Review the repair estimate</Link> : <Link href={model.openEquipmentHref}>Add the missing repair information</Link>}</div>
+      <div><h2>{prices?.replacementBasis ?? "Replacement quote"}</h2><strong>{model.replacementAmountLabel}</strong><p>{prices?.approvedVendor ?? (prices?.quotes.length ? "Review the available vendor quotes below." : "No vendor replacement quote has been selected.")}</p><a href="#replacement-quotes">Review replacement scope and quotes ↓</a></div>
+      <div><h2>Planning estimate</h2><strong>{prices?.planningLabel ?? "Not entered"}</strong><p>Equipment planning reference. This is separate from the vendor’s quote and approved amount.</p><Link href={model.openEquipmentHref}>Review the planning source</Link></div>
     </section>
-  );
-}
-
-function NestedRecord({
-  kind,
-  model,
-  closeHref,
-  fullHref,
-  workOrderCase,
-}: {
-  kind: "work-order" | "equipment";
-  model: DetailPageViewModel;
-  closeHref: string;
-  fullHref: string;
-  workOrderCase?: WorkOrderCaseView;
-}) {
-  const noun = kind === "work-order" ? "work order" : "equipment record";
-  return (
-    <div className={styles.childLayer} role="dialog" aria-modal="true" aria-label={`Open ${noun}`}>
-      <Link className={styles.childBackdrop} href={closeHref} aria-label={`Close ${noun}`} scroll={false} />
-      <article className={styles.childPanel}>
-        <header className={styles.childHeader}>
-          <div>
-            <p>{kind === "work-order" ? "Source work order" : "Source equipment record"}</p>
-            <h2>{model.page.title}</h2>
-            <span>{model.page.description}</span>
-          </div>
-          <div className={styles.childActions}>
-            <Link href={fullHref} className={styles.fullRecordLink} aria-label={`Open full ${noun}`}>Open full page<ArrowUpRight aria-hidden="true" size={15} /></Link>
-            <Link className={styles.closeButton} href={closeHref} aria-label={`Close ${noun}`} scroll={false}><X aria-hidden="true" size={20} /></Link>
-          </div>
-        </header>
-        <div className={styles.childBody}>
-          {workOrderCase ? <WorkOrderStageRail model={workOrderCase} /> : null}
-          <section className={styles.recordSummary} aria-label={`${noun} summary`}>
-            <header><div><p>Record summary</p><h3>At a glance</h3></div><span className={`${styles.status} ${toneClass[model.statusTone ?? "neutral"]}`}>{model.statusLabel}</span></header>
-            <FactGrid facts={model.facts} />
-          </section>
-          <RecordSections sections={model.sections} />
-        </div>
-      </article>
-    </div>
-  );
-}
-
-export function LifecycleRecordStack({
-  model,
-  workOrderDetail,
-  equipmentDetail,
-  workOrderCase,
-}: {
-  model: LifecycleDecisionWorkspaceModel;
-  workOrderDetail?: DetailPageViewModel;
-  equipmentDetail: DetailPageViewModel;
-  workOrderCase?: WorkOrderCaseView;
-}) {
-  return (
-    <div className={styles.decisionLayer} role="dialog" aria-modal={model.activeChild ? undefined : "true"} aria-label={`Repair or replace ${model.assetName}`}>
-      <Link className={styles.backdrop} href={model.closeHref} aria-label="Close repair decision" scroll={false} />
-      <article className={styles.decisionPanel}>
-        <header className={styles.decisionHeader}>
-          <div className={styles.decisionHeading}>
-            <p>Repair or replace decision</p>
-            <div><h2>{model.assetName}</h2><span className={`${styles.status} ${toneClass[model.statusTone]}`}>{model.statusLabel}</span></div>
-            <span>{model.storeLabel} · {model.assetTag}{model.workOrderNumber ? ` · ${model.workOrderNumber}` : ""}</span>
-          </div>
-          <Link className={styles.closeButton} href={model.closeHref} aria-label="Close repair decision" scroll={false}><X aria-hidden="true" size={20} /></Link>
-        </header>
-
-        <div className={styles.decisionBody}>
-          <section className={styles.decisionCallout}>
-            <span><Scale aria-hidden="true" size={22} /></span>
-            <div><small>Decision in plain language</small><h3>{model.decisionLabel}</h3><p>{model.decisionHelper}</p></div>
-          </section>
-
-          <section className={styles.comparison} aria-label="Repair and replacement comparison">
-            <div><span><Wrench aria-hidden="true" size={18} />Current repair</span><strong>{model.repairAmountLabel}</strong><p>Vendor price for this work order only.</p></div>
-            <div><span><PackageOpen aria-hidden="true" size={18} />Installed replacement</span><strong>{model.replacementAmountLabel}</strong><p>Current planning estimate for this equipment.</p></div>
-            <div><span><Scale aria-hidden="true" size={18} />Repair share</span><strong>{model.repairShareLabel}</strong><p>Repair price as a share of installed replacement.</p></div>
-            <div><span><CalendarClock aria-hidden="true" size={18} />Service needed to justify repair</span><strong>{model.requiredRunwayLabel}</strong><p>Entered service estimate: {model.enteredServiceLabel}.</p></div>
-          </section>
-
-          <section className={styles.accountability} aria-label="Decision accountability">
-            <div><small>Owner</small><strong>{model.ownerLabel}</strong></div>
-            <div><small>Next step</small><strong>{model.nextActionLabel}</strong></div>
-            <div><small>Due</small><strong>{model.dueLabel}</strong></div>
-          </section>
-
-          <div className={styles.sourceActions}>
-            {model.openWorkOrderHref ? <Link href={model.openWorkOrderHref} scroll={false}><span><ClipboardList aria-hidden="true" size={20} /></span><div><small>Service execution</small><strong>Open work order</strong><p>See the vendor stage, assignment, visits, cost, and closeout.</p></div><ArrowUpRight aria-hidden="true" size={17} /></Link> : null}
-            <Link href={model.openEquipmentHref} scroll={false}><span><Building2 aria-hidden="true" size={20} /></span><div><small>Equipment history</small><strong>Open equipment</strong><p>See repair history, components, warranty, PM, and lifecycle evidence.</p></div><ArrowUpRight aria-hidden="true" size={17} /></Link>
-          </div>
-
-          <section className={styles.contextFacts}>
-            <header><MessageSquareText aria-hidden="true" size={18} /><div><p>Decision context</p><h3>What else should be considered</h3></div></header>
-            <ul>{model.contextFacts.map((fact) => <li key={fact}><CheckCircle2 aria-hidden="true" size={16} />{fact}</li>)}</ul>
-          </section>
-
-          <ActivityTimeline events={model.activity} />
-        </div>
-      </article>
-
-      {model.activeChild === "work-order" && workOrderDetail && model.workOrderId ? <NestedRecord kind="work-order" model={workOrderDetail} closeHref={model.childCloseHref} fullHref={`/app/work-orders/${encodeURIComponent(model.workOrderId)}`} workOrderCase={workOrderCase} /> : null}
-      {model.activeChild === "equipment" ? <NestedRecord kind="equipment" model={equipmentDetail} closeHref={model.childCloseHref} fullHref={`/app/equipment/${encodeURIComponent(model.assetId)}`} /> : null}
-    </div>
-  );
+    {prices?.finalAmount ? <p className={styles.notice}>Final replacement amount recorded: <strong>{prices.finalAmount}</strong>. The approved amount above remains part of the decision history.</p> : null}
+    {prices?.missing ? <p className={styles.notice}>{prices.missing}</p> : null}
+    <section className={styles.next} aria-labelledby="decision-next">
+      <div><h2 id="decision-next">What happens next</h2><p>{model.nextActionLabel}</p><span>{model.ownerLabel} · Due {model.dueLabel}</span></div>
+      {model.openWorkOrderHref ? <Link className={styles.action} href={model.openWorkOrderHref}>Continue {model.workOrderNumber ?? "existing work"} →</Link> : <Link className={styles.action} href={model.openEquipmentHref}>Review equipment and open work →</Link>}
+    </section>
+    <nav className={styles.sections} aria-label="Decision sections"><a href="#replacement-quotes">Quotes and scope</a><a href="#decision-history">Repair history and warranty</a><a href="#decision-method">Comparison details</a><a href="#decision-activity">Decision history</a></nav>
+    <section className={styles.section} id="replacement-quotes"><h2>Replacement quotes and what they include</h2><p>{prices?.scope}</p>
+      {prices?.quotes.length ? <div className={styles.quotes}>{prices.quotes.map((quote) => <article key={quote.id}><header><div><h3>{quote.vendor}</h3><span>{quote.status}</span></div><strong>{quote.amount}</strong></header><dl><div><dt>Included work</dt><dd>{quote.scope}</dd></div><div><dt>Not included / needs checking</dt><dd>{quote.exclusions}</dd></div><div><dt>Availability</dt><dd>{quote.timing}</dd></div></dl><Link href={quote.href}>Open the quote and its recorded decision →</Link></article>)}</div> : <p>No replacement quote is recorded here. {model.workOrderId ? <Link href={`/app/work-orders/${model.workOrderId}?view=service&path=bids`}>Request replacement pricing for this work order</Link> : <Link href={model.openEquipmentHref}>Open equipment to start a pricing request</Link>}.</p>}
+    </section>
+    <section className={styles.section} id="decision-history"><h2>Repair history and warranty</h2>
+      {review ? <><p><strong>{review.outcome.label}.</strong> {review.outcome.detail}</p><div className={styles.history}><div><h3>Earlier work on this equipment scope</h3>{review.related.length ? <ul>{review.related.map((row) => <li key={row.id}><strong>{row.label}</strong><p>{row.detail}</p>{row.href ? <><Link href={row.href}>Open repair record</Link> <WorkReviewButton href={row.href} label={row.label} context="Repair or replace · related equipment work" /></> : null}</li>)}</ul> : <p>No earlier work is recorded for this scope.</p>}</div><div><h3>Warranty evidence</h3>{review.warranties.length ? <ul>{review.warranties.map((row) => <li key={row.id}><strong>{row.label}</strong><p>{row.detail}</p>{row.href ? <Link href={row.href}>Review warranty evidence →</Link> : null}</li>)}</ul> : <p>No warranty terms are recorded for this work. Check coverage before approving another charge.</p>}</div></div></> : <p>No current service record is attached. The equipment history remains available below.</p>}
+      <Link href={model.openEquipmentHref}>Open the complete equipment history →</Link>
+    </section>
+    <details className={styles.section} id="decision-method"><summary>How the repair comparison was calculated</summary><dl className={styles.method}><div><dt>Repair compared with replacement</dt><dd>{model.repairShareLabel}</dd></div><div><dt>Service needed for the repair to match replacement cost per year</dt><dd>{model.requiredRunwayLabel}</dd></div><div><dt>Estimated service after repair</dt><dd>{model.enteredServiceLabel}</dd></div></dl><p>The comparison uses {prices?.replacement ? "the selected or approved replacement amount" : "the planning estimate because a replacement quote has not been selected"}. It does not predict failures or make the decision for you. Costs in different currencies are not compared.</p><ul>{model.contextFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul></details>
+    <section className={styles.section} id="decision-activity"><h2>Decision history</h2><p><strong>{model.decisionLabel}.</strong> {model.decisionHelper}</p>{model.activity.length ? <ol className={styles.timeline}>{model.activity.map((event) => <li key={event.id}><div><strong>{event.title}</strong><time>{event.timestampLabel}</time></div><p>{event.description}</p><span>{event.actorLabel}</span></li>)}</ol> : <p>No decision history has been recorded.</p>}</section>
+  </main>;
 }

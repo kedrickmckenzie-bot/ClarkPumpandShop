@@ -65,5 +65,32 @@ describe("shared lifecycle decision state", () => {
     expect(row.cells.find((cell) => cell.key === "evidence")?.value).toBe(listDecision);
     expect(workspace?.model.statusLabel).toBe(listDecision);
     expect(workspace?.model.decisionLabel).toBe(listDecision);
+    expect(workspace?.model.replacementAmountLabel).toBe("$32,800.00");
+    expect(workspace?.model.prices?.planningLabel).toBe("$32,852.78");
+  });
+
+  it("keeps the approved source work after closure and separates a later repair decision", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const work = fixture.workOrders.find((row) => row.id === "wo-northline-115")!;
+    work.status = "closed";
+    mocks.getSnapshot.mockResolvedValue(fixture); mocks.loadSession.mockResolvedValue(session());
+    expect((await loadLifecycleRecordStack(work.assetId!, {}))?.model.workOrderId).toBe(work.id);
+    fixture.workOrders.push({ ...work, id: "new-repair", number: "NEW-REPAIR", status: "approved", createdAt: "2026-08-24T00:00:00Z", repairEstimate: { amountMinor: 100000, currency: "USD" } });
+    const current = await loadLifecycleRecordStack(work.assetId!, {});
+    expect(current?.model.workOrderId).toBe("new-repair");
+    expect(current?.model.statusLabel).not.toBe("Replacement approved");
+    expect(current?.model.replacementAmountLabel).toBe("Price needed");
+  });
+
+  it("does not compare currencies or open an asset outside the assigned scope", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const work = fixture.workOrders.find((row) => row.id === "wo-northline-115")!;
+    work.repairEstimate!.currency = "CAD";
+    mocks.getSnapshot.mockResolvedValue(fixture); mocks.loadSession.mockResolvedValue(session());
+    expect((await loadLifecycleRecordStack(work.assetId!, {}))?.model.repairShareLabel).toBe("Not calculable");
+    mocks.loadSession.mockResolvedValue({ ...session(), role: "store_manager", storeIds: [] });
+    expect(await loadLifecycleRecordStack(work.assetId!, {})).toBeNull();
+    mocks.loadSession.mockResolvedValue({ ...session(), role: "store_manager", storeIds: ["store-northline-104"] });
+    expect(await loadLifecycleRecordStack(work.assetId!, {})).toBeNull();
   });
 });
