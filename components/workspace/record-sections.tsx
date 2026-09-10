@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkReviewButton } from "./work-review";
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ArrowRight, ChevronRight, CircleDot, FileSearch } from "lucide-react";
@@ -31,7 +32,7 @@ function DataTable({ table }: { table: TableViewModel }) {
                 const value = <><strong className={cell?.tone ? toneClass[cell.tone] : undefined}>{cell?.value ?? "—"}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</>;
                 return <td data-label={column.label} data-align={column.align ?? "start"} key={column.key}>{(cell?.link || index === 0) ? <Link href={workspaceStartHref(cell?.link?.href ?? row.href)}>{value}</Link> : value}</td>;
               })}
-              <td className={styles.openColumn}><Link className={styles.rowAction} href={workspaceStartHref(row.href)} aria-label={`Open ${row.label}`}><ChevronRight aria-hidden="true" size={16} /></Link></td>
+              <td className={styles.openColumn}><WorkReviewButton href={row.href} label={row.label} /><Link className={styles.rowAction} href={workspaceStartHref(row.href)} aria-label={`Open ${row.label}`}><ChevronRight aria-hidden="true" size={16} /></Link></td>
             </tr>
           ))}
         </tbody>
@@ -56,7 +57,7 @@ function SectionContent({ section, previewHref }: { section: DetailSectionViewMo
           {facts.map((fact) => (
             <div key={fact.label}>
               <dt>{fact.label}</dt>
-              <dd>{fact.link ? <Link href={workspaceStartHref(fact.link.href)}><strong>{fact.value}</strong><ChevronRight aria-hidden="true" size={15} /></Link> : <strong>{fact.value}</strong>}{fact.helperText ? <small>{fact.helperText}</small> : null}</dd>
+              <dd>{fact.link ? <><Link href={workspaceStartHref(fact.link.href)}><strong>{fact.value}</strong><ChevronRight aria-hidden="true" size={15} /></Link><WorkReviewButton href={fact.link.href} label={fact.value} /></> : <strong>{fact.value}</strong>}{fact.helperText ? <small>{fact.helperText}</small> : null}</dd>
             </div>
           ))}
         </dl>

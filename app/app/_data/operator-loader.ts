@@ -627,6 +627,13 @@ export async function loadDetailModel(route: DetailRouteId, id: string) {
   );
 }
 
+export async function loadConnectedWorkReview(workOrderId: string) {
+  const context = await sessionAndFixture();
+  const { createOpsFixtureReadRepository } = await import("@/lib/ops/fixture-repository");
+  const { loadWorkReview } = await import("@/lib/ops/work-review");
+  return loadWorkReview(createOpsFixtureReadRepository(context.fixture), context.session, workOrderId, context.fixture.asOf);
+}
+
 export async function loadVendorPerformanceListModel(searchParams: OperatorSearchParameters = {}) {
   const context = await sessionAndFixture();
   if (!roleCanAccessListRoute(context.session.role, "vendors")) notFound();

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { WorkOrderCase } from "@/components/workspace/work-order-case";
-import { loadDetailModel, loadEstimateComparisonModel, loadHeldWorkActionsModel, loadOperatorSession, loadVendorIssuanceModel, loadWorkOrderCaseModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel, loadVendorResponseActionsModel } from "../../_data/operator-loader";
+import { loadConnectedWorkReview, loadDetailModel, loadEstimateComparisonModel, loadHeldWorkActionsModel, loadOperatorSession, loadVendorIssuanceModel, loadWorkOrderCaseModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel, loadVendorResponseActionsModel } from "../../_data/operator-loader";
 import { loadWorkOrderReplacementIntelligenceModel } from "../../_data/replacement-loader";
 import { loadWorkOrderVerificationModel } from "../../_data/work-order-verification-presenter";
 import caseStyles from "@/components/workspace/owner-brief.module.css";
@@ -33,7 +33,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const notice = Array.isArray(noticeRaw) ? noticeRaw[0] : noticeRaw;
   const errorRaw = query.error;
   const error = Array.isArray(errorRaw) ? errorRaw[0] : errorRaw;
-  const [model, control, recording, estimateComparison, issuance, replacement, verification, stageCase, responseActions, heldWork, session] = await Promise.all([
+  const [model, control, recording, estimateComparison, issuance, replacement, verification, stageCase, responseActions, heldWork, session, connectedReview] = await Promise.all([
     loadDetailModel("work-order", id),
     loadWorkOrderControlModel(id),
     loadWorkOrderRecordingModel(id),
@@ -45,6 +45,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     loadVendorResponseActionsModel(id),
     loadHeldWorkActionsModel(id),
     loadOperatorSession(),
+    ["overview", "equipment"].includes(requestedView) ? loadConnectedWorkReview(id) : null,
   ]);
   const accountabilityOnly = session.demoEdition === "accountability";
   const view = accountabilityOnly && !["overview", "service", "visits"].includes(requestedView)
@@ -109,6 +110,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       </p>
     ) : null}
     <WorkOrderCase
+      connectedReview={connectedReview}
       model={model}
       control={control}
       recording={recording}

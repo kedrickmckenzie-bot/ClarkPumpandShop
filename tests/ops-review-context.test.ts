@@ -60,7 +60,7 @@ describe("reviewing information in context", () => {
     expect(visit).toBeDefined();
     const model = await buildQueryListModel(createOpsFixtureRepository(fixture), session, "visits", { store: visit.storeId });
     const row = model.table.rows.find((item) => item.id === visit.id)!;
-    expect(row.cells.find((cell) => cell.key === "outcome")?.value).toBe("Review work outcomes");
+    expect(row.cells.find((cell) => cell.key === "outcome")?.value).toBe("CPS-2026-0104: Completed · CPS-2026-0035: Completed");
     expect(row.cells.find((cell) => cell.key === "work")?.value).not.toBe("No work order");
     expect(row.cells.find((cell) => cell.key === "outcome")?.link?.href).toBe(`/app/visits/${visit.id}`);
   });

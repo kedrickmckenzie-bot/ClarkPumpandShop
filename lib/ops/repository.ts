@@ -338,6 +338,9 @@ export interface OpsRepository {
   listRequests(scope: OrganizationScope, query?: PageRequest & { search?: string; status?: string; storeId?: OpsId }): Promise<RequestListPage>;
   listWorkOrders(scope: OrganizationScope, query?: WorkOrderListQuery): Promise<WorkOrderListPage>;
   getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null>;
+  /** Only invoices associated with this work; includes sibling lines/splits to verify reconciliation. */
+  getWorkOrderInvoiceSources(organizationId: OpsId, workOrderId: OpsId): Promise<import("./invoice-reporting").InvoiceReportingSources>;
+  getAssetWarrantySources(organizationId: OpsId, assetId: OpsId): Promise<Pick<OpsFixture, "repairItems" | "appliedWarranties" | "warrantyAmendments" | "manufacturerWarranties" | "warrantyCases">>;
   listVendors(scope: OrganizationScope, search?: string, page?: PageRequest): Promise<VendorDirectoryPage>;
   listVisits(scope: OrganizationScope, query?: PageRequest & { search?: string; status?: string; storeId?: OpsId; vendorId?: OpsId; review?: boolean }): Promise<VisitListPage>;
   listExceptions(scope: OrganizationScope, query?: ExceptionQueueQuery): Promise<ExceptionQueuePage>;

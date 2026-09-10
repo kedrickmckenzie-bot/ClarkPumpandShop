@@ -1,3 +1,4 @@
+import { buildPmReactiveReview } from "./pm-reactive-review";
 import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
 import { reviewItemHref } from "@/lib/ops/review-navigation";
@@ -4087,20 +4088,8 @@ export function buildProgramModel(
     );
     const completed = closedWindow.filter((item) => item.status === "completed").length;
     const eligible = closedWindow.length;
-    const latestClosedByAsset = new Map<string, (typeof closedWindow)[number]>();
-    for (const item of closedWindow.filter((candidate) => candidate.occurrence.assetId).sort((a, b) => a.occurrence.windowEndsAt.localeCompare(b.occurrence.windowEndsAt))) latestClosedByAsset.set(item.occurrence.assetId!, item);
-    const compliantAssetIds = new Set([...latestClosedByAsset.values()].filter((item) => item.status === "completed").map((item) => item.occurrence.assetId!));
-    const noncompliantAssetIds = new Set([...latestClosedByAsset.values()].filter((item) => item.status !== "completed").map((item) => item.occurrence.assetId!));
-    const pmWorkOrderIds = new Set(occurrences.map((item) => item.workOrderId).filter((value): value is string => Boolean(value)));
-    const trailingStart = new Date(Date.parse(fixture.asOf) - 365.2425 * 24 * 60 * 60 * 1_000).toISOString();
-    const reactiveAssetWork = scoped.workOrders.filter((work) => work.assetId && work.createdAt >= trailingStart && work.createdAt <= fixture.asOf && !pmWorkOrderIds.has(work.id));
-    const cohortRate = (assetIds: Set<string>) => assetIds.size ? reactiveAssetWork.filter((work) => assetIds.has(work.assetId!)).length / (assetIds.size * 12) * 100 : 0;
-    const compliantRate = cohortRate(compliantAssetIds);
-    const noncompliantRate = cohortRate(noncompliantAssetIds);
-    const minimumCohort = Math.min(compliantAssetIds.size || Number.POSITIVE_INFINITY, noncompliantAssetIds.size || Number.POSITIVE_INFINITY);
-    const cohortCaution = Number.isFinite(minimumCohort) && minimumCohort >= 10 ? "This comparison does not show that scheduled maintenance caused the difference. Review the work history before changing the schedule." : "One comparison group has fewer than 10 pieces of equipment. There is not enough data to judge whether the maintenance schedule is helping.";
-    const reactiveCostByMonth = new Map<string, number>();
-    for (const work of reactiveAssetWork) reactiveCostByMonth.set(work.createdAt.slice(0, 7), (reactiveCostByMonth.get(work.createdAt.slice(0, 7)) ?? 0) + (costByWork.get(work.id) ?? 0));
+    const reactiveReview = buildPmReactiveReview({ fixture, organizationId: scoped.organizationId, stores: scoped.stores, assets: scoped.assets, workOrders: scoped.workOrders, occurrences: occurrenceStates, query, scopeLabel: activeScopeLabel });
+    if (reactiveReview.evidence) return reactiveReview.evidence;
     const rows = visible.sort((a, b) => a.occurrence.dueAt.localeCompare(b.occurrence.dueAt)).map<TableRowViewModel>(({ occurrence, status }) => {
       const plan = planById.get(occurrence.planId);
       const store = scoped.stores.find((item) => item.id === occurrence.storeId);
@@ -4122,25 +4111,22 @@ export function buildProgramModel(
         { key: "status", value: sentence(status), tone: status === "completed" ? "positive" : status === "missed" ? "critical" : status === "due" ? "warning" : "info" },
       ] };
     });
-    const metric = (key: string, label: string, tone: Tone): MetricViewModel => ({ id: key, label, value: String(statusCounts.get(key) ?? 0), supportingText: "Select to open the exact occurrences", tone, link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId, program: programFilter, view: "all" }), label: `Show ${label.toLocaleLowerCase("en-US")}` } });
-    const pmPageHref = (page: number) => hrefWithQuery("/app/pm", { view: pmView, status: statusFilter, occurrence: occurrenceFilter, store: selectedStoreId, program: programFilter, page: String(page) });
+    const metric = (key: string, label: string, tone: Tone): MetricViewModel => ({ id: key, label, value: String(statusCounts.get(key) ?? 0), supportingText: "Select to open the exact occurrences", tone, link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId, region: selectedRegionId, program: programFilter, view: "all" }), label: `Show ${label.toLocaleLowerCase("en-US")}` } });
+    const pmPageHref = (page: number) => hrefWithQuery("/app/pm", { view: pmView, status: statusFilter, occurrence: occurrenceFilter, store: selectedStoreId, region: selectedRegionId, program: programFilter, page: String(page) });
     return {
       state: { kind: "ready" },
-      page: { title: "Preventive maintenance", eyebrow: "Planned work", description: "See scheduled maintenance that is due or overdue, and compare billed service with recorded visits.", scopeLabel: activeScopeLabel, periodLabel: "Current PM window", updatedLabel: `Through ${date(fixture.asOf)}` },
+      page: { title: "Preventive maintenance", eyebrow: "Planned work", description: "See scheduled maintenance that is due or overdue, and compare billed service with recorded visits.", scopeLabel: activeScopeLabel, periodLabel: pmView === "all" ? "All recorded PM windows" : pmView === "upcoming" ? "Due and scheduled windows" : "Due and missed windows", updatedLabel: `Through ${date(fixture.asOf)}` },
       filters: [{ id: "view", label: "Occurrence view", options: [
-        { value: "attention", label: `Needs attention (${occurrenceStates.filter((item) => item.status === "due" || item.status === "missed").length})`, href: hrefWithQuery("/app/pm", { view: "attention", store: selectedStoreId, program: programFilter }), selected: pmView === "attention" },
-        { value: "upcoming", label: `Upcoming (${occurrenceStates.filter((item) => item.status === "due" || item.status === "scheduled").length})`, href: hrefWithQuery("/app/pm", { view: "upcoming", store: selectedStoreId, program: programFilter }), selected: pmView === "upcoming" },
-        { value: "all", label: `All occurrences (${occurrenceStates.length})`, href: hrefWithQuery("/app/pm", { view: "all", store: selectedStoreId, program: programFilter }), selected: pmView === "all" },
+        { value: "attention", label: `Needs attention (${occurrenceStates.filter((item) => item.status === "due" || item.status === "missed").length})`, href: hrefWithQuery("/app/pm", { view: "attention", store: selectedStoreId, region: selectedRegionId, program: programFilter }), selected: pmView === "attention" },
+        { value: "upcoming", label: `Upcoming (${occurrenceStates.filter((item) => item.status === "due" || item.status === "scheduled").length})`, href: hrefWithQuery("/app/pm", { view: "upcoming", store: selectedStoreId, region: selectedRegionId, program: programFilter }), selected: pmView === "upcoming" },
+        { value: "all", label: `All occurrences (${occurrenceStates.length})`, href: hrefWithQuery("/app/pm", { view: "all", store: selectedStoreId, region: selectedRegionId, program: programFilter }), selected: pmView === "all" },
       ] }],
       metrics: [metric("due", "Due", "warning"), metric("scheduled", "Scheduled", "info"), metric("completed", "Completed", "positive"), metric("missed", "Missed", "critical"), metric("waived", "Waived", "neutral")],
       breakdowns: [
-        { id: "pm-status", title: "PM occurrence status", description: `Closed-window compliance: ${completed} completed / ${eligible} eligible occurrences = ${eligible ? Math.round((completed / eligible) * 100) : 0}%. Work still inside its completion window is excluded.`, totalLabel: `${occurrenceStates.length} occurrences`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "completed" ? "positive" : key === "missed" ? "critical" : key === "due" ? "warning" : "info", link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId, program: programFilter, view: "all" }), label: "Filter occurrences" } })), sourceLink: { href: hrefWithQuery("/app/pm", { store: selectedStoreId, program: programFilter, view: "all" }), label: "Open all source occurrences" } },
-        { id: "pm-effectiveness-cohorts", title: "Reactive work after the latest closed PM window", description: `${cohortCaution} Rates use trailing-12-month reactive Work Orders per 100 equipment-months; PM-generated Work Orders are excluded.`, totalLabel: `${compliantAssetIds.size + noncompliantAssetIds.size} equipment`, segments: [
-          { id: "latest-compliant", label: `Latest PM completed (${compliantAssetIds.size})`, value: compliantRate, formattedValue: `${compliantRate.toFixed(1)} / 100`, tone: "positive", link: { href: hrefWithQuery("/app/pm", { status: "completed", store: selectedStoreId }), label: "Open completed occurrence evidence" } },
-          { id: "latest-noncompliant", label: `Latest PM missed (${noncompliantAssetIds.size})`, value: noncompliantRate, formattedValue: `${noncompliantRate.toFixed(1)} / 100`, tone: "warning", link: { href: hrefWithQuery("/app/pm", { status: "missed", store: selectedStoreId }), label: "Open missed occurrence evidence" } },
-        ], sourceLink: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: "Open supporting reactive Work Orders" } },
+        { id: "pm-status", title: "PM occurrence status", description: `Closed-window compliance: ${completed} completed / ${eligible} eligible occurrences = ${eligible ? Math.round((completed / eligible) * 100) : 0}%. Work still inside its completion window is excluded.`, totalLabel: `${occurrenceStates.length} occurrences`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), tone: key === "completed" ? "positive" : key === "missed" ? "critical" : key === "due" ? "warning" : "info", link: { href: hrefWithQuery("/app/pm", { status: key, store: selectedStoreId, region: selectedRegionId, program: programFilter, view: "all" }), label: "Filter occurrences" } })), sourceLink: { href: hrefWithQuery("/app/pm", { store: selectedStoreId, region: selectedRegionId, program: programFilter, view: "all" }), label: "Open all source occurrences" } },
+        reactiveReview.breakdown,
       ],
-      trends: [{ id: "pm-reactive-cost", title: "Recorded reactive cost for PM-covered equipment", description: "Trailing-12-month recorded work cost only. This is context for cadence review, not proof that PM caused or prevented a repair.", points: [...reactiveCostByMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, value]) => ({ id: month, label: month, value, formattedValue: money(value), link: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: `Open ${month} source Work Orders` } })), sourceLink: { href: hrefWithQuery("/app/work-orders", { store: selectedStoreId, hasCost: "true" }), label: "Open all supporting cost records" } }],
+      trends: [reactiveReview.trend],
       priorityActions: allActions,
       resultSummary: filteredOccurrenceStates.length ? `${pageStart + 1}–${Math.min(pageStart + pageSize, filteredOccurrenceStates.length)} of ${filteredOccurrenceStates.length}` : "0 occurrences",
       pagination: filteredOccurrenceStates.length > pageSize

@@ -1,4 +1,5 @@
 import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
+import { connectedReviewRegression } from "./helpers/connected-review-regression";
 import { accountingReportingRegression } from "./helpers/accounting-reporting-regression";
 import { loadOpsFixtureSnapshotFromPostgres } from "@/lib/ops/postgres-snapshot";
 import { TREND_SOURCE_TABLES } from "@/lib/ops/trends-source-tables";
@@ -108,6 +109,7 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
 
     await seedOpsRepository(repository, fixture);
     await workCostDrilldownRegression(repository);
+    await connectedReviewRegression(repository);
 
     const counts = await database.query<{
       stores: number;

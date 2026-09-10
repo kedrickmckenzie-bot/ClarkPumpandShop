@@ -2630,6 +2630,7 @@ export function buildTrendsModel(
     canonicalQuery,
     activeView,
     scopeSummary,
+    sourceScopeLabel: scopeParts.join(" · "),
     filterNotice,
     analysisContext: [
       { label: "Locations", value: locationScopeParts.filter(Boolean).join(" · ") },

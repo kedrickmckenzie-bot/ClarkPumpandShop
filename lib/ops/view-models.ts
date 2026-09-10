@@ -61,6 +61,7 @@ export interface VendorDirectoryRow {
 }
 
 export interface VisitListRow {
+  workOrders?: Array<{ id: OpsId; number: string; problem: string; outcome?: SiteVisitWorkOrderOutcome; outcomeNotes?: string }>;
   id: OpsId;
   storeId: OpsId;
   storeNumber: string;

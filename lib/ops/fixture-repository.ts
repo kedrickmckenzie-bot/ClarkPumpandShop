@@ -104,6 +104,10 @@ function visitRow(fixture: OpsFixture, visit: VisitSession, siteVisitWorkOrder?:
   const linkedWorkOrderId = siteVisitWorkOrder?.workOrderId ?? visit.workOrderId;
   const workOrder = linkedWorkOrderId ? fixture.workOrders.find((row) => row.organizationId === visit.organizationId && row.id === linkedWorkOrderId) : undefined;
   return {
+    workOrders: fixture.siteVisitWorkOrders.filter((link) => link.organizationId === visit.organizationId && link.visitId === visit.id).sort((a, b) => a.ordinal - b.ordinal).flatMap((link) => {
+      const work = fixture.workOrders.find((row) => row.organizationId === visit.organizationId && row.storeId === visit.storeId && row.id === link.workOrderId);
+      return work ? [{ id: work.id, number: work.number, problem: work.problem, outcome: link.outcome, outcomeNotes: link.outcomeNotes }] : [];
+    }),
     id: visit.id, storeId: store.id, storeNumber: store.storeNumber, storeName: store.name,
     storeTimeZone: store.timeZone,
     providerKind: visit.providerKind, vendorId: visit.vendorId, internalMembershipId: visit.internalMembershipId,
@@ -434,7 +438,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   readonly kind = "fixture" as const;
   private counters = new Map<string, number>();
   private idempotencyKeys: IdempotencyKey[] = [];
-  constructor(private fixture: OpsFixture) {
+  constructor(private fixture: OpsFixture, normalize = true) {
+    if (!normalize) return;
     this.fixture.accountingInvoiceSources ??= [];
     this.fixture.invoices.forEach((invoice) => { invoice.version ??= 0; });
     this.fixture.requests.forEach((request) => { request.version ??= 0; });
@@ -737,17 +742,46 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     const workOrder = this.fixture.workOrders.find((row) => row.organizationId === scope.organizationId && row.id === workOrderId);
     if (!workOrder || !storeAllowed(this.fixture, scope, workOrder.storeId)) return null;
     const base = workOrderRow(this.fixture, workOrder);
-    const asset = workOrder.assetId ? this.fixture.assets.find((row) => row.organizationId === scope.organizationId && row.id === workOrder.assetId) : undefined;
-    const component = workOrder.componentId ? this.fixture.components.find((row) => row.organizationId === scope.organizationId && row.id === workOrder.componentId) : undefined;
-    const request = workOrder.requestId ? this.fixture.requests.find((row) => row.organizationId === scope.organizationId && row.id === workOrder.requestId) : undefined;
+    const asset = workOrder.assetId ? this.fixture.assets.find((row) => row.organizationId === scope.organizationId && row.id === workOrder.assetId && row.storeId === workOrder.storeId) : undefined;
+    const component = workOrder.componentId && asset ? this.fixture.components.find((row) => row.organizationId === scope.organizationId && row.id === workOrder.componentId && row.assetId === asset.id) : undefined;
+    const request = workOrder.requestId ? this.fixture.requests.find((row) => row.organizationId === scope.organizationId && row.id === workOrder.requestId && row.storeId === workOrder.storeId) : undefined;
     const visits = this.fixture.siteVisitWorkOrders
       .filter((row) => row.organizationId === scope.organizationId && row.workOrderId === workOrder.id)
       .flatMap((link) => {
-        const visit = this.fixture.visits.find((row) => row.organizationId === scope.organizationId && row.id === link.visitId);
+        const visit = this.fixture.visits.find((row) => row.organizationId === scope.organizationId && row.id === link.visitId && row.storeId === workOrder.storeId);
         return visit ? [visitRow(this.fixture, visit, link)] : [];
       })
       .sort((left, right) => right.checkedInAt.localeCompare(left.checkedInAt) || right.id.localeCompare(left.id));
     return { ...base, request: request ? requestRow(this.fixture, request) : undefined, authorizedScope: workOrder.authorizedScope, asset: asset ? { id: asset.id, name: asset.name, assetTag: asset.assetTag, warrantyEndsAt: asset.warrantyEndsAt } : undefined, component: component ? { id: component.id, name: component.name } : undefined, nte: workOrder.nte, vendorServiceTicketNumber: workOrder.vendorServiceTicketNumber, vendorInvoiceNumber: workOrder.vendorInvoiceNumber, externalAccountingPo: workOrder.externalAccountingPo, visits, followUps: this.fixture.followUps.filter((row) => row.organizationId === scope.organizationId && row.workOrderId === workOrder.id).map((row) => ({ id: row.id, nextAction: row.nextAction, accountableParty: row.accountableParty, dueAt: row.dueAt, status: row.status })), costs: this.fixture.costLines.filter((row) => row.organizationId === scope.organizationId && row.workOrderId === workOrder.id).map((row) => ({ id: row.id, kind: row.kind, description: row.description, amountMinor: row.amount.amountMinor, currency: row.amount.currency, serviceDate: row.serviceDate })) };
+  }
+
+  async getWorkOrderInvoiceSources(organizationId: OpsId, workOrderId: OpsId) {
+    const lineIds = new Set(this.fixture.invoiceLineAllocations.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).map((row) => row.invoiceLineId));
+    const ids = new Set(this.fixture.invoiceLines.filter((row) => row.organizationId === organizationId && lineIds.has(row.id)).map((row) => row.invoiceId));
+    const references = new Set(this.fixture.invoiceAllocations.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).map((row) => row.invoiceReferenceId));
+    references.forEach((id) => ids.add(id));
+    const lines = this.fixture.invoiceLines.filter((row) => row.organizationId === organizationId && ids.has(row.invoiceId));
+    const siblingIds = new Set(lines.map((row) => row.id));
+    return clone({
+      invoices: this.fixture.invoices.filter((row) => row.organizationId === organizationId && ids.has(row.id)),
+      invoiceLines: lines,
+      invoiceLineAllocations: this.fixture.invoiceLineAllocations.filter((row) => row.organizationId === organizationId && siblingIds.has(row.invoiceLineId)),
+      accountingInvoiceSources: (this.fixture.accountingInvoiceSources ?? []).filter((row) => row.organizationId === organizationId && row.invoiceId && ids.has(row.invoiceId)),
+      invoiceReferences: this.fixture.invoiceReferences.filter((row) => row.organizationId === organizationId && references.has(row.id)),
+      invoiceAllocations: this.fixture.invoiceAllocations.filter((row) => row.organizationId === organizationId && references.has(row.invoiceReferenceId)),
+    });
+  }
+
+  async getAssetWarrantySources(organizationId: OpsId, assetId: OpsId) {
+    const repairItems = this.fixture.repairItems.filter((row) => row.organizationId === organizationId && row.assetId === assetId);
+    const repairIds = new Set(repairItems.map((row) => row.id));
+    const appliedWarranties = this.fixture.appliedWarranties.filter((row) => row.organizationId === organizationId && repairIds.has(row.repairItemId));
+    const warrantyIds = new Set(appliedWarranties.map((row) => row.id));
+    return clone({ repairItems, appliedWarranties,
+      warrantyAmendments: this.fixture.warrantyAmendments.filter((row) => row.organizationId === organizationId && warrantyIds.has(row.appliedWarrantyId)),
+      manufacturerWarranties: this.fixture.manufacturerWarranties.filter((row) => row.organizationId === organizationId && row.assetId === assetId),
+      warrantyCases: this.fixture.warrantyCases.filter((row) => row.organizationId === organizationId && row.assetId === assetId),
+    });
   }
 
   async listVendors(scope: OrganizationScope, search = "", request?: PageRequest) {
@@ -756,7 +790,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     return page(rows, request);
   }
 
-  async listVisits(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId; vendorId?: OpsId; review?: boolean } = {}) { const search = normalize(query.search ?? ""); const reviewIds = new Set(this.fixture.exceptions.filter((exception) => exception.organizationId === scope.organizationId && exception.status !== "resolved" && exception.visitId).map((exception) => exception.visitId!)); const linkedIds = new Set(this.fixture.siteVisitWorkOrders.filter((link) => link.organizationId === scope.organizationId).map((link) => link.visitId)); const rows = this.fixture.visits.filter((row) => storeAllowed(this.fixture, scope, row.storeId)).filter((row) => (!query.status || row.status === query.status) && (!query.storeId || row.storeId === query.storeId) && (!query.vendorId || row.vendorId === query.vendorId) && (!query.review || ((!row.workOrderId && !linkedIds.has(row.id)) || reviewIds.has(row.id)))).sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt)).map((row) => visitRow(this.fixture, row)).filter((row) => !search || normalize([row.technicianName, row.providerName, row.purpose, row.storeNumber, row.storeName, row.workOrderNumber].filter(Boolean).join(" ")).includes(search)); return page(rows, query); }
+  async listVisits(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId; vendorId?: OpsId; review?: boolean } = {}) { const search = normalize(query.search ?? ""); const reviewIds = new Set(this.fixture.exceptions.filter((exception) => exception.organizationId === scope.organizationId && exception.status !== "resolved" && exception.visitId).map((exception) => exception.visitId!)); const linkedIds = new Set(this.fixture.siteVisitWorkOrders.filter((link) => link.organizationId === scope.organizationId).map((link) => link.visitId)); const rows = this.fixture.visits.filter((row) => row.organizationId === scope.organizationId && storeAllowed(this.fixture, scope, row.storeId)).filter((row) => (!query.status || row.status === query.status) && (!query.storeId || row.storeId === query.storeId) && (!query.vendorId || row.vendorId === query.vendorId) && (!query.review || ((!row.workOrderId && !linkedIds.has(row.id)) || reviewIds.has(row.id)))).sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt) || b.id.localeCompare(a.id)).map((row) => visitRow(this.fixture, row)).filter((row) => !search || normalize([row.technicianName, row.providerName, row.purpose, row.storeNumber, row.storeName, row.workOrderNumber, ...(row.workOrders ?? []).flatMap((work) => [work.number, work.problem])].filter(Boolean).join(" ")).includes(search)); return page(rows, query); }
 
   async listExceptions(scope: OrganizationScope, query: ExceptionQueueQuery = {}) { const rows = this.fixture.exceptions.filter((row) => row.organizationId === scope.organizationId && exceptionAllowed(this.fixture, scope, row.storeId)).filter((row) => (!query.statuses?.length || query.statuses.includes(row.status)) && (!query.kinds?.length || query.kinds.includes(row.kind)) && (!query.storeId || row.storeId === query.storeId) && (!query.vendorId || row.vendorId === query.vendorId)).sort((a, b) => b.detectedAt.localeCompare(a.detectedAt)).map((row): ExceptionQueueRow => ({ id: row.id, kind: row.kind, status: row.status, severity: row.severity, summary: row.summary, storeId: row.storeId, storeNumber: this.fixture.stores.find((store) => store.organizationId === scope.organizationId && store.id === row.storeId)?.storeNumber, workOrderId: row.workOrderId, workOrderNumber: this.fixture.workOrders.find((workOrder) => workOrder.organizationId === scope.organizationId && workOrder.id === row.workOrderId)?.number, visitId: row.visitId, detectedAt: row.detectedAt })); return page(rows, query); }
 
@@ -867,6 +901,10 @@ export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtu
   if (!Array.isArray(normalized.serviceAppointments)) normalized.serviceAppointments = [];
   if (!Array.isArray(normalized.vendorContinuations)) normalized.vendorContinuations = [];
   return new FixtureOpsRepository(normalized);
+}
+/** Read projections over a request-owned snapshot; avoids cloning it again for each panel. */
+export function createOpsFixtureReadRepository(fixture: OpsFixture): OpsRepository {
+  return new FixtureOpsRepository(fixture, false);
 }
 export function createNorthlineFixtureRepository(): MutableOpsFixtureRepository { return createOpsFixtureRepository(buildNorthlinePresentationFixture()); }
 

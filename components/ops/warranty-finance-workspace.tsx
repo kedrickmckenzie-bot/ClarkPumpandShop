@@ -1,5 +1,6 @@
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
 import Link from "next/link";
+import { WorkReviewButton } from "@/components/workspace/work-review";
 import { domainLabel } from "@/lib/product/domain-label";
 import type { Invoice, OpsFixture, WarrantyCase } from "@/lib/ops/types";
 import { formatOperationsDate } from "@/lib/ops/local-time";
@@ -76,7 +77,7 @@ function InvoiceAllocationEvidence({ fixture, invoice, lineId }: { fixture: OpsF
     const outcome = fixture.siteVisitWorkOrders.find((row) => row.organizationId === invoice.organizationId && row.id === allocation.siteVisitWorkOrderId && row.workOrderId === work?.id);
     const visit = outcome ? fixture.visits.find((row) => row.organizationId === invoice.organizationId && row.id === outcome.visitId && row.storeId === allocation.storeId) : undefined;
     return <span className={styles.allocationEvidence} id={`allocation-${allocation.id}`} key={allocation.id}> · {money(allocation.amount.amountMinor, allocation.amount.currency)} · {allocation.confirmedAt ? "Confirmed match" : "Awaiting review"}
-      {work ? <> · <Link className={styles.sectionLink} href={`/app/work-orders/${work.id}`}>{work.number}</Link></> : " · Work reference unavailable"}
+      {work ? <> · <Link className={styles.sectionLink} href={`/app/work-orders/${work.id}`}>{work.number}</Link><WorkReviewButton href={`/app/work-orders/${work.id}`} label={work.number} /></> : " · Work reference unavailable"}
       {store ? <> · <Link className={styles.sectionLink} href={`/app/stores/${store.id}`}>Store {store.storeNumber}</Link></> : null}
       {visit ? <> · <Link className={styles.sectionLink} href={`/app/visits/${visit.id}?section=work-orders`}>Visit {date(visit.checkedInAt)}</Link></> : null}
     </span>;

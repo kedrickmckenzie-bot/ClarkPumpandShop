@@ -41,6 +41,8 @@ import type {
 import styles from "./enterprise-workspace.module.css";
 import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import { RecordSections } from "@/components/workspace/record-sections";
+import { WorkReviewButton } from "@/components/workspace/work-review";
+import { workReviewTarget } from "@/lib/ops/navigation-trail";
 import { ApprovedLaterIssuanceDialog } from "./approved-later-issuance-dialog";
 import { PaginationControls } from "./pagination-controls";
 import { ApprovedWorkPortfolio } from "@/components/workspace/approved-work-portfolio";
@@ -369,7 +371,7 @@ function FilterGroups({ filters }: { filters?: FilterGroupViewModel[] }) {
   );
 }
 
-function DataTable({ table, selectedId, rowHref, selection }: { table: TableViewModel; selectedId?: string; rowHref?: (row: TableViewModel["rows"][number]) => string; selection?: { name: string; label: string; isDisabled?: (row: TableViewModel["rows"][number]) => boolean } }) {
+function DataTable({ table, selectedId, rowHref, selection, context }: { context?: string; table: TableViewModel; selectedId?: string; rowHref?: (row: TableViewModel["rows"][number]) => string; selection?: { name: string; label: string; isDisabled?: (row: TableViewModel["rows"][number]) => boolean } }) {
   if (!table.rows.length) return <InlineEmpty message="No source records are linked to this section yet." />;
 
   return (
@@ -394,6 +396,7 @@ function DataTable({ table, selectedId, rowHref, selection }: { table: TableView
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
                         {index === table.columns.length - 1 ? <ChevronRight className={styles.cellChevron} aria-hidden="true" size={15} /> : null}
                       </Link>
+                      {index === 0 ? <WorkReviewButton href={row.href} label={row.label} context={context} /> : cell?.link && workReviewTarget(cell.link.href) !== workReviewTarget(row.href) ? <WorkReviewButton href={cell.link.href} label={cell.value} context={context} /> : null}
                     </td>
                   );
                 })}
@@ -487,6 +490,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                             </div>
                             <ChevronRight className={styles.reviewQueueChevron} aria-hidden="true" size={19} />
                           </Link>
+                          <WorkReviewButton href={row.href} label={record?.value ?? row.label} context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} />
                           {row.sources?.length ? <details className={styles.controlDisclosure}>
                             <summary>Tasks and supporting records ({row.sources.length})</summary>
                             <ul>{row.sources.map((source) => <li key={source.id}>
@@ -667,7 +671,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
                 <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode && canManageWorkflowTasks ? (
                   <form className={styles.bulkForm} action="/api/ops/work-orders/bulk-follow-up" method="post">
                     <input type="hidden" name="returnTo" value={workOrderReturnTo} />
-                    <DataTable table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} selection={{ name: "workOrderId", label: "Select open work orders for a bulk follow-up", isDisabled: (row) => ["Closed", "Cancelled"].includes(row.cells.find((cell) => cell.key === "status")?.value ?? "") }} />
+                    <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} selection={{ name: "workOrderId", label: "Select open work orders for a bulk follow-up", isDisabled: (row) => ["Closed", "Cancelled"].includes(row.cells.find((cell) => cell.key === "status")?.value ?? "") }} />
                     <div className={styles.bulkToolbar}>
                       <div><strong>Add the same follow-up to selected work</strong><small>One auditable, non-blocking reminder is added to each selected record.</small></div>
                       <label><span>Action</span><input name="nextAction" required maxLength={240} defaultValue="Follow up with provider" /></label>
@@ -675,7 +679,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
                       <button type="submit">Add follow-ups</button>
                     </div>
                   </form>
-                ) : <DataTable table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} />}</div>
+                ) : <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} />}</div>
                 {selectedRow ? approvedLaterSelection ? <>
                   <Link className={styles.approvedLaterBackdrop} href={selectionHref()} aria-label="Close approved work panel" />
                   <aside className={styles.approvedLaterDialog} role="dialog" aria-modal="true" aria-labelledby="approved-later-dialog-title">
@@ -698,7 +702,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
                   <Link className={styles.triageOpen} href={selectedRow.href}>Open full record<ExternalLink aria-hidden="true" size={15} /></Link>
                 </aside> : null}
               </div>
-            ) : viewMode === "tile" ? <RecordTileGrid table={model.table} /> : <DataTable table={model.table} />}
+            ) : viewMode === "tile" ? <RecordTileGrid table={model.table} /> : <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} />}
             {!triageMode ? <nav className={styles.viewToggle} aria-label="Display mode">
               <Link href={toggleHref} className={styles.viewToggleLink}>{nextView === "table" ? "Switch to table view" : "Switch to card view"}</Link>
             </nav> : null}
@@ -785,7 +789,7 @@ export function ListView({ model }: { model: ListPageViewModel }) {
                 {model.clearFiltersHref ? <Link className={styles.clearFilters} href={model.clearFiltersHref}>Clear all</Link> : null}
               </div>
             ) : null}
-            <DataTable table={model.table} />
+            <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} />
             {model.pagination ? <PaginationControls pagination={model.pagination} /> : null}
           </section>
         </>
@@ -817,7 +821,7 @@ export function SearchView({ model }: { model: SearchPageViewModel }) {
                       const primary = row.cells[0];
                       return (
                         <article className={styles.searchReviewResult} aria-label={row.label} key={row.id}>
-                          <Link href={workspaceStartHref(row.href)} className={styles.searchReviewTitle}><span><strong>{primary?.value ?? row.label}</strong>{primary?.secondary ? <small>{primary.secondary}</small> : null}</span><ChevronRight aria-hidden="true" size={17} /></Link>
+                          <Link href={workspaceStartHref(row.href)} className={styles.searchReviewTitle}><span><strong>{primary?.value ?? row.label}</strong>{primary?.secondary ? <small>{primary.secondary}</small> : null}</span><ChevronRight aria-hidden="true" size={17} /></Link><WorkReviewButton href={row.href} label={row.label} />
                           <dl className={styles.searchReviewFacts}>{row.cells.slice(1).map((cell) => <div key={cell.key}><dt>{group.columns?.find((column) => column.key === cell.key)?.label ?? cell.key.replaceAll("_", " ")}</dt><dd>{cell.link ? <Link href={workspaceStartHref(cell.link.href)} aria-label={`${cell.link.label}: ${cell.value}`}>{cell.value}<ChevronRight aria-hidden="true" size={14} /></Link> : <strong className={cell.tone ? toneClass(cell.tone) : undefined}>{cell.value}</strong>}{cell.secondary ? <small>{cell.secondary}</small> : null}</dd></div>)}</dl>
                         </article>
                       );
@@ -861,7 +865,7 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
               </form> : <span className={styles.toolbarTitle}>Records</span>}
               {model.resultSummary ? <strong className={styles.resultSummary}>{model.resultSummary}</strong> : null}
             </div> : null}
-            <DataTable table={model.table} />
+            <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} />
             {model.pagination ? <PaginationControls pagination={model.pagination} /> : null}
           </section> : null}
         </>
@@ -881,7 +885,7 @@ export function DetailView({ model, beforeSections, after, initialSection }: { m
             {model.facts.length ? <><header className={styles.recordSummaryHeader}>
               <div><small>Record summary</small><h2>Key facts</h2></div>
             </header><div className={styles.recordSummaryGrid}>
-              {model.facts.map((fact) => <div className={styles.factItem} key={fact.label}><span className={styles.factLabel}>{fact.label}</span>{fact.link ? <Link className={styles.connectedFact} href={workspaceStartHref(fact.link.href)} aria-label={`${fact.link.label}: ${fact.value}`}><strong>{fact.value}</strong><ChevronRight aria-hidden="true" size={15} /></Link> : <strong>{fact.value}</strong>}{fact.helperText ? <small>{fact.helperText}</small> : null}</div>)}
+              {model.facts.map((fact) => <div className={styles.factItem} key={fact.label}><span className={styles.factLabel}>{fact.label}</span>{fact.link ? <Link className={styles.connectedFact} href={workspaceStartHref(fact.link.href)} aria-label={`${fact.link.label}: ${fact.value}`}><strong>{fact.value}</strong><ChevronRight aria-hidden="true" size={15} /></Link> : <strong>{fact.value}</strong>}{fact.link ? <WorkReviewButton href={fact.link.href} label={fact.value} /> : null}{fact.helperText ? <small>{fact.helperText}</small> : null}</div>)}
             </div></> : null}
           </section>
           {beforeSections}

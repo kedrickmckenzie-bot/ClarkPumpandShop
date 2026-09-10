@@ -271,10 +271,10 @@ function visitRow(row: VisitListRow): TableRowViewModel {
     { key: "visit", value: row.technicianName, secondary: row.purpose },
     { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
     { key: "vendor", value: row.providerName, link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined },
-    { key: "work", value: row.workOrderNumber ?? "View work-order links", secondary: row.arrivalNote, link: row.workOrderId ? { href: `/app/work-orders/${row.workOrderId}`, label: "Open work order" } : { href: `/app/visits/${row.id}`, label: "Review visit and work-order links" } },
+    { key: "work", value: row.workOrders?.length ? row.workOrders.map((work) => work.number).join(" · ") : row.workOrderNumber ?? "No work order linked", secondary: row.workOrders?.length === 1 ? row.workOrders[0].problem : row.workOrders?.length ? `${row.workOrders.length} linked jobs; each has its own outcome` : row.arrivalNote, link: row.workOrders?.length === 1 ? { href: `/app/work-orders/${row.workOrders[0].id}`, label: "Open work order" } : row.workOrders?.length ? { href: `/app/visits/${row.id}`, label: "Review all linked jobs" } : row.workOrderId ? { href: `/app/work-orders/${row.workOrderId}`, label: "Open work order" } : { href: `/app/visits/${row.id}`, label: "Review visit and work-order links" } },
     { key: "observed", value: observed, secondary: "Store-local display · approximate presence, not labor" },
     { key: "evidence", value: sentence(row.locationResult), tone: row.locationResult === "verified" ? "positive" : "warning" },
-    { key: "outcome", value: row.outcome ? sentence(row.outcome) : row.status === "active" ? "Onsite now" : "Review work outcomes", tone: row.status === "active" ? "info" : "neutral", link: !row.outcome && row.status !== "active" ? { href: `/app/visits/${row.id}`, label: "Review recorded work outcomes" } : undefined },
+    { key: "outcome", value: row.workOrders?.length ? row.workOrders.map((work) => `${row.workOrders!.length > 1 ? `${work.number}: ` : ""}${work.outcome ? sentence(work.outcome) : "Outcome not recorded"}`).join(" · ") : row.outcome ? sentence(row.outcome) : row.status === "active" ? "Onsite now" : "Review work outcomes", tone: row.status === "active" ? "info" : "neutral", link: { href: `/app/visits/${row.id}`, label: "Review recorded work outcomes" } },
   ] };
 }
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PlatformShell } from "@/components/ops/platform-shell";
+import { WorkReviewProvider } from "@/components/workspace/work-review";
 import { productPresentation } from "@/lib/product/presentation";
 import { loadOperatorSession } from "./_data/operator-loader";
 
@@ -15,5 +16,5 @@ export const metadata: Metadata = {
 
 export default async function OperatorLayout({ children }: { children: React.ReactNode }) {
   const session = await loadOperatorSession();
-  return <PlatformShell session={session}>{children}</PlatformShell>;
+  return <WorkReviewProvider key={JSON.stringify([session.organizationId, session.membershipId, session.role, session.storeIds, session.regionIds, session.demoEdition])}><PlatformShell session={session}>{children}</PlatformShell></WorkReviewProvider>;
 }

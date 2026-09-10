@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WorkReviewButton } from "./work-review";
 import {
   ArrowDown,
   ArrowRight,
@@ -283,6 +284,7 @@ function SourceTable({ model }: { model: TrendAnalysisPageViewModel }) {
                     {index === 0 || cell.link
                       ? <Link className={styles.primaryRowLink} href={cell.link?.href ?? row.href}><strong>{cell.value}</strong>{cell.secondary ? <small>{cell.secondary}</small> : null}</Link>
                       : <span className={styles.plainCell}><strong>{cell.value}</strong>{cell.secondary ? <small>{cell.secondary}</small> : null}</span>}
+                    {index === 0 ? <WorkReviewButton href={row.href} label={row.label} context={[model.sourceScopeLabel ?? model.scopeSummary, model.sourcePeriodLabel, model.sourceMeasureLabel ?? model.metricLabel].join(" · ")} /> : null}
                   </td>
                 ))}
                 <td><Link className={styles.rowAction} href={row.href} aria-label={`Open ${row.label}`}><ChevronRight size={17} aria-hidden="true" /></Link></td>

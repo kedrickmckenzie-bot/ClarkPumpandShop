@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { WorkReviewButton } from "./work-review";
+import { workReviewTarget } from "@/lib/ops/navigation-trail";
 import {
   AlertCircle,
   ArrowRight,
@@ -200,7 +202,7 @@ function Trend({ model }: { model: TrendViewModel }) {
   return (
     <article className={`${styles.panel} ${styles.trendPanel}`}>
       <header><div><h2>{model.title}</h2>{model.description ? <p>{model.description}</p> : null}</div></header>
-      {model.points.length ? <div className={styles.trend} role="img" aria-label={model.points.map((point) => `${point.label}: ${point.formattedValue}`).join("; ")}>{model.points.slice(-12).map((point) => <Link href={point.link.href} key={point.id} title={`${point.label}: ${point.formattedValue}`}><strong>{point.formattedValue}</strong><i aria-hidden="true"><span style={{ height: `${Math.max(4, (Math.max(0, point.value) / maximum) * 100)}%` }} /></i><small>{point.label}</small></Link>)}</div> : <div className={styles.empty}><BarChart3 size={19} aria-hidden="true" />No trend records match this context.</div>}
+      {model.points.length ? <div className={styles.trend} role="img" aria-label={model.points.map((point) => `${point.label}: ${point.formattedValue}`).join("; ")}>{(model.id === "pm-reactive-cost" ? model.points : model.points.slice(-12)).map((point) => <Link href={point.link.href} key={point.id} title={`${point.label}: ${point.formattedValue}`}><strong>{point.formattedValue}</strong><i aria-hidden="true"><span style={{ height: `${Math.max(4, (Math.max(0, point.value) / maximum) * 100)}%` }} /></i><small>{point.label}</small></Link>)}</div> : <div className={styles.empty}><BarChart3 size={19} aria-hidden="true" />No trend records match this context.</div>}
       <footer><Link href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={13} aria-hidden="true" /></Link></footer>
     </article>
   );
@@ -217,12 +219,12 @@ function ActionQueue({ model, kind }: { model: ProgramPageViewModel; kind: Plann
   );
 }
 
-function SourceTable({ table, title, description, resultSummary, pagination, preserveScroll = false }: { table?: TableViewModel; title: string; description: string; resultSummary?: string; pagination?: ProgramPageViewModel["pagination"]; preserveScroll?: boolean }) {
+function SourceTable({ table, title, description, resultSummary, pagination, preserveScroll = false, context }: { context?: string; table?: TableViewModel; title: string; description: string; resultSummary?: string; pagination?: ProgramPageViewModel["pagination"]; preserveScroll?: boolean }) {
   if (!table) return null;
   return (
     <section className={styles.sourceSection}>
       <header><div><p>Supporting records</p><h2>{title}</h2><span>{description}</span></div><strong>{resultSummary ?? `${table.rows.length} shown`}</strong></header>
-      {table.rows.length ? <div className={styles.tableScroller}><table><caption className={styles.visuallyHidden}>{table.caption}</caption><thead><tr>{table.columns.map((column) => <th data-align={column.align} key={column.key}>{column.label}</th>)}</tr></thead><tbody>{table.rows.map((row) => <tr key={row.id}>{table.columns.map((column, index) => { const cell = row.cells.find((candidate) => candidate.key === column.key); return <td data-label={column.label} data-align={column.align} className={cell?.tone ? toneClass(cell.tone) : undefined} key={column.key}><Link href={cell?.link?.href ?? row.href} scroll={!preserveScroll}><span><strong>{cell?.value ?? "—"}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</span>{index === table.columns.length - 1 ? <ChevronRight size={14} aria-hidden="true" /> : null}</Link></td>; })}</tr>)}</tbody></table></div> : <div className={styles.empty}><Inbox size={19} aria-hidden="true" />No source records match this context.</div>}
+      {table.rows.length ? <div className={styles.tableScroller}><table><caption className={styles.visuallyHidden}>{table.caption}</caption><thead><tr>{table.columns.map((column) => <th data-align={column.align} key={column.key}>{column.label}</th>)}</tr></thead><tbody>{table.rows.map((row) => <tr key={row.id}>{table.columns.map((column, index) => { const cell = row.cells.find((candidate) => candidate.key === column.key); return <td data-label={column.label} data-align={column.align} className={cell?.tone ? toneClass(cell.tone) : undefined} key={column.key}><Link href={cell?.link?.href ?? row.href} scroll={!preserveScroll}><span><strong>{cell?.value ?? "—"}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</span>{index === table.columns.length - 1 ? <ChevronRight size={14} aria-hidden="true" /> : null}</Link>{index === 0 ? <WorkReviewButton href={row.href} label={row.label} context={[context, table.caption].filter(Boolean).join(" · ")} /> : cell?.link && workReviewTarget(cell.link.href) !== workReviewTarget(row.href) ? <WorkReviewButton href={cell.link.href} label={cell.value} context={[context, table.caption].filter(Boolean).join(" · ")} /> : null}</td>; })}</tr>)}</tbody></table></div> : <div className={styles.empty}><Inbox size={19} aria-hidden="true" />No source records match this context.</div>}
       {pagination ? <PaginationControls pagination={pagination} label="Supporting record pages" /> : null}
     </section>
   );
@@ -265,19 +267,20 @@ export function PlanningWorkspace({
   programManagement?: ReactNode;
 }) {
   const copy = workspaceCopy[kind];
+  const pmEvidence = kind === "pm" && model.table?.id === "pm-reactive-evidence";
   return (
     <main className={styles.workspace}>
       <WorkspaceHeader model={model} kind={kind} />
       {model.state.kind !== "ready" ? <StatePanel state={model.state} /> : <>
-        <BasisBanner kind={kind} />
+        {pmEvidence ? null : <BasisBanner kind={kind} />}
         <Filters model={model} />
-        <MetricStrip model={model} kind={kind} />
+        {model.metrics.length ? <MetricStrip model={model} kind={kind} /> : null}
         {kind === "pm" ? <>
-          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
-          {programManagement}
-          <PmContext model={model} />
+          <SourceTable context={[model.page.scopeLabel, model.page.periodLabel].filter(Boolean).join(" · ")} table={model.table} title={pmEvidence ? model.table!.caption : copy.sourceTitle} description={pmEvidence ? model.sourceDescription ?? model.page.description : copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
+          {pmEvidence ? null : programManagement}
+          {pmEvidence ? null : <PmContext model={model} />}
         </> : kind === "lifecycle" ? <>
-          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} preserveScroll />
+          <SourceTable context={[model.page.scopeLabel, model.page.periodLabel].filter(Boolean).join(" · ")} table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} preserveScroll />
           <LifecycleContext model={model} />
           <LifecycleAdministration>{administration}</LifecycleAdministration>
         </> : <>
@@ -286,7 +289,7 @@ export function PlanningWorkspace({
             {model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}
           </section>
           <ActionQueue model={model} kind={kind} />
-          <SourceTable table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
+          <SourceTable context={[model.page.scopeLabel, model.page.periodLabel].filter(Boolean).join(" · ")} table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
         </>}
       </>}
     </main>

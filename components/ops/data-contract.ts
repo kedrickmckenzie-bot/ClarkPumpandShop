@@ -295,6 +295,7 @@ export interface TrendAnalysisPageViewModel {
   canonicalQuery: string;
   activeView: TrendAnalysisView;
   scopeSummary: string;
+  sourceScopeLabel?: string;
   filterNotice?: string;
   analysisContext: Array<{ label: string; value: string }>;
   mainResult: {
@@ -575,6 +576,7 @@ export interface DetailPageViewModel {
 }
 
 export interface ProgramPageViewModel extends DashboardPageViewModel {
+  sourceDescription?: string;
   filters?: FilterGroupViewModel[];
   appliedFilters?: AppliedFilterViewModel[];
   clearFiltersHref?: string;

@@ -705,7 +705,7 @@ class D1OpsRepository implements OpsRepository {
     if (query.storeId) { clauses.push("vs.store_id = ?"); params.push(query.storeId); }
     if (query.vendorId) { clauses.push("vs.vendor_id = ?"); params.push(query.vendorId); }
     if (query.review) { clauses.push("((vs.work_order_id IS NULL AND NOT EXISTS (SELECT 1 FROM ops_site_visit_work_orders rw WHERE rw.organization_id = vs.organization_id AND rw.visit_id = vs.id)) OR EXISTS (SELECT 1 FROM ops_exceptions re WHERE re.organization_id = vs.organization_id AND re.visit_id = vs.id AND re.status <> 'resolved'))"); }
-    if (query.search?.trim()) { clauses.push("lower(vs.technician_name || ' ' || vs.provider_name || ' ' || vs.purpose || ' ' || s.store_number || ' ' || s.name || ' ' || COALESCE(w.number,'')) LIKE ?"); params.push(`%${query.search.trim().toLocaleLowerCase("en-US")}%`); }
+    if (query.search?.trim()) { clauses.push("(lower(vs.technician_name || ' ' || vs.provider_name || ' ' || vs.purpose || ' ' || s.store_number || ' ' || s.name || ' ' || COALESCE(w.number,'')) LIKE ? OR EXISTS (SELECT 1 FROM ops_site_visit_work_orders l JOIN ops_work_orders lw ON lw.organization_id=l.organization_id AND lw.id=l.work_order_id AND lw.store_id=vs.store_id WHERE l.organization_id=vs.organization_id AND l.visit_id=vs.id AND lower(lw.number || ' ' || lw.problem) LIKE ?))"); const term = `%${query.search.trim().toLocaleLowerCase("en-US")}%`; params.push(term, term); }
     addKeysetCursor(clauses, params, query.cursor, "vs.checked_in_at", "vs.id", "desc");
     const max = limit(query.limit);
     params.push(max + 1, offset(query.offset));
@@ -716,6 +716,11 @@ class D1OpsRepository implements OpsRepository {
       WHERE ${clauses.join(" AND ")} ORDER BY vs.checked_in_at DESC, vs.id DESC LIMIT ? OFFSET ?`, params);
     const visibleRows = rows.slice(0, max);
     const items = visibleRows.map(visitListRow);
+    // One bounded join for the visible page, including every job on multi-work visits.
+    if (items.length) {
+      const linked = await this.all(`SELECT l.visit_id, l.outcome, l.outcome_notes, w.id, w.number, w.problem FROM ops_site_visit_work_orders l JOIN ops_work_orders w ON w.organization_id=l.organization_id AND w.id=l.work_order_id JOIN ops_visit_sessions v ON v.organization_id=l.organization_id AND v.id=l.visit_id AND v.store_id=w.store_id WHERE l.organization_id=? AND l.visit_id IN (${items.map(() => "?").join(",")}) ORDER BY l.ordinal, l.id`, [scope.organizationId, ...items.map((row) => row.id)]);
+      for (const item of items) item.workOrders = linked.filter((row) => text(row, "visit_id") === item.id).map((row) => ({ id: text(row,"id"), number:text(row,"number"), problem:text(row,"problem"), outcome:maybeText(row,"outcome") as SiteVisitWorkOrder["outcome"], outcomeNotes:maybeText(row,"outcome_notes") }));
+    }
     const last = visibleRows.at(-1);
     return { items, nextCursor: rows.length > max && last ? encodeCursor(text(last, "checked_in_at"), text(last, "id")) : undefined };
   }
@@ -776,6 +781,39 @@ class D1OpsRepository implements OpsRepository {
 
   async getStoreDetail(scope: OrganizationScope, storeId: OpsId): Promise<StoreDetailView | null> { const store = await this.getStore(scope.organizationId, storeId); if (!store || !storeAllowed(scope, store)) return null; const base = (await this.searchStores({ ...scope, storeIds: [store.id] }, store.storeNumber, { limit: 1 })).items[0]; if (!base) return null; const openWorkOrders = (await this.listWorkOrders({ ...scope, storeIds: [store.id] }, { statuses: ["draft","awaiting_approval","approved","issued","accepted","scheduled","in_progress","waiting_on_vendor","waiting_on_parts","completed_pending_review","resolved"], limit: 100 })).items; const activeVisits = (await this.listVisits({ ...scope, storeIds: [store.id] }, { status: "active", limit: 100 })).items; const assets = await this.all("SELECT a.id, a.asset_tag, a.name, a.category_key, a.status, COALESCE(SUM(c.amount_minor),0) AS recorded_cost_minor FROM ops_assets a LEFT JOIN ops_work_orders w ON w.organization_id = a.organization_id AND w.asset_id = a.id LEFT JOIN ops_cost_lines c ON c.organization_id = w.organization_id AND c.work_order_id = w.id WHERE a.organization_id = ? AND a.store_id = ? GROUP BY a.id, a.asset_tag, a.name, a.category_key, a.status ORDER BY a.name", [scope.organizationId, store.id]); return { ...base, regionId: store.regionId, status: store.status, activeVisits, openWorkOrders, assets: assets.map((row) => ({ id: text(row,"id"), assetTag: text(row,"asset_tag"), name: text(row,"name"), categoryKey: text(row,"category_key"), status: text(row,"status"), recordedCostMinor: Number(row.recorded_cost_minor ?? 0) })) }; }
 
+  async getWorkOrderInvoiceSources(organizationId: OpsId, workOrderId: OpsId) {
+    const linked = `SELECT l.invoice_id FROM ops_invoice_lines l JOIN ops_invoice_line_allocations a ON a.organization_id=l.organization_id AND a.invoice_line_id=l.id WHERE a.organization_id=? AND a.work_order_id=? UNION SELECT invoice_reference_id FROM ops_invoice_allocations WHERE organization_id=? AND work_order_id=?`;
+    const args = [organizationId, organizationId, workOrderId, organizationId, workOrderId];
+    const [invoices, lines, allocations, sources, references, legacyAllocations] = await Promise.all([
+      this.all(`SELECT * FROM ops_invoices WHERE organization_id=? AND id IN (${linked})`, args),
+      this.all(`SELECT * FROM ops_invoice_lines WHERE organization_id=? AND invoice_id IN (${linked})`, args),
+      this.all(`SELECT a.* FROM ops_invoice_line_allocations a JOIN ops_invoice_lines l ON l.organization_id=a.organization_id AND l.id=a.invoice_line_id WHERE a.organization_id=? AND l.invoice_id IN (${linked})`, args),
+      this.all(`SELECT * FROM ops_accounting_invoice_sources WHERE organization_id=? AND invoice_id IN (${linked})`, args),
+      this.all(`SELECT * FROM ops_invoice_references WHERE organization_id=? AND id IN (${linked})`, args),
+      this.all(`SELECT * FROM ops_invoice_allocations WHERE organization_id=? AND invoice_reference_id IN (${linked})`, args),
+    ]);
+    return {
+      invoices: invoices.map(invoiceFrom), invoiceLines: lines.map(invoiceLineFrom), invoiceLineAllocations: allocations.map(invoiceAllocationFrom), accountingInvoiceSources: sources.map(accountingSourceFrom),
+      invoiceReferences: references.map((row): import("./types").InvoiceReference => ({ id: text(row,"id"), organizationId, vendorId: text(row,"vendor_id"), invoiceNumber: text(row,"invoice_number"), invoiceDate: text(row,"invoice_date"), grossAmount: { amountMinor: Number(row.gross_amount_minor), currency: text(row,"currency") }, matchStatus: text(row,"match_status") as import("./types").InvoiceReference["matchStatus"], createdAt: text(row,"created_at") })),
+      invoiceAllocations: legacyAllocations.map((row): import("./types").InvoiceAllocation => ({ id: text(row,"id"), organizationId, invoiceReferenceId: text(row,"invoice_reference_id"), workOrderId: text(row,"work_order_id"), amount: { amountMinor: Number(row.amount_minor), currency: text(row,"currency") }, confirmedAt: maybeText(row,"confirmed_at"), confirmedByMembershipId: maybeText(row,"confirmed_by_membership_id") })),
+    };
+  }
+
+  async getAssetWarrantySources(organizationId: OpsId, assetId: OpsId) {
+    const [repairs, warranties, amendments, manufacturer, cases] = await Promise.all([
+      this.all("SELECT * FROM ops_repair_items WHERE organization_id=? AND asset_id=?", [organizationId, assetId]),
+      this.all("SELECT w.* FROM ops_applied_warranties w JOIN ops_repair_items r ON r.organization_id=w.organization_id AND r.id=w.repair_item_id WHERE w.organization_id=? AND r.asset_id=?", [organizationId, assetId]),
+      this.all("SELECT a.* FROM ops_warranty_amendments a JOIN ops_applied_warranties w ON w.organization_id=a.organization_id AND w.id=a.applied_warranty_id JOIN ops_repair_items r ON r.organization_id=w.organization_id AND r.id=w.repair_item_id WHERE a.organization_id=? AND r.asset_id=?", [organizationId, assetId]),
+      this.all("SELECT * FROM ops_manufacturer_warranties WHERE organization_id=? AND asset_id=?", [organizationId, assetId]),
+      this.all("SELECT * FROM ops_warranty_cases WHERE organization_id=? AND asset_id=?", [organizationId, assetId]),
+    ]);
+    return {
+      repairItems: repairs.map(repairItemFrom), appliedWarranties: warranties.map(appliedWarrantyFrom), warrantyCases: cases.map(warrantyCaseFrom),
+      warrantyAmendments: amendments.map((r): import("./types").WarrantyAmendment => ({ id:text(r,"id"), organizationId, appliedWarrantyId:text(r,"applied_warranty_id"), amendmentKind:text(r,"amendment_kind") as import("./types").WarrantyAmendment["amendmentKind"], appliesToRepairOnly:Boolean(r.applies_to_repair_only), amendedTermsJson:text(r,"amended_terms_json"), reason:text(r,"reason"), decidedByMembershipId:text(r,"decided_by_membership_id"), decidedByName:text(r,"decided_by_name"), decidedAt:text(r,"decided_at") })),
+      manufacturerWarranties: manufacturer.map((r): import("./types").ManufacturerWarranty => ({ id:text(r,"id"), organizationId, assetId, componentId:maybeText(r,"component_id"), manufacturer:text(r,"manufacturer"), partsCoverage:text(r,"parts_coverage"), laborCoverage:text(r,"labor_coverage"), startDate:text(r,"start_date"), expirationDate:text(r,"expiration_date"), authorizedProviderRule:maybeText(r,"authorized_provider_rule"), claimRequirements:maybeText(r,"claim_requirements"), createdAt:text(r,"created_at") })),
+    };
+  }
+
   async getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null> {
     const workOrder = await this.getWorkOrder(scope.organizationId, workOrderId);
     if (!workOrder) return null;
@@ -802,8 +840,10 @@ class D1OpsRepository implements OpsRepository {
     const visits = visitRows.map(visitListRow);
     const followUps = await this.all("SELECT id, next_action, accountable_party, due_at, status FROM ops_follow_ups WHERE organization_id = ? AND work_order_id = ? ORDER BY created_at", [scope.organizationId, workOrder.id]);
     const costs = await this.all("SELECT * FROM ops_cost_lines WHERE organization_id = ? AND work_order_id = ? ORDER BY service_date, id", [scope.organizationId, workOrder.id]);
-    const asset = workOrder.assetId ? await this.getAsset(scope.organizationId, workOrder.assetId) : null;
-    const component = workOrder.componentId ? await this.getComponent(scope.organizationId, workOrder.componentId) : null;
+    const assetRecord = workOrder.assetId ? await this.getAsset(scope.organizationId, workOrder.assetId) : null;
+    const asset = assetRecord?.storeId === store.id ? assetRecord : null;
+    const componentRecord = workOrder.componentId ? await this.getComponent(scope.organizationId, workOrder.componentId) : null;
+    const component = asset && componentRecord?.assetId === asset.id ? componentRecord : null;
     return { ...this.workListRow(baseRow), request, authorizedScope: workOrder.authorizedScope, asset: asset ? { id: asset.id, name: asset.name, assetTag: asset.assetTag, warrantyEndsAt: asset.warrantyEndsAt } : undefined, component: component ? { id: component.id, name: component.name } : undefined, nte: workOrder.nte, vendorServiceTicketNumber: workOrder.vendorServiceTicketNumber, vendorInvoiceNumber: workOrder.vendorInvoiceNumber, externalAccountingPo: workOrder.externalAccountingPo, visits, followUps: followUps.map((row) => ({ id: text(row,"id"), nextAction: text(row,"next_action"), accountableParty: text(row,"accountable_party"), dueAt: text(row,"due_at"), status: text(row,"status") })), costs: costs.map((row) => ({ id: text(row,"id"), kind: text(row,"kind"), description: text(row,"description"), amountMinor: Number(row.amount_minor), currency: text(row,"currency"), serviceDate: text(row,"service_date") })) };
   }
 

@@ -108,9 +108,14 @@ function activityForDecision(fixture: OpsFixture, organizationId: string, assetI
     add({ id: `appointment-${appointment.id}`, title: `Service date ${sentence(appointment.status).toLowerCase()}`, description: `${timestamp(appointment.startsAt)}${appointment.note ? ` · ${appointment.note}` : ""}`, timestampLabel: timestamp(appointment.createdAt), actorLabel: appointment.proposedBy === "vendor" ? "Vendor" : memberName(fixture, appointment.createdByMembershipId), tone: appointment.status === "confirmed" ? "positive" : appointment.status === "cancelled" ? "warning" : "info" }, appointment.createdAt);
   }
 
-  for (const visit of fixture.visits.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId)) {
+  const workVisitLinks = fixture.siteVisitWorkOrders.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId);
+  const workVisitIds = new Set(workVisitLinks.map((row) => row.visitId));
+  for (const visit of fixture.visits.filter((row) => row.organizationId === organizationId && (workVisitIds.has(row.id) || row.workOrderId === workOrderId && !fixture.siteVisitWorkOrders.some((link) => link.organizationId === organizationId && link.visitId === row.id)))) {
+    const job = workVisitLinks.find((row) => row.visitId === visit.id);
+    const outcome = job ? job.outcome : visit.outcome;
+    const notes = job ? job.outcomeNotes : visit.outcomeNotes;
     add({ id: `visit-in-${visit.id}`, title: "Technician checked in", description: visit.arrivalNote || visit.purpose, timestampLabel: timestamp(visit.checkedInAt), actorLabel: `${visit.technicianName} · ${visit.providerName}`, tone: "info" }, visit.checkedInAt);
-    if (visit.checkedOutAt) add({ id: `visit-out-${visit.id}`, title: visit.outcome ? `Visit ended · ${sentence(visit.outcome)}` : "Technician checked out", description: visit.outcomeNotes ?? "Checkout recorded without additional notes.", timestampLabel: timestamp(visit.checkedOutAt), actorLabel: `${visit.technicianName} · ${visit.providerName}`, tone: visit.outcome === "resolved" || visit.outcome === "pm_complete" ? "positive" : visit.outcome ? "warning" : "neutral" }, visit.checkedOutAt);
+    if (visit.checkedOutAt) add({ id: `visit-out-${visit.id}`, title: outcome ? `Provider reported · ${sentence(outcome)}` : "Technician checked out · Job outcome not recorded", description: notes ?? "Checkout recorded without additional notes for this job.", timestampLabel: timestamp(visit.checkedOutAt), actorLabel: `${visit.technicianName} · ${visit.providerName}`, tone: outcome === "completed" || outcome === "resolved" || outcome === "pm_complete" ? "positive" : outcome ? "warning" : "neutral" }, visit.checkedOutAt);
   }
 
   for (const decision of fixture.lifecycleRecommendations.filter((row) => row.organizationId === organizationId && row.assetId === assetId && (!workOrderId || !row.workOrderId || row.workOrderId === workOrderId))) {
@@ -160,7 +165,9 @@ function workOrderCase(fixture: OpsFixture, organizationId: string, workOrderId:
     vendorResponses: fixture.vendorResponses.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),
     appointments: (fixture.serviceAppointments ?? []).filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),
     continuations: (fixture.vendorContinuations ?? []).filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),
-    visits: fixture.visits.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),
+    visits: fixture.visits.filter((row) => row.organizationId === organizationId && (row.workOrderId === workOrderId || fixture.siteVisitWorkOrders.some((link) => link.organizationId === organizationId && link.workOrderId === workOrderId && link.visitId === row.id))),
+    siteVisitWorkOrders: fixture.siteVisitWorkOrders.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),
+    verifications: fixture.workOrderVerifications.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),
     workflowTasks: fixture.workflowTasks.filter((row) => row.organizationId === organizationId && (row.workOrderId === workOrderId || (workOrder.requestId && row.serviceRequestId === workOrder.requestId))),
     followUps: fixture.followUps.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),
     costLines: fixture.costLines.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId),

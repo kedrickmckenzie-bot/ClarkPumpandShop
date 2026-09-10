@@ -9,7 +9,9 @@ export interface InvoiceReportingAllocation {
 /** Canonical invoices own reporting once present. Legacy references are only a
  * compatibility source for identities not yet represented in the invoice ledger.
  * Never fall back to an older reference when a canonical match is invalidated. */
-export function invoiceReporting(fixture: OpsFixture, organizationId: string) {
+export type InvoiceReportingSources = Pick<OpsFixture, "invoices" | "invoiceLines" | "invoiceLineAllocations" | "accountingInvoiceSources" | "invoiceReferences" | "invoiceAllocations">;
+
+export function invoiceReporting(fixture: InvoiceReportingSources, organizationId: string) {
   const allocations: InvoiceReportingAllocation[] = [];
   const pending: Array<{ id: string; invoiceDate: string; vendorId: string; amount: Money; href: string }> = [];
   const invoices = fixture.invoices.filter((row) => row.organizationId === organizationId);

@@ -1,45 +1,53 @@
-# Connected workflow completion pass
+# Connected workflow and evidence review
 
-This pass connects existing operator screens and preserves the domain workflow. It does not change service authorization, vendor dispatch, acknowledgment obligations, or accounting behavior.
+This pass follows the September 10, 2026 review of `9e925d2`. The acceptance standard is that a person can understand the relationship between the records they are reviewing, and continue existing work with its context intact. Existing service commands, acknowledgment, audited link correction, scope grants, accounting bases, and recording-coverage rules remain in force.
 
-## Navigation behavior
+## Implemented behavior
 
-- A six-screen navigation trail appears throughout the operator shell. It records the actual visited path, filters, pagination, selected record, and query-selected tab. Selecting a previous stop restores that URL. Revisiting a record through a new link keeps the immediately preceding source available.
-- The trail survives form submissions and reloads in the same browser tab through session storage. Changing user, tenant, role, store/region scope, effective capabilities, or demo edition clears the old path. Destination reads still enforce server permissions. Navigation history never authorizes access or associates records.
-- Streamed routes wait for the loaded page heading before naming a stop. Transient mutation messages are omitted. No cross-device history or browser-history access is introduced. Hash-only scroll positions and unsaved form input are not restored.
-- Contextual creation carries the current store from store pages or scoped queues. Work creation also retains supported equipment/vendor parameters from the queue. Store choices display readable names; IDs remain submitted values. Request defaults are restricted to authorized stores.
-- Submitting a report opens its newly created record directly. Quick acknowledgment still needs no note or link, and does not create service work.
+| Starting point | What is assembled and how the journey continues |
+| --- | --- |
+| Action center, work lists and search | **Review here** opens the work's evidence while the original queue, filters, selection, and scroll position remain mounted. Normal full-record/action links remain available. Closing restores keyboard focus to the opening control. |
+| Store history, vendor response/cost/visit evidence, Spending, Trends and PM source tables | Supporting work can open the same in-place review. Cohort and analysis filters stay on the source screen. The review explicitly identifies its separate scope: one work order, across all recorded dates. It does not silently reinterpret the source metric as a lifetime amount. |
+| Request and invoice records | Linked work can be reviewed from the report's facts or an invoice allocation. A missing work link remains missing. Invoice allocation anchors remain exact and the normal matching/correction workflow is retained. |
+| Work review | Reported problem, authorized scope, current impact assessment, accountable operator, provider, open obligations, per-job visit outcomes, the applicable manager verification, entered costs, confirmed invoice allocations, current quotes, warranty references, and other equipment work are assembled together. Each available source link opens the supporting record. |
+| Full work-order overview and equipment view | Prior equipment work, outcomes, warranty responsibility, and available options appear inline. Quote selection and later actions continue on the existing canonical work order. |
+| Equipment | One workspace switches between whole equipment, a component and its descendants, and work with no component specified. It updates history, costs, options, open work, and warranty references together. Existing open work takes priority over creating separate work. Separate creation carries the store, asset and an actual selected component; it never sends `unlinked` as an invented component ID. |
+| Equipment history | 12 months, 24 months, and all recorded dates are explicit. Work appears for creation, linked job activity, or a cost in the chosen window. Cost uses service dates; current outcome/quote status is labeled separately. History pages preserve component and period. Parent-component review includes descendants; its separately labeled broader queue opens whole-equipment work. |
+| Shared service visits and lifecycle | The visit list/search includes every explicitly linked job and its own outcome. Secondary work-order references are searchable. Lifecycle history and service-stage input include the canonical job/visit joins and verification evidence. |
+| PM analytical charts | Cost segments open exact cost lines by service date for the selected PM equipment, store, region and program. Reactive-work comparisons open their exact work-order numerator and a separate equipment/latest-PM-window denominator. Both evidence lists retain scope through pagination. |
 
-## Connected records
+The new equipment workspace replaces the duplicate generic component/service-history overview. Equipment identity, PM and setup remain available. Legacy equipment section URLs still reveal the connected review. On phones, a compact component selector replaces the long button list; history fields retain visible labels. The modal review uses the browser's modal focus behavior, provides loading/error/retry states, and locks background scrolling while open.
 
-- Queue cells can carry independent destinations and suppress links to routes unavailable to the current role (including the finance role’s visits-queue restriction). Stores and vendors open their own records, recorded amounts open the work-order cost tab, and store/vendor activity counts open scoped queues.
-- Vendor visit work references open work orders rather than reopening the visit. Store names, unresolved-item work references, return-visit counts, and recorded cost have corresponding destinations. Unmatched visits keep their review path without inventing work links.
-- Work-order fulfillment and origin facts expose their actual vendor/report/PM/visit links. Acknowledged reports can open equipment belonging to their explicitly linked work; this is labeled linked-work equipment, not original report evidence.
-- Invoice allocation lines replace raw visit/work identifiers with readable links to each exact visit, work order, and store, including every allocation on a split line. Vendor names open the vendor. Invoice reference source rows also link to their store, cost tab, and visit tab. A supplied operator reference opens a unique visible matching work order for inspection, without implying a confirmed allocation. Visit counts include the existing cross-work visit relationships.
-- Trend source store names open store records while their original evidence record links and cohort filters remain intact in the source view and return trail.
-- PM enrollment store/equipment names open those records independently of plan editing. Equipment PM work numbers and occurrence visit evidence are linked. Equipment PM links select the rendered tab instead of pointing at a hidden anchor.
-- Store service-area open-work and 12-month cost cells open matching source work with the relevant store/category/period filters.
+## Evidence and accounting rules
 
-## Validation
+- A verification applies to its exact immutable outcome. A newer service cycle without an outcome cannot inherit an older completion confirmation.
+- A related cooling complaint remains a reported problem. Equipment/component classification identifies related records; it does not diagnose a repeated failure.
+- Current quote revisions and active quote requests are used. Withdrawn, declined, expired-request, and unselected alternatives are excluded from current options. An expired proposal's validity date is visible. Vendor, scope, exclusions, availability and missing details are retained.
+- Warranty references show the earlier repair, provider/routing, term dates and relevant manufacturer terms. Recorded amendments prevent reliance on the superseded calculated term. A recorded coverage decision and invoice hold remain distinct from an unconfirmed reference.
+- Invoice evidence reuses `invoiceReporting`. Narrow repository reads include the associated invoices' sibling lines and allocations so reconciliation is evaluated correctly. Canonical invoices suppress older compatibility references, including after match invalidation. Only the current work's supported allocations are returned to its review.
+- Recorded work cost and linked invoice amount remain separate. Multiple currencies are displayed separately. No cost rows means **No amounts recorded**; a genuine entered zero remains zero. Equipment dates and a quiet list do not establish recording coverage.
+- Reviews create no report, follow-up, task, dispatch, assignment, approval or work order. Acknowledgment and unlinking retain their existing behavior and provenance.
+- PM cost analysis excludes PM-generated work and equipment outside the selected program. The chart explicitly uses USD; other currencies are excluded rather than combined or converted. Unrecorded months are not manufactured as zero. A cost on an older work order belongs to its service-date period. PM cohort rates retain their existing nominal equipment-count × 12 denominator and disclose that it is not adjusted for partial equipment exposure; these are descriptive groups, not proof of PM effectiveness. Latest closed, non-waived windows determine group membership, and every denominator asset and source window is reviewable.
 
-Regression coverage exercises separate cell destinations, scoped count drill-through, source cohort preservation, prefilled creation permissions, unmatched versus linked vendor visits, navigation revisits/bounds, and direct post-submission routing. Browser validation uses the local fictional fixture, including desktop and 390 x 844 mobile.
+## Reads and performance
 
-Browser journeys exercised:
+`GET /api/ops/work-orders/:id/review` checks active membership and the work's tenant/location scope before fetching related evidence. It uses record-scoped repository queries, not a tenant snapshot. Other equipment work is capped at five with a full-list link. Rendered histories, quotes, costs and invoice lists are capped with counts and evidence destinations. Equipment history uses twelve-row pages.
 
-- Desktop: scoped Store 104 work queue → vendor → exact queue return → prefilled work form; queue cost amount → work-order Costs → invoice → exact visit checkout evidence; manager search → source work order.
-- Mobile (390 x 844): readable prefilled work form and navigation trail; contextual create menu → report form with Store 104 selected → submit → new report → quick acknowledgment without note/link → store → PM enrollment → equipment PM tab → linked work reference.
-- Refreshed pages and normal form submissions retained the per-tab path. An initial live-development worker connection interruption recovered on reload. The observed page flows loaded correctly afterward.
+The full-record server render reuses its request-owned snapshot through a read projection that does not clone or normalize/mutate that snapshot again. No persistent response cache is introduced. Lists/charts do not prefetch these evidence bundles in the background.
 
-Validation results:
+Three local development HTTP samples during implementation returned the review in **127–214 ms / 7,883 bytes**, versus **410–837 ms / 471,107 bytes** for the full work-order page. These endpoints intentionally return different amounts of information. The samples exclude client hydration, include development variability, and are not a production performance guarantee. Full compatibility snapshots on several existing record/analytical routes remain a known performance limitation.
 
-- `npm run db:seed`: passed; deterministic 15-store, five-vendor fixture and separate 65-store fixture.
-- `npm run typecheck`: passed.
-- `npm test -- --maxWorkers=1 --no-file-parallelism`: 116 files and 784 tests passed. Earlier parallel runs encountered timing-guard failures/timeouts; no thresholds or assertions were relaxed. A trends-only retry also passed before the complete serial run.
-- `npm run build`: passed, with the existing emitted CSS filename conflict for `ops.D8IpgYP_.css` and plugin-timing notices.
-- `npm run lint`: passed.
-- `npm run test:e2e -- --maxWorkers=1 --no-file-parallelism`: 4 files and 44 tests passed.
-- `git diff --check`: passed. The local browser exercise created one routine test report and acknowledged it; it is labeled as a local workflow check and is not merged or deleted. The untracked dev4.log is preserved. No external delivery, push, or deployment is part of this pass.
+## Validation record
 
-## Limits
+- Required checks passed: `npm run db:seed`, `npm run typecheck`, `npm run lint`, `npm test` (**127 files / 845 tests**), `npm run test:e2e` (**4 files / 46 tests**), and `npm run build`. The Render/Next build (`npm run build:render`) also passed. Final presentation changes received additional type, lint, targeted regression and build checks.
+- `npm run test:routes` checked **134 routes with no failures**. This is a local HTTP render audit, not a substitute for browser interaction.
+- Browser inspection covered desktop at **1280 × 720** and mobile at **390 × 844**: action-center/work/search reviews; filtered overview July spend → records → work review; Spending; Trends sources; PM occurrences and July cost evidence; vendor evidence on a later page; invoice allocation and warranty follow-up; equipment component/period switching and prefilled work creation; and the lifecycle decision's quote/service history. Reviews retained the source URL, scope and keyboard return focus. Mobile evidence and equipment layouts were visually inspected and checked for horizontal overflow. The viewport was restored afterward.
+- The July PM chart opened exactly four cost lines totaling **$9,385**, preserving the selected store and month. Regression fixtures also cover old work with current service-date costs, entered zero, missing history, other currencies, foreign tenant records, equipment outside PM, PM-generated work, cohort changes, invalid selectors and paginated numerator/denominator reconciliation.
+- Existing public vendor authorization/recorded-response and technician entry were inspected. The store-QR-started visit continued to its per-job checkout outcomes through a public link. The no-work-order path continued to crew check-in with an approved vendor and reason. Store creation and deferred-routing forms were inspected, including equipment prefill. These browser checks stopped before submitting mutations; command, persistence, cross-channel, authorization and replay behavior were exercised by the automated workflow/integration suite.
+- Browser testing caught and fixed a server/client module boundary error in Spending and moved the mobile Trends review action beside the record name. A server-render regression now guards the boundary. An early parallel-build test run timed out on one integration case; the subsequent sequential full workflow runs passed without changing the timeout.
 
-The navigation trail supports the last six screens in the current tab, not an unlimited or cross-device workspace. Existing workflow state determines next actions; this pass adds contextual navigation rather than learned predictions. It does not assert that every specialized setup screen or every inline source fact has a dedicated detail page. Future screens should use independent record destinations rather than making every cell reopen the same parent record.
+## Boundaries
+
+This provides a common evidence review across the principal maintenance and data-review surfaces. It does not claim that every specialized screen now answers every possible question. Unmatched visits/invoices still require their explicit reconciliation workflows; the platform does not infer a missing relationship. Public vendor/store actions and setup forms retain their existing specialized journeys. Complete histories and management actions remain available through the full records.
+
+No push or deployment is part of this pass. The prior local implementation and user-owned `dev4.log` are preserved.

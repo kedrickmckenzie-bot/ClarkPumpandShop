@@ -14,7 +14,7 @@ The September 10, 2026 product direction applies to **every screen**, including 
 
 This extends the existing service-workflow contract. It does not make components, invoices, vendor participation, or repair/replacement analysis prerequisites for basic work.
 
-## Implemented review changes
+## Initial review changes (`9e925d2`)
 
 | Area | Review behavior |
 | --- | --- |
@@ -26,6 +26,10 @@ This extends the existing service-workflow contract. It does not make components
 | Spending, PM, and lifecycle supporting tables | Phone rows expose labeled fields using the same review pattern. Existing exact links and intentional in-place lifecycle selection remain intact. |
 
 The new previews use the already-authorized view model. They do not issue additional database queries. Search still uses bounded repository calls, skips equipment reads in the accountability edition, and suppresses links unavailable to the viewer's role. These are presentation changes; domain commands, tenant/store grants, accounting bases, recording coverage, acknowledgment, unlinking, and exceptional obligations are unchanged.
+
+## Connected evidence follow-through
+
+The subsequent [connected workflow completion pass](CONNECTED_WORKFLOW_COMPLETION.md) assembles source relationships, corrects canonical visit joins, adds an in-place work review across principal source tables, and replaces equipment's duplicate overview previews with one component/period workspace. It extends this contract beyond the initial presentation changes described above.
 
 ## Platform audit boundaries
 

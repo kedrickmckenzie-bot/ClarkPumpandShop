@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { WorkReviewButton, WorkEquipmentContext } from "./work-review";
+import type { WorkReviewModel } from "@/lib/ops/work-review";
 import {
   ArrowLeft,
   ArrowRight,
@@ -64,6 +66,7 @@ import {
 } from "@/lib/ops/work-order-workspace";
 
 interface WorkOrderCaseProps {
+  connectedReview?: WorkReviewModel | null;
   model: DetailPageViewModel;
   control: WorkOrderControlViewModel;
   recording: WorkOrderRecordingViewModel;
@@ -212,7 +215,7 @@ function EvidenceTable({ table }: { table: TableViewModel }) {
                   </td>
                 );
               })}
-              <td className={styles.openColumn}><Link href={workspaceStartHref(row.href)} aria-label={`Open ${row.label}`}><ChevronRight aria-hidden="true" size={16} /></Link></td>
+              <td className={styles.openColumn}><WorkReviewButton href={row.href} label={row.label} /><Link href={workspaceStartHref(row.href)} aria-label={`Open ${row.label}`}><ChevronRight aria-hidden="true" size={16} /></Link></td>
             </tr>
           ))}
         </tbody>
@@ -385,7 +388,7 @@ function CaseOverview({
   const invoiceCount = invoices?.table?.rows.length ?? 0;
   const selectedAsset = recording.assets.find((asset) => asset.value === recording.currentAssetId);
   const equipmentHref = selectedAsset
-    ? `/app/equipment/${selectedAsset.value}?section=service-history`
+    ? `/app/equipment/${selectedAsset.value}#equipment-review`
     : `${base}?view=equipment`;
 
   return (
@@ -548,6 +551,7 @@ function workspaceHeading(mode: WorkOrderWorkspaceMode, accountabilityOnly: bool
 }
 
 export function WorkOrderCase({
+  connectedReview,
   model,
   control,
   recording,
@@ -701,6 +705,7 @@ export function WorkOrderCase({
             accountabilityOnly={accountabilityOnly}
             canonicalCase={canonicalCase}
           />
+          {connectedReview?.equipmentScope && !accountabilityOnly ? <WorkspaceSection id="equipment-context" eyebrow="Related service evidence" title="Equipment history and current options" description="Prior outcomes, recorded warranty terms, and available quotes for the equipment scope of this work." icon={<PackageSearch aria-hidden="true" size={20} />}><WorkEquipmentContext model={connectedReview} /></WorkspaceSection> : null}
           <WorkspaceSection
             id="work-history"
             eyebrow="Complete case file"
@@ -803,6 +808,7 @@ export function WorkOrderCase({
         description="Equipment and components are optional. Link them when useful for service history, repeat repairs, and replacement planning."
         icon={<PackageSearch aria-hidden="true" size={20} />}
       >
+        {connectedReview ? <WorkEquipmentContext model={connectedReview} /> : null}
         <div className={styles.equipmentSummary}>
           <div><span><Tags aria-hidden="true" size={16} />Service area</span><strong>{recording.currentCategory ? sentence(recording.currentCategory) : classification?.value ?? "Deferred"}</strong><small>Can be classified after diagnosis</small></div>
           <div><span><PackageSearch aria-hidden="true" size={16} />Equipment</span><strong>{selectedAsset?.label ?? replacement.assetName ?? "Not linked"}</strong><small>{selectedAsset?.description ?? "This work order does not have an equipment history until an equipment record is linked"}</small></div>
@@ -810,7 +816,7 @@ export function WorkOrderCase({
           <div><span><CircleDollarSign aria-hidden="true" size={16} />Capital context</span><strong>{replacement.assetName ? "Available for review" : "Needs linked equipment"}</strong><small>Human planning evidence, never an automatic replacement decision</small></div>
         </div>
         <div className={styles.inlineActions}>
-          {selectedAsset ? <Link className={styles.inlineAction} href={`/app/equipment/${selectedAsset.value}?section=service-history`}>Open equipment history<ArrowRight aria-hidden="true" size={15} /></Link> : null}
+          {selectedAsset ? <Link className={styles.inlineAction} href={`/app/equipment/${selectedAsset.value}#equipment-review`}>Open equipment history<ArrowRight aria-hidden="true" size={15} /></Link> : null}
           {recording.canClassify ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=cost#work-records`}>{selectedAsset ? "Change linked equipment" : "Link equipment to this work order"}<ArrowRight aria-hidden="true" size={15} /></Link> : null}
         </div>
         <div className={styles.panelRegion}><WorkOrderReplacementIntelligencePanel model={replacement} /></div>

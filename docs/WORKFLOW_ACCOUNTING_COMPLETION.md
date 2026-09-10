@@ -68,3 +68,6 @@ See [WORKFLOW_RELIABILITY_AUDIT.md](WORKFLOW_RELIABILITY_AUDIT.md) for the corre
 ## Review experience across the platform
 
 The [platform review experience contract](PLATFORM_REVIEW_EXPERIENCE.md) extends connected workflows to ordinary browsing and data review. Shared record overviews now show bounded evidence previews, search retains connected facts, and phone source tables expose labeled fields. These changes preserve the accounting and acknowledgment behavior above.
+# Connected evidence review
+
+The September 10 follow-through is documented in [CONNECTED_WORKFLOW_COMPLETION.md](CONNECTED_WORKFLOW_COMPLETION.md). Work evidence can now be reviewed from invoice allocations and other source tables without leaving the originating view. The shared review uses the same canonical invoice reconciliation and distinct cost bases; it introduces no new accounting decision or payment behavior.
