@@ -4,7 +4,7 @@ import type { AssetReplacementIntelligenceViewModel, ReplacementProfileManagerVi
 import { roleCan } from "@/components/ops/role-policy";
 import { buildLifecycleRecommendationDraft, replacementBenchmarkPortfolioImpact, resolveAssetReplacementEstimate, suggestReplacementProfilesForAsset } from "@/lib/ops/replacement-intelligence";
 import type { Asset, OpsFixture, ReplacementProfile } from "@/lib/ops/types";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 
@@ -35,7 +35,7 @@ function profileView(fixture: OpsFixture, profile: ReplacementProfile, currentAs
 
 async function context() {
   const session = await loadOperatorSession();
-  const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   return { session, fixture };
 }
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { ListSurface } from "@/components/ops/views";
 import { roleCan } from "@/components/ops/role-policy";
 import { SavedViewsBar } from "@/components/workspace/saved-views";
@@ -10,6 +11,13 @@ type Query = Record<string, string | string[] | undefined>;
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<Query> }) {
   const params = await searchParams;
   const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+  if (first(params.basis) === "invoiced") {
+    const target = new URLSearchParams(Object.entries(params).flatMap(([key, value]) => first(value) ? [[key, first(value)!]] : []));
+    if (target.has("costFrom")) target.set("from", target.get("costFrom")!);
+    if (target.has("costTo")) target.set("to", target.get("costTo")!);
+    for (const key of ["hasCost", "costFrom", "costTo", "selected"]) target.delete(key);
+    redirect(`/app/invoices?${target}`);
+  }
   // The ordinary list and held-work portfolio stay on bounded repository reads.
   // Load the richer legacy matching projection only when a user explicitly asks
   // for confirmed-opportunity or review-window analysis.
@@ -27,7 +35,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
 
   return (
     <>
-      {session.demoEdition === "complete" ? <SavedViewsBar model={{ surface: "work-orders", currentQuery, views: savedViews }} /> : null}
+      {session.demoEdition === "complete" ? <SavedViewsBar model={{ surface: "work-orders", currentQuery, views: savedViews }} collapsed={model.rowNavigation === "record"} /> : null}
       <ListSurface
         model={model}
         approvedWork={approvedWork}

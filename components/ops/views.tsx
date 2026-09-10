@@ -39,6 +39,7 @@ import type {
   TrendViewModel,
 } from "./data-contract";
 import styles from "./enterprise-workspace.module.css";
+import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import { RecordSections } from "@/components/workspace/record-sections";
 import { ApprovedLaterIssuanceDialog } from "./approved-later-issuance-dialog";
 import { PaginationControls } from "./pagination-controls";
@@ -385,9 +386,10 @@ function DataTable({ table, selectedId, rowHref, selection }: { table: TableView
                 {selection ? <td className={styles.selectColumn}><input type="checkbox" name={selection.name} value={row.id} aria-label={`Select ${row.label}`} disabled={selection.isDisabled?.(row)} /></td> : null}
                 {table.columns.map((column, index) => {
                   const cell = row.cells.find((candidate) => candidate.key === column.key);
+                  const href = cell?.link?.href ?? rowHref?.(row) ?? row.href;
                   return (
-                    <td data-column={column.key} className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
-                      <Link href={cell?.link?.href ?? rowHref?.(row) ?? row.href} aria-current={!cell?.link && row.id === selectedId ? "true" : undefined} aria-label={cell?.link ? `${cell.link.label}: ${cell.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
+                    <td data-column={column.key} data-label={column.label} className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
+                      <Link href={cell?.link || !rowHref ? workspaceStartHref(href) : href} aria-current={!cell?.link && row.id === selectedId ? "true" : undefined} aria-label={cell?.link ? `${cell.link.label}: ${cell.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
                         <span>{cell?.value ?? "—"}</span>
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
                         {index === table.columns.length - 1 ? <ChevronRight className={styles.cellChevron} aria-hidden="true" size={15} /> : null}
@@ -613,7 +615,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
     estimates: { heading: "Choose an estimate queue", description: "Open pricing requests by the decision or vendor response still needed." },
   };
   const metricHeading = metricCopy[surface] ?? { heading: "Choose what to review", description: "Each summary opens the matching records without losing your current scope." };
-  const triageMode = TRIAGE_SURFACES.has(surface);
+  const triageMode = TRIAGE_SURFACES.has(surface) && model.rowNavigation !== "record";
   const visitPlanParam = searchParams.visitPlan;
   const approvedLaterMode = surface === "work-orders" && (Array.isArray(visitPlanParam) ? visitPlanParam[0] : visitPlanParam) === "ready";
   const selectedParam = searchParams.selected;

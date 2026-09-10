@@ -1,4 +1,4 @@
-import type { SupportingLink, Tone } from "./data-contract";
+import type { PaginationViewModel, SupportingLink, Tone } from "./data-contract";
 
 export type VendorEvidenceState = "ready" | "insufficient";
 
@@ -190,6 +190,7 @@ export interface VendorReminderViewModel {
 }
 
 export interface VendorPerformanceDetailViewModel {
+  evidencePagination?: Partial<Record<"visitRows" | "authorizationRows" | "repeatVisitRows" | "costRows", PaginationViewModel>>;
   state: "ready" | "missing";
   title: string;
   description: string;

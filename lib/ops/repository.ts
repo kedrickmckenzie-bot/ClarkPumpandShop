@@ -121,7 +121,10 @@ export interface WorkOrderListQuery extends PageRequest {
   componentId?: OpsId | "unlinked";
   hasCost?: boolean;
   costFrom?: string;
+  costTo?: string;
   costMonth?: string;
+  currency?: string;
+  categoryPath?: readonly string[];
   createdFrom?: IsoDateTime;
   createdTo?: IsoDateTime;
   heldOnly?: boolean;

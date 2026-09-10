@@ -32,8 +32,13 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function money(minor: number) {
-  return currency.format(minor / 100);
+function queryCurrency(query: OperatorSearchParameters) {
+  const value = first(query.currency);
+  return value && /^[A-Z]{3}$/.test(value) ? value : "USD";
+}
+
+function money(minor: number, currencyCode = "USD") {
+  return (currencyCode === "USD" ? currency : new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode, maximumFractionDigits: 0 })).format(minor / 100);
 }
 
 function sentence(value: string) {
@@ -98,10 +103,20 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
     under_review: "Reports under review", acknowledged_unlinked: "Acknowledged without linked work", converted: "Reports converted to work", unlinked: "Not linked",
   };
   return Object.entries(query).flatMap(([key, raw]) => {
-    if (["q", "page"].includes(key)) return [];
+    if (["q", "page", "selected", "basis", "period", "currency", "saved", "updated", "notice", "error"].includes(key)) return [];
     const value = first(raw);
     if (!value) return [];
-    const label = key === "review" && value === "true"
+    const label = key === "hasCost" ? "With recorded cost"
+      : key === "costMonth" ? `Cost month · ${formatOperationsDate(`${value}-01`)}`
+      : key === "costFrom" ? `Cost from ${formatOperationsDate(value)}`
+      : key === "costTo" ? `Cost through ${formatOperationsDate(value)}`
+      : key === "path" ? value.split("|").join(" › ")
+      : key === "store" ? "Selected store"
+      : key === "region" ? "Selected region"
+      : key === "asset" ? value === "unlinked" ? "Not linked to equipment" : "Selected equipment"
+      : key === "component" ? value === "unlinked" ? "Not linked to a component" : "Selected component"
+      : key === "vendor" ? "Selected vendor"
+      : key === "review" && value === "true"
       ? "Needs review"
       : key === "visitPlan" && value === "ready"
         ? "Approved for next suitable visit"
@@ -138,6 +153,15 @@ function commonPage(session: OperatorSession, title: string, eyebrow: string, de
   return { title, eyebrow, description, scopeLabel: session.scopeLabel, updatedLabel: `Source data through ${formatOperationsDate(NORTHLINE_AS_OF)}` };
 }
 
+function costPeriod(query: OperatorSearchParameters) {
+  const month = first(query.costMonth);
+  const validMonth = month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : undefined;
+  const from = [first(query.costFrom), validMonth ? `${validMonth}-01` : undefined].filter((value): value is string => Boolean(value)).sort().at(-1);
+  const monthEnd = validMonth ? new Date(Date.UTC(Number(validMonth.slice(0, 4)), Number(validMonth.slice(5)), 0)).toISOString().slice(0, 10) : undefined;
+  const to = [first(query.costTo), monthEnd].filter((value): value is string => Boolean(value)).sort()[0];
+  return [from && to ? `${formatOperationsDate(from)}–${formatOperationsDate(to)}` : from ? `From ${formatOperationsDate(from)}` : to ? `Through ${formatOperationsDate(to)}` : "All recorded dates", queryCurrency(query)].join(" · ");
+}
+
 function searchControl(route: OperatorListRoute, query: OperatorSearchParameters, label: string, placeholder: string) {
   return {
     label,
@@ -171,7 +195,7 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
       { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
       { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
       { key: "next", value: row.nextAction, secondary: `Next: ${row.accountableParty} · Internal: ${row.internalAccountableParty}${row.dueAt ? ` · Due ${formatOperationsDate(row.dueAt)}` : " · No deadline by policy"}` },
-      { key: "cost", value: money(row.recordedCostMinor), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
+      { key: "cost", value: money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
       { key: "status", value: sentence(row.status), tone: toneForStatus(row.status) },
     ],
   };
@@ -190,7 +214,7 @@ function heldWorkRow(row: WorkOrderListRow): TableRowViewModel {
       { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
       { key: "assignment", value: posture, secondary: row.vendorName ? `Current provider: ${row.vendorName}` : "Provider can be chosen when the work is sent" },
       { key: "next", value: row.visitHoldDeadlineAt ? `Review by ${formatOperationsDate(row.visitHoldDeadlineAt)}` : "Review date not recorded", secondary: `Internal owner: ${row.internalAccountableParty}` },
-      { key: "cost", value: money(row.recordedCostMinor), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
+      { key: "cost", value: money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
       { key: "status", value: "Approved for next suitable visit", tone: "info" },
     ],
   };
@@ -224,7 +248,7 @@ function storeRow(row: StoreSearchRow): TableRowViewModel {
     { key: "address", value: row.formattedAddress },
     { key: "work", value: String(row.openWorkCount), link: { href: `/app/work-orders?store=${row.id}&status=open`, label: "Review open work" } },
     { key: "onsite", value: String(row.activeVisitCount), link: { href: `/app/visits?store=${row.id}&status=active`, label: "Review onsite visits" } },
-    { key: "cost", value: money(row.recordedCostMinor), link: { href: `/app/work-orders?store=${row.id}&hasCost=true`, label: "Review recorded cost sources" } },
+    { key: "cost", value: money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders?store=${row.id}&hasCost=true`, label: "Review recorded cost sources" } },
   ] };
 }
 
@@ -290,6 +314,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   let metrics: ListPageViewModel["metrics"];
   let secondaryAction: { label: string; href: string } | undefined;
   let contextualFilters: ListPageViewModel["filters"];
+  const costEvidence = route === "work-orders" && Boolean(first(query.costMonth) || first(query.costFrom) || first(query.costTo) || first(query.hasCost) === "true");
 
   if (route === "work-orders") {
     const heldPlan = first(query.visitPlan) === "ready";
@@ -313,20 +338,23 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       componentId: first(query.component),
       hasCost: first(query.hasCost) === "true",
       costFrom: first(query.costFrom),
+      costTo: first(query.costTo),
       costMonth: first(query.costMonth),
+      currency: costEvidence ? queryCurrency(query) : undefined,
+      categoryPath: first(query.path)?.split("|").filter(Boolean),
       heldOnly: heldPlan,
       heldStoreGroup,
       heldReviewDeadlineTo: heldPlan && heldReviewWindow === "30" ? new Date(Date.parse(NORTHLINE_AS_OF) + 30 * 86_400_000).toISOString() : undefined,
       heldConfirmedOpportunityAfter: heldPlan && heldOpportunity === "confirmed" ? NORTHLINE_AS_OF : undefined,
       upcomingAppointmentAfter: upcomingAppointments ? NORTHLINE_AS_OF : undefined,
-    }), repository.getHeldWorkPortfolioSummary(scope)]);
+    }), costEvidence ? Promise.resolve({ approvedWorkOrders: 0, storesWithApprovedWork: 0, storesWithMultipleApprovedJobs: 0 }) : repository.getHeldWorkPortfolioSummary(scope)]);
     result = work; rows = work.items.map(heldPlan ? heldWorkRow : workRow); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "Track internal and outside service from creation through visits, follow-up, and recorded cost."; placeholder = "Search number, problem, store, vendor, or category";
     if (heldPlan && roleCan(session, "issue_work_order")) {
       const currentContext = `/app/work-orders?${new URLSearchParams(paramsWithoutPage(query)).toString()}`;
       primaryAction = { label: "Send approved jobs together", href: `/app/store-sweeps/new?returnTo=${encodeURIComponent(currentContext)}` };
       secondaryAction = { label: "Return to all work", href: workTimingHref(query, false) };
     } else if (roleCan(session, "create_work_order")) primaryAction = { label: "Create work order", href: creationHref("/app/work-orders/new", query) };
-    if (session.role === "facilities" || session.role === "regional") {
+    if (!costEvidence && (session.role === "facilities" || session.role === "regional")) {
       if (!heldPlan) secondaryAction = { label: "Send approved jobs together", href: "/app/store-sweeps/new?returnTo=%2Fapp%2Fwork-orders" };
       metrics = [
         { id: "ready-to-bundle", label: "Approved for next suitable visit", value: String(held.approvedWorkOrders), supportingText: `${held.storesWithApprovedWork} store${held.storesWithApprovedWork === 1 ? "" : "s"} across your full operating scope`, tone: held.approvedWorkOrders ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open approved work" } },
@@ -390,6 +418,17 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     if (roleCan(session, "onboard_vendor")) primaryAction = { label: "Add vendor", href: "/app/vendors/new" };
   }
 
+  if (costEvidence) {
+    title = "Recorded work cost";
+    eyebrow = "Cost source records";
+    description = "Each amount includes only the recorded costs in these filters. Open a work order to review its cost entries, store, equipment, and service history.";
+    primaryAction = undefined;
+    secondaryAction = { label: "Review spending", href: `/app/spend?${new URLSearchParams(Object.entries({
+      store: first(query.store), region: first(query.region), category: first(query.category), path: first(query.path),
+      asset: first(query.asset), component: first(query.component), period: first(query.period) ?? "12m", basis: "recorded",
+    }).filter((entry): entry is [string, string] => Boolean(entry[1])))}` };
+    rows = rows.map((row) => ({ ...row, href: `${row.href}?view=cost` }));
+  }
   const total = result.totalCount;
   const heldPlan = route === "work-orders" && first(query.visitPlan) === "ready";
   const summary = heldPlan
@@ -400,9 +439,16 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       if (cell.link && !roleCanOpenOperatorHref(session.role, cell.link.href)) cell.link = undefined;
     }
   }
+  const storeCell = first(query.store) ? rows[0]?.cells.find((cell) => cell.key === "store") : undefined;
+  const appliedFilters = queryAppliedFilters(route, query).map((filter) => filter.id === "store" && storeCell
+    ? { ...filter, label: storeCell.value } : filter);
   return {
     state: rows.length || !q ? { kind: "ready" } : { kind: "empty", title: "No matching records", message: "Try another store number, address, vendor, or keyword." },
-    page: { ...commonPage(session, title, eyebrow, description), primaryAction, secondaryAction },
+    rowNavigation: costEvidence ? "record" : undefined,
+    page: { ...commonPage(session, title, eyebrow, description), primaryAction, secondaryAction,
+      ...(costEvidence ? { scopeLabel: [first(query.store) ? storeCell ? `${storeCell.value} · ${storeCell.secondary ?? ""}` : "Selected store · no matching costs" : session.scopeLabel,
+        first(query.category) ? sentence(first(query.category)!) : undefined, first(query.path)?.split("|").join(" › ")].filter(Boolean).join(" · ") } : {}),
+      periodLabel: costEvidence ? costPeriod(query) : undefined },
     metrics,
     table: { id: route, caption: title, columns: heldPlan ? [
       { key: "work", label: "Approved work" }, { key: "store", label: "Store" }, { key: "assignment", label: "Authorized during visit" }, { key: "next", label: "Review and owner" }, { key: "cost", label: "Recorded cost", align: "end" as const }, { key: "status", label: "Timing" },
@@ -410,7 +456,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     resultSummary: summary,
     search: searchControl(route, query, `Search ${title}`, placeholder),
     filters: [...(contextualFilters ?? []), ...(queryFilters(route, query) ?? [])],
-    appliedFilters: queryAppliedFilters(route, query),
+    appliedFilters,
     clearFiltersHref: heldPlan ? "/app/work-orders?visitPlan=ready" : `/app/${route}`,
     pagination: pagination(route, query, result, page),
   };

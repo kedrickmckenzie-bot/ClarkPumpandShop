@@ -1,11 +1,11 @@
 import "server-only";
 
 import { notFound } from "next/navigation";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 
 export async function loadWarrantyFinanceWorkspace(input: { warrantyCaseId?: string; invoiceId?: string } = {}) {
-  const [fixture, session] = await Promise.all([getServerOpsFixtureSnapshot(), loadOperatorSession()]);
+  const [fixture, session] = await Promise.all([getRequestOpsFixtureSnapshot(), loadOperatorSession()]);
   const organizationId = session.organizationId;
   const allowedStore = (storeId: string) => {
     const store = fixture.stores.find((row) => row.organizationId === organizationId && row.id === storeId);

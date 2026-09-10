@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PaginationControls } from "./pagination-controls";
 import type { ReactNode } from "react";
 import {
   AlertTriangle,
@@ -331,18 +332,20 @@ function VendorAccountabilityDetail({ model }: { model: VendorPerformanceDetailV
       </section>
 
       <div className={styles.evidenceStack}>
-        <section className={styles.evidenceSection} aria-labelledby="work-sent-heading" id="work-sent">
-          <SectionHeader id="work-sent-heading" icon={<Clock3 size={20} />} title="Work orders sent" description="The service authorizations delivered to this vendor and the response recorded for each one." count={`${model.authorizationRows.length} sent`} />
+        <section className={styles.evidenceSection} aria-labelledby="work-sent-heading" id="authorization-evidence">
+          <SectionHeader id="work-sent-heading" icon={<Clock3 size={20} />} title="Work orders sent" description="The service authorizations delivered to this vendor and the response recorded for each one." count={model.evidencePagination?.authorizationRows?.summary ?? `${model.authorizationRows.length} sent`} />
           {model.authorizationRows.length ? <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Work orders sent to this vendor</caption><thead><tr><th>Work order / store</th><th>Sent</th><th>Vendor response</th><th>Decision</th></tr></thead><tbody>
             {model.authorizationRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.workOrderNumber}</strong><small>{row.storeLabel} · {row.workOrderProblem}</small></Link></td><td><Link href={row.href}>{row.issuedAtLabel}</Link></td><td><Link href={row.href}><strong>{row.responseLabel}</strong><small>{row.responderLabel}</small></Link></td><td><Link href={row.href}>{row.decisionLabel}<ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
           </tbody></table></div> : <EmptyEvidence>No work order has been sent to this vendor in the selected scope.</EmptyEvidence>}
+          {model.evidencePagination?.authorizationRows ? <PaginationControls pagination={model.evidencePagination.authorizationRows} label="Authorization history pages" /> : null}
         </section>
 
         <section className={styles.evidenceSection} aria-labelledby="visit-evidence-heading" id="visit-evidence">
-          <SectionHeader id="visit-evidence-heading" icon={<MapPinned size={20} />} title="Check-in and checkout history" description="Who arrived, where they worked, which work order they selected, and how the visit ended." count={`${model.visitRows.length} visits`} />
+          <SectionHeader id="visit-evidence-heading" icon={<MapPinned size={20} />} title="Check-in and checkout history" description="Who arrived, where they worked, which work order they selected, and how the visit ended." count={model.evidencePagination?.visitRows?.summary ?? `${model.visitRows.length} visits`} />
           {model.visitRows.length ? <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Vendor check-in and checkout history</caption><thead><tr><th>Technician / store</th><th>Work order</th><th>Observed visit</th><th>Checkout outcome</th></tr></thead><tbody>
             {model.visitRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.technicianName}</strong></Link>{row.storeHref ? <Link href={row.storeHref}><small>{row.storeLabel}</small></Link> : <small>{row.storeLabel}</small>}</td><td><Link className={row.isNoWorkOrder ? styles.warningText : undefined} href={row.workOrderHref ?? row.href}>{row.workOrderLabel}</Link></td><td><Link href={row.href}>{row.observedLabel}</Link></td><td><Link className={row.isUnresolved ? styles.warningText : undefined} href={row.href}>{row.outcomeLabel}<ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
           </tbody></table></div> : <EmptyEvidence>No visits are recorded for this vendor.</EmptyEvidence>}
+          {model.evidencePagination?.visitRows ? <PaginationControls pagination={model.evidencePagination.visitRows} label="Visit history pages" /> : null}
         </section>
 
         <section className={styles.evidenceSection} aria-labelledby="coverage-evidence-heading" id="coverage-evidence">
@@ -559,30 +562,33 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
         </section>
 
         <section className={styles.evidenceSection} aria-labelledby="authorization-evidence" id="authorization-evidence">
-          <SectionHeader id="authorization-evidence-heading" icon={<Clock3 size={20} />} title="Work-order response history" description="See when work was sent and when the vendor first responded." count={`${model.authorizationRows.length} sent`} />
+          <SectionHeader id="authorization-evidence-heading" icon={<Clock3 size={20} />} title="Work-order response history" description="See when work was sent and when the vendor first responded." count={model.evidencePagination?.authorizationRows?.summary ?? `${model.authorizationRows.length} sent`} />
           {model.authorizationRows.length ? (
             <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Authorization response and acceptance evidence</caption><thead><tr><th>Work / store</th><th>Issued</th><th>First response</th><th>Elapsed</th><th>Acceptance decision</th></tr></thead><tbody>
               {model.authorizationRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.workOrderNumber} · Revision {row.revision}</strong><small>{row.storeLabel} · {row.workOrderProblem}</small></Link></td><td><Link href={row.href}>{row.issuedAtLabel}</Link></td><td><Link href={row.href}><strong>{row.responseLabel}</strong><small>{row.responderLabel} · {row.responseAtLabel}</small></Link></td><td><Link href={row.href}>{row.responseTimeLabel}</Link></td><td><Link href={row.href}><strong>{row.decisionLabel}</strong><small>{row.decisionAtLabel}</small><ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
             </tbody></table></div>
           ) : <EmptyEvidence>Not enough history: no service authorization has been issued to this vendor in the selected scope.</EmptyEvidence>}
+          {model.evidencePagination?.authorizationRows ? <PaginationControls pagination={model.evidencePagination.authorizationRows} label="Authorization history pages" /> : null}
         </section>
 
         <section className={styles.evidenceSection} aria-labelledby="repeat-visits" id="repeat-visits">
-          <SectionHeader id="repeat-visits-heading" icon={<Wrench size={20} />} title="Repeat-visit work orders" description="More than one observed visit on the same work order. This is context for review, not an automatic callback or quality judgment." count={`${model.repeatVisitRows.length} work orders`} />
+          <SectionHeader id="repeat-visits-heading" icon={<Wrench size={20} />} title="Repeat-visit work orders" description="More than one observed visit on the same work order. This is context for review, not an automatic callback or quality judgment." count={model.evidencePagination?.repeatVisitRows?.summary ?? `${model.repeatVisitRows.length} work orders`} />
           {model.repeatVisitRows.length ? (
             <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Work orders with repeat observed visits</caption><thead><tr><th>Work / store</th><th>Observed visits</th><th>Latest outcome</th><th>Recorded cost</th></tr></thead><tbody>
               {model.repeatVisitRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.workOrderNumber}</strong><small>{row.storeLabel} · {row.problem}</small></Link></td><td><Link href={`${row.href.split("?")[0]}?view=visits`}>{row.visitCount}</Link></td><td><Link href={row.href}>{row.latestOutcomeLabel}</Link></td><td><Link href={`${row.href.split("?")[0]}?view=cost`}>{row.recordedCostLabel}<ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
             </tbody></table></div>
           ) : <EmptyEvidence>No work order has more than one observed visit from this vendor.</EmptyEvidence>}
+          {model.evidencePagination?.repeatVisitRows ? <PaginationControls pagination={model.evidencePagination.repeatVisitRows} label="Repeat work pages" /> : null}
         </section>
 
         <section className={styles.evidenceSection} aria-labelledby="visit-evidence" id="visit-evidence">
-          <SectionHeader id="visit-evidence-heading" icon={<MapPinned size={20} />} title="Visit and checkout history" description="See who checked in, where, for which work order, and how the visit ended." count={`${model.visitRows.length} visits`} />
+          <SectionHeader id="visit-evidence-heading" icon={<MapPinned size={20} />} title="Visit and checkout history" description="See who checked in, where, for which work order, and how the visit ended." count={model.evidencePagination?.visitRows?.summary ?? `${model.visitRows.length} visits`} />
           {model.visitRows.length ? (
             <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Observed vendor visit evidence</caption><thead><tr><th>Technician / store</th><th>Work order</th><th>Observed presence</th><th>Checkout outcome</th></tr></thead><tbody>
               {model.visitRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.technicianName}</strong></Link>{row.storeHref ? <Link href={row.storeHref}><small>{row.storeLabel}</small></Link> : <small>{row.storeLabel}</small>}</td><td><Link className={row.isNoWorkOrder ? styles.warningText : undefined} href={row.workOrderHref ?? row.href}>{row.workOrderLabel}</Link></td><td><Link href={row.href}>{row.observedLabel}<small>Approximate presence, not labor</small></Link></td><td><Link className={row.isUnresolved ? styles.warningText : undefined} href={row.href}>{row.outcomeLabel}<ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
             </tbody></table></div>
           ) : <EmptyEvidence>Not enough history: no observed visit is linked to this vendor in the selected scope.</EmptyEvidence>}
+          {model.evidencePagination?.visitRows ? <PaginationControls pagination={model.evidencePagination.visitRows} label="Visit history pages" /> : null}
         </section>
 
         <section className={styles.evidenceSection} aria-labelledby="cost-evidence" id="cost-evidence">
@@ -592,6 +598,7 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
               {model.costRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.workOrderNumber}</strong><small>{row.storeLabel} · {row.problem}</small></Link></td><td><Link href={row.href}>{row.statusLabel}</Link></td><td><Link href={row.href}>{row.costLineCount}</Link></td><td><Link href={`${row.href.split("?")[0]}?view=cost`}>{row.costLabel}<ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
             </tbody></table></div>
           ) : <EmptyEvidence>No entered cost line is attached to work currently attributed to this vendor.</EmptyEvidence>}
+          {model.evidencePagination?.costRows ? <PaginationControls pagination={model.evidencePagination.costRows} label="Cost history pages" /> : null}
         </section>
 
         <section className={styles.evidenceSection} aria-labelledby="coverage-evidence" id="coverage-evidence">

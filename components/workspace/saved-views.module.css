@@ -105,3 +105,6 @@
   .saveButton { white-space: nowrap; }
   .hint { width: 100%; margin-left: 0; }
 }
+
+.disclosure { margin-bottom: 14px; }
+.disclosure summary { min-height: 44px; padding: 12px 0; font-size: 14px; color: #475569; cursor: pointer; }

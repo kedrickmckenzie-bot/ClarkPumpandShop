@@ -3,7 +3,8 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { roleCan } from "@/components/ops/role-policy";
 import { heldWorkVendorEligibility } from "@/lib/ops/held-work-policy";
-import { getServerOpsFixtureSnapshot, getServerOpsRepository } from "@/lib/server/ops-repository-provider";
+import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 
 export interface StoreSweepPlannerModel {
@@ -57,7 +58,7 @@ function reviewLabel(deadlineAt: string, asOf: string, timeZone: string) {
 
 export async function loadStoreSweepPlanner(requestedStoreId?: string, requestedWorkOrderId?: string, requestedReturnTo?: string): Promise<StoreSweepPlannerModel> {
   const [fixture, repository, session] = await Promise.all([
-    getServerOpsFixtureSnapshot(),
+    getRequestOpsFixtureSnapshot(),
     getServerOpsRepository(),
     loadOperatorSession(),
   ]);

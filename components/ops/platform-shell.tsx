@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { NavigationTrail } from "@/components/workspace/navigation-trail";
+import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -119,7 +120,7 @@ function NavigationLink({ item, pathname }: { item: NavigationItem; pathname: st
   return (
     <Link
       className={`${styles.navLink} ${active ? styles.navLinkActive : ""}`}
-      href={item.href}
+      href={workspaceStartHref(item.href)}
       aria-current={active ? "page" : undefined}
     >
       <Icon aria-hidden="true" size={19} strokeWidth={1.8} />
@@ -166,7 +167,7 @@ function ContextualNavigation({
           return (
             <Link
               className={`${styles.contextNavLink} ${active ? styles.contextNavLinkActive : ""}`}
-              href={item.href}
+              href={workspaceStartHref(item.href)}
               aria-current={active ? "page" : undefined}
               key={item.id}
             >

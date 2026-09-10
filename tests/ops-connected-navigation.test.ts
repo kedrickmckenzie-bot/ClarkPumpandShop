@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
-import { advanceNavigationTrail } from "@/lib/ops/navigation-trail";
+import { advanceNavigationTrail, workspaceStartHref } from "@/lib/ops/navigation-trail";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import { buildQueryListModel } from "@/app/app/_data/operator-query-presenter";
 import { buildCreateRequestModel, buildCreateWorkOrderModel, buildDetailModel, buildVendorPerformanceDetailModel } from "@/app/app/_data/operator-presenter";
@@ -17,6 +17,11 @@ const session: OperatorSession = { organizationId: NORTHLINE_ORGANIZATION_ID, us
 function fixtureContext() { const fixture = buildNorthlinePresentationFixture(); return { fixture, repository: createOpsFixtureRepository(fixture) }; }
 
 describe("connected navigation", () => {
+  it("lands new records at the workspace start while retaining exact evidence anchors", () => {
+    expect(workspaceStartHref("/app/work-orders/wo-1?view=cost")).toBe("/app/work-orders/wo-1?view=cost#main-content");
+    expect(workspaceStartHref("/app/invoices/invoice-1#allocation-1")).toBe("/app/invoices/invoice-1#allocation-1");
+    expect(workspaceStartHref("https://external.test")).toBe("https://external.test");
+  });
   it("connects trend source stores without altering the underlying cohort record destination", () => {
     const { fixture } = fixtureContext();
     const model = buildTrendsModel(fixture, session, { metric: "recorded_cost", period: "6", view: "records", store: "store-northline-104" });
@@ -50,7 +55,7 @@ describe("connected navigation", () => {
     expect(row.cells.find((cell) => cell.key === "store")?.link?.href).toBe(`/app/stores/${work.storeId}`);
     expect(row.cells.find((cell) => cell.key === "cost")?.link?.href).toBe(`/app/work-orders/${work.id}?view=cost`);
     const markup = renderToStaticMarkup(createElement(ListView, { model }));
-    expect(markup).toContain(`href="/app/work-orders/${work.id}?view=cost"`);
+    expect(markup).toContain(`href="/app/work-orders/${work.id}?view=cost#main-content"`);
     expect(markup).toContain('aria-label="Open store: Store 104"');
     expect(model.page.primaryAction?.href).toBe("/app/work-orders/new?store=store-northline-104");
   });

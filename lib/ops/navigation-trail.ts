@@ -1,5 +1,10 @@
 export interface NavigationStop { href: string; label: string }
 
+/** A stable destination after streamed navigation, including on mobile. */
+export function workspaceStartHref(href: string) {
+  return href.startsWith("/app/") && !href.includes("#") ? `${href}#main-content` : href;
+}
+
 /** Navigation only: never used as an authorization or record-association source. */
 export function advanceNavigationTrail(trail: NavigationStop[], next: NavigationStop): NavigationStop[] {
   if (!next.href.startsWith("/app") || !/^\/app(?:[/?#]|$)/.test(next.href)) return trail;

@@ -2,11 +2,11 @@ import "server-only";
 
 import { notFound } from "next/navigation";
 import { NORTHLINE_DEMO_ENTRY_TOKENS } from "@/lib/ops/fixtures";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 
 export async function loadServiceRunWorkspace(serviceRunId?: string) {
-  const [fixture, session] = await Promise.all([getServerOpsFixtureSnapshot(), loadOperatorSession()]);
+  const [fixture, session] = await Promise.all([getRequestOpsFixtureSnapshot(), loadOperatorSession()]);
   if (!(["executive", "facilities", "regional", "finance"] as const).includes(session.role as "executive" | "facilities" | "regional" | "finance")) notFound();
   const organizationId = session.organizationId;
   const allowedStore = (storeId: string) => {

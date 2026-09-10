@@ -3,7 +3,7 @@ import { roleCan } from "@/components/ops/role-policy";
 import { SetupActions } from "@/components/ops/setup-forms";
 import { DetailView } from "@/components/ops/views";
 import { AssetReplacementIntelligencePanel } from "@/components/ops/replacement-intelligence-panel";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadDetailModel, loadOperatorSession } from "../../_data/operator-loader";
 import { loadAssetReplacementIntelligenceModel } from "../../_data/replacement-loader";
 
@@ -18,7 +18,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
   const session = await loadOperatorSession();
   const [model, fixture, replacement] = await Promise.all([
     loadDetailModel("equipment", id),
-    getServerOpsFixtureSnapshot(session.organizationId),
+    getRequestOpsFixtureSnapshot(session.organizationId),
     loadAssetReplacementIntelligenceModel(id),
   ]);
   const asset = fixture.assets.find((item) => item.organizationId === session.organizationId && item.id === id);

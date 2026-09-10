@@ -510,6 +510,7 @@ export interface PaginationViewModel {
 
 export interface ListPageViewModel {
   state: DataState;
+  rowNavigation?: "record";
   page: PageContext;
   metrics?: MetricViewModel[];
   filters?: FilterGroupViewModel[];

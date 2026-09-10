@@ -1,5 +1,6 @@
 import type { JobRun, NotificationRecipient, NotificationRule, OrganizationWorkflowPolicy, OutboxMessage, PmOccurrence, PmPlan, RoleCapabilityOverride, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
+import { hasWorkCostFilter, matchesWorkCategoryPath, matchesWorkCost } from "./work-cost-query";
 import {
   NORTHLINE_AS_OF,
   NORTHLINE_DEMO_ENTRY_TOKENS,
@@ -664,12 +665,11 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.storeId || row.storeId === query.storeId)
         && (!query.regionId || this.fixture.stores.find((store) => store.organizationId === scope.organizationId && store.id === row.storeId)?.regionId === query.regionId)
         && (!query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.workOrderId === row.id && assignment.vendorId === query.vendorId))
-        && (!query.categoryKey || row.categoryKey === query.categoryKey)
+        && (!query.categoryKey || (row.categoryKey ?? "unclassified") === query.categoryKey)
+        && matchesWorkCategoryPath(this.fixture.assets.find((asset) => asset.organizationId === scope.organizationId && asset.id === row.assetId), query.categoryPath)
         && (!query.assetId || (query.assetId === "unlinked" ? !row.assetId : row.assetId === query.assetId))
         && (!query.componentId || (query.componentId === "unlinked" ? !row.componentId : row.componentId === query.componentId))
-        && (!query.hasCost || costLines.length > 0)
-        && (!query.costFrom || costLines.some((cost) => cost.serviceDate >= query.costFrom!.slice(0, 10)))
-        && (!query.costMonth || costLines.some((cost) => cost.serviceDate.slice(0, 7) === query.costMonth!.slice(0, 7)))
+        && (!hasWorkCostFilter(query) || costLines.some((cost) => matchesWorkCost(cost, query)))
         && (!query.createdFrom || row.createdAt >= query.createdFrom)
         && (!query.createdTo || row.createdAt < query.createdTo)
         && (!query.heldOnly || activeHeldWork.has(row.id))
@@ -683,7 +683,13 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         }))
         && (!query.upcomingAppointmentAfter || (this.fixture.serviceAppointments ?? []).some((appointment) => appointment.organizationId === scope.organizationId && appointment.workOrderId === row.id && appointment.status === "confirmed" && appointment.startsAt >= query.upcomingAppointmentAfter!))
         && (!query.heldStoreGroup || query.heldStoreGroup !== "multiple" || (heldCountByStore.get(row.storeId) ?? 0) >= 2);
-    }).map((row) => workOrderRow(this.fixture, row)).filter((row) => !search || normalize([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName].filter(Boolean).join(" ")).includes(search)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.number.localeCompare(b.number));
+    }).map((row) => {
+      const result = { ...workOrderRow(this.fixture, row), currency: query.currency ?? "USD" };
+      if (hasWorkCostFilter(query) || query.currency) result.recordedCostMinor = this.fixture.costLines
+        .filter((line) => line.organizationId === scope.organizationId && line.workOrderId === row.id && matchesWorkCost(line, query))
+        .reduce((sum, line) => sum + line.amount.amountMinor, 0);
+      return result;
+    }).filter((row) => !search || normalize([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName].filter(Boolean).join(" ")).includes(search)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
     return page(rows, query);
   }
 

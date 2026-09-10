@@ -104,6 +104,7 @@ export function translateOpsSqlForPostgres(
   let text = sql
     .replace(/^\s*INSERT\s+OR\s+IGNORE\b/i, "INSERT")
     .replace(/\bgroup_concat\s*\(([^,()]+),\s*([^()]+)\)/gi, "string_agg($1, $2)")
+    .replace(/\bjson_extract\((\w+\.\w+), '\$\[(\d+)\]'\)/g, "($1::jsonb ->> $2)")
     // PostgreSQL treats an unqualified column shared by the target table and
     // EXCLUDED as ambiguous inside ON CONFLICT. SQLite resolves this update
     // expression to the current counter row.

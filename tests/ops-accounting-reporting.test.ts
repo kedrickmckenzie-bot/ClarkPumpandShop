@@ -1,3 +1,4 @@
+import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { describe, expect, it } from "vitest";
@@ -35,6 +36,7 @@ describe("authoritative invoice reporting", () => {
     try {
       for (const file of readdirSync("drizzle").filter((file) => /^\d.*\.sql$/.test(file)).sort()) db.exec(readFileSync(`drizzle/${file}`, "utf8"));
       for (const statement of buildOpsSeedStatements(buildNorthlinePresentationFixture())) await new SqliteStatement(db, statement.sql).bind(...statement.params).run();
+      await workCostDrilldownRegression(createOpsD1Repository(binding));
       await accountingReportingRegression(createOpsD1Repository(binding), () => loadOpsFixtureSnapshotFromD1(binding, "org-northline-demo", "2026-08-25T18:00:00.000Z", { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] }));
       expect(queries.some((sql) => sql.includes('from "ops_outbox_messages"'))).toBe(false);
       expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);

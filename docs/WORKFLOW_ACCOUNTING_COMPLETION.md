@@ -60,3 +60,7 @@ The local server uses port 3010. Printed/copied QR URLs still reflect the existi
 ## Focused review correction after f57cbdb — September 10, 2026
 
 The follow-up implementation and validation are recorded in [ACCOUNTING_REVIEW_CORRECTIONS.md](ACCOUNTING_REVIEW_CORRECTIONS.md). This supersedes the earlier accounting reporting and all-or-nothing correction description: canonical confirmed invoice allocations now feed Trends and Spending, reference changes invalidate affected matching, and invoice-version protection also covers initial existing-invoice linking and finance decisions. Search preserves matching drafts and saved allocations; an unmapped vendor refreshes duplicate candidates. Earlier workflow and acknowledgment behavior is retained.
+
+## Workflow reliability audit — September 10, 2026
+
+See [WORKFLOW_RELIABILITY_AUDIT.md](WORKFLOW_RELIABILITY_AUDIT.md) for the corrected cost and invoice drill-down paths, request-scoped data reads, mobile navigation, vendor-history pagination, required-check results, and measured local load times. This follow-up preserves the accounting and acknowledgment rules above.

@@ -8,7 +8,7 @@ import type {
   WorkflowTask,
 } from "@/lib/ops/types";
 import { persistedWorkOrderVersion } from "@/lib/ops/concurrency";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "@/lib/ops/work-order-outcome";
@@ -258,7 +258,7 @@ export function buildWorkOrderVerificationModel(
 
 export async function loadWorkOrderVerificationModel(workOrderId: string) {
   const [fixture, session] = await Promise.all([
-    getServerOpsFixtureSnapshot(),
+    getRequestOpsFixtureSnapshot(),
     loadOperatorSession(),
   ]);
   return buildWorkOrderVerificationModel(fixture, session, workOrderId);

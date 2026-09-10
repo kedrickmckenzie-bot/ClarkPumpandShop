@@ -2,12 +2,12 @@ import "server-only";
 
 import type { TaxonomyManagerViewModel } from "@/components/ops/taxonomy-manager";
 import { roleCan } from "@/components/ops/role-policy";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 
 export async function loadTaxonomyManagerModel(): Promise<TaxonomyManagerViewModel> {
   const session = await loadOperatorSession();
-  const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   const equipmentTemplates = fixture.equipmentTemplates ?? [];
   const componentTemplates = fixture.componentTemplates ?? [];
   const nodes = fixture.taxonomyNodes.filter((row) => row.organizationId === session.organizationId).sort((a, b) => a.depth - b.depth || a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));

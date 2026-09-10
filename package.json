@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:routes": "tsx scripts/audit-operator-routes.ts",
     "test:e2e": "vitest run tests/ops-workflow.e2e.test.ts tests/ops-postgres-engine.integration.test.ts tests/ops-public-boundary.test.ts tests/ops-presenter-contract.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",

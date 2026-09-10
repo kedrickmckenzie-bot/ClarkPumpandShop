@@ -9,9 +9,9 @@ export interface SavedViewsBarModel {
   views: SavedView[];
 }
 
-export function SavedViewsBar({ model }: { model: SavedViewsBarModel }) {
+export function SavedViewsBar({ model, collapsed = false }: { model: SavedViewsBarModel; collapsed?: boolean }) {
   const { surface, currentQuery, views } = model;
-  return (
+  const bar = (
     <div className={styles.bar}>
       <span className={styles.label}>Saved views</span>
       <div className={styles.chips}>
@@ -57,4 +57,5 @@ export function SavedViewsBar({ model }: { model: SavedViewsBarModel }) {
       )}
     </div>
   );
+  return collapsed ? <details className={styles.disclosure}><summary>Saved views{views.length ? ` (${views.length})` : ""}</summary>{bar}</details> : bar;
 }

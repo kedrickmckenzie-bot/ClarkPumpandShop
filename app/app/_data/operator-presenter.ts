@@ -1,3 +1,4 @@
+import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
 import { reviewItemHref } from "@/lib/ops/review-navigation";
 import "server-only";
@@ -571,10 +572,11 @@ function recordedCostByWork(
   fixture: OpsFixture,
   organizationId: string,
   serviceDateFrom?: string,
+  serviceDateTo?: string,
 ): Map<string, number> {
   const result = new Map<string, number>();
   for (const line of fixture.costLines) {
-    if (line.organizationId !== organizationId || (serviceDateFrom && line.serviceDate < serviceDateFrom)) continue;
+    if (line.organizationId !== organizationId || (serviceDateFrom && line.serviceDate < serviceDateFrom) || (serviceDateTo && line.serviceDate.slice(0, 10) > serviceDateTo) || line.amount.currency !== "USD") continue;
     result.set(line.workOrderId, (result.get(line.workOrderId) ?? 0) + line.amount.amountMinor);
   }
   return result;
@@ -755,7 +757,7 @@ function costTrend(
     if (
       line.organizationId !== scoped.organizationId ||
       !workById.has(line.workOrderId) ||
-      !visibleMonths.has(key)
+      !visibleMonths.has(key) || line.serviceDate.slice(0, 10) > fixture.asOf.slice(0, 10) || line.amount.currency !== "USD"
     ) continue;
     sourceWorkIds.add(line.workOrderId);
     monthly.set(key, (monthly.get(key) ?? 0) + line.amount.amountMinor);
@@ -770,9 +772,9 @@ function costTrend(
         label: monthLabel(key),
         value: monthly.get(key) ?? 0,
         formattedValue: money(monthly.get(key) ?? 0),
-        link: { href: hrefWithQuery("/app/work-orders", { store: options.storeId, ...options.query, costMonth: key }), label: `Open ${monthLabel(key)} work` },
+        link: { href: workspaceStartHref(hrefWithQuery("/app/work-orders", { store: options.storeId, ...options.query, costMonth: key, costTo: fixture.asOf.slice(0, 10) })), label: `Open ${monthLabel(key)} work` },
       })),
-    sourceLink: { href: hrefWithQuery("/app/work-orders", { store: options.storeId, ...options.query, hasCost: "true", costFrom: `${monthKeys[0]}-01` }), label: `Open ${sourceWorkIds.size} work orders with cost` },
+    sourceLink: { href: workspaceStartHref(hrefWithQuery("/app/work-orders", { store: options.storeId, ...options.query, hasCost: "true", costFrom: `${monthKeys[0]}-01`, costTo: fixture.asOf.slice(0, 10) })), label: `Open ${sourceWorkIds.size} work orders with cost` },
   };
 }
 
@@ -1143,7 +1145,7 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
 function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession): DashboardPageViewModel {
   const scoped = scopeFixture(fixture, session);
   const periodStart = rollingYearStart(fixture.asOf);
-  const costByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart);
+  const costByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart, fixture.asOf.slice(0, 10));
   const lifecycleCostByWork = recordedCostByWork(fixture, scoped.organizationId);
   const recordedCost = costForWorkIds(costByWork, scoped.workOrders.map((workOrder) => workOrder.id));
   const openWork = scoped.workOrders.filter((workOrder) => !["closed", "cancelled"].includes(workOrder.status));
@@ -1463,7 +1465,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
   const base = buildSharedDashboardModel(fixture, session);
   const scoped = scopeFixture(fixture, session);
   const periodStart = rollingYearStart(fixture.asOf);
-  const rollingCostByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart);
+  const rollingCostByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart, fixture.asOf.slice(0, 10));
   const allCostByWork = recordedCostByWork(fixture, scoped.organizationId);
   const recordedCost = costForWorkIds(rollingCostByWork, scoped.workOrders.map((work) => work.id));
   const openWork = scoped.workOrders.filter((work) => !["closed", "cancelled"].includes(work.status));
@@ -3622,7 +3624,7 @@ export function buildProgramModel(
     const period = spendPeriod(fixture.asOf, first(query.period));
     const periodStart = period.start;
     const basis = first(query.basis) === "invoiced" ? "invoiced" : "recorded";
-    const recordedAmountByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart);
+    const recordedAmountByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart, fixture.asOf.slice(0, 10));
     const selectedCategory = first(query.category);
     const selectedPath = pathSegments(first(query.path));
     const selectedAssetId = first(query.asset);
@@ -3652,7 +3654,7 @@ export function buildProgramModel(
       (line) =>
         line.organizationId === scoped.organizationId &&
         scopedWorkIds.has(line.workOrderId) &&
-        line.serviceDate >= periodStart,
+        line.serviceDate >= periodStart && line.serviceDate.slice(0, 10) <= fixture.asOf.slice(0, 10) && line.amount.currency === "USD",
     );
     const total = costForWorkIds(basisAmountByWork, spendWork.map((work) => work.id));
     const storeCost = new Map<string, number>();
@@ -3678,7 +3680,7 @@ export function buildProgramModel(
       const key = work.assetId ?? "unlinked";
       equipmentCost.set(key, (equipmentCost.get(key) ?? 0) + (basisAmountByWork.get(work.id) ?? 0));
     }
-    const workLink = (extra: Record<string, string | undefined>) => hrefWithQuery("/app/work-orders", {
+    const workLink = (extra: Record<string, string | undefined>) => hrefWithQuery(basis === "invoiced" ? "/app/invoices" : "/app/work-orders", {
       region: selectedRegionId,
       store: selectedStoreId,
       category: selectedCategory,
@@ -3686,9 +3688,11 @@ export function buildProgramModel(
       asset: selectedAssetId,
       component: selectedComponentId,
       costFrom: periodStart,
+      costTo: fixture.asOf.slice(0, 10),
       basis,
       period: period.key,
       ...extra,
+      ...(basis === "invoiced" ? { from: periodStart, to: fixture.asOf.slice(0, 10), hasCost: undefined, costFrom: undefined, costTo: undefined } : {}),
     });
     const comparisonMetric: MetricViewModel = selectedStoreId
       ? {
@@ -3836,16 +3840,16 @@ export function buildProgramModel(
       asset: selectedAssetId,
       component: selectedComponentId,
     });
-    const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Entered work costs grouped by service month. Invoice amounts are not included in this basis." : "Confirmed USD invoice allocations grouped by invoice month. Charges awaiting matching are excluded. Use Trends to review other currencies.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : invoiceSourceHref(`${key}-01`, monthEndDate(key)), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10)), label: "Open all exact source records" } };
+    const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Entered work costs grouped by service month. Invoice amounts are not included in this basis." : "Confirmed USD invoice allocations grouped by invoice month. Charges awaiting matching are excluded. Use Trends to review other currencies.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: workspaceStartHref(basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : invoiceSourceHref(`${key}-01`, [monthEndDate(key), fixture.asOf.slice(0, 10)].sort()[0])), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open all exact source records" } };
     const sourceWork = spendWork.filter((work) => (basisAmountByWork.get(work.id) ?? 0) > 0).sort((a, b) => (basisAmountByWork.get(b.id) ?? 0) - (basisAmountByWork.get(a.id) ?? 0) || a.number.localeCompare(b.number));
     const spendPageSize = 25;
     const requestedSpendPage = Number(first(query.page));
     const spendTotalPages = Math.max(1, Math.ceil(sourceWork.length / spendPageSize));
     const spendCurrentPage = Math.min(Number.isFinite(requestedSpendPage) && requestedSpendPage > 0 ? Math.floor(requestedSpendPage) : 1, spendTotalPages);
     const spendPageStart = (spendCurrentPage - 1) * spendPageSize;
-    const sourceRows = sourceWork.slice(spendPageStart, spendPageStart + spendPageSize).map<TableRowViewModel>((work) => ({ id: work.id, label: work.number, href: `/app/work-orders/${work.id}?view=records`, cells: [
+    const sourceRows = sourceWork.slice(spendPageStart, spendPageStart + spendPageSize).map<TableRowViewModel>((work) => ({ id: work.id, label: work.number, href: `/app/work-orders/${work.id}?view=cost`, cells: [
       { key: "work", value: work.number, secondary: work.problem },
-      { key: "store", value: storeLabel(storeById.get(work.storeId)) },
+      { key: "store", value: storeLabel(storeById.get(work.storeId)), link: { href: `/app/stores/${work.storeId}`, label: "Open store" } },
       { key: "category", value: work.categoryKey ? sentence(work.categoryKey) : "Unclassified" },
       { key: "amount", value: money(basisAmountByWork.get(work.id) ?? 0) },
       { key: "basis", value: basis === "recorded" ? "Recorded work cost" : "Confirmed invoice allocation" },
@@ -3883,7 +3887,7 @@ export function buildProgramModel(
       page: { title: selectedComponent?.name ?? selectedAsset?.name ?? selectedPath.at(-1) ?? (selectedCategory ? sentence(selectedCategory) : "Maintenance spend"), eyebrow: "Actual spend visibility", description: "Move from company to region, store, service area, flexible equipment groups, equipment, component, work order, and source record while keeping the selected period and amount basis visible.", scopeLabel: `${activeScopeLabel} · ${hierarchyLabel} · ${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"}`, periodLabel: period.label, updatedLabel: `Through ${date(fixture.asOf)}`, secondaryAction: upHref ? { label: "Up one level", href: upHref } : undefined },
       filters,
       metrics: [
-        { id: "total", label: basis === "recorded" ? "Recorded work cost" : "Linked invoice amount", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} entered source lines` : `${invoiceAmountByWork.size} work orders with confirmed allocations`, link: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10)), label: "Open exact source records" } },
+        { id: "total", label: basis === "recorded" ? "Recorded work cost" : "Linked invoice amount", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} entered source lines` : `${invoiceAmountByWork.size} work orders with confirmed allocations`, link: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open exact source records" } },
         comparisonMetric,
         { id: "unclassified", label: selectedAssetId ? "Not mapped to a component" : selectedCategory ? "Not mapped to equipment" : "Unclassified service area", value: String(unclassified.length), supportingText: "Visible rather than forced into a guess", tone: unclassified.length ? "warning" : "positive", link: { href: selectedAssetId ? workLink({ component: "unlinked", hasCost: "true" }) : selectedCategory ? workLink({ asset: "unlinked", hasCost: "true" }) : workLink({ category: "unclassified", hasCost: "true" }), label: "Open source work" } },
         { id: "invoices", label: "Linked invoice references", value: String(invoiceCount), supportingText: "Optional billing safeguard; not required for cost visibility", link: { href: invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10)), label: "Review invoice references" } },

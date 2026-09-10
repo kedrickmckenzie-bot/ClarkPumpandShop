@@ -1,3 +1,4 @@
+import { hasWorkCostFilter, workCostSql } from "./work-cost-query";
 import type {
   ExceptionQueueQuery,
   OpsRepository,
@@ -558,14 +559,28 @@ class D1OpsRepository implements OpsRepository {
     if (query.storeId) { clauses.push("w.store_id = ?"); params.push(query.storeId); }
     if (query.regionId) { clauses.push("s.region_id = ?"); params.push(query.regionId); }
     if (query.vendorId) { clauses.push("a.vendor_id = ?"); params.push(query.vendorId); }
-    if (query.categoryKey) { clauses.push("w.category_key = ?"); params.push(query.categoryKey); }
+    if (query.categoryKey === "unclassified") clauses.push("w.category_key IS NULL");
+    else if (query.categoryKey) { clauses.push("w.category_key = ?"); params.push(query.categoryKey); }
+    if (query.categoryPath?.length) {
+      const pathConditions = query.categoryPath.map((segment, index) => {
+        const category = "lower(replace(wa.category_key, '_', ' '))";
+        const groupIncludesCategory = `lower(json_extract(wa.group_path_json, '$[0]')) = ${category}`;
+        const fallback = index === 0 ? category : `json_extract(wa.group_path_json, '$[${index - 1}]')`;
+        const value = `CASE WHEN ${groupIncludesCategory} THEN json_extract(wa.group_path_json, '$[${index}]') ELSE ${fallback} END`;
+        params.push(index === 0 ? segment.toLocaleLowerCase("en-US") : segment);
+        return `${index === 0 ? `lower(${value})` : value} = ?`;
+      });
+      clauses.push(`EXISTS (SELECT 1 FROM ops_assets wa WHERE wa.organization_id = w.organization_id AND wa.id = w.asset_id AND ${pathConditions.join(" AND ")})`);
+    }
     if (query.assetId === "unlinked") clauses.push("w.asset_id IS NULL");
     else if (query.assetId) { clauses.push("w.asset_id = ?"); params.push(query.assetId); }
     if (query.componentId === "unlinked") clauses.push("w.component_id IS NULL");
     else if (query.componentId) { clauses.push("w.component_id = ?"); params.push(query.componentId); }
-    if (query.hasCost) { clauses.push("EXISTS (SELECT 1 FROM ops_cost_lines fc WHERE fc.organization_id = w.organization_id AND fc.work_order_id = w.id)"); }
-    if (query.costFrom) { clauses.push("EXISTS (SELECT 1 FROM ops_cost_lines fc WHERE fc.organization_id = w.organization_id AND fc.work_order_id = w.id AND fc.service_date >= ?)"); params.push(query.costFrom.slice(0, 10)); }
-    if (query.costMonth) { clauses.push("EXISTS (SELECT 1 FROM ops_cost_lines fc WHERE fc.organization_id = w.organization_id AND fc.work_order_id = w.id AND substr(fc.service_date, 1, 7) = ?)"); params.push(query.costMonth.slice(0, 7)); }
+    if (hasWorkCostFilter(query)) {
+      const cost = workCostSql("fc", query);
+      clauses.push(`EXISTS (SELECT 1 FROM ops_cost_lines fc WHERE fc.organization_id = w.organization_id AND fc.work_order_id = w.id${cost.sql})`);
+      params.push(...cost.params);
+    }
     if (query.statuses?.length) { clauses.push(`w.status IN (${query.statuses.map(() => "?").join(",")})`); params.push(...query.statuses); }
     if (query.priorities?.length) { clauses.push(`w.priority IN (${query.priorities.map(() => "?").join(",")})`); params.push(...query.priorities); }
     if (query.createdFrom) { clauses.push("w.created_at >= ?"); params.push(query.createdFrom); }
@@ -592,20 +607,21 @@ class D1OpsRepository implements OpsRepository {
     if (query.workOrderId) { clauses.push("w.id = ?"); params.push(query.workOrderId); }
     addKeysetCursor(clauses, params, query.cursor, "w.created_at", "w.id", "desc");
     if (!query.unbounded) params.push(limit(query.limit) + 1, offset(query.offset));
+    const costSum = workCostSql("c", query);
     return await this.all(`SELECT w.*, s.store_number, s.name AS store_name, a.kind AS assignment_kind, a.status AS assignment_status, a.vendor_id, v.name AS vendor_name,
       h.posture AS visit_hold_posture, h.deadline_at AS visit_hold_deadline_at,
       (SELECT COUNT(DISTINCT svwo.visit_id) FROM ops_site_visit_work_orders svwo WHERE svwo.organization_id = w.organization_id AND svwo.work_order_id = w.id) AS visit_count,
-      (SELECT COALESCE(SUM(c.amount_minor),0) FROM ops_cost_lines c WHERE c.organization_id = w.organization_id AND c.work_order_id = w.id) AS recorded_cost_minor
+      (SELECT COALESCE(SUM(c.amount_minor),0) FROM ops_cost_lines c WHERE c.organization_id = w.organization_id AND c.work_order_id = w.id${costSum.sql}) AS recorded_cost_minor
       FROM ops_work_orders w JOIN ops_stores s ON s.organization_id = w.organization_id AND s.id = w.store_id
       LEFT JOIN ops_work_order_assignments a ON a.id = (SELECT aa.id FROM ops_work_order_assignments aa WHERE aa.organization_id = w.organization_id AND aa.work_order_id = w.id ORDER BY aa.assigned_at DESC, aa.id DESC LIMIT 1)
       LEFT JOIN ops_vendors v ON v.organization_id = w.organization_id AND v.id = a.vendor_id
       LEFT JOIN ops_work_order_visit_holds h ON h.id = (SELECT hh.id FROM ops_work_order_visit_holds hh WHERE hh.organization_id = w.organization_id AND hh.work_order_id = w.id AND hh.status = 'active' ORDER BY hh.created_at DESC, hh.id DESC LIMIT 1)
-      WHERE ${clauses.join(" AND ")} ORDER BY w.created_at DESC, w.id DESC ${query.unbounded ? "" : "LIMIT ? OFFSET ?"}`, params);
+      WHERE ${clauses.join(" AND ")} ORDER BY w.created_at DESC, w.id DESC ${query.unbounded ? "" : "LIMIT ? OFFSET ?"}`, [...costSum.params, ...params]);
   }
 
   private workListRow(row: Row): WorkOrderListRow { return { id: text(row, "id"), number: text(row, "number"), storeId: text(row, "store_id"), storeNumber: text(row, "store_number"), storeName: text(row, "store_name"), problem: text(row, "problem"), categoryKey: maybeText(row, "category_key"), priority: text(row, "priority") as WorkOrderListRow["priority"], status: text(row, "status") as WorkOrderListRow["status"], assignmentKind: (maybeText(row, "assignment_kind") ?? "choose_later") as WorkOrderListRow["assignmentKind"], assignmentStatus: maybeText(row, "assignment_status") as WorkOrderListRow["assignmentStatus"], vendorId: maybeText(row, "vendor_id"), vendorName: maybeText(row, "vendor_name"), internalAccountableParty: maybeText(row, "internal_accountable_party") ?? "Facilities coordinator", accountableParty: text(row, "accountable_party"), nextAction: text(row, "next_action"), dueAt: maybeText(row, "due_at"), createdAt: text(row, "created_at"), visitCount: Number(row.visit_count ?? 0), recordedCostMinor: Number(row.recorded_cost_minor ?? 0), currency: "USD", visitHoldPosture: maybeText(row, "visit_hold_posture") as WorkOrderListRow["visitHoldPosture"], visitHoldDeadlineAt: maybeText(row, "visit_hold_deadline_at") }; }
 
-  async listWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery = {}) { const rows = await this.workOrderRows(scope, query); const max = limit(query.limit); const visibleRows = rows.slice(0, max); const items = visibleRows.map((row) => this.workListRow(row)); const last = visibleRows.at(-1); return { items, nextCursor: rows.length > max && last ? encodeCursor(text(last, "created_at"), text(last, "id")) : undefined }; }
+  async listWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery = {}) { const rows = await this.workOrderRows(scope, query); const max = limit(query.limit); const visibleRows = rows.slice(0, max); const items = visibleRows.map((row) => ({ ...this.workListRow(row), currency: query.currency ?? "USD" })); const last = visibleRows.at(-1); return { items, nextCursor: rows.length > max && last ? encodeCursor(text(last, "created_at"), text(last, "id")) : undefined }; }
 
   async getHeldWorkPortfolioSummary(scope: OrganizationScope) {
     const params: unknown[] = [];

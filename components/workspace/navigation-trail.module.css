@@ -6,3 +6,7 @@
 .trail a, .trail li > span { overflow-wrap: anywhere; }
 .trail a:focus-visible { outline: 2px solid #2563eb; outline-offset: 4px; }
 @media (max-width: 640px) { .trail { flex-direction: column; gap: 4px; } .trail a { display: inline-flex; align-items: center; min-height: 44px; } }
+@media (max-width: 560px) {
+  .trail > span, .trail li:not(:nth-last-child(2)):not(:last-child) { display: none; }
+  .trail li:nth-last-child(2) svg { display: none; }
+}

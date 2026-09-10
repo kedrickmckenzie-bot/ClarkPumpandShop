@@ -15,7 +15,7 @@ import type {
   PmPlanScheduleSetupModel,
   SetupOption,
 } from "@/components/ops/setup-types";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import type { OpsFixture, Store, TaxonomyNode } from "@/lib/ops/types";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { loadOperatorSession } from "./operator-loader";
@@ -38,14 +38,14 @@ function storeAllowed(session: OperatorSession, store: Store) {
 async function setupContext(capability: OperatorCapability) {
   const session = await loadOperatorSession();
   if (!roleCan(session, capability)) notFound();
-  const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   return { session, fixture };
 }
 
 async function equipmentDetailContext() {
   const session = await loadOperatorSession();
   if (!roleCanAccessDetailRoute(session.role, "equipment")) notFound();
-  const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   return { session, fixture };
 }
 

@@ -106,3 +106,7 @@ The persisted PostgreSQL-engine integration now exercises the bounded loader and
 ## Accounting reporting correction — September 10, 2026
 
 See [ACCOUNTING_REVIEW_CORRECTIONS.md](ACCOUNTING_REVIEW_CORRECTIONS.md). Linked invoice amount now uses canonical invoice/line allocations through `invoiceReporting`, with legacy references used only for identities absent from the canonical ledger. Corrected and unconfirmed amounts cannot reappear from stale references. Currencies are selected separately; rows preserve invoice date and allocation store/work/equipment, and open the exact allocation. Invoice detail opens a filtered Records view; broader comparisons require clearing the invoice filter. PostgreSQL and D1 use the same explicit source-table boundary and only recording-coverage audit events. Source completeness still does not follow from equipment installation dates or from one transaction.
+
+## Connected drill-down validation — September 10, 2026
+
+The Overview and Spending cost-source lists now keep date and taxonomy filters on bounded repository queries, calculate row amounts within the same filters, and open the actual Costs tab. Filtered invoice links reconcile to canonical allocations. Monthly PostgreSQL date queries are regression-tested alongside SQLite/D1 and the fixture. See [WORKFLOW_RELIABILITY_AUDIT.md](WORKFLOW_RELIABILITY_AUDIT.md). These navigation and loading changes do not change recording coverage, measured-zero eligibility, or equipment exposure.

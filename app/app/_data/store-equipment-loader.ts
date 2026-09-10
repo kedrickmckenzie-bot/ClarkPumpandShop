@@ -6,14 +6,14 @@ import type {
   StoreEquipmentSetupViewModel,
 } from "@/components/ops/store-equipment-setup";
 import { roleCan } from "@/components/ops/role-policy";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { domainLabel } from "@/lib/product/domain-label";
 import { loadOperatorSession } from "./operator-loader";
 
 export async function loadStoreEquipmentSetupModel(storeId: string): Promise<StoreEquipmentSetupViewModel> {
   const session = await loadOperatorSession();
   if (!roleCan(session, "setup_equipment")) notFound();
-  const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   const equipmentTemplates = fixture.equipmentTemplates ?? [];
   const componentTemplates = fixture.componentTemplates ?? [];
   const store = fixture.stores.find((row) => row.organizationId === session.organizationId && row.id === storeId);
@@ -43,7 +43,7 @@ export async function loadStoreEquipmentNamingModel(
   const uniqueAssetIds = [...new Set(requestedAssetIds.map((id) => id.trim()).filter(Boolean))];
   if (!uniqueAssetIds.length || uniqueAssetIds.length > 100) notFound();
 
-  const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   const store = fixture.stores.find((row) => row.organizationId === session.organizationId && row.id === storeId);
   if (!store || session.storeIds && !session.storeIds.includes(store.id) || session.regionIds && !session.regionIds.includes(store.regionId ?? "")) notFound();
 

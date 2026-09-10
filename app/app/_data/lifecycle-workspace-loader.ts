@@ -9,7 +9,7 @@ import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate, formatOperationsDat
 import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
 import type { OpsFixture } from "@/lib/ops/types";
 import { buildWorkOrderCase, type WorkOrderCaseView } from "@/lib/ops/work-order-case";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { buildDetailModel } from "./operator-presenter";
 import { loadOperatorSession } from "./operator-loader";
 
@@ -180,7 +180,7 @@ function workOrderCase(fixture: OpsFixture, organizationId: string, workOrderId:
 
 export async function loadLifecycleRecordStack(assetId: string, query: WorkspaceQuery): Promise<LoadedLifecycleRecordStack | null> {
   const session = await loadOperatorSession();
-  const fixture = await getServerOpsFixtureSnapshot(session.organizationId);
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   const found = visibleAsset(fixture, session, assetId);
   if (!found) return null;
   const { asset, store } = found;

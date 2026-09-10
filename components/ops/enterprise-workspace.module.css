@@ -1211,6 +1211,23 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Phone queues retain every field and link without requiring sideways search. */
+@media (max-width: 560px) {
+  .contextBar.contextBar { display: grid; grid-template-columns: 1fr; overflow: visible; gap: 0; }
+  .contextBar.contextBar > span { min-width: 0; padding: 10px 0; }
+  .contextBar.contextBar > span + span { margin: 0; padding-left: 0; border-left: 0; border-top: 1px solid var(--to-line); }
+  .dataTable[data-table][data-columns] { display: block; min-width: 0; width: 100%; }
+  .dataTable[data-table] thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .dataTable[data-table] tbody { display: block; }
+  .dataTable[data-table] tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 10px 0; border-bottom: 1px solid var(--workspace-border-strong); }
+  .dataTable[data-table] tbody tr:last-child { border-bottom: 0; }
+  .dataTable[data-table][data-columns] td { display: block; width: auto; height: auto; min-width: 0; border: 0; text-align: left; }
+  .dataTable[data-table] td:first-child, .dataTable[data-table] td[data-column="work"], .dataTable[data-table] td[data-column="next"] { grid-column: 1 / -1; }
+  .dataTable[data-table] td[data-label]::before { content: attr(data-label); display: block; padding: 6px 12px 0; font-size: 12px; font-weight: 650; color: var(--to-muted); }
+  .dataTable[data-table] td a { padding: 4px 12px 9px; min-height: 44px; overflow-wrap: anywhere; }
+  .dataTable[data-table] td small { max-width: 100%; white-space: normal; }
+}
+
 .dataTable {
   width: 100%;
   min-width: 760px;

@@ -26,7 +26,8 @@ import {
   NORTHLINE_ORGANIZATION_ID,
   NORTHLINE_PREVIEW_PERSONAS,
 } from "@/lib/ops/fixtures";
-import { getServerOpsRepository, getServerOpsFixtureSnapshot, getServerOpsTrendsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
+import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
+import { getRequestOpsFixtureSnapshot, getRequestOpsTrendsFixtureSnapshot } from "./request-data";
 import { buildOwnerBrief } from "@/lib/ops/owner-brief";
 import { buildWorkOrderCase } from "@/lib/ops/work-order-case";
 import { formatInTimeZone } from "@/lib/ops/local-date-time";
@@ -66,19 +67,13 @@ import {
   type OperatorSearchParameters,
 } from "./operator-presenter";
 import { buildTrendsModel } from "./trends-presenter";
+import { paginateVendorEvidence } from "./vendor-evidence-pagination";
 import { buildApprovedWorkPortfolio } from "./approved-work-presenter";
 import {
   buildQueryListModel,
   buildQuerySearchModel,
   QUERY_FIRST_LIST_ROUTES,
 } from "./operator-query-presenter";
-
-// Server Component reads share one immutable tenant snapshot during a render.
-// Keep this wrapper in the presentation layer: API commands and mutation paths
-// must continue to call the uncached provider and observe the latest state.
-const getRequestOpsFixtureSnapshot = cache((organizationId: string) =>
-  getServerOpsFixtureSnapshot(organizationId),
-);
 
 function isOperatorRole(value: string | undefined): value is OperatorRole {
   return value === "executive" || value === "facilities" || value === "regional" || value === "store_manager" || value === "finance";
@@ -264,10 +259,10 @@ function enforceDetailLinkPolicy<T extends DetailPageViewModel>(model: T, sessio
 export async function loadListModel(route: ListRouteId, searchParams: OperatorSearchParameters = {}) {
   const session = await getRequestOperatorSession();
   if (!roleCanAccessListRoute(session.role, route)) notFound();
-  const requestedKeys = Object.entries(searchParams).filter(([, value]) => Boolean(Array.isArray(value) ? value[0] : value)).map(([key]) => key);
+  const requestedKeys = Object.entries(searchParams).filter(([key, value]) => !["saved", "updated", "created", "success", "notice", "error", "layout"].includes(key) && Boolean(Array.isArray(value) ? value[0] : value)).map(([key]) => key);
   const supportedQueryKeys: Partial<Record<ListRouteId, ReadonlySet<string>>> = {
     requests: new Set(["q", "page", "status", "store", "selected"]),
-    "work-orders": new Set(["q", "page", "status", "store", "vendor", "region", "category", "asset", "component", "hasCost", "costFrom", "costMonth", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity"]),
+    "work-orders": new Set(["q", "page", "status", "store", "vendor", "region", "category", "path", "asset", "component", "hasCost", "costFrom", "costTo", "costMonth", "currency", "basis", "period", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity"]),
     visits: new Set(["q", "page", "status", "store", "vendor", "review", "selected"]),
     stores: new Set(["q", "page", "selected"]),
     vendors: new Set(["q", "page", "selected"]),
@@ -360,7 +355,7 @@ export async function loadProgramModel(route: ProgramRouteId, searchParams: Oper
 export async function loadTrendsModel(searchParams: OperatorSearchParameters = {}) {
   const session = await getRequestOperatorSession();
   if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
-  const fixture = await getServerOpsTrendsFixtureSnapshot(session.organizationId);
+  const fixture = await getRequestOpsTrendsFixtureSnapshot(session.organizationId);
   return buildTrendsModel(fixture, session, searchParams);
 }
 
@@ -369,7 +364,7 @@ export async function loadTrendsModel(searchParams: OperatorSearchParameters = {
 export async function loadTrendsExportModel(searchParams: OperatorSearchParameters = {}) {
   const session = await getRequestOperatorSession();
   if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
-  const fixture = await getServerOpsTrendsFixtureSnapshot(session.organizationId);
+  const fixture = await getRequestOpsTrendsFixtureSnapshot(session.organizationId);
   return buildTrendsModel(fixture, session, searchParams, { includeExportRows: true });
 }
 
@@ -377,7 +372,7 @@ export async function loadTrendsPageData(searchParams: OperatorSearchParameters 
   const session = await getRequestOperatorSession();
   if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
   const [fixture, repository] = await Promise.all([
-    getServerOpsTrendsFixtureSnapshot(session.organizationId), getServerOpsRepository(),
+    getRequestOpsTrendsFixtureSnapshot(session.organizationId), getServerOpsRepository(),
   ]);
   const model = buildTrendsModel(fixture, session, searchParams);
   const savedViews = session.membershipId
@@ -638,10 +633,10 @@ export async function loadVendorPerformanceListModel(searchParams: OperatorSearc
   return buildVendorPerformanceListModel(context.fixture, context.session, searchParams);
 }
 
-export async function loadVendorPerformanceDetailModel(vendorId: string) {
+export async function loadVendorPerformanceDetailModel(vendorId: string, query: OperatorSearchParameters = {}) {
   const context = await sessionAndFixture();
   if (!roleCanAccessDetailRoute(context.session.role, "vendor")) notFound();
-  return buildVendorPerformanceDetailModel(context.fixture, context.session, vendorId);
+  return paginateVendorEvidence(buildVendorPerformanceDetailModel(context.fixture, context.session, vendorId), vendorId, query);
 }
 
 export async function loadCreateRequestModel(query: OperatorSearchParameters = {}) {
@@ -956,9 +951,9 @@ export async function loadJobHealthModel() {
 }
 
 export async function loadSavedViewsModel(surface: string) {
-  const context = await sessionAndFixture();
+  const session = await getRequestOperatorSession();
   const repository = await getServerOpsRepository();
-  return repository.listSavedViews(context.session.organizationId, (context.session.membershipId ?? ""), surface);
+  return repository.listSavedViews(session.organizationId, (session.membershipId ?? ""), surface);
 }
 
 export async function loadVendorScorecardsModel() {
