@@ -14,7 +14,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("summary-first enterprise records", () => {
-  it("opens generic records on a section map instead of rendering every source table at once", () => {
+  it("shows bounded source previews immediately and keeps the complete section available", () => {
     const sections: DetailSectionViewModel[] = [{
       id: "service-history",
       title: "Service history",
@@ -23,20 +23,24 @@ describe("summary-first enterprise records", () => {
         id: "service-history-records",
         caption: "Service history source records",
         columns: [{ key: "work", label: "Work order" }],
-        rows: [{ id: "wo-1", label: "WO-1", href: "/app/work-orders/wo-1", cells: [{ key: "work", value: "WO-1 source detail" }] }],
+        rows: Array.from({ length: 5 }, (_, i) => ({ id: `wo-${i + 1}`, label: `WO-${i + 1}`, href: `/app/work-orders/wo-${i + 1}`, cells: [{ key: "work", value: `WO-${i + 1} source detail` }] })),
       },
     }];
 
     const markup = renderToStaticMarkup(createElement(RecordSections, { sections }));
 
-    expect(markup).toContain("Explore this record");
+    expect(markup).toContain("Review this record");
     expect(markup).toContain("Service history");
-    expect(markup).toContain("1 record");
-    expect(markup).not.toContain("WO-1 source detail");
+    expect(markup).toContain("5 listed records");
+    expect(markup).toContain("WO-1 source detail");
+    expect(markup).toContain("WO-3 source detail");
+    expect(markup).not.toContain("WO-4 source detail");
+    expect(markup).toContain('href="/app/equipment/asset-1?section=service-history#record-review-start"');
 
     const focusedMarkup = renderToStaticMarkup(createElement(RecordSections, { sections, initialSection: "service-history" }));
     expect(focusedMarkup).toContain("WO-1 source detail");
-    expect(focusedMarkup).not.toContain("Explore this record");
+    expect(focusedMarkup).toContain("WO-5 source detail");
+    expect(focusedMarkup).not.toContain("Review this record");
   });
 
   it("routes each work-order tab to a server-selectable view so anchors never land on unrendered panels", async () => {
@@ -55,7 +59,7 @@ describe("summary-first enterprise records", () => {
     expect(workspace).toContain('activeView === "activity"');
   });
 
-  it("separates recorded facts from the related records a manager is likely to open", () => {
+  it("keeps linked facts in the same summary as observed facts with direct evidence links", () => {
     const model: DetailPageViewModel = {
       state: { kind: "ready" },
       page: { title: "Visit 104", description: "Observed service visit.", scopeLabel: "Store 104" },
@@ -73,8 +77,8 @@ describe("summary-first enterprise records", () => {
 
     expect(markup).toContain("Key facts");
     expect(markup).toContain("Observed duration");
-    expect(markup).toContain("Related information");
-    expect(markup).toContain('href="/app/work-orders/wo-1"');
+    expect(markup).not.toContain("Related information");
+    expect(markup).toContain('href="/app/work-orders/wo-1#main-content"');
     expect(markup).toContain("Open work order");
     expect(markup).not.toContain("Open any tile");
   });

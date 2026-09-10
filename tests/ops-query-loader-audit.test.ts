@@ -7,7 +7,7 @@ vi.mock("@/lib/server/ops-repository-provider", () => ({ getServerOpsRepository:
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }), headers: async () => new Headers() }));
 vi.mock("@/app/chatgpt-auth", () => ({ getChatGPTUser: async () => null }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("Not found"); } }));
-import { loadListModel, loadSavedViewsModel } from "@/app/app/_data/operator-loader";
+import { loadListModel, loadSavedViewsModel, loadSearchModel } from "@/app/app/_data/operator-loader";
 
 describe("query-first route loading", () => {
   beforeEach(() => {
@@ -17,6 +17,12 @@ describe("query-first route loading", () => {
   });
   it("loads saved views without fetching unrelated tenant data", async () => {
     expect(await loadSavedViewsModel("work-orders")).toEqual([]);
+    expect(mocked.snapshot).not.toHaveBeenCalled();
+  });
+  it("assembles search context without loading a tenant snapshot", async () => {
+    const model = await loadSearchModel({ q: "104" });
+    expect(model.groups.length).toBeGreaterThan(0);
+    expect(model.groups.every((group) => group.moreLink)).toBe(true);
     expect(mocked.snapshot).not.toHaveBeenCalled();
   });
   it("keeps spending hierarchy, period context, and mutation notices on bounded queries", async () => {

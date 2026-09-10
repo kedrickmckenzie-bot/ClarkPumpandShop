@@ -1228,6 +1228,25 @@
   .dataTable[data-table] td small { max-width: 100%; white-space: normal; }
 }
 
+.connectedFact { display: inline-flex; align-items: center; gap: 8px; color: var(--workspace-action, #2855d9); min-height: 32px; }
+.connectedFact strong { color: inherit; }
+.searchReviewResult { padding: 18px 20px; border-bottom: 1px solid var(--to-line); min-width: 0; }
+.searchReviewResult:last-child { border-bottom: 0; }
+.searchReviewTitle { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; color: var(--workspace-action, #2855d9); }
+.searchReviewTitle strong { font-size: 16px; }
+.searchReviewTitle small { display: block; color: var(--to-ink); font-size: 15px; line-height: 1.5; margin-top: 5px; }
+.searchReviewFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; margin: 16px 0 0; }
+.searchReviewFacts > div { min-width: 0; overflow-wrap: anywhere; }
+.searchReviewFacts dt { color: var(--to-muted); font-size: 13px; margin-bottom: 4px; }
+.searchReviewFacts dd { margin: 0; font-size: 15px; }
+.searchReviewFacts dd a { display: inline-flex; align-items: center; gap: 5px; color: var(--workspace-action, #2855d9); font-weight: 650; min-height: 32px; }
+.searchReviewFacts small { display: block; font-size: 13px; line-height: 1.5; color: var(--to-muted); margin-top: 4px; }
+@media (max-width: 680px) {
+  .searchReviewFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .searchReviewResult { padding: 16px; }
+  .searchReviewTitle, .searchReviewFacts dd a, .connectedFact { min-height: 44px; }
+}
+
 .dataTable {
   width: 100%;
   min-width: 760px;

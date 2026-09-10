@@ -17,7 +17,7 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
   return (
     <DetailView
       model={model}
-      beforeSections={hasDemoVendorQr || canSetupEquipment || canSetupPm ? (
+      after={hasDemoVendorQr || canSetupEquipment || canSetupPm ? (
         <>
           {hasDemoVendorQr ? (
             <StoreQrMaterial

@@ -271,10 +271,10 @@ function visitRow(row: VisitListRow): TableRowViewModel {
     { key: "visit", value: row.technicianName, secondary: row.purpose },
     { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
     { key: "vendor", value: row.providerName, link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined },
-    { key: "work", value: row.workOrderNumber ?? "No work order", secondary: row.arrivalNote, link: row.workOrderId ? { href: `/app/work-orders/${row.workOrderId}`, label: "Open work order" } : undefined },
+    { key: "work", value: row.workOrderNumber ?? "View work-order links", secondary: row.arrivalNote, link: row.workOrderId ? { href: `/app/work-orders/${row.workOrderId}`, label: "Open work order" } : { href: `/app/visits/${row.id}`, label: "Review visit and work-order links" } },
     { key: "observed", value: observed, secondary: "Store-local display · approximate presence, not labor" },
     { key: "evidence", value: sentence(row.locationResult), tone: row.locationResult === "verified" ? "positive" : "warning" },
-    { key: "outcome", value: row.outcome ? sentence(row.outcome) : "Onsite now", tone: row.status === "active" ? "info" : "neutral" },
+    { key: "outcome", value: row.outcome ? sentence(row.outcome) : row.status === "active" ? "Onsite now" : "Review work outcomes", tone: row.status === "active" ? "info" : "neutral", link: !row.outcome && row.status !== "active" ? { href: `/app/visits/${row.id}`, label: "Review recorded work outcomes" } : undefined },
   ] };
 }
 
@@ -465,7 +465,9 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
 function searchAssetRow(row: AssetSearchRow): TableRowViewModel {
   return { id: row.id, label: row.name, href: `/app/equipment/${row.id}`, cells: [
     { key: "result", value: row.name, secondary: `${row.assetTag} · ${[row.manufacturer, row.model].filter(Boolean).join(" ") || "Details not entered"}` },
-    { key: "context", value: `Store ${row.storeNumber} · ${row.storeName}`, secondary: row.groupPath.join(" › ") || sentence(row.categoryKey) },
+    { key: "context", value: `Store ${row.storeNumber} · ${row.storeName}`, secondary: row.groupPath.join(" › ") || sentence(row.categoryKey), link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
+    { key: "serial", value: row.serialNumber ?? "Not recorded" },
+    { key: "status", value: sentence(row.status), tone: toneForStatus(row.status) },
   ] };
 }
 
@@ -477,20 +479,23 @@ export async function buildQuerySearchModel(repository: OpsRepository, session: 
     repository.searchStores(scope, raw, { limit: 8 }),
     repository.listWorkOrders(scope, { search: raw, limit: 8 }),
     repository.listVendors(scope, raw, { limit: 8 }),
-    repository.searchAssets(scope, raw, { limit: 8 }),
-    session.role === "finance" ? Promise.resolve({ items: [], totalCount: 0 }) : repository.listVisits(scope, { search: raw, limit: 8 }),
-    session.demoEdition === "accountability" || session.role === "finance" ? Promise.resolve({ items: [], totalCount: 0 }) : repository.listRequests(scope, { search: raw, limit: 8 }),
+    session.demoEdition === "accountability" ? Promise.resolve({ items: [], totalCount: 0, nextCursor: undefined }) : repository.searchAssets(scope, raw, { limit: 8 }),
+    session.role === "finance" ? Promise.resolve({ items: [], totalCount: 0, nextCursor: undefined }) : repository.listVisits(scope, { search: raw, limit: 8 }),
+    session.demoEdition === "accountability" || session.role === "finance" ? Promise.resolve({ items: [], totalCount: 0, nextCursor: undefined }) : repository.listRequests(scope, { search: raw, limit: 8 }),
   ]);
+  const totals: Record<string, number | undefined> = { stores: stores.totalCount, work: work.totalCount, vendors: vendors.totalCount, equipment: assets.totalCount, visits: visits.totalCount, requests: requests.totalCount };
   const groups = [
-    { id: "stores", label: "Stores", rows: stores.items.map(storeRow), resultCount: stores.totalCount ?? stores.items.length },
-    { id: "work", label: "Work orders", rows: work.items.map(workRow), resultCount: work.totalCount ?? work.items.length },
-    { id: "vendors", label: "Vendors", rows: vendors.items.map(vendorRow), resultCount: vendors.totalCount ?? vendors.items.length },
-    ...(session.demoEdition === "accountability" ? [] : [{ id: "equipment", label: "Equipment", rows: assets.items.map(searchAssetRow), resultCount: assets.totalCount ?? assets.items.length }]),
-    ...(session.role === "finance" ? [] : [{ id: "visits", label: "Service visits", rows: visits.items.map(visitRow), resultCount: visits.totalCount ?? visits.items.length }]),
-    ...(session.demoEdition === "accountability" || session.role === "finance" ? [] : [{ id: "requests", label: "Requests", rows: requests.items.map(requestRow), resultCount: requests.totalCount ?? requests.items.length }]),
-  ].filter((group) => group.rows.length > 0);
+    { id: "stores", label: "Stores", rows: stores.items.map(storeRow), resultCount: stores.totalCount ?? stores.items.length, columns: columns.stores, hasMore: Boolean(stores.nextCursor), moreLink: { href: `/app/stores?${new URLSearchParams({ q: raw })}`, label: "Review matching stores" } },
+    { id: "work", label: "Work orders", rows: work.items.map(workRow), resultCount: work.totalCount ?? work.items.length, columns: columns["work-orders"], hasMore: Boolean(work.nextCursor), moreLink: { href: `/app/work-orders?${new URLSearchParams({ q: raw })}`, label: "Review matching work orders" } },
+    { id: "vendors", label: "Vendors", rows: vendors.items.map(vendorRow), resultCount: vendors.totalCount ?? vendors.items.length, columns: columns.vendors, hasMore: Boolean(vendors.nextCursor), moreLink: { href: `/app/vendors?${new URLSearchParams({ q: raw })}`, label: "Review matching vendors" } },
+    ...(session.demoEdition === "accountability" ? [] : [{ id: "equipment", label: "Equipment", rows: assets.items.map(searchAssetRow), resultCount: assets.totalCount ?? assets.items.length, columns: [{ key: "result", label: "Equipment" }, { key: "context", label: "Store and equipment classification" }, { key: "serial", label: "Serial number" }, { key: "status", label: "Operating state" }], hasMore: Boolean(assets.nextCursor), moreLink: { href: `/app/equipment?${new URLSearchParams({ q: raw })}`, label: "Review matching equipment" } }]),
+    ...(session.role === "finance" ? [] : [{ id: "visits", label: "Service visits", rows: visits.items.map(visitRow), resultCount: visits.totalCount ?? visits.items.length, columns: columns.visits, hasMore: Boolean(visits.nextCursor), moreLink: { href: `/app/visits?${new URLSearchParams({ q: raw })}`, label: "Review matching visits" } }]),
+    ...(session.demoEdition === "accountability" || session.role === "finance" ? [] : [{ id: "requests", label: "Requests", rows: requests.items.map(requestRow), resultCount: requests.totalCount ?? requests.items.length, columns: columns.requests, hasMore: Boolean(requests.nextCursor), moreLink: { href: `/app/requests?${new URLSearchParams({ q: raw })}`, label: "Review matching requests" } }]),
+  ].filter((group) => group.rows.length > 0).map((group) => ({ ...group,
+    countIsLowerBound: group.hasMore && totals[group.id] === undefined,
+    rows: group.rows.map((row) => ({ ...row, cells: row.cells.map((cell) => cell.link && !roleCanOpenOperatorHref(session.role, cell.link.href) ? { ...cell, link: undefined } : cell) })) }));
   const total = groups.reduce((sum, group) => sum + group.resultCount, 0);
-  return { state: total ? { kind: "ready" } : { kind: "empty", title: "No matches found", message: `Nothing in your access scope matched “${raw}”. Try a shorter name, number, address, or equipment term.` }, page: commonPage(session, `Search results for “${raw}”`, "One search · Your full scope", "Search the stores and records available to you."), query: raw, placeholder: "Store, address, work order, vendor, equipment, or serial number", resultSummary: `${total} match${total === 1 ? "" : "es"} across ${groups.length} record type${groups.length === 1 ? "" : "s"}`, groups };
+  return { state: total ? { kind: "ready" } : { kind: "empty", title: "No matches found", message: `Nothing in your access scope matched “${raw}”. Try a shorter name, number, address, or equipment term.` }, page: commonPage(session, `Search results for “${raw}”`, "One search · Your full scope", "Review matching records and their connected information."), query: raw, placeholder: "Store, address, work order, vendor, equipment, or serial number", resultSummary: `${groups.some((group) => group.countIsLowerBound) ? "At least " : ""}${total} match${total === 1 ? "" : "es"} across ${groups.length} record type${groups.length === 1 ? "" : "s"}`, groups };
 }
 
 export async function buildQueryDashboardModel(repository: OpsRepository, session: OperatorSession): Promise<DashboardPageViewModel> {

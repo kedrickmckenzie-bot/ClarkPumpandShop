@@ -810,18 +810,16 @@ export function SearchView({ model }: { model: SearchPageViewModel }) {
           <div className={styles.searchGroups}>
             {model.groups.length ? model.groups.map((group) => (
               <section className={styles.searchGroup} key={group.id}>
-                <SectionHeading title={group.label} description={`${group.resultCount} match${group.resultCount === 1 ? "" : "es"}`} aside={group.resultCount > group.rows.length ? <span className={styles.sectionMeta}>Showing top {group.rows.length}</span> : null} />
+                <SectionHeading title={group.label} description={`${group.resultCount}${group.countIsLowerBound ? "+" : ""} match${group.resultCount === 1 ? "" : "es"}${group.hasMore || group.resultCount > group.rows.length ? ` · Showing ${group.rows.length}` : ""}`} aside={group.moreLink ? <Link href={workspaceStartHref(group.moreLink.href)}>{group.moreLink.label}<ArrowRight aria-hidden="true" size={15} /></Link> : null} />
                 {group.rows.length ? (
                   <div className={styles.searchResultList}>
                     {group.rows.map((row) => {
                       const primary = row.cells[0];
-                      const context = row.cells[1];
                       return (
-                        <Link href={row.href} className={styles.searchResult} key={row.id}>
-                          <span><strong>{primary?.value ?? row.label}</strong>{primary?.secondary ? <small>{primary.secondary}</small> : null}</span>
-                          {context ? <span className={styles.searchContext}><strong>{context.value}</strong>{context.secondary ? <small>{context.secondary}</small> : null}</span> : null}
-                          <ChevronRight aria-hidden="true" size={17} />
-                        </Link>
+                        <article className={styles.searchReviewResult} aria-label={row.label} key={row.id}>
+                          <Link href={workspaceStartHref(row.href)} className={styles.searchReviewTitle}><span><strong>{primary?.value ?? row.label}</strong>{primary?.secondary ? <small>{primary.secondary}</small> : null}</span><ChevronRight aria-hidden="true" size={17} /></Link>
+                          <dl className={styles.searchReviewFacts}>{row.cells.slice(1).map((cell) => <div key={cell.key}><dt>{group.columns?.find((column) => column.key === cell.key)?.label ?? cell.key.replaceAll("_", " ")}</dt><dd>{cell.link ? <Link href={workspaceStartHref(cell.link.href)} aria-label={`${cell.link.label}: ${cell.value}`}>{cell.value}<ChevronRight aria-hidden="true" size={14} /></Link> : <strong className={cell.tone ? toneClass(cell.tone) : undefined}>{cell.value}</strong>}{cell.secondary ? <small>{cell.secondary}</small> : null}</dd></div>)}</dl>
+                        </article>
                       );
                     })}
                   </div>
@@ -873,8 +871,6 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
 }
 
 export function DetailView({ model, beforeSections, after, initialSection }: { model: DetailPageViewModel; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string }) {
-  const linkedFacts = model.facts.filter((fact) => fact.link);
-  const summaryFacts = model.facts.filter((fact) => !fact.link);
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={16} />{model.backLink.label}</Link>
@@ -882,16 +878,11 @@ export function DetailView({ model, beforeSections, after, initialSection }: { m
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           <section className={styles.recordSummary} aria-label="Record summary">
-            {summaryFacts.length ? <><header className={styles.recordSummaryHeader}>
+            {model.facts.length ? <><header className={styles.recordSummaryHeader}>
               <div><small>Record summary</small><h2>Key facts</h2></div>
-              <p>Recorded facts stay separate from the places you can investigate next.</p>
             </header><div className={styles.recordSummaryGrid}>
-              {summaryFacts.map((fact) => <div className={styles.factItem} key={fact.label}><span className={styles.factLabel}>{fact.label}</span><strong>{fact.value}</strong>{fact.helperText ? <small>{fact.helperText}</small> : null}</div>)}
+              {model.facts.map((fact) => <div className={styles.factItem} key={fact.label}><span className={styles.factLabel}>{fact.label}</span>{fact.link ? <Link className={styles.connectedFact} href={workspaceStartHref(fact.link.href)} aria-label={`${fact.link.label}: ${fact.value}`}><strong>{fact.value}</strong><ChevronRight aria-hidden="true" size={15} /></Link> : <strong>{fact.value}</strong>}{fact.helperText ? <small>{fact.helperText}</small> : null}</div>)}
             </div></> : null}
-            {linkedFacts.length ? <nav className={styles.recordDrilldowns} aria-label="Related information">
-              <header><div><small>Supporting records</small><h3>Related information</h3></div><p>Open the store, equipment, work, visit, or cost records connected to this item.</p></header>
-              <div>{linkedFacts.map((fact) => <Link href={fact.link!.href} key={fact.label}><span><small>{fact.label}</small><strong>{fact.value}</strong>{fact.helperText ? <em>{fact.helperText}</em> : null}</span><span>{fact.link!.label}<ChevronRight aria-hidden="true" size={15} /></span></Link>)}</div>
-            </nav> : null}
           </section>
           {beforeSections}
           <RecordSections sections={model.sections} initialSection={initialSection} />

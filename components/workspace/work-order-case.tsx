@@ -52,6 +52,7 @@ import {
 import { WorkOrderStageRail } from "@/components/workspace/work-order-case-stage-rail";
 import styles from "./work-order-case.module.css";
 import { domainLabel } from "@/lib/product/domain-label";
+import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
 import type { WorkOrderCaseView } from "@/lib/ops/work-order-case";
 import { HeldWorkActions, type HeldWorkActionsModel } from "@/components/workspace/held-work-actions";
@@ -206,12 +207,12 @@ function EvidenceTable({ table }: { table: TableViewModel }) {
                   </>
                 );
                 return (
-                  <td data-align={column.align ?? "start"} key={column.key}>
-                    {(cell?.link || index === 0) ? <Link className={styles.rowLink} href={cell?.link?.href ?? row.href}>{cellContent}</Link> : cellContent}
+                  <td data-label={column.label} data-align={column.align ?? "start"} key={column.key}>
+                    {(cell?.link || index === 0) ? <Link className={styles.rowLink} href={workspaceStartHref(cell?.link?.href ?? row.href)}>{cellContent}</Link> : cellContent}
                   </td>
                 );
               })}
-              <td className={styles.openColumn}><Link href={row.href} aria-label={`Open ${row.label}`}><ChevronRight aria-hidden="true" size={16} /></Link></td>
+              <td className={styles.openColumn}><Link href={workspaceStartHref(row.href)} aria-label={`Open ${row.label}`}><ChevronRight aria-hidden="true" size={16} /></Link></td>
             </tr>
           ))}
         </tbody>

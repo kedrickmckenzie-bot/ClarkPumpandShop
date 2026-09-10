@@ -195,6 +195,14 @@
 }
 
 @media (max-width: 520px) {
+  .sourceSection table { display: block; min-width: 0; }
+  .sourceSection thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .sourceSection tbody { display: block; }
+  .sourceSection tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid #dde2e8; }
+  .sourceSection td { display: block; min-width: 0; text-align: left; border: 0; overflow-wrap: anywhere; }
+  .sourceSection td:first-child { grid-column: 1 / -1; }
+  .sourceSection td::before { content: attr(data-label); display: block; padding: 10px 13px 0; color: #667085; font-size: 12px; }
+  .sourceSection td a { min-height: 44px; padding-top: 4px; }
   .metricExplorer > header { align-items: flex-start; flex-direction: column; gap: 4px; }
   .metricExplorer > header p { text-align: left; }
   .headerActions { align-items: stretch; flex-direction: column-reverse; }

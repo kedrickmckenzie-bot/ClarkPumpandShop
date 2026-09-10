@@ -69,6 +69,8 @@ At the NACS 2024 average of $5,719 repairs and maintenance per store per month, 
 
 ### Defining UX rule
 
+The platform-wide [review experience contract](PLATFORM_REVIEW_EXPERIENCE.md) also applies when a user is browsing history or reviewing data without making a decision. Every view should assemble useful context and evidence, preserve scope, make missing information clear, and provide relevant connections without requiring a new task or action.
+
 > One service story, one accountable next action, many optional depths.
 
 The platform stores detailed state but translates it into plain language. A user sees “Waiting on ColdLine Refrigeration & HVAC to schedule by 4:00 PM,” not a chain of assignment, visit, and workflow codes.

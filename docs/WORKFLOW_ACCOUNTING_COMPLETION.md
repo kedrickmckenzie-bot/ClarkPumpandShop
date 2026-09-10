@@ -64,3 +64,7 @@ The follow-up implementation and validation are recorded in [ACCOUNTING_REVIEW_C
 ## Workflow reliability audit — September 10, 2026
 
 See [WORKFLOW_RELIABILITY_AUDIT.md](WORKFLOW_RELIABILITY_AUDIT.md) for the corrected cost and invoice drill-down paths, request-scoped data reads, mobile navigation, vendor-history pagination, required-check results, and measured local load times. This follow-up preserves the accounting and acknowledgment rules above.
+
+## Review experience across the platform
+
+The [platform review experience contract](PLATFORM_REVIEW_EXPERIENCE.md) extends connected workflows to ordinary browsing and data review. Shared record overviews now show bounded evidence previews, search retains connected facts, and phone source tables expose labeled fields. These changes preserve the accounting and acknowledgment behavior above.

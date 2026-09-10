@@ -9,12 +9,8 @@ import { loadAssetReplacementIntelligenceModel } from "../../_data/replacement-l
 
 export const metadata: Metadata = { title: "Equipment detail" };
 
-type Query = Record<string, string | string[] | undefined>;
-
-export default async function EquipmentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Query> }) {
+export default async function EquipmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const query = await searchParams;
-  const requestedSection = Array.isArray(query.section) ? query.section[0] : query.section;
   const session = await loadOperatorSession();
   const [model, fixture, replacement] = await Promise.all([
     loadDetailModel("equipment", id),
@@ -39,11 +35,9 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
   return (
     <DetailView
       model={model}
-      initialSection={requestedSection ?? "service-history"}
-      beforeSections={(
-        <>
-        {replacement ? <AssetReplacementIntelligencePanel model={replacement} /> : null}
-        {canSetupEquipment || canSetupPm ? <SetupActions
+      initialSection="overview"
+      beforeSections={replacement ? <AssetReplacementIntelligencePanel model={replacement} /> : null}
+      after={canSetupEquipment || canSetupPm ? <SetupActions
           title="Build out this equipment record"
           description="Add component depth or schedule preventive work. Both features stay optional and connect back to this equipment history."
           actions={[
@@ -55,8 +49,6 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
               : []),
           ]}
         /> : null}
-        </>
-      )}
     />
   );
 }

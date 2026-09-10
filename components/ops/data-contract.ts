@@ -606,6 +606,10 @@ export interface SearchResultGroupViewModel {
   label: string;
   resultCount: number;
   rows: TableRowViewModel[];
+  columns?: TableColumnViewModel[];
+  hasMore?: boolean;
+  countIsLowerBound?: boolean;
+  moreLink?: SupportingLink;
 }
 
 export interface SearchPageViewModel {
