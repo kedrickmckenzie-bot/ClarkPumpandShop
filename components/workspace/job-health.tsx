@@ -8,7 +8,7 @@ export interface JobHealthModel {
 }
 
 const jobLabels: Record<string, string> = {
-  sla_escalation: "SLA escalation",
+  sla_escalation: "Missed-deadline follow-up",
   pm_recurrence: "PM recurrence",
 };
 

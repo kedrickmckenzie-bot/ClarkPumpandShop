@@ -510,7 +510,7 @@ function InternalAccountabilityForm({ model }: { model: WorkOrderControlViewMode
         <UserRound aria-hidden="true" size={18} />
         <div>
           <h3>Internal accountability</h3>
-          <p>{owner.structured ? "A persisted membership or team owns the customer-side follow-through." : "This older record has only a display label. Assign a persisted owner before relying on named accountability."}</p>
+          <p>{owner.structured ? "A named person or team is responsible for follow-through." : "This older record has no linked owner. Choose the responsible person or team."}</p>
         </div>
       </summary>
       <form action={owner.reassignAction} method="post" onSubmit={submit} className={styles.controlForm}>
@@ -612,7 +612,7 @@ function ExceptionControls({ model }: { model: AttentionItemControlViewModel }) 
           <form action={model.submitAction} method="post" onSubmit={reconcile.submit} className={styles.controlForm}>
             <input type="hidden" name="operation" value="reconcile" />
             <SelectField id={`exception-work-${model.id}`} name="workOrderId" label="Operator work order" options={model.reconciliationOptions} />
-            <label className={styles.field} htmlFor={`reconcile-note-${model.id}`}><span>Reconciliation note <em>Required</em></span><textarea id={`reconcile-note-${model.id}`} name="note" required rows={3} placeholder="Explain how the visit was matched to this work order." /></label>
+            <label className={styles.field} htmlFor={`reconcile-note-${model.id}`}><span>Reason for linking this visit <em>Required</em></span><textarea id={`reconcile-note-${model.id}`} name="note" required rows={3} placeholder="Explain how the visit was matched to this work order." /></label>
             <MutationError message={reconcile.state.error} />
             <div className={styles.formFooter}><button className={styles.secondaryButton} type="submit" disabled={reconcile.state.pending}>{reconcile.state.pending ? "Linking…" : "Link visit"}</button></div>
           </form>
@@ -680,7 +680,7 @@ export function AttentionItemPanel({ model }: { model: AttentionItemControlViewM
         id="attention-control-heading"
         icon={model.kind === "exception" ? <AlertTriangle aria-hidden="true" size={19} /> : <Clock3 aria-hidden="true" size={19} />}
         title={model.kind === "exception" ? "Review the evidence" : "Keep the next action accountable"}
-        description={model.kind === "exception" ? "Acknowledge, resolve, or reconcile this item without deleting the fact that triggered it." : "Update ownership and timing, or record completion with a permanent note."}
+        description={model.kind === "exception" ? "Review this issue and choose the next step." : "Change the owner or due date, or record that the follow-up is complete."}
       />
       {model.kind === "follow_up" ? <div className={styles.controlSummary}><span><small>Owner</small><strong>{model.accountableParty}</strong></span><span><small>Next action</small><strong>{model.nextAction}</strong></span><span><small>Due</small><strong>{textDateTime(model.dueAt)}</strong></span><span><small>Escalation</small><strong>{model.escalationTo}</strong></span></div> : null}
       {!model.available || !model.permitted || terminal ? <p className={styles.inlineEmpty}>{!model.available ? "This review item is no longer available." : terminal ? "This item is complete. Its record remains in the activity history." : "Your role can review this item but cannot change it."}</p> : model.kind === "exception" ? <ExceptionControls model={model} /> : <FollowUpControls model={model} />}

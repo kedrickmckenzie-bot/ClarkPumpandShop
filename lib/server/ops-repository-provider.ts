@@ -226,8 +226,8 @@ export async function getServerOpsFixtureSnapshot(
  *
  * PostgreSQL loads only the source tables the analysis consumes instead of the
  * complete operational tenant (files, audit, outbox, contracts, warranties,
- * and other unrelated domains). The fixture and D1 fallbacks remain isolated
- * adapters while Trends moves toward persisted aggregate read models.
+ * and other unrelated domains). PostgreSQL and D1 use the same explicit
+ * reporting table boundary; local fixtures remain an isolated adapter.
  */
 export async function getServerOpsTrendsFixtureSnapshot(
   organizationId: OpsId = NORTHLINE_ORGANIZATION_ID,
@@ -237,6 +237,12 @@ export async function getServerOpsTrendsFixtureSnapshot(
     await getServerOpsRepository();
     const { loadOpsFixtureSnapshotFromPostgres } = await import("@/lib/ops/postgres-snapshot");
     return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, NORTHLINE_AS_OF, { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] });
+  }
+  if (isRenderNodeRuntime() || shouldUseDevelopmentFixture()) return getServerOpsFixtureSnapshot(organizationId);
+  const binding = await getD1BindingLazily();
+  if (binding) {
+    await getServerOpsRepository();
+    return loadOpsFixtureSnapshotFromD1(binding, organizationId, NORTHLINE_AS_OF, { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] });
   }
   return getServerOpsFixtureSnapshot(organizationId);
 }

@@ -59,7 +59,7 @@ describe("enterprise trends presenter", () => {
     expect(model.page.title).toBe("Trends");
     expect(model.filters.find((filter) => filter.id === "metric")?.options).toHaveLength(6);
     expect(model.filters.map((filter) => filter.id)).toEqual([
-      "metric", "period", "compare", "breakdown", "workType", "region", "store", "category", "costKind", "path", "profile", "asset", "component", "vendor",
+      "currency", "metric", "period", "compare", "breakdown", "workType", "region", "store", "category", "costKind", "path", "profile", "asset", "component", "vendor",
     ]);
     expect(model.series).toHaveLength(12);
     expect(model.series.every((point) => new URL(point.currentLink.href, "https://operations.test").searchParams.get("detailMonth") === point.id)).toBe(true);
@@ -266,6 +266,8 @@ describe("enterprise trends presenter", () => {
 
   it("includes only confirmed invoice allocations in the linked-invoice trend", () => {
     const fixture = buildNorthlinePresentationFixture();
+    // This case exercises legacy-only evidence; canonical authority is covered by accounting reporting regressions.
+    fixture.invoices = []; fixture.invoiceLines = []; fixture.invoiceLineAllocations = [];
     const work = fixture.workOrders.find((candidate) => candidate.categoryKey && candidate.assetId)!;
     const vendorId = fixture.vendors.find((candidate) => candidate.organizationId === NORTHLINE_ORGANIZATION_ID)!.id;
     fixture.invoiceReferences = [

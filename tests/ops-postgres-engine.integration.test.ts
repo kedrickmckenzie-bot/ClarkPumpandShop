@@ -1,3 +1,4 @@
+import { accountingReportingRegression } from "./helpers/accounting-reporting-regression";
 import { loadOpsFixtureSnapshotFromPostgres } from "@/lib/ops/postgres-snapshot";
 import { TREND_SOURCE_TABLES } from "@/lib/ops/trends-source-tables";
 import { buildTrendsModel } from "@/app/app/_data/trends-presenter";
@@ -50,25 +51,26 @@ class PGliteClient implements PostgresClientLike {
 }
 
 class PGlitePool implements PostgresPoolLike {
+  private connectionTail = Promise.resolve();
   constructor(private readonly database: PGlite) {}
-
-  async query<Row extends Record<string, unknown> = Record<string, unknown>>(
-    text: string,
-    values: readonly unknown[] = [],
-  ): Promise<PostgresQueryResult<Row>> {
-    return new PGliteClient(this.database).query<Row>(text, values);
+  private async acquire() {
+    const previous = this.connectionTail;
+    let release!: () => void;
+    this.connectionTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    return release;
   }
-
+  async query<Row extends Record<string, unknown> = Record<string, unknown>>(text: string, values: readonly unknown[] = []): Promise<PostgresQueryResult<Row>> {
+    const release = await this.acquire();
+    try { return await new PGliteClient(this.database).query<Row>(text, values); }
+    finally { release(); }
+  }
   async connect(): Promise<PostgresClientLike> {
-    // PGlite is a single embedded connection, so this lock keeps concurrent
-    // Promise.all callers from interleaving with an active transaction.
-    const transactionLock = await this.database.query("SELECT pg_advisory_lock(8142026)");
-    void transactionLock;
+    // One embedded connection: serialize transaction ownership in JavaScript.
+    // PostgreSQL session advisory locks are reentrant on this shared session.
+    const release = await this.acquire();
     const client = new PGliteClient(this.database);
-    return {
-      query: client.query.bind(client),
-      release: () => { void this.database.query("SELECT pg_advisory_unlock(8142026)"); },
-    };
+    return { query: client.query.bind(client), release };
   }
 }
 
@@ -770,6 +772,9 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     await expect(repository.listSiteVisitWorkOrders(organizationId, visit.id)).resolves.toEqual([
       expect.objectContaining({ workOrderId, selectionSource: "held_work", outcome: "diagnosis_only" }),
     ]);
+  }, 120_000);
+  it("reports imported allocation changes from the persisted PostgreSQL source", async () => {
+    await accountingReportingRegression(createOpsPostgresRepository(pool), () => loadOpsFixtureSnapshotFromPostgres(pool, "org-northline-demo", "2026-08-25T18:00:00.000Z", { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] }));
   }, 120_000);
   it("loads persisted coverage through narrow reads and imports accounting corrections on PostgreSQL", async () => {
     const started = performance.now();

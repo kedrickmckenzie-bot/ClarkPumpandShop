@@ -79,12 +79,12 @@ export async function POST(
     const dueAt = optionalIsoDate(formText(formData, "dueAt", { max: 40 }));
     const noSlaReason = formText(formData, "noSlaReason", { max: 1_000 }) || undefined;
     if (Boolean(dueAt) === Boolean(noSlaReason)) {
-      throw new OpsDomainError("VALIDATION", "Provide a due time or an explicit no-SLA policy reason.");
+      throw new OpsDomainError("VALIDATION", "Enter a due time, or explain why no deadline applies.");
     }
     const rawSlaClock = formText(formData, "applicableSlaClock", { max: 80 });
     const applicableSlaClock = rawSlaClock ? rawSlaClock as WorkflowTaskSlaClock : undefined;
     if (applicableSlaClock && !slaClocks.has(applicableSlaClock)) {
-      throw new OpsDomainError("VALIDATION", "Choose a supported reactive-work SLA clock.");
+      throw new OpsDomainError("VALIDATION", "Choose the service deadline this task follows.");
     }
 
     await createWorkflowTask(

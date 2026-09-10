@@ -1,0 +1,350 @@
+[
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Acknowledge, resolve, or reconcile this item without deleting the fact that triggered it.",
+    "after": "Review this issue and choose the next step.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Update ownership and timing, or record completion with a permanent note.",
+    "after": "Change the owner or due date, or record that the follow-up is complete.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "Reconciliation note",
+    "after": "Reason for linking this visit",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Create future warranty rule",
+    "after": "Add warranty rule",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Warranty policy · Prospective terms",
+    "after": "Warranty rules",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Create a future warranty rule",
+    "after": "Add a warranty rule",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "This changes how future verified repairs calculate coverage. It does not rewrite any immutable Applied Warranty already attached to completed work.",
+    "after": "This rule applies to future confirmed repairs. Existing repair warranties stay unchanged.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "<strong>Separate controls:</strong> use a completed-repair amendment for one historical Repair Item. Use this form only for effective-dated future policy.",
+    "after": "To correct the warranty on a completed repair, open that repair’s warranty record.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Rule scope and precedence",
+    "after": "Where this warranty rule applies",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "More specific selectors win by the directive’s explicit precedence. Equal-priority overlapping rules are rejected.",
+    "after": "Quote or authorization terms apply first, followed by contract rules, then vendor rules. Within each group, component rules take priority over equipment or service rules, then trade rules, then general coverage. For equally specific rules, a lower priority number wins. Rules tied at that level cannot overlap.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Create effective-dated future rule",
+    "after": "Save warranty rule",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Effective start",
+    "after": "Start date",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Effective end (optional)",
+    "after": "End date (optional)",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Trade selector",
+    "after": "Service area",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Asset type",
+    "after": "Equipment type",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Reason for future policy",
+    "after": "Reason for this rule",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Leave a duration blank to omit that category. Each category calculates and freezes independently.",
+    "after": "Enter coverage in days for each charge type. Leave a duration blank when that type is not covered.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Original Vendor mandatory",
+    "after": "Use the original vendor",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-rule-workspace.tsx",
+    "before": "Original Vendor first right to cure",
+    "after": "Offer the repair to the original vendor first",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Manage company standards by exception, see what is due or missed first, and reconcile billed PM service against observed store visits.",
+    "after": "See scheduled maintenance that is due or overdue, and compare billed service with recorded visits.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Approval requests and immutable decisions",
+    "after": "Approval requests and decision history",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "issuance-to-response observation",
+    "after": "recorded vendor response time",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "The original timestamps and evidence remain intact when an operator later reconciles or corrects the record.",
+    "after": "Corrections keep the original times and evidence available in history.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "create a new immutable service-authorization revision",
+    "after": "prepare an updated service authorization",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Create the next immutable review for",
+    "after": "Request another review from",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/app/_data/operator-presenter.ts",
+    "before": "Completing or changing this follow-up also updates the work order's accountable next-action projection.",
+    "after": "Review who is responsible, what happens next, and when it is due.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Amendment ledger",
+    "after": "Correction history",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Completed-repair corrections are appended and never change future Vendor rules.",
+    "after": "Corrections to this repair stay in its history. Future vendor warranty rules stay unchanged.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "No amendments. Original applied terms remain authoritative.",
+    "after": "No corrections have been recorded. The original warranty terms still apply.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Contract and manufacturer precedence is visible; overrides require an allowed reason.",
+    "after": "Check the contract and manufacturer requirements before changing who should do the repair. A reason is required.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Record audited routing override",
+    "after": "Save provider change",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Original Vendor mandatory",
+    "after": "Use the original vendor",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Original Vendor first right to cure",
+    "after": "Offer the repair to the original vendor first",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Vendor response SLA failure",
+    "after": "Vendor missed the response deadline",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "This appends a one-repair amendment. It does not create a future policy.",
+    "after": "Save a correction to this repair’s warranty. Future warranty rules stay unchanged.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Append one-repair amendment",
+    "after": "Save repair warranty correction",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Routing responsibility",
+    "after": "Who should do the warranty repair",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Override routing",
+    "after": "Change the required provider",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "Record reviewed decision",
+    "after": "Save financial review",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/api/ops/work-orders/[id]/tasks/[taskId]/route.ts",
+    "before": "Choose a supported hold reason, owner, and affected reactive-work SLA clock.",
+    "after": "Choose a hold reason, responsible owner, and the deadline being paused.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/api/ops/work-orders/[id]/tasks/route.ts",
+    "before": "Provide a due time or an explicit no-SLA policy reason.",
+    "after": "Enter a due time, or explain why no deadline applies.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "app/api/ops/work-orders/[id]/tasks/route.ts",
+    "before": "Choose a supported reactive-work SLA clock.",
+    "after": "Choose the service deadline this task follows.",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/workspace/job-health.tsx",
+    "before": "\"SLA escalation\"",
+    "after": "\"Missed-deadline follow-up\"",
+    "reason": "Use everyday language while preserving evidence, permissions and separate service/financial decisions."
+  },
+  {
+    "file": "components/ops/invoice-receive-workspace.tsx",
+    "before": "Enter the Vendor’s source lines and exact operator Work Order reference. The platform will compare persisted Contract, Authorization, Visit, and Warranty facts and open review flags—never automatic deductions.",
+    "after": "Enter the invoice items and choose the work they cover. Check any differences against the agreement, approved work, visits, and warranty.",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/invoice-receive-workspace.tsx",
+    "before": "Human review boundary:",
+    "after": "Review before deciding:",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/invoice-receive-workspace.tsx",
+    "before": "automated checks may identify a difference and quantify exposure. They cannot reduce the billed amount, approve payment, or change operational resolution.",
+    "after": "Checks may flag a difference. A reviewer must decide what it means for the invoice. Repair status and payment stay separate.",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/invoice-receive-workspace.tsx",
+    "before": "PDF/image evidence is stored privately when object storage is active. Monetary values are converted to integer cents on the server.",
+    "after": "Attach the invoice if available, then enter its charges in the currency shown below.",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/invoice-receive-workspace.tsx",
+    "before": "Exact operator Work Order",
+    "after": "Work order",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/invoice-receive-workspace.tsx",
+    "before": "Contract Version",
+    "after": "Agreement version",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/invoice-receive-workspace.tsx",
+    "before": "No Agreement version selected",
+    "after": "No agreement selected",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/invoice-receive-workspace.tsx",
+    "before": "amount (dollars)",
+    "after": "amount (selected currency)",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/invoice-receive-workspace.tsx",
+    "before": "Receive invoice and run safeguards",
+    "after": "Save invoice for review",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "A persisted membership or team owns the customer-side follow-through.",
+    "after": "A named person or team is responsible for follow-through.",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/service-control-panels.tsx",
+    "before": "This older record has only a display label. Assign a persisted owner before relying on named accountability.",
+    "after": "This older record has no linked owner. Choose the responsible person or team.",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/workspace/pm-program-management.tsx",
+    "before": "Amount to reconcile",
+    "after": "Amount to review",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops/warranty-finance-workspace.tsx",
+    "before": "This workspace neither approves nor executes payment.",
+    "after": "Review decisions here do not send payment.",
+    "reason": "Use plain instructions and preserve the distinction between evidence, review, and payment."
+  },
+  {
+    "file": "components/ops-public/store-portal-home.tsx",
+    "before": "Technicians can connect to assigned work or use a visit-bound checkout receipt without an account.",
+    "after": "Technicians can check in for assigned work and use a checkout link without an account.",
+    "reason": "Describe technician actions without exposing the internal link scope terminology."
+  },
+  {
+    "file": "app/app/_data/operator-query-presenter.ts",
+    "before": "Every result is tenant- and role-scoped before it reaches this page.",
+    "after": "Search the stores and records available to you.",
+    "reason": "Explain the available search results without authorization implementation terms."
+  }
+]

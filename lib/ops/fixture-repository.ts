@@ -348,6 +348,10 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
     const row = hydrateInserted(table, raw);
     if (row.id && rows.some((item) => item.id === row.id)) throw new Error(`Duplicate fixture id ${String(row.id)}`);
     if (table === "ops_idempotency_keys" && rows.some((item) => item.organizationId === row.organizationId && item.key === row.key)) throw new Error(`Duplicate idempotency key ${String(row.key)}`);
+    if (table === "ops_idempotency_keys" && row.command === "invoice.version_fence") {
+      const [organizationId, invoiceId, version] = statement.params.slice(7);
+      if (!fixture.invoices.some((invoice) => invoice.organizationId === organizationId && invoice.id === invoiceId && (invoice.version ?? 0) === version)) throw new OpsDomainError("CONFLICT", "This invoice changed. Refresh before saving.");
+    }
     if (table === "ops_idempotency_keys" && row.command === "request.version_fence") {
       const [guardOrganizationId, guardRequestId, guardVersion, guardStatus, guardConvertedWorkOrderId] = statement.params.slice(7);
       const request = fixture.requests.find((item) => item.organizationId === guardOrganizationId && item.id === guardRequestId);
@@ -390,7 +394,7 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
     const whereColumns = [...updateMatch[3].matchAll(/([a-z0-9_]+) = \?/gi)].map((match) => match[1]);
     const setValues = statement.params.slice(0, setColumns.length); const whereValues = statement.params.slice(setColumns.length);
     const rows = mapTable(fixture, table);
-    rows.filter((row) => whereColumns.every((column, index) => row[snakeToCamel(column)] === whereValues[index])).forEach((row) => {
+    rows.filter((row) => whereColumns.every((column, index) => (column === "version" ? row.version ?? 0 : row[snakeToCamel(column)]) === whereValues[index])).forEach((row) => {
       setColumns.forEach((column, index) => {
         if (table === "ops_assets" && column === "replacement_attributes_json") row.replacementAttributes = JSON.parse(String(setValues[index] ?? "{}"));
         else if (table === "ops_replacement_events" && column === "final_amount_minor") row.finalAmount = { amountMinor: setValues[index], currency: (row.approvedAmount as { currency?: string } | undefined)?.currency ?? "USD" };
@@ -431,6 +435,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   private idempotencyKeys: IdempotencyKey[] = [];
   constructor(private fixture: OpsFixture) {
     this.fixture.accountingInvoiceSources ??= [];
+    this.fixture.invoices.forEach((invoice) => { invoice.version ??= 0; });
     this.fixture.requests.forEach((request) => { request.version ??= 0; });
     this.fixture.workOrders.forEach((workOrder) => { workOrder.version ??= 0; });
     for (const organization of fixture.organizations) {

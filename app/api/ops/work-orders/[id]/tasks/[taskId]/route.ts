@@ -72,7 +72,7 @@ export async function POST(
         .filter((value): value is string => typeof value === "string")
         .map((value) => value.trim() as WorkflowTaskSlaClock);
       if (!pauseReasons.has(reasonCode) || !ownerTypes.has(ownerType) || !affectedClocks.length || affectedClocks.some((clock) => !slaClocks.has(clock))) {
-        throw new OpsDomainError("VALIDATION", "Choose a supported hold reason, owner, and affected reactive-work SLA clock.");
+        throw new OpsDomainError("VALIDATION", "Choose a hold reason, responsible owner, and the deadline being paused.");
       }
       await pauseWorkflowTaskSla(
         { repository: context.repository },

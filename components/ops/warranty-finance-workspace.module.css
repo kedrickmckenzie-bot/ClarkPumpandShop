@@ -403,3 +403,6 @@ a.metric:focus-visible {
 .fact small {
   font-size: 0.8125rem;
 }
+
+.allocationEvidence { display: block; padding: 6px 0; scroll-margin-top: 100px; }
+.allocationEvidence:target { background: #eff6ff; outline: 2px solid #2563eb; outline-offset: 3px; }

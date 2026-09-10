@@ -1,5 +1,6 @@
 export const TREND_SOURCE_TABLES = new Set([
   "ops_regions",
+  "ops_scope_grants",
   "ops_stores",
   "ops_vendors",
   "ops_work_orders",
@@ -14,6 +15,10 @@ export const TREND_SOURCE_TABLES = new Set([
   "ops_pm_occurrences",
   "ops_pm_work_items",
   "ops_cost_lines",
+  "ops_invoices",
+  "ops_invoice_lines",
+  "ops_invoice_line_allocations",
+  "ops_accounting_invoice_sources",
   "ops_invoice_references",
   "ops_invoice_allocations",
 ]);

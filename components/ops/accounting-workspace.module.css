@@ -12,3 +12,10 @@
 .tableScroll th { background: #f4f6f9; font-size: 14px; }
 .tableScroll caption { text-align: left; padding: 8px 0; font-size: 14px; color: #526176; }
 @media (max-width: 600px) { .page > section { padding: 16px; } .page h1 { font-size: 25px; } }
+
+.reviewForm { min-width: 0; }
+.reviewForm select, .reviewForm input, .reviewForm textarea { min-width: 0; width: 100%; max-width: 100%; }
+.reviewForm input[type="checkbox"] { width: auto; }
+.split { display: grid; gap: 12px; padding: 16px 0; border-top: 1px solid #dce2e9; min-width: 0; }
+.search { display: grid; gap: 12px; min-width: 0; }
+.amounts { font-weight: 600; }

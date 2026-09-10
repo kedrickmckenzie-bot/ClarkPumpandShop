@@ -444,7 +444,7 @@ export async function buildQuerySearchModel(repository: OpsRepository, session: 
     ...(session.demoEdition === "accountability" || session.role === "finance" ? [] : [{ id: "requests", label: "Requests", rows: requests.items.map(requestRow), resultCount: requests.totalCount ?? requests.items.length }]),
   ].filter((group) => group.rows.length > 0);
   const total = groups.reduce((sum, group) => sum + group.resultCount, 0);
-  return { state: total ? { kind: "ready" } : { kind: "empty", title: "No matches found", message: `Nothing in your access scope matched “${raw}”. Try a shorter name, number, address, or equipment term.` }, page: commonPage(session, `Search results for “${raw}”`, "One search · Your full scope", "Every result is tenant- and role-scoped before it reaches this page."), query: raw, placeholder: "Store, address, work order, vendor, equipment, or serial number", resultSummary: `${total} match${total === 1 ? "" : "es"} across ${groups.length} record type${groups.length === 1 ? "" : "s"}`, groups };
+  return { state: total ? { kind: "ready" } : { kind: "empty", title: "No matches found", message: `Nothing in your access scope matched “${raw}”. Try a shorter name, number, address, or equipment term.` }, page: commonPage(session, `Search results for “${raw}”`, "One search · Your full scope", "Search the stores and records available to you."), query: raw, placeholder: "Store, address, work order, vendor, equipment, or serial number", resultSummary: `${total} match${total === 1 ? "" : "es"} across ${groups.length} record type${groups.length === 1 ? "" : "s"}`, groups };
 }
 
 export async function buildQueryDashboardModel(repository: OpsRepository, session: OperatorSession): Promise<DashboardPageViewModel> {

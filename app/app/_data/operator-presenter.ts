@@ -1,3 +1,4 @@
+import { invoiceReporting } from "@/lib/ops/invoice-reporting";
 import { reviewItemHref } from "@/lib/ops/review-navigation";
 import "server-only";
 
@@ -400,7 +401,7 @@ function approvalEvidence(
       ],
       table: {
         id: "approval-ledger",
-        caption: "Immutable approval request and decision ledger",
+        caption: "Approval requests and decision history",
         columns: [
           { key: "request", label: "Request" },
           { key: "amount", label: "Amount", align: "end" },
@@ -3643,9 +3644,9 @@ export function buildProgramModel(
       .filter((work) => selectedPath.length === 0 || assetMatchesPath(work.assetId ? assetById.get(work.assetId) : undefined, selectedPath));
     const spendScope: ScopedFixture = { ...scoped, workOrders: spendWork };
     const scopedWorkIds = new Set(spendWork.map((work) => work.id));
-    const periodInvoiceIds = new Set(fixture.invoiceReferences.filter((invoice) => invoice.organizationId === scoped.organizationId && invoice.invoiceDate >= periodStart && invoice.invoiceDate <= fixture.asOf.slice(0, 10)).map((invoice) => invoice.id));
+    const reportedInvoiceAllocations = invoiceReporting(fixture, scoped.organizationId).allocations.filter((allocation) => allocation.amount.currency === "USD" && scopedWorkIds.has(allocation.workOrderId) && allocation.invoiceDate >= periodStart && allocation.invoiceDate <= fixture.asOf.slice(0, 10));
     const invoiceAmountByWork = new Map<string, number>();
-    for (const allocation of fixture.invoiceAllocations) if (allocation.organizationId === scoped.organizationId && scopedWorkIds.has(allocation.workOrderId) && periodInvoiceIds.has(allocation.invoiceReferenceId)) invoiceAmountByWork.set(allocation.workOrderId, (invoiceAmountByWork.get(allocation.workOrderId) ?? 0) + allocation.amount.amountMinor);
+    for (const allocation of reportedInvoiceAllocations) invoiceAmountByWork.set(allocation.workOrderId, (invoiceAmountByWork.get(allocation.workOrderId) ?? 0) + allocation.amount.amountMinor);
     const basisAmountByWork = basis === "invoiced" ? invoiceAmountByWork : recordedAmountByWork;
     const sourceLines = fixture.costLines.filter(
       (line) =>
@@ -3670,21 +3671,7 @@ export function buildProgramModel(
       if (selectedAssetId && !work.componentId) return true;
       return false;
     });
-    const invoiceIds = new Set(
-      fixture.invoiceAllocations
-        .filter(
-          (allocation) =>
-            allocation.organizationId === scoped.organizationId &&
-            scopedWorkIds.has(allocation.workOrderId),
-        )
-        .map((allocation) => allocation.invoiceReferenceId),
-    );
-    const invoiceCount = fixture.invoiceReferences.filter(
-      (invoice) =>
-        invoice.organizationId === scoped.organizationId &&
-        invoiceIds.has(invoice.id) &&
-        invoice.invoiceDate >= periodStart,
-    ).length;
+    const invoiceCount = new Set(reportedInvoiceAllocations.map((allocation) => allocation.invoiceId)).size;
     const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
     const equipmentCost = new Map<string, number>();
     for (const work of spendWork) {
@@ -3837,8 +3824,7 @@ export function buildProgramModel(
     const monthly = new Map<string, number>();
     if (basis === "recorded") for (const line of sourceLines) monthly.set(monthKey(line.serviceDate), (monthly.get(monthKey(line.serviceDate)) ?? 0) + line.amount.amountMinor);
     else {
-      const invoiceById = new Map(fixture.invoiceReferences.filter((invoice) => invoice.organizationId === scoped.organizationId).map((invoice) => [invoice.id, invoice]));
-      for (const allocation of fixture.invoiceAllocations) { const invoice = invoiceById.get(allocation.invoiceReferenceId); if (allocation.organizationId === scoped.organizationId && scopedWorkIds.has(allocation.workOrderId) && invoice && invoice.invoiceDate >= periodStart) monthly.set(monthKey(invoice.invoiceDate), (monthly.get(monthKey(invoice.invoiceDate)) ?? 0) + allocation.amount.amountMinor); }
+      for (const allocation of reportedInvoiceAllocations) monthly.set(monthKey(allocation.invoiceDate), (monthly.get(monthKey(allocation.invoiceDate)) ?? 0) + allocation.amount.amountMinor);
     }
     const invoiceSourceHref = (from: string, to: string) => hrefWithQuery("/app/invoices", {
       from,
@@ -3850,7 +3836,7 @@ export function buildProgramModel(
       asset: selectedAssetId,
       component: selectedComponentId,
     });
-    const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Entered work costs grouped by service month. Invoice amounts are not included in this basis." : "Confirmed invoice allocations grouped by invoice month. Recorded work costs are not included in this basis.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : invoiceSourceHref(`${key}-01`, monthEndDate(key)), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10)), label: "Open all exact source records" } };
+    const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Entered work costs grouped by service month. Invoice amounts are not included in this basis." : "Confirmed USD invoice allocations grouped by invoice month. Charges awaiting matching are excluded. Use Trends to review other currencies.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : invoiceSourceHref(`${key}-01`, monthEndDate(key)), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10)), label: "Open all exact source records" } };
     const sourceWork = spendWork.filter((work) => (basisAmountByWork.get(work.id) ?? 0) > 0).sort((a, b) => (basisAmountByWork.get(b.id) ?? 0) - (basisAmountByWork.get(a.id) ?? 0) || a.number.localeCompare(b.number));
     const spendPageSize = 25;
     const requestedSpendPage = Number(first(query.page));
@@ -4136,7 +4122,7 @@ export function buildProgramModel(
     const pmPageHref = (page: number) => hrefWithQuery("/app/pm", { view: pmView, status: statusFilter, occurrence: occurrenceFilter, store: selectedStoreId, program: programFilter, page: String(page) });
     return {
       state: { kind: "ready" },
-      page: { title: "Preventive maintenance", eyebrow: "Planned work", description: "Manage company standards by exception, see what is due or missed first, and reconcile billed PM service against observed store visits.", scopeLabel: activeScopeLabel, periodLabel: "Current PM window", updatedLabel: `Through ${date(fixture.asOf)}` },
+      page: { title: "Preventive maintenance", eyebrow: "Planned work", description: "See scheduled maintenance that is due or overdue, and compare billed service with recorded visits.", scopeLabel: activeScopeLabel, periodLabel: "Current PM window", updatedLabel: `Through ${date(fixture.asOf)}` },
       filters: [{ id: "view", label: "Occurrence view", options: [
         { value: "attention", label: `Needs attention (${occurrenceStates.filter((item) => item.status === "due" || item.status === "missed").length})`, href: hrefWithQuery("/app/pm", { view: "attention", store: selectedStoreId, program: programFilter }), selected: pmView === "attention" },
         { value: "upcoming", label: `Upcoming (${occurrenceStates.filter((item) => item.status === "due" || item.status === "scheduled").length})`, href: hrefWithQuery("/app/pm", { view: "upcoming", store: selectedStoreId, program: programFilter }), selected: pmView === "upcoming" },
@@ -4370,7 +4356,7 @@ export function buildApprovalPolicyWorkspaceModel(
     statusTone: "positive",
     facts: [
       { label: "Pending decisions", value: String(stateCount("pending")), helperText: "Each item retains an accountable role and due time" },
-      { label: "Approved", value: String(stateCount("approved")), helperText: "Immutable decisions in the current source ledger" },
+      { label: "Approved", value: String(stateCount("approved")), helperText: "Recorded approval decisions" },
       { label: "Escalated", value: String(stateCount("escalated")), helperText: "Original escalation evidence remains visible beside the next review" },
       { label: "Access", value: session.role === "facilities" ? "Facilities administrator" : sentence(session.role), helperText: "This setup workspace is restricted by the server-side role policy" },
     ],
@@ -4411,7 +4397,7 @@ export function buildApprovalPolicyWorkspaceModel(
         description: "Pending, approved, and escalated examples point back to the exact operational record. Basic work with no triggering amount does not appear here.",
         table: {
           id: "approval-requests",
-          caption: "Approval requests and immutable decisions",
+          caption: "Approval requests and decision history",
           columns: [
             { key: "record", label: "Operational record" },
             { key: "store", label: "Store" },
@@ -5043,7 +5029,7 @@ export function buildDetailModel(
           label: linkedWorks.length === 1 ? "Operator work order" : "Operator work orders",
           value: linkedWorks.length ? linkedWorks.map(({ work: linkedWork }) => linkedWork.number).join(" · ") : "Not linked",
           helperText: linkedWorks.length
-            ? `${linkedWorks.length} canonical service record${linkedWorks.length === 1 ? "" : "s"} covered during this visit`
+            ? `${linkedWorks.length} work order${linkedWorks.length === 1 ? "" : "s"} covered during this visit`
             : visit.unmatchedReason ?? "Entered without a work order",
           link: linkedWorks.length === 1 ? { href: `/app/work-orders/${linkedWorks[0].work.id}`, label: "Open work order" } : undefined,
         },
@@ -5151,7 +5137,7 @@ export function buildDetailModel(
         {
           id: "timeline",
           title: "Append-only activity",
-          description: "The original timestamps and evidence remain intact when an operator later reconciles or corrects the record.",
+          description: "Corrections keep the original times and evidence available in history.",
           timeline: audit.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt, storeTimeZone), actorLabel: event.actorName })),
         },
       ],
@@ -5573,7 +5559,7 @@ export function buildDetailModel(
       { label: "Open work", value: String(vendorWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length) },
       { label: "Onsite now", value: String(vendorVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?vendor=${vendor.id}&status=active`, label: "Open active visits" } },
       { label: "Recorded visits", value: String(vendorVisits.length), helperText: `${returnVisitWork} work order${returnVisitWork === 1 ? "" : "s"} required more than one visit`, link: { href: `/app/visits?vendor=${vendor.id}`, label: "Open visit records" } },
-      { label: "Response time", value: averageResponseHours === undefined ? "Not enough history" : averageResponseHours < 1 ? `${Math.round(averageResponseHours * 60)} min average` : `${averageResponseHours.toFixed(1)} hr average`, helperText: `${responseHours.length} issuance-to-response observation${responseHours.length === 1 ? "" : "s"}` },
+      { label: "Response time", value: averageResponseHours === undefined ? "Not enough history" : averageResponseHours < 1 ? `${Math.round(averageResponseHours * 60)} min average` : `${averageResponseHours.toFixed(1)} hr average`, helperText: `${responseHours.length} recorded vendor response time${responseHours.length === 1 ? "" : "s"}` },
       { label: "Accepted authorizations", value: terminalResponses.length ? `${Math.round((acceptedResponses.length / terminalResponses.length) * 100)}%` : "No terminal responses", helperText: terminalResponses.length ? `${acceptedResponses.length} accepted / ${terminalResponses.length} accepted or declined` : "Questions and proposed dates are not counted" },
       { label: "Open items", value: String(vendorExceptions.length + vendorFollowUps.length), helperText: `${vendorExceptions.length} exception${vendorExceptions.length === 1 ? "" : "s"} · ${vendorFollowUps.length} follow-up${vendorFollowUps.length === 1 ? "" : "s"}`, link: vendorExceptions.length + vendorFollowUps.length ? { href: "/app/action-center", label: "See what needs attention" } : undefined },
       { label: "Recorded work cost", value: money(costForWorkIds(costByWork, vendorWork.map((work) => work.id))) },
@@ -5848,7 +5834,7 @@ export function buildVendorIssuanceModel(fixture: OpsFixture, session: OperatorS
       : selectedEstimate
       ? `${selectedEstimateVendor?.name ?? "The selected vendor"} is locked to this service authorization because its quote was deliberately selected. The quote remains pricing evidence and does not become recorded cost. ${previewDeliveryText}`
       : assignment?.status === "declined"
-        ? `The prior vendor declined the service work. Choose another approved vendor and create a new immutable service-authorization revision. ${previewDeliveryText}`
+        ? `The prior vendor declined the service work. Choose another approved vendor and prepare an updated service authorization. ${previewDeliveryText}`
         : `Send authorized service work to one chosen vendor. This creates a versioned service-authorization record and account-free response link—not a quote request. ${previewDeliveryText}`,
   };
 }
@@ -6212,7 +6198,7 @@ export function buildWorkOrderControlModel(
           decisionOptions.push({
             value: "escalated",
             label: `Escalate to ${escalationRoleLabel}`,
-            description: `Create the next immutable review for ${escalationRoleLabel}. A reason is required.`,
+            description: `Request another review from ${escalationRoleLabel}. A reason is required.`,
             reasonRequired: true,
           });
         }
@@ -6507,7 +6493,7 @@ export function buildRequestReviewModel(
           decisionOptions.push({
             value: "escalated",
             label: `Escalate to ${escalationRoleLabel}`,
-            description: `Create the next immutable review for ${escalationRoleLabel}. A reason is required.`,
+            description: `Request another review from ${escalationRoleLabel}. A reason is required.`,
             reasonRequired: true,
           });
         }
@@ -6826,7 +6812,7 @@ export function buildAttentionItemModel(
           { label: "Source visit", value: visit ? `${visit.technicianName} - ${dateTime(visit.checkedInAt, storeTimeZone)}` : "Not visit-generated", link: visit ? { href: `/app/visits/${visit.id}`, label: "Open visit" } : undefined },
         ],
         sections: [
-          { id: "required-action", title: "Required next action", description: "Completing or changing this follow-up also updates the work order's accountable next-action projection.", facts: [{ label: "Next action", value: followUp.nextAction }, { label: "Owner", value: followUp.accountableParty }, { label: "Escalation", value: followUp.escalationTo }] },
+          { id: "required-action", title: "Required next action", description: "Review who is responsible, what happens next, and when it is due.", facts: [{ label: "Next action", value: followUp.nextAction }, { label: "Owner", value: followUp.accountableParty }, { label: "Escalation", value: followUp.escalationTo }] },
           {
             id: "service-visits",
             title: "Service visits and technician notes",

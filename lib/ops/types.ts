@@ -1689,6 +1689,7 @@ export interface Authorization {
 }
 
 export interface Invoice {
+  version?: number;
   id: OpsId;
   organizationId: OpsId;
   vendorId: OpsId;

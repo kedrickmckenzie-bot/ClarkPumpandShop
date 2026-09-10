@@ -9,6 +9,13 @@ export function accountingDemoDelivery(step: string): AccountingInvoiceDelivery 
     kind: "bill", maintenance: true,
     lines: [{ id: "repair", description: "Beer cave door repair", category: "labor", amountMinor: 35000, storeCode: "104", workOrderNumber: "CPS-2026-0104" }, { id: "travel", description: "Shared service call", category: "travel", amountMinor: 10000, storeCode: "104" }],
   };
+  if (step.startsWith("review-")) {
+    const review = { ...base, externalInvoiceId: "demo-review-multistore", invoiceNumber: "DEMO-MULTISTORE-450", invoiceDate: "2026-08-20", lines: base.lines.map((line) => line.id === "travel" ? { ...line, storeCode: "105" } : line) };
+    if (step === "review-reference") return { ...review, revision: 2, lines: review.lines.map((line) => line.id === "repair" ? { ...line, storeCode: "105", workOrderNumber: "CPS-2026-0117" } : line) };
+    if (step === "review-amount") return { ...accountingDemoDelivery("review-reference"), revision: 3, totalMinor: 40000, lines: accountingDemoDelivery("review-reference").lines.map((line) => line.id === "travel" ? { ...line, amountMinor: 5000 } : line) };
+    if (step === "review-unmapped") return { ...review, externalInvoiceId: "demo-review-unmapped", vendorId: undefined, invoiceNumber: "SUM-104-2607" };
+    return review;
+  }
   if (step === "uncertain") return { ...base, externalInvoiceId: "demo-bill-unknown", invoiceNumber: "DEMO-NEEDS-MATCH", lines: base.lines.map((line) => ({ ...line, storeCode: undefined, workOrderNumber: undefined })) };
   if (step === "correction") return { ...base, revision: 2, totalMinor: 40000, lines: base.lines.map((line) => line.id === "travel" ? { ...line, amountMinor: 5000, description: "Corrected shared service call" } : line) };
   if (step === "payment") return { ...accountingDemoDelivery("correction"), revision: 3, paidMinor: 40000 };

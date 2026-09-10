@@ -1,3 +1,4 @@
+import { invoiceReporting } from "./invoice-reporting";
 import type { OpsFixture } from "./types";
 
 export const RECORDING_COVERAGE_EVENT = "recording.coverage_attested";
@@ -37,7 +38,7 @@ export function attestDemoRecordingCoverage(fixture: OpsFixture, startsOn: strin
       recorded_cost: fixture.costLines.filter((row) => row.organizationId === store.organizationId && workIds.has(row.workOrderId)).map((row) => row.id),
       work_orders: [...workIds],
       service_visits: fixture.visits.filter((row) => row.organizationId === store.organizationId && row.storeId === store.id).map((row) => row.id),
-      linked_invoice: fixture.invoiceAllocations.filter((row) => row.organizationId === store.organizationId && workIds.has(row.workOrderId) && row.confirmedAt && fixture.invoiceReferences.some((invoice) => invoice.organizationId === store.organizationId && invoice.id === row.invoiceReferenceId && invoice.matchStatus === "confirmed")).map((row) => row.id),
+      linked_invoice: invoiceReporting(fixture, store.organizationId).allocations.filter((row) => workIds.has(row.workOrderId)).map((row) => row.id),
     };
     for (const [measure, sourceIds] of Object.entries(sources)) fixture.auditEvents.push({
       id: `coverage-${store.id}-${measure}`, organizationId: store.organizationId,

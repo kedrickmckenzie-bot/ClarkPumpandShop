@@ -55,3 +55,8 @@ Additional browser checks completed: the empty/end-of-selection state and exact 
 - Demo identity and delivery boundaries remain unchanged. Local process memory is not production persistence. No live geolocation or external message delivery was used in these browser tests.
 
 The local server uses port 3010. Printed/copied QR URLs still reflect the existing configured public origin (`localhost:3000`); relative in-app “Open live page” links were verified on 3010. Configure the public origin to the serving port before printing local QR material.
+
+
+## Focused review correction after f57cbdb — September 10, 2026
+
+The follow-up implementation and validation are recorded in [ACCOUNTING_REVIEW_CORRECTIONS.md](ACCOUNTING_REVIEW_CORRECTIONS.md). This supersedes the earlier accounting reporting and all-or-nothing correction description: canonical confirmed invoice allocations now feed Trends and Spending, reference changes invalidate affected matching, and invoice-version protection also covers initial existing-invoice linking and finance decisions. Search preserves matching drafts and saved allocations; an unmapped vendor refreshes duplicate candidates. Earlier workflow and acknowledgment behavior is retained.

@@ -308,6 +308,7 @@ export function TrendsWorkspace({ model }: { model: TrendAnalysisPageViewModel }
 
       <section className={styles.analysisContext} aria-label="Current analysis context">{model.analysisContext.map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}</section>
       {model.filterNotice ? <aside className={styles.filterNotice}><Info size={16} aria-hidden="true" />{model.filterNotice}</aside> : null}
+      {model.invoiceReview ? <aside className={styles.filterNotice}>{model.invoiceReview.message} <Link href={model.invoiceReview.href}>{model.invoiceReview.label}</Link></aside> : null}
       <ExecutiveResults model={model} />
       <TrendsFilterForm action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} />
       <Investigation model={model} />

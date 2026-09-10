@@ -50,7 +50,7 @@ export function StorePortalHome({ token, portal, pendingVisit, publicOrigin }: {
             <span className={styles.portalChoiceIcon}><UserRoundCheck aria-hidden="true" size={24} /></span>
             <div>
               <h2>{portal.capabilities.startVisit && portal.capabilities.finishVisit ? "Vendor check-in or checkout" : portal.capabilities.startVisit ? "Vendor check-in" : "Finish vendor visit"}</h2>
-              <p>{portal.trustedStoreDevice ? "Start a visit or select an onsite technician to finish one—no account, PIN, or location permission required." : "Technicians can connect to assigned work or use a visit-bound checkout receipt without an account."}</p>
+              <p>{portal.trustedStoreDevice ? "Start a visit or select an onsite technician to finish one—no account, PIN, or location permission required." : "Technicians can check in for assigned work and use a checkout link without an account."}</p>
             </div>
             <span className={styles.portalChoiceCta}>Open vendor visit <ArrowRight aria-hidden="true" size={17} /></span>
           </Link>

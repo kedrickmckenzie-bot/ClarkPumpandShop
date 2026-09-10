@@ -172,16 +172,9 @@ describe("operator presenter drill-through contracts", () => {
     const sourceLineCount = fixture.costLines.filter(
       (line) => line.organizationId === NORTHLINE_ORGANIZATION_ID && storeWorkIds.has(line.workOrderId) && line.serviceDate >= periodStart,
     ).length;
-    const periodInvoiceIds = new Set(
-      fixture.invoiceReferences
-        .filter((invoice) => invoice.organizationId === NORTHLINE_ORGANIZATION_ID && invoice.invoiceDate >= periodStart)
-        .map((invoice) => invoice.id),
-    );
-    const storeInvoiceCount = new Set(
-      fixture.invoiceAllocations
-        .filter((allocation) => allocation.organizationId === NORTHLINE_ORGANIZATION_ID && storeWorkIds.has(allocation.workOrderId) && periodInvoiceIds.has(allocation.invoiceReferenceId))
-        .map((allocation) => allocation.invoiceReferenceId),
-    ).size;
+    const periodInvoiceIds = new Set(fixture.invoices.filter((invoice) => invoice.organizationId === NORTHLINE_ORGANIZATION_ID && invoice.status !== "void" && fixture.invoiceLines.filter((line) => line.invoiceId === invoice.id).reduce((sum, line) => sum + line.lineAmount.amountMinor, 0) === invoice.total.amountMinor && invoice.total.currency === "USD" && invoice.invoiceDate >= periodStart && invoice.invoiceDate <= fixture.asOf.slice(0, 10)).map((invoice) => invoice.id));
+    const invoiceByLine = new Map(fixture.invoiceLines.map((line) => [line.id, line.invoiceId]));
+    const storeInvoiceCount = new Set(fixture.invoiceLineAllocations.filter((allocation) => allocation.organizationId === NORTHLINE_ORGANIZATION_ID && allocation.confirmedAt && allocation.amount.amountMinor > 0 && storeWorkIds.has(allocation.workOrderId) && periodInvoiceIds.has(invoiceByLine.get(allocation.invoiceLineId)!)).map((allocation) => invoiceByLine.get(allocation.invoiceLineId))).size;
 
     expect(model.page.scopeLabel).toContain(`Store ${store.storeNumber}`);
     expect(model.metrics.find((metric) => metric.id === "total")?.supportingText).toContain(`${sourceLineCount} entered source lines`);

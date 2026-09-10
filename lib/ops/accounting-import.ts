@@ -1,3 +1,5 @@
+import { classifyAccountingChanges, type AccountingChanges } from "./accounting-changes";
+import { invoiceVersionStatements } from "./invoice-concurrency";
 import { OpsDomainError, type OpsCommandServices } from "./commands";
 import type { OpsRepository, OpsStatement } from "./repository";
 import type { AccountingInvoiceSource, ActorContext, InvoiceLineCategory } from "./types";
@@ -14,6 +16,8 @@ export interface AccountingInvoiceDelivery {
 export interface AccountingSourcePayload {
   delivery: AccountingInvoiceDelivery;
   importedAt?: string;
+  lineIds?: Record<string, string>;
+  changes?: AccountingChanges;
   reviewedVendorId?: string;
   previousReview?: { actor: string; at: string; reason: string };
 }
@@ -29,6 +33,7 @@ async function hash(value: unknown) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(value)));
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
+export async function accountingLineIdentity(sourceId: string, lineId: string) { return `accounting-line-${await hash([sourceId, lineId])}`; }
 export async function accountingSourceIdentity(organizationId: string, connectionKey: string, companyKey: string, externalInvoiceId: string) { return `accounting-${await hash([organizationId, connectionKey, companyKey, externalInvoiceId])}`; }
 export function accountingPayload(source: AccountingInvoiceSource): AccountingSourcePayload { return JSON.parse(source.payloadJson); }
 
@@ -61,7 +66,10 @@ async function persistSource(svc: OpsCommandServices, source: AccountingInvoiceS
   const values = { id: source.id, organization_id: source.organizationId, connection_key: source.connectionKey, company_key: source.companyKey, external_invoice_id: source.externalInvoiceId, source_revision: source.sourceRevision, version: source.version, payload_json: source.payloadJson, invoice_id: source.invoiceId ?? null, match_state: source.matchState, updated_at: source.updatedAt };
   const write: OpsStatement = before ? { sql: "UPDATE ops_accounting_invoice_sources SET source_revision = ?, version = ?, payload_json = ?, invoice_id = ?, match_state = ?, updated_at = ? WHERE organization_id = ? AND id = ? AND version = ?", params: [source.sourceRevision, source.version, source.payloadJson, source.invoiceId ?? null, source.matchState, source.updatedAt, source.organizationId, source.id, before.version] } : insert("ops_accounting_invoice_sources", values);
   try { await svc.repository.atomicWrite([fence, ...statements, write, ...audit(svc, source, actor, before, event)]); }
-  catch (error) { if (await svc.repository.getIdempotencyKey(source.organizationId, String(fence.params[1]))) throw new OpsDomainError("CONFLICT", "This accounting invoice changed. Refresh before trying again"); throw error; }
+  catch (error) {
+    const guard = statements.find((statement) => statement.sql.startsWith("UPDATE ops_invoices SET version ="));
+    if (guard && source.invoiceId && ((await svc.repository.getInvoice(source.organizationId, source.invoiceId))?.version ?? 0) >= Number(guard.params[0])) throw new OpsDomainError("CONFLICT", "This invoice changed during review. Refresh its latest charges before saving.");
+    if (await svc.repository.getIdempotencyKey(source.organizationId, String(fence.params[1]))) throw new OpsDomainError("CONFLICT", "This accounting invoice changed. Refresh before trying again"); throw error; }
 }
 
 export async function importAccountingInvoice(svc: OpsCommandServices, actor: ActorContext, delivery: AccountingInvoiceDelivery) {
@@ -76,47 +84,68 @@ export async function importAccountingInvoice(svc: OpsCommandServices, actor: Ac
     throw new OpsDomainError("CONFLICT", "This is an older or conflicting accounting update. Import the latest source version");
   }
   if (previous && previous.delivery.kind !== delivery.kind) throw new OpsDomainError("CONFLICT", "An accounting bill cannot become a credit under the same source reference");
-  const amountChanged = previous && await hash([previous.delivery.vendorExternalId, previous.delivery.vendorId, previous.delivery.currency, previous.delivery.totalMinor, previous.delivery.lines.map((line) => [line.id, line.amountMinor])]) !== await hash([delivery.vendorExternalId, delivery.vendorId, delivery.currency, delivery.totalMinor, delivery.lines.map((line) => [line.id, line.amountMinor])]);
-  const source: AccountingInvoiceSource = { id: sourceId, organizationId: actor.organizationId, connectionKey: delivery.connectionKey, companyKey: delivery.companyKey, externalInvoiceId: delivery.externalInvoiceId, sourceRevision: delivery.revision, version: (before?.version ?? 0) + 1, payloadJson: JSON.stringify({ delivery, importedAt: clock(svc), previousReview: previous?.previousReview, reviewedVendorId: previous?.delivery.vendorExternalId === delivery.vendorExternalId ? previous.reviewedVendorId : undefined } satisfies AccountingSourcePayload), invoiceId: before?.invoiceId, matchState: !delivery.maintenance && !before?.invoiceId ? "excluded" : before?.invoiceId && before.matchState === "matched" && !amountChanged ? "matched" : "needs_review", updatedAt: clock(svc) };
-  const statements = source.invoiceId && delivery.kind === "bill" ? await invoiceStatements(svc, source, undefined, Boolean(amountChanged)) : [];
+  const changes = previous ? classifyAccountingChanges(previous.delivery, delivery) : undefined;
+  const vendorChanged = previous && (previous.delivery.vendorExternalId !== delivery.vendorExternalId || previous.delivery.vendorId !== delivery.vendorId);
+  const source: AccountingInvoiceSource = { id: sourceId, organizationId: actor.organizationId, connectionKey: delivery.connectionKey, companyKey: delivery.companyKey, externalInvoiceId: delivery.externalInvoiceId, sourceRevision: delivery.revision, version: (before?.version ?? 0) + 1,
+    payloadJson: JSON.stringify({ delivery, importedAt: clock(svc), previousReview: previous?.previousReview, lineIds: previous?.lineIds, changes, reviewedVendorId: vendorChanged ? undefined : previous?.reviewedVendorId } satisfies AccountingSourcePayload),
+    invoiceId: before?.invoiceId, matchState: !delivery.maintenance ? "excluded" : before?.invoiceId && before.matchState === "matched" && !changes?.matching ? "matched" : "needs_review", updatedAt: clock(svc) };
+  const statements = source.invoiceId && delivery.kind === "bill" ? await invoiceStatements(svc, source, undefined, changes, undefined) : [];
   await persistSource(svc, source, before, actor, statements, "accounting.invoice_imported");
   return { source, replayed: false };
 }
 
-async function invoiceStatements(svc: OpsCommandServices, source: AccountingInvoiceSource, splits?: AccountingSplit[], invalidate = false, reviewerId?: string): Promise<OpsStatement[]> {
+async function invoiceStatements(svc: OpsCommandServices, source: AccountingInvoiceSource, splits?: AccountingSplit[], changes?: AccountingChanges, reviewerId?: string): Promise<OpsStatement[]> {
   const payload = accountingPayload(source);
   const delivery = { ...payload.delivery, vendorId: payload.reviewedVendorId ?? payload.delivery.vendorId };
   const invoiceId = source.invoiceId!;
   const existing = await svc.repository.getInvoice(source.organizationId, invoiceId);
   const oldLines = existing ? await svc.repository.listInvoiceLines(source.organizationId, invoiceId) : [];
-  const statements: OpsStatement[] = [];
-  if (!delivery.vendorId) throw new OpsDomainError("VALIDATION", "Choose the matching platform vendor first");
+  const statements: OpsStatement[] = existing ? invoiceVersionStatements(existing, source.updatedAt) : [];
+  // A vendor removed by accounting leaves the old vendor visible as historical
+  // context until review. Its confirmations are invalidated below.
+  const vendorId = delivery.vendorId ?? existing?.vendorId;
+  if (!vendorId) throw new OpsDomainError("VALIDATION", "Choose the matching platform vendor first");
   const tax = delivery.lines.filter((line) => line.category === "tax").reduce((sum, line) => sum + line.amountMinor, 0);
-  const status = delivery.voided ? "void" : delivery.paidMinor >= delivery.totalMinor && delivery.totalMinor > 0 ? "paid" : delivery.paidMinor > 0 ? "partially_paid" : invalidate ? "matching" : "received";
-  if (existing) statements.push({ sql: "UPDATE ops_invoices SET vendor_id = ?, vendor_invoice_number = ?, invoice_date = ?, subtotal_minor = ?, tax_minor = ?, fees_minor = ?, total_minor = ?, currency = ?, paid_amount_minor = ?, status = ? WHERE organization_id = ? AND id = ?", params: [delivery.vendorId, delivery.invoiceNumber, delivery.invoiceDate, delivery.totalMinor - tax, tax, 0, delivery.totalMinor, delivery.currency, delivery.paidMinor, status, source.organizationId, invoiceId] });
-  else statements.push(insert("ops_invoices", { id: invoiceId, organization_id: source.organizationId, vendor_id: delivery.vendorId, vendor_invoice_number: delivery.invoiceNumber, invoice_date: delivery.invoiceDate, subtotal_minor: delivery.totalMinor - tax, tax_minor: tax, fees_minor: 0, total_minor: delivery.totalMinor, currency: delivery.currency, approved_for_payment_minor: 0, paid_amount_minor: delivery.paidMinor, status, created_at: source.updatedAt }));
-  // Keep old rows as auditable amendments. Removed items become zero; history has the prior source.
-  if (oldLines.length) {
+  const chargeShape = (lines: Array<{ description: string; category: string; amountMinor: number }>) => JSON.stringify(lines.map((line) => [line.description, line.category, line.amountMinor]).sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+  const financialChanged = Boolean(existing && (changes?.financial || existing.vendorId !== vendorId || existing.total.currency !== delivery.currency || existing.total.amountMinor !== delivery.totalMinor
+    || chargeShape(oldLines.filter((line) => line.lineAmount.amountMinor !== 0).map((line) => ({ ...line, amountMinor: line.lineAmount.amountMinor }))) !== chargeShape(delivery.lines.filter((line) => line.amountMinor !== 0))));
+  const status = delivery.voided ? "void" : delivery.paidMinor >= delivery.totalMinor && delivery.totalMinor > 0 ? "paid" : delivery.paidMinor > 0 ? "partially_paid" : changes?.matching ? "matching" : !financialChanged && existing?.status === "approved_for_payment" ? existing.status : "received";
+  if (existing) statements.push({ sql: "UPDATE ops_invoices SET vendor_id = ?, vendor_invoice_number = ?, invoice_date = ?, subtotal_minor = ?, tax_minor = ?, fees_minor = ?, total_minor = ?, currency = ?, paid_amount_minor = ?, status = ? WHERE organization_id = ? AND id = ?", params: [vendorId, delivery.invoiceNumber, delivery.invoiceDate, delivery.totalMinor - tax, tax, 0, delivery.totalMinor, delivery.currency, delivery.paidMinor, status, source.organizationId, invoiceId] });
+  else statements.push(insert("ops_invoices", { id: invoiceId, organization_id: source.organizationId, vendor_id: vendorId, vendor_invoice_number: delivery.invoiceNumber, invoice_date: delivery.invoiceDate, subtotal_minor: delivery.totalMinor - tax, tax_minor: tax, fees_minor: 0, total_minor: delivery.totalMinor, currency: delivery.currency, approved_for_payment_minor: 0, paid_amount_minor: delivery.paidMinor, status, created_at: source.updatedAt }));
+  if (existing) {
     const beforeLines = await Promise.all(oldLines.map(async (line) => ({ line, splits: await svc.repository.listInvoiceLineAllocations(source.organizationId, line.id) })));
-    statements.push(insert("ops_audit_events", { id: id(svc, "audit"), organization_id: source.organizationId, aggregate_type: "invoice", aggregate_id: invoiceId, event_type: "invoice.accounting_source_amended", actor_type: "system", actor_name: "Accounting import", occurred_at: source.updatedAt, payload_json: JSON.stringify({ before: existing, lines: beforeLines, sourceId: source.id, sourceRevision: source.sourceRevision }) }));
-    for (const line of oldLines) {
-      statements.push({ sql: "UPDATE ops_invoice_lines SET unit_amount_minor = ?, line_amount_minor = ? WHERE organization_id = ? AND id = ?", params: [0, 0, source.organizationId, line.id] });
-      if (splits || invalidate) statements.push({ sql: "UPDATE ops_invoice_line_allocations SET amount_minor = ?, confirmed_at = ?, confirmed_by_membership_id = ? WHERE organization_id = ? AND invoice_line_id = ?", params: [0, null, null, source.organizationId, line.id] });
-    }
+    statements.push(insert("ops_audit_events", { id: id(svc, "audit"), organization_id: source.organizationId, aggregate_type: "invoice", aggregate_id: invoiceId, event_type: "invoice.accounting_source_amended", actor_type: "system", actor_name: "Accounting import", occurred_at: source.updatedAt, payload_json: JSON.stringify({ before: existing, lines: beforeLines, sourceId: source.id, sourceRevision: source.sourceRevision, changes, financialApprovalInvalidated: financialChanged }) }));
+  }
+  const lineIds = { ...payload.lineIds };
+  const used = new Set(Object.values(lineIds));
+  for (const line of delivery.lines) if (!lineIds[line.id]) {
+    const same = oldLines.find((old) => !used.has(old.id) && old.description === line.description && old.category === line.category && old.lineAmount.amountMinor === line.amountMinor && old.lineAmount.currency === delivery.currency);
+    lineIds[line.id] = same?.id ?? await accountingLineIdentity(source.id, line.id);
+    used.add(lineIds[line.id]);
+  }
+  const activeIds = new Set(delivery.lines.map((line) => lineIds[line.id]));
+  const invalidIds = new Set((changes?.lineIds ?? []).map((key) => lineIds[key]));
+  for (const line of oldLines) {
+    if (!activeIds.has(line.id)) statements.push({ sql: "UPDATE ops_invoice_lines SET unit_amount_minor = ?, line_amount_minor = ? WHERE organization_id = ? AND id = ?", params: [0, 0, source.organizationId, line.id] });
+    if (splits || changes?.allMatches || invalidIds.has(line.id) || !activeIds.has(line.id)) statements.push({ sql: "UPDATE ops_invoice_line_allocations SET amount_minor = ?, confirmed_at = ?, confirmed_by_membership_id = ? WHERE organization_id = ? AND invoice_line_id = ?", params: [0, null, null, source.organizationId, line.id] });
   }
   let nextLineNumber = oldLines.reduce((max, line) => Math.max(max, line.lineNumber), 0) + 1;
   for (const line of delivery.lines) {
-    const lineId = `accounting-line-${await hash([source.id, line.id])}`;
+    const lineId = lineIds[line.id];
     if (oldLines.some((old) => old.id === lineId)) statements.push({ sql: "UPDATE ops_invoice_lines SET description = ?, category = ?, unit_amount_minor = ?, line_amount_minor = ?, currency = ? WHERE organization_id = ? AND id = ?", params: [line.description, line.category, line.amountMinor, line.amountMinor, delivery.currency, source.organizationId, lineId] });
     else statements.push(insert("ops_invoice_lines", { id: lineId, organization_id: source.organizationId, invoice_id: invoiceId, line_number: nextLineNumber++, category: line.category, description: line.description, quantity_thousandths: 1000, unit_amount_minor: line.amountMinor, line_amount_minor: line.amountMinor, currency: delivery.currency, created_at: source.updatedAt }));
-    for (const split of (splits ?? []).filter((split) => split.lineId === line.id)) {
+    for (const split of (splits ?? []).filter((split) => split.lineId === line.id && split.amountMinor > 0)) {
       const work = await svc.repository.getWorkOrder(source.organizationId, split.workOrderId);
       if (!work) throw new OpsDomainError("VALIDATION", "Choose work orders in this company");
       statements.push(insert("ops_invoice_line_allocations", { id: id(svc, "invoice-split"), organization_id: source.organizationId, invoice_line_id: lineId, work_order_id: work.id, store_id: work.storeId, asset_id: work.assetId, component_id: work.componentId, amount_minor: split.amountMinor, currency: delivery.currency, method: "manual", confirmed_by_membership_id: reviewerId, confirmed_at: source.updatedAt }));
     }
   }
-  if (invalidate) statements.push({ sql: "UPDATE ops_invoices SET approved_for_payment_minor = ? WHERE organization_id = ? AND id = ?", params: [0, source.organizationId, invoiceId] });
-  if (invalidate) statements.push(insert("ops_invoice_exceptions", { id: id(svc, "invoice-exception"), organization_id: source.organizationId, invoice_id: invoiceId, kind: "allocation_mismatch", status: "open", summary: "Accounting changed this invoice. Check the amounts and linked work again.", amount_minor: delivery.totalMinor, currency: delivery.currency, detected_at: source.updatedAt }));
+  source.payloadJson = JSON.stringify({ ...payload, lineIds });
+  if (financialChanged) {
+    statements.push({ sql: "UPDATE ops_invoices SET approved_for_payment_minor = ? WHERE organization_id = ? AND id = ?", params: [0, source.organizationId, invoiceId] });
+    if (existing!.approvedForPayment.amountMinor > 0) statements.push(insert("ops_invoice_exceptions", { id: id(svc, "invoice-exception"), organization_id: source.organizationId, invoice_id: invoiceId, kind: "authorization", status: "open", summary: "Accounting changed approved charges. Review the financial decision again.", amount_minor: delivery.totalMinor, currency: delivery.currency, detected_at: source.updatedAt }));
+  }
+  if (changes?.matching) statements.push(insert("ops_invoice_exceptions", { id: id(svc, "invoice-exception"), organization_id: source.organizationId, invoice_id: invoiceId, kind: "allocation_mismatch", status: "open", summary: changes.reasons.join(" "), amount_minor: delivery.totalMinor, currency: delivery.currency, detected_at: source.updatedAt }));
   return statements;
 }
 
@@ -127,6 +156,7 @@ export async function reviewAccountingInvoice(svc: OpsCommandServices, actor: Ac
   if (before.version !== input.expectedVersion) throw new OpsDomainError("CONFLICT", "Accounting updated this invoice. Refresh before saving your review");
   if (!input.reason.trim()) throw new OpsDomainError("VALIDATION", "Explain the match or correction");
   const payload = accountingPayload(before);
+  if (payload.delivery.voided) throw new OpsDomainError("VALIDATION", "This invoice was voided in accounting and cannot be matched.");
   if (!payload.delivery.maintenance) throw new OpsDomainError("VALIDATION", "This source is outside the maintenance import filter");
   const vendor = await svc.repository.getVendor(actor.organizationId, input.vendorId);
   if (!vendor) throw new OpsDomainError("VALIDATION", "Choose a vendor in this company");
@@ -147,15 +177,15 @@ export async function reviewAccountingInvoice(svc: OpsCommandServices, actor: Ac
   }
   if (input.splits.some((split) => !payload.delivery.lines.some((line) => line.id === split.lineId))) throw new OpsDomainError("VALIDATION", "An invoice item changed. Refresh its split");
   const invoiceId = before.invoiceId ?? existing?.id ?? id(svc, "invoice");
-  const source: AccountingInvoiceSource = { ...before, version: before.version + 1, invoiceId, matchState: "matched", updatedAt: clock(svc), payloadJson: JSON.stringify({ delivery: payload.delivery, reviewedVendorId: vendor.id, importedAt: payload.importedAt, previousReview: { actor: actor.actorName, at: clock(svc), reason: input.reason.trim() } } satisfies AccountingSourcePayload) };
+  const source: AccountingInvoiceSource = { ...before, version: before.version + 1, invoiceId, matchState: "matched", updatedAt: clock(svc), payloadJson: JSON.stringify({ ...payload, delivery: payload.delivery, reviewedVendorId: vendor.id, importedAt: payload.importedAt, previousReview: { actor: actor.actorName, at: clock(svc), reason: input.reason.trim() } } satisfies AccountingSourcePayload) };
   const owner = await svc.repository.getIdempotencyKey(actor.organizationId, `__ops_internal__/accounting-invoice-owner:${invoiceId}`);
   if (payload.delivery.kind === "bill" && owner && owner.resultId !== before.id) throw new OpsDomainError("CONFLICT", "This platform invoice is already linked to a different accounting bill. Review the company and source reference");
   const statements: OpsStatement[] = [];
   if (!before.invoiceId && payload.delivery.kind === "bill") statements.push(insert("ops_idempotency_keys", { organization_id: source.organizationId, key: `__ops_internal__/accounting-invoice-owner:${invoiceId}`, command: "accounting.invoice_claimed", result_id: source.id, request_hash: await hash([source.connectionKey, source.companyKey, source.externalInvoiceId]), created_at: source.updatedAt, expires_at: "9999-12-31T23:59:59.999Z" }));
-  if (payload.delivery.kind === "bill") statements.push(...await invoiceStatements(svc, source, input.splits, false, actor.actorId));
+  if (payload.delivery.kind === "bill") statements.push(...await invoiceStatements(svc, source, input.splits, undefined, actor.actorId));
   if (payload.delivery.kind === "bill") {
     const flags = await svc.repository.listInvoiceExceptions(source.organizationId, invoiceId);
-    for (const flag of flags.filter((flag) => flag.status === "open" && flag.kind === "allocation_mismatch" && flag.summary === "Accounting changed this invoice. Check the amounts and linked work again.")) {
+    for (const flag of flags.filter((flag) => flag.status === "open" && flag.kind === "allocation_mismatch" && flag.summary.startsWith("Accounting "))) {
       statements.push({ sql: "UPDATE ops_invoice_exceptions SET status = ?, resolved_at = ?, resolution_reason = ? WHERE organization_id = ? AND id = ?", params: ["resolved", source.updatedAt, input.reason.trim(), source.organizationId, flag.id] });
     }
   }

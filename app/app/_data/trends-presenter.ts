@@ -1,3 +1,4 @@
+import { invoiceReporting } from "@/lib/ops/invoice-reporting";
 import "server-only";
 import { supportedRecordingCoverage } from "@/lib/ops/recording-coverage";
 
@@ -346,7 +347,7 @@ function metricChangeLabel(metric: TrendMetricId, current: number, comparison: n
   return ratioLabel(current, comparison);
 }
 
-function differenceSentence(metric: TrendMetricId, current: number, comparison: number) {
+function differenceSentence(metric: TrendMetricId, current: number, comparison: number, currencyCode = "USD") {
   if (current === comparison) return "No change from the comparison period";
   const direction = current > comparison ? "more" : "less";
   if (metric === "vendor_response") {
@@ -354,7 +355,7 @@ function differenceSentence(metric: TrendMetricId, current: number, comparison: 
     return `${difference < 10 ? difference.toFixed(1) : Math.round(difference)} hours ${current < comparison ? "faster" : "slower"} than before`;
   }
   if (metric === "pm_completion") return `${Math.round(Math.abs(current - comparison))} percentage points ${current > comparison ? "higher" : "lower"} than before`;
-  return `${formatMetric(metric, Math.abs(current - comparison))} ${direction} than before`;
+  return `${formatMetricBase(metric, Math.abs(current - comparison), false, true, currencyCode)} ${direction} than before`;
 }
 
 function evidenceLabel(metric: TrendMetricId, count: number) {
@@ -584,7 +585,6 @@ function buildAllRecords(fixture: OpsFixture, session: OperatorSession, metric: 
     assignmentsByWorkId.set(assignment.workOrderId, [...(assignmentsByWorkId.get(assignment.workOrderId) ?? []), assignment]);
   }
   const historicalProviderIndexes = { visitsByWorkId, assignmentsByWorkId };
-  const invoiceById = new Map(fixture.invoiceReferences.filter((row) => row.organizationId === session.organizationId).map((row) => [row.id, row]));
   const preventiveWorkOrderIds = new Set(fixture.pmWorkItems.filter((row) => row.organizationId === session.organizationId).map((row) => row.workOrderId));
   const records: TrendSourceRecord[] = [];
 
@@ -628,11 +628,11 @@ function buildAllRecords(fixture: OpsFixture, session: OperatorSession, metric: 
       records.push({ id: line.id, sourceKind: "source_record", units: "minor_currency", currency: line.amount.currency, date: line.serviceDate, ...timing(work.storeId, line.serviceDate), value: line.amount.amountMinor, ...common(work), ...attribution, costKind: line.kind, label: work.number, detail: line.description, href: `/app/work-orders/${work.id}?view=cost` });
     }
   } else if (metric === "linked_invoice") {
-    for (const allocation of fixture.invoiceAllocations.filter((row) => row.organizationId === session.organizationId && row.confirmedAt)) {
-      const work = workById.get(allocation.workOrderId);
-      const invoice = invoiceById.get(allocation.invoiceReferenceId);
-      if (!work || !invoice || invoice.matchStatus !== "confirmed") continue;
-      records.push({ id: allocation.id, sourceKind: "source_record", units: "minor_currency", currency: allocation.amount.currency, date: invoice.invoiceDate, ...timing(work.storeId, invoice.invoiceDate), value: allocation.amount.amountMinor, ...common(work), invoiceId: invoice.id, vendorId: invoice.vendorId, providerAttribution: "invoice_vendor", providerAttributionLabel: "Historical vendor named on the linked invoice", label: invoice.invoiceNumber, detail: `${work.number} · ${work.problem}`, href: `/app/invoices/${invoice.id}`, grossAmountMinor: invoice.grossAmount.amountMinor });
+    for (const allocation of invoiceReporting(fixture, session.organizationId).allocations) {
+      const originalWork = workById.get(allocation.workOrderId);
+      if (!originalWork || (allocation.storeId && allocation.storeId !== originalWork.storeId)) continue;
+      const work = { ...originalWork, assetId: allocation.assetId ?? originalWork.assetId, componentId: allocation.componentId ?? originalWork.componentId };
+      records.push({ id: allocation.id, sourceKind: "source_record", units: "minor_currency", currency: allocation.amount.currency, date: allocation.invoiceDate, ...timing(work.storeId, allocation.invoiceDate), value: allocation.amount.amountMinor, ...common(work), invoiceId: allocation.invoiceId, vendorId: allocation.vendorId, providerAttribution: "invoice_vendor", providerAttributionLabel: "Vendor named on the linked invoice", label: allocation.invoiceNumber, detail: `${work.number} · ${work.problem}`, href: allocation.href, grossAmountMinor: allocation.gross.amountMinor });
     }
   } else if (metric === "work_orders") {
     for (const work of workOrders) records.push({ id: work.id, sourceKind: "source_record", units: "count", date: work.createdAt, ...timing(work.storeId, work.createdAt), value: 1, ...common(work), label: work.number, detail: work.problem, href: `/app/work-orders/${work.id}` });
@@ -728,12 +728,12 @@ function aggregate(metric: TrendMetricId, records: TrendSourceRecord[]) {
 }
 
 function additiveMetricHasData(metric: TrendMetricId, records: TrendSourceRecord[]) {
-  return metric === "recorded_cost" || metric === "linked_invoice" || metric === "work_orders" || metric === "service_visits" || records.length > 0;
+  return metric === "recorded_cost" || metric === "work_orders" || metric === "service_visits" || records.length > 0;
 }
 
-function formatMetric(metric: TrendMetricId, value: number, compact = false, hasData = true) {
-  if (!hasData && (metric === "vendor_response" || metric === "pm_completion")) return "No data";
-  if (metric === "recorded_cost" || metric === "linked_invoice") return compact ? compactMoney(value) : money(value);
+function formatMetricBase(metric: TrendMetricId, value: number, compact = false, hasData = true, currencyCode = "USD") {
+  if (!hasData && (metric === "vendor_response" || metric === "pm_completion" || metric === "linked_invoice")) return "No data";
+  if (metric === "recorded_cost" || metric === "linked_invoice") return currencyCode === "USD" ? compact ? compactMoney(value) : money(value) : new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode, notation: compact ? "compact" : "standard" }).format(value / 100);
   if (metric === "vendor_response") return `${value < 10 ? value.toFixed(1) : Math.round(value)} hr`;
   if (metric === "pm_completion") return `${Math.round(value)}%`;
   return integer.format(Math.round(value));
@@ -756,7 +756,7 @@ function sourceTableRows(metric: TrendMetricId, rows: TrendSourceRecord[], store
       { key: "store", value: storeById.has(row.storeId) ? `Store ${storeById.get(row.storeId)!.storeNumber}` : "Store unavailable", secondary: storeById.get(row.storeId)?.name, link: storeById.has(row.storeId) ? { href: `/app/stores/${row.storeId}`, label: "Open store" } : undefined },
       { key: "service", value: recordCategoryKeys(row).length ? recordCategoryKeys(row).map((value) => sentence(value)).join(" + ") : "Unclassified", secondary: [row.sourceKind === "calculated_peer_contribution" ? "Calculated contribution" : row.sourceKind === "raw_peer_observation" ? "Raw historical evidence" : undefined, row.costKind ? sentence(row.costKind) : undefined, recordComponentNames(row).length ? recordComponentNames(row).join(" + ") : row.vendorId ? vendorNameById.get(row.vendorId) : row.providerAttributionLabel].filter(Boolean).join(" · ") || undefined },
       { key: "date", value: row.displayDate },
-      { key: "value", value: row.displayValue ?? formatMetric(metric, row.value), secondary: metric === "linked_invoice" && row.grossAmountMinor !== undefined ? `${money(row.grossAmountMinor)} invoice gross` : undefined },
+      { key: "value", value: row.displayValue ?? formatMetricBase(metric, row.value, false, true, row.currency), secondary: metric === "linked_invoice" && row.grossAmountMinor !== undefined ? `${formatMetricBase(metric, row.grossAmountMinor, false, true, row.currency)} invoice gross` : undefined },
     ],
   }));
 }
@@ -767,6 +767,8 @@ export function buildTrendsModel(
   query: OperatorSearchParameters = {},
   options: { includeExportRows?: boolean } = {},
 ): TrendAnalysisBuildResult {
+  const currencyCode = /^[A-Z]{3}$/.test(first(query.currency) ?? "") ? first(query.currency)! : "USD";
+  const formatMetric = (metric: TrendMetricId, value: number, compact = false, hasData = true) => formatMetricBase(metric, value, compact, hasData, currencyCode);
   const removedFilters: string[] = [];
   const metric = (first(query.metric) ?? "recorded_cost") as TrendMetricId;
   const metricIds = Object.keys(metricCopy) as TrendMetricId[];
@@ -791,6 +793,7 @@ export function buildTrendsModel(
   let selectedAsset = first(query.asset);
   let selectedComponent = first(query.component);
   let selectedVendor = first(query.vendor);
+  const selectedInvoice = safeMetric === "linked_invoice" ? first(query.invoice) : undefined;
   const workTypeValue = first(query.workType);
   const selectedWorkType = safeMetric === "pm_completion"
     ? workTypeValue === "preventive" ? "preventive" : undefined
@@ -943,7 +946,8 @@ export function buildTrendsModel(
 
   const scopeRecord = (row: TrendSourceRecord, includeStore = true, includeVendor = true, includeExactAsset = true, includeCostKind = true) => {
     const store = storeById.get(row.storeId);
-    if (!store) return false;
+    if (!store || (row.currency && row.currency !== currencyCode)) return false;
+    if (selectedInvoice && row.invoiceId !== selectedInvoice) return false;
     if (selectedRegion && store.regionId !== selectedRegion) return false;
     if (includeStore && selectedStore && row.storeId !== selectedStore) return false;
     if (!maintenanceLinkMatches(row, includeExactAsset)) return false;
@@ -1009,7 +1013,7 @@ export function buildTrendsModel(
     || (detailDriverBreakdown && detailDriverValue)
     || hasValidBenchmarkFocus,
   );
-  const activeView: TrendAnalysisView = (["overview", "stores", "drivers", "vendors", "planning", "records"] as const).includes(requestedViewValue as TrendAnalysisView)
+  const activeView: TrendAnalysisView = selectedInvoice ? "records" : (["overview", "stores", "drivers", "vendors", "planning", "records"] as const).includes(requestedViewValue as TrendAnalysisView)
     ? requestedViewValue as TrendAnalysisView
     : hasExplicitEvidenceFocus
       ? "records"
@@ -1115,6 +1119,8 @@ export function buildTrendsModel(
     options: { preserveEvidence?: boolean } = {},
   ) => href("/app/trends", {
     metric: safeMetric,
+    currency: currencyCode,
+    invoice: selectedInvoice,
     period: String(periodMonths),
     compare: comparison,
     breakdown,
@@ -1201,7 +1207,7 @@ export function buildTrendsModel(
   const summary: MetricViewModel[] = [
     { id: "current", label: "Selected dates", value: formatMetric(safeMetric, currentValue, false, currentHasData), supportingText: `${dateLabel(currentStart)}–${dateLabel(currentEnd)} · ${currentEvidence}`, tone: "info", link: { href: `${trendHref({ view: "records", detailKind: "current", detailMonth: undefined })}#source-records`, label: "Open all records for the selected dates" } },
     { id: "comparison", label: comparison === "none" ? "Comparison" : "Compared with", value: comparison === "none" ? "Off" : formatMetric(safeMetric, baselineValue, false, baselineHasData), supportingText: comparison === "none" ? "Choose dates to compare" : !baselineHasData ? `${compareLabel} · no recorded data` : `${baselineStart && baselineEnd ? `${dateLabel(baselineStart)}–${dateLabel(baselineEnd)}` : compareLabel} · ${comparisonEvidence}`, tone: comparison === "none" || !baselineHasData ? "neutral" : valueTone(safeMetric, currentValue, baselineValue), link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ view: "records", detailKind: "comparison", detailMonth: undefined })}#source-records`, label: "Open all comparison-period records" } },
-    { id: "change", label: "Change", value: comparison === "none" ? "—" : !currentHasData || !baselineHasData ? "Not available" : metricChangeLabel(safeMetric, currentValue, baselineValue), supportingText: comparison === "none" ? "Comparison is turned off" : !currentHasData || !baselineHasData ? "Both date ranges need recorded data" : differenceSentence(safeMetric, currentValue, baselineValue), tone: comparison === "none" || !currentHasData || !baselineHasData ? "neutral" : valueTone(safeMetric, currentValue, baselineValue), link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined })}#source-records`, label: "Open records from both date ranges" } },
+    { id: "change", label: "Change", value: comparison === "none" ? "—" : !currentHasData || !baselineHasData ? "Not available" : metricChangeLabel(safeMetric, currentValue, baselineValue), supportingText: comparison === "none" ? "Comparison is turned off" : !currentHasData || !baselineHasData ? "Both date ranges need recorded data" : differenceSentence(safeMetric, currentValue, baselineValue, currencyCode), tone: comparison === "none" || !currentHasData || !baselineHasData ? "neutral" : valueTone(safeMetric, currentValue, baselineValue), link: comparison === "none" ? enableComparisonLink : { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined })}#source-records`, label: "Open records from both date ranges" } },
     { id: "coverage", label: `${sentence(classificationLevel)} detail`, value: coverageHasData ? `${coverage}%` : "No data", supportingText: coverageHasData ? `${classified.length} of ${currentRecords.length} records include ${classificationLevel} information` : "No records are available for these filters and dates", tone: !coverageHasData ? "neutral" : coverage >= 85 ? "positive" : coverage >= 60 ? "warning" : "critical", link: coverageHasData ? { href: `${trendHref({ view: "records", detailKind: "unclassified", detailMonth: undefined })}#source-records`, label: "Review records missing classification" } : { href: `${trendHref({ view: "records", detailKind: "current", detailMonth: undefined })}#source-records`, label: "Open the selected-date record set" } },
   ];
 
@@ -1340,7 +1346,7 @@ export function buildTrendsModel(
     coverageStatus: "observed" | "measured_zero";
     records: TrendSourceRecord[];
   }
-  const recordingCoverage = supportedRecordingCoverage(fixture, session.organizationId, safeMetric, allRecords);
+  const recordingCoverage = selectedInvoice || (safeMetric === "linked_invoice" || safeMetric === "recorded_cost") && currencyCode !== "USD" ? [] : supportedRecordingCoverage(fixture, session.organizationId, safeMetric, allRecords);
   const monthIsCovered = (asset: Asset, month: string, through = endOfMonth(month)) => recordingCoverage.some((coverage) =>
     coverage.storeId === asset.storeId && coverage.startsOn <= `${month}-01` && coverage.endsOn >= through);
   const observationsByCohortAndCalendarMonth = new Map<string, CohortMonthObservation[]>();
@@ -1513,7 +1519,7 @@ export function buildTrendsModel(
                 id: calculationId,
                 sourceKind: "calculated_peer_contribution",
                 units: metricUnits(safeMetric),
-                currency: moneyMetric ? "USD" : undefined,
+                currency: moneyMetric ? currencyCode : undefined,
                 date: `${referenceEnd}T12:00:00.000Z`,
                 localDate: referenceEnd,
                 periodKey: month,
@@ -2182,6 +2188,8 @@ export function buildTrendsModel(
   const sourcePagination = paginationModel(allSourceRows.length, sourcePage, sourcePageSize, sourcePageHref);
   const sourceExportLink = href("/api/ops/trends/export", {
     metric: safeMetric,
+    currency: currencyCode,
+    invoice: selectedInvoice,
     period: String(periodMonths),
     compare: comparison,
     breakdown,
@@ -2232,12 +2240,13 @@ export function buildTrendsModel(
     vendor_response: "the vendor assignment that sent the response",
     pm_completion: "the current issued work-order assignment (not historical spend)",
   };
-  const relatedMeasures = relatedMetricMap[safeMetric].filter((relatedMetric) => allowedMetricIds.includes(relatedMetric)).slice(0, 3).map((relatedMetric) => {
+  const relatedMeasures = (selectedInvoice ? [] : relatedMetricMap[safeMetric]).filter((relatedMetric) => allowedMetricIds.includes(relatedMetric)).slice(0, 3).map((relatedMetric) => {
     const related = buildAllRecords(fixture, session, relatedMetric).records;
     const effectiveWorkType = safeMetric === "pm_completion" ? "preventive" : selectedWorkType;
     const scoped = related.filter((row) => {
       const store = storeById.get(row.storeId);
-      if (!store) return false;
+      if (!store || (row.currency && row.currency !== currencyCode)) return false;
+    if (selectedInvoice && row.invoiceId !== selectedInvoice) return false;
       if (selectedRegion && store.regionId !== selectedRegion) return false;
       if (selectedStore && row.storeId !== selectedStore) return false;
       if (!maintenanceLinkMatches(row, true, effectiveWorkType)) return false;
@@ -2365,7 +2374,8 @@ export function buildTrendsModel(
   const locationScopeParts = selectedStore
     ? [selectedRegion ? regionById.get(selectedRegion)?.name : undefined, `Store ${storeById.get(selectedStore)?.storeNumber ?? "unknown"}`]
     : [selectedRegion ? regionById.get(selectedRegion)?.name : accessibleLocationLabel];
-  const scopeParts = [...locationScopeParts, selectedWorkType ? selectedWorkType === "preventive" ? "Preventive maintenance" : "Reactive work" : undefined, selectedCostKind ? `${sentence(selectedCostKind)} cost` : undefined, selectedCategory ? sentence(selectedCategory) : undefined, selectedPath ? trendPathLabel(selectedPath) : undefined, selectedProfile ? profileById.get(selectedProfile)?.name : undefined, selectedAsset ? assetById.get(selectedAsset)?.name : undefined, selectedComponent, selectedVendor ? vendorNameById.get(selectedVendor) : undefined].filter(Boolean);
+  const selectedInvoiceNumber = allRecords.find((row) => row.invoiceId === selectedInvoice)?.label;
+  const scopeParts = [...locationScopeParts, selectedInvoice ? selectedInvoiceNumber ?? "Selected invoice" : undefined, selectedWorkType ? selectedWorkType === "preventive" ? "Preventive maintenance" : "Reactive work" : undefined, selectedCostKind ? `${sentence(selectedCostKind)} cost` : undefined, selectedCategory ? sentence(selectedCategory) : undefined, selectedPath ? trendPathLabel(selectedPath) : undefined, selectedProfile ? profileById.get(selectedProfile)?.name : undefined, selectedAsset ? assetById.get(selectedAsset)?.name : undefined, selectedComponent, selectedVendor ? vendorNameById.get(selectedVendor) : undefined].filter(Boolean);
   const scopeSummary = [
     scopeParts.join(" · "),
     `${dateLabel(currentStart)}–${dateLabel(currentEnd)}`,
@@ -2380,7 +2390,7 @@ export function buildTrendsModel(
     { id: "planning", label: "Planning", description: "At-the-recent-pace scenario" },
     { id: "records", label: "Source records", description: "Exact records behind each number" },
   ];
-  const views = viewCopy.map((view) => ({
+  const views = viewCopy.filter((view) => !selectedInvoice || view.id === "records").map((view) => ({
     ...view,
     link: {
       href: trendHref({
@@ -2502,7 +2512,7 @@ export function buildTrendsModel(
       id: `period-change:${safeMetric}:${currentStart}:${currentEnd}:${comparison}`,
       findingType: "period_change",
       eyebrow: "Material period change",
-      title: differenceSentence(safeMetric, currentValue, baselineValue),
+      title: differenceSentence(safeMetric, currentValue, baselineValue, currencyCode),
       detail: historicalPortfolioContext ?? "See which stores and types of work contributed to the change.",
       magnitudeLabel: `${absoluteChange >= 0 ? "+" : "−"}${formatMetric(safeMetric, Math.abs(absoluteChange))}`,
       patternLabel: "Period-over-period movement",
@@ -2631,6 +2641,8 @@ export function buildTrendsModel(
     views,
     filterAction: "/app/trends",
     filters: [
+      ...(selectedInvoice ? [{ id: "invoice", label: "Invoice", value: selectedInvoice, group: "analysis" as const, options: [filterOption("", "All invoices"), filterOption(selectedInvoice, selectedInvoiceNumber ?? "Selected invoice")] }] : []),
+      ...(moneyMetric ? [{ id: "currency", label: "Currency", value: currencyCode, group: "analysis" as const, options: [...new Set(["USD", currencyCode, ...allRecords.flatMap((row) => row.currency ?? [])])].sort().map((code) => filterOption(code, code)) }] : []),
       { id: "metric", label: "Track", value: safeMetric, group: "analysis", options: allowedMetricIds.map((value) => filterOption(value, metricCopy[value].label)) },
       { id: "period", label: "Time range", value: String(periodMonths), group: "analysis", options: [filterOption("3", "Last 3 months"), filterOption("6", "Last 6 months"), filterOption("12", "Last 12 months"), filterOption("24", "Last 24 months")] },
       { id: "compare", label: "Compare to", value: comparison, group: "analysis", options: [filterOption("previous_year", "Same period last year"), filterOption("previous_period", `Earlier ${periodMonths} months`), filterOption("none", "Do not compare")] },
@@ -2717,9 +2729,11 @@ export function buildTrendsModel(
     },
     sourceMeasureLabel: detailKind === "vendor_outstanding" ? "Vendor response evidence" : undefined,
     sourceHeading: detailKind === "vendor_outstanding" ? "Still awaiting a response" : detailKind === "benchmark" ? "Inputs behind this comparison" : "Records behind this number",
+    invoiceReview: safeMetric === "linked_invoice" && ["facilities", "executive", "finance"].includes(session.role) && fixture.scopeGrants.some((grant) => grant.organizationId === session.organizationId && grant.membershipId === session.membershipId && grant.scopeKind === "organization" && grant.scopeId === session.organizationId)
+      ? { message: "Charges awaiting matching or a corrected review are excluded from this total.", href: "/app/invoices/accounting", label: "Review accounting invoices" } : undefined,
     sourceDescription: detailKind === "benchmark"
       ? `${detailRecords.filter((row) => row.sourceKind === "calculated_peer_contribution").length} calculated contribution${detailRecords.filter((row) => row.sourceKind === "calculated_peer_contribution").length === 1 ? "" : "s"} and ${detailRecords.filter((row) => row.sourceKind === "raw_peer_observation").length} raw historical record${detailRecords.filter((row) => row.sourceKind === "raw_peer_observation").length === 1 ? "" : "s"} are included. Calculated rows expose uncapped input, capping, peer weight, and target exposure; raw rows open the actual historical source record.`
-      : `${detailRecords.length} record${detailRecords.length === 1 ? "" : "s"} included for the selected filters and dates.`,
+      : `${detailRecords.length} record${detailRecords.length === 1 ? "" : "s"} included for the selected filters and dates.${safeMetric === "linked_invoice" ? " Only confirmed allocations are included. Charges awaiting matching or a corrected review remain in invoice review. No linked records means no confirmed data, not a measured zero. Currencies are shown separately." : ""}`,
     sourceSortLinks,
     sourceSummary: detailKind === "benchmark"
       ? `${detailRecords.length} calculation input${detailRecords.length === 1 ? "" : "s"}`

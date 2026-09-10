@@ -1,0 +1,1 @@
+ALTER TABLE `ops_invoices` ADD `version` integer DEFAULT 0 NOT NULL;

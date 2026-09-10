@@ -112,7 +112,7 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
         <header><div><p>Invoice safeguard</p><h3 id="pm-evidence-review-title">PM billed versus observed visits</h3><span>A missing platform visit is a review fact—not proof that service was not performed.</span></div><FileSearch size={22} aria-hidden="true" /></header>
         {model.reconciliations.map((item) => <article key={item.id}>
           <div><strong>{item.storeLabel} · {item.programName}</strong><span>{item.periodLabel}</span></div>
-          <dl><div><dt>Billed service units</dt><dd>{item.billedUnits}</dd></div><div><dt>Observed PM visits</dt><dd>{item.observedVisits}</dd></div><div data-alert={item.missingEvidence > 0 || undefined}><dt>Without visit evidence</dt><dd>{item.missingEvidence}</dd></div><div><dt>Amount to reconcile</dt><dd>{item.reviewAmountLabel}</dd></div></dl>
+          <dl><div><dt>Billed service units</dt><dd>{item.billedUnits}</dd></div><div><dt>Observed PM visits</dt><dd>{item.observedVisits}</dd></div><div data-alert={item.missingEvidence > 0 || undefined}><dt>Without visit evidence</dt><dd>{item.missingEvidence}</dd></div><div><dt>Amount to review</dt><dd>{item.reviewAmountLabel}</dd></div></dl>
           <p>{item.note} Total invoiced service in this comparison: {item.invoicedAmountLabel}.</p>
           <footer><Link href={item.occurrencesHref}>Open PM occurrences<ArrowRight size={15} aria-hidden="true" /></Link><Link href={item.invoiceHref}>Open supporting invoice<ArrowRight size={15} aria-hidden="true" /></Link></footer>
         </article>)}

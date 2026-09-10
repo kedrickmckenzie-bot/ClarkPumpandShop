@@ -353,6 +353,7 @@ export interface TrendAnalysisPageViewModel {
   sourceHeading: string;
   sourceMeasureLabel?: string;
   sourceDescription: string;
+  invoiceReview?: { message: string; href: string; label: string };
   sourceSortLinks: TrendSourceSortLinkViewModel[];
   sourceSummary: string;
   sourcePeriodLabel: string;

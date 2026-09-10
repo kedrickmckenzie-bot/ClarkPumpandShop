@@ -31,7 +31,7 @@ describe("inbound accounting records", () => {
     expect((await svc.repository.getInvoice(actor.organizationId, reviewed.invoiceId!))?.total.amountMinor).toBe(40000);
     const lines = await svc.repository.listInvoiceLines(actor.organizationId, reviewed.invoiceId!);
     const allocations = (await Promise.all(lines.map((line) => svc.repository.listInvoiceLineAllocations(actor.organizationId, line.id)))).flat();
-    expect(allocations.reduce((sum, allocation) => sum + allocation.amount.amountMinor, 0)).toBe(0);
+    expect(allocations.reduce((sum, allocation) => sum + allocation.amount.amountMinor, 0)).toBe(35000); // Unchanged repair confirmation survives; corrected travel needs review.
     await expect(reviewAccountingInvoice(svc, actor, { sourceId: first.source.id, expectedVersion: reviewed.version, vendorId: "vendor-northline-summit", splits, reason: "Stale review" })).rejects.toMatchObject({ code: "CONFLICT" });
     await importAccountingInvoice(svc, actor, accountingDemoDelivery("payment"));
     expect((await svc.repository.getInvoice(actor.organizationId, reviewed.invoiceId!))?.paidAmount.amountMinor).toBe(40000);
