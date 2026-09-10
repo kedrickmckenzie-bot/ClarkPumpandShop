@@ -23,3 +23,15 @@ export function selectNextReview<T extends { id: string }>(rows: T[], previous: 
   const eligible = new Map(rows.filter((row) => row.id !== previous).map((row) => [row.id, row]));
   return (following ?? "").split(",").slice(0, 25).map((id) => eligible.get(id)).find(Boolean);
 }
+
+/** A return path to an equipment decision, never an external redirect or arbitrary route. */
+export function safeDecisionReturn(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value, "https://ops.invalid");
+    if (url.origin !== "https://ops.invalid" || url.pathname !== "/app/lifecycle" || !url.searchParams.get("decision") || url.searchParams.get("asset") !== url.searchParams.get("decision")) return undefined;
+    const params = new URLSearchParams();
+    for (const key of ["asset", "decision", "view", "component", "history", "historyPage", "costPage"]) { const part = url.searchParams.get(key); if (part) params.set(key, part); }
+    return `/app/lifecycle?${params}#decision-context`;
+  } catch { return undefined; }
+}

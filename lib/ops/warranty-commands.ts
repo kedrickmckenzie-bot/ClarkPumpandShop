@@ -294,7 +294,10 @@ export async function decideWarrantyCoverage(input:{organizationId:OpsId;warrant
   if(input.coverageDecision==="covered"&&input.customerChargeStatus!=="warranty_covered")throw new OpsDomainError("VALIDATION","Covered work must be recorded as warranty covered");
   if(input.coverageDecision==="not_covered"&&input.customerChargeStatus!=="customer_responsible")throw new OpsDomainError("VALIDATION","Not-covered work must record customer responsibility");
   if(input.coverageDecision==="split"&&input.customerChargeStatus!=="split")throw new OpsDomainError("VALIDATION","Split coverage must record a split customer charge status");
-  const tasks=await repository.listWorkflowTasksForWorkOrder(input.organizationId,workOrder.id);const reviewTasks=tasks.filter((task)=>isOpenWorkflowTask(task)&&task.taskType==="review_warranty");
+  // Warranty tasks are work-order scoped, not case scoped. Keep the shared obligation
+  // until every other active case has its own diagnosis and coverage decision.
+  const remainingCases=(await repository.listWarrantyCases(input.organizationId)).filter((item)=>item.workOrderId===workOrder.id&&item.id!==warrantyCase.id&&!item.closedAt&&(item.diagnosisRequired||item.coverageDecision==="pending_diagnosis"));
+  const tasks=await repository.listWorkflowTasksForWorkOrder(input.organizationId,workOrder.id);const reviewTasks=remainingCases.length?[]:tasks.filter((task)=>isOpenWorkflowTask(task)&&task.taskType==="review_warranty");
   const status=input.coverageDecision==="not_covered"?"not_covered":input.coverageDecision==="covered"?"confirmed":"confirmed";
   const closedAt=input.coverageDecision==="not_covered"?now:undefined;
   const terminalTasks=tasks.map((task)=>reviewTasks.some((candidate)=>candidate.id===task.id)?{...task,status:"completed" as const}:task);

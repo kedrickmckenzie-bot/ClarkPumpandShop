@@ -6,7 +6,8 @@ export function warrantyTaskHref(fixture: OpsFixture, task: WorkflowTask): strin
   if (task.taskType !== "review_warranty") return undefined;
   const cases = fixture.warrantyCases.filter((row) => row.organizationId === task.organizationId && row.workOrderId === task.workOrderId);
   const open = cases.filter((row) => !row.closedAt);
-  const candidates = open.length ? open : cases;
+  const pending = open.filter((row) => row.diagnosisRequired || row.coverageDecision === "pending_diagnosis");
+  const candidates = pending.length ? pending : open.length ? open : cases;
   return candidates.length === 1 ? `/app/warranties/${candidates[0].id}#diagnosis` : undefined;
 }
 export function recordedWarrantyDiagnosis(fixture: Pick<OpsFixture, "auditEvents">, item: WarrantyCase) {
@@ -17,4 +18,18 @@ export function recordedWarrantyDiagnosis(fixture: Pick<OpsFixture, "auditEvents
     const payload = JSON.parse(latest.payloadJson) as Record<string, unknown>;
     return { diagnosis: typeof payload.diagnosis === "string" ? payload.diagnosis : undefined, reason: typeof payload.reason === "string" ? payload.reason : undefined, at: latest.occurredAt, by: latest.actorName };
   } catch { return undefined; }
+}
+
+
+/** Display recorded correction values without treating free-text notes as calculated policy. */
+export function warrantyCorrectionTerms(json: string): Array<{label: string; value: string}> {
+  const label = (key: string) => key === "note" ? "Recorded terms" : key.replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ");
+  const flatten = (value: unknown, path: string): Array<{label: string; value: string}> => {
+    if (value === null || value === undefined) return [{label: label(path), value: "Not specified"}];
+    if (Array.isArray(value)) return value.flatMap((item, index) => flatten(item, `${path} ${index + 1}`));
+    if (typeof value === "object") return Object.entries(value).flatMap(([key, item]) => flatten(item, path ? `${path} · ${key}` : key));
+    return [{label: label(path), value: String(value)}];
+  };
+  try { const terms = flatten(JSON.parse(json), ""); return terms.length ? terms : [{label: "Correction", value: "No replacement terms were recorded."}]; }
+  catch { return [{label: "Correction unavailable", value: "The saved terms could not be read. Obtain confirmation before relying on the original terms."}]; }
 }

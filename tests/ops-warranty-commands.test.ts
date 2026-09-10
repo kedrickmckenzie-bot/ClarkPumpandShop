@@ -12,6 +12,30 @@ describe("directive warranty architecture",()=>{
   it("creates an effective-dated future rule without changing historical Applied Warranty",async()=>{const test=harness();const appliedBefore=test.repository.snapshot().appliedWarranties;const result=await createFutureWarrantyRule({organizationId:NORTHLINE_ORGANIZATION_ID,vendorId:"vendor-northline-summit",vendorWarrantyProfileId:"warranty-profile-summit-v1",actor,priority:77,effectiveStartsAt:"2026-09-01T00:00:00.000Z",selectors:{tradeKey:"refrigeration",storeId:"store-northline-105"},coverages:[{coverageType:"travel",duration:60,durationUnit:"days",startEvent:"repair_completion",provider:"vendor",obligatedVendorId:"vendor-northline-summit",routingRule:"original_vendor_first_right_to_cure",deductible:{amountMinor:0,currency:"USD"}}],reason:"Future Store 105 refrigeration terms"},test.services);const snapshot=test.repository.snapshot();expect(result.appliesToCompletedRepairs).toBe(false);expect(snapshot.warrantyRules).toContainEqual(expect.objectContaining({id:result.rule.id,effectiveStartsAt:"2026-09-01T00:00:00.000Z"}));expect(snapshot.appliedWarranties).toEqual(appliedBefore);});
 
   it("records diagnosis and responsibility while explicitly retaining the invoice hold",async()=>{const test=harness();const result=await decideWarrantyCoverage({organizationId:NORTHLINE_ORGANIZATION_ID,warrantyCaseId:"warranty-case-104-compressor-callback",actor,coverageDecision:"covered",customerChargeStatus:"warranty_covered",invoiceHold:true,diagnosis:"Installed compressor has an internally shorted winding related to the prior repair",reason:"Exact component, serial, failure, and active part term confirmed"},test.services);const snapshot=test.repository.snapshot();expect(result).toMatchObject({coverageDecision:"covered",customerChargeStatus:"warranty_covered",invoiceHold:true,diagnosisRequired:false});expect(snapshot.workflowTasks.filter((task)=>task.workOrderId===result?.workOrderId&&task.taskType==="review_warranty").every((task)=>task.status==="completed")).toBe(true);expect(snapshot.auditEvents).toContainEqual(expect.objectContaining({aggregateId:result?.id,eventType:"warranty.coverage_decided"}));});
+  it("keeps shared warranty tasks open until all active cases are reviewed", async () => {
+    const test = harness();
+    const first = test.fixture.warrantyCases.find((row) => row.id === "warranty-case-104-compressor-callback")!;
+    const second = { ...first, id: "second-warranty-case" };
+    test.fixture.warrantyCases.push(second, { ...first, id: "foreign-case", organizationId: "foreign-org" });
+    const task = test.fixture.workflowTasks.find((row) => row.workOrderId === first.workOrderId && row.taskType === "review_warranty")!;
+    test.fixture.workflowTasks.push({ ...task, id: "second-review-task" });
+    const repository = createOpsFixtureRepository(test.fixture);
+    const services = { ...test.services, repository };
+    const decide = (warrantyCaseId: string) => decideWarrantyCoverage({ organizationId: NORTHLINE_ORGANIZATION_ID, warrantyCaseId, actor, coverageDecision: "covered", customerChargeStatus: "warranty_covered", invoiceHold: true, diagnosis: "Confirmed cause for this case", reason: "Vendor confirmed coverage" }, services);
+    await decide(first.id);
+    let snapshot = repository.snapshot();
+    expect(snapshot.workflowTasks.find((row) => row.id === task.id)?.status).toBe(task.status);
+    expect(snapshot.workflowTasks.find((row) => row.id === "second-review-task")?.status).toBe(task.status);
+    expect(snapshot.warrantyCases.find((row) => row.id === second.id)?.coverageDecision).toBe("pending_diagnosis");
+    await decide(first.id); // Updating an already decided case cannot clear another case.
+    expect(repository.snapshot().workflowTasks.find((row) => row.id === task.id)?.status).toBe(task.status);
+    await decide(second.id);
+    snapshot = repository.snapshot();
+    expect(snapshot.workflowTasks.filter((row) => row.workOrderId === first.workOrderId && row.taskType === "review_warranty").every((row) => row.status === "completed")).toBe(true);
+    expect(snapshot.warrantyCases.find((row) => row.id === first.id)?.invoiceHold).toBe(true);
+    expect(snapshot.auditEvents.filter((row) => row.eventType === "workflow_task.completed" && [task.id, "second-review-task"].includes(row.aggregateId))).toHaveLength(2);
+  });
+
   it("resolves each coverage category independently with source and dates",async()=>{
     const test=harness();const preview=await previewWarrantyCoverage(previewInput(),test.repository);
     expect(preview.map((item)=>item.coverage.coverageType).sort()).toEqual(["diagnostic","labor","part","travel"]);

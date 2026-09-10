@@ -1,3 +1,4 @@
+import { buildDecisionContext } from "./decision-context";
 import { roleCanAccessProgramRoute } from "@/components/ops/role-policy";
 import { lifecyclePriceEvidence, priceLabel } from "@/lib/ops/lifecycle-price-evidence";
 import { loadWorkReview, recordedMoneyLabel } from "@/lib/ops/work-review";
@@ -196,7 +197,7 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
   const { asset, store } = found;
   const workOrders = fixture.workOrders.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && row.storeId === store.id);
   const reactiveWork = workOrders.filter((row) => row.priority !== "planned");
-  const currentRepair = reactiveWork.filter((row) => !["closed", "cancelled", "completed_pending_review", "resolved"].includes(row.status) && Boolean(row.repairEstimate)).sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  const currentRepair = reactiveWork.filter((row) => !["closed", "cancelled", "completed_pending_review", "resolved"].includes(row.status)).sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
   const recordedReplacement = fixture.replacementEvents.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && row.status !== "cancelled").sort((a,b) => b.approvedAt.localeCompare(a.approvedAt))[0];
   const proposalWork = currentRepair ?? workOrders.find((row) => row.id === recordedReplacement?.workOrderId);
   const replacement = resolveAssetReplacementEstimate(fixture, asset, fixture.asOf);
@@ -231,9 +232,12 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
   ];
   const activity = activityForDecision(fixture, session.organizationId, asset.id, proposalWork?.id, timeZone);
   const review = proposalWork ? await loadWorkReview(createOpsFixtureReadRepository(fixture), session, proposalWork.id, fixture.asOf) : null;
+  const pendingWarranty = proposalWork && fixture.warrantyCases.find((row) => row.organizationId === session.organizationId && row.workOrderId === proposalWork.id && !row.closedAt && (row.diagnosisRequired || row.coverageDecision === "pending_diagnosis"));
+  const decisionAction = pendingWarranty ? { label: "Check warranty coverage", href: `/app/warranties/${pendingWarranty.id}#diagnosis` } : workCase?.primaryNextAction;
   return {
     model: {
       prices,
+      context: buildDecisionContext(fixture, session, asset.id, query, proposalWork),
       review: review ?? undefined,
       assetId: asset.id,
       assetName: asset.name,
@@ -252,12 +256,12 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
       decisionLabel: managementDecision.label,
       decisionHelper: latestDecision?.userReason ?? managementDecision.helper,
       ownerLabel: workCase?.accountableParty ?? proposalWork?.accountableParty ?? "Facilities",
-      nextActionLabel: workCase?.primaryNextAction.label ?? proposalWork?.nextAction ?? "Review the equipment history and obtain the missing prices",
+      nextActionLabel: decisionAction?.label ?? proposalWork?.nextAction ?? "Review the equipment history and obtain the missing prices",
       dueLabel: workCase?.dueAt ? formatOperationsDateTime(workCase.dueAt, timeZone) : "No open due time",
       contextFacts,
       activity,
       closeHref,
-      openWorkOrderHref: workCase?.primaryNextAction.href ?? openWorkOrderHref,
+      openWorkOrderHref: decisionAction?.href ?? openWorkOrderHref,
       openEquipmentHref,
       childCloseHref,
       activeChild,

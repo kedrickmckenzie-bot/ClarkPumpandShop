@@ -55,3 +55,5 @@ No push or deployment is part of this pass. The prior local implementation and u
 ## Repair-or-replace and warranty follow-up
 
 The lifecycle decision now uses an ordinary full page instead of the earlier stacked modal. Approved replacement price, its exact quote, related repair evidence, and lower history are reachable without clipped rows. Warranty tasks open the diagnosis and terms together in a dedicated case workspace. See [the rebuild completion record](DECISION_WARRANTY_REBUILD_COMPLETION.md) for evidence rules and validation. The in-place work review elsewhere remains available.
+
+The subsequent decision-context pass adds component/period selection directly to that decision, evidence-backed history and missing-cost summaries, exact cost rows, specific continuation actions, and a preserved return path from warranty review. It also corrects shared warranty-task completion and displays actual saved warranty terms. See the follow-up section of the same completion record.

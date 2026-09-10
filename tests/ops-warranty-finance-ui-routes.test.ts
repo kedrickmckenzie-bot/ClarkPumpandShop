@@ -1,3 +1,4 @@
+import { POST as amendWarrantyPost } from "@/app/api/ops/warranties/applied/[id]/amend/route";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach,describe,expect,it,vi } from "vitest";
@@ -31,6 +32,7 @@ describe("interactive warranty and invoice demo workspaces",()=>{
     form.set("diagnosis", "Loose connection; compressor tests correctly");
     form.set("reason", "Vendor confirmed the earlier labor warranty applies");
     form.set("reviewQueue", "https://example.test/elsewhere");
+    form.set("returnDecision", "/app/lifecycle?asset=asset-104-beer-cave&decision=asset-104-beer-cave&component=component-104-compressor&history=24");
     const post = () => warrantyDecisionPost(new Request(`https://ops.test/api/ops/warranties/${item.id}/decision`, { method: "POST", body: form }), { params: Promise.resolve({ id: item.id }) });
     form.set("invoiceHold", "unspecified");
     expect((await post()).status).toBe(422);
@@ -39,6 +41,7 @@ describe("interactive warranty and invoice demo workspaces",()=>{
     const response = await post();
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).not.toContain("example.test");
+    expect(new URL(response.headers.get("location")!, "https://ops.test").searchParams.get("returnDecision")).toContain("history=24");
     let snapshot = test.repository.snapshot();
     let current = snapshot.warrantyCases.find((row) => row.id === item.id)!;
     expect(current.invoiceHold).toBe(true);
@@ -54,6 +57,17 @@ describe("interactive warranty and invoice demo workspaces",()=>{
     expect(snapshot.workOrders.find((row) => row.id === initialWork.id)?.status).toBe(initialWork.status);
     expect(snapshot.invoices.map((row) => row.paidAmount)).toEqual(test.fixture.invoices.map((row) => row.paidAmount));
   });
+  it("saves the actual corrected terms and returns to the case and decision context", async () => {
+    const test=context("facilities");const item=test.fixture.warrantyCases[0];
+    const warranty=test.fixture.appliedWarranties.find((row)=>row.repairItemId===item.priorRepairItemId)!;
+    const form=new FormData();form.set("amendmentKind","override_coverage");form.set("termsNote","Vendor includes return-trip labor through November 8");form.set("reason","Written vendor confirmation");form.set("warrantyCaseId",item.id);form.set("returnDecision",`/app/lifecycle?asset=${item.assetId}&decision=${item.assetId}&history=24`);
+    const post=()=>amendWarrantyPost(new Request(`https://ops.test/api/ops/warranties/applied/${warranty.id}/amend`,{method:"POST",body:form}),{params:Promise.resolve({id:warranty.id})});
+    const response=await post();expect(response.status).toBe(303);expect(response.headers.get("location")).toContain(`/app/warranties/${item.id}?`);expect(response.headers.get("location")).toContain("#warranty-terms");
+    const snapshot=test.repository.snapshot();expect(snapshot.appliedWarranties.find((row)=>row.id===warranty.id)).toEqual(warranty);
+    const html=renderToStaticMarkup(createElement(WarrantyCaseWorkspace,{fixture:snapshot,warrantyCase:item,canManage:false}));expect(html).toContain("Vendor includes return-trip labor through November 8");expect(html).toContain("Jordan Lee");
+    const count=snapshot.warrantyAmendments.length;form.set("warrantyCaseId","wrong-case");expect((await post()).status).toBe(404);expect(test.repository.snapshot().warrantyAmendments.length).toBe(count);
+  });
+
   it("renders source-intake, evidence review, flag-only language, and durable action targets",()=>{const fixture=buildNorthlinePresentationFixture();const invoice=fixture.invoices.find((item)=>item.id==="invoice-summit-104-compressor")!;const warrantyCase=fixture.warrantyCases.find((item)=>item.id==="warranty-case-104-compressor-callback")!;const markup=[renderToStaticMarkup(createElement(InvoiceReceiveWorkspace,{fixture})),renderToStaticMarkup(createElement(InvoiceDetailWorkspace,{fixture,invoice,canDecide:true})),renderToStaticMarkup(createElement(WarrantyCaseWorkspace,{fixture,warrantyCase,canManage:true})),renderToStaticMarkup(createElement(WarrantyRuleCreateWorkspace,{fixture}))].join("\n");expect(markup).toContain('action="/api/ops/invoices"');expect(markup).toContain("Checks may flag a difference");expect(markup).toContain("No deduction or credit has been recorded");expect(markup).toContain(`/api/ops/warranties/${warrantyCase.id}/decision`);expect(markup).toContain("Existing repair warranties stay unchanged.");expect(markup).toContain('action="/api/ops/warranties/rules"');});
 
   it("receives an entered invoice through the authorized route and persists its review flag",async()=>{const test=context("finance");const form=new FormData();form.set("workOrderId","wo-northline-104");form.set("vendorId","vendor-northline-summit");form.set("contractVersionId","contract-version-summit-refrigeration-v1");form.set("vendorInvoiceNumber","SUM-ROUTE-DEMO-1");form.set("invoiceDate","2026-08-20");form.set("currency","USD");form.set("line1Category","travel");form.set("line1Description","Separate trip charge for review");form.set("line1Amount","200.00");const response=await receiveInvoicePost(new Request("https://ops.test/api/ops/invoices",{method:"POST",body:form}));expect(response.status).toBe(303);const invoice=test.repository.snapshot().invoices.find((item)=>item.vendorInvoiceNumber==="SUM-ROUTE-DEMO-1")!;expect(invoice).toMatchObject({approvedForPayment:{amountMinor:0,currency:"USD"},paidAmount:{amountMinor:0,currency:"USD"}});expect(test.repository.snapshot().invoiceExceptions.some((item)=>item.invoiceId===invoice.id&&item.status==="open")).toBe(true);expect(test.repository.snapshot().invoiceAdjustments.some((item)=>item.invoiceId===invoice.id)).toBe(false);});

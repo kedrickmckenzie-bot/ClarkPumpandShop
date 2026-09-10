@@ -55,6 +55,15 @@ describe("decision evidence and warranty task continuity", () => {
     expect(html).not.toContain("Other tenant");
     expect(html).not.toContain("Save diagnosis and warranty decision");
   });
+  it("shows corrected warranty terms and their author beside the original category", () => {
+    const fixture = buildNorthlinePresentationFixture(); const item = fixture.warrantyCases[0];
+    const term = fixture.appliedWarranties.find((row) => row.repairItemId === item.priorRepairItemId)!;
+    fixture.warrantyAmendments.push({ id: "correction", organizationId: item.organizationId, appliedWarrantyId: term.id, amendmentKind: "override_coverage", appliesToRepairOnly: true, amendedTermsJson: JSON.stringify({note: "Labor includes the return visit", endDate: "2026-11-08"}), reason: "Written vendor confirmation", decidedByMembershipId: "membership-northline-facilities", decidedByName: "Jordan Lee", decidedAt: "2026-08-21T14:00:00Z" });
+    fixture.warrantyAmendments.push({...fixture.warrantyAmendments.at(-1)!, id:"foreign", organizationId:"foreign", amendedTermsJson:'{"note":"Private other tenant terms"}'});
+    const html = renderToStaticMarkup(createElement(WarrantyCaseWorkspace, { fixture, warrantyCase:item, canManage:false }));
+    expect(html).toContain("Labor includes the return visit"); expect(html).toContain("2026-11-08"); expect(html).toContain("Jordan Lee"); expect(html).toContain("Original term:"); expect(html).toContain("Latest recorded correction"); expect(html).not.toContain("Private other tenant terms");
+  });
+
   it("shows a missing diagnosis, real earlier work number, and prevents contradictory charge choices", () => {
     const fixture = buildNorthlinePresentationFixture();
     const item = fixture.warrantyCases[0];
