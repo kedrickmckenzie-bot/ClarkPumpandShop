@@ -46,3 +46,10 @@ describe("stage-driven work-order workspace", () => {
     expect(resolveWorkOrderWorkspace({ ...base, stage: "vendor_response_scheduling", serviceSubStage: "authorization_ready", vendorResponseKind: "declined", requestedPath: "direct" })).toBe("direct_service");
   });
 });
+
+it("opens approved replacement setup once, then follows vendor progress", () => {
+  const input = { ...base, stage: "vendor_response_scheduling" as const, selectedDecisionKind: "replacement_quote" as const, replacementApproved: true };
+  expect(resolveWorkOrderWorkspace(input)).toBe("direct_service");
+  expect(resolveWorkOrderWorkspace({...input, currentIssuanceRevision: 1})).toBe("waiting_on_vendor");
+  expect(resolveWorkOrderWorkspace({...input, currentIssuanceRevision: 1, serviceSubStage: "question_pending", vendorResponseKind: "question"})).toBe("vendor_response");
+});

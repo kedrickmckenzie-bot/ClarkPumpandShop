@@ -1,6 +1,7 @@
 import { buildDecisionContext } from "./decision-context";
 import { roleCanAccessProgramRoute } from "@/components/ops/role-policy";
 import { lifecyclePriceEvidence, priceLabel } from "@/lib/ops/lifecycle-price-evidence";
+import { lifecycleReviewWork } from "@/lib/ops/lifecycle-review-work";
 import { loadWorkReview, recordedMoneyLabel } from "@/lib/ops/work-review";
 import { createOpsFixtureReadRepository } from "@/lib/ops/fixture-repository";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
@@ -197,9 +198,7 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
   const { asset, store } = found;
   const workOrders = fixture.workOrders.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && row.storeId === store.id);
   const reactiveWork = workOrders.filter((row) => row.priority !== "planned");
-  const currentRepair = reactiveWork.filter((row) => !["closed", "cancelled", "completed_pending_review", "resolved"].includes(row.status)).sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
-  const recordedReplacement = fixture.replacementEvents.filter((row) => row.organizationId === session.organizationId && row.assetId === asset.id && row.status !== "cancelled").sort((a,b) => b.approvedAt.localeCompare(a.approvedAt))[0];
-  const proposalWork = currentRepair ?? workOrders.find((row) => row.id === recordedReplacement?.workOrderId);
+  const proposalWork = lifecycleReviewWork(fixture, session.organizationId, asset.id, first(query.work), first(query.component));
   const replacement = resolveAssetReplacementEstimate(fixture, asset, fixture.asOf);
   const prices = lifecyclePriceEvidence(fixture, proposalWork, replacement.amount);
   const comparisonAmount = prices.replacement ?? replacement.amount;

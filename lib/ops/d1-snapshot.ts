@@ -1,4 +1,6 @@
 import { and, eq, getTableName, inArray, type InferSelectModel } from "drizzle-orm";
+import { workPriceFrom } from "./work-price-types";
+import { opsWorkPrices } from "@/db/ops-schema";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { drizzle } from "drizzle-orm/d1";
 import {
@@ -193,6 +195,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     responseRows,
     estimateRequestRows,
     estimateProposalRows,
+    workPriceRows,
     visitRows,
     siteVisitWorkOrderRows,
     workOrderVerificationRows,
@@ -286,6 +289,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     read(opsVendorResponses),
     read(opsWorkOrderEstimateRequests),
     read(opsVendorEstimateProposals),
+    read(opsWorkPrices),
     read(opsVisitSessions),
     read(opsSiteVisitWorkOrders),
     read(opsWorkOrderVerifications),
@@ -345,6 +349,7 @@ export async function loadOpsFixtureSnapshotFromD1(
   const users = [...new Map(userRows.map((row) => [row.id, row])).values()];
   return {
     asOf,
+    workPrices: workPriceRows.map((row) => workPriceFrom(row)),
     organizations: organizations as OpsFixture["organizations"],
     divisions: divisionRows as OpsFixture["divisions"],
     regions: regionRows.map((row) => ({ ...row, divisionId: optional(row.divisionId) })) as OpsFixture["regions"],
@@ -503,7 +508,7 @@ export async function loadOpsFixtureSnapshotFromD1(
       retiredAt: optional(row.retiredAt),
       replacedByAssetId: optional(row.replacedByAssetId),
     })) as OpsFixture["assets"],
-    replacementBenchmarks: replacementBenchmarkRows.map((row) => ({ ...row, sourceWorkOrderId: optional(row.sourceWorkOrderId), sourceEstimateProposalId: optional(row.sourceEstimateProposalId), sourceAssetId: optional(row.sourceAssetId), sourceVendorId: optional(row.sourceVendorId), equipmentAmount: { amountMinor: row.equipmentAmountMinor, currency: row.currency }, installationAmount: { amountMinor: row.installationAmountMinor, currency: row.currency }, otherAmount: { amountMinor: row.otherAmountMinor, currency: row.currency }, totalAmount: { amountMinor: row.totalAmountMinor, currency: row.currency }, supersededAt: optional(row.supersededAt), notes: optional(row.notes) })) as OpsFixture["replacementBenchmarks"],
+    replacementBenchmarks: replacementBenchmarkRows.map((row) => ({ ...row, sourceWorkOrderId: optional(row.sourceWorkOrderId), sourceEstimateProposalId: optional(row.sourceEstimateProposalId), sourceAssetId: optional(row.sourceAssetId), sourceVendorId: optional(row.sourceVendorId), equipmentAmount: row.equipmentAmountMinor == null ? undefined : { amountMinor: row.equipmentAmountMinor, currency: row.currency }, installationAmount: row.installationAmountMinor == null ? undefined : { amountMinor: row.installationAmountMinor, currency: row.currency }, otherAmount: row.otherAmountMinor == null ? undefined : { amountMinor: row.otherAmountMinor, currency: row.currency }, totalAmount: { amountMinor: row.totalAmountMinor, currency: row.currency }, supersededAt: optional(row.supersededAt), notes: optional(row.notes) })) as OpsFixture["replacementBenchmarks"],
     assetReplacementOverrides: replacementOverrideRows.map((row) => ({ ...row, sourceBenchmarkId: optional(row.sourceBenchmarkId), amount: { amountMinor: row.amountMinor, currency: row.currency }, supersededAt: optional(row.supersededAt) })) as OpsFixture["assetReplacementOverrides"],
     replacementEvents: replacementEventRows.map((row) => ({ ...row, approvedAmount: { amountMinor: row.approvedAmountMinor, currency: row.currency }, completedAt: optional(row.completedAt), finalAmount: row.finalAmountMinor == null ? undefined : { amountMinor: row.finalAmountMinor, currency: row.currency }, replacementAssetId: optional(row.replacementAssetId) })) as OpsFixture["replacementEvents"],
     lifecycleRecommendations: lifecycleRecommendationRows.map((row) => ({ ...row, workOrderId: optional(row.workOrderId), inputsJson: typeof row.inputsJson === "string" ? row.inputsJson : JSON.stringify(row.inputsJson), missingData: parseStringArray(row.missingDataJson), actualOutcome: optional(row.actualOutcome), actualOutcomeAt: optional(row.actualOutcomeAt), replacementEventId: optional(row.replacementEventId) })) as OpsFixture["lifecycleRecommendations"],

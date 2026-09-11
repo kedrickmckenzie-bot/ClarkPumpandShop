@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { WorkReviewButton } from "./work-review";
 import {
@@ -298,22 +299,20 @@ function SourceTable({ model }: { model: TrendAnalysisPageViewModel }) {
   );
 }
 
-export function TrendsWorkspace({ model }: { model: TrendAnalysisPageViewModel }) {
+export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPageViewModel; savedViews?: ReactNode }) {
   const comparison = model.summary.find((metric) => metric.id === "comparison");
   const coverage = model.summary.find((metric) => metric.id === "coverage");
   return (
     <main className={styles.workspace}>
       <header className={styles.pageHeader}>
-        <div><p>{model.page.eyebrow}</p><h1>{model.page.title}</h1><span>{model.page.description}</span></div>
+        <div><p>{model.page.eyebrow}</p><h1>{model.page.title}</h1><span>Costs, work, and changes over time.</span></div>
         {model.page.secondaryAction ? <Link className={styles.secondaryButton} href={model.page.secondaryAction.href}>{model.page.secondaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </header>
 
       <section className={styles.analysisContext} aria-label="Current analysis context">{model.analysisContext.map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}</section>
       {model.filterNotice ? <aside className={styles.filterNotice}><Info size={16} aria-hidden="true" />{model.filterNotice}</aside> : null}
       {model.invoiceReview ? <aside className={styles.filterNotice}>{model.invoiceReview.message} <Link href={model.invoiceReview.href}>{model.invoiceReview.label}</Link></aside> : null}
-      <ExecutiveResults model={model} />
-      <TrendsFilterForm action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} />
-      <Investigation model={model} />
+      <details className={styles.notes}><summary>Filters &amp; views</summary><TrendsFilterForm action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} />{savedViews}</details>
       <AnalysisViews model={model} />
 
       {model.activeView === "overview" ? <>
@@ -327,6 +326,8 @@ export function TrendsWorkspace({ model }: { model: TrendAnalysisPageViewModel }
       {model.activeView === "planning" ? <OutlookPanel model={model} /> : null}
       {model.activeView === "records" ? <SourceTable model={model} /> : null}
 
+      <ExecutiveResults model={model} />
+      <details className={styles.notes}><summary>Filter details</summary><Investigation model={model} /></details>
       <details className={styles.notes}>
         <summary><Info size={17} aria-hidden="true" />How these numbers work<ChevronRight size={16} aria-hidden="true" /></summary>
         <ul>{model.notes.map((note) => <li key={note}>{note}</li>)}</ul>

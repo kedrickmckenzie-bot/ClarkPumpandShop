@@ -4,7 +4,7 @@ const origin = process.argv[2] ?? "http://localhost:3010";
 if (!["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname)) {
   throw new Error("Use a local preview URL for this audit.");
 }
-const roots = ["overview", "action-center", "requests", "work-orders", "stores", "equipment", "vendors", "spend", "spend?basis=invoiced&period=12m&store=store-northline-104", "trends", "invoices", "pm", "lifecycle", "search?q=104", "stores/new", "work-orders/new", "vendors/vendor-northline-summit?visitPage=2", "work-orders?costMonth=2026-07"];
+const roots = ["overview", "action-center", "requests", "work-orders", "stores", "equipment", "vendors", "spend", "spend?basis=invoiced&period=12m&store=store-northline-104", "trends", "invoices", "pm", "lifecycle", "search?q=104", "stores/new", "work-orders/new", "vendors/vendor-northline-summit?visitPage=2", "work-orders?costMonth=2026-07", "invoices?page=2", "invoices?view=review", "work-orders/wo-warranty-104-compressor-callback/prices", "work-orders/wo-warranty-104-compressor-callback/cost-history", "pm/occurrences/pm-occurrence-104-fall-hvac-104-hvac-01-2025-fall"];
 const paths = new Set(roots.map((route) => `/app/${route}`));
 const results: { path: string; status: number; ms: number; bytes: number; error?: string }[] = [];
 const recordPaths = new Set<string>();

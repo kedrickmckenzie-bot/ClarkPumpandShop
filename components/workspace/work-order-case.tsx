@@ -66,6 +66,7 @@ import {
 } from "@/lib/ops/work-order-workspace";
 
 interface WorkOrderCaseProps {
+  prices?: ReactNode;
   connectedReview?: WorkReviewModel | null;
   model: DetailPageViewModel;
   control: WorkOrderControlViewModel;
@@ -90,7 +91,7 @@ const caseViews: Array<{ id: WorkOrderView; label: string; icon: ReactNode }> = 
   { id: "overview", label: "Overview", icon: <Gauge aria-hidden="true" size={16} /> },
   { id: "service", label: "Service", icon: <Wrench aria-hidden="true" size={16} /> },
   { id: "visits", label: "Visits & notes", icon: <MapPin aria-hidden="true" size={16} /> },
-  { id: "cost", label: "Costs", icon: <ReceiptText aria-hidden="true" size={16} /> },
+  { id: "cost", label: "Prices & costs", icon: <ReceiptText aria-hidden="true" size={16} /> },
   { id: "equipment", label: "Equipment", icon: <PackageSearch aria-hidden="true" size={16} /> },
   { id: "activity", label: "History & follow-up", icon: <History aria-hidden="true" size={16} /> },
 ];
@@ -551,6 +552,7 @@ function workspaceHeading(mode: WorkOrderWorkspaceMode, accountabilityOnly: bool
 }
 
 export function WorkOrderCase({
+  prices,
   connectedReview,
   model,
   control,
@@ -605,6 +607,7 @@ export function WorkOrderCase({
     proposalCount: estimateComparison.proposalCount,
     selectedVendorName: estimateComparison.selectedVendorName,
     selectedDecisionKind: estimateComparison.selectedDecisionKind,
+    replacementApproved: estimateComparison.replacementApproved,
     currentIssuanceRevision: issuance.currentRevision,
     requestedPath: activeServicePath,
   });
@@ -690,6 +693,8 @@ export function WorkOrderCase({
       {activeView === "overview" && !accountabilityOnly ? <WorkOrderStageRail model={canonicalCase} /> : null}
 
       {activeView === "overview" ? <CaseStateDimensions model={canonicalCase} /> : null}
+
+      {prices}
 
       {activeView === "overview" ? (
         <>

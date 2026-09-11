@@ -779,6 +779,7 @@ export interface EstimateComparisonViewModel {
   selectedVendorName?: string;
   selectedDecisionKind?: "service_bid" | "replacement_quote";
   comparisonClosed: boolean;
+  replacementApproved?: boolean;
   activeRequestCount: number;
   proposalCount: number;
 }

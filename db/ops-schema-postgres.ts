@@ -21,6 +21,30 @@ import type { PgTableExtraConfigValue } from "drizzle-orm/pg-core";
 // db/ops-schema.ts; this file intentionally shares only logical table names.
 const id = () => text("id").primaryKey();
 const organizationId = () => text("organization_id").notNull();
+
+export const opsWorkPrices = pgTable("ops_work_prices", {
+  id: id(), organizationId: organizationId(),
+  workOrderId: text("work_order_id").notNull(), storeId: text("store_id").notNull(),
+  assetId: text("asset_id"), componentId: text("component_id"), profileId: text("profile_id"), profileFingerprint: text("profile_fingerprint"),
+  vendorId: text("vendor_id").notNull(), kind: text("kind").notNull(),
+  scopeKind: text("scope_kind").notNull(), scope: text("scope").notNull(),
+  amountMinor: bigint("amount_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true, mode: "string" }).notNull(), recordedBy: text("recorded_by").notNull(),
+}, (table) => [
+  index("idx_ops_work_prices_org_work_date").on(table.organizationId, table.workOrderId, table.recordedAt, table.id),
+  index("idx_ops_work_prices_org_profile_date").on(table.organizationId, table.profileId, table.recordedAt, table.id),
+  index("idx_ops_work_prices_org_asset_date").on(table.organizationId, table.assetId, table.recordedAt, table.id),
+  check("chk_ops_work_prices_kind", sql`${table.kind} IN ('repair', 'replace')`),
+  foreignKey({name:"fk_ops_work_prices_org",columns:[table.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({name:"fk_ops_work_prices_work",columns:[table.organizationId,table.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
+  foreignKey({name:"fk_ops_work_prices_store",columns:[table.organizationId,table.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),
+  foreignKey({name:"fk_ops_work_prices_vendor",columns:[table.organizationId,table.vendorId],foreignColumns:[opsVendors.organizationId,opsVendors.id]}),
+  foreignKey({name:"fk_ops_work_prices_asset",columns:[table.organizationId,table.assetId],foreignColumns:[opsAssets.organizationId,opsAssets.id]}),
+  foreignKey({name:"fk_ops_work_prices_component",columns:[table.organizationId,table.componentId],foreignColumns:[opsAssetComponents.organizationId,opsAssetComponents.id]}),
+  foreignKey({name:"fk_ops_work_prices_profile",columns:[table.organizationId,table.profileId],foreignColumns:[opsReplacementProfiles.organizationId,opsReplacementProfiles.id]}),
+  check("chk_ops_work_prices_scope", sql`${table.scopeKind} IN ('whole', 'part', 'job')`),
+  check("chk_ops_work_prices_amount", sql`${table.amountMinor} >= 0`),
+]);
 const instant = (name: string) => timestamp(name, { withTimezone: true, mode: "string" });
 const createdAt = () => instant("created_at").notNull();
 
@@ -1002,7 +1026,7 @@ export const opsVendorEstimateProposals = pgTable("ops_vendor_estimate_proposals
 ]);
 
 export const opsReplacementBenchmarks = pgTable("ops_replacement_benchmarks", {
-  id: id(), organizationId: organizationId(), profileId: text("profile_id").notNull(), sourceType: text("source_type").notNull(), sourceWorkOrderId: text("source_work_order_id"), sourceEstimateProposalId: text("source_estimate_proposal_id"), sourceAssetId: text("source_asset_id"), sourceVendorId: text("source_vendor_id"), equipmentAmountMinor: bigint("equipment_amount_minor", { mode: "number" }).notNull(), installationAmountMinor: bigint("installation_amount_minor", { mode: "number" }).notNull(), otherAmountMinor: bigint("other_amount_minor", { mode: "number" }).notNull(), totalAmountMinor: bigint("total_amount_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(), effectiveAt: instant("effective_at").notNull(), status: text("status").notNull(), supersededAt: instant("superseded_at"), notes: text("notes"), createdAt: createdAt(),
+  id: id(), organizationId: organizationId(), profileId: text("profile_id").notNull(), sourceType: text("source_type").notNull(), sourceWorkOrderId: text("source_work_order_id"), sourceEstimateProposalId: text("source_estimate_proposal_id"), sourceAssetId: text("source_asset_id"), sourceVendorId: text("source_vendor_id"), equipmentAmountMinor: bigint("equipment_amount_minor", { mode: "number" }), installationAmountMinor: bigint("installation_amount_minor", { mode: "number" }), otherAmountMinor: bigint("other_amount_minor", { mode: "number" }), totalAmountMinor: bigint("total_amount_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(), effectiveAt: instant("effective_at").notNull(), status: text("status").notNull(), supersededAt: instant("superseded_at"), notes: text("notes"), createdAt: createdAt(),
 }, (table) => [
   unique("uq_ops_replacement_benchmarks_org_id").on(table.organizationId, table.id),
   index("idx_ops_replacement_benchmarks_org_profile_status_effective").on(table.organizationId, table.profileId, table.status, table.effectiveAt),
@@ -1014,9 +1038,9 @@ export const opsReplacementBenchmarks = pgTable("ops_replacement_benchmarks", {
   foreignKey({ name: "fk_ops_replacement_benchmarks_proposal", columns: [table.organizationId, table.sourceEstimateProposalId], foreignColumns: [opsVendorEstimateProposals.organizationId, opsVendorEstimateProposals.id] }),
   foreignKey({ name: "fk_ops_replacement_benchmarks_asset", columns: [table.organizationId, table.sourceAssetId], foreignColumns: [opsAssets.organizationId, opsAssets.id] }),
   foreignKey({ name: "fk_ops_replacement_benchmarks_vendor", columns: [table.organizationId, table.sourceVendorId], foreignColumns: [opsVendors.organizationId, opsVendors.id] }),
-  check("chk_ops_replacement_benchmarks_source", sql`${table.sourceType} IN ('approved_quote', 'final_cost', 'manual', 'catalog')`),
+  check("chk_ops_replacement_benchmarks_source", sql`${table.sourceType} IN ('approved_quote', 'final_cost', 'manual', 'catalog', 'reported_price')`),
   check("chk_ops_replacement_benchmarks_status", sql`${table.status} IN ('published', 'superseded')`),
-  check("chk_ops_replacement_benchmarks_amounts", sql`${table.equipmentAmountMinor} >= 0 AND ${table.installationAmountMinor} >= 0 AND ${table.otherAmountMinor} >= 0 AND ${table.totalAmountMinor} = ${table.equipmentAmountMinor} + ${table.installationAmountMinor} + ${table.otherAmountMinor}`),
+  check("chk_ops_replacement_benchmarks_amounts", sql`${table.totalAmountMinor} >= 0 AND ((${table.sourceType} = 'reported_price' AND ${table.equipmentAmountMinor} IS NULL AND ${table.installationAmountMinor} IS NULL AND ${table.otherAmountMinor} IS NULL) OR (${table.equipmentAmountMinor} IS NOT NULL AND ${table.installationAmountMinor} IS NOT NULL AND ${table.otherAmountMinor} IS NOT NULL AND ${table.equipmentAmountMinor} >= 0 AND ${table.installationAmountMinor} >= 0 AND ${table.otherAmountMinor} >= 0 AND ${table.totalAmountMinor} = ${table.equipmentAmountMinor} + ${table.installationAmountMinor} + ${table.otherAmountMinor}))`),
 ]);
 
 export const opsAssetReplacementOverrides = pgTable("ops_asset_replacement_overrides", {
@@ -1954,6 +1978,7 @@ export const opsPostgresSchema = {
   opsRequests,
   opsRequestImpactAssessments,
   opsWorkOrders,
+  opsWorkPrices,
   opsWorkOrderVisitHolds,
   opsApprovalPolicies,
   opsApprovalRequests,

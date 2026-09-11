@@ -345,7 +345,7 @@ describe("operator presenter drill-through contracts", () => {
     expect(store104.metrics.map((metric) => metric.label)).not.toContain("Comparison inputs complete");
     expect(store104.metrics.every((metric) => metric.link.href.includes(`asset=${encodeURIComponent(storyAsset.id)}`))).toBe(true);
     expect(store104.priorityActions).toHaveLength(0);
-    expect(evidence).toMatch(/small repair; not flagged/i);
+    expect(evidence).toBe("No cost flag");
     expect(evidence).not.toMatch(/return visit|recorded work cost|percent of replacement/i);
     expect(proposal?.value).toContain("$1,250");
     expect(proposal?.secondary).toMatch(/1 year.*replacement estimate/i);
@@ -522,18 +522,14 @@ describe("operator presenter drill-through contracts", () => {
     const dashboard = buildDashboardModel(fixture, executiveSession());
 
     expect(dashboard.spotlight?.title).toContain("CPS-2026-0115");
-    expect(dashboard.spotlight?.eyebrow).toBe("Repair or replace");
-    expect(dashboard.spotlight?.description).toMatch(/proposed repair.*would need.*continued service/i);
-    expect(dashboard.spotlight?.description).toMatch(/entered vendor estimate/i);
-    expect(dashboard.spotlight?.description).toMatch(/age, warranty, prior repairs, visits, and preventive maintenance/i);
+    expect(dashboard.spotlight?.eyebrow).toBe("Equipment review");
+    expect(dashboard.spotlight?.title).toContain("Replacement approved");
     expect(dashboard.spotlight?.facts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "Proposed repair", value: "$18,000" }),
-      expect.objectContaining({ label: "Required service runway", value: "6.6 years" }),
-      expect.objectContaining({ label: "Entered service estimate", value: "5 years" }),
-      expect.objectContaining({ label: "Estimated replacement", value: "$32,853" }),
+      expect.objectContaining({ label: "Repair estimate", value: "$18,000.00" }),
+      expect.objectContaining({ value: "$32,800.00" }),
     ]));
-    expect(dashboard.spotlight?.link.label).toBe("Open repair-or-replace details");
-    expect(JSON.stringify(dashboard.spotlight)).not.toMatch(/recorded work cost|break-even|economic screening|before issuing|expected to keep/i);
+    expect(dashboard.spotlight?.link.label).toBe("View costs and history");
+    expect(JSON.stringify(dashboard.spotlight)).not.toMatch(/would need|should replace|break-even|economic screening/i);
   });
 
   it("keeps store-device entry points in the accountability edition without cluttering the full manager record", () => {
@@ -655,4 +651,23 @@ describe("operator presenter drill-through contracts", () => {
       && request.canWithdraw === true
     ))).toBe(true);
   });
+});
+
+it("opens each PM occurrence as evidence, including occurrences without work", () => {
+  const fixture = buildNorthlinePresentationFixture();
+  const model = buildProgramModel(fixture, executiveSession(), "pm", { view: "all", store: "store-northline-104" });
+  expect(model.table!.rows.length).toBeGreaterThan(0);
+  for (const row of model.table!.rows) {
+    expect(row.href).toContain("/app/pm/occurrences/");
+    expect(new URL(row.href, "https://test").searchParams.get("returnTo")).toContain("store=store-northline-104");
+    expect(row.href).not.toContain("work-orders/new");
+  }
+});
+it("keeps approved replacement amount and state in the overview", () => {
+  const fixture = buildNorthlinePresentationFixture();
+  const model = buildDashboardModel(fixture, { ...executiveSession(), role: "facilities" });
+  expect(model.spotlight?.title).toContain("Replacement approved");
+  expect(model.spotlight?.facts.some(fact => fact.value === "$32,800.00" || fact.value === "$32,800")).toBe(true);
+  expect(model.spotlight?.link.href).toContain("work=wo-northline-115");
+  expect(buildEstimateComparisonModel(fixture, executiveSession(), "wo-northline-115").replacementApproved).toBe(true);
 });

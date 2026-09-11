@@ -110,3 +110,8 @@ See [ACCOUNTING_REVIEW_CORRECTIONS.md](ACCOUNTING_REVIEW_CORRECTIONS.md). Linked
 ## Connected drill-down validation — September 10, 2026
 
 The Overview and Spending cost-source lists now keep date and taxonomy filters on bounded repository queries, calculate row amounts within the same filters, and open the actual Costs tab. Filtered invoice links reconcile to canonical allocations. Monthly PostgreSQL date queries are regression-tested alongside SQLite/D1 and the fixture. See [WORKFLOW_RELIABILITY_AUDIT.md](WORKFLOW_RELIABILITY_AUDIT.md). These navigation and loading changes do not change recording coverage, measured-zero eligibility, or equipment exposure.
+
+
+## September 11 review continuity
+
+Recurring-work findings now open the exact reactive-work observations for the selected dates and equipment, preserving the other analysis filters. Planned work and records assigned to multiple units are excluded consistently from the finding and its evidence. This changes no recording-coverage or equipment-exposure rules. The mobile chart is above the detailed results and filter explanations; saved views are within Filters & views. Validation and remaining platform work are recorded in [WORK_PRICE_HISTORY_COMPLETION.md](WORK_PRICE_HISTORY_COMPLETION.md).

@@ -2537,7 +2537,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
   const publishedProfileIds = new Set<string>();
   fixture.replacementBenchmarks.forEach((row) => {
     if (!replacementProfileIds.has(row.profileId)) throw new Error(`Replacement benchmark ${row.id} has no profile`);
-    if (row.totalAmount.amountMinor !== row.equipmentAmount.amountMinor + row.installationAmount.amountMinor + row.otherAmount.amountMinor) throw new Error(`Replacement benchmark ${row.id} does not reconcile`);
+    if (row.sourceType === "reported_price" ? !!(row.equipmentAmount || row.installationAmount || row.otherAmount) : !row.equipmentAmount || !row.installationAmount || !row.otherAmount || row.totalAmount.amountMinor !== row.equipmentAmount.amountMinor + row.installationAmount.amountMinor + row.otherAmount.amountMinor) throw new Error(`Replacement benchmark ${row.id} does not reconcile`);
     if (row.status === "published") {
       const key = `${row.organizationId}:${row.profileId}`;
       if (publishedProfileIds.has(key)) throw new Error(`Replacement profile ${row.profileId} has multiple published benchmarks`);

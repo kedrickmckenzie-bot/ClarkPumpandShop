@@ -191,6 +191,9 @@ export function getServerOpsRepositoryProxy(): OpsRepository {
   return repositoryProxy;
 }
 
+/** The showcase uses the same reporting date on source and planning screens. */
+export function getServerOpsReportingAsOf() { return NORTHLINE_AS_OF; }
+
 export async function getServerOpsFixtureSnapshot(
   organizationId: OpsId = NORTHLINE_ORGANIZATION_ID,
 ): Promise<OpsFixture> {

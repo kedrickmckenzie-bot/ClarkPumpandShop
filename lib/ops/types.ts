@@ -1157,7 +1157,7 @@ export interface ReplacementProfile {
   createdAt: IsoDateTime;
 }
 
-export type ReplacementBenchmarkSource = "approved_quote" | "final_cost" | "manual" | "catalog";
+export type ReplacementBenchmarkSource = "approved_quote" | "final_cost" | "manual" | "catalog" | "reported_price";
 
 export interface ReplacementBenchmark {
   id: OpsId;
@@ -1168,9 +1168,9 @@ export interface ReplacementBenchmark {
   sourceEstimateProposalId?: OpsId;
   sourceAssetId?: OpsId;
   sourceVendorId?: OpsId;
-  equipmentAmount: Money;
-  installationAmount: Money;
-  otherAmount: Money;
+  equipmentAmount?: Money;
+  installationAmount?: Money;
+  otherAmount?: Money;
   totalAmount: Money;
   effectiveAt: IsoDateTime;
   status: "published" | "superseded";
@@ -1967,6 +1967,7 @@ export interface Page<T> {
 }
 
 export interface OpsFixture {
+  workPrices?: import("./work-price-types").WorkPrice[];
   accountingInvoiceSources?: AccountingInvoiceSource[];
   asOf: IsoDateTime;
   organizations: Organization[];

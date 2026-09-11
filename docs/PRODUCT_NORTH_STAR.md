@@ -17,6 +17,8 @@ For every meaningful maintenance dollar, management should be able to determine 
 
 ## Three product promises
 
+The September 11 clarification applies across the suite: show useful facts with short, simple labels; keep long explanations in details. Do not tell an operator to repair or replace equipment. A price entered on a work order should become dated, auditable evidence for later review. Repair prices build history too. Replacement prices may inform matching equipment's capital plans only after the user sees and confirms the proposed changes; equipment-specific prices and approved quotes retain their provenance. See [the implemented work-price flow](WORK_PRICE_HISTORY_COMPLETION.md).
+
 1. **Nothing gets lost.** Every unresolved Work Order has one internal accountable owner, a plain-language next action, a due time or explicit no-SLA policy, and an escalation destination. The target implementation uses first-class Workflow Tasks; current scalar next-action fields are transitional.
 2. **Every visit has context.** Authorization, provider, store, point-in-time arrival/checkout evidence, Work-Order-specific outcomes, and follow-up remain connected without requiring a vendor account or native app.
 3. **Every insight has proof.** Every material metric, outlier, recommendation, and value claim opens the exact source records and preserves scope, period, cost basis, taxonomy, cohort, exclusions, and coverage.

@@ -1,4 +1,5 @@
 import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
+import { workPricePersistenceRegression } from "./helpers/work-price-persistence-regression";
 import { connectedReviewRegression } from "./helpers/connected-review-regression";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
@@ -41,6 +42,7 @@ describe("authoritative invoice reporting", () => {
       await connectedReviewRegression(createOpsD1Repository(binding));
       await accountingReportingRegression(createOpsD1Repository(binding), () => loadOpsFixtureSnapshotFromD1(binding, "org-northline-demo", "2026-08-25T18:00:00.000Z", { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] }));
       expect(queries.some((sql) => sql.includes('from "ops_outbox_messages"'))).toBe(false);
+      await workPricePersistenceRegression(createOpsD1Repository(binding));
       expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     } finally { db.close(); }
   }, 120_000);

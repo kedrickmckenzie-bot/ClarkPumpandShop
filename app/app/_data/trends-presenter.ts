@@ -73,7 +73,7 @@ interface TrendSourceRecord {
   sourceIds?: string[];
 }
 
-type TrendDetailKind = "current" | "comparison" | "both" | "unclassified" | "benchmark" | "projection" | "month" | "vendor_outstanding";
+type TrendDetailKind = "current" | "comparison" | "both" | "unclassified" | "benchmark" | "projection" | "month" | "vendor_outstanding" | "recurring_work";
 
 export interface TrendExportRecord {
   sourceId: string;
@@ -838,7 +838,7 @@ export function buildTrendsModel(
   const requestedViewValue = first(query.view);
   const detailMonthValue = first(query.detailMonth);
   const hasValidDetailMonthShape = Boolean(detailMonthValue && /^\d{4}-(0[1-9]|1[0-2])$/.test(detailMonthValue));
-  const hasRecognizedPeriodDetailKind = detailKindValue === "current" || detailKindValue === "comparison" || detailKindValue === "both" || detailKindValue === "unclassified" || detailKindValue === "projection" || detailKindValue === "vendor_outstanding";
+  const hasRecognizedPeriodDetailKind = detailKindValue === "current" || detailKindValue === "comparison" || detailKindValue === "both" || detailKindValue === "unclassified" || detailKindValue === "projection" || detailKindValue === "vendor_outstanding" || detailKindValue === "recurring_work";
   const detailDriverBreakdownValue = first(query.driverBreakdown);
   let detailDriverBreakdown = (["region", "store", "category", "group", "profile", "component", "vendor"] as const).includes(detailDriverBreakdownValue as TrendBreakdownId)
     ? detailDriverBreakdownValue as TrendBreakdownId
@@ -2084,7 +2084,7 @@ export function buildTrendsModel(
     };
   });
   const breakdownLabels: Record<TrendBreakdownId, string> = { region: "region", store: "store", category: "service area", group: "equipment group", profile: "equipment type", component: "component name", vendor: "vendor" };
-  const detailBaseRecords = detailKind === "vendor_outstanding" ? outstandingRecords : detailKind === "current"
+  const detailBaseRecords = detailKind === "recurring_work" ? currentRecords.filter(row => row.workType === "reactive" && recordAssetIds(row).length === 1) : detailKind === "vendor_outstanding" ? outstandingRecords : detailKind === "current"
     ? currentRecords
     : detailKind === "comparison"
       ? baselineRecords
@@ -2107,7 +2107,7 @@ export function buildTrendsModel(
   const detailDriverLabel = detailDriverBreakdown && detailDriverValue
     ? detailRecords[0] ? driverIdentity(detailRecords[0], detailDriverBreakdown).label : detailDriverValue === unclassifiedDriverKey ? "Unclassified" : "Selected segment"
     : undefined;
-  const detailPeriodLabel = detailKind === "vendor_outstanding" ? `Outstanding assignments first issued ${dateLabel(currentStart)}–${dateLabel(currentEnd)}` : detailKind === "current"
+  const detailPeriodLabel = detailKind === "vendor_outstanding" ? `Outstanding assignments first issued ${dateLabel(currentStart)}–${dateLabel(currentEnd)}` : (detailKind === "current" || detailKind === "recurring_work")
     ? `${detailDriverLabel ? `${detailDriverLabel} · ` : ""}${selectedPeriodName} · ${dateLabel(currentStart)}–${dateLabel(currentEnd)}`
     : detailKind === "comparison" && baselineStart && baselineEnd
       ? `${compareLabel} · ${dateLabel(baselineStart)}–${dateLabel(baselineEnd)}`
@@ -2483,9 +2483,9 @@ export function buildTrendsModel(
       patternLabel: "Repeated equipment-linked activity",
       evidenceLabel: `${evidence.records.length} source records`,
       sourceIds: evidence.records.map((record) => record.id),
-      actionLabel: "Review the equipment history",
+      actionLabel: "View these jobs",
       tone: "warning",
-      link: { href: `/app/equipment/${assetId}`, label: `Open ${asset?.name ?? "equipment"} history` },
+      link: { href: `${trendHref({ asset: assetId, view: "records", detailKind: "recurring_work", sourcePage: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined })}#source-records`, label: "View these source records" },
     });
   }
   if (vendorAccountability.overdueCount > 0 && insights.length < 3) {

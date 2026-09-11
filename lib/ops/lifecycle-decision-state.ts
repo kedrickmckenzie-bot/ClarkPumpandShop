@@ -22,13 +22,6 @@ export interface LifecycleDecisionState {
   tone: LifecycleDecisionTone;
 }
 
-function formatRunway(months: number | undefined): string {
-  if (months === undefined) return "an unknown amount of time";
-  if (months < 12) return `${Math.max(1, Math.round(months))} month${Math.round(months) === 1 ? "" : "s"}`;
-  const years = months / 12;
-  return `${Number.isInteger(years) ? years.toFixed(0) : years.toFixed(1)} years`;
-}
-
 function sentence(value: string): string {
   return value.replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -104,38 +97,33 @@ export function resolveLifecycleDecisionState(input: {
     };
   }
 
-  const runway = screening.comparison.requiredEconomicRunwayMonths;
-  const runwayLabel = runway === undefined
-    ? "The required service runway cannot be calculated until repair, replacement, and expected-life inputs are entered."
-    : `The repair would need about ${formatRunway(runway)} of continued service to equal the replacement's annualized installed-capital cost.`;
-
   if (screening.state === "compare_alternatives") {
     return {
       kind: "compare_alternatives",
-      label: "Compare repair and replacement",
-      helper: `${runwayLabel} Compare the entered repair-service estimate, warranty, and service history before authorizing; this is not a replacement direction.`,
+      label: "Costs to review",
+      helper: "The cost rule flagged this unit for a closer look.",
       tone: "warning",
     };
   }
   if (screening.state === "below_materiality") {
     return {
       kind: "below_materiality",
-      label: "Small repair; not flagged",
-      helper: `${runwayLabel} The current repair remains below the materiality threshold, so a short remaining expected life does not turn it into a replacement signal.`,
-      tone: "positive",
+      label: "No cost flag",
+      helper: "The repair price is below your cost limit.",
+      tone: "neutral",
     };
   }
   if (screening.state === "below_economic_review") {
     return {
       kind: "below_economic_review",
-      label: "Below capital-review threshold",
-      helper: `${runwayLabel} The available planning runway is above that requirement, so the repair is not flagged for capital review.`,
-      tone: "positive",
+      label: "No cost flag",
+      helper: "The current prices do not raise a cost flag.",
+      tone: "neutral",
     };
   }
   return {
     kind: "incomplete",
-    label: "Current comparison inputs needed",
+    label: "Price details needed",
     helper: screening.dataGaps.length
       ? `Still needed: ${screening.dataGaps.map(sentence).join(", ")}.`
       : "Open the source records before making a lifecycle decision.",

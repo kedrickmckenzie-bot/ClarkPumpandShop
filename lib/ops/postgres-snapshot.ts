@@ -1,4 +1,5 @@
 import type { PostgresPoolLike } from "./postgres-repository";
+import { workPriceFrom } from "./work-price-types";
 import type { IsoDateTime, OpsFixture, OpsId } from "./types";
 
 type Row = Record<string, unknown>;
@@ -113,6 +114,7 @@ export async function loadOpsFixtureSnapshotFromPostgres(
     vendorResponses,
     estimateRequests,
     estimateProposals,
+    workPrices,
     visits,
     siteVisitWorkOrders,
     workOrderVerifications,
@@ -202,6 +204,7 @@ export async function loadOpsFixtureSnapshotFromPostgres(
     rows("ops_vendor_responses"),
     rows("ops_work_order_estimate_requests"),
     rows("ops_vendor_estimate_proposals"),
+    rows("ops_work_prices"),
     rows("ops_visit_sessions"),
     rows("ops_site_visit_work_orders"),
     rows("ops_work_order_verifications"),
@@ -267,6 +270,7 @@ export async function loadOpsFixtureSnapshotFromPostgres(
 
   return {
     asOf,
+    workPrices: workPrices.map(workPriceFrom),
     organizations: organizationResult.rows.map(camelRow) as unknown as OpsFixture["organizations"],
     divisions: divisions as unknown as OpsFixture["divisions"],
     regions: regions.map((row) => ({ ...row, divisionId: optional(row.divisionId) })) as unknown as OpsFixture["regions"],
@@ -316,7 +320,7 @@ export async function loadOpsFixtureSnapshotFromPostgres(
     exceptions: exceptions.map((row) => ({ ...row, storeId: optional(row.storeId), workOrderId: optional(row.workOrderId), visitId: optional(row.visitId), vendorId: optional(row.vendorId), resolvedAt: optional(row.resolvedAt) })) as unknown as OpsFixture["exceptions"],
     replacementProfiles: replacementProfiles.map((row) => ({ ...row, taxonomyNodeId: optional(row.taxonomyNodeId), matchKeys: stringArray(row.matchKeysJson), attributes: stringRecord(row.attributesJson), expectedLifeYears: optional(row.expectedLifeYears), annualEscalationBps: Number(row.annualEscalationBps), lowVarianceBps: Number(row.lowVarianceBps), highVarianceBps: Number(row.highVarianceBps) })) as unknown as OpsFixture["replacementProfiles"],
     assets: assets.map((row) => ({ ...row, taxonomyNodeId: optional(row.taxonomyNodeId), equipmentTemplateId: optional(row.equipmentTemplateId), groupPath: stringArray(row.groupPathJson), manufacturer: optional(row.manufacturer), model: optional(row.model), serialNumber: optional(row.serialNumber), supplier: optional(row.supplier), installedAt: optional(row.installedAt), expectedLifeYears: optional(row.expectedLifeYears), warrantyEndsAt: optional(row.warrantyEndsAt), replacementProfileId: optional(row.replacementProfileId), replacementAttributes: stringRecord(row.replacementAttributesJson), replacementAdjustmentBps: optional(row.replacementAdjustmentBps), replacementEstimate: row.replacementEstimateMinor == null ? undefined : { amountMinor: Number(row.replacementEstimateMinor), currency: row.replacementCurrency ?? "USD" }, retiredAt: optional(row.retiredAt), replacedByAssetId: optional(row.replacedByAssetId) })) as unknown as OpsFixture["assets"],
-    replacementBenchmarks: replacementBenchmarks.map((row) => ({ ...row, sourceWorkOrderId: optional(row.sourceWorkOrderId), sourceEstimateProposalId: optional(row.sourceEstimateProposalId), sourceAssetId: optional(row.sourceAssetId), sourceVendorId: optional(row.sourceVendorId), equipmentAmount: { amountMinor: Number(row.equipmentAmountMinor), currency: row.currency }, installationAmount: { amountMinor: Number(row.installationAmountMinor), currency: row.currency }, otherAmount: { amountMinor: Number(row.otherAmountMinor), currency: row.currency }, totalAmount: { amountMinor: Number(row.totalAmountMinor), currency: row.currency }, supersededAt: optional(row.supersededAt), notes: optional(row.notes) })) as unknown as OpsFixture["replacementBenchmarks"],
+    replacementBenchmarks: replacementBenchmarks.map((row) => ({ ...row, sourceWorkOrderId: optional(row.sourceWorkOrderId), sourceEstimateProposalId: optional(row.sourceEstimateProposalId), sourceAssetId: optional(row.sourceAssetId), sourceVendorId: optional(row.sourceVendorId), equipmentAmount: row.equipmentAmountMinor == null ? undefined : { amountMinor: Number(row.equipmentAmountMinor), currency: row.currency }, installationAmount: row.installationAmountMinor == null ? undefined : { amountMinor: Number(row.installationAmountMinor), currency: row.currency }, otherAmount: row.otherAmountMinor == null ? undefined : { amountMinor: Number(row.otherAmountMinor), currency: row.currency }, totalAmount: { amountMinor: Number(row.totalAmountMinor), currency: row.currency }, supersededAt: optional(row.supersededAt), notes: optional(row.notes) })) as unknown as OpsFixture["replacementBenchmarks"],
     assetReplacementOverrides: assetReplacementOverrides.map((row) => ({ ...row, sourceBenchmarkId: optional(row.sourceBenchmarkId), amount: { amountMinor: Number(row.amountMinor), currency: row.currency }, supersededAt: optional(row.supersededAt) })) as unknown as OpsFixture["assetReplacementOverrides"],
     replacementEvents: replacementEvents.map((row) => ({ ...row, approvedAmount: { amountMinor: Number(row.approvedAmountMinor), currency: row.currency }, completedAt: optional(row.completedAt), finalAmount: row.finalAmountMinor == null ? undefined : { amountMinor: Number(row.finalAmountMinor), currency: row.currency }, replacementAssetId: optional(row.replacementAssetId) })) as unknown as OpsFixture["replacementEvents"],
     lifecycleRecommendations: lifecycleRecommendations.map((row) => ({ ...row, workOrderId: optional(row.workOrderId), inputsJson: jsonText(row.inputsJson), missingData: stringArray(row.missingDataJson), actualOutcome: optional(row.actualOutcome), actualOutcomeAt: optional(row.actualOutcomeAt), replacementEventId: optional(row.replacementEventId) })) as unknown as OpsFixture["lifecycleRecommendations"],

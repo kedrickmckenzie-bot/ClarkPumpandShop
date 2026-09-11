@@ -1,3 +1,4 @@
+import { effectivePmStatus } from "@/lib/ops/pm-occurrence-state";
 import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE, warrantyTaskHref } from "@/lib/ops/warranty-review";
 import { buildPmReactiveReview } from "./pm-reactive-review";
 import { workspaceStartHref } from "@/lib/ops/navigation-trail";
@@ -54,7 +55,6 @@ import type {
   Asset,
   ExceptionKind,
   OpsFixture,
-  PmOccurrence,
   RequestImpactAssessment,
   Store,
   VisitSession,
@@ -72,6 +72,7 @@ import {
   calculateRepairReplacementScreening,
   type RepairReplacementScreening,
 } from "@/lib/ops/lifecycle-analytics";
+import { lifecyclePriceEvidence, priceLabel } from "@/lib/ops/lifecycle-price-evidence";
 import { resolveLifecycleDecisionState } from "@/lib/ops/lifecycle-decision-state";
 import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
 import { projectAttentionItems } from "@/lib/ops/attention-projection";
@@ -671,13 +672,6 @@ function rollingMonthKeys(asOf: string, count = 12): string[] {
   });
 }
 
-function effectivePmStatus(occurrence: PmOccurrence, asOf: string): PmOccurrence["status"] {
-  if (occurrence.status === "completed" || occurrence.completedAt) return "completed";
-  if (occurrence.status === "waived") return "waived";
-  if (Date.parse(occurrence.windowEndsAt) < Date.parse(asOf)) return "missed";
-  if (Date.parse(occurrence.windowStartsAt) > Date.parse(asOf)) return "scheduled";
-  return occurrence.status === "scheduled" ? "scheduled" : "due";
-}
 
 function costBreakdown(
   title: string,
@@ -1282,21 +1276,7 @@ function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession
       ),
     ],
     trends: [costTrend(fixture, scoped, { periodStart })],
-    spotlight: candidate
-      ? {
-          eyebrow: "Repair or replace",
-          title: `${candidate.proposalWork?.number ?? "Current repair"}: review repair versus replacement`,
-          description: `The proposed repair is ${money(candidate.screening.comparison.repairEstimateMinor ?? 0)}, or ${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of the ${money(candidate.screening.comparison.replacementEstimateMinor ?? 0)} replacement estimate. It would need about ${candidate.screening.comparison.requiredEconomicRunwayMonths === undefined ? "an uncalculated period" : formatRunway(candidate.screening.comparison.requiredEconomicRunwayMonths)} of continued service to equal the replacement's annualized installed-capital cost. The entered service estimate is planning evidence, not a guarantee.`,
-          facts: [
-            { label: "Proposed repair", value: money(candidate.screening.comparison.repairEstimateMinor ?? 0) },
-            { label: "Estimated replacement", value: money(candidate.screening.comparison.replacementEstimateMinor ?? 0) },
-            { label: "Repair vs. replacement", value: `${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}%` },
-            { label: "Required service runway", value: candidate.screening.comparison.requiredEconomicRunwayMonths === undefined ? "Not calculable" : formatRunway(candidate.screening.comparison.requiredEconomicRunwayMonths) },
-            { label: "Entered service estimate", value: candidate.screening.comparison.estimatedServiceExtensionMonths === undefined ? "Not entered" : formatRunway(candidate.screening.comparison.estimatedServiceExtensionMonths) },
-          ],
-          link: { href: `/app/lifecycle?asset=${candidate.asset.id}`, label: "Open repair-or-replace details" },
-        }
-      : undefined,
+    spotlight: lifecycleSpotlight(fixture, candidate),
   };
 }
 
@@ -1463,6 +1443,21 @@ export function buildAccountabilityDashboardModel(
   };
 }
 
+function lifecycleSpotlight(fixture: OpsFixture, row: ReturnType<typeof lifecycleRows>[number] | undefined): DashboardPageViewModel["spotlight"] {
+  if (!row) return undefined;
+  const prices = lifecyclePriceEvidence(fixture, row.proposalWork, row.replacementResolution.amount);
+  const work = row.proposalWork;
+  return { eyebrow: "Equipment review", title: `${work?.number ?? row.asset.name} · ${row.decisionState.label}`,
+    description: row.asset.name,
+    facts: [
+      {label:"Repair estimate",value:priceLabel(work?.repairEstimate)},
+      {label:prices.replacement ? prices.replacementBasis : "Planning estimate",value:prices.replacement ? prices.replacementLabel : prices.planningLabel},
+      {label:"Spent · 12 months",value:money(row.cost12)},
+    ],
+    link:{href:hrefWithQuery("/app/lifecycle",{asset:row.asset.id,decision:row.asset.id,work:work?.id,view:"review"}),label:"View costs and history"},
+  };
+}
+
 export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession): DashboardPageViewModel {
   const base = buildSharedDashboardModel(fixture, session);
   const scoped = scopeFixture(fixture, session);
@@ -1542,21 +1537,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     },
   );
   const trend = costTrend(fixture, scoped, { periodStart });
-  const lifecycleSpotlight: DashboardPageViewModel["spotlight"] = candidate
-    ? {
-        eyebrow: "Repair or replace",
-        title: `${candidate.proposalWork?.number ?? "Current repair"}: review repair versus replacement`,
-        description: `The proposed repair is ${money(candidate.screening.comparison.repairEstimateMinor ?? 0)}, or ${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}% of the ${money(candidate.screening.comparison.replacementEstimateMinor ?? 0)} replacement estimate. It would need about ${candidate.screening.comparison.requiredEconomicRunwayMonths === undefined ? "an uncalculated period" : formatRunway(candidate.screening.comparison.requiredEconomicRunwayMonths)} of continued service to equal the replacement's annualized installed-capital cost. Open the comparison to review the entered vendor estimate, age, warranty, prior repairs, visits, and preventive maintenance before making the decision.`,
-        facts: [
-          { label: "Proposed repair", value: money(candidate.screening.comparison.repairEstimateMinor ?? 0) },
-          { label: "Estimated replacement", value: money(candidate.screening.comparison.replacementEstimateMinor ?? 0) },
-          { label: "Repair vs. replacement", value: `${Math.round((candidate.screening.comparison.repairToReplacementRatio ?? 0) * 100)}%` },
-          { label: "Required service runway", value: candidate.screening.comparison.requiredEconomicRunwayMonths === undefined ? "Not calculable" : formatRunway(candidate.screening.comparison.requiredEconomicRunwayMonths) },
-          { label: "Entered service estimate", value: candidate.screening.comparison.estimatedServiceExtensionMonths === undefined ? "Not entered" : formatRunway(candidate.screening.comparison.estimatedServiceExtensionMonths) },
-        ],
-        link: { href: `/app/lifecycle?asset=${candidate.asset.id}`, label: "Open repair-or-replace details" },
-      }
-    : undefined;
+  const spotlight = lifecycleSpotlight(fixture, candidate);
   const pageBase = {
     scopeLabel: session.scopeLabel,
     periodLabel: `Rolling 12 months from ${date(periodStart)}`,
@@ -1591,7 +1572,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
       prioritySection: { title: "Owner decisions", description: "The company-level items most likely to need your attention.", link: { href: "/app/action-center", label: "See all" } },
       breakdowns: [storeBreakdown, vendorAccountabilityBreakdown, categoryBreakdown],
       trends: [trend],
-      spotlight: lifecycleSpotlight,
+      spotlight,
     };
   }
 
@@ -1640,7 +1621,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
             ],
             link: { href: `/app/invoices/${invoiceToReview.id}`, label: "Review invoice evidence" },
           }
-        : lifecycleSpotlight,
+        : spotlight,
     };
   }
 
@@ -1719,7 +1700,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
         ]
       : [storeBreakdown, categoryBreakdown],
     trends: [trend],
-    spotlight: lifecycleSpotlight,
+    spotlight,
   };
 }
 
@@ -4097,13 +4078,7 @@ export function buildProgramModel(
       const asset = scoped.assets.find((item) => item.id === occurrence.assetId);
       const observedVisitIds = new Set(fixture.siteVisitWorkOrders.filter((link) => link.organizationId === scoped.organizationId && link.workOrderId === occurrence.workOrderId).map((link) => link.visitId));
       const historicalAttestation = status === "completed" && !occurrence.workOrderId && occurrence.result?.startsWith("Manager-attested historical completion");
-      return { id: occurrence.id, label: plan?.name ?? "PM occurrence", href: occurrence.workOrderId
-        ? `/app/work-orders/${occurrence.workOrderId}`
-        : ["due", "missed"].includes(status)
-          ? hrefWithQuery("/app/work-orders/new", { pmOccurrence: occurrence.id })
-          : asset
-            ? `/app/equipment/${asset.id}?section=preventive-maintenance`
-            : hrefWithQuery("/app/pm", { status, store: occurrence.storeId }), cells: [
+      return { id: occurrence.id, label: plan?.name ?? "PM occurrence", href: hrefWithQuery(`/app/pm/occurrences/${occurrence.id}`, {returnTo:hrefWithQuery("/app/pm",{view:pmView,status:statusFilter,store:selectedStoreId,region:selectedRegionId,program:programFilter,page:String(currentPage)})}), cells: [
         { key: "plan", value: plan?.name ?? "PM plan", secondary: asset?.name ?? (plan?.categoryKey ? sentence(plan.categoryKey) : "Store-level plan") },
         { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { key: "window", value: `${date(occurrence.windowStartsAt)} – ${date(occurrence.windowEndsAt)}`, secondary: `Due ${date(occurrence.dueAt)}` },
@@ -5994,6 +5969,7 @@ export function buildEstimateComparisonModel(
     requests,
     selectedVendorName: selected?.vendorName,
     selectedDecisionKind: estimateRequests.find((request) => request.status === "selected")?.decisionKind ?? "service_bid",
+    replacementApproved: fixture.replacementEvents.some(event => event.organizationId === scoped.organizationId && event.workOrderId === workOrderId && event.status === "approved"),
     comparisonClosed: Boolean(selected),
     activeRequestCount: requests.filter((request) => ["requested", "opened", "submitted"].includes(request.status)).length,
     proposalCount: requests.filter((request) => Boolean(request.latestProposal)).length,

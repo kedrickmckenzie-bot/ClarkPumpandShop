@@ -222,9 +222,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     stage = "approval";
   } else if (!activeAssignment && blockingTask && blockingTask.serviceRequestId) {
     stage = "intake";
-  } else if (approvedReplacement) {
+  } else if (approvedReplacement && !currentIssuance && !activeVisit) {
     stage = "vendor_response_scheduling";
-  } else if (!activeAssignment && estimateRequests.length > 0 && (!selectedEstimateRequest || selectedEstimateRequest.decisionKind === "replacement_quote")) {
+  } else if (!activeAssignment && estimateRequests.length > 0 && (!selectedEstimateRequest || selectedEstimateRequest.decisionKind === "replacement_quote" && !approvedReplacement)) {
     stage = "authorization_or_bidding";
   } else if (!activeAssignment || activeAssignment.kind === "choose_later") {
     stage = "provider_decision";
@@ -291,7 +291,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
         ? { label: estimateProposals.length > 0 ? "Review vendor quotes" : "Track vendor quote requests", href: `${base}?view=service&path=bids#bid-requests` }
         : { label: "Issue the service authorization", href: `${base}?view=service&path=direct#issue-work` },
     vendor_response_scheduling:
-      approvedReplacement ? { label: "Coordinate installation with the selected replacement vendor", href: `${base}?view=service&path=bids#bid-requests` }
+      approvedReplacement && !currentIssuance ? { label: "Set up the replacement", href: `${base}?view=service&path=direct#issue-work` }
       :
       liveAppointment?.status === "confirmed" ? { label: "Track the confirmed service appointment", href: `${base}?view=visits` }
       : liveAppointment?.status === "counter_proposed" ? { label: "Track the counterproposal with the vendor", href: `${base}?view=service#vendor-response` }
@@ -330,7 +330,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     : blockingTask?.escalationDestination ?? closeoutFollowUps[0]?.escalationTo ?? workOrder.escalationTo ?? "Facilities";
 
   let blockingReason: string | undefined;
-  if (approvedReplacement) {
+  if (approvedReplacement && !currentIssuance) {
     blockingReason = "The replacement quote is approved; installation and final installed cost are not yet recorded.";
   } else if (stage === "vendor_response_scheduling" && liveAppointment?.status === "confirmed") {
     const priorBlocker = appointmentStartsNewCycle && latestWorkOutcome?.outcome === "parts_required"
@@ -377,6 +377,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     : liveAppointment?.status === "confirmed" ? "Service appointment scheduled"
     : latestResponse?.response === "question" && !hasContinuation("reply", latestResponse.id) ? "Vendor asked a question"
     : currentIssuance && !latestResponse ? "Waiting for vendor acceptance"
+    : approvedReplacement && !currentIssuance ? "Replacement approved · ready to send"
     : activeAssignment?.kind === "outside_vendor" && !currentIssuance ? "Ready to send to selected provider"
     : !activeAssignment || activeAssignment.kind === "choose_later" ? "Needs a provider"
     : activeAssignment.kind === "internal" ? "Internal maintenance assigned"

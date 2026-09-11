@@ -21,5 +21,5 @@ export default async function InvoiceReferencesPage({ searchParams }: { searchPa
     return <ListSurface model={buildInvoiceEvidenceModel(fixture, session, query)} surface="invoices" searchParams={query} />;
   }
   const { fixture, invoices, session } = await loadWarrantyFinanceWorkspace();
-  return <>{["executive", "facilities", "finance"].includes(session.role) ? <><ReceiveInvoiceLink /><p><Link href="/app/invoices/accounting">Review invoices from accounting</Link></p></> : null}<InvoiceQueueWorkspace fixture={fixture} invoices={invoices} /></>;
+  return <>{["executive", "facilities", "finance"].includes(session.role) ? <><ReceiveInvoiceLink /><p><Link href="/app/invoices/accounting">Review invoices from accounting</Link></p></> : null}<InvoiceQueueWorkspace fixture={fixture} invoices={invoices} page={typeof query.page === "string" ? query.page : undefined} view={typeof query.view === "string" ? query.view : undefined} /></>;
 }

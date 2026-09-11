@@ -104,7 +104,7 @@ export function resolveAssetReplacementEstimate(
     ? fixture.replacementProfiles.find((row) => row.organizationId === asset.organizationId && row.id === asset.replacementProfileId && row.active)
     : undefined;
   const benchmark = profile ? activeBenchmark(fixture.replacementBenchmarks, asset.organizationId, profile.id) : undefined;
-  if (profile && benchmark) {
+  if (profile && benchmark && matchAssetToReplacementProfile(asset, profile).classification === "exact") {
     const evidenceCount = fixture.replacementBenchmarks.filter((row) => row.organizationId === asset.organizationId && row.profileId === profile.id).length;
     const years = yearsBetween(benchmark.effectiveAt, asOf);
     const months = Math.max(0, Math.round(years * 12));

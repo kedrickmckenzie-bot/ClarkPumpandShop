@@ -21,11 +21,14 @@ export function lifecyclePriceEvidence(fixture: OpsFixture, work: WorkOrder | un
     return [{ id: proposal.id, vendor: fixture.vendors.find((row) => row.organizationId === org && row.id === proposal.vendorId)?.name ?? "Vendor unavailable", amount: priceLabel(pinned ? event!.approvedAmount : proposal.amount), scope: proposal.scope || "Scope not recorded", exclusions: proposal.exclusions || "Exclusions not recorded — confirm before approval", timing: proposal.leadTimeDays === undefined ? "Availability not recorded" : `${proposal.leadTimeDays}-day quoted lead time; confirm the installation date`, status: pinned ? "Approved quote" : request.status === "not_selected" ? "Not selected" : ["withdrawn", "declined", "expired"].includes(request.status) ? request.status : expired ? "Quote expired" : request.status === "selected" ? "Selected; approval not recorded" : "Quote received", href: `/app/work-orders/${work!.id}?view=service&path=bids#quote-proposal-${proposal.id}` }];
   });
   const selected = proposals.filter((proposal) => requests.some((request) => request.id === proposal.requestId && request.status === "selected")).sort((a, b) => b.revision - a.revision || b.submittedAt.localeCompare(a.submittedAt))[0];
-  const replacement = event?.approvedAmount ?? selected?.amount;
+  const reported = work ? (fixture.workPrices ?? []).filter(row => row.organizationId === org && row.workOrderId === work.id && row.kind === "replace").sort((a,b)=>b.recordedAt.localeCompare(a.recordedAt)||b.id.localeCompare(a.id)) : [];
+  for (const price of reported) quotes.push({id:price.id,vendor:fixture.vendors.find(row=>row.organizationId===org && row.id===price.vendorId)?.name ?? "Vendor",amount:priceLabel(price.amount),scope:price.scope,exclusions:"Not given",timing:"Not given",status:"Reported price · " + (price.scopeKind === "whole" ? "Whole unit + setup":price.scopeKind === "part" ? "One part":"This job"),href:`/app/work-orders/${work!.id}/prices`});
+  const whole = reported.find(row=>row.scopeKind === "whole");
+  const replacement = event?.approvedAmount ?? selected?.amount ?? whole?.amount;
   return {
-    replacement, replacementLabel: priceLabel(replacement), replacementBasis: event ? "Approved replacement" : selected ? "Selected replacement quote" : "Replacement quote",
+    replacement, replacementLabel: priceLabel(replacement), replacementBasis: event ? "Approved replacement" : selected ? "Selected replacement quote" : whole ? "Reported replacement price" : "Replacement quote",
     planningLabel: priceLabel(planning), approvedVendor: approved ? quotes.find((quote) => quote.id === approved.id)?.vendor : undefined,
-    scope: approved?.scope ?? selected?.scope ?? "A replacement scope has not been selected. Review the quotes below.",
+    scope: approved?.scope ?? selected?.scope ?? whole?.scope ?? "Replacement details needed",
     approvedAt: event?.approvedAt, finalAmount: event?.status === "completed" && event.finalAmount ? priceLabel(event.finalAmount) : undefined,
     missing: event && !approved ? "The approved amount is recorded, but its original quote details are unavailable." : undefined,
     quotes,

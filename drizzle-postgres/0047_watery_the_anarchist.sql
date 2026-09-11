@@ -1,0 +1,1 @@
+ALTER TABLE "ops_work_prices" ADD COLUMN "profile_fingerprint" text;

@@ -417,3 +417,15 @@ a.metric:focus-visible {
 .warrantyReview summary { cursor:pointer; padding:12px 0; font-weight:600; }
 .warrantyReview .form { max-width:780px; }
 .warrantyReview .form select { max-width:100%; }
+
+.invoicePages { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; }
+@media (max-width: 640px) {
+  .invoiceRegister, .invoiceRegister tbody { display: block; width: 100%; }
+  .invoiceRegister thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .invoiceRegister tr { display: block; border-bottom: 2px solid #dbe2eb; padding: 12px; }
+  .invoiceRegister td { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px; padding: 7px 0; border: 0; white-space: normal; }
+  .invoiceRegister td::before { content: attr(data-label); color: #526176; font-weight: 600; }
+  .invoiceRegister td > .lineMeta { grid-column: 2; }
+}
+
+@media (max-width: 640px) { .invoiceMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .invoiceMetrics .metric { padding: 14px; } }

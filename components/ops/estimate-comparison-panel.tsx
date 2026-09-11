@@ -282,11 +282,11 @@ export function EstimateComparisonPanel({ model }: { model: EstimateComparisonVi
         <div className={styles.estimateContinuation}>
           <CheckCircle2 aria-hidden="true" size={20} />
           <div>
-            <strong>{model.selectedDecisionKind === "replacement_quote" ? "Replacement quote selected" : "Service provider selected"}</strong>
-            <p>{model.selectedDecisionKind === "replacement_quote" ? `${model.selectedVendorName}'s quote is ready for capital review. No assignment, authorization, or visit was created.` : `${model.selectedVendorName} is selected, but is not authorized to begin work until the separate service authorization is sent.`}</p>
+            <strong>{model.replacementApproved ? "Replacement approved" : model.selectedDecisionKind === "replacement_quote" ? "Replacement quote selected" : "Service provider selected"}</strong>
+            <p>{model.replacementApproved ? `${model.selectedVendorName} · Ready to set up the work.` : model.selectedDecisionKind === "replacement_quote" ? `${model.selectedVendorName}'s quote is ready for capital review. No assignment, authorization, or visit was created.` : `${model.selectedVendorName} is selected, but is not authorized to begin work until the separate service authorization is sent.`}</p>
           </div>
-          <a className={styles.primaryButton} href={model.selectedDecisionKind === "replacement_quote" ? `/app/work-orders/${model.workOrderId}?view=equipment` : "#issue-work"}>
-            {model.selectedDecisionKind === "replacement_quote" ? "Open capital review" : "Send service authorization"}<Send aria-hidden="true" size={16} />
+          <a className={styles.primaryButton} href={model.replacementApproved ? `/app/work-orders/${model.workOrderId}?view=service&path=direct#issue-work` : model.selectedDecisionKind === "replacement_quote" ? `/app/work-orders/${model.workOrderId}?view=equipment` : "#issue-work"}>
+            {model.replacementApproved ? "Set up the replacement" : model.selectedDecisionKind === "replacement_quote" ? "Open capital review" : "Send service authorization"}<Send aria-hidden="true" size={16} />
           </a>
         </div>
       ) : model.permitted && model.vendors.length ? (

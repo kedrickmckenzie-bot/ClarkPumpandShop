@@ -1,4 +1,5 @@
 import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
+import { workPricePersistenceRegression } from "./helpers/work-price-persistence-regression";
 import { connectedReviewRegression } from "./helpers/connected-review-regression";
 import { accountingReportingRegression } from "./helpers/accounting-reporting-regression";
 import { loadOpsFixtureSnapshotFromPostgres } from "@/lib/ops/postgres-snapshot";
@@ -810,5 +811,12 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     expect(await repository.listFilesForEntity(actor.organizationId, "estimate_proposal", "estimate-proposal-105-summit-r1")).toHaveLength(1);
 
   });
+
+  it("preserves dated reported prices and confirms planning through PostgreSQL",async()=>{
+    const repository=createOpsPostgresRepository(pool);
+    await seedOpsRepository(repository,buildNorthlinePresentationFixture());
+    await workPricePersistenceRegression(repository);
+  });
+
 
 });

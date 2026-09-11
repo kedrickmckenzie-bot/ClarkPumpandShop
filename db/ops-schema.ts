@@ -3,6 +3,23 @@ import { check, foreignKey, index, integer, primaryKey, sqliteTable, text, uniqu
 
 const id = () => text("id").primaryKey();
 const organizationId = () => text("organization_id").notNull();
+
+export const opsWorkPrices = sqliteTable("ops_work_prices", {
+  id: id(), organizationId: organizationId(),
+  workOrderId: text("work_order_id").notNull(), storeId: text("store_id").notNull(),
+  assetId: text("asset_id"), componentId: text("component_id"), profileId: text("profile_id"), profileFingerprint: text("profile_fingerprint"),
+  vendorId: text("vendor_id").notNull(), kind: text("kind").notNull(),
+  scopeKind: text("scope_kind").notNull(), scope: text("scope").notNull(),
+  amountMinor: integer("amount_minor").notNull(), currency: text("currency").notNull(),
+  recordedAt: text("recorded_at").notNull(), recordedBy: text("recorded_by").notNull(),
+}, (table) => [
+  index("idx_ops_work_prices_org_work_date").on(table.organizationId, table.workOrderId, table.recordedAt, table.id),
+  index("idx_ops_work_prices_org_profile_date").on(table.organizationId, table.profileId, table.recordedAt, table.id),
+  index("idx_ops_work_prices_org_asset_date").on(table.organizationId, table.assetId, table.recordedAt, table.id),
+  check("chk_ops_work_prices_kind", sql`${table.kind} IN ('repair', 'replace')`),
+  check("chk_ops_work_prices_scope", sql`${table.scopeKind} IN ('whole', 'part', 'job')`),
+  check("chk_ops_work_prices_amount", sql`${table.amountMinor} >= 0`),
+]);
 const createdAt = () => text("created_at").notNull();
 const bool = (name: string) => integer(name, { mode: "boolean" }).notNull().default(false);
 
@@ -515,7 +532,7 @@ export const opsAssets = sqliteTable("ops_assets", {
 }, (table) => [uniqueIndex("uidx_ops_assets_org_store_tag").on(table.organizationId, table.storeId, table.assetTag), index("idx_ops_assets_org_store_category").on(table.organizationId, table.storeId, table.categoryKey), index("idx_ops_assets_org_status").on(table.organizationId, table.status), index("idx_ops_assets_org_equipment_template").on(table.organizationId, table.equipmentTemplateId, table.status), index("idx_ops_assets_org_replacement_profile").on(table.organizationId, table.replacementProfileId, table.status)]);
 
 export const opsReplacementBenchmarks = sqliteTable("ops_replacement_benchmarks", {
-  id: id(), organizationId: organizationId(), profileId: text("profile_id").notNull(), sourceType: text("source_type").notNull(), sourceWorkOrderId: text("source_work_order_id"), sourceEstimateProposalId: text("source_estimate_proposal_id"), sourceAssetId: text("source_asset_id"), sourceVendorId: text("source_vendor_id"), equipmentAmountMinor: integer("equipment_amount_minor").notNull(), installationAmountMinor: integer("installation_amount_minor").notNull(), otherAmountMinor: integer("other_amount_minor").notNull(), totalAmountMinor: integer("total_amount_minor").notNull(), currency: text("currency").notNull(), effectiveAt: text("effective_at").notNull(), status: text("status").notNull(), supersededAt: text("superseded_at"), notes: text("notes"), createdAt: createdAt(),
+  id: id(), organizationId: organizationId(), profileId: text("profile_id").notNull(), sourceType: text("source_type").notNull(), sourceWorkOrderId: text("source_work_order_id"), sourceEstimateProposalId: text("source_estimate_proposal_id"), sourceAssetId: text("source_asset_id"), sourceVendorId: text("source_vendor_id"), equipmentAmountMinor: integer("equipment_amount_minor"), installationAmountMinor: integer("installation_amount_minor"), otherAmountMinor: integer("other_amount_minor"), totalAmountMinor: integer("total_amount_minor").notNull(), currency: text("currency").notNull(), effectiveAt: text("effective_at").notNull(), status: text("status").notNull(), supersededAt: text("superseded_at"), notes: text("notes"), createdAt: createdAt(),
 }, (table) => [index("idx_ops_replacement_benchmarks_org_profile_status_effective").on(table.organizationId, table.profileId, table.status, table.effectiveAt), uniqueIndex("uidx_ops_replacement_benchmarks_org_profile_published").on(table.organizationId, table.profileId).where(sql`${table.status} = 'published'`), uniqueIndex("uidx_ops_replacement_benchmarks_org_source_proposal").on(table.organizationId, table.sourceEstimateProposalId)]);
 
 export const opsAssetReplacementOverrides = sqliteTable("ops_asset_replacement_overrides", {

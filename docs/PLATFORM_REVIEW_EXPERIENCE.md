@@ -33,6 +33,8 @@ The subsequent [connected workflow completion pass](CONNECTED_WORKFLOW_COMPLETIO
 
 ## Platform audit boundaries
 
+The [reported-price completion pass](WORK_PRICE_HISTORY_COMPLETION.md) adds a work-order price entry, dated repair and replacement history, an exact past-cost view, and a preview/confirm step for company planning changes. This implements the user's preference for short labels, visible numbers, and neutral review prompts. It is a concrete workflow addition; the broader audit boundaries below still apply.
+
 Overview, vendor evidence, invoice allocation review, PM, lifecycle, reports, and setup already have specialized views. Their existing summaries and evidence remain the foundation; this pass improves the shared review behavior instead of replacing those workspaces with one configurable page. The earlier cost/filter corrections are documented in [WORKFLOW_RELIABILITY_AUDIT.md](WORKFLOW_RELIABILITY_AUDIT.md).
 
 The platform-wide contract above is also the acceptance standard for future changes. It is not a claim that every specialized screen now synthesizes every possible question. Narrative repair/replacement comparisons, cross-record diagnosis, and complete coverage of every data/role combination still need their own supported evidence and acceptance tests. Large compatibility snapshots and some specialized history layouts remain performance and usability work.

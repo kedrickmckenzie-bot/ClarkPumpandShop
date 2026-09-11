@@ -1399,3 +1399,15 @@ describe("recording coverage and exact issuance evidence", () => {
     expect(closed.exportRows?.some((row) => row.sourceId === assignment.id)).toBe(false);
   });
 });
+
+it("keeps recurring-work evidence in its dates and equipment scope", () => {
+  const fixture = buildNorthlinePresentationFixture();
+  const query = { metric: "work_orders", period: "12", asset: "asset-104-beer-cave", store: "store-northline-104" };
+  const model = buildTrendsModel(fixture, session(), query);
+  const finding = model.insights.find(row => row.findingType === "recurring_work");
+  expect(finding).toBeDefined();
+  const params = queryFromHref(finding!.link.href);
+  expect(params).toMatchObject({ ...query, detailKind: "recurring_work", view: "records" });
+  const detail = buildTrendsModel(fixture, session(), params, { includeExportRows: true });
+  expect(detail.exportRows?.map(row => row.sourceId).sort()).toEqual([...finding!.sourceIds!].sort());
+});

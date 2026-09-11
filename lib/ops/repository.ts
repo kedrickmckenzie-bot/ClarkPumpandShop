@@ -193,6 +193,8 @@ export interface OpsStatement {
 }
 
 export interface OpsRepository {
+  getWorkPrice(organizationId: OpsId, id: OpsId): Promise<import("./work-price-types").WorkPrice | null>;
+  listWorkPrices(organizationId: OpsId, query: import("./work-price-types").WorkPriceQuery): Promise<{ items: import("./work-price-types").WorkPrice[]; total: number }>;
   readonly kind: "d1" | "postgres" | "fixture";
 
   // Internal record lookups used by domain commands. Organization is always

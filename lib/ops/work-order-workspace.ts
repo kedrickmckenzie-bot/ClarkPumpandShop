@@ -21,6 +21,7 @@ export interface WorkOrderWorkspaceInput {
   proposalCount: number;
   selectedVendorName?: string;
   selectedDecisionKind?: "service_bid" | "replacement_quote";
+  replacementApproved?: boolean;
   currentIssuanceRevision?: number;
   requestedPath?: WorkOrderServicePath;
 }
@@ -35,7 +36,8 @@ export function resolveWorkOrderWorkspace(input: WorkOrderWorkspaceInput): WorkO
   if (input.stage === "closed") return "closed";
 
   if (input.stage === "vendor_response_scheduling") {
-    if (input.selectedDecisionKind === "replacement_quote") return "bids";
+    if (input.selectedDecisionKind === "replacement_quote" && !input.replacementApproved) return "bids";
+    if (input.replacementApproved && !input.currentIssuanceRevision) return input.requestedPath === "bids" ? "bids" : "direct_service";
     if (
       (input.serviceSubStage === "date_proposed" && input.vendorResponseKind === "proposed_date")
       || (input.serviceSubStage === "question_pending" && input.vendorResponseKind === "question")

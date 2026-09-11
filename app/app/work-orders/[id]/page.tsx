@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WorkPricePanel } from "@/components/workspace/work-price-panel";
 import { WorkOrderCase } from "@/components/workspace/work-order-case";
 import { loadConnectedWorkReview, loadDetailModel, loadEstimateComparisonModel, loadHeldWorkActionsModel, loadOperatorSession, loadVendorIssuanceModel, loadWorkOrderCaseModel, loadWorkOrderControlModel, loadWorkOrderRecordingModel, loadVendorResponseActionsModel } from "../../_data/operator-loader";
 import { loadWorkOrderReplacementIntelligenceModel } from "../../_data/replacement-loader";
@@ -87,6 +88,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       href: `/app/work-orders/${id}?view=service&path=bids#bid-requests`,
     };
   }
+  if (estimateComparison.replacementApproved && issuance.permitted) model.page.primaryAction = stageCase.primaryNextAction;
   const viewerAction = verification.canDecide
     ? { label: "Confirm whether the problem is resolved", href: `/app/work-orders/${id}?view=visits#work-verification` }
     : responseActions
@@ -110,6 +112,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       </p>
     ) : null}
     <WorkOrderCase
+      prices={!accountabilityOnly && ["overview", "cost"].includes(view) ? <WorkPricePanel workOrderId={id} /> : undefined}
       connectedReview={connectedReview}
       model={model}
       control={control}

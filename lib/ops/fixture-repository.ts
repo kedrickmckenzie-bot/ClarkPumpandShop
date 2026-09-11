@@ -153,7 +153,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_equipment_templates: "equipmentTemplates", ops_component_templates: "componentTemplates",
     ops_stores: "stores", ops_users: "users", ops_memberships: "memberships",
     ops_scope_grants: "scopeGrants", ops_role_capability_overrides: "roleCapabilityOverrides", ops_workflow_policies: "workflowPolicies", ops_vendors: "vendors", ops_vendor_specialties: "vendorSpecialties",
-    ops_vendor_reminders: "vendorReminders",
+    ops_vendor_reminders: "vendorReminders", ops_work_prices: "workPrices",
     ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
@@ -238,7 +238,7 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   }
   if (table === "ops_visit_evidence") { row.location = { result: row.locationResult ?? "not_requested", latitudeE6: row.latitudeE6, longitudeE6: row.longitudeE6, accuracyM: row.accuracyM, distanceM: row.distanceM, capturedAt: row.observedAt }; delete row.locationResult; delete row.latitudeE6; delete row.longitudeE6; delete row.accuracyM; delete row.distanceM; }
   if (table === "ops_cost_lines") { row.amount = { amountMinor: row.amountMinor, currency: row.currency }; delete row.amountMinor; delete row.currency; }
-  if (table === "ops_vendor_estimate_proposals") { row.amount = { amountMinor: row.amountMinor, currency: row.currency }; delete row.amountMinor; delete row.currency; }
+  if (table === "ops_vendor_estimate_proposals" || table === "ops_work_prices") { row.amount = { amountMinor: row.amountMinor, currency: row.currency }; delete row.amountMinor; delete row.currency; }
   if (table === "ops_invoice_references") { row.grossAmount = { amountMinor: row.grossAmountMinor, currency: row.currency }; delete row.grossAmountMinor; delete row.currency; }
   if (table === "ops_invoice_allocations") { row.amount = { amountMinor: row.amountMinor, currency: row.currency }; delete row.amountMinor; delete row.currency; }
   if (table === "ops_assets") {
@@ -280,9 +280,9 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   }
   if (table === "ops_replacement_benchmarks") {
     const currency = String(row.currency ?? "USD");
-    row.equipmentAmount = { amountMinor: row.equipmentAmountMinor, currency };
-    row.installationAmount = { amountMinor: row.installationAmountMinor, currency };
-    row.otherAmount = { amountMinor: row.otherAmountMinor, currency };
+    row.equipmentAmount = row.equipmentAmountMinor == null ? undefined : { amountMinor: row.equipmentAmountMinor, currency };
+    row.installationAmount = row.installationAmountMinor == null ? undefined : { amountMinor: row.installationAmountMinor, currency };
+    row.otherAmount = row.otherAmountMinor == null ? undefined : { amountMinor: row.otherAmountMinor, currency };
     row.totalAmount = { amountMinor: row.totalAmountMinor, currency };
     delete row.equipmentAmountMinor; delete row.installationAmountMinor; delete row.otherAmountMinor; delete row.totalAmountMinor; delete row.currency;
   }
@@ -403,6 +403,8 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
       setColumns.forEach((column, index) => {
         if (table === "ops_assets" && column === "replacement_attributes_json") row.replacementAttributes = JSON.parse(String(setValues[index] ?? "{}"));
         else if (table === "ops_replacement_events" && column === "final_amount_minor") row.finalAmount = { amountMinor: setValues[index], currency: (row.approvedAmount as { currency?: string } | undefined)?.currency ?? "USD" };
+        else if (table === "ops_work_orders" && column === "repair_estimate_amount_minor") row.repairEstimate = {amountMinor:setValues[index], currency:setValues[setColumns.indexOf("repair_estimate_currency")] ?? "USD"};
+        else if (table === "ops_work_orders" && column === "repair_estimate_currency") { /* Currency belongs to repairEstimate above. */ }
         else if ((table === "ops_invoices" && ["subtotal_minor", "tax_minor", "fees_minor", "total_minor", "approved_for_payment_minor", "paid_amount_minor"].includes(column)) || (table === "ops_invoice_lines" && ["unit_amount_minor", "line_amount_minor"].includes(column)) || (table === "ops_invoice_line_allocations" && column === "amount_minor")) {
           const key = column === "amount_minor" ? "amount" : snakeToCamel(column.replace(/_minor$/, ""));
           const currencyIndex = setColumns.indexOf("currency");
@@ -435,11 +437,24 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
 }
 
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
+  async getWorkPrice(organizationId: string, id: string) {
+    return clone(this.fixture.workPrices?.find((row) => row.organizationId === organizationId && row.id === id) ?? null);
+  }
+  async listWorkPrices(organizationId: string, query: import("./work-price-types").WorkPriceQuery) {
+    const rows = (this.fixture.workPrices ?? []).filter((row) => row.organizationId === organizationId
+      && (!query.workOrderId || row.workOrderId === query.workOrderId)
+      && (!query.assetId || row.assetId === query.assetId) && (!query.profileId || row.profileId === query.profileId)
+      && (!query.kind || row.kind === query.kind) && (query.storeIds === undefined || query.storeIds.includes(row.storeId)))
+      .sort((a,b) => b.recordedAt.localeCompare(a.recordedAt) || b.id.localeCompare(a.id));
+    const offset = Math.max(0, Math.floor(query.offset ?? 0));
+    return { items: clone(rows.slice(offset, offset + Math.max(1, Math.min(50, Math.floor(query.limit ?? 20))))), total: rows.length };
+  }
   readonly kind = "fixture" as const;
   private counters = new Map<string, number>();
   private idempotencyKeys: IdempotencyKey[] = [];
   constructor(private fixture: OpsFixture, normalize = true) {
     if (!normalize) return;
+    this.fixture.workPrices ??= [];
     this.fixture.accountingInvoiceSources ??= [];
     this.fixture.invoices.forEach((invoice) => { invoice.version ??= 0; });
     this.fixture.requests.forEach((request) => { request.version ??= 0; });

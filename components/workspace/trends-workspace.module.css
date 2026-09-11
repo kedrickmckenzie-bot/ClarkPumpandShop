@@ -345,3 +345,10 @@
   .vendorSummary, .responseMix { grid-template-columns: 1fr; }
   .vendorSummary > span, .responseMix > span { border-right: 0; border-bottom: 1px solid #e5e9ef; }
 }
+
+@media (max-width: 540px) {
+  .analysisViews { display: flex; overflow-x: auto; }
+  .analysisViews a { flex: 0 0 auto; min-height: 44px; border-top: 0; }
+  .analysisViews span { display: none; }
+  .analysisViews strong { font-size: 15px; }
+}

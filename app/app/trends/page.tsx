@@ -10,10 +10,5 @@ type Query = Record<string, string | string[] | undefined>;
 export default async function TrendsPage({ searchParams }: { searchParams: Promise<Query> }) {
   const params = await searchParams;
   const { model, savedViews, session } = await loadTrendsPageData(params);
-  return (
-    <>
-      {session.demoEdition === "complete" ? <SavedViewsBar model={{ surface: "trends", currentQuery: model.canonicalQuery, views: savedViews }} /> : null}
-      <TrendsWorkspace model={model} />
-    </>
-  );
+  return <TrendsWorkspace model={model} savedViews={session.demoEdition === "complete" ? <SavedViewsBar model={{ surface: "trends", currentQuery: model.canonicalQuery, views: savedViews }} /> : null} />;
 }
