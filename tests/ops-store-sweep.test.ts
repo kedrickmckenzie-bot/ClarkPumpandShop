@@ -93,6 +93,11 @@ describe("plain-language store sweeps", () => {
     snapshot = test.repository.snapshot();
     expect(snapshot.workOrderVisitHolds?.filter((row) => [DOOR, SINK].includes(row.workOrderId)).every((row) => row.status === "claimed" && row.claimedVisitId === visit.id)).toBe(true);
     expect(visit.siteVisitWorkOrders.every((row) => row.selectionSource === "held_work" && row.workOrderHoldId)).toBe(true);
+    for (const workOrderId of [DOOR, SINK]) {
+      expect(snapshot.workOrders.find((row) => row.id === workOrderId)).toMatchObject({ nextAction: "Record service outcome" });
+      expect(snapshot.workflowTasks.filter((task) => task.workOrderId === workOrderId && task.taskType === "choose_service_provider")
+        .every((task) => !["open", "in_progress"].includes(task.status))).toBe(true);
+    }
     expect(snapshot.auditEvents.filter((event) => (
       [DOOR, SINK].includes(event.aggregateId) && event.eventType === "work_order.visit_started"
     )).every((event) => JSON.parse(event.payloadJson).selectionSource === "held_work")).toBe(true);

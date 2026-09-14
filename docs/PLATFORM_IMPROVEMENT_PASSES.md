@@ -1,0 +1,103 @@
+# Platform improvement passes
+
+This is the persistent execution checklist for the September 14, 2026 review. Read it at the start of platform work and update it before ending a session. The approved rebuild blueprint remains the product authority; [the dated review](PLATFORM_REVIEW_2026-09-14.md) records the original evidence. Older completion notes are not proof of current behavior.
+
+## Checkpoint
+
+- Completed pass: **1 — role/scope and accountability correctness** (4 acceptance items).
+- Next pass: **2 — trustworthy metrics and drill-through**, ready to begin. **35 of 39 items remain**; no later pass is complete.
+- Completion means acceptance evidence is recorded below, not merely that code was edited.
+- Deployment and real-customer readiness are separate gates. Fictional preview controls are not production authentication.
+
+## How to execute and remember
+
+Keep the IDs below stable. Mark items `[x]` only after their acceptance checks pass; leave partial items unchecked with an explicit note. Append discoveries instead of silently expanding or dropping an item. After each pass record changes, checks, unresolved failures and the next starting point. On resume, inspect the working tree and this checkpoint before changing code. Never infer that an unchecked later pass was completed by an earlier one.
+
+The order groups shared data models, UI surfaces and validation to avoid repeatedly changing the same code. Passes 1–3 stabilize behavior before architectural extraction. Pass 4 establishes production boundaries before pass 5 changes query paths. Pass 6 covers infrastructure-dependent proof. Pass 7 is the final cross-platform acceptance gate. Update documentation during every pass, not just at the end.
+
+## Pass 1 — role/scope and accountability correctness
+
+- [x] P1-01 Fix preview role **and edition** cookies for page/API parity; migrate old path-scoped cookies. Prove an ordinary cookie round trip keeps Store 104 scope on exports and rejects facilities-only actions.
+- [x] P1-02 Retire the applicable held-work provider obligation when a vendor starts service. Diagnosis checkout must identify the manager and findings-review action before and after the hold deadline; preserve unrelated legitimate tasks. Cover fixture and persisted SQL adapters.
+- [x] P1-03 Audit the other held-work entry points (adding work to an active visit, confirmed-visit pickup and service-run paths) for the same obsolete-task projection. Cover applicable paths without duplicating or erasing source evidence.
+- [x] P1-04 Verify page identity, mutation actor attribution, permissions and audit actor remain consistent; retain the explicit fictional-preview boundary.
+
+## Pass 2 — trustworthy metrics and drill-through
+
+- [ ] P2-01 Make pending-request count and destination share submitted/under-review IDs, including search, scope and pagination. The five pending requests must not link to all 100 reports.
+- [ ] P2-02 Separate work ready to issue from work awaiting a vendor response; share cohort definitions between counts, labels and queue filters.
+- [ ] P2-03 Reconcile equipment spotlight spending with its destination. Preserve cost basis, planned/reactive cohort and reporting window; include upper as-of bounds. Regress the Store 115 $0/$440 example.
+- [ ] P2-04 Inventory every principal dashboard metric, segment, exception and outlier. Test exact supporting IDs/counts and preservation of scope, period, taxonomy, cost basis, cohort and classification coverage; make omitted segments explicit.
+- [ ] P2-05 Verify onsite labels distinguish active visits from distinct vendors. Verify invoice counts distinguish invoice records, references and allocated/unmatched amounts without double counting.
+- [ ] P2-06 Verify PM numerator/denominator/window/source occurrences and lifecycle rules are transparent; no inferred downtime or automatic replacement/payment decisions.
+
+## Pass 3 — manager and store workflow usability
+
+- [ ] P3-01 Make store and problem sufficient for basic work creation with valid default priority and choose-later routing in UI and API. Preserve deferred category/asset/component classification.
+- [ ] P3-02 Align internal-assignment instructions with the actual command requirements. Test internal, outside and blended fulfillment, vendor search and issue/reissue references.
+- [ ] P3-03 Stack phone section headings, descriptions and actions; visually verify actual 375/390 px layouts, readable text and touch controls on store and public visit views.
+- [ ] P3-04 Consolidate the work-order case into one dominant accountable state/owner/action/due/escalation header and concise evidence summary; preserve detailed source facts in appropriate tabs.
+- [ ] P3-05 Restore useful attention rows on the facilities home and prioritize immediate responsibilities, critical work, PM exceptions and store outliers. Validate manager roles and the six-destination navigation contract.
+- [ ] P3-06 Audit loading, empty, error, partial and permission states, labels, visible scope, keyboard/form behavior and every primary action. No dead controls or misleading optional/required instructions.
+- [ ] P3-07 Complete store creation, no-WO visit reconciliation and cross-channel visit journeys. Verify a reconciliation failure has atomic behavior or explicit recoverable state without losing/duplicating either record.
+
+## Pass 4 — production identity and domain safeguards
+
+- [ ] P4-01 Resolve authenticated users to active organization memberships; isolate preview personas and fail closed outside the fictional preview. Verify missing identity, revoked membership and multiple organizations.
+- [ ] P4-02 Verify organization-first access on every read, command, search, aggregate, export, private file, public token and job; add cross-tenant and cross-store adversarial tests.
+- [ ] P4-03 Verify all channels use shared commands with transactional audit, idempotent retries and optimistic concurrency. Test append-only amendments for reports, issuance, responses, visits, costs, allocations and deadlines.
+- [ ] P4-04 Verify purpose-bound, expiring, hashed action tokens and vendor-eligible work selection; no-WO service remains possible and location remains check-in/out only with explicit evidence status.
+
+## Pass 5 — bounded reads and maintainable persistence
+
+- [ ] P5-01 Inventory remaining snapshot consumers; replace dashboard snapshots with scoped repository aggregates and source queries with stable pagination and indexed ordering.
+- [ ] P5-02 Replace record/program/lifecycle full snapshots with bounded feature queries. Prove scoped callers do not fetch the whole tenant and drill-through remains exact.
+- [ ] P5-03 Extract feature presenters and command modules along domain boundaries while preserving shared commands and all evidence semantics; avoid introducing parallel application stacks.
+- [ ] P5-04 Replace PostgreSQL dependence on D1 SQL translation with a provider-neutral repository boundary and native queries; retain D1/R2 adapters and migration parity during the active hosted preview.
+- [ ] P5-05 Audit imports/routes before retiring legacy cstore/demo/domain/root stacks. Delete only proven unused code and verify routes/builds afterward.
+- [ ] P5-06 Verify production import, stable store IDs/numbers/addresses/aliases, optional operating hierarchy and independent taxonomy. Keep the presentation at exactly 15 stores/five vendors; validate one-store and 65-store fixtures separately.
+
+## Pass 6 — delivery, operations and deployment proof
+
+- [ ] P6-01 Make issuance delivery durable and retryable across crashes between issuance, provider delivery and audit. Preserve immutable revisions and secure token handling; prove no duplicate authorization or misleading delivered status.
+- [ ] P6-02 Verify PM recurrence, SLA/outbox/compliance workers are idempotent, observable and recoverable. Exercise provider failures and retry exhaustion; external delivery requires configured infrastructure and authorized recipients.
+- [ ] P6-03 Verify private evidence uploads/downloads, tenant/file permissions, retention and S3-compatible storage portability; do not use ephemeral production disk.
+- [ ] P6-04 Validate real PostgreSQL migrations, DATABASE_URL, injected PORT, health checks and worker entry points. Create no Render project/manifest until intentionally authorized.
+- [ ] P6-05 Run backup/restore, rollback and alert-routing drills with recorded outcomes. Prove agreed recovery targets (review references RPO ≤1 hour/RTO ≤4 hours) on actual infrastructure.
+- [ ] P6-06 Measure real-backend multi-user 65-store query latency, concurrency and failure recovery; fixture size and local development timings are not throughput proof.
+- [ ] P6-07 Prepare an exact validated hosted version and verify its access policy before publication. Record deployment status separately from local validation and production readiness.
+
+## Pass 7 — acceptance, documentation and release decision
+
+- [ ] P7-01 Add repeatable real-browser coverage for role-cookie round trips, native form validation, metric destinations and mobile layout. Clearly distinguish this from the existing Vitest `test:e2e` suite.
+- [ ] P7-02 Run all required commands sequentially enough to avoid resource-contention false failures: db:seed, typecheck, lint, npm test, test:e2e and build. Record failures accurately; also run build:render when portability changes.
+- [ ] P7-03 Complete the required browser matrix: manager search/drill-down; store creation; deferred/internal/outside work routing; vendor action link; cross-channel visit; no-WO exception; invoice safeguards; PM/lifecycle; responsive store/mobile. Record which journeys actually mutated data and which were inspection only.
+- [ ] P7-04 Reconcile README/demo/status docs with verified implementation and deterministic seed counts. Keep historical reviews dated, centralize current status and verify all temporary branding uses configuration.
+- [ ] P7-05 Review every remaining unchecked item and external dependency before declaring release readiness. No principal metric or primary workflow may end at a dead control; no production claim without production evidence.
+
+## Evidence log
+
+### Baseline — September 14, 2026
+
+Review at commit `6330d5e`: seed/typecheck/lint/e2e/build/Render build passed; 144 sampled routes passed. Full test run: 876 passed/3 failed (one reproducible held-work assertion, two timeouts under overlapping workload). Isolated rerun retained the held-work failure. Browser findings and inspection limitations are recorded in the linked review. Existing untracked `dev4.log` is unrelated and must be preserved.
+
+### Pass 1 — complete, September 14, 2026
+
+Implemented shared root-path preview cookies with explicit expiration of the older `/app` cookie on role/package selection. Existing open preview sessions should apply their role/package once after the update to migrate the older cookie. This fixes preview consistency; production identity remains P4-01.
+
+Held-work check-in and active-visit pickup now replace only a relevant service-preparation obligation. Unrelated tasks remain open, including a higher-priority blocking obligation. The original named-manager diagnosis case is tested on both September 1 and September 14 (before/after the September 12 deadline). Additional shared regressions exercise fixture and embedded PostgreSQL transactions, QR-to-secure-link checkout, and work added during a visit. Combined store visits retain the appropriate task projection and held-work provenance.
+
+Evidence so far:
+
+- `npm test`: **131 files / 890 tests passed**, normal configured worker count, 162.91 seconds. The original held-work failure and both baseline timeout cases pass in this full run.
+- Seed: **15 stores, 3 regions, 5 vendors, 2 internal technicians, 100 requests, 422 work orders, 399 visits, 144 assets, 222 PM occurrences**; separate 65-store fixture validated.
+- Real HTTP cookie-container test preloaded the old facilities/accountability `/app` cookies, then selected store-manager/complete. Page and API headers both contained only the new selections. Export returned **Store 104**; facilities-only accounting endpoint returned **403**. This did not manually inject the role header into the API requests.
+- Session/command regression uses the actual session loader and API command with fixture persistence: selected regional membership is the audit actor; Store 104 scope and facilities-only restrictions are enforced.
+- Browser: switched facilities → store manager, observed Store 104 scope and denied work creation under its configured permissions; switched back to facilities and observed the creation form. Manager search for 104 still returned 81 matches across five types. No browser-created service/store/work record and no location permission request.
+- README fixture counts and status links updated. The dated review remains historical evidence.
+
+Final typecheck, lint and build passed; `test:e2e` passed **4 files / 52 tests**. All six required commands passed for this pass. Private-preview publication is pending at this checkpoint. The full browser mutation matrix remains P7-03; domain/database journeys do not substitute for it.
+
+### Next starting point — Pass 2
+
+Work together on `operator-presenter.ts` dashboard cohorts, `operator-query-presenter.ts` filter labels, loader query normalization and repository filter implementations. Pending requests need a combined submitted/under-review filter carried into query-first lists. Vendor-response stages must use the same source predicate across shared/store/regional/facilities dashboards and both list paths. Inspect all occurrences of onsite-vendor labels, including store summaries. Reconcile the lifecycle spotlight with the exact cost/history destination before changing its label. Add record-ID equality assertions across presentation and repository queries, not only URL/string assertions.

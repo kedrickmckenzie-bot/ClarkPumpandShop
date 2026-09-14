@@ -208,6 +208,12 @@ function facilitiesAssignee(name = "Facilities coordinator") {
   return { assigneeType: "role" as const, assigneeRole: "facilities_admin" as const, assigneeName: name };
 }
 
+function selectVisitPreparationTask(tasks: readonly WorkflowTask[], heldWork: boolean) {
+  return selectPrimaryWorkflowTask(tasks.filter((task) =>
+    ["vendor_response_required", "schedule_service", "confirm_store_access", "schedule_return_visit"].includes(task.taskType)
+    || (heldWork && task.taskType === "choose_service_provider")));
+}
+
 function buildReplaceMatchingTaskStatements(input: {
   workOrder: WorkOrder;
   tasks: readonly WorkflowTask[];
@@ -1971,7 +1977,7 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
   for (const linkedWorkOrder of workOrders) {
     statements.push({ sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ?", params: ["in_progress", providerName, "Record service outcome", input.organizationId, linkedWorkOrder.id] });
     const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, linkedWorkOrder.id);
-    const targetTask = selectPrimaryWorkflowTask(tasks.filter((task) => ["vendor_response_required", "schedule_service", "confirm_store_access", "schedule_return_visit"].includes(task.taskType)));
+    const targetTask = selectVisitPreparationTask(tasks, visitHoldByWorkOrderId.has(linkedWorkOrder.id));
     const assignee = vendorId
       ? { assigneeType: "vendor" as const, assigneeId: vendorId, assigneeName: providerName }
       : { assigneeType: "user" as const, assigneeId: internalMembershipId!, assigneeName: providerName };
@@ -2128,7 +2134,7 @@ export async function addHeldWorkToActiveVisit(svc: OpsCommandServices, input: A
       { sql: "UPDATE ops_work_order_visit_holds SET status = ?, claimed_visit_id = ?, claimed_vendor_id = ?, claimed_at = ?, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ? AND status = ? AND version = ?", params: ["claimed", visit.id, visit.vendorId, now, now, input.organizationId, hold!.id, "active", hold!.version] },
       { sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ?", params: ["in_progress", providerName, "Record service outcome", input.organizationId, workOrder!.id] },
       ...buildReplaceMatchingTaskStatements({
-        workOrder: workOrder!, tasks, targetTask: selectPrimaryWorkflowTask(tasks), replacementTask,
+        workOrder: workOrder!, tasks, targetTask: selectVisitPreparationTask(tasks, true), replacementTask,
         actor: input.actor, occurredAt: now, ids, resolutionNote: "Vendor added this approved item during an active visit",
       }),
       ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder!.id, eventType: "work_order.held_work_claimed", actor: input.actor, occurredAt: now, payload: { holdId: hold!.id, visitId: visit.id, vendorId: visit.vendorId, posture: hold!.posture, deadlineAt: hold!.deadlineAt, addedAfterCheckIn: true }, ids }),

@@ -1,4 +1,5 @@
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
+import { setPreviewCookie } from "@/lib/server/preview-cookie";
 import {
   OPS_INTERNAL_URL_BASE,
   OPS_PREVIEW_ROLE_COOKIE,
@@ -38,17 +39,6 @@ export async function POST(request: Request) {
   }
 
   const response = relativeRedirect303(returnTo);
-  const forwardedProtocol = request.headers
-    .get("x-forwarded-proto")
-    ?.split(",")[0]
-    ?.trim()
-    .toLowerCase();
-  response.cookies.set(OPS_PREVIEW_ROLE_COOKIE, requestedRole, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: forwardedProtocol ? forwardedProtocol === "https" : new URL(request.url).protocol === "https:",
-    path: "/app",
-    maxAge: 60 * 60 * 8,
-  });
+  setPreviewCookie(response, request, OPS_PREVIEW_ROLE_COOKIE, requestedRole);
   return response;
 }

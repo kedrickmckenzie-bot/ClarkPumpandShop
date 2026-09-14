@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { beforeEach, describe, expect, it } from "vitest";
+import { heldWorkAccountabilityRegression } from "./helpers/held-work-accountability-regression";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PUBLIC_DEMO_LINKS, getPublicOperationsGateway } from "@/components/ops-public/server-gateway";
 import { placeWorkOrderOnVisitHold, planHeldWorkForConfirmedAppointment, updateWorkOrderControl } from "@/lib/ops/commands";
 import { getNorthlineFixtureRepository, resetNorthlineFixtureRepository } from "@/lib/ops/fixture-repository";
@@ -12,6 +13,20 @@ const LIGHT_WORK_ID = "wo-held-104-canopy-light";
 
 describe("manager-approved held work", () => {
   beforeEach(() => resetNorthlineFixtureRepository());
+  afterEach(() => vi.useRealTimers());
+
+  it("does not complete an unrelated higher-priority obligation when held work is added onsite", async () => {
+    await heldWorkAccountabilityRegression(getNorthlineFixtureRepository(), "2026-09-14T12:00:00.000Z", true, true);
+  });
+
+  it.each([
+    ["2026-09-01T12:00:00.000Z", false],
+    ["2026-09-14T12:00:00.000Z", false],
+    ["2026-09-01T12:00:00.000Z", true],
+    ["2026-09-14T12:00:00.000Z", true],
+  ])("retires the hold obligation at %s (added during visit: %s)", async (now, addDuringVisit) => {
+    await heldWorkAccountabilityRegression(getNorthlineFixtureRepository(), now, addDuringVisit);
+  });
 
   it("offers only service-matched work and never exposes the internal review threshold", async () => {
     const gateway = getPublicOperationsGateway();
@@ -184,7 +199,9 @@ describe("manager-approved held work", () => {
     expect(notice!.payloadJson).not.toMatch(/amountMinor|authorizedAmount|internalReviewThreshold/);
   }, 30_000);
 
-  it("moves look-and-report findings to manager review instead of pretending the repair was completed", async () => {
+  it.each(["2026-09-01T12:00:00.000Z", "2026-09-14T12:00:00.000Z"])("moves look-and-report findings to the named manager at %s", async (now) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(now));
     const gateway = getPublicOperationsGateway();
     const repository = getNorthlineFixtureRepository();
     const checkIn = await gateway.checkIn(PUBLIC_DEMO_LINKS.storeToken, {

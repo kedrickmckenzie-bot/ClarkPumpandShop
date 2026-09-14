@@ -4,6 +4,8 @@ These rules govern the clean-slate TraceOps Convenience Suite rebuild. The prima
 
 ## Rebuild boundary
 
+- Before platform improvement work, read [`docs/PLATFORM_IMPROVEMENT_PASSES.md`](docs/PLATFORM_IMPROVEMENT_PASSES.md). It is the persistent checklist requested by the user. Preserve its item IDs, work in the recorded pass order unless evidence warrants a documented change, and update its checkpoint, item status and validation evidence before ending a session. Partial implementation is not a completed acceptance item.
+
 - TraceOps is a purpose-built convenience-retail suite. It is not a reskin of the previous application.
 - Legacy screens, routes, components, seed assumptions and information architecture are not the product foundation. The current c-store prototype is also not a production state container or authorization layer. Rebuild from the approved platform blueprint; do not patch a session-scoped UI merely because it already exists.
 - A convincing guided story is only one acceptance test. Product decisions must support durable multi-user operation, real external vendors, server-enforced scopes, support, recovery, and operators at approximately 63-store scale without the creator manually holding the workflow together.

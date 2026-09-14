@@ -52,6 +52,10 @@ describe("demo package switch", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/app/overview");
     expect(response.headers.get("set-cookie")).toContain("ops-preview-edition=accountability");
+    expect(response.headers.getSetCookie()).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^ops-preview-edition=accountability; Path=\/;/),
+      expect.stringMatching(/^ops-preview-edition=; Path=\/app; Max-Age=0;/),
+    ]));
   });
 
   it("returns to the current screen when the complete package is selected", async () => {

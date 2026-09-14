@@ -35,7 +35,10 @@ describe("preview role switch", () => {
     expect(response.headers.get("location")).not.toContain("127.0.0.1");
     const cookie = response.headers.get("set-cookie") ?? "";
     expect(cookie).toContain("ops-preview-role=executive");
-    expect(cookie).toContain("Path=/app");
+    expect(response.headers.getSetCookie()).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^ops-preview-role=executive; Path=\/;/),
+      expect.stringMatching(/^ops-preview-role=; Path=\/app; Max-Age=0;/),
+    ]));
     expect(cookie).toMatch(/;\s*HttpOnly/i);
     expect(cookie).toMatch(/;\s*SameSite=lax/i);
     expect(cookie).toMatch(/;\s*Secure/i);

@@ -1,4 +1,5 @@
 import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
+import { heldWorkAccountabilityRegression } from "./helpers/held-work-accountability-regression";
 import { workPricePersistenceRegression } from "./helpers/work-price-persistence-regression";
 import { connectedReviewRegression } from "./helpers/connected-review-regression";
 import { accountingReportingRegression } from "./helpers/accounting-reporting-regression";
@@ -725,6 +726,16 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
 
     await expect(repository.deleteSavedView(organizationId, membershipId, "saved-view-pg-roundtrip-2")).resolves.toBe(true);
   }, 60_000);
+
+  it.each([
+    ["2026-09-01T12:00:00.000Z", false],
+    ["2026-09-14T12:00:00.000Z", false],
+    ["2026-09-14T12:00:00.000Z", true],
+  ])("persists held-work accountability at %s (added during visit: %s)", async (now, addDuringVisit) => {
+    const repository = createOpsPostgresRepository(pool);
+    await seedOpsRepository(repository, buildNorthlinePresentationFixture());
+    await heldWorkAccountabilityRegression(repository, now, addDuringVisit);
+  }, 120_000);
 
   it("persists a held-work revision, atomic claim, and review outcome through PostgreSQL", async () => {
     const fixture = buildNorthlinePresentationFixture();

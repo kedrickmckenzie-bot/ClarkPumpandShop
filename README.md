@@ -6,6 +6,8 @@ The c-store suite is intentionally specific: store and region visibility, refrig
 
 > The legacy screens are not the product foundation. New work follows [the rebuild blueprint](./docs/CSTORE_PLATFORM_REBUILD_BLUEPRINT.md), not the previous application's navigation, components or assumptions.
 
+Current improvement work is tracked in [the persistent pass checklist](./docs/PLATFORM_IMPROVEMENT_PASSES.md). Read its checkpoint before resuming work; the [September 14 review](./docs/PLATFORM_REVIEW_2026-09-14.md) records the baseline findings and limitations.
+
 ## Demo contract
 
 The fictional demo operator, **Clark Pump and Shop**, has exactly:
@@ -19,7 +21,7 @@ The five vendors are ColdLine Refrigeration & HVAC, ClearFlow HVAC, Plumbing & K
 
 The hosted showcase seeds the fictional tenant into Cloudflare D1 and writes workflow changes back through the same tenant-scoped repositories and domain commands. Uploaded evidence uses the private R2 binding. Local development uses the same deterministic fixture through an in-memory repository and resets when the local process restarts.
 
-The presentation fixture currently contains **95 intake requests, 379 work orders across 20 months, 372 visits, 138 assets, 836 component records, 222 PM occurrences and 91 invoice references**. It includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
+The September 14 seed validation reports **100 intake requests, 422 work orders, 399 visits, 144 assets and 222 PM occurrences**. Run `npm run db:seed` for the current source-derived counts and separate 65-store fixture validation. The presentation includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
 
 All charts, counts and narrative claims derive from source records. Summary numbers are never independently hardcoded.
 
