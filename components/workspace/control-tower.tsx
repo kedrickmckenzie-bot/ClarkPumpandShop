@@ -49,7 +49,7 @@ function PageHeader({ model }: { model: DashboardPageViewModel }) {
       </header>
       <div className={styles.contextBar} aria-label="Dashboard context">
         <span><MapPinned size={15} aria-hidden="true" /><strong>Viewing</strong> {page.scopeLabel}</span>
-        {page.periodLabel ? <span><CalendarClock size={15} aria-hidden="true" /><strong>Period</strong> {page.periodLabel}</span> : null}
+        {page.periodLabel ? <span><CalendarClock size={15} aria-hidden="true" /><strong>Cost period</strong> {page.periodLabel}</span> : null}
         {page.updatedLabel ? <span><Clock3 size={15} aria-hidden="true" /><strong>Updated</strong> {page.updatedLabel}</span> : null}
       </div>
     </>
@@ -146,7 +146,7 @@ function Distribution({ model }: { model: BreakdownViewModel }) {
         {model.totalLabel ? <strong>{model.totalLabel}</strong> : null}
       </header>
       <div className={styles.distribution}>
-        {model.segments.length ? model.segments.slice(0, 7).map((segment) => (
+        {model.segments.length ? model.segments.map((segment) => (
           <Link href={segment.link.href} className={styles.distributionRow} key={segment.id}>
             <span className={styles.distributionLabel}><strong>{segment.label}</strong><small>{segment.shareLabel ?? segment.link.label}</small></span>
             <span className={styles.barTrack} aria-hidden="true"><span style={{ width: `${Math.max(2, (Math.max(0, segment.value) / maximum) * 100)}%` }} /></span>
@@ -155,7 +155,7 @@ function Distribution({ model }: { model: BreakdownViewModel }) {
           </Link>
         )) : <p className={styles.empty}>No source records match this context.</p>}
       </div>
-      <footer className={styles.sourceFooter}><span>Open the records behind this view.</span><Link className={styles.textLink} href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={14} aria-hidden="true" /></Link></footer>
+      <footer className={styles.sourceFooter}><Link className={styles.textLink} href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={14} aria-hidden="true" /></Link></footer>
     </section>
   );
 }

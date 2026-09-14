@@ -1,9 +1,11 @@
 import { expect } from "vitest";
+import { dashboardQueueRegression } from "./dashboard-queue-regression";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 
 /** Shared expectations run against fixture, SQLite/D1 and PostgreSQL. */
 export async function workCostDrilldownRegression(repository: OpsRepository) {
+  await dashboardQueueRegression(repository);
   const fixture = buildNorthlinePresentationFixture();
   const scope = { organizationId: NORTHLINE_ORGANIZATION_ID };
   const query = { costFrom: "2026-01-01", costTo: "2026-07-20", costMonth: "2026-07", hasCost: true };

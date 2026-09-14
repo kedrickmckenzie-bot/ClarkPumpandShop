@@ -1,3 +1,4 @@
+import { matchesRequestStatus, matchesWorkStage } from "./dashboard-cohorts";
 import type { JobRun, NotificationRecipient, NotificationRule, OrganizationWorkflowPolicy, OutboxMessage, PmOccurrence, PmPlan, RoleCapabilityOverride, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
 import { hasWorkCostFilter, matchesWorkCategoryPath, matchesWorkCost } from "./work-cost-query";
@@ -661,7 +662,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
 
   async listRequests(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId } = {}) {
     const search = normalize(query.search ?? "");
-    const rows = this.fixture.requests.filter((row) => storeAllowed(this.fixture, scope, row.storeId)).filter((row) => (!query.status || (query.status === "acknowledged_unlinked" ? row.status === "acknowledged" && !row.linkedWorkOrderId : row.status === query.status)) && (!query.storeId || row.storeId === query.storeId)).map((row) => requestRow(this.fixture, row)).filter((row) => !search || normalize([row.reference, row.problem, row.reporterName, row.storeNumber, row.storeName].join(" ")).includes(search)).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+    const rows = this.fixture.requests.filter((row) => row.organizationId === scope.organizationId && storeAllowed(this.fixture, scope, row.storeId)).filter((row) => matchesRequestStatus(row, query.status) && (!query.storeId || row.storeId === query.storeId)).map((row) => requestRow(this.fixture, row)).filter((row) => !search || normalize([row.reference, row.problem, row.reporterName, row.storeNumber, row.storeName].join(" ")).includes(search)).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt) || b.id.localeCompare(a.id));
     return page(rows, query);
   }
 
@@ -681,6 +682,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     const rows = this.fixture.workOrders.filter((row) => storeAllowed(this.fixture, scope, row.storeId)).filter((row) => {
       const costLines = this.fixture.costLines.filter((cost) => cost.organizationId === scope.organizationId && cost.workOrderId === row.id);
       return (!query.statuses?.length || query.statuses.includes(row.status))
+        && matchesWorkStage(row, query.stage, this.fixture)
         && (!query.priorities?.length || query.priorities.includes(row.priority))
         && (!query.storeId || row.storeId === query.storeId)
         && (!query.regionId || this.fixture.stores.find((store) => store.organizationId === scope.organizationId && store.id === row.storeId)?.regionId === query.regionId)

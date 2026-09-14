@@ -110,6 +110,7 @@ export interface OrganizationScope {
 }
 
 export interface WorkOrderListQuery extends PageRequest {
+  stage?: string;
   search?: string;
   statuses?: readonly string[];
   priorities?: readonly string[];

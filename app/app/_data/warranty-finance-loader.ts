@@ -1,4 +1,5 @@
 import "server-only";
+import { scopedInvoiceRecords } from "@/lib/ops/dashboard-cohorts";
 
 import { notFound } from "next/navigation";
 import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
@@ -21,12 +22,7 @@ export async function loadWarrantyFinanceWorkspace(input: { warrantyCaseId?: str
     const workOrder = fixture.workOrders.find((row) => row.organizationId === organizationId && row.id === item.workOrderId);
     return Boolean(workOrder && allowedStore(workOrder.storeId));
   });
-  const invoices = fixture.invoices.filter((invoice) => {
-    if (invoice.organizationId !== organizationId) return false;
-    const lineIds = fixture.invoiceLines.filter((line) => line.organizationId === organizationId && line.invoiceId === invoice.id).map((line) => line.id);
-    const allocations = fixture.invoiceLineAllocations.filter((allocation) => allocation.organizationId === organizationId && lineIds.includes(allocation.invoiceLineId));
-    return allocations.length > 0 && allocations.every((allocation) => allowedStore(allocation.storeId));
-  });
+  const invoices = scopedInvoiceRecords(fixture, organizationId, new Set(fixture.stores.filter((store) => allowedStore(store.id)).map((store) => store.id)));
   const selectedWarrantyCase = input.warrantyCaseId ? warrantyCases.find((item) => item.id === input.warrantyCaseId) : undefined;
   const selectedInvoice = input.invoiceId ? invoices.find((item) => item.id === input.invoiceId) : undefined;
   if (input.warrantyCaseId && !selectedWarrantyCase) notFound();

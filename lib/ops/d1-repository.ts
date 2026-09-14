@@ -1,3 +1,4 @@
+import { PENDING_REQUEST_STATUSES, WORK_STAGE_STATUSES } from "./dashboard-cohorts";
 import { hasWorkCostFilter, workCostSql } from "./work-cost-query";
 import { workPriceFrom, type WorkPriceQuery } from "./work-price-types";
 import type {
@@ -605,6 +606,20 @@ class D1OpsRepository implements OpsRepository {
       params.push(...cost.params);
     }
     if (query.statuses?.length) { clauses.push(`w.status IN (${query.statuses.map(() => "?").join(",")})`); params.push(...query.statuses); }
+    if (query.stage) {
+      const statuses = WORK_STAGE_STATUSES[query.stage];
+      if (!statuses) clauses.push("1 = 0");
+      else { clauses.push(`w.status IN (${statuses.map(() => "?").join(",")})`); params.push(...statuses); }
+      if (query.stage === "vendor-response") clauses.push(`a.kind = 'outside_vendor' AND a.status IN ('pending','issued','opened','accepted') AND (
+        EXISTS (SELECT 1 FROM ops_workflow_tasks vt WHERE vt.organization_id = w.organization_id AND vt.id = (
+          SELECT pt.id FROM ops_workflow_tasks pt WHERE pt.organization_id = w.organization_id AND pt.work_order_id = w.id AND pt.status IN ('open','in_progress')
+          ORDER BY pt.blocking DESC, pt.required_for_progress DESC,
+            CASE pt.priority WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 ELSE 1 END DESC,
+            CASE WHEN pt.due_at IS NULL THEN 1 ELSE 0 END, pt.due_at, CASE pt.status WHEN 'in_progress' THEN 1 ELSE 0 END DESC, pt.created_at, pt.id LIMIT 1
+        ) AND vt.assignee_type = 'vendor' AND vt.assignee_id = a.vendor_id)
+        OR (NOT EXISTS (SELECT 1 FROM ops_workflow_tasks pt WHERE pt.organization_id = w.organization_id AND pt.work_order_id = w.id AND pt.status IN ('open','in_progress')) AND w.accountable_party = v.name)
+      )`);
+    }
     if (query.priorities?.length) { clauses.push(`w.priority IN (${query.priorities.map(() => "?").join(",")})`); params.push(...query.priorities); }
     if (query.createdFrom) { clauses.push("w.created_at >= ?"); params.push(query.createdFrom); }
     if (query.createdTo) { clauses.push("w.created_at < ?"); params.push(query.createdTo); }
@@ -706,6 +721,7 @@ class D1OpsRepository implements OpsRepository {
     const params: unknown[] = [];
     const clauses = [scopeWhere(scope, "s", params)];
     if (query.status === "acknowledged_unlinked") clauses.push("r.status = 'acknowledged' AND r.linked_work_order_id IS NULL");
+    else if (query.status === "pending") { clauses.push(`r.status IN (${PENDING_REQUEST_STATUSES.map(() => "?").join(",")})`); params.push(...PENDING_REQUEST_STATUSES); }
     else if (query.status) { clauses.push("r.status = ?"); params.push(query.status); }
     if (query.storeId) { clauses.push("r.store_id = ?"); params.push(query.storeId); }
     if (query.search?.trim()) { clauses.push("lower(r.reference || ' ' || r.problem || ' ' || r.reporter_name || ' ' || s.store_number || ' ' || s.name) LIKE ?"); params.push(`%${query.search.trim().toLocaleLowerCase("en-US")}%`); }

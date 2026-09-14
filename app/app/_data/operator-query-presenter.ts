@@ -1,4 +1,6 @@
+import { workStatusLabel } from "@/lib/product/work-status-label";
 import "server-only";
+import { WORK_STAGE_STATUSES } from "@/lib/ops/dashboard-cohorts";
 
 import type {
   DashboardPageViewModel,
@@ -85,9 +87,9 @@ function queryFilters(route: OperatorListRoute, query: OperatorSearchParameters)
   const statusOptions = route === "visits"
     ? [{ value: "", label: "All visits" }, { value: "active", label: "Onsite now" }, { value: "checked_out", label: "Completed" }]
     : route === "work-orders"
-      ? [{ value: "", label: "All work" }, { value: "open", label: "Open" }, { value: "waiting_on_vendor", label: "Waiting on vendor" }, { value: "waiting_on_parts", label: "Waiting on parts" }, { value: "completed_pending_review", label: "Needs verification" }, { value: "closed", label: "Closed" }]
+      ? [{ value: "", label: "All work" }, { value: "open", label: "Open" }, { value: "waiting_on_vendor", label: "Vendor follow-up" }, { value: "waiting_on_parts", label: "Waiting on parts" }, { value: "completed_pending_review", label: "Needs verification" }, { value: "closed", label: "Closed" }]
       : route === "requests"
-        ? [{ value: "", label: "All reports" }, { value: "submitted", label: "New" }, { value: "under_review", label: "Under review" }, { value: "acknowledged_unlinked", label: "Acknowledged without linked work" }, { value: "converted", label: "Converted to work" }, { value: "closed", label: "Closed" }]
+        ? [{ value: "", label: "All reports" }, { value: "pending", label: "Needs review" }, { value: "submitted", label: "New" }, { value: "under_review", label: "Under review" }, { value: "acknowledged_unlinked", label: "Acknowledged without linked work" }, { value: "converted", label: "Converted to work" }, { value: "closed", label: "Closed" }]
         : [];
   return statusOptions.length ? [{
     id: "status",
@@ -98,7 +100,8 @@ function queryFilters(route: OperatorListRoute, query: OperatorSearchParameters)
 
 function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchParameters) {
   const labels: Record<string, string> = {
-    active: "Onsite now", checked_out: "Completed visits", open: "Open work", waiting_on_vendor: "Waiting on vendor",
+    pending: "Needs review", "not-sent": "Approved · not sent", "vendor-response": "Waiting on vendor",
+    active: "Onsite now", checked_out: "Completed visits", open: "Open work", waiting_on_vendor: "Vendor follow-up",
     waiting_on_parts: "Waiting on parts", completed_pending_review: "Needs verification", submitted: "New reports",
     under_review: "Reports under review", acknowledged_unlinked: "Acknowledged without linked work", converted: "Reports converted to work", unlinked: "Not linked",
   };
@@ -196,7 +199,7 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
       { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
       { key: "next", value: row.nextAction, secondary: `Next: ${row.accountableParty} · Internal: ${row.internalAccountableParty}${row.dueAt ? ` · Due ${formatOperationsDate(row.dueAt)}` : " · No deadline by policy"}` },
       { key: "cost", value: money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
-      { key: "status", value: sentence(row.status), tone: toneForStatus(row.status) },
+      { key: "status", value: workStatusLabel(row.status), tone: toneForStatus(row.status) },
     ],
   };
 }
@@ -323,6 +326,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     const heldOpportunity = first(query.opportunity);
     const heldStoreGroup = first(query.storeGroup) === "multiple" ? "multiple" as const : undefined;
     const requestedStatus = first(query.status);
+    const stageStatuses = WORK_STAGE_STATUSES[first(query.stage) ?? ""];
     const statuses = requestedStatus === "open"
       ? ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"]
       : requestedStatus ? [requestedStatus] : undefined;
@@ -330,6 +334,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       ...request,
       search: q,
       statuses,
+      stage: first(query.stage),
       storeId: first(query.store),
       vendorId: first(query.vendor),
       regionId: first(query.region),
@@ -349,12 +354,16 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       upcomingAppointmentAfter: upcomingAppointments ? NORTHLINE_AS_OF : undefined,
     }), costEvidence ? Promise.resolve({ approvedWorkOrders: 0, storesWithApprovedWork: 0, storesWithMultipleApprovedJobs: 0 }) : repository.getHeldWorkPortfolioSummary(scope)]);
     result = work; rows = work.items.map(heldPlan ? heldWorkRow : workRow); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "Track internal and outside service from creation through visits, follow-up, and recorded cost."; placeholder = "Search number, problem, store, vendor, or category";
+    if (stageStatuses) {
+      title = first(query.stage) === "not-sent" ? "Approved · not sent" : "Waiting on vendor";
+      description = first(query.stage) === "not-sent" ? "Approved work, including jobs held for a later visit." : "Sent work needing a vendor response.";
+    }
     if (heldPlan && roleCan(session, "issue_work_order")) {
       const currentContext = `/app/work-orders?${new URLSearchParams(paramsWithoutPage(query)).toString()}`;
       primaryAction = { label: "Send approved jobs together", href: `/app/store-sweeps/new?returnTo=${encodeURIComponent(currentContext)}` };
       secondaryAction = { label: "Return to all work", href: workTimingHref(query, false) };
     } else if (roleCan(session, "create_work_order")) primaryAction = { label: "Create work order", href: creationHref("/app/work-orders/new", query) };
-    if (!costEvidence && (session.role === "facilities" || session.role === "regional")) {
+    if (!costEvidence && !first(query.stage) && (session.role === "facilities" || session.role === "regional")) {
       if (!heldPlan) secondaryAction = { label: "Send approved jobs together", href: "/app/store-sweeps/new?returnTo=%2Fapp%2Fwork-orders" };
       metrics = [
         { id: "ready-to-bundle", label: "Approved for next suitable visit", value: String(held.approvedWorkOrders), supportingText: `${held.storesWithApprovedWork} store${held.storesWithApprovedWork === 1 ? "" : "s"} across your full operating scope`, tone: held.approvedWorkOrders ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open approved work" } },
@@ -379,7 +388,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     }
   } else if (route === "requests") {
     const requests = await repository.listRequests(scope, { ...request, search: q, status: first(query.status), storeId: first(query.store) });
-    result = requests; rows = requests.items.map(requestRow); title = "Service requests"; eyebrow = "Reported issues"; description = "Review what store teams reported, then create work, escalate it, or close it without changing the original report."; placeholder = "Search problem, reporter, request, or store";
+    result = requests; rows = requests.items.map(requestRow); title = first(query.status) === "pending" ? "Requests to review" : "Service requests"; eyebrow = "Reported issues"; description = "Review reported problems and choose the next step."; placeholder = "Search problem, reporter, request, or store";
     if (roleCan(session, "create_request")) primaryAction = { label: "Report an issue", href: creationHref("/app/requests/new", query) };
   } else if (route === "visits") {
     const visitContext = { storeId: first(query.store), vendorId: first(query.vendor) };
@@ -387,7 +396,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       repository.listVisits(scope, { ...request, search: q, status: first(query.status), review: first(query.review) === "true", ...visitContext }),
       repository.getVisitPortfolioSummary(scope, { ...visitContext, now: NORTHLINE_AS_OF }),
     ]);
-    result = visits; rows = visits.items.map(visitRow); title = first(query.review) === "true" ? "Visits needing review" : first(query.status) === "active" ? "Vendors onsite now" : "Service visits"; eyebrow = "Observed service"; description = "See who arrived, why, the evidence captured, and which visits need review—without treating presence as certified labor."; placeholder = "Search technician, vendor, store, or work order";
+    result = visits; rows = visits.items.map(visitRow); title = first(query.review) === "true" ? "Visits needing review" : first(query.status) === "active" ? "Onsite visits" : "Service visits"; eyebrow = "Observed service"; description = "See who arrived, why, the evidence captured, and which visits need review—without treating presence as certified labor."; placeholder = "Search technician, vendor, store, or work order";
     const withContext = (status?: string, review?: string) => {
       const params = new URLSearchParams(Object.entries({ store: visitContext.storeId, vendor: visitContext.vendorId, status, review }).filter((entry): entry is [string, string] => Boolean(entry[1])));
       return `/app/visits${params.size ? `?${params}` : ""}`;
@@ -409,7 +418,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     metrics = [
       { id: "stores-in-scope", label: "Stores in scope", value: String(storeSummary.stores), supportingText: "Portfolio-wide for your operating scope; search below filters the directory", tone: "neutral", link: { href: "/app/stores", label: "Open full directory" } },
       { id: "store-open-work", label: "Open work orders", value: String(storeSummary.openWorkOrders), supportingText: "Current open work across the scoped store portfolio", tone: storeSummary.openWorkOrders ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open source work" } },
-      { id: "store-onsite-now", label: "Vendors onsite now", value: String(storeSummary.activeVisits), supportingText: "Active server-timestamped check-ins across the scoped portfolio", tone: storeSummary.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open active visits" } },
+      { id: "store-onsite-now", label: "Onsite visits", value: String(storeSummary.activeVisits), supportingText: "Active server-timestamped check-ins across the scoped portfolio", tone: storeSummary.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open active visits" } },
       { id: "store-recorded-cost", label: "Recorded work cost · all history", value: money(storeSummary.recordedCostMinor), supportingText: "Entered cost lines across the full scoped history; not invoice totals", tone: "neutral", link: { href: "/app/work-orders?hasCost=true", label: "Open every work order with recorded cost" } },
     ];
   } else {

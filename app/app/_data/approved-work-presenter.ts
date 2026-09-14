@@ -1,3 +1,4 @@
+import { matchesWorkStage } from "@/lib/ops/dashboard-cohorts";
 import "server-only";
 
 import type { OperatorSession } from "@/components/ops/data-contract";
@@ -370,7 +371,7 @@ export function buildApprovedWorkPortfolio(
         && (!options.categoryKey || (workOrder.categoryKey ?? "unclassified") === options.categoryKey)
       )
       .filter((workOrder) => !options.status || options.status === "open" || options.status === workOrder.status)
-      .filter((workOrder) => !options.stage || (options.stage === "vendor-response" && ["approved", "issued", "waiting_on_vendor"].includes(workOrder.status)))
+      .filter((workOrder) => matchesWorkStage(workOrder, options.stage, fixture))
       .filter((workOrder) => {
         const assignment = assignmentForWork(fixture, session.organizationId, workOrder.id);
         return !options.vendorId || assignment?.vendorId === options.vendorId;

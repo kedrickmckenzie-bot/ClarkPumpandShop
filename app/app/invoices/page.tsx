@@ -14,12 +14,12 @@ import { notFound } from "next/navigation";
 export const metadata: Metadata = { title: "Invoice references" };
 export default async function InvoiceReferencesPage({ searchParams }: { searchParams: Promise<OperatorSearchParameters> }) {
   const query = await searchParams;
+  const session = await loadOperatorSession();
+  if (!roleCanAccessListRoute(session.role, "invoices")) notFound();
   if (hasInvoiceEvidenceFilters(query)) {
-    const session = await loadOperatorSession();
-    if (!roleCanAccessListRoute(session.role, "invoices")) notFound();
     const fixture = await getRequestOpsTrendsFixtureSnapshot(session.organizationId);
     return <ListSurface model={buildInvoiceEvidenceModel(fixture, session, query)} surface="invoices" searchParams={query} />;
   }
-  const { fixture, invoices, session } = await loadWarrantyFinanceWorkspace();
+  const { fixture, invoices } = await loadWarrantyFinanceWorkspace();
   return <>{["executive", "facilities", "finance"].includes(session.role) ? <><ReceiveInvoiceLink /><p><Link href="/app/invoices/accounting">Review invoices from accounting</Link></p></> : null}<InvoiceQueueWorkspace fixture={fixture} invoices={invoices} page={typeof query.page === "string" ? query.page : undefined} view={typeof query.view === "string" ? query.view : undefined} /></>;
 }

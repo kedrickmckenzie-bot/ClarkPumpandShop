@@ -54,7 +54,7 @@ describe("operator presenter drill-through contracts", () => {
     expect(allVisits.table.rows).toHaveLength(Math.min(25, fixture.visits.length));
     expect(allVisits.pagination?.summary).toBe(`Showing 1–${Math.min(25, fixture.visits.length)} of ${fixture.visits.length}`);
     expect(onsite.table.rows).toHaveLength(activeCount);
-    expect(onsite.page.title).toBe("Vendors onsite now");
+    expect(onsite.page.title).toBe("Onsite visits");
     expect(onsite.resultSummary).toBe(`${activeCount} matching of ${fixture.visits.length} visits`);
     expect(onsite.appliedFilters?.map((filter) => filter.label)).toContain("Onsite now");
     expect(onsite.clearFiltersHref).toBe("/app/visits");

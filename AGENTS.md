@@ -16,6 +16,7 @@ These rules govern the clean-slate TraceOps Convenience Suite rebuild. The prima
 
 ## Enterprise experience and temporary brand
 
+- In every improvement pass, user experience and interface polish are the first priority. Make the next action and meaning obvious at a glance: short, plain labels, sensible defaults, concise help only where needed, and readable layouts on desktop and phone. Avoid long explanatory text boxes, repeated instructions, and jargon. Verify the affected user journey, not just the underlying calculation.
 - The current operator UX, teal/coral palette, generic page renderer, card-heavy dashboard treatment, tiny labels, and legacy application stacks are not design foundations. Replace them with one coherent enterprise interface.
 - Use neutral cool-gray canvases, white working surfaces, deep slate navigation, one restrained cobalt action color, semantic status colors, strong tables/queues/timelines, readable 15–16 px body text, and designed loading/empty/error/partial/permission states.
 - Cards summarize; exact records belong in tables, queues, split views, and full record pages. Avoid decorative charts, marketing gradients, glass effects, playful illustration, and excessive rounded containers in the operator application.
