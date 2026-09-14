@@ -177,3 +177,10 @@ All browser-created stores, WOs and visits were in the disposable local in-memor
 All six required checks passed: `db:seed`, `typecheck`, `lint`, **133 files / 910 tests** in the full suite (154.14 seconds), **4 files / 52 tests** in `test:e2e` (57.27 seconds), and production build. The final application change removed an unreachable duplicate filter-label branch found by lint; the subsequent lint run passed. Earlier runs exposed outdated copy/default expectations, which were updated alongside the shorter UI. The Sites Node build helper again failed to resolve npm on Windows; direct `npm run build` succeeded. Existing non-fatal duplicate CSS-output and static route-classification warnings remain.
 
 **P3-01 through P3-07 are complete. 18 of 40 items are complete; 22 remain.** Keep the UX-first standing rule in every later pass. Begin Pass 4 with production identity isolation, active membership resolution and organization-first adversarial checks; do not interpret the fictional role picker or this successful preview as production identity proof. Private publication status is recorded separately below.
+
+### Pass 3 publication — complete
+
+- Private version **31** published successfully at **2026-09-14 23:04:30 UTC**: https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site . Owner-only access was preserved.
+- Published source: `a2a28adab0bcc90a0e70f5a03693a26fe0831043`. Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_8af1148b4558819187bcd9a9d0f21e72`. Deployment: `appgdep_6aa87d6e9e288191834f7590a347f769`.
+- The unchanged packaging script succeeded through installed Git Bash after the Node wrapper could not start bash. The archive included the server entrypoint, client assets, hosting manifest and existing migrations. D1/R2 bindings and presentation seed were preserved.
+- The local preview process was stopped, discarding its temporary browser-test records. The temporary browser viewport was reset. Existing unrelated `dev4.log` remains untouched. This post-publication checkpoint changes documentation only; resume at **Pass 4** with all 22 outstanding IDs retained.
