@@ -6,10 +6,12 @@ import { loadAttentionItemModel } from "../../_data/operator-loader";
 
 export const metadata: Metadata = { title: "Attention item" };
 
-export default async function AttentionItemPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ updated?: string | string[] }> }) {
+export default async function AttentionItemPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ updated?: string | string[]; workOrder?: string | string[] }> }) {
   const { id } = await params;
   const query = await searchParams;
   const updated = Array.isArray(query.updated) ? query.updated[0] : query.updated;
   const model = await loadAttentionItemModel(id);
+  const selectedWork = Array.isArray(query.workOrder) ? query.workOrder[0] : query.workOrder;
+  if (model.control.reconciliationOptions?.some((option) => option.value === selectedWork)) model.control.selectedReconciliationWorkOrderId = selectedWork;
   return <DetailView model={model.detail} initialSection="service-visits" beforeSections={<div className={styles.controlStack}><MutationReceipt code={updated} /><AttentionItemPanel model={model.control} /></div>} />;
 }

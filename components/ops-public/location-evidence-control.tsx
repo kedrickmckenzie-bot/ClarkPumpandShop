@@ -28,15 +28,16 @@ export function LocationEvidenceControl({
       <div className={styles.locationHeader}>
         <div>
           <strong>Location evidence</strong>
-          <p>Your browser will ask before capturing one location point for this {actionLabel}. There is no continuous tracking.</p>
+          <p>One location check for {actionLabel}. No continuous tracking.</p>
         </div>
-        <span className={styles.statusPill}>{value ? (value.captureResult === "captured" ? "Captured" : "Unavailable") : "Not checked"}</span>
+        <span className={styles.statusPill}>{value ? (value.captureResult === "captured" ? "Captured" : value.captureResult === "permission_denied" ? "Declined" : "Unavailable") : "Not checked"}</span>
       </div>
       <p className={styles.helper} aria-live="polite">{describeLocationAttempt(value)}</p>
       <button className={styles.secondaryButton} disabled={capturing} onClick={capture} type="button">
         {value ? <RefreshCw aria-hidden="true" size={18} /> : <LocateFixed aria-hidden="true" size={18} />}
         {capturing ? "Checking location…" : value ? "Try location again" : "Check my location"}
       </button>
+      {!value ? <button className={styles.secondaryButton} disabled={capturing} onClick={() => onChange({ captureResult: "permission_denied" })} type="button">Continue without location</button> : null}
     </div>
   );
 }

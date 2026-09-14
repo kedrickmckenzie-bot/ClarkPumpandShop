@@ -319,6 +319,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   let accountableParty = workOrder.accountableParty;
   if (blockingTask) accountableParty = blockingTask.assigneeName;
   if (stage === "followup_closeout" && closeoutFollowUps[0]) accountableParty = closeoutFollowUps[0].accountableParty;
+  if (activeAssignment?.kind === "internal" && input.providerName && accountableParty === "Internal maintenance" && (!blockingTask || blockingTask.assigneeId === activeAssignment.internalMembershipId)) accountableParty = input.providerName;
   if (fullyClosed) accountableParty = "No active owner";
 
   let dueAt: string | undefined = blockingTask?.dueAt ?? closeoutFollowUps[0]?.dueAt ?? workOrder.dueAt;
@@ -529,7 +530,7 @@ export interface WorkOrderCaseInput {
   workOrder: Pick<WorkOrder, "id" | "organizationId" | "number" | "storeId" | "problem" | "priority" | "status" | "internalAccountableParty" | "internalAccountableType" | "internalAccountableId" | "accountableParty" | "nextAction" | "dueAt" | "escalationTo" | "createdAt" | "closedAt">;
   storeName?: string;
   providerName?: string;
-  assignments?: Pick<WorkOrderAssignment, "id" | "kind" | "status" | "assignedAt" | "supersedesAssignmentId">[];
+  assignments?: Pick<WorkOrderAssignment, "id" | "kind" | "status" | "assignedAt" | "supersedesAssignmentId" | "internalMembershipId">[];
   issuances?: Pick<WorkOrderIssuance, "id" | "assignmentId" | "revision" | "issuedAt">[];
   vendorResponses?: Pick<VendorResponse, "id" | "issuanceId" | "response" | "respondedAt" | "proposedAt">[];
   appointments?: Pick<ServiceAppointment, "id" | "status" | "startsAt" | "createdAt" | "sourceVendorResponseId" | "workOrderId" | "assignmentId" | "proposedBy">[];

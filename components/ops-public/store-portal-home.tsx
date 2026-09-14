@@ -41,7 +41,7 @@ export function StorePortalHome({ token, portal, pendingVisit, publicOrigin }: {
         {portal.capabilities.reportIssue ? (
           <Link className={styles.portalChoice} href={`${base}/report`}>
             <span className={styles.portalChoiceIcon}><ClipboardPlus aria-hidden="true" size={24} /></span>
-            <div><h2>Report a store problem</h2><p>Employees can document an issue for manager review. Equipment selection is optional.</p></div>
+            <div><h2>Report a store problem</h2><p>Describe the problem for your manager.</p></div>
             <span className={styles.portalChoiceCta}>Report an issue <ArrowRight aria-hidden="true" size={17} /></span>
           </Link>
         ) : null}
@@ -50,17 +50,14 @@ export function StorePortalHome({ token, portal, pendingVisit, publicOrigin }: {
             <span className={styles.portalChoiceIcon}><UserRoundCheck aria-hidden="true" size={24} /></span>
             <div>
               <h2>{portal.capabilities.startVisit && portal.capabilities.finishVisit ? "Vendor check-in or checkout" : portal.capabilities.startVisit ? "Vendor check-in" : "Finish vendor visit"}</h2>
-              <p>{portal.trustedStoreDevice ? "Start a visit or select an onsite technician to finish one—no account, PIN, or location permission required." : "Technicians can check in for assigned work and use a checkout link without an account."}</p>
+              <p>{portal.trustedStoreDevice ? "Start or finish a visit. No login or location permission needed." : "Start or finish your visit. No account needed."}</p>
             </div>
             <span className={styles.portalChoiceCta}>Open vendor visit <ArrowRight aria-hidden="true" size={17} /></span>
           </Link>
         ) : null}
       </div>
       {portal.capabilities.startVisit ? <PublicStoreQr configuredOrigin={publicOrigin} storeNumber={portal.store.number} targetPath={base} /> : null}
-      <section className={styles.notice} style={{ marginTop: "1rem" }}>
-        <strong>Simple by design</strong>
-        <p className={styles.helper}>{portal.trustedStoreDevice ? "This trusted store computer uses the server receipt time, so a busy employee cannot backdate the visit later." : "This page does not require a login or PIN. Each action receives a server-confirmed record."}</p>
-      </section>
+
     </PublicFrame>
   );
 }

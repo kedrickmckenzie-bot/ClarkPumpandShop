@@ -136,7 +136,7 @@ export function StoreEquipmentSetup({ model }: { model: StoreEquipmentSetupViewM
   }
 
   return (
-    <main className={styles.workspace}>
+    <section className={styles.workspace}>
       <CommissioningHeader
         storeLabel={model.storeLabel}
         addressLabel={model.addressLabel}
@@ -147,7 +147,7 @@ export function StoreEquipmentSetup({ model }: { model: StoreEquipmentSetupViewM
       <SetupProgress active={2} />
       <section className={styles.callout}>
         <PackageCheck size={21} aria-hidden="true" />
-        <div><strong>Fast by design</strong><p>You only need the equipment type and quantity today. Model, serial, warranty, and vendor-supplied details remain optional.</p></div>
+        <div><strong>Equipment is optional</strong><p>Add types and quantities now, or skip this step.</p></div>
       </section>
       <form action={model.action} method="post" onSubmit={submit} className={styles.form}>
         <div className={styles.toolbar}>
@@ -183,7 +183,7 @@ export function StoreEquipmentSetup({ model }: { model: StoreEquipmentSetupViewM
           <div><Link className={styles.secondaryButton} href={model.backHref}>Skip for now</Link><button className={styles.primaryButton} disabled={pending || total === 0} type="submit">{pending ? "Creating equipment…" : "Continue to names"}<ArrowRight size={17} aria-hidden="true" /></button></div>
         </footer>
       </form>
-    </main>
+    </section>
   );
 }
 
@@ -216,7 +216,7 @@ export function StoreEquipmentNaming({ model }: { model: StoreEquipmentNamingVie
   }
 
   return (
-    <main className={styles.workspace}>
+    <section className={styles.workspace}>
       <CommissioningHeader
         storeLabel={model.storeLabel}
         addressLabel={model.addressLabel}
@@ -248,6 +248,6 @@ export function StoreEquipmentNaming({ model }: { model: StoreEquipmentNamingVie
           <div><Link className={styles.secondaryButton} href={model.backHref}>Keep automatic names</Link><button className={styles.primaryButton} disabled={pending} type="submit">{pending ? "Saving names…" : "Save & finish store setup"}<ArrowRight size={17} aria-hidden="true" /></button></div>
         </footer>
       </form>
-    </main>
+    </section>
   );
 }

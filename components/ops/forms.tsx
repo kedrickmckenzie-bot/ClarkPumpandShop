@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { WorkRoutingFields } from "./work-routing-fields";
+import { RecordForm } from "./record-form";
 import { ArrowLeft, ArrowRight, Info, Route, Send, ShieldCheck } from "lucide-react";
 import type {
   CreateRequestPageViewModel,
@@ -55,7 +57,7 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
       <PageIntro model={model} />
       <ModelState state={model.state} />
       {model.state.kind === "ready" ? (
-        <form className={styles.recordForm} action={model.submitAction} method="post">
+        <RecordForm className={styles.recordForm} action={model.submitAction}>
           <section className={styles.formSection}>
             <div className={styles.formSectionHeading}><span>1</span><div><h2>Where is the issue?</h2><p>Choose the store so the request reaches the right manager.</p></div></div>
             <label className={styles.field} htmlFor="request-store">
@@ -86,7 +88,7 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
 
           <div className={styles.formNotice}><Info aria-hidden="true" size={19} /><p><strong>You do not need equipment details or a diagnosis.</strong> This creates a visible record that a manager can review, classify, and turn into work without changing the original report.</p></div>
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Submit request<ArrowRight aria-hidden="true" size={18} /></button></div>
-        </form>
+        </RecordForm>
       ) : null}
     </div>
   );
@@ -103,7 +105,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
       <PageIntro model={model} />
       <ModelState state={model.state} />
       {model.state.kind === "ready" ? (
-        <form className={styles.recordForm} action={model.submitAction} method="post">
+        <RecordForm className={styles.recordForm} action={model.submitAction}>
           <input type="hidden" name="submissionKey" value={submissionKey} />
           {model.sourceRequest ? <input type="hidden" name="requestId" value={model.sourceRequest.id} /> : null}
           {model.sourcePm ? <input type="hidden" name="pmOccurrenceId" value={model.sourcePm.occurrenceId} /> : null}
@@ -112,7 +114,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
           {componentId ? (
             <div className={styles.formNotice}>
               <Info aria-hidden="true" size={19} />
-              <p><strong>Component-level work.</strong> This work order will stay classified to the component you opened, so its repair, visit, and cost history remain connected.</p>
+              <p><strong>Component-level work.</strong> Linked to the component you selected.</p>
             </div>
           ) : null}
           {model.sourceRequest ? (
@@ -124,14 +126,14 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
           {model.sourcePm ? (
             <div className={styles.formNotice}>
               <Info aria-hidden="true" size={19} />
-              <p><strong>Creating work for {model.sourcePm.planName}.</strong> This {model.sourcePm.statusLabel.toLocaleLowerCase("en-US")} occurrence was due {model.sourcePm.dueLabel}. The occurrence, work order, visit, outcome, and future cost evidence will stay connected.</p>
+              <p><strong>Creating work for {model.sourcePm.planName}.</strong> This {model.sourcePm.statusLabel.toLocaleLowerCase("en-US")} occurrence was due {model.sourcePm.dueLabel}. The PM occurrence stays linked.</p>
             </div>
           ) : null}
           {model.sourceVisit ? (
             <>
               <div className={styles.formNotice}>
                 <Route aria-hidden="true" size={19} />
-                <p><strong>Documenting work after service began.</strong> {model.sourceVisit.technicianName} from {model.sourceVisit.providerName} checked in {model.sourceVisit.checkedInLabel}{model.sourceVisit.checkedOutLabel ? ` and checked out ${model.sourceVisit.checkedOutLabel}` : ""}. The new work order will be linked by an auditable amendment. It will not backdate authorization or alter the original “{model.sourceVisit.unmatchedReason}” check-in assertion.</p>
+                <p><strong>Documenting work after service began.</strong> {model.sourceVisit.technicianName} from {model.sourceVisit.providerName} checked in {model.sourceVisit.checkedInLabel}{model.sourceVisit.checkedOutLabel ? ` and checked out ${model.sourceVisit.checkedOutLabel}` : ""}. Original times stay unchanged. This does not backdate authorization.</p>
               </div>
               {model.sourceVisit.outcomeNotes ? <div className={styles.formNotice}>
                 <Info aria-hidden="true" size={19} />
@@ -140,19 +142,19 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
             </>
           ) : null}
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>1</span><div><h2>Define the work</h2><p>Only the store and problem are required. Classification stays honest when details are not yet known.</p></div></div>
+            <div className={styles.formSectionHeading}><span>1</span><div><h2>Define the work</h2><p>Start with a store and a problem.</p></div></div>
             <label className={styles.field} htmlFor="work-store">
               <span>Store <em>Required</em></span>
               {model.sourceVisit || model.sourceRequest ? <><input name="storeId" type="hidden" value={boundStoreId} /><input id="work-store" readOnly value={sourceStoreLabel ?? "Bound store"} /></> : <select id="work-store" name="storeId" required defaultValue={model.defaults?.storeId ?? ""}><option value="" disabled>Choose a store</option>{model.stores.map((store) => <option value={store.value} key={store.value}>{store.label}</option>)}</select>}
             </label>
             <label className={styles.field} htmlFor="work-problem">
               <span>Problem <em>Required</em></span>
-              <textarea id="work-problem" name="problem" rows={5} required minLength={10} placeholder="What needs to be inspected, repaired, or maintained?" defaultValue={model.sourceRequest?.problem ?? model.defaults?.problem} />
+              <textarea id="work-problem" name="problem" rows={3} required placeholder="What needs to be inspected, repaired, or maintained?" defaultValue={model.sourceRequest?.problem ?? model.defaults?.problem} />
             </label>
-            <SelectField id="work-priority" name="priority" label="Priority" required options={model.priorityOptions} defaultValue={model.defaults?.priority} />
+            <SelectField id="work-priority" name="priority" label="Priority" required options={model.priorityOptions} defaultValue={model.defaults?.priority ?? "routine"} />
             {!accountabilityOnly ? (
               <details className={styles.optionalFormSection} open={Boolean(componentId || model.defaults?.assetId || model.defaults?.categoryKey)}>
-                <summary><strong>Classify equipment</strong><span>Optional — add a category or known asset now, or leave it for diagnosis</span></summary>
+                <summary><strong>Classify equipment</strong><span>Optional · add now or later</span></summary>
                 <div className={styles.optionalFormBody}>
                   <label className={styles.field} htmlFor="work-category">
                     <span>Category <small>Optional</small></span>
@@ -166,44 +168,20 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>2</span><div><h2>{model.sourceVisit ? "Confirm who performed the visit" : accountabilityOnly ? "Choose the vendor" : "Choose the service path"}</h2><p>{model.sourceVisit ? "The provider comes from the observed check-in and cannot be silently replaced while this record is created." : accountabilityOnly ? "Select the outside vendor now or save the work order and choose one later." : "Use a known provider, request pricing first, route internally, or decide later."}</p></div></div>
+            <div className={styles.formSectionHeading}><span>2</span><div><h2>{model.sourceVisit ? "Confirm who performed the visit" : accountabilityOnly ? "Choose the vendor" : "Choose who will do it"}</h2><p>{model.sourceVisit ? "Keep the provider recorded at check-in." : accountabilityOnly ? "Select the outside vendor now or save the work order and choose one later." : "You can choose later."}</p></div></div>
             {model.sourceVisit ? (
               <div className={styles.formNotice}>
                 <Route aria-hidden="true" size={19} />
                 <input type="hidden" name="assignmentKind" value={model.defaults?.assignmentKind} />
                 {model.defaults?.vendorId ? <input type="hidden" name="vendorId" value={model.defaults.vendorId} /> : null}
                 {model.defaults?.internalMembershipId ? <input type="hidden" name="internalMembershipId" value={model.defaults.internalMembershipId} /> : null}
-                <p><strong>Provider preserved from check-in.</strong> {sourceVendorLabel ?? sourceInternalLabel ?? model.sourceVisit.providerName} will stay attached to this visit-derived work order. Change the provider later only through an auditable reassignment.</p>
+                <p><strong>Provider preserved from check-in.</strong> {sourceVendorLabel ?? sourceInternalLabel ?? model.sourceVisit.providerName} stays assigned.</p>
               </div>
-            ) : <><fieldset className={styles.assignmentChoices}>
-              <legend>Next step <span>Required</span></legend>
-              {!accountabilityOnly ? <label htmlFor="assignment-internal" aria-label="Internal maintenance"><input id="assignment-internal" type="radio" name="assignmentKind" value="internal" required defaultChecked={model.defaults?.assignmentKind === "internal"} /><span><strong>Internal maintenance</strong><small>Assign to your own maintenance team.</small></span></label> : null}
-              <label htmlFor="assignment-vendor" aria-label="Outside vendor"><input id="assignment-vendor" type="radio" name="assignmentKind" value="outside_vendor" required={accountabilityOnly} defaultChecked={model.defaults?.assignmentKind === "outside_vendor" || (accountabilityOnly && Boolean(model.defaults?.vendorId))} /><span><strong>Outside vendor</strong><small>Choose the vendor now, then send a service authorization. Technician check-in applies after it is issued.</small></span></label>
-              {!accountabilityOnly ? <label htmlFor="assignment-bid" aria-label="Request vendor quotes"><input id="assignment-bid" type="radio" name="assignmentKind" value="bid_request" /><span><strong>Request quotes first</strong><small>Ask one or more vendors for pricing by a due date. No vendor is assigned and no check-in is available.</small></span></label> : null}
-              {!accountabilityOnly ? <label htmlFor="assignment-hold" aria-label="Approve for later"><input id="assignment-hold" type="radio" name="assignmentKind" value="hold_for_visit" /><span><strong>Approve for later</strong><small>Approve this now, then offer it when a suitable vendor is already at the store.</small></span></label> : null}
-              <label htmlFor="assignment-later" aria-label="Decide later"><input id="assignment-later" type="radio" name="assignmentKind" value="choose_later" defaultChecked={model.defaults?.assignmentKind === "choose_later" || (accountabilityOnly && !model.defaults?.vendorId && model.defaults?.assignmentKind !== "outside_vendor")} /><span><strong>Choose later</strong><small>Save the work order now and select the vendor before sending it.</small></span></label>
-            </fieldset>
-            <div className={`${styles.fieldGrid} ${styles.providerFieldGrid}`}>
-              <label className={`${styles.field} ${styles.vendorConditional}`} htmlFor="work-vendor">
-                <span>Service vendor <small>Required only for “Outside vendor”</small></span>
-                <input id="work-vendor" name="vendorId" list="work-vendor-options" placeholder="Search name, specialty, equipment, or coverage" autoComplete="off" defaultValue={model.defaults?.vendorId} />
-                <Datalist id="work-vendor-options" options={model.vendors} />
-              </label>
-              {!accountabilityOnly ? <SelectField id="work-internal-assignee" name="internalMembershipId" label="Internal assignee" options={model.internalAssignees} helper="Can be assigned after creation." defaultValue={model.defaults?.internalMembershipId} className={styles.internalConditional} /> : null}
-            </div>
-            {!accountabilityOnly ? <div className={styles.holdConditional}>
-              <div className={styles.formNotice}><Route aria-hidden="true" size={19} /><p><strong>Approved work, no separate trip yet.</strong> A matching vendor may choose this work when already onsite. The technician is never asked to price it or wait for approval.</p></div>
-              <div className={styles.fieldGrid}>
-                <SelectField id="hold-posture" name="holdPosture" label="What may the vendor do?" options={[{ value: "complete_using_professional_judgment", label: "Complete during the visit if practical" }, { value: "look_and_report", label: "Inspect and report back" }]} defaultValue="complete_using_professional_judgment" />
-                <label className={styles.field} htmlFor="hold-deadline"><span>Review by <em>Required for held work</em></span><input id="hold-deadline" name="holdDeadlineAt" type="datetime-local" /></label>
-                <label className={styles.field} htmlFor="hold-review-threshold"><span>Internal invoice-review threshold <small>Optional</small></span><input id="hold-review-threshold" name="holdInternalReviewThreshold" type="number" inputMode="decimal" min="0" step="0.01" placeholder="Not shown to the vendor" /><small>This is a later review signal—not a price, authorization, or technician stop.</small></label>
-              </div>
-            </div> : null}
-            </>}
+            ) : <WorkRoutingFields model={model} accountabilityOnly={accountabilityOnly} />}
           </section>
 
           <details className={`${styles.formSection} ${styles.optionalServiceSection}`}>
-            <summary className={styles.formSectionHeading}><span>3</span><div><h2>{model.sourceVisit ? "Add what was requested" : "Add service details"}</h2><p>{model.sourceVisit ? "Optionally document the verbal scope or timing without presenting it as a prior written authorization." : accountabilityOnly ? "Optional scope or requested service date." : "Optional scope, spending limit, or requested date. Open this when the vendor needs more than the problem description."}</p></div></summary>
+            <summary className={styles.formSectionHeading}><span>3</span><div><h2>{model.sourceVisit ? "Add what was requested" : "Add service details"}</h2><p>{model.sourceVisit ? "Optional notes about what was requested." : accountabilityOnly ? "Optional scope or requested service date." : "Optional scope, spending limit or due date."}</p></div></summary>
             <div className={styles.optionalServiceBody}>
               <label className={styles.field} htmlFor="work-scope">
                 <span>{model.sourceVisit ? "Reported verbal scope" : "Authorized scope"} <small>Optional</small></span>
@@ -222,13 +200,13 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
             </div>
           </details>
 
-          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p>{model.sourceVisit ? <><strong>This is an after-the-fact work order.</strong> It gives the visit, future cost entries, and optional invoice evidence one operator reference while preserving when the service actually began and how it was requested.</> : accountabilityOnly ? <><strong>Creating the work order does not invent a visit.</strong> For outside-vendor work, “Create and send to vendor” issues the authorization immediately; approval policy still stops the send when review is required.</> : <><strong>A quote request and a service authorization are different records.</strong> Quote requests ask for pricing only. “Create and send to vendor” is the short path for known outside-vendor work and still honors configured approval rules.</>}</p></div>
+          {model.sourceVisit ? <p className={styles.formMeta}>Links this visit without backdating authorization.</p> : null}
           <div className={styles.formFooter}>
             <Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link>
-            <button className={model.sourceVisit ? styles.primaryButton : styles.secondaryButton} type="submit" name="intent" value="save">{model.sourceVisit ? "Create and link work order" : "Create only"}</button>
+            <button className={styles.primaryButton} type="submit" name="intent" value="save">{model.sourceVisit ? "Create and link work order" : "Create work order"}</button>
             {!model.sourceVisit ? <button className={`${styles.primaryButton} ${styles.sendConditional}`} type="submit" name="intent" value="create_and_send">Create and send to vendor<Send aria-hidden="true" size={18} /></button> : null}
           </div>
-        </form>
+        </RecordForm>
       ) : null}
     </div>
   );
@@ -239,7 +217,7 @@ export function VendorIssuancePanel({ model, edition = "complete" }: { model: Ve
   const accountabilityOnly = edition === "accountability";
   return (
     <section className={styles.issuancePanel} id="issue-work" aria-labelledby="issue-work-heading">
-      <div className={styles.formSectionHeading}><span><Send aria-hidden="true" size={18} /></span><div><h2 id="issue-work-heading">{accountabilityOnly ? "Send work order" : "Service path"}</h2><p>{accountabilityOnly ? "Choose the vendor and generate the account-free work-order link they will receive." : model.helperText}</p></div></div>
+      <div className={styles.formSectionHeading}><span><Send aria-hidden="true" size={18} /></span><div><h2 id="issue-work-heading">{accountabilityOnly ? "Send work order" : "Service path"}</h2><p>{accountabilityOnly ? "Choose the vendor and generate the account-free work-order link they will receive." : "Create a secure authorization link. Email sends only when configured; SMS delivery is not connected."}</p></div></div>
       {!model.rolePermitted ? (
         <p className={styles.inlineEmpty}>Your role can review the service path but cannot send a service authorization.</p>
       ) : model.workflowBlocked ? (
@@ -268,7 +246,7 @@ export function VendorIssuancePanel({ model, edition = "complete" }: { model: Ve
                   </select>
                 )}
               </label>
-              <SelectField id="issuance-channel" name="channel" label="Handoff method" required options={model.channels} />
+              <SelectField id="issuance-channel" name="channel" label="Handoff method" required options={model.channels} defaultValue={model.channels[0]?.value} />
             </div>
             <label className={styles.field} htmlFor="issuance-message">
               <span>Service note <small>Optional</small></span>
@@ -288,19 +266,19 @@ export function CreateStoreForm({ model }: { model: CreateStorePageViewModel }) 
       <PageIntro model={model} />
       <ModelState state={model.state} />
       {model.state.kind === "ready" ? (
-        <form className={styles.recordForm} action={model.submitAction} method="post">
+        <RecordForm className={styles.recordForm} action={model.submitAction}>
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>1</span><div><h2>Store identity</h2><p>Create the stable store record people will use across requests, work, visits, equipment, and reporting.</p></div></div>
+            <div className={styles.formSectionHeading}><span>1</span><div><h2>Store identity</h2><p>Use the store’s everyday name and number.</p></div></div>
             <div className={styles.fieldGrid}>
               <label className={styles.field} htmlFor="store-number"><span>Store number <em>Required</em></span><input id="store-number" name="storeNumber" required autoComplete="off" /></label>
               <label className={styles.field} htmlFor="store-name"><span>Store name <em>Required</em></span><input id="store-name" name="name" required autoComplete="organization" /></label>
             </div>
-            <label className={styles.field} htmlFor="store-aliases"><span>Search aliases <small>Optional</small></span><input id="store-aliases" name="aliases" placeholder="Former number, neighborhood, or commonly used name" /><small>Separate multiple aliases with commas. Aliases improve search without changing the official store number.</small></label>
-            <SelectField id="store-region" name="regionId" label="Region" options={model.regions} helper="A store can be assigned or moved later without changing its stable ID." />
+            <label className={styles.field} htmlFor="store-aliases"><span>Search aliases <small>Optional</small></span><input id="store-aliases" name="aliases" placeholder="Former number, neighborhood, or commonly used name" /><small>Separate other names or old numbers with commas.</small></label>
+            <SelectField id="store-region" name="regionId" label="Region" options={model.regions} helper="You can choose a region later." />
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>2</span><div><h2>Location</h2><p>Use a structured address so search, service authorizations, and optional visit evidence stay consistent.</p></div></div>
+            <div className={styles.formSectionHeading}><span>2</span><div><h2>Location</h2><p>Enter the service address.</p></div></div>
             <label className={styles.field} htmlFor="store-address-1"><span>Address line 1 <em>Required</em></span><input id="store-address-1" name="address1" required autoComplete="address-line1" /></label>
             <label className={styles.field} htmlFor="store-address-2"><span>Address line 2 <small>Optional</small></span><input id="store-address-2" name="address2" autoComplete="address-line2" /></label>
             <div className={styles.addressGrid}>
@@ -308,18 +286,18 @@ export function CreateStoreForm({ model }: { model: CreateStorePageViewModel }) 
               <label className={styles.field} htmlFor="store-state"><span>State <em>Required</em></span><input id="store-state" name="state" required maxLength={2} autoComplete="address-level1" /></label>
               <label className={styles.field} htmlFor="store-postal"><span>Postal code <em>Required</em></span><input id="store-postal" name="postalCode" required autoComplete="postal-code" /></label>
             </div>
-            <SelectField id="store-timezone" name="timeZone" label="Store time zone" options={model.timeZones} defaultValue={model.defaultTimeZone} required helper="Confirm the zone at this store address. Visit evidence, camera lookup times, deadlines, and vendor scheduling use this value—never the viewer's device clock." />
+            <SelectField id="store-timezone" name="timeZone" label="Store time zone" options={model.timeZones} defaultValue={model.defaultTimeZone} required helper="Used for visits, appointments and deadlines." />
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>3</span><div><h2>Visit evidence policy</h2><p>Location evidence is optional and captured only at check-in and checkout—never continuously.</p></div></div>
-            <label className={styles.checkField} htmlFor="store-location-policy" aria-label="Enable point-in-time location evidence"><input id="store-location-policy" type="checkbox" name="locationPolicyEnabled" value="true" /><span><strong>Enable point-in-time location evidence</strong><small>Technicians can still use a trusted store device when location is unavailable.</small></span></label>
-            <label className={styles.field} htmlFor="store-geofence"><span>Geofence radius in meters <small>Optional</small></span><input id="store-geofence" name="geofenceRadiusM" type="number" min="25" max="2000" step="5" /><small>Configure after the address is verified. This is evidence context, not automatic proof of labor.</small></label>
+            <div className={styles.formSectionHeading}><span>3</span><div><h2>Visit evidence policy</h2><p>Optional location checks at arrival and departure only.</p></div></div>
+            <label className={styles.checkField} htmlFor="store-location-policy" aria-label="Check location at arrival and departure"><input id="store-location-policy" type="checkbox" name="locationPolicyEnabled" value="true" /><span><strong>Check location at arrival and departure</strong><small>Technicians can still use a trusted store device when location is unavailable.</small></span></label>
+            <label className={styles.field} htmlFor="store-geofence"><span>Location radius (meters) <small>Optional</small></span><input id="store-geofence" name="geofenceRadiusM" type="number" min="25" max="2000" step="5" /><small>Distance allowed from the store. Configure after verifying the address.</small></label>
           </section>
 
-          <div className={styles.formNotice}><Info aria-hidden="true" size={19} /><p><strong>Start with the store.</strong> Cost centers, equipment, components, PM plans, access notes, QR material, and local users are separate next steps—not blockers to creating the location.</p></div>
+
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Create store<ArrowRight aria-hidden="true" size={18} /></button></div>
-        </form>
+        </RecordForm>
       ) : null}
     </div>
   );
@@ -331,7 +309,7 @@ export function CreateVendorForm({ model }: { model: CreateVendorPageViewModel }
       <PageIntro model={model} />
       <ModelState state={model.state} />
       {model.state.kind === "ready" ? (
-        <form className={styles.recordForm} action={model.submitAction} method="post">
+        <RecordForm className={styles.recordForm} action={model.submitAction}>
           <section className={styles.formSection}>
             <div className={styles.formSectionHeading}><span>1</span><div><h2>Vendor profile</h2><p>Add the approved service company and a reliable dispatch contact. A portal account is not required.</p></div></div>
             <div className={styles.fieldGrid}>
@@ -368,7 +346,7 @@ export function CreateVendorForm({ model }: { model: CreateVendorPageViewModel }
 
           <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p><strong>Approval is controlled by the operator.</strong> Once saved, this vendor can be selected within its approved coverage. Secure service links do not require a portal account.</p></div>
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Add approved vendor<ArrowRight aria-hidden="true" size={18} /></button></div>
-        </form>
+        </RecordForm>
       ) : null}
     </div>
   );

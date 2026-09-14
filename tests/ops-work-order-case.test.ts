@@ -22,6 +22,12 @@ function wo(id: string, status: "draft" | "issued" | "accepted" | "closed") {
 }
 
 describe("work-order case stage projector", () => {
+  it("names the assigned internal technician without claiming an observed visit", () => {
+    const model = buildWorkOrderCase({ now: NOW, workOrder: { ...wo("internal-ui", "accepted"), accountableParty: "Internal maintenance" }, providerName: "Maria Santos", assignments: [{ id: "assignment-ui", kind: "internal", status: "accepted", assignedAt: NOW, internalMembershipId: "member-maria" }] });
+    expect(model.nextActionOwner).toBe("Maria Santos");
+    expect(model.plainLanguageState).toBe("Internal maintenance assigned");
+    expect(model.primaryNextAction.href).toContain("view=visits");
+  });
   it("opens provider review when a legacy approval status has no pending approval", () => {
     const fixture = buildNorthlinePresentationFixture();
     const workOrder = fixture.workOrders.find((work) => work.id === "wo-northline-105-price-check")!;

@@ -51,7 +51,7 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
       <section className={styles.card} aria-labelledby="open-service-title">
         <span className={styles.eyebrow}>Vendor response</span>
         <h2 className={styles.cardTitle} id="open-service-title">Review this service authorization</h2>
-        <p className={styles.helper}>Opening records that a person reviewed it. Automated email previews and operator test views do not change its status.</p>
+        <p className={styles.helper}>This records that you opened the authorization.</p>
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
         <div className={styles.actions}>
           <button className={styles.button} disabled={submitting} onClick={openAuthorization} type="button">

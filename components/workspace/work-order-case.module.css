@@ -1745,3 +1745,21 @@
     scroll-behavior: auto;
   }
 }
+.accountableHeader { display: grid; grid-template-columns: 1.7fr 1fr 1fr 1fr; gap: 14px; border-top: 1px solid var(--case-border); padding: 14px 18px; background: #f8fafc; }
+.accountableHeader > div { min-width: 0; }
+.accountableHeader span { display: block; font-size: 14px; color: var(--case-muted); margin-bottom: 4px; }
+.accountableHeader strong { display: block; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.accountableHeader > small { grid-column: 1 / -1; font-size: 14px; color: var(--case-muted); }
+.serviceNeed { margin: 0; font-size: 16px; line-height: 1.5; }
+.currentStepPanel > summary { cursor: pointer; font-size: 15px; font-weight: 600; min-height: 44px; padding: 12px; }
+.currentStepPanel:not([open]) > :not(summary) { display: none; }
+.page .primaryAction { color: #fff; }
+@media (max-width: 760px) {
+  .caseHeader { position: static; }
+  .accountableHeader { grid-template-columns: 1fr 1fr; gap: 14px; }
+  .accountableHeader > div:first-child { grid-column: 1 / -1; }
+  .caseIdentityRow { flex-wrap: wrap; }
+  .headerActions { width: 100%; }
+  .headerActions > a { min-height: 44px; }
+  .sectionHeading { flex-direction: column; align-items: stretch; }
+}

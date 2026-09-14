@@ -1072,6 +1072,7 @@ export interface AttentionItemControlViewModel {
   nextAction?: string;
   dueAt?: string;
   escalationTo?: string;
+  selectedReconciliationWorkOrderId?: string;
   reconciliationOptions?: SelectOptionViewModel[];
   unmatchedVisit?: {
     createWorkOrderHref: string;

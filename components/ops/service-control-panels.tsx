@@ -611,7 +611,7 @@ function ExceptionControls({ model }: { model: AttentionItemControlViewModel }) 
           <div className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Link the unmatched visit</h3><p>Select eligible open work at the same store. This adds an amendment; it does not rewrite the original check-in.</p></div></div>
           <form action={model.submitAction} method="post" onSubmit={reconcile.submit} className={styles.controlForm}>
             <input type="hidden" name="operation" value="reconcile" />
-            <SelectField id={`exception-work-${model.id}`} name="workOrderId" label="Operator work order" options={model.reconciliationOptions} />
+            <SelectField id={`exception-work-${model.id}`} name="workOrderId" label="Operator work order" options={model.reconciliationOptions} defaultValue={model.selectedReconciliationWorkOrderId} />
             <label className={styles.field} htmlFor={`reconcile-note-${model.id}`}><span>Reason for linking this visit <em>Required</em></span><textarea id={`reconcile-note-${model.id}`} name="note" required rows={3} placeholder="Explain how the visit was matched to this work order." /></label>
             <MutationError message={reconcile.state.error} />
             <div className={styles.formFooter}><button className={styles.secondaryButton} type="submit" disabled={reconcile.state.pending}>{reconcile.state.pending ? "Linking…" : "Link visit"}</button></div>

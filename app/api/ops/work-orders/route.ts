@@ -39,8 +39,8 @@ export async function POST(request: Request) {
       .digest("hex");
     const priorSubmission = await context.repository.getIdempotencyKey(context.session.organizationId, submissionKey);
     const storeId = formText(formData, "storeId", { required: true, max: 120 });
-    const priority = formText(formData, "priority", { required: true, max: 20 });
-    const assignmentKind = formText(formData, "assignmentKind", { required: true, max: 30 });
+    const priority = formText(formData, "priority", { max: 20 }) || "routine";
+    const assignmentKind = formText(formData, "assignmentKind", { max: 30 }) || "choose_later";
     const intent = formText(formData, "intent", { max: 30 }) || "save";
     if (!priorities.has(priority) || !assignmentKinds.has(assignmentKind)) {
       throw new OpsDomainError("VALIDATION", "Choose a supported priority and assignment route.");
@@ -163,7 +163,7 @@ export async function POST(request: Request) {
           },
         );
       } catch {
-        return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=visits&error=${encodeURIComponent(`${result.number} was created, but the original visit still needs to be linked. The work order was not duplicated; retry from the unmatched-visit review.`)}`);
+        return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=visits&reconcile=${encodeURIComponent(sourceExceptionId)}&error=${encodeURIComponent(`${result.number} was saved. Link the original visit to finish; do not create another work order.`)}`);
       }
     }
     if (intent === "create_and_send" && vendorId) {

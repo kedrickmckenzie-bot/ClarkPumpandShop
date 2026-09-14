@@ -387,7 +387,7 @@ a.factCard { padding-right: 38px; }
 .choiceCard small { margin-top: 4px; color: var(--ops-muted); font-size: 14px; line-height: 1.4; }
 .assignmentChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; border: 0; }
 .assignmentChoices legend { margin-bottom: 8px; }
-.assignmentChoices label { position: relative; display: flex; align-items: flex-start; gap: 10px; min-height: 105px; padding: 14px; border: 1px solid #d1d8d4; border-radius: 10px; cursor: pointer; }
+.assignmentChoices label { position: relative; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 14px; border: 1px solid #d1d8d4; border-radius: 6px; cursor: pointer; }
 .assignmentChoices label:has(input:checked) { border-color: #93c5fd; background: var(--ops-brand-soft); box-shadow: 0 0 0 2px rgba(37,99,235,.09); }
 .assignmentChoices input { margin-top: 4px; accent-color: var(--ops-brand); }
 .assignmentChoices label > span { display: flex; flex-direction: column; }
@@ -932,7 +932,7 @@ a.factCard { padding-right: 38px; }
   .followUpList > a { align-items: flex-start; }
   .fieldGrid, .addressGrid, .assignmentChoices { grid-template-columns: 1fr; }
   .lifecyclePlanningResult dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .assignmentChoices label { min-height: 82px; }
+  .assignmentChoices label { min-height: 52px; }
   .formFooter { align-items: stretch; flex-direction: column-reverse; }
   .formFooter > a, .formFooter > button { width: 100%; }
   .formMeta { margin: 0; text-align: center; }
@@ -1086,3 +1086,15 @@ a.factCard { padding-right: 38px; }
 .storeTemplateGroup > header { background: #f8fafc; }
 .taxonomyEdit > summary,
 .taxonomyAddEquipment > summary { color: #1d4ed8; }
+.formFields { display: contents; border: 0; padding: 0; margin: 0; min-width: 0; }
+.formError { padding: 16px; border: 1px solid #fca5a5; border-radius: 6px; color: #991b1b; background: #fef2f2; }
+.formError p { margin: 6px 0 0; }
+.recordForm .assignmentChoices strong, .recordForm input, .recordForm select, .recordForm textarea { font-size: 16px; }
+.recordForm button, .recordForm select, .recordForm input:not([type="radio"]):not([type="checkbox"]) { min-height: 44px; }
+@media (max-width: 680px) {
+  .formSectionHeading > div { min-width: 0; }
+  .formSectionHeading p { font-size: 14px; }
+  .formFooter { gap: 12px; }
+  .optionalFormSection summary { flex-direction: column; align-items: flex-start; gap: 5px; }
+}
+.recordForm:has(input[name="assignmentKind"][value="outside_vendor"]:checked) button[value="save"] { color: #334155; background: #fff; border: 1px solid #cbd5e1; }

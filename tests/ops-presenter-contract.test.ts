@@ -487,7 +487,7 @@ describe("operator presenter drill-through contracts", () => {
     expect(detail.sections.find((section) => section.id === "service-history")?.table?.rows.length).toBeGreaterThan(0);
 
     const create = buildCreateWorkOrderModel(fixture, session, { store: asset.storeId, asset: asset.id });
-    expect(create.defaults).toEqual({ storeId: asset.storeId, assetId: asset.id, categoryKey: asset.categoryKey });
+    expect(create.defaults).toEqual({ storeId: asset.storeId, assetId: asset.id, categoryKey: asset.categoryKey, priority: "routine", assignmentKind: "choose_later" });
     expect(create.lifecycleAsOf).toBe(fixture.asOf);
     expect(create.assetLifecycleInputs.find((input) => input.id === asset.id)).toMatchObject({
       installedAt: asset.installedAt,

@@ -193,7 +193,7 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_equipment_templates") row.active = Boolean(row.active);
   if (table === "ops_lifecycle_recommendations") { row.missingData = JSON.parse(String(row.missingDataJson ?? "[]")); delete row.missingDataJson; }
   if (table === "ops_component_lifecycle_events") { row.laborCost = { amountMinor: row.laborCostMinor, currency: row.currency }; row.partCost = { amountMinor: row.partCostMinor, currency: row.currency }; delete row.laborCostMinor; delete row.partCostMinor; delete row.currency; }
-  if (table === "ops_stores") { row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.locationPolicyEnabled = Boolean(row.locationPolicyEnabled); delete row.aliasesJson; delete row.searchText; }
+  if (table === "ops_stores") { row.address1 = raw.address_1; row.address2 = raw.address_2; delete row.address_1; delete row.address_2; row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.locationPolicyEnabled = Boolean(row.locationPolicyEnabled); delete row.aliasesJson; delete row.searchText; }
   if (table === "ops_vendors") { row.preferred = Boolean(row.preferred); delete row.searchText; }
   if (table === "ops_notification_rules") row.emailEnabled = Boolean(row.emailEnabled);
   if (table === "ops_role_capability_overrides") row.enabled = Boolean(row.enabled);

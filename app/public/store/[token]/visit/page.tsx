@@ -36,5 +36,5 @@ export default async function PublicTechnicianVisitRoute({
     : undefined;
   const storeOptionsHref = portal.capabilities.startVisit ? `/public/store/${encodeURIComponent(token)}` : verifiedReturnHref;
   const pendingVisit = await loadPendingVisitCheckout(portal, portal.capabilities.startVisit ? token : candidateReturnToken ?? undefined);
-  return <TechnicianVisitFlow pendingVisit={pendingVisit} portal={portal} storeOptionsHref={storeOptionsHref} token={token} />;
+  return <TechnicianVisitFlow key={token} pendingVisit={pendingVisit} portal={portal} storeOptionsHref={storeOptionsHref} token={token} />;
 }

@@ -94,9 +94,6 @@ function ActionRow({ action }: { action: ActionItemViewModel }) {
 
 function AttentionSection({ model }: { model: DashboardPageViewModel }) {
   const actions = model.priorityActions.slice(0, 7);
-  const critical = model.priorityActions.filter((item) => item.tone === "critical").length;
-  const waiting = model.priorityActions.filter((item) => item.tone === "warning").length;
-  const remaining = Math.max(0, model.priorityActions.length - actions.length);
   const source = model.prioritySection?.link ?? { href: "/app/action-center", label: "Open action queue" };
 
   return (
@@ -105,15 +102,11 @@ function AttentionSection({ model }: { model: DashboardPageViewModel }) {
         <div><h2 id="attention-heading">{model.prioritySection?.title ?? "What needs attention now"}</h2><p>{model.prioritySection?.description ?? "Work ordered by responsibility and deadline."}</p></div>
         <Link className={styles.textLink} href={source.href}>{source.label}<ArrowRight size={15} aria-hidden="true" /></Link>
       </header>
-      <div className={styles.attentionLayout}>
+      <div className={styles.actionQueue}>
         <div className={styles.actionList}>
           {actions.length ? actions.map((action) => <ActionRow action={action} key={action.id} />) : <div className={styles.empty}><CheckCircle2 size={22} aria-hidden="true" /><p>Nothing needs attention right now.</p></div>}
         </div>
-        <aside className={styles.attentionSummary} aria-label="Action queue summary">
-          <Link href={source.href}><span>Urgent or overdue</span><strong>{critical}</strong><small>Needs a decision now</small></Link>
-          <Link href={source.href}><span>Waiting or due soon</span><strong>{waiting}</strong><small>Monitor the next action</small></Link>
-          <Link href={source.href}><span>More items</span><strong>{remaining}</strong><small>See the full list</small></Link>
-        </aside>
+
       </div>
     </section>
   );
@@ -241,7 +234,7 @@ export function ControlTower({ model }: { model: DashboardPageViewModel }) {
       break;
     case "operations":
     default:
-      content = <>{metrics}{pipeline}{attention}{insights}{spotlight}</>;
+      content = <>{metrics}{attention}{pipeline}{insights}{spotlight}</>;
   }
 
   return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;

@@ -30,7 +30,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
             </div>
             <div className={styles.callout}>
               <strong>Your company was selected for this work</strong>
-              <p>Review the service authorization before scheduling or beginning work. Digital acceptance is available when your company uses it, but the operator may still allow technician check-in for already-issued work.</p>
+              <p>Review the scope before starting. Follow the customer’s acceptance requirements.</p>
             </div>
             <p className={styles.problem}>{authorization.service.problem}</p>
             <div className={styles.callout} style={{ marginTop: "1rem" }}>
@@ -92,7 +92,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
             <section className={styles.card}>
               <CalendarDays aria-hidden="true" color="#0d6b62" size={24} />
               <h2 className={styles.cardTitle} style={{ marginTop: "0.65rem" }}>Technician check-in and checkout</h2>
-              <p className={styles.muted} style={{ marginTop: "0.35rem" }}>This visit action is available because the separate work order authorizes onsite service. Start or finish the store visit from any phone; no vendor account is required.</p>
+              <p className={styles.muted} style={{ marginTop: "0.35rem" }}>Start or finish your visit from any phone. No account needed.</p>
               <Link className={styles.textLink} href={authorization.technicianVisitUrl} style={{ marginTop: "0.85rem" }}>Open technician check-in / checkout <ArrowRight aria-hidden="true" size={16} /></Link>
             </section>
           ) : null}

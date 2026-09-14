@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { assignWorkOrder, createStore } from "@/lib/ops/commands";
 import { POST } from "@/app/api/ops/work-orders/route";
 import { CreateWorkOrderForm } from "@/components/ops/forms";
 import type { OperatorSession } from "@/components/ops/data-contract";
@@ -98,11 +99,83 @@ describe("work-order vendor path entry", () => {
     const model = buildCreateWorkOrderModel(fixture, session);
     const markup = renderToStaticMarkup(createElement(CreateWorkOrderForm, { model }));
 
-    expect(markup).toContain("Choose the service path");
+    expect(markup).toContain("Choose who will do it");
     expect(markup).toContain("Outside vendor");
     expect(markup).toContain("Request quotes first");
-    expect(markup).toContain("No vendor is assigned and no check-in is available");
-    expect(markup).toContain("Quote requests ask for pricing only");
+    expect(markup).toContain("Choose later");
+    expect(markup).toContain("Ask for pricing before authorizing work");
+  });
+
+
+  it("reads the full structured address after creating a store", async () => {
+    const repository = configureContext();
+    const store = await createStore({ repository }, { organizationId: session.organizationId, storeNumber: "P3-901", name: "Test store", address1: "901 Example Way", address2: "Unit 2", city: "Demo City", state: "KY", postalCode: "40001", aliases: ["old 901"], timeZone: "America/New_York", actor: { actorType: "user", actorId: session.membershipId, actorName: session.displayName, organizationId: session.organizationId } });
+    expect(await repository.getStore(session.organizationId, store.id)).toMatchObject({ address1: "901 Example Way", address2: "Unit 2", city: "Demo City", state: "KY", postalCode: "40001", aliases: ["old 901"] });
+  });
+
+  it("creates routine unclassified work from store and problem alone, and replays without duplication", async () => {
+    const repository = configureContext();
+    const before = repository.snapshot().workOrders.length;
+    const form = new FormData();
+    form.set("storeId", "store-northline-101"); form.set("problem", "Leaking tap"); form.set("submissionKey", "pass3-minimal-work-order");
+    const response = await POST(new Request("https://operations.test/api/ops/work-orders", { method: "POST", body: form }));
+    expect(response.status, await response.clone().text()).toBe(303);
+    const work = repository.snapshot().workOrders.at(-1)!;
+    expect(work).toMatchObject({ priority: "routine", problem: "Leaking tap", storeId: "store-northline-101" });
+    expect(work.assetId).toBeUndefined(); expect(work.categoryKey).toBeUndefined(); expect(work.componentId).toBeUndefined();
+    expect(await repository.getActiveAssignment(session.organizationId, work.id)).toMatchObject({ kind: "choose_later" });
+    expect(work.accountableParty).toBeTruthy(); expect(work.nextAction).toBeTruthy(); expect(work.dueAt).toBeTruthy(); expect(work.escalationTo).toBeTruthy();
+    expect((await POST(new Request("https://operations.test/api/ops/work-orders", { method: "POST", body: form }))).status).toBe(303);
+    expect(repository.snapshot().workOrders).toHaveLength(before + 1);
+  });
+
+  it("requires an internal assignee and preserves one work order through an outside-vendor handoff", async () => {
+    const repository = configureContext();
+    const before = repository.snapshot().workOrders.length;
+    const form = new FormData();
+    form.set("storeId", "store-northline-101"); form.set("problem", "Inspect the fan, then arrange specialist repair");
+    form.set("assignmentKind", "internal"); form.set("submissionKey", "pass3-internal-vendor-handoff");
+    const rejected = await POST(new Request("https://operations.test/api/ops/work-orders", { method: "POST", body: form }));
+    expect(rejected.status).toBe(422);
+    expect(repository.snapshot().workOrders).toHaveLength(before);
+    form.set("internalMembershipId", "membership-northline-tech-1");
+    const created = await POST(new Request("https://operations.test/api/ops/work-orders", { method: "POST", body: form }));
+    expect(created.status, await created.clone().text()).toBe(303);
+    const work = repository.snapshot().workOrders.at(-1)!;
+    const internal = await repository.getActiveAssignment(session.organizationId, work.id);
+    expect(internal).toMatchObject({ kind: "internal", internalMembershipId: "membership-northline-tech-1" });
+    const outside = await assignWorkOrder({ repository, clock: { now: () => "2026-08-25T16:00:00.000Z" } }, {
+      organizationId: session.organizationId, workOrderId: work.id, kind: "outside_vendor", vendorId: "vendor-northline-summit",
+      actor: { actorType: "user", actorId: session.membershipId, actorName: session.displayName, organizationId: session.organizationId },
+    });
+    expect(await repository.getAssignment(session.organizationId, internal!.id)).toMatchObject({ status: "superseded", internalMembershipId: "membership-northline-tech-1" });
+    expect(await repository.getActiveAssignment(session.organizationId, work.id)).toMatchObject({ id: outside.id, kind: "outside_vendor", supersedesAssignmentId: internal!.id });
+    expect(await repository.getWorkOrder(session.organizationId, work.id)).toMatchObject({ number: work.number, problem: work.problem });
+    expect(repository.snapshot().workOrders).toHaveLength(before + 1);
+  });
+
+  it("recovers a failed visit link using the same saved work order", async () => {
+    const repository = configureContext(); const before = repository.snapshot();
+    const write = repository.atomicWrite.bind(repository);
+    let rejectLink = true;
+    vi.spyOn(repository, "atomicWrite").mockImplementation(async (statements) => {
+      if (rejectLink && statements.some((statement) => statement.sql.startsWith("UPDATE ops_visit_sessions SET work_order_id"))) { rejectLink = false; throw new Error("Injected reconciliation failure"); }
+      return write(statements);
+    });
+    const form = new FormData();
+    for (const [key, value] of Object.entries({ storeId: "store-northline-107", problem: "Restore the stockroom light", assignmentKind: "outside_vendor", vendorId: "vendor-northline-brightpath", sourceExceptionId: "exception-northline-107-no-wo", submissionKey: "pass3-visit-link-recovery" })) form.set(key, value);
+    const send = () => POST(new Request("https://operations.test/api/ops/work-orders", { method: "POST", body: form }));
+    const failed = await send();
+    expect(failed.status, await failed.clone().text()).toBe(303); expect(failed.headers.get("location")).toContain("reconcile=exception-northline-107-no-wo");
+    expect(repository.snapshot().workOrders).toHaveLength(before.workOrders.length + 1);
+    expect(repository.snapshot().visits.find((visit) => visit.id === "visit-northline-107-no-wo")?.workOrderId).toBeUndefined();
+    const saved = repository.snapshot().workOrders.at(-1)!;
+    expect((await send()).headers.get("location")).not.toContain("error=");
+    expect(repository.snapshot().visits.find((visit) => visit.id === "visit-northline-107-no-wo")?.workOrderId).toBe(saved.id);
+    expect(repository.snapshot().workOrders).toHaveLength(before.workOrders.length + 1);
+    expect((await send()).headers.get("location")).not.toContain("error=");
+    expect(repository.snapshot().siteVisitWorkOrders.filter((link) => link.visitId === "visit-northline-107-no-wo")).toHaveLength(1);
+    expect(repository.snapshot().auditEvents.filter((event) => event.aggregateId === "visit-northline-107-no-wo" && event.eventType === "visit.reconciled")).toHaveLength(1);
   });
 
   it("prefills an unmatched visit and creates its canonical work order with an auditable link", async () => {
@@ -133,7 +206,7 @@ describe("work-order vendor path entry", () => {
     });
     expect(markup).toContain("After-the-fact service record");
     expect(markup).toContain("Documenting work after service began");
-    expect(markup).toContain("It will not backdate authorization");
+    expect(markup).toContain("This does not backdate authorization");
     expect(markup).toContain("Technician checkout");
     expect(markup).toContain("Replaced the failed LED driver");
     expect(markup).toContain("Create and link work order");

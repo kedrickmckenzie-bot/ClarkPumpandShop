@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { WorkPricePanel } from "@/components/workspace/work-price-panel";
 import { WorkOrderCase } from "@/components/workspace/work-order-case";
@@ -24,7 +25,7 @@ function selectedServicePath(value: string | string[] | undefined): WorkOrderSer
   return candidate === "direct" || candidate === "bids" ? candidate : undefined;
 }
 
-export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ updated?: string | string[]; view?: string | string[]; path?: string | string[]; notice?: string | string[]; error?: string | string[] }> }) {
+export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ updated?: string | string[]; view?: string | string[]; path?: string | string[]; notice?: string | string[]; error?: string | string[]; reconcile?: string | string[] }> }) {
   const { id } = await params;
   const query = await searchParams;
   const updated = Array.isArray(query.updated) ? query.updated[0] : query.updated;
@@ -32,6 +33,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const requestedServicePath = selectedServicePath(query.path);
   const noticeRaw = query.notice;
   const notice = Array.isArray(noticeRaw) ? noticeRaw[0] : noticeRaw;
+  const reconcileId = Array.isArray(query.reconcile) ? query.reconcile[0] : query.reconcile;
   const errorRaw = query.error;
   const error = Array.isArray(errorRaw) ? errorRaw[0] : errorRaw;
   const [model, control, recording, estimateComparison, issuance, replacement, verification, stageCase, responseActions, heldWork, session, connectedReview] = await Promise.all([
@@ -95,10 +97,10 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       ? { label: responseActions.kind === "question" ? "Answer the vendor question" : responseActions.kind === "proposed_date" ? "Review the proposed visit time" : responseActions.kind === "declined" ? "Choose another provider" : "Review vendor response", href: `/app/work-orders/${id}?view=service#vendor-response` }
       : heldStatus && ["active", "claimed", "review_required"].includes(heldStatus)
         ? heldCase.primaryNextAction
-        : model.page.primaryAction
+        : (model.page.primaryAction && session.role !== "finance" ? heldCase.primaryNextAction : model.page.primaryAction)
           ?? (session.role === "finance"
             ? { label: "Review financial evidence", href: `/app/work-orders/${id}?view=cost` }
-            : { label: "Review current status", href: `/app/work-orders/${id}?view=overview` });
+            : heldCase.primaryNextAction);
   return (
     <>
     {notice ? (
@@ -109,10 +111,11 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     {error ? (
       <p role="alert" className={caseStyles.errorNotice}>
         {error}
+        {reconcileId ? <Link href={`/app/action-center/${encodeURIComponent(reconcileId)}?workOrder=${encodeURIComponent(id)}`}>Link the saved work order</Link> : null}
       </p>
     ) : null}
     <WorkOrderCase
-      prices={!accountabilityOnly && ["overview", "cost"].includes(view) ? <WorkPricePanel workOrderId={id} /> : undefined}
+      prices={!accountabilityOnly && view === "cost" ? <WorkPricePanel workOrderId={id} /> : undefined}
       connectedReview={connectedReview}
       model={model}
       control={control}

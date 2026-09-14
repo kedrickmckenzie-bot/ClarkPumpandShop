@@ -1620,7 +1620,7 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
         ...pageBase,
         title: store ? `Store ${store.storeNumber} at a glance` : "Your store at a glance",
         eyebrow: "Store manager home",
-        description: "Report an issue, see who is onsite, follow current work, and understand this store's maintenance cost without corporate clutter.",
+        description: "Report problems and follow work at your store.",
         primaryAction: { label: "Report an issue", href: "/app/requests/new" },
         secondaryAction: { label: "Review current work", href: "/app/work-orders?status=open" },
       },
@@ -1632,12 +1632,12 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
         { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Rolling source cost for this store", link: { href: "/app/spend", label: "Explain the total" } },
       ],
       priorityActions: [
-        dashboardShortcut({ id: "store-report", title: "Report a new store issue", description: "Capture the problem, reporter, priority, and optional photos. Equipment can be classified later.", categoryLabel: "Issue intake", dueLabel: "When needed", ownerLabel: "Store team", tone: "info", href: "/app/requests/new", linkLabel: "Report an issue" }),
-        dashboardShortcut({ id: "store-response", title: `${storeManagerActions.length} need${storeManagerActions.length === 1 ? "s" : ""} your response`, description: storeManagerActions.length ? "These are decisions or confirmations assigned to the store-manager role, not every item facilities is handling." : "No decision or observable-result confirmation is assigned to you right now.", categoryLabel: "Needs your response", dueLabel: storeManagerActions.length ? "Review now" : "Nothing waiting", ownerLabel: "Store manager", tone: storeManagerActions.length ? "warning" : "positive", href: "/app/action-center?lane=mine", linkLabel: "Open your actions" }),
-        dashboardShortcut({ id: "store-work", title: `${openWork.length} work order${openWork.length === 1 ? " is" : "s are"} being handled`, description: "See the responsible person or team, the next expected event, and when it is due without taking over facilities work.", categoryLabel: "Being handled", dueLabel: "Current", ownerLabel: "Store and maintenance", tone: openWork.length ? "info" : "positive", href: "/app/work-orders?status=open", linkLabel: "Open current work" }),
-        dashboardShortcut({ id: "store-upcoming", title: `${upcomingAppointments.length} upcoming confirmed appointment${upcomingAppointments.length === 1 ? "" : "s"}`, description: "Review agreed service timing and the authorized work before the vendor arrives.", categoryLabel: "Upcoming visits", dueLabel: upcomingAppointments.length ? "Scheduled" : "None scheduled", ownerLabel: "Vendor and facilities", href: "/app/visits?status=upcoming", linkLabel: "Open upcoming visits" }),
+        dashboardShortcut({ id: "store-report", title: "Report a new store issue", description: "Describe what needs attention.", categoryLabel: "Issue intake", dueLabel: "When needed", ownerLabel: "Store team", tone: "info", href: "/app/requests/new", linkLabel: "Report an issue" }),
+        dashboardShortcut({ id: "store-response", title: `${storeManagerActions.length} need${storeManagerActions.length === 1 ? "s" : ""} your response`, description: storeManagerActions.length ? "These are decisions or confirmations assigned to the store-manager role, not every item facilities is handling." : "Nothing needs your response.", categoryLabel: "Needs your response", dueLabel: storeManagerActions.length ? "Review now" : "Nothing waiting", ownerLabel: "Store manager", tone: storeManagerActions.length ? "warning" : "positive", href: "/app/action-center?lane=mine", linkLabel: "Open your actions" }),
+        dashboardShortcut({ id: "store-work", title: `${openWork.length} work order${openWork.length === 1 ? " is" : "s are"} being handled`, description: "See the next action and who owns it.", categoryLabel: "Being handled", dueLabel: "Current", ownerLabel: "Store and maintenance", tone: openWork.length ? "info" : "positive", href: "/app/work-orders?status=open", linkLabel: "Open current work" }),
+        dashboardShortcut({ id: "store-upcoming", title: `${upcomingAppointments.length} upcoming confirmed appointment${upcomingAppointments.length === 1 ? "" : "s"}`, description: "See confirmed vendor visits.", categoryLabel: "Upcoming visits", dueLabel: upcomingAppointments.length ? "Scheduled" : "None scheduled", ownerLabel: "Vendor and facilities", href: "/app/visits?status=upcoming", linkLabel: "Open upcoming visits" }),
       ],
-      prioritySection: { title: "Your store workflow", description: "Report a problem, respond only when a decision is assigned to you, and follow work that maintenance is already handling.", link: { href: store ? `/app/stores/${store.id}` : "/app/stores", label: "Open complete store record" } },
+      prioritySection: { title: "Your store workflow", description: "Your store’s next steps.", link: { href: store ? `/app/stores/${store.id}` : "/app/stores", label: "Open complete store record" } },
       breakdowns: [categoryBreakdown],
       trends: [trend],
     };
@@ -1677,8 +1677,8 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
           { id: "active-visits", label: "Onsite visits", value: String(activeVisits.length), supportingText: `${scoped.visits.length} recorded visits in regional scope`, tone: activeVisits.length ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
           { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Rolling source cost inside your region", link: { href: "/app/spend", label: "Explain the total" } },
         ],
-    priorityActions: reviewItems.slice(0, 6),
-    prioritySection: { title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" }, display: "summary" },
+    priorityActions: reviewItems,
+    prioritySection: { title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" } },
     breakdowns: isFacilities
       ? [
           countBreakdown("open-work-status", "Open work by status", workStatusCounts, (key) => hrefWithQuery("/app/work-orders", { status: key }), { description: "", labelFor: (key) => workStatusLabel(key as WorkOrder["status"]), totalNoun: "open work orders", sourceLink: { href: "/app/work-orders?status=open", label: "View all open work orders" } }),
@@ -1850,7 +1850,9 @@ function appliedFilters(
     .filter(([key]) => !ignored.has(key))
     .map(([key, value]) => {
       let label = filterLabels[value] ?? sentence(value);
-      if (key === "store") label = storeLabel(stores.get(value));
+      if (key === "unmatched") label = "No work order";
+      else if (key === "review") label = "Needs review";
+      else if (key === "store") label = storeLabel(stores.get(value));
       else if (key === "vendor") label = vendors.get(value)?.name ?? "Selected vendor";
       else if (key === "asset") label = assets.get(value)?.name ?? (value === "unlinked" ? "No equipment linked" : "Selected equipment");
       else if (key === "costFrom") label = `Cost from ${date(value)}`;
@@ -1858,7 +1860,6 @@ function appliedFilters(
       else if (key === "path") label = value.split("|").at(-1) ?? value;
       else if (key === "exception") label = "Selected exception";
       else if (key === "visit") label = "Selected visit";
-      else if (key === "review") label = "Needs review";
       else if (key === "reviewWindow" && value === "30") label = "Review within 30 days";
       else if (key === "opportunity" && value === "confirmed") label = "Confirmed visit matches";
       else if (key === "storeGroup" && value === "multiple") label = "Stores with 2+ approved jobs";
@@ -2142,10 +2143,10 @@ function visitMetrics(fixture: OpsFixture, scoped: ScopedFixture, query: Operato
     const assignment = fixture.assignments.find((candidate) => candidate.organizationId === scoped.organizationId && candidate.id === appointment.assignmentId);
     return !selectedVendor || assignment?.vendorId === selectedVendor;
   }).length;
-  const noWorkOrder = base.filter((visit) => !visit.workOrderId).length;
+  const noWorkOrder = base.filter((visit) => !visitHasWork(fixture, visit)).length;
   const needsReviewIds = new Set(
     base
-      .filter((visit) => openExceptionVisitIds.has(visit.id) || !visit.workOrderId)
+      .filter((visit) => openExceptionVisitIds.has(visit.id) || !visitHasWork(fixture, visit))
       .map((visit) => visit.id),
   );
   return [
@@ -2275,7 +2276,7 @@ function buildVendorEvidenceBundle(
     linkedVisitsByWork.set(visit.workOrderId, current);
   }
   const coveredServiceWorkCount = [...serviceWorkIds].filter((workOrderId) => linkedVisitsByWork.has(workOrderId)).length;
-  const noWorkOrderVisits = vendorVisits.filter((visit) => !visit.workOrderId);
+  const noWorkOrderVisits = vendorVisits.filter((visit) => !visitHasWork(fixture, visit));
   const checkedOutVisits = vendorVisits.filter((visit) => visit.status !== "active");
   const unresolvedVisits = checkedOutVisits.filter(
     (visit) => Boolean(visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome)),
@@ -5423,7 +5424,7 @@ export function buildDetailModel(
             { label: "Work orders", value: String(storeWork.length), link: { href: `/app/work-orders?store=${store.id}`, label: "Open all work orders" } },
             { label: "Open work", value: String(openStoreWorkIds.size), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open current work" } },
             { label: "Recorded visits", value: String(storeVisits.length), link: { href: `/app/visits?store=${store.id}`, label: "Open all visits" } },
-            { label: "Visits without a work order", value: String(storeVisits.filter((visit) => !visit.workOrderId).length), helperText: "Reviewable onsite evidence; not hidden from history", link: { href: `/app/visits?store=${store.id}&review=true`, label: "Review unmatched visits" } },
+            { label: "Visits without a work order", value: String(storeVisits.filter((visit) => !visitHasWork(fixture, visit)).length), helperText: "Reviewable onsite evidence; not hidden from history", link: { href: `/app/visits?store=${store.id}&unmatched=true`, label: "Review unmatched visits" } },
           ],
           tableHeading: "Current and recent work orders",
           table: { id: "store-work", caption: `Current and recent work orders for Store ${store.storeNumber}`, columns: columns["work-orders"], rows: storeHistoryRows },
@@ -5640,20 +5641,27 @@ export function buildCreateWorkOrderModel(
     page: sourceVisit ? {
       title: "Create work order from visit",
       eyebrow: "After-the-fact service record",
-      description: "Use the observed check-in to document work that began after a phone call, verbal dispatch, or missing work-order number.",
-      scopeLabel: `${session.scopeLabel} · The original check-in time stays unchanged and no prior written authorization is implied`,
+      description: "Link this observed visit to a work order.",
+      scopeLabel: session.scopeLabel,
     } : sourcePmOccurrence ? {
       title: "Create PM work order",
       eyebrow: "Preventive maintenance",
       description: "Create a work order for this scheduled maintenance, then choose who will do it.",
       scopeLabel: `${session.scopeLabel} · PM occurrence, work order, visit, and outcome remain linked`,
-    } : { title: "Create work order", eyebrow: "Service control", description: "Choose the store and describe the problem. You can add the other details later.", scopeLabel: `${session.scopeLabel} · Store and problem are the only required work facts` },
+    } : { title: "Create work order", eyebrow: "Service control", description: "Choose the store and describe the problem. You can add the other details later.", scopeLabel: session.scopeLabel },
     submitAction: "/api/ops/work-orders",
     cancelLink: sourceVisit
       ? { label: "Back to service visit", href: `/app/visits/${encodeURIComponent(sourceVisit.id)}` }
       : { label: "Back to work orders", href: "/app/work-orders" },
     stores: storesAsOptions(scoped),
-    vendors: vendors.map((vendor) => ({ value: vendor.id, label: vendor.name, description: fixture.vendorSpecialties.filter((item) => item.vendorId === vendor.id && item.organizationId === scoped.organizationId).flatMap((item) => [item.displayName, ...item.searchAliases]).join(", ") })),
+    vendors: vendors.map((vendor) => ({ value: vendor.id, label: vendor.name, description: [
+      ...fixture.vendorSpecialties.filter((item) => item.vendorId === vendor.id && item.organizationId === scoped.organizationId).flatMap((item) => [item.displayName, ...item.searchAliases]),
+      ...fixture.vendorCoverage.filter((item) => item.vendorId === vendor.id && item.organizationId === scoped.organizationId).flatMap((item) => [
+        item.preferredRank !== undefined ? "preferred" : "",
+        item.scopeKind === "organization" ? "All stores companywide" : item.scopeKind === "region" ? fixture.regions.find((region) => region.organizationId === scoped.organizationId && region.id === item.scopeId)?.name ?? "" : storeLabel(scoped.stores.find((store) => store.id === item.scopeId)),
+        ...scoped.stores.filter((store) => item.scopeKind === "organization" || item.scopeKind === "store" && store.id === item.scopeId || item.scopeKind === "region" && store.regionId === item.scopeId).map((store) => storeLabel(store)),
+      ]),
+    ].join(", ") })),
     internalAssignees: internal.map((membership) => ({ value: membership.id, label: userById.get(membership.userId)?.displayName ?? "Internal technician" })),
     priorityOptions: [
       { value: "routine", label: "Routine" },
@@ -5673,7 +5681,9 @@ export function buildCreateWorkOrderModel(
       replacementEstimate: asset.replacementEstimate,
     })),
     lifecycleAsOf: fixture.asOf,
-    defaults: requestedAsset || requestedStore || sourceVisit || sourcePmOccurrence ? {
+    defaults: {
+      priority: "routine",
+      assignmentKind: "choose_later",
       storeId: sourceRequest?.storeId ?? sourceVisit?.storeId ?? sourcePmOccurrence?.storeId ?? requestedAsset?.storeId ?? requestedStore,
       assetId: sourcePmOccurrence?.assetId ?? requestedAsset?.id,
       categoryKey: sourcePmProgram?.tradeKey ?? requestedAsset?.categoryKey,
@@ -5689,7 +5699,7 @@ export function buildCreateWorkOrderModel(
         vendorId: sourceVisit.vendorId,
         internalMembershipId: sourceVisit.internalMembershipId,
       } : {}),
-    } : undefined,
+    },
     sourceRequest: sourceRequest ? {
       id: sourceRequest.id,
       reference: sourceRequest.reference,
@@ -5722,7 +5732,7 @@ export function buildCreateStoreModel(fixture: OpsFixture, session: OperatorSess
   const organizationTimeZone = fixture.organizations.find((organization) => organization.id === session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   return {
     state: { kind: "ready" },
-    page: { title: "Add a store", eyebrow: "Network setup", description: "Create the location first, then add equipment, PM, and deeper classification only where it creates value.", scopeLabel: session.scopeLabel },
+    page: { title: "Add a store", eyebrow: "Network setup", description: "Add the store name, number and address.", scopeLabel: session.scopeLabel },
     submitAction: "/api/ops/stores",
     cancelLink: { label: "Back to stores", href: "/app/stores" },
     regions: fixture.regions.filter((region) => region.organizationId === session.organizationId).map((region) => ({ value: region.id, label: region.name, description: region.code })),

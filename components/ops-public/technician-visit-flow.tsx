@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Camera, Clock3, MapPin } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, MapPin } from "lucide-react";
 import type {
   ActiveVisitView,
   LocationEvidenceInput,
@@ -434,7 +434,7 @@ export function TechnicianVisitFlow({
           {step === 1 && context && mode === "check_in" ? (
             <fieldset className={styles.fieldset} style={{ marginTop: "1.1rem" }}>
               <legend className={styles.legend}>Choose the job you came to complete</legend>
-              <p className={styles.helper}>Select one assigned work order first. The list will then show any other approved work at this store for the same vendor.</p>
+              <p className={styles.helper}>Choose a job. You can add more work for the same vendor.</p>
               <div className={styles.stack}>
                 {visibleEligibleWork.map((work) => {
                   const selected = selectedWorkOrderIds.includes(work.id);
@@ -498,13 +498,13 @@ export function TechnicianVisitFlow({
               {portal.trustedStoreDevice ? <p className={styles.notice}><strong>Trusted store computer</strong><br />The server records the time when you confirm. No location permission is needed.</p> : portal.locationPolicy.enabled ? <LocationEvidenceControl actionLabel="checkout" onChange={(nextLocation) => { clearSubmissionKey("check_out"); setLocation(nextLocation); }} value={location} /> : <p className={styles.notice}>This operator does not require location evidence for this visit.</p>}
               {portal.locationPolicy.enabled && !portal.trustedStoreDevice ? <p className={styles.helper}>If location is declined or unavailable, you may continue. The receipt preserves that exact result and never presents it as verified.</p> : null}
               {error ? <p className={styles.error} role="alert">{error}</p> : null}
-              <div className={styles.actions}><button className={styles.secondaryButton} disabled={submitting} onClick={() => { clearSubmissionKey("check_out"); setStep(2); }} type="button"><ArrowLeft aria-hidden="true" size={17} /> Back</button><button className={styles.button} disabled={(portal.locationPolicy.enabled && !location) || submitting} onClick={submitCheckOut} type="button">{submitting ? "Sending…" : "Confirm all outcomes and checkout"}</button></div>
+              <div className={styles.actions}><button className={styles.secondaryButton} disabled={submitting} onClick={() => { clearSubmissionKey("check_out"); setStep(2); }} type="button"><ArrowLeft aria-hidden="true" size={17} /> Back</button><button className={styles.button} disabled={(portal.locationPolicy.enabled && !location) || submitting} onClick={submitCheckOut} type="button">{submitting ? "Sending…" : "Finish visit"}</button></div>
             </div>
           ) : null}
         </section>
 
         <aside className={styles.stack} aria-label="Visit information">
-          <section className={styles.card}><Clock3 aria-hidden="true" color="#0d6b62" size={23} /><h2 className={styles.cardTitle} style={{ marginTop: "0.6rem" }}>What this records</h2><ul className={styles.list} style={{ marginTop: "0.85rem" }}><li className={styles.listItem}><strong>One visit window</strong><p>One check-in and checkout can cover several work orders assigned to the same vendor.</p></li><li className={styles.listItem}><strong>One result per work order</strong><p>Choose the closest plain-language result before checkout.</p></li><li className={styles.listItem}><strong>Follow-up without extra typing</strong><p>If work remains, the platform creates the accountable operator or vendor follow-up automatically.</p></li></ul></section>
+
           <section className={styles.notice}><strong>Presence evidence, not a timesheet</strong><p className={styles.helper}>The observed onsite window is approximate. It does not certify billable labor or automatically approve an invoice.</p></section>
         </aside>
       </div>

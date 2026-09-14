@@ -192,7 +192,7 @@ describe("public work-order-first multi-work-order visit", () => {
     expect(source).not.toContain("additionalTechnicianNames:");
     expect(source).not.toContain("vehicleIdentifier:");
     expect(source).toContain("perWorkOrderOutcomes");
-    expect(source).toContain("Follow-up without extra typing");
+    expect(source).toContain("Presence evidence, not a timesheet");
     expect(source).toContain("Shared photos or service files");
   });
 });

@@ -94,8 +94,8 @@ describe("public quote request and service authorization distinction", () => {
     expect(markup).toContain("Authorized work issued to ColdLine Refrigeration &amp; HVAC");
     expect(markup).toContain("This is authorized work, not a quote request");
     expect(markup).toContain("Your company was selected for this work");
-    expect(markup).toContain("Digital acceptance is available when your company uses it");
-    expect(markup).toContain("operator may still allow technician check-in for already-issued work");
+    expect(markup).toContain("Follow the customer’s acceptance requirements.");
+    expect(markup).toContain("Start or finish your visit from any phone. No account needed.");
     expect(markup).toContain("Work reference &amp; billing");
     expect(markup).not.toMatch(/authorization limit|not-to-exceed|\bNTE\b/iu);
     expect(markup).toContain("Technician check-in and checkout");
