@@ -205,3 +205,10 @@ All six required checks passed: seed, typecheck, lint, **135 files / 932 tests**
 **P4-01 through P4-04 are complete at the implemented application-boundary level. 22 of 40 items complete; 18 remain.** Real-user onboarding, a Render identity adapter, external infrastructure, recovery/scale evidence and final acceptance remain separate gates. Private publication is pending; the hosted showcase will explicitly retain `OPS_ACCESS_MODE=preview` (environment revision 1), with existing owner-only access unchanged.
 
 The additional `npm run build:render` portability build passed. Temporary browser sizing was reset. All Pass 4 browser mutations were local, and stopping the owned preview discarded them. `dev4.log` remains untouched. Resume Pass 5 by inventorying snapshot consumers before replacing the dashboard and record queries; preserve all exact-cohort and tenant-boundary regression checks.
+
+### Pass 4 publication — complete
+
+- Private version **32** published successfully at **2026-09-14 23:46:34 UTC**: https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site . Owner-only access and the D1/R2 bindings were preserved. Environment revision **1** explicitly retains the fictional preview mode.
+- Published source: `9fc6320daf48d251bd4bd78f961469571d16d08f`. Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_85df7238cbd88191bc9060cee56d42ba`. Deployment: `appgdep_6aa8874d0cc08191b1800243723a4230`.
+- The unchanged packaging script succeeded through installed Git Bash after the Node wrapper could not launch bash. Validated the server entrypoint, client assets, hosting manifest and migrations before saving. No application source changed after validation/publication; this checkpoint is documentation only.
+- Resume at **Pass 5**. **22 of 40 complete; 18 remain.** Keep the standing UX rule and the explicit production-rollout limitations in Operator access.
