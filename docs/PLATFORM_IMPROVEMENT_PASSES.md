@@ -5,7 +5,7 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 ## Checkpoint
 
 - Completed passes: **1 — role/scope and accountability correctness**, **2 — trustworthy metrics and drill-through**, **3 — manager and store workflow usability**, and **4 — production identity and domain safeguards** (21 acceptance items).
-- Next product pass: **5 — bounded reads and maintainable persistence**. **22 of 40 items complete; 18 remain**. No later pass is complete.
+- Current product pass: **5 — bounded reads and maintainable persistence**, started under the user's authorization to continue all remaining passes automatically while away. **22 of 40 items complete; 18 remain**. No later pass is complete.
 - Completed exception: **P6-08 — populated D1 upgrade repair**, pulled forward after the first private publication failed; the repaired publication succeeded. All original item IDs remain unchanged.
 - Completion means acceptance evidence is recorded below, not merely that code was edited.
 - Deployment and real-customer readiness are separate gates. Fictional preview controls are not production authentication.
@@ -212,3 +212,11 @@ The additional `npm run build:render` portability build passed. Temporary browse
 - Published source: `9fc6320daf48d251bd4bd78f961469571d16d08f`. Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_85df7238cbd88191bc9060cee56d42ba`. Deployment: `appgdep_6aa8874d0cc08191b1800243723a4230`.
 - The unchanged packaging script succeeded through installed Git Bash after the Node wrapper could not launch bash. Validated the server entrypoint, client assets, hosting manifest and migrations before saving. No application source changed after validation/publication; this checkpoint is documentation only.
 - Resume at **Pass 5**. **22 of 40 complete; 18 remain.** Keep the standing UX rule and the explicit production-rollout limitations in Operator access.
+
+### Automatic continuation — authorized September 14, 2026
+
+The user requested that the remaining passes continue automatically until done while away. An active goal and hourly follow-up named **Finish platform improvement passes** are attached to this task (automation ID `finish-platform-improvement-passes`). Continue implementation without asking for another pass prompt. Disable the follow-up when work is complete or only documented external blockers remain; do not repeatedly retry unchanged infrastructure blockers. No authorization to contact external recipients, invent credentials, create a Render project, or broaden the private Site audience was given.
+
+Pass 5 has started with the snapshot/adapter inventory. `operator-loader.ts` still funnels roughly thirty dashboard, record, program and setup consumers through `sessionAndFixture`; several API/setup loaders also use full snapshots. Some setup pages load a snapshot only to obtain session access and can drop that read immediately. Normal lists/search already use query-first paths; specialized filters and Trends still use compatibility projections. PostgreSQL currently imports the repository from `d1-repository.ts` and emulates D1 prepared statements through a SQL translator. Refactor a genuine provider-neutral query/execution boundary before adding new feature queries; preserve native transaction behavior and the existing 932-test baseline. Keep stable item IDs and leave P5 items unchecked until their complete acceptance evidence exists.
+
+Next work groups: (1) inventory and remove needless setup reads, establish the neutral persistence boundary; (2) scoped dashboard aggregates and exact source pages; (3) bounded record/program/lifecycle queries and feature extraction; (4) audited legacy retirement and import/fixture proof. Then continue Passes 6–7, recording actual deployment/recovery/scale dependencies separately from local evidence. Last published application remains private version 32; no application change has been made since that publication.
