@@ -7,7 +7,7 @@ const events = new Set<NotificationEventKey>(["vendor_response_received", "vendo
 const roles = new Set<NotificationRecipientRole>(["facilities_admin", "store_manager", "regional_manager", "executive", "finance_reviewer"]);
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities"]);
+    const context = await getOpsRequestContext(["facilities"], undefined, request, true);
     const form = await request.formData();
     const eventKey = formText(form, "eventKey", { required: true, max: 80 }) as NotificationEventKey;
     const enabledRoles = new Set(form.getAll("enabledRole").map(String));

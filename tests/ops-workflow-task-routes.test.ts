@@ -87,7 +87,7 @@ describe("Workflow Task operator routes", () => {
       assigneeRole: "store_manager",
       blocking: true,
     });
-    expect(contextMocks.getOpsRequestContext).toHaveBeenCalledWith(["facilities", "regional"]);
+    expect(contextMocks.getOpsRequestContext).toHaveBeenCalledWith(["facilities", "regional"], undefined, expect.any(Request));
     expect(contextMocks.assertStoreInSessionScope).toHaveBeenCalledOnce();
   });
 

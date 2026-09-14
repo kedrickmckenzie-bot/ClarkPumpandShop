@@ -9,7 +9,7 @@ import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"]);
+    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], undefined, request);
     const { id } = await params;
     await assertStoreInSessionScope(context.session, id);
     const formData = await request.formData();

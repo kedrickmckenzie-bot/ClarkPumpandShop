@@ -39,7 +39,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string; taskId: string }> },
 ) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional"], undefined, request);
     const { id: workOrderId, taskId } = await params;
     const organizationId = context.session.organizationId;
     const [workOrder, task] = await Promise.all([

@@ -5,6 +5,8 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
+import { isFictionalPreview, trustsSitesIdentity, OPS_ORGANIZATION_COOKIE, OperatorAccessError } from "@/lib/server/operator-access";
+import { resolveAuthenticatedOperatorSession, domainRoleForOperatorRole } from "@/lib/server/operator-membership";
 import type {
   DashboardPageViewModel,
   DetailPageViewModel,
@@ -84,8 +86,16 @@ export async function loadOperatorSession(): Promise<OperatorSession> {
 }
 
 const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
-  const repository = await getServerOpsRepository();
   const [identity, cookieStore] = await Promise.all([getChatGPTUser(), cookies()]);
+  if (!isFictionalPreview()) {
+    if (!trustsSitesIdentity()) throw new OperatorAccessError("configuration", "Workspace sign-in is not configured. Contact your administrator.");
+    if (!identity) throw new OperatorAccessError("sign_in", "Sign in to open your workspace.");
+    return resolveAuthenticatedOperatorSession(await getServerOpsRepository(), {
+      userId: `sites:${identity.userId}`,
+      organizationId: cookieStore.get(OPS_ORGANIZATION_COOKIE)?.value ?? process.env.OPS_ORGANIZATION_ID ?? "",
+    });
+  }
+  const repository = await getServerOpsRepository();
   const requestedRole = cookieStore.get(OPS_PREVIEW_ROLE_COOKIE)?.value
     ?? cookieStore.get(LEGACY_OPS_PREVIEW_ROLE_COOKIE)?.value
     ?? process.env.OPS_OPERATOR_PREVIEW_ROLE
@@ -113,8 +123,19 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
     repository.listRoleCapabilityOverrides(NORTHLINE_ORGANIZATION_ID),
   ]);
   const effectivePolicy = resolveRoleCapabilities(membership?.role ?? "support", capabilityOverrides);
+  if (!organization || !membership || membership.status !== "active" || membership.role !== domainRoleForOperatorRole[role]) {
+    throw new OperatorAccessError("membership", "This preview role is unavailable.");
+  }
+  const personaUser = await repository.getUserInOrganization(NORTHLINE_ORGANIZATION_ID, membership.userId);
+  if (!personaUser || personaUser.status !== "active") throw new OperatorAccessError("membership", "This preview role is unavailable.");
+  if (!grants.some(grant => ["ops:*", "ops:read", "ops:write", "ops:read_write", "ops:store_manage", "ops:finance_read"].includes(grant.permission))) {
+    throw new OperatorAccessError("membership", "No stores are assigned to this preview role.");
+  }
   const regionIds = grants.filter((grant) => grant.scopeKind === "region").map((grant) => grant.scopeId);
   const storeIds = grants.filter((grant) => grant.scopeKind === "store").map((grant) => grant.scopeId);
+  if (role === "regional" && !regionIds.length || role === "store_manager" && !storeIds.length) {
+    throw new OperatorAccessError("membership", "No stores are assigned to this preview role.");
+  }
   const scopedStores = await repository.searchStores({
     organizationId: NORTHLINE_ORGANIZATION_ID,
     regionIds: regionIds.length ? regionIds : undefined,
@@ -130,10 +151,11 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
         ? `${organizationName} companywide · review-only financial scope`
         : `${organizationName} companywide · ${scopedStores.totalCount ?? scopedStores.items.length} stores`;
   return {
-    userId: identity?.userId ?? "user-northline-preview",
+    accessMode: "preview",
+    userId: personaUser.id,
     membershipId: membership?.id,
-    displayName: identity?.displayName ?? "Demo operator",
-    email: identity?.email ?? "operator@clark-demo.example",
+    displayName: personaUser.displayName,
+    email: personaUser.email,
     role,
     organizationId: NORTHLINE_ORGANIZATION_ID,
     organizationName,
@@ -148,10 +170,8 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
 });
 
 async function sessionAndFixture() {
-  const [fixture, session] = await Promise.all([
-    getRequestOpsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID),
-    getRequestOperatorSession(),
-  ]);
+  const session = await getRequestOperatorSession();
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   return { session, fixture };
 }
 
@@ -273,7 +293,7 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
     const repository = await getServerOpsRepository();
     return enforceListLinkPolicy(await buildQueryListModel(repository, session, route, searchParams), session);
   }
-  const fixture = await getRequestOpsFixtureSnapshot(NORTHLINE_ORGANIZATION_ID);
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   return enforceListLinkPolicy(
     buildListModel(fixture, session, route, searchParams),
     session,

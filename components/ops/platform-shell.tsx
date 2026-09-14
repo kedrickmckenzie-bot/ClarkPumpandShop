@@ -232,7 +232,7 @@ function SidebarFooter({ session, edition }: { session: OperatorSession; edition
       </nav>
       <div className={styles.profilePanel}>
         <UserSummary session={session} />
-        <PreviewRoleSwitcher role={session.role} />
+        {session.accessMode !== "authenticated" ? <PreviewRoleSwitcher role={session.role} /> : <Link className={styles.setupLink} href="/access?reason=company">Switch company</Link>}
       </div>
     </div>
   );
@@ -290,7 +290,7 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
           <small>{session.scopeLabel}</small>
         </div>
 
-        <PreviewEditionSwitcher edition={edition} />
+        {session.accessMode !== "authenticated" ? <PreviewEditionSwitcher edition={edition} /> : null}
 
         <PrimaryNavigation session={session} pathname={pathname} edition={edition} />
         <SidebarFooter session={session} edition={edition} />
@@ -312,7 +312,7 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
                     <span>{session.scopeLabel}</span>
                   </p>
                 </div>
-                <PreviewEditionSwitcher edition={edition} />
+                {session.accessMode !== "authenticated" ? <PreviewEditionSwitcher edition={edition} /> : null}
                 <PrimaryNavigation session={session} pathname={pathname} edition={edition} />
                 <SidebarFooter session={session} edition={edition} />
               </div>
@@ -337,15 +337,15 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
               <button type="submit">Search</button>
             </form>
 
-            <div className={styles.editionIndicator} aria-label={`Demo package: ${demoEditionPresentation[edition].label}`}>
+            {session.accessMode !== "authenticated" ? <div className={styles.editionIndicator} aria-label={`Demo package: ${demoEditionPresentation[edition].label}`}>
               <Layers3 aria-hidden="true" size={17} />
               <span>
                 <small>Demo package</small>
                 <strong>{demoEditionPresentation[edition].label}</strong>
               </span>
-            </div>
+            </div> : null}
 
-            <div className={styles.topbarContext} aria-label="Current preview role and access scope">
+            <div className={styles.topbarContext} aria-label={session.accessMode === "authenticated" ? "Current role and access scope" : "Current preview role and access scope"}>
               <UsersRound aria-hidden="true" size={18} />
               <span>
                 <strong>{roleLabel(session.role)}</strong>

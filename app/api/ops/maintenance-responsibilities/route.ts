@@ -8,7 +8,7 @@ import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 const roles = new Set<OrganizationRole>(["store_manager", "regional_manager", "facilities_admin"]);
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities"], "administer");
+    const context = await getOpsRequestContext(["facilities"], "administer", request, true);
     const form = await request.formData();
     const role = formText(form, "role", { required: true, max: 40 }) as OrganizationRole;
     const enabledCapabilities = form.getAll("enabledCapability").map(String) as ConfigurableMaintenanceCapability[];

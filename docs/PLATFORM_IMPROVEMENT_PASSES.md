@@ -4,8 +4,8 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
-- Completed passes: **1 — role/scope and accountability correctness**, **2 — trustworthy metrics and drill-through**, and **3 — manager and store workflow usability** (17 acceptance items).
-- Next product pass: **4 — production identity and domain safeguards**. **18 of 40 items complete; 22 remain**. No later pass is complete.
+- Completed passes: **1 — role/scope and accountability correctness**, **2 — trustworthy metrics and drill-through**, **3 — manager and store workflow usability**, and **4 — production identity and domain safeguards** (21 acceptance items).
+- Next product pass: **5 — bounded reads and maintainable persistence**. **22 of 40 items complete; 18 remain**. No later pass is complete.
 - Completed exception: **P6-08 — populated D1 upgrade repair**, pulled forward after the first private publication failed; the repaired publication succeeded. All original item IDs remain unchanged.
 - Completion means acceptance evidence is recorded below, not merely that code was edited.
 - Deployment and real-customer readiness are separate gates. Fictional preview controls are not production authentication.
@@ -46,10 +46,10 @@ The order groups shared data models, UI surfaces and validation to avoid repeate
 
 ## Pass 4 — production identity and domain safeguards
 
-- [ ] P4-01 Resolve authenticated users to active organization memberships; isolate preview personas and fail closed outside the fictional preview. Verify missing identity, revoked membership and multiple organizations.
-- [ ] P4-02 Verify organization-first access on every read, command, search, aggregate, export, private file, public token and job; add cross-tenant and cross-store adversarial tests.
-- [ ] P4-03 Verify all channels use shared commands with transactional audit, idempotent retries and optimistic concurrency. Test append-only amendments for reports, issuance, responses, visits, costs, allocations and deadlines.
-- [ ] P4-04 Verify purpose-bound, expiring, hashed action tokens and vendor-eligible work selection; no-WO service remains possible and location remains check-in/out only with explicit evidence status.
+- [x] P4-01 Resolve authenticated users to active organization memberships; isolate preview personas and fail closed outside the fictional preview. Verify missing identity, revoked membership and multiple organizations.
+- [x] P4-02 Verify organization-first access on every read, command, search, aggregate, export, private file, public token and job; add cross-tenant and cross-store adversarial tests.
+- [x] P4-03 Verify all channels use shared commands with transactional audit, idempotent retries and optimistic concurrency. Test append-only amendments for reports, issuance, responses, visits, costs, allocations and deadlines.
+- [x] P4-04 Verify purpose-bound, expiring, hashed action tokens and vendor-eligible work selection; no-WO service remains possible and location remains check-in/out only with explicit evidence status.
 
 ## Pass 5 — bounded reads and maintainable persistence
 
@@ -78,6 +78,8 @@ The order groups shared data models, UI surfaces and validation to avoid repeate
 - [ ] P7-03 Complete the required browser matrix: manager search/drill-down; store creation; deferred/internal/outside work routing; vendor action link; cross-channel visit; no-WO exception; invoice safeguards; PM/lifecycle; responsive store/mobile. Record which journeys actually mutated data and which were inspection only.
 - [ ] P7-04 Reconcile README/demo/status docs with verified implementation and deterministic seed counts. Keep historical reviews dated, centralize current status and verify all temporary branding uses configuration.
 - [ ] P7-05 Review every remaining unchecked item and external dependency before declaring release readiness. No principal metric or primary workflow may end at a dead control; no production claim without production evidence.
+
+Additional discovery for P7-03: PM and lifecycle program layouts currently nest a second `main` inside the operator shell's `main`. Consolidate those landmarks during final accessibility acceptance; Pass 4 inspected these views without claiming that structural issue fixed.
 
 ## Evidence log
 
@@ -184,3 +186,22 @@ All six required checks passed: `db:seed`, `typecheck`, `lint`, **133 files / 91
 - Published source: `a2a28adab0bcc90a0e70f5a03693a26fe0831043`. Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_8af1148b4558819187bcd9a9d0f21e72`. Deployment: `appgdep_6aa87d6e9e288191834f7590a347f769`.
 - The unchanged packaging script succeeded through installed Git Bash after the Node wrapper could not start bash. The archive included the server entrypoint, client assets, hosting manifest and existing migrations. D1/R2 bindings and presentation seed were preserved.
 - The local preview process was stopped, discarding its temporary browser-test records. The temporary browser viewport was reset. Existing unrelated `dev4.log` remains untouched. This post-publication checkpoint changes documentation only; resume at **Pass 4** with all 22 outstanding IDs retained.
+
+### Pass 4 implementation and browser evidence — September 14, 2026
+
+Grouped work: identity/membership and clear access screens (P4-01); organization-first loader/repository boundaries and adversarial scope tests (P4-02); shared mutation guards and existing transactional regression proof (P4-03); public capability/visit regression checks (P4-04). The standing UX priority applies throughout. Configuration and provisioning are documented in [Operator access](OPERATOR_ACCESS.md).
+
+- **Identity:** deployed runtimes fail closed unless explicitly configured. Authenticated Sites identity resolves by exact verified subject to an active database user and one active membership in the selected organization. Suspended users/memberships, no scopes and ambiguous memberships deny access; preview cookies never select authenticated roles. Organization/division/region/store grants resolve through scoped repository queries, including the PostgreSQL adapter. Render does not trust Sites headers. Demo startup seeding runs only in preview. Real-user onboarding and a Render identity provider are not implemented or claimed.
+- **Data boundaries:** removed fixed-demo-organization and omitted-organization snapshot calls; local snapshots now filter tenant rows/users. Existing SQL organization predicates and store scopes remain. Empty explicit scopes deny access. All operator mutation routes now pass the actual request through the shared origin/read-only guard. Mixed read/write scopes remain read-only; company setup and operations spanning stores require companywide access. Preview accounting/role/package mutations are disabled outside preview. CSV/report routes return explicit access errors. Preview audit names now identify the same fictional persona as the membership actor.
+- **Domain and capability evidence:** new tests cover foreign-company and empty-scope search/list/detail/aggregate reads; missing sign-in on reads/commands/exports; narrow-store denial; mixed read/write denial; six public capability types with expiration, revocation, wrong purpose and foreign-tenant subjects. Existing regression suites cover quote/private-file denial, vendor/work eligibility, immutable issuance revisions, append-only report/response/evidence/cost/invoice/deadline records, stale versions, transaction rollback with audit/outbox, idempotent operator/public retries, multi-WO atomic check-in/checkout and one required unresolved follow-up. No independent mutation implementation was added to the UI channels. One-time geolocation remains check-in/out only.
+- **Browser evidence:** on the local fixture, actually created **CPS-2026-2282** from Store 101 and “Pass 4 local access check: leaking tap”; it saved Routine / Choose later / Classification deferred with an accountable action and due time. Pending-request drill-through showed exactly five records; Ridgeview search returned 77 matches across five record types. Inspected Add a store, PM (222 occurrences), lifecycle (three current cases), invoices (90 records), vendor authorization and 375px technician/no-WO selection. No-WO selection exposed vendor/reason fields. These latter workflows were inspection only in this pass; the prior pass records full store creation and QR-to-secure-link checkout submissions. Current automated suites re-exercised those shared commands.
+- **Authenticated browser evidence:** temporarily configured the local worker through ignored `.env.local`; parent-shell variables alone did not configure its Cloudflare environment. `/app/overview` then returned 307 to the short sign-in page, with no operator records or preview switchers. Inspected 375px Sign in and Access needed, plus 1280px Choose your company. Submitting a company without identity returned to Sign in. No real login or real membership was created. Temporary configuration was removed and the local server stopped.
+- **Early failures corrected:** initial full-suite failures were six old mock assertions after adding the request guard argument; updated those assertions. The new PostgreSQL membership test initially ran before the seed test; moved it after seeding. Both issues are fixed, with subsequent full-suite and workflow runs passing.
+
+### Pass 4 validation checkpoint
+
+All six required checks passed: seed, typecheck, lint, **135 files / 932 tests** in the full suite (141.14 seconds), **4 files / 53 tests** in the workflow suite (52.74 seconds), and the production build. Targeted boundary/PostgreSQL checks also passed **3 files / 37 tests**. The Sites Node build wrapper again failed to resolve npm on Windows; direct `npm run build` succeeded. Existing duplicate emitted-CSS and route-classification warnings remain nonfatal. The new checks preserve exactly 15 presentation stores and five outside vendors, with the separate 65-store fixture.
+
+**P4-01 through P4-04 are complete at the implemented application-boundary level. 22 of 40 items complete; 18 remain.** Real-user onboarding, a Render identity adapter, external infrastructure, recovery/scale evidence and final acceptance remain separate gates. Private publication is pending; the hosted showcase will explicitly retain `OPS_ACCESS_MODE=preview` (environment revision 1), with existing owner-only access unchanged.
+
+The additional `npm run build:render` portability build passed. Temporary browser sizing was reset. All Pass 4 browser mutations were local, and stopping the owned preview discarded them. `dev4.log` remains untouched. Resume Pass 5 by inventorying snapshot consumers before replacing the dashboard and record queries; preserve all exact-cohort and tenant-boundary regression checks.

@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     if (!DECISIONS.has(decision)) throw new OpsDomainError("VALIDATION", "Choose a valid vendor-response action.");
     const vendorResponseId = text("vendorResponseId");
     if (!vendorResponseId) throw new OpsDomainError("VALIDATION", "Vendor response is required.");
-    const context = await getOpsRequestContext([...ALLOWED_ROLES]);
+    const context = await getOpsRequestContext([...ALLOWED_ROLES], undefined, request);
     const response = await context.repository.getVendorResponse(context.session.organizationId, vendorResponseId);
     if (!response) throw new OpsDomainError("NOT_FOUND", "Vendor response was not found in this organization.");
     const workOrder = await context.repository.getWorkOrder(context.session.organizationId, response.workOrderId);

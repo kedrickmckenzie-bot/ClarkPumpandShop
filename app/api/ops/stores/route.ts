@@ -4,7 +4,7 @@ import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities"]);
+    const context = await getOpsRequestContext(["facilities"], undefined, request, true);
     const formData = await request.formData();
     const radiusValue = formText(formData, "geofenceRadiusM", { max: 10 });
     const radius = radiusValue ? Number(radiusValue) : undefined;

@@ -257,9 +257,7 @@ export function buildWorkOrderVerificationModel(
 }
 
 export async function loadWorkOrderVerificationModel(workOrderId: string) {
-  const [fixture, session] = await Promise.all([
-    getRequestOpsFixtureSnapshot(),
-    loadOperatorSession(),
-  ]);
+  const session = await loadOperatorSession();
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   return buildWorkOrderVerificationModel(fixture, session, workOrderId);
 }

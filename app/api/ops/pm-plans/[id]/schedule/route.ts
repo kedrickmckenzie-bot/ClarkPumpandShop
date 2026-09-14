@@ -11,7 +11,7 @@ function wholeNumber(value: string, label: string) {
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await getOpsRequestContext(["executive", "facilities", "regional", "store_manager"]);
+    const context = await getOpsRequestContext(["executive", "facilities", "regional", "store_manager"], undefined, request);
     const { id } = await params;
     const plan = await context.repository.getPmPlan(context.session.organizationId, id);
     if (!plan) throw new OpsDomainError("NOT_FOUND", "PM plan was not found in this organization.");

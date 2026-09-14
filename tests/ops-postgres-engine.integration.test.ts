@@ -184,6 +184,21 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     expect(workOrderCount.rows[0]?.count).toBe(fixture.workOrders.length);
   }, 120_000);
 
+  it("resolves users and division/store grants inside the selected organization", async () => {
+    const repository = createOpsPostgresRepository(pool);
+    const data = buildNorthlinePresentationFixture();
+    const organizationId = data.organizations[0].id;
+    const member = data.memberships.find(row => row.id === "membership-northline-facilities")!;
+    expect(await repository.getUserInOrganization(organizationId, member.userId)).toMatchObject({ id: member.userId, status: "active" });
+    expect(await repository.getUserInOrganization("foreign-organization", member.userId)).toBeNull();
+    expect(await repository.listMembershipsForUser("foreign-organization", member.userId)).toEqual([]);
+    expect(await repository.listMembershipsForUser(organizationId, member.userId)).toEqual([member]);
+    expect(await repository.listStoreIdsForMembership(organizationId, "membership-northline-store-104")).toEqual(["store-northline-104"]);
+    expect(await repository.listStoreIdsForMembership(organizationId, "membership-northline-regional-1")).toHaveLength(5);
+    expect(await repository.listStoreIdsForMembership(organizationId, member.id)).toHaveLength(15);
+    expect(await repository.listStoreIdsForMembership("foreign-organization", member.id)).toEqual([]);
+  });
+
   it("enforces organization-aware foreign keys", async () => {
     await expect(database.query(
       `INSERT INTO ops_work_orders

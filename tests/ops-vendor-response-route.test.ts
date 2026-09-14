@@ -58,7 +58,7 @@ describe("operator vendor-response continuation route", () => {
 
     expect(result.status).toBe(303);
     expect(result.headers.get("location")).toContain("notice=Counterproposal+sent");
-    expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(["facilities", "regional"]);
+    expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(["facilities", "regional"], undefined, expect.any(Request));
     expect(mocks.assertStoreInSessionScope).toHaveBeenCalledWith(session, workOrder.storeId);
     expect(mocks.resolveVendorResponse).toHaveBeenCalledWith({ repository }, expect.objectContaining({
       organizationId,

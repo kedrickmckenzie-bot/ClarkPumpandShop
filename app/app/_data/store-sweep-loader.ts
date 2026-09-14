@@ -57,10 +57,10 @@ function reviewLabel(deadlineAt: string, asOf: string, timeZone: string) {
 }
 
 export async function loadStoreSweepPlanner(requestedStoreId?: string, requestedWorkOrderId?: string, requestedReturnTo?: string): Promise<StoreSweepPlannerModel> {
-  const [fixture, repository, session] = await Promise.all([
-    getRequestOpsFixtureSnapshot(),
+  const session = await loadOperatorSession();
+  const [fixture, repository] = await Promise.all([
+    getRequestOpsFixtureSnapshot(session.organizationId),
     getServerOpsRepository(),
-    loadOperatorSession(),
   ]);
   const planningBaseline = new Date(Math.max(Date.parse(fixture.asOf), Date.now())).toISOString();
   const returnHref = approvedWorkReturnHref(requestedReturnTo);

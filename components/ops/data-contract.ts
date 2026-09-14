@@ -10,6 +10,7 @@ export type DemoEdition = "accountability" | "complete";
 export type Tone = "neutral" | "positive" | "warning" | "critical" | "info";
 
 export interface OperatorSession {
+  accessMode?: "preview" | "authenticated";
   userId: string;
   membershipId?: string;
   displayName: string;

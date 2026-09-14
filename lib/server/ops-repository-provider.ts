@@ -1,5 +1,7 @@
 import { TREND_SOURCE_TABLES } from "@/lib/ops/trends-source-tables";
 import "server-only";
+import { isFictionalPreview } from "./operator-access";
+import { tenantFixture } from "@/lib/ops/tenant-fixture";
 
 import { createOpsD1Repository } from "@/lib/ops/d1-repository";
 import { loadOpsFixtureSnapshotFromD1 } from "@/lib/ops/d1-snapshot";
@@ -141,7 +143,7 @@ export async function getServerOpsRepository(): Promise<OpsRepository> {
     return initializeDurableRepository(async () => {
       const pool = await getPostgresPool();
       const repository = createOpsPostgresRepository(pool);
-      await ensureNorthlinePostgresSeed(pool);
+      if (isFictionalPreview()) await ensureNorthlinePostgresSeed(pool);
       return repository;
     });
   }
@@ -157,7 +159,7 @@ export async function getServerOpsRepository(): Promise<OpsRepository> {
   if (binding) {
     return initializeDurableRepository(async () => {
       const repository = createOpsD1Repository(binding);
-      await ensureNorthlineSeed(binding, repository);
+      if (isFictionalPreview()) await ensureNorthlineSeed(binding, repository);
       return repository;
     });
   }
@@ -192,34 +194,34 @@ export function getServerOpsRepositoryProxy(): OpsRepository {
 }
 
 /** The showcase uses the same reporting date on source and planning screens. */
-export function getServerOpsReportingAsOf() { return NORTHLINE_AS_OF; }
+export function getServerOpsReportingAsOf() { return isFictionalPreview() ? NORTHLINE_AS_OF : new Date().toISOString(); }
 
 export async function getServerOpsFixtureSnapshot(
-  organizationId: OpsId = NORTHLINE_ORGANIZATION_ID,
+  organizationId: OpsId,
 ): Promise<OpsFixture> {
   if (process.env.DATABASE_URL?.trim()) {
     const pool = await getPostgresPool();
     await getServerOpsRepository();
     const { loadOpsFixtureSnapshotFromPostgres } = await import("@/lib/ops/postgres-snapshot");
-    return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, NORTHLINE_AS_OF);
+    return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, getServerOpsReportingAsOf());
   }
 
   if (isRenderNodeRuntime()) {
-    if (isLocalRenderDevelopment()) return getNorthlineFixtureRepository().snapshot();
+    if (isLocalRenderDevelopment()) return tenantFixture(getNorthlineFixtureRepository().snapshot(), organizationId);
     throw new Error("The Render runtime requires DATABASE_URL; operator data cannot use a fallback.");
   }
 
-  if (shouldUseDevelopmentFixture()) return getNorthlineFixtureRepository().snapshot();
+  if (shouldUseDevelopmentFixture()) return tenantFixture(getNorthlineFixtureRepository().snapshot(), organizationId);
 
   const binding = await getD1BindingLazily();
   if (!binding) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("Operator data cannot load without the Cloudflare D1 `DB` binding.");
     }
-    return getNorthlineFixtureRepository().snapshot();
+    return tenantFixture(getNorthlineFixtureRepository().snapshot(), organizationId);
   }
   await getServerOpsRepository();
-  return loadOpsFixtureSnapshotFromD1(binding, organizationId, NORTHLINE_AS_OF);
+  return loadOpsFixtureSnapshotFromD1(binding, organizationId, getServerOpsReportingAsOf());
 }
 
 
@@ -233,19 +235,19 @@ export async function getServerOpsFixtureSnapshot(
  * reporting table boundary; local fixtures remain an isolated adapter.
  */
 export async function getServerOpsTrendsFixtureSnapshot(
-  organizationId: OpsId = NORTHLINE_ORGANIZATION_ID,
+  organizationId: OpsId,
 ): Promise<OpsFixture> {
   if (process.env.DATABASE_URL?.trim()) {
     const pool = await getPostgresPool();
     await getServerOpsRepository();
     const { loadOpsFixtureSnapshotFromPostgres } = await import("@/lib/ops/postgres-snapshot");
-    return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, NORTHLINE_AS_OF, { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] });
+    return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, getServerOpsReportingAsOf(), { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] });
   }
   if (isRenderNodeRuntime() || shouldUseDevelopmentFixture()) return getServerOpsFixtureSnapshot(organizationId);
   const binding = await getD1BindingLazily();
   if (binding) {
     await getServerOpsRepository();
-    return loadOpsFixtureSnapshotFromD1(binding, organizationId, NORTHLINE_AS_OF, { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] });
+    return loadOpsFixtureSnapshotFromD1(binding, organizationId, getServerOpsReportingAsOf(), { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] });
   }
   return getServerOpsFixtureSnapshot(organizationId);
 }

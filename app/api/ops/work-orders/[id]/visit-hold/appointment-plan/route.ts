@@ -25,7 +25,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional"], undefined, request);
     const { id: workOrderId } = await params;
     const workOrder = await context.repository.getWorkOrder(context.session.organizationId, workOrderId);
     if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Approved work was not found.");

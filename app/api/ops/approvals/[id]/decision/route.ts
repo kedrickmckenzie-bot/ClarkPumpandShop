@@ -17,7 +17,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const context = await getOpsRequestContext(operatorRoles);
+    const context = await getOpsRequestContext(operatorRoles, undefined, request);
     const membershipId = context.session.membershipId;
     if (!membershipId) {
       throw new OpsDomainError("FORBIDDEN", "An active preview membership is required to record an approval decision.");

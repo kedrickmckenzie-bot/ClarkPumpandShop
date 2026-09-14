@@ -18,7 +18,7 @@ const reviewStatuses = new Set(["pending", "approved", "rejected", "expired"] as
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await getOpsRequestContext(["facilities"]);
+    const context = await getOpsRequestContext(["facilities"], undefined, request, true);
     const { id: vendorId } = await params;
     const vendor = await context.repository.getVendor(context.session.organizationId, vendorId);
     if (!vendor) throw new OpsDomainError("NOT_FOUND", "Vendor not found in organization");

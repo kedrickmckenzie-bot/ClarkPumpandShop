@@ -14,7 +14,7 @@ function requiredMoney(form: FormData, name: string) {
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; componentId: string }> }) {
   try {
-    const context = await getOpsRequestContext(["executive", "facilities", "regional"]);
+    const context = await getOpsRequestContext(["executive", "facilities", "regional"], undefined, request);
     const { id: assetId, componentId } = await params;
     const [asset, component] = await Promise.all([
       context.repository.getAsset(context.session.organizationId, assetId),

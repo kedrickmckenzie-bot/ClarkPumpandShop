@@ -8,7 +8,7 @@ const routingRules=new Set<WarrantyRoutingRule>(["original_vendor_mandatory","or
 
 export async function POST(request:Request){
   try{
-    const context=await getOpsRequestContext(["executive","facilities"]);const form=await request.formData();
+    const context=await getOpsRequestContext(["executive","facilities"], undefined, request, true);const form=await request.formData();
     const profileId=formText(form,"profileId",{required:true,max:160});const profile=await context.repository.getVendorWarrantyProfile(context.session.organizationId,profileId);
     if(!profile||profile.status!=="active")throw new OpsDomainError("NOT_FOUND","Active Vendor Warranty Profile not found");
     const coverages:FutureWarrantyCoverageInput[]=[];

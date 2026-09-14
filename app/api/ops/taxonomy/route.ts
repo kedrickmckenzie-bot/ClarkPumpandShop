@@ -9,7 +9,7 @@ function success(request: Request) { const redirectTo = "/app/admin/service-area
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities"]);
+    const context = await getOpsRequestContext(["facilities"], undefined, request, true);
     const formData = await request.formData();
     const operation = formText(formData, "operation", { required: true, max: 30 });
     if (operation === "create") {

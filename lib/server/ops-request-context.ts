@@ -7,14 +7,8 @@ import { OpsDomainError } from "@/lib/ops/commands";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import type { OpsRepository } from "@/lib/ops/repository";
 import type { ActorContext } from "@/lib/ops/types";
-
-const domainRoleForOperatorRole = {
-  executive: "executive",
-  facilities: "facilities_admin",
-  regional: "regional_manager",
-  store_manager: "store_manager",
-  finance: "finance_reviewer",
-} as const;
+import { domainRoleForOperatorRole } from "./operator-membership";
+import { OperatorAccessError } from "./operator-access";
 
 export async function assertActiveOperatorMembership(
   repository: OpsRepository,
@@ -28,19 +22,35 @@ export async function assertActiveOperatorMembership(
     !membership
     || membership.status !== "active"
     || membership.role !== domainRoleForOperatorRole[session.role]
+    || session.accessMode === "authenticated" && membership.userId !== session.userId
   ) {
     throw new OpsDomainError("FORBIDDEN", "Your organization membership or role is no longer active.");
+  }
+  if (session.accessMode === "authenticated") {
+    const user = await repository.getUserInOrganization(session.organizationId, session.userId);
+    if (!user || user.status !== "active") throw new OpsDomainError("FORBIDDEN", "Your account is no longer active.");
   }
   return membership;
 }
 
-export async function getOpsRequestContext(allowedRoles: readonly OperatorRole[], requiredCapability?: OperatorCapability) {
+export async function getOpsRequestContext(allowedRoles: readonly OperatorRole[], requiredCapability?: OperatorCapability, request?: Request, organizationWide = false) {
+  if (request && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    const origin = request.headers.get("origin");
+    if (request.headers.get("sec-fetch-site") === "cross-site" || origin && origin !== new URL(request.url).origin) {
+      throw new OpsDomainError("FORBIDDEN", "Open this form from your workspace and try again.");
+    }
+  }
   const session = await loadOperatorSession();
   if (!allowedRoles.includes(session.role)) {
     throw new OpsDomainError("FORBIDDEN", "Your current role cannot perform this action.");
   }
   const repository = await getServerOpsRepository();
   const membership = await assertActiveOperatorMembership(repository, session);
+  if (organizationWide) assertOrganizationWriteScope(session);
+  if (request && !["GET", "HEAD", "OPTIONS"].includes(request.method) && session.accessMode === "authenticated"
+    && (!session.permissions?.length || !session.permissions.every(permission => ["ops:*", "ops:write", "ops:read_write", "ops:store_manage"].includes(permission)))) {
+    throw new OpsDomainError("FORBIDDEN", "Your account can view records but cannot change them.");
+  }
   if (requiredCapability && !roleCan(session, requiredCapability)) {
     throw new OpsDomainError("FORBIDDEN", "This maintenance responsibility is not enabled for your role.");
   }
@@ -60,19 +70,25 @@ export async function assertStoreInSessionScope(
   const repository = await getServerOpsRepository();
   const store = await repository.getStore(session.organizationId, storeId);
   if (!store) throw new OpsDomainError("NOT_FOUND", "Store was not found in this organization.");
-  if (session.storeIds?.length && !session.storeIds.includes(store.id)) {
+  if (session.storeIds !== undefined && !session.storeIds.includes(store.id)) {
     throw new OpsDomainError("FORBIDDEN", "Store is outside your assigned scope.");
   }
-  if (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId))) {
+  if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) {
     throw new OpsDomainError("FORBIDDEN", "Store is outside your assigned region.");
   }
-  if (session.role === "store_manager" && !session.storeIds?.length) {
+  if (session.role === "store_manager" && !session.storeIds?.length && session.accessMode !== "authenticated") {
     throw new OpsDomainError("FORBIDDEN", "No store scope is assigned to this role.");
   }
-  if (session.role === "regional" && !session.regionIds?.length) {
+  if (session.role === "regional" && !session.regionIds?.length && session.accessMode !== "authenticated") {
     throw new OpsDomainError("FORBIDDEN", "No region scope is assigned to this role.");
   }
   return store;
+}
+
+export function assertOrganizationWriteScope(session: Awaited<ReturnType<typeof loadOperatorSession>>) {
+  if (session.accessMode === "authenticated" && (session.storeIds !== undefined || session.regionIds !== undefined)) {
+    throw new OpsDomainError("FORBIDDEN", "Companywide access is required to change company setup.");
+  }
 }
 
 export function formText(formData: FormData, name: string, options: { required?: boolean; max?: number } = {}) {
@@ -98,6 +114,7 @@ export function optionalMoneyMinor(value: string) {
 }
 
 export function opsApiError(error: unknown) {
+  if (error instanceof OperatorAccessError) return Response.json({ error: error.message, code: error.reason }, { status: error.reason === "sign_in" ? 401 : 403 });
   if (error instanceof OpsDomainError) {
     const status = error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404 : error.code === "CONFLICT" ? 409 : 422;
     return Response.json({ error: error.message, code: error.code }, { status });

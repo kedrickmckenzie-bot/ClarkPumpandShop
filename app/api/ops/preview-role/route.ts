@@ -1,3 +1,4 @@
+import { isFictionalPreview } from "@/lib/server/operator-access";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { setPreviewCookie } from "@/lib/server/preview-cookie";
 import {
@@ -30,6 +31,7 @@ function safeReturnPath(value: FormDataEntryValue | null): string {
 }
 
 export async function POST(request: Request) {
+  if (!isFictionalPreview()) return Response.json({ error: "Preview controls are unavailable in this workspace." }, { status: 403 });
   const formData = await request.formData();
   const requestedRole = formData.get("role");
   const returnTo = safeReturnPath(formData.get("returnTo"));

@@ -27,7 +27,7 @@ function optionalPositiveInteger(value: string) {
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], "create_work_order");
+    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], "create_work_order", request);
     const formData = await request.formData();
     const submissionKey = formText(formData, "submissionKey", { max: 120 }) || `work-order:${randomUUID()}`;
     const requestHash = createHash("sha256")

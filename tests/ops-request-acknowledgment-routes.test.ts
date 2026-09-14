@@ -76,7 +76,7 @@ describe("request acknowledgment routes", () => {
     const { repository } = await mocks.getOpsRequestContext.mock.results[0].value;
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`/app/requests/${serviceRequest.id}?updated=request-acknowledged`);
-    expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(["facilities", "regional", "store_manager"], "review_request");
+    expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(["facilities", "regional", "store_manager"], "review_request", expect.any(Request));
     expect(mocks.assertStoreInSessionScope).toHaveBeenCalledWith(session, serviceRequest.storeId);
     expect(mocks.acknowledgeServiceRequest).toHaveBeenCalledWith({ repository }, {
       organizationId: NORTHLINE_ORGANIZATION_ID, requestId: serviceRequest.id, expectedStatus: "submitted", actor,
@@ -123,7 +123,7 @@ describe("unlink boundary", () => {
     const fields = { expectedVersion: "2", expectedWorkOrderId: "wo-route", correctionReason: "Incorrect association" };
     const response = await unlink(post("/unlink", fields), { params: Promise.resolve({ id: serviceRequest.id }) });
     expect(response.status).toBe(303);
-    expect(mocks.getOpsRequestContext).toHaveBeenLastCalledWith(["facilities", "regional", "store_manager"], "review_request");
+    expect(mocks.getOpsRequestContext).toHaveBeenLastCalledWith(["facilities", "regional", "store_manager"], "review_request", expect.any(Request));
     expect(mocks.unlinkServiceRequestFromWorkOrder).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ expectedVersion: 2, expectedWorkOrderId: "wo-route", correctionReason: fields.correctionReason }));
     mocks.unlinkServiceRequestFromWorkOrder.mockClear();
     expect((await unlink(post("/unlink", { ...fields, correctionReason: "" }), { params: Promise.resolve({ id: serviceRequest.id }) })).status).toBe(422);

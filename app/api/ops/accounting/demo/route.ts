@@ -3,9 +3,11 @@ import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { importAccountingInvoice } from "@/lib/ops/accounting-import";
 import { accountingDemoDelivery } from "@/lib/ops/accounting-demo-adapter";
 import { OpsDomainError } from "@/lib/ops/commands";
+import { requirePreviewMode } from "@/lib/server/operator-access";
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["executive", "facilities", "finance"]);
+    requirePreviewMode();
+    const context = await getOpsRequestContext(["executive", "facilities", "finance"], undefined, request);
     const step = formText(await request.formData(), "step", { required: true, max: 30 });
     if (!["new", "replay", "uncertain", "correction", "payment", "void", "credit", "merchandise", "review-new", "review-reference", "review-amount", "review-unmapped"].includes(step)) throw new OpsDomainError("VALIDATION", "Choose a demonstration step");
     const result = await importAccountingInvoice({ repository: context.repository }, context.actor, accountingDemoDelivery(step));

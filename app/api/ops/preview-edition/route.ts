@@ -1,3 +1,4 @@
+import { isFictionalPreview } from "@/lib/server/operator-access";
 import { demoEditionAllowsPath, isDemoEdition } from "@/components/ops/demo-edition";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { setPreviewCookie } from "@/lib/server/preview-cookie";
@@ -23,6 +24,7 @@ function safeReturnPath(value: FormDataEntryValue | null): string {
 }
 
 export async function POST(request: Request) {
+  if (!isFictionalPreview()) return Response.json({ error: "Preview controls are unavailable in this workspace." }, { status: 403 });
   const formData = await request.formData();
   const requestedEdition = formData.get("edition");
   if (typeof requestedEdition !== "string" || !isDemoEdition(requestedEdition)) {

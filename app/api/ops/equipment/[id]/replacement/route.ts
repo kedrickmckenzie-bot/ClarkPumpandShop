@@ -27,7 +27,7 @@ function requiredDate(formData: FormData, field: string, label: string) {
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional"], undefined, request);
     const { id } = await params;
     const asset = await context.repository.getAsset(context.session.organizationId, id);
     if (!asset) throw new OpsDomainError("NOT_FOUND", "Equipment was not found.");

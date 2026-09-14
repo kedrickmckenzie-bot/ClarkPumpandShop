@@ -96,6 +96,7 @@ describe("work-order verification route", () => {
     expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(
       ["facilities", "regional", "store_manager"],
       "confirm_observable_result",
+      expect.any(Request),
     );
     expect(mocks.assertStoreInSessionScope).toHaveBeenCalledWith(currentSession, workOrder.storeId);
     expect(mocks.recordWorkOrderVerification).toHaveBeenCalledWith(

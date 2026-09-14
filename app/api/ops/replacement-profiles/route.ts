@@ -12,7 +12,7 @@ function success(request: Request, redirectTo: string) { return isOpsClientReque
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional"], undefined, request);
     const formData = await request.formData();
     const operation = formText(formData, "operation", { required: true, max: 30 });
     if (operation === "create-profile") {

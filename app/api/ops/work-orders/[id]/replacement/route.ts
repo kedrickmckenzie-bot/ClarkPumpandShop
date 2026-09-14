@@ -11,7 +11,7 @@ function success(request: Request, redirectTo: string) { return isOpsClientReque
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional"], undefined, request);
     const { id } = await params;
     const workOrder = await context.repository.getWorkOrder(context.session.organizationId, id);
     if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order was not found.");

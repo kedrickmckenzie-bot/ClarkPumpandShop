@@ -1,3 +1,4 @@
+import { opsApiError } from "@/lib/server/ops-request-context";
 import { loadTrendsExportModel } from "@/app/app/_data/operator-loader";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,7 @@ function csvCell(value: string) {
 }
 
 export async function GET(request: Request) {
+  try {
   const requestUrl = new URL(request.url);
   const query = Object.fromEntries(requestUrl.searchParams.entries());
   delete query.sourcePage;
@@ -62,4 +64,5 @@ export async function GET(request: Request) {
       "Content-Type": "text/csv; charset=utf-8",
     },
   });
+  } catch (error) { return opsApiError(error); }
 }

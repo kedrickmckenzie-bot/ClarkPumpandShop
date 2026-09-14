@@ -5,7 +5,7 @@ const ALLOWED_ROLES = ["executive", "facilities", "regional", "store_manager", "
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext([...ALLOWED_ROLES]);
+    const context = await getOpsRequestContext([...ALLOWED_ROLES], undefined, request);
     const formData = await request.formData();
     const operation = formText(formData, "operation", { max: 10 }) || "save";
     const surface = formText(formData, "surface", { required: true, max: 40 });

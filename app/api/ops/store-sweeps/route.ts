@@ -22,7 +22,7 @@ async function sha256(value: string) {
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional"], undefined, request);
     const formData = await request.formData();
     const storeId = formText(formData, "storeId", { required: true, max: 120 });
     const vendorId = formText(formData, "vendorId", { required: true, max: 120 });

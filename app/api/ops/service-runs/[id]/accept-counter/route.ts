@@ -5,7 +5,7 @@ import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await getOpsRequestContext(["executive", "facilities", "regional"]);
+    const context = await getOpsRequestContext(["executive", "facilities", "regional"], undefined, request, true);
     const { id } = await params;
     const run = await context.repository.getServiceRun(context.session.organizationId, id);
     if (!run) throw new OpsDomainError("NOT_FOUND", "Service Run was not found in your organization");

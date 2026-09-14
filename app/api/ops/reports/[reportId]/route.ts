@@ -1,3 +1,4 @@
+import { opsApiError } from "@/lib/server/ops-request-context";
 import { NextResponse } from "next/server";
 import { loadListModel, loadProgramModel } from "@/app/app/_data/operator-loader";
 import { reportCatalogEntry } from "@/lib/ops/report-catalog";
@@ -10,6 +11,7 @@ function csvCell(value: string) {
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ reportId: string }> }) {
+  try {
   const { reportId } = await params;
   const definition = reportCatalogEntry(reportId);
   if (!definition) return NextResponse.json({ error: "Report definition not found." }, { status: 404 });
@@ -49,4 +51,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
       "X-Exported-Record-Count": String(table.rows.length),
     },
   });
+  } catch (error) { return opsApiError(error); }
 }

@@ -5,7 +5,7 @@ import { reviewAccountingInvoice } from "@/lib/ops/accounting-import";
 const splitsSchema = z.array(z.object({ lineId: z.string().min(1).max(160), workOrderId: z.string().min(1).max(180), amount: z.string().regex(/^\d+(?:\.\d{1,2})?$/) })).max(800);
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["executive", "facilities", "finance"]);
+    const context = await getOpsRequestContext(["executive", "facilities", "finance"], undefined, request, true);
     const form = await request.formData();
     const sourceId = formText(form, "sourceId", { required: true, max: 180 });
     const splits = splitsSchema.parse(JSON.parse(formText(form, "splits", { required: true, max: 100000 }))).map((split) => ({ lineId: split.lineId, workOrderId: split.workOrderId, amountMinor: Math.round(Number(split.amount) * 100) }));

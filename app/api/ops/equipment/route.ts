@@ -19,7 +19,7 @@ function optionalWholeNumber(value: string, label: string) {
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"]);
+    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], undefined, request);
     const formData = await request.formData();
     const storeId = formText(formData, "storeId", { required: true, max: 120 });
     await assertStoreInSessionScope(context.session, storeId);

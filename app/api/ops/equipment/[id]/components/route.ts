@@ -14,7 +14,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"]);
+    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], undefined, request);
     const { id: assetId } = await params;
     const asset = await context.repository.getAsset(context.session.organizationId, assetId);
     if (!asset) throw new OpsDomainError("NOT_FOUND", "Equipment was not found in your organization.");

@@ -37,7 +37,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional"]);
+    const context = await getOpsRequestContext(["facilities", "regional"], undefined, request);
     const { id: itemId } = await params;
     const formData = await request.formData();
     const operation = formText(formData, "operation", { required: true, max: 30 });

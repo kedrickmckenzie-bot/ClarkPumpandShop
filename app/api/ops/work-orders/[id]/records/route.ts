@@ -22,7 +22,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional", "finance"]);
+    const context = await getOpsRequestContext(["facilities", "regional", "finance"], undefined, request);
     const { id: workOrderId } = await params;
     const workOrder = await context.repository.getWorkOrder(context.session.organizationId, workOrderId);
     if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order was not found in your organization.");

@@ -11,7 +11,7 @@ function wholeNumber(value: string, label: string) {
 
 export async function POST(request: Request) {
   try {
-    const context = await getOpsRequestContext(["executive", "facilities"]);
+    const context = await getOpsRequestContext(["executive", "facilities"], undefined, request, true);
     const formData = await request.formData();
     const equipmentTemplateIds = formData.getAll("equipmentTemplateId")
       .filter((value): value is string => typeof value === "string")

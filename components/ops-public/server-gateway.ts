@@ -19,6 +19,7 @@ import { vendorFacingScope } from "@/lib/ops/public-visibility";
 import { siteVisitOutcomeFromLegacy, siteVisitOutcomeRequiresFollowUp } from "@/lib/ops/site-visit-outcomes";
 import { heldWorkVendorEligibility } from "@/lib/ops/held-work-policy";
 import { getServerOpsRepositoryProxy } from "@/lib/server/ops-repository-provider";
+import { isFictionalPreview } from "@/lib/server/operator-access";
 import type { ActorContext, LocationObservation, ServiceRequest, SiteVisitWorkOrderOutcome, Store, VendorResponseKind, VisitChannel, VisitOutcome as OpsVisitOutcome, VisitSession } from "@/lib/ops/types";
 import type {
   ActiveVisitView as OpsActiveVisitView,
@@ -89,8 +90,8 @@ type PublicAccess =
       storeRecord: Store;
     };
 
-function runtime(): { repository: OpsRepository; mode: "demo" } {
-  return { repository: getServerOpsRepositoryProxy(), mode: "demo" };
+function runtime(): { repository: OpsRepository; mode: "demo" | "live" } {
+  return { repository: getServerOpsRepositoryProxy(), mode: isFictionalPreview() ? "demo" : "live" };
 }
 
 function now(): string {

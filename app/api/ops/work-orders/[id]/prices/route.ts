@@ -4,7 +4,7 @@ import { OpsDomainError } from "@/lib/ops/commands";
 import { getOpsRequestContext, assertStoreInSessionScope, formText, optionalMoneyMinor, opsApiError } from "@/lib/server/ops-request-context";
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}) {
   try {
-    const context = await getOpsRequestContext(["facilities","regional"]);
+    const context = await getOpsRequestContext(["facilities","regional"], undefined, request);
     const {id} = await params; const work = await context.repository.getWorkOrder(context.session.organizationId,id);
     if (!work) throw new OpsDomainError("NOT_FOUND","Work order not found.");
     await assertStoreInSessionScope(context.session,work.storeId);

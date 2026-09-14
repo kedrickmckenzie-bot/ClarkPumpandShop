@@ -220,6 +220,9 @@ export interface OpsRepository {
   getVendorReminder(organizationId: OpsId, reminderId: OpsId): Promise<import("./types").VendorReminder | null>;
   listVendorReminders(organizationId: OpsId, vendorId: OpsId): Promise<import("./types").VendorReminder[]>;
   getMembership(organizationId: OpsId, membershipId: OpsId): Promise<Membership | null>;
+  getUserInOrganization(organizationId: OpsId, userId: OpsId): Promise<import("./types").User | null>;
+  listMembershipsForUser(organizationId: OpsId, userId: OpsId): Promise<Membership[]>;
+  listStoreIdsForMembership(organizationId: OpsId, membershipId: OpsId): Promise<OpsId[]>;
   listScopeGrantsForMembership(organizationId: OpsId, membershipId: OpsId): Promise<ScopeGrant[]>;
   listRoleCapabilityOverrides(organizationId: OpsId): Promise<RoleCapabilityOverride[]>;
   upsertRoleCapabilityOverride(input: { organizationId: OpsId; id: OpsId; role: RoleCapabilityOverride["role"]; capability: ConfigurableMaintenanceCapability; enabled: boolean; updatedByMembershipId: OpsId; updatedByName: string; occurredAt: IsoDateTime }): Promise<void>;

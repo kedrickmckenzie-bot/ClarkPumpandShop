@@ -6,7 +6,8 @@ import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 
 export async function loadServiceRunWorkspace(serviceRunId?: string) {
-  const [fixture, session] = await Promise.all([getRequestOpsFixtureSnapshot(), loadOperatorSession()]);
+  const session = await loadOperatorSession();
+  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   if (!(["executive", "facilities", "regional", "finance"] as const).includes(session.role as "executive" | "facilities" | "regional" | "finance")) notFound();
   const organizationId = session.organizationId;
   const allowedStore = (storeId: string) => {

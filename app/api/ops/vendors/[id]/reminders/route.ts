@@ -5,7 +5,7 @@ import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await getOpsRequestContext(["facilities"]);
+    const context = await getOpsRequestContext(["facilities"], undefined, request, true);
     const { id: vendorId } = await params;
     const organizationId = context.session.organizationId;
     const [vendor, organization] = await Promise.all([

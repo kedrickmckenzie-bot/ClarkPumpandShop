@@ -73,7 +73,7 @@ describe("request impact review route", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`/app/requests/${serviceRequest.id}?updated=impact-review`);
-    expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(["facilities", "regional", "store_manager"]);
+    expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(["facilities", "regional", "store_manager"], undefined, expect.any(Request));
     expect(mocks.assertStoreInSessionScope).toHaveBeenCalledWith(session, serviceRequest.storeId);
     expect(mocks.reviewRequestImpactAssessment).toHaveBeenCalledWith({ repository }, {
       organizationId: NORTHLINE_ORGANIZATION_ID,

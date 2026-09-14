@@ -15,7 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], "issue_work_order");
+    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], "issue_work_order", request);
     const { id: workOrderId } = await params;
     const formData = await request.formData();
     const workOrder = await context.repository.getWorkOrder(context.session.organizationId, workOrderId);

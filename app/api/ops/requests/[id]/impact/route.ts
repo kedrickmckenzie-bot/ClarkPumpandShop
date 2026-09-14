@@ -17,7 +17,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"]);
+    const context = await getOpsRequestContext(["facilities", "regional", "store_manager"], undefined, request);
     const { id: requestId } = await params;
     const serviceRequest = await context.repository.getRequest(context.session.organizationId, requestId);
     if (!serviceRequest) throw new OpsDomainError("NOT_FOUND", "Service request was not found in your organization.");
