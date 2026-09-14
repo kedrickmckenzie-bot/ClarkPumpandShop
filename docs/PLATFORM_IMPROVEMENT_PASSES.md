@@ -5,7 +5,8 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 ## Checkpoint
 
 - Completed pass: **1 — role/scope and accountability correctness** (4 acceptance items).
-- Next pass: **2 — trustworthy metrics and drill-through**, ready to begin. **35 of 39 items remain**; no later pass is complete.
+- Next product pass: **2 — trustworthy metrics and drill-through**, ready to begin after the publication repair below. **36 of 40 items remain**; no later pass is complete.
+- Current exception: **P6-08 — populated D1 upgrade repair**, pulled forward because the first private publication failed. All original item IDs remain unchanged.
 - Completion means acceptance evidence is recorded below, not merely that code was edited.
 - Deployment and real-customer readiness are separate gates. Fictional preview controls are not production authentication.
 
@@ -66,6 +67,7 @@ The order groups shared data models, UI surfaces and validation to avoid repeate
 - [ ] P6-05 Run backup/restore, rollback and alert-routing drills with recorded outcomes. Prove agreed recovery targets (review references RPO ≤1 hour/RTO ≤4 hours) on actual infrastructure.
 - [ ] P6-06 Measure real-backend multi-user 65-store query latency, concurrency and failure recovery; fixture size and local development timings are not throughput proof.
 - [ ] P6-07 Prepare an exact validated hosted version and verify its access policy before publication. Record deployment status separately from local validation and production readiness.
+- [ ] P6-08 Repair the populated D1 migration failure discovered during Pass 1 publication. Preserve visit-work rows and their verification records under enforced foreign keys, verify an upgrade with existing data, and confirm the private publication succeeds without resetting the tenant.
 
 ## Pass 7 — acceptance, documentation and release decision
 
@@ -101,3 +103,9 @@ Final typecheck, lint and build passed; `test:e2e` passed **4 files / 52 tests**
 ### Next starting point — Pass 2
 
 Work together on `operator-presenter.ts` dashboard cohorts, `operator-query-presenter.ts` filter labels, loader query normalization and repository filter implementations. Pending requests need a combined submitted/under-review filter carried into query-first lists. Vendor-response stages must use the same source predicate across shared/store/regional/facilities dashboards and both list paths. Inspect all occurrences of onsite-vendor labels, including store summaries. Reconcile the lifecycle spotlight with the exact cost/history destination before changing its label. Add record-ID equality assertions across presentation and repository queries, not only URL/string assertions.
+
+### Publication repair — P6-08, in progress
+
+Private version 28 from commit `f076dc08cba4b43b81d49d71be7886ab8e8c151e` failed with `FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_FOREIGNKEY)`. Site: `appgprj_6a733d7dbb708191a9b80f3f9424582a`; version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_3e74728869f88191b5b0e5ff58bc6e80`; deployment: `appgdep_6aa8673ca87c8191b0b7edbd8c0c5a1e`. Recent worker logs contained no additional errors.
+
+The new populated migration regression reproduced that error at `0039_uneven_morph.sql`: existing work verifications reference the visit-work table being rebuilt. Empty-chain and work-order-only upgrade tests missed it. The repair preserves verification rows in a transaction-local staging table, rebuilds visit-work and its indexes, restores the original verification schema/indexes and all records, then removes staging. Foreign keys stay enabled. The populated regression now passes and checks record preservation and foreign-key integrity after each remaining migration. The populated migration tests, typecheck and lint passed after the repair. Application source is unchanged from the fully validated Pass 1 build; the deployment archive will be repackaged with the repaired migration. Another private publication is pending.
