@@ -146,4 +146,11 @@ Pass 3 should start with P3-01/P3-02 defaults and routing, then the work-record 
 
 All six required checks passed on the final application source: seed; typecheck; lint; **133 files / 905 tests** in the full suite (129.66 seconds); **4 files / 52 tests** in test:e2e (55.09 seconds); and production build. The Sites Node build wrapper failed to resolve npm on Windows before starting the application build; direct `npm run build` then completed successfully. The build reports duplicate emitted CSS filename warnings and static route-classification limitations; these did not fail the build.
 
-**P2-01 through P2-06 are complete. 11 of 40 items are complete; 29 remain.** Publication is being prepared from this validated source. The full browser submission matrix and final production-readiness gates remain open.
+**P2-01 through P2-06 are complete. 11 of 40 items are complete; 29 remain.** The full browser submission matrix and final production-readiness gates remain open.
+
+### Pass 2 publication — complete
+
+- Private version **30** published successfully at **2026-09-14 22:25:01 UTC**: https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site . Owner-only access was preserved.
+- Published source: `2f6cd3e0353ffd307930e4259b564fbe751f221e`. Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_a1bf4c83142c819185d7ff17acbd9451`. Deployment: `appgdep_6aa8742fe62c81918584881f47d78ff2`.
+- The Node packaging wrapper could not locate bash in the Windows environment. Running its unchanged packaging script through the installed Git Bash succeeded; archive validation confirmed the worker entrypoint, hosting manifest and migrations before saving. No application source changed after validation/publication.
+- This post-publication checkpoint is documentation only. Existing unrelated `dev4.log` was preserved. Resume with **Pass 3**, retaining the standing UX rule and all 29 remaining IDs.
