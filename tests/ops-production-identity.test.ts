@@ -15,6 +15,8 @@ import OwnerBriefPage from "@/app/app/brief/page";
 import ActionCenterPage from "@/app/app/action-center/page";
 import OccurrencePage from "@/app/app/pm/occurrences/[id]/page";
 import PreventiveMaintenancePage from "@/app/app/pm/page";
+import InvoiceRecordPage from "@/app/app/invoices/[id]/page";
+import { loadInvoiceRecord } from "@/app/app/_data/invoice-record-loader";
 import { loadProgramModel, loadPmProgramManagementModel } from "@/app/app/_data/operator-loader";
 import { loadPmOccurrenceRecord } from "@/app/app/_data/pm-record-loader";
 import { loadPmPlanScheduleSetupModel } from "@/app/app/_data/setup-loader";
@@ -40,6 +42,28 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("loads every invoice section without snapshots and denies store and role conflicts", async () => {
+    const data = fixture(); useFixture(data);
+    const id = "invoice-summit-107-pm-2026-q3";
+    for (const section of ["items", "matches", "evidence", "flags", "history"]) {
+      expect(await InvoiceRecordPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({ section }) })).toBeTruthy();
+    }
+    expect((await loadInvoiceRecord(id)).canDecide).toBe(false);
+    expect((await loadInvoiceRecord(id, { section: "invalid", page: "Infinity" })).section).toBe("items");
+    const membership = data.memberships.find(m => m.id === "membership-northline-facilities")!;
+    const grant = data.scopeGrants.find(g => g.membershipId === membership.id)!;
+    grant.scopeKind = "store"; grant.scopeId = "store-northline-104"; useFixture(data);
+    await expect(loadInvoiceRecord(id)).rejects.toThrow();
+    membership.role = "finance_reviewer"; grant.scopeId = "store-northline-107"; useFixture(data);
+    expect((await loadInvoiceRecord(id)).canDecide).toBe(false);
+    grant.scopeKind = "organization"; grant.scopeId = ORG; useFixture(data);
+    expect((await loadInvoiceRecord(id)).canDecide).toBe(true);
+    data.invoices.find(i => i.id === id)!.submittedByMembershipId = membership.id; useFixture(data);
+    expect((await loadInvoiceRecord(id)).canDecide).toBe(false);
+    membership.role = "store_manager"; useFixture(data);
+    await expect(loadInvoiceRecord(id)).rejects.toThrow();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
   it("keeps PM setup and invoice reviews scoped without snapshots", async () => {
     const data = fixture(); useFixture(data);
     const selected = data.stores.find(row => row.storeNumber === "104")!;

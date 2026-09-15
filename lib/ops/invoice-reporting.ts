@@ -34,7 +34,7 @@ export function invoiceReporting(fixture: InvoiceReportingSources, organizationI
       if (splits.reduce((sum, split) => sum + split.amount.amountMinor, 0) > line.lineAmount.amountMinor) continue;
       for (const split of splits) {
         confirmed += split.amount.amountMinor;
-        allocations.push({ ...split, invoiceId: invoice.id, invoiceNumber: invoice.vendorInvoiceNumber, invoiceDate: invoice.invoiceDate, vendorId: invoice.vendorId, gross: invoice.total, href: `/app/invoices/${invoice.id}#allocation-${split.id}` });
+        allocations.push({ ...split, invoiceId: invoice.id, invoiceNumber: invoice.vendorInvoiceNumber, invoiceDate: invoice.invoiceDate, vendorId: invoice.vendorId, gross: invoice.total, href: `/app/invoices/${invoice.id}?section=matches&match=${encodeURIComponent(split.id)}#allocation-${split.id}` });
       }
     }
     if (!reconciles || confirmed < invoice.total.amountMinor) pending.push({ id: invoice.id, invoiceDate: invoice.invoiceDate, vendorId: invoice.vendorId, amount: { amountMinor: Math.max(0, invoice.total.amountMinor - confirmed), currency: invoice.total.currency }, href: sources.has(invoice.id) ? `/app/invoices/accounting?source=${sources.get(invoice.id)!.source.id}` : `/app/invoices/${invoice.id}` });

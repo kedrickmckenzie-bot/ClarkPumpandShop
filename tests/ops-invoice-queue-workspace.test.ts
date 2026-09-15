@@ -1,7 +1,9 @@
+import { InvoiceRecordWorkspace } from "@/components/workspace/invoice-record-workspace";
+import { invoiceRecordFromFixture } from "@/lib/ops/invoice-record-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { InvoiceDetailWorkspace, InvoiceQueueWorkspace } from "@/components/ops/warranty-finance-workspace";
+import { InvoiceQueueWorkspace } from "@/components/ops/warranty-finance-workspace";
 import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
 
 describe("invoice review workspace", () => {
@@ -10,7 +12,7 @@ describe("invoice review workspace", () => {
     const invoice = fixture.invoices.find((row) => row.id === "invoice-summit-104-compressor")!;
     const allocation = fixture.invoiceLineAllocations.find((row) => row.siteVisitWorkOrderId && fixture.invoiceLines.some((line) => line.id === row.invoiceLineId && line.invoiceId === invoice.id))!;
     const outcome = fixture.siteVisitWorkOrders.find((row) => row.id === allocation.siteVisitWorkOrderId)!;
-    const markup = renderToStaticMarkup(createElement(InvoiceDetailWorkspace, { fixture, invoice, canDecide: false }));
+    const markup = renderToStaticMarkup(createElement(InvoiceRecordWorkspace, { result: invoiceRecordFromFixture(fixture, { organizationId: invoice.organizationId }, invoice.id, { section: "matches" }), section: "matches", scopeLabel: "Companywide", canDecide: false }));
     expect(markup).toContain(`href="/app/visits/${outcome.visitId}?section=work-orders"`);
     expect(markup).toContain(`href="/app/work-orders/${allocation.workOrderId}"`);
     expect(markup).toContain(`href="/app/stores/${allocation.storeId}"`);
@@ -61,6 +63,6 @@ it("links an invoice directly to the warranty cases for its allocated work", () 
   const work=new Set(fixture.invoiceLineAllocations.filter(row=>lines.has(row.invoiceLineId)).map(row=>row.workOrderId));
   const cases=fixture.warrantyCases.filter(row=>work.has(row.workOrderId));
   expect(cases.length).toBeGreaterThan(0);
-  const markup=renderToStaticMarkup(createElement(InvoiceDetailWorkspace,{fixture,invoice,canDecide:false}));
+  const markup=renderToStaticMarkup(createElement(InvoiceRecordWorkspace,{result:invoiceRecordFromFixture(fixture,{organizationId:invoice.organizationId},invoice.id,{section:"evidence"}),section:"evidence",scopeLabel:"Companywide",canDecide:false}));
   for(const item of cases) expect(markup).toContain(`/app/warranties/${item.id}#diagnosis`);
 });

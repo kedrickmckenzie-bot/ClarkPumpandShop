@@ -8,6 +8,19 @@ const financeActor={organizationId:NORTHLINE_ORGANIZATION_ID,actorType:"user" as
 function harness(){const fixture=buildNorthlinePresentationFixture();const repository=createOpsFixtureRepository(fixture);let sequence=0;const services:OpsCommandServices={repository,clock:{now:()=>"2026-08-20T15:00:00.000Z"},ids:{next:(prefix)=>`${prefix}-financial-test-${++sequence}`}};return{fixture,repository,services};}
 
 describe("directive financial safeguard decisions",()=>{
+  it("denies direct invoice decisions for store-only and empty finance grants", async () => {
+    for (const restricted of ["store", "empty"] as const) {
+      const fixture = buildNorthlinePresentationFixture();
+      const grants = fixture.scopeGrants.filter(g => g.membershipId === financeActor.actorId);
+      if (restricted === "empty") fixture.scopeGrants = fixture.scopeGrants.filter(g => g.membershipId !== financeActor.actorId);
+      else for (const grant of grants) {
+        grant.scopeKind = "store"; grant.scopeId = "store-northline-104";
+      }
+      const repository = createOpsFixtureRepository(fixture), before = repository.snapshot();
+      await expect(resolveInvoiceReview({ organizationId: NORTHLINE_ORGANIZATION_ID, invoiceId: "invoice-summit-104-compressor", exceptionId: "invoice-exception-104-authorization", actor: financeActor, decision: "waive_flag", reason: "Should be denied" }, { repository })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(repository.snapshot()).toEqual(before);
+    }
+  });
   it("receives a durable source invoice and turns a trip difference into a review flag only",async()=>{
     const test=harness();const result=await receiveInvoice({organizationId:NORTHLINE_ORGANIZATION_ID,invoiceId:"invoice-interactive-demo-test",vendorId:"vendor-northline-summit",contractVersionId:"contract-version-summit-refrigeration-v1",workOrderId:"wo-northline-104",vendorInvoiceNumber:"SUM-DEMO-NEW-1",invoiceDate:"2026-08-20",currency:"USD",lines:[{category:"labor",description:"Callback diagnosis",amount:{amountMinor:16_500,currency:"USD"}},{category:"travel",description:"Separate trip charge",amount:{amountMinor:20_000,currency:"USD"}}],supportingFile:{id:"file-invoice-demo-test",storageKey:"ops-private/v1/demo/invoice.pdf",sha256:"a".repeat(64),originalName:"invoice.pdf",contentType:"application/pdf",byteLength:1200},actor:financeActor},test.services);
     const snapshot=test.repository.snapshot();expect(result.flagCount).toBeGreaterThan(0);expect(result.paymentExecuted).toBe(false);expect(result.operationalResolutionChanged).toBe(false);

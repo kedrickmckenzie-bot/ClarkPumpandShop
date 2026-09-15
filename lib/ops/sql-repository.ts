@@ -475,6 +475,7 @@ class SqlOpsRepository implements OpsRepository {
   async listPmSchedule(scope: OrganizationScope, query: PmScheduleQuery) { return queryPmSchedule(this.driver, scope, query); }
   async listPmSetup(scope: OrganizationScope, query: import("./pm-setup-query").PmSetupQuery) { return (await import("./pm-setup-sql")).queryPmSetup(this.driver, scope, query); }
   async listPmReview(scope: OrganizationScope, query: import("./pm-review-query").PmReviewQuery) { return (await import("./pm-review-sql")).queryPmReview(this.driver, scope, query); }
+  async readInvoiceRecord(scope: OrganizationScope, invoiceId: string, query: import("./invoice-record-query").InvoiceRecordQuery) { return (await import("./invoice-record-sql")).queryInvoiceRecord(this.driver, scope, invoiceId, query); }
   async listPmAnalysis(scope: OrganizationScope, query: PmAnalysisQuery) { return queryPmAnalysis(this.driver, scope, query); }
   async listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query: PageRequest = {}) { return queryWorkVisitEvidence(this.driver, scope, workOrderId, query); }
   async listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return (await this.all("SELECT * FROM ops_pm_work_items WHERE organization_id = ? AND occurrence_id = ? ORDER BY asset_id, id", [organizationId, occurrenceId])).map(pmWorkItemFrom); }
