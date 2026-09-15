@@ -4,7 +4,7 @@ import { POST as amendWarrantyPost } from "@/app/api/ops/warranties/applied/[id]
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach,describe,expect,it,vi } from "vitest";
-import { InvoiceReceiveWorkspace } from "@/components/ops/invoice-receive-workspace";
+import { InvoiceIntakeForm } from "@/components/workspace/invoice-intake-form";
 import { WarrantyCaseWorkspace } from "@/components/ops/warranty-finance-workspace";
 import { WarrantyRuleCreateWorkspace } from "@/components/ops/warranty-rule-workspace";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
@@ -25,6 +25,18 @@ function context(role:"finance"|"facilities"){const fixture=buildNorthlinePresen
 
 describe("interactive warranty and invoice demo workspaces",()=>{
   beforeEach(()=>vi.clearAllMocks());
+  it("receives five invoice items and rejects an invalid item count before mutation", async () => {
+    const test = context("finance"), form = new FormData();
+    for (const [key, value] of Object.entries({ workOrderId: "wo-northline-104", vendorId: "vendor-northline-summit", vendorInvoiceNumber: "INTAKE-FIVE-ITEMS", invoiceDate: "2026-08-20", currency: "USD", lineCount: "5" })) form.set(key, value);
+    for (let i = 1; i <= 5; i++) { form.set(`line${i}Category`, "part"); form.set(`line${i}Description`, `Item ${i}`); form.set(`line${i}Amount`, "10.25"); }
+    expect((await receiveInvoicePost(new Request("https://ops.test/api/ops/invoices", { method: "POST", body: form }))).status).toBe(303);
+    const invoice = test.repository.snapshot().invoices.find(i => i.vendorInvoiceNumber === "INTAKE-FIVE-ITEMS")!;
+    expect(invoice.total).toEqual({ amountMinor: 5125, currency: "USD" });
+    expect(test.repository.snapshot().invoiceLines.filter(l => l.invoiceId === invoice.id)).toHaveLength(5);
+    const before = test.repository.snapshot(); form.set("lineCount", "101");
+    expect((await receiveInvoicePost(new Request("https://ops.test/api/ops/invoices", { method: "POST", body: form }))).status).toBe(422);
+    expect(test.repository.snapshot()).toEqual(before);
+  });
   it("records diagnosis and later releases the hold through audited decisions, rejecting an unspecified hold", async () => {
     const test = context("facilities");
     const item = test.fixture.warrantyCases[0];
@@ -70,7 +82,7 @@ describe("interactive warranty and invoice demo workspaces",()=>{
     const count=snapshot.warrantyAmendments.length;form.set("warrantyCaseId","wrong-case");expect((await post()).status).toBe(404);expect(test.repository.snapshot().warrantyAmendments.length).toBe(count);
   });
 
-  it("renders source-intake, evidence review, flag-only language, and durable action targets",()=>{const fixture=buildNorthlinePresentationFixture();const invoice=fixture.invoices.find((item)=>item.id==="invoice-summit-104-compressor")!;const warrantyCase=fixture.warrantyCases.find((item)=>item.id==="warranty-case-104-compressor-callback")!;const markup=[renderToStaticMarkup(createElement(InvoiceReceiveWorkspace,{fixture})),renderToStaticMarkup(createElement(InvoiceRecordWorkspace,{result:invoiceRecordFromFixture(fixture,{organizationId:invoice.organizationId},invoice.id,{section:"history"}),section:"history",scopeLabel:"Companywide",canDecide:true})),renderToStaticMarkup(createElement(WarrantyCaseWorkspace,{fixture,warrantyCase,canManage:true})),renderToStaticMarkup(createElement(WarrantyRuleCreateWorkspace,{fixture}))].join("\n");expect(markup).toContain('action="/api/ops/invoices"');expect(markup).toContain("Checks may flag a difference");expect(markup).toContain("This app does not send payments");expect(markup).toContain(`/api/ops/warranties/${warrantyCase.id}/decision`);expect(markup).toContain("Existing repair warranties stay unchanged.");expect(markup).toContain('action="/api/ops/warranties/rules"');});
+  it("renders source-intake, evidence review, flag-only language, and durable action targets",()=>{const fixture=buildNorthlinePresentationFixture();const invoice=fixture.invoices.find((item)=>item.id==="invoice-summit-104-compressor")!;const warrantyCase=fixture.warrantyCases.find((item)=>item.id==="warranty-case-104-compressor-callback")!;const markup=[renderToStaticMarkup(createElement(InvoiceIntakeForm,{workOrderId:"wo-northline-104",vendorId:invoice.vendorId})),renderToStaticMarkup(createElement(InvoiceRecordWorkspace,{result:invoiceRecordFromFixture(fixture,{organizationId:invoice.organizationId},invoice.id,{section:"history"}),section:"history",scopeLabel:"Companywide",canDecide:true})),renderToStaticMarkup(createElement(WarrantyCaseWorkspace,{fixture,warrantyCase,canManage:true})),renderToStaticMarkup(createElement(WarrantyRuleCreateWorkspace,{fixture}))].join("\n");expect(markup).toContain('action="/api/ops/invoices"');expect(markup).toContain("Matching work does not approve or send payment");expect(markup).toContain("This app does not send payments");expect(markup).toContain(`/api/ops/warranties/${warrantyCase.id}/decision`);expect(markup).toContain("Existing repair warranties stay unchanged.");expect(markup).toContain('action="/api/ops/warranties/rules"');});
 
   it("receives an entered invoice through the authorized route and persists its review flag",async()=>{const test=context("finance");const form=new FormData();form.set("workOrderId","wo-northline-104");form.set("vendorId","vendor-northline-summit");form.set("contractVersionId","contract-version-summit-refrigeration-v1");form.set("vendorInvoiceNumber","SUM-ROUTE-DEMO-1");form.set("invoiceDate","2026-08-20");form.set("currency","USD");form.set("line1Category","travel");form.set("line1Description","Separate trip charge for review");form.set("line1Amount","200.00");const response=await receiveInvoicePost(new Request("https://ops.test/api/ops/invoices",{method:"POST",body:form}));expect(response.status).toBe(303);const invoice=test.repository.snapshot().invoices.find((item)=>item.vendorInvoiceNumber==="SUM-ROUTE-DEMO-1")!;expect(invoice).toMatchObject({approvedForPayment:{amountMinor:0,currency:"USD"},paidAmount:{amountMinor:0,currency:"USD"}});expect(test.repository.snapshot().invoiceExceptions.some((item)=>item.invoiceId===invoice.id&&item.status==="open")).toBe(true);expect(test.repository.snapshot().invoiceAdjustments.some((item)=>item.invoiceId===invoice.id)).toBe(false);});
 

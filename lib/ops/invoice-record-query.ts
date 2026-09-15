@@ -1,3 +1,4 @@
+import { invoiceLinkFacts } from "./invoice-linking";
 import type { OrganizationScope } from "./repository";
 import type { Money, OpsFixture, PageRequest } from "./types";
 import { dashboardPageBounds } from "./dashboard-query";
@@ -38,12 +39,7 @@ export function invoiceRecordFromFixture(fixture: OpsFixture, scope: Organizatio
   const agreement = fixture.contractVersions.find(c => c.organizationId === organizationId && c.vendorId === invoice.vendorId && c.id === invoice.contractVersionId);
   const flags = fixture.invoiceExceptions.filter(e => e.organizationId === organizationId && e.invoiceId === invoice.id);
   const relevantSources = (fixture.accountingInvoiceSources ?? []).filter(s => s.organizationId === organizationId && s.invoiceId === invoice.id);
-  // Invalid imported JSON remains unavailable rather than crashing invoice review.
-  const safeSources = relevantSources.flatMap(source => { try { const payload = JSON.parse(source.payloadJson); return payload?.delivery && typeof payload.delivery === "object" ? [{ source, payload }] : []; } catch { return []; } });
-  const excluded = invoice.status === "void" || safeSources.some(s => s.payload.delivery.kind === "bill" && s.payload.delivery.maintenance === false);
-  const reconciles = lines.every(l => l.lineAmount.currency === invoice.total.currency) && lines.reduce((sum, l) => sum + l.lineAmount.amountMinor, 0) === invoice.total.amountMinor;
-  const eligible = allocations.filter(a => a.confirmedAt && a.amount.amountMinor > 0 && a.amount.currency === invoice.total.currency);
-  const supported = excluded || !reconciles ? [] : eligible.filter(a => eligible.filter(x => x.invoiceLineId === a.invoiceLineId).reduce((sum, x) => sum + x.amount.amountMinor, 0) <= lines.find(l => l.id === a.invoiceLineId)!.lineAmount.amountMinor);
+  const { excluded, reconciles, supported } = invoiceLinkFacts(fixture, invoice);
   const linkedMinor = supported.reduce((sum, a) => sum + a.amount.amountMinor, 0), pending = !excluded && (!reconciles || linkedMinor < invoice.total.amountMinor);
   const groups: Record<InvoiceRecordSection, InvoiceRecordRow[]> = {
     items: lines.map(l => { const count = allocations.filter(a => a.invoiceLineId === l.id).length; return { id: l.id, kind: "item", label: l.description, detail: l.category, status: `${count} ${count === 1 ? "match" : "matches"}`, date: instant(l.createdAt), amount: l.lineAmount, lineId: l.id, lineNumber: l.lineNumber }; }),

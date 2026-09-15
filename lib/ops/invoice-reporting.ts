@@ -1,4 +1,5 @@
 import type { OpsFixture, Money } from "./types";
+import { invoiceLinkFacts } from "./invoice-linking";
 
 export interface InvoiceReportingAllocation {
   id: string; invoiceId: string; invoiceLineId?: string; workOrderId: string;
@@ -17,26 +18,24 @@ export function invoiceReporting(fixture: InvoiceReportingSources, organizationI
   const invoices = fixture.invoices.filter((row) => row.organizationId === organizationId);
   const canonicalIds = new Set(invoices.map((row) => row.id));
   const sources = new Map((fixture.accountingInvoiceSources ?? []).filter((row) => row.organizationId === organizationId && row.invoiceId).flatMap((row) => {
-    const payload = JSON.parse(row.payloadJson) as { delivery: { kind: string; maintenance: boolean } };
-    return payload.delivery.kind === "bill" ? [[row.invoiceId!, { source: row, maintenance: payload.delivery.maintenance }] as const] : [];
+    try {
+      const payload = JSON.parse(row.payloadJson);
+      return payload?.delivery?.kind === "bill" ? [[row.invoiceId!, { source: row }] as const] : [];
+    } catch { return []; }
   }));
   const byInvoice = new Map<string, OpsFixture["invoiceLines"]>();
   for (const line of fixture.invoiceLines.filter((row) => row.organizationId === organizationId)) byInvoice.set(line.invoiceId, [...(byInvoice.get(line.invoiceId) ?? []), line]);
   const byLine = new Map<string, OpsFixture["invoiceLineAllocations"]>();
   for (const split of fixture.invoiceLineAllocations.filter((row) => row.organizationId === organizationId)) byLine.set(split.invoiceLineId, [...(byLine.get(split.invoiceLineId) ?? []), split]);
   for (const invoice of invoices) {
-    if (invoice.status === "void" || sources.get(invoice.id)?.maintenance === false) continue;
     const lines = byInvoice.get(invoice.id) ?? [];
+    const { excluded, reconciles, supported } = invoiceLinkFacts({ invoiceLines: lines, invoiceLineAllocations: lines.flatMap(line => byLine.get(line.id) ?? []), accountingInvoiceSources: fixture.accountingInvoiceSources }, invoice);
+    if (excluded) continue;
     let confirmed = 0;
-    const reconciles = lines.every((line) => line.lineAmount.currency === invoice.total.currency) && lines.reduce((sum, line) => sum + line.lineAmount.amountMinor, 0) === invoice.total.amountMinor;
-    if (reconciles) for (const line of lines) {
-      const splits = (byLine.get(line.id) ?? []).filter((split) => split.confirmedAt && split.amount.amountMinor > 0 && split.amount.currency === invoice.total.currency);
-      if (splits.reduce((sum, split) => sum + split.amount.amountMinor, 0) > line.lineAmount.amountMinor) continue;
-      for (const split of splits) {
+      for (const split of supported) {
         confirmed += split.amount.amountMinor;
         allocations.push({ ...split, invoiceId: invoice.id, invoiceNumber: invoice.vendorInvoiceNumber, invoiceDate: invoice.invoiceDate, vendorId: invoice.vendorId, gross: invoice.total, href: `/app/invoices/${invoice.id}?section=matches&match=${encodeURIComponent(split.id)}#allocation-${split.id}` });
       }
-    }
     if (!reconciles || confirmed < invoice.total.amountMinor) pending.push({ id: invoice.id, invoiceDate: invoice.invoiceDate, vendorId: invoice.vendorId, amount: { amountMinor: Math.max(0, invoice.total.amountMinor - confirmed), currency: invoice.total.currency }, href: sources.has(invoice.id) ? `/app/invoices/accounting?source=${sources.get(invoice.id)!.source.id}` : `/app/invoices/${invoice.id}` });
   }
   for (const invoice of fixture.invoiceReferences.filter((row) => row.organizationId === organizationId && !canonicalIds.has(row.id))) {

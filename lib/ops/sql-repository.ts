@@ -476,6 +476,8 @@ class SqlOpsRepository implements OpsRepository {
   async listPmSetup(scope: OrganizationScope, query: import("./pm-setup-query").PmSetupQuery) { return (await import("./pm-setup-sql")).queryPmSetup(this.driver, scope, query); }
   async listPmReview(scope: OrganizationScope, query: import("./pm-review-query").PmReviewQuery) { return (await import("./pm-review-sql")).queryPmReview(this.driver, scope, query); }
   async readInvoiceRecord(scope: OrganizationScope, invoiceId: string, query: import("./invoice-record-query").InvoiceRecordQuery) { return (await import("./invoice-record-sql")).queryInvoiceRecord(this.driver, scope, invoiceId, query); }
+  async readInvoiceIntakeChecks(organizationId: OpsId, workId: OpsId, vendorId: OpsId, number: string) { return (await import("./invoice-intake-sql")).queryInvoiceIntakeChecks(this.driver, organizationId, workId, vendorId, number); }
+  async listInvoiceIntakeOptions(scope: OrganizationScope, query: import("./invoice-intake-query").InvoiceIntakeQuery) { return (await import("./invoice-intake-sql")).queryInvoiceIntake(this.driver, scope, query); }
   async listInvoiceQueue(scope: OrganizationScope, query: import("./invoice-queue-query").InvoiceQueueQuery) { return (await import("./invoice-queue-sql")).queryInvoiceQueue(this.driver, scope, query); }
   async listPmAnalysis(scope: OrganizationScope, query: PmAnalysisQuery) { return queryPmAnalysis(this.driver, scope, query); }
   async listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query: PageRequest = {}) { return queryWorkVisitEvidence(this.driver, scope, workOrderId, query); }

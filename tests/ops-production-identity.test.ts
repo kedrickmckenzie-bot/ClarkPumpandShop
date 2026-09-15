@@ -42,6 +42,20 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("loads invoice intake without snapshots and rejects scoped or read-only callers", async () => {
+    const data = fixture(); useFixture(data);
+    const { loadInvoiceIntake } = await import("@/app/app/_data/invoice-intake-loader");
+    expect((await loadInvoiceIntake()).options?.items.length).toBe(25);
+    expect((await loadInvoiceIntake({ work: "wo-northline-104" })).work?.number).toBe("CPS-2026-0104");
+    await expect(loadInvoiceIntake({ work: "missing" })).rejects.toThrow();
+    await expect(loadInvoiceIntake({ work: "wo-northline-104", vendor: "missing" })).rejects.toThrow();
+    const grant = data.scopeGrants.find(g => g.membershipId === "membership-northline-facilities")!;
+    grant.scopeKind = "store"; grant.scopeId = "store-northline-104"; useFixture(data);
+    await expect(loadInvoiceIntake()).rejects.toThrow();
+    grant.scopeKind = "organization"; grant.scopeId = ORG; grant.permission = "ops:read"; useFixture(data);
+    await expect(loadInvoiceIntake()).rejects.toThrow();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
   it("loads invoice queue and exact flag sources without snapshots", async () => {
     const data = fixture(); useFixture(data);
     const { default: InvoiceQueuePage } = await import("@/app/app/invoices/page");

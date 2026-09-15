@@ -176,3 +176,8 @@ The ordinary invoice queue now calls `listInvoiceQueue`, with native all/review/
 An initial correlated allocation-scope check caused the isolated embedded PostgreSQL regression to time out (185.71 seconds total). Grouping allocation scope once per invoice reduced the unchanged regression to 43.90 seconds and passed; the timeout was not caused by an external Render database. SQLite density traversal and scope/currency tests also pass. Final suite/build/browser/publication results belong in the pass log.
 
 Next complete journey: invoice intake and its bounded work/vendor/agreement choices, then the filtered Trends invoice evidence branch still present in `app/app/invoices/page.tsx`. Confirm PM review raw allocations versus confirmed linked reporting before treating those totals as the same basis. Warranty, remaining records/actions, lifecycle and Trends still keep P4-02/P5-02/P5-03 open.
+
+
+## Invoice intake and PM linked basis — September 15, 2026
+
+`/app/invoices/new` now uses `loadInvoiceIntake`, native `listInvoiceIntakeOptions` and exact organization-bound record reads. `receiveInvoice` uses `readInvoiceIntakeChecks` for bounded duplicate/prior-invoice/warranty checks. The former invoice receive snapshot renderer is removed. PM review linked amounts now require the same canonical supported allocation rules as exact invoice detail and fixture reporting; unsupported invoices stay in the visible evidence cohort with zero linked amount. The filtered invoice route still calls `getRequestOpsTrendsFixtureSnapshot`; migration and full cross-feature acceptance remain pending. This is partial progress toward P4-02/P5-02/P5-03, not acceptance of those items.

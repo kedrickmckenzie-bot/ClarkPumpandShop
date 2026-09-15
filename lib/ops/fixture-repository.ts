@@ -558,6 +558,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listPmSetup(scope: OrganizationScope, query: import("./pm-setup-query").PmSetupQuery) { return (await import("./pm-setup-query")).pmSetupFromFixture(this.fixture, scope, query); }
   async listPmReview(scope: OrganizationScope, query: import("./pm-review-query").PmReviewQuery) { return (await import("./pm-review-query")).pmReviewFromFixture(this.fixture, scope, query); }
   async readInvoiceRecord(scope: OrganizationScope, invoiceId: string, query: import("./invoice-record-query").InvoiceRecordQuery) { return (await import("./invoice-record-query")).invoiceRecordFromFixture(this.fixture, scope, invoiceId, query); }
+  async readInvoiceIntakeChecks(organizationId: OpsId, workId: OpsId, vendorId: OpsId, number: string) { return (await import("./invoice-intake-query")).invoiceIntakeChecksFromFixture(this.fixture, organizationId, workId, vendorId, number); }
+  async listInvoiceIntakeOptions(scope: OrganizationScope, query: import("./invoice-intake-query").InvoiceIntakeQuery) { return (await import("./invoice-intake-query")).invoiceIntakeFromFixture(this.fixture, scope, query); }
   async listInvoiceQueue(scope: OrganizationScope, query: import("./invoice-queue-query").InvoiceQueueQuery) { return (await import("./invoice-queue-query")).invoiceQueueFromFixture(this.fixture, scope, query); }
   async listPmAnalysis(scope: OrganizationScope, query: PmAnalysisQuery) { return pmAnalysisFromFixture(this.fixture, scope, query); }
   async listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query: PageRequest = {}) { return workVisitEvidenceFromFixture(this.fixture, scope, workOrderId, query); }

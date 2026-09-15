@@ -1,3 +1,4 @@
+import { invoiceLinkFacts } from "./invoice-linking";
 import type { OrganizationScope } from "./repository";
 import type { OpsFixture, PageRequest } from "./types";
 import { dashboardPageBounds } from "./dashboard-query";
@@ -47,7 +48,8 @@ export function pmReviewFromFixture(fixture:OpsFixture,scope:OrganizationScope,q
       const allocations=fixture.invoiceLineAllocations.filter(a=>a.organizationId===scope.organizationId&&lineIds.has(a.invoiceLineId));
       if(!allocations.length||allocations.some(a=>a.storeId!==parent.storeId||work.get(a.workOrderId)?.storeId!==parent.storeId)){unavailableLinks++;return [];}
       const linked=allocations.filter(a=>eligibleWork.has(a.workOrderId));if(!linked.length){unavailableLinks++;return [];}
-      return [{invoice,allocations:linked}];
+      const supported=new Set(invoiceLinkFacts(fixture,invoice).supported.map(a=>a.id));
+      return [{invoice,allocations:linked.map(a=>({...a,amount:{currency:invoice.total.currency,amountMinor:supported.has(a.id)?a.amount.amountMinor:0}}))}];
     });
     const linkedWork=new Set(invoices.flatMap(i=>i.allocations.map(a=>a.workOrderId)));
     const flagged=missingRefs.flatMap(id=>{const o=programOccurrences.find(o=>o.id===id);if(!o){unavailableLinks++;return [];}return [o];});

@@ -78,7 +78,24 @@ it("keeps damaged references partial, currencies separate and current cross-chan
     expect(initial).toMatchObject({ invoiceCount: 4, occurrenceCount: 4, visitCount: 2, missingCount: 2, unavailableLinks: 4, amountMinor: 170000, missingAmountMinor: 85000 });
     const line = fixture.invoiceLines.find(l => l.invoiceId === facts.billedInvoiceIds[0])!;
     const allocation = fixture.invoiceLineAllocations.find(a => a.invoiceLineId === line.id)!;
+    const confirmedAt = allocation.confirmedAt;
+    allocation.confirmedAt = undefined; db.prepare("UPDATE ops_invoice_line_allocations SET confirmed_at=NULL WHERE id=?").run(allocation.id);
+    const unconfirmed = await check({ kind: "invoices", review: review.id, limit: 25 });
+    expect(unconfirmed.parent?.amountMinor).toBe(127500);
+    expect(unconfirmed.parent?.invoiceCount).toBe(4);
+    expect(unconfirmed.sources.find(r => r.id === line.invoiceId)?.amountMinor).toBe(0);
+    allocation.confirmedAt = confirmedAt; db.prepare("UPDATE ops_invoice_line_allocations SET confirmed_at=? WHERE id=?").run(confirmedAt!, allocation.id);
+    const invoice = fixture.invoices.find(i => i.id === line.invoiceId)!;
+    const originalTotal = invoice.total.amountMinor;
+    invoice.total = { ...invoice.total, amountMinor: originalTotal + 1 }; db.prepare("UPDATE ops_invoices SET total_minor=? WHERE id=?").run(originalTotal + 1, invoice.id);
+    expect((await check({ kind: "invoices", review: review.id })).sources.find(r => r.id === invoice.id)?.amountMinor).toBe(0);
+    invoice.total = { ...invoice.total, amountMinor: originalTotal }; db.prepare("UPDATE ops_invoices SET total_minor=? WHERE id=?").run(originalTotal, invoice.id);
     allocation.amount.currency = "CAD"; db.prepare("UPDATE ops_invoice_line_allocations SET currency='CAD' WHERE id=?").run(allocation.id);
+    expect((await check({ kind: "invoices", review: review.id })).parent?.amountMinor).toBe(127500);
+    // A different allocation currency is invalid; a complete CAD invoice is a separate valid basis.
+    invoice.total = { ...invoice.total, currency: "CAD" }; line.lineAmount = { ...line.lineAmount, currency: "CAD" };
+    db.prepare("UPDATE ops_invoices SET currency='CAD' WHERE id=?").run(invoice.id);
+    db.prepare("UPDATE ops_invoice_lines SET currency='CAD' WHERE id=?").run(line.id);
     const mixed = await check({ kind: "invoices", review: review.id, limit: 25 });
     expect(mixed.parent?.amountMinor).toBeUndefined(); expect(mixed.parent?.currency).toBeUndefined();
     expect(new Set(mixed.sources.map(r => r.currency))).toEqual(new Set(["USD", "CAD"]));

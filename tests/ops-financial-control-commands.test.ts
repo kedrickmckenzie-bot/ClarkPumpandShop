@@ -19,6 +19,8 @@ describe("directive financial safeguard decisions",()=>{
       const repository = createOpsFixtureRepository(fixture), before = repository.snapshot();
       await expect(resolveInvoiceReview({ organizationId: NORTHLINE_ORGANIZATION_ID, invoiceId: "invoice-summit-104-compressor", exceptionId: "invoice-exception-104-authorization", actor: financeActor, decision: "waive_flag", reason: "Should be denied" }, { repository })).rejects.toMatchObject({ code: "FORBIDDEN" });
       expect(repository.snapshot()).toEqual(before);
+      await expect(receiveInvoice({ organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: "wo-northline-104", vendorId: "vendor-northline-summit", vendorInvoiceNumber: "DENIED", invoiceDate: "2026-08-20", currency: "USD", lines: [{ category: "labor", description: "Denied intake", amount: { amountMinor: 100, currency: "USD" } }], actor: financeActor }, { repository })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(repository.snapshot()).toEqual(before);
     }
   });
   it("receives a durable source invoice and turns a trip difference into a review flag only",async()=>{
@@ -36,6 +38,8 @@ describe("directive financial safeguard decisions",()=>{
   it("flags a second invoice allocated to the same exact work order without relying on amount similarity",async()=>{
     const test=harness();
     const prior=test.repository.snapshot().invoices.find((row)=>row.id==="invoice-summit-104-compressor")!;
+    test.repository.listInvoices = async () => { throw new Error("Intake must not scan every invoice"); };
+    test.repository.listWarrantyCases = async () => { throw new Error("Intake must not scan every warranty case"); };
     const result=await receiveInvoice({organizationId:NORTHLINE_ORGANIZATION_ID,vendorId:prior.vendorId,workOrderId:"wo-northline-104",vendorInvoiceNumber:"SUM-ALT-NUMBER-9",invoiceDate:"2026-08-20",currency:"USD",lines:[{category:"labor",description:"Separate callback diagnosis",amount:{amountMinor:16_500,currency:"USD"}}],actor:financeActor},test.services);
     const snapshot=test.repository.snapshot();
     expect(snapshot.invoiceExceptions.some((item)=>item.invoiceId===result.invoiceId&&item.kind==="duplicate_invoice"&&item.status==="open")).toBe(true);
