@@ -396,3 +396,11 @@ Validation: seed passes with 15 stores, five vendors, two internal technicians, 
 Portable Sites helpers were attempted: configuration returns portable/configured false; native build cannot locate its npm wrapper; native packaging cannot start. The standard npm build and documented Git Bash packaging fallback succeed. Validated the deployment archive contains only dist output, the Worker entry, manifest, client assets and bundled migrations. Current private publication remains version 42 until the following publication checkpoint.
 
 **24/40 remain complete, 16 open.** Next: replace PM program/schedule aggregates and exact enrollment/reconciliation/reactive-analysis source queries; repair global ordering and scope/filter preservation. P5-02/P5-03 and P4-02 remain open. Continue other inventory groups and passes 6–7 afterward. Preserve the completed overview/brief/queue/PM-record boundaries. Unrelated dev4.log is untouched.
+
+### Pass 5 — PM record publication checkpoint
+
+Private Site **version 43** succeeded at **2026-09-15 04:19:50 UTC**, with environment revision 1 and the existing DB/FILES bindings. Source commit: `51fdafd64c0478c9b075724038585d3c230b46e1`, pushed to the registered Sites main branch before saving. Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_51c0d5b1d37881918e87f80d726bf133`. Deployment: `appgdep_6aa8c75841a081919fef37bbbf92d964`. Production URL: https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site . Access remains custom owner-only: one allowed user, zero groups; no audience or environment changes.
+
+The final archive was rebuilt/repackaged after whitespace cleanup, then validated at 701 tar entries / 678 saved files. Native terminal deployment success is the publication evidence; no production HTTP/browser probe was used. The local development server stays running and the continued browser tab is at companywide PM with maintenance/facilities access and normal viewport sizing. The exact work and visit links both opened matching Store 106 records. Unrelated dev4.log remains untouched.
+
+The goal remains active: **24/40 complete**. Continue the main PM program/schedule migration in the query inventory, then the remaining record/lifecycle/import/operational and acceptance gates. This checkpoint records documentation only after the published implementation.
