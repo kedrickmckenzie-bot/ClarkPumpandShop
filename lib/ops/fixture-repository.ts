@@ -1,4 +1,5 @@
 import { attentionFromFixture } from "./attention-query";
+import { workVisitEvidenceFromFixture } from "./pm-record-query";
 import { attentionSourcesFromFixture } from "./attention-sources";
 import { matchesRequestStatus, matchesWorkStage } from "./dashboard-cohorts";
 import { dashboardActivityFromFixture, dashboardBreakdownFromFixture } from "./dashboard-query";
@@ -551,6 +552,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listAssetsForEquipmentTemplates(organizationId: OpsId, equipmentTemplateIds: OpsId[]) { const allowed = new Set(equipmentTemplateIds); return clone(this.fixture.assets.filter((row) => row.organizationId === organizationId && row.equipmentTemplateId && allowed.has(row.equipmentTemplateId) && row.status !== "retired").sort((a, b) => a.storeId.localeCompare(b.storeId) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))); }
   async getPmPlan(organizationId: OpsId, planId: OpsId) { return clone(this.fixture.pmPlans.find((row) => row.organizationId === organizationId && row.id === planId) ?? null); }
   async getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return clone(this.fixture.pmOccurrences.find((row) => row.organizationId === organizationId && row.id === occurrenceId) ?? null); }
+  async listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query: PageRequest = {}) { return workVisitEvidenceFromFixture(this.fixture, scope, workOrderId, query); }
   async listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return clone(this.fixture.pmWorkItems.filter((row) => row.organizationId === organizationId && row.occurrenceId === occurrenceId)); }
   async listVendorQualifications(organizationId: OpsId, vendorId: OpsId) { return clone(this.fixture.vendorQualifications.filter((row) => row.organizationId === organizationId && row.vendorId === vendorId)); }
   async listVendorComplianceDocuments(organizationId: OpsId, vendorId: OpsId) { return clone(this.fixture.vendorComplianceDocuments.filter((row) => row.organizationId === organizationId && row.vendorId === vendorId)); }

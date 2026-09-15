@@ -1,33 +1,62 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { loadOperatorSession } from "@/app/app/_data/operator-loader";
-import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
-import { roleCan, roleCanAccessProgramRoute } from "@/components/ops/role-policy";
-import { effectivePmStatus } from "@/lib/ops/pm-occurrence-state";
+import { loadPmOccurrenceRecord } from "@/app/app/_data/pm-record-loader";
 import { formatOperationsDateTime } from "@/lib/ops/local-time";
-import styles from "@/components/ops/warranty-finance-workspace.module.css";
+import styles from "@/components/workspace/pm-record.module.css";
 
-export default async function OccurrencePage({params,searchParams}: {params:Promise<{id:string}>;searchParams:Promise<{returnTo?:string}>}) {
-  const {id}=await params, query=await searchParams, session=await loadOperatorSession();
-  if(!roleCanAccessProgramRoute(session.role,"pm"))notFound();
-  const fixture=await getRequestOpsFixtureSnapshot(session.organizationId);
-  const occurrence=fixture.pmOccurrences.find(row=>row.organizationId===session.organizationId && row.id===id);
-  const store=fixture.stores.find(row=>row.organizationId===session.organizationId && row.id===occurrence?.storeId);
-  if(!occurrence || !store || session.storeIds!==undefined&&!session.storeIds.includes(store.id) || session.regionIds!==undefined&&!session.regionIds.includes(store.regionId??""))notFound();
-  const plan=fixture.pmPlans.find(row=>row.organizationId===session.organizationId && row.id===occurrence.planId);
-  const asset=fixture.assets.find(row=>row.organizationId===session.organizationId && row.storeId===store.id && row.id===occurrence.assetId);
-  const work=fixture.workOrders.find(row=>row.organizationId===session.organizationId && row.storeId===store.id && row.id===occurrence.workOrderId);
-  const status=effectivePmStatus(occurrence,fixture.asOf);
-  const links=fixture.siteVisitWorkOrders.filter(row=>row.organizationId===session.organizationId && row.workOrderId===work?.id);
-  const visits=fixture.visits.filter(row=>row.organizationId===session.organizationId && row.storeId===store.id && links.some(link=>link.visitId===row.id));
-  const fromBrief=query.returnTo?.startsWith("/app/brief/records?");
-  const back=fromBrief || query.returnTo?.startsWith("/app/pm?") ? query.returnTo! : "/app/pm";
-  const date=(value:string)=>formatOperationsDateTime(value,store.timeZone);
+export default async function OccurrencePage({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string; visitPage?: string }>;
+}) {
+  const { id } = await params, query = await searchParams;
+  const { occurrence, store, storeLabel, plan, asset, work, status, visits, page, canAdjustPlan, canCreateWork } = await loadPmOccurrenceRecord(id, query.visitPage);
+  const fromBrief = query.returnTo?.startsWith("/app/brief/records?");
+  const back = fromBrief || query.returnTo?.startsWith("/app/pm?") ? query.returnTo! : "/app/pm";
+  const date = (value: string) => formatOperationsDateTime(value, store.timeZone);
+  const visitHref = (nextPage: number) => {
+    const params = new URLSearchParams({ visitPage: String(nextPage), returnTo: back });
+    return `/app/pm/occurrences/${encodeURIComponent(id)}?${params}#visit-evidence`;
+  };
+  const lastPage = Math.max(1, Math.ceil(visits.totalCount / 25));
+  const statusLabel = status === "missed" ? "Past due" : status === "cancelled" ? "Canceled" : (status[0].toUpperCase() + status.slice(1)).replaceAll("_", " ");
   return <div className={styles.page}>
-    <Link href={back}>← {fromBrief ? "Back to brief records" : "Back to PM"}</Link>
-    <header className={styles.header}><div><h1>{plan?.name??"Planned maintenance"}</h1><p><Link href={`/app/stores/${store.id}`}>Store {store.storeNumber}</Link>{asset?<> · <Link href={`/app/equipment/${asset.id}`}>{asset.name}</Link></>:null}</p></div><strong>{status}</strong></header>
-    <section className={styles.metrics} aria-label="Maintenance window"><div className={styles.metric}><span>Starts</span><strong>{date(occurrence.windowStartsAt)}</strong></div><div className={styles.metric}><span>Due</span><strong>{date(occurrence.dueAt)}</strong></div><div className={styles.metric}><span>Ends</span><strong>{date(occurrence.windowEndsAt)}</strong></div></section>
-    <section className={styles.panel}><div className={styles.panelHeader}><h2>What is recorded</h2></div><div className={styles.body}><p>{occurrence.result??"No result recorded."}</p>{occurrence.completedAt?<p>Completed {date(occurrence.completedAt)}</p>:null}{occurrence.exceptionReason?<p>{occurrence.exceptionReason}</p>:null}{work?<p><Link href={`/app/work-orders/${work.id}`}>{work.number} →</Link></p>:<p>No work order linked.</p>}{visits.length?<ul>{visits.map(visit=><li key={visit.id}><Link href={`/app/visits/${visit.id}`}>Visit · {date(visit.checkedInAt)}</Link></li>)}</ul>:<p>No visit recorded.</p>}</div></section>
-    <nav aria-label="PM record actions">{plan?<Link className={styles.secondaryButton} href={`/app/pm/plans/${plan.id}`}>View plan</Link>:null}{!work && ["due","missed","scheduled"].includes(status) && roleCan(session,"create_work_order")?<Link className={styles.button} href={`/app/work-orders/new?pmOccurrence=${occurrence.id}`}>Create work order</Link>:null}</nav>
+    <Link className={styles.back} href={back}>← {fromBrief ? "Back to brief records" : "Back to PM"}</Link>
+    <header className={styles.header}>
+      <div><h1>{plan?.name ?? "Planned maintenance"}</h1><p><Link href={`/app/stores/${encodeURIComponent(store.id)}`}>{storeLabel}</Link>{asset ? <> · <Link href={`/app/equipment/${encodeURIComponent(asset.id)}`}>{asset.name}</Link></> : null}</p></div>
+      <strong className={styles.status} data-status={status}>{statusLabel}</strong>
+    </header>
+    <dl className={styles.window} aria-label="Maintenance window">
+      <div><dt>Window starts</dt><dd>{date(occurrence.windowStartsAt)}</dd></div>
+      <div><dt>Due</dt><dd>{date(occurrence.dueAt)}</dd></div>
+      <div><dt>Window ends</dt><dd>{date(occurrence.windowEndsAt)}</dd></div>
+    </dl>
+    <section className={styles.section} aria-labelledby="pm-result">
+      <h2 id="pm-result">Result</h2>
+      <p>{occurrence.result ?? "No result recorded."}</p>
+      {occurrence.completedAt ? <p>Completed {date(occurrence.completedAt)}</p> : null}
+      {occurrence.exceptionReason ? <p>{occurrence.exceptionReason}</p> : null}
+      {work ? <Link className={styles.action} href={`/app/work-orders/${encodeURIComponent(work.id)}`}>Work order {work.number} →</Link> : <p>{occurrence.workOrderId ? "Linked work order unavailable." : "No work order linked."}</p>}
+    </section>
+    <section className={styles.section} id="visit-evidence" aria-labelledby="pm-visits">
+      <h2 id="pm-visits">Visit evidence <span>({visits.totalCount})</span></h2>
+      {visits.items.length ? <>
+        <p className={styles.note}>Check-in and check-out show presence, not billed labor.</p>
+        <table className={styles.table}><thead><tr><th>Provider / technician</th><th>Checked in</th><th>Checked out</th></tr></thead>
+          <tbody>{visits.items.map(visit => <tr key={visit.id}>
+            <td><Link href={`/app/visits/${encodeURIComponent(visit.id)}`}>{visit.providerName} →</Link><span>{visit.technicianName}</span></td>
+            <td data-label="Checked in">{date(visit.checkedInAt)}</td>
+            <td data-label="Checked out">{visit.checkedOutAt ? date(visit.checkedOutAt) : visit.status === "active" ? "Still onsite" : "Not recorded"}</td>
+          </tr>)}</tbody>
+        </table>
+      </> : <p>{visits.totalCount ? "No visits on this page." : "No visit recorded."}</p>}
+      {lastPage > 1 || page > 1 ? <nav className={styles.pagination} aria-label="Visit pages">
+        {page > 1 ? <Link href={visitHref(Math.min(page - 1, lastPage))}>Previous</Link> : null}
+        <span>{page <= lastPage ? `Page ${page} of ${lastPage}` : `${visits.totalCount} visits`}</span>
+        {visits.nextOffset !== undefined ? <Link href={visitHref(page + 1)}>Next</Link> : null}
+      </nav> : null}
+    </section>
+    <nav className={styles.actions} aria-label="PM record actions">
+      {canAdjustPlan && plan ? <Link className={styles.action} href={`/app/pm/plans/${encodeURIComponent(plan.id)}`}>Adjust schedule</Link> : null}
+      {!work && !occurrence.workOrderId && ["due", "missed", "scheduled"].includes(status) && canCreateWork ? <Link className={styles.primary} href={`/app/work-orders/new?pmOccurrence=${encodeURIComponent(occurrence.id)}`}>Create work order</Link> : null}
+    </nav>
   </div>;
 }

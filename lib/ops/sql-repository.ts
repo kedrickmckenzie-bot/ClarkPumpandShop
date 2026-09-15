@@ -1,4 +1,5 @@
 import { queryAttention } from "./attention-sql";
+import { queryWorkVisitEvidence } from "./pm-record-sql";
 import { queryAttentionSources } from "./attention-sources-sql";
 import { sqlJsonArrayText, sqlStringAggregate, type OpsSqlDriver } from "./sql-driver";
 import { scopeWhere } from "./sql-scope";
@@ -467,6 +468,7 @@ class SqlOpsRepository implements OpsRepository {
   async listAssetsForEquipmentTemplates(organizationId: OpsId, equipmentTemplateIds: OpsId[]): Promise<Asset[]> { if (!equipmentTemplateIds.length) return []; const rows = await this.all(`SELECT id FROM ops_assets WHERE organization_id = ? AND equipment_template_id IN (${equipmentTemplateIds.map(() => "?").join(",")}) AND status <> ? ORDER BY store_id, name, id`, [organizationId, ...equipmentTemplateIds, "retired"]); const assets: Asset[] = []; for (const row of rows) { const asset = await this.getAsset(organizationId, text(row, "id")); if (asset) assets.push(asset); } return assets; }
   async getPmPlan(organizationId: OpsId, planId: OpsId) { const row = await this.first("SELECT * FROM ops_pm_plans WHERE organization_id = ? AND id = ?", [organizationId, planId]); return row ? pmPlanFrom(row) : null; }
   async getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId) { const row = await this.first("SELECT * FROM ops_pm_occurrences WHERE organization_id = ? AND id = ?", [organizationId, occurrenceId]); return row ? pmOccurrenceFrom(row) : null; }
+  async listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query: PageRequest = {}) { return queryWorkVisitEvidence(this.driver, scope, workOrderId, query); }
   async listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return (await this.all("SELECT * FROM ops_pm_work_items WHERE organization_id = ? AND occurrence_id = ? ORDER BY asset_id, id", [organizationId, occurrenceId])).map(pmWorkItemFrom); }
   async listVendorQualifications(organizationId: OpsId, vendorId: OpsId) { return (await this.all("SELECT * FROM ops_vendor_qualifications WHERE organization_id = ? AND vendor_id = ? ORDER BY trade_key, id", [organizationId, vendorId])).map(vendorQualificationFrom); }
   async listVendorComplianceDocuments(organizationId: OpsId, vendorId: OpsId) { return (await this.all("SELECT * FROM ops_vendor_compliance_documents WHERE organization_id = ? AND vendor_id = ? ORDER BY document_type, expires_at, id", [organizationId, vendorId])).map(vendorComplianceFrom); }

@@ -269,7 +269,7 @@ export function PlanningWorkspace({
   const copy = workspaceCopy[kind];
   const pmEvidence = kind === "pm" && model.table?.id === "pm-reactive-evidence";
   return (
-    <main className={styles.workspace}>
+    <div className={styles.workspace}>
       <WorkspaceHeader model={model} kind={kind} />
       {model.state.kind !== "ready" ? <StatePanel state={model.state} /> : <>
         {pmEvidence ? null : <BasisBanner kind={kind} />}
@@ -292,6 +292,6 @@ export function PlanningWorkspace({
           <SourceTable context={[model.page.scopeLabel, model.page.periodLabel].filter(Boolean).join(" · ")} table={model.table} title={copy.sourceTitle} description={copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
         </>}
       </>}
-    </main>
+    </div>
   );
 }

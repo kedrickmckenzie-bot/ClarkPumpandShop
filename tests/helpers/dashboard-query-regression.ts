@@ -9,6 +9,7 @@ import type { DashboardBreakdownKind, DashboardBreakdownRow } from "@/lib/ops/da
 
 /** Run unchanged against migrated SQLite and PostgreSQL before mutating their shared fixture. */
 export async function dashboardQueryRegression(repository: OpsRepository, fixture: OpsFixture) {
+  await (await import("./pm-record-query-regression")).pmRecordQueryRegression(repository, fixture);
   await recordIntegrityRegression(repository, fixture);
   await briefQueryRegression(repository, fixture);
   await attentionQueryRegression(repository, fixture);

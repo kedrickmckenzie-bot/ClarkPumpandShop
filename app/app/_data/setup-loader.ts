@@ -19,6 +19,9 @@ import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import type { OpsFixture, Store, TaxonomyNode } from "@/lib/ops/types";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { loadOperatorSession } from "./operator-loader";
+import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
+import { readPmPlanRecord } from "@/lib/ops/pm-record-query";
+import { compactStoreLabel } from "@/lib/product/store-label";
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -231,29 +234,23 @@ export async function loadCreatePmProgramSetupModel(): Promise<CreatePmProgramSe
 }
 
 export async function loadPmPlanScheduleSetupModel(planId: string): Promise<PmPlanScheduleSetupModel> {
-  const { session, fixture } = await setupContext("setup_pm");
-  const plan = fixture.pmPlans.find((row) => row.organizationId === session.organizationId && row.id === planId);
-  const store = plan?.storeId
-    ? fixture.stores.find((row) => row.organizationId === session.organizationId && row.id === plan.storeId)
-    : undefined;
-  if (!plan || !store || !storeAllowed(session, store)) notFound();
-  const asset = plan.assetId
-    ? fixture.assets.find((row) => row.organizationId === session.organizationId && row.id === plan.assetId)
-    : undefined;
-  const program = plan.programId
-    ? fixture.maintenancePrograms.find((row) => row.organizationId === session.organizationId && row.id === plan.programId)
-    : undefined;
+  const session = await loadOperatorSession();
+  if (!roleCan(session, "setup_pm")) notFound();
+  const record = await readPmPlanRecord(await getServerOpsRepository(), session, planId);
+  if (!record) notFound();
+  const { plan, store, asset, program } = record;
+  const label = compactStoreLabel(storeLabel(store), session.organizationName);
   return {
-    title: "Adjust this store's PM schedule",
-    eyebrow: "Store-level exception",
-    description: "Keep the company standard intact while documenting why this store needs a different future cadence.",
-    scopeLabel: `${storeLabel(store)} · ${asset?.name ?? plan.name}`,
+    title: "Adjust store schedule",
+    eyebrow: "Planned maintenance",
+    description: "Set this store’s schedule and record the reason for the change.",
+    scopeLabel: `${label} · ${asset?.name ?? plan.name}`,
     submitAction: `/api/ops/pm-plans/${encodeURIComponent(plan.id)}/schedule`,
     cancelHref: `/app/pm?store=${encodeURIComponent(store.id)}`,
     cancelLabel: "Back to store PM",
     planId: plan.id,
     planName: plan.name,
-    storeLabel: storeLabel(store),
+    storeLabel: label,
     assetLabel: asset ? `${asset.name} · ${asset.assetTag}` : plan.name,
     masterProgramName: program?.name,
     masterCadenceDays: program?.frequencyDays,

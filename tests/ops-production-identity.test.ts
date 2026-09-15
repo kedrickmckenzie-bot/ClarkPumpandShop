@@ -13,6 +13,9 @@ import { GET as exportTrends } from "@/app/api/ops/trends/export/route";
 import { tenantFixture } from "@/lib/ops/tenant-fixture";
 import OwnerBriefPage from "@/app/app/brief/page";
 import ActionCenterPage from "@/app/app/action-center/page";
+import OccurrencePage from "@/app/app/pm/occurrences/[id]/page";
+import { loadPmOccurrenceRecord } from "@/app/app/_data/pm-record-loader";
+import { loadPmPlanScheduleSetupModel } from "@/app/app/_data/setup-loader";
 import { loadListModel, loadReviewSourcesModel, loadReviewSelection } from "@/app/app/_data/operator-loader";
 
 const boundary = vi.hoisted(() => ({ cookies: new Map<string, string>(), repository: vi.fn(), identity: vi.fn(), snapshot: vi.fn(() => { throw new Error("Setup must not load tenant source records"); }) }));
@@ -35,6 +38,22 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("loads PM occurrence and plan records without snapshots and retains terminal timing", async () => {
+    const data = fixture();
+    const occurrence = data.pmOccurrences.find(row => row.workOrderId)!;
+    useFixture(data);
+    expect(await OccurrencePage({ params: Promise.resolve({ id: occurrence.id }), searchParams: Promise.resolve({ returnTo: "/app/brief/records?kind=pm" }) })).toBeTruthy();
+    expect((await loadPmPlanScheduleSetupModel(occurrence.planId)).planId).toBe(occurrence.planId);
+    occurrence.status = "cancelled"; occurrence.completedAt = undefined; useFixture(data);
+    expect((await loadPmOccurrenceRecord(occurrence.id)).status).toBe("cancelled");
+    occurrence.status = "completed"; occurrence.completedAt = new Date(Date.parse(occurrence.windowEndsAt) + 86400000).toISOString(); useFixture(data);
+    expect((await loadPmOccurrenceRecord(occurrence.id)).status).toBe("completed_late");
+    const grant = data.scopeGrants.find(row => row.membershipId === "membership-northline-facilities")!;
+    grant.scopeKind = "store"; grant.scopeId = data.stores.find(row => row.id !== occurrence.storeId)!.id; useFixture(data);
+    await expect(loadPmOccurrenceRecord(occurrence.id)).rejects.toThrow();
+    await expect(loadPmPlanScheduleSetupModel(occurrence.planId)).rejects.toThrow();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
   it("loads the complete review queue, filtered metrics and supporting sources without a snapshot", async()=>{
     const model=await loadListModel("action-center",{q:"104",priority:"urgent"});
     expect(model.table.rows.length).toBeGreaterThan(0);

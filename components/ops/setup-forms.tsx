@@ -180,8 +180,8 @@ export function CreatePmSetupForm({ model }: { model: CreatePmSetupModel }) {
             <span>2</span><div><h2>Set the schedule</h2><p>Cadence defines how often the work repeats. The completion window defines how early or late it may be completed.</p></div>
           </div>
           <div className={styles.fieldGrid}>
-            <label className={styles.field} htmlFor="pm-cadence"><span>Cadence in days <em>Required</em></span><input id="pm-cadence" name="cadenceDays" type="number" min="1" max="3650" step="1" defaultValue="90" required inputMode="numeric" /><small>Examples: 30 monthly, 90 quarterly, 365 annually.</small></label>
-            <label className={styles.field} htmlFor="pm-window"><span>Completion window in days <em>Required</em></span><input id="pm-window" name="completionWindowDays" type="number" min="1" max="365" step="1" defaultValue="7" required inputMode="numeric" /><small>The window applies before and after the due date.</small></label>
+            <label className={styles.field} htmlFor="pm-cadence"><span>Repeat every (days) <em>Required</em></span><input id="pm-cadence" name="cadenceDays" type="number" min="1" max="3650" step="1" defaultValue="90" required inputMode="numeric" /><small>Examples: 30 monthly, 90 quarterly, 365 annually.</small></label>
+            <label className={styles.field} htmlFor="pm-window"><span>Completion window (days) <em>Required</em></span><input id="pm-window" name="completionWindowDays" type="number" min="1" max="365" step="1" defaultValue="7" required inputMode="numeric" /><small>The window applies before and after the due date.</small></label>
           </div>
           <label className={styles.field} htmlFor="pm-first-due"><span>First due date <em>Required</em></span><input id="pm-first-due" name="firstDueAt" type="date" required /></label>
         </section>
@@ -224,8 +224,8 @@ export function CreatePmProgramSetupForm({ model }: { model: CreatePmProgramSetu
             <span>3</span><div><h2>Set the company cadence</h2><p>This becomes the default at every matching store. A store can later use a faster cadence with a documented reason.</p></div>
           </div>
           <div className={styles.fieldGrid}>
-            <label className={styles.field} htmlFor="program-cadence"><span>Cadence in days <em>Required</em></span><input id="program-cadence" name="cadenceDays" type="number" min="1" max="3650" defaultValue="90" required inputMode="numeric" /><small>30 monthly · 90 quarterly · 365 annually.</small></label>
-            <label className={styles.field} htmlFor="program-window"><span>Completion window in days <em>Required</em></span><input id="program-window" name="completionWindowDays" type="number" min="1" max="365" defaultValue="7" required inputMode="numeric" /><small>Allowed before and after the due date.</small></label>
+            <label className={styles.field} htmlFor="program-cadence"><span>Repeat every (days) <em>Required</em></span><input id="program-cadence" name="cadenceDays" type="number" min="1" max="3650" defaultValue="90" required inputMode="numeric" /><small>30 monthly · 90 quarterly · 365 annually.</small></label>
+            <label className={styles.field} htmlFor="program-window"><span>Completion window (days) <em>Required</em></span><input id="program-window" name="completionWindowDays" type="number" min="1" max="365" defaultValue="7" required inputMode="numeric" /><small>Allowed before and after the due date.</small></label>
           </div>
           <label className={styles.field} htmlFor="program-first-due"><span>First company due date <em>Required</em></span><input id="program-first-due" name="firstDueAt" type="date" required /></label>
         </section>
@@ -244,23 +244,23 @@ export function PmPlanScheduleSetupForm({ model }: { model: PmPlanScheduleSetupM
       <form className={styles.recordForm} action={model.submitAction} method="post">
         <section className={styles.formSection}>
           <div className={styles.formSectionHeading}>
-            <span>1</span><div><h2>Schedule inherited by this store</h2><p>The equipment stays connected to the company program; only this store&apos;s future cadence changes.</p></div>
+            <span>1</span><div><h2>Company schedule</h2><p>Changes apply to future cycles at this store.</p></div>
           </div>
-          <div className={styles.formNotice}><Layers3 aria-hidden="true" size={20} /><p><strong>{model.assetLabel}</strong> · {model.storeLabel}<br />{model.masterProgramName ? `${model.masterProgramName}: every ${model.masterCadenceDays} days with a ${model.masterWindowDays}-day window.` : "This is a store-created plan without a master program."}</p></div>
+          <div className={styles.formNotice}><Layers3 aria-hidden="true" size={20} /><p><strong>{model.assetLabel}</strong> · {model.storeLabel}<br />{model.masterProgramName ? `${model.masterProgramName}: every ${model.masterCadenceDays} days · ${model.masterWindowDays} days before or after due.` : "Store schedule. No company program linked."}</p></div>
         </section>
 
         <section className={styles.formSection}>
           <div className={styles.formSectionHeading}>
-            <span>2</span><div><h2>Set the local cadence</h2><p>Use this for higher-volume stores, unusual operating conditions, or another documented local need.</p></div>
+            <span>2</span><div><h2>Store schedule</h2><p>Enter the interval and completion window.</p></div>
           </div>
           <div className={styles.fieldGrid}>
-            <label className={styles.field} htmlFor="plan-cadence"><span>Cadence in days <em>Required</em></span><input id="plan-cadence" name="cadenceDays" type="number" min="1" max="3650" defaultValue={model.cadenceDays} required inputMode="numeric" /></label>
-            <label className={styles.field} htmlFor="plan-window"><span>Completion window in days <em>Required</em></span><input id="plan-window" name="completionWindowDays" type="number" min="1" max="365" defaultValue={model.completionWindowDays} required inputMode="numeric" /></label>
+            <label className={styles.field} htmlFor="plan-cadence"><span>Repeat every (days) <em>Required</em></span><input id="plan-cadence" name="cadenceDays" type="number" min="1" max="3650" defaultValue={model.cadenceDays} required inputMode="numeric" /></label>
+            <label className={styles.field} htmlFor="plan-window"><span>Completion window (days) <em>Required</em></span><input id="plan-window" name="completionWindowDays" type="number" min="1" max="365" defaultValue={model.completionWindowDays} required inputMode="numeric" /><small>Before and after the due date.</small></label>
           </div>
-          <label className={styles.field} htmlFor="plan-reason"><span>Why this store is different <em>Required</em></span><textarea id="plan-reason" name="reason" required maxLength={500} defaultValue={model.overrideReason} placeholder="This location has extended hours and higher refrigeration traffic." /><small>The reason remains visible with the local override.</small></label>
+          <label className={styles.field} htmlFor="plan-reason"><span>Reason for change <em>Required</em></span><textarea id="plan-reason" name="reason" required maxLength={500} defaultValue={model.overrideReason} placeholder="This location has extended hours and higher refrigeration traffic." /><small>Saved with the schedule change.</small></label>
         </section>
 
-        <div className={styles.formNotice}><Info aria-hidden="true" size={20} /><p><strong>The current occurrence is not rewritten.</strong> The scheduler uses this cadence for future cycles, preserving prior due dates and compliance evidence.</p></div>
+        <div className={styles.formNotice}><Info aria-hidden="true" size={20} /><p><strong>Future cycles only.</strong> Existing due dates and completion records stay the same.</p></div>
         <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelHref}>Cancel</Link><button className={styles.primaryButton} type="submit">Save store schedule<ArrowRight aria-hidden="true" size={18} /></button></div>
       </form>
     </div>
