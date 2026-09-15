@@ -376,3 +376,9 @@
 .planLinks span { line-height: 1.45; }
 .planLinks small { color: #64748b; }
 @media (max-width: 760px) { .planSummary, .planLinks { grid-template-columns: 1fr; } .planPanel header { flex-wrap: wrap; } }
+.scenario { border-top: 1px solid #dce2eb; border-bottom: 1px solid #dce2eb; padding: 16px 0; margin: 12px 0; }
+.scenario summary { cursor: pointer; font-weight: 650; color: #1d4ed8; }
+.scenarioForm { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
+.scenarioForm label { display: grid; gap: 6px; flex: 1; min-width: 160px; font-size: 14px; }
+.scenarioForm input { min-height: 42px; width: 100%; border: 1px solid #cbd5e1; border-radius: 5px; padding: 8px 10px; font-size: 16px; background: #fff; }
+.scenarioForm button { min-height: 42px; padding: 8px 18px; border: 0; border-radius: 5px; background: #2563eb; color: white; font-weight: 650; }

@@ -667,6 +667,10 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
             </div>
             <FilterGroups filters={model.filters} />
             <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
+            {surface === "work-orders" ? <details className={styles.workDateFilters} open={Boolean(searchParams.createdFrom || searchParams.createdThrough)}><summary>Created date (UTC)</summary><form action="/app/work-orders" method="get">
+              {Object.entries(searchParams).filter(([key]) => !["createdFrom", "createdThrough", "page", "selected"].includes(key)).map(([key, value]) => <input type="hidden" name={key} value={Array.isArray(value) ? value[0] : value ?? ""} key={key} />)}
+              <label>Created from<input type="date" name="createdFrom" defaultValue={String(searchParams.createdFrom ?? "")} /></label><label>Created through<input type="date" name="createdThrough" defaultValue={String(searchParams.createdThrough ?? "")} /></label><button type="submit">Apply dates</button>
+            </form></details> : null}
             {triageMode ? (
               <div className={styles.triageWorkspace} data-has-preview={selectedRow && !approvedLaterSelection || undefined}>
                 <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode && !["history", "closed", "cancelled"].includes(String(searchParams.status ?? "")) && canManageWorkflowTasks ? (

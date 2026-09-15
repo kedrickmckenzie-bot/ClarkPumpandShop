@@ -19,6 +19,12 @@ describe("query-first route loading", () => {
     expect(await loadSavedViewsModel("work-orders")).toEqual([]);
     expect(mocked.snapshot).not.toHaveBeenCalled();
   });
+  it("keeps created-date history filters on the native query path", async () => {
+    const model = await loadListModel("work-orders", { status: "history", createdFrom: "2026-08-01", createdThrough: "2026-08-25" });
+    expect(model.filters?.some((filter) => filter.id === "work-view")).toBe(true);
+    expect(model.appliedFilters?.some((filter) => filter.label === "Created from 2026-08-01 (UTC)")).toBe(true);
+    expect(mocked.snapshot).not.toHaveBeenCalled();
+  });
   it("assembles search context without loading a tenant snapshot", async () => {
     const model = await loadSearchModel({ q: "104" });
     expect(model.groups.length).toBeGreaterThan(0);

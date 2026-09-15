@@ -296,7 +296,7 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
   const requestedKeys = Object.entries(searchParams).filter(([key, value]) => !["saved", "updated", "created", "success", "notice", "error", "layout"].includes(key) && Boolean(Array.isArray(value) ? value[0] : value)).map(([key]) => key);
   const supportedQueryKeys: Partial<Record<ListRouteId, ReadonlySet<string>>> = {
     requests: new Set(["q", "page", "status", "store", "selected"]),
-    "work-orders": new Set(["q", "page", "status", "stage", "store", "vendor", "region", "category", "path", "asset", "component", "hasCost", "costFrom", "costTo", "costMonth", "currency", "basis", "period", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity"]),
+    "work-orders": new Set(["q", "page", "status", "stage", "store", "vendor", "region", "category", "path", "asset", "component", "hasCost", "createdFrom", "createdThrough", "costFrom", "costTo", "costMonth", "currency", "basis", "period", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity"]),
     visits: new Set(["q", "page", "status", "store", "vendor", "review", "selected"]),
     stores: new Set(["q", "page", "selected"]),
     vendors: new Set(["q", "page", "selected"]),

@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
 import type { SavedView } from "@/lib/ops/types";
 import styles from "./saved-views.module.css";
 
@@ -9,11 +13,30 @@ export interface SavedViewsBarModel {
   views: SavedView[];
 }
 
-export function SavedViewsBar({ model, collapsed = false }: { model: SavedViewsBarModel; collapsed?: boolean }) {
+export function SavedViewsBar({ model, collapsed = false, scenarios = false }: { model: SavedViewsBarModel; collapsed?: boolean; scenarios?: boolean }) {
   const { surface, currentQuery, views } = model;
+  const router = useRouter();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true); setError("");
+    const data = new FormData(event.currentTarget);
+    try {
+      const response = await fetch("/api/ops/saved-views", { method: "POST", body: data });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error || "Could not save this view. Try again.");
+      }
+      router.push(`/app/${surface}${currentQuery ? `?${currentQuery}` : ""}`);
+      router.refresh();
+      setBusy(false);
+    } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not save. Try again."); setBusy(false); }
+  }
   const bar = (
     <div className={styles.bar}>
-      <span className={styles.label}>Saved views</span>
+      <span className={styles.label}>{scenarios ? "My saved scenarios" : "Saved views"}</span>
       <div className={styles.chips}>
         {views.length === 0 ? <span className={styles.empty}>None yet</span> : null}
         {views.map((view) => (
@@ -21,12 +44,12 @@ export function SavedViewsBar({ model, collapsed = false }: { model: SavedViewsB
             <Link className={styles.chipLink} href={`/app/${surface}?${view.queryString}`}>
               {view.name}
             </Link>
-            <form action="/api/ops/saved-views" method="post" className={styles.deleteForm}>
+            <form action="/api/ops/saved-views" method="post" className={styles.deleteForm} onSubmit={submit}>
               <input type="hidden" name="operation" value="delete" />
               <input type="hidden" name="id" value={view.id} />
               <input type="hidden" name="surface" value={surface} />
               <input type="hidden" name="returnTo" value={`/app/${surface}${currentQuery ? `?${currentQuery}` : ""}`} />
-              <button type="submit" className={styles.deleteButton} aria-label={`Delete saved view ${view.name}`}>
+              <button type="submit" disabled={busy} className={styles.deleteButton} aria-label={`Delete saved view ${view.name}`}>
                 ×
               </button>
             </form>
@@ -34,7 +57,7 @@ export function SavedViewsBar({ model, collapsed = false }: { model: SavedViewsB
         ))}
       </div>
       {currentQuery ? (
-        <form action="/api/ops/saved-views" method="post" className={styles.saveForm}>
+        <form action="/api/ops/saved-views" method="post" className={styles.saveForm} onSubmit={submit}>
           <input type="hidden" name="operation" value="save" />
           <input type="hidden" name="surface" value={surface} />
           <input type="hidden" name="query" value={currentQuery} />
@@ -44,17 +67,18 @@ export function SavedViewsBar({ model, collapsed = false }: { model: SavedViewsB
             name="name"
             required
             maxLength={60}
-            placeholder="Name this filtered view"
-            aria-label="Saved view name"
+            placeholder={scenarios ? "Name this scenario" : "Name this filtered view"}
+            aria-label={scenarios ? "Scenario name" : "Saved view name"}
             className={styles.nameInput}
           />
-          <button type="submit" className={styles.saveButton}>
-            Save current filters
+          <button type="submit" disabled={busy} className={styles.saveButton}>
+            {busy ? "Saving…" : scenarios ? "Save scenario" : "Save current filters"}
           </button>
         </form>
       ) : (
         <span className={styles.hint}>Apply filters to enable saving a view.</span>
       )}
+      {error ? <p role="alert">{error}</p> : null}
     </div>
   );
   return collapsed ? <details className={styles.disclosure}><summary>Saved views{views.length ? ` (${views.length})` : ""}</summary>{bar}</details> : bar;

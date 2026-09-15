@@ -2336,10 +2336,10 @@ export function buildVendorPerformanceListModel(
     createVendorLink: roleCan(session, "onboard_vendor") ? { href: "/app/vendors/new", label: "Add approved vendor" } : undefined,
     portfolioMetrics: [
       { id: "vendors", label: "Approved vendors", value: String(vendors.length), context: `${vendors.length} vendor${vendors.length === 1 ? "" : "s"} match this view`, sourceLink: { href: hrefWithQuery("/app/vendors", { screen: "directory", q: first(query.q), specialty: first(query.specialty), view }), label: "Open vendor directory" } },
-      { id: "attention", label: "Vendors to review", value: String(vendors.filter((vendor) => vendor.relationshipState !== "stable").length), context: "Open follow-ups, unresolved visits, or missing documents", sourceLink: { href: "/app/vendors?view=attention", label: "Review these vendors" } },
-      { id: "compliance", label: "Documents current", value: `${vendors.filter((vendor) => vendor.compliance.state === "ready").length}/${vendors.length}`, context: "Approved vendor documents that are current", sourceLink: { href: "/app/vendors?view=attention", label: "Review missing documents" } },
-      { id: "visits", label: "Jobs with a recorded visit", value: ratioLabel(visitCovered, visitEligible), context: `${visitCovered} of ${visitEligible} vendor work orders have a linked check-in`, sourceLink: { href: "/app/visits", label: "Open visit evidence" } },
-      { id: "cost", label: "Recorded work cost", value: money(recordedCostMinor), context: "Entered cost lines on work currently attributed to these vendors", sourceLink: { href: "/app/spend", label: "Open cost records" } },
+      { id: "attention", label: "Vendors to review", value: String(vendors.filter((vendor) => vendor.relationshipState !== "stable").length), context: "Open follow-ups, unresolved visits, or missing documents", sourceLink: { href: "#vendor-attention-heading", label: "Review these vendors" } },
+      { id: "compliance", label: "Documents current", value: `${vendors.filter((vendor) => vendor.compliance.state === "ready").length}/${vendors.length}`, context: "Approved vendor documents that are current", sourceLink: { href: "#vendor-directory-heading", label: "Review vendor documents" } },
+      { id: "visits", label: "Jobs with a recorded visit", value: ratioLabel(visitCovered, visitEligible), context: `${visitCovered} of ${visitEligible} vendor work orders have a linked check-in`, sourceLink: { href: "#vendor-directory-heading", label: "Compare visit evidence" } },
+      { id: "cost", label: "Recorded work cost", value: money(recordedCostMinor), context: "Entered cost lines on work currently attributed to these vendors", sourceLink: { href: "#vendor-directory-heading", label: "Compare vendor costs" } },
     ],
     vendors,
   };

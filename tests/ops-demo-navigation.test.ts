@@ -6,6 +6,8 @@ import { buildQueryListModel } from "@/app/app/_data/operator-query-presenter";
 import { buildMaintenancePlan } from "@/lib/ops/maintenance-plan";
 import { workListNavigation } from "@/lib/ops/work-list-navigation";
 import { buildTrendsModel } from "@/app/app/_data/trends-presenter";
+import { planningScenario } from "@/lib/ops/planning-scenario";
+import { workCreatedRange } from "@/lib/ops/work-created-range";
 import type { OperatorSession } from "@/components/ops/data-contract";
 
 vi.mock("server-only", () => ({}));
@@ -13,6 +15,37 @@ const session: OperatorSession = { organizationId: NORTHLINE_ORGANIZATION_ID, us
 const query = (href: string) => Object.fromEntries(new URL(href, "http://local.test").searchParams);
 
 describe("demo navigation and planning", () => {
+  it("saves and replaces personal scenarios without changing another owner's view", async () => {
+    const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const input = { id: "scenario-one", organizationId: session.organizationId, ownerMembershipId: "owner-one", surface: "trends", name: "Repair allowance", queryString: "view=planning&planTarget=50000&planAllowance=1000.10", createdAt: "2026-09-15T00:00:00.000Z" };
+    await repository.putSavedView(input);
+    await repository.putSavedView({ ...input, id: "scenario-other", ownerMembershipId: "owner-two" });
+    await repository.putSavedView({ ...input, id: "scenario-revised", queryString: "view=planning&planTarget=60000" });
+    expect(await repository.listSavedViews(session.organizationId, "owner-one", "trends")).toEqual([expect.objectContaining({ id: "scenario-revised", queryString: "view=planning&planTarget=60000" })]);
+    expect(await repository.listSavedViews(session.organizationId, "owner-two", "trends")).toEqual([expect.objectContaining({ queryString: input.queryString })]);
+    expect(await repository.listSavedViews("other-org", "owner-one", "trends")).toEqual([]);
+  });
+  it("compares money in minor units and preserves personal scenario assumptions for saving", () => {
+    const scenario = planningScenario(new URLSearchParams("planTarget=50000&planAllowance=1000.10&planContingency=250.20"), 3665000);
+    expect(scenario).toMatchObject({ target: 5000000, total: 3790030, gap: 1209970, invalid: false });
+    expect(planningScenario(new URLSearchParams("planTarget=-1"), 0).invalid).toBe(true);
+    expect(planningScenario(new URLSearchParams("planTarget=1e9"), 0).invalid).toBe(true);
+    expect(planningScenario(new URLSearchParams("planTarget=1.123"), 0).invalid).toBe(true);
+    expect(planningScenario(new URLSearchParams("planTarget=0"), 1).gap).toBe(-1);
+    const model = buildTrendsModel(buildNorthlinePresentationFixture(), session, { view: "planning", planTarget: "50000", planAllowance: "1000.10", planContingency: "250.20" });
+    expect(new URLSearchParams(model.canonicalQuery).get("planTarget")).toBe("50000");
+    expect(new URLSearchParams(model.canonicalQuery).get("planAllowance")).toBe("1000.10");
+  });
+
+  it("filters work by inclusive created dates, independently of cost dates", async () => {
+    expect(workCreatedRange("2026-08-01", "2026-08-25")).toEqual({ createdFrom: "2026-08-01T00:00:00.000Z", createdTo: "2026-08-26T00:00:00.000Z" });
+    expect(() => workCreatedRange("2026-02-30")).toThrow();
+    expect(() => workCreatedRange("2026-08-26", "2026-08-25")).toThrow();
+    const fixture = buildNorthlinePresentationFixture();
+    const model = await buildQueryListModel(createOpsFixtureRepository(fixture), session, "work-orders", { status: "all", createdFrom: "2026-08-01", createdThrough: "2026-08-25" });
+    expect(model.table.rows.length).toBeGreaterThan(0);
+    expect(model.table.rows.every((row) => { const work = fixture.workOrders.find((work) => work.id === row.id)!; return work.createdAt >= "2026-08-01" && work.createdAt < "2026-08-26"; })).toBe(true);
+  });
   it("keeps evidence filters while removing incompatible queue filters", () => {
     const history = workListNavigation({ store: "104", vendor: "vendor", costFrom: "2026-01-01", q: "cooler", stage: "not-sent", visitPlan: "ready", selected: "old", page: "3" }).find((item) => item.value === "history")!;
     expect(query(history.href)).toEqual({ store: "104", vendor: "vendor", costFrom: "2026-01-01", q: "cooler", status: "history" });

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { formatOperationsDate } from "@/lib/ops/local-time";
+import { planningScenario, scenarioKeys } from "@/lib/ops/planning-scenario";
 import { WorkReviewButton } from "./work-review";
 import {
   ArrowDown,
@@ -140,23 +141,39 @@ function OutlookPanel({ model }: { model: TrendAnalysisPageViewModel }) {
   </section>;
 }
 
-function UpcomingWorkPlan({ model }: { model: TrendAnalysisPageViewModel }) {
+function UpcomingWorkPlan({ model, savedViews }: { model: TrendAnalysisPageViewModel; savedViews?: ReactNode }) {
   const plan = model.maintenancePlan;
   if (!plan) return <OutlookPanel model={model} />;
   const current = new URLSearchParams(model.canonicalQuery);
+  const scenario = planningScenario(current, plan.estimateMinor);
+  const currency = current.get("currency") ?? "USD";
+  const money = (minor: number) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(minor / 100);
   const context = new URLSearchParams();
   for (const key of ["store", "region"]) { const value = current.get(key); if (value) context.set(key, value); }
   const destination = (path: string, extra: Record<string, string> = {}) => { const query = new URLSearchParams(context); for (const [key, value] of Object.entries(extra)) query.set(key, value); return `${path}${query.size ? `?${query}` : ""}`; };
   const pageHref = (page: number) => { const query = new URLSearchParams(current); query.set("planPage", String(page)); return `/app/trends?${query}#open-work-plan`; };
   return <>
     <section className={styles.planPanel} id="open-work-plan">
-      <header><div><h2>Price the work ahead</h2><p>Current open work in your selected location, equipment and vendor scope.</p></div><strong>No budget set</strong></header>
+      <header><div><h2>Price the work ahead</h2><p>Current open work in your selected location, equipment and vendor scope.</p></div><strong>{scenario.target === undefined ? "No target set" : `Personal target: ${money(scenario.target)}`}</strong></header>
       <div className={styles.planSummary}>
         <div><span>Entered repair estimates</span><strong>{plan.estimateLabel}</strong><small>{plan.pricedCount} priced jobs · {current.get("currency") ?? "USD"}</small></div>
         <div><span>Not priced in this currency</span><strong>{plan.unpricedCount}</strong><small>Review missing or other-currency prices below</small></div>
         <div><span>Open work to plan</span><strong>{plan.totalCount}</strong><small>Ordered by next-action deadline</small></div>
       </div>
       <p>Entered estimates only. Missing prices need review; this is not a complete budget.</p>
+      <details className={styles.scenario} open={scenarioKeys.some((key) => current.has(key))}>
+        <summary>Compare a budget scenario</summary>
+        <p>Current estimates + extra-work allowance + contingency. Personal assumptions only; saved scenarios recalculate as work changes.</p>
+        <form action="/app/trends" method="get" className={styles.scenarioForm}>
+          {[...current].filter(([key]) => ![...scenarioKeys, "planPage"].includes(key)).map(([key, value]) => <input key={key} name={key} value={value} type="hidden" />)}
+          {scenarioKeys.map((key, index) => <label key={key}><span>{["Target", "Extra-work allowance", "Contingency"][index]} ({currency})</span><input name={key} type="number" min="0" max="999999999.99" step="0.01" defaultValue={current.get(key) ?? ""} placeholder="0.00" /></label>)}
+          <button type="submit">Compare</button>
+        </form>
+        {scenario.invalid ? <p role="alert">Use positive amounts with up to two decimal places.</p> : <>
+          <div className={styles.planSummary}><div><span>Scenario total</span><strong>{money(scenario.total)}</strong><small>{money(plan.estimateMinor)} estimates + {money(scenario.allowance)} allowance + {money(scenario.contingency)} contingency</small></div><div><span>{scenario.gap === undefined ? "Target comparison" : scenario.gap < 0 ? "Above target" : "Below target"}</span><strong>{scenario.gap === undefined ? "No target set" : money(Math.abs(scenario.gap))}</strong><small>{plan.unpricedCount} jobs still need a price in {currency}. PM and replacement plans are separate.</small></div></div>
+          {savedViews}
+        </>}
+      </details>
       <details><summary>What is included?</summary><p>Current open work in the selected scope, regardless of historical date or cost-type filters. Estimates are full work amounts, not unpaid balances. Approval limits, recorded costs and invoices are kept separate.</p></details>
       <div className={styles.planTable}><table><caption className={styles.visuallyHidden}>Open work and entered repair estimates</caption><thead><tr><th>Work</th><th>Store</th><th>Repair estimate</th><th>Next action due</th></tr></thead><tbody>
         {plan.rows.map((row) => <tr key={row.id}><td><Link href={row.href}>{row.number}</Link><span>{row.problem}</span></td><td>{row.store}</td><td>{row.estimate}</td><td>{row.due ? formatOperationsDate(row.due) : "Date needed"}<span>{row.nextAction}</span></td></tr>)}
@@ -346,7 +363,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
       <section className={styles.analysisContext} aria-label="Current analysis context">{model.analysisContext.filter((item) => model.activeView !== "planning" || item.label === "Locations").map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}{model.activeView === "planning" ? <span><small>Planning basis</small><strong>Current open work · entered repair estimates</strong></span> : null}</section>
       {model.filterNotice ? <aside className={styles.filterNotice}><Info size={16} aria-hidden="true" />{model.filterNotice}</aside> : null}
       {model.invoiceReview ? <aside className={styles.filterNotice}>{model.invoiceReview.message} <Link href={model.invoiceReview.href}>{model.invoiceReview.label}</Link></aside> : null}
-      <details className={styles.notes}><summary>Filters &amp; views</summary><TrendsFilterForm action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} />{savedViews}</details>
+      <details className={styles.notes}><summary>Filters &amp; views</summary><TrendsFilterForm scenarioQuery={model.canonicalQuery} action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} />{model.activeView !== "planning" ? savedViews : null}</details>
       <AnalysisViews model={model} />
 
       {model.activeView === "overview" ? <>
@@ -357,7 +374,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
       {model.activeView === "drivers" ? <DriversTable model={model} /> : null}
       {model.activeView === "stores" ? <BenchmarkTable model={model} /> : null}
       {model.activeView === "vendors" ? <VendorAccountability model={model} /> : null}
-      {model.activeView === "planning" ? <UpcomingWorkPlan model={model} /> : null}
+      {model.activeView === "planning" ? <UpcomingWorkPlan model={model} savedViews={savedViews} /> : null}
       {model.activeView === "records" ? <SourceTable model={model} /> : null}
 
       <ExecutiveResults model={model} />

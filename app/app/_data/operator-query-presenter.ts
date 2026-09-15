@@ -2,6 +2,7 @@ import { workStatusLabel } from "@/lib/product/work-status-label";
 import "server-only";
 import { WORK_STAGE_STATUSES } from "@/lib/ops/dashboard-cohorts";
 import { workListNavigation } from "@/lib/ops/work-list-navigation";
+import { workCreatedRange } from "@/lib/ops/work-created-range";
 
 import type {
   DashboardPageViewModel,
@@ -114,6 +115,8 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
     if (!value) return [];
     const label = key === "hasCost" ? "With recorded cost"
       : key === "costMonth" ? `Cost month · ${formatOperationsDate(`${value}-01`)}`
+      : key === "createdFrom" ? `Created from ${value} (UTC)`
+      : key === "createdThrough" ? `Created through ${value} (UTC)`
       : key === "costFrom" ? `Cost from ${formatOperationsDate(value)}`
       : key === "costTo" ? `Cost through ${formatOperationsDate(value)}`
       : key === "path" ? value.split("|").join(" › ")
@@ -335,6 +338,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       : requestedStatus === "history" ? ["closed", "cancelled"] : requestedStatus && requestedStatus !== "all" ? [requestedStatus] : undefined;
     const [work, held] = await Promise.all([repository.listWorkOrders(scope, {
       ...request,
+      ...workCreatedRange(first(query.createdFrom), first(query.createdThrough)),
       search: q,
       statuses,
       stage: first(query.stage),

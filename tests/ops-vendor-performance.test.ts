@@ -128,9 +128,8 @@ describe("vendor performance workspace", () => {
   it("renders the enterprise directory with relationship, compliance, and source-linked evidence", () => {
     const fixture = buildNorthlinePresentationFixture();
     const list = buildVendorPerformanceListModel(fixture, session());
-    expect(list.portfolioMetrics.every((metric) => metric.sourceLink.href.startsWith("/app/"))).toBe(true);
-    expect(list.portfolioMetrics.find((metric) => metric.id === "attention")?.sourceLink.href).toBe("/app/vendors?view=attention");
-    expect(list.portfolioMetrics.find((metric) => metric.id === "visits")?.sourceLink.href).toBe("/app/visits");
+    expect(list.portfolioMetrics.find((metric) => metric.id === "attention")?.sourceLink.href).toBe("#vendor-attention-heading");
+    expect(list.portfolioMetrics.find((metric) => metric.id === "visits")?.sourceLink.href).toBe("#vendor-directory-heading");
     const markup = renderToStaticMarkup(createElement(VendorPerformanceList, { model: list }));
     expect(markup).toContain("Vendor network");
     expect(markup).toContain("How vendor measures work");
@@ -139,7 +138,8 @@ describe("vendor performance workspace", () => {
     expect(markup).toContain("Recorded work cost only");
     expect(markup).toContain("5 of 5 approved vendors");
     expect(markup).toContain("Review these vendors");
-    expect(markup).toContain("Open visit evidence");
+    expect(markup).toContain("Compare visit evidence");
+    for (const metric of list.portfolioMetrics.filter((metric) => metric.sourceLink.href.startsWith("#"))) expect(markup).toContain(`id="${metric.sourceLink.href.slice(1)}"`);
   });
 
   it("derives onboarding controls and relationship filters from vendor source records", () => {

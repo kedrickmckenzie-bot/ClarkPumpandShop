@@ -2558,7 +2558,7 @@ export function buildTrendsModel(
     link: selectedPeriodEvidenceLink,
   };
 
-  const canonicalQuery = trendHref({
+  let canonicalQuery = trendHref({
     detailKind: undefined,
     detailMonth: undefined,
     driverBreakdown: undefined,
@@ -2568,6 +2568,14 @@ export function buildTrendsModel(
     driverPage: undefined,
     storePage: undefined,
   }).split("?")[1] ?? "";
+  if (activeView === "planning") {
+    const savedScenario = new URLSearchParams(canonicalQuery);
+    for (const key of ["planTarget", "planAllowance", "planContingency"]) {
+      const value = first(query[key]);
+      if (value) savedScenario.set(key, value.slice(0, 32));
+    }
+    canonicalQuery = savedScenario.toString();
+  }
   const partialPeriodNote = baselineStart && baselineEnd && currentEnd !== endOfMonth(monthKey(currentEnd))
     ? `${longMonthLabel(monthKey(currentEnd)).split(" ")[0]} is not complete, so both ranges compare the first ${Number(currentEnd.slice(-2))} days of their final month.`
     : undefined;

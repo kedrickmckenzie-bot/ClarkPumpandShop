@@ -1,6 +1,7 @@
 import type { OpsFixture } from "./types";
 
 export interface MaintenancePlan {
+  estimateMinor: number;
   estimateLabel: string;
   pricedCount: number;
   unpricedCount: number;
@@ -22,6 +23,7 @@ export function buildMaintenancePlan(fixture: OpsFixture, organizationId: string
   const pages = Math.max(1, Math.ceil(work.length / 10));
   const page = Math.min(pages, Math.max(1, Number.isFinite(requestedPage) ? Math.floor(requestedPage) : 1));
   return {
+    estimateMinor: priced.reduce((sum, row) => sum + row.repairEstimate!.amountMinor, 0),
     estimateLabel: money.format(priced.reduce((sum, row) => sum + row.repairEstimate!.amountMinor, 0) / 100),
     pricedCount: priced.length, unpricedCount: work.length - priced.length, totalCount: work.length, page, pages,
     rows: work.slice((page - 1) * 10, page * 10).map((row) => ({

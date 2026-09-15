@@ -79,7 +79,7 @@
 
 .saveButton {
   background: #2563eb;
-  color: var(--to-surface);
+    color: #fff !important;
   border: none;
   border-radius: 6px;
   padding: 5px 13px;

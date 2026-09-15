@@ -117,10 +117,11 @@ function VendorPerformanceListComplete({ model }: { model: VendorPerformanceList
         ))}
       </section>
 
-      {attentionVendors.length ? <section className={styles.attentionRail} aria-labelledby="vendor-attention-heading">
+      <section className={styles.attentionRail} aria-labelledby="vendor-attention-heading">
         <div className={styles.attentionRailHeader}><span><AlertTriangle aria-hidden="true" size={18} /></span><div><h2 id="vendor-attention-heading">Vendors to review</h2><p>Open follow-ups or missing onboarding items. This is not a vendor grade.</p></div><strong>{attentionVendors.length}</strong></div>
         <div className={styles.attentionRailItems}>{attentionVendors.map((vendor) => <Link href={vendor.href} key={vendor.id}><span data-state={vendor.relationshipState}>{vendor.relationshipLabel}</span><strong>{vendor.name}</strong><p>{vendor.relationshipSummary}</p><em>Open vendor<ArrowRight aria-hidden="true" size={14} /></em></Link>)}</div>
-      </section> : null}
+        {!attentionVendors.length ? <p>No vendors in this view need review.</p> : null}
+      </section>
 
       <section className={styles.directoryPanel} aria-labelledby="vendor-directory-heading">
         <div className={styles.directoryToolbar}>
@@ -191,9 +192,9 @@ function VendorPerformanceListComplete({ model }: { model: VendorPerformanceList
                     </td>
                     <td><Link className={styles.directoryCell} href={`${vendor.href}#coverage-evidence`}><strong><MapPinned aria-hidden="true" size={15} />{vendor.coverageLabel}</strong><span>{vendor.coverageRegionCount} region{vendor.coverageRegionCount === 1 ? "" : "s"} · {vendor.observedStoreCount} stores observed</span><div className={styles.tagRow}>{vendor.specialties.slice(0, 3).map((specialty) => <em key={specialty}>{specialty}</em>)}</div></Link></td>
                     <td><Link className={styles.directoryCell} href={`${vendor.href}#compliance-evidence`}><span className={styles.complianceState} data-state={vendor.compliance.state}><BadgeCheck aria-hidden="true" size={15} />{vendor.compliance.label}</span><span>{vendor.compliance.detail}</span><small>{vendor.compliance.activeQualificationCount} active qualification{vendor.compliance.activeQualificationCount === 1 ? "" : "s"}</small></Link></td>
-                    <td><Link className={styles.directoryCell} href={`/app/work-orders?vendor=${vendor.id}`}><strong>{vendor.openWorkCount} open work order{vendor.openWorkCount === 1 ? "" : "s"}</strong><span>{vendor.assignedWorkCount} total attributed</span><small className={vendor.measures.accountability.numerator ? styles.warningText : undefined}>{vendor.measures.accountability.denominatorLabel}</small></Link></td>
+                    <td><Link className={styles.directoryCell} href={`/app/work-orders?vendor=${vendor.id}&status=open`}><strong>{vendor.openWorkCount} open work order{vendor.openWorkCount === 1 ? "" : "s"}</strong><span>{vendor.assignedWorkCount} total attributed</span><small className={vendor.measures.accountability.numerator ? styles.warningText : undefined}>{vendor.measures.accountability.denominatorLabel}</small></Link></td>
                     <td><Link className={styles.directoryCell} href={vendor.measures.responseTime.sourceLink.href}><strong>{vendor.measures.responseTime.value}</strong><span>Median first response</span><small>{vendor.measures.acceptance.value} acceptance · {vendor.measures.acceptance.denominator} decisions</small></Link></td>
-                    <td><Link className={styles.directoryCell} href={vendor.measures.visitCoverage.sourceLink.href}><strong>{vendor.measures.visitCoverage.value}</strong><span>Eligible work with an observed visit</span><small className={vendor.measures.noWorkOrder.numerator || vendor.measures.unresolvedOutcomes.numerator ? styles.warningText : undefined}>{vendor.measures.noWorkOrder.numerator} no-WO · {vendor.measures.unresolvedOutcomes.numerator} unresolved</small></Link></td>
+                    <td><Link className={styles.directoryCell} href={vendor.measures.visitCoverage.sourceLink.href}><strong>{vendor.measures.visitCoverage.value}</strong><span>{vendor.measures.visitCoverage.numerator} of {vendor.measures.visitCoverage.denominator} eligible jobs</span><small className={vendor.measures.noWorkOrder.numerator || vendor.measures.unresolvedOutcomes.numerator ? styles.warningText : undefined}>{vendor.measures.noWorkOrder.numerator} no-WO · {vendor.measures.unresolvedOutcomes.numerator} unresolved</small></Link></td>
                     <td><Link className={`${styles.directoryCell} ${styles.costDirectoryCell}`} href={`${vendor.href}#cost-evidence`}><strong>{money(vendor.recordedCostMinor)}</strong><span>{vendor.recordedCostLineCount} entered cost line{vendor.recordedCostLineCount === 1 ? "" : "s"}</span><small>Recorded work cost only</small></Link></td>
                   </tr>
                 ))}

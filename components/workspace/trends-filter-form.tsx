@@ -13,11 +13,12 @@ interface TrendsFilterFormProps {
   clearHref: string;
   filters: TrendAnalysisPageViewModel["filters"];
   scopeSummary: string;
+  scenarioQuery?: string;
 }
 
 const commonFilterIds = new Set(["metric", "period", "compare", "region", "store"]);
 
-export function TrendsFilterForm({ action, activeView, clearHref, filters, scopeSummary }: TrendsFilterFormProps) {
+export function TrendsFilterForm({ action, activeView, clearHref, filters, scopeSummary, scenarioQuery }: TrendsFilterFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const hasMaintenanceScope = filters.some((filter) => filter.group === "maintenance_scope" && Boolean(filter.value));
@@ -39,6 +40,7 @@ export function TrendsFilterForm({ action, activeView, clearHref, filters, scope
         startTransition(() => router.push(`${action}?${parameters.toString()}`, { scroll: false }));
       }}
     >
+      {activeView === "planning" ? ["planTarget", "planAllowance", "planContingency"].map((key) => <input type="hidden" name={key} value={new URLSearchParams(scenarioQuery).get(key) ?? ""} key={key} />) : null}
       <header>
         <span><SlidersHorizontal size={17} aria-hidden="true" /><span><strong>Analysis context</strong><small>{scopeSummary}</small></span></span>
         <Link href={clearHref}><RotateCcw size={15} aria-hidden="true" />Reset all</Link>
