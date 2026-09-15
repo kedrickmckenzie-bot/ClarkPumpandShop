@@ -338,6 +338,7 @@ export interface OpsRepository {
   allocateWorkOrderNumber(organizationId: OpsId, prefix: string, year: number): Promise<string>;
 
   // Manager-first, server-scoped read models.
+  getDashboardContext(scope: OrganizationScope): Promise<import("./dashboard-context").DashboardContext>;
   getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow): Promise<import("./dashboard-query").DashboardActivitySummary>;
   listAttention(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery): Promise<import("./attention-query").AttentionPage>;
   listDashboardBreakdown(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: import("./dashboard-query").DashboardBreakdownQuery): Promise<import("./dashboard-query").DashboardBreakdownPage>;

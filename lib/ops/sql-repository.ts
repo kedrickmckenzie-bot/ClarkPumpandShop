@@ -3,6 +3,7 @@ import { sqlJsonArrayText, sqlStringAggregate, type OpsSqlDriver } from "./sql-d
 import { scopeWhere } from "./sql-scope";
 import { vendorResponseSql } from "./work-stage-sql";
 import { queryDashboardActivity, queryDashboardBreakdown } from "./dashboard-sql";
+import { queryDashboardContext } from "./dashboard-context-sql";
 import { PENDING_REQUEST_STATUSES, WORK_STAGE_STATUSES } from "./dashboard-cohorts";
 import { hasWorkCostFilter, workCostSql } from "./work-cost-query";
 import { workPriceFrom, type WorkPriceQuery } from "./work-price-types";
@@ -340,6 +341,9 @@ function serviceAppointmentFrom(row: Row): ServiceAppointment { return { id: tex
 function savedViewFrom(row: Row): SavedView { return { id: text(row, "id"), organizationId: text(row, "organization_id"), ownerMembershipId: text(row, "owner_membership_id"), surface: text(row, "surface"), name: text(row, "name"), queryString: text(row, "query_string"), createdAt: text(row, "created_at") }; }
 
 class SqlOpsRepository implements OpsRepository {
+  async getDashboardContext(scope: OrganizationScope) {
+    return queryDashboardContext(this.driver, scope);
+  }
   async listAttention(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery) {
     return queryAttention(this.driver, scope, access, query);
   }

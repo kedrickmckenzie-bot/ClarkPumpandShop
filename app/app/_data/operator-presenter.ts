@@ -6,7 +6,8 @@ import { DASHBOARD_CHART_LIMITS, presentDashboardCharts, type DashboardChartPage
 import { workStatusLabel } from "@/lib/product/work-status-label";
 import { matchesRequestStatus, matchesWorkStage, visitHasWork } from "@/lib/ops/dashboard-cohorts";
 import { buildEquipmentReview } from "./equipment-review";
-import { scopedInvoiceRecords } from "@/lib/ops/dashboard-cohorts";
+import { dashboardContextFromFixture, type DashboardContext } from "@/lib/ops/dashboard-context";
+import { presentInvoiceSpotlight } from "./dashboard-context-presenter";
 import { effectivePmStatus } from "@/lib/ops/pm-occurrence-state";
 import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE, warrantyTaskHref } from "@/lib/ops/warranty-review";
 import { buildPmReactiveReview } from "./pm-reactive-review";
@@ -1205,7 +1206,7 @@ function lifecycleSpotlight(fixture: OpsFixture, session: OperatorSession, row: 
   };
 }
 
-export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession, prepared?: { activity: DashboardActivitySummary; attention: AttentionPage; charts?: DashboardChartPages }): DashboardPageViewModel {
+export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession, prepared?: { activity: DashboardActivitySummary; attention: AttentionPage; charts?: DashboardChartPages; context?: DashboardContext }): DashboardPageViewModel {
   const scoped = scopeFixture(fixture, session);
   const periodStart = rollingYearStart(fixture.asOf);
   const allCostByWork = recordedCostByWork(fixture, scoped.organizationId);
@@ -1225,22 +1226,16 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     updatedLabel: `Source data through ${date(fixture.asOf)}`,
   };
 
-  const invoiceRecords = scopedInvoiceRecords(fixture, scoped.organizationId, scoped.storeIds);
-  const invoiceToReview = invoiceRecords.find((invoice) => fixture.invoiceExceptions.some((flag) => flag.organizationId === scoped.organizationId && flag.invoiceId === invoice.id && flag.status === "open"));
+  const context = prepared?.context ?? dashboardContextFromFixture(fixture, scope);
   return presentDashboard({
     activity,
     pageBase, costFrom: periodStart, costTo: fixture.asOf.slice(0,10), journey: presentDashboardJourney(activity, attention.followUpCount),
     review: { items: attention.items.map(item => presentAttentionRow(item, fixture.asOf)), totalCount: attention.totalCount, mineCount: attention.mineCount },
     repairComparisonCount: repairComparisons.length,
     replacementEstimateTotal: lifecycle.reduce((sum, row) => sum + (row.replacement ?? 0), 0),
-    store: scoped.stores[0],
+    store: context.store,
     ...charts, spotlight,
-    invoiceSpotlight: invoiceToReview ? {
-      eyebrow: "Optional invoice safeguard", title: `Review invoice ${invoiceToReview.vendorInvoiceNumber}`,
-      description: "Check the flagged charges against the work and supporting evidence.",
-      facts: [{ label: "Gross invoice amount", value: money(invoiceToReview.total.amountMinor) }, { label: "Status", value: sentence(invoiceToReview.status) }, { label: "Vendor", value: fixture.vendors.find(vendor => vendor.organizationId === session.organizationId && vendor.id === invoiceToReview.vendorId)?.name ?? "Unknown vendor" }],
-      link: { href: `/app/invoices/${invoiceToReview.id}`, label: "Review invoice evidence" },
-    } : undefined,
+    invoiceSpotlight: presentInvoiceSpotlight(context.invoice),
   }, session);
 }
 

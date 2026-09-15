@@ -366,12 +366,13 @@ export async function loadDashboardModel() {
   const repository = await getServerOpsRepository();
   const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
   const window = { asOf: fixture.asOf, costFrom: rollingYearStart(fixture.asOf), costTo: fixture.asOf.slice(0, 10), currency: "USD" };
-  const [activity, attention, charts] = await Promise.all([
+  const [activity, attention, charts, dashboardContext] = await Promise.all([
     repository.getDashboardActivity(scope, window),
     repository.listAttention(scope, attentionAccess(session), { asOf: fixture.asOf, limit: 7 }),
     loadDashboardChartPages(repository, scope, window),
+    repository.getDashboardContext(scope),
   ]);
-  return enforceDashboardLinkPolicy(buildDashboardModel(fixture, session, { activity, attention, charts }), session);
+  return enforceDashboardLinkPolicy(buildDashboardModel(fixture, session, { activity, attention, charts, context: dashboardContext }), session);
 }
 
 export async function loadSearchModel(searchParams: OperatorSearchParameters = {}) {

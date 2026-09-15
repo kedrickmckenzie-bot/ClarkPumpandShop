@@ -10,6 +10,7 @@ import { buildDashboardModel } from "@/app/app/_data/operator-presenter";
 import { dashboardActivityFromFixture, rollingYearStart } from "@/lib/ops/dashboard-query";
 import { attentionAccess } from "@/app/app/_data/attention-presenter";
 import * as projection from "@/lib/ops/attention-projection";
+import * as dashboardContext from "@/lib/ops/dashboard-context";
 import type { OperatorSession } from "@/components/ops/data-contract";
 
 it("pages more than 200 same-deadline obligations without omission, duplicate identity, or unbounded returned rows", async () => {
@@ -64,7 +65,9 @@ it.each(["facilities", "executive", "regional", "store_manager", "finance"] as c
   const activity = dashboardActivityFromFixture(fixture, scope, { asOf: fixture.asOf, costFrom: rollingYearStart(fixture.asOf), costTo: fixture.asOf.slice(0, 10), currency: "USD" });
   const attention = attentionFromFixture(fixture, scope, attentionAccess(session), { asOf: fixture.asOf, limit: 7 });
   const expected = buildDashboardModel(fixture, session);
+  const context = dashboardContext.dashboardContextFromFixture(fixture, scope);
   const spy = vi.spyOn(projection, "projectAttentionItems").mockImplementation(() => { throw new Error("Dashboard rebuilt the review population"); });
-  try { expect(buildDashboardModel(fixture, session, { activity, attention })).toEqual(expected); expect(spy).not.toHaveBeenCalled(); }
-  finally { spy.mockRestore(); }
+  const contextSpy = vi.spyOn(dashboardContext, "dashboardContextFromFixture").mockImplementation(() => { throw new Error("Dashboard rebuilt invoice source history"); });
+  try { expect(buildDashboardModel(fixture, session, { activity, attention, context })).toEqual(expected); expect(spy).not.toHaveBeenCalled(); expect(contextSpy).not.toHaveBeenCalled(); }
+  finally { spy.mockRestore(); contextSpy.mockRestore(); }
 });

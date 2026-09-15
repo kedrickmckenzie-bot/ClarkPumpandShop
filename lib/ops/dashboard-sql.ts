@@ -3,6 +3,7 @@ import type { OpsSqlDriver } from "./sql-driver";
 import { scopeWhere } from "./sql-scope";
 import { vendorResponseSql } from "./work-stage-sql";
 import { workCostSql } from "./work-cost-query";
+import { visibleInvoiceSql } from "./invoice-scope-sql";
 import { PENDING_REQUEST_STATUSES, WORK_STAGE_STATUSES } from "./dashboard-cohorts";
 import {
   dashboardCursor, dashboardPageBounds, readDashboardCursor, validateDashboardWindow,
@@ -43,9 +44,7 @@ export async function queryDashboardActivity(driver: OpsSqlDriver, scope: Organi
     ["visitsWithoutWork", `SELECT COUNT(*) FROM scoped_visits v WHERE v.work_order_id IS NULL AND NOT EXISTS (SELECT 1 FROM ops_site_visit_work_orders l WHERE l.organization_id=v.organization_id AND l.visit_id=v.id)`],
     ["upcomingAppointments", `SELECT COUNT(*) FROM ops_service_appointments a JOIN scoped_work w ON w.organization_id=a.organization_id AND w.id=a.work_order_id WHERE a.status='confirmed' AND a.starts_at >= ?`],
     ["watchAssets", "SELECT COUNT(*) FROM ops_assets a JOIN scoped_stores s ON s.organization_id=a.organization_id AND s.id=a.store_id WHERE a.status='watch'"],
-    ["invoiceRecords", `SELECT COUNT(*) FROM ops_invoices i WHERE i.organization_id IN (SELECT organization_id FROM scoped_stores)
-      AND EXISTS (SELECT 1 FROM ops_invoice_lines l JOIN ops_invoice_line_allocations a ON a.organization_id=l.organization_id AND a.invoice_line_id=l.id WHERE l.organization_id=i.organization_id AND l.invoice_id=i.id)
-      AND NOT EXISTS (SELECT 1 FROM ops_invoice_lines l JOIN ops_invoice_line_allocations a ON a.organization_id=l.organization_id AND a.invoice_line_id=l.id WHERE l.organization_id=i.organization_id AND l.invoice_id=i.id AND a.store_id NOT IN (SELECT id FROM scoped_stores))`],
+    ["invoiceRecords", `SELECT COUNT(*) FROM ops_invoices i WHERE ${visibleInvoiceSql}`],
     ["recordedCostMinor", "SELECT COALESCE(SUM(amount_minor),0) FROM period_costs"],
     ["costWorkOrders", "SELECT COUNT(DISTINCT work_order_id) FROM period_costs"],
     ["costLines", "SELECT COUNT(*) FROM period_costs"],

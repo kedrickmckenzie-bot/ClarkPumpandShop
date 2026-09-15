@@ -19,6 +19,7 @@ export async function dashboardQueryRegression(repository: OpsRepository, fixtur
     { organizationId: "another-organization", storeIds: [store.id] },
   ];
   for (const scope of scopes) {
+    expect(await repository.getDashboardContext(scope)).toEqual(await reference.getDashboardContext(scope));
     const summary = await repository.getDashboardActivity(scope, window);
     expect(summary).toEqual(await reference.getDashboardActivity(scope, window));
     const pending = await repository.listRequests(scope, { status: "pending", limit: 100 });
