@@ -15,6 +15,7 @@ Snapshot inventory after the first persistence extraction, September 14, 2026. T
 | Creation | `loadCreateRequestModel`, `loadCreateWorkOrderModel`, `loadCreateStoreModel`, `loadCreateVendorModel` | Scoped option searches and small configuration queries; avoid full tenant source data |
 | Governance | `loadApprovalPolicyWorkspaceModel`, `loadJobHealthModel` | Policy and worker-health queries; record-check queries are complete |
 | Vendors | `loadVendorPerformanceListModel`, `loadVendorPerformanceDetailModel` | Aggregate vendor evidence and paginated exact records; unused scorecard loader retired |
+| Invoice / warranty records | `loadWarrantyFinanceWorkspace`, `InvoiceDetailWorkspace` | Exact scoped invoice/warranty parents and paged lines, evidence, review history and accounting sources; avoid a compatibility fixture of the whole tenant |
 | Other loaders | Verification, store sweeps, service runs, value ledger and remaining feature loaders using request snapshots | Feature-specific relationship queries |
 | API consumers | Import preview, equipment replacement, vendor creation and vendor relationship updates | Targeted validation inputs and command preconditions |
 
@@ -151,3 +152,5 @@ Shared fixture, migrated SQLite and embedded PostgreSQL contracts pass. A separa
 The local presentation has four invoices totaling $1,700, two recorded visits and two windows without visits with $850 linked invoice amount. Browser checks confirm the full invoice list, filtered two-invoice amount, visit list, missing windows and exact occurrence return path, plus Store 104 manager denial. Desktop and 375px phone layouts are inspected. These are local source facts, not a claim about changed records in the persisted hosted tenant.
 
 Next: remaining record/work-action, equipment/lifecycle, Trends, import and governance readers in the inventory above. Keep the completed PM/overview/brief/queue boundaries intact. P4-02/P5-02/P5-03 remain open until their full scope is proved; this checkpoint does not satisfy infrastructure or release gates.
+
+Concrete next reader: `/app/invoices/[id]` calls `loadWarrantyFinanceWorkspace({invoiceId})`, then `InvoiceDetailWorkspace` with a fixture. It also uses `!session.storeIds?.length && !session.regionIds?.length` for accounting-source access; audit explicit-empty versus unrestricted scope before replacing the reader. The newly bounded PM review opens this existing detail route, which is not yet a bounded feature page. Keep review source queries intact while migrating the invoice parent, lines, allocations, comparison and audit history.
