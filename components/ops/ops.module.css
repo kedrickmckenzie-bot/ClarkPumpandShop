@@ -1097,7 +1097,7 @@ a.factCard { padding-right: 38px; }
   .formFooter { gap: 12px; }
   .optionalFormSection summary { flex-direction: column; align-items: flex-start; gap: 5px; }
 }
-.recordForm:has(input[name="assignmentKind"][value="outside_vendor"]:checked) button[value="save"] { color: #334155; background: #fff; border: 1px solid #cbd5e1; }
+.recordForm:has(input[name="assignmentKind"][value="outside_vendor"]:checked) button[value="save"] { color: #334155 !important; background: #fff; border: 1px solid #cbd5e1; }
 
 .choiceFieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .choiceFieldset legend { margin-bottom: 12px; font-weight: 650; }

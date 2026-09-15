@@ -1,6 +1,15 @@
 @import "tailwindcss";
 
 :root {
+  /* Shared workspace tokens must not depend on the retired legacy stylesheet. */
+  --to-canvas:#f2f4f7;--to-surface:#fff;--to-soft:#f8fafc;--to-sidebar:#16212e;
+  --to-ink:#161f2a;--to-copy:#4e5f70;--to-muted:#74838f;--to-line:#e2e7ec;
+  --to-line-strong:#ccd4dd;--to-teal:var(--product-action, #2563eb);--to-teal-dark:var(--product-action-hover, #1d4ed8);
+  --to-teal-soft:var(--product-action-soft, #eff6ff);--to-coral:#2a5cc7;--to-coral-soft:#e9effb;
+  --to-amber:#96620f;--to-amber-soft:#fdf3df;--to-blue:#34689f;--to-blue-soft:#eaf2f8;
+  --to-red:#ae4439;--to-red-soft:#fdecea;--to-green:#33795a;--to-green-soft:#e8f3eb;
+  --to-shadow:0 12px 32px rgba(15,23,42,.07);--to-radius:12px;--to-radius-lg:16px;
+
   color-scheme: light;
   --app-canvas: var(--product-canvas, #f3f4f6);
   --app-surface: var(--product-surface, #ffffff);
