@@ -10,6 +10,11 @@ export interface DashboardWindow {
   currency: string;
 }
 
+export function rollingYearStart(asOf: string): string {
+  const value = new Date(asOf);
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() - 11, 1)).toISOString().slice(0, 10);
+}
+
 export interface DashboardActivitySummary {
   stores: number;
   openWork: number;

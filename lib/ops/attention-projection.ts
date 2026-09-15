@@ -88,6 +88,17 @@ export interface AttentionProjectionInput {
   history?: boolean;
 }
 
+export function quoteRoundCopy(requested: number, submitted: number, missed: number) {
+  return {
+    title: submitted ? "Review the vendor quote round" : missed ? "Follow up on overdue quote requests" : "Wait for requested vendor quotes",
+    reason: submitted
+      ? `${submitted} of ${requested} ${requested === 1 ? "quote is" : "quotes are"} ready. Compare price, scope, and timing before choosing.`
+      : missed
+        ? `${missed} ${missed === 1 ? "quote has" : "quotes have"} passed the response deadline. Follow up with the vendor.`
+        : `Waiting for ${requested} vendor ${requested === 1 ? "quote" : "quotes"}. No action is due yet.`,
+  };
+}
+
 /**
  * Produces the complete scoped queue population. Callers may filter and paginate
  * the returned rows, but must not cap its inputs first.
@@ -221,12 +232,7 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
         sourceIds: [...requests.map((request) => request.id), ...proposalIds],
         workOrderId,
         storeId: work.storeId,
-        title: submitted.length ? "Review the vendor quote round" : missed.length ? "Follow up on overdue quote requests" : "Wait for requested vendor quotes",
-        reason: submitted.length
-          ? `${submitted.length} of ${requests.length} requested ${requests.length === 1 ? "quote is" : "quotes are"} ready for comparison. Review scope, exclusions, availability, validity, and amount before choosing.`
-          : missed.length
-            ? `${missed.length} vendor ${missed.length === 1 ? "commitment has" : "commitments have"} passed the requested response time without a quote.`
-            : `${requests.length} vendor ${requests.length === 1 ? "quote is" : "quotes are"} outstanding. This is visible waiting work, not an operator task until a quote arrives or a commitment is missed.`,
+        ...quoteRoundCopy(requests.length, submitted.length, missed.length),
         owner: work.accountableParty,
         dueAt,
         priority: missed.length ? "critical" : submitted.length ? "high" : "normal",

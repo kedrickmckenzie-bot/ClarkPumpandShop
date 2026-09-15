@@ -1,3 +1,4 @@
+import { attentionFromFixture } from "./attention-query";
 import { matchesRequestStatus, matchesWorkStage } from "./dashboard-cohorts";
 import { dashboardActivityFromFixture, dashboardBreakdownFromFixture } from "./dashboard-query";
 import type { JobRun, NotificationRecipient, NotificationRule, OrganizationWorkflowPolicy, OutboxMessage, PmOccurrence, PmPlan, RoleCapabilityOverride, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
@@ -439,6 +440,9 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
 }
 
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
+  async listAttention(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery) {
+    return attentionFromFixture(this.fixture, scope, access, query);
+  }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return dashboardActivityFromFixture(this.fixture, scope, window);
   }

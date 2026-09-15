@@ -1,3 +1,4 @@
+import { queryAttention } from "./attention-sql";
 import { sqlJsonArrayText, sqlStringAggregate, type OpsSqlDriver } from "./sql-driver";
 import { scopeWhere } from "./sql-scope";
 import { vendorResponseSql } from "./work-stage-sql";
@@ -339,6 +340,9 @@ function serviceAppointmentFrom(row: Row): ServiceAppointment { return { id: tex
 function savedViewFrom(row: Row): SavedView { return { id: text(row, "id"), organizationId: text(row, "organization_id"), ownerMembershipId: text(row, "owner_membership_id"), surface: text(row, "surface"), name: text(row, "name"), queryString: text(row, "query_string"), createdAt: text(row, "created_at") }; }
 
 class SqlOpsRepository implements OpsRepository {
+  async listAttention(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery) {
+    return queryAttention(this.driver, scope, access, query);
+  }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return queryDashboardActivity(this.driver, scope, window);
   }

@@ -1,4 +1,7 @@
-import { presentDashboard } from "./dashboard-presenter";
+import { presentDashboard, presentDashboardJourney } from "./dashboard-presenter";
+import { attentionAccess, presentAttentionRow, reviewQueueExceptionCopy } from "./attention-presenter";
+import { attentionFromFixture, type AttentionPage } from "@/lib/ops/attention-query";
+import { dashboardActivityFromFixture, rollingYearStart, type DashboardActivitySummary } from "@/lib/ops/dashboard-query";
 import { workStatusLabel } from "@/lib/product/work-status-label";
 import { matchesRequestStatus, matchesWorkStage, visitHasWork } from "@/lib/ops/dashboard-cohorts";
 import { buildEquipmentReview } from "./equipment-review";
@@ -58,7 +61,6 @@ import { roleCan, roleCanAccessProgramRoute, roleCanOpenOperatorHref } from "@/c
 import type {
   ApprovalRequiredRole,
   Asset,
-  ExceptionKind,
   OpsFixture,
   RequestImpactAssessment,
   Store,
@@ -608,11 +610,6 @@ function hrefWithQuery(path: string, values: Record<string, string | undefined>)
   return query ? `${path}?${query}` : path;
 }
 
-function rollingYearStart(asOf: string): string {
-  const asOfDate = new Date(asOf);
-  return new Date(Date.UTC(asOfDate.getUTCFullYear(), asOfDate.getUTCMonth() - 11, 1)).toISOString().slice(0, 10);
-}
-
 function paginationModel(
   totalRows: number,
   currentPage: number,
@@ -759,45 +756,6 @@ function costTrend(
     sourceLink: { href: workspaceStartHref(hrefWithQuery("/app/work-orders", { store: options.storeId, ...options.query, hasCost: "true", costFrom: `${monthKeys[0]}-01`, costTo: fixture.asOf.slice(0, 10) })), label: `Open ${sourceWorkIds.size} work orders with cost` },
   };
 }
-
-const reviewQueueExceptionCopy: Record<ExceptionKind, { label: string; title: string }> = {
-  no_work_order: {
-    label: "Visit without a work order",
-    title: "Create or link a work order",
-  },
-  unexpected_visit: {
-    label: "Unplanned visit",
-    title: "Review an unplanned vendor visit",
-  },
-  missing_checkout: {
-    label: "Missing checkout",
-    title: "Close or follow up on an open visit",
-  },
-  outside_geofence: {
-    label: "Check-in outside store area",
-    title: "Review the check-in location",
-  },
-  low_accuracy_location: {
-    label: "Weak location data",
-    title: "Review a check-in with weak location data",
-  },
-  duplicate_active_visit: {
-    label: "Possible duplicate visits",
-    title: "Check for a duplicate visit",
-  },
-  unmatched_invoice: {
-    label: "Invoice not linked",
-    title: "Link the invoice to the right work",
-  },
-  amount_above_authorization: {
-    label: "Cost above approved amount",
-    title: "Review a cost above the approved amount",
-  },
-  overdue_pm: {
-    label: "Scheduled maintenance is overdue",
-    title: "Review overdue preventive maintenance",
-  },
-};
 
 const accountabilityExceptionKinds = new Set([
   "no_work_order",
@@ -1104,150 +1062,6 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
   );
 }
 
-function buildSharedDashboardModel(fixture: OpsFixture, session: OperatorSession): DashboardPageViewModel {
-  const scoped = scopeFixture(fixture, session);
-  const periodStart = rollingYearStart(fixture.asOf);
-  const costByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart, fixture.asOf.slice(0, 10));
-  const lifecycleCostByWork = recordedCostByWork(fixture, scoped.organizationId);
-  const recordedCost = costForWorkIds(costByWork, scoped.workOrders.map((workOrder) => workOrder.id));
-  const openWork = scoped.workOrders.filter((workOrder) => !["closed", "cancelled"].includes(workOrder.status));
-  const activeVisits = scoped.visits.filter((visit) => visit.status === "active");
-  const completedVisits = scoped.visits.filter((visit) => visit.status !== "active");
-  const pendingRequests = fixture.requests.filter(
-    (request) =>
-      request.organizationId === scoped.organizationId &&
-      scoped.storeIds.has(request.storeId) &&
-      matchesRequestStatus(request, "pending"),
-  );
-  const awaitingVendor = scoped.workOrders.filter((workOrder) =>
-    matchesWorkStage(workOrder, "vendor-response", fixture),
-  );
-  const followUps = actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER).filter((item) => item.attentionType === "follow_up");
-  const categoryCost = new Map<string, number>();
-  for (const work of scoped.workOrders) {
-    const key = work.categoryKey ?? "unclassified";
-    categoryCost.set(key, (categoryCost.get(key) ?? 0) + (costByWork.get(work.id) ?? 0));
-  }
-  const candidate = lifecycleRows(fixture, scoped, lifecycleCostByWork).find((row) =>
-    row.screening.state === "compare_alternatives",
-  );
-
-  const reviewItems = actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER);
-  const metrics: MetricViewModel[] = [
-    {
-      id: "active-visits",
-      label: "Onsite visits",
-      value: String(activeVisits.length),
-      supportingText: `${activeVisits.length} onsite now · ${scoped.visits.length} visits in scope`,
-      tone: activeVisits.length ? "info" : "neutral",
-      link: { href: "/app/visits?status=active", label: "Open live visits" },
-    },
-    {
-      id: "open-exceptions",
-      label: "Items to review",
-      value: String(reviewItems.length),
-      supportingText: "Open the queue for source records and next steps",
-      tone: reviewItems.length ? "warning" : "positive",
-      link: { href: "/app/action-center", label: "Open review queue" },
-    },
-    {
-      id: "open-work",
-      label: "Open work",
-      value: String(openWork.length),
-      supportingText: "Every item has an owner and next action",
-      link: { href: "/app/work-orders?status=open", label: "Open work orders" },
-    },
-    {
-      id: "recorded-cost",
-      label: "Recorded work cost",
-      value: money(recordedCost),
-      supportingText: "Rolling 12-month source cost; invoices not required",
-      link: { href: "/app/spend", label: "Explain the total" },
-    },
-  ];
-
-  return {
-    state: { kind: "ready" },
-    layout: session.role === "executive" ? "executive" : session.role === "finance" ? "finance" : session.role === "store_manager" ? "store" : session.role === "regional" ? "regional" : "operations",
-    page: {
-      title: session.role === "executive" ? "Your company at a glance" : "Maintenance overview",
-      eyebrow: session.role === "executive" ? "Executive home" : "Manager home",
-      description: "Start with the decisions that need you, then follow every number into the store, work order, visit, or cost record behind it.",
-      scopeLabel: session.scopeLabel,
-      periodLabel: `Rolling 12 months from ${date(periodStart)}`,
-      updatedLabel: `Source data through ${date(fixture.asOf)}`,
-      primaryAction: { label: "Review queue", href: "/app/action-center" },
-      secondaryAction: session.role === "facilities" || session.role === "regional"
-        ? { label: "Create work order", href: "/app/work-orders/new" }
-        : undefined,
-    },
-    journey: [
-      {
-        id: "intake",
-        label: "Requests to review",
-        value: String(pendingRequests.length),
-        supportingText: "Waiting for review",
-        tone: pendingRequests.length ? "warning" : "neutral",
-        link: { href: "/app/requests?status=pending", label: "Review requests" },
-      },
-      {
-        id: "not-sent",
-        label: "Approved · not sent",
-        value: String(scoped.workOrders.filter((work) => matchesWorkStage(work, "not-sent", fixture)).length),
-        supportingText: "Includes work held for a later visit",
-        link: { href: "/app/work-orders?stage=not-sent", label: "Review approved work" },
-      },
-      {
-        id: "authorization",
-        label: "Waiting on vendor",
-        value: String(awaitingVendor.length),
-        supportingText: "Sent work needing a response",
-        tone: awaitingVendor.length ? "warning" : "neutral",
-        link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" },
-      },
-      {
-        id: "onsite",
-        label: "Onsite now",
-        value: String(activeVisits.length),
-        supportingText: `${scoped.visits.length} total visits in scope`,
-        tone: activeVisits.length ? "info" : "neutral",
-        link: { href: "/app/visits?status=active", label: "Open live visits" },
-      },
-      {
-        id: "follow-up",
-        label: "Work follow-ups",
-        value: String(followUps.length),
-        supportingText: "Open tasks and follow-ups",
-        tone: followUps.length ? "critical" : "positive",
-        link: { href: "/app/action-center?type=follow-up", label: "Open follow-ups" },
-      },
-      {
-        id: "history",
-        label: "Completed visits",
-        value: String(completedVisits.length),
-        supportingText: "Observed service history",
-        tone: "positive",
-        link: { href: "/app/visits?status=checked_out", label: "Open visit history" },
-      },
-    ],
-    metrics,
-    priorityActions: actionsForSession(fixture, scoped, session),
-    breakdowns: [
-      costBreakdown(
-        "Recorded cost by service area",
-        categoryCost,
-        (key) => hrefWithQuery("/app/work-orders", { category: key, hasCost: "true", costFrom: periodStart, costTo: fixture.asOf.slice(0, 10) }),
-        {
-          description: "Select a service area to open the exact work orders and cost lines behind it.",
-          sourceHref: hrefWithQuery("/app/work-orders", { hasCost: "true", costFrom: periodStart, costTo: fixture.asOf.slice(0, 10) }),
-        },
-      ),
-    ],
-    trends: [costTrend(fixture, scoped, { periodStart })],
-    spotlight: lifecycleSpotlight(fixture, session, candidate),
-  };
-}
-
 /**
  * A deliberately complete view of the smaller launch package.
  *
@@ -1426,19 +1240,13 @@ function lifecycleSpotlight(fixture: OpsFixture, session: OperatorSession, row: 
   };
 }
 
-export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession): DashboardPageViewModel {
-  const base = buildSharedDashboardModel(fixture, session);
+export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession, prepared?: { activity: DashboardActivitySummary; attention: AttentionPage }): DashboardPageViewModel {
   const scoped = scopeFixture(fixture, session);
   const periodStart = rollingYearStart(fixture.asOf);
   const rollingCostByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart, fixture.asOf.slice(0, 10));
   const allCostByWork = recordedCostByWork(fixture, scoped.organizationId);
-  const recordedCost = costForWorkIds(rollingCostByWork, scoped.workOrders.map((work) => work.id));
   const openWork = scoped.workOrders.filter((work) => !["closed", "cancelled"].includes(work.status));
   const activeVisits = scoped.visits.filter((visit) => visit.status === "active");
-  const completedVisits = scoped.visits.filter((visit) => visit.status !== "active");
-  const awaitingVendor = openWork.filter((work) =>
-    matchesWorkStage(work, "vendor-response", fixture),
-  );
   const lifecycle = lifecycleRows(fixture, scoped, allCostByWork);
   const repairComparisons = lifecycle.filter((row) => row.screening.state === "compare_alternatives");
   const candidate = repairComparisons[0];
@@ -1453,15 +1261,9 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     if (visit.vendorId) observedVisitCounts.set(visit.vendorId, (observedVisitCounts.get(visit.vendorId) ?? 0) + 1);
   }
 
-  const reviewItems = actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER);
-  const storeManagerActions = reviewItems.filter((item) => item.attentionLane === "mine");
-  const dashboardWorkIds = new Set(scoped.workOrders.map((work) => work.id));
-  const upcomingAppointments = (fixture.serviceAppointments ?? []).filter((appointment) => (
-    appointment.organizationId === scoped.organizationId
-    && appointment.status === "confirmed"
-    && Date.parse(appointment.startsAt) >= Date.parse(fixture.asOf)
-    && dashboardWorkIds.has(appointment.workOrderId)
-  ));
+  const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
+  const activity = prepared?.activity ?? dashboardActivityFromFixture(fixture, scope, { asOf: fixture.asOf, costFrom: periodStart, costTo: fixture.asOf.slice(0, 10), currency: "USD" });
+  const attention = prepared?.attention ?? attentionFromFixture(fixture, scope, attentionAccess(session), { asOf: fixture.asOf, limit: 7 });
   const categoryCost = new Map<string, number>();
   const storeCost = new Map<string, number>();
   for (const work of scoped.workOrders) {
@@ -1520,15 +1322,9 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
   const activeVendorCounts = new Map<string, number>();
   for (const visit of activeVisits) if (visit.vendorId) activeVendorCounts.set(visit.vendorId, (activeVendorCounts.get(visit.vendorId) ?? 0) + 1);
   return presentDashboard({
-    activity: {
-      openWork: openWork.length, awaitingVendor: awaitingVendor.length, activeVisits: activeVisits.length,
-      completedVisits: completedVisits.length, totalVisits: scoped.visits.length, recordedCostMinor: recordedCost,
-      costWorkOrders: [...rollingCostByWork.keys()].filter(id => scoped.workOrders.some(work => work.id === id)).length,
-      invoiceRecords: invoiceRecords.length, watchAssets: scoped.assets.filter(asset => asset.status === "watch").length,
-      upcomingAppointments: upcomingAppointments.length,
-    },
-    pageBase, costFrom: periodStart, costTo: fixture.asOf.slice(0,10), journey: base.journey,
-    review: { items: reviewItems.slice(0,7), totalCount: reviewItems.length, mineCount: storeManagerActions.length },
+    activity,
+    pageBase, costFrom: periodStart, costTo: fixture.asOf.slice(0,10), journey: presentDashboardJourney(activity, attention.followUpCount),
+    review: { items: attention.items.map(item => presentAttentionRow(item, fixture.asOf)), totalCount: attention.totalCount, mineCount: attention.mineCount },
     repairComparisonCount: repairComparisons.length,
     replacementEstimateTotal: lifecycle.reduce((sum, row) => sum + (row.replacement ?? 0), 0),
     store: scoped.stores[0],

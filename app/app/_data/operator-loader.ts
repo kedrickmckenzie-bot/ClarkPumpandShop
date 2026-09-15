@@ -1,4 +1,6 @@
 import { approvalRequestState } from "@/lib/ops/approval-governance";
+import { rollingYearStart } from "@/lib/ops/dashboard-query";
+import { attentionAccess } from "./attention-presenter";
 import "server-only";
 
 import { cache } from "react";
@@ -355,7 +357,14 @@ export async function loadImportWorkspaceAccess() {
 
 export async function loadDashboardModel() {
   const context = await sessionAndFixture();
-  return enforceDashboardLinkPolicy(buildDashboardModel(context.fixture, context.session), context.session);
+  const { session, fixture } = context;
+  const repository = await getServerOpsRepository();
+  const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
+  const [activity, attention] = await Promise.all([
+    repository.getDashboardActivity(scope, { asOf: fixture.asOf, costFrom: rollingYearStart(fixture.asOf), costTo: fixture.asOf.slice(0, 10), currency: "USD" }),
+    repository.listAttention(scope, attentionAccess(session), { asOf: fixture.asOf, limit: 7 }),
+  ]);
+  return enforceDashboardLinkPolicy(buildDashboardModel(fixture, session, { activity, attention }), session);
 }
 
 export async function loadSearchModel(searchParams: OperatorSearchParameters = {}) {

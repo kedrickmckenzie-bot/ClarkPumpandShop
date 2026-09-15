@@ -1,4 +1,5 @@
 import { expect } from "vitest";
+import { attentionQueryRegression } from "./attention-query-regression";
 import type { OpsRepository, OrganizationScope } from "@/lib/ops/repository";
 import type { OpsFixture } from "@/lib/ops/types";
 import { createOpsFixtureReadRepository } from "@/lib/ops/fixture-repository";
@@ -6,6 +7,7 @@ import type { DashboardBreakdownKind, DashboardBreakdownRow } from "@/lib/ops/da
 
 /** Run unchanged against migrated SQLite and PostgreSQL before mutating their shared fixture. */
 export async function dashboardQueryRegression(repository: OpsRepository, fixture: OpsFixture) {
+  await attentionQueryRegression(repository, fixture);
   const reference = createOpsFixtureReadRepository(fixture);
   const organizationId = fixture.organizations[0].id;
   const store = fixture.stores.find(row => row.storeNumber === "104")!;

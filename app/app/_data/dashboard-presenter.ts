@@ -24,6 +24,17 @@ export interface DashboardPresentationData {
 }
 
 function money(amountMinor: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amountMinor / 100); }
+
+export function presentDashboardJourney(activity: DashboardActivitySummary, followUpCount: number): DashboardPageViewModel["journey"] {
+  return [
+    { id: "intake", label: "Requests to review", value: String(activity.pendingRequests), supportingText: "Waiting for review", tone: activity.pendingRequests ? "warning" : "neutral", link: { href: "/app/requests?status=pending", label: "Review requests" } },
+    { id: "not-sent", label: "Approved · not sent", value: String(activity.approvedNotSent), supportingText: "Includes work held for a later visit", link: { href: "/app/work-orders?stage=not-sent", label: "Review approved work" } },
+    { id: "authorization", label: "Waiting on vendor", value: String(activity.awaitingVendor), supportingText: "Sent work needing a response", tone: activity.awaitingVendor ? "warning" : "neutral", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
+    { id: "onsite", label: "Onsite now", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} total visits in scope`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
+    { id: "follow-up", label: "Work follow-ups", value: String(followUpCount), supportingText: "Open tasks and follow-ups", tone: followUpCount ? "critical" : "positive", link: { href: "/app/action-center?type=follow-up", label: "Open follow-ups" } },
+    { id: "history", label: "Completed visits", value: String(activity.completedVisits), supportingText: "Observed service history", tone: "positive", link: { href: "/app/visits?status=checked_out", label: "Open visit history" } },
+  ];
+}
 function hrefWithQuery(path: string, values: Record<string, string | undefined>) { const params = new URLSearchParams(Object.entries(values).filter((entry): entry is [string,string] => Boolean(entry[1]))); return params.size ? path + "?" + params.toString() : path; }
 
 function dashboardShortcut(options: {
