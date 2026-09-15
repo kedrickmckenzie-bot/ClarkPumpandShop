@@ -49,9 +49,17 @@ Use `.env.render.example` as the checklist, but enter values in Render rather
 than committing a `.env` file. Required application settings are:
 
 - `TRACEOPS_RUNTIME=render`
+- `OPS_ACCESS_MODE=preview` for this fictional, no-login demo
 - `DATABASE_URL` from the new TraceOps PostgreSQL database
 - `NEXT_PUBLIC_SITE_URL` set to this web service's final HTTPS origin
 - `PUBLIC_TOKEN_SECRET` generated specifically for TraceOps
+
+If the demo shows **Workspace setup needed**, set `OPS_ACCESS_MODE` to `preview`
+in the Render web service's Environment settings and save/redeploy. A Git push
+does not update Render environment variables. Leave `OPS_IDENTITY_PROVIDER`
+unset for this demo. Anyone who can reach this Render demo can use its fictional
+preview roles; do not put real customer data in it. Customer production must use
+authenticated mode with a verified identity adapter.
 
 For uploaded evidence, create a separate private S3-compatible bucket and set
 the `S3_*` variables from `.env.render.example`. Do not use Render's ephemeral
