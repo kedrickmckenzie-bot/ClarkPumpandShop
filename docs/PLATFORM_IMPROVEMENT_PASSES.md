@@ -306,3 +306,9 @@ Seed, typecheck, lint, **131 files / 898 tests** (190.17 seconds), **4 files / 5
 Browser inspection verified the finance overview’s invoice COLDLINE-202603-104-4, $14,725.00 USD, and exact record destination with CPS-2026-0035 / Store 104 evidence. The phone view kept the amount, status and vendor readable. The store-manager overview retained Store 104 and its exact store shortcut. Facilities overview and normal viewport sizing were restored. No source data or external delivery was mutated.
 
 **24 of 40 complete / 16 remaining.** The remaining home snapshot inputs are lifecycle/estimate summaries and the equipment spotlight. Continue with their bounded domain inputs as described in `PASS5_QUERY_INVENTORY.md`, then remove the home snapshot dependency. Full action-center and other record/program migrations plus Passes 6–7 remain open. Keep `dev4.log` untouched.
+
+### Pass 5 invoice/store context publication — complete
+
+Private version **38** published successfully at **2026-09-15 01:50:05 UTC**, from source `3edf49581ee9204347fada21cd7800f711275d05`, at https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site . Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_21e58e4c983481919f2148c8733f7163`; deployment: `appgdep_6aa8a43cf79c8191be6d73c3a6713b97`. The owner-only audience, D1/R2 and environment revision 1 were preserved. Exact source push, successful builds, Git Bash packaging and archive validation preceded saving/deployment. This post-publication checkpoint is documentation only.
+
+The goal and automatic continuation remain active at **24 of 40 complete / 16 remaining**. Continue the lifecycle/estimate summary and equipment spotlight extraction; invoice/store context is now connected and does not need rebuilding. Port 3000 and the browser tab remain available for ongoing work, with facilities preview and normal sizing restored. `dev4.log` is untouched.
