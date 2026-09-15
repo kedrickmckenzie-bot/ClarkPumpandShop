@@ -1,4 +1,5 @@
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
+import { buildMaintenancePlan } from "@/lib/ops/maintenance-plan";
 import "server-only";
 import { supportedRecordingCoverage } from "@/lib/ops/recording-coverage";
 
@@ -2387,7 +2388,7 @@ export function buildTrendsModel(
     { id: "drivers", label: "Change drivers", description: `What changed by ${breakdownLabels[breakdown]}` },
     { id: "stores", label: "Compare stores", description: "Equipment-matched company peers" },
     { id: "vendors", label: "Vendor follow-through", description: "Response speed, coverage, and nonresponse" },
-    { id: "planning", label: "Planning", description: "At-the-recent-pace scenario" },
+    { id: "planning", label: "Plan upcoming work", description: "Open estimates, PM and replacements" },
     { id: "records", label: "Source records", description: "Exact records behind each number" },
   ];
   const views = viewCopy.filter((view) => !selectedInvoice || view.id === "records").map((view) => ({
@@ -2618,6 +2619,9 @@ export function buildTrendsModel(
 
   return {
     state: { kind: "ready" },
+    maintenancePlan: activeView === "planning" ? buildMaintenancePlan(fixture, session.organizationId,
+      new Set(buildAllRecords(fixture, session, "work_orders").records.filter((row) => scopeRecord(row, true, true, true, false)).flatMap((row) => row.workOrderId ? [row.workOrderId] : [])),
+      currencyCode, Number(first(query.planPage) ?? 1)) : undefined,
     page: {
       title: "Trends",
       eyebrow: "What changed and where",

@@ -1,6 +1,7 @@
 import { workStatusLabel } from "@/lib/product/work-status-label";
 import "server-only";
 import { WORK_STAGE_STATUSES } from "@/lib/ops/dashboard-cohorts";
+import { workListNavigation } from "@/lib/ops/work-list-navigation";
 
 import type {
   DashboardPageViewModel,
@@ -87,7 +88,9 @@ function queryFilters(route: OperatorListRoute, query: OperatorSearchParameters)
   const statusOptions = route === "visits"
     ? [{ value: "", label: "All visits" }, { value: "active", label: "Onsite now" }, { value: "checked_out", label: "Completed" }]
     : route === "work-orders"
-      ? [{ value: "", label: "All work" }, { value: "open", label: "Open" }, { value: "waiting_on_vendor", label: "Vendor follow-up" }, { value: "waiting_on_parts", label: "Waiting on parts" }, { value: "completed_pending_review", label: "Needs verification" }, { value: "closed", label: "Closed" }]
+      ? selectedStatus === "history" || selectedStatus === "closed" || selectedStatus === "cancelled"
+        ? [{ value: "history", label: "All history" }, { value: "closed", label: "Closed" }, { value: "cancelled", label: "Cancelled" }]
+        : [{ value: "waiting_on_vendor", label: "Vendor follow-up" }, { value: "waiting_on_parts", label: "Waiting on parts" }, { value: "completed_pending_review", label: "Needs verification" }]
       : route === "requests"
         ? [{ value: "", label: "All reports" }, { value: "pending", label: "Needs review" }, { value: "submitted", label: "New" }, { value: "under_review", label: "Under review" }, { value: "acknowledged_unlinked", label: "Acknowledged without linked work" }, { value: "converted", label: "Converted to work" }, { value: "closed", label: "Closed" }]
         : [];
@@ -329,7 +332,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     const stageStatuses = WORK_STAGE_STATUSES[first(query.stage) ?? ""];
     const statuses = requestedStatus === "open"
       ? ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"]
-      : requestedStatus ? [requestedStatus] : undefined;
+      : requestedStatus === "history" ? ["closed", "cancelled"] : requestedStatus && requestedStatus !== "all" ? [requestedStatus] : undefined;
     const [work, held] = await Promise.all([repository.listWorkOrders(scope, {
       ...request,
       search: q,
@@ -363,7 +366,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       primaryAction = { label: "Send approved jobs together", href: `/app/store-sweeps/new?returnTo=${encodeURIComponent(currentContext)}` };
       secondaryAction = { label: "Return to all work", href: workTimingHref(query, false) };
     } else if (roleCan(session, "create_work_order")) primaryAction = { label: "Create work order", href: creationHref("/app/work-orders/new", query) };
-    if (!costEvidence && !first(query.stage) && (session.role === "facilities" || session.role === "regional")) {
+    if (!costEvidence && !first(query.stage) && !["history", "closed", "cancelled"].includes(first(query.status) ?? "") && (session.role === "facilities" || session.role === "regional")) {
       if (!heldPlan) secondaryAction = { label: "Send approved jobs together", href: "/app/store-sweeps/new?returnTo=%2Fapp%2Fwork-orders" };
       metrics = [
         { id: "ready-to-bundle", label: "Approved for next suitable visit", value: String(held.approvedWorkOrders), supportingText: `${held.storesWithApprovedWork} store${held.storesWithApprovedWork === 1 ? "" : "s"} across your full operating scope`, tone: held.approvedWorkOrders ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open approved work" } },
@@ -373,7 +376,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
         id: "work-visit-plan",
         label: "Work timing",
         options: [
-          { value: "all", label: "All work", href: workTimingHref(query, false), selected: !heldPlan },
+          { value: "all", label: "Any timing", href: workTimingHref(query, false), selected: !heldPlan },
           { value: "ready", label: `Approved for next suitable visit (${held.approvedWorkOrders})`, href: workTimingHref(query, true), selected: heldPlan },
         ],
       }, ...(heldPlan ? [{
@@ -464,7 +467,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     ] : columns[route as QueryListRoute], rows },
     resultSummary: summary,
     search: searchControl(route, query, `Search ${title}`, placeholder),
-    filters: [...(contextualFilters ?? []), ...(queryFilters(route, query) ?? [])],
+    filters: [...(route === "work-orders" ? [{ id: "work-view", label: "Work", options: workListNavigation(query) }] : []), ...(queryFilters(route, query) ?? []), ...(contextualFilters ?? [])],
     appliedFilters,
     clearFiltersHref: heldPlan ? "/app/work-orders?visitPlan=ready" : `/app/${route}`,
     pagination: pagination(route, query, result, page),

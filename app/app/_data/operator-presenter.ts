@@ -1,4 +1,5 @@
 import { recordedMoneyLabel } from "@/lib/ops/work-review";
+import { equipmentType } from "@/lib/ops/equipment-browse";
 import { attentionAccess, reviewQueueExceptionCopy } from "./attention-presenter";
 import { attentionFromFixture, type AttentionPage } from "@/lib/ops/attention-query";
 import { dashboardActivityFromFixture, dashboardBreakdownFromFixture, rollingYearStart, type DashboardActivitySummary, type DashboardBreakdownKind } from "@/lib/ops/dashboard-query";
@@ -2334,7 +2335,7 @@ export function buildVendorPerformanceListModel(
     resultSummary: `${vendors.length} of ${fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).length} approved vendors`,
     createVendorLink: roleCan(session, "onboard_vendor") ? { href: "/app/vendors/new", label: "Add approved vendor" } : undefined,
     portfolioMetrics: [
-      { id: "vendors", label: "Approved vendors", value: String(vendors.length), context: `${vendors.length} vendor${vendors.length === 1 ? "" : "s"} match this view`, sourceLink: { href: "/app/vendors", label: "Open vendor directory" } },
+      { id: "vendors", label: "Approved vendors", value: String(vendors.length), context: `${vendors.length} vendor${vendors.length === 1 ? "" : "s"} match this view`, sourceLink: { href: hrefWithQuery("/app/vendors", { screen: "directory", q: first(query.q), specialty: first(query.specialty), view }), label: "Open vendor directory" } },
       { id: "attention", label: "Vendors to review", value: String(vendors.filter((vendor) => vendor.relationshipState !== "stable").length), context: "Open follow-ups, unresolved visits, or missing documents", sourceLink: { href: "/app/vendors?view=attention", label: "Review these vendors" } },
       { id: "compliance", label: "Documents current", value: `${vendors.filter((vendor) => vendor.compliance.state === "ready").length}/${vendors.length}`, context: "Approved vendor documents that are current", sourceLink: { href: "/app/vendors?view=attention", label: "Review missing documents" } },
       { id: "visits", label: "Jobs with a recorded visit", value: ratioLabel(visitCovered, visitEligible), context: `${visitCovered} of ${visitEligible} vendor work orders have a linked check-in`, sourceLink: { href: "/app/visits", label: "Open visit evidence" } },
@@ -3415,6 +3416,8 @@ export function buildProgramModel(
   }
 
   if (route === "equipment") {
+    const typeFilter = first(query.type);
+    const browse = first(query.browse) === "types" ? "types" : first(query.browse) === "stores" ? "stores" : "all";
     const categoryCounts = new Map<string, number>();
     for (const asset of scoped.assets) categoryCounts.set(asset.categoryKey, (categoryCounts.get(asset.categoryKey) ?? 0) + 1);
     const statusCounts = new Map<string, number>();
@@ -3427,7 +3430,7 @@ export function buildProgramModel(
       ? requestedView
       : categoryFilter || statusFilter || searchQuery
         ? "all"
-        : "attention";
+        : "all";
     const terminalWorkStatuses = new Set(["closed", "cancelled"]);
     const workByAsset = new Map<string, WorkOrder[]>();
     for (const work of scoped.workOrders) {
@@ -3445,12 +3448,13 @@ export function buildProgramModel(
     );
     const viewAssets = equipmentView === "attention" ? attentionAssets : equipmentView === "recent" ? recentlyServicedAssets : scoped.assets;
     const filteredAssets = viewAssets
+      .filter((asset) => !typeFilter || equipmentType(asset, fixture).id === typeFilter)
       .filter((asset) => !categoryFilter || asset.categoryKey === categoryFilter)
       .filter((asset) => !statusFilter || asset.status === statusFilter)
       .filter((asset) => {
         if (!searchQuery) return true;
         const store = scoped.stores.find((item) => item.id === asset.storeId);
-        return [asset.name, asset.assetTag, asset.model, asset.serialNumber, store?.storeNumber, store?.name, store?.address1, store?.address2, store?.city, store?.state, store?.postalCode]
+        return [equipmentType(asset, fixture).label, asset.name, asset.assetTag, asset.model, asset.serialNumber, store?.storeNumber, store?.name, store?.address1, store?.address2, store?.city, store?.state, store?.postalCode]
           .filter(Boolean)
           .some((value) => String(value).toLocaleLowerCase("en-US").includes(searchQuery));
       })
@@ -3466,6 +3470,9 @@ export function buildProgramModel(
     const pageStart = (currentPage - 1) * pageSize;
     const pageAssets = filteredAssets.slice(pageStart, pageStart + pageSize);
     const equipmentHref = (values: Record<string, string | undefined>) => hrefWithQuery("/app/equipment", {
+      browse: browse === "all" ? undefined : browse,
+      type: typeFilter,
+      region: selectedRegionId,
       view: equipmentView,
       store: selectedStoreId,
       category: categoryFilter,
@@ -3474,6 +3481,7 @@ export function buildProgramModel(
       ...values,
     });
     const equipmentAppliedFilters = [
+      ...(typeFilter ? [{ id: "type", label: `Type: ${scoped.assets.map((asset) => equipmentType(asset, fixture)).find((type) => type.id === typeFilter)?.label ?? "Selected type"}`, removeHref: equipmentHref({ type: undefined, page: undefined }) }] : []),
       ...(categoryFilter ? [{ id: "category", label: `Service area: ${sentence(categoryFilter)}`, removeHref: equipmentHref({ category: undefined, page: undefined }) }] : []),
       ...(statusFilter ? [{ id: "status", label: `Status: ${equipmentStatusLabel(statusFilter)}`, removeHref: equipmentHref({ status: undefined, page: undefined }) }] : []),
     ];
@@ -3495,13 +3503,33 @@ export function buildProgramModel(
         { key: "status", value: equipmentStatusLabel(asset.status), tone: asset.status === "watch" ? "warning" : asset.status === "operational" ? "positive" : "critical" },
       ] };
     });
+    const groups = new Map<string, { label: string; assets: typeof filteredAssets }>();
+    if (browse !== "all") for (const asset of filteredAssets) {
+      const type = equipmentType(asset, fixture);
+      const key = browse === "types" ? type.id : asset.storeId;
+      const label = browse === "types" ? type.label : storeLabel(scoped.stores.find((store) => store.id === asset.storeId));
+      const group = groups.get(key) ?? { label, assets: [] };
+      group.assets.push(asset);
+      groups.set(key, group);
+    }
+    const groupRows: TableRowViewModel[] = [...groups.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label, undefined, { numeric: true })).map(([id, group]) => ({
+      id, label: group.label,
+      href: equipmentHref({ browse: undefined, ...(browse === "types" ? { type: id } : { store: id }), page: undefined }),
+      cells: [{ key: "group", value: group.label }, { key: "count", value: String(group.assets.length) },
+        { key: "stores", value: String(new Set(group.assets.map((asset) => asset.storeId)).size) },
+        { key: "attention", value: String(group.assets.filter((asset) => attentionAssets.some((item) => item.id === asset.id)).length), link: { href: equipmentHref({ browse: undefined, ...(browse === "types" ? { type: id } : { store: id }), view: "attention", page: undefined }), label: "Review equipment needing attention" } }],
+    }));
     return {
       state: { kind: "ready" },
-      page: { title: "Equipment", eyebrow: "Equipment & service history", description: "The default queue shows equipment needing attention—not the whole register. Switch to All equipment at any time, then search by store, asset tag, model, serial number, or location.", scopeLabel: activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
-      filters: [{ id: "view", label: "View", options: [
-        { value: "attention", label: `Needs attention (${attentionAssets.length})`, href: hrefWithQuery("/app/equipment", { view: "attention", store: selectedStoreId }), selected: equipmentView === "attention" },
-        { value: "recent", label: `Recently serviced (${recentlyServicedAssets.length})`, href: hrefWithQuery("/app/equipment", { view: "recent", store: selectedStoreId }), selected: equipmentView === "recent" },
-        { value: "all", label: `All equipment (${scoped.assets.length})`, href: hrefWithQuery("/app/equipment", { view: "all", store: selectedStoreId }), selected: equipmentView === "all" },
+      page: { title: "Equipment", eyebrow: "Equipment & service history", description: "Find equipment by type or store, then open its work, costs and service history.", scopeLabel: activeScopeLabel, updatedLabel: `Through ${date(fixture.asOf)}` },
+      filters: [{ id: "browse", label: "Browse", options: [
+        { value: "all", label: "All equipment", href: equipmentHref({ browse: undefined, page: undefined }), selected: browse === "all" },
+        { value: "types", label: "By type", href: equipmentHref({ browse: "types", type: undefined, page: undefined }), selected: browse === "types" },
+        { value: "stores", label: "By store", href: equipmentHref({ browse: "stores", store: undefined, page: undefined }), selected: browse === "stores" },
+      ] }, { id: "view", label: "Show", options: [
+        { value: "attention", label: "Needs attention", href: equipmentHref({ view: "attention", page: undefined }), selected: equipmentView === "attention" },
+        { value: "recent", label: "Recently serviced", href: equipmentHref({ view: "recent", page: undefined }), selected: equipmentView === "recent" },
+        { value: "all", label: "Any condition", href: equipmentHref({ view: "all", page: undefined }), selected: equipmentView === "all" },
       ] }],
       metrics: [
         { id: "assets", label: "Equipment", value: String(scoped.assets.length), supportingText: "Across the stores in this view", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "View all equipment" } },
@@ -3516,6 +3544,9 @@ export function buildProgramModel(
       trends: [],
       priorityActions: [],
       search: { label: "Search equipment", placeholder: "Asset tag, name, model, serial, store, or address", value: first(query.q), action: "/app/equipment", preservedParameters: [
+        { name: "browse", value: browse },
+        ...(typeFilter ? [{ name: "type", value: typeFilter }] : []),
+        ...(selectedRegionId ? [{ name: "region", value: selectedRegionId }] : []),
         { name: "view", value: equipmentView },
         ...(selectedStoreId ? [{ name: "store", value: selectedStoreId }] : []),
         ...(categoryFilter ? [{ name: "category", value: categoryFilter }] : []),
@@ -3523,17 +3554,17 @@ export function buildProgramModel(
       ] },
       appliedFilters: equipmentAppliedFilters,
       clearFiltersHref: equipmentAppliedFilters.length ? hrefWithQuery("/app/equipment", { view: equipmentView, store: selectedStoreId }) : undefined,
-      resultSummary: filteredAssets.length
+      resultSummary: browse !== "all" ? `${groupRows.length} ${browse === "types" ? "equipment types" : "stores"} · ${filteredAssets.length} equipment records` : filteredAssets.length
         ? equipmentView === "attention" && !categoryFilter && !statusFilter && !searchQuery
           ? `${filteredAssets.length} needing attention · ${scoped.assets.length} total equipment`
           : equipmentView === "recent" && !categoryFilter && !statusFilter && !searchQuery
             ? `${filteredAssets.length} recently serviced · ${scoped.assets.length} total equipment`
             : `Showing ${pageStart + 1}–${Math.min(pageStart + pageSize, filteredAssets.length)} of ${filteredAssets.length}`
         : "0 equipment records",
-      pagination: filteredAssets.length > pageSize
+      pagination: browse === "all" && filteredAssets.length > pageSize
         ? paginationModel(filteredAssets.length, currentPage, pageSize, (page) => equipmentHref({ page: String(page) }))
         : undefined,
-      table: { id: "equipment", caption: equipmentView === "attention" ? "Equipment needing attention" : equipmentView === "recent" ? "Recently serviced equipment" : "Tracked equipment", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "category", label: "Service area" }, { key: "identity", label: "Model / serial" }, { key: "work", label: "Linked work", align: "end" }, { key: "status", label: "Status" }], rows },
+      table: browse !== "all" ? { id: "equipment-groups", caption: browse === "types" ? "Equipment by type" : "Equipment by store", columns: [{ key: "group", label: browse === "types" ? "Equipment type" : "Store" }, { key: "count", label: "Equipment", align: "end" }, ...(browse === "types" ? [{ key: "stores", label: "Stores", align: "end" as const }] : []), { key: "attention", label: "Needs attention", align: "end" }], rows: groupRows } : { id: "equipment", caption: equipmentView === "attention" ? "Equipment needing attention" : equipmentView === "recent" ? "Recently serviced equipment" : "Tracked equipment", columns: [{ key: "asset", label: "Equipment" }, { key: "store", label: "Store" }, { key: "category", label: "Service area" }, { key: "identity", label: "Model / serial" }, { key: "work", label: "Linked work", align: "end" }, { key: "status", label: "Status" }], rows },
     };
   }
 

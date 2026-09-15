@@ -295,6 +295,7 @@ export interface TrendVendorAccountabilityViewModel {
 }
 
 export interface TrendAnalysisPageViewModel {
+  maintenancePlan?: import("@/lib/ops/maintenance-plan").MaintenancePlan;
   state: DataState;
   page: PageContext;
   canonicalQuery: string;

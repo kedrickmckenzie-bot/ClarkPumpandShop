@@ -91,7 +91,7 @@ function VendorPerformanceListComplete({ model }: { model: VendorPerformanceList
     <div className={styles.workspace}>
       <header className={styles.directoryHeader}>
         <div>
-          <p className={styles.eyebrow}>Approved vendors</p>
+          <p className={styles.eyebrow}>Vendor overview</p>
           <h1>{model.title}</h1>
           <p>{model.description}</p>
         </div>
@@ -124,8 +124,9 @@ function VendorPerformanceListComplete({ model }: { model: VendorPerformanceList
 
       <section className={styles.directoryPanel} aria-labelledby="vendor-directory-heading">
         <div className={styles.directoryToolbar}>
-          <div><h2 id="vendor-directory-heading">Vendor directory</h2><p>Search the approved network by company, trade, alias, or service coverage.</p></div>
+          <div><h2 id="vendor-directory-heading">Compare vendor performance</h2><p>Compare the same trade and review the work behind each measure.</p></div>
           <form className={styles.toolbar} action="/app/vendors" method="get" role="search">
+            <input type="hidden" name="screen" value="overview" />
             <label>
               <span className={styles.visuallyHidden}>Search vendors</span>
               <Search aria-hidden="true" size={17} />
@@ -232,6 +233,7 @@ function VendorAccountabilityList({ model }: { model: VendorPerformanceListViewM
         <div className={styles.directoryToolbar}>
           <div><h2 id="vendor-directory-heading">Vendor directory</h2><p>Search by company name or the type of work you need performed.</p></div>
           <form className={styles.toolbar} action="/app/vendors" method="get" role="search">
+            <input type="hidden" name="screen" value="directory" />
             <label>
               <span className={styles.visuallyHidden}>Search vendors</span>
               <Search aria-hidden="true" size={17} />
@@ -261,7 +263,7 @@ function VendorAccountabilityList({ model }: { model: VendorPerformanceListViewM
                     <td><Link className={styles.directoryCell} href={vendor.href}><strong>{vendor.specialties.join(" · ") || "Not classified"}</strong><span>Used when selecting a vendor for a work order</span></Link></td>
                     <td><Link className={styles.directoryCell} href={vendor.href}><strong>{vendor.dispatchPhone ?? "Phone not entered"}</strong><span>{vendor.dispatchEmail}</span></Link></td>
                     <td><Link className={styles.directoryCell} href={`${vendor.href}#coverage-evidence`}><strong>{vendor.coverageLabel}</strong><span>{vendor.coverageRegionCount} region{vendor.coverageRegionCount === 1 ? "" : "s"}</span></Link></td>
-                    <td><Link className={styles.directoryCell} href={`/app/work-orders?vendor=${vendor.id}`}><strong>{vendor.openWorkCount} open</strong><span>{vendor.assignedWorkCount} total work order{vendor.assignedWorkCount === 1 ? "" : "s"}</span></Link></td>
+                    <td><Link className={styles.directoryCell} href={`/app/work-orders?vendor=${vendor.id}&status=open`}><strong>{vendor.openWorkCount} open</strong><span>{vendor.assignedWorkCount} total work order{vendor.assignedWorkCount === 1 ? "" : "s"}</span></Link></td>
                   </tr>
                 ))}
               </tbody>
@@ -273,10 +275,20 @@ function VendorAccountabilityList({ model }: { model: VendorPerformanceListViewM
   );
 }
 
-export function VendorPerformanceList({ model, edition = "complete" }: { model: VendorPerformanceListViewModel; edition?: DemoEdition }) {
-  return edition === "accountability"
-    ? <VendorAccountabilityList model={model} />
-    : <VendorPerformanceListComplete model={model} />;
+export function VendorPerformanceList({ model, screen = "overview" }: { model: VendorPerformanceListViewModel; edition?: DemoEdition; screen?: "overview" | "directory" }) {
+  const href = (target: string) => {
+    const query = new URLSearchParams({ screen: target });
+    if (model.searchValue) query.set("q", model.searchValue);
+    if (model.specialty) query.set("specialty", model.specialty);
+    return `/app/vendors?${query}`;
+  };
+  return <>
+    <nav className={styles.viewTabs} aria-label="Vendor views">
+      <Link href={href("overview")} aria-current={screen === "overview" ? "page" : undefined}>Overview</Link>
+      <Link href={href("directory")} aria-current={screen === "directory" ? "page" : undefined}>Directory & contacts</Link>
+    </nav>
+    {screen === "directory" ? <VendorAccountabilityList model={model} /> : <VendorPerformanceListComplete model={model} />}
+  </>;
 }
 
 function SectionHeader({ id, icon, title, description, count }: { id: string; icon: ReactNode; title: string; description: string; count?: string }) {

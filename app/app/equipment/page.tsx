@@ -16,5 +16,5 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Pr
   if (roleCan(session, "setup_pm")) {
     model.page.secondaryAction = { label: "Create PM plan", href: store ? `/app/pm/new?store=${encodeURIComponent(store)}` : "/app/pm/new" };
   }
-  return <ProgramView model={model} />;
+  return <ProgramView model={model} compact />;
 }

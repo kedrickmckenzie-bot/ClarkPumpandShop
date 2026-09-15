@@ -352,3 +352,27 @@
   .analysisViews span { display: none; }
   .analysisViews strong { font-size: 15px; }
 }
+
+.planPanel { background: #fff; border: 1px solid #d9e0ea; border-radius: 8px; padding: 22px; }
+.planPanel header { display: flex; justify-content: space-between; gap: 20px; align-items: start; }
+.planPanel h2 { margin: 0; font-size: 22px; color: #172033; }
+.planPanel p { color: #5e6a7e; font-size: 15px; line-height: 1.5; }
+.planPanel header > strong { white-space: nowrap; color: #64748b; font-size: 14px; }
+.planSummary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; padding: 20px 0; border-bottom: 1px solid #e2e8f0; }
+.planSummary div { display: grid; gap: 7px; }
+.planSummary strong { font-size: 30px; color: #172033; }
+.planSummary small { color: #64748b; }
+.planTable { overflow-x: auto; }
+.planTable table { width: 100%; border-collapse: collapse; text-align: left; font-size: 15px; }
+.planTable th { padding: 12px; color: #475569; background: #f8fafc; }
+.planTable td { padding: 14px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+.planTable td span { display: block; color: #64748b; line-height: 1.45; margin-top: 5px; max-width: 400px; }
+.planTable a { color: #1d4ed8; font-weight: 650; }
+.planPages { display: flex; justify-content: flex-end; align-items: center; gap: 20px; padding-top: 16px; }
+.planPages a { color: #1d4ed8; padding: 10px; }
+.planLinks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.planLinks a { display: grid; gap: 10px; padding: 20px; background: #fff; border: 1px solid #d9e0ea; border-radius: 8px; text-decoration: none; color: #172033; }
+.planLinks strong { color: #1d4ed8; font-size: 18px; }
+.planLinks span { line-height: 1.45; }
+.planLinks small { color: #64748b; }
+@media (max-width: 760px) { .planSummary, .planLinks { grid-template-columns: 1fr; } .planPanel header { flex-wrap: wrap; } }

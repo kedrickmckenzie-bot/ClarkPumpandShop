@@ -354,7 +354,7 @@ function FilterGroups({ filters }: { filters?: FilterGroupViewModel[] }) {
     <div className={styles.filters} aria-label="Filter results">
       <span className={styles.filterHeading}><Filter aria-hidden="true" size={16} />Filters</span>
       {filters.map((filter) => (
-        <div className={styles.filterGroup} key={filter.id}>
+        <div className={styles.filterGroup} data-primary={filter.id === "work-view" || filter.id === "browse" || undefined} key={filter.id}>
           <span>{filter.label}</span>
           <div>
             {filter.options.map((option) => (
@@ -651,7 +651,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           {notice ? <div className={styles.successNotice} role="status">{notice}</div> : null}
-          {approvedLaterMode && approvedWork ? <ApprovedWorkPortfolio model={approvedWork} /> : model.metrics ? <MetricStrip metrics={model.metrics} heading={metricHeading.heading} description={metricHeading.description} /> : null}
+          {approvedLaterMode && approvedWork ? <ApprovedWorkPortfolio model={approvedWork} /> : surface !== "work-orders" && model.metrics ? <MetricStrip metrics={model.metrics} heading={metricHeading.heading} description={metricHeading.description} /> : null}
           <section className={styles.listWorkspace}>
             <div className={styles.listToolbar}>
               {model.search ? (
@@ -669,10 +669,10 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
             <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
             {triageMode ? (
               <div className={styles.triageWorkspace} data-has-preview={selectedRow && !approvedLaterSelection || undefined}>
-                <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode && canManageWorkflowTasks ? (
+                <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode && !["history", "closed", "cancelled"].includes(String(searchParams.status ?? "")) && canManageWorkflowTasks ? (
                   <form className={styles.bulkForm} action="/api/ops/work-orders/bulk-follow-up" method="post">
                     <input type="hidden" name="returnTo" value={workOrderReturnTo} />
-                    <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} selection={{ name: "workOrderId", label: "Select open work orders for a bulk follow-up", isDisabled: (row) => ["Closed", "Cancelled"].includes(row.cells.find((cell) => cell.key === "status")?.value ?? "") }} />
+                    <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} selection={{ name: "workOrderId", label: "Select", isDisabled: (row) => ["Closed", "Cancelled"].includes(row.cells.find((cell) => cell.key === "status")?.value ?? "") }} />
                     <div className={styles.bulkToolbar}>
                       <div><strong>Add the same follow-up to selected work</strong><small>One auditable, non-blocking reminder is added to each selected record.</small></div>
                       <label><span>Action</span><input name="nextAction" required maxLength={240} defaultValue="Follow up with provider" /></label>
@@ -838,7 +838,7 @@ export function SearchView({ model }: { model: SearchPageViewModel }) {
   );
 }
 
-export function ProgramView({ model, beforeContent }: { model: ProgramPageViewModel; beforeContent?: ReactNode }) {
+export function ProgramView({ model, beforeContent, compact = false }: { model: ProgramPageViewModel; beforeContent?: ReactNode; compact?: boolean }) {
   return (
     <div className={styles.pageStack}>
       <PageHeader page={model.page} />
@@ -847,8 +847,8 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
           {beforeContent}
           <FilterGroups filters={model.filters} />
           <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
-          <MetricStrip metrics={model.metrics} heading="Explore the equipment register" description="Open a measure to see the exact equipment, stores, planning coverage, or lifecycle records behind it." />
-          {(model.breakdowns.length || model.trends.length) ? (
+          {!compact ? <MetricStrip metrics={model.metrics} heading="Explore the equipment register" description="Open a measure to see the exact equipment, stores, planning coverage, or lifecycle records behind it." /> : null}
+          {!compact && (model.breakdowns.length || model.trends.length) ? (
             <section className={styles.analysisGrid} aria-label="Program intelligence">
               {model.breakdowns.map((breakdown) => <BreakdownPanel breakdown={breakdown} key={breakdown.id} />)}
               {model.trends.map((trend) => <TrendPanel trend={trend} key={trend.id} />)}
@@ -869,6 +869,7 @@ export function ProgramView({ model, beforeContent }: { model: ProgramPageViewMo
             <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} />
             {model.pagination ? <PaginationControls pagination={model.pagination} /> : null}
           </section> : null}
+          {compact ? <details className={styles.listWorkspace}><summary>Equipment summary</summary><MetricStrip metrics={model.metrics} />{model.breakdowns.map((breakdown) => <BreakdownPanel breakdown={breakdown} key={breakdown.id} />)}</details> : null}
         </>
       )}
     </div>

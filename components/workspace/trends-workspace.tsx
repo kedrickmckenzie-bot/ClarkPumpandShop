@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { formatOperationsDate } from "@/lib/ops/local-time";
 import { WorkReviewButton } from "./work-review";
 import {
   ArrowDown,
@@ -137,6 +138,39 @@ function OutlookPanel({ model }: { model: TrendAnalysisPageViewModel }) {
     <aside><Info size={16} aria-hidden="true" />{model.outlook.caution}</aside>
     {model.outlook.evidenceLink ? <Link className={styles.outlookEvidenceLink} href={model.outlook.evidenceLink.href}>{model.outlook.evidenceLink.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
   </section>;
+}
+
+function UpcomingWorkPlan({ model }: { model: TrendAnalysisPageViewModel }) {
+  const plan = model.maintenancePlan;
+  if (!plan) return <OutlookPanel model={model} />;
+  const current = new URLSearchParams(model.canonicalQuery);
+  const context = new URLSearchParams();
+  for (const key of ["store", "region"]) { const value = current.get(key); if (value) context.set(key, value); }
+  const destination = (path: string, extra: Record<string, string> = {}) => { const query = new URLSearchParams(context); for (const [key, value] of Object.entries(extra)) query.set(key, value); return `${path}${query.size ? `?${query}` : ""}`; };
+  const pageHref = (page: number) => { const query = new URLSearchParams(current); query.set("planPage", String(page)); return `/app/trends?${query}#open-work-plan`; };
+  return <>
+    <section className={styles.planPanel} id="open-work-plan">
+      <header><div><h2>Price the work ahead</h2><p>Current open work in your selected location, equipment and vendor scope.</p></div><strong>No budget set</strong></header>
+      <div className={styles.planSummary}>
+        <div><span>Entered repair estimates</span><strong>{plan.estimateLabel}</strong><small>{plan.pricedCount} priced jobs · {current.get("currency") ?? "USD"}</small></div>
+        <div><span>Not priced in this currency</span><strong>{plan.unpricedCount}</strong><small>Review missing or other-currency prices below</small></div>
+        <div><span>Open work to plan</span><strong>{plan.totalCount}</strong><small>Ordered by next-action deadline</small></div>
+      </div>
+      <p>Entered estimates only. Missing prices need review; this is not a complete budget.</p>
+      <details><summary>What is included?</summary><p>Current open work in the selected scope, regardless of historical date or cost-type filters. Estimates are full work amounts, not unpaid balances. Approval limits, recorded costs and invoices are kept separate.</p></details>
+      <div className={styles.planTable}><table><caption className={styles.visuallyHidden}>Open work and entered repair estimates</caption><thead><tr><th>Work</th><th>Store</th><th>Repair estimate</th><th>Next action due</th></tr></thead><tbody>
+        {plan.rows.map((row) => <tr key={row.id}><td><Link href={row.href}>{row.number}</Link><span>{row.problem}</span></td><td>{row.store}</td><td>{row.estimate}</td><td>{row.due ? formatOperationsDate(row.due) : "Date needed"}<span>{row.nextAction}</span></td></tr>)}
+        {!plan.rows.length ? <tr><td colSpan={4}>No open work matches this scope.</td></tr> : null}
+      </tbody></table></div>
+      {plan.pages > 1 ? <nav className={styles.planPages} aria-label="Open work plan pages">{plan.page > 1 ? <Link href={pageHref(plan.page - 1)}>Previous</Link> : null}<span>Page {plan.page} of {plan.pages}</span>{plan.page < plan.pages ? <Link href={pageHref(plan.page + 1)}>Next</Link> : null}</nav> : null}
+    </section>
+    <section className={styles.planLinks} aria-label="Continue planning for the selected locations">
+      <Link href={destination("/app/pm", { view: "all" })}><strong>Scheduled maintenance</strong><span>Review refrigeration, HVAC, forecourt and other service windows.</span><small>Selected locations · all equipment and vendors</small></Link>
+      <Link href={destination("/app/lifecycle", { view: "review" })}><strong>Repair or replace</strong><span>Compare repair prices and replacement quotes for the same equipment.</span><small>Selected locations · current decisions</small></Link>
+      <Link href={destination("/app/lifecycle", { view: "capital" })}><strong>Planned replacements</strong><span>Review management-selected equipment, funding years and estimates.</span><small>Selected locations · no assumed replacements</small></Link>
+    </section>
+    <details className={styles.notes}><summary>Historical baseline comparison</summary><OutlookPanel model={model} /></details>
+  </>;
 }
 
 function AnalysisViews({ model }: { model: TrendAnalysisPageViewModel }) {
@@ -305,11 +339,11 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
   return (
     <div className={styles.workspace}>
       <header className={styles.pageHeader}>
-        <div><p>{model.page.eyebrow}</p><h1>{model.page.title}</h1><span>Costs, work, and changes over time.</span></div>
+        <div><p>{model.activeView === "planning" ? "Spending & planning" : model.page.eyebrow}</p><h1>{model.activeView === "planning" ? "Plan upcoming work" : model.page.title}</h1><span>{model.activeView === "planning" ? "Price open jobs. Review maintenance and replacement decisions." : "Costs, work, and changes over time."}</span></div>
         {model.page.secondaryAction ? <Link className={styles.secondaryButton} href={model.page.secondaryAction.href}>{model.page.secondaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </header>
 
-      <section className={styles.analysisContext} aria-label="Current analysis context">{model.analysisContext.map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}</section>
+      <section className={styles.analysisContext} aria-label="Current analysis context">{model.analysisContext.filter((item) => model.activeView !== "planning" || item.label === "Locations").map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}{model.activeView === "planning" ? <span><small>Planning basis</small><strong>Current open work · entered repair estimates</strong></span> : null}</section>
       {model.filterNotice ? <aside className={styles.filterNotice}><Info size={16} aria-hidden="true" />{model.filterNotice}</aside> : null}
       {model.invoiceReview ? <aside className={styles.filterNotice}>{model.invoiceReview.message} <Link href={model.invoiceReview.href}>{model.invoiceReview.label}</Link></aside> : null}
       <details className={styles.notes}><summary>Filters &amp; views</summary><TrendsFilterForm action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} />{savedViews}</details>
@@ -323,7 +357,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
       {model.activeView === "drivers" ? <DriversTable model={model} /> : null}
       {model.activeView === "stores" ? <BenchmarkTable model={model} /> : null}
       {model.activeView === "vendors" ? <VendorAccountability model={model} /> : null}
-      {model.activeView === "planning" ? <OutlookPanel model={model} /> : null}
+      {model.activeView === "planning" ? <UpcomingWorkPlan model={model} /> : null}
       {model.activeView === "records" ? <SourceTable model={model} /> : null}
 
       <ExecutiveResults model={model} />

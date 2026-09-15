@@ -11,5 +11,5 @@ export default async function VendorsPage({ searchParams }: { searchParams: Prom
     loadVendorPerformanceListModel(query),
     loadOperatorSession(),
   ]);
-  return <VendorPerformanceList model={model} edition={session.demoEdition} />;
+  return <VendorPerformanceList model={model} edition={session.demoEdition} screen={query.screen === "directory" ? "directory" : "overview"} />;
 }

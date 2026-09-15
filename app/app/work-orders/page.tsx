@@ -9,7 +9,8 @@ export const metadata: Metadata = { title: "Work orders" };
 type Query = Record<string, string | string[] | undefined>;
 
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<Query> }) {
-  const params = await searchParams;
+  const rawParams = await searchParams;
+  const params = Object.keys(rawParams).length ? rawParams : { status: "open" };
   const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
   if (first(params.basis) === "invoiced") {
     const target = new URLSearchParams(Object.entries(params).flatMap(([key, value]) => first(value) ? [[key, first(value)!]] : []));
@@ -35,7 +36,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
 
   return (
     <>
-      {session.demoEdition === "complete" ? <SavedViewsBar model={{ surface: "work-orders", currentQuery, views: savedViews }} collapsed={model.rowNavigation === "record"} /> : null}
+      {session.demoEdition === "complete" ? <SavedViewsBar model={{ surface: "work-orders", currentQuery, views: savedViews }} collapsed /> : null}
       <ListSurface
         model={model}
         approvedWork={approvedWork}

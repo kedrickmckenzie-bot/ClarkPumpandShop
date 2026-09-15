@@ -294,11 +294,11 @@ describe("operator presenter drill-through contracts", () => {
     expect(effectiveness?.segments.every((row) => row.link.href.startsWith("/app/pm"))).toBe(true);
   });
 
-  it("opens Equipment as a bounded attention queue with a searchable, paginated full register", () => {
+  it("opens Equipment as a paginated full register with an optional attention queue", () => {
     const fixture = buildNorthlinePresentationFixture();
     const session = executiveSession();
-    const attention = buildProgramModel(fixture, session, "equipment");
-    const all = buildProgramModel(fixture, session, "equipment", { view: "all" });
+    const attention = buildProgramModel(fixture, session, "equipment", { view: "attention" });
+    const all = buildProgramModel(fixture, session, "equipment");
     const serial = fixture.assets.find((asset) => asset.serialNumber)?.serialNumber;
     const searched = buildProgramModel(fixture, session, "equipment", { q: serial });
     const outOfService = buildProgramModel(fixture, session, "equipment", { view: "all", status: "out_of_service" });

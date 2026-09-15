@@ -126,17 +126,20 @@ describe("demo package switch", () => {
     expect(visits.appliedFilters?.map((filter) => filter.label)).toContain("Needs review");
   });
 
-  it("renders an operational vendor directory instead of scorecards", () => {
+  it("makes vendor overview and contact directory available in both editions", () => {
     const fixture = buildNorthlinePresentationFixture();
     const model = buildVendorPerformanceListModel(fixture, session());
-    const accountabilityMarkup = renderToStaticMarkup(createElement(VendorPerformanceList, { model, edition: "accountability" }));
+    const accountabilityMarkup = renderToStaticMarkup(createElement(VendorPerformanceList, { model, edition: "accountability", screen: "directory" }));
     const completeMarkup = renderToStaticMarkup(createElement(VendorPerformanceList, { model, edition: "complete" }));
+    const accountabilityOverview = renderToStaticMarkup(createElement(VendorPerformanceList, { model, edition: "accountability" }));
 
     expect(accountabilityMarkup).toContain("Dispatch contact");
     expect(accountabilityMarkup).not.toContain("Vendors to review");
     expect(accountabilityMarkup).not.toContain("Median first response");
     expect(accountabilityMarkup).not.toContain("Recorded work cost");
     expect(completeMarkup).toContain("Median first response");
+    expect(accountabilityOverview).toContain("Median first response");
+    expect(accountabilityOverview).toContain("Directory &amp; contacts");
   });
 
   it("reduces work-order creation to outside-vendor routing", () => {
