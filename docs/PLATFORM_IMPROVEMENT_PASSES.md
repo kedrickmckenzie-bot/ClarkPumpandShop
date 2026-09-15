@@ -4,8 +4,8 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
-- Completed passes: **1 — role/scope and accountability correctness**, **2 — trustworthy metrics and drill-through**, **3 — manager and store workflow usability**, and **4 — production identity and domain safeguards** (21 acceptance items).
-- Current product pass: **5 — bounded reads and maintainable persistence**, started under the user's authorization to continue all remaining passes automatically while away. **24 of 40 items complete; 16 remain**. P5-04/P5-05 are complete; the other Pass 5 items remain open. No later pass is complete.
+- Completed passes: **1 — role/scope and accountability correctness**, **2 — trustworthy metrics and drill-through**, and **3 — manager and store workflow usability**. Pass 4 has three verified items; **P4-02 is reopened** for the owner-brief regional-scope counterexample found during Pass 5.
+- Current product pass: **5 — bounded reads and maintainable persistence**, started under the user's authorization to continue all remaining passes automatically while away. **23 of 40 items complete; 17 remain**. P5-04/P5-05 are complete; the other Pass 5 items remain open. Fix the reopened P4-02 alongside P5-01. No later pass is complete.
 - Completed exception: **P6-08 — populated D1 upgrade repair**, pulled forward after the first private publication failed; the repaired publication succeeded. All original item IDs remain unchanged.
 - Completion means acceptance evidence is recorded below, not merely that code was edited.
 - Deployment and real-customer readiness are separate gates. Fictional preview controls are not production authentication.
@@ -47,7 +47,7 @@ The order groups shared data models, UI surfaces and validation to avoid repeate
 ## Pass 4 — production identity and domain safeguards
 
 - [x] P4-01 Resolve authenticated users to active organization memberships; isolate preview personas and fail closed outside the fictional preview. Verify missing identity, revoked membership and multiple organizations.
-- [x] P4-02 Verify organization-first access on every read, command, search, aggregate, export, private file, public token and job; add cross-tenant and cross-store adversarial tests.
+- [ ] P4-02 Verify organization-first access on every read, command, search, aggregate, export, private file, public token and job; add cross-tenant and cross-store adversarial tests. **Reopened:** the owner-brief loader allows regional viewers but does not pass location scope into its organization-wide projection. Add an actual scoped-loader regression and complete the bounded replacement; earlier passing boundary tests did not cover this reader.
 - [x] P4-03 Verify all channels use shared commands with transactional audit, idempotent retries and optimistic concurrency. Test append-only amendments for reports, issuance, responses, visits, costs, allocations and deadlines.
 - [x] P4-04 Verify purpose-bound, expiring, hashed action tokens and vendor-eligible work selection; no-WO service remains possible and location remains check-in/out only with explicit evidence status.
 
@@ -324,3 +324,9 @@ Final validation passed seed, typecheck, lint, **132 files / 901 tests** (157.66
 Browser inspection confirmed all five roles: facilities 61 review items/$216,737; executive 34 open jobs/eight watch assets/three repair comparisons; regional eight open jobs/17 review items/$64,315; Store 104 eight open jobs/25 visits/$37,443; finance $3,544,394 replacement outlook. The equipment summary opened CPS-2026-0115 and whole-equipment history with the same $18,000 repair, $32,800 approved replacement and $440 recorded cost in August 25, 2025–August 25, 2026. The 375px phone summary remained readable. Facilities overview and normal viewport sizing were restored; no source data or external delivery was mutated.
 
 **24 of 40 complete / 16 remaining.** The main overview migration is complete, but P5-01 remains open for the owner brief and its scope/source issues. Source inspection found `loadOwnerBriefModel` allows regional users yet passes only the organization ID and full organization snapshot to `buildOwnerBrief`; it also mixes cost currencies and links period metrics to broad lists. This is the next priority, documented with its exact inputs in `PASS5_QUERY_INVENTORY.md`. The companion coverage loader is executive/facilities-only and needs bounded reads as well. Do not rebuild the completed main overview. Full action-center, record/program/Trends queries and Passes 6–7 remain open. Keep `dev4.log` untouched.
+
+### Pass 5 overview publication and access-check correction
+
+Private version **39** published successfully at **2026-09-15 02:13:31 UTC**, from source `0468c9bbdb6c0b7dead6c9eec7ab3b32d3288894`, at https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site . Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_d1bf12cc42b08191aeb268e0b5a92d89`; deployment: `appgdep_6aa8a9bd1f3c81918916eab595ee365b`. The owner-only audience, D1/R2 and environment revision 1 were preserved. Final source was pushed, packaged through the unchanged Git Bash helper, validated and saved before deployment. This post-publication checkpoint is documentation only.
+
+**Corrected checkpoint: 23 of 40 complete / 17 remaining.** P4-02 is reopened because the newly identified regional owner-brief reader contradicts the prior broad access claim. Earlier 24/40 checkpoints remain historical evidence; they are not the current completion count. Resolve this with P5-01's bounded owner-brief replacement and an actual regional-loader test. Main overview query migration is complete and remains in place. The goal and automatic continuation remain active. Local port 3000, facilities overview and the continuing browser tab are retained with normal sizing; `dev4.log` remains untouched.
