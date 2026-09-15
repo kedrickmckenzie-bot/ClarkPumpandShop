@@ -57,7 +57,7 @@ const workspaceCopy: Record<PlanningWorkspaceKind, {
   pm: {
     label: "Preventive maintenance",
     basisTitle: "How completion is counted",
-    basis: "Only maintenance windows that have ended count toward completion. Work that is still in its window—or was waived—is not counted as missed.",
+    basis: "Due and overdue work is still inside its completion window. A missed window has ended. Waived and canceled windows are excluded from completion rates. Open a record to see when it was completed.",
     metricTitle: "Choose what you want to review",
     metricDescription: "Open a status to see the exact maintenance windows, stores, and linked work.",
     sourceTitle: "Maintenance schedule",
@@ -105,7 +105,7 @@ function WorkspaceHeader({ model, kind }: { model: ProgramPageViewModel; kind: P
     <>
       <header className={styles.header}>
         <div>
-          <p>{copy.label}</p>
+          {copy.label !== model.page.title ? <p>{copy.label}</p> : null}
           <h1>{model.page.title}</h1>
           <span>{model.page.description}</span>
         </div>
@@ -152,8 +152,9 @@ function Filters({ model }: { model: ProgramPageViewModel }) {
 
 function MetricStrip({ model, kind }: { model: ProgramPageViewModel; kind: PlanningWorkspaceKind }) {
   const copy = workspaceCopy[kind];
+  if (kind === "pm") return <nav className={styles.pmStatuses} aria-label="PM status filters">{model.metrics.map(metric => <Link href={metric.link.href} aria-current={metric.selected ? "page" : undefined} key={metric.id}><span>{metric.label}</span><strong>{metric.value}</strong></Link>)}</nav>;
   return (
-    <section className={styles.metricExplorer} aria-label={kind === "pm" ? "PM status filters" : "Key planning measures"}>
+    <section className={styles.metricExplorer} aria-label="Key planning measures">
       <header><div><small>Common questions</small><h2>{copy.metricTitle}</h2></div><p>{copy.metricDescription}</p></header>
       <div className={styles.metrics}>{model.metrics.map((metric) => (
         <Link href={metric.link.href} className={toneClass(metric.tone)} key={metric.id}>
@@ -249,7 +250,7 @@ function PmContext({ model }: { model: ProgramPageViewModel }) {
   if (!model.breakdowns.length && !model.trends.length) return null;
   return (
     <details className={styles.administration} suppressHydrationWarning>
-      <summary><span><BarChart3 size={18} aria-hidden="true" /><span><strong>PM compliance and repair context</strong><small>Closed-window completion, equipment cohorts, and recorded reactive cost</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary>
+      <summary><span><BarChart3 size={18} aria-hidden="true" /><span><strong>PM results and other work</strong><small>Completed windows, equipment groups and recorded cost</small></span></span><ChevronRight size={16} aria-hidden="true" /></summary>
       <div><section className={styles.insights} aria-label="Preventive maintenance analysis">{model.breakdowns.map((breakdown) => <Breakdown model={breakdown} key={breakdown.id} />)}{model.trends.map((trend) => <Trend model={trend} key={trend.id} />)}</section></div>
     </details>
   );
@@ -274,9 +275,11 @@ export function PlanningWorkspace({
       {model.state.kind !== "ready" ? <StatePanel state={model.state} /> : <>
         {pmEvidence ? null : <BasisBanner kind={kind} />}
         <Filters model={model} />
+        {kind === "pm" && model.clearFiltersHref ? <Link href={model.clearFiltersHref}>Clear filters</Link> : null}
         {model.metrics.length ? <MetricStrip model={model} kind={kind} /> : null}
         {kind === "pm" ? <>
-          <SourceTable context={[model.page.scopeLabel, model.page.periodLabel].filter(Boolean).join(" · ")} table={model.table} title={pmEvidence ? model.table!.caption : copy.sourceTitle} description={pmEvidence ? model.sourceDescription ?? model.page.description : copy.sourceDescription} resultSummary={model.resultSummary} pagination={model.pagination} />
+          {model.sourceMethodology ? <details className={styles.basis}><summary><span><BarChart3 size={17} aria-hidden="true" /></span><strong>How this comparison is counted</strong><ChevronRight size={17} aria-hidden="true" /></summary><p>{model.sourceMethodology}</p></details> : null}
+          <SourceTable context={[model.page.scopeLabel, model.page.periodLabel].filter(Boolean).join(" · ")} table={model.table} title={model.table?.caption ?? copy.sourceTitle} description={model.sourceDescription ?? (pmEvidence ? model.page.description : copy.sourceDescription)} resultSummary={model.resultSummary} pagination={model.pagination} />
           {pmEvidence ? null : programManagement}
           {pmEvidence ? null : <PmContext model={model} />}
         </> : kind === "lifecycle" ? <>

@@ -6,6 +6,8 @@ import styles from "./pm-program-management.module.css";
 
 export interface PmProgramManagementModel {
   scopeLabel: string;
+  enrolledPlansHref?: string;
+  attentionHref?: string;
   canCreateMasterSchedule: boolean;
   summary: {
     activePrograms: number;
@@ -86,9 +88,9 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
       <div className={styles.summary} aria-label="PM program coverage summary">
         <Link href="#pm-programs-title"><CalendarRange size={18} aria-hidden="true" /><span><small>Active schedules</small><strong>{model.summary.activePrograms}</strong><em>Open schedules</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
         <Link href="#pm-programs-title"><Layers3 size={18} aria-hidden="true" /><span><small>Matching equipment</small><strong>{model.summary.matchingEquipment}</strong><em>Review coverage rules</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
-        <Link href="/app/pm?enrollments=all#store-pm-plans"><CheckCircle2 size={18} aria-hidden="true" /><span><small>Enrolled plans</small><strong>{model.summary.enrolledPlans}</strong><em>Open store schedules</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
+        <Link href={model.enrolledPlansHref ?? "/app/pm?enrollments=all#store-pm-plans"}><CheckCircle2 size={18} aria-hidden="true" /><span><small>Enrolled plans</small><strong>{model.summary.enrolledPlans}</strong><em>Open store schedules</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
         <Link data-alert={model.summary.coverageGaps > 0 || undefined} href="#pm-programs-title"><CircleAlert size={18} aria-hidden="true" /><span><small>Coverage gaps</small><strong>{model.summary.coverageGaps}</strong><em>Open coverage details</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
-        <Link data-alert={model.summary.evidenceReviews > 0 || undefined} href={model.summary.evidenceReviews ? "#pm-evidence-review-title" : "/app/pm?view=attention"}><FileSearch size={18} aria-hidden="true" /><span><small>Evidence reviews</small><strong>{model.summary.evidenceReviews}</strong><em>{model.summary.evidenceReviews ? "Open evidence review" : "Open PM review"}</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
+        <Link data-alert={model.summary.evidenceReviews > 0 || undefined} href={model.summary.evidenceReviews ? "#pm-evidence-review-title" : model.attentionHref ?? "/app/pm?view=attention"}><FileSearch size={18} aria-hidden="true" /><span><small>Evidence reviews</small><strong>{model.summary.evidenceReviews}</strong><em>{model.summary.evidenceReviews ? "Open evidence review" : "Open PM review"}</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
       </div>
 
       <div className={styles.tableWrap}>

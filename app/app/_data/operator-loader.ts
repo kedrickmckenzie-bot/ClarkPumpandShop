@@ -2,6 +2,10 @@ import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { attentionAccess } from "./attention-presenter";
 import { buildReviewQueue, buildReviewSources } from "./review-queue-presenter";
+import { buildPmScheduleModel } from "./pm-schedule-presenter";
+import { pmScheduleScope, pmScheduleState } from "@/lib/ops/pm-schedule-query";
+import { pmStoreAllowed } from "@/lib/ops/pm-record-query";
+import { scopedInvoiceRecords } from "@/lib/ops/dashboard-cohorts";
 import { loadDashboardChartPages } from "./dashboard-charts";
 import { presentQueryDashboard } from "./dashboard-query-presenter";
 import { buildStoreCostRanking } from "./store-cost-presenter";
@@ -394,6 +398,11 @@ export async function loadSearchModel(searchParams: OperatorSearchParameters = {
 }
 
 export async function loadProgramModel(route: ProgramRouteId, searchParams: OperatorSearchParameters = {}) {
+  if (route === "pm") {
+    const session = await getRequestOperatorSession();
+    if (!roleCanAccessProgramRoute(session.role, route)) notFound();
+    return enforceDashboardLinkPolicy(await buildPmScheduleModel(await getServerOpsRepository(), session, getServerOpsReportingAsOf(), searchParams), session);
+  }
   const context = await sessionAndFixture();
   if (!roleCanAccessProgramRoute(context.session.role, route)) notFound();
   return enforceDashboardLinkPolicy(
@@ -450,31 +459,23 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
   if (!roleCanAccessProgramRoute(session.role, "pm")) notFound();
   const selectedStoreId = Array.isArray(searchParams.store) ? searchParams.store[0] : searchParams.store;
   const selectedProgramId = Array.isArray(searchParams.program) ? searchParams.program[0] : searchParams.program;
+  const selectedRegionId = Array.isArray(searchParams.region) ? searchParams.region[0] : searchParams.region;
   const requestedEnrollmentView = Array.isArray(searchParams.enrollments) ? searchParams.enrollments[0] : searchParams.enrollments;
   const requestedEnrollmentPage = Number(Array.isArray(searchParams.enrollmentPage) ? searchParams.enrollmentPage[0] : searchParams.enrollmentPage);
   const enrollmentPage = Number.isFinite(requestedEnrollmentPage) && requestedEnrollmentPage > 0 ? Math.floor(requestedEnrollmentPage) : 1;
-  const visibleStores = fixture.stores.filter((store) => {
-    if (store.organizationId !== session.organizationId) return false;
-    if (session.storeIds?.length && !session.storeIds.includes(store.id)) return false;
-    if (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
-    return true;
-  });
+  const visibleStores = fixture.stores.filter(store => pmStoreAllowed(pmScheduleScope(session, { store: selectedStoreId, region: selectedRegionId }), store));
   const visibleStoreIds = new Set(visibleStores.map((store) => store.id));
   const storesById = new Map(visibleStores.map((store) => [store.id, store]));
   const templates = fixture.equipmentTemplates.filter((template) => template.organizationId === session.organizationId && template.active);
   const visibleAssets = fixture.assets.filter((asset) => asset.organizationId === session.organizationId && visibleStoreIds.has(asset.storeId) && asset.status !== "retired");
   const assetById = new Map(visibleAssets.map((asset) => [asset.id, asset]));
-  const programs = fixture.maintenancePrograms.filter((program) => program.organizationId === session.organizationId && program.status === "active");
+  const programs = fixture.maintenancePrograms.filter((program) => program.organizationId === session.organizationId && program.status === "active" && (!selectedProgramId || program.id === selectedProgramId));
   const programById = new Map(programs.map((program) => [program.id, program]));
   const visiblePlans = fixture.pmPlans.filter((plan) => plan.organizationId === session.organizationId && plan.active && plan.storeId && visibleStoreIds.has(plan.storeId));
-  const visibleOccurrences = fixture.pmOccurrences.filter((occurrence) => occurrence.organizationId === session.organizationId && visibleStoreIds.has(occurrence.storeId));
+  const visibleOccurrences = fixture.pmOccurrences.filter((occurrence) => occurrence.organizationId === session.organizationId && visibleStoreIds.has(occurrence.storeId) && visiblePlans.some(plan => plan.id === occurrence.planId && plan.storeId === occurrence.storeId));
 
   const pmStatus = (occurrence: (typeof visibleOccurrences)[number]) => {
-    if (occurrence.status === "completed" || occurrence.completedAt) return "completed" as const;
-    if (occurrence.status === "waived") return "waived" as const;
-    if (Date.parse(occurrence.windowEndsAt) < Date.parse(fixture.asOf)) return "missed" as const;
-    if (Date.parse(occurrence.windowStartsAt) > Date.parse(fixture.asOf)) return "scheduled" as const;
-    return "due" as const;
+    return pmScheduleState(occurrence, fixture.asOf);
   };
   const pmHref = (values: Record<string, string | number | undefined>) => {
     const params = new URLSearchParams();
@@ -502,7 +503,7 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
       : matchingAssets.filter((asset) => !enrolledAssetIds.has(asset.id)).length;
     const overrides = plans.filter((plan) => plan.cadenceDays !== program.frequencyDays || plan.completionWindowDays !== program.dueWindowDays || Boolean(plan.cadenceOverrideReason)).length;
     const occurrences = visibleOccurrences.filter((occurrence) => plans.some((plan) => plan.id === occurrence.planId));
-    const dueOccurrences = occurrences.filter((occurrence) => pmStatus(occurrence) === "due").length;
+    const dueOccurrences = occurrences.filter((occurrence) => ["due", "overdue"].includes(pmStatus(occurrence))).length;
     const missedOccurrences = occurrences.filter((occurrence) => pmStatus(occurrence) === "missed").length;
     const nextOccurrence = occurrences
       .filter((occurrence) => pmStatus(occurrence) === "scheduled")
@@ -522,7 +523,7 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
       dueOccurrences,
       missedOccurrences,
       nextWindowLabel: nextOccurrence ? `Next window ${shortDate(nextOccurrence.windowStartsAt)}` : "No future window scheduled",
-      href: pmHref({ program: program.id, store: selectedStoreId, view: "attention" }),
+      href: pmHref({ program: program.id, store: selectedStoreId, region: selectedRegionId, view: "attention" }),
       selected: selectedProgramId === program.id,
     };
   });
@@ -549,7 +550,8 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
     .slice(enrollmentStart, enrollmentStart + enrollmentPageSize)
     .map((plan) => {
       const store = storesById.get(plan.storeId ?? "");
-      const asset = plan.assetId ? assetById.get(plan.assetId) : undefined;
+      const candidateAsset = plan.assetId ? assetById.get(plan.assetId) : undefined;
+      const asset = candidateAsset?.storeId === plan.storeId ? candidateAsset : undefined;
       const program = plan.programId ? programById.get(plan.programId) : undefined;
       const inherited = Boolean(program) && plan.cadenceDays === program?.frequencyDays && plan.completionWindowDays === program?.dueWindowDays && !plan.cadenceOverrideReason;
       return {
@@ -567,7 +569,8 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
       };
     });
 
-  const reconciliations = fixture.serviceDiscrepancies
+  const visibleInvoiceIds = new Set(scopedInvoiceRecords(fixture, session.organizationId, visibleStoreIds).map(row => row.id));
+  const reconciliations = (roleCanAccessListRoute(session.role, "invoices") ? fixture.serviceDiscrepancies : [])
     .filter((item) => item.organizationId === session.organizationId && item.status !== "resolved" && item.status !== "closed")
     .flatMap((item) => {
       let facts: Record<string, unknown>;
@@ -577,9 +580,13 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
         return [];
       }
       if (facts.reconciliationKind !== "pm_billed_vs_observed" || typeof facts.storeId !== "string" || !visibleStoreIds.has(facts.storeId)) return [];
+      if (selectedProgramId && facts.programId !== selectedProgramId) return [];
       const store = storesById.get(facts.storeId);
       const program = typeof facts.programId === "string" ? programById.get(facts.programId) : undefined;
       const invoiceIds = Array.isArray(facts.billedInvoiceIds) ? facts.billedInvoiceIds.filter((value): value is string => typeof value === "string") : [];
+      if (invoiceIds.some(id => !visibleInvoiceIds.has(id))) return [];
+      const recordInvoiceIds = new Set(scopedInvoiceRecords(fixture, session.organizationId, new Set([facts.storeId])).map(row => row.id));
+      if (invoiceIds.some(id => !recordInvoiceIds.has(id))) return [];
       const billedUnits = typeof facts.billedServiceUnits === "number" ? facts.billedServiceUnits : invoiceIds.length;
       const observedVisits = typeof facts.observedVisitCount === "number" ? facts.observedVisitCount : 0;
       const missingEvidence = Array.isArray(facts.missingOccurrenceIds) ? facts.missingOccurrenceIds.length : Math.max(0, billedUnits - observedVisits);
@@ -609,6 +616,8 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
   const commonPlanQuery = {
     program: selectedProgramId,
     store: selectedStoreId,
+    region: selectedRegionId,
+    window: queryValue("window"),
     view: queryValue("view"),
     status: queryValue("status"),
     occurrence: queryValue("occurrence"),
@@ -619,7 +628,9 @@ export async function loadPmProgramManagementModel(searchParams: OperatorSearchP
     .filter((page) => page >= 1 && page <= totalEnrollmentPages))].sort((left, right) => left - right);
   return {
     scopeLabel: session.scopeLabel,
-    canCreateMasterSchedule: session.role === "executive" || session.role === "facilities",
+    enrolledPlansHref: `${pmHref({ ...commonPlanQuery, enrollments: "all" })}#store-pm-plans`,
+    attentionHref: pmHref({ store: selectedStoreId, region: selectedRegionId, program: selectedProgramId, view: "attention" }),
+    canCreateMasterSchedule: (session.role === "executive" || session.role === "facilities") && roleCan(session, "setup_pm"),
     summary: {
       activePrograms: programs.length,
       matchingEquipment,

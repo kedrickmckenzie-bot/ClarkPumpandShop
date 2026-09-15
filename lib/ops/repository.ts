@@ -255,6 +255,8 @@ export interface OpsRepository {
   listAssetsForEquipmentTemplates(organizationId: OpsId, equipmentTemplateIds: OpsId[]): Promise<Asset[]>;
   getPmPlan(organizationId: OpsId, planId: OpsId): Promise<PmPlan | null>;
   getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId): Promise<PmOccurrence | null>;
+  listPmSchedule(scope: OrganizationScope, query: import("./pm-schedule-query").PmScheduleQuery): Promise<import("./pm-schedule-query").PmSchedulePage>;
+  listPmAnalysis(scope: OrganizationScope, query: import("./pm-analysis-query").PmAnalysisQuery): Promise<import("./pm-analysis-query").PmAnalysisPage>;
   listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query?: PageRequest): Promise<import("./pm-record-query").WorkVisitEvidencePage>;
   listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId): Promise<PmWorkItem[]>;
   listVendorQualifications(organizationId: OpsId, vendorId: OpsId): Promise<VendorQualification[]>;

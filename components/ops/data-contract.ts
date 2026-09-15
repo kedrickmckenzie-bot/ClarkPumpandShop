@@ -52,6 +52,7 @@ export interface PageContext {
 }
 
 export interface MetricViewModel {
+  selected?: boolean;
   id: string;
   label: string;
   value: string;
@@ -582,6 +583,7 @@ export interface DetailPageViewModel {
 
 export interface ProgramPageViewModel extends DashboardPageViewModel {
   sourceDescription?: string;
+  sourceMethodology?: string;
   filters?: FilterGroupViewModel[];
   appliedFilters?: AppliedFilterViewModel[];
   clearFiltersHref?: string;

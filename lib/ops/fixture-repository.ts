@@ -1,4 +1,6 @@
 import { attentionFromFixture } from "./attention-query";
+import { pmScheduleFromFixture, type PmScheduleQuery } from "./pm-schedule-query";
+import { pmAnalysisFromFixture, type PmAnalysisQuery } from "./pm-analysis-query";
 import { workVisitEvidenceFromFixture } from "./pm-record-query";
 import { attentionSourcesFromFixture } from "./attention-sources";
 import { matchesRequestStatus, matchesWorkStage } from "./dashboard-cohorts";
@@ -552,6 +554,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listAssetsForEquipmentTemplates(organizationId: OpsId, equipmentTemplateIds: OpsId[]) { const allowed = new Set(equipmentTemplateIds); return clone(this.fixture.assets.filter((row) => row.organizationId === organizationId && row.equipmentTemplateId && allowed.has(row.equipmentTemplateId) && row.status !== "retired").sort((a, b) => a.storeId.localeCompare(b.storeId) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))); }
   async getPmPlan(organizationId: OpsId, planId: OpsId) { return clone(this.fixture.pmPlans.find((row) => row.organizationId === organizationId && row.id === planId) ?? null); }
   async getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return clone(this.fixture.pmOccurrences.find((row) => row.organizationId === organizationId && row.id === occurrenceId) ?? null); }
+  async listPmSchedule(scope: OrganizationScope, query: PmScheduleQuery) { return pmScheduleFromFixture(this.fixture, scope, query); }
+  async listPmAnalysis(scope: OrganizationScope, query: PmAnalysisQuery) { return pmAnalysisFromFixture(this.fixture, scope, query); }
   async listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query: PageRequest = {}) { return workVisitEvidenceFromFixture(this.fixture, scope, workOrderId, query); }
   async listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return clone(this.fixture.pmWorkItems.filter((row) => row.organizationId === organizationId && row.occurrenceId === occurrenceId)); }
   async listVendorQualifications(organizationId: OpsId, vendorId: OpsId) { return clone(this.fixture.vendorQualifications.filter((row) => row.organizationId === organizationId && row.vendorId === vendorId)); }

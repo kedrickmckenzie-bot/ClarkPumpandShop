@@ -14,11 +14,13 @@ import { tenantFixture } from "@/lib/ops/tenant-fixture";
 import OwnerBriefPage from "@/app/app/brief/page";
 import ActionCenterPage from "@/app/app/action-center/page";
 import OccurrencePage from "@/app/app/pm/occurrences/[id]/page";
+import PreventiveMaintenancePage from "@/app/app/pm/page";
+import { loadProgramModel, loadPmProgramManagementModel } from "@/app/app/_data/operator-loader";
 import { loadPmOccurrenceRecord } from "@/app/app/_data/pm-record-loader";
 import { loadPmPlanScheduleSetupModel } from "@/app/app/_data/setup-loader";
 import { loadListModel, loadReviewSourcesModel, loadReviewSelection } from "@/app/app/_data/operator-loader";
 
-const boundary = vi.hoisted(() => ({ cookies: new Map<string, string>(), repository: vi.fn(), identity: vi.fn(), snapshot: vi.fn(() => { throw new Error("Setup must not load tenant source records"); }) }));
+const boundary = vi.hoisted(() => ({ cookies: new Map<string, string>(), repository: vi.fn(), identity: vi.fn(), snapshot: vi.fn((): import("@/lib/ops/types").OpsFixture => { throw new Error("Setup must not load tenant source records"); }) }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => boundary.cookies.has(name) ? { value: boundary.cookies.get(name) } : undefined }) }));
 vi.mock("@/app/chatgpt-auth", () => ({ getChatGPTUser: () => boundary.identity() }));
 vi.mock("@/lib/server/ops-repository-provider", () => ({ getServerOpsRepository: () => boundary.repository(), getServerOpsFixtureSnapshot: () => boundary.snapshot(), getServerOpsReportingAsOf: () => "2026-08-25T16:00:00.000Z" }));
@@ -38,6 +40,35 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("keeps the remaining PM configuration panel inside selected stores and invoice references", async () => {
+    const data = fixture(); useFixture(data); boundary.snapshot.mockReturnValue(data);
+    const selected = data.stores.find(row => row.storeNumber === "104")!;
+    const model = await loadPmProgramManagementModel({ store: selected.id });
+    expect(model.plans.every(row => row.storeHref?.endsWith(selected.id))).toBe(true);
+    expect(model.summary.enrolledPlans).toBe(data.pmPlans.filter(row => row.active && row.storeId === selected.id).length);
+    expect(new URL(model.enrolledPlansHref!, "https://ops.invalid").searchParams.get("store")).toBe(selected.id);
+    const review = data.serviceDiscrepancies.find(row => row.factsJson.includes("pm_billed_vs_observed"))!;
+    const facts = JSON.parse(review.factsJson); facts.storeId = selected.id; review.factsJson = JSON.stringify(facts);
+    expect((await loadPmProgramManagementModel({})).reconciliations).toEqual([]);
+    const grant = data.scopeGrants.find(row => row.membershipId === "membership-northline-facilities")!;
+    grant.scopeKind = "store"; grant.scopeId = selected.id; useFixture(data);
+    const denied = await loadPmProgramManagementModel({ store: data.stores.find(row => row.id !== selected.id)!.id });
+    expect(denied.plans).toEqual([]); expect(denied.summary.enrolledPlans).toBe(0); expect(denied.reconciliations).toEqual([]);
+  });
+  it("loads the PM schedule and exact comparison pages without snapshots", async () => {
+    const params = { store: "store-northline-104", status: "completed", view: "all" };
+    const model = await loadProgramModel("pm", params);
+    expect(model.page.scopeLabel).toBe("Store 104 · Ridgeview");
+    expect(model.table?.rows.length).toBeGreaterThan(0);
+    expect(model.table?.rows.every(row => row.cells.find(cell => cell.key === "store")?.value.startsWith("Store 104"))).toBe(true);
+    expect(model.metrics.find(metric => metric.id === "completed")?.selected).toBe(true);
+    expect(model.metrics.every(metric => new URL(metric.link.href, "https://ops.invalid").searchParams.get("store") === params.store)).toBe(true);
+    const costs = await loadProgramModel("pm", { store: params.store, evidence: "reactive-cost" });
+    expect(costs.table?.id).toBe("pm-reactive-evidence");
+    expect(costs.page.secondaryAction?.label).toBe("Back to PM schedule");
+    expect(await PreventiveMaintenancePage({ searchParams: Promise.resolve({ store: params.store, evidence: "cohort-equipment" }) })).toBeTruthy();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
   it("loads PM occurrence and plan records without snapshots and retains terminal timing", async () => {
     const data = fixture();
     const occurrence = data.pmOccurrences.find(row => row.workOrderId)!;
@@ -112,6 +143,7 @@ describe("production identity and organization selection", () => {
     expect(boundary.snapshot).not.toHaveBeenCalled();
   });
   beforeEach(() => {
+    boundary.snapshot.mockReset().mockImplementation(() => { throw new Error("Setup must not load tenant source records"); });
     vi.stubEnv("OPS_ACCESS_MODE", "authenticated");
     vi.stubEnv("OPS_IDENTITY_PROVIDER", "sites");
     vi.stubEnv("OPS_ORGANIZATION_ID", ORG);
