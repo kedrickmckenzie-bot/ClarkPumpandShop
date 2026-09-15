@@ -1,4 +1,5 @@
 import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
+import { sqlDriverRegression } from "./helpers/sql-driver-regression";
 import { heldWorkAccountabilityRegression } from "./helpers/held-work-accountability-regression";
 import { workPricePersistenceRegression } from "./helpers/work-price-persistence-regression";
 import { connectedReviewRegression } from "./helpers/connected-review-regression";
@@ -197,6 +198,7 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     expect(await repository.listStoreIdsForMembership(organizationId, "membership-northline-regional-1")).toHaveLength(5);
     expect(await repository.listStoreIdsForMembership(organizationId, member.id)).toHaveLength(15);
     expect(await repository.listStoreIdsForMembership("foreign-organization", member.id)).toEqual([]);
+    await sqlDriverRegression(repository);
   });
 
   it("enforces organization-aware foreign keys", async () => {

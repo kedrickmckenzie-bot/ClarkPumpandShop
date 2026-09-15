@@ -105,7 +105,7 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
     const fixture = remapNorthlineFixtureVisitWorkIds(buildNorthlinePresentationFixture(), (links.results ?? []).map((row) => ({
       organizationId: row.organization_id, id: row.id, visitId: row.visit_id, workOrderId: row.work_order_id,
     })));
-    // Every source statement is INSERT OR IGNORE: existing facts and user
+    // Every source statement uses ON CONFLICT DO NOTHING: existing facts and user
     // mutations win, while missing demo capabilities receive source records.
     await seedOpsRepository(repository, fixture);
     await repository.atomicWrite([
@@ -115,7 +115,7 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
     return;
   }
 
-  // INSERT OR IGNORE makes bootstrap restartable after a partial failure and
+  // Conflict-safe inserts make bootstrap restartable after a partial failure and
   // safe when fresh isolates running this same release race. The completion
   // marker is written last. Cross-release initialization is an operational
   // deployment boundary because D1 has no cross-version application lock.

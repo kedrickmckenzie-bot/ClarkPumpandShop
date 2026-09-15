@@ -3,7 +3,7 @@ import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { isFictionalPreview, trustsSitesIdentity } from "@/lib/server/operator-access";
 import { resolveAuthenticatedOperatorSession } from "@/lib/server/operator-membership";
-import { loadOperatorSession } from "@/app/app/_data/operator-loader";
+import { loadOperatorSession, loadNotificationSettingsModel, loadImportWorkspaceAccess } from "@/app/app/_data/operator-loader";
 import { assertStoreInSessionScope, getOpsRequestContext } from "@/lib/server/ops-request-context";
 import { POST as createWork } from "@/app/api/ops/work-orders/route";
 import { POST as previewRole } from "@/app/api/ops/preview-role/route";
@@ -12,10 +12,10 @@ import { POST as chooseCompany } from "@/app/api/ops/organization/route";
 import { GET as exportTrends } from "@/app/api/ops/trends/export/route";
 import { tenantFixture } from "@/lib/ops/tenant-fixture";
 
-const boundary = vi.hoisted(() => ({ cookies: new Map<string, string>(), repository: vi.fn(), identity: vi.fn() }));
+const boundary = vi.hoisted(() => ({ cookies: new Map<string, string>(), repository: vi.fn(), identity: vi.fn(), snapshot: vi.fn(() => { throw new Error("Setup must not load tenant source records"); }) }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => boundary.cookies.has(name) ? { value: boundary.cookies.get(name) } : undefined }) }));
 vi.mock("@/app/chatgpt-auth", () => ({ getChatGPTUser: () => boundary.identity() }));
-vi.mock("@/lib/server/ops-repository-provider", () => ({ getServerOpsRepository: () => boundary.repository() }));
+vi.mock("@/lib/server/ops-repository-provider", () => ({ getServerOpsRepository: () => boundary.repository(), getServerOpsFixtureSnapshot: () => boundary.snapshot() }));
 
 const USER = "sites:identity-a";
 const ORG = NORTHLINE_ORGANIZATION_ID;
@@ -32,6 +32,11 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("loads access-only setup pages without loading tenant source records", async () => {
+    expect(await loadImportWorkspaceAccess()).toMatchObject({ organizationName: "Clark Pump and Shop" });
+    expect(await loadNotificationSettingsModel()).toMatchObject({ organizationName: "Clark Pump and Shop", rules: expect.any(Array) });
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.stubEnv("OPS_ACCESS_MODE", "authenticated");
     vi.stubEnv("OPS_IDENTITY_PROVIDER", "sites");

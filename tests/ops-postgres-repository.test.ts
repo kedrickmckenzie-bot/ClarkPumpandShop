@@ -1,7 +1,8 @@
+import { bindPostgresStatement } from "@/lib/ops/postgres-parameters";
 import { describe, expect, it } from "vitest";
 import {
   createOpsPostgresRepository,
-  translateOpsSqlForPostgres,
+  createOpsPostgresTransactionRepository,
   type PostgresClientLike,
   type PostgresPoolLike,
 } from "@/lib/ops/postgres-repository";
@@ -67,10 +68,10 @@ class FakePostgresPool implements PostgresPoolLike {
   }
 }
 
-describe("PostgreSQL SQL compatibility", () => {
+describe("PostgreSQL native statements", () => {
   it("numbers bind markers without rewriting question marks in SQL literals or identifiers", () => {
     const values = ["org-one", "store-one"] as const;
-    const translated = translateOpsSqlForPostgres(
+    const translated = bindPostgresStatement(
       `SELECT '?' AS literal_value, "?" AS literal_identifier
        FROM ops_stores
        WHERE organization_id = ? AND id = ?`,
@@ -83,12 +84,12 @@ describe("PostgreSQL SQL compatibility", () => {
   });
 
   it("preserves idempotent seed semantics and PostgreSQL aggregate syntax", () => {
-    const insert = translateOpsSqlForPostgres(
-      "INSERT OR IGNORE INTO ops_stores (id, organization_id, location_policy_enabled) VALUES (?, ?, ?)",
+    const insert = bindPostgresStatement(
+      "INSERT INTO ops_stores (id, organization_id, location_policy_enabled) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
       ["store-one", "org-one", 1],
     );
-    const aggregate = translateOpsSqlForPostgres(
-      "SELECT group_concat(display_name, '|') AS specialties FROM ops_vendor_specialties WHERE organization_id = ?",
+    const aggregate = bindPostgresStatement(
+      "SELECT string_agg(display_name, '|') AS specialties FROM ops_vendor_specialties WHERE organization_id = ?",
       ["org-one"],
     );
 
@@ -101,8 +102,8 @@ describe("PostgreSQL SQL compatibility", () => {
   });
 
   it("qualifies the work-order counter during PostgreSQL conflict updates", () => {
-    const counter = translateOpsSqlForPostgres(
-      "INSERT INTO ops_work_order_counters (organization_id, counter_year, next_value) VALUES (?, ?, 2) ON CONFLICT(organization_id, counter_year) DO UPDATE SET next_value = next_value + 1 RETURNING next_value - 1 AS allocated",
+    const counter = bindPostgresStatement(
+      "INSERT INTO ops_work_order_counters (organization_id, counter_year, next_value) VALUES (?, ?, 2) ON CONFLICT(organization_id, counter_year) DO UPDATE SET next_value = ops_work_order_counters.next_value + 1 RETURNING next_value - 1 AS allocated",
       ["org-one", 2026],
     );
 
@@ -113,6 +114,26 @@ describe("PostgreSQL SQL compatibility", () => {
 });
 
 describe("PostgreSQL repository boundary", () => {
+  it("builds native aggregate and JSON queries before binding parameters", async () => {
+    const pool = new FakePostgresPool(new FakePostgresClient());
+    const repository = createOpsPostgresRepository(pool);
+    await repository.listVendors({ organizationId: "org-one" });
+    await repository.listWorkOrders({ organizationId: "org-one" }, { categoryPath: ["Refrigeration", "Beer caves"] });
+    expect(pool.calls.some(call => call.text.includes("string_agg(display_name, '|')"))).toBe(true);
+    expect(pool.calls.some(call => call.text.includes("wa.group_path_json::jsonb ->> 0"))).toBe(true);
+    expect(pool.calls.every(call => !/group_concat|json_extract|INSERT OR IGNORE/.test(call.text))).toBe(true);
+    expect(pool.calls.every(call => call.values[0] === "org-one")).toBe(true);
+  });
+
+  it("reuses an owned transaction without nesting or releasing it", async () => {
+    const client = new FakePostgresClient();
+    const repository = createOpsPostgresTransactionRepository(client);
+    await repository.getStore("org-one", "store-one");
+    await repository.atomicWrite([{ sql: "DELETE FROM ops_saved_views WHERE organization_id = ? AND id = ?", params: ["org-one", "view-one"] }]);
+    expect(client.calls).toHaveLength(2);
+    expect(client.calls.some(call => /^(BEGIN|COMMIT|ROLLBACK)$/.test(call.text))).toBe(false);
+    expect(client.releaseCount).toBe(0);
+  });
   it("keeps the full fixture seed in one transaction for deferred forward references", async () => {
     const client = new FakePostgresClient();
     const pool = new FakePostgresPool(client);

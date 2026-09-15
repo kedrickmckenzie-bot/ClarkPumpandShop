@@ -335,12 +335,12 @@ export async function loadApprovalPolicyWorkspaceModel() {
 }
 
 export async function loadNotificationSettingsModel() {
-  const context = await sessionAndFixture();
-  requireCapability(context.session, "administer");
+  const session = await getRequestOperatorSession();
+  requireCapability(session, "administer");
   const repository = await getServerOpsRepository();
   return {
-    organizationName: context.session.organizationName,
-    rules: await repository.listNotificationRules(context.session.organizationId),
+    organizationName: session.organizationName,
+    rules: await repository.listNotificationRules(session.organizationId),
     providerConfigured: Boolean(process.env.EMAIL_PROVIDER && process.env.EMAIL_API_KEY && process.env.EMAIL_FROM),
     providerLabel: process.env.EMAIL_PROVIDER?.trim() || "Not configured",
     fromAddress: process.env.EMAIL_FROM?.trim(),
@@ -348,9 +348,9 @@ export async function loadNotificationSettingsModel() {
 }
 
 export async function loadImportWorkspaceAccess() {
-  const context = await sessionAndFixture();
-  requireCapability(context.session, "administer");
-  return { organizationName: context.session.organizationName };
+  const session = await getRequestOperatorSession();
+  requireCapability(session, "administer");
+  return { organizationName: session.organizationName };
 }
 
 export async function loadDashboardModel() {

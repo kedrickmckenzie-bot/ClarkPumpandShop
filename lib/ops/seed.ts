@@ -4,7 +4,7 @@ import { assertOpsFixture } from "./fixtures";
 
 function insert(table: string, value: Record<string, unknown>): OpsStatement {
   const entries = Object.entries(value).filter(([, item]) => item !== undefined);
-  return { sql: `INSERT OR IGNORE INTO ${table} (${entries.map(([key]) => key).join(", ")}) VALUES (${entries.map(() => "?").join(", ")})`, params: entries.map(([, item]) => item) };
+  return { sql: `INSERT INTO ${table} (${entries.map(([key]) => key).join(", ")}) VALUES (${entries.map(() => "?").join(", ")}) ON CONFLICT DO NOTHING`, params: entries.map(([, item]) => item) };
 }
 
 export function buildOpsSeedStatements(fixture: OpsFixture): OpsStatement[] {

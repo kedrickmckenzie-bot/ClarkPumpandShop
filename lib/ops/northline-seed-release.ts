@@ -89,9 +89,9 @@ export function remapNorthlineFixtureVisitWorkIds(fixture: OpsFixture, existing:
 
 export function buildNorthlineCurrentSeedMarker(): OpsStatement {
   return {
-    sql: `INSERT OR IGNORE INTO ops_idempotency_keys
+    sql: `INSERT INTO ops_idempotency_keys
       (organization_id, key, command, result_id, request_hash, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
     params: [
       NORTHLINE_ORGANIZATION_ID,
       NORTHLINE_SEED_VERSION,
@@ -106,9 +106,9 @@ export function buildNorthlineCurrentSeedMarker(): OpsStatement {
 
 export function buildNorthlineCompatibilityMarker(sourceVersion: string): OpsStatement {
   return {
-    sql: `INSERT OR IGNORE INTO ops_idempotency_keys
+    sql: `INSERT INTO ops_idempotency_keys
       (organization_id, key, command, result_id, request_hash, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
     params: [
       NORTHLINE_ORGANIZATION_ID,
       NORTHLINE_SEED_COMPATIBILITY_MARKER,
