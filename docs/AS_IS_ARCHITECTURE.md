@@ -3,6 +3,8 @@
 **Snapshot date:** August 20, 2026
 **Purpose:** factual repository inventory, including the active worktree; not a production-readiness claim
 
+This is a dated snapshot. The September 14 [legacy retirement](PASS5_LEGACY_RETIREMENT.md) supersedes the parallel-stack inventory below; use the [current pass checklist](PLATFORM_IMPROVEMENT_PASSES.md) for implementation status.
+
 The approved direction is in [CSTORE_PLATFORM_REBUILD_BLUEPRINT.md](CSTORE_PLATFORM_REBUILD_BLUEPRINT.md) and [ADR 0001](adr/0001-selective-clean-slate-modular-monolith-and-portable-persistence.md). This document describes what exists now.
 
 ## Runtime and stack

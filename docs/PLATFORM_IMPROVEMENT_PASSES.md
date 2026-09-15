@@ -5,7 +5,7 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 ## Checkpoint
 
 - Completed passes: **1 — role/scope and accountability correctness**, **2 — trustworthy metrics and drill-through**, **3 — manager and store workflow usability**, and **4 — production identity and domain safeguards** (21 acceptance items).
-- Current product pass: **5 — bounded reads and maintainable persistence**, started under the user's authorization to continue all remaining passes automatically while away. **23 of 40 items complete; 17 remain**. P5-04 is complete; the other Pass 5 items remain open. No later pass is complete.
+- Current product pass: **5 — bounded reads and maintainable persistence**, started under the user's authorization to continue all remaining passes automatically while away. **24 of 40 items complete; 16 remain**. P5-04/P5-05 are complete; the other Pass 5 items remain open. No later pass is complete.
 - Completed exception: **P6-08 — populated D1 upgrade repair**, pulled forward after the first private publication failed; the repaired publication succeeded. All original item IDs remain unchanged.
 - Completion means acceptance evidence is recorded below, not merely that code was edited.
 - Deployment and real-customer readiness are separate gates. Fictional preview controls are not production authentication.
@@ -57,7 +57,7 @@ The order groups shared data models, UI surfaces and validation to avoid repeate
 - [ ] P5-02 Replace record/program/lifecycle full snapshots with bounded feature queries. Prove scoped callers do not fetch the whole tenant and drill-through remains exact.
 - [ ] P5-03 Extract feature presenters and command modules along domain boundaries while preserving shared commands and all evidence semantics; avoid introducing parallel application stacks.
 - [x] P5-04 Replace PostgreSQL dependence on D1 SQL translation with a provider-neutral repository boundary and native queries; retain D1/R2 adapters and migration parity during the active hosted preview.
-- [ ] P5-05 Audit imports/routes before retiring legacy cstore/demo/domain/root stacks. Delete only proven unused code and verify routes/builds afterward.
+- [x] P5-05 Audit imports/routes before retiring legacy cstore/demo/domain/root stacks. Delete only proven unused code and verify routes/builds afterward.
 - [ ] P5-06 Verify production import, stable store IDs/numbers/addresses/aliases, optional operating hierarchy and independent taxonomy. Keep the presentation at exactly 15 stores/five vendors; validate one-store and 65-store fixtures separately.
 
 ## Pass 6 — delivery, operations and deployment proof
@@ -234,3 +234,11 @@ Browser inspection confirmed notification settings/import access, the 15-store d
 ### Pass 5 persistence publication — complete
 
 Private version **33** published successfully at **2026-09-15 00:09:31 UTC**, from source `74fb76ad2df8bc8b883e6c2abe6d3d87fddce9d2`, at https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site . Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_01217ab31190819187ddecfe5aea21e1`; deployment: `appgdep_6aa88cad7c34819190bd1893cfa0d448`. Owner-only access, D1/R2 bindings and environment revision 1 were preserved. The unchanged packaging script ran through installed Git Bash after the Node wrapper failed to start bash; archive validation confirmed server/client output, manifest and migrations. Temporary browser sizing was reset. `dev4.log` remains untouched. Continue the remaining Pass 5 items automatically; this publication does not complete the overall goal.
+
+### Pass 5 legacy retirement — validated
+
+The [retirement audit and file manifest](PASS5_LEGACY_RETIREMENT.md) records the syntax-tree import walk from 199 runtime/configuration/script roots, 420 reachable files, zero unresolved local imports and zero nonliteral dynamic imports. Removed 93 unreachable prototype files / 50,070 lines, including eight legacy-only test files. The current `ops-*` tests, active routes, domain, migration histories and hosting inputs remain. No application route was redirected or deleted. Historical reviews remain dated; README links the current retirement record.
+
+Seed, typecheck, lint, **127 files / 884 tests** (132.98 seconds), **4 files / 53 workflow tests** (56.26 seconds), Sites production build and Render portability build passed. The test total decreased by 51 because those tests covered retired implementations; no current-platform test was removed. The read-only local HTTP route audit passed **148 sampled routes**, with no HTTP or rendered-server errors; this excludes client hydration and is not the final browser suite. **P5-05 is complete: 24 of 40 items complete, 16 remain.** Browser reload preserved the dashboard and manager search returned 81 matches across five record types; the Store 104 open-work link led to eight work records with Store 104 / Open work filters. No browser data mutation was made during this retirement checkpoint.
+
+Resume the remaining query work at the **Next query group** in `PASS5_QUERY_INVENTORY.md`. The existing executive snapshot is not a drop-in overview replacement because its time/cohort and task semantics differ. Keep P5-01/P5-02/P5-03/P5-06 and every later gate open.

@@ -8,6 +8,8 @@ The c-store suite is intentionally specific: store and region visibility, refrig
 
 Current improvement work is tracked in [the persistent pass checklist](./docs/PLATFORM_IMPROVEMENT_PASSES.md). Read its checkpoint before resuming work; the [September 14 review](./docs/PLATFORM_REVIEW_2026-09-14.md) records the baseline findings and limitations.
 
+The unreachable prototype stacks have been retired after an import and route audit; [the removal record](./docs/PASS5_LEGACY_RETIREMENT.md) identifies the preserved boundaries and deleted files. Their history remains in Git.
+
 ## Demo contract
 
 The fictional demo operator, **Clark Pump and Shop**, has exactly:
