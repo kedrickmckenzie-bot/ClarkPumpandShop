@@ -588,3 +588,9 @@ Desktop walkthrough verified global search to Store 104, prefilled work creation
 Final full suite: 141 files / 933 tests passed in 178.14 seconds. Typecheck and lint pass. Final workflow checks and both builds are running. No infrastructure or broad migration acceptance is implied: 24/40 accepted, 16 open. This demo-first batch does not close Pass 5 or the complete production checklist.
 
 Final validation completed: seed, typecheck, lint, 933 tests, 54 workflow tests (90.20 seconds), Sites build and Render build all pass. Existing duplicate CSS emission warnings remain; both builds exit successfully. Publishing this combined desktop-demo batch privately; no broad production checklist item is closed.
+
+### Desktop demo publication checkpoint
+
+Private version 50 succeeded September 15, 2026 at 18:08:38 UTC, environment revision 1: https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site . Pushed source 3f28c9b48ec6a8643d5050bd88d22c7af2f79753. Version appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_aaeeaaf53e2c8191ac6583b50ffe9790. Deployment appgdep_6aa98997aeb881918a7362058be12dd0. Validated archive contains the server entry, client assets, DB/FILES manifest and 51 migrations; saved version reports 716 files. Private audience preserved. No production browser/HTTP probe performed. All validation evidence above applies to this batch. Unrelated dev4.log remains untouched.
+
+24/40 accepted, 16 open. Immediate priority remains desktop demo usability and vendor mobile check-in/out only. General operator mobile polish is deferred. Remaining production scope, snapshot migrations, import application and infrastructure gates stay open; do not restart those ahead of demo-blocking feedback or describe the whole checklist as complete.
