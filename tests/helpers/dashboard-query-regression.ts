@@ -1,5 +1,6 @@
 import { expect } from "vitest";
 import { briefQueryRegression } from "./brief-query-regression";
+import { recordIntegrityRegression } from "./record-integrity-regression";
 import { attentionQueryRegression } from "./attention-query-regression";
 import type { OpsRepository, OrganizationScope } from "@/lib/ops/repository";
 import type { OpsFixture } from "@/lib/ops/types";
@@ -8,6 +9,7 @@ import type { DashboardBreakdownKind, DashboardBreakdownRow } from "@/lib/ops/da
 
 /** Run unchanged against migrated SQLite and PostgreSQL before mutating their shared fixture. */
 export async function dashboardQueryRegression(repository: OpsRepository, fixture: OpsFixture) {
+  await recordIntegrityRegression(repository, fixture);
   await briefQueryRegression(repository, fixture);
   await attentionQueryRegression(repository, fixture);
   const reference = createOpsFixtureReadRepository(fixture);

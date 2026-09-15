@@ -1,91 +1,30 @@
 import Link from "next/link";
-import type { ClosedLoopCoverageResult, DataQualityReport } from "@/lib/ops/coverage-quality";
-import styles from "./coverage-quality.module.css";
+import type { IntegritySummary } from "@/app/app/_data/record-integrity-presenter";
+import { integrityHref, type IntegritySource } from "@/lib/ops/record-integrity-query";
+import styles from "./brief-summary.module.css";
 
-export interface CoverageQualityModel {
-  coverage: ClosedLoopCoverageResult;
-  quality: DataQualityReport;
-}
-
-const missingLabels: Record<string, string> = {
-  outcome_recorded: "No visit outcome on record",
-  verification_verified: "Vendor claim not verified internally",
-  cost_recorded: "No recorded cost evidence",
-};
-
-const entityHref: Record<string, (id: string) => string> = {
-  work_order: (id) => `/app/work-orders/${id}`,
-  invoice: (id) => `/app/invoices/${id}`,
-  asset: (id) => `/app/equipment/${id}`,
-};
-
-export function CoverageQualitySection({ model }: { model: CoverageQualityModel }) {
-  const { coverage, quality } = model;
-  const rate = coverage.coverageRate == null ? null : Math.round(coverage.coverageRate * 100);
-  return (
-    <section className={styles.section} aria-labelledby="coverage-quality-heading">
-      <h2 id="coverage-quality-heading">Operating record integrity</h2>
-      <div className={styles.columns}>
-        <div className={styles.block}>
-          <h3>Jobs followed through to done</h3>
-          {coverage.denominator === 0 ? (
-            <p className={styles.empty}>No work orders have closed yet.</p>
-          ) : (
-            <>
-              <p className={styles.bigNumber}>{rate}%</p>
-              <p className={styles.subtext}>
-                {coverage.numerator} of {coverage.denominator} closed work orders satisfy every completeness requirement of{" "}
-                {coverage.policyVersion}.
-              </p>
-              <ul className={styles.reqList}>
-                {coverage.requirements.map((requirement) => (
-                  <li key={requirement.key}>
-                    {requirement.label}: {requirement.satisfiedCount}
-                  </li>
-                ))}
-              </ul>
-              {coverage.incompleteWorkOrders.length > 0 ? (
-                <div className={styles.gaps}>
-                  <p className={styles.gapsTitle}>Closed with gaps ({coverage.incompleteWorkOrders.length})</p>
-                  <ul>
-                    {coverage.incompleteWorkOrders.slice(0, 5).map((row) => (
-                      <li key={row.workOrderId}>
-                        <Link href={`/app/work-orders/${row.workOrderId}`}>Open record</Link>
-                        <span className={styles.gapList}>{row.missing.map((key) => missingLabels[key]).join(" · ")}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {coverage.incompleteWorkOrders.length > 5 ? (
-                    <p className={styles.moreNote}>…and {coverage.incompleteWorkOrders.length - 5} more.</p>
-                  ) : null}
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
-
-        <div className={styles.block}>
-          <h3>Records that need cleanup</h3>
-          <div className={styles.severityRow}>
-            <span className={`${styles.pill} ${styles.pillHigh}`}>High: {quality.counts.high}</span>
-            <span className={`${styles.pill} ${styles.pillMedium}`}>Medium: {quality.counts.medium}</span>
-            <span className={`${styles.pill} ${styles.pillLow}`}>Low: {quality.counts.low}</span>
-          </div>
-          {quality.issues.length === 0 ? (
-            <p className={styles.empty}>Every operational record currently passes its checks.</p>
-          ) : (
-            <ul className={styles.issueList}>
-              {quality.issues.slice(0, 6).map((issue) => (
-                <li key={`${issue.entityType}-${issue.entityId}-${issue.label}`}>
-                  <Link href={entityHref[issue.entityType](issue.entityId)}>{issue.label}</Link>
-                  <span className={styles.issueDetail}>{issue.detail}</span>
-                </li>
-              ))}
-              {quality.issues.length > 6 ? <li className={styles.moreNote}>…and {quality.issues.length - 6} more.</li> : null}
-            </ul>
-          )}
-        </div>
+export function CoverageQualitySection({ model }: { model: IntegritySummary }) {
+  const { counts } = model;
+  const countLink = (kind: IntegritySource, label: string) => <Link href={integrityHref(kind)} aria-label={`${label}: ${counts[kind]} records`}>{counts[kind]}</Link>;
+  return <section id="record-checks" className={`${styles.summary} ${styles.section}`} aria-labelledby="record-checks-heading">
+    <header><h2 id="record-checks-heading">Record checks</h2><span className={styles.checkContext}>All history · {model.scopeLabel}</span></header>
+    <div className={styles.integrityColumns}>
+      <div><h3>Needs follow-up</h3><ul className={styles.checkList}>
+        <li><Link href={integrityHref("missing_action")}>Work without a next action <strong>{counts.missing_action}</strong></Link></li>
+        <li><Link href={integrityHref("aged_invoice")}>Invoice reviews 30+ days old <strong>{counts.aged_invoice}</strong></Link></li>
+      </ul>
+      <details className={styles.optionalDetails}><summary>Optional details to add</summary><p>These do not block work.</p><ul className={styles.checkList}>
+        <li><Link href={integrityHref("unclassified_work")}>Work not yet classified <strong>{counts.unclassified_work}</strong></Link></li>
+        <li><Link href={integrityHref("missing_life")}>Equipment life not entered <strong>{counts.missing_life}</strong></Link></li>
+      </ul></details></div>
+      <div><h3>Closed work evidence</h3><p><Link href={integrityHref("closed_work")}>{counts.closed_work} resolved or closed work orders</Link></p>
+      <div className={styles.tableScroll}><table className={styles.evidenceTable}><thead><tr><th>Evidence</th><th>Yes</th><th>No</th></tr></thead><tbody>
+        <tr><th scope="row">Latest visit outcome recorded</th><td data-label="Yes">{countLink("with_outcome", "Visit outcome recorded")}</td><td data-label="No">{countLink("without_outcome", "No visit outcome recorded")}</td></tr>
+        <tr><th scope="row">Work cost recorded</th><td data-label="Yes">{countLink("with_cost", "Work cost recorded")}</td><td data-label="No">{countLink("without_cost", "No work cost recorded")}</td></tr>
+        <tr><th scope="row">Outside work verified</th><td data-label="Yes">{countLink("verified", "Latest outside-work outcome verified")}</td><td data-label="No">{countLink("unverified", "Latest outside-work outcome not verified")}</td></tr>
+      </tbody></table></div>
+      <details className={styles.optionalDetails}><summary>About these counts</summary><p>Evidence coverage does not decide whether work is complete. Visits, verification and costs are optional.</p><p>Verification covers <Link href={integrityHref("vendor_closed")}>{counts.vendor_closed} closed jobs with an outside assignment</Link>. Only a verified decision matching the latest recorded outcome counts.</p></details>
       </div>
-    </section>
-  );
+    </div>
+  </section>;
 }

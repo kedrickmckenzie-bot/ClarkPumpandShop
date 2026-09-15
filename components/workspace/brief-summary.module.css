@@ -1,5 +1,5 @@
 .summary { color: var(--ops-ink); font-size: 16px; line-height: 1.5; }
-.summary a { color: var(--ops-brand, #2563eb); text-underline-offset: 3px; }
+.summary a:not(.metric) { color: var(--ops-brand, #2563eb); text-underline-offset: 3px; }
 .context { margin: 0 0 20px; color: var(--ops-muted); }
 .money { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .summary .metric { display: flex; flex-direction: column; gap: 8px; background: var(--ops-panel); border: 1px solid var(--ops-border); border-radius: 6px; padding: 20px; text-decoration: none; color: var(--ops-ink); }
@@ -45,3 +45,21 @@
 .head h1 { font-size: 30px; font-weight: 650; letter-spacing: -.03em; margin: 4px 0 6px; }
 .head p { margin: 0; color: var(--ops-muted); font-size: 16px; }
 .head a { color: var(--ops-brand); }
+.integrityColumns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 28px; }
+.integrityColumns h3 { margin: 4px 0 10px; font-size: 17px; font-weight: 650; }
+.integrityColumns p { font-size: 15px; color: var(--ops-muted); margin: 10px 0; }
+.checkContext { color: var(--ops-muted); font-size: 15px; }
+.checkList { list-style: none; padding: 0; margin: 0; }
+.checkList li { border-bottom: 1px solid var(--ops-border); }
+.checkList a { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 12px 0; }
+.optionalDetails { margin-top: 18px; font-size: 15px; }
+.optionalDetails summary { color: var(--ops-brand); }
+@media (max-width: 1000px) { .integrityColumns { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+  .evidenceTable thead { display: none; }
+  .evidenceTable tbody { display: block; }
+  .evidenceTable tr { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--ops-border); padding: 12px 0; }
+  .evidenceTable th:first-child { grid-column: 1 / -1; padding: 0 0 8px; border: 0; }
+  .evidenceTable td { text-align: left; border: 0; padding: 4px 0; }
+  .evidenceTable td::before { content: attr(data-label) ": "; color: var(--ops-muted); }
+}

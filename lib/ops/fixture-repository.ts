@@ -443,6 +443,9 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
 }
 
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
+  async listRecordIntegrity(scope: OrganizationScope, asOf: string, query: import("./record-integrity-query").IntegrityQuery) {
+    return integrityFromFixture(this.fixture, scope, asOf, query);
+  }
   async listBriefSources(scope: OrganizationScope, period: import("./owner-brief-query").BriefPeriod, query: import("./owner-brief-query").BriefSourceQuery) {
     return briefSourcesFromFixture(this.fixture, scope, period, query);
   }
@@ -1002,3 +1005,4 @@ export function getNorthlineDemoRuntime() {
     tokenHashes: NORTHLINE_DEMO_TOKEN_HASHES,
   } as const;
 }
+import { integrityFromFixture } from "./record-integrity-query";

@@ -11,6 +11,7 @@ import { POST as previewEdition } from "@/app/api/ops/preview-edition/route";
 import { POST as chooseCompany } from "@/app/api/ops/organization/route";
 import { GET as exportTrends } from "@/app/api/ops/trends/export/route";
 import { tenantFixture } from "@/lib/ops/tenant-fixture";
+import OwnerBriefPage from "@/app/app/brief/page";
 
 const boundary = vi.hoisted(() => ({ cookies: new Map<string, string>(), repository: vi.fn(), identity: vi.fn(), snapshot: vi.fn(() => { throw new Error("Setup must not load tenant source records"); }) }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => boundary.cookies.has(name) ? { value: boundary.cookies.get(name) } : undefined }) }));
@@ -32,13 +33,17 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
-  it("does not load the companywide integrity companion for a location-scoped facilities membership", async () => {
+  it("renders the actual owner brief with both summaries without requesting a tenant snapshot", async () => {
+    expect(await OwnerBriefPage({ searchParams: Promise.resolve({}) })).toBeTruthy();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
+  it("loads scoped integrity counts without a snapshot for a location-scoped facilities membership", async () => {
     const data = fixture();
     const grant = data.scopeGrants.find(row => row.membershipId === "membership-northline-facilities")!;
     grant.scopeKind = "store"; grant.scopeId = data.stores[0].id;
     useFixture(data);
     expect((await loadOwnerBriefModel())!.sources.stores.totalCount).toBe(1);
-    expect(await loadCoverageQualityModel()).toBeNull();
+    expect((await loadCoverageQualityModel())!.counts.closed_work).toBe(data.workOrders.filter(row => row.storeId === data.stores[0].id && ["resolved", "closed"].includes(row.status)).length);
     expect(boundary.snapshot).not.toHaveBeenCalled();
   });
   it("keeps the regional brief and its source pages inside the membership scope without a snapshot", async () => {
@@ -52,7 +57,7 @@ describe("production identity and organization selection", () => {
     const otherStore = data.stores.find(row => row.regionId !== "region-northline-north")!;
     const records = await loadBriefRecordsModel({ kind: "recorded_cost", store: otherStore.id });
     expect(records.table.rows).toEqual([]);
-    expect(await loadCoverageQualityModel()).toBeNull();
+    expect((await loadCoverageQualityModel())!.scopeLabel).toContain("5 stores");
     expect(boundary.snapshot).not.toHaveBeenCalled();
   });
   it("loads the actual manager home without requesting a tenant snapshot", async () => {

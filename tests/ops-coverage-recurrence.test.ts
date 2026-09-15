@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildClosedLoopCoverage, buildDataQualityIssues } from "@/lib/ops/coverage-quality";
+import { integrityFromFixture } from "@/lib/ops/record-integrity-query";
 import { runPmRecurrenceCycle } from "@/lib/ops/job-workers";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
@@ -7,32 +7,32 @@ import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/
 const ORG = NORTHLINE_ORGANIZATION_ID;
 const NOW = "2026-09-01T12:00:00.000Z";
 
-describe("closed-loop maintenance coverage", () => {
+describe("closed-work evidence coverage", () => {
   const fixture = buildNorthlinePresentationFixture();
 
-  it("stamps its policy version and reconciles numerator against an honest denominator", () => {
-    const coverage = buildClosedLoopCoverage(fixture, ORG);
-    expect(coverage.policyVersion).toBe("closed-loop-v1");
-    expect(coverage.denominator).toBeGreaterThan(0);
-    expect(coverage.numerator + coverage.incompleteWorkOrders.length).toBe(coverage.denominator);
+  it("reconciles each evidence count against its own eligible population", () => {
+    const { counts } = integrityFromFixture(fixture, { organizationId: ORG }, NOW, { kind: "closed_work" });
+    expect(counts.closed_work).toBeGreaterThan(0);
+    expect(counts.with_outcome + counts.without_outcome).toBe(counts.closed_work);
+    expect(counts.with_cost + counts.without_cost).toBe(counts.closed_work);
+    expect(counts.verified + counts.unverified).toBe(counts.vendor_closed);
   });
 
   it("never leaks another tenant's work orders into coverage", () => {
-    const coverage = buildClosedLoopCoverage(fixture, "org-other");
-    expect(coverage.denominator).toBe(0);
-    expect(coverage.coverageRate).toBeNull();
+    const coverage = integrityFromFixture(fixture, { organizationId: "org-other" }, NOW, { kind: "closed_work" });
+    expect(coverage.totalCount).toBe(0);
+    expect(Object.values(coverage.counts).every(count => count === 0)).toBe(true);
   });
 });
 
-describe("operational data-quality queue", () => {
-  it("flags an active work order holding no open workflow task as high severity", () => {
+describe("operational record checks", () => {
+  it("finds an active work order holding no open workflow task", () => {
     const fixture = buildNorthlinePresentationFixture();
     const orphan = fixture.workOrders.find((row) => row.organizationId === ORG && !["resolved", "closed", "cancelled"].includes(row.status))!;
     fixture.workflowTasks = fixture.workflowTasks.filter((row) => row.workOrderId !== orphan.id);
-    const report = buildDataQualityIssues(fixture, ORG, NOW);
-    const issue = report.issues.find((row) => row.entityId === orphan.id && row.label.includes("accountable next action"));
-    expect(issue?.severity).toBe("high");
-    expect(report.counts.high).toBeGreaterThanOrEqual(1);
+    const report = integrityFromFixture(fixture, { organizationId: ORG }, NOW, { kind: "missing_action" });
+    expect(report.items.some(row => row.entityId === orphan.id)).toBe(true);
+    expect(report.totalCount).toBeGreaterThanOrEqual(1);
   });
 
   it("flags invoice reviews that age past 30 days without a decision", () => {
@@ -40,22 +40,22 @@ describe("operational data-quality queue", () => {
     const exception = fixture.invoiceExceptions.find((row) => row.organizationId === ORG)!;
     exception.status = "open";
     exception.detectedAt = "2026-01-01T00:00:00.000Z";
-    const report = buildDataQualityIssues(fixture, ORG, NOW);
-    const issue = report.issues.find((row) => row.entityType === "invoice" && row.label.includes("aging past 30 days"));
-    expect(issue?.severity).toBe("medium");
+    const report = integrityFromFixture(fixture, { organizationId: ORG }, NOW, { kind: "aged_invoice" });
+    expect(report.items.some(row => row.entityType === "invoice")).toBe(true);
   });
 
-  it("flags assets whose lifecycle inputs are incomplete", () => {
+  it("keeps missing life details optional without creating an operational follow-up", () => {
     const fixture = buildNorthlinePresentationFixture();
     const assetWithoutLife = fixture.assets.find((row) => row.organizationId === ORG && row.status !== "retired")!;
     delete (assetWithoutLife as { expectedLifeYears?: number }).expectedLifeYears;
-    const report = buildDataQualityIssues(fixture, ORG, NOW);
-    expect(report.counts.low).toBeGreaterThanOrEqual(1);
+    const report = integrityFromFixture(fixture, { organizationId: ORG }, NOW, { kind: "missing_life" });
+    expect(report.items.some(row => row.entityId === assetWithoutLife.id)).toBe(true);
+    expect(report.counts.missing_action).toBe(0);
   });
 
   it("stays empty for a foreign tenant", () => {
-    const report = buildDataQualityIssues(buildNorthlinePresentationFixture(), "org-other", NOW);
-    expect(report.issues).toHaveLength(0);
+    const report = integrityFromFixture(buildNorthlinePresentationFixture(), { organizationId: "org-other" }, NOW, { kind: "missing_action" });
+    expect(report.items).toHaveLength(0);
   });
 });
 

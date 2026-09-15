@@ -345,6 +345,9 @@ function serviceAppointmentFrom(row: Row): ServiceAppointment { return { id: tex
 function savedViewFrom(row: Row): SavedView { return { id: text(row, "id"), organizationId: text(row, "organization_id"), ownerMembershipId: text(row, "owner_membership_id"), surface: text(row, "surface"), name: text(row, "name"), queryString: text(row, "query_string"), createdAt: text(row, "created_at") }; }
 
 class SqlOpsRepository implements OpsRepository {
+  async listRecordIntegrity(scope: OrganizationScope, asOf: string, query: import("./record-integrity-query").IntegrityQuery) {
+    return queryRecordIntegrity(this.driver, scope, asOf, query);
+  }
   async listBriefSources(scope: OrganizationScope, period: import("./owner-brief-query").BriefPeriod, query: import("./owner-brief-query").BriefSourceQuery) {
     return queryBriefSources(this.driver, scope, period, query);
   }
@@ -1031,3 +1034,4 @@ export function createOpsSqlRepository(
 }
 
 function accountingSourceFrom(row: Row): import("./types").AccountingInvoiceSource { return { id: text(row, "id"), organizationId: text(row, "organization_id"), connectionKey: text(row, "connection_key"), companyKey: text(row, "company_key"), externalInvoiceId: text(row, "external_invoice_id"), sourceRevision: Number(row.source_revision), version: Number(row.version), payloadJson: text(row, "payload_json"), invoiceId: maybeText(row, "invoice_id"), matchState: text(row, "match_state") as import("./types").AccountingInvoiceSource["matchState"], updatedAt: text(row, "updated_at") }; }
+import { queryRecordIntegrity } from "./record-integrity-sql";

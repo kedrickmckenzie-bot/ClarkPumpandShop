@@ -4,15 +4,15 @@ Snapshot inventory after the first persistence extraction, September 14, 2026. T
 
 | Consumer group | Current entry points | Replacement needed |
 | --- | --- | --- |
-| Manager home / brief | `loadDashboardModel`, `loadOwnerBriefModel` | Main overview is fully query-backed, including lifecycle and both spotlights. Replace the owner brief, its companywide-only projection and companion coverage reads |
+| Manager home / brief | `loadDashboardModel`, `loadOwnerBriefModel`, `loadCoverageQualityModel` | Complete: overview, owner summary and record checks use scoped repository queries with exact source pages. Preserve this boundary |
 | Lists | `loadListModel` fallback, `loadApprovedWorkPortfolioModel` | Complete query-first filtering for specialized cohorts and stable source pagination |
 | Programs | `loadProgramModel`, `loadPmProgramManagementModel` | Scoped equipment/PM/lifecycle queries and counts; retain PM denominator/window and transparent lifecycle inputs |
 | Trends | `loadTrendsModel`, `loadTrendsExportModel`, `loadTrendsPageData` | Replace included-table compatibility projections with bounded source/aggregate queries; exports use a dedicated stream/page path |
 | Records | `loadDetailModel`, `loadConnectedWorkReview`, `loadWorkOrderCaseModel` | Exact record and related evidence queries; histories paginate without losing totals |
 | Work actions | `loadVendorIssuanceModel`, `loadEstimateComparisonModel`, `loadHeldWorkActionsModel`, `loadVendorResponseActionsModel`, `loadWorkOrderControlModel`, `loadWorkOrderRecordingModel`, `loadRequestReviewModel`, `loadAttentionItemModel` | Exact work/request/exception plus only eligible options and related evidence |
 | Creation | `loadCreateRequestModel`, `loadCreateWorkOrderModel`, `loadCreateStoreModel`, `loadCreateVendorModel` | Scoped option searches and small configuration queries; avoid full tenant source data |
-| Governance | `loadApprovalPolicyWorkspaceModel`, `loadJobHealthModel`, data-quality loader | Policy, worker-health and scoped coverage queries |
-| Vendors | `loadVendorPerformanceListModel`, `loadVendorPerformanceDetailModel`, `loadVendorScorecardsModel` | Aggregate vendor evidence and paginated exact records |
+| Governance | `loadApprovalPolicyWorkspaceModel`, `loadJobHealthModel` | Policy and worker-health queries; record-check queries are complete |
+| Vendors | `loadVendorPerformanceListModel`, `loadVendorPerformanceDetailModel` | Aggregate vendor evidence and paginated exact records; unused scorecard loader retired |
 | Other loaders | Verification, store sweeps, service runs, value ledger and remaining feature loaders using request snapshots | Feature-specific relationship queries |
 | API consumers | Import preview, equipment replacement, vendor creation and vendor relationship updates | Targeted validation inputs and command preconditions |
 
@@ -72,11 +72,9 @@ Shared migrated SQLite/PostgreSQL and fixture checks compare full scoped summari
 
 ## Next query group
 
-**Next priority: the owner brief's operating-integrity companion.** The owner summary and all eleven source cohorts now use scoped repository queries, as recorded below. `/app/brief` still loads coverage quality for companywide executive/facilities memberships; location-scoped memberships return before that snapshot is requested. Replace the companion with bounded scoped aggregates and exact source lists, then simplify its wording and migrate its obsolete style tokens. Do not reintroduce snapshots into the completed main overview or owner summary.
+**Next priority: the full action center.** Migrate its type/urgent/search/history filters, filtered summaries and bounded supporting-source details, preserving return-to-queue behavior. Do not substitute the simpler dashboard preview DTO. The overview, owner summary and record-check companion are now fully query-backed; do not reintroduce tenant snapshots into them.
 
-The companion is in `lib/ops/coverage-quality.ts`, `components/workspace/coverage-quality.tsx` and `loadCoverageQualityModel`. It currently truncates gaps and cleanup rows with an unreachable “and more” count, uses implementation wording, and treats optional equipment classification as a cleanup problem. Preserve real completeness evidence while correcting these UX and product-contract problems. Its denominator and each defect bucket need exact, scoped, paginated source destinations. The unused companywide `loadVendorScorecardsModel` entry point was removed after a call-site audit; live vendor performance uses the existing separate query/presenter paths.
-
-Then migrate the full action center with its type/urgent/search/history filters, filtered summaries and bounded supporting-source details, preserving return-to-queue behavior. Do not substitute the simpler dashboard preview DTO. Record/program/Trends replacements remain separate until their own queries and pagination pass. The legacy-stack retirement in `PASS5_LEGACY_RETIREMENT.md` does not complete these active query migrations.
+Record/program/Trends replacements remain separate until their own queries and pagination pass. Audit linked PM/record readers for P4-02 while replacing them. The legacy-stack retirement in `PASS5_LEGACY_RETIREMENT.md` does not complete these active query migrations.
 
 ## Scoped owner summary and exact source records — September 14, 2026
 
@@ -87,3 +85,13 @@ Recorded costs use inclusive service dates, defaulting to 30 calendar dates endi
 The owner brief uses current enterprise tokens, a short heading and one-line metric notes. PM methodology is disclosed on demand. Every metric opens its exact source population with period/currency intact. Source rows stack on phones so amounts and dates remain visible. PM rows name the plan and store, including asset-free maintenance, and open the exact occurrence with a return link to the same source page. Store amount and opened-work cells filter their source records to that store. The summary no longer nests a main landmark.
 
 Shared fixture/migrated SQLite/embedded PostgreSQL comparisons cover all eleven cohorts, company/region/store/empty/foreign scopes, second/past-end pages and store-filter intersection. A separate adversarial SQLite database checks first-day cost inclusion, USD/CAD separation, malformed/conflicting references, PM timezone timing and 230 same-deadline decisions across ten pages; each returned result is at most 26 rows. Actual authenticated regional and store-scoped facilities loader tests throw on snapshot access. The companywide coverage companion remains the next migration; P5-01 is not complete.
+
+## Scoped record checks — September 14, 2026
+
+The companion now uses `listRecordIntegrity` for twelve scoped cohorts, with complete counts and 25-row source pages. The actual complete owner-brief page is tested with snapshot access forbidden. Executive, facilities and regional memberships receive the same organization/location predicates. Invoice aging uses the oldest organization-bound open flag and full allocation visibility. Closed work, current visit outcome, recorded cost and outside-work verification have separate counts; verification must match the latest visit-work cycle and its exact recorded outcome. A newer unfinished cycle cannot inherit an older verified outcome.
+
+The interface presents short **Needs follow-up** and **Closed work evidence** sections. Optional classification and equipment-life details sit behind a disclosure and do not label basic work invalid. Every numerator, complement and denominator opens its complete supporting population. Yes/No evidence counts remain separate from work completion; visits, costs and verification are optional capabilities. Source rows stack on phones and retain full totals across pages. Retired the obsolete composite coverage helper and its old CSS, migrating its regression assertions to the new contract.
+
+Native SQL materializes current outcome and verification IDs once before aggregating facts. The initial nested correlated join caused the PostgreSQL worker to run for 312.90 seconds; it was explicitly stopped, then replaced. The isolated migrated PostgreSQL check passed in 20.20 seconds after correction. Shared fixture/SQLite/PostgreSQL checks cover all cohorts, scopes and pages. The adversarial SQLite fixture adds 230 tied closed records, equivalent timestamp formats, conflicting verification history, an unfinished newer cycle and a foreign invoice flag. Full traversal is stable and returned rows never exceed 101. These are query correctness and bounded-result checks, not production throughput certification.
+
+The full suite passed 134 files / 906 tests in 146.81 seconds, and the workflow command passed 4 files / 53 tests in 61.14 seconds. Browser checks confirmed companywide 389 closed records, 387 recorded outcomes/costs, and 351 unverified outside-work outcomes across 15 pages. Regional checks showed five stores, 129 closed records, 127 recorded outcomes/costs, 115 unverified outside-work outcomes and no aged invoice reviews. The empty state and 375px layout were inspected. P5-01 remains open for the full action center; P4-02 still requires the linked PM/record audit.

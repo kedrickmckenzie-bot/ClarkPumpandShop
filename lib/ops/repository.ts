@@ -339,6 +339,7 @@ export interface OpsRepository {
 
   // Manager-first, server-scoped read models.
   listBriefSources(scope: OrganizationScope, period: import("./owner-brief-query").BriefPeriod, query: import("./owner-brief-query").BriefSourceQuery): Promise<import("./owner-brief-query").BriefSourcePage>;
+  listRecordIntegrity(scope: OrganizationScope, asOf: string, query: import("./record-integrity-query").IntegrityQuery): Promise<import("./record-integrity-query").IntegrityPage>;
   getDashboardContext(scope: OrganizationScope): Promise<import("./dashboard-context").DashboardContext>;
   getDashboardLifecycle(scope: OrganizationScope, asOf: string): Promise<import("./lifecycle-summary").DashboardLifecycleSummary>;
   getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow): Promise<import("./dashboard-query").DashboardActivitySummary>;

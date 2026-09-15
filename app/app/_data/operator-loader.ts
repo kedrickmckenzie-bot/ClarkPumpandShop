@@ -39,7 +39,7 @@ import { buildQueryOwnerBrief, buildQueryBriefRecords } from "./owner-brief-quer
 import { buildWorkOrderCase } from "@/lib/ops/work-order-case";
 import { formatInTimeZone } from "@/lib/ops/local-date-time";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate } from "@/lib/ops/local-time";
-import { buildClosedLoopCoverage, buildDataQualityIssues } from "@/lib/ops/coverage-quality";
+import { buildIntegritySummary, buildIntegrityRecords } from "./record-integrity-presenter";
 import {
   LEGACY_OPS_PREVIEW_ROLE_COOKIE,
   OPS_PREVIEW_EDITION_COOKIE,
@@ -1007,12 +1007,12 @@ export async function loadSavedViewsModel(surface: string) {
 export async function loadCoverageQualityModel() {
   const session = await getRequestOperatorSession();
   const role = session.role;
-  if (role !== "executive" && role !== "facilities") return null;
-  // This companywide companion still uses a compatibility snapshot. Do not
-  // expose it to location-scoped memberships while its scoped query is built.
-  if (session.storeIds !== undefined || session.regionIds !== undefined) return null;
-  const context = await sessionAndFixture();
-  const coverage = buildClosedLoopCoverage(context.fixture, context.session.organizationId);
-  const quality = buildDataQualityIssues(context.fixture, context.session.organizationId, context.fixture.asOf);
-  return { coverage, quality };
+  if (role !== "executive" && role !== "facilities" && role !== "regional") return null;
+  return buildIntegritySummary(await getServerOpsRepository(), session, await getServerOpsReportingAsOf());
+}
+
+export async function loadIntegrityRecordsModel(query: OperatorSearchParameters) {
+  const session = await getRequestOperatorSession();
+  if (!["executive", "facilities", "regional"].includes(session.role)) notFound();
+  return buildIntegrityRecords(await getServerOpsRepository(), session, await getServerOpsReportingAsOf(), query);
 }
