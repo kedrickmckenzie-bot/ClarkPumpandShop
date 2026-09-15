@@ -555,6 +555,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async getPmPlan(organizationId: OpsId, planId: OpsId) { return clone(this.fixture.pmPlans.find((row) => row.organizationId === organizationId && row.id === planId) ?? null); }
   async getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return clone(this.fixture.pmOccurrences.find((row) => row.organizationId === organizationId && row.id === occurrenceId) ?? null); }
   async listPmSchedule(scope: OrganizationScope, query: PmScheduleQuery) { return pmScheduleFromFixture(this.fixture, scope, query); }
+  async listPmSetup(scope: OrganizationScope, query: import("./pm-setup-query").PmSetupQuery) { return (await import("./pm-setup-query")).pmSetupFromFixture(this.fixture, scope, query); }
   async listPmAnalysis(scope: OrganizationScope, query: PmAnalysisQuery) { return pmAnalysisFromFixture(this.fixture, scope, query); }
   async listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query: PageRequest = {}) { return workVisitEvidenceFromFixture(this.fixture, scope, workOrderId, query); }
   async listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return clone(this.fixture.pmWorkItems.filter((row) => row.organizationId === organizationId && row.occurrenceId === occurrenceId)); }

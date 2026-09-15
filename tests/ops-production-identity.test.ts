@@ -67,6 +67,10 @@ describe("production identity and organization selection", () => {
     expect(costs.table?.id).toBe("pm-reactive-evidence");
     expect(costs.page.secondaryAction?.label).toBe("Back to PM schedule");
     expect(await PreventiveMaintenancePage({ searchParams: Promise.resolve({ store: params.store, evidence: "cohort-equipment" }) })).toBeTruthy();
+    const coverage = await loadProgramModel("pm", { store: params.store, setup: "targets", setupFilter: "gaps" });
+    expect(coverage.table?.id).toBe("pm-setup-evidence");
+    expect(coverage.page.scopeLabel).toBe("Store 104 · Ridgeview");
+    expect(await PreventiveMaintenancePage({ searchParams: Promise.resolve({ store: params.store, setup: "programs" }) })).toBeTruthy();
     expect(boundary.snapshot).not.toHaveBeenCalled();
   });
   it("loads PM occurrence and plan records without snapshots and retains terminal timing", async () => {

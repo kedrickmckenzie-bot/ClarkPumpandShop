@@ -473,6 +473,7 @@ class SqlOpsRepository implements OpsRepository {
   async getPmPlan(organizationId: OpsId, planId: OpsId) { const row = await this.first("SELECT * FROM ops_pm_plans WHERE organization_id = ? AND id = ?", [organizationId, planId]); return row ? pmPlanFrom(row) : null; }
   async getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId) { const row = await this.first("SELECT * FROM ops_pm_occurrences WHERE organization_id = ? AND id = ?", [organizationId, occurrenceId]); return row ? pmOccurrenceFrom(row) : null; }
   async listPmSchedule(scope: OrganizationScope, query: PmScheduleQuery) { return queryPmSchedule(this.driver, scope, query); }
+  async listPmSetup(scope: OrganizationScope, query: import("./pm-setup-query").PmSetupQuery) { return (await import("./pm-setup-sql")).queryPmSetup(this.driver, scope, query); }
   async listPmAnalysis(scope: OrganizationScope, query: PmAnalysisQuery) { return queryPmAnalysis(this.driver, scope, query); }
   async listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query: PageRequest = {}) { return queryWorkVisitEvidence(this.driver, scope, workOrderId, query); }
   async listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId) { return (await this.all("SELECT * FROM ops_pm_work_items WHERE organization_id = ? AND occurrence_id = ? ORDER BY asset_id, id", [organizationId, occurrenceId])).map(pmWorkItemFrom); }

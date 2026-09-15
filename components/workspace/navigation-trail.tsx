@@ -80,5 +80,5 @@ export function NavigationTrail({ scopeKey }: { scopeKey: string }) {
     publishTrail(scopeKey, trail.slice(0, index + 1));
   };
   if (trail.length < 2) return null;
-  return <nav className={styles.trail} aria-label="Your navigation path"><span>Your path</span><ol>{trail.map((stop, index) => <li key={`${index}:${stop.href}`}>{index > 0 ? <ChevronRight aria-hidden="true" size={14} /> : null}{index === trail.length - 1 ? <span aria-current="page">{stop.label}</span> : <Link href={stop.href} onClick={(event) => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) returnToStop(index); }}>{stop.label}</Link>}</li>)}</ol></nav>;
+  return <details className={styles.history}><summary>Recently viewed</summary><nav className={styles.trail} aria-label="Your navigation path"><span>Your path</span><ol>{trail.map((stop, index) => <li key={`${index}:${stop.href}`}>{index > 0 ? <ChevronRight aria-hidden="true" size={14} /> : null}{index === trail.length - 1 ? <span aria-current="page">{stop.label}</span> : <Link href={stop.href} onClick={(event) => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) returnToStop(index); }}>{stop.label}</Link>}</li>)}</ol></nav></details>;
 }

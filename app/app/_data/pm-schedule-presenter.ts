@@ -12,7 +12,7 @@ const labels: Record<PmScheduleState | "follow-up", string> = { scheduled: "Upco
 const tone = (status: string): Tone => status === "completed" ? "positive" : status === "missed" ? "critical" : ["due", "overdue", "unscheduled", "follow-up"].includes(status) ? "warning" : "neutral";
 export function pmHref(query: Query, changes: Record<string, string | undefined> = {}) {
   const values = new URLSearchParams();
-  for (const key of ["store", "region", "program", "window", "view", "status", "occurrence", "evidence", "cohort", "month", "enrollments", "enrollmentPage", "page"]) { const value = first(query[key]); if (value) values.set(key, value); }
+  for (const key of ["store", "region", "program", "window", "view", "status", "occurrence", "evidence", "cohort", "month", "enrollments", "enrollmentPage", "page", "setup", "setupFilter", "setupPage", "programPage", "asset"]) { const value = first(query[key]); if (value) values.set(key, value); }
   for (const [key, value] of Object.entries(changes)) { if (value) values.set(key, value); else values.delete(key); }
   return `/app/pm${values.size ? `?${values}` : ""}`;
 }

@@ -268,7 +268,7 @@ export function PlanningWorkspace({
   programManagement?: ReactNode;
 }) {
   const copy = workspaceCopy[kind];
-  const pmEvidence = kind === "pm" && model.table?.id === "pm-reactive-evidence";
+  const pmEvidence = kind === "pm" && ["pm-reactive-evidence", "pm-setup-evidence"].includes(model.table?.id ?? "");
   return (
     <div className={styles.workspace}>
       <WorkspaceHeader model={model} kind={kind} />

@@ -10,3 +10,7 @@
   .trail > span, .trail li:not(:nth-last-child(2)):not(:last-child) { display: none; }
   .trail li:nth-last-child(2) svg { display: none; }
 }
+.history { margin-bottom: 12px; color: #475569; font-size: 14px; }
+.history > summary { display: list-item; width: fit-content; min-height: 44px; padding: 12px 0; cursor: pointer; }
+.history > summary:focus-visible { outline: 2px solid var(--product-action, #2563eb); outline-offset: 3px; }
+.history .trail { padding: 0 0 12px; }

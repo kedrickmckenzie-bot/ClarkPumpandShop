@@ -15,7 +15,7 @@ export default async function PreventiveMaintenancePage({ searchParams }: { sear
   });
   if (!loaded.model || !loaded.session) return <section><h1>Maintenance view unavailable</h1><p>{loaded.error}</p><Link href="/app/pm">Back to PM schedule</Link></section>;
   const { model, session } = loaded;
-  const evidence = model.table?.id === "pm-reactive-evidence";
+  const evidence = ["pm-reactive-evidence", "pm-setup-evidence"].includes(model.table?.id ?? "");
   if (evidence) return <PlanningWorkspace kind="pm" model={model} />;
   const programManagement = await loadPmProgramManagementModel(query);
   const store = Array.isArray(query.store) ? query.store[0] : query.store;
