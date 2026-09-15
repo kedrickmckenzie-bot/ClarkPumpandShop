@@ -4,9 +4,10 @@ import { attentionAccess } from "./attention-presenter";
 import { buildReviewQueue, buildReviewSources } from "./review-queue-presenter";
 import { buildPmScheduleModel } from "./pm-schedule-presenter";
 import { buildPmSetupManagement, buildPmSetupSources } from "./pm-setup-presenter";
-import { pmScheduleScope } from "@/lib/ops/pm-schedule-query";
-import { pmStoreAllowed } from "@/lib/ops/pm-record-query";
-import { scopedInvoiceRecords } from "@/lib/ops/dashboard-cohorts";
+import { buildPmReviewPreview, buildPmReviewSources } from "./pm-review-presenter";
+
+
+
 import { loadDashboardChartPages } from "./dashboard-charts";
 import { presentQueryDashboard } from "./dashboard-query-presenter";
 import { buildStoreCostRanking } from "./store-cost-presenter";
@@ -402,6 +403,10 @@ export async function loadProgramModel(route: ProgramRouteId, searchParams: Oper
   if (route === "pm") {
     const session = await getRequestOperatorSession();
     if (!roleCanAccessProgramRoute(session.role, route)) notFound();
+        if (searchParams.reviewSource || searchParams.pmReview) {
+      if (!roleCanAccessListRoute(session.role, "invoices")) notFound();
+      return enforceDashboardLinkPolicy(await buildPmReviewSources(await getServerOpsRepository(),session,searchParams),session);
+    }
     return enforceDashboardLinkPolicy(await (searchParams.setup ? buildPmSetupSources : buildPmScheduleModel)(await getServerOpsRepository(), session, getServerOpsReportingAsOf(), searchParams), session);
   }
   const context = await sessionAndFixture();
@@ -441,63 +446,12 @@ export async function loadTrendsPageData(searchParams: OperatorSearchParameters 
   return { model, savedViews, session };
 }
 
-// Remaining snapshot consumer: replace the invoice comparison with its own scoped source query.
-async function loadPmReconciliations(session: OperatorSession, searchParams: OperatorSearchParameters): Promise<PmProgramManagementModel["reconciliations"]> {
-  if (!roleCanAccessListRoute(session.role, "invoices")) return [];
-  const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
-  const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
-  const selectedStoreId=first(searchParams.store),selectedRegionId=first(searchParams.region),selectedProgramId=first(searchParams.program);
-  const visibleStores=fixture.stores.filter(store=>pmStoreAllowed(pmScheduleScope(session,{store:selectedStoreId,region:selectedRegionId}),store));
-  const visibleStoreIds=new Set(visibleStores.map(store=>store.id)),storesById=new Map(visibleStores.map(store=>[store.id,store]));
-  const programById=new Map(fixture.maintenancePrograms.filter(program=>program.organizationId===session.organizationId && program.status==="active").map(program=>[program.id,program]));
-  const pmHref=(values:Record<string,string|number|undefined>)=>{const params=new URLSearchParams();for(const [key,value] of Object.entries(values))if(value!==undefined)params.set(key,String(value));return `/app/pm?${params}`;};
-  const money=(minor:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(minor/100);
-  const visibleInvoiceIds = new Set(scopedInvoiceRecords(fixture, session.organizationId, visibleStoreIds).map(row => row.id));
-  const reconciliations = (roleCanAccessListRoute(session.role, "invoices") ? fixture.serviceDiscrepancies : [])
-    .filter((item) => item.organizationId === session.organizationId && item.status !== "resolved" && item.status !== "closed")
-    .flatMap((item) => {
-      let facts: Record<string, unknown>;
-      try {
-        facts = JSON.parse(item.factsJson) as Record<string, unknown>;
-      } catch {
-        return [];
-      }
-      if (facts.reconciliationKind !== "pm_billed_vs_observed" || typeof facts.storeId !== "string" || !visibleStoreIds.has(facts.storeId)) return [];
-      if (selectedProgramId && facts.programId !== selectedProgramId) return [];
-      const store = storesById.get(facts.storeId);
-      const program = typeof facts.programId === "string" ? programById.get(facts.programId) : undefined;
-      const invoiceIds = Array.isArray(facts.billedInvoiceIds) ? facts.billedInvoiceIds.filter((value): value is string => typeof value === "string") : [];
-      if (invoiceIds.some(id => !visibleInvoiceIds.has(id))) return [];
-      const recordInvoiceIds = new Set(scopedInvoiceRecords(fixture, session.organizationId, new Set([facts.storeId])).map(row => row.id));
-      if (invoiceIds.some(id => !recordInvoiceIds.has(id))) return [];
-      const billedUnits = typeof facts.billedServiceUnits === "number" ? facts.billedServiceUnits : invoiceIds.length;
-      const observedVisits = typeof facts.observedVisitCount === "number" ? facts.observedVisitCount : 0;
-      const missingEvidence = Array.isArray(facts.missingOccurrenceIds) ? facts.missingOccurrenceIds.length : Math.max(0, billedUnits - observedVisits);
-      return [{
-        id: item.id,
-        programName: program?.name ?? "Preventive maintenance",
-        storeLabel: store ? `Store ${store.storeNumber} · ${store.name}` : "Unknown store",
-        periodLabel: typeof facts.periodLabel === "string" ? facts.periodLabel : "Selected service period",
-        billedUnits,
-        observedVisits,
-        missingEvidence,
-        invoicedAmountLabel: money(typeof facts.invoicedAmountMinor === "number" ? facts.invoicedAmountMinor : 0),
-        reviewAmountLabel: money(typeof facts.reviewAmountMinor === "number" ? facts.reviewAmountMinor : 0),
-        invoiceHref: invoiceIds.length ? `/app/invoices/${encodeURIComponent(invoiceIds.at(-1)!)}` : "/app/invoices",
-        occurrencesHref: pmHref({ program: typeof facts.programId === "string" ? facts.programId : undefined, store: facts.storeId, view: "all" }),
-        note: typeof facts.note === "string" ? facts.note : "No matching platform visit evidence was found; confirm the service record before drawing a conclusion.",
-      }];
-    });
-
-  return reconciliations;
-}
-
 export async function loadPmProgramManagementModel(searchParams: OperatorSearchParameters = {}): Promise<PmProgramManagementModel> {
   const session=await getRequestOperatorSession();
   if(!roleCanAccessProgramRoute(session.role,"pm"))notFound();
   const model=await buildPmSetupManagement(await getServerOpsRepository(),session,getServerOpsReportingAsOf(),searchParams);
-  model.reconciliations=await loadPmReconciliations(session,searchParams);
-  model.summary.evidenceReviews=model.reconciliations.length;
+  model.canReviewInvoices=roleCanAccessListRoute(session.role,"invoices");
+  if(model.canReviewInvoices){const reviews=await buildPmReviewPreview(await getServerOpsRepository(),session,searchParams);model.reconciliations=reviews.rows;model.summary.evidenceReviews=reviews.total;model.reconciliationHref=reviews.href;}
   return model;
 }
 export async function loadDetailModel(route: DetailRouteId, id: string) {

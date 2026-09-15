@@ -64,19 +64,13 @@ export interface PmProgramManagementModel {
     toggleLabel?: string;
     pagination?: PaginationViewModel;
   };
+  canReviewInvoices?: boolean;
+  reconciliationHref?: string;
   reconciliations: Array<{
-    id: string;
-    programName: string;
-    storeLabel: string;
-    periodLabel: string;
-    billedUnits: number;
-    observedVisits: number;
-    missingEvidence: number;
-    invoicedAmountLabel: string;
-    reviewAmountLabel: string;
-    invoiceHref: string;
-    occurrencesHref: string;
-    note: string;
+    id:string; programName:string; storeLabel:string; periodLabel:string;
+    invoiceCount:number; visitCount:number; missingCount:number; unavailableLinks:number;
+    amountLabel:string; missingAmountLabel:string;
+    href:string; invoicesHref:string; visitsHref:string; missingHref:string; missingAmountHref:string;
   }>;
 }
 
@@ -97,7 +91,7 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
         <Link href={model.targetsHref ?? "#pm-programs-title"}><Layers3 size={18} aria-hidden="true" /><span><small>Coverage targets</small><strong>{model.summary.matchingEquipment}</strong><em>Equipment and stores</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
         <Link href={model.enrolledPlansHref ?? "/app/pm?enrollments=all#store-pm-plans"}><CheckCircle2 size={18} aria-hidden="true" /><span><small>Enrolled plans</small><strong>{model.summary.enrolledPlans}</strong><em>Open store schedules</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
         <Link data-alert={model.summary.coverageGaps > 0 || undefined} href={model.gapsHref ?? "#pm-programs-title"}><CircleAlert size={18} aria-hidden="true" /><span><small>Coverage gaps</small><strong>{model.summary.coverageGaps}</strong><em>Open coverage details</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
-        <Link data-alert={model.summary.evidenceReviews > 0 || undefined} href={model.summary.evidenceReviews ? "#pm-evidence-review-title" : model.attentionHref ?? "/app/pm?view=attention"}><FileSearch size={18} aria-hidden="true" /><span><small>Evidence reviews</small><strong>{model.summary.evidenceReviews}</strong><em>{model.summary.evidenceReviews ? "Open evidence review" : "Open PM review"}</em></span><ChevronRight size={15} aria-hidden="true" /></Link>
+        {model.canReviewInvoices !== false ? <Link data-alert={model.summary.evidenceReviews > 0 || undefined} href={model.reconciliationHref ?? "#pm-evidence-review-title"}><FileSearch size={18} aria-hidden="true" /><span><small>Invoice reviews</small><strong>{model.summary.evidenceReviews}</strong><em>{model.summary.evidenceReviews ? "Open evidence review" : "Open PM review"}</em></span><ChevronRight size={15} aria-hidden="true" /></Link> : null}
       </div>
 
       <div className={styles.tableWrap}>
@@ -118,16 +112,15 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
       </div>
 
       {model.programPagination ? <PaginationControls pagination={model.programPagination} label="Company schedule pages" /> : null}
-      {model.reconciliations.length ? <section className={styles.reconciliation} aria-labelledby="pm-evidence-review-title">
-        <header><div><p>Invoice safeguard</p><h3 id="pm-evidence-review-title">PM billed versus observed visits</h3><span>A missing platform visit is a review fact—not proof that service was not performed.</span></div><FileSearch size={22} aria-hidden="true" /></header>
-        {model.reconciliations.map((item) => <article key={item.id}>
-          <div><strong>{item.storeLabel} · {item.programName}</strong><span>{item.periodLabel}</span></div>
-          <dl><div><dt>Billed service units</dt><dd>{item.billedUnits}</dd></div><div><dt>Observed PM visits</dt><dd>{item.observedVisits}</dd></div><div data-alert={item.missingEvidence > 0 || undefined}><dt>Without visit evidence</dt><dd>{item.missingEvidence}</dd></div><div><dt>Amount to review</dt><dd>{item.reviewAmountLabel}</dd></div></dl>
-          <p>{item.note} Total invoiced service in this comparison: {item.invoicedAmountLabel}.</p>
-          <footer><Link href={item.occurrencesHref}>Open PM occurrences<ArrowRight size={15} aria-hidden="true" /></Link><Link href={item.invoiceHref}>Open supporting invoice<ArrowRight size={15} aria-hidden="true" /></Link></footer>
-        </article>)}
+      {model.canReviewInvoices !== false && model.reconciliations.length ? <section className={styles.reviewSection} aria-labelledby="pm-evidence-review-title">
+        <header><div><h3 id="pm-evidence-review-title">PM invoice review</h3><p>Check linked invoices and visit evidence.</p></div><Link href={model.reconciliationHref ?? "#pm-evidence-review-title"}>All reviews ({model.summary.evidenceReviews})<ArrowRight size={16} aria-hidden="true" /></Link></header>
+        <div className={styles.tableWrap}><table><caption>Open PM invoice reviews</caption><thead><tr><th>Store / schedule</th><th>Linked invoice amount</th><th>Recorded visits</th><th>Without visit evidence</th></tr></thead><tbody>{model.reconciliations.map(item=><tr key={item.id}>
+          <td><Link href={item.href}><strong>{item.storeLabel}</strong><small>{item.programName}</small><small>{item.periodLabel}</small></Link></td>
+          <td><Link href={item.invoicesHref}><strong>{item.amountLabel}</strong><small>{item.invoiceCount} invoices</small></Link></td>
+          <td><Link href={item.visitsHref}><strong>{item.visitCount} visits</strong><small>{item.unavailableLinks ? `${item.unavailableLinks} links unavailable` : "Open visit records"}</small></Link></td>
+          <td><Link href={item.missingHref}><strong>{item.missingCount} PM windows</strong><small>Open windows without visits</small></Link><Link href={item.missingAmountHref}><strong>{item.missingAmountLabel}</strong><small>Linked invoice amount</small></Link></td>
+        </tr>)}</tbody></table></div>
       </section> : null}
-
       <div className={styles.planHeader} id="store-pm-plans">
         <div><h3>{model.planView.title}</h3><p>{model.planView.description}</p></div>
         <div className={styles.planHeaderActions}><strong>{model.planView.resultLabel}</strong>{model.planView.toggleHref && model.planView.toggleLabel ? <Link href={model.planView.toggleHref}>{model.planView.toggleLabel}</Link> : null}</div>

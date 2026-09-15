@@ -34,23 +34,6 @@
 .planHeader > strong { color: #475569; font-size: 13px; }
 .planHeaderActions { display: flex; align-items: center; gap: 14px; color: #475569; font-size: 13px; }
 .planHeaderActions a { color: #1d4ed8; font-weight: 750; }
-.reconciliation { margin: 18px; overflow: hidden; border: 1px solid #f1c7a6; border-radius: 8px; background: #fffaf5; }
-.reconciliation > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 17px 18px; border-bottom: 1px solid #f2d5be; color: #9a3f18; background: #fff7ed; }
-.reconciliation > header p { margin: 0 0 3px; font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.reconciliation > header h3 { margin: 0; color: #172033; font-size: 17px; }
-.reconciliation > header span { display: block; margin-top: 4px; color: #6b5a4e; font-size: 13px; }
-.reconciliation article { padding: 18px; color: #334155; }
-.reconciliation article > div:first-child { display: flex; justify-content: space-between; gap: 20px; }
-.reconciliation article > div:first-child > span { color: #64748b; font-size: 13px; }
-.reconciliation dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 15px 0; border: 1px solid #e6d8cc; border-radius: 7px; background: #fff; }
-.reconciliation dl div { padding: 13px 14px; border-right: 1px solid #e6d8cc; }
-.reconciliation dl div:last-child { border-right: 0; }
-.reconciliation dl div[data-alert] { background: #fff3e8; }
-.reconciliation dt { color: #64748b; font-size: 13px; font-weight: 700; }
-.reconciliation dd { margin: 4px 0 0; color: #172033; font-size: 20px; font-weight: 800; }
-.reconciliation article > p { margin: 0; color: #5f6b7c; font-size: 13px; line-height: 1.5; }
-.reconciliation footer { display: flex; gap: 18px; margin-top: 14px; }
-.reconciliation footer a { display: inline-flex; align-items: center; gap: 6px; color: #1d4ed8; font-size: 13px; font-weight: 750; }
 .pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 18px; border-top: 1px solid #e2e7ef; color: #64748b; font-size: 13px; }
 .pagination > div { display: flex; gap: 8px; }
 .pagination a,.pagination > div > span { display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; border: 1px solid #d8dee8; border-radius: 6px; color: #334155; background: #fff; font-weight: 700; }
@@ -60,7 +43,7 @@
 .override { color: #92400e; background: #fff7ed; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @media (max-width: 980px) { .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }.summary > a { border-bottom: 1px solid #e2e7ef; } }
-@media (max-width: 640px) { .heading { flex-direction: column; }.heading > a { width: 100%; justify-content: center; }.summary { grid-template-columns: 1fr 1fr; }.summary > a { border-right: 1px solid #e2e7ef; }.planHeader,.planHeaderActions,.reconciliation article > div:first-child,.pagination { align-items: flex-start; flex-direction: column; }.reconciliation dl { grid-template-columns: 1fr 1fr; }.reconciliation dl div:nth-child(2) { border-right: 0; }.reconciliation dl div:nth-child(-n + 2) { border-bottom: 1px solid #e6d8cc; }.reconciliation footer { flex-direction: column; gap: 10px; }.tableWrap { overflow: visible; }.tableWrap table,.tableWrap thead,.tableWrap tbody,.tableWrap tr,.tableWrap th,.tableWrap td { display: block; }.tableWrap thead { position: absolute; width: 1px; height: 1px; overflow: hidden; }.tableWrap tr { padding: 10px 14px; border-bottom: 1px solid #e2e7ef; }.tableWrap td { border: 0; }.tableWrap td a { min-height: 0; padding: 5px 0; }.tableWrap td:last-child { display: none; } }
+@media (max-width: 640px) { .heading { flex-direction: column; }.heading > a { width: 100%; justify-content: center; }.summary { grid-template-columns: 1fr 1fr; }.summary > a { border-right: 1px solid #e2e7ef; }.planHeader,.planHeaderActions,.pagination { align-items: flex-start; flex-direction: column; }.tableWrap { overflow: visible; }.tableWrap table,.tableWrap thead,.tableWrap tbody,.tableWrap tr,.tableWrap th,.tableWrap td { display: block; }.tableWrap thead { position: absolute; width: 1px; height: 1px; overflow: hidden; }.tableWrap tr { padding: 10px 14px; border-bottom: 1px solid #e2e7ef; }.tableWrap td { border: 0; }.tableWrap td a { min-height: 0; padding: 5px 0; }.tableWrap td:last-child { display: none; } }
 
 /* Compact, readable working controls; the record lists carry the detail. */
 .heading span,.tableWrap table,.tableWrap td small,.planHeader p { font-size: 15px; }
@@ -72,3 +55,10 @@
 .summary strong { font-size: 16px; margin: 0; }
 .summary em { display: none; }
 @media(max-width:640px) { .tableWrap td a { min-height: 44px; }.summary > a { flex: 1 1 calc(50% - 6px); }.summary > a > svg { display: none; }.summary span { justify-content: space-between; width: 100%; }.heading,.planHeader { padding: 16px; } }
+.reviewSection { border-top: 1px solid var(--workspace-border, #d8dee8); }
+.reviewSection > header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px; }
+.reviewSection h3 { margin:0; font-size:18px; color:#172033; scroll-margin-top:8rem; }
+.reviewSection header p { margin:4px 0 0; font-size:15px; color:#64748b; }
+.reviewSection header > a { display:inline-flex; gap:8px; align-items:center; min-height:44px; color:var(--product-action, #2563eb); font-size:15px; }
+.reviewSection .tableWrap td:last-child a { align-items:flex-start; color:#253147; }
+@media(max-width:640px) { .reviewSection > header { align-items:flex-start; flex-direction:column; }.reviewSection .tableWrap td:last-child { display:block; }.reviewSection .tableWrap td:nth-child(2)::before {content:'Linked invoice amount';font-size:13px;color:#64748b;}.reviewSection .tableWrap td:nth-child(4)::before {content:'Without visit evidence';font-size:13px;color:#64748b;} }

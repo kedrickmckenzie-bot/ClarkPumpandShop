@@ -11,6 +11,7 @@ import type { DashboardBreakdownKind, DashboardBreakdownRow } from "@/lib/ops/da
 export async function dashboardQueryRegression(repository: OpsRepository, fixture: OpsFixture) {
   await (await import("./pm-schedule-query-regression")).pmScheduleQueryRegression(repository, fixture);
   await (await import("./pm-setup-query-regression")).pmSetupQueryRegression(repository, fixture);
+  await (await import("./pm-review-query-regression")).pmReviewQueryRegression(repository, fixture);
   await (await import("./pm-record-query-regression")).pmRecordQueryRegression(repository, fixture);
   await recordIntegrityRegression(repository, fixture);
   await briefQueryRegression(repository, fixture);

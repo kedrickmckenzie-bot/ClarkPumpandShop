@@ -40,20 +40,38 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
-  it("keeps the remaining PM configuration panel inside selected stores and invoice references", async () => {
-    const data = fixture(); useFixture(data); boundary.snapshot.mockReturnValue(data);
+  it("keeps PM setup and invoice reviews scoped without snapshots", async () => {
+    const data = fixture(); useFixture(data);
     const selected = data.stores.find(row => row.storeNumber === "104")!;
     const model = await loadPmProgramManagementModel({ store: selected.id });
     expect(model.plans.every(row => row.storeHref?.endsWith(selected.id))).toBe(true);
     expect(model.summary.enrolledPlans).toBe(data.pmPlans.filter(row => row.active && row.storeId === selected.id).length);
     expect(new URL(model.enrolledPlansHref!, "https://ops.invalid").searchParams.get("store")).toBe(selected.id);
     const review = data.serviceDiscrepancies.find(row => row.factsJson.includes("pm_billed_vs_observed"))!;
-    const facts = JSON.parse(review.factsJson); facts.storeId = selected.id; review.factsJson = JSON.stringify(facts);
+    const facts = JSON.parse(review.factsJson); facts.storeId = selected.id; review.factsJson = JSON.stringify(facts); useFixture(data);
     expect((await loadPmProgramManagementModel({})).reconciliations).toEqual([]);
     const grant = data.scopeGrants.find(row => row.membershipId === "membership-northline-facilities")!;
     grant.scopeKind = "store"; grant.scopeId = selected.id; useFixture(data);
     const denied = await loadPmProgramManagementModel({ store: data.stores.find(row => row.id !== selected.id)!.id });
     expect(denied.plans).toEqual([]); expect(denied.summary.enrolledPlans).toBe(0); expect(denied.reconciliations).toEqual([]);
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
+  it("loads the entire PM page and exact invoice evidence without snapshots, then denies invoice-ineligible roles", async()=>{
+    const data=fixture();useFixture(data);
+    const review=data.serviceDiscrepancies.find(row=>row.factsJson.includes("pm_billed_vs_observed"))!;
+    const management=await loadPmProgramManagementModel({});
+    expect(management.summary.evidenceReviews).toBe(1);
+    expect(management.reconciliations[0]).toMatchObject({invoiceCount:4,visitCount:2,missingCount:2,amountLabel:"$1,700.00",missingAmountLabel:"$850.00"});
+    expect(await PreventiveMaintenancePage({searchParams:Promise.resolve({})})).toBeTruthy();
+    const invoices=await loadProgramModel("pm",{pmReview:review.id,reviewSource:"invoices"});
+    expect(invoices.table?.rows).toHaveLength(4);
+    expect(invoices.page.scopeLabel).toContain("Store 107");
+    expect((await loadProgramModel("pm",{pmReview:review.id,reviewSource:"invoices",reviewMissing:"yes"})).table?.rows).toHaveLength(2);
+    const grant=data.scopeGrants.find(row=>row.membershipId==="membership-northline-facilities")!;grant.scopeKind="store";grant.scopeId="store-northline-104";useFixture(data);
+    expect((await loadProgramModel("pm",{pmReview:review.id,reviewSource:"visits"})).state.kind).toBe("empty");
+    data.memberships.find(row=>row.id==="membership-northline-facilities")!.role="store_manager";useFixture(data);
+    await expect(loadProgramModel("pm",{pmReview:review.id,reviewSource:"invoices"})).rejects.toThrow();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
   });
   it("loads the PM schedule and exact comparison pages without snapshots", async () => {
     const params = { store: "store-northline-104", status: "completed", view: "all" };
