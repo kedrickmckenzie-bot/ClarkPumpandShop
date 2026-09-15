@@ -1,4 +1,5 @@
 import { matchesRequestStatus, matchesWorkStage } from "./dashboard-cohorts";
+import { dashboardActivityFromFixture, dashboardBreakdownFromFixture } from "./dashboard-query";
 import type { JobRun, NotificationRecipient, NotificationRule, OrganizationWorkflowPolicy, OutboxMessage, PmOccurrence, PmPlan, RoleCapabilityOverride, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
 import { hasWorkCostFilter, matchesWorkCategoryPath, matchesWorkCost } from "./work-cost-query";
@@ -438,6 +439,12 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
 }
 
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
+  async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
+    return dashboardActivityFromFixture(this.fixture, scope, window);
+  }
+  async listDashboardBreakdown(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: import("./dashboard-query").DashboardBreakdownQuery) {
+    return dashboardBreakdownFromFixture(this.fixture, scope, window, query);
+  }
   async getWorkPrice(organizationId: string, id: string) {
     return clone(this.fixture.workPrices?.find((row) => row.organizationId === organizationId && row.id === id) ?? null);
   }

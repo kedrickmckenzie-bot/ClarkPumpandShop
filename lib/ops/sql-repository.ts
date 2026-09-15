@@ -1,4 +1,7 @@
 import { sqlJsonArrayText, sqlStringAggregate, type OpsSqlDriver } from "./sql-driver";
+import { scopeWhere } from "./sql-scope";
+import { vendorResponseSql } from "./work-stage-sql";
+import { queryDashboardActivity, queryDashboardBreakdown } from "./dashboard-sql";
 import { PENDING_REQUEST_STATUSES, WORK_STAGE_STATUSES } from "./dashboard-cohorts";
 import { hasWorkCostFilter, workCostSql } from "./work-cost-query";
 import { workPriceFrom, type WorkPriceQuery } from "./work-price-types";
@@ -309,20 +312,6 @@ function visitListRow(row: Row): VisitListRow {
   };
 }
 
-function scopeWhere(scope: OrganizationScope, alias: string, params: unknown[]) {
-  const clauses = [`${alias}.organization_id = ?`];
-  params.push(scope.organizationId);
-  if (scope.storeIds !== undefined) {
-    if (scope.storeIds.length === 0) clauses.push("1 = 0");
-    else { clauses.push(`${alias}.id IN (${scope.storeIds.map(() => "?").join(",")})`); params.push(...scope.storeIds); }
-  }
-  if (scope.regionIds !== undefined) {
-    if (scope.regionIds.length === 0) clauses.push("1 = 0");
-    else { clauses.push(`${alias}.region_id IN (${scope.regionIds.map(() => "?").join(",")})`); params.push(...scope.regionIds); }
-  }
-  return clauses.join(" AND ");
-}
-
 function outboxMessageFrom(row: Row): OutboxMessage {
   return {
     id: text(row, "id"),
@@ -350,6 +339,12 @@ function serviceAppointmentFrom(row: Row): ServiceAppointment { return { id: tex
 function savedViewFrom(row: Row): SavedView { return { id: text(row, "id"), organizationId: text(row, "organization_id"), ownerMembershipId: text(row, "owner_membership_id"), surface: text(row, "surface"), name: text(row, "name"), queryString: text(row, "query_string"), createdAt: text(row, "created_at") }; }
 
 class SqlOpsRepository implements OpsRepository {
+  async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
+    return queryDashboardActivity(this.driver, scope, window);
+  }
+  async listDashboardBreakdown(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: import("./dashboard-query").DashboardBreakdownQuery) {
+    return queryDashboardBreakdown(this.driver, scope, window, query);
+  }
   async getWorkPrice(organizationId: string, id: string) {
     const row = await this.first("SELECT * FROM ops_work_prices WHERE organization_id = ? AND id = ?", [organizationId, id]);
     return row ? workPriceFrom(row) : null;
@@ -621,15 +616,7 @@ class SqlOpsRepository implements OpsRepository {
       const statuses = WORK_STAGE_STATUSES[query.stage];
       if (!statuses) clauses.push("1 = 0");
       else { clauses.push(`w.status IN (${statuses.map(() => "?").join(",")})`); params.push(...statuses); }
-      if (query.stage === "vendor-response") clauses.push(`a.kind = 'outside_vendor' AND a.status IN ('pending','issued','opened','accepted') AND (
-        EXISTS (SELECT 1 FROM ops_workflow_tasks vt WHERE vt.organization_id = w.organization_id AND vt.id = (
-          SELECT pt.id FROM ops_workflow_tasks pt WHERE pt.organization_id = w.organization_id AND pt.work_order_id = w.id AND pt.status IN ('open','in_progress')
-          ORDER BY pt.blocking DESC, pt.required_for_progress DESC,
-            CASE pt.priority WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 ELSE 1 END DESC,
-            CASE WHEN pt.due_at IS NULL THEN 1 ELSE 0 END, pt.due_at, CASE pt.status WHEN 'in_progress' THEN 1 ELSE 0 END DESC, pt.created_at, pt.id LIMIT 1
-        ) AND vt.assignee_type = 'vendor' AND vt.assignee_id = a.vendor_id)
-        OR (NOT EXISTS (SELECT 1 FROM ops_workflow_tasks pt WHERE pt.organization_id = w.organization_id AND pt.work_order_id = w.id AND pt.status IN ('open','in_progress')) AND w.accountable_party = v.name)
-      )`);
+      if (query.stage === "vendor-response") clauses.push(vendorResponseSql);
     }
     if (query.priorities?.length) { clauses.push(`w.priority IN (${query.priorities.map(() => "?").join(",")})`); params.push(...query.priorities); }
     if (query.createdFrom) { clauses.push("w.created_at >= ?"); params.push(query.createdFrom); }

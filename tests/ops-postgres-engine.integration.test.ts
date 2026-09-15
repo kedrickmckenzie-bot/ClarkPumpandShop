@@ -1,4 +1,5 @@
 import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
+import { dashboardQueryRegression } from "./helpers/dashboard-query-regression";
 import { sqlDriverRegression } from "./helpers/sql-driver-regression";
 import { heldWorkAccountabilityRegression } from "./helpers/held-work-accountability-regression";
 import { workPricePersistenceRegression } from "./helpers/work-price-persistence-regression";
@@ -111,6 +112,7 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     const repository = createOpsPostgresRepository(pool);
 
     await seedOpsRepository(repository, fixture);
+    await dashboardQueryRegression(repository, fixture);
     await workCostDrilldownRegression(repository);
     await connectedReviewRegression(repository);
 

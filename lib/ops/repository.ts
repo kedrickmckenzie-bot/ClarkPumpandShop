@@ -338,6 +338,8 @@ export interface OpsRepository {
   allocateWorkOrderNumber(organizationId: OpsId, prefix: string, year: number): Promise<string>;
 
   // Manager-first, server-scoped read models.
+  getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow): Promise<import("./dashboard-query").DashboardActivitySummary>;
+  listDashboardBreakdown(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: import("./dashboard-query").DashboardBreakdownQuery): Promise<import("./dashboard-query").DashboardBreakdownPage>;
   searchStores(scope: OrganizationScope, search: string, page?: PageRequest): Promise<StoreSearchPage>;
   searchAssets(scope: OrganizationScope, search: string, page?: PageRequest): Promise<AssetSearchPage>;
   getStoreDetail(scope: OrganizationScope, storeId: OpsId): Promise<StoreDetailView | null>;

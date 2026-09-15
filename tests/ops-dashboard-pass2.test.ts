@@ -20,6 +20,16 @@ function session(role: OperatorSession["role"]): OperatorSession {
   return { role, userId: `user-northline-${role}`, membershipId: `membership-northline-${role}`, displayName: "Reviewer", email: "reviewer@example.test", organizationId: NORTHLINE_ORGANIZATION_ID, organizationName: "Clark", scopeLabel: "Test scope", permissions: ["ops:*"],
     ...(role === "store_manager" ? { storeIds: ["store-northline-104"] } : role === "regional" ? { regionIds: [fixture.regions[1].id] } : {}) };
 }
+
+it("keeps the full review count while sending only the seven visible home rows", () => {
+  const viewer = session("facilities");
+  const model = buildDashboardModel(fixture, viewer);
+  const sourceRows = fixtureRows(viewer, "/app/action-center");
+  expect(sourceRows.length).toBeGreaterThan(7);
+  expect(model.metrics.find(metric => metric.id === "open-exceptions")?.value).toBe(String(sourceRows.length));
+  expect(model.priorityActions).toHaveLength(7);
+  expect(model.priorityActions.map(row => row.id)).toEqual(sourceRows.slice(0, 7).map(row => row.id));
+});
 function query(href: string) { return Object.fromEntries(new URL(href, "https://local.test").searchParams); }
 function scopedStores(viewer: OperatorSession) { return fixture.stores.filter((row) => row.organizationId === viewer.organizationId && (!viewer.storeIds || viewer.storeIds.includes(row.id)) && (!viewer.regionIds || !!row.regionId && viewer.regionIds.includes(row.regionId))); }
 async function queryRows(viewer: OperatorSession, href: string) {

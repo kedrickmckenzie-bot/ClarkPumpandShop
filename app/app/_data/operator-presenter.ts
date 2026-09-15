@@ -1,3 +1,4 @@
+import { presentDashboard } from "./dashboard-presenter";
 import { workStatusLabel } from "@/lib/product/work-status-label";
 import { matchesRequestStatus, matchesWorkStage, visitHasWork } from "@/lib/ops/dashboard-cohorts";
 import { buildEquipmentReview } from "./equipment-review";
@@ -909,28 +910,6 @@ function actionsForSession(
     .slice(0, limit);
 }
 
-function dashboardShortcut(options: {
-  id: string;
-  title: string;
-  description: string;
-  categoryLabel: string;
-  dueLabel: string;
-  ownerLabel: string;
-  tone?: Tone;
-  href: string;
-  linkLabel: string;
-}): ActionItemViewModel {
-  return {
-    id: options.id,
-    title: options.title,
-    description: options.description,
-    categoryLabel: options.categoryLabel,
-    dueLabel: options.dueLabel,
-    ownerLabel: options.ownerLabel,
-    tone: options.tone ?? "neutral",
-    link: { href: options.href, label: options.linkLabel },
-  };
-}
 
 function formatRunway(months: number): string {
   if (months < 12) {
@@ -1533,161 +1512,37 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     updatedLabel: `Source data through ${date(fixture.asOf)}`,
   };
 
-  if (session.role === "executive") {
-    const highestCostStore = [...storeCost.entries()].sort((left, right) => right[1] - left[1])[0];
-    return {
-      state: { kind: "ready" },
-      layout: "executive",
-      page: {
-        ...pageBase,
-        title: "Your company at a glance",
-        eyebrow: "Owner overview",
-        description: "See spending, open work, vendor activity, and upcoming equipment decisions across the company.",
-        primaryAction: { label: "View spending", href: "/app/spend" },
-        secondaryAction: { label: "Open reports", href: "/app/reports" },
-      },
-      metrics: [
-        { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Entered work costs for the last 12 months", link: { href: "/app/spend", label: "See the costs" } },
-        { id: "open-work", label: "Open work", value: String(openWork.length), supportingText: "Every item has an owner and next step", tone: openWork.length ? "info" : "positive", link: { href: "/app/work-orders?status=open", label: "See open work" } },
-        { id: "open-exceptions", label: "Items to review", value: String(reviewItems.length), supportingText: "Open the queue for source records and next steps", tone: reviewItems.length ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
-        { id: "watch-assets", label: "Equipment to review", value: String(scoped.assets.filter((asset) => asset.status === "watch").length), supportingText: "Equipment flagged for a closer look", tone: "warning", link: { href: "/app/equipment?status=watch", label: "Review equipment" } },
-      ],
-      priorityActions: [
-        dashboardShortcut({ id: "executive-attention", title: `Review ${reviewItems.length} item${reviewItems.length === 1 ? "" : "s"}`, description: "Open the complete queue for source records, owners, and next steps.", categoryLabel: "Company overview", dueLabel: "Current", ownerLabel: "Maintenance leadership", tone: reviewItems.length ? "warning" : "positive", href: "/app/action-center", linkLabel: "Open review queue" }),
-        dashboardShortcut({ id: "executive-store-cost", title: highestCostStore ? `${storeLabel(storeById.get(highestCostStore[0]))} has the highest recorded cost` : "Compare store costs", description: highestCostStore ? `${money(highestCostStore[1])} of rolling recorded work cost; open the hierarchy and source work before drawing a conclusion.` : "No store cost is recorded in this period.", categoryLabel: "Cost visibility", dueLabel: "Rolling 12 months", ownerLabel: "Operations leadership", tone: "info", href: highestCostStore ? hrefWithQuery("/app/spend", { store: highestCostStore[0] }) : "/app/spend", linkLabel: "Explain the store total" }),
-        dashboardShortcut({ id: "executive-capital", title: `${repairComparisons.length} repair comparison${repairComparisons.length === 1 ? "" : "s"} to review`, description: "Compare larger repairs with age, expected life, replacement cost, and service history.", categoryLabel: "Equipment planning", dueLabel: "Planning view", ownerLabel: "Maintenance and finance", tone: candidate ? "warning" : "positive", href: "/app/lifecycle?reason=compare+alternatives", linkLabel: "Open equipment planning" }),
-        dashboardShortcut({ id: "executive-reports", title: "Open reports", description: "Share or archive reports for open work, costs, vendors, preventive maintenance, and invoice review.", categoryLabel: "Reporting", dueLabel: "Available now", ownerLabel: "Leadership", href: "/app/reports", linkLabel: "Open reports" }),
-      ],
-      prioritySection: { title: "Owner decisions", description: "The company-level items most likely to need your attention.", link: { href: "/app/action-center", label: "See all" } },
-      breakdowns: [storeBreakdown, vendorAccountabilityBreakdown, categoryBreakdown],
-      trends: [trend],
-      spotlight,
-    };
-  }
-
   const invoiceRecords = scopedInvoiceRecords(fixture, scoped.organizationId, scoped.storeIds);
-  const replacementEstimateTotal = lifecycle.reduce((sum, row) => sum + (row.replacement ?? 0), 0);
-  if (session.role === "finance") {
-    const invoiceToReview = invoiceRecords.find((invoice) => fixture.invoiceExceptions.some((flag) => flag.organizationId === scoped.organizationId && flag.invoiceId === invoice.id && flag.status === "open"));
-    return {
-      state: { kind: "ready" },
-      layout: "finance",
-      page: {
-        ...pageBase,
-        title: "Maintenance cost and evidence",
-        eyebrow: "Finance overview",
-        description: "Review work costs, invoices, and equipment plans.",
-        primaryAction: { label: "Explore recorded cost", href: "/app/spend" },
-        secondaryAction: { label: "Review invoice safeguards", href: "/app/invoices" },
-      },
-      metrics: [
-        { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Recorded costs for the last 12 months", link: { href: "/app/spend", label: "Explain the total" } },
-        { id: "cost-work", label: "Cost-bearing work orders", value: String([...rollingCostByWork.keys()].filter((id) => scoped.workOrders.some((work) => work.id === id)).length), supportingText: "Work orders with entered cost in the rolling period", link: { href: hrefWithQuery("/app/work-orders", { hasCost: "true", costFrom: periodStart, costTo: fixture.asOf.slice(0, 10) }), label: "Open supporting work" } },
-        { id: "invoice-references", label: "Invoice records", value: String(invoiceRecords.length), supportingText: "All dates · available in your scope", tone: invoiceToReview ? "warning" : "neutral", link: { href: "/app/invoices", label: "Review invoices" } },
-        { id: "replacement-estimates", label: "Current replacement outlook", value: money(replacementEstimateTotal), supportingText: "Current equipment planning estimates", tone: "info", link: { href: "/app/lifecycle?replacement=entered", label: "Open capital outlook" } },
-      ],
-      priorityActions: [
-        dashboardShortcut({ id: "finance-invoices", title: `Review ${invoiceRecords.length} invoice${invoiceRecords.length === 1 ? "" : "s"}`, description: "Use operator work-order references and confirmed allocations as an optional safeguard; the platform does not approve or pay invoices.", categoryLabel: "Invoice safeguard", dueLabel: "Optional review", ownerLabel: "Finance", tone: invoiceToReview ? "warning" : "positive", href: "/app/invoices", linkLabel: "Open invoices" }),
-        dashboardShortcut({ id: "finance-store-cost", title: "Compare recorded cost by store", description: "Move from each store total through service area, equipment, component, work order, and entered cost lines.", categoryLabel: "Cost visibility", dueLabel: "Rolling 12 months", ownerLabel: "Finance and operations", tone: "info", href: "/app/stores?sort=cost", linkLabel: "Open store ranking" }),
-        dashboardShortcut({ id: "finance-capital", title: "Review replacement planning evidence", description: `${money(replacementEstimateTotal)} is the current benchmark-based outlook, not an approved budget.`, categoryLabel: "Lifecycle & CapEx", dueLabel: "Planning view", ownerLabel: "Finance and facilities", href: "/app/lifecycle?replacement=entered", linkLabel: "Open capital outlook" }),
-        dashboardShortcut({ id: "finance-reports", title: "View financial reports", description: "Recorded cost, work obligations, invoice references, and lifecycle evidence remain separate and traceable.", categoryLabel: "Reporting", dueLabel: "Available now", ownerLabel: "Finance", href: "/app/reports", linkLabel: "Open reports" }),
-      ],
-      prioritySection: { title: "Financial review paths", description: "Cost and evidence stay distinct so no amount is silently combined or treated as approved.", link: { href: "/app/reports", label: "Open source reports" } },
-      breakdowns: [storeBreakdown, categoryBreakdown],
-      trends: [trend],
-      spotlight: invoiceToReview
-        ? {
-            eyebrow: "Optional invoice safeguard",
-            title: `Review invoice ${invoiceToReview.vendorInvoiceNumber}`,
-            description: "Check the flagged charges against the work and supporting evidence.",
-            facts: [
-              { label: "Gross invoice amount", value: money(invoiceToReview.total.amountMinor) },
-              { label: "Status", value: sentence(invoiceToReview.status) },
-              { label: "Vendor", value: vendorById.get(invoiceToReview.vendorId)?.name ?? "Unknown vendor" },
-            ],
-            link: { href: `/app/invoices/${invoiceToReview.id}`, label: "Review invoice evidence" },
-          }
-        : spotlight,
-    };
-  }
-
-  if (session.role === "store_manager") {
-    const store = scoped.stores[0];
-    return {
-      state: { kind: "ready" },
-      layout: "store",
-      page: {
-        ...pageBase,
-        title: store ? `Store ${store.storeNumber} at a glance` : "Your store at a glance",
-        eyebrow: "Store manager home",
-        description: "Report problems and follow work at your store.",
-        primaryAction: { label: "Report an issue", href: "/app/requests/new" },
-        secondaryAction: { label: "Review current work", href: "/app/work-orders?status=open" },
-      },
-      journey: base.journey,
-      metrics: [
-        { id: "open-work", label: "Open work", value: String(openWork.length), supportingText: "Open work orders at this store", tone: openWork.length ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open current work" } },
-        { id: "vendor-response", label: "Waiting on vendor", value: String(awaitingVendor.length), supportingText: "Sent work needing a response", tone: awaitingVendor.length ? "warning" : "positive", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
-        { id: "recorded-visits", label: "Recorded service visits", value: String(scoped.visits.length), supportingText: `${activeVisits.length} onsite now · ${completedVisits.length} completed`, tone: activeVisits.length ? "info" : "neutral", link: { href: "/app/visits", label: "Open visit history" } },
-        { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Rolling source cost for this store", link: { href: "/app/spend", label: "Explain the total" } },
-      ],
-      priorityActions: [
-        dashboardShortcut({ id: "store-report", title: "Report a new store issue", description: "Describe what needs attention.", categoryLabel: "Issue intake", dueLabel: "When needed", ownerLabel: "Store team", tone: "info", href: "/app/requests/new", linkLabel: "Report an issue" }),
-        dashboardShortcut({ id: "store-response", title: `${storeManagerActions.length} need${storeManagerActions.length === 1 ? "s" : ""} your response`, description: storeManagerActions.length ? "These are decisions or confirmations assigned to the store-manager role, not every item facilities is handling." : "Nothing needs your response.", categoryLabel: "Needs your response", dueLabel: storeManagerActions.length ? "Review now" : "Nothing waiting", ownerLabel: "Store manager", tone: storeManagerActions.length ? "warning" : "positive", href: "/app/action-center?lane=mine", linkLabel: "Open your actions" }),
-        dashboardShortcut({ id: "store-work", title: `${openWork.length} work order${openWork.length === 1 ? " is" : "s are"} being handled`, description: "See the next action and who owns it.", categoryLabel: "Being handled", dueLabel: "Current", ownerLabel: "Store and maintenance", tone: openWork.length ? "info" : "positive", href: "/app/work-orders?status=open", linkLabel: "Open current work" }),
-        dashboardShortcut({ id: "store-upcoming", title: `${upcomingAppointments.length} upcoming confirmed appointment${upcomingAppointments.length === 1 ? "" : "s"}`, description: "See confirmed vendor visits.", categoryLabel: "Upcoming visits", dueLabel: upcomingAppointments.length ? "Scheduled" : "None scheduled", ownerLabel: "Vendor and facilities", href: "/app/visits?status=upcoming", linkLabel: "Open upcoming visits" }),
-      ],
-      prioritySection: { title: "Your store workflow", description: "Your store’s next steps.", link: { href: store ? `/app/stores/${store.id}` : "/app/stores", label: "Open complete store record" } },
-      breakdowns: [categoryBreakdown],
-      trends: [trend],
-    };
-  }
-
+  const invoiceToReview = invoiceRecords.find((invoice) => fixture.invoiceExceptions.some((flag) => flag.organizationId === scoped.organizationId && flag.invoiceId === invoice.id && flag.status === "open"));
+  const highestCostStore = [...storeCost.entries()].sort((left, right) => right[1] - left[1])[0];
   const workStatusCounts = new Map<string, number>();
   for (const work of openWork) workStatusCounts.set(work.status, (workStatusCounts.get(work.status) ?? 0) + 1);
   const activeVendorCounts = new Map<string, number>();
-  for (const visit of activeVisits) if (visit.vendorId) {
-    activeVendorCounts.set(visit.vendorId, (activeVendorCounts.get(visit.vendorId) ?? 0) + 1);
-  }
-  const isFacilities = session.role === "facilities";
-  return {
-    state: { kind: "ready" },
-    layout: isFacilities ? "operations" : "regional",
-    page: {
-      ...pageBase,
-      title: isFacilities ? "Maintenance overview" : "Your region at a glance",
-      eyebrow: isFacilities ? "Daily maintenance" : "Regional overview",
-      description: isFacilities
-        ? "Review work, visits, and costs across your stores."
-        : "See stores, open work, vendor activity, and recorded costs across your region.",
-      primaryAction: { label: "Review queue", href: "/app/action-center" },
-      secondaryAction: { label: "Create work order", href: "/app/work-orders/new" },
+  for (const visit of activeVisits) if (visit.vendorId) activeVendorCounts.set(visit.vendorId, (activeVendorCounts.get(visit.vendorId) ?? 0) + 1);
+  return presentDashboard({
+    activity: {
+      openWork: openWork.length, awaitingVendor: awaitingVendor.length, activeVisits: activeVisits.length,
+      completedVisits: completedVisits.length, totalVisits: scoped.visits.length, recordedCostMinor: recordedCost,
+      costWorkOrders: [...rollingCostByWork.keys()].filter(id => scoped.workOrders.some(work => work.id === id)).length,
+      invoiceRecords: invoiceRecords.length, watchAssets: scoped.assets.filter(asset => asset.status === "watch").length,
+      upcomingAppointments: upcomingAppointments.length,
     },
-    journey: base.journey,
-    metrics: isFacilities
-      ? [
-          { id: "open-exceptions", label: "Items to review", value: String(reviewItems.length), supportingText: "Open the queue for records, owners, and next steps", tone: reviewItems.length ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
-          { id: "vendor-response", label: "Waiting on vendor", value: String(awaitingVendor.length), supportingText: "Sent work needing a response", tone: awaitingVendor.length ? "warning" : "positive", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
-          { id: "active-visits", label: "Onsite visits", value: String(activeVisits.length), supportingText: `${scoped.visits.length} total visits recorded`, tone: activeVisits.length ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
-          { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Entered work costs for the last 12 months", link: { href: "/app/spend", label: "See the costs" } },
-        ]
-      : [
-          { id: "open-work", label: "Open work", value: String(openWork.length), supportingText: "Each item has an owner, next step, and due date", tone: openWork.length ? "info" : "positive", link: { href: "/app/work-orders?status=open", label: "Open regional work" } },
-          { id: "open-exceptions", label: "Items to review", value: String(reviewItems.length), supportingText: "Open the regional queue for records and next steps", tone: reviewItems.length ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
-          { id: "active-visits", label: "Onsite visits", value: String(activeVisits.length), supportingText: `${scoped.visits.length} recorded visits in regional scope`, tone: activeVisits.length ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
-          { id: "recorded-cost", label: "Recorded work cost", value: money(recordedCost), supportingText: "Rolling source cost inside your region", link: { href: "/app/spend", label: "Explain the total" } },
-        ],
-    priorityActions: reviewItems,
-    prioritySection: { title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" } },
-    breakdowns: isFacilities
-      ? [
-          countBreakdown("open-work-status", "Open work by status", workStatusCounts, (key) => hrefWithQuery("/app/work-orders", { status: key }), { description: "", labelFor: (key) => workStatusLabel(key as WorkOrder["status"]), totalNoun: "open work orders", sourceLink: { href: "/app/work-orders?status=open", label: "View all open work orders" } }),
-          countBreakdown("onsite-vendor", "Who is onsite now", activeVendorCounts, (key) => hrefWithQuery("/app/visits", { status: "active", vendor: key }), { description: "Active check-ins by outside vendor.", labelFor: (key) => vendorById.get(key)?.name ?? "Unknown vendor", totalNoun: "active visits", sourceLink: { href: "/app/visits?status=active", label: "Open all live visits" } }),
-        ]
-      : [storeBreakdown, categoryBreakdown],
-    trends: [trend],
-    spotlight,
-  };
+    pageBase, costFrom: periodStart, costTo: fixture.asOf.slice(0,10), journey: base.journey,
+    review: { items: reviewItems.slice(0,7), totalCount: reviewItems.length, mineCount: storeManagerActions.length },
+    repairComparisonCount: repairComparisons.length,
+    replacementEstimateTotal: lifecycle.reduce((sum, row) => sum + (row.replacement ?? 0), 0),
+    store: scoped.stores[0],
+    highestCostStore: highestCostStore ? { id: highestCostStore[0], label: storeLabel(storeById.get(highestCostStore[0])), value: highestCostStore[1] } : undefined,
+    storeBreakdown, categoryBreakdown, vendorAccountabilityBreakdown, trend, spotlight,
+    workStatusBreakdown: countBreakdown("open-work-status", "Open work by status", workStatusCounts, (key) => hrefWithQuery("/app/work-orders", { status: key }), { description: "", labelFor: (key) => workStatusLabel(key as WorkOrder["status"]), totalNoun: "open work orders", sourceLink: { href: "/app/work-orders?status=open", label: "View all open work orders" } }),
+    activeVendorBreakdown: countBreakdown("onsite-vendor", "Who is onsite now", activeVendorCounts, (key) => hrefWithQuery("/app/visits", { status: "active", vendor: key }), { description: "Active check-ins by outside vendor.", labelFor: (key) => vendorById.get(key)?.name ?? "Unknown vendor", totalNoun: "active visits", sourceLink: { href: "/app/visits?status=active", label: "Open all live visits" } }),
+    invoiceSpotlight: invoiceToReview ? {
+      eyebrow: "Optional invoice safeguard", title: `Review invoice ${invoiceToReview.vendorInvoiceNumber}`,
+      description: "Check the flagged charges against the work and supporting evidence.",
+      facts: [{ label: "Gross invoice amount", value: money(invoiceToReview.total.amountMinor) }, { label: "Status", value: sentence(invoiceToReview.status) }, { label: "Vendor", value: vendorById.get(invoiceToReview.vendorId)?.name ?? "Unknown vendor" }],
+      link: { href: `/app/invoices/${invoiceToReview.id}`, label: "Review invoice evidence" },
+    } : undefined,
+  }, session);
 }
 
 const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {

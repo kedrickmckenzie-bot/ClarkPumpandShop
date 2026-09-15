@@ -12,6 +12,7 @@ import { createOpsD1Repository } from "@/lib/ops/d1-repository";
 import { loadOpsFixtureSnapshotFromD1 } from "@/lib/ops/d1-snapshot";
 import { TREND_SOURCE_TABLES } from "@/lib/ops/trends-source-tables";
 import { accountingReportingRegression } from "./helpers/accounting-reporting-regression";
+import { dashboardQueryRegression } from "./helpers/dashboard-query-regression";
 
 /** Real SQLite statements/transactions, exposed through the D1 adapter contract. */
 class SqliteStatement {
@@ -39,6 +40,7 @@ describe("authoritative invoice reporting", () => {
     try {
       for (const file of readdirSync("drizzle").filter((file) => /^\d.*\.sql$/.test(file)).sort()) db.exec(readFileSync(`drizzle/${file}`, "utf8"));
       for (const statement of buildOpsSeedStatements(buildNorthlinePresentationFixture())) await new SqliteStatement(db, statement.sql).bind(...statement.params).run();
+      await dashboardQueryRegression(createOpsD1Repository(binding), buildNorthlinePresentationFixture());
       await workCostDrilldownRegression(createOpsD1Repository(binding));
       await connectedReviewRegression(createOpsD1Repository(binding));
       await accountingReportingRegression(createOpsD1Repository(binding), () => loadOpsFixtureSnapshotFromD1(binding, "org-northline-demo", "2026-08-25T18:00:00.000Z", { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] }));
