@@ -426,7 +426,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
       <PageHeader page={model.page} />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
-          {model.metrics ? <MetricStrip metrics={model.metrics} heading="Choose what to review" description="Each summary opens the exact items behind the count." /> : null}
+          {model.metrics ? <MetricStrip metrics={model.metrics} /> : null}
           <section className={`${styles.listWorkspace} ${styles.reviewQueueWorkspace}`}>
             <div className={styles.listToolbar}>
               {model.search ? (
@@ -448,9 +448,8 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                 <header className={styles.reviewQueueHeading}>
                   <div>
                     <h2>Review items</h2>
-                    <p>Click an item to see the details and take action.</p>
                   </div>
-                  <span>{model.filters?.some((filter) => filter.options.some((option) => option.value === "history" && option.selected)) ? "Most recently completed first" : "Most urgent first"}</span>
+                  <span>{model.filters?.some((filter) => filter.options.some((option) => option.value === "history" && option.selected)) ? "Latest first" : "Most urgent first"}</span>
                 </header>
                 {model.table.rows.length ? (
                   <ol className={styles.reviewQueueList} aria-label="Review items">
@@ -492,6 +491,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                             <ChevronRight className={styles.reviewQueueChevron} aria-hidden="true" size={19} />
                           </Link>
                           <WorkReviewButton href={row.href} label={record?.value ?? row.label} context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} />
+                          {row.sourceLink ? <Link className={styles.reviewSourcesLink} href={row.sourceLink.href}>{row.sourceLink.label}</Link> : null}
                           {row.sources?.length ? <details className={styles.controlDisclosure}>
                             <summary>Tasks and supporting records ({row.sources.length})</summary>
                             <ul>{row.sources.map((source) => <li key={source.id}>
@@ -504,7 +504,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                       );
                     })}
                   </ol>
-                ) : <InlineEmpty message="No open items match these filters." />}
+                ) : <InlineEmpty message="No items match these filters." />}
               </div>
             </div>
             {model.pagination ? <PaginationControls pagination={model.pagination} /> : null}

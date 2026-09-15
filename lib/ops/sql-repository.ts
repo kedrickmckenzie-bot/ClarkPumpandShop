@@ -1,4 +1,5 @@
 import { queryAttention } from "./attention-sql";
+import { queryAttentionSources } from "./attention-sources-sql";
 import { sqlJsonArrayText, sqlStringAggregate, type OpsSqlDriver } from "./sql-driver";
 import { scopeWhere } from "./sql-scope";
 import { vendorResponseSql } from "./work-stage-sql";
@@ -359,6 +360,9 @@ class SqlOpsRepository implements OpsRepository {
   }
   async listAttention(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery) {
     return queryAttention(this.driver, scope, access, query);
+  }
+  async listAttentionSources(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery, itemId: string, page: import("./types").PageRequest) {
+    return queryAttentionSources(this.driver, scope, access, query, itemId, page);
   }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return queryDashboardActivity(this.driver, scope, window);

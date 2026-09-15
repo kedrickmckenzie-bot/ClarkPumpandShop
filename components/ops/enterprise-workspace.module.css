@@ -1465,6 +1465,8 @@
   color: var(--workspace-muted);
 }
 
+.pageStack .reviewSourcesLink { display: inline-flex; align-items: center; min-height: 44px; padding: 6px 18px; color: var(--workspace-action); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
+
 .reviewQueueItem:hover,
 .reviewQueueItem[aria-current="true"] {
   background: #f6f8fc;

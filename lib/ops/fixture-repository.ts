@@ -1,4 +1,5 @@
 import { attentionFromFixture } from "./attention-query";
+import { attentionSourcesFromFixture } from "./attention-sources";
 import { matchesRequestStatus, matchesWorkStage } from "./dashboard-cohorts";
 import { dashboardActivityFromFixture, dashboardBreakdownFromFixture } from "./dashboard-query";
 import { dashboardContextFromFixture } from "./dashboard-context";
@@ -457,6 +458,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   }
   async listAttention(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery) {
     return attentionFromFixture(this.fixture, scope, access, query);
+  }
+  async listAttentionSources(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery, itemId: string, page: import("./types").PageRequest) {
+    return attentionSourcesFromFixture(this.fixture, scope, access, query, itemId, page);
   }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return dashboardActivityFromFixture(this.fixture, scope, window);

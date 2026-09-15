@@ -344,6 +344,7 @@ export interface OpsRepository {
   getDashboardLifecycle(scope: OrganizationScope, asOf: string): Promise<import("./lifecycle-summary").DashboardLifecycleSummary>;
   getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow): Promise<import("./dashboard-query").DashboardActivitySummary>;
   listAttention(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery): Promise<import("./attention-query").AttentionPage>;
+  listAttentionSources(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery, itemId: string, page: PageRequest): Promise<import("./attention-sources").AttentionSourcePage | null>;
   listDashboardBreakdown(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: import("./dashboard-query").DashboardBreakdownQuery): Promise<import("./dashboard-query").DashboardBreakdownPage>;
   searchStores(scope: OrganizationScope, search: string, page?: PageRequest): Promise<StoreSearchPage>;
   searchAssets(scope: OrganizationScope, search: string, page?: PageRequest): Promise<AssetSearchPage>;

@@ -125,7 +125,9 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
       if (task.sourceFollowUpId) representedFollowUps.add(task.sourceFollowUpId);
       const work = task.workOrderId ? workById.get(task.workOrderId) : undefined;
       const request = task.serviceRequestId ? requestById.get(task.serviceRequestId) : undefined;
-      const sourceIds = [task.id, task.sourceFollowUpId, task.sourceApprovalRequestId].filter((id): id is string => Boolean(id));
+      const follow = fixture.followUps.find(row=>row.organizationId===organizationId && row.id===task.sourceFollowUpId && row.workOrderId===task.workOrderId);
+      const approval = fixture.approvalRequests.find(row=>row.organizationId===organizationId && row.id===task.sourceApprovalRequestId && row.storeId===(work?.storeId??request?.storeId) && (row.subjectType==="work_order" ? row.subjectId===task.workOrderId : row.subjectId===task.serviceRequestId));
+      const sourceIds = [task.id, follow?.id, approval?.id].filter((id): id is string => Boolean(id));
       return {
         id: task.id,
         sourceKind: "workflow_task",
@@ -221,9 +223,9 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
     for (const [workOrderId, requests] of requestsByWork) {
       const submitted = requests.filter((request) => request.status === "submitted");
       const missed = requests.filter((request) => request.dueAt && Date.parse(request.dueAt) <= Date.parse(input.asOf));
-      const dueAt = requests.map((request) => request.dueAt).filter((value): value is string => Boolean(value)).sort()[0];
+      const dueAt = requests.map((request) => request.dueAt).filter((value): value is string => Boolean(value)).sort((a,b)=>Date.parse(a)-Date.parse(b))[0];
       const proposalIds = fixture.estimateProposals
-        .filter((proposal) => proposal.organizationId === organizationId && requests.some((request) => request.id === proposal.requestId))
+        .filter((proposal) => proposal.organizationId === organizationId && requests.some((request) => request.id === proposal.requestId && request.workOrderId === proposal.workOrderId && request.vendorId === proposal.vendorId))
         .map((proposal) => proposal.id);
       const work = workById.get(workOrderId)!;
       quoteRoundItems.push({

@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import type { OpsRepository, OrganizationScope } from "@/lib/ops/repository";
 import type { OpsFixture } from "@/lib/ops/types";
 import { attentionFromFixture, type AttentionAccess, type AttentionQueueRow } from "@/lib/ops/attention-query";
+import { attentionSourcesFromFixture } from "@/lib/ops/attention-sources";
 
 export async function attentionQueryRegression(repository: OpsRepository, fixture: OpsFixture) {
   const organizationId = fixture.organizations[0].id;
@@ -36,9 +37,27 @@ export async function attentionQueryRegression(repository: OpsRepository, fixtur
   expect(rows).toEqual(attentionFromFixture(fixture, scope, access, query).items);
   expect(new Set(rows.map(row => row.id)).size).toBe(first.totalCount);
   expect(await repository.listAttention(scope, access, { ...query, offset: 10000 })).toEqual({ ...first, items: [], nextCursor: undefined });
-  for (const lane of ["mine", "team", "waiting", "upcoming"] as const) {
+  for (const lane of ["mine", "team", "waiting", "upcoming", "history"] as const) {
     expect(await repository.listAttention(scope, access, { ...query, lane })).toEqual(attentionFromFixture(fixture, scope, access, { ...query, lane }));
   }
+  for (const filters of [{ q: "104" }, { q: "quote" }, { q: "Check the diagnosis" }, { q: "Create or link a work order" }, { q: "100%_\\" }, { priority: "urgent" as const, type: "follow-up" as const }, { lane: "history" as const, priority: "standard" as const }, { lane: "history" as const, priority: "urgent" as const }, { itemIds: first.items.slice(1, 3).map(row => row.id) }]) {
+    expect(await repository.listAttention(scope, access, { ...query, ...filters })).toEqual(attentionFromFixture(fixture, scope, access, { ...query, ...filters }));
+  }
+  for (const kind of ["workflow_task","follow_up","exception","vendor_reminder","held_work","quote_round"] as const) {
+    const item=rows.find(row=>row.sourceKind===kind); if(!item) continue;
+    for(const page of [{limit:2},{limit:2,offset:2},{limit:2,offset:10000}]) {
+      expect(await repository.listAttentionSources(scope,access,query,item.id,page)).toEqual(attentionSourcesFromFixture(fixture,scope,access,query,item.id,page));
+    }
+    expect(await repository.listAttentionSources({...scope,storeIds:[]},access,query,item.id,{limit:2})).toBeNull();
+  }
+  const scopedQuery={...query,store:store.id};
+  expect(await repository.listAttention(scope,access,{...query,q:"Waiting on another party"})).toEqual(attentionFromFixture(fixture,scope,access,{...query,q:"Waiting on another party"}));
+  expect(await repository.listAttention(scope,access,scopedQuery)).toEqual(attentionFromFixture(fixture,scope,access,scopedQuery));
+  expect((await repository.listAttention({...scope,storeIds:[fixture.stores.find(s=>s.id!==store.id)!.id]},access,scopedQuery)).totalCount).toBe(0);
+  const historyQuery={...query,lane:"history" as const,limit:2};
+  const historyFirst=await repository.listAttention(scope,access,historyQuery);
+  if(historyFirst.nextCursor) expect(await repository.listAttention(scope,access,{...historyQuery,cursor:historyFirst.nextCursor})).toEqual(attentionFromFixture(fixture,scope,access,{...historyQuery,cursor:historyFirst.nextCursor}));
+  if(historyFirst.items[0]) expect(await repository.listAttentionSources(scope,access,historyQuery,historyFirst.items[0].id,{limit:25})).toEqual(attentionSourcesFromFixture(fixture,scope,access,historyQuery,historyFirst.items[0].id,{limit:25}));
   expect(await repository.listAttention(scope, access, { ...query, group: "financial" })).toEqual(attentionFromFixture(fixture, scope, access, { ...query, group: "financial" }));
   await expect(repository.listAttention(scope, access, { ...query, cursor: "broken" })).rejects.toThrow("page link");
   await expect(repository.listAttention(scope, access, { ...query, asOf: "broken" })).rejects.toThrow("review date");

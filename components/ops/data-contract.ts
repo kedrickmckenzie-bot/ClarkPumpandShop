@@ -484,6 +484,7 @@ export interface AttentionSourceDetail {
 
 export interface TableRowViewModel {
   sources?: AttentionSourceDetail[];
+  sourceLink?: { href: string; label: string };
   id: string;
   label: string;
   href: string;

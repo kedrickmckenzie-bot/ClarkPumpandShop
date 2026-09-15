@@ -12,6 +12,8 @@ import { POST as chooseCompany } from "@/app/api/ops/organization/route";
 import { GET as exportTrends } from "@/app/api/ops/trends/export/route";
 import { tenantFixture } from "@/lib/ops/tenant-fixture";
 import OwnerBriefPage from "@/app/app/brief/page";
+import ActionCenterPage from "@/app/app/action-center/page";
+import { loadListModel, loadReviewSourcesModel, loadReviewSelection } from "@/app/app/_data/operator-loader";
 
 const boundary = vi.hoisted(() => ({ cookies: new Map<string, string>(), repository: vi.fn(), identity: vi.fn(), snapshot: vi.fn(() => { throw new Error("Setup must not load tenant source records"); }) }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => boundary.cookies.has(name) ? { value: boundary.cookies.get(name) } : undefined }) }));
@@ -33,6 +35,25 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("loads the complete review queue, filtered metrics and supporting sources without a snapshot", async()=>{
+    const model=await loadListModel("action-center",{q:"104",priority:"urgent"});
+    expect(model.table.rows.length).toBeGreaterThan(0);
+    expect(model.table.rows.every(row=>row.cells.find(cell=>cell.key==="store")?.value.includes("104"))).toBe(true);
+    expect(model.metrics?.find(metric=>metric.id==="attention-urgent")?.value).toBe(model.resultSummary.split(" ")[0]);
+    const link=new URL(model.table.rows[0].sourceLink!.href,"https://ops.invalid");
+    expect((await loadReviewSourcesModel(Object.fromEntries(link.searchParams)))!.rows.length).toBeGreaterThan(0);
+    expect(await ActionCenterPage({searchParams:Promise.resolve({lane:"history"})})).toBeTruthy();
+    expect((await loadReviewSelection({q:"no matching record"},[model.table.rows[0].id])).table.rows).toEqual([]);
+    const storeQueue=await loadListModel("action-center",{store:"store-northline-104"});
+    expect(storeQueue.page.scopeLabel).toBe("Store 104 · Ridgeview");
+    expect(storeQueue.search?.preservedParameters).toContainEqual({name:"store",value:"store-northline-104"});
+    const lastOnPage=(await loadListModel("action-center",{})).table.rows.at(-1)!;
+    const nextIds=new URL(lastOnPage.href,"https://ops.invalid").searchParams.get("reviewAfter")!.split(",");
+    expect(nextIds.length).toBe(25);
+    const selection=await loadReviewSelection({},nextIds);
+    expect(selection.table.rows.some(row=>row.id===nextIds[0])).toBe(true);
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
   it("renders the actual owner brief with both summaries without requesting a tenant snapshot", async () => {
     expect(await OwnerBriefPage({ searchParams: Promise.resolve({}) })).toBeTruthy();
     expect(boundary.snapshot).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { attentionAccess } from "./attention-presenter";
+import { buildReviewQueue, buildReviewSources } from "./review-queue-presenter";
 import { loadDashboardChartPages } from "./dashboard-charts";
 import { presentQueryDashboard } from "./dashboard-query-presenter";
 import { buildStoreCostRanking } from "./store-cost-presenter";
@@ -282,6 +283,7 @@ function enforceDetailLinkPolicy<T extends DetailPageViewModel>(model: T, sessio
 export async function loadListModel(route: ListRouteId, searchParams: OperatorSearchParameters = {}) {
   const session = await getRequestOperatorSession();
   if (!roleCanAccessListRoute(session.role, route)) notFound();
+  if (route === "action-center") return enforceListLinkPolicy(await buildReviewQueue(await getServerOpsRepository(),session,searchParams,getServerOpsReportingAsOf()),session);
   if (route === "stores" && (Array.isArray(searchParams.sort) ? searchParams.sort[0] : searchParams.sort) === "cost") {
     return enforceListLinkPolicy(await buildStoreCostRanking(await getServerOpsRepository(), session, searchParams, getServerOpsReportingAsOf()), session);
   }
@@ -373,6 +375,17 @@ export async function loadDashboardModel() {
     repository.getDashboardLifecycle(scope, asOf),
   ]);
   return enforceDashboardLinkPolicy(presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window), session);
+}
+
+export async function loadReviewSourcesModel(searchParams: OperatorSearchParameters) {
+  const session=await getRequestOperatorSession();
+  if(!roleCanAccessListRoute(session.role,"action-center")) notFound();
+  return buildReviewSources(await getServerOpsRepository(),session,searchParams,getServerOpsReportingAsOf());
+}
+export async function loadReviewSelection(searchParams: OperatorSearchParameters,ids:string[]) {
+  const session=await getRequestOperatorSession();
+  if(!roleCanAccessListRoute(session.role,"action-center")) notFound();
+  return enforceListLinkPolicy(await buildReviewQueue(await getServerOpsRepository(),session,searchParams,getServerOpsReportingAsOf(),ids),session);
 }
 
 export async function loadSearchModel(searchParams: OperatorSearchParameters = {}) {
