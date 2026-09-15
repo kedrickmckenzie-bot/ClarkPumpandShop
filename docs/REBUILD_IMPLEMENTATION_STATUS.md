@@ -1,6 +1,8 @@
 # Rebuild Implementation Status
 
-**Snapshot date:** August 26, 2026
+**Historical snapshot date:** August 26, 2026
+
+> This dated inventory is historical. For current implementation, acceptance, seed counts and publication evidence, use [the persistent pass checklist](PLATFORM_IMPROVEMENT_PASSES.md) and [the demo guide](../DEMO.md). Older completion and scale statements below are not current production proof.
 
 **Demo implementation status:** the canonical service loop, public vendor visit, operator queues, PM, equipment lifecycle, invoice safeguards, management reporting, onboarding preview, and outbound-email configuration are connected in the fictional 15-store suite. Production identity, import apply, private document delivery, and production delivery operations remain go-live work.
 **Authority:** the merged Codex master rebuild directive supplied for this rebuild, the user's active Wave 1 acceptance target, and repository `AGENTS.md`. Earlier c-store plans remain useful history only where they do not conflict.

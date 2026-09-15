@@ -10,6 +10,8 @@ Current improvement work is tracked in [the persistent pass checklist](./docs/PL
 
 The unreachable prototype stacks have been retired after an import and route audit; [the removal record](./docs/PASS5_LEGACY_RETIREMENT.md) identifies the preserved boundaries and deleted files. Their history remains in Git.
 
+Current presentation priority is desktop operator usability; mobile acceptance is limited to vendor check-in/check-out. See [the demo guide](./DEMO.md) for a walkthrough using the current controls.
+
 ## Demo contract
 
 The fictional demo operator, **Clark Pump and Shop**, has exactly:
@@ -23,7 +25,7 @@ The five vendors are ColdLine Refrigeration & HVAC, ClearFlow HVAC, Plumbing & K
 
 The hosted showcase seeds the fictional tenant into Cloudflare D1 and writes workflow changes back through the same tenant-scoped repositories and domain commands. Uploaded evidence uses the private R2 binding. Local development uses the same deterministic fixture through an in-memory repository and resets when the local process restarts.
 
-The September 14 seed validation reports **100 intake requests, 422 work orders, 399 visits, 144 assets and 222 PM occurrences**. Run `npm run db:seed` for the current source-derived counts and separate 65-store fixture validation. The presentation includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
+The September 15 seed validation reports **100 intake requests, 422 work orders, 399 visits, 144 assets and 222 PM occurrences**. Run `npm run db:seed` for the current source-derived counts and separate 65-store fixture validation. The presentation includes internal work, all five outside vendors, deferred assignment, unmatched visits, component-level repeat work, confirmed/suggested/unmatched invoice references and source-linked files/audit events.
 
 All charts, counts and narrative claims derive from source records. Summary numbers are never independently hardcoded.
 
