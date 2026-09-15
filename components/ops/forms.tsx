@@ -164,7 +164,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>2</span><div><h2>{model.sourceVisit ? "Confirm who performed the visit" : accountabilityOnly ? "Choose the vendor" : "Choose who will do it"}</h2><p>{model.sourceVisit ? "Keep the provider recorded at check-in." : accountabilityOnly ? "Select the outside vendor now or save the work order and choose one later." : "You can choose later."}</p></div></div>
+            <div className={styles.formSectionHeading}><span>2</span><div><h2>{model.sourceVisit ? "Confirm who performed the visit" : accountabilityOnly ? "Choose the vendor" : "Choose how to handle it"}</h2><p>{model.sourceVisit ? "Keep the provider recorded at check-in." : accountabilityOnly ? "Select a vendor now or choose one later." : "Assign now, decide later, or save for a suitable visit."}</p></div></div>
             {model.sourceVisit ? (
               <div className={styles.formNotice}>
                 <Route aria-hidden="true" size={19} />

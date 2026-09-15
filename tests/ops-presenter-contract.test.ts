@@ -560,7 +560,7 @@ describe("operator presenter drill-through contracts", () => {
     expect(detail.statusLabel).toBe("Limited operations");
     expect(detail.sections.map((section) => section.title)).toEqual([
       "Upcoming visits",
-      "Approved for next suitable visit",
+      "Jobs saved for later",
       "Preventive maintenance",
       "Service areas and spending",
       "Equipment and lifecycle",

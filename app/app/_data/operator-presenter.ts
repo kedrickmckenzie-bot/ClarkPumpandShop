@@ -4914,13 +4914,14 @@ export function buildDetailModel(
           table: { id: "store-upcoming-visits", caption: `Upcoming visits for Store ${store.storeNumber}`, columns: columns.visits, rows: storeUpcomingVisits },
           action: { label: "Open all upcoming visits", href: `/app/visits?store=${store.id}&status=upcoming` },
         }] : []),
-        ...(storeActiveHolds.length ? [{
+        {
           id: "ready-to-bundle",
-          title: "Approved for next suitable visit",
-          description: "Group several small jobs for one vendor, or leave them available for a suitable vendor who is already onsite.",
-          table: { id: "store-held-work", caption: `Approved for next suitable visit at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "What the vendor may do" }, { key: "review", label: "Review timing" }], rows: heldWorkRows },
-          action: { label: "Send approved jobs together", href: `/app/store-sweeps/new?store=${store.id}` },
-        }] : []),
+          title: "Jobs saved for later",
+          description: "Group compatible small jobs for one vendor visit.",
+          facts: roleCan(session, "create_work_order") ? [{ label: "Add a small job", value: "Save a job for later", link: { label: "Save a job for later", href: `/app/work-orders/new?store=${store.id}&assignmentKind=hold_for_visit` } }] : [],
+          table: { id: "store-held-work", caption: `Jobs saved for later at Store ${store.storeNumber}`, columns: [{ key: "work", label: "Work order" }, { key: "category", label: "Service area" }, { key: "instruction", label: "Vendor instruction" }, { key: "review", label: "Review by" }], rows: heldWorkRows },
+          action: storeActiveHolds.length && roleCan(session, "issue_work_order") ? { label: "Group jobs for a visit", href: `/app/store-sweeps/new?store=${store.id}` } : undefined,
+        },
         {
           id: "preventive-maintenance-plans",
           title: "Preventive maintenance",
@@ -5188,7 +5189,7 @@ export function buildCreateWorkOrderModel(
         item.scopeKind === "organization" ? "All stores companywide" : item.scopeKind === "region" ? fixture.regions.find((region) => region.organizationId === scoped.organizationId && region.id === item.scopeId)?.name ?? "" : storeLabel(scoped.stores.find((store) => store.id === item.scopeId)),
         ...scoped.stores.filter((store) => item.scopeKind === "organization" || item.scopeKind === "store" && store.id === item.scopeId || item.scopeKind === "region" && store.regionId === item.scopeId).map((store) => storeLabel(store)),
       ]),
-    ].join(", ") })),
+    ].map((value) => value.replaceAll(session.organizationName, "")).join(", ") })),
     internalAssignees: internal.map((membership) => ({ value: membership.id, label: userById.get(membership.userId)?.displayName ?? "Internal technician" })),
     priorityOptions: [
       { value: "routine", label: "Routine" },
@@ -5210,7 +5211,7 @@ export function buildCreateWorkOrderModel(
     lifecycleAsOf: fixture.asOf,
     defaults: {
       priority: "routine",
-      assignmentKind: "choose_later",
+      assignmentKind: session.demoEdition !== "accountability" && first(query.assignmentKind) === "hold_for_visit" ? "hold_for_visit" : "choose_later",
       storeId: sourceRequest?.storeId ?? sourceVisit?.storeId ?? sourcePmOccurrence?.storeId ?? requestedAsset?.storeId ?? requestedStore,
       assetId: sourcePmOccurrence?.assetId ?? requestedAsset?.id,
       categoryKey: sourcePmProgram?.tradeKey ?? requestedAsset?.categoryKey,

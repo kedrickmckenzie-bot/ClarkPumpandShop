@@ -681,7 +681,7 @@ export interface CreateWorkOrderPageViewModel {
     categoryKey?: string;
     problem?: string;
     priority?: "routine" | "urgent" | "emergency" | "planned";
-    assignmentKind?: "internal" | "outside_vendor" | "choose_later";
+    assignmentKind?: "internal" | "outside_vendor" | "choose_later" | "hold_for_visit";
     vendorId?: string;
     internalMembershipId?: string;
   };

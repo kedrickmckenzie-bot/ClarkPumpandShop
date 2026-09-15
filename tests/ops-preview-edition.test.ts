@@ -142,6 +142,16 @@ describe("demo package switch", () => {
     expect(accountabilityOverview).toContain("Directory &amp; contacts");
   });
 
+  it("prefills later-visit work only in the full edition and avoids company-name vendor matches", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const full = buildCreateWorkOrderModel(fixture, { ...session(), demoEdition: "complete" }, { assignmentKind: "hold_for_visit" });
+    const simple = buildCreateWorkOrderModel(fixture, { ...session(), demoEdition: "accountability" }, { assignmentKind: "hold_for_visit" });
+    expect(full.defaults?.assignmentKind).toBe("hold_for_visit");
+    expect(simple.defaults?.assignmentKind).toBe("choose_later");
+    expect(full.vendors.every((vendor) => !vendor.description?.includes(session().organizationName))).toBe(true);
+    expect(full.vendors.filter((vendor) => `${vendor.label} ${vendor.description}`.toLowerCase().includes("pump"))).toHaveLength(1);
+  });
+
   it("reduces work-order creation to outside-vendor routing", () => {
     const fixture = buildNorthlinePresentationFixture();
     const model = buildCreateWorkOrderModel(fixture, session(), {});
@@ -149,6 +159,8 @@ describe("demo package switch", () => {
     const completeMarkup = renderToStaticMarkup(createElement(CreateWorkOrderForm, { model, edition: "complete" }));
 
     expect(accountabilityMarkup).toContain("Choose the vendor");
+    expect(accountabilityMarkup).not.toContain("Save for a later visit");
+    expect(completeMarkup).toContain("Save for a later visit");
     expect(accountabilityMarkup).not.toContain("Internal maintenance");
     expect(accountabilityMarkup).not.toContain("Request quotes first");
     expect(accountabilityMarkup).not.toContain("Not-to-exceed amount");
