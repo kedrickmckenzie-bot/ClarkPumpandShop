@@ -1,3 +1,4 @@
+import { recordedMoneyLabel } from "@/lib/ops/work-review";
 import { attentionAccess, reviewQueueExceptionCopy } from "./attention-presenter";
 import { attentionFromFixture, type AttentionPage } from "@/lib/ops/attention-query";
 import { dashboardActivityFromFixture, dashboardBreakdownFromFixture, rollingYearStart, type DashboardActivitySummary, type DashboardBreakdownKind } from "@/lib/ops/dashboard-query";
@@ -20,9 +21,6 @@ import type {
   ApprovalDecisionViewModel,
   AttentionItemControlViewModel,
   BreakdownViewModel,
-  CreateRequestPageViewModel,
-  CreateStorePageViewModel,
-  CreateVendorPageViewModel,
   CreateWorkOrderPageViewModel,
   DashboardPageViewModel,
   DetailPageViewModel,
@@ -473,12 +471,12 @@ function scopeFixture(fixture: OpsFixture, session: OperatorSession): ScopedFixt
   const organizationStores = fixture.stores.filter((store) => store.organizationId === organizationId);
   let stores = organizationStores;
 
-  if (session.regionIds?.length) {
+  if (session.regionIds !== undefined) {
     const regionIds = new Set(session.regionIds);
     stores = stores.filter((store) => Boolean(store.regionId && regionIds.has(store.regionId)));
   }
   if (session.role === "regional" && !session.regionIds?.length) stores = [];
-  if (session.storeIds?.length) {
+  if (session.storeIds !== undefined) {
     const permittedStoreIds = new Set(session.storeIds);
     stores = stores.filter((store) => permittedStoreIds.has(store.id));
   }
@@ -487,7 +485,7 @@ function scopeFixture(fixture: OpsFixture, session: OperatorSession): ScopedFixt
   const storeIds = new Set(stores.map((store) => store.id));
   return {
     organizationId,
-    includeCompanywide: !session.regionIds?.length && !session.storeIds?.length,
+    includeCompanywide: session.regionIds === undefined && session.storeIds === undefined,
     stores,
     storeIds,
     workOrders: fixture.workOrders.filter(
@@ -4230,7 +4228,7 @@ export function buildDetailModel(
       (allocation) => allocation.organizationId === scoped.organizationId && allocation.invoiceReferenceId === invoice.id,
     );
     const visibleAllocations = allAllocations.filter((allocation) => scoped.workOrders.some((work) => work.id === allocation.workOrderId));
-    const hasRestrictedStoreScope = Boolean(session.regionIds?.length || session.storeIds?.length);
+    const hasRestrictedStoreScope = Boolean(session.regionIds !== undefined || session.storeIds !== undefined);
     if ((allAllocations.length > 0 && visibleAllocations.length === 0) || (allAllocations.length === 0 && hasRestrictedStoreScope)) {
       return missingDetail("Invoice reference", "/app/invoices");
     }
@@ -5072,23 +5070,6 @@ function storesAsOptions(scoped: ScopedFixture) {
   return scoped.stores.map((store) => ({ value: store.id, label: `Store ${store.storeNumber} · ${store.name}`, description: storeAddress(store) }));
 }
 
-export function buildCreateRequestModel(fixture: OpsFixture, session: OperatorSession, query: OperatorSearchParameters = {}): CreateRequestPageViewModel {
-  const scoped = scopeFixture(fixture, session);
-  return {
-    state: { kind: "ready" },
-    page: { title: "Report an issue", eyebrow: "Issue intake", description: "Capture what the store can observe. A store and plain-language problem are enough to begin review.", scopeLabel: `${session.scopeLabel} · Requests remain visible after submission` },
-    defaultStoreId: scoped.storeIds.has(first(query.store) ?? "") ? first(query.store) : scoped.stores.length === 1 ? scoped.stores[0].id : undefined,
-    submitAction: "/api/ops/requests",
-    cancelLink: { label: "Back to requests", href: "/app/requests" },
-    stores: storesAsOptions(scoped),
-    priorityOptions: [
-      { value: "routine", label: "Routine", description: "Normal service need" },
-      { value: "urgent", label: "Urgent", description: "Material operating impact" },
-      { value: "emergency", label: "Emergency", description: "Immediate safety, fuel, food-safety, or major operating impact" },
-    ],
-  };
-}
-
 export function buildCreateWorkOrderModel(
   fixture: OpsFixture,
   session: OperatorSession,
@@ -5243,30 +5224,7 @@ export function buildCreateWorkOrderModel(
   };
 }
 
-export function buildCreateStoreModel(fixture: OpsFixture, session: OperatorSession): CreateStorePageViewModel {
-  const organizationTimeZone = fixture.organizations.find((organization) => organization.id === session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
-  return {
-    state: { kind: "ready" },
-    page: { title: "Add a store", eyebrow: "Network setup", description: "Add the store name, number and address.", scopeLabel: session.scopeLabel },
-    submitAction: "/api/ops/stores",
-    cancelLink: { label: "Back to stores", href: "/app/stores" },
-    regions: fixture.regions.filter((region) => region.organizationId === session.organizationId).map((region) => ({ value: region.id, label: region.name, description: region.code })),
-    timeZones: [{ value: "America/New_York", label: "Eastern time" }, { value: "America/Chicago", label: "Central time" }, { value: "America/Denver", label: "Mountain time" }, { value: "America/Los_Angeles", label: "Pacific time" }],
-    defaultTimeZone: organizationTimeZone,
-  };
-}
-
-export function buildCreateVendorModel(fixture: OpsFixture, session: OperatorSession): CreateVendorPageViewModel {
-  const specialtyNames = new Map(fixture.vendorSpecialties.filter((item) => item.organizationId === session.organizationId).map((item) => [item.canonicalKey, item.displayName]));
-  return {
-    state: { kind: "ready" },
-    page: { title: "Add an approved vendor", eyebrow: "Vendor onboarding", description: "Add dispatch details, searchable specialties, and service coverage. A portal account is optional.", scopeLabel: session.scopeLabel },
-    submitAction: "/api/ops/vendors",
-    cancelLink: { label: "Back to vendors", href: "/app/vendors" },
-    specialties: [...specialtyNames.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([value, label]) => ({ value, label })),
-    coverageScopes: [{ value: session.organizationId, label: "All stores", description: "Companywide coverage" }, ...fixture.regions.filter((region) => region.organizationId === session.organizationId).map((region) => ({ value: region.id, label: region.name, description: "Regional coverage" }))],
-  };
-}
+export { buildCreateStoreModel, buildCreateVendorModel } from "./onboarding-presenter";
 
 export function buildVendorIssuanceModel(fixture: OpsFixture, session: OperatorSession, workOrderId: string): VendorIssuanceViewModel {
   const scoped = scopeFixture(fixture, session);
@@ -6167,7 +6125,7 @@ export function buildWorkOrderRecordingModel(
       { value: "other", label: "Other recorded cost" },
     ],
     defaultServiceDate: fixture.asOf.slice(0, 10),
-    recordedCostLabel: money(costLines.reduce((total, line) => total + line.amount.amountMinor, 0)),
+    recordedCostLabel: costLines.length ? recordedMoneyLabel(costLines.map(line => line.amount)) : money(0),
     recordedCostLineCount: costLines.length,
   };
 }

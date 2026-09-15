@@ -651,6 +651,8 @@ export interface AssetLifecycleInputViewModel {
 }
 
 export interface CreateRequestPageViewModel {
+  storeLookup?: boolean;
+  storeNextCursor?: string;
   defaultStoreId?: string;
   state: DataState;
   page: PageContext;

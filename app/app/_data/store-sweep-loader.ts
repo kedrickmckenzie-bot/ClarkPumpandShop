@@ -67,8 +67,8 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string, requested
   if (!roleCan(session, "issue_work_order")) notFound();
   const visibleStores = fixture.stores.filter((store) => {
     if (store.organizationId !== session.organizationId) return false;
-    if (session.storeIds?.length && !session.storeIds.includes(store.id)) return false;
-    if (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
+    if (session.storeIds !== undefined && !session.storeIds.includes(store.id)) return false;
+    if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
     return true;
   });
   const activeHolds = (fixture.workOrderVisitHolds ?? []).filter((hold) => hold.organizationId === session.organizationId && hold.status === "active");

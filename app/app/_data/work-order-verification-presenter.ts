@@ -85,12 +85,12 @@ function dateTime(value: string, timeZone: string) {
 
 function storeInScope(fixture: OpsFixture, session: OperatorSession, workOrder: WorkOrder) {
   if (workOrder.organizationId !== session.organizationId) return false;
-  if (session.storeIds?.length && !session.storeIds.includes(workOrder.storeId)) return false;
+  if (session.storeIds !== undefined && !session.storeIds.includes(workOrder.storeId)) return false;
   const store = fixture.stores.find((candidate) => (
     candidate.organizationId === session.organizationId && candidate.id === workOrder.storeId
   ));
   if (!store) return false;
-  if (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
+  if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
   if (session.role === "store_manager" && !session.storeIds?.length) return false;
   if (session.role === "regional" && !session.regionIds?.length) return false;
   return true;

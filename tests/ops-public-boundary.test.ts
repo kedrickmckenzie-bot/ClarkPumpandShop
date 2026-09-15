@@ -428,6 +428,21 @@ describe("public service and visit capability boundaries", () => {
     expect(issuedContext.eligibleWorkOrders.map((work) => work.id)).toContain(workOrderId);
   });
 
+  it("checkout and retry name the persisted follow-up owner rather than the requested vendor", async () => {
+    const gateway=getPublicOperationsGateway(), repository=getNorthlineFixtureRepository();
+    const workOrderId=NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId, vendorId="vendor-northline-summit";
+    const checkIn=await gateway.checkIn(PUBLIC_DEMO_LINKS.serviceToken,{submissionKey:"receipt-owner-arrival",vendorId,workOrderId,technicianName:"Receipt owner test",location:{captureResult:"permission_denied"}});
+    const token=checkIn.checkoutUrl.split("/public/store/")[1]!.split("/")[0];
+    const command={submissionKey:"receipt-owner-departure",vendorId,visitId:checkIn.visitId,outcome:"return_required" as const,outcomeNotes:"Return to finish the repair",location:{captureResult:"permission_denied" as const},evidence:[]};
+    const receipt=await gateway.checkOut(token,command);
+    const [link]=await repository.listSiteVisitWorkOrders(NORTHLINE_ORGANIZATION_ID,checkIn.visitId);
+    const saved=await repository.getFollowUp(NORTHLINE_ORGANIZATION_ID,link.followUpId!);
+    expect(saved?.accountableParty).toBe("Jordan Lee");
+    expect(receipt.followUpLabel).toBe(`${saved!.accountableParty} now owns: ${saved!.nextAction}.`);
+    expect(receipt.followUpLabel).not.toContain("ColdLine");
+    expect((await gateway.checkOut(token,command)).followUpLabel).toBe(receipt.followUpLabel);
+  });
+
   it("records could-not-reproduce as a clear outcome with accountable manager review", async () => {
     const gateway = getPublicOperationsGateway();
     const repository = getNorthlineFixtureRepository();
@@ -451,7 +466,7 @@ describe("public service and visit capability boundaries", () => {
     });
 
     expect(checkout.outcomeLabel).toBe("Could not reproduce reported issue");
-    expect(checkout.followUpLabel).toMatch(/Facilities coordinator now owns/i);
+    expect(checkout.followUpLabel).toMatch(/Jordan Lee now owns/i);
     expect(await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId)).toMatchObject({
       status: "waiting_on_vendor",
       accountableParty: "Jordan Lee",

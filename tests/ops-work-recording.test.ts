@@ -647,6 +647,19 @@ describe("work-record submission idempotency", () => {
 });
 
 describe("work-recording presenter policy", () => {
+  it("keeps currencies separate in the recorded cost summary", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const line = fixture.costLines[0];
+    fixture.costLines = [
+      { ...line, id: "recorded-usd", amount: { currency: "USD", amountMinor: 1000 } },
+      { ...line, id: "recorded-eur", amount: { currency: "EUR", amountMinor: 2000 } },
+    ];
+    const model = buildWorkOrderRecordingModel(fixture, operatorSession("facilities"), line.workOrderId);
+    expect(model.recordedCostLabel).toContain("$10.00");
+    expect(model.recordedCostLabel).toContain("€20.00");
+    expect(model.recordedCostLabel).not.toContain("$30.00");
+  });
+
   it("shows only store-valid classification choices and separates classification from cost authority by role", () => {
     const fixture = buildNorthlinePresentationFixture();
     const workOrderId = NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId;

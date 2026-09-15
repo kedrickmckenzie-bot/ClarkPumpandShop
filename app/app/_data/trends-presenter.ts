@@ -504,8 +504,8 @@ function allowedStores(fixture: OpsFixture, session: OperatorSession) {
   // missing. An absent grant can never mean companywide access.
   if (session.role === "store_manager" && !session.storeIds?.length) return [];
   if (session.role === "regional" && !session.regionIds?.length) return [];
-  const regionIds = session.regionIds?.length ? new Set(session.regionIds) : undefined;
-  const storeIds = session.storeIds?.length ? new Set(session.storeIds) : undefined;
+  const regionIds = session.regionIds !== undefined ? new Set(session.regionIds) : undefined;
+  const storeIds = session.storeIds !== undefined ? new Set(session.storeIds) : undefined;
   return fixture.stores.filter((store) =>
     store.organizationId === session.organizationId
     && (!regionIds || (store.regionId ? regionIds.has(store.regionId) : false))

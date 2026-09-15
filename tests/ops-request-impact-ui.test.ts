@@ -109,7 +109,6 @@ describe("request impact presentation", () => {
       expect(intake).not.toContain(`name="${field}"`);
       expect(review).toContain(`name="${field}"`);
     }
-    expect(intake).toMatch(/do not need equipment details or a diagnosis/i);
     expect(review).toContain("expectedLatestAssessmentId");
     expect(review).toMatch(/<details/i);
   });

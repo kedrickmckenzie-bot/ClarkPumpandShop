@@ -230,13 +230,13 @@ function hrefWithQuery(path: string, values: Record<string, string | undefined>)
 
 function visibleStoresForSession(fixture: OpsFixture, session: OperatorSession) {
   let stores = fixture.stores.filter((store) => store.organizationId === session.organizationId);
-  if (session.regionIds?.length) {
+  if (session.regionIds !== undefined) {
     const regionIds = new Set(session.regionIds);
     stores = stores.filter((store) => Boolean(store.regionId && regionIds.has(store.regionId)));
   } else if (session.role === "regional") {
     stores = [];
   }
-  if (session.storeIds?.length) {
+  if (session.storeIds !== undefined) {
     const storeIds = new Set(session.storeIds);
     stores = stores.filter((store) => storeIds.has(store.id));
   } else if (session.role === "store_manager") {

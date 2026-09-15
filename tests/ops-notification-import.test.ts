@@ -101,6 +101,7 @@ describe("transactional email and onboarding previews", () => {
     expect(preview.writesPerformed).toBe(false);
     expect(preview.summary.error).toBe(0);
     expect(preview.rows[0]?.status).toBe("ready");
+    expect(previewImport("stores", `${importTemplate("stores")}998,No Region,1 New St,,Toledo,OH,43604,,\r\n`, fixture, NORTHLINE_ORGANIZATION_ID).summary.error).toBe(0);
   });
 
   it("blocks duplicates and unknown equipment templates before apply", () => {

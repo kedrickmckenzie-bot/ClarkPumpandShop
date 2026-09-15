@@ -46,7 +46,7 @@ export function previewImport(entity: ImportEntity, text: string, fixture: OpsFi
     const errors: string[] = []; const warnings: string[] = [];
     if (cells.length > headers.length) errors.push("Row contains more values than the template header.");
     if (entity === "stores") {
-      for (const key of ["store_number", "name", "address_1", "city", "state", "postal_code", "region_code"]) if (!values[key]) errors.push(`${key} is required.`);
+      for (const key of ["store_number", "name", "address_1", "city", "state", "postal_code"]) if (!values[key]) errors.push(`${key} is required.`);
       const key = normalized(values.store_number); if (seen.has(key)) errors.push("Store number is duplicated in this file."); seen.add(key);
       if (stores.some((store) => normalized(store.storeNumber) === key)) errors.push("Store number already exists.");
       if (values.region_code && !regions.some((region) => normalized(region.code) === normalized(values.region_code))) errors.push("Region code does not match a configured region.");

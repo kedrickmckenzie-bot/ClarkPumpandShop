@@ -4,7 +4,9 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
-- Latest validation: invoice queue native queries and exact invoice/flag/exposure views pass the required checks. The PostgreSQL query timeout is repaired; full suite **924/924**, workflow suite **53/53**, Sites and Render builds pass. Resume with the verified PM linked-amount discrepancy and invoice intake/evidence journey below. Wider P5 acceptance items remain open.
+- **Current priority (user clarification, September 15): desktop demo readiness first. Mobile acceptance is limited to vendor check-in/check-out.** Finish the desktop demo journey before further scalability-only migrations or broad mobile polish. Keep every unfinished item below recorded; this sequencing change does not mark those gates complete.
+
+- Latest validated publication: private version **49**, invoice intake and PM linked-amount repair; **926 tests**, **53 workflow checks**, seed/typecheck/lint and both builds passed. Current batch is uncommitted and not yet fully validated: filtered invoice evidence, direct work-review/held-work/vendor-response/job-health readers, and vendor API selection reads. Per the user's latest instruction, finish the remaining implementation together before the final full suite and browser matrix. Do not publish each small migration separately.
 - Completed passes: **1 — role/scope and accountability correctness**, **2 — trustworthy metrics and drill-through**, and **3 — manager and store workflow usability**. Pass 4 has three verified items; **P4-02 is reopened** for the owner-brief regional-scope counterexample found during Pass 5.
 - Current product pass: **5 — bounded reads and maintainable persistence**, started under the user's authorization to continue all remaining passes automatically while away. **24 of 40 items complete; 16 remain**. P5-01/P5-04/P5-05 are complete; P5-02/P5-03/P5-06 remain open. Finish the reopened P4-02 while auditing linked record/program readers. No later pass is complete.
 - Completed exception: **P6-08 — populated D1 upgrade repair**, pulled forward after the first private publication failed; the repaired publication succeeded. All original item IDs remain unchanged.
@@ -13,7 +15,7 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## How to execute and remember
 
-**Standing acceptance rule for every pass:** user experience and interface polish come first. Use short, plain words, obvious next actions, sensible defaults, and clean desktop/phone layouts. Remove long explanatory boxes and repeated instructions. Validate the affected journey visually as well as testing its behavior. A correct calculation behind confusing UI is unfinished work.
+**Standing acceptance rule for every pass:** user experience and interface polish come first. Use short, plain words, obvious next actions, sensible defaults, and clean desktop/phone layouts. Remove long explanatory boxes and repeated instructions. For the current demo, validate operator journeys on desktop; mobile validation is required for vendor check-in/check-out only. Validate the affected journey visually as well as testing its behavior. A correct calculation behind confusing UI is unfinished work.
 
 Keep the IDs below stable. Mark items `[x]` only after their acceptance checks pass; leave partial items unchecked with an explicit note. Append discoveries instead of silently expanding or dropping an item. After each pass record changes, checks, unresolved failures and the next starting point. On resume, inspect the working tree and this checkpoint before changing code. Never infer that an unchecked later pass was completed by an earlier one.
 
@@ -546,3 +548,43 @@ Private version **49** succeeded **2026-09-15 16:57:05 UTC**, environment revisi
 Seed, typecheck, lint, 926 tests, 53 workflow checks and both builds passed. The local invoice queue is retained in the normal viewport with the facilities role; LOCAL-INTAKE-0915 is the only new browser-created fictional record in this batch. Unrelated dev4.log remains untracked and untouched.
 
 **24/40 accepted, 16 open.** Next is the filtered invoice evidence route from Trends, then the outstanding records/actions, lifecycle, imports and operational/release gates. User authorization to continue persists. A fresh get_goal read reports `usageLimited`, not active; no tool has resumed or changed that usage control. Do not claim automatic goal continuation has resumed solely because the user previously reset account usage. This checkpoint records publication only and does not close Pass 5.
+
+
+### Consolidated remaining-work batch — in progress
+
+The user explicitly requested one implementation batch followed by final validation to reduce usage. Current changes replace the filtered invoice evidence snapshot with a native paged query and full totals, preserve its source filters and use exact allocation links when the whole invoice is visible. The focused SQLite/spending regression passed 19 tests; full validation remains deferred. Work review now invokes its existing repository reader directly. Held-work and vendor-response actions check the exact work/store scope first; vendor response selection returns the latest unhandled actionable response. Job health no longer loads source records. Vendor qualification uses that vendor's specialties, and onboarding resolves only selected coverage/specialty values. These changes are not yet acceptance evidence for a whole item.
+
+Continue this batch before testing/publishing: remaining record/action, creation, warranty, lifecycle, Trends, governance and import readers; operational code gaps and the final browser/validation/documentation matrix. External infrastructure gates remain explicitly unproven. Keep 24/40 accepted and preserve dev4.log. The saved goal's usageLimited state does not cancel the user's explicit current-turn and heartbeat authorization to work.
+
+
+Current batch additions: job-health summaries now require companywide access; scoped facilities cannot infer companywide job/outbox counts. Native vendor onboarding selection is bounded to submitted keys/coverage IDs, with exact organization predicates. Added queued regression coverage for work action scope denial, no-snapshot loaders, selected vendor lookups and actionable response parity; these checks have not yet run. Fixed optional-region import validation, added 25-row preview pages and recoverable network errors, and separated recorded work-cost currencies. Production import application remains unimplemented and unaccepted; preview changes do not close P5-06. No full suite or publication has been run for this batch.
+
+
+### Consolidated batch validation checkpoint — September 15, 2026
+
+Added native paged warranty queue/source counts, query-backed request creation with a scoped store picker, and small configuration reads for store/vendor onboarding. Removed duplicate nested main landmarks in five working surfaces. The request form now defaults to Routine and removes repeated instructional boxes. Store selection survives searches; larger networks receive 25-option pages and forward/back controls.
+
+Closed explicit-empty-scope leaks in compatibility record, Trends, approved-work, verification, workflow-task, service-run, store-sweep, setup and value-ledger readers. Companywide import and approval-policy setup reject restricted callers before reading source data. These repairs do not complete the remaining snapshot migrations or restore broad P4-02 acceptance by themselves.
+
+Validation in progress: deterministic seed and typecheck passed. Targeted query/identity/navigation/recording checks passed 52 tests. Full suite reached 930 passing tests with one obsolete text-only assertion requiring a removed instruction box; that assertion was removed while retaining the checks that intake has no required impact fields, and the affected five-test file passed. Initial lint found three unused presenter type imports after extraction; removed them. Workflow, final lint and builds still pending at this checkpoint.
+
+Browser evidence: at 375 px, warranty source drill-through shows one $8,900 flagged amount and its exact case; repeated diagnosis labels removed. Request creation preserves Store 104, defaults Routine, blocks an empty problem through native validation, and saves fictional request `request-461f9f1c-743f-40fb-b756-a5ec72ab90af` (REQ-72AB90AF), reporter Local QA, problem “Local validation: cooler door does not close fully.” This mutation is local only. Invoice evidence retains Store 104, Sep 1 2025–Aug 25 2026 and USD, showing 11 confirmed allocations totaling $24,286.40. Full cross-platform matrix remains pending.
+
+Acceptance remains 24/40. Next local migrations remain Trends aggregates/exports; record/action/program/lifecycle readers; work-order creation; approval governance/vendor performance; warranty detail; import preview/apply and remaining APIs. Infrastructure-dependent delivery, private-storage, real PostgreSQL, recovery and load drills remain unproven. Version 49 remains the published baseline; this batch has not been published.
+
+
+### Demo-first sequencing — September 15, 2026
+
+The user clarified that desktop demo readiness is the immediate objective; vendor check-in/check-out is the only required mobile journey for now. Stop additional operator-phone polishing. Preserve the existing checklist and all open production/architecture gates, but prioritize the desktop demonstration walkthrough and its blocking defects ahead of further snapshot migrations. This explicitly changes execution order without claiming broader production readiness.
+
+### Desktop demo batch — final verification
+
+User priority remains desktop demo readiness, with mobile limited to vendor check-in/out. Vendor onboarding now uses named specialty and coverage checkboxes, with a short optional custom-specialty field. Repeated request and vendor instructions were removed. Multiple selections and missing coverage have API regression coverage.
+
+The vendor mobile journey was completed locally at 390 px on CPS-2026-0116: QR check-in and secure-link checkout, location declined, return visit required. A browser-discovered receipt inconsistency was repaired: receipts and retries now use the persisted follow-up owner/action rather than the requested vendor. Desktop work and lifecycle now show Jordan Lee, “Propose the return service date,” due Sep 16 at 1:55 PM. The corrected receipt is covered by integration tests; it was not resubmitted in the browser. Local visit visit-95ffa560-15ca-4583-ae76-46fbe09e093a is fictional QA data, not a source seed change.
+
+Desktop walkthrough verified global search to Store 104, prefilled work creation with deferred classification, internal/outside routing choices, named vendor onboarding, PM Completed 9 opening exactly nine scoped records, and Planning register 10 opening ten records and the beer-cave comparison. That comparison preserves repair price, planning estimate, recorded-cost basis, source links and the saved next action. Invoice evidence, warranty source links and successful request intake were checked earlier in this batch. Import preview was inspected but no file was uploaded. Operator-wide mobile polish is deferred by user direction. Local overview restored and temporary viewport reset.
+
+Final full suite: 141 files / 933 tests passed in 178.14 seconds. Typecheck and lint pass. Final workflow checks and both builds are running. No infrastructure or broad migration acceptance is implied: 24/40 accepted, 16 open. This demo-first batch does not close Pass 5 or the complete production checklist.
+
+Final validation completed: seed, typecheck, lint, 933 tests, 54 workflow tests (90.20 seconds), Sites build and Render build all pass. Existing duplicate CSS emission warnings remain; both builds exit successfully. Publishing this combined desktop-demo batch privately; no broad production checklist item is closed.

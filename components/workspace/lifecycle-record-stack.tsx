@@ -43,7 +43,7 @@ export interface LifecycleDecisionWorkspaceModel {
 export function LifecycleRecordStack({ model }: { model: LifecycleDecisionWorkspaceModel; equipmentDetail?: DetailPageViewModel; workOrderDetail?: DetailPageViewModel; workOrderCase?: WorkOrderCaseView }) {
   const prices = model.prices;
   const review = model.review;
-  return <main className={styles.page}>
+  return <div className={styles.page}>
     <Link className={styles.back} href={model.closeHref}>← Back to replacement planning</Link>
     <header className={styles.heading}>
       <div><p>Repair or replace</p><h1>{model.assetName}</h1><span>{model.storeLabel} · {model.assetTag}{model.workOrderNumber ? ` · ${model.workOrderNumber}` : ""}</span></div>
@@ -74,5 +74,5 @@ export function LifecycleRecordStack({ model }: { model: LifecycleDecisionWorksp
     </> : null}
     <details className={styles.section} id="decision-method"><summary>How the repair comparison was calculated</summary><dl className={styles.method}><div><dt>Repair compared with replacement</dt><dd>{model.repairShareLabel}</dd></div><div><dt>Service needed for the repair to match replacement cost per year</dt><dd>{model.requiredRunwayLabel}</dd></div><div><dt>Estimated service after repair</dt><dd>{model.enteredServiceLabel}</dd></div></dl><p>The comparison uses {prices?.replacement ? "the selected or approved replacement amount" : "the planning estimate because a replacement quote has not been selected"}. It does not predict failures or make the decision for you. Costs in different currencies are not compared.</p><ul>{model.contextFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul></details>
     <details className={styles.section} id="decision-activity"><summary>Decision history</summary><p><strong>{model.decisionLabel}.</strong> {model.decisionHelper}</p>{model.activity.length ? <ol className={styles.timeline}>{model.activity.map((event) => <li key={event.id}><div><strong>{event.title}</strong><time>{event.timestampLabel}</time></div><p>{event.description}</p><span>{event.actorLabel}</span></li>)}</ol> : <p>No decision history has been recorded.</p>}</details>
-  </main>;
+  </div>;
 }

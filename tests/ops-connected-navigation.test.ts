@@ -6,7 +6,7 @@ import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { advanceNavigationTrail, workspaceStartHref } from "@/lib/ops/navigation-trail";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import { buildQueryListModel } from "@/app/app/_data/operator-query-presenter";
-import { buildCreateRequestModel, buildCreateWorkOrderModel, buildDetailModel, buildVendorPerformanceDetailModel } from "@/app/app/_data/operator-presenter";
+import { buildCreateWorkOrderModel, buildDetailModel, buildVendorPerformanceDetailModel } from "@/app/app/_data/operator-presenter";
 import { buildTrendsModel } from "@/app/app/_data/trends-presenter";
 import { ListView } from "@/components/ops/views";
 
@@ -17,6 +17,16 @@ const session: OperatorSession = { organizationId: NORTHLINE_ORGANIZATION_ID, us
 function fixtureContext() { const fixture = buildNorthlinePresentationFixture(); return { fixture, repository: createOpsFixtureRepository(fixture) }; }
 
 describe("connected navigation", () => {
+  it("empty explicit location grants never become companywide in compatibility readers", () => {
+    const { fixture } = fixtureContext();
+    for (const restricted of [{ ...session, storeIds: [] }, { ...session, regionIds: [] }]) {
+      expect(buildDetailModel(fixture, restricted, "store", "store-northline-104").state.kind).not.toBe("ready");
+      expect(buildCreateWorkOrderModel(fixture, restricted).stores).toHaveLength(0);
+      const trends = buildTrendsModel(fixture, restricted, { metric: "recorded_cost", view: "records" });
+      expect(trends.sourceTable.rows).toHaveLength(0);
+    }
+  });
+
   it("lands new records at the workspace start while retaining exact evidence anchors", () => {
     expect(workspaceStartHref("/app/work-orders/wo-1?view=cost")).toBe("/app/work-orders/wo-1?view=cost#main-content");
     expect(workspaceStartHref("/app/invoices/invoice-1#allocation-1")).toBe("/app/invoices/invoice-1#allocation-1");
@@ -87,13 +97,9 @@ describe("connected navigation", () => {
     const { fixture } = fixtureContext();
     const store = fixture.stores.find((item) => item.id === "store-northline-104")!;
     const asset = fixture.assets.find((item) => item.storeId === store.id)!;
-    expect(buildCreateRequestModel(fixture, session, { store: store.id }).defaultStoreId).toBe(store.id);
     const work = buildCreateWorkOrderModel(fixture, session, { store: store.id, asset: asset.id });
     expect(work.defaults).toMatchObject({ storeId: store.id, assetId: asset.id });
     const restricted = { ...session, storeIds: ["store-northline-101"] };
-    const form = buildCreateRequestModel(fixture, restricted, { store: store.id });
-    expect(form.stores.some((item) => item.value === store.id)).toBe(false);
-    expect(form.defaultStoreId).not.toBe(store.id);
     expect(buildDetailModel(fixture, restricted, "store", store.id).state.kind).not.toBe("ready");
   });
 

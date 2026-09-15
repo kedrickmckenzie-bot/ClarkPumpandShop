@@ -9,6 +9,14 @@ import type { DashboardBreakdownKind, DashboardBreakdownRow } from "@/lib/ops/da
 
 /** Run unchanged against migrated SQLite and PostgreSQL before mutating their shared fixture. */
 export async function dashboardQueryRegression(repository: OpsRepository, fixture: OpsFixture) {
+  const onboardingIds=[fixture.organizations[0].id,fixture.regions[0].id,fixture.stores[0].id,"missing"], onboardingKeys=[fixture.vendorSpecialties[0].canonicalKey,"missing"];
+  const {vendorOnboardingFromFixture}=await import("@/lib/ops/vendor-onboarding-query");
+  for(const org of [fixture.organizations[0].id,"other"]) expect(await repository.readVendorOnboardingSelection(org,onboardingIds,onboardingKeys)).toEqual(vendorOnboardingFromFixture(fixture,org,onboardingIds,onboardingKeys));
+  const {createOpsFixtureReadRepository: responseReference}=await import("@/lib/ops/fixture-repository");
+  for(const response of fixture.vendorResponses.slice(0,3)) expect(await repository.getActionableVendorResponse(response.organizationId,response.workOrderId,response.assignmentId,response.issuanceId)).toEqual(await responseReference(fixture).getActionableVendorResponse(response.organizationId,response.workOrderId,response.assignmentId,response.issuanceId));
+
+  await (await import("./invoice-evidence-query-regression")).invoiceEvidenceQueryRegression(repository, fixture);
+  await (await import("./warranty-queue-query-regression")).warrantyQueueRegression(repository, fixture);
   await (await import("./invoice-intake-query-regression")).invoiceIntakeQueryRegression(repository, fixture);
   await (await import("./invoice-queue-query-regression")).invoiceQueueQueryRegression(repository, fixture);
   await (await import("./invoice-record-query-regression")).invoiceRecordQueryRegression(repository, fixture);

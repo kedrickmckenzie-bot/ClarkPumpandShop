@@ -18,7 +18,7 @@ function cell(model: ListPageViewModel, rowId: string, key: string) {
 
 export function ReportingCenter({ model }: { model: ListPageViewModel }) {
   return (
-    <main className={styles.workspace}>
+    <div className={styles.workspace}>
       <header className={styles.header}>
         <div><p>{model.page.eyebrow}</p><h1>{model.page.title}</h1><span>{model.page.description}</span></div>
       </header>
@@ -64,6 +64,6 @@ export function ReportingCenter({ model }: { model: ListPageViewModel }) {
           </section>
         </>
       )}
-    </main>
+    </div>
   );
 }

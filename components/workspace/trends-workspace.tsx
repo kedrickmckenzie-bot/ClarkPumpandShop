@@ -303,7 +303,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
   const comparison = model.summary.find((metric) => metric.id === "comparison");
   const coverage = model.summary.find((metric) => metric.id === "coverage");
   return (
-    <main className={styles.workspace}>
+    <div className={styles.workspace}>
       <header className={styles.pageHeader}>
         <div><p>{model.page.eyebrow}</p><h1>{model.page.title}</h1><span>Costs, work, and changes over time.</span></div>
         {model.page.secondaryAction ? <Link className={styles.secondaryButton} href={model.page.secondaryAction.href}>{model.page.secondaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
@@ -332,6 +332,6 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
         <summary><Info size={17} aria-hidden="true" />How these numbers work<ChevronRight size={16} aria-hidden="true" /></summary>
         <ul>{model.notes.map((note) => <li key={note}>{note}</li>)}</ul>
       </details>
-    </main>
+    </div>
   );
 }

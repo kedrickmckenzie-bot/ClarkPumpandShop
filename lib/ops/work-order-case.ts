@@ -305,7 +305,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
         ? { label: blockingTask.title, href: `${base}?view=activity#workflow-tasks` }
         : { label: activeAssignment?.kind === "internal" ? "Start internal service" : "Open visit activity", href: `${base}?view=visits` },
     followup_closeout: closeoutFollowUps.length > 0
-      ? { label: "Complete or transfer the required follow-up", href: `/app/action-center/${closeoutFollowUps[0].id}` }
+      ? { label: closeoutFollowUps[0].nextAction, href: `/app/action-center/${closeoutFollowUps[0].id}` }
       : closeoutTask
         ? { label: closeoutTask.title, href: `${base}?view=activity#work-control` }
       : verificationNeedsOperationalReview && blockingTask

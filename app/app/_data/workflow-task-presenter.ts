@@ -229,8 +229,8 @@ export function buildWorkflowTaskWorkspaceModel(
   ));
   const storeInScope = Boolean(
     store
-    && (!session.storeIds?.length || session.storeIds.includes(store.id))
-    && (!session.regionIds?.length || Boolean(store.regionId && session.regionIds.includes(store.regionId)))
+    && (session.storeIds === undefined || session.storeIds.includes(store.id))
+    && (session.regionIds === undefined || Boolean(store.regionId && session.regionIds.includes(store.regionId)))
     && !(session.role === "store_manager" && !session.storeIds?.length)
     && !(session.role === "regional" && !session.regionIds?.length)
   );

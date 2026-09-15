@@ -1,3 +1,4 @@
+import { pmStoreAllowed } from "@/lib/ops/pm-record-query";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { attentionAccess } from "./attention-presenter";
@@ -57,7 +58,6 @@ import { resolveRoleCapabilities } from "@/lib/ops/capability-policy";
 import type { HeldWorkActionsModel } from "@/components/workspace/held-work-actions";
 import type { PmProgramManagementModel } from "@/components/workspace/pm-program-management";
 import {
-  buildCreateRequestModel,
   buildCreateStoreModel,
   buildCreateVendorModel,
   buildCreateWorkOrderModel,
@@ -340,8 +340,10 @@ export async function loadApprovedWorkPortfolioModel(searchParams: OperatorSearc
 }
 
 export async function loadApprovalPolicyWorkspaceModel() {
+  const session = await getRequestOperatorSession();
+  requireCapability(session, "administer");
+  if (session.storeIds !== undefined || session.regionIds !== undefined) notFound();
   const context = await sessionAndFixture();
-  requireCapability(context.session, "administer");
   return enforceDetailLinkPolicy(
     buildApprovalPolicyWorkspaceModel(context.fixture, context.session),
     context.session,
@@ -478,10 +480,9 @@ export async function loadDetailModel(route: DetailRouteId, id: string) {
 }
 
 export async function loadConnectedWorkReview(workOrderId: string) {
-  const context = await sessionAndFixture();
-  const { createOpsFixtureReadRepository } = await import("@/lib/ops/fixture-repository");
+  const session = await getRequestOperatorSession();
   const { loadWorkReview } = await import("@/lib/ops/work-review");
-  return loadWorkReview(createOpsFixtureReadRepository(context.fixture), context.session, workOrderId, context.fixture.asOf);
+  return loadWorkReview(await getServerOpsRepository(), session, workOrderId, await getServerOpsReportingAsOf());
 }
 
 export async function loadVendorPerformanceListModel(searchParams: OperatorSearchParameters = {}) {
@@ -496,10 +497,14 @@ export async function loadVendorPerformanceDetailModel(vendorId: string, query: 
   return paginateVendorEvidence(buildVendorPerformanceDetailModel(context.fixture, context.session, vendorId), vendorId, query);
 }
 
-export async function loadCreateRequestModel(query: OperatorSearchParameters = {}) {
-  const context = await sessionAndFixture();
-  requireCapability(context.session, "create_request");
-  return buildCreateRequestModel(context.fixture, context.session, query);
+export async function loadCreateRequestModel(query: OperatorSearchParameters = {}): Promise<import("@/components/ops/data-contract").CreateRequestPageViewModel> {
+  const session=await getRequestOperatorSession();requireCapability(session,"create_request");
+  const repository=await getServerOpsRepository(),page=await repository.searchStores(session,"",{limit:25}),requested=Array.isArray(query.store)?query.store[0]:query.store;
+  const selected=requested?await repository.getStore(session.organizationId,requested):null;
+  if(requested&&(!selected||!pmStoreAllowed(session,selected)))notFound();
+  const stores=page.items.map(s=>({value:s.id,label:`Store ${s.storeNumber} · ${s.name}`}));
+  if(selected&&!stores.some(s=>s.value===selected.id))stores.unshift({value:selected.id,label:`Store ${selected.storeNumber} · ${selected.name}`});
+  return {state:{kind:"ready"},page:{title:"Report an issue",eyebrow:"Issue intake",description:"Choose a store and describe the problem.",scopeLabel:session.scopeLabel},submitAction:"/api/ops/requests",cancelLink:{label:"Back to requests",href:"/app/requests"},stores,storeLookup:Boolean(page.nextCursor),storeNextCursor:page.nextCursor,defaultStoreId:selected?.id??(!page.nextCursor&&stores.length===1?stores[0].value:undefined),priorityOptions:[{value:"routine",label:"Routine"},{value:"urgent",label:"Urgent"},{value:"emergency",label:"Emergency"}]};
 }
 
 export async function loadCreateWorkOrderModel(searchParams: OperatorSearchParameters = {}) {
@@ -509,15 +514,16 @@ export async function loadCreateWorkOrderModel(searchParams: OperatorSearchParam
 }
 
 export async function loadCreateStoreModel() {
-  const context = await sessionAndFixture();
-  requireCapability(context.session, "create_store");
-  return buildCreateStoreModel(context.fixture, context.session);
+  const session=await getRequestOperatorSession();requireCapability(session,"create_store");
+  if(session.storeIds!==undefined||session.regionIds!==undefined)notFound();
+  const repository=await getServerOpsRepository(),[organization,configuration]=await Promise.all([repository.getOrganization(session.organizationId),repository.readOnboardingConfiguration(session.organizationId)]);
+  if(!organization)notFound();
+  return buildCreateStoreModel({organizations:[organization],regions:configuration.regions},session);
 }
-
 export async function loadCreateVendorModel() {
-  const context = await sessionAndFixture();
-  requireCapability(context.session, "onboard_vendor");
-  return buildCreateVendorModel(context.fixture, context.session);
+  const session=await getRequestOperatorSession();requireCapability(session,"onboard_vendor");
+  if(session.storeIds!==undefined||session.regionIds!==undefined)notFound();
+  return buildCreateVendorModel(await (await getServerOpsRepository()).readOnboardingConfiguration(session.organizationId),session);
 }
 
 export async function loadVendorIssuanceModel(workOrderId: string) {
@@ -623,24 +629,26 @@ function localInputValue(value: string, timeZone: string) {
 }
 
 export async function loadHeldWorkActionsModel(workOrderId: string): Promise<HeldWorkActionsModel> {
-  const context = await sessionAndFixture();
-  if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
-  const workOrder = context.fixture.workOrders.find((row) => row.organizationId === context.session.organizationId && row.id === workOrderId);
-  if (!workOrder) notFound();
+  const session = await getRequestOperatorSession();
+  if (!roleCanAccessDetailRoute(session.role, "work-order")) notFound();
   const repository = await getServerOpsRepository();
+  const workOrder = await repository.getWorkOrder(session.organizationId, workOrderId);
+  if (!workOrder) notFound();
+  const scopeStore = await repository.getStore(session.organizationId,workOrder.storeId);
+  if (!scopeStore || !pmStoreAllowed(session,scopeStore)) notFound();
   const [hold, store] = await Promise.all([
-    repository.getWorkOrderVisitHold(context.session.organizationId, workOrderId),
-    repository.getStore(context.session.organizationId, workOrder.storeId),
+    repository.getWorkOrderVisitHold(session.organizationId, workOrderId),
+    repository.getStore(session.organizationId, workOrder.storeId),
   ]);
-  const organizationTimeZone = context.fixture.organizations.find((row) => row.id === context.session.organizationId)?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
+  const organizationTimeZone = (await repository.getOrganization(session.organizationId))?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   const storeTimeZone = store?.timeZone ?? organizationTimeZone;
-  const fallbackDeadlineMs = Date.parse(context.fixture.asOf) + 30 * 24 * 60 * 60_000;
+  const fallbackDeadlineMs = Date.parse(await getServerOpsReportingAsOf()) + 30 * 24 * 60 * 60_000;
   const recordedDeadlineMs = Date.parse(workOrder.dueAt ?? "");
   const defaultDeadline = new Date(Number.isFinite(recordedDeadlineMs)
     ? Math.max(recordedDeadlineMs, fallbackDeadlineMs)
     : fallbackDeadlineMs).toISOString();
   const claimedVendor = hold?.claimedVendorId
-    ? await repository.getVendor(context.session.organizationId, hold.claimedVendorId)
+    ? await repository.getVendor(session.organizationId, hold.claimedVendorId)
     : null;
   const formatMoney = (amountMinor: number, currency: string) => new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -648,7 +656,7 @@ export async function loadHeldWorkActionsModel(workOrderId: string): Promise<Hel
   }).format(amountMinor / 100);
   return {
     workOrderId,
-    permitted: roleCan(context.session, "control_work_order"),
+    permitted: roleCan(session, "control_work_order"),
     eligible: Boolean(workOrder.categoryKey) && workOrder.status === "approved",
     categoryLabel: workOrder.categoryKey
       ? workOrder.categoryKey.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase())
@@ -668,32 +676,18 @@ export async function loadHeldWorkActionsModel(workOrderId: string): Promise<Hel
   };
 }
 export async function loadVendorResponseActionsModel(workOrderId: string) {
-  const context = await sessionAndFixture();
-  if (!roleCanAccessDetailRoute(context.session.role, "work-order")) notFound();
-  if (!roleCan(context.session, "control_work_order")) return null;
-  const orgId = context.session.organizationId;
-  const workOrder = context.fixture.workOrders.find((row) => row.organizationId === orgId && row.id === workOrderId);
-  if (!workOrder || ["completed_pending_review", "resolved", "closed", "cancelled"].includes(workOrder.status)) return null;
-  const repository = await getServerOpsRepository();
-  const [activeAssignment, latestIssuance, continuations] = await Promise.all([
-    repository.getActiveAssignment(orgId, workOrderId),
-    repository.getLatestIssuanceForWorkOrder(orgId, workOrderId),
-    repository.listVendorContinuationsForWorkOrder(orgId, workOrderId),
-  ]);
-  const responses = context.fixture.vendorResponses
-    .filter((row) => row.organizationId === orgId && row.workOrderId === workOrderId)
-    .sort((a, b) => b.respondedAt.localeCompare(a.respondedAt));
-  const handled = new Set(
-    continuations.map((row) => row.vendorResponseId),
-  );
-  const actionable = responses.find((row) =>
-    !handled.has(row.id)
-    && ((row.response === "proposed_date" || row.response === "question")
-      ? row.assignmentId === activeAssignment?.id && row.issuanceId === latestIssuance?.id
-      : row.response === "declined"));
+  const session = await getRequestOperatorSession();
+  if (!roleCanAccessDetailRoute(session.role, "work-order")) notFound();
+  if (!roleCan(session, "control_work_order")) return null;
+  const orgId = session.organizationId, repository = await getServerOpsRepository();
+  const workOrder = await repository.getWorkOrder(orgId,workOrderId);
+  if (!workOrder) return null;
+  const store = await repository.getStore(orgId,workOrder.storeId);
+  if (!store || !pmStoreAllowed(session,store)) notFound();
+  if (["completed_pending_review", "resolved", "closed", "cancelled"].includes(workOrder.status)) return null;
+  const [activeAssignment,latestIssuance,organization] = await Promise.all([repository.getActiveAssignment(orgId,workOrderId),repository.getLatestIssuanceForWorkOrder(orgId,workOrderId),repository.getOrganization(orgId)]);
+  const actionable = await repository.getActionableVendorResponse(orgId,workOrderId,activeAssignment?.id,latestIssuance?.id);
   if (!actionable) return null;
-  const store = context.fixture.stores.find((row) => row.organizationId === orgId && row.id === workOrder.storeId);
-  const organization = context.fixture.organizations.find((row) => row.id === orgId);
   const timeZone = store?.timeZone ?? organization?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   return {
     responseId: actionable.id,
@@ -740,8 +734,8 @@ export async function loadRequestWorkLinkModel(
   if (!request || !["submitted", "under_review", "acknowledged"].includes(request.status)) notFound();
   const store = await repository.getStore(session.organizationId, request.storeId);
   if (!store
-    || (session.storeIds?.length && !session.storeIds.includes(store.id))
-    || (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId)))) notFound();
+    || (session.storeIds !== undefined && !session.storeIds.includes(store.id))
+    || (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId)))) notFound();
   const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
   const q = first(searchParams.q)?.trim() ?? "";
   const requestedPage = Number(first(searchParams.page) ?? "1");
@@ -800,15 +794,15 @@ export async function loadBriefRecordsModel(query: OperatorSearchParameters) {
 }
 
 export async function loadJobHealthModel() {
-  const context = await sessionAndFixture();
-  const role = context.session.role;
-  if (role !== "executive" && role !== "facilities") return null;
+  const session = await getRequestOperatorSession();
+  const role = session.role;
+  if (role !== "executive" && role !== "facilities" || session.storeIds !== undefined || session.regionIds !== undefined) return null;
   const repository = await getServerOpsRepository();
   const [runs, outboxCounts] = await Promise.all([
-    repository.listRecentJobRuns(context.session.organizationId, 20),
-    repository.outboxStatusCounts(context.session.organizationId),
+    repository.listRecentJobRuns(session.organizationId, 20),
+    repository.outboxStatusCounts(session.organizationId),
   ]);
-  return { generatedAt: context.fixture.asOf, runs, outboxCounts };
+  return { generatedAt: await getServerOpsReportingAsOf(), runs, outboxCounts };
 }
 
 export async function loadSavedViewsModel(surface: string) {

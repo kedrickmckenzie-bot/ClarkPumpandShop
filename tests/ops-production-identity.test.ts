@@ -42,6 +42,69 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("saves multiple named vendor choices without a snapshot and rejects missing coverage", async () => {
+    const data=fixture(), repository=useFixture(data);
+    const {POST}=await import("@/app/api/ops/vendors/route");
+    const form=new FormData();
+    form.set("name","Local vendor choice test");form.set("dispatchEmail","dispatch@example.test");
+    const keys=[...new Set(data.vendorSpecialties.map(r=>r.canonicalKey))].slice(0,2);
+    keys.forEach(key=>form.append("specialtyKeys",key));
+    form.append("specialtyKeys", "");
+    let response=await POST(new Request("http://ops.test/api/ops/vendors",{method:"POST",body:form}));
+    expect(response.status).toBe(422);
+    data.regions.slice(0,2).forEach(region=>form.append("coverageScopeIds",region.id));
+    response=await POST(new Request("http://ops.test/api/ops/vendors",{method:"POST",body:form}));
+    expect(response.status).toBe(303);
+    const id=new URL(response.headers.get("location")!,"http://ops.test").pathname.split("/").pop()!;
+    expect((await repository.listVendorSpecialties(ORG,id)).map(s=>s.canonicalKey).sort()).toEqual(keys.sort());
+    expect(repository.snapshot().vendorCoverage.filter(c=>c.vendorId===id).map(c=>c.scopeId).sort()).toEqual(data.regions.slice(0,2).map(r=>r.id).sort());
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
+
+  it("loads the warranty queue without snapshots and keeps source cases in the caller's store", async () => {
+    const data=fixture();useFixture(data);
+    const {default: WarrantyPage}=await import("@/app/app/warranties/page");
+    const wide=await WarrantyPage({searchParams:Promise.resolve({view:"all"})});
+    expect(wide.props.result.totalCount).toBeGreaterThan(0);
+    const grant=data.scopeGrants.find(g=>g.membershipId==="membership-northline-facilities")!;
+    grant.scopeKind="store";grant.scopeId="store-northline-107";useFixture(data);
+    const scoped=await WarrantyPage({searchParams:Promise.resolve({view:"all"})});
+    expect(scoped.props.canCreate).toBe(false);
+    expect(scoped.props.result.rows.every((r:{storeNumber:string})=>r.storeNumber==="107")).toBe(true);
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
+
+  it("creates requests and company setup forms without tenant snapshots", async () => {
+    const data=fixture();useFixture(data);
+    const {loadCreateRequestModel,loadCreateStoreModel,loadCreateVendorModel}=await import("@/app/app/_data/operator-loader");
+    expect((await loadCreateRequestModel({store:"store-northline-104"})).defaultStoreId).toBe("store-northline-104");
+    expect((await loadCreateStoreModel()).regions.length).toBe(3);
+    expect((await loadCreateVendorModel()).specialties.length).toBeGreaterThan(0);
+    const grant=data.scopeGrants.find(g=>g.membershipId==="membership-northline-facilities")!;
+    grant.scopeKind="store";grant.scopeId="store-northline-107";useFixture(data);
+    await expect(loadCreateRequestModel({store:"store-northline-104"})).rejects.toThrow();
+    expect((await loadCreateRequestModel()).stores.map(s=>s.value)).toEqual(["store-northline-107"]);
+    await expect(loadCreateStoreModel()).rejects.toThrow();
+    await expect(loadCreateVendorModel()).rejects.toThrow();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
+
+  it("loads work review/actions and job health without snapshots and denies a different store", async () => {
+    const data=fixture();useFixture(data);
+    const {loadHeldWorkActionsModel,loadVendorResponseActionsModel,loadConnectedWorkReview,loadJobHealthModel}=await import("@/app/app/_data/operator-loader");
+    expect(await loadHeldWorkActionsModel("wo-northline-104")).toBeTruthy();
+    await loadVendorResponseActionsModel("wo-northline-104");
+    expect(await loadConnectedWorkReview("wo-northline-104")).toBeTruthy();
+    expect(await loadJobHealthModel()).toBeTruthy();
+    const grant=data.scopeGrants.find(g=>g.membershipId==="membership-northline-facilities")!;
+    grant.scopeKind="store";grant.scopeId="store-northline-107";useFixture(data);
+    await expect(loadHeldWorkActionsModel("wo-northline-104")).rejects.toThrow();
+    await expect(loadVendorResponseActionsModel("wo-northline-104")).rejects.toThrow();
+    expect(await loadConnectedWorkReview("wo-northline-104")).toBeNull();
+    expect(await loadJobHealthModel()).toBeNull();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
+
   it("loads invoice intake without snapshots and rejects scoped or read-only callers", async () => {
     const data = fixture(); useFixture(data);
     const { loadInvoiceIntake } = await import("@/app/app/_data/invoice-intake-loader");
@@ -61,6 +124,7 @@ describe("production identity and organization selection", () => {
     const { default: InvoiceQueuePage } = await import("@/app/app/invoices/page");
     const { loadInvoiceQueue } = await import("@/app/app/_data/invoice-queue-loader");
     for (const view of ["all", "review", "flags", "exposure"]) expect(await InvoiceQueuePage({ searchParams: Promise.resolve({ view }) })).toBeTruthy();
+    expect(await InvoiceQueuePage({searchParams:Promise.resolve({from:"2025-09-01",to:"2026-08-25",store:"store-northline-104"})})).toBeTruthy();
     expect((await loadInvoiceQueue({ view: "invalid", page: "Infinity" })).view).toBe("all");
     const flag = data.invoiceExceptions[0];
     expect((await loadInvoiceRecord(flag.invoiceId, { section: "flags", flag: flag.id })).result.rows.map(r => r.id)).toEqual([flag.id]);

@@ -31,8 +31,8 @@ function first(value: string | string[] | undefined) {
 
 function storeAllowed(session: OperatorSession, store: Store) {
   if (store.organizationId !== session.organizationId) return false;
-  if (session.storeIds?.length && !session.storeIds.includes(store.id)) return false;
-  if (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
+  if (session.storeIds !== undefined && !session.storeIds.includes(store.id)) return false;
+  if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
   if (session.role === "store_manager" && !session.storeIds?.length) return false;
   if (session.role === "regional" && !session.regionIds?.length) return false;
   return true;

@@ -967,20 +967,25 @@ function checkOutReceipt(input: {
 async function receiptWorkOrderOutcomes(
   repository: OpsRepository,
   organizationId: string,
+  visitId: string,
   outcomes: readonly PerWorkOrderVisitOutcome[],
 ): Promise<TechnicianCheckOutReceipt["workOrderOutcomes"]> {
+  const links = await repository.listSiteVisitWorkOrders(organizationId, visitId);
   return Promise.all(outcomes.map(async (outcome) => {
     const workOrder = await repository.getWorkOrder(organizationId, outcome.workOrderId);
     if (!workOrder) throw new PublicWorkflowError("A visit work order is no longer available.", 409, "work_order_unavailable");
+    const link = links.find(row => row.workOrderId === workOrder.id && row.visitId === visitId && row.organizationId === organizationId);
+    const candidate = link?.followUpId ? await repository.getFollowUp(organizationId, link.followUpId) : null;
+    const followUp = candidate?.workOrderId === workOrder.id && candidate.sourceVisitId === visitId ? candidate : undefined;
+    const recordedOutcome = link?.outcome ?? outcome.outcome;
     return {
       id: workOrder.id,
       number: workOrder.number,
       problem: workOrder.problem,
-      outcome: outcome.outcome,
-      outcomeLabel: workOrderOutcomeLabel(outcome.outcome),
-      followUpLabel: outcome.followUp
-        ? `${outcome.followUp.accountableParty} now owns: ${outcome.followUp.nextAction}.`
-        : undefined,
+      outcome: recordedOutcome,
+      outcomeLabel: workOrderOutcomeLabel(recordedOutcome),
+      // The command resolves the real internal owner. A requested owner is not a receipt.
+      followUpLabel: followUp ? `${followUp.accountableParty} now owns: ${followUp.nextAction}.` : undefined,
     };
   }));
 }
@@ -1787,7 +1792,7 @@ const gateway: PublicOperationsGateway = {
         visit: prior,
         store,
         outcome: command.outcome,
-        workOrderOutcomes: await receiptWorkOrderOutcomes(repository, organizationId, perWorkOrderOutcomes),
+        workOrderOutcomes: await receiptWorkOrderOutcomes(repository, organizationId, visitId, perWorkOrderOutcomes),
         location: access?.kind === "trusted_store" ? trustedStoreLocation(prior.checkedOutAt).receipt : location.receipt,
         evidenceReceived: replayUploads.received,
         evidenceStorageLabel: replayUploads.label
@@ -1849,7 +1854,7 @@ const gateway: PublicOperationsGateway = {
         visit: completed,
         store,
         outcome: command.outcome,
-        workOrderOutcomes: await receiptWorkOrderOutcomes(repository, organizationId, perWorkOrderOutcomes),
+        workOrderOutcomes: await receiptWorkOrderOutcomes(repository, organizationId, visitId, perWorkOrderOutcomes),
         location: location.receipt,
         evidenceReceived: uploads.received,
         evidenceStorageLabel: uploads.label,

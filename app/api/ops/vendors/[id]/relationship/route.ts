@@ -10,7 +10,6 @@ import {
   optionalIsoDate,
   optionalMoneyMinor,
 } from "@/lib/server/ops-request-context";
-import { getServerOpsFixtureSnapshot } from "@/lib/server/ops-repository-provider";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
 const documentTypes = new Set(["insurance", "license", "certification", "tax", "safety", "other"] as const);
@@ -49,10 +48,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     if (operation === "record_qualification") {
-      const snapshot = await getServerOpsFixtureSnapshot(context.session.organizationId);
       const tradeKey = formText(formData, "tradeKey", { required: true, max: 120 });
-      const approvedTradeKeys = new Set(snapshot.vendorSpecialties
-        .filter((specialty) => specialty.organizationId === context.session.organizationId && specialty.vendorId === vendorId)
+      const approvedTradeKeys = new Set((await context.repository.listVendorSpecialties(context.session.organizationId, vendorId))
         .map((specialty) => specialty.canonicalKey));
       if (!approvedTradeKeys.has(tradeKey)) throw new OpsDomainError("VALIDATION", "Choose a trade already approved on this vendor profile");
       await recordVendorQualification(

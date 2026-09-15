@@ -1,3 +1,4 @@
+import { invoiceEvidenceFromFixture } from "@/lib/ops/invoice-evidence-query";
 import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -5,7 +6,7 @@ import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { buildDashboardModel, buildProgramModel, buildVendorPerformanceDetailModel } from "@/app/app/_data/operator-presenter";
 import { buildQueryListModel } from "@/app/app/_data/operator-query-presenter";
-import { buildInvoiceEvidenceModel } from "@/app/app/_data/invoice-evidence-presenter";
+import { buildInvoiceEvidenceModel as buildEvidenceModel, invoiceEvidenceParameters } from "@/app/app/_data/invoice-evidence-presenter";
 import { paginateVendorEvidence } from "@/app/app/_data/vendor-evidence-pagination";
 import { ListSurface } from "@/components/ops/views";
 import type { OperatorSession } from "@/components/ops/data-contract";
@@ -103,3 +104,5 @@ describe("spend and connected workflow audit", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+function buildInvoiceEvidenceModel(fixture: import("@/lib/ops/types").OpsFixture, session: import("@/components/ops/data-contract").OperatorSession, query: import("@/app/app/_data/operator-presenter").OperatorSearchParameters) { return buildEvidenceModel(invoiceEvidenceFromFixture(fixture,session,invoiceEvidenceParameters(query)),session,query); }

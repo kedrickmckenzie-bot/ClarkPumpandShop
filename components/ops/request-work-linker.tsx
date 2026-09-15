@@ -3,7 +3,7 @@ import type { RequestWorkLinkPageViewModel } from "./data-contract";
 import styles from "./request-work-linker.module.css";
 
 export function RequestWorkLinker({ model }: { model: RequestWorkLinkPageViewModel }) {
-  return <main className={styles.workspace}>
+  return <div className={styles.workspace}>
     <Link className={styles.back} href={model.returnHref}>← Back to {model.reference}</Link>
     <header className={styles.header}><div><p>Potentially related work</p><h1>Browse this store’s open work</h1><span>Choose only when the report belongs with the work. Similar wording is a suggestion—not evidence of a duplicate, shared physical item, or completed repair.</span></div></header>
     <aside className={styles.notice}><strong>{model.reference}:</strong> {model.problem}. The original report, equipment references, photos, and timestamps remain unchanged after linking.</aside>
@@ -16,5 +16,5 @@ export function RequestWorkLinker({ model }: { model: RequestWorkLinkPageViewMod
       })}</ol> : <p className={styles.empty}>No active work matches this search. Try another term or return to acknowledge without linking.</p>}
       <footer className={styles.pagination}><span>Page {model.currentPage} of {model.totalPages}</span><nav>{model.previousHref ? <Link href={model.previousHref}>Previous</Link> : <span />}{model.nextHref ? <Link href={model.nextHref}>Next</Link> : null}</nav></footer>
     </section>
-  </main>;
+  </div>;
 }

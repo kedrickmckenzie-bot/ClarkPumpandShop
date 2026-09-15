@@ -261,6 +261,10 @@ export interface OpsRepository {
   readInvoiceRecord(scope: OrganizationScope, invoiceId: string, query: import("./invoice-record-query").InvoiceRecordQuery): Promise<import("./invoice-record-query").InvoiceRecordPage>;
   readInvoiceIntakeChecks(organizationId: OpsId, workId: OpsId, vendorId: OpsId, number: string): Promise<import("./invoice-intake-query").InvoiceIntakeChecks>;
   listInvoiceIntakeOptions(scope: OrganizationScope, query: import("./invoice-intake-query").InvoiceIntakeQuery): Promise<import("./invoice-intake-query").InvoiceIntakePage>;
+  readVendorOnboardingSelection(organizationId: OpsId, scopeIds: string[], specialtyKeys: string[]): Promise<import("./vendor-onboarding-query").VendorOnboardingSelection>;
+  listWarrantyQueue(scope: OrganizationScope, query: import("./warranty-queue-query").WarrantyQueueQuery): Promise<import("./warranty-queue-query").WarrantyQueuePage>;
+  readOnboardingConfiguration(organizationId: OpsId): Promise<import("./vendor-onboarding-query").OnboardingConfiguration>;
+  listInvoiceEvidence(scope: OrganizationScope, query: import("./invoice-evidence-query").InvoiceEvidenceQuery): Promise<import("./invoice-evidence-query").InvoiceEvidencePage>;
   listInvoiceQueue(scope: OrganizationScope, query: import("./invoice-queue-query").InvoiceQueueQuery): Promise<import("./invoice-queue-query").InvoiceQueuePage>;
   listPmAnalysis(scope: OrganizationScope, query: import("./pm-analysis-query").PmAnalysisQuery): Promise<import("./pm-analysis-query").PmAnalysisPage>;
   listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query?: PageRequest): Promise<import("./pm-record-query").WorkVisitEvidencePage>;
@@ -335,6 +339,7 @@ export interface OpsRepository {
   listIssuancesForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderIssuance[]>;
   getLatestVendorResponse(organizationId: OpsId, assignmentId: OpsId): Promise<import("./types").VendorResponse | null>;
   getLatestVendorResponseForIssuance(organizationId: OpsId, issuanceId: OpsId): Promise<import("./types").VendorResponse | null>;
+  getActionableVendorResponse(organizationId: OpsId, workOrderId: OpsId, assignmentId?: OpsId, issuanceId?: OpsId): Promise<import("./types").VendorResponse | null>;
   getVendorResponse(organizationId: OpsId, vendorResponseId: OpsId): Promise<import("./types").VendorResponse | null>;
   getServiceAppointment(organizationId: OpsId, appointmentId: OpsId): Promise<import("./types").ServiceAppointment | null>;
   listServiceAppointmentsForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<import("./types").ServiceAppointment[]>;

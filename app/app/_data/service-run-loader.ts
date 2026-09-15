@@ -13,8 +13,8 @@ export async function loadServiceRunWorkspace(serviceRunId?: string) {
   const allowedStore = (storeId: string) => {
     const store = fixture.stores.find((row) => row.organizationId === organizationId && row.id === storeId);
     if (!store) return false;
-    if (session.storeIds?.length && !session.storeIds.includes(store.id)) return false;
-    if (session.regionIds?.length && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
+    if (session.storeIds !== undefined && !session.storeIds.includes(store.id)) return false;
+    if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
     return true;
   };
   const runs = fixture.serviceRuns.filter((run) => {

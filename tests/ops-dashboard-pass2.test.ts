@@ -1,3 +1,4 @@
+import { invoiceEvidenceFromFixture } from "@/lib/ops/invoice-evidence-query";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
@@ -8,7 +9,7 @@ import { buildAccountabilityDashboardModel, buildDashboardModel, buildListModel,
 import { buildQueryListModel } from "@/app/app/_data/operator-query-presenter";
 import { buildEquipmentReview } from "@/app/app/_data/equipment-review";
 import { buildDecisionContext } from "@/app/app/_data/decision-context";
-import { buildInvoiceEvidenceModel } from "@/app/app/_data/invoice-evidence-presenter";
+import { buildInvoiceEvidenceModel as buildEvidenceModel, invoiceEvidenceParameters } from "@/app/app/_data/invoice-evidence-presenter";
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
 import { scopedInvoiceRecords } from "@/lib/ops/dashboard-cohorts";
 import { ControlTower } from "@/components/workspace/control-tower";
@@ -208,3 +209,5 @@ describe("Pass 2 dashboard source contracts", () => {
     for (const metric of model.metrics) expect(gather(metric.link.href).length, metric.id).toBe(Number(metric.value));
   });
 });
+
+function buildInvoiceEvidenceModel(fixture: import("@/lib/ops/types").OpsFixture, session: import("@/components/ops/data-contract").OperatorSession, query: import("@/app/app/_data/operator-presenter").OperatorSearchParameters) { return buildEvidenceModel(invoiceEvidenceFromFixture(fixture,session,invoiceEvidenceParameters(query)),session,query); }

@@ -1,3 +1,4 @@
+import { invoiceEvidenceQueryRegression } from "./helpers/invoice-evidence-query-regression";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
 import { expect, it } from "vitest";
@@ -29,6 +30,8 @@ it("reads invoice sources with stable bounded pages and rejects conflicting allo
     for (const file of readdirSync("drizzle").filter(f => /^\d.*\.sql$/.test(f)).sort()) db.exec(readFileSync(`drizzle/${file}`, "utf8"));
     for (const s of buildOpsSeedStatements(fixture)) db.prepare(s.sql).run(...s.params.map(v => typeof v === "boolean" ? Number(v) : v ?? null) as SQLInputValue[]);
     await invoiceRecordQueryRegression(repository, fixture);
+    await invoiceEvidenceQueryRegression(repository, fixture);
+  await (await import("./helpers/warranty-queue-query-regression")).warrantyQueueRegression(repository, fixture);
     for (const section of ["items", "matches", "flags", "history"] as const) {
       const seen: string[] = []; let offset = 0;
       do {

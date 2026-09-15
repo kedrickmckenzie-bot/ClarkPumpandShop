@@ -1,7 +1,8 @@
+import { StorePicker } from "./store-picker";
 import Link from "next/link";
 import { WorkRoutingFields } from "./work-routing-fields";
 import { RecordForm } from "./record-form";
-import { ArrowLeft, ArrowRight, Info, Route, Send, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Info, Route, Send } from "lucide-react";
 import type {
   CreateRequestPageViewModel,
   CreateStorePageViewModel,
@@ -59,19 +60,15 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
       {model.state.kind === "ready" ? (
         <RecordForm className={styles.recordForm} action={model.submitAction}>
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>1</span><div><h2>Where is the issue?</h2><p>Choose the store so the request reaches the right manager.</p></div></div>
-            <label className={styles.field} htmlFor="request-store">
-              <span>Store <em>Required</em></span>
-              <select id="request-store" defaultValue={model.defaultStoreId ?? ""} name="storeId" required><option value="" disabled>Choose a store</option>{model.stores.map((store) => <option value={store.value} key={store.value}>{store.label}</option>)}</select>
-            </label>
+            <div className={styles.formSectionHeading}><span>1</span><div><h2>Where is the issue?</h2></div></div>
+            <StorePicker initial={model.stores} defaultStoreId={model.defaultStoreId} searchable={model.storeLookup} initialCursor={model.storeNextCursor}/>
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>2</span><div><h2>What needs attention?</h2><p>A clear description is enough to submit. Equipment can be classified later.</p></div></div>
+            <div className={styles.formSectionHeading}><span>2</span><div><h2>What needs attention?</h2></div></div>
             <label className={styles.field} htmlFor="request-problem">
               <span>Problem <em>Required</em></span>
-              <textarea id="request-problem" name="problem" required minLength={10} rows={5} placeholder="Describe what is happening, where it is, and any immediate safety concern." />
-              <small>Do not diagnose the issue unless you are confident. Describe what you can observe.</small>
+              <textarea id="request-problem" name="problem" required minLength={10} rows={4} placeholder="What is happening, and where?" />
             </label>
             <div className={styles.fieldGrid}>
               <label className={styles.field} htmlFor="request-reporter">
@@ -83,10 +80,9 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
                 <input id="request-employee-id" name="reporterEmployeeId" autoComplete="off" />
               </label>
             </div>
-            <SelectField id="request-priority" name="priority" label="Priority" required options={model.priorityOptions} helper="Use emergency only for immediate safety, fuel, food-safety, or major operating impact." />
+            <SelectField id="request-priority" name="priority" label="Priority" required defaultValue="routine" options={model.priorityOptions} helper="Emergency: immediate safety risk or major disruption." />
           </section>
 
-          <div className={styles.formNotice}><Info aria-hidden="true" size={19} /><p><strong>You do not need equipment details or a diagnosis.</strong> This creates a visible record that a manager can review, classify, and turn into work without changing the original report.</p></div>
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Submit request<ArrowRight aria-hidden="true" size={18} /></button></div>
         </RecordForm>
       ) : null}
@@ -311,7 +307,7 @@ export function CreateVendorForm({ model }: { model: CreateVendorPageViewModel }
       {model.state.kind === "ready" ? (
         <RecordForm className={styles.recordForm} action={model.submitAction}>
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>1</span><div><h2>Vendor profile</h2><p>Add the approved service company and a reliable dispatch contact. A portal account is not required.</p></div></div>
+            <div className={styles.formSectionHeading}><span>1</span><div><h2>Vendor profile</h2></div></div>
             <div className={styles.fieldGrid}>
               <label className={styles.field} htmlFor="vendor-name"><span>Vendor name <em>Required</em></span><input id="vendor-name" name="name" required autoComplete="organization" /></label>
               <label className={styles.field} htmlFor="vendor-code"><span>Vendor code <small>Optional</small></span><input id="vendor-code" name="code" autoComplete="off" /></label>
@@ -320,31 +316,25 @@ export function CreateVendorForm({ model }: { model: CreateVendorPageViewModel }
               <label className={styles.field} htmlFor="vendor-email"><span>Dispatch email <em>Required</em></span><input id="vendor-email" name="dispatchEmail" type="email" required autoComplete="email" /></label>
               <label className={styles.field} htmlFor="vendor-phone"><span>Dispatch phone <small>Optional</small></span><input id="vendor-phone" name="dispatchPhone" type="tel" autoComplete="tel" /></label>
             </div>
-            <label className={styles.checkField} htmlFor="vendor-preferred" aria-label="Preferred vendor"><input id="vendor-preferred" type="checkbox" name="preferred" value="true" /><span><strong>Preferred vendor</strong><small>Preferred status can improve search ranking within approved coverage; it does not auto-award work.</small></span></label>
+            <label className={styles.checkField} htmlFor="vendor-preferred" aria-label="Preferred vendor"><input id="vendor-preferred" type="checkbox" name="preferred" value="true" /><span><strong>Preferred vendor</strong><small>Prioritize this vendor in search.</small></span></label>
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>2</span><div><h2>What they service</h2><p>Use company-standard specialties plus plain-language aliases people may search.</p></div></div>
-            <label className={styles.field} htmlFor="vendor-specialties">
-              <span>Specialties <em>Required</em></span>
-              <input id="vendor-specialties" name="specialtyKeys" list="vendor-specialty-options" required placeholder="Search plumbing, refrigeration, dispenser, electrical, or equipment" autoComplete="off" />
-              <Datalist id="vendor-specialty-options" options={model.specialties} />
-              <small>Enter one or more approved specialty keys, separated by commas.</small>
-            </label>
+            <div className={styles.formSectionHeading}><span>2</span><div><h2>What they service</h2></div></div>
+            <fieldset className={styles.choiceFieldset}><legend>Specialties <span>Choose one or more</span></legend><div className={styles.fieldGrid}>
+              {model.specialties.map(option=><label className={styles.checkField} key={option.value}><input type="checkbox" name="specialtyKeys" value={option.value}/><span>{option.label}</span></label>)}
+            </div></fieldset>
+            <label className={styles.field} htmlFor="vendor-other-specialties"><span>Other specialties <small>Optional</small></span><input id="vendor-other-specialties" name="specialtyKeys" placeholder="For example, glass repair"/><small>Separate multiple specialties with commas.</small></label>
             <label className={styles.field} htmlFor="vendor-aliases"><span>Search aliases <small>Optional</small></span><input id="vendor-aliases" name="searchAliases" placeholder="Plumber, beer cave, walk-in, pumps, canopy lights" /><small>Aliases help managers find the right vendor using ordinary language.</small></label>
           </section>
 
           <section className={styles.formSection}>
-            <div className={styles.formSectionHeading}><span>3</span><div><h2>Approved coverage</h2><p>Limit where this vendor can appear in outside-work search.</p></div></div>
-            <label className={styles.field} htmlFor="vendor-coverage">
-              <span>Coverage <em>Required</em></span>
-              <input id="vendor-coverage" name="coverageScopeIds" list="vendor-coverage-options" required placeholder="Search company, region, or store" autoComplete="off" />
-              <Datalist id="vendor-coverage-options" options={model.coverageScopes} />
-              <small>Use commas to add more than one company, region, or store scope.</small>
-            </label>
+            <div className={styles.formSectionHeading}><span>3</span><div><h2>Where they work</h2></div></div>
+            <fieldset className={styles.choiceFieldset}><legend>Coverage <span>Choose one or more</span></legend><div className={styles.fieldGrid}>
+              {model.coverageScopes.map(option=><label className={styles.checkField} key={option.value}><input type="checkbox" name="coverageScopeIds" value={option.value}/><span>{option.label}</span></label>)}
+            </div></fieldset>
           </section>
 
-          <div className={styles.formNotice}><ShieldCheck aria-hidden="true" size={20} /><p><strong>Approval is controlled by the operator.</strong> Once saved, this vendor can be selected within its approved coverage. Secure service links do not require a portal account.</p></div>
           <div className={styles.formFooter}><Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link><button className={styles.primaryButton} type="submit">Add approved vendor<ArrowRight aria-hidden="true" size={18} /></button></div>
         </RecordForm>
       ) : null}
