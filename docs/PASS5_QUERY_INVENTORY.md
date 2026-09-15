@@ -15,7 +15,7 @@ Snapshot inventory after the first persistence extraction, September 14, 2026. T
 | Creation | `loadCreateRequestModel`, `loadCreateWorkOrderModel`, `loadCreateStoreModel`, `loadCreateVendorModel` | Scoped option searches and small configuration queries; avoid full tenant source data |
 | Governance | `loadApprovalPolicyWorkspaceModel`, `loadJobHealthModel` | Policy and worker-health queries; record-check queries are complete |
 | Vendors | `loadVendorPerformanceListModel`, `loadVendorPerformanceDetailModel` | Aggregate vendor evidence and paginated exact records; unused scorecard loader retired |
-| Invoice / warranty records | `loadInvoiceRecord`, `loadWarrantyFinanceWorkspace` | Invoice detail is complete: native parent and paged items/matches/evidence/flags/history. Invoice queue/intake and warranty queue/records still use the compatibility fixture |
+| Invoice / warranty records | `loadInvoiceRecord`, `loadInvoiceQueue`, `loadWarrantyFinanceWorkspace` | Invoice detail and ordinary invoice queue use native scoped queries. Filtered Trends invoice evidence, intake and warranty queue/records still use compatibility fixtures |
 | Other loaders | Verification, store sweeps, service runs, value ledger and remaining feature loaders using request snapshots | Feature-specific relationship queries |
 | API consumers | Import preview, equipment replacement, vendor creation and vendor relationship updates | Targeted validation inputs and command preconditions |
 
@@ -168,3 +168,11 @@ The decision UI mirrors the existing API's companywide role/write checks and seg
 Validation includes shared fixture/migrated SQLite/embedded PostgreSQL contracts, all sections and filters, unallocated invoices, empty/foreign scopes and authenticated snapshot rejection. A separate SQLite fixture traverses 231 items/matches and 230 flags/history entries, including mixed-currency adjustments, timestamp ties, a removed confirmation, exact match selection and a contradictory visit/store reference. Results stay at 25 rows or fewer. PostgreSQL's mixed timestamp/text UNION required explicit native timestamp casts and now passes. Full suite/commands/browser/publication evidence is recorded in the pass log.
 
 Next: `/app/invoices` and invoice intake still call `loadWarrantyFinanceWorkspace`; migrate their complete queue counts, review cohorts and option queries, aligning visibility with the new exact parent. Then migrate warranty queue/case and the remaining records, lifecycle, Trends and operational readers. This checkpoint does not complete P4-02/P5-02/P5-03 or later infrastructure gates.
+
+## Invoice queue source views — September 15, 2026
+
+The ordinary invoice queue now calls `listInvoiceQueue`, with native all/review/flags/exposure views, literal search, full counts and 25-row pages. Every invoice allocation must resolve to its authorized work/store parent; unallocated records require companywide scope. Metrics open their exact invoice, flag or recorded exposure cohorts. Exposure sums preserve the selected currency, including historical entries rather than implying confirmed savings. An exact flag selector opens a flag beyond the first invoice-detail page. The old snapshot queue renderer is removed.
+
+An initial correlated allocation-scope check caused the isolated embedded PostgreSQL regression to time out (185.71 seconds total). Grouping allocation scope once per invoice reduced the unchanged regression to 43.90 seconds and passed; the timeout was not caused by an external Render database. SQLite density traversal and scope/currency tests also pass. Final suite/build/browser/publication results belong in the pass log.
+
+Next complete journey: invoice intake and its bounded work/vendor/agreement choices, then the filtered Trends invoice evidence branch still present in `app/app/invoices/page.tsx`. Confirm PM review raw allocations versus confirmed linked reporting before treating those totals as the same basis. Warranty, remaining records/actions, lifecycle and Trends still keep P4-02/P5-02/P5-03 open.

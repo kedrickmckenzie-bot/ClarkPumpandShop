@@ -29,6 +29,8 @@ describe("manager-approved held work", () => {
   });
 
   it("offers only service-matched work and never exposes the internal review threshold", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(getNorthlineFixtureRepository().snapshot().asOf));
     const gateway = getPublicOperationsGateway();
     const cedar = await gateway.lookupVendorVisitContext(PUBLIC_DEMO_LINKS.storeToken, CEDAR_VENDOR_ID);
     const brightline = await gateway.lookupVendorVisitContext(PUBLIC_DEMO_LINKS.storeToken, BRIGHTLINE_VENDOR_ID);
@@ -76,6 +78,8 @@ describe("manager-approved held work", () => {
   it("records a confirmed-visit review plan without assigning or claiming the approved job", async () => {
     const repository = getNorthlineFixtureRepository();
     const snapshot = repository.snapshot();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(snapshot.asOf));
     const hold = await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
     const heldWork = await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, LIGHT_WORK_ID);
     const appointment = snapshot.serviceAppointments?.find((candidate) => {

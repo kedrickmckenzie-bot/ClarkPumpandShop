@@ -5,7 +5,7 @@ import { pmStoreAllowed } from "./pm-record-query";
 
 export const invoiceRecordSections = ["items", "matches", "evidence", "flags", "history"] as const;
 export type InvoiceRecordSection = typeof invoiceRecordSections[number];
-export interface InvoiceRecordQuery extends PageRequest { section: InvoiceRecordSection; line?: string; match?: string; basis?: "linked" | "unmatched"; open?: boolean; accounting?: boolean; }
+export interface InvoiceRecordQuery extends PageRequest { section: InvoiceRecordSection; line?: string; match?: string; flag?: string; basis?: "linked" | "unmatched"; open?: boolean; accounting?: boolean; }
 export interface InvoiceRecordRow {
   id: string; kind: string; label: string; detail: string; status: string; date?: string; amount?: Money;
   lineId?: string; lineNumber?: number; workId?: string; workNumber?: string; workStatus?: string; storeId?: string; storeNumber?: string;
@@ -68,6 +68,7 @@ export function invoiceRecordFromFixture(fixture: OpsFixture, scope: Organizatio
   const counts = Object.fromEntries(invoiceRecordSections.map(k => [k, groups[k].length])) as InvoiceRecordHeader["counts"];
   let rows = groups[query.section]; if (query.line && query.section === "matches") rows = rows.filter(r => r.lineId === query.line);
   if (query.match && query.section === "matches") rows = rows.filter(r => r.id === query.match);
+  if (query.flag && query.section === "flags") rows = rows.filter(r => r.id === query.flag);
   if (query.open && query.section === "flags") rows = rows.filter(r => r.status === "open");
   if (query.basis === "linked" && query.section === "matches") rows = rows.filter(r => supported.some(a => a.id === r.id));
   if (query.basis === "unmatched" && query.section === "items") rows = excluded ? [] : rows.map(r => ({ ...r, amount: { amountMinor: Math.max(0, r.amount!.amountMinor - supported.filter(a => a.invoiceLineId === r.id).reduce((sum, a) => sum + a.amount.amountMinor, 0)), currency: r.amount!.currency } })).filter(r => r.amount.amountMinor > 0);

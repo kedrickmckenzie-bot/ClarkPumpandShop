@@ -16,10 +16,10 @@ export async function loadInvoiceRecord(id: string, params: Record<string, strin
   const rawBasis = first(params.basis);
   const basis: "linked" | "unmatched" | undefined = rawBasis === "linked" && section === "matches" || rawBasis === "unmatched" && section === "items" ? rawBasis : undefined;
   const open = section === "flags" && first(params.open) === "yes";
-  const result = await (await getServerOpsRepository()).readInvoiceRecord(session, id, { section, line: first(params.line), match: first(params.match), basis, open, accounting, limit: 25, offset: (page - 1) * 25 });
+  const result = await (await getServerOpsRepository()).readInvoiceRecord(session, id, { section, line: first(params.line), match: first(params.match), flag: first(params.flag), basis, open, accounting, limit: 25, offset: (page - 1) * 25 });
   if (!result.invoice) notFound();
   const writable = session.accessMode === "preview" || Boolean(session.permissions?.length) && (session.permissions ?? []).every(p => ["ops:*", "ops:write", "ops:read_write", "ops:store_manage"].includes(p));
   const canDecide = result.invoice.submittedByMembershipId !== session.membershipId && unrestricted && ["executive", "finance"].includes(session.role) && writable;
   const decisionNote = result.invoice.submittedByMembershipId === session.membershipId ? "Another reviewer must review invoices you submitted." : !writable ? "This account has read-only access." : "A company finance reviewer can record a decision.";
-  return { result, section, page, line: first(params.line), match: first(params.match), basis, open, scopeLabel: session.scopeLabel, canDecide, decisionNote, updated: first(params.updated) === "decision" };
+  return { result, section, page, line: first(params.line), match: first(params.match), flag: first(params.flag), basis, open, scopeLabel: session.scopeLabel, canDecide, decisionNote, updated: first(params.updated) === "decision" };
 }

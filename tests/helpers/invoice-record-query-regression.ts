@@ -13,7 +13,7 @@ export async function invoiceRecordQueryRegression(repository: OpsRepository, fi
   for (const section of invoiceRecordSections) {
     const query: InvoiceRecordQuery = { section, limit: 2, accounting: true };
     for (const scope of scopes) expect(await repository.readInvoiceRecord(scope, invoice.id, query), `${repository.kind} ${section} ${JSON.stringify(scope)}`).toEqual(invoiceRecordFromFixture(fixture, scope, invoice.id, query));
-    for (const changes of [{ offset: 2 }, { offset: 10000 }, { line: line.id }, { line: "missing" }, { match: allocation.id }, { match: "missing" }, { basis: "linked" as const }, { basis: "unmatched" as const }, { open: true }, { accounting: false }]) {
+    for (const changes of [{ offset: 2 }, { offset: 10000 }, { line: line.id }, { line: "missing" }, { match: allocation.id }, { match: "missing" }, { basis: "linked" as const }, { basis: "unmatched" as const }, { open: true }, { accounting: false }, { flag: fixture.invoiceExceptions.find(e => e.invoiceId === invoice.id)?.id }, { flag: "missing" }]) {
       const q = { ...query, ...changes }; expect(await repository.readInvoiceRecord({ organizationId }, invoice.id, q), `${repository.kind} ${section} ${JSON.stringify(changes)}`).toEqual(invoiceRecordFromFixture(fixture, { organizationId }, invoice.id, q));
     }
   }

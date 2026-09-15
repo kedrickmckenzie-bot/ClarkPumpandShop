@@ -42,6 +42,25 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("loads invoice queue and exact flag sources without snapshots", async () => {
+    const data = fixture(); useFixture(data);
+    const { default: InvoiceQueuePage } = await import("@/app/app/invoices/page");
+    const { loadInvoiceQueue } = await import("@/app/app/_data/invoice-queue-loader");
+    for (const view of ["all", "review", "flags", "exposure"]) expect(await InvoiceQueuePage({ searchParams: Promise.resolve({ view }) })).toBeTruthy();
+    expect((await loadInvoiceQueue({ view: "invalid", page: "Infinity" })).view).toBe("all");
+    const flag = data.invoiceExceptions[0];
+    expect((await loadInvoiceRecord(flag.invoiceId, { section: "flags", flag: flag.id })).result.rows.map(r => r.id)).toEqual([flag.id]);
+    const grant = data.scopeGrants.find(g => g.membershipId === "membership-northline-facilities")!;
+    grant.scopeKind = "store"; grant.scopeId = "store-northline-104"; useFixture(data);
+    expect((await loadInvoiceQueue()).canReceive).toBe(false);
+    expect((await loadInvoiceQueue()).canReadAccounting).toBe(false);
+    const scoped = await loadInvoiceQueue();
+    for (const row of scoped.result.rows) expect((await loadInvoiceRecord(row.invoiceId)).result.invoice).not.toBeNull();
+    data.memberships.find(m => m.id === "membership-northline-facilities")!.role = "store_manager"; useFixture(data);
+    await expect(loadInvoiceQueue()).rejects.toThrow();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
+
   it("loads every invoice section without snapshots and denies store and role conflicts", async () => {
     const data = fixture(); useFixture(data);
     const id = "invoice-summit-107-pm-2026-q3";

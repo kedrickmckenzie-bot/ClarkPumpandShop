@@ -259,6 +259,7 @@ export interface OpsRepository {
   listPmSetup(scope: OrganizationScope, query: import("./pm-setup-query").PmSetupQuery): Promise<import("./pm-setup-query").PmSetupPage>;
   listPmReview(scope: OrganizationScope, query: import("./pm-review-query").PmReviewQuery): Promise<import("./pm-review-query").PmReviewPage>;
   readInvoiceRecord(scope: OrganizationScope, invoiceId: string, query: import("./invoice-record-query").InvoiceRecordQuery): Promise<import("./invoice-record-query").InvoiceRecordPage>;
+  listInvoiceQueue(scope: OrganizationScope, query: import("./invoice-queue-query").InvoiceQueueQuery): Promise<import("./invoice-queue-query").InvoiceQueuePage>;
   listPmAnalysis(scope: OrganizationScope, query: import("./pm-analysis-query").PmAnalysisQuery): Promise<import("./pm-analysis-query").PmAnalysisPage>;
   listWorkVisitEvidence(scope: OrganizationScope, workOrderId: OpsId, query?: PageRequest): Promise<import("./pm-record-query").WorkVisitEvidencePage>;
   listPmWorkItemsForOccurrence(organizationId: OpsId, occurrenceId: OpsId): Promise<PmWorkItem[]>;

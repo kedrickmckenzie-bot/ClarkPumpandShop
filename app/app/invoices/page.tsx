@@ -1,8 +1,6 @@
-import Link from "next/link";
 import type { Metadata } from "next";
-import { InvoiceQueueWorkspace } from "@/components/ops/warranty-finance-workspace";
-import { ReceiveInvoiceLink } from "@/components/ops/invoice-receive-workspace";
-import { loadWarrantyFinanceWorkspace } from "../_data/warranty-finance-loader";
+import { InvoiceQueueWorkspace } from "@/components/workspace/invoice-queue-workspace";
+import { loadInvoiceQueue } from "../_data/invoice-queue-loader";
 import { ListSurface } from "@/components/ops/views";
 import { buildInvoiceEvidenceModel, hasInvoiceEvidenceFilters } from "../_data/invoice-evidence-presenter";
 import { getRequestOpsTrendsFixtureSnapshot } from "../_data/request-data";
@@ -20,6 +18,5 @@ export default async function InvoiceReferencesPage({ searchParams }: { searchPa
     const fixture = await getRequestOpsTrendsFixtureSnapshot(session.organizationId);
     return <ListSurface model={buildInvoiceEvidenceModel(fixture, session, query)} surface="invoices" searchParams={query} />;
   }
-  const { fixture, invoices } = await loadWarrantyFinanceWorkspace();
-  return <>{["executive", "facilities", "finance"].includes(session.role) ? <><ReceiveInvoiceLink /><p><Link href="/app/invoices/accounting">Review invoices from accounting</Link></p></> : null}<InvoiceQueueWorkspace fixture={fixture} invoices={invoices} page={typeof query.page === "string" ? query.page : undefined} view={typeof query.view === "string" ? query.view : undefined} /></>;
+  return <InvoiceQueueWorkspace {...await loadInvoiceQueue(query)} />;
 }

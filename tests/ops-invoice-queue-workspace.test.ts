@@ -3,7 +3,8 @@ import { invoiceRecordFromFixture } from "@/lib/ops/invoice-record-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { InvoiceQueueWorkspace } from "@/components/ops/warranty-finance-workspace";
+import { InvoiceQueueWorkspace } from "@/components/workspace/invoice-queue-workspace";
+import { invoiceQueueFromFixture, type InvoiceQueueView } from "@/lib/ops/invoice-queue-query";
 import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
 
 describe("invoice review workspace", () => {
@@ -23,31 +24,32 @@ describe("invoice review workspace", () => {
   it("makes each principal measure open its exact supporting review set", () => {
     const fixture = buildNorthlinePresentationFixture();
     const markup = renderToStaticMarkup(createElement(InvoiceQueueWorkspace, {
-      fixture,
-      invoices: fixture.invoices,
+      result: invoiceQueueFromFixture(fixture, { organizationId: fixture.organizations[0].id }, { view: "all", currency: "USD", limit: 25 }), scopeLabel: "Companywide",
     }));
     const openExceptions = fixture.invoiceExceptions.filter((exception) => exception.status === "open");
     const reviewInvoiceIds = new Set(openExceptions.map((exception) => exception.invoiceId));
 
     expect(markup).toContain('href="/app/invoices?view=all#invoice-register"');
-    expect(markup.match(/href="\/app\/invoices\?view=review#invoice-register"/g)).toHaveLength(3);
-    expect(markup).toContain(`Invoices needing review</span><strong>${reviewInvoiceIds.size}</strong>`);
+    expect(markup.match(/href="\/app\/invoices\?view=review#invoice-register"/g)).toHaveLength(1);
+    expect(markup).toContain(`Needs review</span><strong>${reviewInvoiceIds.size}</strong>`);
     expect(markup).toContain(`Open review flags</span><strong>${openExceptions.length}</strong>`);
 
     expect(markup).toContain('id="invoice-register"');
 
-    expect(markup).toContain("Open invoice");
+    expect(markup).toContain("Invoice total");
+    expect(markup).toContain("view=flags#invoice-register");
+    expect(markup).toContain("view=exposure#invoice-register");
     expect(markup).not.toContain("Payments executed");
   });
 });
 
 it("pages invoice records without changing the full-scope counts", () => {
   const fixture = buildNorthlinePresentationFixture();
-  const render = (page: string, view = "all") => renderToStaticMarkup(createElement(InvoiceQueueWorkspace, {fixture, invoices: fixture.invoices, page, view}));
+  const render = (raw: string, view: InvoiceQueueView = "all") => { const page = Number.isSafeInteger(Number(raw)) && Number(raw) > 0 ? Number(raw) : 1; return renderToStaticMarkup(createElement(InvoiceQueueWorkspace, { result: invoiceQueueFromFixture(fixture, { organizationId: fixture.organizations[0].id }, { view, currency: "USD", limit: 25, offset: (page - 1) * 25 }), scopeLabel: "Companywide", page, view })); };
   const first = render("1"), second = render("2");
   const rows = (markup: string) => [...markup.matchAll(/data-label="Invoice"><a href="([^"]+)"/g)].map(match => match[1]);
-  expect(rows(first)).toHaveLength(20);
-  expect(rows(second)).toHaveLength(20);
+  expect(rows(first)).toHaveLength(25);
+  expect(rows(second)).toHaveLength(25);
   expect(rows(first).some(href => rows(second).includes(href))).toBe(false);
   expect(second).toContain(`Invoices in scope</span><strong>${fixture.invoices.length}</strong>`);
   const review = render("1", "review");
