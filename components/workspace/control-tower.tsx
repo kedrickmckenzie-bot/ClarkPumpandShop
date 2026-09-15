@@ -142,13 +142,13 @@ function Distribution({ model }: { model: BreakdownViewModel }) {
         {model.segments.length ? model.segments.map((segment) => (
           <Link href={segment.link.href} className={styles.distributionRow} key={segment.id}>
             <span className={styles.distributionLabel}><strong>{segment.label}</strong><small>{segment.shareLabel ?? segment.link.label}</small></span>
-            <span className={styles.barTrack} aria-hidden="true"><span style={{ width: `${Math.max(2, (Math.max(0, segment.value) / maximum) * 100)}%` }} /></span>
+            <span className={styles.barTrack} aria-hidden="true"><span style={{ width: `${segment.value > 0 ? Math.max(2, (segment.value / maximum) * 100) : 0}%` }} /></span>
             <strong className={styles.distributionValue}>{segment.formattedValue}</strong>
             <ChevronRight size={16} aria-hidden="true" />
           </Link>
         )) : <p className={styles.empty}>No source records match this context.</p>}
       </div>
-      <footer className={styles.sourceFooter}><Link className={styles.textLink} href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={14} aria-hidden="true" /></Link></footer>
+      <footer className={styles.sourceFooter}>{model.coverageLabel ? <span>{model.coverageLabel}</span> : null}<Link className={styles.textLink} href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={14} aria-hidden="true" /></Link></footer>
     </section>
   );
 }

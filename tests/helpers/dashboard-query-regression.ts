@@ -34,6 +34,9 @@ export async function dashboardQueryRegression(repository: OpsRepository, fixtur
     }
   }
   const scope = { organizationId };
+  for (const search of ["104", "store", "a%_literal", "does-not-exist"]) {
+    expect(await repository.listDashboardBreakdown(scope, window, { kind: "cost_store", search })).toEqual(await reference.listDashboardBreakdown(scope, window, { kind: "cost_store", search }));
+  }
   const first = await repository.listDashboardBreakdown(scope, window, { kind: "cost_store", limit: 2 });
   const all: DashboardBreakdownRow[] = [...first.items];
   let cursor = first.nextCursor;

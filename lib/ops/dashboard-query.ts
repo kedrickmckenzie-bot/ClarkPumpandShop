@@ -33,6 +33,7 @@ export interface DashboardActivitySummary {
   costLines: number;
   unclassifiedCostMinor: number;
   unclassifiedCostWorkOrders: number;
+  unclassifiedWork: number;
 }
 
 export type DashboardBreakdownKind = "work_status" | "cost_category" | "cost_store" | "cost_month" | "active_vendor" | "observed_vendor";
@@ -43,7 +44,7 @@ export interface DashboardBreakdownPage {
   totalValue: number;
   nextCursor?: string;
 }
-export interface DashboardBreakdownQuery extends PageRequest { kind: DashboardBreakdownKind; }
+export interface DashboardBreakdownQuery extends PageRequest { kind: DashboardBreakdownKind; search?: string; }
 
 export function validateDashboardWindow(window: DashboardWindow) {
   const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -107,6 +108,7 @@ export function dashboardActivityFromFixture(fixture: OpsFixture, scope: Organiz
     costLines: costs.length,
     unclassifiedCostMinor: unclassifiedCosts.reduce((sum, row) => sum + row.amount.amountMinor, 0),
     unclassifiedCostWorkOrders: new Set(unclassifiedCosts.map(row => row.workOrderId)).size,
+    unclassifiedWork: work.filter(row => !row.categoryKey).length,
   };
 }
 
@@ -114,6 +116,7 @@ export function dashboardBreakdownFromFixture(fixture: OpsFixture, scope: Organi
   const { stores, work, visits, costs } = scopedSources(fixture, scope, window);
   const values = new Map<string, DashboardBreakdownRow>();
   const add = (id: string, label: string, amount: number) => values.set(id, { id, label, value: (values.get(id)?.value ?? 0) + amount });
+  if (query.kind === "cost_store") for (const store of stores) add(store.id, `Store ${store.storeNumber} · ${store.name}`, 0);
   if (query.kind === "work_status") {
     for (const row of work) if (!["closed", "cancelled"].includes(row.status)) add(row.status, row.status, 1);
   } else if (query.kind === "active_vendor" || query.kind === "observed_vendor") {
@@ -132,7 +135,8 @@ export function dashboardBreakdownFromFixture(fixture: OpsFixture, scope: Organi
     }
   } else throw new RangeError("Choose a supported dashboard breakdown.");
   // Explicit ID tie-breaker is independent of insertion order and locale collation.
-  const rows = [...values.values()].sort((a, b) => b.value - a.value || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const search = query.search?.trim().toLowerCase();
+  const rows = [...values.values()].filter(row => !search || row.label.toLowerCase().includes(search)).sort((a, b) => b.value - a.value || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const { limit, offset } = dashboardPageBounds(query);
   const cursor = readDashboardCursor(query.cursor);
   const filtered = cursor ? rows.filter(row => row.value < cursor.value || row.value === cursor.value && row.id > cursor.id) : rows.slice(offset);

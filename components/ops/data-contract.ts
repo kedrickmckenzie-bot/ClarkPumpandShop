@@ -84,6 +84,9 @@ export interface BreakdownViewModel {
   title: string;
   description?: string;
   totalLabel?: string;
+  /** Full cohort total, including groups outside a bounded preview. */
+  totalValue?: number;
+  coverageLabel?: string;
   segments: SegmentViewModel[];
   sourceLink: SupportingLink;
 }

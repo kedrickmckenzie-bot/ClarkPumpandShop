@@ -51,6 +51,7 @@ export async function queryDashboardActivity(driver: OpsSqlDriver, scope: Organi
     ["costLines", "SELECT COUNT(*) FROM period_costs"],
     ["unclassifiedCostMinor", "SELECT COALESCE(SUM(c.amount_minor),0) FROM period_costs c JOIN scoped_work w ON w.id=c.work_order_id WHERE w.category_key IS NULL"],
     ["unclassifiedCostWorkOrders", "SELECT COUNT(DISTINCT c.work_order_id) FROM period_costs c JOIN scoped_work w ON w.id=c.work_order_id WHERE w.category_key IS NULL"],
+    ["unclassifiedWork", "SELECT COUNT(*) FROM scoped_work WHERE category_key IS NULL"],
   ] as const;
   source.params.push(...PENDING_REQUEST_STATUSES, ...WORK_STAGE_STATUSES["not-sent"], ...WORK_STAGE_STATUSES["vendor-response"], window.asOf);
   const result = await driver.query({ sql: `${source.sql} SELECT ${conditions.map(([key, sql]) => `(${sql}) AS "${key}"`).join(",\n")}`, params: source.params });
@@ -64,14 +65,17 @@ export async function queryDashboardBreakdown(driver: OpsSqlDriver, scope: Organ
   else if (query.kind === "active_vendor" || query.kind === "observed_vendor") grouped = `SELECT v.vendor_id AS id, COALESCE(p.name,'Unknown vendor') AS label, COUNT(*) AS value FROM scoped_visits v LEFT JOIN ops_vendors p ON p.organization_id=v.organization_id AND p.id=v.vendor_id WHERE v.vendor_id IS NOT NULL ${query.kind === "active_vendor" ? "AND v.status='active'" : ""} GROUP BY v.vendor_id, p.name`;
   else if (query.kind === "cost_month") grouped = "SELECT substr(CAST(service_date AS TEXT),1,7) AS id, substr(CAST(service_date AS TEXT),1,7) AS label, SUM(amount_minor) AS value FROM period_costs GROUP BY substr(CAST(service_date AS TEXT),1,7)";
   else if (query.kind === "cost_category") grouped = "SELECT COALESCE(w.category_key,'unclassified') AS id, COALESCE(w.category_key,'unclassified') AS label, COALESCE(SUM(c.amount_minor),0) AS value FROM scoped_work w LEFT JOIN period_costs c ON c.work_order_id=w.id GROUP BY COALESCE(w.category_key,'unclassified')";
-  else if (query.kind === "cost_store") grouped = "SELECT s.id, 'Store ' || s.store_number || ' · ' || s.name AS label, COALESCE(SUM(c.amount_minor),0) AS value FROM scoped_work w JOIN scoped_stores s ON s.id=w.store_id LEFT JOIN period_costs c ON c.work_order_id=w.id GROUP BY s.id,s.store_number,s.name";
+  else if (query.kind === "cost_store") grouped = "SELECT s.id, 'Store ' || s.store_number || ' · ' || s.name AS label, COALESCE(c.value,0) AS value FROM scoped_stores s LEFT JOIN (SELECT w.store_id,SUM(c.amount_minor) AS value FROM period_costs c JOIN scoped_work w ON w.id=c.work_order_id GROUP BY w.store_id) c ON c.store_id=s.id";
   else throw new RangeError("Choose a supported dashboard breakdown.");
   const { limit, offset } = dashboardPageBounds(query);
+  const search = query.search?.trim().toLowerCase();
+  const searchSql = search ? "WHERE LOWER(label) LIKE ? ESCAPE '\\'" : "";
+  if (search) source.params.push(`%${search.replace(/[\\%_]/g, value => `\\${value}`)}%`);
   const cursor = readDashboardCursor(query.cursor);
   const cursorSql = cursor ? "WHERE value < ? OR (value = ? AND id > ?)" : "";
   if (cursor) source.params.push(cursor.value, cursor.value, cursor.id);
   source.params.push(limit + 1, cursor ? 0 : offset);
-  const result = await driver.query({ sql: `${source.sql}, grouped AS (${grouped}),
+  const result = await driver.query({ sql: `${source.sql}, raw_groups AS (${grouped}), grouped AS (SELECT * FROM raw_groups ${searchSql}),
     totals AS (SELECT COUNT(*) AS total_count, COALESCE(SUM(value),0) AS total_value FROM grouped),
     visible AS (SELECT id,label,value FROM grouped ${cursorSql} ORDER BY value DESC,id ASC LIMIT ? OFFSET ?)
     SELECT visible.id,visible.label,visible.value,totals.total_count,totals.total_value FROM totals LEFT JOIN visible ON 1=1 ORDER BY visible.value DESC,visible.id ASC`, params: source.params });

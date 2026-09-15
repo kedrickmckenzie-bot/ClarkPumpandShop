@@ -286,7 +286,7 @@
 .distribution { display: grid; }
 .distributionRow {
   display: grid;
-  grid-template-columns: minmax(140px, 0.8fr) minmax(130px, 1.2fr) auto 18px;
+  grid-template-columns: minmax(180px, 1fr) minmax(100px, 1fr) auto 18px;
   align-items: center;
   gap: 12px;
   min-height: 55px;
@@ -295,11 +295,11 @@
 }
 .distributionRow:last-child { border-bottom: 0; }
 .distributionRow:hover { background: var(--enterprise-surface-subtle); }
-.distributionLabel strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.distributionLabel small { color: var(--enterprise-muted); font-size: 11px; }
+.distributionLabel strong { display: block; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.distributionLabel small { color: var(--enterprise-muted); font-size: 13px; }
 .barTrack { height: 7px; overflow: hidden; border-radius: 2px; background: #e8edf4; }
 .barTrack span { display: block; height: 100%; background: var(--enterprise-action); }
-.distributionValue { font-size: 13px; font-variant-numeric: tabular-nums; }
+.distributionValue { font-size: 15px; font-variant-numeric: tabular-nums; }
 
 .trendChart {
   display: grid;

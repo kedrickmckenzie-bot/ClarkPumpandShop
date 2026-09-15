@@ -80,7 +80,11 @@ describe("Pass 2 dashboard source contracts", () => {
     for (const breakdown of model.breakdowns) {
       for (const segment of breakdown.segments) {
         const q = query(segment.link.href);
-        if (segment.link.href.startsWith("/app/work-orders")) {
+        if (segment.link.href.startsWith("/app/work-orders") && q.hasCost === "true") {
+          const matchingCosts = costs.filter(row => work.some(record => record.id === row.workOrderId && (!q.store || record.storeId === q.store) && (!q.category || (record.categoryKey ?? "unclassified") === q.category)));
+          expect(segment.value).toBe(matchingCosts.reduce((sum, row) => sum + row.amount.amountMinor, 0));
+          expect(new Set((await queryRows(viewer, segment.link.href)).map(row => row.id))).toEqual(new Set(matchingCosts.map(row => row.workOrderId)));
+        } else if (segment.link.href.startsWith("/app/work-orders")) {
           const expected = work.filter((row) => row.status === q.status);
           expect(new Set((await queryRows(viewer, segment.link.href)).map((row) => row.id))).toEqual(new Set(expected.map((row) => row.id)));
           expect(segment.value).toBe(expected.length);
@@ -119,7 +123,10 @@ describe("Pass 2 dashboard source contracts", () => {
     expect(model.breakdowns[0].segments).toHaveLength(9);
     const owner = buildDashboardModel(fixture, session("executive"));
     const stores = owner.breakdowns.find((row) => row.id === "recorded-cost-by-store")!;
-    expect(stores.segments).toHaveLength(15);
+    expect(stores.segments).toHaveLength(5);
+    expect(stores.coverageLabel).toBe("Showing 5 of 15 stores. Total includes all.");
+    expect(stores.totalValue).toBeGreaterThan(stores.segments.reduce((sum, row) => sum + row.value, 0));
+    expect(query(stores.sourceLink.href)).toEqual({ sort: "cost", costFrom: "2025-09-01", costTo: "2026-08-25", currency: "USD" });
     const ownerHtml = renderToStaticMarkup(createElement(ControlTower, { model: owner }));
     for (const segment of stores.segments) expect(ownerHtml).toContain(segment.link.href.replaceAll("&", "&amp;"));
   });

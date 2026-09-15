@@ -1,7 +1,8 @@
 import { presentDashboard, presentDashboardJourney } from "./dashboard-presenter";
 import { attentionAccess, presentAttentionRow, reviewQueueExceptionCopy } from "./attention-presenter";
 import { attentionFromFixture, type AttentionPage } from "@/lib/ops/attention-query";
-import { dashboardActivityFromFixture, rollingYearStart, type DashboardActivitySummary } from "@/lib/ops/dashboard-query";
+import { dashboardActivityFromFixture, dashboardBreakdownFromFixture, rollingYearStart, type DashboardActivitySummary, type DashboardBreakdownKind } from "@/lib/ops/dashboard-query";
+import { DASHBOARD_CHART_LIMITS, presentDashboardCharts, type DashboardChartPages } from "./dashboard-charts";
 import { workStatusLabel } from "@/lib/product/work-status-label";
 import { matchesRequestStatus, matchesWorkStage, visitHasWork } from "@/lib/ops/dashboard-cohorts";
 import { buildEquipmentReview } from "./equipment-review";
@@ -721,42 +722,6 @@ function countBreakdown(
   };
 }
 
-function costTrend(
-  fixture: OpsFixture,
-  scoped: ScopedFixture,
-  options: { storeId?: string; periodStart?: string; query?: Record<string, string | undefined> } = {},
-): TrendViewModel {
-  const workById = new Map(scoped.workOrders.map((workOrder) => [workOrder.id, workOrder]));
-  const monthKeys = rollingMonthKeys(fixture.asOf);
-  const visibleMonths = new Set(monthKeys);
-  const sourceWorkIds = new Set<string>();
-  const monthly = new Map<string, number>();
-  for (const line of fixture.costLines) {
-    const key = monthKey(line.serviceDate);
-    if (
-      line.organizationId !== scoped.organizationId ||
-      !workById.has(line.workOrderId) ||
-      !visibleMonths.has(key) || line.serviceDate.slice(0, 10) > fixture.asOf.slice(0, 10) || line.amount.currency !== "USD"
-    ) continue;
-    sourceWorkIds.add(line.workOrderId);
-    monthly.set(key, (monthly.get(key) ?? 0) + line.amount.amountMinor);
-  }
-  return {
-    id: "recorded-cost-trend",
-    title: "Recorded work cost — last 12 months",
-    description: `Entered work costs grouped by service month. ${monthLabel(monthKeys.at(-1) ?? monthKey(fixture.asOf))} is through ${date(fixture.asOf)}; invoices are not included.`,
-    points: monthKeys
-      .map((key) => ({
-        id: key,
-        label: monthLabel(key),
-        value: monthly.get(key) ?? 0,
-        formattedValue: money(monthly.get(key) ?? 0),
-        link: { href: workspaceStartHref(hrefWithQuery("/app/work-orders", { store: options.storeId, ...options.query, costMonth: key, costTo: fixture.asOf.slice(0, 10) })), label: `Open ${monthLabel(key)} work` },
-      })),
-    sourceLink: { href: workspaceStartHref(hrefWithQuery("/app/work-orders", { store: options.storeId, ...options.query, hasCost: "true", costFrom: `${monthKeys[0]}-01`, costTo: fixture.asOf.slice(0, 10) })), label: `Open ${sourceWorkIds.size} work orders with cost` },
-  };
-}
-
 const accountabilityExceptionKinds = new Set([
   "no_work_order",
   "unexpected_visit",
@@ -1240,73 +1205,19 @@ function lifecycleSpotlight(fixture: OpsFixture, session: OperatorSession, row: 
   };
 }
 
-export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession, prepared?: { activity: DashboardActivitySummary; attention: AttentionPage }): DashboardPageViewModel {
+export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession, prepared?: { activity: DashboardActivitySummary; attention: AttentionPage; charts?: DashboardChartPages }): DashboardPageViewModel {
   const scoped = scopeFixture(fixture, session);
   const periodStart = rollingYearStart(fixture.asOf);
-  const rollingCostByWork = recordedCostByWork(fixture, scoped.organizationId, periodStart, fixture.asOf.slice(0, 10));
   const allCostByWork = recordedCostByWork(fixture, scoped.organizationId);
-  const openWork = scoped.workOrders.filter((work) => !["closed", "cancelled"].includes(work.status));
-  const activeVisits = scoped.visits.filter((visit) => visit.status === "active");
   const lifecycle = lifecycleRows(fixture, scoped, allCostByWork);
   const repairComparisons = lifecycle.filter((row) => row.screening.state === "compare_alternatives");
   const candidate = repairComparisons[0];
-  const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
-  const vendorById = new Map(
-    fixture.vendors
-      .filter((vendor) => vendor.organizationId === scoped.organizationId)
-      .map((vendor) => [vendor.id, vendor]),
-  );
-  const observedVisitCounts = new Map<string, number>();
-  for (const visit of scoped.visits) {
-    if (visit.vendorId) observedVisitCounts.set(visit.vendorId, (observedVisitCounts.get(visit.vendorId) ?? 0) + 1);
-  }
-
   const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
   const activity = prepared?.activity ?? dashboardActivityFromFixture(fixture, scope, { asOf: fixture.asOf, costFrom: periodStart, costTo: fixture.asOf.slice(0, 10), currency: "USD" });
   const attention = prepared?.attention ?? attentionFromFixture(fixture, scope, attentionAccess(session), { asOf: fixture.asOf, limit: 7 });
-  const categoryCost = new Map<string, number>();
-  const storeCost = new Map<string, number>();
-  for (const work of scoped.workOrders) {
-    const amount = rollingCostByWork.get(work.id) ?? 0;
-    categoryCost.set(work.categoryKey ?? "unclassified", (categoryCost.get(work.categoryKey ?? "unclassified") ?? 0) + amount);
-    storeCost.set(work.storeId, (storeCost.get(work.storeId) ?? 0) + amount);
-  }
-  const categoryBreakdown = costBreakdown(
-    "Recorded cost by service area",
-    categoryCost,
-    (key) => hrefWithQuery("/app/spend", { category: key }),
-    {
-      description: "",
-      linkLabel: "Drill into this service area",
-      sourceHref: "/app/spend",
-      sourceLabel: "Open the full spending view",
-    },
-  );
-  const storeBreakdown = costBreakdown(
-    "Recorded cost by store",
-    storeCost,
-    (key) => hrefWithQuery("/app/spend", { store: key }),
-    {
-      description: "",
-      labelFor: (key) => storeLabel(storeById.get(key)),
-      linkLabel: "Open this store's cost",
-      sourceHref: "/app/stores?sort=cost",
-      sourceLabel: "Open the complete store ranking",
-    },
-  );
-  const vendorAccountabilityBreakdown = countBreakdown(
-    "observed-visits-by-vendor",
-    "Observed service visits by vendor",
-    observedVisitCounts,
-    (key) => hrefWithQuery("/app/visits", { vendor: key }),
-    {
-      description: "All recorded visits in your scope.",
-      labelFor: (key) => vendorById.get(key)?.name ?? "Unknown vendor",
-      totalNoun: "observed outside-vendor visits",
-      sourceLink: { href: "/app/vendors", label: "Open vendor accountability" },
-    },
-  );
-  const trend = costTrend(fixture, scoped, { periodStart });
+  const window = { asOf: fixture.asOf, costFrom: periodStart, costTo: fixture.asOf.slice(0, 10), currency: "USD" };
+  const chartPages = prepared?.charts ?? Object.fromEntries((Object.keys(DASHBOARD_CHART_LIMITS) as DashboardBreakdownKind[]).map(kind => [kind, dashboardBreakdownFromFixture(fixture, scope, window, { kind, limit: DASHBOARD_CHART_LIMITS[kind] })])) as DashboardChartPages;
+  const charts = presentDashboardCharts(chartPages, activity, window, session.organizationName);
   const spotlight = lifecycleSpotlight(fixture, session, candidate);
   const pageBase = {
     scopeLabel: session.scopeLabel,
@@ -1316,11 +1227,6 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
 
   const invoiceRecords = scopedInvoiceRecords(fixture, scoped.organizationId, scoped.storeIds);
   const invoiceToReview = invoiceRecords.find((invoice) => fixture.invoiceExceptions.some((flag) => flag.organizationId === scoped.organizationId && flag.invoiceId === invoice.id && flag.status === "open"));
-  const highestCostStore = [...storeCost.entries()].sort((left, right) => right[1] - left[1])[0];
-  const workStatusCounts = new Map<string, number>();
-  for (const work of openWork) workStatusCounts.set(work.status, (workStatusCounts.get(work.status) ?? 0) + 1);
-  const activeVendorCounts = new Map<string, number>();
-  for (const visit of activeVisits) if (visit.vendorId) activeVendorCounts.set(visit.vendorId, (activeVendorCounts.get(visit.vendorId) ?? 0) + 1);
   return presentDashboard({
     activity,
     pageBase, costFrom: periodStart, costTo: fixture.asOf.slice(0,10), journey: presentDashboardJourney(activity, attention.followUpCount),
@@ -1328,14 +1234,11 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
     repairComparisonCount: repairComparisons.length,
     replacementEstimateTotal: lifecycle.reduce((sum, row) => sum + (row.replacement ?? 0), 0),
     store: scoped.stores[0],
-    highestCostStore: highestCostStore ? { id: highestCostStore[0], label: storeLabel(storeById.get(highestCostStore[0])), value: highestCostStore[1] } : undefined,
-    storeBreakdown, categoryBreakdown, vendorAccountabilityBreakdown, trend, spotlight,
-    workStatusBreakdown: countBreakdown("open-work-status", "Open work by status", workStatusCounts, (key) => hrefWithQuery("/app/work-orders", { status: key }), { description: "", labelFor: (key) => workStatusLabel(key as WorkOrder["status"]), totalNoun: "open work orders", sourceLink: { href: "/app/work-orders?status=open", label: "View all open work orders" } }),
-    activeVendorBreakdown: countBreakdown("onsite-vendor", "Who is onsite now", activeVendorCounts, (key) => hrefWithQuery("/app/visits", { status: "active", vendor: key }), { description: "Active check-ins by outside vendor.", labelFor: (key) => vendorById.get(key)?.name ?? "Unknown vendor", totalNoun: "active visits", sourceLink: { href: "/app/visits?status=active", label: "Open all live visits" } }),
+    ...charts, spotlight,
     invoiceSpotlight: invoiceToReview ? {
       eyebrow: "Optional invoice safeguard", title: `Review invoice ${invoiceToReview.vendorInvoiceNumber}`,
       description: "Check the flagged charges against the work and supporting evidence.",
-      facts: [{ label: "Gross invoice amount", value: money(invoiceToReview.total.amountMinor) }, { label: "Status", value: sentence(invoiceToReview.status) }, { label: "Vendor", value: vendorById.get(invoiceToReview.vendorId)?.name ?? "Unknown vendor" }],
+      facts: [{ label: "Gross invoice amount", value: money(invoiceToReview.total.amountMinor) }, { label: "Status", value: sentence(invoiceToReview.status) }, { label: "Vendor", value: fixture.vendors.find(vendor => vendor.organizationId === session.organizationId && vendor.id === invoiceToReview.vendorId)?.name ?? "Unknown vendor" }],
       link: { href: `/app/invoices/${invoiceToReview.id}`, label: "Review invoice evidence" },
     } : undefined,
   }, session);
@@ -1809,7 +1712,8 @@ function visitMetrics(fixture: OpsFixture, scoped: ScopedFixture, query: Operato
 }
 
 function storeRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSearchParameters): TableRowViewModel[] {
-  const costByWork = recordedCostByWork(fixture, scoped.organizationId);
+  const ranking = first(query.sort) === "cost";
+  const costByWork = recordedCostByWork(fixture, scoped.organizationId, first(query.costFrom) ?? (ranking ? rollingYearStart(fixture.asOf) : undefined), first(query.costTo) ?? (ranking ? fixture.asOf.slice(0, 10) : undefined));
   const regionById = new Map(fixture.regions.filter((region) => region.organizationId === scoped.organizationId).map((region) => [region.id, region]));
   const q = cleanSearch(first(query.q));
   const sort = first(query.sort);
@@ -3330,7 +3234,9 @@ export function buildProgramModel(
           label: "Median store cost",
           value: money(median),
           supportingText: "Useful comparison; not a budget target",
-          link: { href: "/app/stores?sort=cost", label: "Compare stores" },
+          link: basis === "recorded" && !selectedRegionId && !selectedCategory && !selectedAssetId
+            ? { href: hrefWithQuery("/app/stores", { sort: "cost", costFrom: periodStart, costTo: fixture.asOf.slice(0, 10), currency: "USD" }), label: "Compare stores" }
+            : { href: workLink({ hasCost: "true" }), label: "Open the comparison's cost records" },
         };
 
     const spendHref = (overrides: Record<string, string | undefined> = {}) => hrefWithQuery("/app/spend", {

@@ -193,14 +193,14 @@ function SectionHeading({
 
 function BreakdownPanel({ breakdown }: { breakdown: BreakdownViewModel }) {
   const maximum = Math.max(...breakdown.segments.map((segment) => segment.value), 1);
-  const total = breakdown.segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0);
+  const total = Math.max(breakdown.totalValue ?? 0, breakdown.segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0));
   let cursor = 0;
   const gradient = total > 0
     ? `conic-gradient(${breakdown.segments.map((segment, index) => {
       const start = cursor;
       cursor += (Math.max(0, segment.value) / total) * 100;
       return `${chartColor(segment.tone, index)} ${start}% ${cursor}%`;
-    }).join(", ")})`
+    }).join(", ")}, #e2e8f0 ${cursor}% 100%)`
     : "conic-gradient(#e2e8f0 0 100%)";
   const [centerValue, ...centerLabelParts] = (breakdown.totalLabel ?? String(breakdown.segments.length)).split(" ");
   const centerLabel = centerLabelParts.join(" ") || (breakdown.totalLabel ? "total" : "groups");
@@ -224,7 +224,7 @@ function BreakdownPanel({ breakdown }: { breakdown: BreakdownViewModel }) {
                 <span className={styles.segmentSwatch} style={{ background: chartColor(segment.tone, index) }} aria-hidden="true" />
                 <span className={styles.segmentLabels}><strong>{segment.label}</strong><small>{segment.shareLabel ?? segment.link.label}</small></span>
                 <span className={styles.segmentTrack} aria-hidden="true">
-                  <span style={{ width: `${Math.max((segment.value / maximum) * 100, 2)}%`, background: chartColor(segment.tone, index) }} />
+                  <span style={{ width: `${segment.value > 0 ? Math.max((segment.value / maximum) * 100, 2) : 0}%`, background: chartColor(segment.tone, index) }} />
                 </span>
                 <strong className={styles.segmentValue}>{segment.formattedValue}</strong>
                 <ChevronRight aria-hidden="true" size={16} />
@@ -233,6 +233,7 @@ function BreakdownPanel({ breakdown }: { breakdown: BreakdownViewModel }) {
           </div>
         </div>
       ) : <InlineEmpty message="No source records match this view." />}
+      {breakdown.coverageLabel ? <p>{breakdown.coverageLabel}</p> : null}
       <Link className={styles.sourceLink} href={breakdown.sourceLink.href}>{breakdown.sourceLink.label}<ExternalLink aria-hidden="true" size={14} /></Link>
     </article>
   );
@@ -618,7 +619,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
     requests: { heading: "Choose an issue queue", description: "Open reported issues by their current review or work-order status." },
     estimates: { heading: "Choose an estimate queue", description: "Open pricing requests by the decision or vendor response still needed." },
   };
-  const metricHeading = metricCopy[surface] ?? { heading: "Choose what to review", description: "Each summary opens the matching records without losing your current scope." };
+  const metricHeading = model.table.id === "store-cost-ranking" ? { heading: undefined, description: undefined } : metricCopy[surface] ?? { heading: "Choose what to review", description: "Each summary opens the matching records without losing your current scope." };
   const triageMode = TRIAGE_SURFACES.has(surface) && model.rowNavigation !== "record";
   const visitPlanParam = searchParams.visitPlan;
   const approvedLaterMode = surface === "work-orders" && (Array.isArray(visitPlanParam) ? visitPlanParam[0] : visitPlanParam) === "ready";
@@ -628,7 +629,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
   const approvedLaterSelection = approvedLaterMode && selectedRow?.management?.kind === "approved_later";
   const layoutParam = searchParams.layout;
   const requestedView = typeof layoutParam === "string" && (layoutParam === "table" || layoutParam === "tile") ? layoutParam : null;
-  const viewMode: SurfaceViewMode = triageMode ? "table" : requestedView ?? (TILE_DEFAULT_SURFACES.has(surface) ? "tile" : "table");
+  const viewMode: SurfaceViewMode = triageMode ? "table" : requestedView ?? (model.table.id === "store-cost-ranking" ? "table" : TILE_DEFAULT_SURFACES.has(surface) ? "tile" : "table");
   const toggleQuery = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
     if (["layout", "selected", "matchStore"].includes(key) || value === undefined) continue;

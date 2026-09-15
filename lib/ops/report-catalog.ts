@@ -37,7 +37,7 @@ export const reportCatalog: readonly ReportCatalogEntry[] = [
     id: "store-cost-comparison",
     title: "Spending by store",
     description: "Compare store-level recorded work cost and continue into exact service-area and work-order evidence.",
-    definition: "Recorded work-cost lines only; proposals, NTE amounts, and invoices are not silently combined.",
+    definition: "Recorded work-cost lines for the rolling 12 months through the reporting date; proposals, NTE amounts, and invoices are not combined.",
     liveHref: "/app/stores?sort=cost",
     source: { kind: "list", route: "stores", query: { sort: "cost" } },
   },

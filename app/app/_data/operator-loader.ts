@@ -1,6 +1,8 @@
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { attentionAccess } from "./attention-presenter";
+import { loadDashboardChartPages } from "./dashboard-charts";
+import { buildStoreCostRanking } from "./store-cost-presenter";
 import "server-only";
 
 import { cache } from "react";
@@ -30,7 +32,7 @@ import {
   NORTHLINE_ORGANIZATION_ID,
   NORTHLINE_PREVIEW_PERSONAS,
 } from "@/lib/ops/fixtures";
-import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
+import { getServerOpsRepository, getServerOpsReportingAsOf } from "@/lib/server/ops-repository-provider";
 import { getRequestOpsFixtureSnapshot, getRequestOpsTrendsFixtureSnapshot } from "./request-data";
 import { buildOwnerBrief } from "@/lib/ops/owner-brief";
 import { buildWorkOrderCase } from "@/lib/ops/work-order-case";
@@ -281,6 +283,9 @@ function enforceDetailLinkPolicy<T extends DetailPageViewModel>(model: T, sessio
 export async function loadListModel(route: ListRouteId, searchParams: OperatorSearchParameters = {}) {
   const session = await getRequestOperatorSession();
   if (!roleCanAccessListRoute(session.role, route)) notFound();
+  if (route === "stores" && (Array.isArray(searchParams.sort) ? searchParams.sort[0] : searchParams.sort) === "cost") {
+    return enforceListLinkPolicy(await buildStoreCostRanking(await getServerOpsRepository(), session, searchParams, getServerOpsReportingAsOf()), session);
+  }
   const requestedKeys = Object.entries(searchParams).filter(([key, value]) => !["saved", "updated", "created", "success", "notice", "error", "layout"].includes(key) && Boolean(Array.isArray(value) ? value[0] : value)).map(([key]) => key);
   const supportedQueryKeys: Partial<Record<ListRouteId, ReadonlySet<string>>> = {
     requests: new Set(["q", "page", "status", "store", "selected"]),
@@ -360,11 +365,13 @@ export async function loadDashboardModel() {
   const { session, fixture } = context;
   const repository = await getServerOpsRepository();
   const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
-  const [activity, attention] = await Promise.all([
-    repository.getDashboardActivity(scope, { asOf: fixture.asOf, costFrom: rollingYearStart(fixture.asOf), costTo: fixture.asOf.slice(0, 10), currency: "USD" }),
+  const window = { asOf: fixture.asOf, costFrom: rollingYearStart(fixture.asOf), costTo: fixture.asOf.slice(0, 10), currency: "USD" };
+  const [activity, attention, charts] = await Promise.all([
+    repository.getDashboardActivity(scope, window),
     repository.listAttention(scope, attentionAccess(session), { asOf: fixture.asOf, limit: 7 }),
+    loadDashboardChartPages(repository, scope, window),
   ]);
-  return enforceDashboardLinkPolicy(buildDashboardModel(fixture, session, { activity, attention }), session);
+  return enforceDashboardLinkPolicy(buildDashboardModel(fixture, session, { activity, attention, charts }), session);
 }
 
 export async function loadSearchModel(searchParams: OperatorSearchParameters = {}) {
