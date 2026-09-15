@@ -537,3 +537,12 @@ Browser: work search selected the exact CPS-2026-0104; five vendors and the vend
 
 
 Final intake validation: seed, typecheck and lint pass; **141 files / 926 tests passed in 179.56 seconds**; workflow checks **4 files / 53 tests passed in 86.60 seconds**. Sites and Render builds pass. The existing duplicate emitted CSS warnings remain a final packaged-acceptance observation. The final blue save button was visually verified, the selected agreement returned correctly to the form, and the facilities invoice queue was restored with the viewport override reset. The archive uses the already-established Git Bash packaging fallback for the native Windows helper startup failure. Publication evidence follows after terminal success. No checklist acceptance item was closed by this partial migration.
+
+
+### Pass 5 — invoice intake publication checkpoint
+
+Private version **49** succeeded **2026-09-15 16:57:05 UTC**, environment revision 1, at https://clarks-operations-demo.kedrick-mckenzie.chatgpt.site . Exact pushed source: `86b0017172c127e2b7a173d3e3192015a6e583ee`. Version: `appgprj_6a733d7dbb708191a9b80f3f9424582a~appgver_a998f1f46df48191b35259f2ebab1801`. Deployment: `appgdep_6aa978cb7a1c81918b0db4233bd59136`. Private audience and DB/FILES are preserved. Validated archive: 730 entries, 51 migrations; saved version reports 707 files. Terminal success is publication evidence; no production browser/HTTP probe was performed.
+
+Seed, typecheck, lint, 926 tests, 53 workflow checks and both builds passed. The local invoice queue is retained in the normal viewport with the facilities role; LOCAL-INTAKE-0915 is the only new browser-created fictional record in this batch. Unrelated dev4.log remains untracked and untouched.
+
+**24/40 accepted, 16 open.** Next is the filtered invoice evidence route from Trends, then the outstanding records/actions, lifecycle, imports and operational/release gates. User authorization to continue persists. A fresh get_goal read reports `usageLimited`, not active; no tool has resumed or changed that usage control. Do not claim automatic goal continuation has resumed solely because the user previously reset account usage. This checkpoint records publication only and does not close Pass 5.
