@@ -3,7 +3,7 @@ import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { isFictionalPreview, trustsSitesIdentity } from "@/lib/server/operator-access";
 import { resolveAuthenticatedOperatorSession } from "@/lib/server/operator-membership";
-import { loadOperatorSession, loadNotificationSettingsModel, loadImportWorkspaceAccess } from "@/app/app/_data/operator-loader";
+import { loadOperatorSession, loadNotificationSettingsModel, loadImportWorkspaceAccess, loadDashboardModel } from "@/app/app/_data/operator-loader";
 import { assertStoreInSessionScope, getOpsRequestContext } from "@/lib/server/ops-request-context";
 import { POST as createWork } from "@/app/api/ops/work-orders/route";
 import { POST as previewRole } from "@/app/api/ops/preview-role/route";
@@ -15,7 +15,7 @@ import { tenantFixture } from "@/lib/ops/tenant-fixture";
 const boundary = vi.hoisted(() => ({ cookies: new Map<string, string>(), repository: vi.fn(), identity: vi.fn(), snapshot: vi.fn(() => { throw new Error("Setup must not load tenant source records"); }) }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => boundary.cookies.has(name) ? { value: boundary.cookies.get(name) } : undefined }) }));
 vi.mock("@/app/chatgpt-auth", () => ({ getChatGPTUser: () => boundary.identity() }));
-vi.mock("@/lib/server/ops-repository-provider", () => ({ getServerOpsRepository: () => boundary.repository(), getServerOpsFixtureSnapshot: () => boundary.snapshot() }));
+vi.mock("@/lib/server/ops-repository-provider", () => ({ getServerOpsRepository: () => boundary.repository(), getServerOpsFixtureSnapshot: () => boundary.snapshot(), getServerOpsReportingAsOf: () => "2026-08-25T16:00:00.000Z" }));
 
 const USER = "sites:identity-a";
 const ORG = NORTHLINE_ORGANIZATION_ID;
@@ -32,6 +32,12 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("loads the actual manager home without requesting a tenant snapshot", async () => {
+    const model = await loadDashboardModel();
+    expect(model.metrics.find(row => row.id === "open-exceptions")?.value).toBe("61");
+    expect(model.spotlight?.facts.find(row => row.label === "Approved replacement")?.value).toBe("$32,800.00");
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
   it("loads access-only setup pages without loading tenant source records", async () => {
     expect(await loadImportWorkspaceAccess()).toMatchObject({ organizationName: "Clark Pump and Shop" });
     expect(await loadNotificationSettingsModel()).toMatchObject({ organizationName: "Clark Pump and Shop", rules: expect.any(Array) });

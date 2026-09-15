@@ -1,4 +1,5 @@
 import type { OpsFixture, WorkOrder, Money } from "./types";
+import { selectLifecycleReplacementPrice } from "./lifecycle-price-selection";
 
 export interface LifecycleQuoteEvidence {
   id: string; vendor: string; amount: string; scope: string; exclusions: string;
@@ -24,9 +25,10 @@ export function lifecyclePriceEvidence(fixture: OpsFixture, work: WorkOrder | un
   const reported = work ? (fixture.workPrices ?? []).filter(row => row.organizationId === org && row.workOrderId === work.id && row.kind === "replace").sort((a,b)=>b.recordedAt.localeCompare(a.recordedAt)||b.id.localeCompare(a.id)) : [];
   for (const price of reported) quotes.push({id:price.id,vendor:fixture.vendors.find(row=>row.organizationId===org && row.id===price.vendorId)?.name ?? "Vendor",amount:priceLabel(price.amount),scope:price.scope,exclusions:"Not given",timing:"Not given",status:"Reported price · " + (price.scopeKind === "whole" ? "Whole unit + setup":price.scopeKind === "part" ? "One part":"This job"),href:`/app/work-orders/${work!.id}/prices`});
   const whole = reported.find(row=>row.scopeKind === "whole");
-  const replacement = event?.approvedAmount ?? selected?.amount ?? whole?.amount;
+  const selection = selectLifecycleReplacementPrice(event?.approvedAmount, selected?.amount, whole?.amount);
+  const replacement = selection.amount;
   return {
-    replacement, replacementLabel: priceLabel(replacement), replacementBasis: event ? "Approved replacement" : selected ? "Selected replacement quote" : whole ? "Reported replacement price" : "Replacement quote",
+    replacement, replacementLabel: priceLabel(replacement), replacementBasis: selection.basis,
     planningLabel: priceLabel(planning), approvedVendor: approved ? quotes.find((quote) => quote.id === approved.id)?.vendor : undefined,
     scope: approved?.scope ?? selected?.scope ?? whole?.scope ?? "Replacement details needed",
     approvedAt: event?.approvedAt, finalAmount: event?.status === "completed" && event.finalAmount ? priceLabel(event.finalAmount) : undefined,

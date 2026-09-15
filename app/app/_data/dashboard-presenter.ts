@@ -10,7 +10,7 @@ export interface DashboardPresentationData {
   journey: DashboardPageViewModel["journey"];
   review: { items: ActionItemViewModel[]; totalCount: number; mineCount: number };
   repairComparisonCount: number;
-  replacementEstimateTotal: number;
+  replacementEstimateLabel: string;
   store?: { id: string; storeNumber: string };
   highestCostStore?: { id: string; label: string; value: number };
   storeBreakdown: BreakdownViewModel;
@@ -61,7 +61,7 @@ function dashboardShortcut(options: {
 }
 
 export function presentDashboard(data: DashboardPresentationData, session: OperatorSession): DashboardPageViewModel {
-  const { activity, pageBase, costFrom, costTo, journey, review, repairComparisonCount, replacementEstimateTotal, store, highestCostStore, storeBreakdown, categoryBreakdown, vendorAccountabilityBreakdown, workStatusBreakdown, activeVendorBreakdown, trend, spotlight, invoiceSpotlight } = data;
+  const { activity, pageBase, costFrom, costTo, journey, review, repairComparisonCount, replacementEstimateLabel, store, highestCostStore, storeBreakdown, categoryBreakdown, vendorAccountabilityBreakdown, workStatusBreakdown, activeVendorBreakdown, trend, spotlight, invoiceSpotlight } = data;
   if (session.role === "executive") {
     return {
       state: { kind: "ready" },
@@ -109,12 +109,12 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
         { id: "recorded-cost", label: "Recorded work cost", value: money(activity.recordedCostMinor), supportingText: "Recorded costs for the last 12 months", link: { href: "/app/spend", label: "Explain the total" } },
         { id: "cost-work", label: "Cost-bearing work orders", value: String(activity.costWorkOrders), supportingText: "Work orders with entered cost in the rolling period", link: { href: hrefWithQuery("/app/work-orders", { hasCost: "true", costFrom, costTo: costTo }), label: "Open supporting work" } },
         { id: "invoice-references", label: "Invoice records", value: String(activity.invoiceRecords), supportingText: "All dates · available in your scope", tone: invoiceSpotlight ? "warning" : "neutral", link: { href: "/app/invoices", label: "Review invoices" } },
-        { id: "replacement-estimates", label: "Current replacement outlook", value: money(replacementEstimateTotal), supportingText: "Current equipment planning estimates", tone: "info", link: { href: "/app/lifecycle?replacement=entered", label: "Open capital outlook" } },
+        { id: "replacement-estimates", label: "Current replacement outlook", value: replacementEstimateLabel, supportingText: "Current equipment planning estimates", tone: "info", link: { href: "/app/lifecycle?replacement=entered", label: "Open capital outlook" } },
       ],
       priorityActions: [
         dashboardShortcut({ id: "finance-invoices", title: `Review ${activity.invoiceRecords} invoice${activity.invoiceRecords === 1 ? "" : "s"}`, description: "Use operator work-order references and confirmed allocations as an optional safeguard; the platform does not approve or pay invoices.", categoryLabel: "Invoice safeguard", dueLabel: "Optional review", ownerLabel: "Finance", tone: invoiceSpotlight ? "warning" : "positive", href: "/app/invoices", linkLabel: "Open invoices" }),
         dashboardShortcut({ id: "finance-store-cost", title: "Compare recorded cost by store", description: "Compare store totals, then open their recorded work costs.", categoryLabel: "Cost visibility", dueLabel: "Rolling 12 months", ownerLabel: "Finance and operations", tone: "info", href: hrefWithQuery("/app/stores", { sort: "cost", costFrom, costTo, currency: "USD" }), linkLabel: "Open store ranking" }),
-        dashboardShortcut({ id: "finance-capital", title: "Review replacement planning evidence", description: `${money(replacementEstimateTotal)} is the current benchmark-based outlook, not an approved budget.`, categoryLabel: "Lifecycle & CapEx", dueLabel: "Planning view", ownerLabel: "Finance and facilities", href: "/app/lifecycle?replacement=entered", linkLabel: "Open capital outlook" }),
+        dashboardShortcut({ id: "finance-capital", title: "Review replacement planning evidence", description: `${replacementEstimateLabel} in current planning estimates.`, categoryLabel: "Equipment planning", dueLabel: "Planning view", ownerLabel: "Finance and facilities", href: "/app/lifecycle?replacement=entered", linkLabel: "Open capital outlook" }),
         dashboardShortcut({ id: "finance-reports", title: "View financial reports", description: "Recorded cost, work obligations, invoice references, and lifecycle evidence remain separate and traceable.", categoryLabel: "Reporting", dueLabel: "Available now", ownerLabel: "Finance", href: "/app/reports", linkLabel: "Open reports" }),
       ],
       prioritySection: { title: "Financial review paths", description: "Cost and evidence stay distinct so no amount is silently combined or treated as approved.", link: { href: "/app/reports", label: "Open source reports" } },

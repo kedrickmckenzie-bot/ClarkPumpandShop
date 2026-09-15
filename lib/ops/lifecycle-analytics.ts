@@ -30,6 +30,7 @@ export type ComparisonHorizonSource =
   | "unavailable";
 
 export type RepairReplacementDataGap =
+  | "currency_mismatch"
   | "missing_install_date"
   | "invalid_install_date"
   | "install_date_after_as_of"
@@ -47,6 +48,7 @@ export type RepairReplacementDataGap =
  * screen an estimate before a work order exists or before it is issued.
  */
 export interface RepairProposalInput {
+  repairEstimateCurrency?: CurrencyCode;
   proposalId?: OpsId;
   repairEstimateMinor?: number;
   estimatedServiceExtensionMonths?: number;
@@ -258,9 +260,11 @@ export function calculateRepairReplacementScreening(
   else if (!replacementEstimateIsValid) dataGaps.push("invalid_replacement_estimate");
 
   const repairEstimateMinor = proposal?.repairEstimateMinor;
-  const repairEstimateIsValid = isNonNegativeMinorUnits(repairEstimateMinor);
+  const currenciesMatch = !proposal?.repairEstimateCurrency || !asset.replacementEstimate?.currency || proposal.repairEstimateCurrency === asset.replacementEstimate.currency;
+  const repairEstimateIsValid = isNonNegativeMinorUnits(repairEstimateMinor) && currenciesMatch;
+  if (!currenciesMatch) dataGaps.push("currency_mismatch");
   if (repairEstimateMinor === undefined) dataGaps.push("missing_repair_estimate");
-  else if (!repairEstimateIsValid) dataGaps.push("invalid_repair_estimate");
+  else if (!isNonNegativeMinorUnits(repairEstimateMinor)) dataGaps.push("invalid_repair_estimate");
 
   const chronologicalRemainingMonthsExact =
     expectedLifeIsValid && ageMonthsExact !== undefined

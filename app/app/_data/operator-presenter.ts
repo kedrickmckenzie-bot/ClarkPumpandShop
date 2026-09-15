@@ -1,13 +1,12 @@
-import { presentDashboard, presentDashboardJourney } from "./dashboard-presenter";
-import { attentionAccess, presentAttentionRow, reviewQueueExceptionCopy } from "./attention-presenter";
+import { attentionAccess, reviewQueueExceptionCopy } from "./attention-presenter";
 import { attentionFromFixture, type AttentionPage } from "@/lib/ops/attention-query";
 import { dashboardActivityFromFixture, dashboardBreakdownFromFixture, rollingYearStart, type DashboardActivitySummary, type DashboardBreakdownKind } from "@/lib/ops/dashboard-query";
-import { DASHBOARD_CHART_LIMITS, presentDashboardCharts, type DashboardChartPages } from "./dashboard-charts";
+import { DASHBOARD_CHART_LIMITS, type DashboardChartPages } from "./dashboard-charts";
 import { workStatusLabel } from "@/lib/product/work-status-label";
 import { matchesRequestStatus, matchesWorkStage, visitHasWork } from "@/lib/ops/dashboard-cohorts";
-import { buildEquipmentReview } from "./equipment-review";
 import { dashboardContextFromFixture, type DashboardContext } from "@/lib/ops/dashboard-context";
-import { presentInvoiceSpotlight } from "./dashboard-context-presenter";
+import { dashboardLifecycleFromFixture, lifecycleIdOrder, type DashboardLifecycleSummary } from "@/lib/ops/lifecycle-summary";
+import { presentQueryDashboard } from "./dashboard-query-presenter";
 import { effectivePmStatus } from "@/lib/ops/pm-occurrence-state";
 import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE, warrantyTaskHref } from "@/lib/ops/warranty-review";
 import { buildPmReactiveReview } from "./pm-reactive-review";
@@ -81,7 +80,6 @@ import {
   calculateRepairReplacementScreening,
   type RepairReplacementScreening,
 } from "@/lib/ops/lifecycle-analytics";
-import { lifecyclePriceEvidence, priceLabel } from "@/lib/ops/lifecycle-price-evidence";
 import { resolveLifecycleDecisionState } from "@/lib/ops/lifecycle-decision-state";
 import { resolveAssetReplacementEstimate } from "@/lib/ops/replacement-intelligence";
 import { projectAttentionItems } from "@/lib/ops/attention-projection";
@@ -846,6 +844,7 @@ function formatRunway(months: number): string {
 
 function lifecycleGapLabel(gap: RepairReplacementScreening["dataGaps"][number]): string {
   const labels: Record<typeof gap, string> = {
+    currency_mismatch: "Repair and replacement prices in the same currency",
     missing_install_date: "Install date",
     invalid_install_date: "Valid install date",
     install_date_after_as_of: "Install date before today",
@@ -907,7 +906,7 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
         : undefined;
       const latestLifecycleDecision = fixture.lifecycleRecommendations
         .filter((recommendation) => recommendation.organizationId === scoped.organizationId && recommendation.assetId === asset.id)
-        .sort((left, right) => right.version - left.version || right.decidedAt.localeCompare(left.decidedAt))[0];
+        .sort((left, right) => right.version - left.version || right.decidedAt.localeCompare(left.decidedAt) || lifecycleIdOrder(right.id, left.id))[0];
       const hasManagementPlan = Boolean(
         latestLifecycleDecision?.plannedForYear &&
         ["replace", "defer"].includes(latestLifecycleDecision.userDecision) &&
@@ -943,12 +942,13 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
           !["closed", "cancelled", "completed_pending_review", "resolved"].includes(candidate.status) &&
           Boolean(candidate.repairEstimate),
         )
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || lifecycleIdOrder(right.id, left.id))[0];
       const screening = calculateRepairReplacementScreening(
         { ...asset, replacementEstimate: replacementResolution.amount },
         proposalWork ? {
           proposalId: proposalWork.id,
           repairEstimateMinor: proposalWork.repairEstimate?.amountMinor,
+          repairEstimateCurrency: proposalWork.repairEstimate?.currency,
           estimatedServiceExtensionMonths: proposalWork.estimatedServiceExtensionMonths,
           sourceRecordIds: [proposalWork.id],
         } : undefined,
@@ -1024,7 +1024,7 @@ function lifecycleRows(fixture: OpsFixture, scoped: ScopedFixture, costByWork: M
   return rows.sort((a, b) =>
     stateOrder[b.screening.state] - stateOrder[a.screening.state] ||
     (b.screening.comparison.repairEstimateMinor ?? 0) - (a.screening.comparison.repairEstimateMinor ?? 0) ||
-    b.workCost - a.workCost,
+    b.workCost - a.workCost || lifecycleIdOrder(a.asset.id, b.asset.id),
   );
 }
 
@@ -1191,54 +1191,17 @@ export function buildAccountabilityDashboardModel(
   };
 }
 
-function lifecycleSpotlight(fixture: OpsFixture, session: OperatorSession, row: ReturnType<typeof lifecycleRows>[number] | undefined): DashboardPageViewModel["spotlight"] {
-  if (!row) return undefined;
-  const prices = lifecyclePriceEvidence(fixture, row.proposalWork, row.replacementResolution.amount);
-  const work = row.proposalWork;
-  return { eyebrow: "Equipment review", title: `${work?.number ?? row.asset.name} · ${row.decisionState.label}`,
-    description: row.asset.name,
-    facts: [
-      {label:"Repair estimate",value:priceLabel(work?.repairEstimate)},
-      {label:prices.replacement ? prices.replacementBasis : "Planning estimate",value:prices.replacement ? prices.replacementLabel : prices.planningLabel},
-      {label:"Recorded cost · 12 months",value:buildEquipmentReview(fixture, session, row.asset.id, { history: "12" })?.workCost ?? "No costs recorded"},
-    ],
-    link:{href:hrefWithQuery("/app/lifecycle",{asset:row.asset.id,decision:row.asset.id,work:work?.id,view:"review",history:"12"}),label:"View costs and history"},
-  };
-}
-
-export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession, prepared?: { activity: DashboardActivitySummary; attention: AttentionPage; charts?: DashboardChartPages; context?: DashboardContext }): DashboardPageViewModel {
-  const scoped = scopeFixture(fixture, session);
-  const periodStart = rollingYearStart(fixture.asOf);
-  const allCostByWork = recordedCostByWork(fixture, scoped.organizationId);
-  const lifecycle = lifecycleRows(fixture, scoped, allCostByWork);
-  const repairComparisons = lifecycle.filter((row) => row.screening.state === "compare_alternatives");
-  const candidate = repairComparisons[0];
+/** Compatibility fixture adapter for reports/tests; the live home loader uses repository queries. */
+export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession, prepared?: { activity: DashboardActivitySummary; attention: AttentionPage; charts?: DashboardChartPages; context?: DashboardContext; lifecycle?: DashboardLifecycleSummary }): DashboardPageViewModel {
   const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
-  const activity = prepared?.activity ?? dashboardActivityFromFixture(fixture, scope, { asOf: fixture.asOf, costFrom: periodStart, costTo: fixture.asOf.slice(0, 10), currency: "USD" });
+  const window = { asOf: fixture.asOf, costFrom: rollingYearStart(fixture.asOf), costTo: fixture.asOf.slice(0, 10), currency: "USD" };
+  const activity = prepared?.activity ?? dashboardActivityFromFixture(fixture, scope, window);
   const attention = prepared?.attention ?? attentionFromFixture(fixture, scope, attentionAccess(session), { asOf: fixture.asOf, limit: 7 });
-  const window = { asOf: fixture.asOf, costFrom: periodStart, costTo: fixture.asOf.slice(0, 10), currency: "USD" };
-  const chartPages = prepared?.charts ?? Object.fromEntries((Object.keys(DASHBOARD_CHART_LIMITS) as DashboardBreakdownKind[]).map(kind => [kind, dashboardBreakdownFromFixture(fixture, scope, window, { kind, limit: DASHBOARD_CHART_LIMITS[kind] })])) as DashboardChartPages;
-  const charts = presentDashboardCharts(chartPages, activity, window, session.organizationName);
-  const spotlight = lifecycleSpotlight(fixture, session, candidate);
-  const pageBase = {
-    scopeLabel: session.scopeLabel,
-    periodLabel: `Rolling 12 months from ${date(periodStart)}`,
-    updatedLabel: `Source data through ${date(fixture.asOf)}`,
-  };
-
+  const charts = prepared?.charts ?? Object.fromEntries((Object.keys(DASHBOARD_CHART_LIMITS) as DashboardBreakdownKind[]).map(kind => [kind, dashboardBreakdownFromFixture(fixture, scope, window, { kind, limit: DASHBOARD_CHART_LIMITS[kind] })])) as DashboardChartPages;
   const context = prepared?.context ?? dashboardContextFromFixture(fixture, scope);
-  return presentDashboard({
-    activity,
-    pageBase, costFrom: periodStart, costTo: fixture.asOf.slice(0,10), journey: presentDashboardJourney(activity, attention.followUpCount),
-    review: { items: attention.items.map(item => presentAttentionRow(item, fixture.asOf)), totalCount: attention.totalCount, mineCount: attention.mineCount },
-    repairComparisonCount: repairComparisons.length,
-    replacementEstimateTotal: lifecycle.reduce((sum, row) => sum + (row.replacement ?? 0), 0),
-    store: context.store,
-    ...charts, spotlight,
-    invoiceSpotlight: presentInvoiceSpotlight(context.invoice),
-  }, session);
+  const lifecycle = prepared?.lifecycle ?? dashboardLifecycleFromFixture(fixture, scope, fixture.asOf);
+  return presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window);
 }
-
 const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
   "action-center": [
     { key: "item", label: "Next action" },

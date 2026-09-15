@@ -2,6 +2,7 @@ import { attentionFromFixture } from "./attention-query";
 import { matchesRequestStatus, matchesWorkStage } from "./dashboard-cohorts";
 import { dashboardActivityFromFixture, dashboardBreakdownFromFixture } from "./dashboard-query";
 import { dashboardContextFromFixture } from "./dashboard-context";
+import { dashboardLifecycleFromFixture } from "./lifecycle-summary";
 import type { JobRun, NotificationRecipient, NotificationRule, OrganizationWorkflowPolicy, OutboxMessage, PmOccurrence, PmPlan, RoleCapabilityOverride, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
 import { hasWorkCostFilter, matchesWorkCategoryPath, matchesWorkCost } from "./work-cost-query";
@@ -441,6 +442,9 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
 }
 
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
+  async getDashboardLifecycle(scope: OrganizationScope, asOf: string) {
+    return dashboardLifecycleFromFixture(this.fixture, scope, asOf);
+  }
   async getDashboardContext(scope: OrganizationScope) {
     return dashboardContextFromFixture(this.fixture, scope);
   }
