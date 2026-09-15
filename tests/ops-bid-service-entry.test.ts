@@ -99,7 +99,7 @@ describe("work-order vendor path entry", () => {
     const model = buildCreateWorkOrderModel(fixture, session);
     const markup = renderToStaticMarkup(createElement(CreateWorkOrderForm, { model }));
 
-    expect(markup).toContain("Choose who will do it");
+    expect(markup).toContain("Choose how to handle it");
     expect(markup).toContain("Outside vendor");
     expect(markup).toContain("Request quotes first");
     expect(markup).toContain("Choose later");
