@@ -5,8 +5,11 @@ import { createOpsD1Repository } from "../lib/ops/d1-repository";
 import { runOutboxDeliveryCycle } from "../lib/ops/outbox-delivery";
 import { createNotificationEmailTransport, emailRuntimeFromEnvironment } from "../lib/ops/email-delivery";
 import { runPmRecurrenceCycle, runSlaEscalationCycle } from "../lib/ops/job-workers";
+import { applyWorkerAccessEnvironment } from "../lib/server/worker-access-environment";
 
 interface Env {
+  OPS_ACCESS_MODE?: string;
+  OPS_IDENTITY_PROVIDER?: string;
   ASSETS: Fetcher;
   DB: D1Database;
   EMAIL_PROVIDER?: string;
@@ -36,6 +39,7 @@ interface ExecutionContext {
 
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    applyWorkerAccessEnvironment(env);
     const url = new URL(request.url);
 
     if (url.pathname === "/_vinext/image") {
