@@ -120,6 +120,7 @@ export function lifecycleOutstandingState(
   }
 }
 
+/** Historical fixture report only. Live brief readers use owner-brief-query and scoped repository queries. */
 export function buildOwnerBrief(
   fixture: Pick<OpsFixture, "stores" | "workOrders" | "costLines" | "valueEvents" | "invoices" | "invoiceExceptions" | "pmOccurrences" | "workflowTasks" | "lifecycleRecommendations" | "assets">,
   organizationId: string,

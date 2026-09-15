@@ -3,7 +3,7 @@ import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { isFictionalPreview, trustsSitesIdentity } from "@/lib/server/operator-access";
 import { resolveAuthenticatedOperatorSession } from "@/lib/server/operator-membership";
-import { loadOperatorSession, loadNotificationSettingsModel, loadImportWorkspaceAccess, loadDashboardModel } from "@/app/app/_data/operator-loader";
+import { loadOperatorSession, loadNotificationSettingsModel, loadImportWorkspaceAccess, loadDashboardModel, loadOwnerBriefModel, loadBriefRecordsModel, loadCoverageQualityModel } from "@/app/app/_data/operator-loader";
 import { assertStoreInSessionScope, getOpsRequestContext } from "@/lib/server/ops-request-context";
 import { POST as createWork } from "@/app/api/ops/work-orders/route";
 import { POST as previewRole } from "@/app/api/ops/preview-role/route";
@@ -32,6 +32,29 @@ function useFixture(data = fixture()) {
 }
 
 describe("production identity and organization selection", () => {
+  it("does not load the companywide integrity companion for a location-scoped facilities membership", async () => {
+    const data = fixture();
+    const grant = data.scopeGrants.find(row => row.membershipId === "membership-northline-facilities")!;
+    grant.scopeKind = "store"; grant.scopeId = data.stores[0].id;
+    useFixture(data);
+    expect((await loadOwnerBriefModel())!.sources.stores.totalCount).toBe(1);
+    expect(await loadCoverageQualityModel()).toBeNull();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
+  it("keeps the regional brief and its source pages inside the membership scope without a snapshot", async () => {
+    const data = buildNorthlinePresentationFixture();
+    data.users.find(row => row.id === "user-northline-regional-1")!.id = USER;
+    data.memberships.find(row => row.id === "membership-northline-regional-1")!.userId = USER;
+    useFixture(data);
+    const brief = await loadOwnerBriefModel();
+    expect(brief!.sources.stores.totalCount).toBe(5);
+    expect(brief!.sources.stores.items.every(row => data.stores.some(store => store.id === row.id && store.regionId === "region-northline-north"))).toBe(true);
+    const otherStore = data.stores.find(row => row.regionId !== "region-northline-north")!;
+    const records = await loadBriefRecordsModel({ kind: "recorded_cost", store: otherStore.id });
+    expect(records.table.rows).toEqual([]);
+    expect(await loadCoverageQualityModel()).toBeNull();
+    expect(boundary.snapshot).not.toHaveBeenCalled();
+  });
   it("loads the actual manager home without requesting a tenant snapshot", async () => {
     const model = await loadDashboardModel();
     expect(model.metrics.find(row => row.id === "open-exceptions")?.value).toBe("61");

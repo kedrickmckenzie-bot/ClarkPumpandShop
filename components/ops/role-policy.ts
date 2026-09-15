@@ -173,6 +173,7 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
   const record = segments[2];
 
   if (area === "overview" || area === "search") return true;
+  if (area === "brief") return role === "executive" || role === "facilities" || role === "regional";
   if (area === "trends") return roleCanAccessProgramRoute(role, "trends");
   if (area === "action-center") return roleCanAccessListRoute(role, "action-center");
   if (area === "requests") {

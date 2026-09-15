@@ -35,12 +35,11 @@ import {
 } from "@/lib/ops/fixtures";
 import { getServerOpsRepository, getServerOpsReportingAsOf } from "@/lib/server/ops-repository-provider";
 import { getRequestOpsFixtureSnapshot, getRequestOpsTrendsFixtureSnapshot } from "./request-data";
-import { buildOwnerBrief } from "@/lib/ops/owner-brief";
+import { buildQueryOwnerBrief, buildQueryBriefRecords } from "./owner-brief-query-presenter";
 import { buildWorkOrderCase } from "@/lib/ops/work-order-case";
 import { formatInTimeZone } from "@/lib/ops/local-date-time";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate } from "@/lib/ops/local-time";
 import { buildClosedLoopCoverage, buildDataQualityIssues } from "@/lib/ops/coverage-quality";
-import { buildVendorScorecards } from "@/lib/ops/vendor-scorecards";
 import {
   LEGACY_OPS_PREVIEW_ROLE_COOKIE,
   OPS_PREVIEW_EDITION_COOKIE,
@@ -974,13 +973,17 @@ export async function loadAttentionItemModel(itemId: string) {
   return model;
 }
 
-export async function loadOwnerBriefModel() {
-  const context = await sessionAndFixture();
-  const role = context.session.role;
+export async function loadOwnerBriefModel(query: OperatorSearchParameters = {}) {
+  const session = await getRequestOperatorSession();
+  const role = session.role;
   if (role !== "executive" && role !== "facilities" && role !== "regional") return null;
-  const periodEndsAt = context.fixture.asOf;
-  const periodStartsAt = new Date(Date.parse(periodEndsAt) - 30 * 24 * 60 * 60 * 1000).toISOString();
-  return buildOwnerBrief(context.fixture, context.session.organizationId, { startsAt: periodStartsAt, endsAt: periodEndsAt });
+  return buildQueryOwnerBrief(await getServerOpsRepository(), session, query, await getServerOpsReportingAsOf());
+}
+
+export async function loadBriefRecordsModel(query: OperatorSearchParameters) {
+  const session = await getRequestOperatorSession();
+  if (!["executive", "facilities", "regional"].includes(session.role)) notFound();
+  return buildQueryBriefRecords(await getServerOpsRepository(), session, query, await getServerOpsReportingAsOf());
 }
 
 export async function loadJobHealthModel() {
@@ -1001,15 +1004,14 @@ export async function loadSavedViewsModel(surface: string) {
   return repository.listSavedViews(session.organizationId, (session.membershipId ?? ""), surface);
 }
 
-export async function loadVendorScorecardsModel() {
-  const context = await sessionAndFixture();
-  const role = context.session.role;
-  if (role !== "executive" && role !== "facilities" && role !== "regional") return [];
-  return buildVendorScorecards(context.fixture, context.session.organizationId);
-}  export async function loadCoverageQualityModel() {
-  const context = await sessionAndFixture();
-  const role = context.session.role;
+export async function loadCoverageQualityModel() {
+  const session = await getRequestOperatorSession();
+  const role = session.role;
   if (role !== "executive" && role !== "facilities") return null;
+  // This companywide companion still uses a compatibility snapshot. Do not
+  // expose it to location-scoped memberships while its scoped query is built.
+  if (session.storeIds !== undefined || session.regionIds !== undefined) return null;
+  const context = await sessionAndFixture();
   const coverage = buildClosedLoopCoverage(context.fixture, context.session.organizationId);
   const quality = buildDataQualityIssues(context.fixture, context.session.organizationId, context.fixture.asOf);
   return { coverage, quality };

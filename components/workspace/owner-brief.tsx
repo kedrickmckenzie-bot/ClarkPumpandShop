@@ -1,143 +1,39 @@
 import Link from "next/link";
-import type { OwnerBrief } from "@/lib/ops/owner-brief";
-import styles from "./owner-brief.module.css";
+import { BRIEF_SOURCES, briefSourceHref, type BriefSummary, type BriefSource } from "@/lib/ops/owner-brief-query";
+import { briefMoney, briefRecordHref } from "@/app/app/_data/owner-brief-query-presenter";
+import { formatOperationsDate } from "@/lib/ops/local-time";
+import styles from "./brief-summary.module.css";
 
-const usd = (minor: number) => `$${Math.round(minor / 100).toLocaleString("en-US")}`;
-
-function hrefFor(drill: OwnerBrief["decisionsNeeded"][number]["drillThrough"]) {
-  if (drill.type === "asset") return `/app/equipment/${drill.id}`;
-  if (drill.type === "workflow_task") return `/app/action-center/${drill.id}`;
-  return `/app/work-orders/${drill.id}`;
-}
-
-const decisionBadge: Record<OwnerBrief["decisionsNeeded"][number]["kind"], string> = {
-  capital_review: "Capital decision",
-  replacement_review: "Replacement review",
-  approval: "Approval waiting",
-  escalated_task: "Escalated",
-};
-
-export function OwnerBriefSection({ model }: { model: OwnerBrief }) {
-  const obligations = model.pmCompliance.obligations;
-  const obligationSummary = [
-    `Completed on time or early: ${obligations.completedOnTimeOrEarly}`,
-    `Completed late: ${obligations.completedLate}`,
-    `Missed: ${obligations.missed}`,
-    `Finished without a timing record: ${obligations.finishedWithoutTimingRecord}`,
-    `Still open inside the completion window: ${obligations.openInWindow}`,
-    `Waived: ${obligations.waived}`,
-    `Not yet scheduled: ${obligations.notYetScheduled}`,
-  ].join(" · ");
-  return (
-    <section className={styles.brief} aria-labelledby="owner-brief-heading">
-      <header className={styles.header}>
-        <p className={styles.eyebrow}>Owner brief</p>
-        <h2 id="owner-brief-heading">The last 30 days, in plain language</h2>
-      </header>
-
-      <div className={styles.moneyRow}>
-        <Link className={styles.moneyCell} href={model.drillThrough.recordedSpendHref}>
-          <span className={styles.moneyLabel}>Recorded work spend</span>
-          <strong>{usd(model.money.recordedSpendMinor)}</strong>
-          <span className={styles.moneyNote}>{model.money.currency} · cost lines with service dates in the period — open every cost line</span>
-        </Link>
-        <Link className={styles.moneyCell} href={model.drillThrough.invoiceReviewHref}>
-          <span className={styles.moneyLabel}>Invoices under review</span>
-          <strong className={styles.warningText}>{usd(model.money.invoiceReviewAmountMinor)}</strong>
-          <span className={styles.moneyNote}>{model.money.invoiceReviewCount} invoice{model.money.invoiceReviewCount === 1 ? "" : "s"} with open review flags, each counted once at its full total{model.money.otherIdentifiedExposureMinor > 0 ? ` · other exposure ${usd(model.money.otherIdentifiedExposureMinor)}` : ""}</span>
-        </Link>
-        <Link className={styles.moneyCell} href={model.drillThrough.verifiedValueHref}>
-          <span className={styles.moneyLabel}>Verified savings recovered</span>
-          <strong className={styles.positiveText}>{usd(model.money.realizedVerifiedMinor)}</strong>
-          <span className={styles.moneyNote}>Deductions, credits, and warranty recoveries backed by source records</span>
-        </Link>
-        <div className={styles.moneyCell}>
-          <span className={styles.moneyLabel}>Estimated opportunity</span>
-          <strong>{usd(model.money.estimatedOpportunityMinor)}</strong>
-          <span className={styles.moneyNote}>Not yet verified — never counted as realized</span>
-        </div>
+export function OwnerBriefSection({ model }: { model: BriefSummary & { scopeLabel: string } }) {
+  const { period, sources } = model;
+  const money = (amount: number) => briefMoney(amount, period.currency);
+  const href = (kind: BriefSource, store?: string) => briefSourceHref(period, kind, 0, store);
+  const pm = sources.pm.statuses;
+  const onTime = pm.completed_early + pm.completed_on_time;
+  const due = onTime + pm.completed_late + pm.completed + pm.missed;
+  const notes = { recorded_cost: "Costs dated in this period", invoice_review: "Current flags · each invoice counted once", verified_value: "Confirmed credits and recoveries", opportunity: "Estimates awaiting confirmation" };
+  return <section className={styles.summary} aria-label="Owner brief summary">
+    <p className={styles.context}>{model.scopeLabel}<br />{formatOperationsDate(period.from)} – {formatOperationsDate(period.to)} · {period.currency}</p>
+    <div className={styles.money}>
+      {(["recorded_cost", "invoice_review", "verified_value", "opportunity"] as const).map(kind => <Link key={kind} href={href(kind)} className={styles.metric}>
+        <span>{BRIEF_SOURCES[kind]}</span><strong>{money(sources[kind].totalAmountMinor)}</strong><small>{notes[kind]}</small><span className={styles.open}>View records →</span>
+      </Link>)}
+    </div>
+    {sources.other_exposure.totalCount > 0 ? <p><Link href={href("other_exposure")}>Other amounts to review: {money(sources.other_exposure.totalAmountMinor)}</Link></p> : null}
+    <div className={styles.facts}>
+      <div><h2>PM completed on time</h2><Link href={href("pm")} className={styles.value}>{due ? `${Math.round(onTime / due * 100)}% · ${onTime} of ${due}` : "No closed PM windows"}</Link>
+        <details><summary>How this is counted</summary><p>PM due in this period. The rate includes finished work and missed windows.</p><ul>
+          {[["On time or early", onTime], ["Late", pm.completed_late], ["Missed", pm.missed], ["Finished, timing unknown", pm.completed], ["Window still open", pm.open], ["Unscheduled", pm.unscheduled], ["Waived", pm.waived], ["Cancelled", pm.cancelled]].map(([label, count]) => <li key={label}>{label}: {count}</li>)}
+        </ul></details>
       </div>
-
-      <dl className={styles.factsRow}>
-        <div>
-          <dt>PM compliance</dt>
-          <dd>
-            <Link href={model.drillThrough.pmComplianceHref}>
-              {model.pmCompliance.denominator > 0
-                ? `${Math.round((model.pmCompliance.numerator / model.pmCompliance.denominator) * 100)}% (${model.pmCompliance.numerator} of ${model.pmCompliance.denominator})`
-                : "No PM obligations were due in this period"}
-            </Link>
-            <small>{model.pmCompliance.method}</small>
-            <small>{obligationSummary}</small>
-          </dd>
-        </div>
-        <div>
-          <dt>Work orders</dt>
-          <dd>
-            <Link href={model.drillThrough.activeWorkOrdersHref}>
-              {model.headline.openedWorkOrders} opened · {model.headline.activeWorkOrders} active
-            </Link>
-            <small>{model.workOrderDefinition}</small>
-            <small>Active means not yet resolved or closed.</small>
-          </dd>
-        </div>
-        <div>
-          <dt>Escalations active</dt>
-          <dd>
-            <Link href={model.drillThrough.escalationsHref}>{model.headline.escalationsActive}</Link>
-            <small>Each one has an accountable owner, a due time, and a destination.</small>
-          </dd>
-        </div>
-      </dl>
-      {model.decisionsNeeded.length > 0 ? (
-        <div className={styles.decisionsBlock}>
-          <h3>What needs you</h3>
-          <ol className={styles.decisionList}>
-            {model.decisionsNeeded.slice(0, 6).map((decision) => (
-              <li key={`${decision.kind}-${decision.id}`}>
-                <span className={`${styles.badge} ${decision.kind === "escalated_task" ? styles.badgeCritical : styles.badgeNeutral}`}>
-                  {decisionBadge[decision.kind]}
-                </span>
-                <div>
-                  <p className={styles.decisionLabel}>{decision.label}</p>
-                  <p className={styles.decisionDetail}>{decision.detail}</p>
-                  <Link className={styles.drillLink} href={hrefFor(decision.drillThrough)}>
-                    Open the record
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : (
-        <p className={styles.allClear}>Nothing is waiting on a decision from you.</p>
-      )}
-
-      {model.storeLines.length > 0 ? (
-        <details className={styles.storeDetails}>
-          <summary>Spend by store this period</summary>
-          <table className={styles.storeTable}>
-            <thead>
-              <tr>
-                <th scope="col">Store</th>
-                <th scope="col">Work orders opened in period</th>
-                <th scope="col">Recorded spend in period</th>
-              </tr>
-            </thead>
-            <tbody>
-              {model.storeLines.map((line) => (
-                <tr key={line.storeId}>
-                  <td>
-                    <Link href={`/app/stores/${line.storeId}`}>{line.storeNumber} · {line.storeName}</Link>
-                  </td>
-                  <td>{line.workOrdersOpenedInPeriod}</td>
-                  <td>{usd(line.recordedSpendMinor)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </details>
-      ) : null}
+      <div><h2>Work</h2><Link href={href("opened_work")} className={styles.value}>{sources.opened_work.totalCount} opened this period</Link><Link href={href("active_work")}>{sources.active_work.totalCount} active now</Link></div>
+      <div><h2>Escalations</h2><Link href={href("escalations")} className={styles.value}>{sources.escalations.totalCount} active now</Link><small>Work needing the next level of review</small></div>
+    </div>
+    <section className={styles.section}><header><h2>Decisions to review <span>{sources.decisions.totalCount}</span></h2><Link href={href("decisions")}>View all →</Link></header>
+      {sources.decisions.items.length ? <ul className={styles.decisions}>{sources.decisions.items.map(row => <li key={`${row.status}-${row.id}`}><span>{row.status === "lifecycle" ? "Equipment" : row.status === "approval" ? "Approval" : "Escalation"}</span><Link href={briefRecordHref(row)!}>{row.label}</Link></li>)}</ul> : <p>No decisions are waiting.</p>}
     </section>
-  );
+    <section className={styles.section}><header><h2>Cost by store</h2><Link href={href("stores")}>View all {sources.stores.totalCount} stores →</Link></header>
+      <div className={styles.tableScroll}><table><thead><tr><th>Store</th><th>Work opened</th><th>Recorded work cost</th></tr></thead><tbody>{sources.stores.items.map(row => <tr key={row.id}><th scope="row"><Link href={briefRecordHref(row)!}>{row.label}</Link></th><td><Link href={href("opened_work", row.id)}>{row.openedWork}</Link></td><td><Link href={href("recorded_cost", row.id)}>{money(row.amountMinor)}</Link></td></tr>)}</tbody></table></div>
+    </section>
+  </section>;
 }
