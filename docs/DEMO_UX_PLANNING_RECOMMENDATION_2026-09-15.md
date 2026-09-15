@@ -58,3 +58,7 @@ Do not claim these changes are delivered. Research completed; implementation and
 The September 15 batch implements the core work/equipment navigation, makes existing vendor overview and directory explicit, and replaces the planning headline with current open estimates and price gaps. Existing PM, repair/replacement and capital routes are reused. Historical baseline is collapsed. Validation and publication evidence live in PLATFORM_IMPROVEMENT_PASSES.md.
 
 UX-R1/R2/R3 remain partial against the full acceptance above: date controls and bounded equipment aggregation, exact filtered vendor portfolio drill-through, and durable budget/allowance/scenario commands are still outstanding. This batch does not establish production readiness or complete competitive parity. The scheduled continuation was paused at user request and must remain paused.
+
+## Small follow-up scope (user-approved usage constraint)
+
+Delivered a lightweight personal scenario using existing saved views: target + extra-work allowance + contingency compared with current open repair estimates. Values and scope persist; source totals recalculate on reopen. This is not an approved or frozen company budget. Shared approvals, monthly forecasts, PM/replacement consolidation and richer scenarios remain outside this small follow-up. Created-date history filters and filtered vendor portfolio destinations are also implemented. See the persistent checklist for browser/test/publication evidence.
