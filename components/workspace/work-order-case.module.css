@@ -22,9 +22,8 @@
 }
 
 .caseHeader {
-  position: sticky;
-  top: var(--workspace-sticky-offset, 109px);
-  z-index: 18;
+  position: relative;
+  z-index: 1;
   overflow: hidden;
   border: 1px solid var(--case-border);
   border-radius: 8px;

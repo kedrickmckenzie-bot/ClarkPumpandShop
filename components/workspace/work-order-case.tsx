@@ -1,3 +1,4 @@
+import { SavedWorkSuggestions } from "@/components/ops/saved-work-suggestions";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { WorkReviewButton, WorkEquipmentContext } from "./work-review";
@@ -760,6 +761,7 @@ export function WorkOrderCase({
             <ArrowLeft aria-hidden="true" size={15} />Change service path
           </Link>
         ) : null}
+        {!accountabilityOnly && workspaceMode === "direct_service" && issuance.rolePermitted && issuance.selectedVendorId ? <SavedWorkSuggestions workOrderId={issuance.workOrderId} vendorId={issuance.selectedVendorId} /> : null}
         {workspaceMode === "direct_service" ? <div className={styles.panelRegion} data-panel="authorization"><VendorIssuancePanel model={issuance} edition={edition} /></div> : null}
         {workspaceMode === "bids" && !accountabilityOnly ? <div className={styles.panelRegion} data-panel="pricing"><EstimateComparisonPanel model={estimateComparison} /></div> : null}
         {workspaceMode !== "held" ? <ServiceRecordHistory authorization={authorization} estimateComparison={estimateComparison} /> : null}

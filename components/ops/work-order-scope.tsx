@@ -5,6 +5,7 @@ import { StorePicker } from "./store-picker";
 import { WorkOrderLifecycleFields } from "./work-order-lifecycle-fields";
 import styles from "./ops.module.css";
 const Scope = createContext({ storeId: "", setStoreId: (() => {}) as (id: string) => void });
+export const useWorkOrderScope = () => useContext(Scope);
 export function WorkOrderScope({ defaultStoreId, children }: { defaultStoreId?: string; children: ReactNode }) {
   const [storeId, setStoreId] = useState(defaultStoreId ?? "");
   return <Scope.Provider value={{ storeId, setStoreId }}>{children}</Scope.Provider>;

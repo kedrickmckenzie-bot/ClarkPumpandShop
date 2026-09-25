@@ -198,7 +198,7 @@ export async function POST(request: Request) {
         : assignmentKind === "hold_for_visit"
           ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(`${result.number} is approved to wait for a matching vendor visit.`)}`
         : assignmentKind === "outside_vendor"
-          ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=service-work-created#issue-work`
+          ? `/app/work-orders/${encodeURIComponent(result.id)}?view=service&updated=service-work-created#saved-jobs`
           : `/app/work-orders/${encodeURIComponent(result.id)}?created=true`;
     return relativeRedirect303(destination);
   } catch (error) {

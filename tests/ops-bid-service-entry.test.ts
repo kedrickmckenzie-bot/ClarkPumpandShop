@@ -293,7 +293,7 @@ describe("work-order vendor path entry", () => {
     const response = await POST(requestFor("outside_vendor"));
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toMatch(/view=service&updated=service-work-created#issue-work$/);
+    expect(response.headers.get("location")).toMatch(/view=service&updated=service-work-created#saved-jobs$/);
     const after = repository.snapshot();
     const workOrder = after.workOrders.at(-1)!;
     expect(workOrder.nextAction).toBe("Issue service authorization");

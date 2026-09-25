@@ -694,7 +694,7 @@
 .breakdownBody {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 24px;
   padding: 24px 22px;
 }

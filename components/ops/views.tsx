@@ -50,16 +50,8 @@ import { ApprovedWorkPortfolio } from "@/components/workspace/approved-work-port
 import type { ApprovedWorkPortfolioViewModel } from "@/app/app/_data/approved-work-presenter";
 
 const CHART_PALETTE = ["#2855d9", "#64748b", "#0f766e", "#8b5cf6", "#d97706", "#dc2626", "#475569"];
-const CHART_TONE_COLORS: Partial<Record<Tone, string>> = {
-  positive: "#16805c",
-  warning: "#d97706",
-  critical: "#dc2626",
-  info: "#2855d9",
-  neutral: "#64748b",
-};
-
-function chartColor(tone: Tone | undefined, index: number) {
-  return tone ? CHART_TONE_COLORS[tone] ?? CHART_PALETTE[index % CHART_PALETTE.length] : CHART_PALETTE[index % CHART_PALETTE.length];
+function chartColor(_tone: Tone | undefined, index: number) {
+  return CHART_PALETTE[index % CHART_PALETTE.length];
 }
 
 function toneClass(tone: Tone = "neutral") {

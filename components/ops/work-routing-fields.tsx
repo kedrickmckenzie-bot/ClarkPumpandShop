@@ -1,10 +1,13 @@
 "use client";
 
+import { SavedWorkSuggestions } from "./saved-work-suggestions";
+import { useWorkOrderScope } from "./work-order-scope";
 import { useState } from "react";
 import type { CreateWorkOrderPageViewModel } from "./data-contract";
 import styles from "./ops.module.css";
 
 export function WorkRoutingFields({ model, accountabilityOnly }: { model: CreateWorkOrderPageViewModel; accountabilityOnly: boolean }) {
+  const { storeId } = useWorkOrderScope();
   const [route, setRoute] = useState<string>(accountabilityOnly && model.defaults?.assignmentKind === "hold_for_visit" ? "choose_later" : model.defaults?.assignmentKind ?? "choose_later");
   const [search, setSearch] = useState("");
   const [vendorId, setVendorId] = useState(model.defaults?.vendorId ?? "");
@@ -40,6 +43,7 @@ export function WorkRoutingFields({ model, accountabilityOnly }: { model: Create
           <span><strong>{vendor.label}</strong>{vendor.value === vendorId ? <small>Selected{!vendors.includes(vendor) ? " · outside this search" : ""}</small> : null}</span>
         </label>)}
       </fieldset>
+      {!accountabilityOnly ? <SavedWorkSuggestions storeId={storeId} vendorId={vendorId} preview /> : null}
     </div> : null}
     {route === "internal" ? <label className={styles.field} htmlFor="work-internal-assignee"><span>Internal assignee <em>Required</em></span><select id="work-internal-assignee" name="internalMembershipId" required defaultValue={model.defaults?.internalMembershipId ?? ""}><option value="">Choose a technician</option>{model.internalAssignees.map((member) => <option key={member.value} value={member.value}>{member.label}</option>)}</select><small>Choose a technician, or use Choose later.</small></label> : null}
     {route === "hold_for_visit" ? <div className={styles.fieldGrid}>
