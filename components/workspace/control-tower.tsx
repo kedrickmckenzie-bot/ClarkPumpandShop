@@ -21,6 +21,7 @@ import type {
   TrendViewModel,
 } from "@/components/ops/data-contract";
 import styles from "./control-tower.module.css";
+import { CompanySpendSummary } from "./company-spend-summary";
 
 function toneClass(tone: Tone = "neutral") {
   return {
@@ -203,11 +204,15 @@ export function ControlTower({ model }: { model: DashboardPageViewModel }) {
     return <div className={styles.workspace}><PageHeader model={model} /><StatePanel model={model} /></div>;
   }
 
-  const insights = model.breakdowns.length + model.trends.length ? (
+  const useSpendSummary = model.layout === "operations" || model.layout === "regional";
+  const isSpendBreakdown = (breakdown: BreakdownViewModel) => ["recorded-cost-by-service-area", "recorded-cost-by-store"].includes(breakdown.id);
+  const regularBreakdowns = useSpendSummary ? model.breakdowns.filter(breakdown => !isSpendBreakdown(breakdown)) : model.breakdowns;
+  const spendSummary = useSpendSummary ? <CompanySpendSummary breakdowns={model.breakdowns.filter(isSpendBreakdown).sort((a, b) => a.id.localeCompare(b.id))} /> : null;
+  const insights = regularBreakdowns.length + model.trends.length ? (
     <div className={styles.insightStack} aria-label="Scope insights">
-      {model.breakdowns.length ? (
+      {regularBreakdowns.length ? (
         <div className={styles.insightGrid}>
-          {model.breakdowns.slice(0, model.layout === "executive" ? 3 : 2).map((breakdown) => <Distribution model={breakdown} key={breakdown.id} />)}
+          {regularBreakdowns.slice(0, model.layout === "executive" ? 3 : 2).map((breakdown) => <Distribution model={breakdown} key={breakdown.id} />)}
         </div>
       ) : null}
       {model.trends.slice(0, 2).map((trend) => <Trend model={trend} key={trend.id} />)}
@@ -227,14 +232,14 @@ export function ControlTower({ model }: { model: DashboardPageViewModel }) {
       content = <>{metrics}{insights}{spotlight}{attention}{pipeline}</>;
       break;
     case "regional":
-      content = <>{metrics}{attention}{insights}{pipeline}{spotlight}</>;
+      content = <>{metrics}{spendSummary}{attention}{insights}{pipeline}{spotlight}</>;
       break;
     case "store":
       content = <>{attention}{metrics}{pipeline}{insights}{spotlight}</>;
       break;
     case "operations":
     default:
-      content = <>{metrics}{attention}{pipeline}{insights}{spotlight}</>;
+      content = <>{metrics}{spendSummary}{attention}{pipeline}{insights}{spotlight}</>;
   }
 
   return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;

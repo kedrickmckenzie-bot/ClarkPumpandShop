@@ -166,8 +166,7 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
       description: isFacilities
         ? "Review work, visits, and costs across your stores."
         : "See stores, open work, vendor activity, and recorded costs across your region.",
-      primaryAction: { label: "Review queue", href: "/app/action-center" },
-      secondaryAction: { label: "Create work order", href: "/app/work-orders/new" },
+      primaryAction: { label: "Create work order", href: "/app/work-orders/new" },
     },
     journey: journey,
     metrics: isFacilities
@@ -184,8 +183,8 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
           { id: "recorded-cost", label: "Recorded work cost", value: money(activity.recordedCostMinor), supportingText: "Rolling source cost inside your region", link: { href: "/app/spend", label: "Explain the total" } },
         ],
     priorityActions: review.items,
-    prioritySection: { title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" } },
-    breakdowns: isFacilities ? [workStatusBreakdown, activeVendorBreakdown] : [storeBreakdown, categoryBreakdown],
+    prioritySection: { display: "summary", title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" } },
+    breakdowns: isFacilities ? [workStatusBreakdown, activeVendorBreakdown, categoryBreakdown, storeBreakdown] : [storeBreakdown, categoryBreakdown],
     trends: [trend],
     spotlight,
   };

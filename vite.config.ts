@@ -46,7 +46,7 @@ export default defineConfig(async () => {
   return {
     // Vinext dynamically imports named navigation helpers. Keep those export
     // names stable across the production client chunks.
-    build: { rolldownOptions: { preserveEntrySignatures: "strict" } },
+    build: { rolldownOptions: { preserveEntrySignatures: "strict" as const } },
     server: { watch: {
       ...(isCodexSeatbeltSandbox ? { useFsEvents: false, usePolling: true } : {}),
       // Build output and runtime logs are not source changes. Watching them
