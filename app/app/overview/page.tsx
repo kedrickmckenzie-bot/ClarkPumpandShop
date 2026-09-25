@@ -5,5 +5,10 @@ import { loadDashboardModel } from "../_data/operator-loader";
 export const metadata: Metadata = { title: "Overview" };
 
 export default async function OverviewPage() {
-  return <ControlTower model={await loadDashboardModel()} />;
+  try {
+    return <ControlTower model={await loadDashboardModel()} />;
+  } catch (error) {
+    console.error("Overview workspace loading failed", error);
+    throw error;
+  }
 }
