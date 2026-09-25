@@ -385,8 +385,23 @@ describe("production identity and organization selection", () => {
     data.scopeGrants.find(row => row.membershipId === "membership-northline-facilities")!.permission = "ops:read";
     const repository = useFixture(data); const before = repository.snapshot().workOrders.length;
     expect((await loadOperatorSession()).effectiveCapabilities).toEqual([]);
-    expect((await createWork(request())).status).toBe(403);
+    expect((await createWork(request({ origin: "https://public-proxy.example", "sec-fetch-site": "same-origin" }))).status).toBe(403);
     expect(repository.snapshot().workOrders).toHaveLength(before);
+  });
+
+  it("creates a store through a reverse proxy without confusing the internal URL with the browser origin", async () => {
+    const data = fixture();
+    const grant = data.scopeGrants.find(row => row.membershipId === "membership-northline-facilities")!;
+    grant.scopeKind = "organization"; grant.scopeId = ORG;
+    const repository = useFixture(data);
+    const { POST } = await import("@/app/api/ops/stores/route");
+    const body = new FormData();
+    for (const [key, value] of Object.entries({storeNumber:"PROXY-TEST", name:"Proxy regression store", address1:"1 Example Road", city:"Example", state:"KY", postalCode:"40000", timeZone:"America/New_York"})) body.set(key, value);
+    const response = await POST(new Request("http://localhost:10000/api/ops/stores", {method:"POST", headers:{origin:"https://traceops-convenience-demo.onrender.com", "sec-fetch-site":"same-origin"}, body}));
+    expect(response.status).toBe(303);
+    const store = repository.snapshot().stores.find(row => row.storeNumber === "PROXY-TEST")!;
+    expect(store.organizationId).toBe(ORG);
+    expect(response.headers.get("location")).toBe(`/app/stores/${store.id}/equipment-setup?created=true`);
   });
 
   it("does not combine company read access with a narrower write grant", async () => {

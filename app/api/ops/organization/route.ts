@@ -3,11 +3,12 @@ import { isFictionalPreview, trustsSitesIdentity, OPS_ORGANIZATION_COOKIE, Opera
 import { resolveAuthenticatedOperatorSession } from "@/lib/server/operator-membership";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
+import { isWorkspaceOrigin } from "@/lib/server/request-origin";
 
 export async function POST(request: Request) {
   if (isFictionalPreview()) return relativeRedirect303("/app/overview");
   if (!trustsSitesIdentity()) return relativeRedirect303("/access?reason=configuration");
-  if (request.headers.get("sec-fetch-site") === "cross-site" || (request.headers.get("origin") && request.headers.get("origin") !== new URL(request.url).origin)) return Response.json({ error: "Open this form from your workspace." }, { status: 403 });
+  if (!isWorkspaceOrigin(request)) return Response.json({ error: "Open this form from your workspace." }, { status: 403 });
   const identity = await getChatGPTUser();
   if (!identity) return relativeRedirect303("/access?reason=sign_in");
   const form = await request.formData();

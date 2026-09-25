@@ -9,6 +9,7 @@ import type { OpsRepository } from "@/lib/ops/repository";
 import type { ActorContext } from "@/lib/ops/types";
 import { domainRoleForOperatorRole } from "./operator-membership";
 import { OperatorAccessError } from "./operator-access";
+import { isWorkspaceOrigin } from "./request-origin";
 
 export async function assertActiveOperatorMembership(
   repository: OpsRepository,
@@ -35,8 +36,7 @@ export async function assertActiveOperatorMembership(
 
 export async function getOpsRequestContext(allowedRoles: readonly OperatorRole[], requiredCapability?: OperatorCapability, request?: Request, organizationWide = false) {
   if (request && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
-    const origin = request.headers.get("origin");
-    if (request.headers.get("sec-fetch-site") === "cross-site" || origin && origin !== new URL(request.url).origin) {
+    if (!isWorkspaceOrigin(request)) {
       throw new OpsDomainError("FORBIDDEN", "Open this form from your workspace and try again.");
     }
   }
