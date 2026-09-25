@@ -1,3 +1,4 @@
+import { LiveSearchForm } from "./live-search-form";
 import Link from "next/link";
 import type { RequestWorkLinkPageViewModel } from "./data-contract";
 import styles from "./request-work-linker.module.css";
@@ -7,7 +8,7 @@ export function RequestWorkLinker({ model }: { model: RequestWorkLinkPageViewMod
     <Link className={styles.back} href={model.returnHref}>← Back to {model.reference}</Link>
     <header className={styles.header}><div><p>Potentially related work</p><h1>Browse this store’s open work</h1><span>Choose only when the report belongs with the work. Similar wording is a suggestion—not evidence of a duplicate, shared physical item, or completed repair.</span></div></header>
     <aside className={styles.notice}><strong>{model.reference}:</strong> {model.problem}. The original report, equipment references, photos, and timestamps remain unchanged after linking.</aside>
-    <form className={styles.search} action={model.searchAction} method="get"><input type="hidden" name="returnTo" value={model.returnHref} /><input name="q" defaultValue={model.searchValue} aria-label="Search this store’s open work" placeholder="Search work-order number, problem, vendor, or category" /><button type="submit">Search</button></form>
+    <LiveSearchForm role="search" className={styles.search} action={model.searchAction} method="get"><input type="hidden" name="returnTo" value={model.returnHref} /><input type="search" name="q" defaultValue={model.searchValue} aria-label="Search this store’s open work" placeholder="Search work-order number, problem, vendor, or category" /><button type="submit">Search</button></LiveSearchForm>
     <section className={styles.results} aria-labelledby="work-results-title"><header id="work-results-title">{model.resultSummary}</header>
       {model.rows.length ? <ol className={styles.list}>{model.rows.map((work) => {
         const alreadyLinked = work.id === model.currentLinkedWorkOrderId;

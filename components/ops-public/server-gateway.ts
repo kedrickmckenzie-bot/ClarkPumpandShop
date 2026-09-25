@@ -1140,7 +1140,7 @@ const gateway: PublicOperationsGateway = {
         accepted: `${source.organizationName} has been notified that ${source.vendor.name} accepted this service authorization.`,
         declined: `${source.organizationName} has been notified that the service authorization was declined.`,
         proposed_date: `${source.organizationName} received the proposed arrival time.`,
-        question: `Your question was sent to ${source.organizationName} Facilities.`,
+        question: `Your question was added to work order ${source.workOrderNumber} and sent to Facilities.`,
       };
       return {
         receiptId: response.id,

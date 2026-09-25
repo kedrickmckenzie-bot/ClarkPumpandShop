@@ -641,6 +641,7 @@ export interface AssetLifecycleInputViewModel {
   id: string;
   organizationId: string;
   storeId: string;
+  categoryKey?: string;
   label: string;
   description?: string;
   installedAt?: string;

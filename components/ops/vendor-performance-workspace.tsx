@@ -1,3 +1,4 @@
+import { LiveSearchForm } from "./live-search-form";
 import Link from "next/link";
 import { WorkReviewButton } from "@/components/workspace/work-review";
 import { PaginationControls } from "./pagination-controls";
@@ -126,7 +127,7 @@ function VendorPerformanceListComplete({ model }: { model: VendorPerformanceList
       <section className={styles.directoryPanel} aria-labelledby="vendor-directory-heading">
         <div className={styles.directoryToolbar}>
           <div><h2 id="vendor-directory-heading">Compare vendor performance</h2><p>Compare the same trade and review the work behind each measure.</p></div>
-          <form className={styles.toolbar} action="/app/vendors" method="get" role="search">
+          <LiveSearchForm className={styles.toolbar} action="/app/vendors" method="get" role="search">
             <input type="hidden" name="screen" value="overview" />
             <label>
               <span className={styles.visuallyHidden}>Search vendors</span>
@@ -160,7 +161,7 @@ function VendorPerformanceListComplete({ model }: { model: VendorPerformanceList
               </select>
             </label>
             <button type="submit">Apply</button>
-          </form>
+          </LiveSearchForm>
         </div>
         <div className={styles.resultLine}><strong>{model.resultSummary}</strong><span>Response rates appear after three recorded responses. Select any number to see the work behind it.</span></div>
 
@@ -233,7 +234,7 @@ function VendorAccountabilityList({ model }: { model: VendorPerformanceListViewM
       <section className={styles.directoryPanel} aria-labelledby="vendor-directory-heading">
         <div className={styles.directoryToolbar}>
           <div><h2 id="vendor-directory-heading">Vendor directory</h2><p>Search by company name or the type of work you need performed.</p></div>
-          <form className={styles.toolbar} action="/app/vendors" method="get" role="search">
+          <LiveSearchForm className={styles.toolbar} action="/app/vendors" method="get" role="search">
             <input type="hidden" name="screen" value="directory" />
             <label>
               <span className={styles.visuallyHidden}>Search vendors</span>
@@ -248,7 +249,7 @@ function VendorAccountabilityList({ model }: { model: VendorPerformanceListViewM
               </select>
             </label>
             <button type="submit">Search</button>
-          </form>
+          </LiveSearchForm>
         </div>
         <div className={styles.resultLine}><strong>{model.resultSummary}</strong><span>Contact and routing information only.</span></div>
 

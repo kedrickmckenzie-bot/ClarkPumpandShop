@@ -9,6 +9,7 @@ import type { OpsFixture } from "@/lib/ops/types";
 import type { OperatorSession } from "@/components/ops/data-contract";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 let buildVendorPerformanceDetailModel: typeof import("@/app/app/_data/operator-presenter").buildVendorPerformanceDetailModel;
 let buildVendorPerformanceListModel: typeof import("@/app/app/_data/operator-presenter").buildVendorPerformanceListModel;

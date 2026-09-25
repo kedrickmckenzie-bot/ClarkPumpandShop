@@ -235,6 +235,14 @@ describe("canonical work and provider commands", () => {
     const updated = await svc.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id);
     expect(updated?.accountableParty).toBe("Facilities coordination team");
     expect((await svc.repository.getAssignment(NORTHLINE_ORGANIZATION_ID, assignment.id))?.status).toBe("issued");
+    const beforeQuestion = (svc.repository as ReturnType<typeof createNorthlineFixtureRepository>).snapshot();
+    await recordVendorResponse(svc, { organizationId: NORTHLINE_ORGANIZATION_ID, workOrderId: workOrder.id, assignmentId: assignment.id, issuanceId: issuance.id, response: "question", responderName: "Vendor dispatch", message: "Where is the roof access?", actor: { ...actor, actorType: "vendor_link" } });
+    const afterQuestion = (svc.repository as ReturnType<typeof createNorthlineFixtureRepository>).snapshot();
+    expect(afterQuestion.workOrders.map(row => row.id)).toEqual(beforeQuestion.workOrders.map(row => row.id));
+    expect(await svc.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id)).toMatchObject({ number: workOrder.number });
+    const tasks = await svc.repository.listWorkflowTasksForWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrder.id);
+    expect(tasks.some(task => task.title === "Answer vendor question" && task.workOrderId === workOrder.id)).toBe(true);
+
   });
 });
 

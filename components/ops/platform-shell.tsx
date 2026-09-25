@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkspaceSearch } from "./workspace-search";
 import Image from "next/image";
 import { NavigationTrail } from "@/components/workspace/navigation-trail";
 import { workspaceStartHref } from "@/lib/ops/navigation-trail";
@@ -13,7 +14,6 @@ import {
   LayoutDashboard,
   Menu,
   Plus,
-  Search,
   Settings2,
   Store,
   Truck,
@@ -320,22 +320,7 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
 
             <div className={styles.mobileBrand}><ProductIdentity compact /></div>
 
-            <form className={styles.globalSearch} action="/app/search" method="get" role="search">
-              <Search aria-hidden="true" size={18} />
-              <label className={styles.visuallyHidden} htmlFor="global-platform-search">
-                Search the workspace
-              </label>
-              <input
-                id="global-platform-search"
-                name="q"
-                type="search"
-                placeholder={edition === "accountability"
-                  ? "Search work orders, visits, stores, or vendors"
-                  : "Search a store, work order, vendor, or equipment"}
-                autoComplete="off"
-              />
-              <button type="submit">Search</button>
-            </form>
+            <WorkspaceSearch placeholder={edition === "accountability" ? "Search work orders, visits, stores, or vendors" : "Search a store, work order, vendor, or equipment"} />
 
             {session.accessMode !== "authenticated" ? <div className={styles.editionIndicator} aria-label={`Demo package: ${demoEditionPresentation[edition].label}`}>
               <Layers3 aria-hidden="true" size={17} />

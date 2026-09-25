@@ -1,0 +1,10 @@
+.root { position: relative; flex: 1; min-width: 180px; max-width: 660px; }
+.form { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #dbe1e8; border-radius: 6px; padding: 0 10px; height: 42px; }
+.form input { min-width: 0; flex: 1; border: 0; outline-offset: 2px; background: transparent; font-size: 15px; }
+.form button { padding: 8px; color: #1e40af; font-weight: 600; }
+.results { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 100; max-height: 65vh; overflow: auto; background: white; border: 1px solid #dbe1e8; border-radius: 6px; box-shadow: 0 8px 24px #0f172a22; padding: 10px; }
+.results p, .results h3 { margin: 6px 8px; color: #526175; font-size: 13px; }
+.results h3 { font-weight: 700; text-transform: uppercase; margin-top: 14px; }
+.results a { display: flex; flex-direction: column; padding: 9px; color: #17253b; font-size: 15px; }
+.results a:hover, .results a:focus-visible { background: #eff6ff; }
+.results small { color: #526175; }

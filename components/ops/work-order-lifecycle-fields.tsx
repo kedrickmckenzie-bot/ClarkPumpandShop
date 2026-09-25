@@ -40,6 +40,7 @@ export function WorkOrderLifecycleFields({
   asOf: string;
   defaultAssetId?: string;
 }) {
+  const [search, setSearch] = useState("");
   const [assetId, setAssetId] = useState(defaultAssetId ?? "");
   const [repairEstimate, setRepairEstimate] = useState("");
   const [serviceExtensionYears, setServiceExtensionYears] = useState("");
@@ -104,22 +105,11 @@ export function WorkOrderLifecycleFields({
     <>
       <label className={styles.field} htmlFor="work-asset">
         <span>Equipment or asset <small>Optional — can be deferred</small></span>
-        <input
-          id="work-asset"
-          name="assetId"
-          list="work-asset-options"
-          placeholder="Search an asset, or leave blank when unknown"
-          autoComplete="off"
-          value={assetId}
-          onChange={(event) => setAssetId(event.target.value)}
-        />
-        <datalist id="work-asset-options">
-          {assets.map((option) => (
-            <option value={option.id} label={option.label} key={option.id}>
-              {option.description}
-            </option>
-          ))}
-        </datalist>
+        <input type="search" aria-label="Find equipment at this store" placeholder="Find equipment by name or tag" value={search} onChange={e => setSearch(e.target.value)} />
+        <select id="work-asset" name="assetId" value={assetId} onChange={e => setAssetId(e.target.value)}>
+          <option value="">No equipment selected</option>
+          {assets.filter(a => a.id === assetId || `${a.label} ${a.description ?? ""}`.toLowerCase().includes(search.trim().toLowerCase())).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+        </select>
         <small>Leaving this blank will not create a placeholder asset. It can be linked after diagnosis.</small>
       </label>
 

@@ -7,6 +7,7 @@ import type { OperatorSession } from "@/components/ops/data-contract";
 import { NORTHLINE_ORGANIZATION_ID, buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 let buildListModel: typeof import("@/app/app/_data/operator-presenter").buildListModel;
 

@@ -1,3 +1,4 @@
+import { LiveSearchForm } from "./live-search-form";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -431,13 +432,13 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
           <section className={`${styles.listWorkspace} ${styles.reviewQueueWorkspace}`}>
             <div className={styles.listToolbar}>
               {model.search ? (
-                <form className={styles.listSearch} action={model.search.action} method="get" role="search">
+                <LiveSearchForm className={styles.listSearch} action={model.search.action} method="get" role="search">
                   <Search aria-hidden="true" size={18} />
                   <label className={styles.visuallyHidden} htmlFor={`${model.table.id}-search`}>{model.search.label}</label>
                   <input id={`${model.table.id}-search`} name="q" type="search" defaultValue={model.search.value} placeholder={model.search.placeholder} />
                   {model.search.preservedParameters?.map((parameter) => <input key={parameter.name} name={parameter.name} type="hidden" value={parameter.value} />)}
                   <button type="submit">Search</button>
-                </form>
+                </LiveSearchForm>
               ) : <span className={styles.toolbarTitle}>Review queue</span>}
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
@@ -656,13 +657,13 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
           <section className={styles.listWorkspace}>
             <div className={styles.listToolbar}>
               {model.search ? (
-                <form className={styles.listSearch} action={model.search.action} method="get" role="search">
+                <LiveSearchForm className={styles.listSearch} action={model.search.action} method="get" role="search">
                   <Search aria-hidden="true" size={18} />
                   <label className={styles.visuallyHidden} htmlFor={`${model.table.id}-search`}>{model.search.label}</label>
                   <input id={`${model.table.id}-search`} name="q" type="search" defaultValue={model.search.value} placeholder={model.search.placeholder} />
                   {model.search.preservedParameters?.map((parameter) => <input key={parameter.name} name={parameter.name} type="hidden" value={parameter.value} />)}
                   <button type="submit">Search</button>
-                </form>
+                </LiveSearchForm>
               ) : <span className={styles.toolbarTitle}>Records</span>}
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
@@ -777,13 +778,13 @@ export function ListView({ model }: { model: ListPageViewModel }) {
           <section className={styles.listWorkspace}>
             <div className={styles.listToolbar}>
               {model.search ? (
-                <form className={styles.listSearch} action={model.search.action} method="get" role="search">
+                <LiveSearchForm className={styles.listSearch} action={model.search.action} method="get" role="search">
                   <Search aria-hidden="true" size={18} />
                   <label className={styles.visuallyHidden} htmlFor={`${model.table.id}-search`}>{model.search.label}</label>
                   <input id={`${model.table.id}-search`} name="q" type="search" defaultValue={model.search.value} placeholder={model.search.placeholder} />
                   {model.search.preservedParameters?.map((parameter) => <input key={parameter.name} name={parameter.name} type="hidden" value={parameter.value} />)}
                   <button type="submit">Search</button>
-                </form>
+                </LiveSearchForm>
               ) : <span className={styles.toolbarTitle}>Records</span>}
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
@@ -808,12 +809,12 @@ export function SearchView({ model }: { model: SearchPageViewModel }) {
   return (
     <div className={styles.pageStack}>
       <PageHeader page={model.page} />
-      <form className={styles.universalSearch} action="/app/search" method="get" role="search">
+      <LiveSearchForm className={styles.universalSearch} action="/app/search" method="get" role="search">
         <Search aria-hidden="true" size={20} />
         <label className={styles.visuallyHidden} htmlFor="universal-search">Search records</label>
         <input id="universal-search" name="q" type="search" defaultValue={model.query} placeholder={model.placeholder ?? "Store, address, work order, vendor, equipment, or serial number"} />
         <button type="submit">Search</button>
-      </form>
+      </LiveSearchForm>
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           <div className={styles.searchSummary}><strong>{model.resultSummary}</strong><span>Results are limited to your current role and location scope.</span></div>
@@ -862,13 +863,13 @@ export function ProgramView({ model, beforeContent, compact = false }: { model: 
           {model.priorityActions.length ? <ActionQueue actions={model.priorityActions} /> : null}
           {model.table ? <section className={styles.listWorkspace}>
             {model.search || model.resultSummary ? <div className={styles.listToolbar}>
-              {model.search ? <form className={styles.listSearch} action={model.search.action} method="get" role="search">
+              {model.search ? <LiveSearchForm className={styles.listSearch} action={model.search.action} method="get" role="search">
                 <Search aria-hidden="true" size={18} />
                 <label className={styles.visuallyHidden} htmlFor={`${model.table.id}-search`}>{model.search.label}</label>
                 <input id={`${model.table.id}-search`} name="q" type="search" defaultValue={model.search.value} placeholder={model.search.placeholder} />
                 {model.search.preservedParameters?.map((parameter) => <input key={parameter.name} name={parameter.name} type="hidden" value={parameter.value} />)}
                 <button type="submit">Search</button>
-              </form> : <span className={styles.toolbarTitle}>Records</span>}
+              </LiveSearchForm> : <span className={styles.toolbarTitle}>Records</span>}
               {model.resultSummary ? <strong className={styles.resultSummary}>{model.resultSummary}</strong> : null}
             </div> : null}
             <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} />

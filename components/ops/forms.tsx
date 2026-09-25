@@ -14,7 +14,7 @@ import type {
   VendorIssuanceViewModel,
 } from "./data-contract";
 import { DataStatePanel } from "./views";
-import { WorkOrderLifecycleFields } from "./work-order-lifecycle-fields";
+import { WorkOrderScope, WorkOrderStore, WorkOrderEquipment } from "./work-order-scope";
 import styles from "./ops.module.css";
 
 function PageIntro({ model }: { model: CreateRequestPageViewModel | CreateWorkOrderPageViewModel | CreateStorePageViewModel | CreateVendorPageViewModel }) {
@@ -29,10 +29,6 @@ function PageIntro({ model }: { model: CreateRequestPageViewModel | CreateWorkOr
       </div>
     </header>
   );
-}
-
-function Datalist({ id, options }: { id: string; options: SelectOptionViewModel[] }) {
-  return <datalist id={id}>{options.map((option) => <option value={option.value} label={option.label} key={option.value}>{option.description}</option>)}</datalist>;
 }
 
 function SelectField({ id, name, label, options, required, helper, defaultValue, className }: { id: string; name: string; label: string; options: SelectOptionViewModel[]; required?: boolean; helper?: string; defaultValue?: string; className?: string }) {
@@ -93,7 +89,7 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
 export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-order:test-render", edition = "complete" }: { model: CreateWorkOrderPageViewModel; componentId?: string; submissionKey?: string; edition?: DemoEdition }) {
   const accountabilityOnly = edition === "accountability";
   const boundStoreId = model.sourceRequest?.storeId ?? model.defaults?.storeId;
-  const sourceStoreLabel = model.stores.find((store) => store.value === boundStoreId)?.label;
+
   const sourceVendorLabel = model.sourceVisit ? model.vendors.find((vendor) => vendor.value === model.defaults?.vendorId)?.label : undefined;
   const sourceInternalLabel = model.sourceVisit ? model.internalAssignees.find((member) => member.value === model.defaults?.internalMembershipId)?.label : undefined;
   return (
@@ -101,7 +97,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
       <PageIntro model={model} />
       <ModelState state={model.state} />
       {model.state.kind === "ready" ? (
-        <RecordForm className={styles.recordForm} action={model.submitAction}>
+        <WorkOrderScope defaultStoreId={boundStoreId}><RecordForm className={styles.recordForm} action={model.submitAction}>
           <input type="hidden" name="submissionKey" value={submissionKey} />
           {model.sourceRequest ? <input type="hidden" name="requestId" value={model.sourceRequest.id} /> : null}
           {model.sourcePm ? <input type="hidden" name="pmOccurrenceId" value={model.sourcePm.occurrenceId} /> : null}
@@ -139,10 +135,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
           ) : null}
           <section className={styles.formSection}>
             <div className={styles.formSectionHeading}><span>1</span><div><h2>Define the work</h2><p>Start with a store and a problem.</p></div></div>
-            <label className={styles.field} htmlFor="work-store">
-              <span>Store <em>Required</em></span>
-              {model.sourceVisit || model.sourceRequest ? <><input name="storeId" type="hidden" value={boundStoreId} /><input id="work-store" readOnly value={sourceStoreLabel ?? "Bound store"} /></> : <select id="work-store" name="storeId" required defaultValue={model.defaults?.storeId ?? ""}><option value="" disabled>Choose a store</option>{model.stores.map((store) => <option value={store.value} key={store.value}>{store.label}</option>)}</select>}
-            </label>
+            <WorkOrderStore model={model} locked={Boolean(model.sourceVisit || model.sourceRequest || model.sourcePm || componentId)} />
             <label className={styles.field} htmlFor="work-problem">
               <span>Problem <em>Required</em></span>
               <textarea id="work-problem" name="problem" rows={3} required placeholder="What needs to be inspected, repaired, or maintained?" defaultValue={model.sourceRequest?.problem ?? model.defaults?.problem} />
@@ -151,14 +144,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
             {!accountabilityOnly ? (
               <details className={styles.optionalFormSection} open={Boolean(componentId || model.defaults?.assetId || model.defaults?.categoryKey)}>
                 <summary><strong>Classify equipment</strong><span>Optional · add now or later</span></summary>
-                <div className={styles.optionalFormBody}>
-                  <label className={styles.field} htmlFor="work-category">
-                    <span>Category <small>Optional</small></span>
-                    <input id="work-category" name="categoryKey" list="work-category-options" placeholder="Classify now or leave blank" autoComplete="off" defaultValue={model.defaults?.categoryKey} />
-                    <Datalist id="work-category-options" options={model.categories} />
-                  </label>
-                  <WorkOrderLifecycleFields assets={model.assetLifecycleInputs} asOf={model.lifecycleAsOf} defaultAssetId={model.defaults?.assetId} />
-                </div>
+                <WorkOrderEquipment model={model} />
               </details>
             ) : null}
           </section>
@@ -202,7 +188,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
             <button className={styles.primaryButton} type="submit" name="intent" value="save">{model.sourceVisit ? "Create and link work order" : "Create work order"}</button>
             {!model.sourceVisit ? <button className={`${styles.primaryButton} ${styles.sendConditional}`} type="submit" name="intent" value="create_and_send">Create and send to vendor<Send aria-hidden="true" size={18} /></button> : null}
           </div>
-        </RecordForm>
+        </RecordForm></WorkOrderScope>
       ) : null}
     </div>
   );

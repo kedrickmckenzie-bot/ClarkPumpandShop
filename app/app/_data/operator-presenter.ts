@@ -5213,10 +5213,11 @@ export function buildCreateWorkOrderModel(
       { value: "planned", label: "Planned / preventive" },
     ],
     categories: [...new Set(scoped.assets.map((asset) => asset.categoryKey).concat(scoped.workOrders.map((work) => work.categoryKey ?? "")).filter(Boolean))].sort().map((category) => ({ value: category, label: sentence(category) })),
-    assetLifecycleInputs: scoped.assets.map((asset) => ({
+    assetLifecycleInputs: scoped.assets.filter(asset => asset.status !== "retired").map((asset) => ({
       id: asset.id,
       organizationId: asset.organizationId,
       storeId: asset.storeId,
+      categoryKey: asset.categoryKey,
       label: `${asset.name} · ${asset.assetTag}`,
       description: `${storeLabel(scoped.stores.find((store) => store.id === asset.storeId))} · ${assetHierarchyPath(asset).join(" › ")}`,
       installedAt: asset.installedAt,
