@@ -306,6 +306,7 @@ async function resolvePublicAccess(token: string): Promise<PublicAccess | null> 
     now: now(),
   });
   if (serviceAuthorization) {
+    if (["completed_pending_review", "resolved", "closed", "cancelled"].includes(serviceAuthorization.status)) return null;
     const storeRecord = await repository.getStore(serviceAuthorization.organizationId, serviceAuthorization.store.id);
     return storeRecord ? { kind: "service", tokenHash, channel: "secure_link", serviceAuthorization, storeRecord } : null;
   }
@@ -1000,6 +1001,8 @@ const gateway: PublicOperationsGateway = {
       runtime().repository.listServiceAppointmentsForWorkOrder(source.organizationId, source.workOrderId),
       runtime().repository.listVendorContinuationsForWorkOrder(source.organizationId, source.workOrderId),
     ]);
+    const work = await runtime().repository.getWorkOrder(source.organizationId, source.workOrderId);
+    const serviceDecisionsClosed = ["accepted", "completed", "declined", "cancelled", "superseded"].includes(source.assignmentStatus) || ["in_progress", "waiting_on_parts", "completed_pending_review", "resolved", "closed", "cancelled"].includes(work?.status ?? "");
     const currentVendorTask = tasks.find((task) => (
       ["open", "in_progress"].includes(task.status)
       && task.assigneeType === "vendor"
@@ -1009,7 +1012,7 @@ const gateway: PublicOperationsGateway = {
     const continuation = source.latestResponse
       ? continuations.find((item) => item.vendorResponseId === source.latestResponse!.id)
       : undefined;
-    const nextStep = appointment?.status === "confirmed"
+    const nextStep = serviceDecisionsClosed ? "Questions and replies stay on this work order. Sending a message does not change service status." : appointment?.status === "confirmed"
       ? "The visit time is confirmed. The technician should check in on arrival using this work-order link."
       : appointment?.status === "counter_proposed"
         ? "Review the operator's proposed time below, then accept the work, propose another time, ask a question, or decline."
@@ -1019,6 +1022,7 @@ const gateway: PublicOperationsGateway = {
             ? "The work is accepted, but no visit time is confirmed yet. Coordinate timing or use the technician check-in when arriving under the operator's instructions."
             : "Review the authorized scope, then accept, propose a visit time, ask a question, or decline.";
     return {
+      serviceDecisionsClosed,
       organizationName: source.organizationName,
       organizationSupport: "Contact the facilities team through the original service message if you need help.",
       vendorName: source.vendor.name,
@@ -1058,7 +1062,7 @@ const gateway: PublicOperationsGateway = {
       } : undefined,
       appointment: appointment ? { status: appointment.status, startsAt: appointment.startsAt, note: appointment.note } : undefined,
       nextStep,
-      technicianVisitUrl: `/public/store/${encodeURIComponent(token)}/visit`,
+      technicianVisitUrl: ["completed_pending_review", "resolved", "closed", "cancelled"].includes(source.status) ? undefined : `/public/store/${encodeURIComponent(token)}/visit`,
       mode: runtime().mode,
     };
   },
@@ -1094,10 +1098,10 @@ const gateway: PublicOperationsGateway = {
     const resolved = await resolveServiceAuthorization(token);
     if (!resolved) throw new PublicWorkflowError("This service link is unavailable.", 404, "link_unavailable");
     const source = resolved.view;
-    if (source.latestResponse && ["accepted", "declined"].includes(source.latestResponse.response)) {
+    if (command.response !== "question" && source.latestResponse && ["accepted", "declined"].includes(source.latestResponse.response)) {
       throw new PublicWorkflowError("A final response has already been recorded for this authorization.", 409, "response_already_recorded");
     }
-    if (source.assignmentStatus === "issued") {
+    if (source.assignmentStatus === "issued" && command.response !== "question") {
       try {
         await markServiceAuthorizationOpened(
           { repository: runtime().repository },

@@ -474,6 +474,16 @@ describe("public service and visit capability boundaries", () => {
     });
   });
 
+  it("accepts a question after vendor acceptance without resetting service", async () => {
+    const gateway = getPublicOperationsGateway();
+    const repository = getNorthlineFixtureRepository();
+    await gateway.respondToServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken, { response: "accepted", responderName: "Vendor" });
+    const before = await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId);
+    await gateway.respondToServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken, { response: "question", responderName: "Vendor", detail: "Where is roof access?" });
+    expect(await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, before!.id)).toMatchObject({ status: before!.status, nextAction: before!.nextAction, accountableParty: before!.accountableParty });
+    expect(await gateway.loadServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken)).toMatchObject({ serviceDecisionsClosed: true });
+  });
+
   it("keeps completed work in manager review instead of reopening it through an old authorization", async () => {
     const gateway = getPublicOperationsGateway();
     const repository = getNorthlineFixtureRepository();
@@ -501,12 +511,18 @@ describe("public service and visit capability boundaries", () => {
     expect(await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrderId)).toMatchObject({
       status: "completed_pending_review",
     });
-    expect(await gateway.loadServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken)).toBeNull();
+    expect(await gateway.loadServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken)).toMatchObject({ serviceDecisionsClosed: true, technicianVisitUrl: undefined });
     expect(await repository.getServiceAuthorizationByToken({
       tokenHash: NORTHLINE_DEMO_TOKEN_HASHES.serviceAuthorization104,
       purpose: "service_authorization",
       now: new Date().toISOString(),
-    })).toBeNull();
+    })).not.toBeNull();
+
+    const beforeQuestion = await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrderId);
+    const receipt = await gateway.respondToServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken, { response: "question", responderName: "Technician", detail: "Do you need the service report?" });
+    expect(receipt.message).toContain(beforeQuestion!.number);
+    expect(await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrderId)).toMatchObject({ status: "completed_pending_review", nextAction: beforeQuestion!.nextAction, accountableParty: beforeQuestion!.accountableParty });
+    await expect(gateway.respondToServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken, { response: "declined", responderName: "Technician", detail: "Too late to decline" })).rejects.toBeDefined();
 
     const storeContext = await gateway.lookupVendorVisitContext(PUBLIC_DEMO_LINKS.storeToken, vendorId);
     expect(storeContext.eligibleWorkOrders.map((work) => work.id)).not.toContain(workOrderId);

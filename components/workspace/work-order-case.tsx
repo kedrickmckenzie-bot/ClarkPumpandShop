@@ -752,8 +752,8 @@ export function WorkOrderCase({
       >
         <CurrentStepPanel model={canonicalCase} mode={workspaceMode} />
         {workspaceMode === "held" && !accountabilityOnly ? <HeldWorkActions model={heldWork} /> : null}
-        {workspaceMode === "vendor_response" && vendorResponse ? <VendorResponseActions model={vendorResponse} /> : null}
-        {workspaceMode === "waiting_on_vendor" && vendorResponse ? <VendorUpdateSummary model={vendorResponse} /> : null}
+        {(workspaceMode === "vendor_response" || vendorResponse?.kind === "question") && vendorResponse ? <VendorResponseActions model={vendorResponse} /> : null}
+        {workspaceMode === "waiting_on_vendor" && vendorResponse && vendorResponse.kind !== "question" ? <VendorUpdateSummary model={vendorResponse} /> : null}
         {workspaceMode === "choose_path" ? <ServicePathChoice control={control} issuance={issuance} estimateComparison={estimateComparison} workOrderId={control.workOrderId} /> : null}
         {canChangeRequestedServicePath && (workspaceMode === "direct_service" || workspaceMode === "bids") ? (
           <Link className={styles.changePathLink} href={`/app/work-orders/${control.workOrderId}?view=service`}>

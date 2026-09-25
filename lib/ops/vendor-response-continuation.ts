@@ -2,6 +2,7 @@ import { OpsDomainError, type OpsCommandServices } from "./commands";
 import { atomicWorkOrderMutation } from "./concurrency";
 import {
   buildReplacePrimaryTaskStatements,
+  buildCompleteWorkflowTaskStatements,
   buildWorkflowTaskRecord,
   selectPrimaryWorkflowTask,
 } from "./workflow-task-commands";
@@ -80,13 +81,13 @@ export async function resolveVendorResponse(
     repository.listVendorContinuationsForWorkOrder(input.organizationId, response.workOrderId),
   ]);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order not found in this organization");
-  if (["completed_pending_review", "resolved", "closed", "cancelled"].includes(workOrder.status)) {
+  if (input.decision !== "reply_to_question" && ["completed_pending_review", "resolved", "closed", "cancelled"].includes(workOrder.status)) {
     throw new OpsDomainError("CONFLICT", "This vendor response is no longer actionable because service has moved to closeout");
   }
   if (
-    activeAssignment?.id !== response.assignmentId
+    (input.decision !== "reply_to_question" && activeAssignment?.id !== response.assignmentId)
     || latestIssuance?.id !== response.issuanceId
-    || latestResponse?.id !== response.id
+    || (input.decision !== "reply_to_question" && latestResponse?.id !== response.id)
   ) {
     throw new OpsDomainError("CONFLICT", "This is not the current vendor response. Refresh the work order before continuing.");
   }
@@ -170,6 +171,16 @@ export async function resolveVendorResponse(
     payload_json: payload, status: "pending", available_at: now, created_at: now, attempt_count: 0,
   }));
 
+  if (input.decision === "reply_to_question") {
+    if (response.response !== "question") throw new OpsDomainError("CONFLICT", "Only a question can receive a reply");
+    for (const task of tasks.filter(task => ["open", "in_progress"].includes(task.status) && !task.blocking && task.reason.startsWith(`Vendor question ${response.id}:`))) {
+      statements.push(...buildCompleteWorkflowTaskStatements({ task, actor: input.actor, occurredAt: now, ids, resolutionNote: input.message!.trim() }));
+    }
+    await atomicWorkOrderMutation({ repository, workOrder, now, statements });
+    return { response: { id: response.id, workOrderId: response.workOrderId, response: response.response } };
+  }
+
+  if (!activeAssignment) throw new OpsDomainError("CONFLICT", "The vendor assignment is no longer active");
   const primaryTask = selectPrimaryWorkflowTask(tasks);
   if (primaryTask && !RESPONSE_TASK_TYPES.has(primaryTask.taskType)) {
     throw new OpsDomainError("CONFLICT", `Complete the current required action (${primaryTask.title}) before handling this vendor response.`);

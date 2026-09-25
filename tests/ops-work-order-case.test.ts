@@ -216,7 +216,7 @@ describe("vendor response continuation", () => {
     })).rejects.toThrow(/Facilities or regional authority/);
   });
 
-  it("hands accountability back to the vendor after answering a current question", async () => {
+  it("preserves service accountability when answering a question", async () => {
     const fixture = buildNorthlinePresentationFixture();
     const response = fixture.vendorResponses.find((row) => row.id === "response-current-113-proposed-date")!;
     response.response = "question";
@@ -237,8 +237,8 @@ describe("vendor response continuation", () => {
 
     expect(await repository.getWorkOrder("org-northline-demo", response.workOrderId)).toMatchObject({
       status: "waiting_on_vendor",
-      accountableParty: "ColdLine Refrigeration & HVAC",
-      nextAction: "Confirm the service plan after the operator reply",
+      accountableParty: "Facilities coordinator",
+      nextAction: "Accept or counter ColdLine's proposed service date",
     });
   });
 });

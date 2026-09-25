@@ -883,12 +883,12 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     const assignment = this.fixture.assignments.find((row) => row.organizationId === token.organizationId && row.id === issuance.assignmentId && row.workOrderId === issuance.workOrderId && row.kind === "outside_vendor");
     const workOrder = this.fixture.workOrders.find((row) => row.organizationId === token.organizationId && row.id === issuance.workOrderId);
     const vendor = assignment?.vendorId ? this.fixture.vendors.find((row) => row.organizationId === token.organizationId && row.id === assignment.vendorId) : undefined;
-    if (!assignment || !workOrder || !vendor || !["issued", "opened", "accepted"].includes(assignment.status) || ["completed_pending_review", "resolved", "closed", "cancelled"].includes(workOrder.status)) return null;
+    if (!assignment || !workOrder || !vendor || !["issued", "opened", "accepted", "completed"].includes(assignment.status) || workOrder.status === "cancelled") return null;
     const [latestIssuance, activeAssignment] = await Promise.all([
       this.getLatestIssuanceForWorkOrder(token.organizationId, workOrder.id),
       this.getActiveAssignment(token.organizationId, workOrder.id),
     ]);
-    if (latestIssuance?.id !== issuance.id || activeAssignment?.id !== assignment.id) return null;
+    if (latestIssuance?.id !== issuance.id || (activeAssignment?.id !== assignment.id && !(assignment.status === "completed" && !activeAssignment))) return null;
     const store = this.fixture.stores.find((row) => row.organizationId === token.organizationId && row.id === workOrder.storeId)!;
     const response = this.fixture.vendorResponses
       .filter((row) => row.organizationId === token.organizationId && row.issuanceId === issuance.id)

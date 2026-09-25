@@ -684,10 +684,9 @@ export async function loadVendorResponseActionsModel(workOrderId: string) {
   if (!workOrder) return null;
   const store = await repository.getStore(orgId,workOrder.storeId);
   if (!store || !pmStoreAllowed(session,store)) notFound();
-  if (["completed_pending_review", "resolved", "closed", "cancelled"].includes(workOrder.status)) return null;
   const [activeAssignment,latestIssuance,organization] = await Promise.all([repository.getActiveAssignment(orgId,workOrderId),repository.getLatestIssuanceForWorkOrder(orgId,workOrderId),repository.getOrganization(orgId)]);
-  const actionable = await repository.getActionableVendorResponse(orgId,workOrderId,activeAssignment?.id,latestIssuance?.id);
-  if (!actionable) return null;
+  const actionable = await repository.getActionableVendorResponse(orgId,workOrderId,activeAssignment?.id ?? latestIssuance?.assignmentId,latestIssuance?.id);
+  if (!actionable || (actionable.response !== "question" && ["completed_pending_review", "resolved", "closed", "cancelled"].includes(workOrder.status))) return null;
   const timeZone = store?.timeZone ?? organization?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   return {
     responseId: actionable.id,

@@ -382,3 +382,20 @@
 .scenarioForm label { display: grid; gap: 6px; flex: 1; min-width: 160px; font-size: 14px; }
 .scenarioForm input { min-height: 42px; width: 100%; border: 1px solid #cbd5e1; border-radius: 5px; padding: 8px 10px; font-size: 16px; background: #fff; }
 .scenarioForm button { min-height: 42px; padding: 8px 18px; border: 0; border-radius: 5px; background: #2563eb; color: white; font-weight: 650; }
+
+.driverSnapshot { background: white; border: 1px solid #dbe1e8; padding: 22px; }
+.driverSnapshot header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
+.driverSnapshot h2 { font-size:20px; margin:0 0 6px; }
+.driverSnapshot p, .driverSnapshot footer { color:#526175; font-size:14px; margin:0; }
+.driverSnapshot header a { color:#2456c6; font-weight:600; }
+.driverBars { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px 32px; margin-bottom:18px; }
+.driverBar { display:grid; gap:7px; color:#17253b; }
+.driverBar > span { display:flex; justify-content:space-between; gap:12px; font-size:15px; }
+.driverBar > i, .coverageTrack { display:block; height:9px; background:#e8edf4; overflow:hidden; border-radius:3px; }
+.driverBar em, .coverageTrack > span { display:block; height:100%; background:#285bd4; }
+.driverBar small { color:#526175; font-size:13px; }
+.driverBar:hover strong { text-decoration:underline; }
+.pricingCoverage { display:grid; gap:10px; padding:18px 0; }
+.pricingCoverage > div:first-child { display:flex; justify-content:space-between; gap:16px; }
+.pricingCoverage small, .pricingCoverage span { color:#526175; }
+@media(max-width:760px) { .driverBars { grid-template-columns:1fr; } .pricingCoverage > div:first-child { flex-direction:column; } }

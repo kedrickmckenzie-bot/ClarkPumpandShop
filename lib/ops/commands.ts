@@ -1649,6 +1649,24 @@ export async function recordVendorResponse(svc: OpsCommandServices, input: Recor
     throw new OpsDomainError("NOT_FOUND", "Issued vendor assignment not found");
   }
   if (assignment.kind !== "outside_vendor") throw new OpsDomainError("VALIDATION", "Vendor responses apply only to outside-vendor assignments");
+  const latestQuestionIssuance = await repository.getLatestIssuanceForWorkOrder(input.organizationId, input.workOrderId);
+  if (input.response === "question") {
+    if (workOrder.status === "cancelled" || ["declined", "cancelled", "superseded"].includes(assignment.status) || latestQuestionIssuance?.id !== issuance.id) {
+      throw new OpsDomainError("CONFLICT", "This service link is no longer current");
+    }
+    const now = clock.now(), id = ids.next("vendor-response");
+    const message = required(input.message ?? "", "Question");
+    const responderName = required(input.responderName, "Responder name");
+    const owner = await resolveInternalAccountability(repository, workOrder);
+    const task = buildWorkflowTaskRecord({ id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id, actor: input.actor, createdAt: now,
+      draft: { ...taskDraft({ workOrder, taskType: "other", title: "Answer vendor question", assignee: { assigneeType: owner.assigneeType, assigneeId: owner.assigneeId, assigneeRole: owner.assigneeRole, assigneeName: owner.assigneeName }, blocking: false, requiredForProgress: false, dueAt: nextTaskDueAt(undefined, now), escalationDestination: owner.escalationDestination }), reason: `Vendor question ${id}: ${message}` } });
+    await atomicWorkOrderMutation({ repository, workOrder, now, statements: [
+      insert("ops_vendor_responses", { id, organization_id: input.organizationId, work_order_id: workOrder.id, assignment_id: assignment.id, issuance_id: issuance.id, response: "question", responder_name: responderName, message, responded_at: now }),
+      ...buildCreateTaskStatements({ task, actor: input.actor, ids }),
+      ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "vendor.question", actor: input.actor, occurredAt: now, payload: { responseId: id, assignmentId: assignment.id, issuanceId: issuance.id, message }, ids }),
+    ] });
+    return { id, organizationId: input.organizationId, workOrderId: workOrder.id, assignmentId: assignment.id, issuanceId: issuance.id, response: input.response, responderName, message, respondedAt: now };
+  }
   if (["accepted", "declined", "completed", "cancelled", "superseded"].includes(assignment.status)) throw new OpsDomainError("CONFLICT", "Assignment no longer accepts vendor responses");
   if (vendorResponseClosedWorkStatuses.has(workOrder.status)) {
     throw new OpsDomainError("CONFLICT", "Vendor response is closed because onsite work or follow-up has already started");
@@ -1668,7 +1686,7 @@ export async function recordVendorResponse(svc: OpsCommandServices, input: Recor
   const workStatus = input.response === "accepted" ? "accepted" : input.response === "declined" ? "approved" : "issued";
   const facilitiesOwnsNext = ["declined", "proposed_date", "question"].includes(input.response);
   const internalAccountability = await resolveInternalAccountability(repository, workOrder);
-  const nextAction = input.response === "declined" ? "Select another provider" : input.response === "proposed_date" ? "Review proposed service date" : input.response === "question" ? "Answer vendor question" : "Complete onsite service";
+  const nextAction = input.response === "declined" ? "Select another provider" : input.response === "proposed_date" ? "Review proposed service date" : "Complete onsite service";
   const selectedEstimate = input.response === "declined"
     ? (await repository.listEstimateRequestsForWorkOrder(input.organizationId, input.workOrderId))
         .find((request) => request.status === "selected" && request.vendorId === assignment.vendorId)

@@ -57,6 +57,7 @@ export interface PublicActionReceipt {
 }
 
 export interface ServiceAuthorizationView {
+  serviceDecisionsClosed?: boolean;
   organizationName: string;
   organizationSupport: string;
   vendorName: string;

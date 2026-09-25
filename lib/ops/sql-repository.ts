@@ -962,9 +962,9 @@ class SqlOpsRepository implements OpsRepository {
       this.getWorkOrder(org,issuance.workOrderId),
       this.getLatestIssuanceForWorkOrder(org,issuance.workOrderId),
     ]);
-    if(!assignment||!workOrder||latestIssuance?.id!==issuance.id||assignment.kind!=="outside_vendor"||assignment.workOrderId!==workOrder.id||!assignment.vendorId||!["issued","opened","accepted"].includes(assignment.status)||["completed_pending_review","resolved","closed","cancelled"].includes(workOrder.status))return null;
+    if(!assignment||!workOrder||latestIssuance?.id!==issuance.id||assignment.kind!=="outside_vendor"||assignment.workOrderId!==workOrder.id||!assignment.vendorId||!["issued","opened","accepted","completed"].includes(assignment.status)||workOrder.status==="cancelled")return null;
     const activeAssignment=await this.getActiveAssignment(org,workOrder.id);
-    if(activeAssignment?.id!==assignment.id)return null;
+    if(activeAssignment?.id!==assignment.id&&!(assignment.status==="completed"&&!activeAssignment))return null;
     const [vendor,store,organization]=await Promise.all([
       this.getVendor(org,assignment.vendorId),
       this.getStore(org,workOrder.storeId),

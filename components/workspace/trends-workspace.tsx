@@ -98,16 +98,26 @@ function ComparisonChart({ model }: { model: TrendAnalysisPageViewModel }) {
   );
 }
 
+function DriverSnapshot({ model }: { model: TrendAnalysisPageViewModel }) {
+  const rows = [...model.drivers.rows].filter(row => row.currentValue !== undefined).sort((a, b) => (b.currentValue ?? 0) - (a.currentValue ?? 0)).slice(0, 6);
+  const max = Math.max(1, ...rows.map(row => row.currentValue ?? 0));
+  return <section className={styles.driverSnapshot} aria-labelledby="driver-snapshot-title">
+    <header><div><h2 id="driver-snapshot-title">Where the money goes</h2><p>{model.drivers.title} · {model.currentPeriodLabel}</p></div><Link href={model.views.find(view => view.id === "drivers")!.link.href}>Explore drivers →</Link></header>
+    {rows.length ? <div className={styles.driverBars}>{rows.map(row => <Link key={row.id} href={row.recordsLink.href} className={styles.driverBar}><span><strong>{row.label}</strong><b>{row.currentLabel}</b></span><i aria-hidden="true"><em style={{ width: `${Math.max(0, (row.currentValue ?? 0) / max * 100)}%` }} /></i><small>{row.changeLabel} · {row.currentSourceCount} source records</small></Link>)}</div> : <p>No recorded costs in this scope.</p>}
+    <footer>{rows.length} shown · {model.drivers.sampleLabel}. Open drivers for the complete breakdown.</footer>
+  </section>;
+}
+
 function ExecutiveResults({ model }: { model: TrendAnalysisPageViewModel }) {
   return (
     <section className={styles.executiveResults} aria-label="Trend results">
       <Link className={`${styles.mainResult} ${toneClass(model.mainResult.tone)}`} href={model.mainResult.link.href}>
-        <span>Main result<ChevronRight size={16} aria-hidden="true" /></span>
+        <span>{model.metricLabel}<ChevronRight size={16} aria-hidden="true" /></span>
         <strong>{model.mainResult.value}</strong>
         <p>{model.mainResult.absoluteChangeLabel}{model.mainResult.relativeChangeLabel ? ` · ${model.mainResult.relativeChangeLabel}` : ""}</p>
         <small>{model.mainResult.comparisonBasis} · {model.mainResult.evidenceLabel}</small>
       </Link>
-      {model.insights.slice(0, 3).map((insight) => <Link className={`${styles.resultCard} ${toneClass(insight.tone)}`} href={insight.link.href} key={insight.id}><span>{insight.eyebrow}<ChevronRight size={16} aria-hidden="true" /></span><strong>{insight.title}</strong><p>{insight.detail}</p>{insight.evidenceLimit ? <small>{insight.evidenceLimit}</small> : null}<b>{insight.actionLabel ?? insight.link.label}</b></Link>)}
+      {model.insights.slice(0, 3).map((insight) => <div className={`${styles.resultCard} ${toneClass(insight.tone)}`} key={insight.id}><span>{insight.eyebrow}</span><strong>{insight.title}</strong><Link href={insight.link.href}><b>{insight.actionLabel ?? insight.link.label} →</b></Link><details><summary>Details</summary><p>{insight.detail}</p>{insight.evidenceLimit ? <small>{insight.evidenceLimit}</small> : null}</details></div>)}
     </section>
   );
 }
@@ -160,7 +170,7 @@ function UpcomingWorkPlan({ model, savedViews }: { model: TrendAnalysisPageViewM
         <div><span>Not priced in this currency</span><strong>{plan.unpricedCount}</strong><small>Review missing or other-currency prices below</small></div>
         <div><span>Open work to plan</span><strong>{plan.totalCount}</strong><small>Ordered by next-action deadline</small></div>
       </div>
-      <p>Entered estimates only. Missing prices need review; this is not a complete budget.</p>
+      <div className={styles.pricingCoverage} aria-label="Open work pricing coverage"><div><strong>{plan.totalCount ? Math.round(plan.pricedCount / plan.totalCount * 100) : 0}% of open jobs priced</strong><span>{plan.pricedCount} of {plan.totalCount} jobs · {plan.unpricedCount} still need a price in {currency}</span></div><div className={styles.coverageTrack} aria-hidden="true"><span style={{ width: `${plan.totalCount ? plan.pricedCount / plan.totalCount * 100 : 0}%` }} /></div><small>Only entered work-order estimates are counted. Missing prices are not treated as zero.</small></div>
       <details className={styles.scenario} open={scenarioKeys.some((key) => current.has(key))}>
         <summary>Compare a budget scenario</summary>
         <p>Current estimates + extra-work allowance + contingency. Personal assumptions only; saved scenarios recalculate as work changes.</p>
@@ -356,7 +366,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
   return (
     <div className={styles.workspace}>
       <header className={styles.pageHeader}>
-        <div><p>{model.activeView === "planning" ? "Spending & planning" : model.page.eyebrow}</p><h1>{model.activeView === "planning" ? "Plan upcoming work" : model.page.title}</h1><span>{model.activeView === "planning" ? "Price open jobs. Review maintenance and replacement decisions." : "Costs, work, and changes over time."}</span></div>
+        <div><p>{model.activeView === "planning" ? "Spending & planning" : model.page.eyebrow}</p><h1>{model.activeView === "planning" ? "Plan upcoming work" : model.activeView === "overview" ? "Spending overview" : model.page.title}</h1><span>{model.activeView === "planning" ? "Price open jobs. Review maintenance and replacement decisions." : "Costs, work, and changes over time."}</span></div>
         {model.page.secondaryAction ? <Link className={styles.secondaryButton} href={model.page.secondaryAction.href}>{model.page.secondaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </header>
 
@@ -367,7 +377,9 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
       <AnalysisViews model={model} />
 
       {model.activeView === "overview" ? <>
+        <ExecutiveResults model={model} />
         <ComparisonChart model={model} />
+        {model.metricId === "recorded_cost" ? <DriverSnapshot model={model} /> : null}
         <section className={styles.contextMetrics} aria-label="Comparison and data coverage">{comparison ? <SummaryCard metric={comparison} /> : null}{coverage ? <SummaryCard metric={coverage} /> : null}</section>
         <RelatedMeasures model={model} />
       </> : null}
@@ -377,7 +389,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
       {model.activeView === "planning" ? <UpcomingWorkPlan model={model} savedViews={savedViews} /> : null}
       {model.activeView === "records" ? <SourceTable model={model} /> : null}
 
-      <ExecutiveResults model={model} />
+      {model.activeView !== "overview" && model.activeView !== "planning" ? <ExecutiveResults model={model} /> : null}
       <details className={styles.notes}><summary>Filter details</summary><Investigation model={model} /></details>
       <details className={styles.notes}>
         <summary><Info size={17} aria-hidden="true" />How these numbers work<ChevronRight size={16} aria-hidden="true" /></summary>

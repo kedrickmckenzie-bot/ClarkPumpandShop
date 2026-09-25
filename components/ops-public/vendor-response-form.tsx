@@ -14,7 +14,7 @@ const RESPONSE_OPTIONS: Array<{
 }> = [
   { id: "accepted", title: "Accept work", description: "Confirm that your company will take this service call.", icon: Check },
   { id: "proposed_date", title: "Propose a date", description: "Send the operator an expected arrival date and time.", icon: CalendarClock },
-  { id: "question", title: "Ask a question", description: "Request clarification without accepting or declining yet.", icon: HelpCircle },
+  { id: "question", title: "Ask a question", description: "Send a question about this work order.", icon: HelpCircle },
   { id: "declined", title: "Decline work", description: "Return the service call to the operator with a reason.", icon: X },
 ];
 
@@ -93,17 +93,17 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
           </div>
         </div>
         <div className={styles.choiceGrid}>
-          {RESPONSE_OPTIONS.map((option) => {
+          {RESPONSE_OPTIONS.filter(option => !disabled || option.id === "question").map((option) => {
             const Icon = option.icon;
             return (
-              <button className={styles.choiceCard} disabled={disabled} key={option.id} onClick={() => setResponse(option.id)} type="button">
+              <button className={styles.choiceCard} key={option.id} onClick={() => setResponse(option.id)} type="button">
                 <span><Icon size={20} aria-hidden="true" /> <span className={styles.choiceTitle}>{option.title}</span></span>
                 <span className={styles.choiceDescription}>{option.description}</span>
               </button>
             );
           })}
         </div>
-        {disabled ? <p className={styles.notice}>A response has already been recorded. Contact {organizationName} Facilities if it needs to be amended.</p> : null}
+        {disabled ? <p className={styles.notice}>Service decisions are closed. You can still send a question.</p> : null}
       </section>
     );
   }

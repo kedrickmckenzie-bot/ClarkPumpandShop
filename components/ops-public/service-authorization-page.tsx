@@ -6,7 +6,7 @@ import { VendorResponseForm } from "./vendor-response-form";
 import styles from "./public-workflows.module.css";
 
 export function ServiceAuthorizationPage({ token, authorization }: { token: string; authorization: ServiceAuthorizationView }) {
-  const hasFinalResponse = authorization.status === "accepted" || authorization.status === "declined";
+  const hasFinalResponse = authorization.serviceDecisionsClosed || authorization.status === "accepted" || authorization.status === "declined";
   return (
     <PublicFrame organizationName={authorization.organizationName} context="Work Order / Service Authorization" mode={authorization.mode}>
       <div className={styles.hero}>
