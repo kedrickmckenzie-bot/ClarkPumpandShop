@@ -22,6 +22,7 @@ export interface PmProgramManagementModel {
     evidenceReviews: number;
   };
   programs: Array<{
+    editHref?: string;
     id: string;
     name: string;
     serviceAreaLabel: string;
@@ -105,7 +106,7 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
               <td><Link href={program.href}><strong>{program.cadenceLabel}</strong><small>{program.windowLabel} · anchor {program.anchorLabel}</small></Link></td>
               <td><Link href={program.coverageHref ?? program.href}><strong>{program.coveredTargets ?? program.enrolledPlans} of {program.matchingEquipment} covered</strong><small>{program.matchingEquipment ? program.coverageGaps ? `${program.coverageGaps} need a plan` : "All targets covered" : "No matching records"}</small></Link></td>
               <td><Link href={program.href}><strong>{program.missedOccurrences ? `${program.missedOccurrences} missed` : program.dueOccurrences ? `${program.dueOccurrences} due` : "On track"}</strong><small>{program.dueOccurrences ? `${program.dueOccurrences} currently due · ` : ""}{program.nextWindowLabel}</small></Link></td>
-              <td><Link aria-label={`Open ${program.name}`} href={program.href}><ChevronRight size={17} aria-hidden="true" /></Link></td>
+              <td>{program.editHref ? <Link href={program.editHref}>Edit schedule</Link> : null}<Link aria-label={`Open ${program.name}`} href={program.href}><ChevronRight size={17} aria-hidden="true" /></Link></td>
             </tr>
           )) : <tr><td className={styles.empty} colSpan={6}><strong>No company schedules in this scope</strong><small>Choose a different scope or create a company schedule.</small></td></tr>}</tbody>
         </table>

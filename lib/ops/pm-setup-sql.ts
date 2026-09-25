@@ -20,7 +20,7 @@ export async function queryPmSetup(driver: OpsSqlDriver, scope: OrganizationScop
   // Normalize legacy rule aliases inside SQL without returning the tenant's type catalog.
   // The recursive scan has exactly the same ASCII token contract as pmTypeKey.
   const ctes=`WITH RECURSIVE stores AS (SELECT s.* FROM ops_stores s WHERE ${where}),
-    programs AS (SELECT g.*,${arrayLength} AS rule_count FROM ops_maintenance_programs g WHERE ${programWhere}),
+    programs AS (SELECT g.*,CASE WHEN EXISTS (SELECT 1 FROM ${rules} WHERE substr(CAST(v.value AS TEXT),1,15)='store_category:') THEN -1 ELSE ${arrayLength} END AS rule_count FROM ops_maintenance_programs g WHERE ${programWhere}),
     templates AS (SELECT t.* FROM ops_equipment_templates t WHERE t.organization_id=${templateOrg} AND t.active=${active}),
     type_values(kind,owner_id,raw) AS (SELECT 'rule',g.id,CAST(v.value AS TEXT) FROM programs g CROSS JOIN ${rules}
       UNION ALL SELECT 'template',id,id FROM templates UNION ALL SELECT 'template',id,name FROM templates),
@@ -39,7 +39,7 @@ export async function queryPmSetup(driver: OpsSqlDriver, scope: OrganizationScop
       WHERE p.active=${active}${planProgram}),
     target_base AS (SELECT g.id AS program_id,g.name AS program_name,s.id AS store_id,s.store_number,s.name AS store_name,a.id AS asset_id,a.name AS asset_name,g.frequency_days,g.due_window_days,0 AS store_level
       FROM programs g JOIN matched_types m ON m.program_id=g.id JOIN assets a ON a.equipment_template_id=m.template_id JOIN stores s ON s.id=a.store_id
-      UNION ALL SELECT g.id,g.name,s.id,s.store_number,s.name,CAST(NULL AS TEXT),CAST(NULL AS TEXT),g.frequency_days,g.due_window_days,1 FROM programs g CROSS JOIN stores s WHERE g.rule_count=0),
+      UNION ALL SELECT g.id,g.name,s.id,s.store_number,s.name,CAST(NULL AS TEXT),CAST(NULL AS TEXT),g.frequency_days,g.due_window_days,1 FROM programs g CROSS JOIN stores s WHERE g.rule_count=0 OR (g.rule_count=-1 AND EXISTS (SELECT 1 FROM plans p WHERE p.program_id=g.id AND p.store_id=s.id))),
     target_counts AS (SELECT t.*,(SELECT COUNT(*) FROM plans p WHERE p.program_id=t.program_id AND p.store_id=t.store_id AND (p.asset_id=t.asset_id OR (t.asset_id IS NULL AND p.asset_id IS NULL))) AS plan_count FROM target_base t),
     clock AS (SELECT ${clock} AS as_of),
     occurrences AS (SELECT o.*,CASE WHEN o.status IN ('waived','cancelled') THEN o.status WHEN o.completed_at IS NOT NULL OR o.status LIKE 'completed%' THEN 'completed'
@@ -49,12 +49,12 @@ export async function queryPmSetup(driver: OpsSqlDriver, scope: OrganizationScop
     summary AS (SELECT (SELECT COUNT(*) FROM programs) AS summary_programs,(SELECT COUNT(*) FROM target_counts) AS summary_targets,
       (SELECT COUNT(*) FROM target_counts WHERE plan_count>0) AS summary_covered,(SELECT COUNT(*) FROM target_counts WHERE plan_count=0) AS summary_gaps,
       (SELECT COUNT(*) FROM plans) AS summary_plans,(SELECT COUNT(*) FROM plans WHERE changed=1) AS summary_changes)`;
-  const cols=["id","name","program_id","program_name","store_id","store_number","store_name","asset_id","asset_name","has_asset_reference","has_program_reference","reason","cadence","window_days","anchor","next_window","store_level","matched_types","targets","covered","plans","gaps","changes","due","missed"];
-  const numeric=new Set(["has_asset_reference","has_program_reference","cadence","window_days","store_level","matched_types","targets","covered","plans","gaps","changes","due","missed"]);
+  const cols=["store_schedule","id","name","program_id","program_name","store_id","store_number","store_name","asset_id","asset_name","has_asset_reference","has_program_reference","reason","cadence","window_days","anchor","next_window","store_level","matched_types","targets","covered","plans","gaps","changes","due","missed"];
+  const numeric=new Set(["store_schedule","has_asset_reference","has_program_reference","cadence","window_days","store_level","matched_types","targets","covered","plans","gaps","changes","due","missed"]);
   const select=(fields:Record<string,string>)=>cols.map(key=>`${fields[key]??(numeric.has(key)?"0":"NULL")} AS ${key}`).join(",");
   let selected:string;
   if(query.kind==="programs") selected=`SELECT ${select({id:"g.id",name:"g.name",program_id:"g.id",program_name:"g.name",cadence:"g.frequency_days",window_days:"g.due_window_days",anchor:"g.schedule_anchor_at",
-    store_level:"CASE WHEN g.rule_count=0 THEN 1 ELSE 0 END",matched_types:"(SELECT COUNT(*) FROM matched_types m WHERE m.program_id=g.id)",
+    store_schedule:"CASE WHEN g.rule_count=-1 THEN 1 ELSE 0 END",store_level:"CASE WHEN g.rule_count<=0 THEN 1 ELSE 0 END",matched_types:"(SELECT COUNT(*) FROM matched_types m WHERE m.program_id=g.id)",
     targets:"(SELECT COUNT(*) FROM target_counts t WHERE t.program_id=g.id)",covered:"(SELECT COUNT(*) FROM target_counts t WHERE t.program_id=g.id AND t.plan_count>0)",
     gaps:"(SELECT COUNT(*) FROM target_counts t WHERE t.program_id=g.id AND t.plan_count=0)",plans:"(SELECT COUNT(*) FROM plans p WHERE p.program_id=g.id)",changes:"(SELECT COUNT(*) FROM plans p WHERE p.program_id=g.id AND p.changed=1)",
     due:"(SELECT COUNT(*) FROM occurrences o WHERE o.matched_program=g.id AND o.state='due')",missed:"(SELECT COUNT(*) FROM occurrences o WHERE o.matched_program=g.id AND o.state='missed')",
@@ -66,7 +66,7 @@ export async function queryPmSetup(driver: OpsSqlDriver, scope: OrganizationScop
   const first=result.rows[0]??{},totalCount=Number(first.total_count??0);
   const items:PmSetupRow[]=result.rows.filter(r=>r.id!=null).map(r=>{
     const opt=(key:string)=>r[key]==null?undefined:String(r[key]), num=(key:string)=>Number(r[key]??0);
-    return {id:String(r.id),name:String(r.name),programId:opt("program_id"),programName:opt("program_name"),storeId:opt("store_id"),storeNumber:opt("store_number"),storeName:opt("store_name"),assetId:opt("asset_id"),assetName:opt("asset_name"),
+    return {...(num("store_schedule") ? { storeSchedule: true } : {}),id:String(r.id),name:String(r.name),programId:opt("program_id"),programName:opt("program_name"),storeId:opt("store_id"),storeNumber:opt("store_number"),storeName:opt("store_name"),assetId:opt("asset_id"),assetName:opt("asset_name"),
       ...(query.kind==="plans"?{hasAssetReference:Boolean(num("has_asset_reference")),hasProgramReference:Boolean(num("has_program_reference")),reason:opt("reason")}:{}),
       cadence:num("cadence"),window:num("window_days"),...(query.kind==="programs"?{anchor:r.anchor==null?undefined:new Date(String(r.anchor)).toISOString(),nextWindow:r.next_window==null?undefined:new Date(pg?String(r.next_window):(Number(r.next_window)-2440587.5)*86400000).toISOString()}:{}),
       storeLevel:Boolean(num("store_level")),matchedTypes:num("matched_types"),targets:num("targets"),covered:num("covered"),plans:num("plans"),gaps:num("gaps"),changes:num("changes"),due:num("due"),missed:num("missed")};

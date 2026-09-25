@@ -252,6 +252,7 @@ export interface OpsRepository {
   getComponent(organizationId: OpsId, componentId: OpsId): Promise<AssetComponent | null>;
   getMaintenanceProgram(organizationId: OpsId, programId: OpsId): Promise<MaintenanceProgram | null>;
   listMaintenancePrograms(organizationId: OpsId): Promise<MaintenanceProgram[]>;
+  listAssetsForStore(organizationId: OpsId, storeId: OpsId): Promise<Asset[]>;
   listAssetsForEquipmentTemplates(organizationId: OpsId, equipmentTemplateIds: OpsId[]): Promise<Asset[]>;
   getPmPlan(organizationId: OpsId, planId: OpsId): Promise<PmPlan | null>;
   getPmOccurrence(organizationId: OpsId, occurrenceId: OpsId): Promise<PmOccurrence | null>;

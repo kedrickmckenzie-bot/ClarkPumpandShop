@@ -1,3 +1,4 @@
+import { pmCoverageRule } from "@/lib/ops/pm-coverage";
 import { OpsDomainError } from "@/lib/ops/commands";
 import { overridePmPlanCadence } from "@/lib/ops/setup-commands";
 import { assertStoreInSessionScope, formText, getOpsRequestContext, opsApiError } from "@/lib/server/ops-request-context";
@@ -18,14 +19,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!plan.storeId) throw new OpsDomainError("VALIDATION", "This PM plan is not assigned to a store.");
     await assertStoreInSessionScope(context.session, plan.storeId);
     const formData = await request.formData();
+    const rule = pmCoverageRule(plan);
+    const checked = new Set(formData.getAll("coveredAssetId").map(String));
+    const assets = rule ? (await context.repository.listAssetsForStore(context.session.organizationId, plan.storeId)).filter(a => a.status !== "retired") : [];
+    if ([...checked].some(id => !assets.some(a => a.id === id))) throw new OpsDomainError("VALIDATION", "Choose equipment at this store");
     await overridePmPlanCadence(
       { repository: context.repository },
       {
         organizationId: context.session.organizationId,
         planId: plan.id,
+        useDefaults: formData.get("mode") === "defaults",
+        coverage: rule ? { includedAssetIds: assets.filter(a => checked.has(a.id) && a.categoryKey !== rule.categoryKey).map(a => a.id), excludedAssetIds: assets.filter(a => !checked.has(a.id) && a.categoryKey === rule.categoryKey).map(a => a.id) } : undefined,
+        active: rule ? formData.get("active") === "on" : undefined,
+        preferredVendorId: rule ? formText(formData, "preferredVendorId", { max: 180 }) : undefined,
+        instructions: rule ? formText(formData, "instructions", { max: 4000 }) : undefined,
         cadenceDays: wholeNumber(formText(formData, "cadenceDays", { required: true, max: 5 }), "Cadence"),
         completionWindowDays: wholeNumber(formText(formData, "completionWindowDays", { required: true, max: 4 }), "Completion window"),
-        reason: formText(formData, "reason", { required: true, max: 500 }),
+        reason: formText(formData, "reason", { required: formData.get("mode") !== "defaults", max: 500 }),
         actor: context.actor,
       },
     );

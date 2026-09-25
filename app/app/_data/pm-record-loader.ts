@@ -1,3 +1,4 @@
+import { coveredPmAssets, pmCoverageRule } from "@/lib/ops/pm-coverage";
 import "server-only";
 import { notFound } from "next/navigation";
 import { roleCan, roleCanAccessProgramRoute } from "@/components/ops/role-policy";
@@ -14,6 +15,10 @@ export async function loadPmOccurrenceRecord(id: string, requestedPage?: string)
   const repository = await getServerOpsRepository();
   const record = await readPmOccurrenceRecord(repository, session, id);
   if (!record) notFound();
+  const grouped = record.plan ? pmCoverageRule(record.plan) : undefined;
+  const currentAssets = grouped ? await repository.listAssetsForStore(session.organizationId, record.store.id) : [];
+  const workItems = record.work ? await repository.listPmWorkItemsForOccurrence(session.organizationId, record.occurrence.id) : [];
+  const coverageAssets = record.work ? workItems.map(i => ({ id: i.assetId, name: currentAssets.find(a => a.id === i.assetId)?.name ?? "Equipment record", status: i.status })) : record.plan ? coveredPmAssets(record.plan, currentAssets).map(a => ({ id: a.id, name: a.name, status: "Included" })) : [];
   const parsed = Number(requestedPage ?? 1);
   const page = Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 1_000_000 ? parsed : 1;
   const visits = record.work ? await repository.listWorkVisitEvidence(session, record.work.id, { limit: 25, offset: (page - 1) * 25 }) : { items: [], totalCount: 0 };
@@ -21,8 +26,8 @@ export async function loadPmOccurrenceRecord(id: string, requestedPage?: string)
   const timing = briefPmState(record.occurrence, asOf);
   const status = timing.startsWith("completed") || timing === "cancelled" || timing === "waived" ? timing : effectivePmStatus(record.occurrence, asOf);
   return {
-    ...record, visits, page, status, storeLabel: compactStoreLabel(`Store ${record.store.storeNumber} · ${record.store.name}`, session.organizationName),
+    ...record, grouped: Boolean(grouped), coverageAssets, visits, page, status, storeLabel: compactStoreLabel(`Store ${record.store.storeNumber} · ${record.store.name}`, session.organizationName),
     canAdjustPlan: roleCan(session, "setup_pm") && record.plan?.storeId === record.store.id,
-    canCreateWork: roleCan(session, "create_work_order"),
+    canCreateWork: roleCan(session, "create_work_order") && record.plan?.active !== false,
   };
 }

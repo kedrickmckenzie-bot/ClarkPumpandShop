@@ -15,6 +15,9 @@ it("pages full PM coverage without duplicate targets or turning unknown equipmen
     fixture.maintenancePrograms.push({...base,id,programKey:id,name:id});
     if(i%2===0)fixture.pmPlans.push({...plan,id:`plan-${id}`,programId:id});
   }
+  const categoryProgram = { ...base, id: "pm-store-category", programKey: "pm-store-category", applicableAssetTypes: ["store_category:hvac"] };
+  fixture.maintenancePrograms.push(categoryProgram);
+  fixture.pmPlans.push({ ...plan, id: "pm-category-store-plan", programId: categoryProgram.id, assetId: undefined, categoryKey: "hvac", assetSelectionRule: JSON.stringify({ kind: "store_category", categoryKey: "hvac", includedAssetIds: [], excludedAssetIds: [] }) });
   const unknown={...base,id:"pm-unknown-rule",programKey:"pm-unknown-rule",name:"Unknown equipment",applicableAssetTypes:["unknown-equipment!*"]};
   const alias={...base,id:"pm-alias-rule",programKey:"pm-alias-rule",name:"Alias equipment",applicableAssetTypes:[" 5 TON!!PACKAGED ROOFTOP UNIT "]};
   fixture.maintenancePrograms.push(unknown,alias);

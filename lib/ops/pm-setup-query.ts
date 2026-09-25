@@ -10,6 +10,7 @@ export interface PmSetupQuery extends PageRequest {
   filter?: "all" | "gaps" | "changes";
 }
 export interface PmSetupRow {
+  storeSchedule?: boolean;
   id: string; name: string; programId?: string; programName?: string;
   storeId?: string; storeNumber?: string; storeName?: string; assetId?: string; assetName?: string;
   hasAssetReference?: boolean; hasProgramReference?: boolean; reason?: string;
@@ -44,8 +45,8 @@ export function pmSetupFromFixture(fixture: OpsFixture, scope: OrganizationScope
   for (const p of programs) {
     const keys = new Set(p.applicableAssetTypes.map(pmTypeKey));
     const matched = templates.filter(t => keys.has(pmTypeKey(t.id)) || keys.has(pmTypeKey(t.name)));
-    const ids = new Set(matched.map(t => t.id)), storeLevel = p.applicableAssetTypes.length === 0;
-    const candidates = storeLevel ? stores.map(s => ({ s, a: undefined })) : assets.filter(a => a.equipmentTemplateId && ids.has(a.equipmentTemplateId)).map(a => ({ s: storeById.get(a.storeId)!, a }));
+    const ids = new Set(matched.map(t => t.id)), categorySchedule = p.applicableAssetTypes.some(t => t.startsWith("store_category:")), storeLevel = p.applicableAssetTypes.length === 0 || categorySchedule;
+    const candidates = storeLevel ? stores.filter(s => !categorySchedule || rawPlans.some(plan => plan.programId === p.id && plan.storeId === s.id)).map(s => ({ s, a: undefined })) : assets.filter(a => a.equipmentTemplateId && ids.has(a.equipmentTemplateId)).map(a => ({ s: storeById.get(a.storeId)!, a }));
     const ownPlans = rawPlans.filter(plan => plan.programId === p.id);
     const ownTargets = candidates.map(({s,a}) => {
       const covering = ownPlans.filter(plan => plan.storeId === s.id && (a ? plan.assetId === a.id : !plan.assetId));
@@ -55,7 +56,7 @@ export function pmSetupFromFixture(fixture: OpsFixture, scope: OrganizationScope
     targets.push(...ownTargets);
     const occurrences = fixture.pmOccurrences.filter(o => o.organizationId === scope.organizationId && ownPlans.some(plan => plan.id === o.planId && plan.storeId === o.storeId));
     const future = occurrences.filter(o => pmScheduleState(o, query.asOf) === "scheduled").sort((a,b) => Date.parse(a.windowStartsAt)-Date.parse(b.windowStartsAt) || a.id.localeCompare(b.id));
-    programRows.push({ ...emptyPmSetupRow(p.id,p.name), programId:p.id, programName:p.name, cadence:p.frequencyDays, window:p.dueWindowDays, anchor:p.scheduleAnchorAt ? new Date(p.scheduleAnchorAt).toISOString() : undefined,
+    programRows.push({ ...emptyPmSetupRow(p.id,p.name), ...(categorySchedule ? { storeSchedule: true } : {}), programId:p.id, programName:p.name, cadence:p.frequencyDays, window:p.dueWindowDays, anchor:p.scheduleAnchorAt ? new Date(p.scheduleAnchorAt).toISOString() : undefined,
       nextWindow:future[0] ? new Date(future[0].windowStartsAt).toISOString() : undefined, storeLevel, matchedTypes:matched.length, targets:ownTargets.length, covered:ownTargets.filter(t=>t.covered).length,
       gaps:ownTargets.filter(t=>t.gaps).length, plans:ownPlans.length, changes:planRows.filter(plan=>plan.programId===p.id && plan.changes).length,
       due:occurrences.filter(o=>["due","overdue"].includes(pmScheduleState(o,query.asOf))).length, missed:occurrences.filter(o=>pmScheduleState(o,query.asOf)==="missed").length });

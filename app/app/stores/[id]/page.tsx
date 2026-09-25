@@ -36,7 +36,7 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
                   ? [{ label: "Set up store equipment", href: `/app/stores/${encodeURIComponent(id)}/equipment-setup`, icon: "asset" as const }]
                   : []),
                 ...(canSetupPm
-                  ? [{ label: "Create PM plan", href: `/app/pm/new?store=${encodeURIComponent(id)}`, kind: "secondary" as const, icon: "pm" as const }]
+                  ? [{ label: "Manage store PM", href: `/app/pm?store=${encodeURIComponent(id)}&setup=plans`, kind: "secondary" as const, icon: "pm" as const }, { label: "Create PM plan", href: `/app/pm/new?store=${encodeURIComponent(id)}`, kind: "secondary" as const, icon: "pm" as const }]
                   : []),
               ]}
             />

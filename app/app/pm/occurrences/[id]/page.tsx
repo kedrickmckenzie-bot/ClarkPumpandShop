@@ -8,7 +8,7 @@ export default async function OccurrencePage({ params, searchParams }: {
   searchParams: Promise<{ returnTo?: string; visitPage?: string }>;
 }) {
   const { id } = await params, query = await searchParams;
-  const { occurrence, store, storeLabel, plan, asset, work, status, visits, page, canAdjustPlan, canCreateWork } = await loadPmOccurrenceRecord(id, query.visitPage);
+  const { occurrence, store, storeLabel, plan, asset, work, status, visits, page, canAdjustPlan, canCreateWork, grouped, coverageAssets } = await loadPmOccurrenceRecord(id, query.visitPage);
   const fromBrief = query.returnTo?.startsWith("/app/brief/records?");
   const back = fromBrief || query.returnTo?.startsWith("/app/pm?") ? query.returnTo! : "/app/pm";
   const date = (value: string) => formatOperationsDateTime(value, store.timeZone);
@@ -36,6 +36,11 @@ export default async function OccurrencePage({ params, searchParams }: {
       {occurrence.exceptionReason ? <p>{occurrence.exceptionReason}</p> : null}
       {work ? <Link className={styles.action} href={`/app/work-orders/${encodeURIComponent(work.id)}`}>Work order {work.number} →</Link> : <p>{occurrence.workOrderId ? "Linked work order unavailable." : "No work order linked."}</p>}
     </section>
+    {grouped ? <section className={styles.section}>
+      <h2>Equipment covered ({coverageAssets.length})</h2>
+      <p>{work ? "Coverage saved with this work order." : "Current coverage. Finalized when the work order is created."}</p>
+      {coverageAssets.length ? <table className={styles.table}><thead><tr><th>Equipment</th><th>Status</th></tr></thead><tbody>{coverageAssets.map(a => <tr key={a.id}><td><Link href={`/app/equipment/${encodeURIComponent(a.id)}`}>{a.name}</Link></td><td>{a.status.replaceAll("_", " ")}</td></tr>)}</tbody></table> : <p>Store service covers the selected area. Equipment list needs review.</p>}
+    </section> : null}
     <section className={styles.section} id="visit-evidence" aria-labelledby="pm-visits">
       <h2 id="pm-visits">Visit evidence <span>({visits.totalCount})</span></h2>
       {visits.items.length ? <>

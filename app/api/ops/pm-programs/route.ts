@@ -25,13 +25,17 @@ export async function POST(request: Request) {
         organizationId: context.session.organizationId,
         name: formText(formData, "name", { required: true, max: 180 }),
         applicableEquipmentTemplateIds: equipmentTemplateIds,
+        storeIds: formData.getAll("storeId").map(String),
+        categoryKey: formText(formData, "categoryKey", { max: 80 }) || undefined,
+        replacesProgramId: formText(formData, "programId", { max: 180 }) || undefined,
+        checklist: formText(formData, "checklist", { max: 4000 }) || undefined,
         cadenceDays: wholeNumber(formText(formData, "cadenceDays", { required: true, max: 5 }), "Cadence"),
         completionWindowDays: wholeNumber(formText(formData, "completionWindowDays", { required: true, max: 4 }), "Completion window"),
         firstDueAt,
         actor: context.actor,
       },
     );
-    return relativeRedirect303(`/app/pm?program=${encodeURIComponent(result.program.id)}&created=true`);
+    return relativeRedirect303(`/app/pm?program=${encodeURIComponent(result.program.id)}&setup=plans&created=true`);
   } catch (error) {
     return opsApiError(error);
   }

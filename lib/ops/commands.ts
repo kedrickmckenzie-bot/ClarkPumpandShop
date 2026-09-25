@@ -1,3 +1,4 @@
+import { coveredPmAssets, pmCoverageRule } from "./pm-coverage";
 import type { OpsRepository, OpsStatement } from "./repository";
 import { atomicRequestMutation, atomicWorkOrderMutation, atomicWorkOrderSetMutation, persistedRequestVersion, persistedWorkOrderVersion } from "./concurrency";
 import { OpsDomainError } from "./errors";
@@ -828,12 +829,20 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
       expiresAt: "9999-12-31T23:59:59.999Z",
     }));
     statements.push({ sql: "UPDATE ops_pm_occurrences SET work_order_id = ? WHERE organization_id = ? AND id = ? AND store_id = ? AND work_order_id IS NULL", params: [id, input.organizationId, sourcePmOccurrence.id, input.storeId] });
-    if (sourcePmOccurrence.assetId && sourceProgram) {
+    const sourcePlan = await repository.getPmPlan(input.organizationId, sourcePmOccurrence.planId);
+    if (sourcePlan && !sourcePlan.active) throw new OpsDomainError("CONFLICT", "This store has been removed from the PM schedule");
+    const coverage = sourcePlan && pmCoverageRule(sourcePlan) ? coveredPmAssets(sourcePlan, await repository.listAssetsForStore(input.organizationId, input.storeId)) : [];
+    const coveredIds = sourcePmOccurrence.assetId ? [sourcePmOccurrence.assetId] : coverage.map(a => a.id);
+    if (sourcePlan && pmCoverageRule(sourcePlan)) {
+      const scope = [input.authorizedScope, sourceProgram?.completionCriteria, sourcePlan.accessRequirements, coverage.length ? `Equipment: ${coverage.map(a => `${a.name} (${a.assetTag})`).join("; ")}` : `Service all ${sourcePlan.categoryKey} equipment at this store. Equipment list needs review.`].filter(Boolean).join("\n");
+      statements.push({ sql: "UPDATE ops_work_orders SET authorized_scope = ? WHERE organization_id = ? AND id = ?", params: [scope, input.organizationId, id] });
+    }
+    for (const coveredId of sourceProgram ? coveredIds : []) {
       statements.push(insert("ops_pm_work_items", {
         id: ids.next("pm-work-item"), organization_id: input.organizationId,
-        occurrence_id: sourcePmOccurrence.id, work_order_id: id, asset_id: sourcePmOccurrence.assetId,
-        required_task: sourceProgram.completionCriteria, checklist_template_id: sourceProgram.checklistTemplateId,
-        status: "pending", currency: sourceProgram.currency, created_at: now,
+        occurrence_id: sourcePmOccurrence.id, work_order_id: id, asset_id: coveredId,
+        required_task: [sourceProgram!.completionCriteria, sourcePlan?.accessRequirements].filter(Boolean).join("\n"), checklist_template_id: sourceProgram!.checklistTemplateId,
+        status: "pending", currency: sourceProgram!.currency, created_at: now,
       }));
     }
   }

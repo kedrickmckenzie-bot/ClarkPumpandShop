@@ -5231,9 +5231,10 @@ export function buildCreateWorkOrderModel(
       assetId: sourcePmOccurrence?.assetId ?? requestedAsset?.id,
       categoryKey: sourcePmProgram?.tradeKey ?? requestedAsset?.categoryKey,
       ...(sourcePmOccurrence ? {
-        problem: sourcePmProgram?.name ?? sourcePmPlan?.name ?? "Complete scheduled preventive maintenance",
+        problem: [sourcePmProgram?.name ?? sourcePmPlan?.name ?? "Complete scheduled preventive maintenance", sourcePmProgram?.completionCriteria, sourcePmPlan?.accessRequirements].filter(Boolean).join("\n"),
         priority: "planned" as const,
-        assignmentKind: "choose_later" as const,
+        assignmentKind: sourcePmPlan?.preferredVendorId ? "outside_vendor" as const : "choose_later" as const,
+        vendorId: sourcePmPlan?.preferredVendorId,
       } : {}),
       ...(sourceVisit ? {
         problem: sourceVisit.purpose,

@@ -1,3 +1,4 @@
+import { coveredPmAssets, pmCoverageRule } from "@/lib/ops/pm-coverage";
 import "server-only";
 
 import { notFound } from "next/navigation";
@@ -206,19 +207,24 @@ export async function loadCreatePmSetupModel(query: Query = {}): Promise<CreateP
   };
 }
 
-export async function loadCreatePmProgramSetupModel(): Promise<CreatePmProgramSetupModel> {
+export async function loadCreatePmProgramSetupModel(programId?: string): Promise<CreatePmProgramSetupModel> {
   const { session, fixture } = await setupContext("setup_pm");
   if (session.role !== "executive" && session.role !== "facilities") notFound();
+  const program = programId ? fixture.maintenancePrograms.find(p => p.organizationId === session.organizationId && p.id === programId && p.status === "active" && p.applicableAssetTypes.some(t => t.startsWith("store_category:"))) : undefined;
+  if (programId && !program) notFound();
   const nodes = fixture.taxonomyNodes.filter((node) => node.organizationId === session.organizationId && node.active);
   const byId = new Map(nodes.map((node) => [node.id, node]));
   return {
-    title: "Create company PM schedule",
+    initial: program ? { programId: program.id, name: program.name, categoryKey: program.tradeKey, storeIds: fixture.pmPlans.filter(p => p.organizationId === session.organizationId && p.programId === program.id && p.active).flatMap(p => p.storeId ? [p.storeId] : []), cadenceDays: program.frequencyDays, completionWindowDays: program.dueWindowDays, firstDueAt: (program.scheduleAnchorAt ?? fixture.asOf).slice(0,10), checklist: program.completionCriteria } : undefined,
+    title: program ? "Edit PM schedule" : "Create company PM schedule",
     eyebrow: "Preventive maintenance standards",
-    description: "Choose the company equipment types once. Matching equipment across every store joins the schedule now, and future equipment joins automatically.",
+    description: "Set the schedule, choose stores, and cover their equipment automatically.",
     scopeLabel: session.scopeLabel,
     submitAction: "/api/ops/pm-programs",
     cancelHref: "/app/pm",
     cancelLabel: "Back to preventive maintenance",
+    categories: categories(fixture, session.organizationId),
+    stores: storeOptions(fixture, session).map(option => ({ ...option, label: compactStoreLabel(option.label, session.organizationName), region: fixture.regions.find(r => r.id === fixture.stores.find(s => s.id === option.value)?.regionId)?.name, equipmentCounts: fixture.assets.filter(a => a.organizationId === session.organizationId && a.storeId === option.value && a.status !== "retired").reduce<Record<string, number>>((counts, a) => { counts[a.categoryKey] = (counts[a.categoryKey] ?? 0) + 1; return counts; }, {}) })),
     equipmentTypes: fixture.equipmentTemplates
       .filter((template) => template.organizationId === session.organizationId && template.active)
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -239,9 +245,22 @@ export async function loadPmPlanScheduleSetupModel(planId: string): Promise<PmPl
   const record = await readPmPlanRecord(await getServerOpsRepository(), session, planId);
   if (!record) notFound();
   const { plan, store, asset, program } = record;
+  const rule = pmCoverageRule(plan);
+  const repository = await getServerOpsRepository();
+  const equipment = rule ? (await repository.listAssetsForStore(session.organizationId, store.id)).filter(a => a.status !== "retired") : [];
+  const included = new Set(coveredPmAssets(plan, equipment).map(a => a.id));
+  equipment.sort((a,b) => Number(included.has(b.id)) - Number(included.has(a.id)) || a.name.localeCompare(b.name));
+  const vendorPage = rule ? await repository.listVendors({ organizationId: session.organizationId, storeIds: [store.id] }, "", { limit: 100 }) : undefined;
+  const vendors = [];
+  for (const vendor of vendorPage?.items ?? []) if (vendor.status === "approved" && await repository.vendorCoversStore(session.organizationId, vendor.id, store.id)) vendors.push({ value: vendor.id, label: vendor.name });
   const label = compactStoreLabel(storeLabel(store), session.organizationName);
   return {
-    title: "Adjust store schedule",
+    editScheduleHref: rule && program && (session.role === "executive" || session.role === "facilities") ? `/app/pm/programs/${encodeURIComponent(program.id)}` : undefined,
+    coverage: rule ? { categoryKey: rule.categoryKey, active: plan.active, assets: equipment.map(a => ({ id: a.id, name: a.name, categoryKey: a.categoryKey, included: included.has(a.id) })) } : undefined,
+    vendors,
+    instructions: plan.accessRequirements,
+    preferredVendorId: plan.preferredVendorId,
+    title: "Customize store schedule",
     eyebrow: "Planned maintenance",
     description: "Set this store’s schedule and record the reason for the change.",
     scopeLabel: `${label} · ${asset?.name ?? plan.name}`,
