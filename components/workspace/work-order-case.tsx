@@ -50,6 +50,7 @@ import {
 } from "@/components/ops/replacement-intelligence-panel";
 import { WorkOrderStageRail } from "@/components/workspace/work-order-case-stage-rail";
 import styles from "./work-order-case.module.css";
+import { WorkOrderVisitHistory } from "./work-order-visit-history";
 import { domainLabel } from "@/lib/product/domain-label";
 import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
@@ -402,7 +403,7 @@ function CaseOverview({
         </section>
       ) : null}
       <section className={styles.recordMap} aria-label="Work-order evidence map">
-        <Link href={canonicalCase.primaryNextAction.href}>
+        <Link href={canonicalCase.stage === "closed" ? `${base}?view=service` : canonicalCase.primaryNextAction.href}>
           <span><Truck size={18} aria-hidden="true" />Service workflow</span>
           <strong>{canonicalCase.plainLanguageState}</strong>
           <small>{canonicalCase.primaryNextAction.label} · {control.assignment?.providerLabel ?? "Provider not selected"}</small>
@@ -632,16 +633,16 @@ export function WorkOrderCase({
           <span className={`${styles.statusPill} ${toneStyles[canonicalTone]}`}><CircleDot aria-hidden="true" size={14} />{canonicalStatus}</span>
           <div className={styles.headerActions}>
             <CaseAction action={model.page.secondaryAction} />
-            <CaseAction action={viewerAction} primary />
+            {canonicalCase.stage === "closed" && activeView === "overview" ? null : <CaseAction action={viewerAction} primary />}
           </div>
         </div>
-        <section className={styles.accountableHeader} aria-label="Next step">
+        {canonicalCase.stage !== "closed" ? <section className={styles.accountableHeader} aria-label="Next step">
           <div><span>Next action</span><strong>{canonicalCase.primaryNextAction.label}</strong></div>
           <div><span>Who acts next</span><strong>{canonicalCase.nextActionOwner}</strong></div>
-          <div><span>Due</span><strong>{canonicalCase.stage === "closed" ? "Complete" : dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
+          <div><span>Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
           <div><span>Escalates to</span><strong>{canonicalCase.escalationDestination}</strong></div>
           <small>Internal owner: {canonicalCase.internalAccountableParty}</small>
-        </section>
+        </section> : null}
         <nav className={styles.caseTabs} aria-label="Work-order sections">
           {visibleCaseViews.map((view) => (
             <Link
@@ -660,13 +661,13 @@ export function WorkOrderCase({
         <section className={styles.caseBrief} aria-label="Work-order summary">
           <div className={styles.problemStatement}>
             <div className={styles.problemStatementHeader}>
-              <span>{originalRequest ? "Original store report" : "Service need"}</span>
+              <span>{originalRequest?.title ?? "Service need"}</span>
               {originalRequest?.action ? <Link href={originalRequest.action.href}>{originalRequest.action.label}<ArrowRight aria-hidden="true" size={15} /></Link> : null}
             </div>
             <h2>{originalRequest?.description ?? model.page.description}</h2>
             <p>
               {originalRequest
-                ? `${sectionFact(originalRequest, "Request")?.value ?? "Request"} · Reported by ${sectionFact(originalRequest, "Reported by")?.value ?? "Not recorded"} · ${sectionFact(originalRequest, "Reported")?.value ?? "Time not recorded"}`
+                ? `${sectionFact(originalRequest, "Request")?.value ?? "Work order"} · ${sectionFact(originalRequest, "Request") ? "Submitted" : "Created"} by ${sectionFact(originalRequest, "Reported by")?.value ?? "Not recorded"} · ${sectionFact(originalRequest, "Reported")?.value ?? "Time not recorded"}`
                 : model.page.scopeLabel}
             </p>
           </div>
@@ -693,6 +694,7 @@ export function WorkOrderCase({
 
       {activeView === "overview" ? (
         <>
+          <WorkOrderVisitHistory section={visits} />
           <CaseOverview
             control={control}
             recording={recording}
@@ -771,7 +773,8 @@ export function WorkOrderCase({
         icon={<MapPin aria-hidden="true" size={20} />}
       >
         <div className={styles.panelRegion}><WorkOrderVerificationPanel model={verification} /></div>
-        <RecordBlock section={visits} icon={<MapPin aria-hidden="true" size={18} />} keepAnchor={false} />
+        <WorkOrderVisitHistory section={visits} />
+        {visits?.timeline?.some((event) => !event.link?.href.startsWith("/app/visits/")) ? <RecordBlock section={{ ...visits, id: "work-updates", title: "Other work-order notes", description: undefined, table: undefined, timeline: visits.timeline.filter((event) => !event.link?.href.startsWith("/app/visits/")) }} icon={<FileText aria-hidden="true" size={18} />} /> : null}
       </WorkspaceSection> : null}
 
       {activeView === "cost" ? <WorkspaceSection

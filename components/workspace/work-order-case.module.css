@@ -1763,3 +1763,16 @@
   .headerActions > a { min-height: 44px; }
   .sectionHeading { flex-direction: column; align-items: stretch; }
 }
+
+.visitHistory { padding: 24px; border: 1px solid #dde2e8; background: #fff; border-radius: 6px; }
+.visitHistory h2 { margin: 0 0 20px; font-size: 20px; }
+.visitHistory h2 small { margin-left: 10px; font-size: 14px; color: #526174; font-weight: 400; }
+.visitHistory ol { list-style: none; padding: 0; margin: 0; }
+.visitHistory li + li { border-top: 1px solid #dde2e8; margin-top: 22px; padding-top: 22px; }
+.visitHistory header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.visitHistory h3 { margin: 0; font-size: 16px; }
+.visitHistory header a { color: #1d4ed8; font-size: 14px; }
+.visitHistory p { margin: 8px 0; font-size: 16px; }
+.visitTiming { color: #526174; }
+.visitNote { white-space: pre-wrap; overflow-wrap: anywhere; border-left: 3px solid #cbd5e1; padding-left: 14px; }
+.visitNote small { font-size: 13px; color: #526174; }

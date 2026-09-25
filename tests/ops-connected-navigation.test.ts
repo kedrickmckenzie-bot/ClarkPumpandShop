@@ -8,7 +8,8 @@ import type { OperatorSession } from "@/components/ops/data-contract";
 import { buildQueryListModel } from "@/app/app/_data/operator-query-presenter";
 import { buildCreateWorkOrderModel, buildDetailModel, buildVendorPerformanceDetailModel } from "@/app/app/_data/operator-presenter";
 import { buildTrendsModel } from "@/app/app/_data/trends-presenter";
-import { ListView } from "@/components/ops/views";
+import { WorkOrderVisitHistory } from "@/components/workspace/work-order-visit-history";
+import { ListSurface, ListView } from "@/components/ops/views";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ usePathname: () => "/app/work-orders", useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push: vi.fn() }) }));
@@ -113,5 +114,40 @@ describe("connected navigation", () => {
     const unmatched = model.visitRows.find((row) => row.isNoWorkOrder)!;
     expect(unmatched.workOrderHref).toBeUndefined();
     expect(unmatched.href).toMatch(/^\/app\/visits\//);
+  });
+});
+
+
+describe("work-order review entry", () => {
+  it("opens the work order from every history-row data cell, including store and vendor", async () => {
+    const { repository } = fixtureContext();
+    const model = await buildQueryListModel(repository, session, "work-orders", { status: "history" });
+    const html = renderToStaticMarkup(createElement(ListSurface, { model, surface: "work-orders", searchParams: { status: "history" } }));
+    const body = html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? "";
+    const links = [...body.matchAll(/href="([^"]+)"/g)].map((match) => match[1]);
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every((href) => href.startsWith("/app/work-orders/"))).toBe(true);
+    expect(body).not.toContain("selected=");
+  });
+
+  it("keeps each bundled job's notes with that job instead of borrowing the primary job's checkout", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const visit = fixture.visits.find((item) => item.workOrderId && item.checkedOutAt)!;
+    const work = fixture.workOrders.find((item) => item.storeId === visit.storeId && item.id !== visit.workOrderId)!;
+    visit.outcomeNotes = "Primary job only";
+    fixture.siteVisitWorkOrders.push({ id: "review-scope-link", organizationId: session.organizationId, visitId: visit.id, workOrderId: work.id, ordinal: 99, linkedByActorType: "system", linkedByActorName: "Test", linkedAt: visit.checkedInAt, outcome: "completed", outcomeNotes: "This job only" });
+    const detail = buildDetailModel(fixture, session, "work-order", work.id);
+    const history = detail.sections.find((section) => section.id === "visits")!;
+    const row = history.table!.rows.find((item) => item.id === visit.id)!;
+    expect(row.cells.find((cell) => cell.key === "outcome")?.secondary).toBe("This job only");
+    const markup = renderToStaticMarkup(createElement(WorkOrderVisitHistory, { section: { ...history, table: { ...history.table!, rows: [row] } } }));
+    expect(markup).toContain("Visit history");
+    expect(markup).toContain(visit.technicianName);
+    expect(markup).toContain("This job only");
+    expect(markup).not.toContain("Primary job only");
+    expect(history.timeline?.find((event) => event.link?.href === `/app/visits/${visit.id}`)?.description).toBe("This job only");
+    fixture.siteVisitWorkOrders.at(-1)!.outcomeNotes = undefined;
+    const noNote = buildDetailModel(fixture, session, "work-order", work.id).sections.find((section) => section.id === "visits")!;
+    expect(noNote.table!.rows.find((item) => item.id === visit.id)!.cells.find((cell) => cell.key === "outcome")?.secondary).toBe("No checkout note recorded");
   });
 });

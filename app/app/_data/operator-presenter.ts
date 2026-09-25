@@ -65,6 +65,7 @@ import type {
   RequestImpactAssessment,
   Store,
   VisitSession,
+  SiteVisitWorkOrderOutcome,
   WorkOrder,
 } from "@/lib/ops/types";
 import {
@@ -120,7 +121,7 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
 });
-const unresolvedOutcomesForPresentation = new Set<NonNullable<VisitSession["outcome"]>>([
+const unresolvedOutcomesForPresentation = new Set<NonNullable<VisitSession["outcome"]> | SiteVisitWorkOrderOutcome>([
   "temporary_repair",
   "diagnosed_waiting_parts",
   "return_required",
@@ -140,7 +141,9 @@ function money(amountMinor: number): string {
   return currencyFormatter.format(amountMinor / 100);
 }
 
-function visitsForWorkOrder(fixture: OpsFixture, scoped: ScopedFixture, workOrderId: string): VisitSession[] {
+type WorkOrderVisit = Omit<VisitSession, "outcome"> & { outcome?: VisitSession["outcome"] | SiteVisitWorkOrderOutcome; noteActorName?: string; noteRecordedAt?: string };
+
+function visitsForWorkOrder(fixture: OpsFixture, scoped: ScopedFixture, workOrderId: string): WorkOrderVisit[] {
   const linkedVisitIds = new Set(
     fixture.siteVisitWorkOrders
       .filter((link) => link.organizationId === scoped.organizationId && link.workOrderId === workOrderId)
@@ -148,10 +151,14 @@ function visitsForWorkOrder(fixture: OpsFixture, scoped: ScopedFixture, workOrde
   );
   return scoped.visits
     .filter((visit) => visit.workOrderId === workOrderId || linkedVisitIds.has(visit.id))
+    .map((visit) => {
+      const link = fixture.siteVisitWorkOrders.find((item) => item.organizationId === scoped.organizationId && item.visitId === visit.id && item.workOrderId === workOrderId);
+      return link ? { ...visit, noteActorName: link.outcomeRecordedByActorName, noteRecordedAt: link.outcomeRecordedAt, outcome: link.outcome ?? (visit.workOrderId === workOrderId ? visit.outcome : undefined), outcomeNotes: link.outcomeNotes ?? (visit.workOrderId === workOrderId ? visit.outcomeNotes : undefined) } : visit;
+    })
     .sort((left, right) => right.checkedInAt.localeCompare(left.checkedInAt));
 }
 
-function workOrderVisitRows(visits: VisitSession[], timeZone: string, sourceVisitId?: string): TableRowViewModel[] {
+function workOrderVisitRows(visits: WorkOrderVisit[], timeZone: string, sourceVisitId?: string): TableRowViewModel[] {
   return visits.map((visit) => ({
     id: visit.id,
     label: `${visit.technicianName} service visit`,
@@ -181,7 +188,7 @@ function workOrderNoteHistory(
   fixture: OpsFixture,
   organizationId: string,
   workOrderId: string,
-  visits: VisitSession[],
+  visits: WorkOrderVisit[],
   timeZone: string,
 ): TimelineEventViewModel[] {
   const membershipById = new Map(
@@ -198,7 +205,7 @@ function workOrderNoteHistory(
 
   for (const visit of visits) {
     if (!visit.outcomeNotes?.trim()) continue;
-    const recordedAt = visit.checkedOutAt ?? visit.checkedInAt;
+    const recordedAt = visit.noteRecordedAt ?? visit.checkedOutAt ?? visit.checkedInAt;
     notes.push({
       sortAt: recordedAt,
       event: {
@@ -206,7 +213,7 @@ function workOrderNoteHistory(
         title: "Technician checkout note",
         description: visit.outcomeNotes.trim(),
         timestampLabel: dateTime(recordedAt, timeZone),
-        actorLabel: `${visit.technicianName} · ${visit.providerName}`,
+        actorLabel: visit.noteActorName ?? `${visit.technicianName} · ${visit.providerName}`,
         tone: visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome) ? "warning" : "neutral",
         link: { href: `/app/visits/${visit.id}`, label: "Open visit" },
       },
@@ -4413,7 +4420,15 @@ export function buildDetailModel(
             { label: "Original priority", value: sentence(sourceRequest.priority) },
           ],
           action: { label: "Open original report", href: `/app/requests/${sourceRequest.id}` },
-        }] : []),
+        }] : [{
+          id: "original-request",
+          title: "Work order details",
+          description: work.problem,
+          facts: [
+            { label: "Reported by", value: audit.find((event) => event.aggregateId === work.id && event.eventType === "work_order.created")?.actorName ?? "Not recorded" },
+            { label: "Reported", value: dateTime(work.createdAt, storeTimeZone) },
+          ],
+        }]),
         ...(linkedRequests.length ? [{
           id: "related-reports",
           title: linkedRequests.length === 1 ? "Linked store report" : "Linked store reports",

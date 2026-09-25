@@ -372,7 +372,7 @@ function FilterGroups({ filters }: { filters?: FilterGroupViewModel[] }) {
   );
 }
 
-function DataTable({ table, selectedId, rowHref, selection, context }: { context?: string; table: TableViewModel; selectedId?: string; rowHref?: (row: TableViewModel["rows"][number]) => string; selection?: { name: string; label: string; isDisabled?: (row: TableViewModel["rows"][number]) => boolean } }) {
+function DataTable({ table, selectedId, rowHref, selection, context, openRecord = false }: { openRecord?: boolean; context?: string; table: TableViewModel; selectedId?: string; rowHref?: (row: TableViewModel["rows"][number]) => string; selection?: { name: string; label: string; isDisabled?: (row: TableViewModel["rows"][number]) => boolean } }) {
   if (!table.rows.length) return <InlineEmpty message="No source records are linked to this section yet." />;
 
   return (
@@ -389,15 +389,16 @@ function DataTable({ table, selectedId, rowHref, selection, context }: { context
                 {selection ? <td className={styles.selectColumn}><input type="checkbox" name={selection.name} value={row.id} aria-label={`Select ${row.label}`} disabled={selection.isDisabled?.(row)} /></td> : null}
                 {table.columns.map((column, index) => {
                   const cell = row.cells.find((candidate) => candidate.key === column.key);
-                  const href = cell?.link?.href ?? rowHref?.(row) ?? row.href;
+                  const cellLink = openRecord ? undefined : cell?.link;
+                  const href = openRecord ? row.href : cellLink?.href ?? rowHref?.(row) ?? row.href;
                   return (
                     <td data-column={column.key} data-label={column.label} className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
-                      <Link href={cell?.link || !rowHref ? workspaceStartHref(href) : href} aria-current={!cell?.link && row.id === selectedId ? "true" : undefined} aria-label={cell?.link ? `${cell.link.label}: ${cell.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
+                      <Link href={openRecord || cellLink || !rowHref ? workspaceStartHref(href) : href} aria-current={!cellLink && row.id === selectedId ? "true" : undefined} aria-label={cellLink ? `${cellLink.label}: ${cell?.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
                         <span>{cell?.value ?? "—"}</span>
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
                         {index === table.columns.length - 1 ? <ChevronRight className={styles.cellChevron} aria-hidden="true" size={15} /> : null}
                       </Link>
-                      {index === 0 ? <WorkReviewButton href={row.href} label={row.label} context={context} /> : cell?.link && workReviewTarget(cell.link.href) !== workReviewTarget(row.href) ? <WorkReviewButton href={cell.link.href} label={cell.value} context={context} /> : null}
+                      {openRecord ? null : index === 0 ? <WorkReviewButton href={row.href} label={row.label} context={context} /> : cell?.link && workReviewTarget(cell.link.href) !== workReviewTarget(row.href) ? <WorkReviewButton href={cell.link.href} label={cell.value} context={context} /> : null}
                     </td>
                   );
                 })}
@@ -676,7 +677,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
                 <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode && !["history", "closed", "cancelled"].includes(String(searchParams.status ?? "")) && canManageWorkflowTasks ? (
                   <form className={styles.bulkForm} action="/api/ops/work-orders/bulk-follow-up" method="post">
                     <input type="hidden" name="returnTo" value={workOrderReturnTo} />
-                    <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} selection={{ name: "workOrderId", label: "Select", isDisabled: (row) => ["Closed", "Cancelled"].includes(row.cells.find((cell) => cell.key === "status")?.value ?? "") }} />
+                    <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} openRecord={surface === "work-orders" && !approvedLaterMode} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} selection={{ name: "workOrderId", label: "Select", isDisabled: (row) => ["Closed", "Cancelled"].includes(row.cells.find((cell) => cell.key === "status")?.value ?? "") }} />
                     <div className={styles.bulkToolbar}>
                       <div><strong>Add the same follow-up to selected work</strong><small>One auditable, non-blocking reminder is added to each selected record.</small></div>
                       <label><span>Action</span><input name="nextAction" required maxLength={240} defaultValue="Follow up with provider" /></label>
@@ -684,7 +685,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
                       <button type="submit">Add follow-ups</button>
                     </div>
                   </form>
-                ) : <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} />}</div>
+                ) : <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} openRecord={surface === "work-orders" && !approvedLaterMode} selectedId={selectedId} rowHref={(row) => selectionHref(row.id)} />}</div>
                 {selectedRow ? approvedLaterSelection ? <>
                   <Link className={styles.approvedLaterBackdrop} href={selectionHref()} aria-label="Close approved work panel" />
                   <aside className={styles.approvedLaterDialog} role="dialog" aria-modal="true" aria-labelledby="approved-later-dialog-title">

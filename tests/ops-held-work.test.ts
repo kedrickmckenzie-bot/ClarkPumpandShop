@@ -140,6 +140,8 @@ describe("manager-approved held work", () => {
   });
 
   it("atomically claims held work, records temporary-repair advice, and returns it to its original deadline", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-14T12:00:00.000Z"));
     const gateway = getPublicOperationsGateway();
     const repository = getNorthlineFixtureRepository();
     const originalHold = await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, DOOR_WORK_ID);
