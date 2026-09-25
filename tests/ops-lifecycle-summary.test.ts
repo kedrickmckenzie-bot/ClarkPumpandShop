@@ -27,6 +27,8 @@ it("streams every asset through bounded native batches and finds a candidate bey
   const resultSizes: number[] = [];
   const sql: string[] = [];
   const driver: OpsSqlDriver = { dialect: "sqlite", async query<Row extends SqlRow>(statement: { sql: string; params: readonly unknown[] }) {
+    // SQLite permits more variables than hosted D1; enforce the production limit here.
+    if (statement.params.length > 100) throw new Error(`D1 query exceeds 100 bound parameters: ${statement.params.length}`);
     const rows = db.prepare(statement.sql).all(...statement.params.map(value => typeof value === "boolean" ? Number(value) : value ?? null) as SQLInputValue[]) as Row[];
     resultSizes.push(rows.length); sql.push(statement.sql); return { rows, affectedRows: 0 };
   }, async atomic() { throw new Error("Read-only test"); } };
@@ -42,8 +44,8 @@ it("streams every asset through bounded native batches and finds a candidate bey
     expect(result.spotlight?.recordedCosts).toEqual([{ currency: "CAD", amountMinor: 12345 }, { currency: "USD", amountMinor: 12345 }]);
     expect(result.replacementEstimates.find(row => row.currency === "CAD")).toEqual({ currency: "CAD", amountMinor: 123456 });
     expect(result.repairComparisonCount).toBeGreaterThanOrEqual(225);
-    expect(resultSizes.every(count => count <= 101)).toBe(true);
-    expect(sql.filter(query => query.includes("LIMIT 101"))).toHaveLength(4);
+    expect(resultSizes.every(count => count <= 100)).toBe(true);
+    expect(sql.filter(query => query.startsWith("SELECT a.* FROM ops_assets"))).toHaveLength(4);
     expect(sql).toHaveLength(30); // Six batched reads per page, then six single-candidate evidence reads.
     expect((await repository.getDashboardLifecycle({ organizationId: "foreign-tenant", storeIds: [baseAsset.storeId] }, fixture.asOf)).spotlight).toBeUndefined();
   } finally { db.close(); }

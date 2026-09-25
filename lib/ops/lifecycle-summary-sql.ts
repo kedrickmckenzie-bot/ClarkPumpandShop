@@ -11,7 +11,10 @@ export interface LifecycleRecordReaders {
   event(row: SqlRow): ReplacementEvent;
 }
 
-/** Reads current inputs in 100-asset batches; never returns work, price or decision histories. */
+// D1 allows 100 bound parameters: reserve one for the tenant and one for active profiles.
+const ASSET_BATCH_SIZE = 98;
+
+/** Reads current inputs in bounded batches; never returns work, price or decision histories. */
 export async function queryDashboardLifecycle(driver: OpsSqlDriver, scope: OrganizationScope, asOf: string, readers: LifecycleRecordReaders) {
   const summary = createLifecycleSummary(asOf);
   const binary = driver.dialect === "postgres" ? 'COLLATE "C"' : "COLLATE BINARY";
@@ -20,8 +23,8 @@ export async function queryDashboardLifecycle(driver: OpsSqlDriver, scope: Organ
     const params: unknown[] = [];
     const where = scopeWhere(scope, "s", params);
     if (cursor) params.push(cursor);
-    const page = await driver.query({ sql: `SELECT a.* FROM ops_assets a JOIN ops_stores s ON s.organization_id=a.organization_id AND s.id=a.store_id WHERE ${where} ${cursor ? `AND a.id ${binary}>?` : ""} ORDER BY a.id ${binary} LIMIT 101`, params });
-    const assets = page.rows.slice(0, 100).map(readers.asset);
+    const page = await driver.query({ sql: `SELECT a.* FROM ops_assets a JOIN ops_stores s ON s.organization_id=a.organization_id AND s.id=a.store_id WHERE ${where} ${cursor ? `AND a.id ${binary}>?` : ""} ORDER BY a.id ${binary} LIMIT ${ASSET_BATCH_SIZE + 1}`, params });
+    const assets = page.rows.slice(0, ASSET_BATCH_SIZE).map(readers.asset);
     if (!assets.length) break;
     const ids = assets.map(asset => asset.id);
     const batchParams = [scope.organizationId, ...ids];
@@ -37,7 +40,7 @@ export async function queryDashboardLifecycle(driver: OpsSqlDriver, scope: Organ
     const keyed = (rows: SqlRow[]) => new Map(rows.map(row => [String(row.selected_asset_id), row]));
     const w = keyed(work.rows), p = keyed(profiles.rows), b = keyed(benchmarks.rows), o = keyed(overrides.rows), c = keyed(costs.rows);
     for (const asset of assets) summary.add({ asset, work: w.has(asset.id) ? readers.work(w.get(asset.id)!) : undefined, profile: p.has(asset.id) ? readers.profile(p.get(asset.id)!) : undefined, benchmark: b.has(asset.id) ? readers.benchmark(b.get(asset.id)!) : undefined, override: o.has(asset.id) ? readers.override(o.get(asset.id)!) : undefined, recordedCostMinor: Number(c.get(asset.id)?.amount_minor ?? 0) });
-    if (page.rows.length <= 100) break;
+    if (page.rows.length <= ASSET_BATCH_SIZE) break;
     cursor = assets.at(-1)!.id;
   }
   const candidate = summary.candidate;
