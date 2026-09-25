@@ -58,7 +58,9 @@ export async function queryAttention(driver: OpsSqlDriver, scope: OrganizationSc
   const { limit, offset } = dashboardPageBounds(query);
   const idOrder = driver.dialect === "postgres" ? 'id COLLATE "C"' : "id COLLATE BINARY";
   const cursorWhere = cursor ? `WHERE (overdue_order,priority_order,COALESCE(sort_date,'9999-12-31T00:00:00.000Z'),${idOrder}) > (${cursor.map(value => bind(value)).join(",")})` : "";
-  const sql = `${scoped}, candidates AS (${[task, follow, exception, reminder, quote, hold].join(" UNION ALL ")}), enriched AS (${enriched}), ordered AS (${ordered}), filtered AS (${filtered}),
+  // D1 permits five terms per compound SELECT. Keep held work in a second
+  // compound without changing the shared filtering, totals or page ordering.
+  const sql = `${scoped}, primary_candidates AS (${[task, follow, exception, reminder, quote].join(" UNION ALL ")}), candidates AS (SELECT * FROM primary_candidates UNION ALL ${hold}), enriched AS (${enriched}), ordered AS (${ordered}), filtered AS (${filtered}),
     totals AS (SELECT COUNT(*) AS total_count,COALESCE(SUM(CASE WHEN lane='mine' THEN 1 ELSE 0 END),0) AS mine_count,COALESCE(SUM(CASE WHEN source_kind NOT IN ('exception','vendor_reminder') THEN 1 ELSE 0 END),0) AS follow_up_count FROM filtered),
     visible AS (SELECT * FROM filtered ${cursorWhere} ORDER BY overdue_order,priority_order,COALESCE(sort_date,'9999-12-31T00:00:00.000Z'),${idOrder} LIMIT ${bind(limit + 1)} OFFSET ${bind(cursor ? 0 : offset)})
     SELECT a.*,t.total_count,t.mine_count,t.follow_up_count,wt.task_type FROM totals t LEFT JOIN visible a ON 1=1 LEFT JOIN visible_tasks wt ON wt.id=a.id AND a.source_kind='workflow_task' ORDER BY a.overdue_order,a.priority_order,COALESCE(a.sort_date,'9999-12-31T00:00:00.000Z'),a.${idOrder}`;

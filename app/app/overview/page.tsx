@@ -8,7 +8,7 @@ export default async function OverviewPage() {
   try {
     return <ControlTower model={await loadDashboardModel()} />;
   } catch (error) {
-    console.error("Overview workspace loading failed", error);
+    console.error("Overview workspace loading failed", error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
