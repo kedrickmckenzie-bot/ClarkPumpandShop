@@ -1,3 +1,4 @@
+import { safeDecisionReturn } from "@/lib/ops/review-navigation";
 import type { Metadata } from "next";
 import { roleCan } from "@/components/ops/role-policy";
 import { SetupActions } from "@/components/ops/setup-forms";
@@ -14,6 +15,7 @@ export const metadata: Metadata = { title: "Equipment detail" };
 export default async function EquipmentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = await params;
   const query = await searchParams;
+  const returnDecision = safeDecisionReturn(Array.isArray(query.returnDecision) ? query.returnDecision[0] : query.returnDecision);
   const session = await loadOperatorSession();
   const [model, fixture, replacement] = await Promise.all([
     loadDetailModel("equipment", id),
@@ -42,6 +44,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
       ? { label: "Continue existing work", href: review.currentWork[0].href }
       : { label: "Review existing work", href: "#equipment-review" };
   }
+  if (returnDecision) model.backLink = { label: "Back to equipment review", href: returnDecision };
   const canSetupEquipment = roleCan(session, "setup_equipment");
   const canSetupPm = roleCan(session, "setup_pm");
   const storeId = model.facts.find((fact) => fact.label === "Store")?.link?.href.split("/").at(-1);

@@ -1,3 +1,4 @@
+import { safeDecisionReturn } from "@/lib/ops/review-navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { WorkPricePanel } from "@/components/workspace/work-price-panel";
@@ -25,9 +26,10 @@ function selectedServicePath(value: string | string[] | undefined): WorkOrderSer
   return candidate === "direct" || candidate === "bids" ? candidate : undefined;
 }
 
-export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ updated?: string | string[]; view?: string | string[]; path?: string | string[]; notice?: string | string[]; error?: string | string[]; reconcile?: string | string[] }> }) {
+export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ returnDecision?: string | string[]; updated?: string | string[]; view?: string | string[]; path?: string | string[]; notice?: string | string[]; error?: string | string[]; reconcile?: string | string[] }> }) {
   const { id } = await params;
   const query = await searchParams;
+  const returnDecision = safeDecisionReturn(Array.isArray(query.returnDecision) ? query.returnDecision[0] : query.returnDecision);
   const updated = Array.isArray(query.updated) ? query.updated[0] : query.updated;
   const requestedView = selectedView(query.view);
   const requestedServicePath = selectedServicePath(query.path);
@@ -114,6 +116,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
         {reconcileId ? <Link href={`/app/action-center/${encodeURIComponent(reconcileId)}?workOrder=${encodeURIComponent(id)}`}>Link the saved work order</Link> : null}
       </p>
     ) : null}
+    {returnDecision ? <Link href={returnDecision}>← Back to equipment review</Link> : null}
     <WorkOrderCase
       prices={!accountabilityOnly && view === "cost" ? <WorkPricePanel workOrderId={id} /> : undefined}
       connectedReview={connectedReview}

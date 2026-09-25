@@ -49,11 +49,13 @@ export function LifecycleRecordStack({ model }: { model: LifecycleDecisionWorksp
       <div><p>Repair or replace</p><h1>{model.assetName}</h1><span>{model.storeLabel} · {model.assetTag}{model.workOrderNumber ? ` · ${model.workOrderNumber}` : ""}</span></div>
       <strong className={styles.status}>{model.statusLabel}</strong>
     </header>
-    <p className={styles.problem}>{model.description}</p>{model.context ? <p>Current work concerns: <strong>{model.context.currentScope}</strong>. Replacement scope must be confirmed from the selected quote.</p> : null}
+    <p className={styles.problem}>{model.description}</p>
+    <nav className={styles.sections} aria-label="Decision sections"><a href="#replacement-quotes">Quotes and scope</a><a href="#decision-context">Recent issues</a><a href="#replacement-references">Similar replacement costs</a><a href="#decision-method">Comparison details</a><a href="#decision-activity">Decision history</a></nav>
+    {model.context ? <DecisionContext model={model.context} /> : null}
     <section className={styles.prices} aria-label="Repair and replacement prices">
       <div><h2>Repair price</h2><strong>{model.repairAmountLabel}</strong><p>Estimate entered on this work order.</p>{model.workOrderId ? <Link href={`/app/work-orders/${model.workOrderId}?view=overview`}>Review the repair estimate</Link> : <Link href={model.openEquipmentHref}>Add the missing repair information</Link>}</div>
       <div><h2>{prices?.replacementBasis ?? "Replacement quote"}</h2><strong>{model.replacementAmountLabel}</strong><p>{prices?.approvedVendor ?? (prices?.quotes.length ? "Prices are listed below." : "No vendor replacement quote has been selected.")}</p><a href="#replacement-quotes">Review replacement scope and quotes ↓</a></div>
-      <div><h2>Planning estimate</h2><strong>{prices?.planningLabel ?? "Not entered"}</strong><p>Equipment planning reference. This is separate from the vendor’s quote and approved amount.</p><Link href={model.openEquipmentHref}>Review the planning source</Link></div>
+      <div><h2>Saved planning estimate</h2><strong>{prices?.planningLabel ?? "Not entered"}</strong><p>Equipment planning reference. This is separate from the vendor’s quote and approved amount.</p><Link href={model.openEquipmentHref}>Review the planning source</Link></div>
     </section>
     {prices?.finalAmount ? <p className={styles.notice}>Final replacement amount recorded: <strong>{prices.finalAmount}</strong>. The approved amount above remains part of the decision history.</p> : null}
     {prices?.missing ? <p className={styles.notice}>{prices.missing}</p> : null}
@@ -61,8 +63,7 @@ export function LifecycleRecordStack({ model }: { model: LifecycleDecisionWorksp
       <div><h2 id="decision-next">What happens next</h2><p>{model.nextActionLabel}</p><span>{model.ownerLabel} · Due {model.dueLabel}</span></div>
       {model.openWorkOrderHref ? <Link className={styles.action} href={model.openWorkOrderHref}>{model.nextActionLabel} →</Link> : <Link className={styles.action} href={model.openEquipmentHref}>Review equipment and open work →</Link>}
     </section>
-    <nav className={styles.sections} aria-label="Decision sections"><a href="#replacement-quotes">Quotes and scope</a><a href="#decision-context">Repair history and warranty</a><a href="#decision-method">Comparison details</a><a href="#decision-activity">Decision history</a></nav>
-    {model.context ? <DecisionContext model={model.context} /> : null}
+
     <section className={styles.section} id="replacement-quotes"><h2>Replacement quotes and what they include</h2><p>{prices?.scope}</p>
       {prices?.quotes.length ? <div className={styles.quotes}>{prices.quotes.map((quote) => <article key={quote.id}><header><div><h3>{quote.vendor}</h3><span>{quote.status}</span></div><strong>{quote.amount}</strong></header><dl><div><dt>Included work</dt><dd>{quote.scope}</dd></div><div><dt>Not included / needs checking</dt><dd>{quote.exclusions}</dd></div><div><dt>Availability</dt><dd>{quote.timing}</dd></div></dl><Link href={quote.href}>{quote.href.endsWith("/prices") ? "Price history →" : "Quote details →"}</Link></article>)}</div> : <p>No replacement quote is recorded here. {model.workOrderId ? <Link href={`/app/work-orders/${model.workOrderId}?view=service&path=bids`}>Request replacement pricing for this work order</Link> : <Link href={model.openEquipmentHref}>Open equipment to start a pricing request</Link>}.</p>}
     </section>

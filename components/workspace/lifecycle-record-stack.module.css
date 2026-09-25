@@ -74,3 +74,14 @@
 @media(max-width:760px) { .desktopScope { display:none; } .mobileScope { display:block; margin:18px 0; } .mobileScope label { display:block; font-weight:600; } .mobileScope select { display:block; width:100%; margin-top:8px; padding:12px 8px; border:1px solid #a9b8cc; border-radius:4px; background:#fff; font:inherit; color:#243248; } .section { scroll-margin-top:135px; } }
 
 .notice a { display:inline-block; padding:4px 0; text-decoration:underline; }
+
+.sectionHeading { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px; }
+.sectionHeading h2 { margin-bottom:4px; }
+.sectionHeading span { color:#526177; font-size:14px; }
+.rowLink { display:flex; flex-direction:column; gap:7px; min-height:100%; text-decoration:none; color:inherit !important; }
+.rowLink small { font-size:14px; color:#526177; }
+.repairTable tr:hover { background:#f5f8fd; }
+.repairTable td:has(> .rowLink) { padding:0; }
+.repairTable .rowLink { padding:14px 12px; }
+.prices { margin-top:24px; }
+@media(max-width:760px) { .sectionHeading { align-items:flex-start; flex-direction:column; } }

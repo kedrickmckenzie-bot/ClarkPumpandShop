@@ -31,7 +31,7 @@ export function safeDecisionReturn(value?: string | null): string | undefined {
     const url = new URL(value, "https://ops.invalid");
     if (url.origin !== "https://ops.invalid" || url.pathname !== "/app/lifecycle" || !url.searchParams.get("decision") || url.searchParams.get("asset") !== url.searchParams.get("decision")) return undefined;
     const params = new URLSearchParams();
-    for (const key of ["asset", "decision", "view", "component", "history", "historyPage", "costPage"]) { const part = url.searchParams.get(key); if (part) params.set(key, part); }
+    for (const key of ["asset", "decision", "view", "component", "history", "historyPage", "costPage", "references", "referencePage"]) { const part = url.searchParams.get(key); if (part) params.set(key, part); }
     return `/app/lifecycle?${params}#decision-context`;
   } catch { return undefined; }
 }

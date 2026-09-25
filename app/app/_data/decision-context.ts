@@ -1,3 +1,4 @@
+import { replacementReferences } from "@/lib/ops/replacement-references";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import type { OpsFixture, WorkOrder } from "@/lib/ops/types";
@@ -45,11 +46,23 @@ export function buildDecisionContext(fixture: OpsFixture, session: OperatorSessi
     { text: missingCosts ? `${missingCosts} of those work orders have no cost lines in this period. The total is recorded spending, not a complete repair bill.` : "These totals use recorded cost lines. They do not establish that every repair or charge was recorded.", href: "#decision-costs" },
     ...(diagnosis ? [{ text: `Recorded diagnosis: ${diagnosis}`, href: warrantyHref(diagnosisCase!.id) }] : pending.length ? [{ text: "An unresolved warranty case in this scope still needs a diagnosis and coverage decision. Similar complaints alone do not establish that an earlier repair failed.", href: warrantyHref(pending[0].id) }] : []),
   ];
+  const returnLink = (href: string) => { const url = new URL(href, "https://local.test"); url.searchParams.set("returnDecision", returnDecision); return `${url.pathname}${url.search}${url.hash}`; };
+  const referenceCutoff = new Date(fixture.asOf); referenceCutoff.setUTCFullYear(referenceCutoff.getUTCFullYear() - 1);
+  const allReferences = replacementReferences(fixture, session, asset, componentId);
+  const olderCount = allReferences.filter(r => r.date < referenceCutoff.toISOString().slice(0,10)).length;
+  const showOlder = first(query.references) === "all";
+  const references = allReferences.filter(r => showOlder || r.date >= referenceCutoff.toISOString().slice(0,10));
+  const referencePage = Math.max(1, Math.min(Math.max(1, Math.ceil(references.length / 20)), Math.floor(Number(first(query.referencePage))) || 1));
+  const referenceHref = (older: boolean, page = 1) => { const url = new URL(returnDecision, "https://local.test"); if (older) url.searchParams.set("references", "all"); else url.searchParams.delete("references"); url.searchParams.set("referencePage", String(page)); return `${url.pathname}${url.search}#replacement-references`; };
   return {
+    referenceAsOf: formatOperationsDate(fixture.asOf),
+    references: references.slice((referencePage - 1) * 20, referencePage * 20).map(r => ({ ...r, date: formatOperationsDate(r.date), href: returnLink(r.href), older: r.date < referenceCutoff.toISOString().slice(0,10) })), referenceCount: references.length, olderCount, showOlder, referenceToggleHref: referenceHref(!showOlder),
+    referencePages: [...(referencePage > 1 ? [{ label: "Previous references", href: referenceHref(showOlder, referencePage - 1) }] : []), ...(referencePage * 20 < references.length ? [{ label: "Next references", href: referenceHref(showOlder, referencePage + 1) }] : [])],
+    fullHistoryHref: `/app/equipment/${assetId}?${new URLSearchParams({ history: "all", ...(componentId ? { component: componentId } : {}), returnDecision })}#equipment-review`,
     title: selected.title, period: selected.period, notice: selected.notice, currentScope,
     choices: selected.choices.map((row) => ({ ...row, href: remap(row.href) })), periods: selected.periods.map((row) => ({ ...row, href: remap(row.href) })),
     selectedCost: selected.workCost, wholeCost: whole.workCost, selectedComponent: !!componentId, facts,
-    rows: selected.rows.map((row) => ({ ...row, repairs: repairs.filter((repair) => repair.workOrderId === row.id).map((repair) => ({ failure: repair.rootCause ?? repair.failureCode?.replaceAll("-", " ") ?? "Cause not recorded", action: repair.repairAction, date: repair.completionDate })) })),
+    rows: selected.rows.map((row) => ({ ...row, href: returnLink(row.href), date: formatOperationsDate(work.find(w => w.id === row.id)!.createdAt), provider: (() => { const assignment = fixture.assignments.filter(a => a.organizationId === org && a.workOrderId === row.id).sort((a,b) => b.assignedAt.localeCompare(a.assignedAt))[0]; return assignment?.vendorId ? fixture.vendors.find(v => v.organizationId === org && v.id === assignment.vendorId)?.name ?? "Vendor unavailable" : assignment?.kind === "internal" ? "Internal maintenance" : "Provider not assigned"; })(), repairs: repairs.filter((repair) => repair.workOrderId === row.id).map((repair) => ({ failure: repair.rootCause ?? repair.failureCode?.replaceAll("-", " ") ?? "Cause not recorded", action: repair.repairAction, date: repair.completionDate })) })),
     wholeHref: remap(whole.choices[0].href).replace("#decision-context", "#decision-costs"),
     rowCount: selected.rowCount, pages: selected.pages.map((row) => ({ ...row, href: remap(row.href) })),
     costCount: costs.length, costPages: [...(costPage > 1 ? [{label: "Previous cost lines", href: costPageHref(costPage - 1)}] : []), ...(costPage * 20 < costs.length ? [{label: "Next cost lines", href: costPageHref(costPage + 1)}] : [])],
