@@ -34,6 +34,8 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
     }
   }
   if (review) {
+    const warrantyFact = model.facts.find(fact => fact.label === "Warranty");
+    if (warrantyFact) { warrantyFact.label = "Warranty records"; warrantyFact.value = `${review.warranty.length} in this equipment scope`; warrantyFact.helperText = "View coverage and individual dates"; warrantyFact.link = { label: "View warranties", href: "#equipment-warranties" }; }
     // The connected workspace owns history/components now; keep setup and PM sections.
     model.sections = model.sections.filter((section) => !["service-history", "components", "lifecycle-evidence"].includes(section.id));
     if (review.currentWork.length) model.page.primaryAction = review.currentWork.length === 1

@@ -1,3 +1,4 @@
+import { buildCreateTaskStatements, buildWorkflowTaskRecord, isOpenWorkflowTask } from "./workflow-task-commands";
 import type { OpsCommandServices, OpsIdSource } from "./commands";
 import { OpsDomainError } from "./commands";
 import { atomicWorkOrderMutation } from "./concurrency";
@@ -271,6 +272,21 @@ export async function recordWorkOrderCost(
       ids,
     }),
   ];
+  const threshold = workOrder.internalReviewThresholdMinor;
+  if (threshold != null && currency === workOrder.internalReviewCurrency) {
+    const [detail, tasks] = await Promise.all([repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id), repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id)]);
+    const total = (detail?.costs.filter(cost => cost.currency === currency).reduce((sum, cost) => sum + cost.amountMinor, 0) ?? 0) + input.amountMinor;
+    const title = "Review costs above internal flag";
+    if (total > threshold && !tasks.some(task => task.title === title && isOpenWorkflowTask(task))) {
+      const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value / 100);
+      const task = buildWorkflowTaskRecord({ id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id, actor: input.actor, createdAt: now, draft: {
+        taskType: "other", title, reason: `Recorded work cost ${money(total)} exceeds the internal flag of ${money(threshold)}. Review the cost entries; vendor authorization is unchanged.`,
+        assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator", priority: "high", blocking: false, requiredForProgress: false,
+        dueAt: new Date(Date.parse(now) + 24 * 60 * 60_000).toISOString(), applicableSlaClock: "completion", completionCriteria: "Review recorded costs and record the decision.", escalationDestination: "Facilities director",
+      } });
+      statements.push(...buildCreateTaskStatements({ task, actor: input.actor, ids }));
+    }
+  }
   if (input.idempotency) statements.unshift(idempotencyStatement({ organizationId: input.organizationId, resultId: id, command: COST_COMMAND, now, idempotency: input.idempotency }));
   try {
     await atomicWorkOrderMutation({ repository, workOrder, now, statements });

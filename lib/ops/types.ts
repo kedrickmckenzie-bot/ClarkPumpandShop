@@ -644,6 +644,8 @@ export interface WorkOrder {
   dueAt?: IsoDateTime;
   escalationTo?: string;
   nte?: Money;
+  internalReviewThresholdMinor?: number;
+  internalReviewCurrency?: string;
   /** Optional current repair proposal used for capital planning; never an authorization limit. */
   repairEstimate?: Money;
   /** Optional planning estimate of how much useful service the proposed repair is expected to buy. */
@@ -1610,7 +1612,12 @@ export interface WarrantyAmendment {
   decidedAt: IsoDateTime;
 }
 
+/** Registered equipment coverage; legacy storage name retained for existing records. */
 export interface ManufacturerWarranty {
+  providerKind?: "manufacturer" | "vendor";
+  vendorId?: OpsId;
+  workOrderId?: OpsId;
+  title?: string;
   id: OpsId;
   organizationId: OpsId;
   assetId: OpsId;

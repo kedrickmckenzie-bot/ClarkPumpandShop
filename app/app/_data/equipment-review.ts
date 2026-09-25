@@ -15,13 +15,14 @@ export interface EquipmentReviewModel {
   rows: Array<{ id: string; number: string; problem: string; scope: string; outcome: string; verification: string; cost: string; quotes: string[]; href: string }>;
   rowCount: number;
   workCost: string;
-  warranty: ReviewEvidence[];
+  warranty: Array<ReviewEvidence & { dates?: string; status?: string; provider?: string }>;
   currentWork: Array<{ label: string; href: string }>;
   createHref?: string;
   recordsHref: string;
   recordsLabel: string;
   pages: Array<{ label: string; href: string }>;
   componentHref?: string;
+  addWarrantyHref?: string;
   notice?: string;
 }
 
@@ -66,21 +67,22 @@ export function buildEquipmentReview(fixture: OpsFixture, session: OperatorSessi
     return `/app/equipment/${asset.id}?${params}#equipment-review`;
   };
   const title = selected ? `${asset.name} › ${selected.name}${selectedIds.size > 1 ? " and its components" : ""}` : selectedId === "unlinked" ? `${asset.name} › Component not specified` : `${asset.name} › Whole equipment`;
-  const warranty: ReviewEvidence[] = [];
+  const warranty: EquipmentReviewModel["warranty"] = [];
   if (!invalid && selectedId !== "unlinked") {
     const repairs = fixture.repairItems.filter((row) => row.organizationId === org && row.assetId === asset.id && (!selected || Boolean(row.componentId && selectedIds.has(row.componentId))));
     const repairsById = new Map(repairs.map((row) => [row.id, row]));
     for (const reference of fixture.appliedWarranties.filter((row) => row.organizationId === org && repairsById.has(row.repairItemId))) {
       const repair = repairsById.get(reference.repairItemId)!;
       const amendments = fixture.warrantyAmendments.filter((row) => row.organizationId === org && row.appliedWarrantyId === reference.id && row.amendmentKind !== "accept_calculated").sort((a, b) => b.decidedAt.localeCompare(a.decidedAt));
-      warranty.push({ id: reference.id, label: `${reference.coverageType.replaceAll("_", " ")} · ${date(repair.completionDate)} repair`, detail: amendments.length ? `Terms amended: ${warrantyCorrectionTerms(amendments[0].amendedTermsJson).map((entry) => `${entry.label}: ${entry.value}`).join("; ")}. ${amendments[0].decidedByName} · ${date(amendments[0].decidedAt)}. Reason: ${amendments[0].reason}. Review the original record and any earlier corrections.` : `${date(reference.startDate)}–${date(reference.endDate)} · ${reference.routingRule.replaceAll("_", " ")} · ${reference.endDate < to ? "Term ended" : "Check applicability to this problem"}`, href: `/app/work-orders/${repair.workOrderId}?view=equipment#work-equipment-context` });
+      warranty.push({ id: reference.id, dates: `${date(reference.startDate)}–${date(reference.endDate)}`, status: reference.endDate < to ? "Expired" : reference.startDate > to ? "Starts later" : "In date", label: `${reference.coverageType.replaceAll("_", " ")} · ${date(repair.completionDate)} repair`, detail: amendments.length ? `Terms amended: ${warrantyCorrectionTerms(amendments[0].amendedTermsJson).map((entry) => `${entry.label}: ${entry.value}`).join("; ")}. ${amendments[0].decidedByName} · ${date(amendments[0].decidedAt)}. Reason: ${amendments[0].reason}. Review the original record and any earlier corrections.` : `${date(reference.startDate)}–${date(reference.endDate)} · ${reference.routingRule.replaceAll("_", " ")} · ${reference.endDate < to ? "Term ended" : "Check applicability to this problem"}`, href: `/app/work-orders/${repair.workOrderId}?view=equipment#work-equipment-context` });
     }
-    for (const reference of fixture.manufacturerWarranties.filter((row) => row.organizationId === org && row.assetId === asset.id && (!selected || !row.componentId || selectedIds.has(row.componentId)))) warranty.push({ id: reference.id, label: `${reference.manufacturer} · ${reference.componentId ? components.find((row) => row.id === reference.componentId)?.name ?? "Component" : "Whole equipment"}`, detail: `${date(reference.startDate)}–${date(reference.expirationDate)}. Parts: ${reference.partsCoverage}. Labor: ${reference.laborCoverage}. ${reference.claimRequirements ?? "Claim requirements not entered."}` });
+    for (const reference of fixture.manufacturerWarranties.filter((row) => row.organizationId === org && row.assetId === asset.id && (!selected || !row.componentId || selectedIds.has(row.componentId)))) warranty.push({ id: reference.id, provider: reference.manufacturer, dates: `${date(reference.startDate)}–${date(reference.expirationDate)}`, status: reference.expirationDate < to ? "Expired" : reference.startDate > to ? "Starts later" : "In date", label: `${reference.providerKind === "vendor" ? "Vendor work" : "Manufacturer"} · ${reference.title ?? reference.manufacturer} · ${reference.componentId ? components.find((row) => row.id === reference.componentId)?.name ?? "Component" : "Whole equipment"}`, detail: `${reference.manufacturer} · ${reference.expirationDate < to ? "Expired" : reference.startDate > to ? "Starts later" : "In date"} · ${date(reference.startDate)}–${date(reference.expirationDate)}. Parts: ${reference.partsCoverage}. Labor: ${reference.laborCoverage}. ${reference.claimRequirements ?? "Claim requirements not entered."}`, href: reference.workOrderId ? `/app/work-orders/${reference.workOrderId}` : undefined });
     const end = selected?.warrantyEndsAt ?? (!selected ? asset.warrantyEndsAt : undefined);
     if (!warranty.length && end) warranty.push({ id: "reference", label: "Recorded warranty date", detail: `${date(end)} · Coverage terms and responsibility need checking.` });
   }
   const records = new URLSearchParams({ store: store.id, asset: asset.id, ...(selectedId ? { component: selectedId } : {}) });
   return {
+    addWarrantyHref: ["executive", "facilities", "regional"].includes(session.role) ? `/app/equipment/${asset.id}/warranties/new${selected ? `?component=${selected.id}` : ""}` : undefined,
     title, period: from ? `${date(from)}–${date(to)}` : `All recorded dates through ${date(to)}`, asOf: date(to),
     choices: [{ label: "Whole equipment", href: href({ component: undefined }), selected: !selectedId }, ...components.map((row) => ({ label: `${row.name}${row.removedAt && !row.name.toLowerCase().includes("removed") ? " (removed)" : ""}`, href: href({ component: row.id }), selected: row.id === selectedId })), { label: "Component not specified", href: href({ component: "unlinked" }), selected: selectedId === "unlinked" }],
     periods: ["12", "24", "all"].map((value) => ({ label: value === "all" ? "All recorded dates" : `${value} months`, href: href({ history: value }), selected: value === (months?.toString() ?? "all") })),

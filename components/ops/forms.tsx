@@ -174,6 +174,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
                   <span>Not-to-exceed amount <small>Optional</small></span>
                   <input id="work-nte" name="nteAmount" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00" />
                 </label> : null}
+                <label className={styles.field} htmlFor="work-internal-review"><span>Internally flag costs over <small>Optional · USD</small></span><input id="work-internal-review" name="internalReviewThreshold" type="number" min="0" step="0.01" placeholder="0.00" /><small>Flags recorded work costs for your team. Hidden from vendors; does not limit their authorization.</small></label>
                 <label className={styles.field} htmlFor="work-due">
                   <span>Requested by <small>Optional</small></span>
                   <input id="work-due" name="dueAt" type="datetime-local" />

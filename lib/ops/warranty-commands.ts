@@ -332,3 +332,37 @@ export async function createFutureWarrantyRule(input:{organizationId:OpsId;vendo
   const coverageIds:OpsId[]=[];for(const coverage of input.coverages){if(!Number.isInteger(coverage.duration)||coverage.duration<0)throw new OpsDomainError("VALIDATION","Coverage duration must be a non-negative integer");nonnegativeMoney(coverage.deductible,"Coverage deductible");if(coverage.maximumCoverage)nonnegativeMoney(coverage.maximumCoverage,"Maximum coverage");const id=ids.next("warranty-coverage");coverageIds.push(id);statements.push(insert("ops_warranty_coverage_lines",{id,organization_id:input.organizationId,warranty_rule_id:rule.id,vendor_warranty_profile_id:input.vendorWarrantyProfileId,coverage_type:coverage.coverageType,duration:coverage.duration,duration_unit:coverage.durationUnit,start_event:coverage.startEvent,provider:coverage.provider,obligated_vendor_id:coverage.obligatedVendorId,routing_rule:coverage.routingRule,deductible_minor:coverage.deductible.amountMinor,currency:coverage.deductible.currency,maximum_coverage_minor:coverage.maximumCoverage?.amountMinor,conditions:coverage.conditions,exclusions:coverage.exclusions}));}
   statements.push(...auditAndOutbox({organizationId:input.organizationId,aggregateType:"warranty_rule",aggregateId:rule.id,eventType:"warranty.future_rule_created",actor:input.actor,occurredAt:now,payload:{vendorId:input.vendorId,profileId:input.vendorWarrantyProfileId,coverageIds,priority:rule.priority,effectiveStartsAt:rule.effectiveStartsAt,reason,appliesToCompletedRepairs:false,createdByMembershipId:membership.id},ids}));await repository.atomicWrite(statements);return{rule,coverageIds,appliesToCompletedRepairs:false};
 }
+
+export async function addEquipmentWarranty(input: {
+  organizationId: OpsId; actor: ActorContext; assetId: OpsId; componentId?: OpsId;
+  providerKind: "manufacturer" | "vendor"; providerName: string; title: string;
+  workOrderId?: OpsId; startDate: string; expirationDate: string;
+  partsCoverage: string; laborCoverage: string; claimRequirements?: string;
+}, dependencies: OpsCommandServices) {
+  const { repository, clock, ids } = services(dependencies);
+  const asset = await repository.getAsset(input.organizationId, input.assetId);
+  if (!asset) throw new OpsDomainError("NOT_FOUND", "Equipment not found");
+  await assertWarrantyActor(repository, input.actor, input.organizationId, { storeId: asset.storeId } as WorkOrder);
+  if (!["manufacturer", "vendor"].includes(input.providerKind)) throw new OpsDomainError("VALIDATION", "Choose manufacturer or vendor coverage");
+  if (input.componentId) {
+    const component = await repository.getComponent(input.organizationId, input.componentId);
+    if (!component || component.assetId !== asset.id) throw new OpsDomainError("VALIDATION", "Choose a component on this equipment");
+  }
+  if (input.workOrderId) {
+    const work = await repository.getWorkOrder(input.organizationId, input.workOrderId);
+    if (!work || work.assetId !== asset.id || work.storeId !== asset.storeId) throw new OpsDomainError("VALIDATION", "Choose work on this equipment");
+  }
+  for (const value of [input.startDate, input.expirationDate]) {
+    const date = new Date(`${value}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0,10) !== value) throw new OpsDomainError("VALIDATION", "Enter valid warranty dates");
+  }
+  if (input.expirationDate < input.startDate) throw new OpsDomainError("VALIDATION", "Warranty end must be on or after its start");
+  const id = ids.next("equipment-warranty"); const now = clock.now();
+  const title = required(input.title, "Warranty name"); const provider = required(input.providerName, "Provider name");
+  const parts = required(input.partsCoverage, "Parts coverage"); const labor = required(input.laborCoverage, "Labor coverage");
+  await repository.atomicWrite([
+    insert("ops_manufacturer_warranties", { id, organization_id: input.organizationId, asset_id: asset.id, component_id: input.componentId, provider_kind: input.providerKind, manufacturer: provider, title, work_order_id: input.workOrderId, start_date: input.startDate, expiration_date: input.expirationDate, parts_coverage: parts, labor_coverage: labor, claim_requirements: input.claimRequirements?.trim(), created_at: now }),
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "equipment_warranty", aggregateId: id, eventType: "equipment_warranty.added", actor: input.actor, occurredAt: now, payload: { ...input, actor: undefined, title, providerName: provider }, ids }),
+  ]);
+  return { id };
+}

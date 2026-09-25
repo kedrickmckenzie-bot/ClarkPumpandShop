@@ -197,6 +197,7 @@ export const opsRequestImpactAssessments = sqliteTable("ops_request_impact_asses
 ]);
 
 export const opsWorkOrders = sqliteTable("ops_work_orders", {
+  internalReviewThresholdMinor: integer("internal_review_threshold_minor"), internalReviewCurrency: text("internal_review_currency"),
   id: id(), organizationId: organizationId(), number: text("number").notNull(), storeId: text("store_id").notNull(), requestId: text("request_id"), problem: text("problem").notNull(), authorizedScope: text("authorized_scope"), categoryKey: text("category_key"), taxonomyNodeId: text("taxonomy_node_id"), assetId: text("asset_id"), componentId: text("component_id"),
   priority: text("priority").notNull(), status: text("status").notNull(), version: integer("version").notNull().default(0), internalAccountableParty: text("internal_accountable_party").notNull().default("Facilities coordinator"), internalAccountableType: text("internal_accountable_type"), internalAccountableId: text("internal_accountable_id"), accountableParty: text("accountable_party").notNull(), nextAction: text("next_action").notNull(), dueAt: text("due_at"), escalationTo: text("escalation_to"),
   nteAmountMinor: integer("nte_amount_minor"), nteCurrency: text("nte_currency"), repairEstimateAmountMinor: integer("repair_estimate_amount_minor"), repairEstimateCurrency: text("repair_estimate_currency"), estimatedServiceExtensionMonths: integer("estimated_service_extension_months"), vendorServiceTicketNumber: text("vendor_service_ticket_number"), vendorInvoiceNumber: text("vendor_invoice_number"), externalAccountingPo: text("external_accounting_po"), createdAt: createdAt(), resolvedAt: text("resolved_at"), closedAt: text("closed_at"),
@@ -620,6 +621,7 @@ export const opsWarrantyAmendments = sqliteTable("ops_warranty_amendments", {
 }, (table) => [index("idx_ops_warranty_amendments_org_applied_time").on(table.organizationId, table.appliedWarrantyId, table.decidedAt)]);
 
 export const opsManufacturerWarranties = sqliteTable("ops_manufacturer_warranties", {
+  providerKind: text("provider_kind").notNull().default("manufacturer"), vendorId: text("vendor_id"), workOrderId: text("work_order_id"), title: text("title"),
   id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), componentId: text("component_id"), manufacturer: text("manufacturer").notNull(), model: text("model"), serialNumber: text("serial_number"), partsCoverage: text("parts_coverage").notNull(), laborCoverage: text("labor_coverage").notNull(), startDate: text("start_date").notNull(), expirationDate: text("expiration_date").notNull(), authorizedProviderRule: text("authorized_provider_rule"), claimRequirements: text("claim_requirements"), installingVendorId: text("installing_vendor_id"), administrator: text("administrator"), supportingFileId: text("supporting_file_id"), createdAt: createdAt(),
 }, (table) => [index("idx_ops_manufacturer_warranty_org_asset_expiry").on(table.organizationId, table.assetId, table.expirationDate)]);
 

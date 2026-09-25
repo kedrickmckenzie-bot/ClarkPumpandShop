@@ -125,6 +125,7 @@ export async function POST(request: Request) {
         nextAction,
         dueAt: dueAtInput ? localDateTimeToIso(dueAtInput, storeTimeZone) : undefined,
         escalationTo: "Facilities director",
+        internalReviewThresholdMinor: optionalMoneyMinor(formText(formData, "internalReviewThreshold", { max: 30 })),
         nteAmountMinor: optionalMoneyMinor(formText(formData, "nteAmount", { max: 30 })),
         currency: "USD",
         repairEstimateAmountMinor: optionalMoneyMinor(formText(formData, "repairEstimateAmount", { max: 30 })),

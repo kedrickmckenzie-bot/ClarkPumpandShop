@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { DetailView } from "@/components/ops/views";
 import { ComponentLifecyclePanel } from "@/components/ops/component-lifecycle-panel";
@@ -18,5 +19,5 @@ export default async function ComponentDetailPage({
   const [model, fixture] = await Promise.all([loadComponentDetailModel(id, componentId), getRequestOpsFixtureSnapshot(session.organizationId)]);
   const asset = fixture.assets.find((item) => item.id === id && item.organizationId === session.organizationId);
   const component = fixture.components.find((item) => item.id === componentId && item.assetId === id && item.organizationId === session.organizationId);
-  return <DetailView model={model} beforeSections={asset && component ? <ComponentLifecyclePanel fixture={fixture} asset={asset} component={component} canManage={roleCan(session, "manage_lifecycle")} /> : null} />;
+  return <DetailView model={model} beforeSections={asset && component ? <><p><Link href={`/app/equipment/${id}?component=${componentId}#equipment-warranties`}>View component warranties</Link>{["executive", "facilities", "regional"].includes(session.role) ? <> · <Link href={`/app/equipment/${id}/warranties/new?component=${componentId}`}>Add warranty</Link></> : null}</p><ComponentLifecyclePanel fixture={fixture} asset={asset} component={component} canManage={roleCan(session, "manage_lifecycle")} /></> : null} />;
 }

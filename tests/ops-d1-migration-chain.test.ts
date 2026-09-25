@@ -22,7 +22,7 @@ describe("D1 migration chain", () => {
       .sort();
 
     try {
-      expect(migrations).toHaveLength(51);
+      expect(migrations).toHaveLength(52);
       for (const migration of migrations) {
         database.exec("BEGIN");
         try {
@@ -54,6 +54,8 @@ describe("D1 migration chain", () => {
         ORDER BY name
       `).all();
       expect(tables).toHaveLength(10);
+      expect(database.prepare("PRAGMA table_info(ops_manufacturer_warranties)").all()).toEqual(expect.arrayContaining([expect.objectContaining({ name: "provider_kind" }), expect.objectContaining({ name: "work_order_id" })]));
+      expect(database.prepare("PRAGMA table_info(ops_work_orders)").all()).toEqual(expect.arrayContaining([expect.objectContaining({ name: "internal_review_threshold_minor" })]));
       expect(database.prepare("PRAGMA table_info(ops_requests)").all())
         .toEqual(expect.arrayContaining([expect.objectContaining({ name: "version", notnull: 1, dflt_value: "0" })]));
       expect(database.prepare("PRAGMA table_info(ops_invoices)").all())

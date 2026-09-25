@@ -109,14 +109,16 @@ function DriverSnapshot({ model }: { model: TrendAnalysisPageViewModel }) {
 }
 
 function ExecutiveResults({ model }: { model: TrendAnalysisPageViewModel }) {
+  const comparison = model.summary.find(metric => metric.id === "comparison");
   return (
     <section className={styles.executiveResults} aria-label="Trend results">
-      <Link className={`${styles.mainResult} ${toneClass(model.mainResult.tone)}`} href={model.mainResult.link.href}>
+      <div className={`${styles.mainResult} ${toneClass(model.mainResult.tone)}`}><Link href={model.mainResult.link.href}>
         <span>{model.metricLabel}<ChevronRight size={16} aria-hidden="true" /></span>
-        <strong>{model.mainResult.value}</strong>
+        <strong>{model.mainResult.value}</strong><small>{model.currentPeriodLabel}</small>
         <p>{model.mainResult.absoluteChangeLabel}{model.mainResult.relativeChangeLabel ? ` · ${model.mainResult.relativeChangeLabel}` : ""}</p>
-        <small>{model.mainResult.comparisonBasis} · {model.mainResult.evidenceLabel}</small>
-      </Link>
+        <small>{model.mainResult.evidenceLabel}</small></Link>
+        {model.comparisonPeriodLabel && comparison ? <Link className={styles.inlineComparison} href={comparison.link.href}><span>{model.comparisonLabel}: <b>{comparison.value}</b></span><small>{model.comparisonPeriodLabel}</small></Link> : null}
+      </div>
       {model.insights.slice(0, 3).map((insight) => <div className={`${styles.resultCard} ${toneClass(insight.tone)}`} key={insight.id}><span>{insight.eyebrow}</span><strong>{insight.title}</strong><Link href={insight.link.href}><b>{insight.actionLabel ?? insight.link.label} →</b></Link><details><summary>Details</summary><p>{insight.detail}</p>{insight.evidenceLimit ? <small>{insight.evidenceLimit}</small> : null}</details></div>)}
     </section>
   );
@@ -361,7 +363,6 @@ function SourceTable({ model }: { model: TrendAnalysisPageViewModel }) {
 }
 
 export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPageViewModel; savedViews?: ReactNode }) {
-  const comparison = model.summary.find((metric) => metric.id === "comparison");
   const coverage = model.summary.find((metric) => metric.id === "coverage");
   return (
     <div className={styles.workspace}>
@@ -380,7 +381,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
         <ExecutiveResults model={model} />
         <ComparisonChart model={model} />
         {model.metricId === "recorded_cost" ? <DriverSnapshot model={model} /> : null}
-        <section className={styles.contextMetrics} aria-label="Comparison and data coverage">{comparison ? <SummaryCard metric={comparison} /> : null}{coverage ? <SummaryCard metric={coverage} /> : null}</section>
+        <section className={styles.contextMetrics} aria-label="Data coverage">{coverage ? <SummaryCard metric={coverage} /> : null}</section>
         <RelatedMeasures model={model} />
       </> : null}
       {model.activeView === "drivers" ? <DriversTable model={model} /> : null}

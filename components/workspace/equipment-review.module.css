@@ -30,3 +30,8 @@
 .method { margin-top:12px; font-size:14px; color:#526177; }
 @media(max-width:700px) { .workspace { padding:18px; } .table thead { display:none; } .table tbody,.table tr,.table td { display:block; } .table td { min-width:0; max-width:none; border:0; padding:10px 0; } .table td:first-child { width:auto; } .table tr { border-top:1px solid #c9d3e1; padding:12px 0; } .table td::before { content:attr(data-label); display:block; color:#526177; font-size:13px; margin-bottom:6px; } .current li { align-items:flex-start; flex-direction:column; gap:10px; } }
 @media(max-width:700px) { .choices { display:none; } .mobileScope { display:block; margin-bottom:16px; } .mobileScope label { display:grid; gap:7px; font-size:14px; color:#526177; } .mobileScope select { width:100%; min-width:0; min-height:44px; background:#fff; color:#243248; border:1px solid #c9d3e1; padding:8px; font:inherit; } }
+
+.warranty > header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+.warranty h3 { font-size: 20px; font-weight: 700; margin: 0; }
+.warranty > header > a { color: #fff; background: #2563eb; padding: 10px 16px; border-radius: 6px; font-weight: 650; text-decoration: none; }
+.warranty td details summary { cursor: pointer; color: #1d4ed8; }

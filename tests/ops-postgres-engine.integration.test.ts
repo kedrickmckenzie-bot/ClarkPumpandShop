@@ -1,3 +1,5 @@
+import { addEquipmentWarranty } from "@/lib/ops/warranty-commands";
+import { recordWorkOrderCost } from "@/lib/ops/work-recording-commands";
 import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
 import { dashboardQueryRegression } from "./helpers/dashboard-query-regression";
 import { sqlDriverRegression } from "./helpers/sql-driver-regression";
@@ -848,5 +850,19 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     await workPricePersistenceRegression(repository);
   });
 
+
+  it("persists equipment coverage types and internal cost flags through SQL and snapshots", async () => {
+    const fixture = buildNorthlinePresentationFixture(); const repository = createOpsPostgresRepository(pool);
+    const organizationId = fixture.organizations[0].id;
+    const actor = { organizationId, actorType: "user" as const, actorId: "membership-northline-facilities", actorName: "Jordan Lee" };
+    const services = { repository, clock: { now: () => "2026-08-25T14:00:00.000Z" } };
+    const asset = fixture.assets[0];
+    const warranty = await addEquipmentWarranty({ organizationId, actor, assetId: asset.id, providerKind: "vendor", providerName: "Test service company", title: "Workmanship", startDate: "2026-08-01", expirationDate: "2027-08-01", partsCoverage: "Excluded", laborCoverage: "Repair labor" }, services);
+    expect((await repository.getAssetWarrantySources(organizationId, asset.id)).manufacturerWarranties.find(w => w.id === warranty.id)).toMatchObject({ providerKind: "vendor", title: "Workmanship" });
+    const work = await createWorkOrder(services, { organizationId, actor, storeId: asset.storeId, problem: "SQL internal cost flag", accountableParty: "Facilities", nextAction: "Choose service", internalReviewThresholdMinor: 10000, currency: "USD" });
+    expect(await repository.getWorkOrder(organizationId, work.id)).toMatchObject({ internalReviewThresholdMinor: 10000, internalReviewCurrency: "USD" });
+    await recordWorkOrderCost(services, { organizationId, actor, workOrderId: work.id, kind: "labor", description: "Labor", amountMinor: 10001, currency: "USD", serviceDate: "2026-08-20" });
+    expect((await repository.listWorkflowTasksForWorkOrder(organizationId, work.id)).some(t => t.title === "Review costs above internal flag")).toBe(true);
+  });
 
 });

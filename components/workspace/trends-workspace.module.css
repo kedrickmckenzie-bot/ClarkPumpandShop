@@ -15,8 +15,8 @@
 .executiveResults > * + * { border-left: 1px solid #e5e9ef; }
 .executiveResults .summaryCard { min-height: 132px; border-left-width: 0; }
 .mainResult { display: grid; align-content: start; gap: 5px; min-height: 142px; padding: 16px 18px; border-top: 4px solid #64748b; background: #f8fafc; }
-.mainResult > span { display: flex; align-items: center; justify-content: space-between; color: #4b5a70; font-size: 13px; font-weight: 780; letter-spacing: .05em; text-transform: uppercase; }
-.mainResult > strong { color: #0f172a; font-size: 31px; letter-spacing: -.03em; }
+.mainResult > a:first-child > span { display: flex; align-items: center; justify-content: space-between; color: #4b5a70; font-size: 13px; font-weight: 780; letter-spacing: .05em; text-transform: uppercase; }
+.mainResult > a:first-child > strong { color: #0f172a; font-size: 31px; letter-spacing: -.03em; }
 .mainResult p { margin: 0; color: #344054; font-size: 15px; font-weight: 720; }
 .mainResult small, .resultCard small { color: #727e90; font-size: 12px; line-height: 1.35; }
 .mainResult.info { border-top-color: #2563eb; }.mainResult.positive { border-top-color: #16805c; }.mainResult.warning { border-top-color: #d97706; }.mainResult.critical { border-top-color: #dc2626; }
@@ -399,3 +399,7 @@
 .pricingCoverage > div:first-child { display:flex; justify-content:space-between; gap:16px; }
 .pricingCoverage small, .pricingCoverage span { color:#526175; }
 @media(max-width:760px) { .driverBars { grid-template-columns:1fr; } .pricingCoverage > div:first-child { flex-direction:column; } }
+
+.mainResult > a { display: grid; gap: 8px; color: inherit; text-decoration: none; }
+.inlineComparison { border-top: 1px solid #cbd5e1; padding-top: 12px; margin-top: 8px; font-size: 15px; }
+.inlineComparison small { font-size: 13px; }
