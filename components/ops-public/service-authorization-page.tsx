@@ -1,3 +1,4 @@
+import { OptionalVisitWork } from "./optional-visit-work";
 import Link from "next/link";
 import { ArrowRight, Building2, CalendarDays, FileCheck2, MapPin, Phone } from "lucide-react";
 import type { ServiceAuthorizationView } from "./contracts";
@@ -59,6 +60,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
               <p className={styles.helper}>Recorded {formatPublicDateTime(authorization.operatorContinuation.receivedAt, authorization.store.timeZone)}{authorization.operatorContinuation.detail ? ` · ${authorization.operatorContinuation.detail}` : ""}</p>
             </section>
           ) : null}
+          <OptionalVisitWork token={token} />
           <VendorResponseForm disabled={hasFinalResponse} opened={authorization.opened} organizationName={authorization.organizationName} token={token} />
         </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { RecordForm } from "./record-form";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Building2, Check, FileCheck2, Mail, Search, Send, ShieldCheck, X } from "lucide-react";
 import type { ApprovedLaterManagementViewModel } from "./data-contract";
@@ -143,14 +144,14 @@ export function ApprovedLaterIssuanceDialog({ model }: { model: ApprovedLaterMan
               <button className={styles.issuancePrimaryButton} type="button" disabled={!selectedVendor} onClick={() => setStep("review")}>Review before sending<Send aria-hidden="true" size={17} /></button>
             </>
           ) : (
-            <form action={`/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/issue`} method="post">
+            <RecordForm action={`/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/issue`}>
               <input type="hidden" name="vendorId" value={vendorId} />
               <input type="hidden" name="channel" value={channel} />
               <input type="hidden" name="message" value={message} />
               <input type="hidden" name="expectedRevision" value={model.currentIssuanceRevision} />
               <button type="button" onClick={() => setStep("vendor")}><ArrowLeft aria-hidden="true" size={16} />Change vendor or details</button>
               <button className={styles.issuancePrimaryButton} type="submit">Send work order to {selectedVendor?.label ?? "vendor"}<Send aria-hidden="true" size={17} /></button>
-            </form>
+            </RecordForm>
           )}
         </footer>
       </section>

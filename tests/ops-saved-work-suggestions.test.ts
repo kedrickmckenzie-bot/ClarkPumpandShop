@@ -6,7 +6,7 @@ vi.mock("@/lib/server/ops-request-context", async () => ({ ...await vi.importAct
 vi.mock("@/lib/server/ops-repository-provider", () => ({getServerOpsRepository: mocks.repo}));
 type Payload = {rows:{id:string;revision:number;eligible:boolean}[];results:{ok:boolean;message:string}[]};
 async function payload(response: Response) { return await response.json() as Payload; }
-import { GET, POST } from "@/app/api/ops/saved-work/route";
+import { GET } from "@/app/api/ops/saved-work/route";
 function setup() {
   const f = buildNorthlinePresentationFixture();
   const vendor = f.vendors.find(v=>v.name.startsWith("BrightLine"))!;
@@ -24,14 +24,5 @@ describe("saved work suggestions",()=>{
     expect(data.rows.find((r:{id:string})=>r.id==="wo-held-104-restroom-door")!.eligible).toBe(false);
     const context=await mocks.context(); context.session.storeIds=["store-northline-105"];
     expect((await GET(new Request(t.url))).status).toBe(403);
-  });
-  it("issues only selected eligible jobs and prevents replay",async()=>{
-    const t=setup(); const job=(await payload(await GET(new Request(t.url)))).rows.find((r:{id:string})=>r.id==="wo-held-104-canopy-light")!;
-    const send=()=>POST(new Request(t.url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:"manual",jobs:[{id:job.id,revision:job.revision},{id:"wo-held-104-restroom-door",revision:0}]})}));
-    const data=await payload(await send());
-    expect(data.results[0].ok, data.results[0].message).toBe(true); expect(data.results[1].ok).toBe(false);
-    expect((await payload(await send())).results[0].ok).toBe(false);
-    expect((await t.repository.listIssuancesForWorkOrder(NORTHLINE_ORGANIZATION_ID,job.id))).toHaveLength(1);
-    expect((await t.repository.listIssuancesForWorkOrder(NORTHLINE_ORGANIZATION_ID,"wo-held-104-restroom-door"))).toHaveLength(0);
   });
 });

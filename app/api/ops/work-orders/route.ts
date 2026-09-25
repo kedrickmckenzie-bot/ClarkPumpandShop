@@ -177,6 +177,7 @@ export async function POST(request: Request) {
       }
       try {
         const issued = await issueWorkOrderToVendor({
+          offeredWorkIds: formData.getAll("offeredWorkId").filter((v): v is string => typeof v === "string"),
           repository: context.repository,
           organizationId: context.session.organizationId,
           organizationName: context.session.organizationName,

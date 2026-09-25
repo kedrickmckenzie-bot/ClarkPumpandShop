@@ -97,7 +97,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
       <PageIntro model={model} />
       <ModelState state={model.state} />
       {model.state.kind === "ready" ? (
-        <WorkOrderScope defaultStoreId={boundStoreId}><RecordForm className={styles.recordForm} action={model.submitAction}>
+        <WorkOrderScope defaultStoreId={boundStoreId}><RecordForm offerSavedWork={!accountabilityOnly} className={styles.recordForm} action={model.submitAction}>
           <input type="hidden" name="submissionKey" value={submissionKey} />
           {model.sourceRequest ? <input type="hidden" name="requestId" value={model.sourceRequest.id} /> : null}
           {model.sourcePm ? <input type="hidden" name="pmOccurrenceId" value={model.sourcePm.occurrenceId} /> : null}
@@ -210,7 +210,7 @@ export function VendorIssuancePanel({ model, edition = "complete" }: { model: Ve
       ) : (
         <details className={styles.controlDisclosure} open={!model.currentRevision}>
           <summary className={styles.controlDisclosureSummary}><Send aria-hidden="true" size={18} /><span><strong>{model.currentRevision ? `Prepare service-authorization revision ${model.currentRevision + 1}` : "Choose a vendor and prepare the service authorization"}</strong><small>{accountabilityOnly ? "This sends the vendor work order and enables technician check-in." : "This authorizes service. It is not a quote request."}</small></span></summary>
-          <form action={model.submitAction} method="post" target="_blank">
+          <RecordForm offerSavedWork={!accountabilityOnly} action={model.submitAction}>
             <input type="hidden" name="workOrderId" value={model.workOrderId} />
             {model.currentRevision !== undefined ? <input type="hidden" name="expectedRevision" value={model.currentRevision} /> : null}
             <div className={styles.fieldGrid}>
@@ -236,7 +236,7 @@ export function VendorIssuancePanel({ model, edition = "complete" }: { model: Ve
               <textarea id="issuance-message" name="message" rows={3} placeholder="Add access instructions, preferred arrival times, or other details for the vendor." />
             </label>
             <div className={styles.formFooter}><span className={styles.formMeta}>{model.workOrderNumber}{model.currentRevision ? ` · next revision ${model.currentRevision + 1}` : ""}</span><button className={styles.primaryButton} type="submit">Generate service authorization<Send aria-hidden="true" size={17} /></button></div>
-          </form>
+          </RecordForm>
         </details>
       )}
     </section>

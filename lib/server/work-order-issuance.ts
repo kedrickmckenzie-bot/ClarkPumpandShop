@@ -1,3 +1,4 @@
+import { prepareOfferedWork } from "@/lib/ops/optional-work-policy";
 import { routeAndIssueWorkOrder, OpsDomainError } from "@/lib/ops/commands";
 import { emailRuntimeFromEnvironment, sendVendorServiceAuthorizationEmail } from "@/lib/ops/email-delivery";
 import type { OpsRepository } from "@/lib/ops/repository";
@@ -26,6 +27,8 @@ export async function issueWorkOrderToVendor(input: {
   channel: ServiceAuthorizationChannel;
   message?: string;
   actor: ActorContext;
+  offeredWorkIds?: readonly string[];
+  offerAcceptance?: { issuanceId:string; responderName:string };
 }) {
   const [workOrder, vendor] = await Promise.all([
     input.repository.getWorkOrder(input.organizationId, input.workOrderId),
@@ -36,6 +39,8 @@ export async function issueWorkOrderToVendor(input: {
   const store = await input.repository.getStore(input.organizationId, workOrder.storeId);
   if (!store) throw new OpsDomainError("NOT_FOUND", "Store was not found in your organization.");
   const asset = workOrder.assetId ? await input.repository.getAsset(input.organizationId, workOrder.assetId) : null;
+  const offeredWork = await prepareOfferedWork(input.repository, input.organizationId, workOrder.storeId, vendor.id, input.offeredWorkIds ?? [], new Date().toISOString());
+  if (offeredWork.some(j=>j.id===workOrder.id)) throw new OpsDomainError("VALIDATION", "The main job cannot be its own extra.");
   const rawToken = createRawToken();
   const tokenHash = await sha256Hex(rawToken);
   const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
@@ -47,7 +52,9 @@ export async function issueWorkOrderToVendor(input: {
       vendorId: vendor.id,
       expectedRevision: input.expectedRevision,
       channel: input.channel,
+      offerAcceptance: input.offerAcceptance,
       authorizationSnapshot: {
+        ...(offeredWork.length ? {offeredWork} : {}),
         organizationName: input.organizationName,
         workOrderNumber: workOrder.number,
         store: {
@@ -107,6 +114,7 @@ export async function issueWorkOrderToVendor(input: {
         actionUrl,
         replyTo: process.env.EMAIL_REPLY_TO,
         issuanceId: issued.issuance.id,
+        optionalJobs: offeredWork,
       });
       eventType = "work_order.email_delivered";
       payload = { ...payload, providerMessageId: delivery.messageId };

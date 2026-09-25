@@ -1,3 +1,4 @@
+import { prepareOfferedWork, resolveOfferedWork, offerResponseKey } from "./optional-work-policy";
 import { coveredPmAssets, pmCoverageRule } from "./pm-coverage";
 import type { OpsRepository, OpsStatement } from "./repository";
 import { atomicRequestMutation, atomicWorkOrderMutation, atomicWorkOrderSetMutation, persistedRequestVersion, persistedWorkOrderVersion } from "./concurrency";
@@ -1309,6 +1310,7 @@ export async function issueWorkOrder(svc: OpsCommandServices, input: IssueWorkOr
 }
 
 export interface RouteAndIssueWorkOrderInput {
+  offerAcceptance?: { issuanceId:string; responderName:string };
   organizationId: OpsId;
   workOrderId: OpsId;
   vendorId: OpsId;
@@ -1382,7 +1384,18 @@ export async function routeAndIssueWorkOrder(
   if (activeAssignment?.kind === "outside_vendor" && activeAssignment.vendorId !== vendor.id) {
     throw new OpsDomainError("CONFLICT", "Another vendor is already assigned. Record an explicit reassignment before issuing a different provider.");
   }
+  const acceptedOffer = input.offerAcceptance ? await resolveOfferedWork(repository, input.organizationId, input.offerAcceptance.issuanceId, workOrder.id, vendor.id, now) : undefined;
+  if (acceptedOffer?.prior) throw new OpsDomainError("CONFLICT", "This optional job already has a response.");
   const snapshot = input.authorizationSnapshot;
+  if (snapshot.offeredWork?.length) {
+    if (snapshot.offeredWork.some(j=>j.id===workOrder.id)) throw new OpsDomainError("VALIDATION", "The main job cannot be an extra.");
+    if (actorMembership?.role === "store_manager") {
+      const extras = await Promise.all(snapshot.offeredWork.map(j=>repository.getWorkOrder(input.organizationId,j.id)));
+      if (extras.some(j=>j?.priority!=="routine")) throw new OpsDomainError("FORBIDDEN","Store managers can include only routine saved work.");
+    }
+    const checked = await prepareOfferedWork(repository,input.organizationId,workOrder.storeId,vendor.id,snapshot.offeredWork.map(j=>j.id),now);
+    if (JSON.stringify(checked)!==JSON.stringify(snapshot.offeredWork)) throw new OpsDomainError("CONFLICT", "Selected saved jobs changed. Review before sending.");
+  }
   const formattedAddress = [store.address1, store.address2, `${store.city}, ${store.state} ${store.postalCode}`].filter(Boolean).join(", ");
   const snapshotNteMatches = snapshot.nte?.amountMinor === workOrder.nte?.amountMinor
     && snapshot.nte?.currency === workOrder.nte?.currency;
@@ -1487,11 +1500,11 @@ export async function routeAndIssueWorkOrder(
     }),
     {
       sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ? AND work_order_id = ?",
-      params: ["issued", input.organizationId, assignmentId, workOrder.id],
+      params: [acceptedOffer ? "accepted" : "issued", input.organizationId, assignmentId, workOrder.id],
     },
     {
       sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ? WHERE organization_id = ? AND id = ?",
-      params: ["issued", "Outside vendor", "Acknowledge service authorization", input.organizationId, workOrder.id],
+      params: [acceptedOffer ? "accepted" : "issued", "Outside vendor", acceptedOffer ? "Complete onsite service" : "Acknowledge service authorization", input.organizationId, workOrder.id],
     },
   );
   statements.push(...revokeServiceAuthorizationTokens(
@@ -1524,9 +1537,9 @@ export async function routeAndIssueWorkOrder(
   const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
   const replacementTask = buildWorkflowTaskRecord({
     id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
-    draft: taskDraft({ workOrder, taskType: "vendor_response_required", title: "Acknowledge service authorization",
+    draft: taskDraft({ workOrder, taskType: acceptedOffer ? "schedule_service" : "vendor_response_required", title: acceptedOffer ? "Complete onsite service" : "Acknowledge service authorization",
       assignee: { assigneeType: "vendor", assigneeId: vendor.id, assigneeName: "Outside vendor" },
-      dueAt: vendorResponseDueAt(workOrder.priority, now), applicableSlaClock: "vendor_response",
+      dueAt: acceptedOffer ? nextTaskDueAt(workOrder.dueAt, now) : vendorResponseDueAt(workOrder.priority, now), applicableSlaClock: acceptedOffer ? "scheduling" : "vendor_response",
       escalationDestination: workOrder.escalationTo }),
     actor: input.actor, createdAt: now,
   });
@@ -1536,9 +1549,16 @@ export async function routeAndIssueWorkOrder(
     replacementTask, actor: input.actor, occurredAt: now, ids,
     resolutionNote: "Vendor selected and service authorization issued",
   }));
-  await atomicWorkOrderMutation({
+  if (acceptedOffer && input.offerAcceptance) {
+    const responseId=ids.next("vendor-response");
+    statements.push(insert("ops_vendor_responses", {id:responseId, organization_id:input.organizationId,work_order_id:workOrder.id,assignment_id:assignmentId,issuance_id:issuanceId,response:"accepted",responder_name:required(input.offerAcceptance.responderName,"Responder name"),responded_at:now}),
+      insert("ops_idempotency_keys", {organization_id:input.organizationId,key:offerResponseKey(input.offerAcceptance.issuanceId,workOrder.id),command:"optional_work.response",result_id:"accepted",request_hash:input.offerAcceptance.issuanceId,created_at:now,expires_at:"9999-12-31T23:59:59.999Z"}),
+      ...auditAndOutbox({organizationId:input.organizationId,aggregateType:"work_order",aggregateId:acceptedOffer.parent.id,eventType:"optional_work.accepted",actor:input.actor,occurredAt:now,payload:{workOrderId:workOrder.id,workOrderNumber:workOrder.number,sourceIssuanceId:input.offerAcceptance.issuanceId,vendorId:vendor.id},ids}),
+      ...auditAndOutbox({organizationId:input.organizationId,aggregateType:"work_order",aggregateId:workOrder.id,eventType:"vendor.accepted",actor:input.actor,occurredAt:now,payload:{responseId,assignmentId,issuanceId,sourceIssuanceId:input.offerAcceptance.issuanceId},ids}));
+  }
+  await atomicWorkOrderSetMutation({
     repository,
-    workOrder,
+    workOrders: acceptedOffer ? [workOrder,acceptedOffer.parent] : [workOrder],
     now,
     statements,
     conflictMessage: "This work order changed while the authorization was being created. Refresh and verify the selected provider.",
@@ -1550,7 +1570,7 @@ export async function routeAndIssueWorkOrder(
       workOrderId: workOrder.id,
       kind: "outside_vendor" as const,
       vendorId: vendor.id,
-      status: "issued" as const,
+      status: acceptedOffer ? "accepted" as const : "issued" as const,
       assignedAt: reuseAssignment ? activeAssignment.assignedAt : now,
       supersedesAssignmentId: reuseAssignment ? activeAssignment.supersedesAssignmentId : priorAssignment?.id,
     },
@@ -1565,6 +1585,21 @@ export async function routeAndIssueWorkOrder(
       issuedAt: now,
     },
   };
+}
+
+export async function skipOfferedWork(svc: OpsCommandServices, input: {organizationId:string; issuanceId:string; workOrderId:string; vendorId:string; actor:ActorContext}) {
+  const {repository,clock,ids}=services(svc); const now=clock.now();
+  assertActorOrganization(input.actor,input.organizationId);
+  const offer=await resolveOfferedWork(repository,input.organizationId,input.issuanceId,input.workOrderId,input.vendorId,now);
+  if(offer.prior)return {status:offer.prior.resultId};
+  const work=await repository.getWorkOrder(input.organizationId,input.workOrderId);
+  const payload={workOrderId:work!.id,workOrderNumber:work!.number,sourceIssuanceId:input.issuanceId,vendorId:input.vendorId};
+  await atomicWorkOrderSetMutation({repository,workOrders:[offer.parent,work!],now,statements:[
+    insert("ops_idempotency_keys",{organization_id:input.organizationId,key:offerResponseKey(input.issuanceId,work!.id),command:"optional_work.response",result_id:"skipped",request_hash:input.issuanceId,created_at:now,expires_at:"9999-12-31T23:59:59.999Z"}),
+    ...auditAndOutbox({organizationId:input.organizationId,aggregateType:"work_order",aggregateId:offer.parent.id,eventType:"optional_work.skipped",actor:input.actor,occurredAt:now,payload,ids}),
+    ...auditAndOutbox({organizationId:input.organizationId,aggregateType:"work_order",aggregateId:work!.id,eventType:"optional_work.skipped",actor:input.actor,occurredAt:now,payload,ids}),
+  ]});
+  return {status:"skipped"};
 }
 
 export interface RecordVendorResponseInput { organizationId: OpsId; workOrderId: OpsId; assignmentId: OpsId; issuanceId: OpsId; response: VendorResponseKind; responderName: string; proposedAt?: IsoDateTime; message?: string; actor: ActorContext }

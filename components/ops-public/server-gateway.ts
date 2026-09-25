@@ -1,3 +1,5 @@
+import { offerResponseKey } from "@/lib/ops/optional-work-policy";
+import type { ServiceAuthorizationSnapshot } from "@/lib/ops/view-models";
 import {
   addHeldWorkToActiveVisit,
   attachPublicEvidence,
@@ -557,6 +559,18 @@ async function publicWorkOrdersForVisit(
   })));
 }
 
+async function acceptedOptionalVisitWork(repository: OpsRepository, view: OpsServiceAuthorizationView) {
+  const issuance = await repository.getIssuance(view.organizationId, view.issuanceId);
+  const offers = issuance ? (JSON.parse(issuance.immutablePayloadJson) as ServiceAuthorizationSnapshot).offeredWork ?? [] : [];
+  return (await Promise.all(offers.map(async offer => {
+    const response = await repository.getIdempotencyKey(view.organizationId, offerResponseKey(view.issuanceId, offer.id));
+    if (response?.resultId !== "accepted") return null;
+    const [work, assignment] = await Promise.all([repository.getWorkOrder(view.organizationId, offer.id), repository.getActiveAssignment(view.organizationId, offer.id)]);
+    if (!work || work.storeId !== view.store.id || !ELIGIBLE_VISIT_WORK_STATUSES.some(status => status === work.status) || assignment?.vendorId !== view.vendor.id || !ELIGIBLE_VISIT_ASSIGNMENT_STATUSES.has(assignment.status)) return null;
+    return {id:work.id, number:work.number, problem:work.problem, categoryKey:work.categoryKey, priority:work.priority, vendorId:view.vendor.id, vendorName:view.vendor.name, assignmentKind:"outside_vendor" as const, assignmentStatus:assignment.status, dueAt:work.dueAt, createdAt:work.createdAt};
+  }))).filter((work): work is NonNullable<typeof work> => Boolean(work));
+}
+
 async function getContextFromAccess(access: PublicAccess, requestedVendorId?: string): Promise<VendorVisitContextView> {
   const repository = runtime().repository;
   const vendors = accessVendors(access);
@@ -580,7 +594,7 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
         assignmentStatus: access.serviceAuthorization.assignmentStatus,
         dueAt: undefined,
         createdAt: access.serviceAuthorization.issuedAt,
-      }]
+      }, ...await acceptedOptionalVisitWork(repository, access.serviceAuthorization)]
     : access.kind === "store" || access.kind === "trusted_store"
       ? (await repository.listWorkOrders(scope, {
           statuses: [...ELIGIBLE_VISIT_WORK_STATUSES],
@@ -1465,7 +1479,7 @@ const gateway: PublicOperationsGateway = {
     const unmatchedReason = workOrderIds.length ? undefined : cleanRequired(command.noWorkOrderReason ?? "", "Reason for visit", 500);
     if (!workOrderIds.length && !vendorId) throw new PublicWorkflowError("Choose an approved vendor for a visit without a work order.", 422, "missing_vendor");
     if (!workOrderIds.length && access.kind === "service") {
-      throw new PublicWorkflowError("This service-authorization link can start only its assigned work order.", 403, "service_token_work_order_bound");
+      throw new PublicWorkflowError("This link can start its main work order and accepted extras only.", 403, "service_token_work_order_bound");
     }
     const organizationId = accessOrganizationId(access);
     const storeView = accessStore(access);
@@ -1535,8 +1549,8 @@ const gateway: PublicOperationsGateway = {
     if (replayed) return replayed;
 
     const context = await getContextFromAccess(access);
-    if (access.kind === "service" && !sameStringList(workOrderIds, [access.serviceAuthorization.workOrderId])) {
-      throw new PublicWorkflowError("This service-authorization link can start only its assigned work order.", 403, "service_token_work_order_bound");
+    if (access.kind === "service" && (!workOrderIds.length || workOrderIds.some(id => !context.eligibleWorkOrders.some(work => work.id === id)))) {
+      throw new PublicWorkflowError("This link can start its main work order and accepted extras only.", 403, "service_token_work_order_bound");
     }
     const eligibleById = new Map(context.eligibleWorkOrders.map((workOrder) => [workOrder.id, workOrder]));
     const selectedWork = workOrderIds.map((workOrderId) => eligibleById.get(workOrderId));

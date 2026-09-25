@@ -110,6 +110,7 @@ export async function sendVendorServiceAuthorizationEmail(input: {
   actionUrl: string;
   replyTo?: string;
   issuanceId: string;
+  optionalJobs?: Array<{number:string;problem:string}>;
 }) {
   const subject = `${input.organizationName} service authorization ${input.workOrder.number}`;
   const publicScope = vendorFacingScope(input.authorizedScope);
@@ -120,11 +121,13 @@ export async function sendVendorServiceAuthorizationEmail(input: {
     `Problem: ${input.workOrder.problem}`,
     `Authorized scope: ${publicScope}`,
     "",
+    ...(input.optionalJobs?.length ? ["Optional jobs for this visit (accept or skip each):", ...input.optionalJobs.map(j=>`${j.number}: ${j.problem}`), ""] : []),
     `Open the secure authorization: ${input.actionUrl}`,
     "",
     `Include ${input.workOrder.number} on service paperwork and invoices.`,
   ].join("\n");
-  const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(input.vendorName)},</p><p><strong>${escapeEmailHtml(input.organizationName)}</strong> issued service authorization <strong>${escapeEmailHtml(input.workOrder.number)}</strong> for ${escapeEmailHtml(input.storeLabel)}.</p><table style="border-collapse:collapse;width:100%;margin:20px 0"><tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Problem</td><td style="padding:8px;border-bottom:1px solid #e2e8f0">${escapeEmailHtml(input.workOrder.problem)}</td></tr><tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Authorized scope</td><td style="padding:8px;border-bottom:1px solid #e2e8f0">${escapeEmailHtml(publicScope)}</td></tr></table><p><a href="${escapeEmailHtml(input.actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Open secure authorization</a></p><p style="color:#475569">Include <strong>${escapeEmailHtml(input.workOrder.number)}</strong> on service paperwork and invoices.</p></div>`;
+  const optionalHtml = input.optionalJobs?.length ? `<p><strong>Optional jobs for this visit</strong> — accept or skip each.</p><ul>${input.optionalJobs.map(j=>`<li>${escapeEmailHtml(j.number)}: ${escapeEmailHtml(j.problem)}</li>`).join("")}</ul>` : "";
+  const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(input.vendorName)},</p><p><strong>${escapeEmailHtml(input.organizationName)}</strong> issued service authorization <strong>${escapeEmailHtml(input.workOrder.number)}</strong> for ${escapeEmailHtml(input.storeLabel)}.</p><table style="border-collapse:collapse;width:100%;margin:20px 0"><tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Problem</td><td style="padding:8px;border-bottom:1px solid #e2e8f0">${escapeEmailHtml(input.workOrder.problem)}</td></tr><tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Authorized scope</td><td style="padding:8px;border-bottom:1px solid #e2e8f0">${escapeEmailHtml(publicScope)}</td></tr></table>${optionalHtml}<p><a href="${escapeEmailHtml(input.actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Open secure authorization</a></p><p style="color:#475569">Include <strong>${escapeEmailHtml(input.workOrder.number)}</strong> on service paperwork and invoices.</p></div>`;
   return input.provider.send({ to: input.vendorEmail, subject, text, html, replyTo: input.replyTo, idempotencyKey: `service-authorization/${input.issuanceId}/${input.vendorEmail}` });
 }
 

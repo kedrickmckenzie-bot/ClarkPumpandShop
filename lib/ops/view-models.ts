@@ -241,6 +241,7 @@ export interface ServiceAuthorizationView {
 }
 
 export interface ServiceAuthorizationSnapshot {
+  offeredWork?: import("./optional-work-policy").OfferedWork[];
   organizationName: string;
   workOrderNumber: string;
   store: ServiceAuthorizationView["store"];
