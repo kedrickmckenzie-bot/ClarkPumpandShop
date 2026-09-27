@@ -1,3 +1,4 @@
+import { VendorCoverageEditor } from "./vendor-coverage-editor";
 import { VendorServiceReport } from "@/components/workspace/vendor-service-report";
 import { LiveSearchForm } from "./live-search-form";
 import Link from "next/link";
@@ -350,8 +351,8 @@ function VendorAccountabilityDetail({ model }: { model: VendorPerformanceDetailV
       <div className={styles.evidenceStack}>
         <section className={styles.evidenceSection} aria-labelledby="work-sent-heading" id="authorization-evidence">
           <SectionHeader id="work-sent-heading" icon={<Clock3 size={20} />} title="Work orders sent" description="The service authorizations delivered to this vendor and the response recorded for each one." count={model.evidencePagination?.authorizationRows?.summary ?? `${model.authorizationRows.length} sent`} />
-          {model.authorizationRows.length ? <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Work orders sent to this vendor</caption><thead><tr><th>Work order / store</th><th>Sent</th><th>Vendor response</th><th>Decision</th></tr></thead><tbody>
-            {model.authorizationRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.workOrderNumber}</strong><small>{row.storeLabel} · {row.workOrderProblem}</small></Link><WorkReviewButton href={row.href} label={row.workOrderNumber} /></td><td><Link href={row.href}>{row.issuedAtLabel}</Link></td><td><Link href={row.href}><strong>{row.responseLabel}</strong><small>{row.responderLabel}</small></Link></td><td><Link href={row.href}>{row.decisionLabel}<ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
+          {model.authorizationRows.length ? <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Work orders sent to this vendor</caption><thead><tr><th>Work order</th><th>Sent</th><th>First reply</th><th>Outcome</th></tr></thead><tbody>
+            {model.authorizationRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.workOrderNumber}</strong><small>{row.storeLabel} · {row.workOrderProblem}</small></Link><WorkReviewButton href={row.href} label={row.workOrderNumber} /></td><td><Link href={row.href}>{row.issuedAtLabel}</Link></td><td><Link href={row.href}><strong>{row.responseLabel}</strong><small>{row.responseTimeLabel} · {row.responseAtLabel}</small><small>{row.responderLabel}</small></Link></td><td><Link href={row.href}>{row.decisionLabel}<ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
           </tbody></table></div> : <EmptyEvidence>No work order has been sent to this vendor in the selected scope.</EmptyEvidence>}
           {model.evidencePagination?.authorizationRows ? <PaginationControls pagination={model.evidencePagination.authorizationRows} label="Authorization history pages" /> : null}
         </section>
@@ -366,6 +367,7 @@ function VendorAccountabilityDetail({ model }: { model: VendorPerformanceDetailV
 
         <section className={styles.evidenceSection} aria-labelledby="coverage-evidence-heading" id="coverage-evidence">
           <SectionHeader id="coverage-evidence-heading" icon={<Store size={20} />} title="Service specialties and coverage" description="The locations and types of work this vendor can be selected for." count={`${vendor.coverageStoreCount}/${vendor.coverageStoreDenominator} stores`} />
+          {model.coverageEditor ? <VendorCoverageEditor model={model.coverageEditor} /> : null}
           <div className={styles.coverageGrid}>
             <article><span><Wrench aria-hidden="true" size={17} />Specialties</span><strong>{vendor.specialties.join(" · ") || "Not classified"}</strong></article>
             <article><span><Store aria-hidden="true" size={17} />Stores</span><strong>{vendor.coverageLabel}</strong></article>
@@ -533,7 +535,7 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
             <div className={styles.relationshipActions}>
               <details>
                 <summary><span><BadgeCheck aria-hidden="true" size={17} /><strong>Add compliance record</strong><small>Insurance, license, W-9, safety, or certification</small></span><ArrowRight aria-hidden="true" size={16} /></summary>
-                <form action={model.manageRelationshipAction} method="post" className={styles.relationshipForm}>
+                <form action={model.manageRelationshipAction} method="post" encType="multipart/form-data" className={styles.relationshipForm}>
                   <input type="hidden" name="operation" value="record_compliance" />
                   <div className={styles.relationshipFormGrid}>
                     <label><span>Document type</span><select name="documentType" required defaultValue="insurance"><option value="insurance">Insurance</option><option value="license">License</option><option value="certification">Certification</option><option value="tax">Tax / W-9</option><option value="safety">Safety</option><option value="other">Other</option></select></label>
@@ -543,8 +545,9 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
                     <label><span>Effective date</span><input name="effectiveAt" type="date" /></label>
                     <label><span>Expiration date</span><input name="expiresAt" type="date" /></label>
                   </div>
+                  <label><span>Document file (optional)</span><input type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt"/><small>PDF, JPG, PNG, WebP or text · Up to 8 MB</small></label>
                   <label className={styles.relationshipCheck} aria-label="Required for routing"><input type="checkbox" name="blocking" value="true" /><span><strong>Required for routing</strong><small>A missing, rejected, or expired current record places this vendor on routing hold.</small></span></label>
-                  <div className={styles.relationshipFormFooter}><p>This records reviewed metadata. File evidence can remain in the customer&apos;s document system until private upload is configured.</p><button type="submit">Record document</button></div>
+                  <div className={styles.relationshipFormFooter}><p>Attach the document to open or download it later. Earlier records stay in the history.</p><button type="submit">Record document</button></div>
                 </form>
               </details>
               <details>
@@ -572,7 +575,7 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
             </div>
           </div> : null}
           <div className={styles.relationshipSubsection}><div><h3>Compliance documents</h3><p>Insurance, licensing, tax, certification, and other onboarding records remain independently reviewable.</p></div>
-            {model.complianceRows.length ? <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Vendor compliance document evidence</caption><thead><tr><th>Document</th><th>Reference</th><th>Review state</th><th>Effective</th><th>Expires</th><th>Routing effect</th></tr></thead><tbody>{model.complianceRows.map((row) => <tr key={row.id}><td className={styles.plainCell}><strong>{row.documentTypeLabel}</strong></td><td className={styles.plainCell}>{row.referenceLabel}</td><td className={`${styles.plainCell} ${row.tone === "critical" ? styles.criticalText : row.tone === "warning" ? styles.warningText : row.tone === "positive" ? styles.positiveText : styles.neutralText}`}>{row.statusLabel}</td><td className={styles.plainCell}>{row.effectiveLabel}</td><td className={styles.plainCell}>{row.expiryLabel}</td><td className={styles.plainCell}>{row.blockingLabel}</td></tr>)}</tbody></table></div> : <EmptyEvidence>No compliance documents are configured for this approved vendor.</EmptyEvidence>}
+            {model.complianceRows.length ? <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Vendor compliance document evidence</caption><thead><tr><th>Document</th><th>Reference</th><th>Review state</th><th>Effective</th><th>Expires</th><th>Routing effect</th></tr></thead><tbody>{model.complianceRows.map((row) => <tr key={row.id}><td className={styles.plainCell}><strong>{row.documentTypeLabel}</strong>{row.fileHref?<div className={styles.documentLinks}><a href={row.fileHref} target="_blank" rel="noopener noreferrer">Open document</a>{" · "}<a href={`${row.fileHref}?download=1`}>Download</a></div>:<div><small>{row.fileAttached?"Company access required":"No file attached"}</small></div>}</td><td className={styles.plainCell}>{row.referenceLabel}</td><td className={`${styles.plainCell} ${row.tone === "critical" ? styles.criticalText : row.tone === "warning" ? styles.warningText : row.tone === "positive" ? styles.positiveText : styles.neutralText}`}>{row.statusLabel}</td><td className={styles.plainCell}>{row.effectiveLabel}</td><td className={styles.plainCell}>{row.expiryLabel}</td><td className={styles.plainCell}>{row.blockingLabel}</td></tr>)}</tbody></table></div> : <EmptyEvidence>No compliance documents are configured for this approved vendor.</EmptyEvidence>}
           </div>
           <div className={styles.relationshipSubsection}><div><h3>Approved routing qualifications</h3><p>Capabilities used by vendor search and routing, including emergency, warranty, PM, after-hours, and job-limit rules.</p></div>
             {model.qualificationRows.length ? <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Vendor qualification evidence</caption><thead><tr><th>Trade</th><th>Approved capability</th><th>Service rights</th><th>Job limit</th><th>Expires</th><th>Status</th></tr></thead><tbody>{model.qualificationRows.map((row) => <tr key={row.id}><td className={styles.plainCell}><strong>{row.tradeLabel}</strong></td><td className={styles.plainCell}>{row.capabilityLabel}</td><td className={styles.plainCell}>{row.serviceRightsLabel}</td><td className={styles.plainCell}>{row.limitLabel}</td><td className={styles.plainCell}>{row.expiryLabel}</td><td className={`${styles.plainCell} ${row.tone === "critical" ? styles.criticalText : styles.positiveText}`}>{row.statusLabel}</td></tr>)}</tbody></table></div> : <EmptyEvidence>No routing qualification is configured for this vendor.</EmptyEvidence>}
@@ -582,8 +585,8 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
         <section className={styles.evidenceSection} aria-labelledby="authorization-evidence" id="authorization-evidence">
           <SectionHeader id="authorization-evidence-heading" icon={<Clock3 size={20} />} title="Work-order response history" description="See when work was sent and when the vendor first responded." count={model.evidencePagination?.authorizationRows?.summary ?? `${model.authorizationRows.length} sent`} />
           {model.authorizationRows.length ? (
-            <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Authorization response and acceptance evidence</caption><thead><tr><th>Work / store</th><th>Issued</th><th>First response</th><th>Elapsed</th><th>Acceptance decision</th></tr></thead><tbody>
-              {model.authorizationRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.workOrderNumber} · Revision {row.revision}</strong><small>{row.storeLabel} · {row.workOrderProblem}</small></Link><WorkReviewButton href={row.href} label={row.workOrderNumber} /></td><td><Link href={row.href}>{row.issuedAtLabel}</Link></td><td><Link href={row.href}><strong>{row.responseLabel}</strong><small>{row.responderLabel} · {row.responseAtLabel}</small></Link></td><td><Link href={row.href}>{row.responseTimeLabel}</Link></td><td><Link href={row.href}><strong>{row.decisionLabel}</strong><small>{row.decisionAtLabel}</small><ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
+            <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Authorization response and acceptance evidence</caption><thead><tr><th>Work order</th><th>Sent</th><th>First reply</th><th>Outcome</th></tr></thead><tbody>
+              {model.authorizationRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.workOrderNumber} · Revision {row.revision}</strong><small>{row.storeLabel} · {row.workOrderProblem}</small></Link><WorkReviewButton href={row.href} label={row.workOrderNumber} /></td><td><Link href={row.href}>{row.issuedAtLabel}</Link></td><td><Link href={row.href}><strong>{row.responseLabel}</strong><small>{row.responseTimeLabel} · {row.responseAtLabel}</small><small>{row.responderLabel}</small></Link></td><td><Link href={row.href}><strong>{row.decisionLabel}</strong><small>{row.decisionAtLabel}</small><ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}
             </tbody></table></div>
           ) : <EmptyEvidence>Not enough history: no service authorization has been issued to this vendor in the selected scope.</EmptyEvidence>}
           {model.evidencePagination?.authorizationRows ? <PaginationControls pagination={model.evidencePagination.authorizationRows} label="Authorization history pages" /> : null}
@@ -619,8 +622,9 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
           {model.evidencePagination?.costRows ? <PaginationControls pagination={model.evidencePagination.costRows} label="Cost history pages" /> : null}
         </section>
 
-        <section className={styles.evidenceSection} aria-labelledby="coverage-evidence" id="coverage-evidence">
+        <section className={styles.evidenceSection} aria-labelledby="coverage-evidence-heading" id="coverage-evidence">
           <SectionHeader id="coverage-evidence-heading" icon={<Store size={20} />} title="Service specialties and coverage" description="The stores, regions, and types of work this vendor is approved to receive." count={`${vendor.coverageStoreCount}/${vendor.coverageStoreDenominator} stores`} />
+          {model.coverageEditor ? <VendorCoverageEditor model={model.coverageEditor} /> : null}
           <div className={styles.coverageGrid}>
             <article><span><Wrench aria-hidden="true" size={17} />Specialties</span><strong>{vendor.specialties.join(" · ") || "Not classified"}</strong><small>Used for approved-vendor search and routing.</small></article>
             <article><span><Store aria-hidden="true" size={17} />Stores</span><strong>{vendor.coverageLabel}</strong><small>{vendor.observedStoreCount} stores have observed visit history.</small></article>

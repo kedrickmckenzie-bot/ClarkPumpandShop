@@ -1,3 +1,4 @@
+import { latestStorePreference, storeVendorsFromFixture } from "./store-vendors";
 import { matchesInspection, inspectionViews, type InspectionQuery, type InspectionView } from "./compliance-types";
 import { attentionFromFixture } from "./attention-query";
 import { pmScheduleFromFixture, type PmScheduleQuery } from "./pm-schedule-query";
@@ -166,7 +167,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_stores: "stores", ops_users: "users", ops_memberships: "memberships",
     ops_scope_grants: "scopeGrants", ops_role_capability_overrides: "roleCapabilityOverrides", ops_workflow_policies: "workflowPolicies", ops_vendors: "vendors", ops_vendor_specialties: "vendorSpecialties",
     ops_vendor_reminders: "vendorReminders", ops_work_prices: "workPrices",
-    ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
+    ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
     ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
@@ -355,6 +356,12 @@ function assertReplacementUniqueness(table: string, rows: Array<Record<string, u
 }
 
 function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], statement: OpsStatement) {
+  if (statement.sql === "DELETE FROM ops_vendor_coverage WHERE organization_id = ? AND vendor_id = ?") {
+    const [org, vendorId] = statement.params;
+    fixture.vendorCoverage = fixture.vendorCoverage.filter(row => row.organizationId !== org || row.vendorId !== vendorId);
+    return;
+  }
+  fixture.storeVendorPreferences ??= [];
   const insertMatch = statement.sql.match(/^INSERT INTO ([a-z0-9_]+) \((.+)\) VALUES \((.+)\)$/i);
   if (insertMatch) {
     const table = insertMatch[1]; const columns = insertMatch[2].split(",").map((item) => item.trim());
@@ -363,6 +370,7 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
       ? idempotencyKeys as unknown as Array<Record<string, unknown>>
       : mapTable(fixture, table);
     const row = hydrateInserted(table, raw);
+    if(table === "ops_store_vendor_preferences" && rows.some(r=>r.organizationId===row.organizationId&&r.storeId===row.storeId&&r.vendorId===row.vendorId&&r.version===row.version)) throw new OpsDomainError("CONFLICT","Preferences changed. Refresh before saving.");
     if (row.id && rows.some((item) => item.id === row.id)) throw new Error(`Duplicate fixture id ${String(row.id)}`);
     if (table === "ops_idempotency_keys" && rows.some((item) => item.organizationId === row.organizationId && item.key === row.key)) throw new Error(`Duplicate idempotency key ${String(row.key)}`);
     if (table === "ops_idempotency_keys" && row.command === "invoice.version_fence") {
@@ -536,6 +544,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listComponentTemplates(organizationId: OpsId, equipmentTemplateId: OpsId) { return clone(this.fixture.componentTemplates.filter((row) => row.organizationId === organizationId && row.equipmentTemplateId === equipmentTemplateId).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))); }
   async getStore(organizationId: OpsId, storeId: OpsId) { return clone(this.fixture.stores.find((row) => row.organizationId === organizationId && row.id === storeId) ?? null); }
   async getVendor(organizationId: OpsId, vendorId: OpsId) { return clone(this.fixture.vendors.find((row) => row.organizationId === organizationId && row.id === vendorId) ?? null); }
+  async getStoreVendorPreference(org: string, storeId: string, vendorId: string) { return clone(latestStorePreference(this.fixture,org,storeId,vendorId)); }
+  async queryStoreVendors(scope: OrganizationScope, storeId: string, query: import("./store-vendors").StoreVendorQuery) {return clone(storeVendorsFromFixture(this.fixture,scope,storeId,query));}
+  async listVendorCoverage(org: OpsId, vendorId: OpsId) { return clone(this.fixture.vendorCoverage.filter(row => row.organizationId === org && row.vendorId === vendorId)); }
   async listVendorSpecialties(organizationId: OpsId, vendorId: OpsId) { return clone(this.fixture.vendorSpecialties.filter((row) => row.organizationId === organizationId && row.vendorId === vendorId).sort((a, b) => a.displayName.localeCompare(b.displayName) || a.id.localeCompare(b.id))); }
   async listNotificationRules(organizationId: OpsId) { return clone((this.fixture.notificationRules ?? []).filter((row) => row.organizationId === organizationId).sort((a, b) => a.eventKey.localeCompare(b.eventKey) || a.recipientRole.localeCompare(b.recipientRole))); }
   async upsertNotificationRule(input: Parameters<OpsRepository["upsertNotificationRule"]>[0]) { const candidate = clone(this.fixture); candidate.notificationRules ??= []; const existing = candidate.notificationRules.find((row) => row.organizationId === input.organizationId && row.eventKey === input.eventKey && row.recipientRole === input.recipientRole); if (existing) Object.assign(existing, { emailEnabled: input.emailEnabled, updatedByMembershipId: input.updatedByMembershipId, updatedAt: input.occurredAt }); else candidate.notificationRules.push({ id: input.id, organizationId: input.organizationId, eventKey: input.eventKey, emailEnabled: input.emailEnabled, recipientRole: input.recipientRole, updatedByMembershipId: input.updatedByMembershipId, createdAt: input.occurredAt, updatedAt: input.occurredAt }); this.fixture = candidate; }
@@ -662,6 +673,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     const ids = new Set(this.fixture.entityFiles.filter((row) => row.organizationId === organizationId && row.entityType === entityType && row.entityId === entityId && (!visibility || row.visibility === visibility)).map((row) => row.fileId));
     return clone(this.fixture.files.filter((row) => row.organizationId === organizationId && row.status === "available" && ids.has(row.id)));
   }
+  async getStoredFileById(organizationId:OpsId,id:OpsId) { return clone(this.fixture.files.find(f=>f.organizationId===organizationId&&f.id===id)??null); }
   async getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null> { return clone(this.fixture.files.find((row) => row.organizationId === organizationId && row.storageKey === storageKey) ?? null); }
   async getActiveAssignment(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.assignments.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId && !["cancelled", "declined", "completed", "superseded"].includes(row.status)).at(-1) ?? null); }
   async getLatestIssuanceForWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.issuances.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((a, b) => b.revision - a.revision).at(0) ?? null); }

@@ -1,25 +1,2 @@
-import Link from "next/link";
-import { loadOperatorSession } from "../_data/operator-loader";
-import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
-import { inspectionViews, type InspectionView } from "@/lib/ops/compliance-types";
-import styles from "@/components/workspace/compliance.module.css";
-const labels:Record<InspectionView,string>={scheduled:"Scheduled",all:"All inspections",upcoming:"Upcoming",overdue:"Overdue",pending:"Pending",passed:"Reviewed & closed",action_needed:"Open findings",performed:"Awaiting review",missing_docs:"Missing paperwork",expiring:"Documents expiring",due30:"Due in 30 days",due60:"Due in 60 days",due90:"Due in 90 days"};
-export default async function CompliancePage({searchParams}:{searchParams:Promise<{view?:string;offset?:string;store?:string;notice?:string;error?:string}>}) {
- const session=await loadOperatorSession(),r=await getServerOpsRepository(),q=await searchParams;
- const today=new Date().toISOString().slice(0,10),view=inspectionViews.includes(q.view as InspectionView)?q.view as InspectionView:"all",offset=Math.min(100000,Math.max(0,Math.floor(Number(q.offset)||0)));
- const page=await r.queryInspections(session,{today,view,storeId:q.store,offset,limit:25}),stores=await r.searchStores(session,"",{limit:100});
- const edit=["facilities","regional"].includes(session.role);
- const href=(v:InspectionView,start=0)=>`/app/compliance?${new URLSearchParams({view:v,offset:String(start),...(q.store?{store:q.store}:{})})}`;
- return <div className={styles.page}>
- <header className={styles.header}><div><h1>Compliance</h1><p>Inspections, renewals and the records behind them.</p><small>{session.scopeLabel} · As of {today}</small></div>{edit?<Link className={styles.action} href="/app/compliance/new">New schedule</Link>:null}</header>
- {q.notice?<p role="status" className={styles.notice}>{q.notice}</p>:null}{q.error?<p role="alert" className={styles.notice}>{q.error}</p>:null}
- <div className={styles.metrics}>{(["due30","overdue","performed","missing_docs","action_needed"] as InspectionView[]).map(v=><Link key={v} href={href(v)} className={styles.metric}>{labels[v]}<strong>{page.summary[v]}</strong></Link>)}</div>
- <nav className={styles.filters} aria-label="Compliance horizons">{(["due60","due90","scheduled","upcoming","expiring"] as InspectionView[]).map(v=><Link key={v} href={href(v)}>{labels[v]} · {page.summary[v]}</Link>)}</nav>
- <section className={styles.panel}><form className={styles.filters}><label>View<select name="view" defaultValue={view}>{inspectionViews.map(v=><option key={v} value={v}>{labels[v]}</option>)}</select></label><label>Store<select name="store" defaultValue={q.store??""}><option value="">All permitted stores</option>{stores.items.map(s=><option key={s.id} value={s.id}>{s.storeNumber} · {s.name}</option>)}</select></label><button type="submit">Apply</button></form>
- <p>{page.totalCount} inspections · Date windows overlap. Pending includes inspections not yet performed.</p>
- <div className={styles.scroll}><table className={styles.table}><thead><tr><th>Inspection / store</th><th>Due</th><th>Status</th><th>Handling</th><th>Evidence</th></tr></thead><tbody>{page.items.map(i=><tr key={i.id}><td><Link href={`/app/compliance/${i.id}`}>{i.name}</Link><p>Store {i.storeNumber} · {i.storeName}</p></td><td>{i.dueDate}{i.scheduledAt?<p><small>Visit {String(i.scheduledAt).slice(0,10)}</small></p>:null}{i.lastCompleted?<p><small>Last closed {i.lastCompleted}</small></p>:null}</td><td><span className={`${styles.tag} ${i.status!=="passed"&&i.dueDate<today?styles.danger:""}`}>{i.status==="pending"&&i.dueDate<today?"Overdue":labels[i.status]}</span></td><td>{i.assignedName}<p><small>{i.handler==="vendor"?"Outside vendor":"Internal team"}</small></p>{i.workOrderId?<p><Link href={`/app/work-orders/${i.workOrderId}`}>Work order</Link></p>:<p><small>Not yet prepared</small></p>}</td><td>{i.evidenceLabel}<p><small>{i.evidenceCount?`${i.evidenceCount} files on record`:"No files yet"}</small></p>{i.documentExpiresOn?<small>Expires {i.documentExpiresOn}</small>:null}</td></tr>)}</tbody></table></div>
- {!page.items.length?<p>No inspections in this view.{edit?<> <Link href="/app/compliance/new">Create a custom schedule</Link>.</>:null}</p>:null}
- <nav className={styles.bar}>{offset>0?<Link href={href(view,Math.max(0,offset-25))}>Previous</Link>:<span/>}{offset+25<page.totalCount?<Link href={href(view,offset+25)}>Next</Link>:null}</nav></section>
- {session.role==="facilities"&&session.storeIds===undefined&&session.regionIds===undefined?<details className={styles.panel}><summary>Schedule controls</summary><p>Prepare due work and queue reminders now. Paused schedules stop future preparation and email; existing work remains available.</p><form method="post" action="/api/ops/compliance"><input type="hidden" name="action" value="cycle"/><button type="submit">Run schedule check</button></form><small>This queues delivery; it does not send email from the browser.</small></details>:null}
- </div>;
-}
+import ComplianceWorkspace from "@/components/workspace/compliance-workspace";
+export default async function CompliancePage({searchParams}:{searchParams:Promise<{view?:string;offset?:string;store?:string;notice?:string;error?:string}>}) {return <ComplianceWorkspace searchParams={searchParams}/>;}

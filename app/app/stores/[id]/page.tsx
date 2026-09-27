@@ -1,3 +1,4 @@
+import { StoreWorkspaceNav } from "@/components/workspace/store-workspace-nav";
 import type { Metadata } from "next";
 import { roleCan } from "@/components/ops/role-policy";
 import { SetupActions } from "@/components/ops/setup-forms";
@@ -17,6 +18,7 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
   return (
     <DetailView
       model={model}
+      beforeSections={<StoreWorkspaceNav id={id} />}
       after={hasDemoVendorQr || canSetupEquipment || canSetupPm ? (
         <>
           {hasDemoVendorQr ? (

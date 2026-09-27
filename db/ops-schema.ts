@@ -96,6 +96,16 @@ export const opsVendorSpecialties = sqliteTable("ops_vendor_specialties", {
   id: id(), organizationId: organizationId(), vendorId: text("vendor_id").notNull(), canonicalKey: text("canonical_key").notNull(), displayName: text("display_name").notNull(), searchAliasesJson: text("search_aliases_json").notNull().default("[]"),
 }, (table) => [uniqueIndex("uidx_ops_vendor_specialties_org_vendor_key").on(table.organizationId, table.vendorId, table.canonicalKey), index("idx_ops_vendor_specialties_org_key").on(table.organizationId, table.canonicalKey)]);
 
+export const opsStoreVendorPreferences = sqliteTable("ops_store_vendor_preferences", {
+  id: id(), organizationId: organizationId(), storeId: text("store_id").notNull(), vendorId: text("vendor_id").notNull(),
+  tradeKeysJson: text("trade_keys_json").notNull(), version: integer("version").notNull(), createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_ops_store_vendor_preferences_version").on(table.organizationId, table.storeId, table.vendorId, table.version),
+  index("idx_ops_store_vendor_preferences_store").on(table.organizationId, table.storeId, table.vendorId),
+  foreignKey({ name: "fk_ops_store_vendor_preferences_store", columns: [table.organizationId, table.storeId], foreignColumns: [opsStores.organizationId, opsStores.id] }),
+  foreignKey({ name: "fk_ops_store_vendor_preferences_vendor", columns: [table.organizationId, table.vendorId], foreignColumns: [opsVendors.organizationId, opsVendors.id] }),
+]);
+
 export const opsVendorCoverage = sqliteTable("ops_vendor_coverage", {
   id: id(), organizationId: organizationId(), vendorId: text("vendor_id").notNull(), scopeKind: text("scope_kind").notNull(), scopeId: text("scope_id").notNull(), preferredRank: integer("preferred_rank"),
 }, (table) => [uniqueIndex("uidx_ops_vendor_coverage_org_vendor_scope").on(table.organizationId, table.vendorId, table.scopeKind, table.scopeId), index("idx_ops_vendor_coverage_org_scope").on(table.organizationId, table.scopeKind, table.scopeId)]);
@@ -735,6 +745,7 @@ export const opsSchema = {
   opsVendorReminders,
   opsVendorSpecialties,
   opsVendorCoverage,
+  opsStoreVendorPreferences,
   opsVendorQualifications,
   opsVendorComplianceDocuments,
   opsVendorComplianceAlerts,

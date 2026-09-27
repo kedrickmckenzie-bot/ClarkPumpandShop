@@ -13,7 +13,7 @@ export function WorkOrderScope({ defaultStoreId, children }: { defaultStoreId?: 
 export function WorkOrderStore({ model, locked }: { model: CreateWorkOrderPageViewModel; locked: boolean }) {
   const { storeId, setStoreId } = useContext(Scope);
   if (locked) return <label className={styles.field}><span>Store</span><input type="hidden" name="storeId" value={storeId} /><input readOnly value={model.stores.find(s => s.value === storeId)?.label ?? "Selected store"} /></label>;
-  return <StorePicker initial={model.stores} defaultStoreId={storeId} onSelect={setStoreId} />;
+  return <StorePicker searchable initial={model.stores} defaultStoreId={storeId} onSelect={setStoreId} />;
 }
 export function WorkOrderEquipment({ model }: { model: CreateWorkOrderPageViewModel }) {
   const { storeId } = useContext(Scope);

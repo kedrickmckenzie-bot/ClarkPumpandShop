@@ -210,6 +210,9 @@ export interface OpsRepository {
   listComponentTemplates(organizationId: OpsId, equipmentTemplateId: OpsId): Promise<ComponentTemplate[]>;
   getStore(organizationId: OpsId, storeId: OpsId): Promise<Store | null>;
   getVendor(organizationId: OpsId, vendorId: OpsId): Promise<Vendor | null>;
+  getStoreVendorPreference(org: string, storeId: string, vendorId: string): Promise<import("./store-vendors").StoreVendorPreference | null>;
+  queryStoreVendors(scope: OrganizationScope, storeId: string, query: import("./store-vendors").StoreVendorQuery): Promise<import("./store-vendors").StoreVendorPage>;
+  listVendorCoverage(organizationId: OpsId, vendorId: OpsId): Promise<import("./types").VendorCoverage[]>;
   listVendorSpecialties(organizationId: OpsId, vendorId: OpsId): Promise<VendorSpecialty[]>;
   inspectionHistory(org:string,id:string):Promise<Array<{id:string;eventType:string;actorName:string;occurredAt:string;payloadJson:string}>>;
   inspectionDelivery(org:string,id:string):Promise<Array<{id:string;topic:string;status:string}>>;
@@ -349,6 +352,7 @@ export interface OpsRepository {
   getException(organizationId: OpsId, exceptionId: OpsId): Promise<OpsException | null>;
   getIdempotencyKey(organizationId: OpsId, key: string): Promise<IdempotencyKey | null>;
   listFilesForEntity(organizationId: OpsId, entityType: string, entityId: OpsId, visibility?: "vendor_shared"): Promise<StoredFile[]>;
+  getStoredFileById(organizationId:OpsId,id:OpsId):Promise<StoredFile|null>;
   getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null>;
   getActiveAssignment(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderAssignment | null>;
   getLatestIssuanceForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderIssuance | null>;

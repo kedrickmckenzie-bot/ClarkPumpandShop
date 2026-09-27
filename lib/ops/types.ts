@@ -1993,6 +1993,7 @@ export interface OpsFixture {
   vendorReminders: VendorReminder[];
   vendorSpecialties: VendorSpecialty[];
   vendorCoverage: VendorCoverage[];
+  storeVendorPreferences?: import("./store-vendors").StoreVendorPreference[];
   vendorQualifications: VendorQualification[];
   vendorComplianceDocuments: VendorComplianceDocument[];
   vendorComplianceAlerts?: VendorComplianceAlert[];

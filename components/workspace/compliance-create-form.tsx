@@ -1,12 +1,13 @@
 "use client";
+import { StorePicker } from "@/components/ops/store-picker";
 import { useState } from "react";
 import styles from "./compliance.module.css";
-export function ComplianceCreateForm({stores,vendors,owners}:{stores:Array<{id:string;storeNumber:string;name:string}>;vendors:Array<{id:string;name:string}>;owners:Array<{id:string;name:string}>}) {
+export function ComplianceCreateForm({stores,vendors,owners,defaultStoreId}:{defaultStoreId?:string;stores:Array<{id:string;storeNumber:string;name:string;formattedAddress?:string}>;vendors:Array<{id:string;name:string}>;owners:Array<{id:string;name:string}>}) {
  const [handler,setHandler]=useState("internal"),[unit,setUnit]=useState("months");
  return <form action="/api/ops/compliance" method="post" encType="multipart/form-data" className={styles.form}>
  <input type="hidden" name="action" value="create"/>
  <label>Inspection or renewal name<input name="name" required maxLength={160} placeholder="e.g. Fire extinguisher inspection"/></label>
- <div className={styles.pair}><label>Store<select name="storeId" required><option value="">Choose a store</option>{stores.map(s=><option key={s.id} value={s.id}>{s.storeNumber} · {s.name}</option>)}</select></label><label>Type<select name="kind"><option value="inspection">Inspection</option><option value="permit">Permit / renewal</option></select></label></div>
+ <div className={styles.pair}><StorePicker searchable defaultStoreId={defaultStoreId} initial={stores.map(s=>({value:s.id,label:`Store ${s.storeNumber} · ${s.name}`,description:s.formattedAddress}))}/><label>Type<select name="kind"><option value="inspection">Inspection</option><option value="permit">Permit / renewal</option></select></label></div>
  <div className={styles.pair}><label>First due date<input type="date" name="firstDueDate" required/></label><label>Repeat<select name="intervalUnit" value={unit} onChange={e=>setUnit(e.target.value)}><option value="once">One time</option><option value="days">Every number of days</option><option value="months">Every number of months</option></select></label></div>
  {unit!=="once"?<label>Every<input type="number" name="intervalCount" min="1" max="365" defaultValue="12" required/><small>{unit} · Monthly = 1 month; annual = 12 months</small></label>:<input type="hidden" name="intervalCount" value="1"/>}
  <div className={styles.pair}><label>Handled by<select name="handler" value={handler} onChange={e=>setHandler(e.target.value)}><option value="internal">Internal team</option><option value="vendor">Outside vendor</option></select></label>{handler==="internal"?<label>Responsible person<select name="membershipId" required><option value="">Choose a person</option>{owners.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>:<label>Vendor<select name="vendorId" required><option value="">Choose a vendor</option>{vendors.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label>}</div>

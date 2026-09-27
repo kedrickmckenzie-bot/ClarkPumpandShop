@@ -2219,6 +2219,8 @@ function buildVendorEvidenceBundle(
     const effectiveStatus = expiredByDate ? "expired" : document.reviewStatus;
     return {
       id: document.id,
+      fileAttached:Boolean(document.storedFileId),
+      fileHref:document.storedFileId?`/api/ops/vendors/${vendor.id}/documents/${document.id}`:undefined,
       documentTypeLabel: sentence(document.documentType),
       referenceLabel: [document.issuer, document.reference].filter(Boolean).join(" · ") || "Reference not entered",
       statusLabel: replacementPending
@@ -2400,6 +2402,14 @@ export function buildVendorPerformanceDetailModel(
     createWorkOrderLink: roleCan(session, "create_work_order")
       ? { href: `/app/work-orders/new?vendor=${vendor.id}`, label: "Create work order" }
       : undefined,
+    coverageEditor: roleCan(session, "onboard_vendor") && session.storeIds === undefined && session.regionIds === undefined ? {
+      action: `/api/ops/vendors/${encodeURIComponent(vendor.id)}/relationship`,
+      organizationId: scoped.organizationId,
+      version: fixture.vendorCoverage.filter(row => row.organizationId === scoped.organizationId && row.vendorId === vendor.id).map(row => row.id).sort().join(","),
+      selectedIds: fixture.vendorCoverage.filter(row => row.organizationId === scoped.organizationId && row.vendorId === vendor.id).map(row => row.scopeId),
+      regions: fixture.regions.filter(row => row.organizationId === scoped.organizationId).map(row => ({id: row.id, name: row.name})),
+      stores: fixture.stores.filter(row => row.organizationId === scoped.organizationId).sort((a,b) => a.storeNumber.localeCompare(b.storeNumber)).map(row => ({id: row.id, label: `${row.storeNumber} · ${row.name}`, address: [row.address1,row.address2,row.city,row.state,row.postalCode].filter(Boolean).join(", "), searchText: [row.storeNumber,row.name,row.address1,row.address2,row.city,row.state,row.postalCode,...row.aliases].filter(Boolean).join(" "), regionId: row.regionId})),
+    } : undefined,
     manageRelationshipAction: roleCan(session, "onboard_vendor")
       ? `/api/ops/vendors/${encodeURIComponent(vendor.id)}/relationship`
       : undefined,
@@ -2421,7 +2431,7 @@ export function buildVendorPerformanceDetailModel(
     visitRows: bundle.visitRows,
     costRows: bundle.costRows,
     coverageRows: bundle.coverageRows,
-    complianceRows: bundle.complianceRows,
+    complianceRows: bundle.complianceRows.map(row=>({...row,fileHref:["facilities","executive","finance"].includes(session.role)&&session.storeIds===undefined&&session.regionIds===undefined?row.fileHref:undefined})),
     qualificationRows: bundle.qualificationRows,
     vendorReminderRows: fixture.vendorReminders
       .filter((reminder) => reminder.organizationId === scoped.organizationId && reminder.vendorId === vendor.id)
@@ -5235,8 +5245,9 @@ export function buildCreateWorkOrderModel(
     })),
     lifecycleAsOf: fixture.asOf,
     defaults: {
+      vendorId: vendors.some(v=>v.id===first(query.vendor)) ? first(query.vendor) : undefined,
       priority: "routine",
-      assignmentKind: session.demoEdition !== "accountability" && first(query.assignmentKind) === "hold_for_visit" ? "hold_for_visit" : "choose_later",
+      assignmentKind: session.demoEdition !== "accountability" && first(query.assignmentKind) === "hold_for_visit" ? "hold_for_visit" : vendors.some(v=>v.id===first(query.vendor)) ? "outside_vendor" : "choose_later",
       storeId: sourceRequest?.storeId ?? sourceVisit?.storeId ?? sourcePmOccurrence?.storeId ?? requestedAsset?.storeId ?? requestedStore,
       assetId: sourcePmOccurrence?.assetId ?? requestedAsset?.id,
       categoryKey: sourcePmProgram?.tradeKey ?? requestedAsset?.categoryKey,

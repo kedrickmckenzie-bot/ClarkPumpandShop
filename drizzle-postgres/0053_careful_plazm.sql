@@ -1,0 +1,2 @@
+ALTER TABLE "ops_store_vendor_preferences" ADD CONSTRAINT "fk_ops_store_vendor_preferences_store" FOREIGN KEY ("organization_id","store_id") REFERENCES "public"."ops_stores"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ops_store_vendor_preferences" ADD CONSTRAINT "fk_ops_store_vendor_preferences_vendor" FOREIGN KEY ("organization_id","vendor_id") REFERENCES "public"."ops_vendors"("organization_id","id") ON DELETE no action ON UPDATE no action;

@@ -1,3 +1,6 @@
+import { storeVendorRegression } from "./store-vendor-regression";
+import { coverageVersion, updateVendorCoverage } from "@/lib/ops/vendor-coverage";
+import { recordVendorComplianceDocument } from "@/lib/ops/commands";
 import { masterDocuments } from "@/lib/ops/compliance-documents";
 import type { StoredFile } from "@/lib/ops/types";
 import { expect } from "vitest";
@@ -39,6 +42,12 @@ export async function complianceRegression(repository:OpsRepository) {
  const failed=(await repository.getInspection(org,second.id))!;const correction=await createInspectionCorrection(svc,failed,"Repair exit light",actor);expect(correction?.id).toBeTruthy();
  await expect(recordInspectionResult(svc,{...result,inspectionId:second.id,version:2,status:"passed"},actor)).rejects.toThrow("corrective work");
  const vendors=await repository.listVendors({organizationId:org},"ColdLine",{limit:5});const vendor=vendors.items[0];
+ const vendorFile={...template,id:`vendor-file-${crypto.randomUUID()}`,originalName:"insurance.pdf"};
+ const vendorDocument=await recordVendorComplianceDocument(svc,{organizationId:org,vendorId:vendor.id,documentType:"insurance",reference:"Policy acceptance",reviewStatus:"pending",file:vendorFile,actor});
+ expect((await repository.listVendorComplianceDocuments(org,vendor.id)).find(d=>d.id===vendorDocument.id)?.storedFileId).toBe(vendorFile.id);
+ expect(await repository.getStoredFileById(org,vendorFile.id)).toEqual(vendorFile);
+ expect(await repository.getStoredFileById("foreign",vendorFile.id)).toBeNull();
+ await expect(recordVendorComplianceDocument(svc,{organizationId:org,vendorId:vendor.id,documentType:"insurance",reference:"Invalid file",reviewStatus:"pending",file:{...vendorFile,organizationId:"foreign"},actor})).rejects.toMatchObject({code:"VALIDATION"});
  const external=await createComplianceSchedule(svc,{...input,name:"Outside inspection",intervalUnit:"once",handler:"vendor",membershipId:undefined,vendorId:vendor.id},actor,[template]);
  expect((await runInspectionCycle(svc,org,external.id)).failed).toBe(0);
  i=(await repository.queryInspections({organizationId:org},{today:"2026-09-27",scheduleId:external.id})).items[0];
@@ -49,5 +58,20 @@ export async function complianceRegression(repository:OpsRepository) {
  await setComplianceScheduleStatus(svc,external,"paused",actor);await deliverInspectionEmail(transport,message,svc.clock.now());expect(sent).toHaveLength(1);
  await runInspectionCycle({...svc,clock:{now:()=>"2026-10-28T12:00:00.000Z"}},org,s.id);
  expect(masterDocuments((await repository.latestInspection(org,s.id))!)).toEqual([revised]);
+ const beforeCoverage=await repository.listVendorCoverage(org,vendor.id);
+ const change={organizationId:org,vendorId:vendor.id,scopeIds:[input.storeId],expectedVersion:coverageVersion(beforeCoverage),actor};
+ await updateVendorCoverage(svc,change);
+ expect((await repository.listVendorCoverage(org,vendor.id)).map(row=>row.scopeId)).toEqual([input.storeId]);
+ expect(await repository.listVendorCoverage("foreign",vendor.id)).toEqual([]);
+ expect(await repository.vendorCoversStore(org,vendor.id,input.storeId)).toBe(true);
+ expect(await repository.vendorCoversStore(org,vendor.id,"store-northline-105")).toBe(false);
+ await expect(updateVendorCoverage(svc,change)).rejects.toMatchObject({code:"CONFLICT"});
+ const current=await repository.listVendorCoverage(org,vendor.id);
+ await expect(updateVendorCoverage(svc,{...change,scopeIds:["foreign-store"],expectedVersion:coverageVersion(current)})).rejects.toMatchObject({code:"VALIDATION"});
+ expect(await repository.listVendorCoverage(org,vendor.id)).toEqual(current);
+ await updateVendorCoverage(svc,{...change,scopeIds:[org],expectedVersion:coverageVersion(current)});
+ expect((await repository.listVendorCoverage(org,vendor.id)).map(row=>row.scopeKind)).toEqual(["organization"]);
+ expect(await repository.vendorCoversStore(org,vendor.id,"store-northline-105")).toBe(true);
+ await storeVendorRegression(repository);
  expect(nextInspectionDate({...s,intervalUnit:"once"} as ComplianceSchedule,s.firstDueDate)).toBeNull();
 }

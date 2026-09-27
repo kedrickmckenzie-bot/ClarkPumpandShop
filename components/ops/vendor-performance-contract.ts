@@ -82,6 +82,8 @@ export interface VendorPerformanceListViewModel {
 }
 
 export interface VendorComplianceEvidenceRow {
+  fileHref?:string;
+  fileAttached?:boolean;
   id: string;
   documentTypeLabel: string;
   referenceLabel: string;
@@ -199,6 +201,7 @@ export interface VendorPerformanceDetailViewModel {
   updatedLabel: string;
   backLink: SupportingLink;
   createWorkOrderLink?: SupportingLink;
+  coverageEditor?: { action: string; version: string; organizationId: string; selectedIds: string[]; regions: Array<{id: string; name: string}>; stores: Array<{id: string; label: string; address?: string; searchText?: string; regionId?: string}> };
   manageRelationshipAction?: string;
   manageRemindersAction?: string;
   timeZone: string;

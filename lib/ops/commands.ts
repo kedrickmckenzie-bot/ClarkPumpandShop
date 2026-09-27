@@ -31,6 +31,7 @@ import {
 } from "./workflow-task-commands";
 import type { ServiceAuthorizationSnapshot } from "./view-models";
 import type {
+  StoredFile,
   ActorContext,
   AssignmentKind,
   AssignmentStatus,
@@ -482,6 +483,7 @@ export interface RecordVendorComplianceDocumentInput {
   reviewStatus: "pending" | "approved" | "rejected" | "expired";
   blocking?: boolean;
   storedFileId?: OpsId;
+  file?: StoredFile;
   actor: ActorContext;
 }
 
@@ -493,6 +495,8 @@ export async function recordVendorComplianceDocument(svc: OpsCommandServices, in
   const now = clock.now();
   const id = ids.next("vendor-document");
   const reference = required(input.reference, "Document reference");
+  const file=input.file??(input.storedFileId?await repository.getStoredFileById(input.organizationId,input.storedFileId):null);
+  if((input.file||input.storedFileId)&&(!file||file.organizationId!==input.organizationId||file.status!=="available"||!Number.isSafeInteger(file.byteLength)||file.byteLength<=0||file.byteLength>8*1024*1024||!/^[a-f0-9]{64}$/.test(file.sha256)))throw new OpsDomainError("VALIDATION","Document file is unavailable or invalid");
   if (input.effectiveAt && input.expiresAt && Date.parse(input.expiresAt) < Date.parse(input.effectiveAt)) {
     throw new OpsDomainError("VALIDATION", "Document expiration cannot be before its effective date");
   }
@@ -508,7 +512,7 @@ export async function recordVendorComplianceDocument(svc: OpsCommandServices, in
       expires_at: input.expiresAt,
       review_status: input.reviewStatus,
       blocking: input.blocking ? 1 : 0,
-      stored_file_id: input.storedFileId,
+      stored_file_id: file?.id,
       created_at: now,
     }),
     ...auditAndOutbox({
@@ -518,10 +522,11 @@ export async function recordVendorComplianceDocument(svc: OpsCommandServices, in
       eventType: "vendor.compliance_document_recorded",
       actor: input.actor,
       occurredAt: now,
-      payload: { documentId: id, documentType: input.documentType, reviewStatus: input.reviewStatus, blocking: Boolean(input.blocking) },
+      payload: { documentId: id, storedFileId:file?.id, documentType: input.documentType, reviewStatus: input.reviewStatus, blocking: Boolean(input.blocking) },
       ids,
     }),
   ];
+  if(input.file)statements.unshift(insert("ops_files",{id:file!.id,organization_id:file!.organizationId,storage_key:file!.storageKey,sha256:file!.sha256,original_name:file!.originalName,content_type:file!.contentType,byte_length:file!.byteLength,status:file!.status,created_at:file!.createdAt}));
   await repository.atomicWrite(statements);
   return { id, vendorId: vendor.id, recordedAt: now };
 }

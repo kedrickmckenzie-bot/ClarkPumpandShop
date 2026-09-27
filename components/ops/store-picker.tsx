@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { SelectOptionViewModel } from "./data-contract";
 import styles from "./ops.module.css";
-export function StorePicker({ initial, defaultStoreId, searchable = false, initialCursor, onSelect }: { initial: SelectOptionViewModel[]; defaultStoreId?: string; searchable?: boolean; initialCursor?: string; onSelect?: (id: string) => void }) {
+export function StorePicker({ initial, defaultStoreId, searchable = false, initialCursor, onSelect, name = "storeId", required = true }: { name?: string; required?: boolean; initial: SelectOptionViewModel[]; defaultStoreId?: string; searchable?: boolean; initialCursor?: string; onSelect?: (id: string) => void }) {
   const [items, setItems] = useState(initial);
   const [selected, setSelected] = useState(initial.find(s => s.value === defaultStoreId));
   const [query, setQuery] = useState("");
@@ -32,7 +32,7 @@ export function StorePicker({ initial, defaultStoreId, searchable = false, initi
   function page(value: string, history: string[]) { touched.current = true; setBusy(true); setCursor(value); setTrail(history); }
   return <div>
     <label className={styles.field}><span>Find a store</span><input type="search" value={query} placeholder="Store number, name or address" maxLength={160} onChange={e => { touched.current = true; setQuery(e.target.value); setCursor(""); setTrail([""]); setBusy(searchable); }} onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }} /></label>
-    <label className={styles.field} htmlFor="request-store"><span>Store <em>Required</em></span><select id="request-store" name="storeId" required value={selected?.value ?? ""} onChange={e => { setSelected(choices.find(s => s.value === e.target.value)); onSelect?.(e.target.value); }}><option value="" disabled>Choose a store</option>{choices.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
+    <label className={styles.field} htmlFor="request-store"><span>Store {required ? <em>Required</em> : null}</span><select id="request-store" name={name} required={required} value={selected?.value ?? ""} onChange={e => { setSelected(choices.find(s => s.value === e.target.value)); onSelect?.(e.target.value); }}><option value="" disabled={required}>{required ? "Choose a store" : "All permitted stores"}</option>{choices.map(s => <option key={s.value} value={s.value}>{s.label}{s.description ? ` — ${s.description}` : ""}</option>)}</select></label>
     {error ? <p role="alert">{error}</p> : null}
     <p role="status">{busy ? "Searching…" : query ? `${matches.length} matching stores${selected && !matches.some(s => s.value === selected.value) ? " · Current selection kept" : ""}` : ""}</p>
     {searchable && trail.length > 1 ? <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => page(trail[trail.length - 2], trail.slice(0, -1))}>Back</button> : null}

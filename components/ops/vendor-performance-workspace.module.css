@@ -1840,3 +1840,17 @@
 .coverageRows span {
   font-size: 0.8125rem;
 }
+
+.documentLinks { margin-top: 4px; }
+.coverageEditor { margin: 16px 0; }
+.coverageEditor > summary { color: #315dcc; font-size: 16px; font-weight: 600; cursor: pointer; padding: 8px 0; }
+.coverageChoices { border: 1px solid #d9dfe7; padding: 14px; margin: 0; min-width: 0; }
+.coverageChoices legend { font-weight: 600; font-size: 16px; }
+.coverageChoices label { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 16px; cursor: pointer; }
+.coverageChoices input { width: 18px; height: 18px; min-height: 0; flex: 0 0 18px; accent-color: #315dcc; }
+.coverageChoices small { display: block; color: #526174; margin-top: 3px; }
+.coverageStoreList { max-height: 320px; overflow-y: auto; }
+.coverageEditor form > label { display: grid; gap: 8px; font-size: 16px; }
+.coverageEditor input[type="search"] { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid #cbd3de; border-radius: 4px; font: inherit; }
+.documentLinks a { color: #315dcc; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.documentLinks a:focus-visible { outline: 2px solid #315dcc; outline-offset: 3px; }

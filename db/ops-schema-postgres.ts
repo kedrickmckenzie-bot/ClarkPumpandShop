@@ -349,6 +349,16 @@ export const opsVendorSpecialties = pgTable("ops_vendor_specialties", {
   }),
 ]);
 
+export const opsStoreVendorPreferences = pgTable("ops_store_vendor_preferences", {
+  id: id(), organizationId: organizationId(), storeId: text("store_id").notNull(), vendorId: text("vendor_id").notNull(),
+  tradeKeysJson: text("trade_keys_json").notNull(), version: integer("version").notNull(), createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_ops_store_vendor_preferences_version").on(table.organizationId, table.storeId, table.vendorId, table.version),
+  index("idx_ops_store_vendor_preferences_store").on(table.organizationId, table.storeId, table.vendorId),
+  foreignKey({ name: "fk_ops_store_vendor_preferences_store", columns: [table.organizationId, table.storeId], foreignColumns: [opsStores.organizationId, opsStores.id] }),
+  foreignKey({ name: "fk_ops_store_vendor_preferences_vendor", columns: [table.organizationId, table.vendorId], foreignColumns: [opsVendors.organizationId, opsVendors.id] }),
+]);
+
 export const opsVendorCoverage = pgTable("ops_vendor_coverage", {
   id: id(),
   organizationId: organizationId(),
@@ -1967,6 +1977,7 @@ export const opsPostgresSchema = {
   opsVendorReminders,
   opsVendorSpecialties,
   opsVendorCoverage,
+  opsStoreVendorPreferences,
   opsVendorQualifications,
   opsVendorComplianceDocuments,
   opsVendorComplianceAlerts,
