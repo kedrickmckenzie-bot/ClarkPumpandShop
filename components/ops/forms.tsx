@@ -1,4 +1,4 @@
-import { StorePicker } from "./store-picker";
+import { RequestStorePicker } from "./request-store-picker";
 import Link from "next/link";
 import { WorkRoutingFields } from "./work-routing-fields";
 import { RecordForm } from "./record-form";
@@ -57,7 +57,7 @@ export function CreateRequestForm({ model }: { model: CreateRequestPageViewModel
         <RecordForm className={styles.recordForm} action={model.submitAction}>
           <section className={styles.formSection}>
             <div className={styles.formSectionHeading}><span>1</span><div><h2>Where is the issue?</h2></div></div>
-            <StorePicker initial={model.stores} defaultStoreId={model.defaultStoreId} searchable={model.storeLookup} initialCursor={model.storeNextCursor}/>
+            <RequestStorePicker model={model} />
           </section>
 
           <section className={styles.formSection}>
@@ -171,7 +171,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
               </label>
               <div className={styles.fieldGrid}>
                 {!accountabilityOnly && !model.sourceVisit ? <label className={styles.field} htmlFor="work-nte">
-                  <span>Not-to-exceed amount <small>Optional</small></span>
+                  <span>Spending limit <small>Optional</small></span>
                   <input id="work-nte" name="nteAmount" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00" />
                 </label> : null}
                 <label className={styles.field} htmlFor="work-internal-review"><span>Internally flag costs over <small>Optional · USD</small></span><input id="work-internal-review" name="internalReviewThreshold" type="number" min="0" step="0.01" placeholder="0.00" /><small>Flags recorded work costs for your team. Hidden from vendors; does not limit their authorization.</small></label>

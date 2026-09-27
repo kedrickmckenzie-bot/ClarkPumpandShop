@@ -1,3 +1,5 @@
+import { WorkOrderQuickUpdate } from "@/components/ops/work-order-quick-update";
+import { ManualVendorResponseForm } from "@/components/ops/service-control-panels";
 import { SavedWorkSuggestions } from "@/components/ops/saved-work-suggestions";
 import type { ReactNode } from "react";
 import Link from "next/link";
@@ -65,7 +67,10 @@ import {
 } from "@/lib/ops/work-order-workspace";
 
 interface WorkOrderCaseProps {
+  emailHistory?: ReactNode;
+  costPrompts?: ReactNode;
   prices?: ReactNode;
+  canAttachInvoice?: boolean;
   connectedReview?: WorkReviewModel | null;
   model: DetailPageViewModel;
   control: WorkOrderControlViewModel;
@@ -247,7 +252,7 @@ function Timeline({ section }: { section?: DetailSectionViewModel }) {
         <li key={event.id}>
           <span className={`${styles.timelineDot} ${toneStyles[event.tone ?? "neutral"]}`} aria-hidden="true" />
           <div>
-            <header><strong>{event.title}</strong><time>{event.timestampLabel}</time></header>
+            <header><strong>{event.title === "Work Order Control Updated" ? "Update recorded" : event.title === "Work Order Completed Manually" ? "Completion confirmed manually" : event.title}</strong><time>{event.timestampLabel}</time></header>
             {event.description ? <p>{event.description}</p> : null}
             <footer>
               <span>{event.actorLabel}</span>
@@ -418,7 +423,7 @@ function CaseOverview({
         </Link>
         {!accountabilityOnly ? <Link href={`${base}?view=cost`}>
           <span><ReceiptText size={18} aria-hidden="true" />Cost evidence</span>
-          <strong>{recordedCost?.value ?? recording.recordedCostLabel}</strong>
+          <strong>{recording.recordedCostLineCount ? recordedCost?.value ?? recording.recordedCostLabel : "Not recorded"}</strong>
           <small>{nte?.value && nte.value !== "Not set" ? `${nte.value} authorization limit` : "No authorization limit recorded"} · {invoiceCount ? `${invoiceCount} invoice reference${invoiceCount === 1 ? "" : "s"}` : "No invoice linked"}</small>
           <em>Explain cost<ChevronRight size={15} aria-hidden="true" /></em>
         </Link> : null}
@@ -552,7 +557,10 @@ function workspaceHeading(mode: WorkOrderWorkspaceMode, accountabilityOnly: bool
 }
 
 export function WorkOrderCase({
+  emailHistory,
+  costPrompts,
   prices,
+  canAttachInvoice = false,
   connectedReview,
   model,
   control,
@@ -638,7 +646,7 @@ export function WorkOrderCase({
           </div>
         </div>
         {canonicalCase.stage !== "closed" ? <section className={styles.accountableHeader} aria-label="Next step">
-          <div><span>Next action</span><strong>{canonicalCase.primaryNextAction.label}</strong></div>
+          <div><span>Next action</span><strong>{control.nextAction}</strong></div>
           <div><span>Who acts next</span><strong>{canonicalCase.nextActionOwner}</strong></div>
           <div><span>Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
           <div><span>Escalates to</span><strong>{canonicalCase.escalationDestination}</strong></div>
@@ -674,11 +682,10 @@ export function WorkOrderCase({
           </div>
           <dl className={styles.caseMeta}>
             <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
-            <div><dt>Fulfillment</dt><dd><FactValue fact={assigned} /></dd></div>
+            <div><dt>Handled by</dt><dd><FactValue fact={assigned} /></dd></div>
 
-            {recordOrigin ? <div><dt>{recordOrigin.label}</dt><dd><FactValue fact={recordOrigin} /></dd></div> : null}
-            {!accountabilityOnly ? <div><dt>Authorization limit</dt><dd>{nte?.value ?? "Not set"}</dd></div> : null}
-            {!accountabilityOnly ? <div><dt>Classification</dt><dd>{classification?.value ?? "Deferred"}</dd></div> : null}
+
+
           </dl>
         </section>
       ) : (
@@ -691,11 +698,23 @@ export function WorkOrderCase({
 
       {activeView === "activity" ? <CaseStateDimensions model={canonicalCase} /> : null}
 
+      {emailHistory}
+      {costPrompts}
       {prices}
 
       {activeView === "overview" ? (
         <>
-          <WorkOrderVisitHistory section={visits} />
+          <WorkOrderQuickUpdate model={control} canAddNote={verification.permitted} canComplete={!visits?.table?.rows.length && !control.pendingApproval && control.status !== "awaiting_approval"} />
+          {verification.available && (verification.canDecide || verification.currentOutcome) ? <details className={styles.historyDisclosure}><summary>Confirm the result</summary><WorkOrderVerificationPanel model={verification} /></details> : null}
+          {control.permitted ? <ManualVendorResponseForm model={control} /> : null}
+          <div className={styles.inlineActions}>
+            {recording.canClassify ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=equipment#work-records`}>Link equipment</Link> : null}
+            {estimateComparison.permitted && !estimateComparison.workflowBlocked && ["choose_path", "direct_service", "bids"].includes(workspaceMode) ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=service&path=bids`}>Request a price</Link> : null}
+            {canAttachInvoice ? <Link className={styles.inlineAction} href={`/app/invoices/new?work=${control.workOrderId}`}>Attach invoice</Link> : null}
+            {recording.canRecordCost ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=cost#work-records`}>Add cost</Link> : null}
+          </div>
+          <RecordBlock section={{ ...timeline, id: "recent-updates", title: "Recent updates", description: undefined, timeline: timeline?.timeline?.slice(0, 4) ?? [], action: { href: `/app/work-orders/${control.workOrderId}?view=activity`, label: "Full history" } }} icon={<History size={18} aria-hidden="true" />} />
+          <details className={styles.historyDisclosure}><summary>More details</summary><div className={styles.historyDisclosureBody}>
           <CaseOverview
             control={control}
             recording={recording}
@@ -708,6 +727,7 @@ export function WorkOrderCase({
             accountabilityOnly={accountabilityOnly}
             canonicalCase={canonicalCase}
           />
+          </div></details>
           <div className={styles.inlineActions}><Link href={`/app/work-orders/${control.workOrderId}?view=visits`}>Visits & notes<ArrowRight size={16} aria-hidden="true" /></Link><Link href={`/app/work-orders/${control.workOrderId}?view=activity`}>Full history<ArrowRight size={16} aria-hidden="true" /></Link></div>
         </>
       ) : null}
@@ -787,11 +807,11 @@ export function WorkOrderCase({
         icon={<ReceiptText aria-hidden="true" size={20} />}
       >
         <div className={styles.costSummary}>
-          <div><small>Recorded work cost</small><FactValue fact={recordedCost} /></div>
+          <div><small>Recorded work cost</small>{recording.recordedCostLineCount ? <FactValue fact={recordedCost} /> : <strong>Not recorded</strong>}</div>
           <div><small>Authorization limit</small><FactValue fact={nte} /></div>
           <div><small>Invoice references</small><strong>{invoices?.table?.rows.length ?? 0} linked reference{invoices?.table?.rows.length === 1 ? "" : "s"}</strong></div>
         </div>
-        <div className={styles.panelRegion}><WorkOrderRecordingPanel model={recording} /></div>
+        <div className={styles.panelRegion}><WorkOrderRecordingPanel model={recording} section="cost" /></div>
         <RecordBlock section={costs} icon={<CircleDollarSign aria-hidden="true" size={18} />} keepAnchor={false} />
         <RecordBlock section={invoices} icon={<ReceiptText aria-hidden="true" size={18} />} />
       </WorkspaceSection> : null}
@@ -803,6 +823,7 @@ export function WorkOrderCase({
         description="Equipment and components are optional. Link them when useful for service history, repeat repairs, and replacement planning."
         icon={<PackageSearch aria-hidden="true" size={20} />}
       >
+        <WorkOrderRecordingPanel model={recording} section="equipment" />
         {connectedReview ? <WorkEquipmentContext model={connectedReview} /> : null}
         <div className={styles.equipmentSummary}>
           <div><span><Tags aria-hidden="true" size={16} />Service area</span><strong>{recording.currentCategory ? sentence(recording.currentCategory) : classification?.value ?? "Deferred"}</strong><small>Can be classified after diagnosis</small></div>
@@ -812,7 +833,7 @@ export function WorkOrderCase({
         </div>
         <div className={styles.inlineActions}>
           {selectedAsset ? <Link className={styles.inlineAction} href={`/app/equipment/${selectedAsset.value}#equipment-review`}>Open equipment history<ArrowRight aria-hidden="true" size={15} /></Link> : null}
-          {recording.canClassify ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=cost#work-records`}>{selectedAsset ? "Change linked equipment" : "Link equipment to this work order"}<ArrowRight aria-hidden="true" size={15} /></Link> : null}
+          {recording.canClassify ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=equipment#work-records`}>{selectedAsset ? "Change linked equipment" : "Link equipment to this work order"}<ArrowRight aria-hidden="true" size={15} /></Link> : null}
         </div>
         <div className={styles.panelRegion}><WorkOrderReplacementIntelligencePanel model={replacement} /></div>
       </WorkspaceSection> : null}

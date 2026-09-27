@@ -1,3 +1,4 @@
+import { masterDocuments } from "@/lib/ops/compliance-documents";
 import { offerResponseKey } from "@/lib/ops/optional-work-policy";
 import type { ServiceAuthorizationSnapshot } from "@/lib/ops/view-models";
 import {
@@ -1155,8 +1156,8 @@ const gateway: PublicOperationsGateway = {
         actor: { actorType: "vendor_link", actorName: responderName, organizationId: source.organizationId },
       });
       const messages: Record<VendorResponseKind, string> = {
-        accepted: `${source.organizationName} has been notified that ${source.vendor.name} accepted this service authorization.`,
-        declined: `${source.organizationName} has been notified that the service authorization was declined.`,
+        accepted: `${source.vendor.name} accepted this service authorization. The response is recorded on the work order.`,
+        declined: "The decline is recorded on the work order for the operator to review.",
         proposed_date: `${source.organizationName} received the proposed arrival time.`,
         question: `Your question was added to work order ${source.workOrderNumber} and sent to Facilities.`,
       };
@@ -2018,4 +2019,10 @@ export async function resolveVendorQuoteFile(token: string, proposalId: string, 
   const proposals = await runtime().repository.listEstimateProposalsForRequest(source.organizationId, source.id);
   if (!proposals.some((proposal) => proposal.id === proposalId && proposal.vendorId === source.vendorId)) return null;
   return (await runtime().repository.listFilesForEntity(source.organizationId, "estimate_proposal", proposalId, "vendor_shared")).find((file) => file.id === fileId) ?? null;
+}
+
+export async function resolveInspectionMasterFiles(token:string) {
+ const access=await resolveServiceAuthorization(token);if(!access)return [];
+ const inspection=await runtime().repository.inspectionForWork(access.view.organizationId,access.view.workOrderId);
+ return inspection&&inspection.workOrderId===access.view.workOrderId?masterDocuments(inspection):[];
 }

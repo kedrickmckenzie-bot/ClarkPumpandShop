@@ -196,6 +196,7 @@ export interface WorkOrderListRow {
   dueAt?: IsoDateTime;
   createdAt: IsoDateTime;
   visitCount: number;
+  recordedCostLineCount?: number;
   recordedCostMinor: number;
   currency: CurrencyCode;
   visitHoldPosture?: "complete_using_professional_judgment" | "look_and_report";

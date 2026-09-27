@@ -382,8 +382,8 @@ function DataTable({ table, selectedId, rowHref, selection, context, openRecord 
                 {selection ? <td className={styles.selectColumn}><input type="checkbox" name={selection.name} value={row.id} aria-label={`Select ${row.label}`} disabled={selection.isDisabled?.(row)} /></td> : null}
                 {table.columns.map((column, index) => {
                   const cell = row.cells.find((candidate) => candidate.key === column.key);
-                  const cellLink = openRecord ? undefined : cell?.link;
-                  const href = openRecord ? row.href : cellLink?.href ?? rowHref?.(row) ?? row.href;
+                  const cellLink = openRecord && !cell?.link?.href.startsWith(row.href) ? undefined : cell?.link;
+                  const href = cellLink?.href ?? (openRecord ? row.href : rowHref?.(row) ?? row.href);
                   return (
                     <td data-column={column.key} data-label={column.label} className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
                       <Link href={openRecord || cellLink || !rowHref ? workspaceStartHref(href) : href} aria-current={!cellLink && row.id === selectedId ? "true" : undefined} aria-label={cellLink ? `${cellLink.label}: ${cell?.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>

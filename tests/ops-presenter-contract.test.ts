@@ -671,3 +671,19 @@ it("keeps approved replacement amount and state in the overview", () => {
   expect(model.spotlight?.link.href).toContain("work=wo-northline-115");
   expect(buildEstimateComparisonModel(fixture, executiveSession(), "wo-northline-115").replacementApproved).toBe(true);
 });
+
+it("spending cost coverage opens the exact missing-cost cohort", async () => {
+  const fixture = buildNorthlinePresentationFixture();
+  const model = buildProgramModel(fixture, executiveSession(), "spend", { store: "store-northline-104", period: "12m" });
+  const metric = model.metrics.find(item => item.id === "cost-coverage")!;
+  const query = new URL(metric.link!.href, "https://example.test").searchParams;
+  const repository = (await import("@/lib/ops/fixture-repository")).createOpsFixtureRepository(fixture);
+  const missing = await repository.listWorkOrders({ organizationId: NORTHLINE_ORGANIZATION_ID }, {
+    storeId: query.get("store")!, hasCost: false, currency: "USD", costFrom: query.get("costFrom")!, costTo: query.get("costTo")!,
+    ...(await import("@/lib/ops/work-created-range")).workCreatedRange(query.get("createdFrom")!, query.get("createdThrough")!), limit: 100,
+  });
+  const [recorded, total] = metric.value.split(" of ").map(Number);
+  expect(total).toBeGreaterThan(0);
+  expect(missing.items).toHaveLength(total - recorded);
+  expect(missing.items.every(row => row.recordedCostLineCount === 0)).toBe(true);
+});

@@ -1,3 +1,6 @@
+import { readPrivateUpload } from "@/components/ops-public/server-file-store";
+import { deliverInspectionEmail } from "./compliance-delivery";
+import { deliverRoutineReminder } from "./routine-follow-ups";
 import type { OpsRepository } from "./repository";
 import { vendorFacingScope } from "./public-visibility";
 import type { NotificationEventKey, NotificationRecipient, NotificationRecipientRole, OutboxMessage, ServiceRun, Store, WorkOrder } from "./types";
@@ -9,6 +12,7 @@ export interface TransactionalEmail {
   html: string;
   text: string;
   idempotencyKey: string;
+  attachments?: Array<{filename:string;content:string;contentType:string}>;
   replyTo?: string;
 }
 
@@ -81,6 +85,7 @@ export function createResendEmailProvider(input: {
           html: email.html,
           text: email.text,
           reply_to: email.replyTo ?? input.replyTo,
+          attachments: email.attachments?.map(a=>({filename:a.filename,content:a.content,content_type:a.contentType})),
         }),
       });
       const body = await response.text();
@@ -325,6 +330,8 @@ export function createNotificationEmailTransport(input: {
   return {
     name: input.provider ? `email:${input.provider.name}` : "email:not-configured",
     async deliver(message) {
+      if (message.topic.startsWith("ops.compliance.")) { await deliverInspectionEmail({...input,readAttachment:readPrivateUpload},message); return; }
+      if (message.topic === "ops.routine.reminder") { await deliverRoutineReminder(input,message); return; }
       const eventKey = notificationEventForTopic(message.topic);
       if (!eventKey) {
         sink(JSON.stringify({ channel: "ops.outbox.delivery", transport: "operational-log", messageId: message.id, topic: message.topic, notification: "not_routed" }));

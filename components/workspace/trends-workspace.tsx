@@ -379,9 +379,9 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
 
       {model.activeView === "overview" ? <>
         <ExecutiveResults model={model} />
+        <section className={styles.contextMetrics} aria-label="Data coverage">{coverage ? <SummaryCard metric={coverage} /> : null}</section>
         <ComparisonChart model={model} />
         {model.metricId === "recorded_cost" ? <DriverSnapshot model={model} /> : null}
-        <section className={styles.contextMetrics} aria-label="Data coverage">{coverage ? <SummaryCard metric={coverage} /> : null}</section>
         <RelatedMeasures model={model} />
       </> : null}
       {model.activeView === "drivers" ? <DriversTable model={model} /> : null}

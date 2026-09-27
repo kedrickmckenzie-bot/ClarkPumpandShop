@@ -56,7 +56,7 @@ function ClassificationForm({ model }: { model: WorkOrderRecordingViewModel }) {
             <option value="">Leave unclassified</option>
             {model.categories.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
           </select>
-          <small>Use the company-wide service language. Classification can remain deferred.</small>
+          <small>You can leave this blank.</small>
         </label>
         <label className={styles.field} htmlFor={`record-asset-${model.workOrderId}`}>
           <span>Equipment <small>Optional</small></span>
@@ -73,7 +73,7 @@ function ClassificationForm({ model }: { model: WorkOrderRecordingViewModel }) {
           <option value="">No component linked</option>
           {componentOptions.map((component) => <option value={component.value} key={component.value}>{component.label}{component.description ? ` - ${component.description}` : ""}</option>)}
         </select>
-        <small>Component depth is useful for repeat repairs and warranties, but never required.</small>
+        <small>Select a component if known.</small>
       </label>
       <label className={styles.field} htmlFor={`record-classification-note-${model.workOrderId}`}>
         <span>Classification note <em>Required</em></span>
@@ -113,23 +113,23 @@ function CostForm({ model }: { model: WorkOrderRecordingViewModel }) {
           <input id={`record-cost-description-${model.workOrderId}`} name="description" required placeholder="Diagnostic labor, replacement motor, travel…" />
         </label>
       </div>
-      <div className={styles.controlWarning}><CircleDollarSign aria-hidden="true" size={18} /><p>This is a recorded work-cost fact, not an invoice, approval, or payment. Invoice safeguards remain optional and separate.</p></div>
+      <div className={styles.controlWarning}><CircleDollarSign aria-hidden="true" size={18} /><p>Recorded work cost. Attach invoices separately when available.</p></div>
       <ErrorMessage message={mutation.state.error} />
       <div className={styles.formFooter}><span className={styles.formMeta}>{model.recordedCostLabel} across {model.recordedCostLineCount} existing source line{model.recordedCostLineCount === 1 ? "" : "s"}</span><button className={styles.primaryButton} type="submit" disabled={mutation.state.pending}>{mutation.state.pending ? "Recording…" : "Add recorded cost"}<FilePlus2 aria-hidden="true" size={17} /></button></div>
     </form>
   );
 }
 
-export function WorkOrderRecordingPanel({ model }: { model: WorkOrderRecordingViewModel }) {
+export function WorkOrderRecordingPanel({ model, section }: { model: WorkOrderRecordingViewModel; section?: "cost" | "equipment" }) {
   if (!model.available || (!model.canClassify && !model.canRecordCost)) return null;
   return (
     <section className={styles.controlPanel} id="work-records" aria-labelledby="work-records-heading">
       <div className={styles.controlHeading}>
         <span><FilePlus2 aria-hidden="true" size={19} /></span>
-        <div><h2 id="work-records-heading">Record the facts that power visibility</h2><p>Classify work after diagnosis and add entered cost as separate source facts. Dashboards and lifecycle drilldowns derive from these records.</p></div>
+        <div><h2 id="work-records-heading">Optional details</h2><p>Add details as they become available.</p></div>
       </div>
-      {model.canClassify ? <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`}><summary className={styles.subControlHeading}><Boxes aria-hidden="true" size={18} /><div><h3>Classify after intake</h3><p>Service area, equipment, and component remain optional until the facts are known.</p></div></summary><ClassificationForm model={model} /></details> : null}
-      {model.canRecordCost ? <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`}><summary className={styles.subControlHeading}><CircleDollarSign aria-hidden="true" size={18} /><div><h3>Add recorded work cost</h3><p>{model.recordedCostLabel} across {model.recordedCostLineCount} existing source line{model.recordedCostLineCount === 1 ? "" : "s"}; invoices remain optional.</p></div></summary><CostForm model={model} /></details> : null}
+      {model.canClassify && section !== "cost" ? <details open={section === "equipment"} className={`${styles.subControlPanel} ${styles.controlDisclosure}`}><summary className={styles.subControlHeading}><Boxes aria-hidden="true" size={18} /><div><h3>Link equipment</h3><p>Equipment and component are optional.</p></div></summary><ClassificationForm model={model} /></details> : null}
+      {model.canRecordCost && section !== "equipment" ? <details open={section === "cost"} className={`${styles.subControlPanel} ${styles.controlDisclosure}`}><summary className={styles.subControlHeading}><CircleDollarSign aria-hidden="true" size={18} /><div><h3>Add recorded work cost</h3><p>{model.recordedCostLabel} across {model.recordedCostLineCount} existing source line{model.recordedCostLineCount === 1 ? "" : "s"}; invoices remain optional.</p></div></summary><CostForm model={model} /></details> : null}
     </section>
   );
 }

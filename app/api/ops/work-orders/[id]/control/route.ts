@@ -126,6 +126,19 @@ export async function POST(
 
     const formData = await request.formData();
     const operation = formText(formData, "operation", { max: 30 }) || "update";
+    if (operation === "manual_close") {
+      const source = formText(formData, "completionSource", { required: true, max: 20 });
+      const expectedVersion = Number(formText(formData, "expectedVersion", { required: true, max: 12 }));
+      if (!["phone", "email", "in_person"].includes(source) || !Number.isSafeInteger(expectedVersion) || formData.get("resultConfirmed") !== "on") throw new OpsDomainError("VALIDATION", "Confirm the result and how it was checked.");
+      await updateWorkOrderControl({ repository: context.repository }, {
+        organizationId: context.session.organizationId, workOrderId,
+        expectedStatus: formText(formData, "expectedStatus", { required: true, max: 40 }) as WorkOrderStatus,
+        expectedVersion, status: "closed",
+        manualCompletion: { source: source as "phone" | "email" | "in_person", confirmedBy: formText(formData, "confirmedBy", { required: true, max: 200 }) },
+        note: formText(formData, "note", { required: true, max: 2_000 }), actor: context.actor,
+      });
+      return relativeRedirect303(`/app/work-orders/${encodeURIComponent(workOrderId)}?updated=control#recent-updates`);
+    }
     if (operation === "vendor_response") {
       await recordOutsideResponse(context, workOrderId, formData);
       return relativeRedirect303(
@@ -216,6 +229,8 @@ export async function POST(
     }
 
     const rawDueAt = formText(formData, "dueAt", { max: 40 });
+    const rawVersion = formText(formData, "expectedVersion", { max: 12 });
+    if (rawVersion && !Number.isSafeInteger(Number(rawVersion))) throw new OpsDomainError("VALIDATION", "Invalid work version.");
     const [store, organization] = rawDueAt ? await Promise.all([
       context.repository.getStore(context.session.organizationId, workOrder.storeId),
       context.repository.getOrganization(context.session.organizationId),
@@ -226,6 +241,7 @@ export async function POST(
         organizationId: context.session.organizationId,
         workOrderId,
         expectedStatus: expectedStatus as WorkOrderStatus,
+        expectedVersion: rawVersion ? Number(rawVersion) : undefined,
         status: status as WorkOrderStatus,
         priority: priority as WorkOrderPriority,
         accountableParty: formText(formData, "accountableParty", { max: 200 }) || undefined,

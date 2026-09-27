@@ -1251,7 +1251,7 @@ export const opsEntityFiles = pgTable("ops_entity_files", {
     columns: [table.organizationId, table.fileId],
     foreignColumns: [opsFiles.organizationId, opsFiles.id],
   }),
-  check("chk_ops_entity_files_type", sql`${table.entityType} IN ('request', 'work_order', 'visit', 'asset', 'invoice_reference', 'invoice', 'estimate_proposal')`),
+  check("chk_ops_entity_files_type", sql`${table.entityType} IN ('inbound_email', 'request', 'work_order', 'visit', 'asset', 'invoice_reference', 'invoice', 'estimate_proposal')`),
   check("chk_ops_entity_files_purpose", sql`${table.purpose} IN ('photo', 'service_document', 'invoice', 'warranty', 'other')`),
   check("chk_ops_entity_files_visibility", sql`${table.visibility} IN ('internal', 'vendor_shared', 'public_receipt')`),
 ]);
@@ -2061,4 +2061,49 @@ export const opsAccountingInvoiceSources = pgTable("ops_accounting_invoice_sourc
 }, (table) => [
   uniqueIndex("uidx_ops_accounting_source_identity").on(table.organizationId, table.connectionKey, table.companyKey, table.externalInvoiceId),
   index("idx_ops_accounting_source_updated").on(table.organizationId, table.updatedAt, table.id),
+]);
+
+export const opsInboundEmails = pgTable("ops_inbound_emails", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(),
+  messageKey: text("message_key").notNull(), sender: text("sender").notNull(), subject: text("subject").notNull(),
+  body: text("body").notNull(), reportedDate: text("reported_date"), receivedAt: text("received_at").notNull(),
+  status: text("status").notNull(), workOrderId: text("work_order_id"), requestId: text("request_id"),
+}, t => [
+  uniqueIndex("idx_ops_email_org_key").on(t.organizationId,t.messageKey),
+  index("idx_ops_email_org_status_date").on(t.organizationId,t.status,t.receivedAt,t.id),
+  index("idx_ops_email_org_work_date").on(t.organizationId,t.workOrderId,t.receivedAt,t.id),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
+  foreignKey({columns:[t.organizationId,t.requestId],foreignColumns:[opsRequests.organizationId,opsRequests.id]}),
+  check("chk_ops_email_status",sql`${t.status} IN ('needs_review','linked','dismissed')`),
+]);
+export const opsFollowUpPreferences = pgTable("ops_follow_up_preferences", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), cadenceHours: integer("cadence_hours").notNull(), createdAt: text("created_at").notNull(),
+}, t => [index("idx_ops_follow_up_preference_org_date").on(t.organizationId,t.createdAt,t.id), foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}), check("chk_ops_follow_up_cadence",sql`${t.cadenceHours} IN (0,24,48,168)`) ]);
+
+export const opsComplianceSchedules = pgTable("ops_compliance_schedules", {
+ masterDocumentsJson:text("master_documents_json"),
+ id:text("id").primaryKey(), organizationId:text("organization_id").notNull(), storeId:text("store_id").notNull(),
+ name:text("name").notNull(),instructions:text("instructions").notNull(),requirementSource:text("requirement_source").notNull(),evidenceLabel:text("evidence_label").notNull(),assetId:text("asset_id"),kind:text("kind").notNull(),escalationDays:integer("escalation_days").notNull(),escalationTo:text("escalation_to").notNull(),firstDueDate:text("first_due_date").notNull(),
+ intervalUnit:text("interval_unit").notNull(),intervalCount:integer("interval_count").notNull(),leadDays:integer("lead_days").notNull(),
+ handler:text("handler").notNull(),membershipId:text("membership_id"),vendorId:text("vendor_id"),evidenceRequired:integer("evidence_required").notNull(),
+ status:text("status").notNull(),createdAt:text("created_at").notNull(),
+},t=>[
+ uniqueIndex("idx_ops_compliance_org_id").on(t.organizationId,t.id),index("idx_ops_compliance_org_store").on(t.organizationId,t.storeId,t.id),
+ foreignKey({columns:[t.organizationId,t.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),
+ foreignKey({columns:[t.organizationId,t.vendorId],foreignColumns:[opsVendors.organizationId,opsVendors.id]}),
+ check("chk_ops_compliance_status",sql`${t.status} IN ('active','paused')`),
+ check("chk_ops_compliance_handler",sql`(${t.handler} = 'vendor' AND ${t.vendorId} IS NOT NULL AND ${t.membershipId} IS NULL) OR (${t.handler} = 'internal' AND ${t.membershipId} IS NOT NULL AND ${t.vendorId} IS NULL)`),
+ check("chk_ops_compliance_interval",sql`${t.intervalUnit} IN ('once','days','months') AND ${t.intervalCount} BETWEEN 1 AND 365 AND ${t.leadDays} BETWEEN 0 AND 90 AND ${t.evidenceRequired} IN (0,1)`)
+]);
+export const opsInspections = pgTable("ops_inspections", {
+ masterDocumentsJson:text("master_documents_json"),
+ id:text("id").primaryKey(),organizationId:text("organization_id").notNull(),scheduleId:text("schedule_id").notNull(),storeId:text("store_id").notNull(),dueDate:text("due_date").notNull(),
+ status:text("status").notNull(),workOrderId:text("work_order_id"),correctiveWorkOrderId:text("corrective_work_order_id"),documentExpiresOn:text("document_expires_on"),completedAt:text("completed_at"),resultNote:text("result_note"),version:integer("version").notNull(),createdAt:text("created_at").notNull(),
+},t=>[
+ uniqueIndex("idx_ops_inspection_cycle").on(t.organizationId,t.scheduleId,t.dueDate),index("idx_ops_inspection_due").on(t.organizationId,t.storeId,t.status,t.dueDate,t.id),
+ foreignKey({columns:[t.organizationId,t.scheduleId],foreignColumns:[opsComplianceSchedules.organizationId,opsComplianceSchedules.id]}),
+ foreignKey({columns:[t.organizationId,t.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),
+ foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
+ check("chk_ops_inspection_status",sql`${t.status} IN ('pending','performed','passed','action_needed')`)
 ]);

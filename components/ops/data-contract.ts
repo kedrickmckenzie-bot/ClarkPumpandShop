@@ -537,6 +537,10 @@ export interface ListPageViewModel {
 }
 
 export interface DashboardPageViewModel {
+  equipmentIssues?: {
+    period: string; currency: string; totalCount: number; href: string;
+    rows: Array<{ id: string; name: string; assetTag: string; storeLabel: string; issueCount: number; latestIssue: string; cost: string; coverage: string; href: string }>;
+  };
   state: DataState;
   page: PageContext;
   layout?: "executive" | "finance" | "operations" | "regional" | "store";

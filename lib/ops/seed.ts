@@ -125,6 +125,9 @@ export function buildOpsSeedStatements(fixture: OpsFixture): OpsStatement[] {
     }
   }
   push("ops_work_prices", (fixture.workPrices ?? []).map(row => ({ id:row.id, organization_id:row.organizationId, work_order_id:row.workOrderId, store_id:row.storeId, asset_id:row.assetId, component_id:row.componentId, profile_id:row.profileId, profile_fingerprint:row.profileFingerprint, vendor_id:row.vendorId, kind:row.kind, scope_kind:row.scopeKind, scope:row.scope, amount_minor:row.amount.amountMinor, currency:row.amount.currency, recorded_at:row.recordedAt, recorded_by:row.recordedBy })));
+  const columns = (row:object) => Object.fromEntries(Object.entries(row).map(([key,value])=>[key.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`),value]));
+  push("ops_compliance_schedules",(fixture.complianceSchedules??[]).map(columns));
+  push("ops_inspections",(fixture.inspections??[]).map(columns));
   return statements;
 }
 

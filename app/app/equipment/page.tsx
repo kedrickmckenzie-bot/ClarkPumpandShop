@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { roleCan } from "@/components/ops/role-policy";
-import { ProgramView } from "@/components/ops/views";
-import { loadProgramModel } from "../_data/operator-loader";
+import { ProgramView, ListView } from "@/components/ops/views";
+import { loadProgramModel, loadEquipmentIssueRanking } from "../_data/operator-loader";
 import { loadOperatorSession } from "../_data/operator-loader";
 
 export const metadata: Metadata = { title: "Equipment" };
 type Query = Record<string, string | string[] | undefined>;
 export default async function EquipmentPage({ searchParams }: { searchParams: Promise<Query> }) {
   const query = await searchParams;
+  if ((Array.isArray(query.view) ? query.view[0] : query.view) === "issues") return <ListView model={await loadEquipmentIssueRanking(query)} />;
   const [model, session] = await Promise.all([loadProgramModel("equipment", query), loadOperatorSession()]);
   const store = Array.isArray(query.store) ? query.store[0] : query.store;
   if (roleCan(session, "setup_equipment")) {

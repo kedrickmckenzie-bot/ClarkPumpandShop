@@ -83,7 +83,7 @@ describe("summary-first enterprise records", () => {
     expect(markup).not.toContain("Open any tile");
   });
 
-  it("keeps review details off the overview while preserving one count that opens the full queue", () => {
+  it("shows actionable review rows and preserves the full queue link", () => {
     const model: DashboardPageViewModel = {
       state: { kind: "ready" },
       layout: "operations",
@@ -125,7 +125,8 @@ describe("summary-first enterprise records", () => {
     expect(markup).toContain("Items to review");
     expect(markup).toContain("12");
     expect(markup).toContain('href="/app/action-center"');
-    expect(markup).not.toContain("Detailed exception that belongs in the review queue");
+    expect(markup).toContain("Detailed exception that belongs in the review queue");
+    expect(markup).toContain('href="/app/action-center/detail"');
     expect(markup).not.toContain("Action queue summary");
   });
 });

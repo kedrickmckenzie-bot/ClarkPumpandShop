@@ -1,0 +1,31 @@
+.workspace { display:grid; gap:20px; color:#1e293b; font-size:16px; max-width:1200px; margin:auto; }
+.workspace h1 { font-size:30px; margin:12px 0; }
+.workspace h2 { font-size:19px; margin:0 0 8px; }
+.workspace p { margin:8px 0; color:#475569; }
+.workspace a { color:#2457d6; }
+.panel { background:#fff; border:1px solid #dbe1e9; border-radius:6px; padding:22px; }
+.panel summary { cursor:pointer; font-weight:600; padding:8px 0; }
+.bar,.bar nav { display:flex; gap:20px; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+.bar span, .workspace small { color:#64748b; font-size:14px; }
+.form { display:grid; gap:16px; margin-top:16px; max-width:720px; }
+.form label,.routing label { display:grid; gap:6px; }
+.form input,.form textarea,.routing input,.workspace select { padding:10px 12px; border:1px solid #94a3b8; border-radius:4px; font:inherit; min-width:0; }
+.workspace button { padding:10px 16px; background:#2457d6; color:#fff; border:0; border-radius:4px; cursor:pointer; font:inherit; width:fit-content; }
+.routing { display:flex; align-items:end; gap:12px; flex-wrap:wrap; margin-top:18px; }
+.body { white-space:pre-wrap; overflow-wrap:anywhere; max-height:400px; overflow:auto; }
+.prompts { display:grid; gap:0; border:1px solid #dbe1e9; background:#fff; border-radius:6px; margin:16px 0; }
+.prompts h2 { margin:0; padding:16px 20px 8px; font-size:18px; }
+.prompt { padding:14px 20px; border-top:1px solid #eef1f5; display:flex; gap:16px; align-items:center; justify-content:space-between; }
+.prompt p { margin:4px 0 0; color:#64748b; font-size:14px; }
+.prompt a { color:#2457d6; white-space:nowrap; }
+.table { width:100%; border-collapse:collapse; }
+.table th,.table td { text-align:left; padding:12px; border-bottom:1px solid #e2e8f0; vertical-align:top; }
+.scroll { overflow-x:auto; }
+@media(max-width:600px) { .panel{padding:16px} .routing{display:grid} .prompt{align-items:start;flex-direction:column} }
+
+.compact { gap:10px; margin:16px; max-width:none; }
+.compact .routing { margin-top:0; }
+
+.workspace { width:100%; box-sizing:border-box; }
+.workspace.compact { width:auto; }
+.workspace section[id],.workspace[id] { scroll-margin-top:170px; }

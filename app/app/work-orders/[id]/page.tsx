@@ -1,3 +1,6 @@
+import { WorkInspectionContext } from "@/components/workspace/work-inspection-context";
+import { WorkEmailHistory } from "@/components/workspace/work-email-history";
+import { WorkCostPrompts } from "@/components/workspace/work-cost-prompts";
 import { safeDecisionReturn } from "@/lib/ops/review-navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -118,6 +121,8 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     ) : null}
     {returnDecision ? <Link href={returnDecision}>← Back to equipment review</Link> : null}
     <WorkOrderCase
+      emailHistory={["overview","activity"].includes(view) ? <><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}
+      costPrompts={["overview", "service", "cost"].includes(view) ? <WorkCostPrompts workOrderId={id}/> : undefined}
       prices={!accountabilityOnly && view === "cost" ? <WorkPricePanel workOrderId={id} /> : undefined}
       connectedReview={connectedReview}
       model={model}
@@ -132,6 +137,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       heldWork={heldWork}
       vendorResponse={responseActions ? { ...responseActions, workOrderId: id } : undefined}
       activeView={view}
+      canAttachInvoice={!accountabilityOnly && control.status !== "cancelled" && ["executive", "facilities", "finance"].includes(session.role) && session.storeIds === undefined && session.regionIds === undefined && (session.accessMode === "preview" || Boolean(session.permissions?.length) && session.permissions!.every(p => ["ops:*", "ops:write", "ops:read_write", "ops:store_manage"].includes(p)))}
       activeServicePath={requestedServicePath}
       edition={session.demoEdition}
       updated={updated}

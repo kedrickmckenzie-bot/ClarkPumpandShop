@@ -344,6 +344,27 @@
       "when": 1790363677618,
       "tag": "0048_legal_black_bird",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1790507136922,
+      "tag": "0049_sudden_nighthawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790510353405,
+      "tag": "0050_legal_onslaught",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1790512972146,
+      "tag": "0051_busy_groot",
+      "breakpoints": true
     }
   ]
 }

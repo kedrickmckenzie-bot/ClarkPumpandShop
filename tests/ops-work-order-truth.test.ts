@@ -136,14 +136,14 @@ describe("work-order control truth boundary", () => {
     expect(allowedWorkOrderControlTransitions("closed")).toEqual([]);
   });
 
-  it("keeps priority, owner, next action, due date, and escalation editable without creating service evidence", async () => {
+  it("updates timing and next action while preserving the assigned party and service evidence", async () => {
     const test = harness();
     const before = test.repository.snapshot();
 
     await updateWorkOrderControl(test.services, {
       ...controlInput("issued", "issued"),
       priority: "planned",
-      accountableParty: "Regional facilities lead",
+      accountableParty: before.workOrders.find(work => work.id === PUBLIC_WORK_ORDER_ID)!.accountableParty,
       nextAction: "Confirm revised access window",
       dueAt: "2026-08-20T16:00:00.000Z",
       escalationTo: "Facilities director",
@@ -154,7 +154,7 @@ describe("work-order control truth boundary", () => {
     expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, PUBLIC_WORK_ORDER_ID)).toMatchObject({
       status: "issued",
       priority: "planned",
-      accountableParty: "Regional facilities lead",
+      accountableParty: before.workOrders.find(work => work.id === PUBLIC_WORK_ORDER_ID)!.accountableParty,
       nextAction: "Confirm revised access window",
       dueAt: "2026-08-20T16:00:00.000Z",
       escalationTo: "Facilities director",
@@ -167,6 +167,13 @@ describe("work-order control truth boundary", () => {
       aggregateId: PUBLIC_WORK_ORDER_ID,
       eventType: "work_order.control_updated",
     }));
+  });
+
+  it("rejects relabeling an assigned vendor through the generic editor", async () => {
+    const test = harness();
+    const before = test.repository.snapshot();
+    await expect(updateWorkOrderControl(test.services, { ...controlInput("issued", "issued"), accountableParty: "Different provider" })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(test.repository.snapshot()).toEqual(before);
   });
 
   it.each([

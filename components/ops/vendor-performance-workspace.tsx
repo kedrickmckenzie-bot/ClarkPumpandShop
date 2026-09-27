@@ -1,3 +1,4 @@
+import { VendorServiceReport } from "@/components/workspace/vendor-service-report";
 import { LiveSearchForm } from "./live-search-form";
 import Link from "next/link";
 import { WorkReviewButton } from "@/components/workspace/work-review";
@@ -444,6 +445,8 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
           <span className={styles.sourcePrompt}>Open cost evidence<ArrowRight aria-hidden="true" size={14} /></span>
         </Link>
       </section>
+
+      {model.serviceReport ? <VendorServiceReport model={model.serviceReport} vendorId={vendor.id}/> : null}
 
       <section className={styles.methodBanner}>
         <span><ShieldCheck aria-hidden="true" size={21} /></span>

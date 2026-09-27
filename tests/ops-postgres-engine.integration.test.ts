@@ -1,3 +1,5 @@
+import { complianceRegression } from "./helpers/compliance-regression";
+import { communicationRegression } from "./helpers/communication-regression";
 import { addEquipmentWarranty } from "@/lib/ops/warranty-commands";
 import { recordWorkOrderCost } from "@/lib/ops/work-recording-commands";
 import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
@@ -864,5 +866,9 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     await recordWorkOrderCost(services, { organizationId, actor, workOrderId: work.id, kind: "labor", description: "Labor", amountMinor: 10001, currency: "USD", serviceDate: "2026-08-20" });
     expect((await repository.listWorkflowTasksForWorkOrder(organizationId, work.id)).some(t => t.title === "Review costs above internal flag")).toBe(true);
   });
+
+  it("persists email routing and stale-safe routine follow-ups", async () => { const repository = createOpsPostgresRepository(pool); await seedOpsRepository(repository,buildNorthlinePresentationFixture()); await communicationRegression(repository); }, 60000);
+
+  it("persists custom inspection schedules, evidence and linked corrective work", async()=>{const repository=createOpsPostgresRepository(pool);await seedOpsRepository(repository,buildNorthlinePresentationFixture());await complianceRegression(repository);},60000);
 
 });

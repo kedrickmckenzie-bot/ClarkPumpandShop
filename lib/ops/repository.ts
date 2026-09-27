@@ -110,6 +110,7 @@ export interface OrganizationScope {
 }
 
 export interface WorkOrderListQuery extends PageRequest {
+  dueBefore?: IsoDateTime;
   stage?: string;
   search?: string;
   statuses?: readonly string[];
@@ -210,6 +211,20 @@ export interface OpsRepository {
   getStore(organizationId: OpsId, storeId: OpsId): Promise<Store | null>;
   getVendor(organizationId: OpsId, vendorId: OpsId): Promise<Vendor | null>;
   listVendorSpecialties(organizationId: OpsId, vendorId: OpsId): Promise<VendorSpecialty[]>;
+  inspectionHistory(org:string,id:string):Promise<Array<{id:string;eventType:string;actorName:string;occurredAt:string;payloadJson:string}>>;
+  inspectionDelivery(org:string,id:string):Promise<Array<{id:string;topic:string;status:string}>>;
+  listComplianceOwners(org:string):Promise<Array<{id:string;name:string}>>;
+  getComplianceSchedule(org:string,id:string):Promise<import("./compliance-types").ComplianceSchedule|null>;
+  listComplianceSchedules(scope:OrganizationScope,offset?:number):Promise<import("./compliance-types").ComplianceSchedule[]>;
+  listComplianceOrganizations():Promise<string[]>;
+  getInspection(org:string,id:string):Promise<import("./compliance-types").Inspection|null>;
+  inspectionForWork(org:string,workId:string):Promise<import("./compliance-types").Inspection|null>;
+  latestInspection(org:string,scheduleId:string):Promise<import("./compliance-types").Inspection|null>;
+  queryInspections(scope:OrganizationScope,query:import("./compliance-types").InspectionQuery):Promise<import("./compliance-types").InspectionPage>;
+  getInboundEmail(organizationId: OpsId, id: OpsId): Promise<import("./types").InboundEmail | null>;
+  listInboundEmails(organizationId: OpsId, query: { offset?: number; status?: string; workOrderId?: string }): Promise<import("./types").InboundEmail[]>;
+  getFollowUpPreference(organizationId: OpsId): Promise<import("./types").FollowUpPreference | null>;
+  listFollowUpOrganizations(): Promise<string[]>;
   listNotificationRules(organizationId: OpsId): Promise<NotificationRule[]>;
   upsertNotificationRule(input: { organizationId: OpsId; id: OpsId; eventKey: NotificationEventKey; emailEnabled: boolean; recipientRole: NotificationRecipientRole; updatedByMembershipId?: OpsId; occurredAt: IsoDateTime }): Promise<void>;
   listNotificationRecipients(
@@ -355,6 +370,7 @@ export interface OpsRepository {
   // Manager-first, server-scoped read models.
   listBriefSources(scope: OrganizationScope, period: import("./owner-brief-query").BriefPeriod, query: import("./owner-brief-query").BriefSourceQuery): Promise<import("./owner-brief-query").BriefSourcePage>;
   listRecordIntegrity(scope: OrganizationScope, asOf: string, query: import("./record-integrity-query").IntegrityQuery): Promise<import("./record-integrity-query").IntegrityPage>;
+  listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query?: PageRequest): Promise<import("./equipment-issues").EquipmentIssuePage>;
   getDashboardContext(scope: OrganizationScope): Promise<import("./dashboard-context").DashboardContext>;
   getDashboardLifecycle(scope: OrganizationScope, asOf: string): Promise<import("./lifecycle-summary").DashboardLifecycleSummary>;
   getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow): Promise<import("./dashboard-query").DashboardActivitySummary>;

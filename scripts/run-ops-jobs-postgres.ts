@@ -1,3 +1,5 @@
+import { runInspectionCycle } from "../lib/ops/compliance";
+import { runRoutineFollowUpCycle } from "../lib/ops/routine-follow-ups";
 import { createOpsPostgresRepository } from "../lib/ops/postgres-repository";
 import { runOutboxDeliveryCycle } from "../lib/ops/outbox-delivery";
 import { createNotificationEmailTransport, emailRuntimeFromEnvironment } from "../lib/ops/email-delivery";
@@ -19,8 +21,10 @@ async function main() {
   const slaEscalation = await runSlaEscalationCycle({ repository });
   const pmRecurrence = await runPmRecurrenceCycle({ repository });
   const vendorCompliance = await runVendorComplianceCycle({ repository });
+  const inspections = await runInspectionCycle({ repository });
+  const routineFollowUps = await runRoutineFollowUpCycle({ repository });
   const outbox = await runOutboxDeliveryCycle({ repository }, transport);
-  console.log(JSON.stringify({ channel: "ops.jobs.cycle", runtime: "postgres", transport: transport.name, outbox, slaEscalation, pmRecurrence, vendorCompliance }));
+  console.log(JSON.stringify({ channel: "ops.jobs.cycle", runtime: "postgres", transport: transport.name, outbox, inspections, slaEscalation, pmRecurrence, vendorCompliance, routineFollowUps }));
 }
 
 try {

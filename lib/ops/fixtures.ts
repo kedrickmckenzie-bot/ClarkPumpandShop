@@ -2086,6 +2086,15 @@ function buildFixture(): OpsFixture {
 }
 
 const presentationFixture = buildFixture();
+// Fictional example schedules; these are not jurisdiction-specific legal requirements.
+presentationFixture.complianceSchedules = [
+ ["extinguisher","Fire extinguisher check","2026-09-24","store-northline-104","internal",undefined,"Inspection checklist / photos"],
+ ["fuel","Fuel-system inspection","2026-10-14","store-northline-105","vendor","vendor-northline-pump-pro","Test report"],
+ ["food","Food-service inspection","2026-09-25","store-northline-108","internal",undefined,"Inspection report"],
+ ["permit","Permit renewal review","2026-10-20","store-northline-112","internal",undefined,"Renewal confirmation"],
+ ["safety","Site safety inspection","2026-09-26","store-northline-114","internal",undefined,"Photos and findings"],
+].map(([key,name,date,storeId,handler,,evidenceLabel])=>({id:`compliance-demo-${key}`,organizationId:NORTHLINE_ORGANIZATION_ID,storeId:storeId!,name:name!,instructions:"Example inspection schedule. Confirm the applicable requirements with your responsible team.",requirementSource:"Fictional company schedule",evidenceLabel:evidenceLabel!,kind:key==="permit"?"permit" as const:"inspection" as const,firstDueDate:date!,intervalUnit:"months" as const,intervalCount:key==="extinguisher"?1:12,leadDays:30,handler:handler as "internal"|"vendor",vendorId:handler==="vendor"?presentationFixture.vendors.find(v=>v.name.includes("PumpPro"))!.id:undefined,membershipId:handler==="internal"?"membership-northline-facilities":undefined,evidenceRequired:1,escalationDays:3,escalationTo:"Facilities coordinator",status:"active" as const,createdAt:"2026-09-01T12:00:00.000Z"}));
+presentationFixture.inspections = presentationFixture.complianceSchedules.map((s,index)=>({id:`inspection-${s.id}-${s.firstDueDate}`,organizationId:s.organizationId,scheduleId:s.id,storeId:s.storeId,dueDate:s.firstDueDate,status:index===2?"performed" as const:index===4?"action_needed" as const:"pending" as const,completedAt:index===2?"2026-09-25":index===4?"2026-09-26":undefined,resultNote:index===2?"Inspection performed; report requested.":index===4?"Damaged exit light found. Corrective work needs assignment.":undefined,version:0,createdAt:s.createdAt}));
 attestDemoRecordingCoverage(presentationFixture, "2024-08-01", NORTHLINE_AS_OF.slice(0, 10));
 
 export function buildNorthlinePresentationFixture(): OpsFixture {
@@ -2097,6 +2106,7 @@ export const NORTHLINE_PRESENTATION_FIXTURE: Readonly<OpsFixture> = presentation
 export function buildSyntheticScaleFixture(storeCount = 65): OpsFixture {
   if (!Number.isInteger(storeCount) || storeCount < 1) throw new Error("storeCount must be a positive integer");
   const fixture = buildNorthlinePresentationFixture();
+  fixture.complianceSchedules=[]; fixture.inspections=[];
   const sourceStores = fixture.stores;
   fixture.stores = Array.from({ length: storeCount }, (_, index) => {
     const source = sourceStores[index % sourceStores.length];
@@ -2673,7 +2683,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
   fixture.invoiceReferences.forEach((row) => { if (!vendorIds.has(row.vendorId) || row.grossAmount.amountMinor < 0) throw new Error(`Invoice ${row.id} is invalid`); });
   fixture.invoiceAllocations.forEach((row) => { const invoice = fixture.invoiceReferences.find((item) => item.organizationId === row.organizationId && item.id === row.invoiceReferenceId); if (!workOrderIds.has(row.workOrderId) || !invoiceIds.has(row.invoiceReferenceId) || !invoice || row.amount.currency !== invoice.grossAmount.currency || row.amount.amountMinor < 0) throw new Error(`Invoice allocation ${row.id} is invalid`); });
   fixture.invoiceReferences.filter((invoice) => invoice.matchStatus === "confirmed").forEach((invoice) => { const allocated = fixture.invoiceAllocations.filter((item) => item.organizationId === invoice.organizationId && item.invoiceReferenceId === invoice.id).reduce((sum, item) => sum + item.amount.amountMinor, 0); if (allocated !== invoice.grossAmount.amountMinor) throw new Error(`Confirmed invoice ${invoice.id} does not reconcile`); });
-  const entityIds: Record<EntityFileLink["entityType"], Set<string>> = { estimate_proposal: new Set(fixture.estimateProposals.map((row) => row.id)), request: new Set(fixture.requests.map((row) => row.id)), work_order: workOrderIds, visit: visitIds, asset: assetIds, invoice_reference: invoiceIds, invoice: new Set(fixture.invoices.map((row) => row.id)) };
+  const entityIds: Record<EntityFileLink["entityType"], Set<string>> = { inbound_email: new Set((fixture.inboundEmails ?? []).map(row => row.id)), estimate_proposal: new Set(fixture.estimateProposals.map((row) => row.id)), request: new Set(fixture.requests.map((row) => row.id)), work_order: workOrderIds, visit: visitIds, asset: assetIds, invoice_reference: invoiceIds, invoice: new Set(fixture.invoices.map((row) => row.id)) };
   fixture.files.forEach((row) => { if (!/^[a-f0-9]{64}$/i.test(row.sha256) || row.byteLength <= 0 || !row.storageKey.trim()) throw new Error(`File ${row.id} has invalid immutable metadata`); });
   fixture.entityFiles.forEach((row) => { if (!fileIds.has(row.fileId) || !entityIds[row.entityType].has(row.entityId)) throw new Error(`Entity file ${row.id} has an invalid target`); });
   [...fixture.auditEvents, ...fixture.outboxMessages].forEach((row) => { try { JSON.parse(row.payloadJson); } catch { throw new Error(`Event ${row.id} has invalid JSON`); } });

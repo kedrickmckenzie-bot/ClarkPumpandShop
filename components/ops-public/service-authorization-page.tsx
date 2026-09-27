@@ -6,7 +6,7 @@ import { formatPublicDateTime, PublicFrame } from "./public-ui";
 import { VendorResponseForm } from "./vendor-response-form";
 import styles from "./public-workflows.module.css";
 
-export function ServiceAuthorizationPage({ token, authorization }: { token: string; authorization: ServiceAuthorizationView }) {
+export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { token: string; authorization: ServiceAuthorizationView;forms?:Array<{name:string;href:string}> }) {
   const hasFinalResponse = authorization.serviceDecisionsClosed || authorization.status === "accepted" || authorization.status === "declined";
   return (
     <PublicFrame organizationName={authorization.organizationName} context="Work Order / Service Authorization" mode={authorization.mode}>
@@ -25,14 +25,11 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
             <div className={styles.cardHeader}>
               <div>
                 <span className={styles.eyebrow}>Customer-authorized service</span>
-                <h2 className={styles.cardTitle} id="service-request-title">This is authorized work, not a quote request</h2>
+                <h2 className={styles.cardTitle} id="service-request-title">Work to complete</h2>
               </div>
-              <FileCheck2 aria-hidden="true" color="#0d6b62" size={24} />
+              <FileCheck2 aria-hidden="true" color="#315dcc" size={24} />
             </div>
-            <div className={styles.callout}>
-              <strong>Your company was selected for this work</strong>
-              <p>Review the scope before starting. Follow the customer’s acceptance requirements.</p>
-            </div>
+
             <p className={styles.problem}>{authorization.service.problem}</p>
             <div className={styles.callout} style={{ marginTop: "1rem" }}>
               <strong>Authorized scope</strong>
@@ -48,6 +45,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
             <div className={styles.callout} style={{ marginTop: "1rem" }}><strong>What to do next</strong><p>{authorization.nextStep}</p></div>
           </section>
 
+          {forms.length?<section className={styles.card}><h2 className={styles.cardTitle}>Instructions & blank forms</h2><p>Download or print, then return the completed paperwork and photos.</p><ul>{forms.map(f=><li key={f.href}><a href={f.href}>{f.name}</a></li>)}</ul></section>:null}
           {authorization.priorResponse ? (
             <section className={styles.notice} aria-label="Recorded vendor response">
               <strong>{authorization.priorResponse.label}</strong>
@@ -60,13 +58,13 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
               <p className={styles.helper}>Recorded {formatPublicDateTime(authorization.operatorContinuation.receivedAt, authorization.store.timeZone)}{authorization.operatorContinuation.detail ? ` · ${authorization.operatorContinuation.detail}` : ""}</p>
             </section>
           ) : null}
-          <OptionalVisitWork token={token} />
           <VendorResponseForm disabled={hasFinalResponse} opened={authorization.opened} organizationName={authorization.organizationName} token={token} />
+          <details className={styles.card}><summary>Other approved work at this store</summary><OptionalVisitWork token={token} /></details>
         </div>
 
         <aside className={styles.stack} aria-label="Service authorization details">
           <section className={styles.card}>
-            <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Store access</h2><Building2 aria-hidden="true" color="#0d6b62" size={22} /></div>
+            <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Store access</h2><Building2 aria-hidden="true" color="#315dcc" size={22} /></div>
             <div className={styles.stack}>
               <div className={styles.detail}><span className={styles.detailLabel}>Location</span><p className={styles.detailValue}><MapPin aria-hidden="true" size={16} /> {authorization.store.address}</p></div>
               {authorization.store.phone ? <div className={styles.detail}><span className={styles.detailLabel}>Store phone</span><p className={styles.detailValue}><Phone aria-hidden="true" size={16} /> {authorization.store.phone}</p></div> : null}
@@ -76,7 +74,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
 
           {authorization.appointment ? (
             <section className={styles.card}>
-              <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Visit timing</h2><CalendarDays aria-hidden="true" color="#0d6b62" size={22} /></div>
+              <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Visit timing</h2><CalendarDays aria-hidden="true" color="#315dcc" size={22} /></div>
               <div className={styles.detail} style={{ marginTop: ".8rem" }}><span className={styles.detailLabel}>{authorization.appointment.status === "confirmed" ? "Confirmed appointment" : authorization.appointment.status === "counter_proposed" ? "Operator counterproposal" : "Proposed appointment"}</span><p className={styles.detailValue}>{formatPublicDateTime(authorization.appointment.startsAt, authorization.store.timeZone)}</p>{authorization.appointment.note ? <p className={styles.helper}>{authorization.appointment.note}</p> : null}</div>
               <p className={styles.muted} style={{ marginTop: ".65rem" }}>{authorization.appointment.status === "confirmed" ? "This is the agreed service timing." : "This time remains a proposal until both sides confirm it."}</p>
             </section>
@@ -92,7 +90,7 @@ export function ServiceAuthorizationPage({ token, authorization }: { token: stri
 
           {authorization.technicianVisitUrl ? (
             <section className={styles.card}>
-              <CalendarDays aria-hidden="true" color="#0d6b62" size={24} />
+              <CalendarDays aria-hidden="true" color="#315dcc" size={24} />
               <h2 className={styles.cardTitle} style={{ marginTop: "0.65rem" }}>Technician check-in and checkout</h2>
               <p className={styles.muted} style={{ marginTop: "0.35rem" }}>Start or finish your visit from any phone. No account needed.</p>
               <Link className={styles.textLink} href={authorization.technicianVisitUrl} style={{ marginTop: "0.85rem" }}>Open technician check-in / checkout <ArrowRight aria-hidden="true" size={16} /></Link>

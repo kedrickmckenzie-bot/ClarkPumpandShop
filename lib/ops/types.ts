@@ -971,7 +971,7 @@ export interface EntityFileLink {
   id: OpsId;
   organizationId: OpsId;
   fileId: OpsId;
-  entityType: "request" | "work_order" | "visit" | "asset" | "invoice_reference" | "invoice" | "estimate_proposal";
+  entityType: "inbound_email" | "request" | "work_order" | "visit" | "asset" | "invoice_reference" | "invoice" | "estimate_proposal";
   entityId: OpsId;
   purpose: "photo" | "service_document" | "invoice" | "warranty" | "other";
   visibility: "internal" | "vendor_shared" | "public_receipt";
@@ -2065,6 +2065,10 @@ export interface OpsFixture {
   invoiceReferences: InvoiceReference[];
   invoiceAllocations: InvoiceAllocation[];
   auditEvents: AuditEvent[];
+  complianceSchedules?: import("./compliance-types").ComplianceSchedule[];
+  inspections?: import("./compliance-types").Inspection[];
+  inboundEmails?: InboundEmail[];
+  followUpPreferences?: FollowUpPreference[];
   notificationRules?: NotificationRule[];
   savedViews?: SavedView[];
   serviceAppointments?: ServiceAppointment[];
@@ -2079,4 +2083,15 @@ export interface AccountingInvoiceSource {
   id: OpsId; organizationId: OpsId; connectionKey: string; companyKey: string; externalInvoiceId: string;
   sourceRevision: number; version: number; payloadJson: string; invoiceId?: OpsId;
   matchState: "needs_review" | "matched" | "excluded"; updatedAt: IsoDateTime;
+}
+
+/** Original email evidence is immutable; routing is reviewed separately. */
+export interface InboundEmail {
+  id: OpsId; organizationId: OpsId; messageKey: string; sender: string; subject: string;
+  body: string; reportedDate?: string; receivedAt: IsoDateTime;
+  status: "needs_review" | "linked" | "dismissed";
+  workOrderId?: OpsId; requestId?: OpsId;
+}
+export interface FollowUpPreference {
+  id: OpsId; organizationId: OpsId; cadenceHours: number; createdAt: IsoDateTime;
 }

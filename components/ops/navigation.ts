@@ -9,6 +9,7 @@ import {
 } from "./role-policy";
 
 export type PrimaryNavigationId =
+  | "compliance"
   | "overview"
   | "work"
   | "stores"
@@ -38,7 +39,7 @@ export interface ContextualNavigationGroup {
   items: ContextualNavigationItem[];
 }
 
-/** The operator application has one stable, six-destination enterprise frame. */
+/** Compliance is a dedicated destination requested by the operator. */
 export const operatorNavigation: NavigationItem[] = [
   {
     id: "overview",
@@ -49,7 +50,7 @@ export const operatorNavigation: NavigationItem[] = [
   {
     id: "work",
     label: "Work",
-    href: "/app/action-center",
+    href: "/app/work-orders?status=open",
     matchPrefixes: ["/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits"],
     contextGroup: "work",
   },
@@ -66,6 +67,7 @@ export const operatorNavigation: NavigationItem[] = [
     matchPrefixes: ["/app/equipment", "/app/pm"],
     contextGroup: "equipment",
   },
+  { id:"compliance", label:"Compliance", href:"/app/compliance", matchPrefixes:["/app/compliance"] },
   {
     id: "vendors",
     label: "Vendors",
@@ -126,6 +128,8 @@ export function navigationItemIsActive(item: NavigationItem, pathname: string) {
 
 function roleCanSeeNavigationItem(role: OperatorRole, item: NavigationItem) {
   switch (item.id) {
+    case "compliance":
+      return ["facilities","regional","store_manager","executive","finance"].includes(role);
     case "overview":
       return roleCanSeePrimaryNavigation(role, "home");
     case "work":
@@ -199,6 +203,7 @@ export function navigationForRole(role: OperatorRole, edition: DemoEdition = DEF
           matchPrefixes: ["/app/work-orders", "/app/visits"],
         };
       }
+      if (item.id === "work" && roleCanAccessListRoute(role, "work-orders")) return item;
       if (!item.contextGroup) return item;
       const firstVisibleItem = visibleContextGroup(role, item.contextGroup, edition)?.items[0];
       return firstVisibleItem ? { ...item, href: firstVisibleItem.href } : item;

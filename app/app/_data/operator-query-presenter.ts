@@ -113,7 +113,7 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
     if (["q", "page", "selected", "basis", "period", "currency", "saved", "updated", "notice", "error"].includes(key)) return [];
     const value = first(raw);
     if (!value) return [];
-    const label = key === "hasCost" ? "With recorded cost"
+    const label = key === "hasCost" ? value === "false" ? "Without recorded cost" : "With recorded cost"
       : key === "costMonth" ? `Cost month · ${formatOperationsDate(`${value}-01`)}`
       : key === "createdFrom" ? `Created from ${value} (UTC)`
       : key === "createdThrough" ? `Created through ${value} (UTC)`
@@ -203,8 +203,8 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
       { key: "work", value: row.number, secondary: row.problem },
       { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
       { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
-      { key: "next", value: row.nextAction, secondary: `Next: ${row.accountableParty} · Internal: ${row.internalAccountableParty}${row.dueAt ? ` · Due ${formatOperationsDate(row.dueAt)}` : " · No deadline by policy"}` },
-      { key: "cost", value: money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
+      { key: "next", link: { href: `/app/work-orders/${row.id}#add-update`, label: "Add update" }, value: row.nextAction, secondary: `${row.accountableParty}${row.dueAt ? ` · Follow up ${formatOperationsDate(row.dueAt)}` : ""}` },
+      { key: "cost", value: row.recordedCostLineCount === 0 ? "Not recorded" : money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
       { key: "status", value: workStatusLabel(row.status), tone: toneForStatus(row.status) },
     ],
   };
@@ -223,7 +223,7 @@ function heldWorkRow(row: WorkOrderListRow): TableRowViewModel {
       { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
       { key: "assignment", value: posture, secondary: row.vendorName ? `Current provider: ${row.vendorName}` : "Provider can be chosen when the work is sent" },
       { key: "next", value: row.visitHoldDeadlineAt ? `Review by ${formatOperationsDate(row.visitHoldDeadlineAt)}` : "Review date not recorded", secondary: `Internal owner: ${row.internalAccountableParty}` },
-      { key: "cost", value: money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
+      { key: "cost", value: row.recordedCostLineCount === 0 ? "Not recorded" : money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
       { key: "status", value: "Approved for next suitable visit", tone: "info" },
     ],
   };
@@ -323,7 +323,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   let metrics: ListPageViewModel["metrics"];
   let secondaryAction: { label: string; href: string } | undefined;
   let contextualFilters: ListPageViewModel["filters"];
-  const costEvidence = route === "work-orders" && Boolean(first(query.costMonth) || first(query.costFrom) || first(query.costTo) || first(query.hasCost) === "true");
+  const costEvidence = route === "work-orders" && Boolean(first(query.costMonth) || first(query.costFrom) || first(query.costTo) || ["true", "false"].includes(first(query.hasCost) ?? ""));
 
   if (route === "work-orders") {
     const heldPlan = first(query.visitPlan) === "ready";
@@ -333,14 +333,15 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     const heldStoreGroup = first(query.storeGroup) === "multiple" ? "multiple" as const : undefined;
     const requestedStatus = first(query.status);
     const stageStatuses = WORK_STAGE_STATUSES[first(query.stage) ?? ""];
-    const statuses = requestedStatus === "open"
+    const statuses = requestedStatus === "open" || requestedStatus === "attention"
       ? ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"]
-      : requestedStatus === "history" ? ["closed", "cancelled"] : requestedStatus && requestedStatus !== "all" ? [requestedStatus] : undefined;
+      : requestedStatus === "waiting" ? ["issued", "waiting_on_vendor", "waiting_on_parts", "awaiting_approval"] : requestedStatus === "history" ? ["closed", "cancelled"] : requestedStatus && requestedStatus !== "all" ? [requestedStatus] : undefined;
     const [work, held] = await Promise.all([repository.listWorkOrders(scope, {
       ...request,
       ...workCreatedRange(first(query.createdFrom), first(query.createdThrough)),
       search: q,
       statuses,
+      dueBefore: requestedStatus === "attention" ? (session.accessMode === "authenticated" ? new Date().toISOString() : NORTHLINE_AS_OF) : undefined,
       stage: first(query.stage),
       storeId: first(query.store),
       vendorId: first(query.vendor),
@@ -348,11 +349,11 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       categoryKey: first(query.category),
       assetId: first(query.asset),
       componentId: first(query.component),
-      hasCost: first(query.hasCost) === "true",
+      hasCost: first(query.hasCost) === "true" ? true : first(query.hasCost) === "false" ? false : undefined,
       costFrom: first(query.costFrom),
       costTo: first(query.costTo),
       costMonth: first(query.costMonth),
-      currency: costEvidence ? queryCurrency(query) : undefined,
+      currency: queryCurrency(query),
       categoryPath: first(query.path)?.split("|").filter(Boolean),
       heldOnly: heldPlan,
       heldStoreGroup,
@@ -360,7 +361,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       heldConfirmedOpportunityAfter: heldPlan && heldOpportunity === "confirmed" ? NORTHLINE_AS_OF : undefined,
       upcomingAppointmentAfter: upcomingAppointments ? NORTHLINE_AS_OF : undefined,
     }), costEvidence ? Promise.resolve({ approvedWorkOrders: 0, storesWithApprovedWork: 0, storesWithMultipleApprovedJobs: 0 }) : repository.getHeldWorkPortfolioSummary(scope)]);
-    result = work; rows = work.items.map(heldPlan ? heldWorkRow : workRow); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "Track internal and outside service from creation through visits, follow-up, and recorded cost."; placeholder = "Search number, problem, store, vendor, or category";
+    result = work; rows = work.items.map(heldPlan ? heldWorkRow : workRow); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "See who is handling each job and what happens next."; placeholder = "Search number, problem, store, vendor, or category";
     if (stageStatuses) {
       title = first(query.stage) === "not-sent" ? "Approved · not sent" : "Waiting on vendor";
       description = first(query.stage) === "not-sent" ? "Approved work, including jobs held for a later visit." : "Sent work needing a vendor response.";
@@ -370,7 +371,8 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       primaryAction = { label: "Send approved jobs together", href: `/app/store-sweeps/new?returnTo=${encodeURIComponent(currentContext)}` };
       secondaryAction = { label: "Return to all work", href: workTimingHref(query, false) };
     } else if (roleCan(session, "create_work_order")) primaryAction = { label: "Create work order", href: creationHref("/app/work-orders/new", query) };
-    if (!costEvidence && !first(query.stage) && !["history", "closed", "cancelled"].includes(first(query.status) ?? "") && (session.role === "facilities" || session.role === "regional")) {
+    if (!heldPlan && !costEvidence && roleCan(session, "issue_work_order")) secondaryAction = { label: "Plan future visits", href: "/app/work-orders?visitPlan=ready" };
+    if (heldPlan && !costEvidence && !first(query.stage) && !["history", "closed", "cancelled"].includes(first(query.status) ?? "") && (session.role === "facilities" || session.role === "regional")) {
       if (!heldPlan) secondaryAction = { label: "Send approved jobs together", href: "/app/store-sweeps/new?returnTo=%2Fapp%2Fwork-orders" };
       metrics = [
         { id: "ready-to-bundle", label: "Approved for next suitable visit", value: String(held.approvedWorkOrders), supportingText: `${held.storesWithApprovedWork} store${held.storesWithApprovedWork === 1 ? "" : "s"} across your full operating scope`, tone: held.approvedWorkOrders ? "info" : "positive", link: { href: "/app/work-orders?visitPlan=ready", label: "Open approved work" } },
@@ -435,9 +437,9 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   }
 
   if (costEvidence) {
-    title = "Recorded work cost";
+    title = first(query.hasCost) === "false" ? "Work without recorded cost" : "Recorded work cost";
     eyebrow = "Cost source records";
-    description = "Each amount includes only the recorded costs in these filters. Open a work order to review its cost entries, store, equipment, and service history.";
+    description = first(query.hasCost) === "false" ? "No cost has been recorded in the selected currency and dates. Open work to add one when available." : "Open a work order to review its recorded costs.";
     primaryAction = undefined;
     secondaryAction = { label: "Review spending", href: `/app/spend?${new URLSearchParams(Object.entries({
       store: first(query.store), region: first(query.region), category: first(query.category), path: first(query.path),

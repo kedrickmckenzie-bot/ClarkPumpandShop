@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { ListSurface } from "@/components/ops/views";
@@ -36,6 +37,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
 
   return (
     <>
+      {session.role === "facilities" && session.storeIds === undefined && session.regionIds === undefined ? <p><Link href="/app/work-orders/inbox">Email inbox →</Link></p> : null}
       {session.demoEdition === "complete" ? <SavedViewsBar model={{ surface: "work-orders", currentQuery, views: savedViews }} collapsed /> : null}
       <ListSurface
         model={model}

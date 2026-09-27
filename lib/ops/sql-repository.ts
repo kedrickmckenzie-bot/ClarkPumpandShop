@@ -1,3 +1,4 @@
+import { inspectionViews, type ComplianceSchedule, type Inspection, type InspectionQuery, type InspectionView, type InspectionRow } from "./compliance-types";
 import { queryAttention } from "./attention-sql";
 import { queryPmSchedule } from "./pm-schedule-sql";
 import { queryPmAnalysis } from "./pm-analysis-sql";
@@ -10,6 +11,7 @@ import { scopeWhere } from "./sql-scope";
 import { vendorResponseSql } from "./work-stage-sql";
 import { queryDashboardActivity, queryDashboardBreakdown } from "./dashboard-sql";
 import { queryDashboardContext } from "./dashboard-context-sql";
+import { queryEquipmentIssues } from "./equipment-issues-sql";
 import { queryDashboardLifecycle } from "./lifecycle-summary-sql";
 import { queryBriefSources } from "./owner-brief-sql";
 import { PENDING_REQUEST_STATUSES, WORK_STAGE_STATUSES } from "./dashboard-cohorts";
@@ -350,7 +352,43 @@ function serviceAppointmentFrom(row: Row): ServiceAppointment { return { id: tex
 
 function savedViewFrom(row: Row): SavedView { return { id: text(row, "id"), organizationId: text(row, "organization_id"), ownerMembershipId: text(row, "owner_membership_id"), surface: text(row, "surface"), name: text(row, "name"), queryString: text(row, "query_string"), createdAt: text(row, "created_at") }; }
 
+function inboundEmailFrom(row: Row): import("./types").InboundEmail { return { id: text(row,"id"), organizationId: text(row,"organization_id"), messageKey: text(row,"message_key"), sender: text(row,"sender"), subject: text(row,"subject"), body: text(row,"body"), reportedDate: maybeText(row,"reported_date"), receivedAt: text(row,"received_at"), status: text(row,"status") as import("./types").InboundEmail["status"], workOrderId: maybeText(row,"work_order_id"), requestId: maybeText(row,"request_id") }; }
 class SqlOpsRepository implements OpsRepository {
+  async inspectionHistory(org:string,id:string) {return (await this.all("SELECT id,event_type,actor_name,occurred_at,payload_json FROM ops_audit_events WHERE organization_id = ? AND aggregate_type = 'inspection' AND aggregate_id = ? ORDER BY occurred_at DESC,id DESC LIMIT 30",[org,id])).map(r=>complianceRow<{id:string;eventType:string;actorName:string;occurredAt:string;payloadJson:string}>(r));}
+  async inspectionDelivery(org:string,id:string) {return (await this.all("SELECT id,topic,status FROM ops_outbox_messages WHERE organization_id = ? AND aggregate_type = 'inspection' AND aggregate_id = ? ORDER BY created_at DESC,id DESC LIMIT 10",[org,id])).map(r=>complianceRow<{id:string;topic:string;status:string}>(r));}
+  async listComplianceOwners(org:string) {return (await this.all("SELECT m.id,u.display_name FROM ops_memberships m JOIN ops_users u ON u.id=m.user_id WHERE m.organization_id = ? AND m.status = 'active' AND m.role IN ('facilities_admin','regional_manager','store_manager','internal_technician') ORDER BY u.display_name,m.id LIMIT 100",[org])).map(r=>({id:String(r.id),name:String(r.display_name)}));}
+  async getComplianceSchedule(org:string,id:string) { const r=await this.first("SELECT * FROM ops_compliance_schedules WHERE organization_id = ? AND id = ?",[org,id]);return r?complianceRow<ComplianceSchedule>(r):null; }
+  async listComplianceSchedules(scope:OrganizationScope,start=0) { const params:unknown[]=[];const where=scopeWhere(scope,"s",params);return (await this.all(`SELECT c.* FROM ops_compliance_schedules c JOIN ops_stores s ON s.organization_id=c.organization_id AND s.id=c.store_id WHERE ${where} ORDER BY c.id LIMIT 100 OFFSET ?`,[...params,start])).map(r=>complianceRow<ComplianceSchedule>(r)); }
+  async listComplianceOrganizations() { return (await this.all("SELECT DISTINCT organization_id FROM ops_compliance_schedules",[])).map(r=>String(r.organization_id)); }
+  async getInspection(org:string,id:string) { const r=await this.first("SELECT * FROM ops_inspections WHERE organization_id = ? AND id = ?",[org,id]);return r?complianceRow<Inspection>(r):null; }
+  async inspectionForWork(org:string,workId:string) { const r=await this.first("SELECT * FROM ops_inspections WHERE organization_id = ? AND (work_order_id = ? OR corrective_work_order_id = ?) LIMIT 1",[org,workId,workId]);return r?complianceRow<Inspection>(r):null; }
+  async latestInspection(org:string,scheduleId:string) { const r=await this.first("SELECT * FROM ops_inspections WHERE organization_id = ? AND schedule_id = ? ORDER BY due_date DESC LIMIT 1",[org,scheduleId]);return r?complianceRow<Inspection>(r):null; }
+  async queryInspections(scope:OrganizationScope,q:InspectionQuery) {
+    const params:unknown[]=[];let where=scopeWhere(scope,"s",params);
+    if(q.storeId){where+=" AND i.store_id = ?";params.push(q.storeId);}if(q.scheduleId){where+=" AND i.schedule_id = ?";params.push(q.scheduleId);}
+    const appointment="(SELECT a.status FROM ops_service_appointments a WHERE a.organization_id=i.organization_id AND a.work_order_id=i.work_order_id ORDER BY a.created_at DESC,a.id DESC LIMIT 1)";
+    const scheduled=`CASE WHEN ${appointment} = 'confirmed' THEN (SELECT a.starts_at FROM ops_service_appointments a WHERE a.organization_id=i.organization_id AND a.work_order_id=i.work_order_id ORDER BY a.created_at DESC,a.id DESC LIMIT 1) ELSE NULL END`;
+    const assigned="COALESCE((SELECT v.name FROM ops_vendors v WHERE v.organization_id=c.organization_id AND v.id=c.vendor_id),(SELECT u.display_name FROM ops_memberships m JOIN ops_users u ON u.id=m.user_id WHERE m.organization_id=c.organization_id AND m.id=c.membership_id),'Unassigned')";
+    const evidence="(SELECT COUNT(*) FROM ops_entity_files ef WHERE ef.organization_id=i.organization_id AND ef.entity_type='work_order' AND ef.entity_id=i.work_order_id)";
+    const from=`FROM ops_inspections i JOIN ops_stores s ON s.organization_id=i.organization_id AND s.id=i.store_id JOIN ops_compliance_schedules c ON c.organization_id=i.organization_id AND c.id=i.schedule_id WHERE ${where}`;
+    const cutoff=(days:number)=>new Date(Date.parse(q.today)+days*86400000).toISOString().slice(0,10);
+    const predicates:Record<InspectionView,{sql:string;params:unknown[]}>=Object.fromEntries(inspectionViews.map(v=>[v,{sql:v==="all"?"1=1":"i.status = ?",params:v==="all"?[]:[v]}])) as Record<InspectionView,{sql:string;params:unknown[]}>;
+    predicates.scheduled={sql:`i.status = 'pending' AND ${appointment} = 'confirmed'`,params:[]};
+    predicates.upcoming={sql:"i.status = 'pending' AND i.due_date > ?",params:[q.today]};predicates.overdue={sql:"i.status <> 'passed' AND i.due_date < ?",params:[q.today]};
+    predicates.missing_docs={sql:`i.status = 'performed' AND c.evidence_required = 1 AND ${evidence} = 0`,params:[]};
+    predicates.expiring={sql:"i.document_expires_on >= ? AND i.document_expires_on <= ?",params:[q.today,cutoff(30)]};
+    for(const days of [30,60,90])predicates[`due${days}` as InspectionView]={sql:"i.status <> 'passed' AND i.due_date >= ? AND i.due_date <= ?",params:[q.today,cutoff(days)]};
+    const counts=await this.first(`SELECT ${inspectionViews.map(v=>`SUM(CASE WHEN ${predicates[v].sql} THEN 1 ELSE 0 END) AS "${v}"`).join(",")} ${from}`,[...inspectionViews.flatMap(v=>predicates[v].params),...params]);
+    const summary=Object.fromEntries(inspectionViews.map(v=>[v,Number(counts?.[v]??0)])) as Record<InspectionView,number>;
+    const selected=predicates[q.view??"all"];
+    const items=(await this.all(`SELECT i.*,c.name,c.handler,c.evidence_label,${scheduled} AS scheduled_at,${assigned} AS assigned_name,${evidence} AS evidence_count,s.store_number,s.name AS store_name,(SELECT MAX(h.completed_at) FROM ops_inspections h WHERE h.organization_id=i.organization_id AND h.schedule_id=i.schedule_id AND h.status='passed' AND h.id<>i.id) AS last_completed ${from} AND (${selected.sql}) ORDER BY i.due_date,i.id LIMIT ? OFFSET ?`,[...params,...selected.params,Math.min(100,q.limit??25),q.offset??0])).map(r=>({...complianceRow<InspectionRow>(r),evidenceCount:Number(r.evidence_count)}));
+    return {items,totalCount:summary[q.view??"all"],summary};
+  }
+  async getInboundEmail(org: string, id: string) { const row = await this.first("SELECT * FROM ops_inbound_emails WHERE organization_id = ? AND id = ?", [org,id]); return row ? inboundEmailFrom(row) : null; }
+  async listInboundEmails(org: string, query: { offset?: number; status?: string; workOrderId?: string }) { const where = ["organization_id = ?"]; const params: unknown[] = [org]; if (query.status) { where.push("status = ?"); params.push(query.status); } if (query.workOrderId) { where.push("work_order_id = ?"); params.push(query.workOrderId); } return (await this.all(`SELECT * FROM ops_inbound_emails WHERE ${where.join(" AND ")} ORDER BY received_at DESC, id DESC LIMIT 26 OFFSET ?`, [...params,offset(query.offset)])).map(inboundEmailFrom); }
+  async getFollowUpPreference(org: string) { const row = await this.first("SELECT * FROM ops_follow_up_preferences WHERE organization_id = ? ORDER BY created_at DESC, id DESC LIMIT 1", [org]); return row ? { id: text(row,"id"), organizationId: org, cadenceHours: Number(row.cadence_hours), createdAt: text(row,"created_at") } : null; }
+  async listFollowUpOrganizations() { return (await this.all("SELECT DISTINCT organization_id FROM ops_follow_up_preferences", [])).map(row => text(row,"organization_id")); }
+
   async listRecordIntegrity(scope: OrganizationScope, asOf: string, query: import("./record-integrity-query").IntegrityQuery) {
     return queryRecordIntegrity(this.driver, scope, asOf, query);
   }
@@ -368,6 +406,9 @@ class SqlOpsRepository implements OpsRepository {
   }
   async listAttentionSources(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery, itemId: string, page: import("./types").PageRequest) {
     return queryAttentionSources(this.driver, scope, access, query, itemId, page);
+  }
+  async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: PageRequest = {}) {
+    return queryEquipmentIssues(this.driver, scope, window, query);
   }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return queryDashboardActivity(this.driver, scope, window);
@@ -653,7 +694,7 @@ class SqlOpsRepository implements OpsRepository {
     else if (query.componentId) { clauses.push("w.component_id = ?"); params.push(query.componentId); }
     if (hasWorkCostFilter(query)) {
       const cost = workCostSql("fc", query);
-      clauses.push(`EXISTS (SELECT 1 FROM ops_cost_lines fc WHERE fc.organization_id = w.organization_id AND fc.work_order_id = w.id${cost.sql})`);
+      clauses.push(`${query.hasCost === false ? "NOT " : ""}EXISTS (SELECT 1 FROM ops_cost_lines fc WHERE fc.organization_id = w.organization_id AND fc.work_order_id = w.id${cost.sql})`);
       params.push(...cost.params);
     }
     if (query.statuses?.length) { clauses.push(`w.status IN (${query.statuses.map(() => "?").join(",")})`); params.push(...query.statuses); }
@@ -666,6 +707,7 @@ class SqlOpsRepository implements OpsRepository {
     if (query.priorities?.length) { clauses.push(`w.priority IN (${query.priorities.map(() => "?").join(",")})`); params.push(...query.priorities); }
     if (query.createdFrom) { clauses.push("w.created_at >= ?"); params.push(query.createdFrom); }
     if (query.createdTo) { clauses.push("w.created_at < ?"); params.push(query.createdTo); }
+    if (query.dueBefore) { clauses.push("w.due_at <= ?"); params.push(query.dueBefore); }
     if (query.heldOnly) clauses.push("w.status = 'approved' AND EXISTS (SELECT 1 FROM ops_work_order_visit_holds hw WHERE hw.organization_id = w.organization_id AND hw.work_order_id = w.id AND hw.status = 'active')");
     if (query.heldStoreGroup === "multiple") clauses.push("(SELECT COUNT(*) FROM ops_work_order_visit_holds hg JOIN ops_work_orders gw ON gw.organization_id = hg.organization_id AND gw.id = hg.work_order_id WHERE hg.organization_id = w.organization_id AND gw.store_id = w.store_id AND gw.status = 'approved' AND hg.status = 'active') >= 2");
     if (query.upcomingAppointmentAfter) { clauses.push("EXISTS (SELECT 1 FROM ops_service_appointments ua WHERE ua.organization_id = w.organization_id AND ua.work_order_id = w.id AND ua.status = 'confirmed' AND ua.starts_at >= ?)"); params.push(query.upcomingAppointmentAfter); }
@@ -692,15 +734,16 @@ class SqlOpsRepository implements OpsRepository {
     return await this.all(`SELECT w.*, s.store_number, s.name AS store_name, a.kind AS assignment_kind, a.status AS assignment_status, a.vendor_id, v.name AS vendor_name,
       h.posture AS visit_hold_posture, h.deadline_at AS visit_hold_deadline_at,
       (SELECT COUNT(DISTINCT svwo.visit_id) FROM ops_site_visit_work_orders svwo WHERE svwo.organization_id = w.organization_id AND svwo.work_order_id = w.id) AS visit_count,
-      (SELECT COALESCE(SUM(c.amount_minor),0) FROM ops_cost_lines c WHERE c.organization_id = w.organization_id AND c.work_order_id = w.id${costSum.sql}) AS recorded_cost_minor
+      (SELECT COALESCE(SUM(c.amount_minor),0) FROM ops_cost_lines c WHERE c.organization_id = w.organization_id AND c.work_order_id = w.id${costSum.sql}) AS recorded_cost_minor,
+      (SELECT COUNT(*) FROM ops_cost_lines c WHERE c.organization_id = w.organization_id AND c.work_order_id = w.id${costSum.sql}) AS recorded_cost_line_count
       FROM ops_work_orders w JOIN ops_stores s ON s.organization_id = w.organization_id AND s.id = w.store_id
       LEFT JOIN ops_work_order_assignments a ON a.id = (SELECT aa.id FROM ops_work_order_assignments aa WHERE aa.organization_id = w.organization_id AND aa.work_order_id = w.id ORDER BY aa.assigned_at DESC, aa.id DESC LIMIT 1)
       LEFT JOIN ops_vendors v ON v.organization_id = w.organization_id AND v.id = a.vendor_id
       LEFT JOIN ops_work_order_visit_holds h ON h.id = (SELECT hh.id FROM ops_work_order_visit_holds hh WHERE hh.organization_id = w.organization_id AND hh.work_order_id = w.id AND hh.status = 'active' ORDER BY hh.created_at DESC, hh.id DESC LIMIT 1)
-      WHERE ${clauses.join(" AND ")} ORDER BY w.created_at DESC, w.id DESC ${query.unbounded ? "" : "LIMIT ? OFFSET ?"}`, [...costSum.params, ...params]);
+      WHERE ${clauses.join(" AND ")} ORDER BY w.created_at DESC, w.id DESC ${query.unbounded ? "" : "LIMIT ? OFFSET ?"}`, [...costSum.params, ...costSum.params, ...params]);
   }
 
-  private workListRow(row: Row): WorkOrderListRow { return { id: text(row, "id"), number: text(row, "number"), storeId: text(row, "store_id"), storeNumber: text(row, "store_number"), storeName: text(row, "store_name"), problem: text(row, "problem"), categoryKey: maybeText(row, "category_key"), priority: text(row, "priority") as WorkOrderListRow["priority"], status: text(row, "status") as WorkOrderListRow["status"], assignmentKind: (maybeText(row, "assignment_kind") ?? "choose_later") as WorkOrderListRow["assignmentKind"], assignmentStatus: maybeText(row, "assignment_status") as WorkOrderListRow["assignmentStatus"], vendorId: maybeText(row, "vendor_id"), vendorName: maybeText(row, "vendor_name"), internalAccountableParty: maybeText(row, "internal_accountable_party") ?? "Facilities coordinator", accountableParty: text(row, "accountable_party"), nextAction: text(row, "next_action"), dueAt: maybeText(row, "due_at"), createdAt: text(row, "created_at"), visitCount: Number(row.visit_count ?? 0), recordedCostMinor: Number(row.recorded_cost_minor ?? 0), currency: "USD", visitHoldPosture: maybeText(row, "visit_hold_posture") as WorkOrderListRow["visitHoldPosture"], visitHoldDeadlineAt: maybeText(row, "visit_hold_deadline_at") }; }
+  private workListRow(row: Row): WorkOrderListRow { return { id: text(row, "id"), number: text(row, "number"), storeId: text(row, "store_id"), storeNumber: text(row, "store_number"), storeName: text(row, "store_name"), problem: text(row, "problem"), categoryKey: maybeText(row, "category_key"), priority: text(row, "priority") as WorkOrderListRow["priority"], status: text(row, "status") as WorkOrderListRow["status"], assignmentKind: (maybeText(row, "assignment_kind") ?? "choose_later") as WorkOrderListRow["assignmentKind"], assignmentStatus: maybeText(row, "assignment_status") as WorkOrderListRow["assignmentStatus"], vendorId: maybeText(row, "vendor_id"), vendorName: maybeText(row, "vendor_name"), internalAccountableParty: maybeText(row, "internal_accountable_party") ?? "Facilities coordinator", accountableParty: text(row, "accountable_party"), nextAction: text(row, "next_action"), dueAt: maybeText(row, "due_at"), createdAt: text(row, "created_at"), visitCount: Number(row.visit_count ?? 0), recordedCostLineCount: Number(row.recorded_cost_line_count ?? 0), recordedCostMinor: Number(row.recorded_cost_minor ?? 0), currency: "USD", visitHoldPosture: maybeText(row, "visit_hold_posture") as WorkOrderListRow["visitHoldPosture"], visitHoldDeadlineAt: maybeText(row, "visit_hold_deadline_at") }; }
 
   async listWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery = {}) { const rows = await this.workOrderRows(scope, query); const max = limit(query.limit); const visibleRows = rows.slice(0, max); const items = visibleRows.map((row) => ({ ...this.workListRow(row), currency: query.currency ?? "USD" })); const last = visibleRows.at(-1); return { items, nextCursor: rows.length > max && last ? encodeCursor(text(last, "created_at"), text(last, "id")) : undefined }; }
 
@@ -1059,3 +1102,5 @@ export function createOpsSqlRepository(
 
 function accountingSourceFrom(row: Row): import("./types").AccountingInvoiceSource { return { id: text(row, "id"), organizationId: text(row, "organization_id"), connectionKey: text(row, "connection_key"), companyKey: text(row, "company_key"), externalInvoiceId: text(row, "external_invoice_id"), sourceRevision: Number(row.source_revision), version: Number(row.version), payloadJson: text(row, "payload_json"), invoiceId: maybeText(row, "invoice_id"), matchState: text(row, "match_state") as import("./types").AccountingInvoiceSource["matchState"], updatedAt: text(row, "updated_at") }; }
 import { queryRecordIntegrity } from "./record-integrity-sql";
+
+function complianceRow<T>(r:Record<string,unknown>):T {return Object.fromEntries(Object.entries(r).map(([k,v])=>[k.replace(/_([a-z])/g,(_,c:string)=>c.toUpperCase()),v===null?undefined:v instanceof Date?v.toISOString():v])) as T;}

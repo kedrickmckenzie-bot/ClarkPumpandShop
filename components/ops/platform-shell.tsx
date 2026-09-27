@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { WorkspaceSearch } from "./workspace-search";
 import Image from "next/image";
 import { NavigationTrail } from "@/components/workspace/navigation-trail";
@@ -13,6 +14,8 @@ import {
   Layers3,
   LayoutDashboard,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Settings2,
   Store,
@@ -37,7 +40,29 @@ import { PreviewEditionSwitcher } from "./preview-edition-switcher";
 import { roleCan, type OperatorCapability } from "./role-policy";
 import styles from "./platform-shell.module.css";
 
+const sidebarPreferenceKey = "workspace.sidebar-collapsed";
+let sidebarFallback = false;
+function sidebarSnapshot() {
+  try { return localStorage.getItem(sidebarPreferenceKey) === "true"; }
+  catch { return sidebarFallback; }
+}
+function subscribeSidebar(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener("workspace-sidebar-change", onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener("workspace-sidebar-change", onChange);
+  };
+}
+function toggleSidebar() {
+  sidebarFallback = !sidebarSnapshot();
+  try { localStorage.setItem(sidebarPreferenceKey, String(sidebarFallback)); } catch { /* Session-only preference when storage is unavailable. */ }
+  window.dispatchEvent(new Event("workspace-sidebar-change"));
+}
+const expandedSidebarOnServer = () => false;
+
 const iconByNavigationId: Record<NavigationItem["id"], LucideIcon> = {
+  compliance: ClipboardList,
   overview: LayoutDashboard,
   work: ClipboardList,
   stores: Store,
@@ -274,14 +299,15 @@ function CreateMenu({ session, edition }: { session: OperatorSession; edition: D
 }
 
 export function PlatformShell({ session, children }: PlatformShellProps) {
+  const sidebarCollapsed = useSyncExternalStore(subscribeSidebar, sidebarSnapshot, expandedSidebarOnServer);
   const pathname = usePathname();
   const edition = session.demoEdition ?? DEFAULT_DEMO_EDITION;
 
   return (
-    <div className={styles.shell} style={productThemeVariables}>
+    <div className={`${styles.shell} ${sidebarCollapsed ? styles.shellCollapsed : ""}`} style={productThemeVariables}>
       <a className={styles.skipLink} href="#main-content">Skip to main content</a>
 
-      <aside className={styles.sidebar}>
+      <aside id="workspace-sidebar" className={styles.sidebar} inert={sidebarCollapsed} aria-hidden={sidebarCollapsed || undefined}>
         <ProductIdentity />
 
         <div className={styles.organizationContext} aria-label="Current organization and scope">
@@ -299,6 +325,9 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
       <div className={styles.contentColumn}>
         <div className={styles.topbarFrame}>
           <header className={styles.topbar}>
+            <button type="button" className={styles.sidebarToggle} onClick={toggleSidebar} aria-controls="workspace-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"} title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}>
+              {sidebarCollapsed ? <PanelLeftOpen size={21} aria-hidden="true" /> : <PanelLeftClose size={21} aria-hidden="true" />}
+            </button>
             <details className={styles.mobileMenu} key={pathname}>
               <summary aria-label="Open navigation">
                 <Menu aria-hidden="true" size={22} />

@@ -1775,3 +1775,9 @@
 .visitTiming { color: #526174; }
 .visitNote { white-space: pre-wrap; overflow-wrap: anywhere; border-left: 3px solid #cbd5e1; padding-left: 14px; }
 .visitNote small { font-size: 13px; color: #526174; }
+
+/* Keep the everyday record readable and leave room for optional details. */
+.caseMeta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.caseMeta dt { font-size: 14px; }
+.caseMeta dd { font-size: 16px; }
+.page :global(#add-update), .page :global(#recent-updates) { scroll-margin-top: 90px; }

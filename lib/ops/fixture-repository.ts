@@ -1,3 +1,4 @@
+import { matchesInspection, inspectionViews, type InspectionQuery, type InspectionView } from "./compliance-types";
 import { attentionFromFixture } from "./attention-query";
 import { pmScheduleFromFixture, type PmScheduleQuery } from "./pm-schedule-query";
 import { pmAnalysisFromFixture, type PmAnalysisQuery } from "./pm-analysis-query";
@@ -7,6 +8,7 @@ import { matchesRequestStatus, matchesWorkStage } from "./dashboard-cohorts";
 import { dashboardActivityFromFixture, dashboardBreakdownFromFixture } from "./dashboard-query";
 import { dashboardContextFromFixture } from "./dashboard-context";
 import { dashboardLifecycleFromFixture } from "./lifecycle-summary";
+import { equipmentIssuesFromFixture } from "./equipment-issues";
 import { briefSourcesFromFixture } from "./owner-brief-query";
 import type { JobRun, NotificationRecipient, NotificationRule, OrganizationWorkflowPolicy, OutboxMessage, PmOccurrence, PmPlan, RoleCapabilityOverride, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
@@ -187,7 +189,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_accounting_invoice_sources: "accountingInvoiceSources", ops_invoices: "invoices", ops_invoice_lines: "invoiceLines", ops_invoice_line_allocations: "invoiceLineAllocations", ops_invoice_exceptions: "invoiceExceptions",
     ops_invoice_adjustments: "invoiceAdjustments", ops_service_discrepancies: "serviceDiscrepancies", ops_value_events: "valueEvents",
     ops_cost_lines: "costLines", ops_invoice_references: "invoiceReferences", ops_invoice_allocations: "invoiceAllocations",
-    ops_vendor_compliance_alerts: "vendorComplianceAlerts", ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_notification_rules: "notificationRules", ops_job_runs: "jobRuns", ops_service_appointments: "serviceAppointments", ops_vendor_continuations: "vendorContinuations", ops_saved_views: "savedViews", ops_public_tokens: "publicTokens",
+    ops_vendor_compliance_alerts: "vendorComplianceAlerts", ops_audit_events: "auditEvents", ops_outbox_messages: "outboxMessages", ops_notification_rules: "notificationRules", ops_inbound_emails: "inboundEmails", ops_compliance_schedules: "complianceSchedules", ops_inspections: "inspections", ops_follow_up_preferences: "followUpPreferences", ops_job_runs: "jobRuns", ops_service_appointments: "serviceAppointments", ops_vendor_continuations: "vendorContinuations", ops_saved_views: "savedViews", ops_public_tokens: "publicTokens",
   };
   const key = mapping[table];
   if (!key) throw new Error(`Fixture repository does not support table ${table}`);
@@ -447,6 +449,28 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
 }
 
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
+  async inspectionHistory(org:string,id:string) {return clone(this.fixture.auditEvents.filter(r=>r.organizationId===org&&r.aggregateId===id&&r.aggregateType==="inspection").sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)).slice(0,30));}
+  async inspectionDelivery(org:string,id:string) {return clone(this.fixture.outboxMessages.filter(r=>r.organizationId===org&&r.aggregateId===id&&r.aggregateType==="inspection").sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,10).map(r=>({id:r.id,topic:r.topic,status:r.status})));}
+  async listComplianceOwners(org:string) {return this.fixture.memberships.filter(m=>m.organizationId===org&&m.status==="active"&&["facilities_admin","regional_manager","store_manager","internal_technician"].includes(m.role)).slice(0,100).map(m=>({id:m.id,name:this.fixture.users.find(u=>u.id===m.userId)?.displayName??m.id}));}
+  async getComplianceSchedule(org:string,id:string) { return clone(this.fixture.complianceSchedules?.find(r=>r.organizationId===org&&r.id===id)??null); }
+  async listComplianceSchedules(scope:OrganizationScope,offset=0) { const stores=this.fixture.stores.filter(s=>s.organizationId===scope.organizationId&&(scope.storeIds===undefined||scope.storeIds.includes(s.id))&&(scope.regionIds===undefined||scope.regionIds.includes(s.regionId??"")));return clone((this.fixture.complianceSchedules??[]).filter(r=>r.organizationId===scope.organizationId&&stores.some(s=>s.id===r.storeId)).sort((a,b)=>a.id.localeCompare(b.id)).slice(offset,offset+100)); }
+  async listComplianceOrganizations() { return [...new Set((this.fixture.complianceSchedules??[]).map(r=>r.organizationId))]; }
+  async getInspection(org:string,id:string) { return clone(this.fixture.inspections?.find(r=>r.organizationId===org&&r.id===id)??null); }
+  async inspectionForWork(org:string,workId:string) { return clone(this.fixture.inspections?.find(r=>r.organizationId===org&&(r.workOrderId===workId||r.correctiveWorkOrderId===workId))??null); }
+  async latestInspection(org:string,scheduleId:string) { return clone((this.fixture.inspections??[]).filter(r=>r.organizationId===org&&r.scheduleId===scheduleId).sort((a,b)=>b.dueDate.localeCompare(a.dueDate))[0]??null); }
+  async queryInspections(scope:OrganizationScope,q:InspectionQuery) {
+    const stores=this.fixture.stores.filter(s=>s.organizationId===scope.organizationId&&(scope.storeIds===undefined||scope.storeIds.includes(s.id))&&(scope.regionIds===undefined||scope.regionIds.includes(s.regionId??"")));
+    const base=(this.fixture.inspections??[]).map(r=>({...r,scheduledAt:(()=>{const a=this.fixture.serviceAppointments?.filter(a=>a.organizationId===r.organizationId&&a.workOrderId===r.workOrderId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id))[0];return a?.status==="confirmed"?a.startsAt:undefined;})(),evidenceRequired:this.fixture.complianceSchedules?.find(s=>s.organizationId===r.organizationId&&s.id===r.scheduleId)?.evidenceRequired,evidenceCount:this.fixture.entityFiles.filter(f=>f.organizationId===r.organizationId&&f.entityType==="work_order"&&f.entityId===r.workOrderId).length})).filter(r=>r.organizationId===scope.organizationId&&stores.some(s=>s.id===r.storeId)&&(!q.storeId||r.storeId===q.storeId)&&(!q.scheduleId||r.scheduleId===q.scheduleId));
+    const summary=Object.fromEntries(inspectionViews.map(v=>[v,base.filter(r=>matchesInspection(r,v,q.today)).length])) as Record<InspectionView,number>;
+    const rows=base.filter(r=>matchesInspection(r,q.view??"all",q.today)).sort((a,b)=>a.dueDate.localeCompare(b.dueDate)||a.id.localeCompare(b.id));
+    const items=rows.slice(q.offset??0,(q.offset??0)+Math.min(100,q.limit??25)).map(r=>{const store=stores.find(s=>s.id===r.storeId)!;const schedule=this.fixture.complianceSchedules!.find(s=>s.id===r.scheduleId&&s.organizationId===scope.organizationId)!;return {...r,name:schedule.name,storeNumber:store.storeNumber,storeName:store.name,handler:schedule.handler,assignedName:schedule.vendorId?this.fixture.vendors.find(v=>v.organizationId===r.organizationId&&v.id===schedule.vendorId)?.name??"Outside vendor":this.fixture.users.find(u=>u.id===this.fixture.memberships.find(m=>m.organizationId===r.organizationId&&m.id===schedule.membershipId)?.userId)?.displayName??"Internal team",evidenceLabel:schedule.evidenceLabel,lastCompleted:(this.fixture.inspections??[]).filter(h=>h.organizationId===r.organizationId&&h.scheduleId===r.scheduleId&&h.status==="passed"&&h.id!==r.id).map(h=>h.completedAt??"").sort().at(-1)};});
+    return clone({items,totalCount:rows.length,summary});
+  }
+  async getInboundEmail(organizationId: string, id: string) { return clone(this.fixture.inboundEmails?.find(row => row.organizationId === organizationId && row.id === id) ?? null); }
+  async listInboundEmails(organizationId: string, query: { offset?: number; status?: string; workOrderId?: string }) { return clone((this.fixture.inboundEmails ?? []).filter(row => row.organizationId === organizationId && (!query.status || row.status === query.status) && (!query.workOrderId || row.workOrderId === query.workOrderId)).sort((a,b) => b.receivedAt.localeCompare(a.receivedAt) || b.id.localeCompare(a.id)).slice(query.offset ?? 0, (query.offset ?? 0) + 26)); }
+  async getFollowUpPreference(organizationId: string) { return clone((this.fixture.followUpPreferences ?? []).filter(row => row.organizationId === organizationId).sort((a,b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0] ?? null); }
+  async listFollowUpOrganizations() { return [...new Set((this.fixture.followUpPreferences ?? []).map(row => row.organizationId))]; }
+
   async listRecordIntegrity(scope: OrganizationScope, asOf: string, query: import("./record-integrity-query").IntegrityQuery) {
     return integrityFromFixture(this.fixture, scope, asOf, query);
   }
@@ -464,6 +488,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   }
   async listAttentionSources(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery, itemId: string, page: import("./types").PageRequest) {
     return attentionSourcesFromFixture(this.fixture, scope, access, query, itemId, page);
+  }
+  async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: PageRequest = {}) {
+    return equipmentIssuesFromFixture(this.fixture, scope, window, query);
   }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return dashboardActivityFromFixture(this.fixture, scope, window);
@@ -747,9 +774,10 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && matchesWorkCategoryPath(this.fixture.assets.find((asset) => asset.organizationId === scope.organizationId && asset.id === row.assetId), query.categoryPath)
         && (!query.assetId || (query.assetId === "unlinked" ? !row.assetId : row.assetId === query.assetId))
         && (!query.componentId || (query.componentId === "unlinked" ? !row.componentId : row.componentId === query.componentId))
-        && (!hasWorkCostFilter(query) || costLines.some((cost) => matchesWorkCost(cost, query)))
+        && (!hasWorkCostFilter(query) || costLines.some((cost) => matchesWorkCost(cost, query)) !== (query.hasCost === false))
         && (!query.createdFrom || row.createdAt >= query.createdFrom)
         && (!query.createdTo || row.createdAt < query.createdTo)
+        && (!query.dueBefore || Boolean(row.dueAt && row.dueAt <= query.dueBefore))
         && (!query.heldOnly || activeHeldWork.has(row.id))
         && (!query.heldReviewDeadlineTo || (this.fixture.workOrderVisitHolds ?? []).some((hold) => hold.organizationId === scope.organizationId && hold.workOrderId === row.id && hold.status === "active" && hold.deadlineAt <= query.heldReviewDeadlineTo!))
         && (!query.heldConfirmedOpportunityAfter || (this.fixture.serviceAppointments ?? []).some((appointment) => {
@@ -762,7 +790,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.upcomingAppointmentAfter || (this.fixture.serviceAppointments ?? []).some((appointment) => appointment.organizationId === scope.organizationId && appointment.workOrderId === row.id && appointment.status === "confirmed" && appointment.startsAt >= query.upcomingAppointmentAfter!))
         && (!query.heldStoreGroup || query.heldStoreGroup !== "multiple" || (heldCountByStore.get(row.storeId) ?? 0) >= 2);
     }).map((row) => {
-      const result = { ...workOrderRow(this.fixture, row), currency: query.currency ?? "USD" };
+      const result = { ...workOrderRow(this.fixture, row), currency: query.currency ?? "USD", recordedCostLineCount: this.fixture.costLines.filter(line => line.organizationId === scope.organizationId && line.workOrderId === row.id && matchesWorkCost(line, query)).length };
       if (hasWorkCostFilter(query) || query.currency) result.recordedCostMinor = this.fixture.costLines
         .filter((line) => line.organizationId === scope.organizationId && line.workOrderId === row.id && matchesWorkCost(line, query))
         .reduce((sum, line) => sum + line.amount.amountMinor, 0);

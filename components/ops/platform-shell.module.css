@@ -1072,3 +1072,31 @@
     transition: none;
   }
 }
+
+/* Keep the navigation width steady while the workspace gains its space. */
+@media (min-width: 921px) {
+  .shell { transition: grid-template-columns 200ms ease; }
+  .shellCollapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  .sidebar { width: 256px; transition: transform 200ms ease, visibility 200ms; }
+  .shellCollapsed .sidebar { transform: translateX(-100%); visibility: hidden; }
+}
+.sidebarToggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--ops-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ops-ink);
+  cursor: pointer;
+}
+.sidebarToggle:hover { background: var(--ops-soft); }
+.sidebarToggle:focus-visible { outline: 2px solid var(--ops-brand); outline-offset: 3px; }
+@media (max-width: 920px) { .sidebarToggle { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .shell, .sidebar { transition: none; }
+}

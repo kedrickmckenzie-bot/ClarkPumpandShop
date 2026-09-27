@@ -58,10 +58,10 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
   const [problem, setProblem] = useState("");
   const [area, setArea] = useState("");
   const [urgency, setUrgency] = useState<Urgency>("routine");
-  const [storeOperatingState, setStoreOperatingState] = useState<StoreOperatingState | "">("");
-  const [safetyConcern, setSafetyConcern] = useState<SafetyConcern | "">("");
-  const [productInventoryRisk, setProductInventoryRisk] = useState<InventoryRisk | "">("");
-  const [customersAffected, setCustomersAffected] = useState<YesNoUnknown | "">("");
+  const [storeOperatingState, setStoreOperatingState] = useState<StoreOperatingState | "">("unknown");
+  const [safetyConcern, setSafetyConcern] = useState<SafetyConcern | "">("unknown");
+  const [productInventoryRisk, setProductInventoryRisk] = useState<InventoryRisk | "">("unknown");
+  const [customersAffected, setCustomersAffected] = useState<YesNoUnknown | "">("unknown");
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +155,7 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
         <div>
           <span className={styles.eyebrow}>Store {portal.store.number}</span>
           <h1 className={styles.title}>Report a problem</h1>
-          <p className={styles.lede}>Tell the store manager what needs attention. You only need to identify the store and describe the problem.</p>
+          <p className={styles.lede}>Describe the problem. Add details if you know them.</p>
         </div>
       </div>
       <div className={styles.layout}>
@@ -183,9 +183,8 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
               <label className={styles.label}>Area or equipment <span className={styles.helper}>(optional)</span>
                 <input className={styles.input} maxLength={120} onChange={(event) => setArea(event.target.value)} placeholder="Example: Beer cave, pump 4, women's restroom" value={area} />
               </label>
-              <fieldset className={styles.fieldset}>
-                <legend className={styles.legend}>What is the business impact right now?</legend>
-                <p className={styles.helper}>Plain-language answers are enough. A manager will confirm or revise them before creating a work order.</p>
+              <details className={styles.fieldset}>
+                <summary className={styles.legend}>Store impact (optional)</summary>
                 <label className={styles.label}>Is the store still operating? <span className={styles.required} aria-hidden="true">*</span>
                   <select className={styles.select} onChange={(event) => setStoreOperatingState(event.target.value as StoreOperatingState | "")} value={storeOperatingState}>
                     <option value="">Choose an answer</option>
@@ -210,7 +209,7 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
                     {CUSTOMER_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                   </select>
                 </label>
-              </fieldset>
+              </details>
               <fieldset className={styles.fieldset}>
                 <legend className={styles.legend}>How urgent is it?</legend>
                 <div className={styles.choiceGrid}>
@@ -248,10 +247,7 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
                 <div className={styles.detail}><span className={styles.detailLabel}>Customers affected</span><p className={styles.detailValue}>{CUSTOMER_OPTIONS.find((option) => option.id === customersAffected)?.label}</p></div>
                 <div className={styles.detail}><span className={styles.detailLabel}>Photos</span><p className={styles.detailValue}>{files.length}</p></div>
               </div>
-              <div className={styles.callout}>
-                <strong>The original report stays in the record</strong>
-                <p>The manager can review, classify, approve, escalate, or create a work order. They cannot silently erase what was submitted.</p>
-              </div>
+
               {error ? <p className={styles.error} role="alert">{error}</p> : null}
               <div className={styles.actions}>
                 <button className={styles.secondaryButton} disabled={submitting} onClick={() => { clearSubmissionKey(); setStep(2); }} type="button"><ArrowLeft aria-hidden="true" size={17} /> Back</button>

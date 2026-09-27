@@ -81,7 +81,7 @@ describe("demo package switch", () => {
       .toBe("/app/overview");
     expect(contextualNavigationForPath("facilities", "/app/work-orders", "accountability")?.items.map((item) => item.id))
       .toEqual(["work-orders", "visits"]);
-    expect(navigationForRole("facilities", "complete")).toHaveLength(6);
+    expect(navigationForRole("facilities", "complete")).toHaveLength(7);
   });
 
   it("builds the smaller package from source service records without planning links", () => {

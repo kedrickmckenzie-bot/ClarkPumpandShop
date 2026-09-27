@@ -42,12 +42,12 @@ describe("operator query presenter", () => {
     expect(model.table.rows.length).toBeGreaterThan(0);
     expect(model.table.rows.length).toBeLessThanOrEqual(25);
     expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "store")?.value === "Store 104")).toBe(true);
-    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "next")?.secondary?.includes("Internal:"))).toBe(true);
+    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "next")?.link?.href.endsWith("#add-update"))).toBe(true);
   });
 
   it("restores the facilities journey from default work to held-work bundling without abandoning query-first rows", async () => {
     const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
-    const model = await buildQueryListModel(repository, session({ role: "facilities", membershipId: "membership-northline-facilities" }), "work-orders", {});
+    const model = await buildQueryListModel(repository, session({ role: "facilities", membershipId: "membership-northline-facilities" }), "work-orders", { visitPlan: "ready" });
     const heldMetric = model.metrics?.find((metric) => metric.id === "ready-to-bundle");
     const multipleMetric = model.metrics?.find((metric) => metric.id === "store-sweep-opportunities");
     const timing = model.filters?.find((filter) => filter.id === "work-visit-plan");
@@ -57,8 +57,8 @@ describe("operator query presenter", () => {
     expect(Number(heldMetric?.value)).toBeGreaterThan(0);
     expect(multipleMetric?.link.href).toContain("storeGroup=multiple");
     expect(timing?.options.map((option) => option.label)).toContainEqual(expect.stringContaining("Approved for next suitable visit"));
-    expect(model.page.secondaryAction?.href).toContain("/app/store-sweeps/new");
-    expect(model.page.secondaryAction?.href).toContain("returnTo=");
+    expect(model.page.primaryAction?.href).toContain("/app/store-sweeps/new");
+    expect(model.page.primaryAction?.href).toContain("returnTo=");
   });
 
   it("keeps the normal held-work portfolio on bounded repository rows with context-preserving planning", async () => {

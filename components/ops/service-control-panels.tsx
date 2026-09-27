@@ -330,7 +330,7 @@ function WorkOrderControlForm({ model }: { model: WorkOrderControlViewModel }) {
       {!terminal ? (
         <div className={styles.accountabilityFields}>
           <div className={styles.fieldGrid}>
-            <label className={styles.field} htmlFor={`work-owner-${model.workOrderId}`}><span>Owner <em>Required</em></span><input id={`work-owner-${model.workOrderId}`} name="accountableParty" required defaultValue={model.accountableParty} /></label>
+            <label className={styles.field} htmlFor={`work-owner-${model.workOrderId}`}><span>Owner <em>Required</em></span><input id={`work-owner-${model.workOrderId}`} name="accountableParty" readOnly required defaultValue={model.accountableParty} /></label>
             <label className={styles.field} htmlFor={`work-due-${model.workOrderId}`}><span>Due <em>Required</em></span><input id={`work-due-${model.workOrderId}`} name="dueAt" type="datetime-local" required defaultValue={model.dueInputValue ?? inputDateTime(model.dueAt)} /></label>
           </div>
           <label className={styles.field} htmlFor={`work-next-${model.workOrderId}`}><span>Next step <em>Required</em></span><input id={`work-next-${model.workOrderId}`} name="nextAction" required defaultValue={model.nextAction} /></label>
@@ -441,7 +441,7 @@ function PendingApprovalPanel({ approval }: { approval: ApprovalDecisionViewMode
   );
 }
 
-function ManualVendorResponseForm({ model }: { model: WorkOrderControlViewModel }) {
+export function ManualVendorResponseForm({ model }: { model: WorkOrderControlViewModel }) {
   const { state, submit } = useMutation();
   const [response, setResponse] = useState("accepted");
   const target = model.manualVendorResponseTarget;
@@ -449,7 +449,7 @@ function ManualVendorResponseForm({ model }: { model: WorkOrderControlViewModel 
 
   return (
     <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`}>
-      <summary className={styles.subControlHeading}><MessageSquareText aria-hidden="true" size={18} /><div><h3>Record a response received outside the platform</h3><p>Use this when a vendor replied by phone, email, or in person. The record preserves who entered it and who responded.</p></div></summary>
+      <summary className={styles.subControlHeading}><MessageSquareText aria-hidden="true" size={18} /><div><h3>Record vendor reply</h3><p>Phone, email or in person.</p></div></summary>
       <form action={model.manualResponseAction} method="post" onSubmit={submit} className={styles.controlForm}>
         <input type="hidden" name="operation" value="vendor_response" />
         <input type="hidden" name="expectedAssignmentId" value={target.expectedAssignmentId} />
@@ -473,7 +473,7 @@ function ManualVendorResponseForm({ model }: { model: WorkOrderControlViewModel 
         {response === "proposed_date" ? <label className={styles.field} htmlFor={`vendor-proposed-${model.workOrderId}`}><span>Proposed service date <em>Required</em></span><input id={`vendor-proposed-${model.workOrderId}`} name="proposedAt" type="datetime-local" required /></label> : null}
         <label className={styles.field} htmlFor={`vendor-message-${model.workOrderId}`}><span>Response details{response === "declined" || response === "question" ? <em>Required</em> : <small>Optional</small>}</span><textarea id={`vendor-message-${model.workOrderId}`} name="message" rows={3} required={response === "declined" || response === "question"} placeholder="Record the vendor's words or a concise factual summary." /></label>
         <MutationError message={state.error} />
-        <div className={styles.formFooter}><button className={styles.secondaryButton} type="submit" disabled={state.pending}>{state.pending ? "Recording…" : "Record attributed response"}</button></div>
+        <div className={styles.formFooter}><button className={styles.secondaryButton} type="submit" disabled={state.pending}>{state.pending ? "Recording…" : "Save reply"}</button></div>
       </form>
     </details>
   );

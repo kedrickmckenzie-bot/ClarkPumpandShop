@@ -38,6 +38,8 @@ export async function dashboardQueryRegression(repository: OpsRepository, fixtur
     { organizationId: "another-organization", storeIds: [store.id] },
   ];
   for (const scope of scopes) {
+    expect(await repository.listEquipmentIssues(scope, window, { limit: 5 })).toEqual(await reference.listEquipmentIssues(scope, window, { limit: 5 }));
+    expect(await repository.listEquipmentIssues(scope, window, { limit: 5, offset: 5 })).toEqual(await reference.listEquipmentIssues(scope, window, { limit: 5, offset: 5 }));
     expect(await repository.getDashboardContext(scope)).toEqual(await reference.getDashboardContext(scope));
     expect(await repository.getDashboardLifecycle(scope, fixture.asOf)).toEqual(await reference.getDashboardLifecycle(scope, fixture.asOf));
     const summary = await repository.getDashboardActivity(scope, window);

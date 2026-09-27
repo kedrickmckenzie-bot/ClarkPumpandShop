@@ -2,7 +2,7 @@ import type { WorkOrderListQuery } from "./repository";
 import type { Asset, CostLine } from "./types";
 
 export function hasWorkCostFilter(query: WorkOrderListQuery) {
-  return Boolean(query.hasCost || query.costFrom || query.costTo || query.costMonth);
+  return Boolean(query.hasCost !== undefined || query.costFrom || query.costTo || query.costMonth);
 }
 
 export function matchesWorkCost(line: CostLine, query: WorkOrderListQuery) {

@@ -1,0 +1,24 @@
+"use client";
+import { useState } from "react";
+import styles from "./compliance.module.css";
+export function ComplianceCreateForm({stores,vendors,owners}:{stores:Array<{id:string;storeNumber:string;name:string}>;vendors:Array<{id:string;name:string}>;owners:Array<{id:string;name:string}>}) {
+ const [handler,setHandler]=useState("internal"),[unit,setUnit]=useState("months");
+ return <form action="/api/ops/compliance" method="post" encType="multipart/form-data" className={styles.form}>
+ <input type="hidden" name="action" value="create"/>
+ <label>Inspection or renewal name<input name="name" required maxLength={160} placeholder="e.g. Fire extinguisher inspection"/></label>
+ <div className={styles.pair}><label>Store<select name="storeId" required><option value="">Choose a store</option>{stores.map(s=><option key={s.id} value={s.id}>{s.storeNumber} · {s.name}</option>)}</select></label><label>Type<select name="kind"><option value="inspection">Inspection</option><option value="permit">Permit / renewal</option></select></label></div>
+ <div className={styles.pair}><label>First due date<input type="date" name="firstDueDate" required/></label><label>Repeat<select name="intervalUnit" value={unit} onChange={e=>setUnit(e.target.value)}><option value="once">One time</option><option value="days">Every number of days</option><option value="months">Every number of months</option></select></label></div>
+ {unit!=="once"?<label>Every<input type="number" name="intervalCount" min="1" max="365" defaultValue="12" required/><small>{unit} · Monthly = 1 month; annual = 12 months</small></label>:<input type="hidden" name="intervalCount" value="1"/>}
+ <div className={styles.pair}><label>Handled by<select name="handler" value={handler} onChange={e=>setHandler(e.target.value)}><option value="internal">Internal team</option><option value="vendor">Outside vendor</option></select></label>{handler==="internal"?<label>Responsible person<select name="membershipId" required><option value="">Choose a person</option>{owners.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>:<label>Vendor<select name="vendorId" required><option value="">Choose a vendor</option>{vendors.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label>}</div>
+ <label>Prepare and remind this many days before due<input type="number" name="leadDays" min="0" max="90" defaultValue="30" required/><small>Outside vendors receive a work order. Open items get weekly reminders.</small></label>
+ <label>Instructions & blank forms (optional)<input type="file" name="templates" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.txt"/><small>Included with each inspection work order. Download, print and upload the completed copy. Up to 5 files · 8 MB total.</small></label>
+ <label>Required evidence<input name="evidenceLabel" required maxLength={300} defaultValue="Inspection report or photos"/></label>
+ <label>Paperwork required to close?<select name="evidenceRequired" defaultValue="1"><option value="1">Yes</option><option value="0">No — result and notes are enough</option></select></label>
+ <details><summary>Instructions, requirement and escalation</summary><div className={styles.form}>
+ <label>Instructions<textarea name="instructions" rows={3} maxLength={4000}/></label>
+ <label>Requirement / reference<input name="requirementSource" maxLength={500} placeholder="Agency, permit, company policy or reference URL"/></label>
+ <label>Equipment tag (optional)<input name="assetTag" maxLength={100}/><small>Leave blank for a store-wide inspection.</small></label>
+ <div className={styles.pair}><label>Escalate days before due<input name="escalationDays" type="number" min="0" max="90" defaultValue="0"/></label><label>Escalation owner<input name="escalationTo" defaultValue="Facilities coordinator" required maxLength={160}/></label></div><small>Escalations notify the facilities team and identify this owner.</small>
+ </div></details><button type="submit">Create schedule</button>
+ </form>;
+}

@@ -5,14 +5,21 @@ import { recordedMoneyLabel, type ReviewEvidence } from "@/lib/ops/work-review";
 import { latestRecordedWorkOutcome, applicableOutcomeVerification } from "@/lib/ops/work-order-outcome";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import type { OpsFixture } from "@/lib/ops/types";
+import { equipmentIssueRankingHref, isEquipmentIssue } from "@/lib/ops/equipment-issues";
+import { rollingYearStart, validateDashboardWindow } from "@/lib/ops/dashboard-query";
 
 export interface EquipmentReviewModel {
+  issueCohort?: boolean;
+  currency?: string;
+  decisionHref?: string;
+  rankingHref?: string;
+  allHistoryHref?: string;
   title: string;
   period: string;
   asOf: string;
   choices: Array<{ label: string; href: string; selected: boolean }>;
   periods: Array<{ label: string; href: string; selected: boolean }>;
-  rows: Array<{ id: string; number: string; problem: string; scope: string; outcome: string; verification: string; cost: string; quotes: string[]; href: string }>;
+  rows: Array<{ id: string; number: string; problem: string; scope: string; opened?: string; provider?: string; outcome: string; verification: string; cost: string; quotes: string[]; href: string }>;
   rowCount: number;
   workCost: string;
   warranty: Array<ReviewEvidence & { dates?: string; status?: string; provider?: string }>;
@@ -39,8 +46,12 @@ export function buildEquipmentReview(fixture: OpsFixture, session: OperatorSessi
   const months = first(query.history) === "24" ? 24 : first(query.history) === "all" ? undefined : 12;
   const starts = new Date(fixture.asOf);
   if (months) starts.setUTCMonth(starts.getUTCMonth() - months);
-  const from = months ? starts.toISOString().slice(0, 10) : undefined;
-  const to = fixture.asOf.slice(0, 10);
+  const issueCohort = first(query.cohort) === "issues";
+  const from = issueCohort ? first(query.issueFrom) ?? rollingYearStart(fixture.asOf) : months ? starts.toISOString().slice(0, 10) : undefined;
+  const to = issueCohort ? first(query.issueTo) ?? fixture.asOf.slice(0, 10) : fixture.asOf.slice(0, 10);
+  const issueWindow = { asOf: fixture.asOf, costFrom: from ?? rollingYearStart(fixture.asOf), costTo: to, currency: first(query.currency) ?? "USD" };
+  let invalidPeriod = false;
+  if (issueCohort) { try { validateDashboardWindow(issueWindow); } catch { invalidPeriod = true; } }
   const within = (value: string) => (!from || value.slice(0, 10) >= from) && value.slice(0, 10) <= to;
   const components = fixture.components.filter((row) => row.organizationId === org && row.assetId === asset.id);
   const selected = components.find((row) => row.id === selectedId);
@@ -50,14 +61,16 @@ export function buildEquipmentReview(fixture: OpsFixture, session: OperatorSessi
     changed = false;
     for (const component of components) if (component.parentComponentId && selectedIds.has(component.parentComponentId) && !selectedIds.has(component.id)) { selectedIds.add(component.id); changed = true; }
   }
-  const invalid = Boolean(selectedId && selectedId !== "unlinked" && !selected);
+  const invalid = invalidPeriod || Boolean(selectedId && selectedId !== "unlinked" && !selected);
   const scopedWork = fixture.workOrders.filter((row) => row.organizationId === org && row.storeId === store.id && row.assetId === asset.id && !invalid && (!selectedId || (selectedId === "unlinked" ? !row.componentId : Boolean(row.componentId && selectedIds.has(row.componentId)))));
-  const scopeIds = new Set(scopedWork.map((row) => row.id));
+  const pmWorkIds = new Set(fixture.pmOccurrences.filter(p => p.organizationId === org).flatMap(p => p.workOrderId ? [p.workOrderId] : []));
+  const issueWork = issueCohort ? scopedWork.filter(row => isEquipmentIssue(row, issueWindow, pmWorkIds)) : scopedWork;
+  const scopeIds = new Set(issueWork.map((row) => row.id));
   const links = fixture.siteVisitWorkOrders.filter((row) => row.organizationId === org && scopeIds.has(row.workOrderId));
-  const costs = fixture.costLines.filter((row) => row.organizationId === org && scopeIds.has(row.workOrderId) && within(row.serviceDate));
+  const costs = fixture.costLines.filter((row) => row.organizationId === org && scopeIds.has(row.workOrderId) && within(row.serviceDate) && (!issueCohort || row.amount.currency === issueWindow.currency));
   const costIds = new Set(costs.map((row) => row.workOrderId));
   const activeIds = new Set(links.filter((row) => within(row.outcomeRecordedAt ?? row.linkedAt)).map((row) => row.workOrderId));
-  const work = scopedWork.filter((row) => within(row.createdAt) || costIds.has(row.id) || activeIds.has(row.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+  const work = issueWork.filter((row) => issueCohort || within(row.createdAt) || costIds.has(row.id) || activeIds.has(row.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
   const page = Math.max(1, Math.min(Math.max(1, Math.ceil(work.length / 12)), Math.floor(Number(first(query.historyPage))) || 1));
   const date = (value: string) => formatOperationsDate(value, store.timeZone);
   const href = (changes: Record<string, string | undefined>) => {
@@ -82,21 +95,28 @@ export function buildEquipmentReview(fixture: OpsFixture, session: OperatorSessi
   }
   const records = new URLSearchParams({ store: store.id, asset: asset.id, ...(selectedId ? { component: selectedId } : {}) });
   return {
+    issueCohort, currency: issueCohort ? issueWindow.currency : undefined,
+    rankingHref: issueCohort ? equipmentIssueRankingHref(issueWindow) : undefined,
+    allHistoryHref: issueCohort ? href({ cohort: undefined, issueFrom: undefined, issueTo: undefined, currency: undefined, history: "all" }) : undefined,
+    decisionHref: roleCanOpenOperatorHref(session.role, "/app/lifecycle") && !invalid ? `/app/lifecycle?${new URLSearchParams({ asset: asset.id, decision: asset.id, view: "review", history: first(query.history) ?? "12", ...(selectedId ? { component: selectedId } : {}) })}` : undefined,
     addWarrantyHref: ["executive", "facilities", "regional"].includes(session.role) ? `/app/equipment/${asset.id}/warranties/new${selected ? `?component=${selected.id}` : ""}` : undefined,
-    title, period: from ? `${date(from)}–${date(to)}` : `All recorded dates through ${date(to)}`, asOf: date(to),
+    title, period: from ? `${date(from)}–${date(to)}` : `All recorded dates through ${date(to)}`, asOf: date(fixture.asOf),
     choices: [{ label: "Whole equipment", href: href({ component: undefined }), selected: !selectedId }, ...components.map((row) => ({ label: `${row.name}${row.removedAt && !row.name.toLowerCase().includes("removed") ? " (removed)" : ""}`, href: href({ component: row.id }), selected: row.id === selectedId })), { label: "Component not specified", href: href({ component: "unlinked" }), selected: selectedId === "unlinked" }],
-    periods: ["12", "24", "all"].map((value) => ({ label: value === "all" ? "All recorded dates" : `${value} months`, href: href({ history: value }), selected: value === (months?.toString() ?? "all") })),
+    periods: issueCohort ? [] : ["12", "24", "all"].map((value) => ({ label: value === "all" ? "All recorded dates" : `${value} months`, href: href({ history: value }), selected: value === (months?.toString() ?? "all") })),
     rows: work.slice((page - 1) * 12, page * 12).map((row) => {
       const outcome = latestRecordedWorkOutcome(links.filter((link) => link.workOrderId === row.id));
       const verification = applicableOutcomeVerification(fixture.workOrderVerifications.filter((item) => item.organizationId === org && item.workOrderId === row.id), outcome);
       const estimates = fixture.estimateRequests.filter((item) => item.organizationId === org && item.workOrderId === row.id && !["withdrawn", "declined", "expired", "not_selected"].includes(item.status));
-      return { id: row.id, number: row.number, problem: row.problem, scope: row.componentId ? components.find((item) => item.id === row.componentId)?.name ?? "Unknown component" : "Component not specified", outcome: outcome ? `${date(outcome.outcomeRecordedAt!)} · Provider reported ${outcome.outcome!.replaceAll("_", " ")}${outcome.outcomeNotes ? `: ${outcome.outcomeNotes}` : ""}` : `No job outcome recorded · Work status: ${row.status.replaceAll("_", " ")}`, verification: verification ? `Manager review: ${verification.decision.replaceAll("_", " ")}${verification.reason ? ` — ${verification.reason}` : ""}` : "No manager review of the current outcome", cost: recordedMoneyLabel(costs.filter((item) => item.workOrderId === row.id).map((item) => item.amount)), quotes: estimates.map((estimate) => { const proposal = fixture.estimateProposals.filter((item) => item.organizationId === org && item.requestId === estimate.id).sort((a, b) => b.revision - a.revision)[0]; return `${estimate.decisionKind === "replacement_quote" ? "Replacement" : "Service"}: ${proposal ? `${recordedMoneyLabel([proposal.amount])} · ${proposal.scope}${proposal.validUntil && proposal.validUntil.slice(0, 10) < to ? " · Expired quote" : ""}` : "Price awaited"}`; }), href: `/app/work-orders/${row.id}` };
+      const visitIds = new Set(links.filter(link => link.workOrderId === row.id).map(link => link.visitId));
+      const visits = fixture.visits.filter(visit => visit.organizationId === org && visit.storeId === store.id && (visitIds.has(visit.id) || visit.workOrderId === row.id));
+      const provider = [...new Set(visits.map(visit => visit.providerName))].join(", ");
+      return { id: row.id, number: row.number, opened: date(issueCohort ? row.createdAt.slice(0, 10) : row.createdAt), provider: visits.length ? `${provider} · ${visits.length} visit${visits.length === 1 ? "" : "s"}` : "No visits recorded", problem: row.problem, scope: row.componentId ? components.find((item) => item.id === row.componentId)?.name ?? "Unknown component" : "Component not specified", outcome: outcome ? `${date(outcome.outcomeRecordedAt!)} · Provider reported ${outcome.outcome!.replaceAll("_", " ")}${outcome.outcomeNotes ? `: ${outcome.outcomeNotes}` : ""}` : `No job outcome recorded · Work status: ${row.status.replaceAll("_", " ")}`, verification: verification ? `Manager review: ${verification.decision.replaceAll("_", " ")}${verification.reason ? ` — ${verification.reason}` : ""}` : "No manager review of the current outcome", cost: recordedMoneyLabel(costs.filter((item) => item.workOrderId === row.id).map((item) => item.amount)), quotes: estimates.map((estimate) => { const proposal = fixture.estimateProposals.filter((item) => item.organizationId === org && item.requestId === estimate.id).sort((a, b) => b.revision - a.revision)[0]; return `${estimate.decisionKind === "replacement_quote" ? "Replacement" : "Service"}: ${proposal ? `${recordedMoneyLabel([proposal.amount])} · ${proposal.scope}${proposal.validUntil && proposal.validUntil.slice(0, 10) < to ? " · Expired quote" : ""}` : "Price awaited"}`; }), href: `/app/work-orders/${row.id}` };
     }),
     rowCount: work.length, workCost: recordedMoneyLabel(costs.map((row) => row.amount)), warranty,
     currentWork: scopedWork.filter((row) => !["closed", "cancelled", "resolved"].includes(row.status)).map((row) => ({ label: `${row.number} · ${row.problem}`, href: `/app/work-orders/${row.id}` })),
     createHref: roleCan(session, "create_work_order") && !invalid ? `/app/work-orders/new?${new URLSearchParams({ store: store.id, asset: asset.id, ...(selected ? { component: selected.id } : {}) })}` : undefined,
     recordsHref: `/app/work-orders?${selectedIds.size > 1 ? new URLSearchParams({ store: store.id, asset: asset.id }) : records}`, recordsLabel: selectedIds.size > 1 ? "All work on the whole equipment" : "All work orders in this scope", componentHref: selected ? `/app/equipment/${asset.id}/components/${selected.id}` : undefined,
     pages: [...(page > 1 ? [{ label: "Previous history", href: href({ historyPage: String(page - 1) }) }] : []), ...(page * 12 < work.length ? [{ label: "Next history", href: href({ historyPage: String(page + 1) }) }] : [])],
-    notice: invalid ? "This component is unavailable on this equipment record. Choose a listed scope to review its evidence." : undefined,
+    notice: invalidPeriod ? "This issue period is invalid. Return to Overview and reopen the equipment ranking." : invalid ? "This component is unavailable on this equipment record. Choose a listed scope to review its evidence." : undefined,
   };
 }

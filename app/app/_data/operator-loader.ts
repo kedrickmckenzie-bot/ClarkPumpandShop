@@ -1,6 +1,7 @@
 import { pmStoreAllowed } from "@/lib/ops/pm-record-query";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
+import { presentEquipmentIssues, buildEquipmentIssueRanking } from "./equipment-issues-presenter";
 import { attentionAccess } from "./attention-presenter";
 import { buildReviewQueue, buildReviewSources } from "./review-queue-presenter";
 import { buildPmScheduleModel } from "./pm-schedule-presenter";
@@ -257,6 +258,7 @@ function enforceDashboardLinkPolicy<T extends DashboardPageViewModel>(model: T, 
   if (model.spotlight && !roleCanOpenOperatorHref(role, model.spotlight.link.href)) {
     model.spotlight = undefined;
   }
+  if (model.equipmentIssues && !roleCanOpenOperatorHref(role, model.equipmentIssues.href)) model.equipmentIssues = undefined;
   return model;
 }
 
@@ -375,14 +377,33 @@ export async function loadDashboardModel() {
   const repository = await getServerOpsRepository();
   const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
   const window = { asOf, costFrom: rollingYearStart(asOf), costTo: asOf.slice(0, 10), currency: "USD" };
-  const [activity, attention, charts, context, lifecycle] = await Promise.all([
+  const [activity, attention, charts, context, lifecycle, issues] = await Promise.all([
     repository.getDashboardActivity(scope, window),
     repository.listAttention(scope, attentionAccess(session), { asOf, limit: 7 }),
     loadDashboardChartPages(repository, scope, window),
     repository.getDashboardContext(scope),
     repository.getDashboardLifecycle(scope, asOf),
+    repository.listEquipmentIssues(scope, window, { limit: 5 }),
   ]);
-  return enforceDashboardLinkPolicy(presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window), session);
+  const model = presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window);
+  model.equipmentIssues = presentEquipmentIssues(issues, window, session);
+  return enforceDashboardLinkPolicy(model, session);
+}
+
+export async function loadEquipmentIssueRanking(query: OperatorSearchParameters) {
+  const session = await getRequestOperatorSession();
+  if (!roleCanAccessProgramRoute(session.role, "equipment")) notFound();
+  return buildEquipmentIssueRanking(await getServerOpsRepository(), session, query, getServerOpsReportingAsOf());
+}
+
+export async function loadEquipmentIssueSummary() {
+  const session = await getRequestOperatorSession();
+  if (!roleCanAccessProgramRoute(session.role, "equipment")) return null;
+  const asOf = getServerOpsReportingAsOf();
+  const window = { asOf, costFrom: rollingYearStart(asOf), costTo: asOf.slice(0, 10), currency: "USD" };
+  const repository = await getServerOpsRepository();
+  const result = await repository.listEquipmentIssues({ organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds }, window, { limit: 5 });
+  return presentEquipmentIssues(result, window, session);
 }
 
 export async function loadReviewSourcesModel(searchParams: OperatorSearchParameters) {
@@ -494,7 +515,7 @@ export async function loadVendorPerformanceListModel(searchParams: OperatorSearc
 export async function loadVendorPerformanceDetailModel(vendorId: string, query: OperatorSearchParameters = {}) {
   const context = await sessionAndFixture();
   if (!roleCanAccessDetailRoute(context.session.role, "vendor")) notFound();
-  return paginateVendorEvidence(buildVendorPerformanceDetailModel(context.fixture, context.session, vendorId), vendorId, query);
+  return paginateVendorEvidence(buildVendorPerformanceDetailModel(context.fixture, context.session, vendorId, { report: Array.isArray(query.report) ? query.report[0] : query.report, reportPage: Array.isArray(query.reportPage) ? query.reportPage[0] : query.reportPage }), vendorId, query);
 }
 
 export async function loadCreateRequestModel(query: OperatorSearchParameters = {}): Promise<import("@/components/ops/data-contract").CreateRequestPageViewModel> {

@@ -1,0 +1,57 @@
+import { expect } from "vitest";
+import { createWorkOrder, recordWorkOrderNote } from "@/lib/ops/commands";
+import { receiveEmail, resolveEmail, routeVerifiedEmail } from "@/lib/ops/email-intake";
+import { deliverRoutineReminder, runRoutineFollowUpCycle, saveFollowUpPreference } from "@/lib/ops/routine-follow-ups";
+import { loadWorkCostPrompts } from "@/lib/ops/work-cost-prompts";
+import { NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
+import type { OpsRepository } from "@/lib/ops/repository";
+
+export async function communicationRegression(repository:OpsRepository) {
+  const org=NORTHLINE_ORGANIZATION_ID;
+  const actor={organizationId:org,actorType:"user" as const,actorId:"membership-northline-facilities",actorName:"Jordan Lee"};
+  const svc={repository,clock:{now:()=>"2026-09-01T12:00:00.000Z"}};
+  const work=await createWorkOrder({...svc,clock:{now:()=>"2026-09-01T10:00:00.000Z"}},{organizationId:org,storeId:"store-northline-104",problem:"Communication acceptance latch",accountableParty:"Facilities coordinator",nextAction:"Confirm parts arrival",dueAt:"2026-09-01T11:00:00.000Z",actor});
+  const email=await receiveEmail(svc,{organizationId:org,messageKey:`regression-${crypto.randomUUID()}`,sender:"dispatcher@example.test",subject:`Re: ${work.number}`,body:"Parts arrive Tuesday. The store is still waiting.",reportedDate:"Tuesday morning",files:[{id:`file-${crypto.randomUUID()}`,organizationId:org,storageKey:"test-private-evidence",sha256:"a".repeat(64),originalName:"parts.txt",contentType:"text/plain",byteLength:24,status:"available",createdAt:svc.clock.now()}]});
+  const replay=await receiveEmail(svc,{organizationId:org,messageKey:email.messageKey,sender:email.sender,subject:"Changed retry",body:"Should not replace original"});
+  expect(replay.body).toBe(email.body);
+  expect((await routeVerifiedEmail(svc,email.id,org,false))?.status).toBe("needs_review");
+  await expect(resolveEmail(svc,{organizationId:org,emailId:email.id,workOrderId:work.id,actor:{...actor,organizationId:"other"}})).rejects.toMatchObject({code:"FORBIDDEN"});
+  expect(await repository.getInboundEmail("other",email.id)).toBeNull();
+  await resolveEmail(svc,{organizationId:org,emailId:email.id,workOrderId:work.id,actor});
+  expect(await repository.getInboundEmail(org,email.id)).toMatchObject({status:"linked",workOrderId:work.id});
+  expect((await repository.listFilesForEntity(org,"work_order",work.id))[0]?.originalName).toBe("parts.txt");
+  await expect(resolveEmail(svc,{organizationId:org,emailId:email.id,storeId:work.storeId,actor})).rejects.toMatchObject({code:"CONFLICT"});
+  expect(await repository.listServiceAppointmentsForWorkOrder(org,work.id)).toHaveLength(0);
+  const fresh=await receiveEmail(svc,{organizationId:org,messageKey:`new-${crypto.randomUUID()}`,sender:"store@example.test",subject:"Store 104 — rear door",body:"Rear door sticks."});
+  const routed=await routeVerifiedEmail(svc,fresh.id,org,true);
+  expect(routed?.requestId).toBeTruthy();
+  const request=await repository.getRequest(org,routed!.requestId!);
+  expect(request).toMatchObject({storeId:"store-northline-104",status:"submitted"});
+  const settingsClock={now:()=>"2026-09-01T12:00:01.000Z"};
+  await saveFollowUpPreference({...svc,clock:settingsClock},org,24,actor);
+  const messages: import("@/lib/ops/outbox-delivery").OutboxDeliveryMessage[]=[];
+  const capturing = new Proxy(repository,{get(target,key){if(key==="atomicWrite") return async (statements:readonly import("@/lib/ops/repository").OpsStatement[])=>{await target.atomicWrite(statements);for(const statement of statements) if(statement.sql.startsWith("INSERT INTO ops_outbox_messages")){const columns=statement.sql.match(/\(([^)]+)\)/)![1].split(", ");const data=Object.fromEntries(columns.map((column,index)=>[column,statement.params[index]]));if(data.topic==="ops.routine.reminder")messages.push({id:String(data.id),organizationId:String(data.organization_id),aggregateId:String(data.aggregate_id),aggregateType:String(data.aggregate_type),topic:String(data.topic),payloadJson:String(data.payload_json),attemptCount:0});}};const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;}});
+  await runRoutineFollowUpCycle({...svc,repository:capturing},org);
+  // Read the deterministic fence to find this work's reminder even on a large tenant.
+  const preference=await repository.getFollowUpPreference(org);
+  const fence=await repository.getIdempotencyKey(org,`routine:${work.id}:${work.dueAt}:${preference!.id}:0`);
+  expect(fence?.resultId).toBeTruthy();
+  let message=messages.find(row=>row.id===fence?.resultId);
+  if(!message) throw new Error("Expected due reminder in outbox");
+  const sent:string[]=[];
+  const transport={repository,baseUrl:"https://example.test",provider:{name:"fake",async send(email:{to:string}){sent.push(email.to);return {messageId:"test"};}}};
+  await deliverRoutineReminder(transport,{...message,attemptCount:1},svc.clock.now());
+  expect(sent.length).toBeGreaterThan(0);
+  const count=sent.length;
+  const before=(await repository.getWorkOrder(org,work.id))!;
+  await recordWorkOrderNote(svc,{organizationId:org,workOrderId:work.id,expectedVersion:before.version ?? 0,note:"Phone: parts received; awaiting fitting",actor});
+  await deliverRoutineReminder(transport,{...message,attemptCount:2},svc.clock.now());
+  expect(sent).toHaveLength(count);
+  const second=await runRoutineFollowUpCycle(svc,org);
+  expect(second.queued).toBe(0);
+  await saveFollowUpPreference({...svc,clock:{now:()=>"2026-09-01T12:00:02.000Z"}},org,0,actor);
+  message={...message,payloadJson:JSON.stringify({...JSON.parse(message.payloadJson),fingerprint:"stale"})};
+  await deliverRoutineReminder(transport,{...message,attemptCount:3},svc.clock.now());
+  expect(sent).toHaveLength(count);
+  expect(await loadWorkCostPrompts(repository,{organizationId:org,storeIds:[]},work.id,svc.clock.now())).toEqual([]);
+}

@@ -94,7 +94,7 @@ function ActionRow({ action }: { action: ActionItemViewModel }) {
 }
 
 function AttentionSection({ model }: { model: DashboardPageViewModel }) {
-  const actions = model.priorityActions.slice(0, 7);
+  const actions = model.priorityActions.slice(0, 5);
   const source = model.prioritySection?.link ?? { href: "/app/action-center", label: "Open action queue" };
 
   return (
@@ -199,6 +199,18 @@ function StatePanel({ model }: { model: DashboardPageViewModel }) {
   return <div className={styles.statePanel}>{icon}<h2>{title}</h2><p>{message}</p></div>;
 }
 
+export function EquipmentIssues({ model }: { model: NonNullable<DashboardPageViewModel["equipmentIssues"]> }) {
+  return <section id="equipment-issues" className={styles.section} aria-labelledby="equipment-issues-title">
+    <div className={styles.issueHeading}><div><h2 id="equipment-issues-title">Most frequent equipment issues</h2><p>{model.period} · {model.totalCount ? `Top ${Math.min(5, model.totalCount)} in your scope` : "Your equipment scope"}</p></div><Link href={model.href} className={styles.textLink}>View all <ArrowRight size={16} aria-hidden="true" /></Link></div>
+    {model.rows.length ? <div className={styles.issueTable}><table><caption>Equipment ranked by unplanned work orders</caption><thead><tr><th>Equipment</th><th>Store</th><th>Issues</th><th>Recorded work cost · {model.currency}</th><th>Latest issue</th></tr></thead><tbody>{model.rows.map(row => <tr key={row.id}>
+      <td><Link href={row.href}>{row.name}</Link><small>{row.assetTag}</small></td><td>{row.storeLabel}</td>
+      <td><Link href={row.href} aria-label={`${row.issueCount} ${row.issueCount === 1 ? "issue" : "issues"} for ${row.name} at ${row.storeLabel}`}>{row.issueCount}</Link></td>
+      <td>{row.cost}<small>{row.coverage}</small></td><td>{row.latestIssue}</td>
+    </tr>)}</tbody></table></div> : <p className={styles.issueNote}>No unplanned work orders are linked to equipment in this period.</p>}
+    <p className={styles.issueNote}>Unplanned work linked to equipment. Counts describe issues, not confirmed outages. <Link href="/app/work-orders?asset=unlinked&status=all">Review work without equipment</Link>.</p>
+  </section>;
+}
+
 export function ControlTower({ model }: { model: DashboardPageViewModel }) {
   if (model.state.kind !== "ready") {
     return <div className={styles.workspace}><PageHeader model={model} /><StatePanel model={model} /></div>;
@@ -221,25 +233,26 @@ export function ControlTower({ model }: { model: DashboardPageViewModel }) {
     <section className={styles.section}><div className={styles.empty}><BarChart3 size={24} aria-hidden="true" /><p>No insight records are available for this scope and period.</p></div></section>
   );
   const metrics = <MetricStrip metrics={model.metrics} />;
-  const attention = model.prioritySection?.display === "summary" ? null : <AttentionSection model={model} />;
+  const attention = <AttentionSection model={model} />;
   const pipeline = <Pipeline model={model} />;
   const spotlight = model.spotlight ? <Spotlight model={model.spotlight} /> : null;
+  const equipment = model.equipmentIssues ? <EquipmentIssues model={model.equipmentIssues} /> : null;
   let content: ReactNode;
 
   switch (model.layout) {
     case "executive":
     case "finance":
-      content = <>{metrics}{insights}{spotlight}{attention}{pipeline}</>;
+      content = <>{metrics}{equipment}{insights}{spotlight}{attention}{pipeline}</>;
       break;
     case "regional":
-      content = <>{metrics}{spendSummary}{attention}{insights}{pipeline}{spotlight}</>;
+      content = <>{metrics}{attention}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
       break;
     case "store":
-      content = <>{attention}{metrics}{pipeline}{insights}{spotlight}</>;
+      content = <>{attention}{metrics}{equipment}{pipeline}{insights}{spotlight}</>;
       break;
     case "operations":
     default:
-      content = <>{metrics}{spendSummary}{attention}{pipeline}{insights}{spotlight}</>;
+      content = <>{metrics}{attention}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
   }
 
   return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;

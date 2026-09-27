@@ -2895,10 +2895,23 @@ export async function requestAcknowledgedServiceRequestFollowUp(svc: OpsCommandS
   return { request: { ...request, status: "under_review" as const, version: persistedRequestVersion(request) + 1 }, task };
 }
 
+export async function recordWorkOrderNote(svc: OpsCommandServices, input: { organizationId: OpsId; workOrderId: OpsId; expectedVersion: number; note: string; actor: ActorContext }) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
+  if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order not found");
+  if (persistedWorkOrderVersion(workOrder) !== input.expectedVersion) throw new OpsDomainError("CONFLICT", "This work order changed. Refresh before saving your note");
+  const note = required(input.note, "Update");
+  const now = clock.now();
+  await atomicWorkOrderMutation({ repository, workOrder, now, statements: auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.note_added", actor: input.actor, occurredAt: now, payload: { note }, ids }) });
+}
+
 export interface UpdateWorkOrderControlInput {
   organizationId: OpsId;
   workOrderId: OpsId;
   expectedStatus: WorkOrderStatus;
+  expectedVersion?: number;
+  manualCompletion?: { source: "phone" | "email" | "in_person"; confirmedBy: string };
   status: WorkOrderStatus;
   priority?: WorkOrderPriority;
   accountableParty?: string;
@@ -3093,13 +3106,23 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
   assertActorOrganization(input.actor, input.organizationId);
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
   if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Work order not found");
+  if (input.expectedVersion !== undefined && input.expectedVersion !== persistedWorkOrderVersion(workOrder)) throw new OpsDomainError("CONFLICT", "This work order changed. Refresh before saving your update");
   if (workOrder.status !== input.expectedStatus) throw new OpsDomainError("CONFLICT", "This work order changed. Refresh before recording another update");
   if (terminalWorkOrderStatuses.has(workOrder.status)) throw new OpsDomainError("CONFLICT", "Closed or cancelled work orders cannot be edited");
-  if (input.status !== workOrder.status && !allowedWorkOrderControlTransitions(workOrder.status).includes(input.status)) {
+  if (input.manualCompletion) {
+    const membership = input.actor.actorType === "user" && input.actor.actorId ? await repository.getMembership(input.organizationId, input.actor.actorId) : undefined;
+    if (!membership || membership.status !== "active" || !["facilities_admin", "regional_manager"].includes(membership.role)) throw new OpsDomainError("FORBIDDEN", "Facilities or regional management must confirm completion");
+    if (input.status !== "closed" || input.expectedVersion === undefined || !["phone", "email", "in_person"].includes(input.manualCompletion.source)) throw new OpsDomainError("VALIDATION", "Confirm how completion was checked");
+    required(input.manualCompletion.confirmedBy, "Person who confirmed the result");
+    const [detail, tasks] = await Promise.all([repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id), repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id)]);
+    if (detail?.visits.length) throw new OpsDomainError("CONFLICT", "This work has visit evidence. Confirm its recorded result before closing");
+    if (workOrder.status === "awaiting_approval" || tasks.some(task => ["open", "in_progress", "paused"].includes(task.status) && task.sourceApprovalRequestId)) throw new OpsDomainError("CONFLICT", "Resolve the pending approval before closing");
+  }
+  if (!input.manualCompletion && input.status !== workOrder.status && !allowedWorkOrderControlTransitions(workOrder.status).includes(input.status)) {
     throw new OpsDomainError("CONFLICT", `Work cannot move directly from ${workOrder.status} to ${input.status}`);
   }
   const note = required(input.note, "Update note");
-  if (input.status === "closed") {
+  if (input.status === "closed" && !input.manualCompletion) {
     await assertWorkOrderReadyForClosure(repository, workOrder, input.actor);
   }
   const now = clock.now();
@@ -3148,7 +3171,7 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
     if (!Number.isFinite(Date.parse(dueAt))) throw new OpsDomainError("VALIDATION", "Due date is invalid");
   }
   const closedAt = terminal ? now : null;
-  const eventType = input.status !== workOrder.status
+  const eventType = input.manualCompletion ? "work_order.completed_manually" : input.status !== workOrder.status
     ? input.status === "closed"
       ? "work_order.closed"
       : input.status === "cancelled"
@@ -3159,6 +3182,19 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
     sql: "UPDATE ops_work_orders SET status = ?, priority = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ?, closed_at = ? WHERE organization_id = ? AND id = ? AND status = ?",
     params: [input.status, priority, accountableParty, nextAction, dueAt, escalationTo, closedAt, input.organizationId, workOrder.id, input.expectedStatus],
   }];
+  // Keep the primary task and the work table consistent when a person edits the next step.
+  if (!terminal) {
+    const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
+    const primary = selectPrimaryWorkflowTask(tasks);
+    if (primary && (accountableParty !== workOrder.accountableParty || nextAction !== workOrder.nextAction || dueAt !== workOrder.dueAt || escalationTo !== workOrder.escalationTo)) {
+      if (primary.sourceApprovalRequestId) throw new OpsDomainError("CONFLICT", "Use the approval action to change this pending decision");
+      if (primary.assigneeId && accountableParty !== workOrder.accountableParty) throw new OpsDomainError("CONFLICT", "Use the assignment action to change who handles this work");
+      const updatedTask = { ...primary, assigneeName: accountableParty, title: nextAction, dueAt: dueAt ?? undefined, noSlaReason: undefined, escalationDestination: escalationTo ?? primary.escalationDestination };
+      statements.push(workflowTaskUpdateStatement({ organizationId: input.organizationId, workflowTaskId: primary.id, patch: { title: nextAction, assigneeName: accountableParty, dueAt, escalationDestination: escalationTo ?? undefined } }));
+      if (primary.sourceFollowUpId) statements.push({ sql: "UPDATE ops_follow_ups SET accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ? WHERE organization_id = ? AND id = ? AND status = ?", params: [accountableParty, nextAction, dueAt, escalationTo, input.organizationId, primary.sourceFollowUpId, "open"] });
+      statements.push(buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, tasks.map(task => task.id === primary.id ? updatedTask : task)));
+    }
+  }
   if (terminal) {
     if (visitHoldToCancel) {
       statements.push(
@@ -3234,6 +3270,7 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
     occurredAt: now,
     payload: {
       note,
+      ...(input.manualCompletion ? { completionSource: input.manualCompletion.source, confirmedBy: input.manualCompletion.confirmedBy, evidenceMeaning: "operator_reported_completion_without_observed_visit" } : {}),
       previous: {
         status: workOrder.status,
         priority: workOrder.priority,

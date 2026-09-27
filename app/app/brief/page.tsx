@@ -4,7 +4,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OwnerBriefSection } from "@/components/workspace/owner-brief";
 import { CoverageQualitySection } from "@/components/workspace/coverage-quality";
-import { loadCoverageQualityModel, loadOwnerBriefModel } from "../_data/operator-loader";
+import { loadCoverageQualityModel, loadOwnerBriefModel, loadEquipmentIssueSummary } from "../_data/operator-loader";
+import { EquipmentIssues } from "@/components/workspace/control-tower";
+import dashboardStyles from "@/components/workspace/control-tower.module.css";
 
 export const metadata: Metadata = { title: "Owner brief" };
 
@@ -18,13 +20,14 @@ export default async function OwnerBriefPage({ searchParams }: { searchParams: P
   }
   const coverageQuality = await loadCoverageQualityModel();
   if (!brief && !coverageQuality) notFound();
+  const equipmentIssues = await loadEquipmentIssueSummary();
   return (
     <div className={styles.page}>
       <header className={styles.head}>
         <h1>Owner brief</h1>
         <p className="brief-page-sub">Costs, work and decisions across your stores.</p>
       </header>
-      {brief ? <OwnerBriefSection model={brief} /> : null}
+      {brief ? <OwnerBriefSection model={brief} equipmentIssues={equipmentIssues ? <div className={dashboardStyles.workspace}><EquipmentIssues model={equipmentIssues} /></div> : null} /> : null}
       {coverageQuality ? <CoverageQualitySection model={coverageQuality} /> : null}
     </div>
   );

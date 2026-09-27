@@ -1,10 +1,11 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { BRIEF_SOURCES, briefSourceHref, type BriefSummary, type BriefSource } from "@/lib/ops/owner-brief-query";
 import { briefMoney, briefRecordHref } from "@/app/app/_data/owner-brief-query-presenter";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import styles from "./brief-summary.module.css";
 
-export function OwnerBriefSection({ model }: { model: BriefSummary & { scopeLabel: string } }) {
+export function OwnerBriefSection({ model, equipmentIssues }: { model: BriefSummary & { scopeLabel: string }; equipmentIssues?: ReactNode }) {
   const { period, sources } = model;
   const money = (amount: number) => briefMoney(amount, period.currency);
   const href = (kind: BriefSource, store?: string) => briefSourceHref(period, kind, 0, store);
@@ -29,6 +30,7 @@ export function OwnerBriefSection({ model }: { model: BriefSummary & { scopeLabe
       <div><h2>Work</h2><Link href={href("opened_work")} className={styles.value}>{sources.opened_work.totalCount} opened this period</Link><Link href={href("active_work")}>{sources.active_work.totalCount} active now</Link></div>
       <div><h2>Escalations</h2><Link href={href("escalations")} className={styles.value}>{sources.escalations.totalCount} active now</Link><small>Work needing the next level of review</small></div>
     </div>
+    {equipmentIssues}
     <section className={styles.section}><header><h2>Decisions to review <span>{sources.decisions.totalCount}</span></h2><Link href={href("decisions")}>View all →</Link></header>
       {sources.decisions.items.length ? <ul className={styles.decisions}>{sources.decisions.items.map(row => <li key={`${row.status}-${row.id}`}><span>{row.status === "lifecycle" ? "Equipment" : row.status === "approval" ? "Approval" : "Escalation"}</span><Link href={briefRecordHref(row)!}>{row.label}</Link></li>)}</ul> : <p>No decisions are waiting.</p>}
     </section>

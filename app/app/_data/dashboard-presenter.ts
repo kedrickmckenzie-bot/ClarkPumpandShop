@@ -139,7 +139,7 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
       journey: journey,
       metrics: [
         { id: "open-work", label: "Open work", value: String(activity.openWork), supportingText: "Open work orders at this store", tone: activity.openWork ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open current work" } },
-        { id: "vendor-response", label: "Waiting on vendor", value: String(activity.awaitingVendor), supportingText: "Sent work needing a response", tone: activity.awaitingVendor ? "warning" : "positive", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
+        { id: "upcoming-visits", label: "Upcoming visits", value: String(activity.upcomingAppointments), supportingText: "Confirmed vendor appointments", tone: "info", link: { href: "/app/visits?status=upcoming", label: "See expected visits" } },
         { id: "recorded-visits", label: "Recorded service visits", value: String(activity.totalVisits), supportingText: `${activity.activeVisits} onsite now · ${activity.completedVisits} completed`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits", label: "Open visit history" } },
         { id: "recorded-cost", label: "Recorded work cost", value: money(activity.recordedCostMinor), supportingText: "Rolling source cost for this store", link: { href: "/app/spend", label: "Explain the total" } },
       ],
@@ -172,7 +172,7 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
     metrics: isFacilities
       ? [
           { id: "open-exceptions", label: "Items to review", value: String(review.totalCount), supportingText: "Open the queue for records, owners, and next steps", tone: review.totalCount ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
-          { id: "vendor-response", label: "Waiting on vendor", value: String(activity.awaitingVendor), supportingText: "Sent work needing a response", tone: activity.awaitingVendor ? "warning" : "positive", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
+          { id: "upcoming-visits", label: "Upcoming visits", value: String(activity.upcomingAppointments), supportingText: "Confirmed vendor appointments", tone: "info", link: { href: "/app/visits?status=upcoming", label: "See expected visits" } },
           { id: "active-visits", label: "Onsite visits", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} total visits recorded`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
           { id: "recorded-cost", label: "Recorded work cost", value: money(activity.recordedCostMinor), supportingText: "Entered work costs for the last 12 months", link: { href: "/app/spend", label: "See the costs" } },
         ]

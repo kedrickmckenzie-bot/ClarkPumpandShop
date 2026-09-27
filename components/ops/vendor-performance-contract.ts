@@ -190,6 +190,7 @@ export interface VendorReminderViewModel {
 }
 
 export interface VendorPerformanceDetailViewModel {
+  serviceReport?: import("@/lib/ops/vendor-service-report").VendorServiceReport;
   evidencePagination?: Partial<Record<"visitRows" | "authorizationRows" | "repeatVisitRows" | "costRows", PaginationViewModel>>;
   state: "ready" | "missing";
   title: string;
