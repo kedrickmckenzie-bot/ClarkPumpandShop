@@ -1,0 +1,1 @@
+ALTER TABLE "ops_warranty_rules" ADD COLUMN "exclude_coverage" boolean DEFAULT false NOT NULL;

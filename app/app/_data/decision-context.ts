@@ -20,6 +20,8 @@ export function buildDecisionContext(fixture: OpsFixture, session: OperatorSessi
   for (let changed = true; changed;) { changed = false; for (const component of components) if (component.parentComponentId && ids.has(component.parentComponentId) && !ids.has(component.id)) { ids.add(component.id); changed = true; } }
   const inScope = (id?: string) => !componentId || (componentId === "unlinked" ? !id : !!id && ids.has(id));
   const work = fixture.workOrders.filter((row) => row.organizationId === org && row.assetId === assetId && row.storeId === asset.storeId && inScope(row.componentId) && !selected.notice);
+  const pmIds=new Set(fixture.pmOccurrences.filter(p=>p.organizationId===org).flatMap(p=>p.workOrderId?[p.workOrderId]:[]));
+  const planned=(w:WorkOrder)=>w.priority==="planned"||pmIds.has(w.id);
   const scopedIds = new Set(work.map((row) => row.id));
   const from = new Date(fixture.asOf); const months = first(query.history) === "24" ? 24 : first(query.history) === "all" ? undefined : 12;
   if (months) from.setUTCMonth(from.getUTCMonth() - months);
@@ -30,7 +32,7 @@ export function buildDecisionContext(fixture: OpsFixture, session: OperatorSessi
   const repairs = fixture.repairItems.filter((row) => row.organizationId === org && row.assetId === assetId && scopedIds.has(row.workOrderId) && inScope(row.componentId));
   const cases = fixture.warrantyCases.filter((row) => row.organizationId === org && scopedIds.has(row.workOrderId) && inScope(row.componentId) && !row.closedAt);
   const pending = cases.filter((row) => row.diagnosisRequired || row.coverageDecision === "pending_diagnosis");
-  const remap = (href: string) => { const source = new URL(href, "https://local.test"); source.searchParams.set("decision", assetId); source.searchParams.set("asset", assetId); source.searchParams.set("view", "review"); return `/app/lifecycle?${source.searchParams}#decision-context`; };
+  const remap = (href: string) => { const source = new URL(href, "https://local.test"); source.searchParams.set("decision", assetId); source.searchParams.set("asset", assetId); source.searchParams.set("view", first(query.view)??"review"); return `/app/lifecycle?${source.searchParams}#decision-context`; };
   const costPage = Math.max(1, Math.min(Math.max(1, Math.ceil(costs.length / 20)), Math.floor(Number(first(query.costPage))) || 1));
   const costPageHref = (page: number) => { const url = new URL(remap(selected.choices.find((row) => row.selected)?.href ?? selected.choices[0].href), "https://local.test"); url.searchParams.set("costPage", String(page)); return `${url.pathname}?${url.searchParams}#decision-costs`; };
   const returnDecision = remap(selected.choices.find((row) => row.selected)?.href ?? selected.choices[0].href);
@@ -62,7 +64,9 @@ export function buildDecisionContext(fixture: OpsFixture, session: OperatorSessi
     title: selected.title, period: selected.period, notice: selected.notice, currentScope,
     choices: selected.choices.map((row) => ({ ...row, href: remap(row.href) })), periods: selected.periods.map((row) => ({ ...row, href: remap(row.href) })),
     selectedCost: selected.workCost, wholeCost: whole.workCost, selectedComponent: !!componentId, facts,
-    rows: selected.rows.map((row) => ({ ...row, href: returnLink(row.href), date: formatOperationsDate(work.find(w => w.id === row.id)!.createdAt), provider: (() => { const assignment = fixture.assignments.filter(a => a.organizationId === org && a.workOrderId === row.id).sort((a,b) => b.assignedAt.localeCompare(a.assignedAt))[0]; return assignment?.vendorId ? fixture.vendors.find(v => v.organizationId === org && v.id === assignment.vendorId)?.name ?? "Vendor unavailable" : assignment?.kind === "internal" ? "Internal maintenance" : "Provider not assigned"; })(), repairs: repairs.filter((repair) => repair.workOrderId === row.id).map((repair) => ({ failure: repair.rootCause ?? repair.failureCode?.replaceAll("-", " ") ?? "Cause not recorded", action: repair.repairAction, date: repair.completionDate })) })),
+    plannedWork: periodWork.filter(planned).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,12).map(w=>({id:w.id,number:w.number,problem:w.problem,status:w.status.replaceAll("_"," "),href:returnLink(`/app/work-orders/${w.id}`)})),
+    plannedCount: periodWork.filter(planned).length,
+    rows: selected.rows.filter(row=>!planned(work.find(w=>w.id===row.id)!)).map((row) => ({ ...row, href: returnLink(row.href), date: formatOperationsDate(work.find(w => w.id === row.id)!.createdAt), provider: (() => { const assignment = fixture.assignments.filter(a => a.organizationId === org && a.workOrderId === row.id).sort((a,b) => b.assignedAt.localeCompare(a.assignedAt))[0]; return assignment?.vendorId ? fixture.vendors.find(v => v.organizationId === org && v.id === assignment.vendorId)?.name ?? "Vendor unavailable" : assignment?.kind === "internal" ? "Internal maintenance" : "Provider not assigned"; })(), repairs: repairs.filter((repair) => repair.workOrderId === row.id).map((repair) => ({ failure: repair.rootCause ?? repair.failureCode?.replaceAll("-", " ") ?? "Cause not recorded", action: repair.repairAction, date: repair.completionDate })) })),
     wholeHref: remap(whole.choices[0].href).replace("#decision-context", "#decision-costs"),
     rowCount: selected.rowCount, pages: selected.pages.map((row) => ({ ...row, href: remap(row.href) })),
     costCount: costs.length, costPages: [...(costPage > 1 ? [{label: "Previous cost lines", href: costPageHref(costPage - 1)}] : []), ...(costPage * 20 < costs.length ? [{label: "Next cost lines", href: costPageHref(costPage + 1)}] : [])],

@@ -70,7 +70,7 @@ describe("decision evidence and warranty task continuity", () => {
     const repair = fixture.repairItems.find((row) => row.id === item.priorRepairItemId)!;
     const prior = fixture.workOrders.find((row) => row.id === repair.workOrderId)!;
     const html = renderToStaticMarkup(createElement(WarrantyCaseWorkspace, { fixture, warrantyCase: item, canManage: true }));
-    expect(html).toContain("No diagnosis has been recorded");
+    expect(html).toContain("Diagnosis needed.");
     expect(html).toContain(prior.number);
     expect(html).toContain('id="diagnosis"');
     expect(html).toContain('id="warranty-terms"');

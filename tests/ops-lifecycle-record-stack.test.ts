@@ -59,7 +59,8 @@ describe("lifecycle stacked record workspace", () => {
     expect(markup).toContain("$18,000");
     expect(markup).toContain("$32,853");
     expect(markup).not.toContain('role="dialog"');
-    expect(markup).toContain("Coordinate installation →");
+    expect(markup).toContain("Coordinate installation");
+    expect(markup).toContain("Continue →");
     expect(markup).toContain("record=work-order");
     expect(markup).toContain("Open the complete equipment history");
     expect(markup).toContain("record=equipment");

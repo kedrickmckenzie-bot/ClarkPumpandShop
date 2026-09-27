@@ -72,6 +72,58 @@ select {
   background: var(--product-action-soft, #dbeafe);
 }
 
+/* One heading hierarchy across operator pages, including nested record views.
+   The stable main landmark takes precedence over older module typography. */
+:is(#main-content, #public-main) :is(h1, h2, h3, h4, h5, h6) {
+  color: #172033;
+  font-weight: 720;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+:is(#main-content, #public-main) h1 {
+  padding-inline-start: 16px;
+  border-inline-start: 4px solid var(--app-brand);
+  font-size: clamp(28px, 2.5vw, 36px);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  font-weight: 760;
+}
+
+:is(#main-content, #public-main) h2 {
+  font-size: 21px;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+:is(#main-content, #public-main) h3 {
+  font-size: 17px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+:is(#main-content, #public-main) :is(h4, h5, h6) {
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+:is(#main-content, #public-main) thead th {
+  background: #eef2f7;
+  color: #344256;
+  border-bottom: 1px solid #cbd5e1;
+  font-size: 14px;
+  font-weight: 720;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+@media (max-width: 640px) {
+  :is(#main-content, #public-main) h1 { padding-inline-start: 12px; font-size: 28px; }
+  :is(#main-content, #public-main) h2 { font-size: 20px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

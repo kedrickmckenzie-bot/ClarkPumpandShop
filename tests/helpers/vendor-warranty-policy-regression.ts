@@ -1,0 +1,33 @@
+import { expect } from "vitest";
+import type { OpsRepository } from "@/lib/ops/repository";
+import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
+import { buildConfirmedWorkWarrantyStatements,createFutureWarrantyRule,previewWarrantyCoverage,retireStoreWarrantyPolicy } from "@/lib/ops/warranty-commands";
+import { createAsset } from "@/lib/ops/setup-commands";
+export async function vendorWarrantyPolicyRegression(repository:OpsRepository){
+ const f=buildNorthlinePresentationFixture(),organizationId=f.organizations[0].id,actor={organizationId,actorType:"user" as const,actorId:"membership-northline-facilities",actorName:"Jordan Lee"},clock={now:()=>"2026-10-02T12:00:00.000Z"},svc={repository,clock};
+ const profile=f.vendorWarrantyProfiles[0],vendorId=profile.vendorId,storeId=f.stores[0].id;
+ const coverages=[{coverageType:"labor" as const,duration:90,durationUnit:"days" as const,startEvent:"repair_completion" as const,provider:"vendor" as const,obligatedVendorId:vendorId,routingRule:"original_vendor_first_right_to_cure" as const,deductible:{amountMinor:0,currency:"USD"}}];
+ const common={organizationId,vendorId,vendorWarrantyProfileId:profile.id,actor,priority:0,effectiveStartsAt:"2026-10-01T00:00:00.000Z",selectors:{},coverages,reason:"Vendor standard agreed"};
+ const master=await createFutureWarrantyRule(common,svc);
+ const preview=(store=storeId,date="2026-10-02")=>previewWarrantyCoverage({organizationId,vendorId,storeId:store,completionDate:date},repository);
+ expect((await preview()).find(l=>l.coverage.coverageType==="labor")?.coverage.duration).toBe(90);
+ const excluded=await createFutureWarrantyRule({...common,selectors:{storeId},excludeCoverage:true,coverages:[],reason:"Separate store agreement"},svc);
+ expect(await preview()).toEqual([]);expect((await preview(f.stores[1].id)).length).toBeGreaterThan(0);
+ await expect(createFutureWarrantyRule({...common,selectors:{storeId:"foreign-store"}},svc)).rejects.toMatchObject({code:"NOT_FOUND"});
+ await expect(createFutureWarrantyRule({...common,actor:{...actor,organizationId:"foreign"}},svc)).rejects.toMatchObject({code:"FORBIDDEN"});
+ const replacement=await createFutureWarrantyRule({...common,selectors:{storeId},effectiveStartsAt:"2026-10-03T00:00:00.000Z",supersedesId:excluded.rule.id,coverages:[{...coverages[0],duration:180}]},svc);
+ expect(await preview(storeId,"2026-10-02")).toEqual([]);expect((await preview(storeId,"2026-10-04"))[0].coverage.duration).toBe(180);
+ await retireStoreWarrantyPolicy({organizationId,vendorId,storeId,ruleId:replacement.rule.id,actor,reason:"Restore company terms"},{...svc,clock:{now:()=>"2026-10-05T12:00:00.000Z"}});
+ expect((await preview(storeId,"2026-10-06"))[0].coverage.duration).toBe(90);
+ const outcome=f.siteVisitWorkOrders.find(o=>o.outcome==="completed"&&f.visits.some(v=>v.id===o.visitId&&v.vendorId===vendorId)&&f.workOrders.some(w=>w.id===o.workOrderId&&w.assetId)&&!f.repairItems.some(r=>r.siteVisitWorkOrderId===o.id))!;
+ expect(outcome).toBeTruthy();const work=(await repository.getWorkOrder(organizationId,outcome.workOrderId))!;
+ let n=0;const input={work,outcome:{...outcome,outcomeRecordedAt:"2026-10-07T12:00:00.000Z"},actor,now:"2026-10-08T12:00:00.000Z",ids:{next:(prefix:string)=>`${prefix}-policy-regression-${++n}`}};
+ const statements=await buildConfirmedWorkWarrantyStatements(input,repository);expect(statements.length).toBeGreaterThan(0);await repository.atomicWrite(statements);
+ const saved=(await repository.getAssetWarrantySources(organizationId,work.assetId!)).manufacturerWarranties.filter(w=>w.id.startsWith(`work-warranty-${outcome.id}-`));expect(saved.length).toBeGreaterThan(0);expect(saved.every(w=>w.vendorId===vendorId&&w.workOrderId===work.id)).toBe(true);
+ expect(await buildConfirmedWorkWarrantyStatements(input,repository)).toEqual([]);
+ expect(await buildConfirmedWorkWarrantyStatements({...input,outcome:{...input.outcome,outcome:"no_issue_found"}},repository)).toEqual([]);
+ await createFutureWarrantyRule({...common,effectiveStartsAt:"2026-11-01T00:00:00.000Z",supersedesId:master.rule.id,coverages:[{...coverages[0],duration:30}]},svc);
+ expect((await repository.getAssetWarrantySources(organizationId,work.assetId!)).manufacturerWarranties.filter(w=>w.id.startsWith(`work-warranty-${outcome.id}-`))).toEqual(saved);
+ const asset=await createAsset(svc,{organizationId,storeId,categoryKey:"hvac",assetTag:"POLICY-TEST-UNIT",name:"Policy test equipment",actor,manufacturerWarranty:{provider:"Test manufacturer",startDate:"2026-10-01",endDate:"2027-10-01",parts:"Compressor",labor:"Not covered"}});
+ expect((await repository.getAssetWarrantySources(organizationId,asset.id)).manufacturerWarranties[0]).toMatchObject({providerKind:"manufacturer",partsCoverage:"Compressor",laborCoverage:"Not covered"});
+}

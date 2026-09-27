@@ -1,3 +1,4 @@
+import {renderToStaticMarkup} from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
@@ -63,14 +64,14 @@ describe("production identity and organization selection", () => {
 
   it("loads the warranty queue without snapshots and keeps source cases in the caller's store", async () => {
     const data=fixture();useFixture(data);
-    const {default: WarrantyPage}=await import("@/app/app/warranties/page");
-    const wide=await WarrantyPage({searchParams:Promise.resolve({view:"all"})});
-    expect(wide.props.result.totalCount).toBeGreaterThan(0);
+    const {WarrantyCenter}=await import("@/components/workspace/warranty-center");
+    const wide=renderToStaticMarkup(await WarrantyCenter({searchParams:Promise.resolve({tab:"attention"})}));
+    expect(wide).toContain("Store 104");
     const grant=data.scopeGrants.find(g=>g.membershipId==="membership-northline-facilities")!;
     grant.scopeKind="store";grant.scopeId="store-northline-107";useFixture(data);
-    const scoped=await WarrantyPage({searchParams:Promise.resolve({view:"all"})});
-    expect(scoped.props.canCreate).toBe(false);
-    expect(scoped.props.result.rows.every((r:{storeNumber:string})=>r.storeNumber==="107")).toBe(true);
+    const scoped=renderToStaticMarkup(await WarrantyCenter({searchParams:Promise.resolve({tab:"attention"})}));
+    expect(scoped).not.toContain("Store 104");
+    expect(scoped).toContain("No open warranty cases");
     expect(boundary.snapshot).not.toHaveBeenCalled();
   });
 

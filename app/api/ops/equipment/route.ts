@@ -55,6 +55,9 @@ export async function POST(request: Request) {
           | "watch"
           | "out_of_service"
           | "retired",
+        manufacturerWarranty: ["warrantyProvider","warrantyStart","warrantyParts","warrantyLabor","warrantyTerms"].some(key=>formText(formData,key)) ? {
+          provider:formText(formData,"warrantyProvider",{required:true,max:180}),startDate:formText(formData,"warrantyStart",{required:true,max:10}),endDate:formText(formData,"warrantyEndsAt",{required:true,max:10}),parts:formText(formData,"warrantyParts",{required:true,max:2000}),labor:formText(formData,"warrantyLabor",{required:true,max:2000}),terms:formText(formData,"warrantyTerms",{max:3000})||undefined,
+        }:undefined,
         actor: context.actor,
       },
     );

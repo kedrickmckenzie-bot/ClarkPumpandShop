@@ -128,6 +128,7 @@ function precedence(rule: WarrantyRule) {
   if (contract && rule.componentType) return 3;
   if (contract && (rule.assetType || rule.serviceType || rule.workType)) return 4;
   if (contract && rule.tradeKey) return 5;
+  if (contract) return 5.5;
   if (rule.componentType) return 6;
   if (rule.assetType || rule.serviceType || rule.workType) return 7;
   if (rule.tradeKey) return 8;
@@ -155,19 +156,23 @@ export async function previewWarrantyCoverage(input: WarrantyPreviewInput, repos
   const profile = profiles.find((item) => item.status === "active" && Date.parse(item.effectiveStartsAt) <= completion && (!item.effectiveEndsAt || Date.parse(item.effectiveEndsAt) >= completion));
   if (!profile) return [];
   const lines = await repository.listWarrantyCoverageLines(input.organizationId, profile.id);
-  const activeRules = rules.filter((rule) => rule.status === "active" && Date.parse(rule.effectiveStartsAt) <= completion && (!rule.effectiveEndsAt || Date.parse(rule.effectiveEndsAt) >= completion) && selectorMatches(rule, input));
+  let activeRules = rules.filter((rule) => rule.vendorWarrantyProfileId === profile.id && rule.status === "active" && Date.parse(rule.effectiveStartsAt) <= completion && (!rule.effectiveEndsAt || Date.parse(rule.effectiveEndsAt) >= completion) && selectorMatches(rule, input));
+  // A store policy replaces vendor defaults, but explicit quote/contract terms retain precedence.
+  const storePolicies = activeRules.filter(rule => rule.storeId && !rule.contractVersionId && !rule.quoteId && !rule.authorizationId);
+  const storePolicy = storePolicies.sort((a,b) => precedence(a)-precedence(b)||a.priority-b.priority)[0];
+  if (storePolicy) activeRules = activeRules.filter(rule => rule.id === storePolicy.id || rule.contractVersionId || rule.quoteId || rule.authorizationId);
   const byType = new Map<WarrantyCoverageType, WarrantyPreviewLine>();
   const allTypes = new Set(lines.map((line) => line.coverageType));
   for (const type of allTypes) {
     const candidates = activeRules.flatMap((rule) => lines.filter((line) => line.warrantyRuleId === rule.id && line.coverageType === type).map((coverage) => ({ coverage, rule, precedence: precedence(rule) })));
-    const base = lines.filter((line) => !line.warrantyRuleId && line.vendorWarrantyProfileId === profile.id && line.coverageType === type).map((coverage) => ({ coverage, rule: undefined, precedence: 9 }));
+    const base = lines.filter((line) => !storePolicy && !line.warrantyRuleId && line.vendorWarrantyProfileId === profile.id && line.coverageType === type).map((coverage) => ({ coverage, rule: undefined, precedence: 9 }));
     const ranked = [...candidates, ...base].sort((a, b) => a.precedence - b.precedence || (a.rule?.priority ?? 999) - (b.rule?.priority ?? 999) || a.coverage.id.localeCompare(b.coverage.id));
     const winner = ranked[0];
-    if (!winner) continue;
+    if (!winner || winner.rule?.excludeCoverage || winner.coverage.duration===0) continue;
     const samePriority = ranked.filter((candidate) => candidate.precedence === winner.precedence && (candidate.rule?.priority ?? 999) === (winner.rule?.priority ?? 999));
     if (samePriority.length > 1) throw new OpsDomainError("CONFLICT", `Overlapping equal-priority ${type} warranty rules require review: ${samePriority.map((item) => item.rule?.id ?? item.coverage.id).join(", ")}`);
     const dates = coverageDates(winner.coverage, input);
-    const source = winner.precedence === 2 ? "Quote- or Authorization-specific warranty term" : winner.precedence === 3 ? "Contract-specific Component rule" : winner.precedence === 4 ? "Contract-specific Asset or service rule" : winner.precedence === 5 ? "Contract-specific Trade rule" : winner.precedence === 6 ? "Vendor Component rule" : winner.precedence === 7 ? "Vendor Asset or service rule" : winner.precedence === 8 ? "Vendor Trade rule" : "Vendor base warranty";
+    const source = winner.rule?.storeId ? "Store-specific vendor warranty" : winner.precedence === 2 ? "Quote- or Authorization-specific warranty term" : winner.precedence === 3 ? "Contract-specific Component rule" : winner.precedence === 4 ? "Contract-specific Asset or service rule" : winner.precedence === 5 ? "Contract-specific Trade rule" : winner.precedence === 6 ? "Vendor Component rule" : winner.precedence === 7 ? "Vendor Asset or service rule" : winner.precedence === 8 ? "Vendor Trade rule" : "Vendor base warranty";
     byType.set(type, { coverage: winner.coverage, rule: winner.rule, profile, precedence: winner.precedence, policySource: source, ...dates, explanation: `${source} supplies ${type} coverage from ${dates.startDate} through ${dates.endDate}; broader matching rules are overridden for this category only.`, overriddenRuleIds: ranked.slice(1).flatMap((item) => item.rule ? [item.rule.id] : []) });
   }
   return [...byType.values()].sort((a, b) => a.coverage.coverageType.localeCompare(b.coverage.coverageType));
@@ -217,7 +222,10 @@ export async function recordRepairAndApplyWarranty(input: RecordRepairWarrantyIn
   if (input.laborCost.currency !== input.partCost.currency) throw new OpsDomainError("VALIDATION", "Repair Item costs must share one currency");
   const store = await repository.getStore(input.organizationId, workOrder.storeId);
   if (!store) throw new OpsDomainError("NOT_FOUND", "Store not found");
-  const preview = await previewWarrantyCoverage({ organizationId: input.organizationId, vendorId: input.vendorId, contractVersionId: input.contractVersionId, quoteId: input.quoteId, authorizationId: input.authorizationId, tradeKey: workOrder.categoryKey, workType: input.workType, serviceType: input.serviceType, assetType: input.assetType, componentType: input.componentType, manufacturer: input.partManufacturer, model: input.partModel, vendorSuppliedPart: input.vendorSupplied, customerSuppliedPart: !input.vendorSupplied, regionId: store.regionId, storeId: store.id, completionDate: input.completionDate, verificationDate: input.verificationDate ?? verification.decidedAt.slice(0,10), installationDate: input.completionDate, commissioningDate: input.completionDate }, repository);
+  let preview = await previewWarrantyCoverage({ organizationId: input.organizationId, vendorId: input.vendorId, contractVersionId: input.contractVersionId, quoteId: input.quoteId, authorizationId: input.authorizationId, tradeKey: workOrder.categoryKey, workType: input.workType, serviceType: input.serviceType, assetType: input.assetType, componentType: input.componentType, manufacturer: input.partManufacturer, model: input.partModel, vendorSuppliedPart: input.vendorSupplied, customerSuppliedPart: !input.vendorSupplied, regionId: store.regionId, storeId: store.id, completionDate: input.completionDate, verificationDate: input.verificationDate ?? verification.decidedAt.slice(0,10), installationDate: input.completionDate, commissioningDate: input.completionDate }, repository);
+  const existingCoverage=await repository.getAssetWarrantySources(input.organizationId,input.assetId);
+  // Verification may already have attached these exact terms; do not create a second warranty.
+  preview=preview.filter(line=>!existingCoverage.manufacturerWarranties.some(w=>w.id===`work-warranty-${input.siteVisitWorkOrderId}-${line.coverage.coverageType}`));
   if ((await repository.listRepairItemsForAsset(input.organizationId, input.assetId)).some((item) => item.siteVisitWorkOrderId === input.siteVisitWorkOrderId)) throw new OpsDomainError("CONFLICT", "This Site Visit / Work Order outcome already has a Repair Item");
   const installedComponentId = input.componentReplacement ? ids.next("component") : input.installedComponentId;
   const repair: RepairItem = { ...input, installedComponentId, id: ids.next("repair-item"), createdAt: now };
@@ -298,7 +306,7 @@ export async function decideWarrantyCoverage(input:{organizationId:OpsId;warrant
   // until every other active case has its own diagnosis and coverage decision.
   const remainingCases=(await repository.listWarrantyCases(input.organizationId)).filter((item)=>item.workOrderId===workOrder.id&&item.id!==warrantyCase.id&&!item.closedAt&&(item.diagnosisRequired||item.coverageDecision==="pending_diagnosis"));
   const tasks=await repository.listWorkflowTasksForWorkOrder(input.organizationId,workOrder.id);const reviewTasks=remainingCases.length?[]:tasks.filter((task)=>isOpenWorkflowTask(task)&&task.taskType==="review_warranty");
-  const status=input.coverageDecision==="not_covered"?"not_covered":input.coverageDecision==="covered"?"confirmed":"confirmed";
+  const status=input.coverageDecision==="not_covered"?"not_covered":input.coverageDecision===warrantyCase.coverageDecision&&["routed","completed"].includes(warrantyCase.status)?warrantyCase.status:"confirmed";
   const closedAt=input.coverageDecision==="not_covered"?now:undefined;
   const terminalTasks=tasks.map((task)=>reviewTasks.some((candidate)=>candidate.id===task.id)?{...task,status:"completed" as const}:task);
   const statements:OpsStatement[]=[{sql:"UPDATE ops_warranty_cases SET status = ?, diagnosis_required = ?, coverage_decision = ?, customer_charge_status = ?, invoice_hold = ?, closed_at = ? WHERE organization_id = ? AND id = ? AND coverage_decision = ?",params:[status,false,input.coverageDecision,input.customerChargeStatus,input.invoiceHold,closedAt??null,input.organizationId,warrantyCase.id,warrantyCase.coverageDecision]}];
@@ -318,26 +326,34 @@ function rulesMayOverlap(left:WarrantyRule,right:WarrantyRule){
 }
 
 /** Creates a prospective rule only; it never rewrites terms already applied to a completed repair. */
-export async function createFutureWarrantyRule(input:{organizationId:OpsId;vendorId:OpsId;vendorWarrantyProfileId:OpsId;actor:ActorContext;priority:number;effectiveStartsAt:IsoDateTime;effectiveEndsAt?:IsoDateTime;selectors:FutureWarrantySelectors;coverages:FutureWarrantyCoverageInput[];reason:string},dependencies:OpsCommandServices){
+export async function createFutureWarrantyRule(input:{organizationId:OpsId;vendorId:OpsId;vendorWarrantyProfileId:OpsId;actor:ActorContext;priority:number;effectiveStartsAt:IsoDateTime;effectiveEndsAt?:IsoDateTime;selectors:FutureWarrantySelectors;supersedesId?:OpsId;excludeCoverage?:boolean;coverages:FutureWarrantyCoverageInput[];reason:string},dependencies:OpsCommandServices){
   const {repository,clock,ids}=services(dependencies);const now=clock.now();const membership=await assertWarrantyActor(repository,input.actor,input.organizationId);
+  if(input.selectors.storeId){const store=await repository.getStore(input.organizationId,input.selectors.storeId);if(!store)throw new OpsDomainError("NOT_FOUND","Store not found");await assertWarrantyActor(repository,input.actor,input.organizationId,{storeId:store.id} as WorkOrder);}
+  else if(membership.role==="regional_manager")throw new OpsDomainError("FORBIDDEN","Company warranty rules require facilities access");
+  if(input.excludeCoverage&&!input.selectors.storeId)throw new OpsDomainError("VALIDATION","Choose a store to exclude");
   const profiles=await repository.listVendorWarrantyProfiles(input.organizationId,input.vendorId);if(!profiles.some((profile)=>profile.id===input.vendorWarrantyProfileId&&profile.status==="active"))throw new OpsDomainError("NOT_FOUND","Active Vendor Warranty Profile not found");
   if(!Number.isInteger(input.priority)||input.priority<0)throw new OpsDomainError("VALIDATION","Warranty rule priority must be a non-negative integer");
   if(!Number.isFinite(Date.parse(input.effectiveStartsAt))||input.effectiveEndsAt&&!Number.isFinite(Date.parse(input.effectiveEndsAt)))throw new OpsDomainError("VALIDATION","Warranty rule effective date is invalid");
   if(input.effectiveEndsAt&&input.effectiveEndsAt<input.effectiveStartsAt)throw new OpsDomainError("VALIDATION","Warranty rule end must follow its start");
-  if(!input.coverages.length)throw new OpsDomainError("VALIDATION","At least one coverage category is required");
+  if(!input.coverages.length&&!input.excludeCoverage)throw new OpsDomainError("VALIDATION","At least one coverage category is required");
   if(new Set(input.coverages.map((coverage)=>coverage.coverageType)).size!==input.coverages.length)throw new OpsDomainError("VALIDATION","Each coverage category may appear only once per rule");
-  const rule:WarrantyRule={id:ids.next("warranty-rule"),organizationId:input.organizationId,vendorWarrantyProfileId:input.vendorWarrantyProfileId,vendorId:input.vendorId,...input.selectors,priority:input.priority,effectiveStartsAt:input.effectiveStartsAt,effectiveEndsAt:input.effectiveEndsAt,status:"active",createdAt:now};
-  const existing=await repository.listWarrantyRules(input.organizationId,input.vendorId);if(existing.some((candidate)=>candidate.status==="active"&&precedence(candidate)===precedence(rule)&&candidate.priority===rule.priority&&rulesMayOverlap(candidate,rule)))throw new OpsDomainError("CONFLICT","An equal-priority overlapping warranty rule already exists; change priority, scope, or effective dates");
-  const reason=required(input.reason,"Future rule reason");const statements:OpsStatement[]=[insert("ops_warranty_rules",{id:rule.id,organization_id:rule.organizationId,vendor_warranty_profile_id:rule.vendorWarrantyProfileId,vendor_id:rule.vendorId,contract_version_id:rule.contractVersionId,quote_id:rule.quoteId,authorization_id:rule.authorizationId,trade_key:rule.tradeKey,work_type:rule.workType,service_type:rule.serviceType,asset_type:rule.assetType,component_type:rule.componentType,manufacturer:rule.manufacturer,model:rule.model,vendor_supplied_part:rule.vendorSuppliedPart,customer_supplied_part:rule.customerSuppliedPart,region_id:rule.regionId,store_id:rule.storeId,priority:rule.priority,effective_starts_at:rule.effectiveStartsAt,effective_ends_at:rule.effectiveEndsAt,status:rule.status,created_at:rule.createdAt})];
+  const rule:WarrantyRule={excludeCoverage:input.excludeCoverage??false,id:ids.next("warranty-rule"),organizationId:input.organizationId,vendorWarrantyProfileId:input.vendorWarrantyProfileId,vendorId:input.vendorId,...input.selectors,priority:input.priority,effectiveStartsAt:input.effectiveStartsAt,effectiveEndsAt:input.effectiveEndsAt,status:"active",createdAt:now};
+  const existing=await repository.listWarrantyRules(input.organizationId,input.vendorId);if(existing.some((candidate)=>candidate.id!==input.supersedesId&&candidate.status==="active"&&candidate.storeId===rule.storeId&&precedence(candidate)===precedence(rule)&&candidate.priority===rule.priority&&rulesMayOverlap(candidate,rule)))throw new OpsDomainError("CONFLICT","An equal-priority overlapping warranty rule already exists; change priority, scope, or effective dates");
+  const reason=required(input.reason,"Future rule reason");const statements:OpsStatement[]=[insert("ops_warranty_rules",{exclude_coverage:rule.excludeCoverage??false,id:rule.id,organization_id:rule.organizationId,vendor_warranty_profile_id:rule.vendorWarrantyProfileId,vendor_id:rule.vendorId,contract_version_id:rule.contractVersionId,quote_id:rule.quoteId,authorization_id:rule.authorizationId,trade_key:rule.tradeKey,work_type:rule.workType,service_type:rule.serviceType,asset_type:rule.assetType,component_type:rule.componentType,manufacturer:rule.manufacturer,model:rule.model,vendor_supplied_part:rule.vendorSuppliedPart,customer_supplied_part:rule.customerSuppliedPart,region_id:rule.regionId,store_id:rule.storeId,priority:rule.priority,effective_starts_at:rule.effectiveStartsAt,effective_ends_at:rule.effectiveEndsAt,status:rule.status,created_at:rule.createdAt})];
+  if(input.supersedesId){
+    const previous=existing.find(r=>r.id===input.supersedesId&&r.vendorWarrantyProfileId===rule.vendorWarrantyProfileId&&r.storeId===rule.storeId);
+    if(!previous||previous.status!=="active"||previous.effectiveEndsAt||input.effectiveStartsAt<=previous.effectiveStartsAt)throw new OpsDomainError("CONFLICT","This rule changed or its new start date does not follow the prior version. Refresh and review the dates.");
+    statements.push({sql:"UPDATE ops_warranty_rules SET effective_ends_at = ? WHERE organization_id = ? AND id = ? AND effective_ends_at IS NULL",params:[new Date(Date.parse(input.effectiveStartsAt)-1).toISOString(),input.organizationId,previous.id]});
+  }
   const coverageIds:OpsId[]=[];for(const coverage of input.coverages){if(!Number.isInteger(coverage.duration)||coverage.duration<0)throw new OpsDomainError("VALIDATION","Coverage duration must be a non-negative integer");nonnegativeMoney(coverage.deductible,"Coverage deductible");if(coverage.maximumCoverage)nonnegativeMoney(coverage.maximumCoverage,"Maximum coverage");const id=ids.next("warranty-coverage");coverageIds.push(id);statements.push(insert("ops_warranty_coverage_lines",{id,organization_id:input.organizationId,warranty_rule_id:rule.id,vendor_warranty_profile_id:input.vendorWarrantyProfileId,coverage_type:coverage.coverageType,duration:coverage.duration,duration_unit:coverage.durationUnit,start_event:coverage.startEvent,provider:coverage.provider,obligated_vendor_id:coverage.obligatedVendorId,routing_rule:coverage.routingRule,deductible_minor:coverage.deductible.amountMinor,currency:coverage.deductible.currency,maximum_coverage_minor:coverage.maximumCoverage?.amountMinor,conditions:coverage.conditions,exclusions:coverage.exclusions}));}
-  statements.push(...auditAndOutbox({organizationId:input.organizationId,aggregateType:"warranty_rule",aggregateId:rule.id,eventType:"warranty.future_rule_created",actor:input.actor,occurredAt:now,payload:{vendorId:input.vendorId,profileId:input.vendorWarrantyProfileId,coverageIds,priority:rule.priority,effectiveStartsAt:rule.effectiveStartsAt,reason,appliesToCompletedRepairs:false,createdByMembershipId:membership.id},ids}));await repository.atomicWrite(statements);return{rule,coverageIds,appliesToCompletedRepairs:false};
+  statements.push(...auditAndOutbox({organizationId:input.organizationId,aggregateType:"warranty_rule",aggregateId:rule.id,eventType:"warranty.future_rule_created",actor:input.actor,occurredAt:now,payload:{vendorId:input.vendorId,profileId:input.vendorWarrantyProfileId,coverageIds,supersedesId:input.supersedesId,storeId:rule.storeId,excludeCoverage:rule.excludeCoverage,priority:rule.priority,effectiveStartsAt:rule.effectiveStartsAt,reason,appliesToCompletedRepairs:false,createdByMembershipId:membership.id},ids}));await repository.atomicWrite(statements);return{rule,coverageIds,appliesToCompletedRepairs:false};
 }
 
 export async function addEquipmentWarranty(input: {
   organizationId: OpsId; actor: ActorContext; assetId: OpsId; componentId?: OpsId;
-  providerKind: "manufacturer" | "vendor"; providerName: string; title: string;
+  vendorId?:string; providerKind: "manufacturer" | "vendor"; providerName: string; title: string;
   workOrderId?: OpsId; startDate: string; expirationDate: string;
-  partsCoverage: string; laborCoverage: string; claimRequirements?: string;
+  partsCoverage: string; laborCoverage: string; travelCoverage?: string; administrator?: string; authorizedProviderRule?: string; claimRequirements?: string;
 }, dependencies: OpsCommandServices) {
   const { repository, clock, ids } = services(dependencies);
   const asset = await repository.getAsset(input.organizationId, input.assetId);
@@ -357,12 +373,105 @@ export async function addEquipmentWarranty(input: {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0,10) !== value) throw new OpsDomainError("VALIDATION", "Enter valid warranty dates");
   }
   if (input.expirationDate < input.startDate) throw new OpsDomainError("VALIDATION", "Warranty end must be on or after its start");
+  if(input.vendorId&&input.providerKind!=="vendor")throw new OpsDomainError("VALIDATION","Choose Vendor work warranty to link a vendor.");
+  if(input.vendorId&&!await repository.getVendor(input.organizationId,input.vendorId))throw new OpsDomainError("VALIDATION","Vendor not found");
   const id = ids.next("equipment-warranty"); const now = clock.now();
   const title = required(input.title, "Warranty name"); const provider = required(input.providerName, "Provider name");
   const parts = required(input.partsCoverage, "Parts coverage"); const labor = required(input.laborCoverage, "Labor coverage");
   await repository.atomicWrite([
-    insert("ops_manufacturer_warranties", { id, organization_id: input.organizationId, asset_id: asset.id, component_id: input.componentId, provider_kind: input.providerKind, manufacturer: provider, title, work_order_id: input.workOrderId, start_date: input.startDate, expiration_date: input.expirationDate, parts_coverage: parts, labor_coverage: labor, claim_requirements: input.claimRequirements?.trim(), created_at: now }),
+    insert("ops_manufacturer_warranties", { id, organization_id: input.organizationId, asset_id: asset.id, component_id: input.componentId, provider_kind: input.providerKind, vendor_id:input.vendorId, manufacturer: provider, title, work_order_id: input.workOrderId, start_date: input.startDate, expiration_date: input.expirationDate, parts_coverage: parts, labor_coverage: labor, travel_coverage:input.travelCoverage?.trim(), administrator:input.administrator?.trim(), authorized_provider_rule:input.authorizedProviderRule?.trim(), claim_requirements: input.claimRequirements?.trim(), created_at: now }),
     ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "equipment_warranty", aggregateId: id, eventType: "equipment_warranty.added", actor: input.actor, occurredAt: now, payload: { ...input, actor: undefined, title, providerName: provider }, ids }),
   ]);
   return { id };
+}
+
+/** Case progress is separate from the coverage decision and operational work status. */
+export async function updateWarrantyProgress(input:{organizationId:string;actor:ActorContext;caseId:string;expectedWorkVersion:number;status:"routed"|"completed"|"closed"|"follow_up";owner:string;nextAction:string;followUpOn?:string;note:string},dependencies:OpsCommandServices) {
+ const {repository,clock,ids}=services(dependencies),item=await repository.getWarrantyCase(input.organizationId,input.caseId);
+ if(!item)throw new OpsDomainError("NOT_FOUND","Warranty case not found");
+ const work=await repository.getWorkOrder(input.organizationId,item.workOrderId);if(!work)throw new OpsDomainError("NOT_FOUND","Work order not found");
+ await assertWarrantyActor(repository,input.actor,input.organizationId,work);
+ if((work.version??0)!==input.expectedWorkVersion)throw new OpsDomainError("CONFLICT","This work order changed. Refresh before updating the case.");
+ if(!["routed","completed","closed","follow_up"].includes(input.status))throw new OpsDomainError("VALIDATION","Choose a case update");
+ if(item.closedAt)throw new OpsDomainError("VALIDATION","This case is closed. Update the coverage decision first if it needs to be reopened.");
+ if(input.status!=="follow_up"&&item.coverageDecision==="pending_diagnosis")throw new OpsDomainError("VALIDATION","Confirm coverage before progressing the repair.");
+ if(input.status==="closed"&&item.status!=="completed")throw new OpsDomainError("VALIDATION","Record repair completion before verifying and closing the case.");
+ if(input.status==="closed"&&item.invoiceHold)throw new OpsDomainError("VALIDATION","Resolve the warranty invoice hold before closing this case.");
+ const note=required(input.note,"Update note"),owner=required(input.owner,"Case owner"),nextAction=input.status==="closed"?"Case closed":required(input.nextAction,"Next action"),now=clock.now();
+ if(input.status!=="closed"&&(!input.followUpOn||!/^\d{4}-\d{2}-\d{2}$/.test(input.followUpOn)||!Number.isFinite(Date.parse(input.followUpOn))||new Date(input.followUpOn).toISOString().slice(0,10)!==input.followUpOn))throw new OpsDomainError("VALIDATION","Enter a valid follow-up date");
+ const status=input.status==="follow_up"?item.status:input.status;
+ await atomicWorkOrderMutation({repository,workOrder:work,now,statements:[{sql:"UPDATE ops_warranty_cases SET status = ?, owner_name = ?, next_action = ?, follow_up_on = ?, closed_at = ? WHERE organization_id = ? AND id = ?",params:[status,owner,nextAction,input.status==="closed"?null:input.followUpOn??null,input.status==="closed"?now:null,input.organizationId,item.id]},...auditAndOutbox({organizationId:input.organizationId,aggregateType:"warranty_case",aggregateId:item.id,eventType:"warranty.progress_recorded",actor:input.actor,occurredAt:now,payload:{status,owner,nextAction,followUpOn:input.followUpOn,note,operationalResolutionChanged:false},ids})]});
+}
+export async function attachWarrantyFiles(input:{organizationId:string;actor:ActorContext;id:string;files:import("./types").StoredFile[]},dependencies:OpsCommandServices) {
+ const {repository,clock,ids}=services(dependencies),now=clock.now();
+ const coverage=(await repository.listWarrantyDirectory({organizationId:input.organizationId},{today:now.slice(0,10),view:"all",id:input.id,limit:1})).items[0];
+ const item=coverage?null:await repository.getWarrantyCase(input.organizationId,input.id);
+ const work=item?await repository.getWorkOrder(input.organizationId,item.workOrderId):null;
+ if(!coverage&&!work)throw new OpsDomainError("NOT_FOUND","Warranty not found");
+ await assertWarrantyActor(repository,input.actor,input.organizationId,{storeId:coverage?.storeId??work!.storeId} as WorkOrder);
+ if(!input.files.length||input.files.length>5||input.files.reduce((n,f)=>n+f.byteLength,0)>8*1024*1024||input.files.some(f=>f.organizationId!==input.organizationId||f.status!=="available"||!Number.isSafeInteger(f.byteLength)||f.byteLength<=0||!/^[a-f0-9]{64}$/.test(f.sha256)))throw new OpsDomainError("VALIDATION","Attach valid warranty documents or photos");
+ const statements:OpsStatement[]=[];
+ for(const f of input.files)statements.push(insert("ops_files",{id:f.id,organization_id:f.organizationId,storage_key:f.storageKey,sha256:f.sha256,original_name:f.originalName,content_type:f.contentType,byte_length:f.byteLength,status:f.status,created_at:now}),insert("ops_entity_files",{id:ids.next("file-link"),organization_id:input.organizationId,file_id:f.id,entity_type:"warranty",entity_id:input.id,purpose:"warranty",visibility:"internal",created_at:now}));
+ statements.push(...auditAndOutbox({organizationId:input.organizationId,aggregateType:"warranty",aggregateId:input.id,eventType:"warranty.files_added",actor:input.actor,occurredAt:now,payload:{fileIds:input.files.map(f=>f.id)},ids}));
+ await repository.atomicWrite(statements);
+}
+
+export async function startWarrantyReview(input:{organizationId:string;actor:ActorContext;workId:string;coverageId:string},dependencies:OpsCommandServices) {
+ const {repository,clock,ids}=services(dependencies),now=clock.now(),work=await repository.getWorkOrder(input.organizationId,input.workId);
+ if(!work?.assetId)throw new OpsDomainError("NOT_FOUND","Equipment work order not found");
+ await assertWarrantyActor(repository,input.actor,input.organizationId,work);
+ const coverage=(await repository.listWarrantyDirectory({organizationId:input.organizationId,storeIds:[work.storeId]},{today:now.slice(0,10),view:"active",assetId:work.assetId,id:input.coverageId,limit:1})).items[0];
+ if(!coverage)throw new OpsDomainError("VALIDATION","Choose active coverage on this equipment");
+ const sources=await repository.getAssetWarrantySources(input.organizationId,work.assetId),existing=sources.warrantyCases.find(c=>c.workOrderId===work.id&&!c.closedAt&&(c.manufacturerWarrantyId===coverage.id||c.appliedWarrantyId===coverage.id));if(existing)return {id:existing.id};
+ const applied=sources.appliedWarranties.find(w=>w.id===coverage.id),id=ids.next("warranty-case"),due=new Date(Date.parse(now)+86400000).toISOString(),explanation=`Recorded coverage on this equipment: ${coverage.title}. Confirm the diagnosis and applicable terms.`;
+ const task=buildWorkflowTaskRecord({id:ids.next("workflow-task"),organizationId:input.organizationId,workOrderId:work.id,actor:input.actor,createdAt:now,draft:{taskType:"review_warranty",title:WARRANTY_REVIEW_TITLE,reason:explanation,assigneeType:"role",assigneeRole:"facilities_admin",assigneeName:"Facilities",priority:"normal",blocking:false,requiredForProgress:false,dueAt:due,applicableSlaClock:"warranty_response",completionCriteria:WARRANTY_REVIEW_DONE,escalationDestination:"Facilities director"}});
+ const tasks=await repository.listWorkflowTasksForWorkOrder(input.organizationId,work.id);
+ await atomicWorkOrderMutation({repository,workOrder:work,now,statements:[insert("ops_warranty_cases",{id,organization_id:input.organizationId,work_order_id:work.id,asset_id:work.assetId,component_id:work.componentId,prior_repair_item_id:applied?.repairItemId,applied_warranty_id:applied?.id,manufacturer_warranty_id:coverage.kind==="registered"?coverage.id:undefined,status:"diagnosis_required",confidence:"low",detection_explanation:explanation,diagnosis_required:true,coverage_decision:"pending_diagnosis",customer_charge_status:"undetermined",invoice_hold:false,routing_rule:applied?.routingRule??"manual_review",obligated_vendor_id:coverage.vendorId,owner_name:input.actor.actorName,next_action:"Confirm diagnosis and coverage",follow_up_on:due.slice(0,10),created_at:now}),...buildCreateTaskStatements({task,actor:input.actor,ids}),buildWorkflowTaskProjectionStatement(input.organizationId,work.id,[...tasks.filter(isOpenWorkflowTask),task]),...auditAndOutbox({organizationId:input.organizationId,aggregateType:"warranty_case",aggregateId:id,eventType:"warranty.review_started",actor:input.actor,occurredAt:now,payload:{workOrderId:work.id,coverageId:coverage.id,explanation},ids})]});
+ return {id};
+}
+
+/** Initialize a vendor's rule container without inventing coverage. */
+export async function ensureVendorWarrantyProfile(input:{organizationId:OpsId;vendorId:OpsId;actor:ActorContext},dependencies:OpsCommandServices){
+ const {repository,clock,ids}=services(dependencies);const membership=await assertWarrantyActor(repository,input.actor,input.organizationId);
+ if(membership.role==="regional_manager")throw new OpsDomainError("FORBIDDEN","Facilities must initialize vendor warranty terms");
+ if(!await repository.getVendor(input.organizationId,input.vendorId))throw new OpsDomainError("NOT_FOUND","Vendor not found");
+ const profiles=await repository.listVendorWarrantyProfiles(input.organizationId,input.vendorId);const current=profiles.find(p=>p.status==="active");if(current)return current;
+ const now=clock.now(),id=ids.next("vendor-warranty-profile");
+ const profile:VendorWarrantyProfile={id,organizationId:input.organizationId,vendorId:input.vendorId,baseLaborDays:0,basePartsDays:0,baseTravelDays:0,baseDiagnosticDays:0,effectiveStartsAt:now.slice(0,10)+"T00:00:00.000Z",status:"active",createdAt:now};
+ await repository.atomicWrite([insert("ops_vendor_warranty_profiles",{id,organization_id:input.organizationId,vendor_id:input.vendorId,base_labor_days:0,base_parts_days:0,base_travel_days:0,base_diagnostic_days:0,effective_starts_at:profile.effectiveStartsAt,status:"active",created_at:now}),...auditAndOutbox({organizationId:input.organizationId,aggregateType:"vendor_warranty_profile",aggregateId:id,eventType:"warranty.profile_created",actor:input.actor,occurredAt:now,payload:{vendorId:input.vendorId},ids})]);return profile;
+}
+
+export async function retireStoreWarrantyPolicy(input:{organizationId:OpsId;vendorId:OpsId;storeId:OpsId;ruleId:OpsId;actor:ActorContext;reason:string},dependencies:OpsCommandServices){
+ const {repository,clock,ids}=services(dependencies);await assertWarrantyActor(repository,input.actor,input.organizationId,{storeId:input.storeId} as WorkOrder);
+ const rule=(await repository.listWarrantyRules(input.organizationId,input.vendorId)).find(r=>r.id===input.ruleId&&r.storeId===input.storeId&&r.status==="active"&&!r.effectiveEndsAt);
+ if(!rule)throw new OpsDomainError("CONFLICT","This store policy changed. Refresh before restoring vendor terms.");
+ const now=clock.now(),future=rule.effectiveStartsAt>now;await repository.atomicWrite([{sql:"UPDATE ops_warranty_rules SET effective_ends_at = ?, status = ? WHERE organization_id = ? AND id = ? AND effective_ends_at IS NULL",params:[future?null:now,future?"inactive":"active",input.organizationId,rule.id]},...auditAndOutbox({organizationId:input.organizationId,aggregateType:"warranty_rule",aggregateId:rule.id,eventType:"warranty.store_default_restored",actor:input.actor,occurredAt:now,payload:{reason:required(input.reason,"Reason"),storeId:input.storeId,vendorId:input.vendorId},ids})]);
+}
+
+/** Builds immutable coverage alongside the exact completed-work confirmation. */
+export async function buildConfirmedWorkWarrantyStatements(input:{work:WorkOrder;outcome:import("./types").SiteVisitWorkOrder;actor:ActorContext;now:string;ids:OpsIdSource},repository:OpsRepository):Promise<OpsStatement[]>{
+ const {work,outcome,now,ids}=input;
+ if(outcome.workOrderId!==work.id||outcome.organizationId!==work.organizationId||!work.assetId||outcome.outcome!=="completed"||!outcome.outcomeRecordedAt)return [];
+ const [visit,asset,store,sources]=await Promise.all([repository.getVisit(work.organizationId,outcome.visitId),repository.getAsset(work.organizationId,work.assetId),repository.getStore(work.organizationId,work.storeId),repository.getAssetWarrantySources(work.organizationId,work.assetId)]);
+ if(!visit?.vendorId||visit.providerKind!=="outside_vendor"||!asset||asset.storeId!==work.storeId||!store||sources.repairItems.some(r=>r.siteVisitWorkOrderId===outcome.id))return [];
+ const vendor=await repository.getVendor(work.organizationId,visit.vendorId);if(!vendor)return [];
+ const component=work.componentId?await repository.getComponent(work.organizationId,work.componentId):undefined;
+ const authorization=(await repository.listAuthorizationsForWorkOrder(work.organizationId,work.id)).filter(a=>a.authorizedAt<=outcome.outcomeRecordedAt!).sort((a,b)=>b.authorizedAt.localeCompare(a.authorizedAt))[0];
+ let preview:WarrantyPreviewLine[];
+ try{preview=await previewWarrantyCoverage({authorizationId:authorization?.id,contractVersionId:authorization?.contractVersionId,organizationId:work.organizationId,vendorId:vendor.id,storeId:store.id,regionId:store.regionId,tradeKey:work.categoryKey,componentType:component?.name,completionDate:outcome.outcomeRecordedAt.slice(0,10),verificationDate:now.slice(0,10)},repository);}
+ catch(error){
+   if(!(error instanceof OpsDomainError)||!["CONFLICT","VALIDATION"].includes(error.code))throw error;
+   const task=buildWorkflowTaskRecord({id:ids.next("workflow-task"),organizationId:work.organizationId,workOrderId:work.id,actor:input.actor,createdAt:now,draft:{taskType:"review_warranty",title:"Review vendor warranty terms",reason:error.message,assigneeType:"role",assigneeRole:"facilities_admin",assigneeName:"Facilities",priority:"normal",blocking:false,requiredForProgress:false,dueAt:new Date(Date.parse(now)+86400000).toISOString(),applicableSlaClock:"warranty_response",completionCriteria:"Confirm coverage and record the applicable terms",escalationDestination:"Facilities director"}});
+   return [...buildCreateTaskStatements({task,actor:input.actor,ids}),...auditAndOutbox({organizationId:work.organizationId,aggregateType:"work_order",aggregateId:work.id,eventType:"warranty.application_needs_review",actor:input.actor,occurredAt:now,payload:{siteVisitWorkOrderId:outcome.id,reason:error.message},ids})];
+ }
+
+ const statements:OpsStatement[]=[];
+ for(const line of preview){
+   if(line.coverage.duration===0||line.coverage.provider!=="vendor")continue;
+   const type=line.coverage.coverageType,id=`work-warranty-${outcome.id}-${type}`;
+   if(sources.manufacturerWarranties.some(w=>w.id===id))continue;
+   const terms=[`${line.coverage.duration} ${line.coverage.durationUnit} from completed work.`,line.coverage.conditions,line.coverage.exclusions?`Exclusions: ${line.coverage.exclusions}`:undefined].filter(Boolean).join(" ");
+   statements.push(insert("ops_manufacturer_warranties",{id,organization_id:work.organizationId,asset_id:asset.id,component_id:component?.id,provider_kind:"vendor",vendor_id:vendor.id,manufacturer:vendor.name,title:`${type==="part"?"Parts":type[0].toUpperCase()+type.slice(1)} warranty · ${work.number}`,work_order_id:work.id,start_date:line.startDate,expiration_date:line.endDate,parts_coverage:type==="part"?terms:"Not included in this term",labor_coverage:type==="labor"?terms:"Not included in this term",travel_coverage:type==="travel"?terms:"Not included in this term",authorized_provider_rule:line.coverage.routingRule.replaceAll("_"," "),claim_requirements:`${line.policySource}. ${type==="diagnostic"?terms:""} Work performed: ${outcome.outcomeNotes??work.problem}`,created_at:now}),...auditAndOutbox({organizationId:work.organizationId,aggregateType:"equipment_warranty",aggregateId:id,eventType:"equipment_warranty.automatically_applied",actor:input.actor,occurredAt:now,payload:{workOrderId:work.id,siteVisitWorkOrderId:outcome.id,vendorId:vendor.id,assetId:asset.id,componentId:component?.id,terms:line},ids}));
+ }
+ return statements;
 }

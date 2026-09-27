@@ -1,0 +1,1 @@
+ALTER TABLE `ops_warranty_rules` ADD `exclude_coverage` integer DEFAULT false NOT NULL;

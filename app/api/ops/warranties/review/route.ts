@@ -1,0 +1,5 @@
+import {getOpsRequestContext,opsApiError,formText,assertStoreInSessionScope} from "@/lib/server/ops-request-context";
+import {startWarrantyReview} from "@/lib/ops/warranty-commands";
+import {OpsDomainError} from "@/lib/ops/errors";
+import {relativeRedirect303} from "@/lib/server/relative-redirect";
+export async function POST(request:Request) {try {const {session,repository,actor}=await getOpsRequestContext(["executive","facilities","regional"],undefined,request),form=await request.formData(),workId=formText(form,"workId",{required:true,max:200}),coverageId=formText(form,"coverageId",{required:true,max:200}),work=await repository.getWorkOrder(session.organizationId,workId);if(!work)throw new OpsDomainError("NOT_FOUND","Work order not found");await assertStoreInSessionScope(session,work.storeId);const result=await startWarrantyReview({organizationId:session.organizationId,actor,workId,coverageId},{repository});return relativeRedirect303(`/app/warranties/${encodeURIComponent(result.id)}`);}catch(error){return opsApiError(error);}}

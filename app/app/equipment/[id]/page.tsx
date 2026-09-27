@@ -44,6 +44,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
       ? { label: "Continue existing work", href: review.currentWork[0].href }
       : { label: "Review existing work", href: "#equipment-review" };
   }
+  if (asset?.status!=="retired" && ["facilities","regional"].includes(session.role)) model.page.secondaryAction={label:"Plan replacement",href:`/app/lifecycle/plan?asset=${encodeURIComponent(id)}`};
   if (returnDecision) model.backLink = { label: "Back to equipment review", href: returnDecision };
   const canSetupEquipment = roleCan(session, "setup_equipment");
   const canSetupPm = roleCan(session, "setup_pm");

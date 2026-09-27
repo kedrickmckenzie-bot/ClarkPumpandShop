@@ -24,3 +24,11 @@
  .vendorTable td:first-child {min-width:0;}
  .vendorTable form {min-width:0;}
 }
+
+.forecast{max-height:340px;overflow:auto;margin:16px 0}.forecast th{position:sticky;top:0;background:#f8fafc;z-index:1}
+
+@media(max-width:600px){.forecast .table{min-width:0;table-layout:fixed}.forecast th,.forecast td{padding:12px 6px}.forecast th:nth-child(1){width:25%}.forecast th:nth-child(2){width:15%}.forecast th:nth-child(3){width:32%}.forecast th:nth-child(4){width:28%}}
+
+@media(max-width:640px){.vendorTable{min-width:0}}
+
+.panel > h2 { padding-bottom: 14px; border-bottom: 1px solid #d8e0ea; margin-bottom: 18px; }

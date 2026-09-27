@@ -4,6 +4,55 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+- **September 27 — release commit:** User authorized committing and pushing the accepted RR, WC, HD and VW changes to `origin/codex/platform-rebuild`. Existing validation evidence below was reviewed; no implementation changes followed those checks. `dev4.log` remains excluded. Automatic warranty coverage still attaches at internal verification; the subsequently discussed completion trigger and dedicated confirmation notification are not implemented in this release.
+
+- **September 27 — vendor warranty defaults:** user-directed extension locally verified. Architecture acceptance remains 26/40.
+- [x] VW-01 Vendor standard terms, effective history and store overrides/exclusions.
+- [x] VW-02 Automatic coverage for confirmed vendor work, preserving exact provider/work/component and prior terms.
+- [x] VW-03 Optional manufacturer coverage during equipment creation; vendor/store access to rule management.
+- [x] VW-04 Scoped regression, required checks and browser acceptance.
+
+### Vendor warranty defaults acceptance — September 27
+
+- Added vendor standard labor/parts/travel/diagnostic policies, first-time vendor profile initialization, prospective versions and store-specific custom/excluded policies. Rule/history pages use tenant-scoped vendor reads and paged vendor/store search; store search accepts number, name and address. Company writes require companywide request scope; store mutations validate the user's store scope. Vendor and store warranty views link to policy management.
+- Confirmation of an exact completed outside-vendor outcome attaches dated coverage to its equipment/component and originating work order atomically with the verification. Existing coverage and a recorded repair are checked to prevent duplicates. No-issue, internal and unclassified work do not invent coverage. Coverage is additive to manufacturer records; prior applied terms are not rewritten. Ambiguous or date-dependent rules create a nonblocking internal review task. Detailed repair recording retains the earlier automatic coverage rather than attaching the same category twice. Rules and evidence remain internal.
+- Optional manufacturer provider, dates, parts/labor and claim instructions on equipment creation save the coverage and audit in the asset transaction. Supporting documents remain available through the existing private coverage-record workflow.
+- Browser acceptance: ColdLine standard 90-day labor policy; Store 104 found by address; exclusion saved, then replaced prospectively by 180-day labor with prior policy retained; scheduled status, desktop layout and 390px form inspected. Equipment creation produced a manufacturer coverage record linked from its asset. BrightLine's first policy initialized its missing profile successfully. Preview-only test mutations reset on process restart.
+- Tests cover fixture/SQLite/PostgreSQL policy selection, store exclusion and override, restoring defaults, tenant rejection, immutable prior coverage, repeat application, no-issue exclusion and asset creation. Verification regression proves automatic coverage/audit and nonblocking fallback. Required seed/typecheck/lint, all 1,033 tests (162 files), all 59 end-to-end checks, preview build and Render build passed; typecheck/lint rechecked after final form polish. `git diff --check` clean. Logs: local temporary directory `vendor-policy-*-final.log` / `vendor-policy-*-last.log`.
+- No retrospective bulk rewrite, external delivery, push or deployment. These feature checks do not close outstanding architecture gates.
+
+- **September 27 — shared heading polish:** user-directed visual pass locally verified. HD-01 and HD-02 accepted; existing architecture acceptance remains 26/40.
+
+- [x] HD-01 Consistent, distinct headings and section framing across operator pages.
+- [x] HD-02 Browser acceptance and required regression/build checks.
+
+### Heading polish acceptance — September 27
+
+- Shared main-landmark typography establishes page, section and subsection levels across operator and public service screens. Page titles use a restrained product-action accent; section framing and shaded table headers distinguish labels from records. Existing semantics, controls and responsive table behavior remain intact.
+- Desktop screenshots inspected on Overview, Vendors, Compliance and an exact work order; warranty center inspected at 390px, then viewport restored. Clear title wrapping, section contrast and action placement verified.
+- Required seed, typecheck, lint, full tests (162 files / 1,032 tests), end-to-end checks (59 tests), preview build and Render build all passed. `git diff --check` clean. Logs: local temporary directory `headings-*.log`. No new tests needed for this CSS-only change. No push or deployment.
+
+- **September 27 — warranty center and store coverage:** user-directed pass locally verified. Financial value reporting excluded. Internal coverage review stays separate from vendor-facing service instructions. WC-01–WC-05 accepted with evidence below; architecture acceptance remains 26/40.
+
+## Warranty center — current authorized work
+
+- [x] WC-01 Scoped coverage directory, active/expiring/amended/expired views and exact records.
+- [x] WC-02 Store warranty tab with active coverage and open cases; equipment and vendor links.
+- [x] WC-03 Coverage details, parts/labor/travel, contact, provider instructions and private documents/photos.
+- [x] WC-04 Internal work-order review and audited case follow-up, completion and verification.
+- [x] WC-05 Required checks and desktop/responsive browser acceptance; preserve vendor privacy.
+
+### Warranty acceptance — September 27
+
+- Native paged coverage queries verified across fixture, SQLite and PostgreSQL, including tenant/store scope, address search, literal search characters, pagination and amended terms. Case detail retains its existing snapshot loader; this feature does not close the remaining architecture gates.
+- Browser acceptance: center coverage/attention/history, Store 104 active coverage and address search, scoped equipment picker, new manufacturer coverage with separate parts/labor/travel and optional contact/instructions, two private uploads (photo and document) and successful downloads, equipment link, and a new unassigned work order opening an internal review without an invoice hold. Coverage confirmation leaves the repair open; arranged, completed and verified stages were exercised through case history. Desktop and 390px layouts inspected, then viewport restored.
+- Vendor boundary: internal coverage notice only; warranty entity files use internal visibility and are excluded from vendor-shared queries. Removed the old automatic warranty-date hint from the public held-work response. Vendor service instructions remain explicitly authored service scope.
+- Validation: `npm run db:seed`, `npm run typecheck`, `npm run lint`, `npm test -- --maxWorkers=2`, `npm run test:e2e -- --maxWorkers=1`, `npm run build`, and `npm run build:render` run. Full unit run: 1,031 passed with one stale copy assertion; updated that assertion to the new “Diagnosis needed.” label, then all five tests in that file passed. All 59 end-to-end checks and both builds passed. `git diff --check` clean. Final logs are in the local temporary directory under `warranty-*-final*.log`.
+- Local browser fixtures reset on development-server restart. No deployment, push, external delivery or financial value reporting is included in this acceptance.
+
+
+- **September 27 — repair decisions and monthly capital planning:** user-directed overhaul locally verified. RR-01–RR-05 accepted with the evidence below. Existing architecture acceptance remains 26/40.
+
 - **September 27 — store compliance, vendor coverage and optional store preferences:** user-directed extension. ST-01–ST-04 locally verified, including browser journeys, migrations, regression checks and both builds. Existing architecture acceptance remains 26/40.
 
 - **September 27 — vendor coverage editing and clearer response history:** user-directed usability follow-up. VC-01–VC-03 locally verified, including browser acceptance and required checks. Existing architecture acceptance remains 26/40.
@@ -977,3 +1026,18 @@ Browser evidence: Store 104 shows its extinguisher inspection and New schedule p
 ## Commit checkpoint — September 27
 
 User authorized committing and pushing the locally verified vendor-document, coverage, response-table, store-compliance, optional store-preference and store-search changes to `origin/codex/platform-rebuild`. Validation evidence is recorded in VD, VC and ST above. Local `dev4.log` is excluded.
+
+
+## Repair decisions and monthly capital planning — September 27
+
+- [x] RR-01 Native, scoped and paged Needs a decision, Planned replacements and Decision history views, with store/region/category/search filters.
+- [x] RR-02 Proactive replacement plans without repair/work prerequisites. Optional month/cost, owner, priority and notes; append-only revisions, cancellation and concurrent-edit protection.
+- [x] RR-03 Currency-separated 3/6/12/24-month forecast, exact month drill-down, undated/missing-cost visibility, equipment entry point and compact Overview link. One current cost per equipment; planning remains separate from authorization.
+- [x] RR-04 Decision detail puts prices/actions before history, separates PM from reactive issues, records repair/review decisions and exposes plan revisions. Existing quote and authorization workflows remain canonical.
+- [x] RR-05 Required validation commands, backend regressions and browser acceptance.
+
+Validation: `npm run db:seed`, typecheck and lint passed. The final full suite passed all 1,032 tests across 162 files with two workers; all 59 workflow tests passed with one worker, including PostgreSQL migrations and capital persistence. Sites and Render production builds passed, then were repeated successfully after the final UI polish. Final typecheck/lint and `git diff --check` passed. New fixture/SQLite/PostgreSQL regressions cover proactive plans, optional timing/cost, monthly rescheduling without double counting, separate currencies, tenant/store scope, stale/concurrent edits, cancellation suppressing legacy year-only plans, server-resolved price sources, retained cost basis and plan revisions. The new API regression verifies membership/scope, stale writes, validation, role restrictions and atomic audit. Early verification exposed a missing SQLite composite asset index, a PostgreSQL date-type mismatch and a test that reused equipment; all were corrected. Initial unrelated invoice/PostgreSQL timeouts passed in the final reruns.
+
+Browser acceptance: created a $36,500 December plan for equipment with zero reactive work orders; verified the monthly contribution and exact December drill-down; moved it to February while preserving the saved cost and store filter; confirmed December became zero, February carried one $36,500 plan, and both revisions remained visible. The detail header now reflects the current month rather than the older legacy year. Saved a repair decision from the detail form and verified Decision history. Overview displayed the same $36,500 forecast and opened its matching period/currency. Address search for 55 Pine Valley Parkway returned Store 105 equipment. A second proactive plan saved with blank month and cost remained visible as Month needed / Cost needed. Phone-sized inspection verified readable form controls, all forecast columns and stacked plan rows; corrected inherited table minimum widths and restored desktop viewport. Existing broader service/visit/vendor/invoice journeys remain covered by the 59-test workflow suite and earlier browser acceptance; they were not manually repeated in this bounded change.
+
+Implementation remains local and uncommitted. D1 and PostgreSQL migrations add append-only capital plans. Legacy year-only decisions retain their year and remain Month needed until scheduled explicitly. Existing decision-detail loading still uses its earlier snapshot loader; the new queues, forecast, plan editor and history use scoped repository queries. This does not close the remaining architecture acceptance items (26/40). No external delivery, deployment, subagent or automation changes. `dev4.log` remains excluded.

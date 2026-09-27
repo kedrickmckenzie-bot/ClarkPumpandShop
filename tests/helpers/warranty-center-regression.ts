@@ -1,0 +1,34 @@
+import {expect} from "vitest";
+import type {OpsRepository} from "@/lib/ops/repository";
+import {addEquipmentWarranty,startWarrantyReview,decideWarrantyCoverage,updateWarrantyProgress,attachWarrantyFiles} from "@/lib/ops/warranty-commands";
+import {buildNorthlinePresentationFixture} from "@/lib/ops/fixtures";
+import {warrantyDirectoryFromFixture} from "@/lib/ops/warranty-directory";
+export async function warrantyCenterRegression(repository:OpsRepository) {
+ const organizationId="org-northline-demo",fixture=buildNorthlinePresentationFixture(),scope={organizationId},today="2026-09-27",actor={organizationId,actorType:"user" as const,actorId:"membership-northline-facilities",actorName:"Jordan Lee"},svc={repository,clock:{now:()=>today+"T14:00:00.000Z"}};
+ for(const view of ["active","expiring","review","expired","all"] as const) {const q={today,view,limit:100};const expected=warrantyDirectoryFromFixture(fixture,scope,q),actual=await repository.listWarrantyDirectory(scope,q);const seedIds=new Set([...fixture.manufacturerWarranties,...fixture.appliedWarranties].map(w=>w.id));expect(actual.items.filter(r=>seedIds.has(r.id))).toEqual(expected.items);expect(actual.totalCount).toBeGreaterThanOrEqual(expected.totalCount);}
+ for(const scoped of [{organizationId,storeIds:[]},{organizationId,regionIds:[]},{organizationId:"other"}])expect((await repository.listWarrantyDirectory(scoped,{today,view:"all"})).totalCount).toBe(0);
+ expect((await repository.listWarrantyDirectory(scope,{today,view:"all",id:"applied-warranty-104-compressor-part"})).items[0].parts).toBe("Covered by this term");
+ const store=fixture.stores.find(s=>s.id==="store-northline-104")!;
+ const addressed=await repository.listWarrantyDirectory(scope,{today,view:"all",search:store.address1});expect(addressed.totalCount).toBeGreaterThan(0);expect(addressed.items.every(r=>r.storeId===store.id)).toBe(true);
+ expect((await repository.listWarrantyDirectory(scope,{today,view:"all",search:"%_"})).totalCount).toBe(0);
+ const firstPage=await repository.listWarrantyDirectory(scope,{today,view:"active",limit:1});const nextPage=await repository.listWarrantyDirectory(scope,{today,view:"active",limit:1,offset:firstPage.nextOffset});expect(firstPage.nextOffset).toBe(1);expect(firstPage.items[0].id).not.toBe(nextPage.items[0].id);
+ const assetId="asset-104-beer-cave",workId=fixture.warrantyCases[0].workOrderId;
+ const saved=await addEquipmentWarranty({organizationId,actor,assetId,providerKind:"manufacturer",providerName:"Test warranty desk",title:"Center regression coverage",startDate:"2026-09-01",expirationDate:"2026-12-01",partsCoverage:"Covered",laborCoverage:"Excluded",travelCoverage:"Excluded",administrator:"Call warranty desk",authorizedProviderRule:"Approved provider",claimRequirements:"Submit diagnosis"},svc);
+ const coverage=(await repository.listWarrantyDirectory(scope,{today,view:"active",id:saved.id})).items[0];expect(coverage).toMatchObject({parts:"Covered",labor:"Excluded",travel:"Excluded",contact:"Call warranty desk"});
+ expect((await repository.listWarrantyDirectory({...scope,storeIds:["store-northline-101"]},{today,view:"all",id:saved.id})).totalCount).toBe(0);
+ const item=await startWarrantyReview({organizationId,actor,workId,coverageId:saved.id},svc);expect(await startWarrantyReview({organizationId,actor,workId,coverageId:saved.id},svc)).toEqual(item);
+ expect(await repository.getWarrantyCase(organizationId,item.id)).toMatchObject({invoiceHold:false,diagnosisRequired:true,ownerName:"Jordan Lee"});
+ const tasks=await repository.listWorkflowTasksForWorkOrder(organizationId,workId);expect(tasks.some(t=>t.taskType==="review_warranty"&&!t.blocking&&!t.requiredForProgress)).toBe(true);
+ const progress=async(status:"routed"|"completed"|"closed"|"follow_up",expectedWorkVersion?:number)=>updateWarrantyProgress({organizationId,actor,caseId:item.id,expectedWorkVersion:expectedWorkVersion??(await repository.getWorkOrder(organizationId,workId))!.version??0,status,owner:"Facilities",nextAction:"Call provider",followUpOn:"2026-10-02",note:"Provider confirmation recorded"},svc);
+ await expect(progress("routed")).rejects.toMatchObject({code:"VALIDATION"});
+ await progress("follow_up");
+ await decideWarrantyCoverage({organizationId,actor,warrantyCaseId:item.id,coverageDecision:"covered",customerChargeStatus:"warranty_covered",invoiceHold:false,diagnosis:"Confirmed failed component",reason:"Written provider confirmation"},svc);
+ await expect(progress("closed")).rejects.toMatchObject({code:"VALIDATION"});
+ const oldVersion=(await repository.getWorkOrder(organizationId,workId))!.version??0;await progress("routed");await expect(progress("completed",oldVersion)).rejects.toMatchObject({code:"CONFLICT"});await progress("completed");await decideWarrantyCoverage({organizationId,actor,warrantyCaseId:item.id,coverageDecision:"covered",customerChargeStatus:"warranty_covered",invoiceHold:false,diagnosis:"Confirmed failed component",reason:"Hold review complete"},svc);expect((await repository.getWarrantyCase(organizationId,item.id))?.status).toBe("completed");await progress("closed");
+ expect(await repository.getWarrantyCase(organizationId,item.id)).toMatchObject({status:"closed",closedAt:today+"T14:00:00.000Z"});
+ expect((await repository.listWarrantyQueue(scope,{view:"history",currency:"USD",limit:100})).rows.some(r=>r.caseId===item.id)).toBe(true);
+ const file={id:"warranty-center-file",organizationId,storageKey:"warranty/test",sha256:"a".repeat(64),originalName:"inspection-photo.png",contentType:"image/png",byteLength:200,status:"available" as const,createdAt:today+"T14:00:00.000Z"};
+ await attachWarrantyFiles({organizationId,actor,id:saved.id,files:[file]},svc);expect((await repository.listFilesForEntity(organizationId,"warranty",saved.id)).map(f=>f.originalName)).toEqual([file.originalName]);
+ expect(await repository.listFilesForEntity(organizationId,"warranty",saved.id,"vendor_shared")).toEqual([]);
+ await expect(attachWarrantyFiles({organizationId,actor,id:saved.id,files:[{...file,id:"foreign-file",organizationId:"other"}]},svc)).rejects.toMatchObject({code:"VALIDATION"});
+}

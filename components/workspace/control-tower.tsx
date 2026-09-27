@@ -211,7 +211,7 @@ export function EquipmentIssues({ model }: { model: NonNullable<DashboardPageVie
   </section>;
 }
 
-export function ControlTower({ model }: { model: DashboardPageViewModel }) {
+export function ControlTower({ model, capitalSummary }: { model: DashboardPageViewModel; capitalSummary?: ReactNode }) {
   if (model.state.kind !== "ready") {
     return <div className={styles.workspace}><PageHeader model={model} /><StatePanel model={model} /></div>;
   }
@@ -255,5 +255,5 @@ export function ControlTower({ model }: { model: DashboardPageViewModel }) {
       content = <>{metrics}{attention}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
   }
 
-  return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;
+  return <div className={styles.workspace}><PageHeader model={model} />{capitalSummary}{content}</div>;
 }

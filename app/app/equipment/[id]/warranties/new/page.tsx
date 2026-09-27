@@ -3,15 +3,16 @@ import { notFound } from "next/navigation";
 import { loadOperatorSession } from "@/app/app/_data/operator-loader";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import { RecordForm } from "@/components/ops/record-form";
-import styles from "@/components/ops/ops.module.css";
+import styles from "@/components/workspace/warranty-center.module.css";
 export default async function AddWarrantyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ component?: string }> }) {
   const session = await loadOperatorSession(); const { id } = await params; const query = await searchParams;
   if (!["executive", "facilities", "regional"].includes(session.role)) notFound();
   const repo = await getServerOpsRepository(); const asset = await repo.getAssetDetail(session, id);
   if (!asset) notFound();
-  return <div className={styles.formPage}><header className={styles.formPageHeader}><Link href={`/app/equipment/${id}#equipment-warranties`}>Back to equipment</Link><h1>Add warranty</h1><p>{asset.name} · {asset.assetTag}</p></header>
-    <RecordForm action={`/api/ops/equipment/${encodeURIComponent(id)}/warranties`} className={styles.recordForm}>
-      <section className={styles.formSection}><div className={styles.fieldGrid}>
+  const vendors=await repo.listVendors(session,"",{limit:100});
+  return <div className={styles.page}><header className={styles.header}><div><Link href={`/app/equipment/${id}#equipment-warranties`}>Back to equipment</Link><h1>Add warranty</h1><p>{asset.name} · {asset.assetTag}</p></div></header>
+    <RecordForm action={`/api/ops/equipment/${encodeURIComponent(id)}/warranties`} className={`${styles.surface} ${styles.form}`}>
+      <section className={styles.body}><div className={styles.grid}>
         <label className={styles.field}><span>Warranty type</span><select name="providerKind" required><option value="manufacturer">Manufacturer warranty</option><option value="vendor">Vendor work warranty</option></select></label>
         <label className={styles.field}><span>Covers</span><select name="componentId" defaultValue={query.component ?? ""}><option value="">Whole equipment</option>{asset.components.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label>
         <label className={styles.field}><span>Warranty name</span><input name="title" required maxLength={200} placeholder="Compressor parts coverage" /></label>
@@ -20,8 +21,11 @@ export default async function AddWarrantyPage({ params, searchParams }: { params
         <label className={styles.field}><span>Ends</span><input name="expirationDate" type="date" required /></label>
         <label className={styles.field}><span>Parts coverage</span><input name="partsCoverage" required maxLength={1000} placeholder="Covered, excluded, or specific terms" /></label>
         <label className={styles.field}><span>Labor coverage</span><input name="laborCoverage" required maxLength={1000} placeholder="Covered, excluded, or specific terms" /></label>
-      </div><label className={styles.field}><span>Related work order <small>Optional</small></span><select name="workOrderId"><option value="">No linked work order</option>{asset.workOrders.map(w => <option key={w.id} value={w.id}>{w.number} · {w.problem}</option>)}</select></label>
-      <label className={styles.field}><span>Claim instructions or exclusions <small>Optional</small></span><textarea name="claimRequirements" rows={2} maxLength={2000} /></label></section>
-      <div className={styles.formFooter}><Link className={styles.secondaryButton} href={`/app/equipment/${id}`}>Cancel</Link><button className={styles.primaryButton} type="submit">Add warranty</button></div>
+        <label><span>Travel coverage <small>Optional</small></span><input name="travelCoverage" maxLength={1000} placeholder="Covered, excluded, or not yet confirmed" /></label>
+
+      </div><details><summary>More details (optional)</summary><div className={styles.form}><label><span>Contact <small>Optional</small></span><input name="administrator" maxLength={500} placeholder="Name, phone or email" /></label><label><span>Vendor work provider <small>Optional</small></span><select name="vendorId"><option value="">No vendor linked</option>{vendors.items.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label><label className={styles.field}><span>Related work order <small>Optional</small></span><select name="workOrderId"><option value="">No linked work order</option>{asset.workOrders.map(w => <option key={w.id} value={w.id}>{w.number} · {w.problem}</option>)}</select></label>
+      <label><span>Required repair provider <small>Optional</small></span><input name="authorizedProviderRule" maxLength={1000} placeholder="Any approved provider, original vendor, or authorized service" /></label>
+      <label className={styles.field}><span>Claim instructions or exclusions <small>Optional</small></span><textarea name="claimRequirements" rows={2} maxLength={2000} /></label></div></details></section>
+      <div className={styles.body}><p className={styles.muted}>You can attach documents and photos after saving.</p><div className={styles.actions}><Link className={styles.secondary} href={`/app/equipment/${id}`}>Cancel</Link><button className={styles.button} type="submit">Add warranty</button></div></div>
     </RecordForm></div>;
 }

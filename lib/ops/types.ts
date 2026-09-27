@@ -971,7 +971,7 @@ export interface EntityFileLink {
   id: OpsId;
   organizationId: OpsId;
   fileId: OpsId;
-  entityType: "inbound_email" | "request" | "work_order" | "visit" | "asset" | "invoice_reference" | "invoice" | "estimate_proposal";
+  entityType: "warranty" | "inbound_email" | "request" | "work_order" | "visit" | "asset" | "invoice_reference" | "invoice" | "estimate_proposal";
   entityId: OpsId;
   purpose: "photo" | "service_document" | "invoice" | "warranty" | "other";
   visibility: "internal" | "vendor_shared" | "public_receipt";
@@ -1510,6 +1510,7 @@ export interface VendorWarrantyProfile {
 }
 
 export interface WarrantyRule {
+  excludeCoverage?: boolean;
   id: OpsId;
   organizationId: OpsId;
   vendorWarrantyProfileId: OpsId;
@@ -1614,6 +1615,7 @@ export interface WarrantyAmendment {
 
 /** Registered equipment coverage; legacy storage name retained for existing records. */
 export interface ManufacturerWarranty {
+  travelCoverage?: string;
   providerKind?: "manufacturer" | "vendor";
   vendorId?: OpsId;
   workOrderId?: OpsId;
@@ -1638,6 +1640,7 @@ export interface ManufacturerWarranty {
 }
 
 export interface WarrantyCase {
+  ownerName?: string; nextAction?: string; followUpOn?: string;
   id: OpsId;
   organizationId: OpsId;
   requestId?: OpsId;
@@ -2032,6 +2035,7 @@ export interface OpsFixture {
   replacementBenchmarks: ReplacementBenchmark[];
   assetReplacementOverrides: AssetReplacementOverride[];
   replacementEvents: ReplacementEvent[];
+  capitalPlans?: import("./capital-planning").CapitalPlan[];
   lifecycleRecommendations: LifecycleRecommendation[];
   components: AssetComponent[];
   componentLifecycleEvents: ComponentLifecycleEvent[];

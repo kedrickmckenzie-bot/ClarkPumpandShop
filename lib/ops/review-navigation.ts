@@ -35,3 +35,11 @@ export function safeDecisionReturn(value?: string | null): string | undefined {
     return `/app/lifecycle?${params}#decision-context`;
   } catch { return undefined; }
 }
+
+export function safeCapitalReturn(value?:string|null) {
+ const fallback="/app/lifecycle?view=capital";
+ if(!value)return fallback;
+ try {const url=new URL(value,"https://ops.invalid");if(url.origin!=="https://ops.invalid"||url.pathname!=="/app/lifecycle")return fallback;
+ const params=new URLSearchParams({view:"capital"});for(const key of ["q","store","region","category","start","months","currency","month","offset"]){const part=url.searchParams.get(key);if(part)params.set(key,part.slice(0,160));}return `/app/lifecycle?${params}`;
+ }catch{return fallback;}
+}

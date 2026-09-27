@@ -1,3 +1,4 @@
+import { buildConfirmedWorkWarrantyStatements } from "./warranty-commands";
 import { atomicWorkOrderMutation, persistedWorkOrderVersion } from "./concurrency";
 import { OpsDomainError } from "./errors";
 import type { OpsCommandServices, OpsIdSource } from "./commands";
@@ -485,6 +486,7 @@ export async function recordWorkOrderVerification(
       ids,
     }),
   ];
+  if(input.decision==="verified")statements.push(...await buildConfirmedWorkWarrantyStatements({work:workOrder,outcome,actor:input.actor,now,ids},repository));
   await atomicWorkOrderMutation({
     repository,
     workOrder,

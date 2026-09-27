@@ -257,6 +257,12 @@ export interface OpsRepository {
   listApprovalRequests(organizationId: OpsId): Promise<ApprovalRequest[]>;
   listApprovalRequestsForSubject(organizationId: OpsId, subjectType: ApprovalRequest["subjectType"], subjectId: OpsId): Promise<ApprovalRequest[]>;
   listApprovalDecisionsForRequest(organizationId: OpsId, approvalRequestId: OpsId): Promise<ApprovalDecision[]>;
+  getCapitalFilters(scope: OrganizationScope): Promise<{stores: {id:string;label:string}[];regions:{id:string;label:string}[];categories:string[]}>;
+  listCapitalPlanHistory(org:string,assetId:string): Promise<import("./capital-planning").CapitalPlan[]>;
+  getCapitalPlan(org: string, assetId: string): Promise<import("./capital-planning").CapitalPlan | null>;
+  getCapitalPrices(org: string, assetId: string): Promise<import("./capital-planning").CapitalPrice[]>;
+  queryCapitalPlans(scope: OrganizationScope, query: import("./capital-planning").CapitalQuery): Promise<import("./capital-planning").CapitalPage>;
+  queryLifecycleQueue(scope: OrganizationScope, query: import("./lifecycle-queue").LifecycleQueueQuery): Promise<import("./lifecycle-queue").LifecycleQueuePage>;
   getAsset(organizationId: OpsId, assetId: OpsId): Promise<Asset | null>;
   getReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<ReplacementProfile | null>;
   listReplacementProfiles(organizationId: OpsId): Promise<ReplacementProfile[]>;
@@ -281,6 +287,7 @@ export interface OpsRepository {
   readInvoiceIntakeChecks(organizationId: OpsId, workId: OpsId, vendorId: OpsId, number: string): Promise<import("./invoice-intake-query").InvoiceIntakeChecks>;
   listInvoiceIntakeOptions(scope: OrganizationScope, query: import("./invoice-intake-query").InvoiceIntakeQuery): Promise<import("./invoice-intake-query").InvoiceIntakePage>;
   readVendorOnboardingSelection(organizationId: OpsId, scopeIds: string[], specialtyKeys: string[]): Promise<import("./vendor-onboarding-query").VendorOnboardingSelection>;
+  listWarrantyDirectory(scope: OrganizationScope, query: import("./warranty-directory").WarrantyDirectoryQuery): Promise<import("./warranty-directory").WarrantyDirectoryPage>;
   listWarrantyQueue(scope: OrganizationScope, query: import("./warranty-queue-query").WarrantyQueueQuery): Promise<import("./warranty-queue-query").WarrantyQueuePage>;
   readOnboardingConfiguration(organizationId: OpsId): Promise<import("./vendor-onboarding-query").OnboardingConfiguration>;
   listInvoiceEvidence(scope: OrganizationScope, query: import("./invoice-evidence-query").InvoiceEvidenceQuery): Promise<import("./invoice-evidence-query").InvoiceEvidencePage>;

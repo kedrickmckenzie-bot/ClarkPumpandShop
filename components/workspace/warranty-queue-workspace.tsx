@@ -2,7 +2,7 @@ import Link from "next/link";
 import { domainLabel } from "@/lib/product/domain-label";
 import type { WarrantyQueuePage, WarrantyQueueView } from "@/lib/ops/warranty-queue-query";
 import styles from "./invoice-queue-workspace.module.css";
-const titles={all:"All warranty cases",open:"Open cases",diagnosis:"Diagnosis requested",held:"Invoice holds",exposure:"Amounts flagged"};
+const titles={history:"History",all:"All warranty cases",open:"Open cases",diagnosis:"Diagnosis requested",held:"Invoice holds",exposure:"Amounts flagged"};
 export function WarrantyQueueWorkspace({result,view,page,search,currency,scopeLabel,canCreate}:{result:WarrantyQueuePage;view:WarrantyQueueView;page:number;search:string;currency:string;scopeLabel:string;canCreate:boolean}){
  const money=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency}).format(n/100);
  const href=(v:WarrantyQueueView,p=1)=>`/app/warranties?${new URLSearchParams({view:v,currency,...(search?{q:search}:{}),...(p>1?{page:String(p)}:{})})}#warranty-register`;

@@ -7,6 +7,7 @@ import { loadOperatorSession } from "./operator-loader";
 
 export async function loadWarrantyFinanceWorkspace(input: { warrantyCaseId?: string; invoiceId?: string } = {}) {
   const session = await loadOperatorSession();
+  if(input.warrantyCaseId&&!["executive","facilities","regional","finance","store_manager"].includes(session.role))notFound();
   const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
   const organizationId = session.organizationId;
   const allowedStore = (storeId: string) => {

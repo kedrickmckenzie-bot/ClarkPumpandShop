@@ -1,3 +1,5 @@
+import type {CapitalPlan} from "@/lib/ops/capital-planning";
+import {LifecycleDecisionForm} from "./lifecycle-decision-form";
 import type { DecisionContextModel } from "@/app/app/_data/decision-context";
 import { DecisionContext } from "./decision-context";
 import Link from "next/link";
@@ -12,6 +14,7 @@ export interface LifecycleDecisionWorkspaceModel {
   context?: DecisionContextModel;
   prices?: ReturnType<typeof lifecyclePriceEvidence>;
   review?: WorkReviewModel;
+  canPlan?: boolean;
   assetId: string;
   assetName: string;
   assetTag: string;
@@ -31,6 +34,7 @@ export interface LifecycleDecisionWorkspaceModel {
   ownerLabel: string;
   nextActionLabel: string;
   dueLabel: string;
+  equipmentSummary?: string[];
   contextFacts: string[];
   activity: TimelineEventViewModel[];
   closeHref: string;
@@ -40,30 +44,36 @@ export interface LifecycleDecisionWorkspaceModel {
   activeChild?: "work-order" | "equipment";
 }
 
-export function LifecycleRecordStack({ model }: { model: LifecycleDecisionWorkspaceModel; equipmentDetail?: DetailPageViewModel; workOrderDetail?: DetailPageViewModel; workOrderCase?: WorkOrderCaseView }) {
+export function LifecycleRecordStack({ model,plans=[] }: { plans?:CapitalPlan[]; model: LifecycleDecisionWorkspaceModel; equipmentDetail?: DetailPageViewModel; workOrderDetail?: DetailPageViewModel; workOrderCase?: WorkOrderCaseView }) {
+  const currentPlan=plans[0];
+  const planLabel=currentPlan?.status==="planned"?`Replacement planned${currentPlan.targetMonth?` for ${new Date(`${currentPlan.targetMonth}-01T12:00:00Z`).toLocaleDateString("en-US",{month:"short",year:"numeric",timeZone:"UTC"})}`:" · month needed"}`:currentPlan?"Replacement plan removed":undefined;
   const prices = model.prices;
   const review = model.review;
   return <div className={styles.page}>
     <Link className={styles.back} href={model.closeHref}>← Back to replacement planning</Link>
     <header className={styles.heading}>
       <div><p>Repair or replace</p><h1>{model.assetName}</h1><span>{model.storeLabel} · {model.assetTag}{model.workOrderNumber ? ` · ${model.workOrderNumber}` : ""}</span></div>
-      <strong className={styles.status}>{model.statusLabel}</strong>
+      <strong className={styles.status}>{planLabel??model.statusLabel}</strong>
     </header>
     <p className={styles.problem}>{model.description}</p>
+    {model.equipmentSummary?<p>{model.equipmentSummary.join(" · ")}</p>:null}
+    <nav className={styles.sections} aria-label="Decision actions">{model.canPlan?<Link className={styles.action} href={`/app/lifecycle/plan?asset=${encodeURIComponent(model.assetId)}`}>Plan replacement</Link>:null}<Link href={model.openEquipmentHref}>Equipment history</Link></nav>
+    {plans.length?<section className={styles.section}><h2>{plans[0].status==="planned"?"Replacement planned":"Replacement plan removed"}</h2><p>{plans[0].targetMonth??"Month needed"} · {plans[0].amountMinor===undefined?"Cost needed":`${plans[0].currency} ${(plans[0].amountMinor/100).toLocaleString()}`} · {plans[0].owner}</p><p>{plans[0].reason}</p><Link href={`/app/lifecycle/plan?asset=${encodeURIComponent(model.assetId)}`}>View or edit plan</Link><details><summary>Plan revisions ({plans.length}{plans.length===20?" most recent":""})</summary><ol>{plans.map(p=><li key={p.id}><strong>{p.createdAt.slice(0,10)} · {p.status}</strong><p>{p.targetMonth??"Month needed"} · {p.amountMinor===undefined?"Cost needed":`${p.currency} ${(p.amountMinor/100).toLocaleString()}`} · {p.costBasis} · {p.owner}</p><p>{p.reason}</p></li>)}</ol></details></section>:null}
     <nav className={styles.sections} aria-label="Decision sections"><a href="#replacement-quotes">Quotes and scope</a><a href="#decision-context">Recent issues</a><a href="#replacement-references">Similar replacement costs</a><a href="#decision-method">Comparison details</a><a href="#decision-activity">Decision history</a></nav>
-    {model.context ? <DecisionContext model={model.context} /> : null}
     <section className={styles.prices} aria-label="Repair and replacement prices">
-      <div><h2>Repair price</h2><strong>{model.repairAmountLabel}</strong><p>Estimate entered on this work order.</p>{model.workOrderId ? <Link href={`/app/work-orders/${model.workOrderId}?view=overview`}>Review the repair estimate</Link> : <Link href={model.openEquipmentHref}>Add the missing repair information</Link>}</div>
+      <div><h2>Repair price</h2><strong>{model.workOrderId?model.repairAmountLabel:"No repair proposal"}</strong>{model.workOrderId?<><p>Estimate entered on this work order.</p><Link href={`/app/work-orders/${model.workOrderId}?view=overview`}>Review the repair estimate</Link></>:<p>This replacement can be planned proactively.</p>}</div>
       <div><h2>{prices?.replacementBasis ?? "Replacement quote"}</h2><strong>{model.replacementAmountLabel}</strong><p>{prices?.approvedVendor ?? (prices?.quotes.length ? "Prices are listed below." : "No vendor replacement quote has been selected.")}</p><a href="#replacement-quotes">Review replacement scope and quotes ↓</a></div>
       <div><h2>Saved planning estimate</h2><strong>{prices?.planningLabel ?? "Not entered"}</strong><p>Equipment planning reference. This is separate from the vendor’s quote and approved amount.</p><Link href={model.openEquipmentHref}>Review the planning source</Link></div>
     </section>
     {prices?.finalAmount ? <p className={styles.notice}>Final replacement amount recorded: <strong>{prices.finalAmount}</strong>. The approved amount above remains part of the decision history.</p> : null}
     {prices?.missing ? <p className={styles.notice}>{prices.missing}</p> : null}
     <section className={styles.next} aria-labelledby="decision-next">
-      <div><h2 id="decision-next">What happens next</h2><p>{model.nextActionLabel}</p><span>{model.ownerLabel} · Due {model.dueLabel}</span></div>
-      {model.openWorkOrderHref ? <Link className={styles.action} href={model.openWorkOrderHref}>{model.nextActionLabel} →</Link> : <Link className={styles.action} href={model.openEquipmentHref}>Review equipment and open work →</Link>}
+      <div><h2 id="decision-next">What happens next</h2><p>{model.nextActionLabel}</p><span>{model.ownerLabel}{model.dueLabel!=="No open due time"?` · Due ${model.dueLabel}`:""}</span></div>
+      {model.openWorkOrderHref ? <Link className={styles.action} href={model.openWorkOrderHref}>Continue →</Link> : <Link className={styles.action} href={model.canPlan?`/app/lifecycle/plan?asset=${encodeURIComponent(model.assetId)}`:model.openEquipmentHref}>{model.canPlan?"Plan replacement":"Review equipment"} →</Link>}
     </section>
 
+    {model.canPlan&&model.workOrderId?<LifecycleDecisionForm assetId={model.assetId} workOrderId={model.workOrderId}/>:null}
+    {model.context ? <DecisionContext model={model.context} /> : null}
     <section className={styles.section} id="replacement-quotes"><h2>Replacement quotes and what they include</h2><p>{prices?.scope}</p>
       {prices?.quotes.length ? <div className={styles.quotes}>{prices.quotes.map((quote) => <article key={quote.id}><header><div><h3>{quote.vendor}</h3><span>{quote.status}</span></div><strong>{quote.amount}</strong></header><dl><div><dt>Included work</dt><dd>{quote.scope}</dd></div><div><dt>Not included / needs checking</dt><dd>{quote.exclusions}</dd></div><div><dt>Availability</dt><dd>{quote.timing}</dd></div></dl><Link href={quote.href}>{quote.href.endsWith("/prices") ? "Price history →" : "Quote details →"}</Link></article>)}</div> : <p>No replacement quote is recorded here. {model.workOrderId ? <Link href={`/app/work-orders/${model.workOrderId}?view=service&path=bids`}>Request replacement pricing for this work order</Link> : <Link href={model.openEquipmentHref}>Open equipment to start a pricing request</Link>}.</p>}
     </section>

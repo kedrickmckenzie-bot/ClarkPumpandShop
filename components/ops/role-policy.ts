@@ -105,9 +105,9 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
   },
   store_manager: {
     capabilities: ["create_request", "review_request", "setup_equipment", "setup_pm", "confirm_observable_result"],
-    listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "reports"],
+    listRoutes: ["action-center", "requests", "work-orders", "visits", "stores", "vendors", "warranties", "reports"],
     programRoutes: ["trends", "spend", "equipment", "pm"],
-    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment"],
+    detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
     workNavigation: ["requests", "work-orders", "visits"],
     insightsNavigation: ["trends", "spend", "equipment", "pm"],

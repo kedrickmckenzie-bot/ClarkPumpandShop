@@ -236,6 +236,7 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
   return {
     model: {
       prices,
+      canPlan: ["facilities","regional"].includes(session.role) && asset.status!=="retired",
       context: buildDecisionContext(fixture, session, asset.id, query, proposalWork),
       review: review ?? undefined,
       assetId: asset.id,
@@ -244,7 +245,7 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
       storeLabel: `${store.storeNumber} - ${store.name}`,
       statusLabel: managementDecision.label,
       statusTone: managementDecision.tone,
-      description: proposalWork?.problem ?? "No active repair proposal is attached to this equipment.",
+      description: proposalWork?.problem ?? "Plan a proactive replacement or review the equipment history.",
       workOrderId: proposalWork?.id,
       workOrderNumber: proposalWork?.number,
       repairAmountLabel: priceLabel(proposalWork?.repairEstimate),
@@ -255,8 +256,9 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
       decisionLabel: managementDecision.label,
       decisionHelper: latestDecision?.userReason ?? managementDecision.helper,
       ownerLabel: workCase?.accountableParty ?? proposalWork?.accountableParty ?? "Facilities",
-      nextActionLabel: decisionAction?.label ?? proposalWork?.nextAction ?? "Review the equipment history and obtain the missing prices",
+      nextActionLabel: decisionAction?.label ?? proposalWork?.nextAction ?? "Set replacement timing and budget",
       dueLabel: workCase?.dueAt ? formatOperationsDateTime(workCase.dueAt, timeZone) : "No open due time",
+      equipmentSummary: [asset.installedAt?`Installed ${formatOperationsDate(asset.installedAt,timeZone)}`:"Install date unknown",asset.expectedLifeYears?`${asset.expectedLifeYears}-year expected life`:"Expected life unknown",`${reactiveWork.length} reactive work orders`,contextFacts[3]],
       contextFacts,
       activity,
       closeHref,

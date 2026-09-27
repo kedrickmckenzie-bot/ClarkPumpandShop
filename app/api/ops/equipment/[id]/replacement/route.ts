@@ -50,6 +50,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const currentAsset = fixture.assets.find((row) => row.organizationId === context.session.organizationId && row.id === asset.id);
       if (!currentAsset) throw new OpsDomainError("NOT_FOUND", "Equipment was not found.");
       const draft = buildLifecycleRecommendationDraft(fixture, currentAsset, fixture.asOf);
+      const decisionWorkId=formText(formData,"workOrderId",{max:120});
+      if(decisionWorkId){const work=await context.repository.getWorkOrder(context.session.organizationId,decisionWorkId);if(!work||work.assetId!==asset.id||work.storeId!==asset.storeId)throw new OpsDomainError("VALIDATION","This work order does not belong to the equipment.");draft.workOrderId=work.id;}
       const userDecision = formText(formData, "userDecision", { required: true, max: 30 });
       if (!["repair", "replace", "defer", "investigate"].includes(userDecision)) throw new OpsDomainError("VALIDATION", "Choose a supported lifecycle decision.");
       const rawPlanningYear = formText(formData, "plannedForYear", { max: 4 });

@@ -682,9 +682,6 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
         const disclosures = detail?.asset
           ? [
               `Equipment: ${detail.asset.name} · ${detail.asset.assetTag}`,
-              ...(detail.asset.warrantyEndsAt && detail.asset.warrantyEndsAt > now()
-                ? [`Warranty record through ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: store.timeZone }).format(new Date(detail.asset.warrantyEndsAt))}; preserve any manufacturer service requirements.`]
-                : []),
             ]
           : [];
         return {

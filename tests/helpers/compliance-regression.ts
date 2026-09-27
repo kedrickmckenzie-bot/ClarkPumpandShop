@@ -1,3 +1,5 @@
+import {vendorWarrantyPolicyRegression} from "./vendor-warranty-policy-regression";
+import {capitalRegression} from "./capital-regression";
 import { storeVendorRegression } from "./store-vendor-regression";
 import { coverageVersion, updateVendorCoverage } from "@/lib/ops/vendor-coverage";
 import { recordVendorComplianceDocument } from "@/lib/ops/commands";
@@ -73,5 +75,8 @@ export async function complianceRegression(repository:OpsRepository) {
  expect((await repository.listVendorCoverage(org,vendor.id)).map(row=>row.scopeKind)).toEqual(["organization"]);
  expect(await repository.vendorCoversStore(org,vendor.id,"store-northline-105")).toBe(true);
  await storeVendorRegression(repository);
+ await capitalRegression(repository);
+ await (await import("./warranty-center-regression")).warrantyCenterRegression(repository);
  expect(nextInspectionDate({...s,intervalUnit:"once"} as ComplianceSchedule,s.firstDueDate)).toBeNull();
+ await vendorWarrantyPolicyRegression(repository);
 }

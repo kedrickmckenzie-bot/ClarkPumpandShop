@@ -1067,6 +1067,18 @@ export const opsAssetReplacementOverrides = pgTable("ops_asset_replacement_overr
   check("chk_ops_asset_replacement_overrides_amount", sql`${table.amountMinor} >= 0`),
 ]);
 
+export const opsCapitalPlans = pgTable("ops_capital_plans", {
+  id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), storeId: text("store_id").notNull(),
+  version: integer("version").notNull(), targetMonth: text("target_month"), amountMinor: integer("amount_minor"), currency: text("currency").notNull(),
+  costBasis: text("cost_basis").notNull(), sourceId: text("source_id"), priority: text("priority").notNull(), owner: text("owner").notNull(),
+  reason: text("reason").notNull(), status: text("status").notNull(), createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_ops_capital_plans_version").on(table.organizationId, table.assetId, table.version),
+  index("idx_ops_capital_plans_store_month").on(table.organizationId, table.storeId, table.targetMonth),
+  foreignKey({name:"fk_ops_capital_plans_asset",columns:[table.organizationId,table.assetId],foreignColumns:[opsAssets.organizationId,opsAssets.id]}),
+  foreignKey({name:"fk_ops_capital_plans_store",columns:[table.organizationId,table.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),
+]);
+
 export const opsReplacementEvents = pgTable("ops_replacement_events", {
   id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), workOrderId: text("work_order_id").notNull(), profileId: text("profile_id").notNull(), sourceEstimateProposalId: text("source_estimate_proposal_id").notNull(), status: text("status").notNull(), approvedAmountMinor: bigint("approved_amount_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(), approvedAt: instant("approved_at").notNull(), completedAt: instant("completed_at"), finalAmountMinor: bigint("final_amount_minor", { mode: "number" }), replacementAssetId: text("replacement_asset_id"), createdAt: createdAt(),
 }, (table) => [
@@ -1261,7 +1273,7 @@ export const opsEntityFiles = pgTable("ops_entity_files", {
     columns: [table.organizationId, table.fileId],
     foreignColumns: [opsFiles.organizationId, opsFiles.id],
   }),
-  check("chk_ops_entity_files_type", sql`${table.entityType} IN ('inbound_email', 'request', 'work_order', 'visit', 'asset', 'invoice_reference', 'invoice', 'estimate_proposal')`),
+  check("chk_ops_entity_files_type", sql`${table.entityType} IN ('warranty', 'inbound_email', 'request', 'work_order', 'visit', 'asset', 'invoice_reference', 'invoice', 'estimate_proposal')`),
   check("chk_ops_entity_files_purpose", sql`${table.purpose} IN ('photo', 'service_document', 'invoice', 'warranty', 'other')`),
   check("chk_ops_entity_files_visibility", sql`${table.visibility} IN ('internal', 'vendor_shared', 'public_receipt')`),
 ]);
@@ -1580,6 +1592,7 @@ export const opsVendorWarrantyProfiles = pgTable("ops_vendor_warranty_profiles",
 }, (table) => [unique("uq_ops_vendor_warranty_profiles_org_id").on(table.organizationId, table.id), index("idx_ops_vendor_warranty_profiles_org_vendor_status").on(table.organizationId, table.vendorId, table.status)]);
 
 export const opsWarrantyRules = pgTable("ops_warranty_rules", {
+  excludeCoverage: boolean("exclude_coverage").notNull().default(false),
   id: id(), organizationId: organizationId(), vendorWarrantyProfileId: text("vendor_warranty_profile_id").notNull(), vendorId: text("vendor_id").notNull(), contractVersionId: text("contract_version_id"), quoteId: text("quote_id"), authorizationId: text("authorization_id"), tradeKey: text("trade_key"), workType: text("work_type"), serviceType: text("service_type"), assetType: text("asset_type"), componentType: text("component_type"), manufacturer: text("manufacturer"), model: text("model"), vendorSuppliedPart: boolean("vendor_supplied_part"), customerSuppliedPart: boolean("customer_supplied_part"), regionId: text("region_id"), storeId: text("store_id"), priority: integer("priority").notNull(), effectiveStartsAt: instant("effective_starts_at").notNull(), effectiveEndsAt: instant("effective_ends_at"), status: text("status").notNull(), createdAt: createdAt(),
 }, (table) => [unique("uq_ops_warranty_rules_org_id").on(table.organizationId, table.id), index("idx_ops_warranty_rules_org_vendor_status_priority").on(table.organizationId, table.vendorId, table.status, table.priority)]);
 
@@ -1621,11 +1634,13 @@ export const opsWarrantyAmendments = pgTable("ops_warranty_amendments", {
 }, (table) => [unique("uq_ops_warranty_amendments_org_id").on(table.organizationId, table.id), index("idx_ops_warranty_amendments_org_applied_time").on(table.organizationId, table.appliedWarrantyId, table.decidedAt)]);
 
 export const opsManufacturerWarranties = pgTable("ops_manufacturer_warranties", {
+  travelCoverage: text("travel_coverage"),
   providerKind: text("provider_kind").notNull().default("manufacturer"), vendorId: text("vendor_id"), workOrderId: text("work_order_id"), title: text("title"),
   id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), componentId: text("component_id"), manufacturer: text("manufacturer").notNull(), model: text("model"), serialNumber: text("serial_number"), partsCoverage: text("parts_coverage").notNull(), laborCoverage: text("labor_coverage").notNull(), startDate: date("start_date", { mode: "string" }).notNull(), expirationDate: date("expiration_date", { mode: "string" }).notNull(), authorizedProviderRule: text("authorized_provider_rule"), claimRequirements: text("claim_requirements"), installingVendorId: text("installing_vendor_id"), administrator: text("administrator"), supportingFileId: text("supporting_file_id"), createdAt: createdAt(),
 }, (table) => [unique("uq_ops_manufacturer_warranties_org_id").on(table.organizationId, table.id), index("idx_ops_manufacturer_warranty_org_asset_expiry").on(table.organizationId, table.assetId, table.expirationDate)]);
 
 export const opsWarrantyCases = pgTable("ops_warranty_cases", {
+  ownerName: text("owner_name"), nextAction: text("next_action"), followUpOn: text("follow_up_on"),
   id: id(), organizationId: organizationId(), requestId: text("request_id"), workOrderId: text("work_order_id").notNull(), assetId: text("asset_id").notNull(), componentId: text("component_id"), priorRepairItemId: text("prior_repair_item_id"), appliedWarrantyId: text("applied_warranty_id"), manufacturerWarrantyId: text("manufacturer_warranty_id"), status: text("status").notNull(), confidence: text("confidence").notNull(), detectionExplanation: text("detection_explanation").notNull(), diagnosisRequired: boolean("diagnosis_required").notNull().default(true), coverageDecision: text("coverage_decision").notNull(), customerChargeStatus: text("customer_charge_status").notNull(), invoiceHold: boolean("invoice_hold").notNull().default(true), routingRule: text("routing_rule").notNull(), obligatedVendorId: text("obligated_vendor_id"), vendorResponseDueAt: instant("vendor_response_due_at"), createdAt: createdAt(), closedAt: instant("closed_at"),
 }, (table) => [unique("uq_ops_warranty_cases_org_id").on(table.organizationId, table.id), index("idx_ops_warranty_cases_org_status_vendor_due").on(table.organizationId, table.status, table.obligatedVendorId, table.vendorResponseDueAt), index("idx_ops_warranty_cases_org_asset").on(table.organizationId, table.assetId)]);
 
@@ -2017,6 +2032,7 @@ export const opsPostgresSchema = {
   opsReplacementBenchmarks,
   opsAssetReplacementOverrides,
   opsReplacementEvents,
+  opsCapitalPlans,
   opsLifecycleRecommendations,
   opsAssetComponents,
   opsMaintenancePrograms,

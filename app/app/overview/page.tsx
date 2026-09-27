@@ -1,6 +1,11 @@
+import {roleCanAccessProgramRoute} from "@/components/ops/role-policy";
 import type { Metadata } from "next";
 import { ControlTower } from "@/components/workspace/control-tower";
-import { loadDashboardModel } from "../_data/operator-loader";
+import Link from "next/link";
+import {getServerOpsRepository} from "@/lib/server/ops-repository-provider";
+import {validMonth} from "@/lib/ops/capital-planning";
+import styles from "@/components/workspace/compliance.module.css";
+import { loadOperatorSession, loadDashboardModel } from "../_data/operator-loader";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -9,5 +14,9 @@ export default async function OverviewPage() {
     console.error("Overview workspace loading failed", error instanceof Error ? error.message : String(error));
     throw error;
   });
-  return <ControlTower model={model} />;
+  const session=await loadOperatorSession(),repository=await getServerOpsRepository(),start=new Date().toISOString().slice(0,7);
+  if(!roleCanAccessProgramRoute(session.role,"lifecycle"))return <ControlTower model={model}/>;
+  const capital=await repository.queryCapitalPlans(session,{start,months:12,currency:"USD"}),buckets=capital.buckets.filter(b=>validMonth(b.month));
+  const amount=buckets.reduce((n,b)=>n+b.amountMinor,0),missing=buckets.reduce((n,b)=>n+b.missing,0),undated=capital.buckets.find(b=>b.month==="undated")?.count??0;
+  return <ControlTower model={model} capitalSummary={<div className={`${styles.panel} ${styles.bar}`}><div><strong>Replacement planning · next 12 months</strong><p>{new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(amount/100)} USD known planned cost · {missing} need a cost · {undated} need a month</p></div><Link href={`/app/lifecycle?view=capital&start=${start}&months=12&currency=USD`}>View capital forecast →</Link></div>} />;
 }

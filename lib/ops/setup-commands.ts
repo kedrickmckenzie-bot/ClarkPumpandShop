@@ -264,6 +264,7 @@ export interface CreateAssetInput {
   replacementEstimateMinor?: number;
   currency?: string;
   status?: Asset["status"];
+  manufacturerWarranty?: {provider:string;startDate:string;endDate:string;parts:string;labor:string;terms?:string};
   actor: ActorContext;
 }
 
@@ -373,6 +374,15 @@ export async function createAsset(svc: OpsCommandServices, input: CreateAssetInp
     status,
     createdAt: now,
   };
+  const warranty=input.manufacturerWarranty;
+  let warrantyStatement:OpsStatement|undefined;
+  let warrantyId:string|undefined;
+  if(warranty){
+    for(const date of [warranty.startDate,warranty.endDate]){if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw new OpsDomainError("VALIDATION","Enter valid manufacturer warranty dates");}
+    if(warranty.endDate<warranty.startDate)throw new OpsDomainError("VALIDATION","Warranty end must follow its start");
+    warrantyId=ids.next("equipment-warranty");
+    warrantyStatement=insert("ops_manufacturer_warranties",{id:warrantyId,organization_id:input.organizationId,asset_id:id,provider_kind:"manufacturer",manufacturer:required(warranty.provider,"Warranty provider"),title:"Manufacturer warranty",start_date:warranty.startDate,expiration_date:warranty.endDate,parts_coverage:required(warranty.parts,"Parts coverage"),labor_coverage:required(warranty.labor,"Labor coverage"),claim_requirements:warranty.terms,created_at:now});
+  }
   await repository.atomicWrite([
     insert("ops_assets", {
       id: asset.id,
@@ -395,6 +405,7 @@ export async function createAsset(svc: OpsCommandServices, input: CreateAssetInp
       status: asset.status,
       created_at: asset.createdAt,
     }),
+    ...(warrantyStatement?[warrantyStatement,...auditAndOutbox({organizationId:input.organizationId,aggregateType:"equipment_warranty",aggregateId:warrantyId!,eventType:"equipment_warranty.added",actor:input.actor,occurredAt:now,payload:{assetId:id,...warranty},ids})]:[]),
     ...auditAndOutbox({
       organizationId: input.organizationId,
       aggregateType: "asset",

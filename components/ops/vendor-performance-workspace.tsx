@@ -425,7 +425,7 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
         <a href="#compliance-evidence">Documents & capabilities</a>
         <a href="#authorization-evidence">Work sent</a>
         <a href="#visit-evidence">Visits</a>
-        <a href="#cost-evidence">Costs</a>
+        <a href="#cost-evidence">Costs</a><Link href={`/app/warranties?tab=coverage&vendor=${encodeURIComponent(vendor.id)}`}>Warranties</Link><Link href={`/app/warranties/rules?vendor=${encodeURIComponent(vendor.id)}`}>Warranty rules</Link>
       </nav>
 
       <section className={styles.vendorFacts} id="relationship-evidence" aria-label="Vendor identity and coverage">

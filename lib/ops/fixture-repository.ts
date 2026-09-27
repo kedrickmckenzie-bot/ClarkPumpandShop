@@ -1,3 +1,5 @@
+import {latestCapitalPlan, capitalPricesFromFixture, capitalFromFixture, type CapitalQuery} from "./capital-planning";
+import {lifecycleQueueFromFixture, type LifecycleQueueQuery} from "./lifecycle-queue";
 import { latestStorePreference, storeVendorsFromFixture } from "./store-vendors";
 import { matchesInspection, inspectionViews, type InspectionQuery, type InspectionView } from "./compliance-types";
 import { attentionFromFixture } from "./attention-query";
@@ -167,7 +169,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_stores: "stores", ops_users: "users", ops_memberships: "memberships",
     ops_scope_grants: "scopeGrants", ops_role_capability_overrides: "roleCapabilityOverrides", ops_workflow_policies: "workflowPolicies", ops_vendors: "vendors", ops_vendor_specialties: "vendorSpecialties",
     ops_vendor_reminders: "vendorReminders", ops_work_prices: "workPrices",
-    ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
+    ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
     ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
@@ -362,6 +364,7 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
     return;
   }
   fixture.storeVendorPreferences ??= [];
+  fixture.capitalPlans ??= [];
   const insertMatch = statement.sql.match(/^INSERT INTO ([a-z0-9_]+) \((.+)\) VALUES \((.+)\)$/i);
   if (insertMatch) {
     const table = insertMatch[1]; const columns = insertMatch[2].split(",").map((item) => item.trim());
@@ -370,6 +373,7 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
       ? idempotencyKeys as unknown as Array<Record<string, unknown>>
       : mapTable(fixture, table);
     const row = hydrateInserted(table, raw);
+    if(table === "ops_capital_plans" && rows.some(r=>r.organizationId===row.organizationId&&r.assetId===row.assetId&&r.version===row.version)) throw new OpsDomainError("CONFLICT","Plan changed. Refresh before saving.");
     if(table === "ops_store_vendor_preferences" && rows.some(r=>r.organizationId===row.organizationId&&r.storeId===row.storeId&&r.vendorId===row.vendorId&&r.version===row.version)) throw new OpsDomainError("CONFLICT","Preferences changed. Refresh before saving.");
     if (row.id && rows.some((item) => item.id === row.id)) throw new Error(`Duplicate fixture id ${String(row.id)}`);
     if (table === "ops_idempotency_keys" && rows.some((item) => item.organizationId === row.organizationId && item.key === row.key)) throw new Error(`Duplicate idempotency key ${String(row.key)}`);
@@ -576,6 +580,15 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listApprovalRequests(organizationId: OpsId) { return clone(this.fixture.approvalRequests.filter((row) => row.organizationId === organizationId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt) || b.id.localeCompare(a.id))); }
   async listApprovalRequestsForSubject(organizationId: OpsId, subjectType: ApprovalRequest["subjectType"], subjectId: OpsId) { return clone(this.fixture.approvalRequests.filter((row) => row.organizationId === organizationId && row.subjectType === subjectType && row.subjectId === subjectId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt) || b.id.localeCompare(a.id))); }
   async listApprovalDecisionsForRequest(organizationId: OpsId, approvalRequestId: OpsId) { return clone(this.fixture.approvalDecisions.filter((row) => row.organizationId === organizationId && row.approvalRequestId === approvalRequestId).sort((a, b) => b.decidedAt.localeCompare(a.decidedAt) || b.id.localeCompare(a.id))); }
+  async getCapitalFilters(scope: OrganizationScope) {
+    const stores=this.fixture.stores.filter(s=>s.organizationId===scope.organizationId&&(scope.storeIds===undefined||scope.storeIds.includes(s.id))&&(scope.regionIds===undefined||scope.regionIds.includes(s.regionId??"")));
+    return {stores:stores.slice(0,250).map(s=>({id:s.id,label:`${s.storeNumber} · ${s.name}`})),regions:this.fixture.regions.filter(r=>r.organizationId===scope.organizationId&&stores.some(s=>s.regionId===r.id)).map(r=>({id:r.id,label:r.name})),categories:[...new Set(this.fixture.assets.filter(a=>a.organizationId===scope.organizationId&&stores.some(s=>s.id===a.storeId)).map(a=>a.categoryKey))].sort()};
+  }
+  async listCapitalPlanHistory(org:string,assetId:string) {return clone((this.fixture.capitalPlans??[]).filter(p=>p.organizationId===org&&p.assetId===assetId).sort((a,b)=>b.version-a.version).slice(0,20));}
+  async getCapitalPlan(org: string, assetId: string) {return clone(latestCapitalPlan(this.fixture,org,assetId));}
+  async getCapitalPrices(org: string, assetId: string) {return capitalPricesFromFixture(this.fixture,org,assetId);}
+  async queryCapitalPlans(scope: OrganizationScope, query: CapitalQuery) {return capitalFromFixture(this.fixture,scope,query);}
+  async queryLifecycleQueue(scope: OrganizationScope, query: LifecycleQueueQuery) {return lifecycleQueueFromFixture(this.fixture,scope,query);}
   async getAsset(organizationId: OpsId, assetId: OpsId) { return clone(this.fixture.assets.find((row) => row.organizationId === organizationId && row.id === assetId) ?? null); }
   async getReplacementProfile(organizationId: OpsId, profileId: OpsId): Promise<ReplacementProfile | null> { return clone(this.fixture.replacementProfiles.find((row) => row.organizationId === organizationId && row.id === profileId) ?? null); }
   async listReplacementProfiles(organizationId: OpsId): Promise<ReplacementProfile[]> { return clone(this.fixture.replacementProfiles.filter((row) => row.organizationId === organizationId).sort((a, b) => a.categoryKey.localeCompare(b.categoryKey) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))); }
@@ -600,6 +613,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async readInvoiceIntakeChecks(organizationId: OpsId, workId: OpsId, vendorId: OpsId, number: string) { return (await import("./invoice-intake-query")).invoiceIntakeChecksFromFixture(this.fixture, organizationId, workId, vendorId, number); }
   async listInvoiceIntakeOptions(scope: OrganizationScope, query: import("./invoice-intake-query").InvoiceIntakeQuery) { return (await import("./invoice-intake-query")).invoiceIntakeFromFixture(this.fixture, scope, query); }
   async readVendorOnboardingSelection(organizationId: OpsId, scopeIds: string[], specialtyKeys: string[]) { return (await import("./vendor-onboarding-query")).vendorOnboardingFromFixture(this.fixture,organizationId,scopeIds,specialtyKeys); }
+  async listWarrantyDirectory(scope: OrganizationScope, query: import("./warranty-directory").WarrantyDirectoryQuery) { return (await import("./warranty-directory")).warrantyDirectoryFromFixture(this.fixture,scope,query); }
   async listWarrantyQueue(scope: OrganizationScope, query: import("./warranty-queue-query").WarrantyQueueQuery) { return (await import("./warranty-queue-query")).warrantyQueueFromFixture(this.fixture,scope,query); }
   async readOnboardingConfiguration(organizationId: OpsId) { const names=new Map<string,string>();for(const s of this.fixture.vendorSpecialties.filter(s=>s.organizationId===organizationId))if(!names.has(s.canonicalKey)||s.displayName<names.get(s.canonicalKey)!)names.set(s.canonicalKey,s.displayName);return clone({regions:this.fixture.regions.filter(r=>r.organizationId===organizationId).sort((a,b)=>a.id<b.id?-1:1),vendorSpecialties:[...names].sort(([a],[b])=>a<b?-1:1).map(([canonicalKey,displayName])=>({organizationId,canonicalKey,displayName}))}); }
   async listInvoiceEvidence(scope: OrganizationScope, query: import("./invoice-evidence-query").InvoiceEvidenceQuery) { return (await import("./invoice-evidence-query")).invoiceEvidenceFromFixture(this.fixture, scope, query); }
@@ -723,7 +737,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
           asset.model,
           asset.serialNumber,
           store?.storeNumber,
-          store?.name,
+          store?.name,store?.address1,store?.address2,store?.city,store?.state,store?.postalCode,...(store?.aliases??[]),
         ].filter(Boolean).join(" ")).includes(query);
       })
       .sort((a, b) => a.assetTag.localeCompare(b.assetTag) || a.id.localeCompare(b.id))

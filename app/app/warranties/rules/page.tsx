@@ -1,0 +1,43 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { loadOperatorSession } from "@/app/app/_data/operator-loader";
+import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
+import { storeWorkspaceContext } from "@/lib/server/store-workspace-context";
+import { formatOperationsDate } from "@/lib/ops/local-time";
+import styles from "@/components/workspace/warranty-center.module.css";
+export const metadata={title:"Vendor warranty rules"};
+type Query={vendor?:string;store?:string;q?:string;offset?:string};
+export default async function Page({searchParams}:{searchParams:Promise<Query>}){
+ const q=await searchParams,session=await loadOperatorSession(),repo=await getServerOpsRepository();
+ if(!["executive","facilities","regional","store_manager"].includes(session.role))notFound();
+ const store=q.store?(await storeWorkspaceContext(q.store)).store:undefined;
+ const editable=["executive","facilities"].includes(session.role)||session.role==="regional"&&Boolean(store);
+ const offset=Math.max(0,Number(q.offset)||0),base="/app/warranties/rules",today=new Date().toISOString().slice(0,10);
+ const href=(values:Query)=>base+"?"+new URLSearchParams(Object.entries(values).filter(([,v])=>v!==undefined) as [string,string][]);
+ const vendors=await repo.listVendors(session,q.vendor?undefined:q.q,{limit:25,offset:q.vendor?0:offset});
+ const vendor=q.vendor?await repo.getVendor(session.organizationId,q.vendor):undefined;
+ if(q.vendor&&!vendor)notFound();
+ const rules=vendor?await repo.listWarrantyRules(session.organizationId,vendor.id):[];
+ const profiles=vendor?await repo.listVendorWarrantyProfiles(session.organizationId,vendor.id):[];
+ const lines=(await Promise.all(profiles.map(p=>repo.listWarrantyCoverageLines(session.organizationId,p.id)))).flat();
+ const visibleRules=rules.filter(r=>store?r.storeId===store.id:!r.storeId);
+ const simple=visibleRules.filter(r=>!r.tradeKey&&!r.workType&&!r.serviceType&&!r.assetType&&!r.componentType&&!r.contractVersionId&&!r.quoteId&&!r.authorizationId&&!r.regionId&&!r.manufacturer&&!r.model&&r.vendorSuppliedPart===undefined&&r.customerSuppliedPart===undefined);
+ const current=simple.find(r=>r.status==="active"&&!r.effectiveEndsAt);
+ const start=current&&current.effectiveStartsAt.slice(0,10)>=today?new Date(Date.parse(current.effectiveStartsAt)+86400000).toISOString().slice(0,10):today;
+ const baseLines=lines.filter(l=>!l.warrantyRuleId&&profiles.some(p=>p.status==="active"&&p.id===l.vendorWarrantyProfileId));
+ const currentLines=current?lines.filter(l=>l.warrantyRuleId===current.id):store?[]:baseLines;
+ const stores=vendor&&!store?await repo.searchStores(session,q.q??"",{limit:25,offset}):undefined;
+ return <div className={styles.page}><header className={styles.header}><div><p className={styles.eyebrow}>{store?`Store ${store.storeNumber} · ${store.name}`:"Company warranty settings"}</p><h1>{vendor?vendor.name:"Vendor warranty rules"}</h1><p>{store?"Choose this store’s vendor terms. Existing repair coverage stays on record.":"Set terms once. Coverage attaches to confirmed work on equipment."}</p></div><Link href={store?`/app/stores/${store.id}/warranties`:"/app/warranties"}>Back to warranties</Link></header>
+ {!vendor?<section className={styles.surface}><header className={styles.sectionHead}><h2>Choose a vendor</h2></header><div className={styles.body}><form className={styles.filters}><input type="hidden" name="store" value={q.store??""}/><label>Search vendors<input name="q" defaultValue={q.q}/></label><button>Search</button></form>{vendors.items.map(v=><Link key={v.id} href={href({vendor:v.id,store:q.store})}>{v.name} →</Link>)}{!vendors.items.length?<p>No matching vendors.</p>:null}<nav>{offset>0?<Link href={href({store:q.store,q:q.q,offset:String(Math.max(0,offset-25))})}>Previous</Link>:null}{vendors.nextCursor?<Link href={href({store:q.store,q:q.q,offset:String(offset+25)})}>Next →</Link>:null}</nav></div></section>:<>
+ <nav className={styles.tabs}><Link href={href({store:q.store})}>Choose another vendor</Link>{store?<Link href={href({vendor:vendor.id})}>Company default</Link>:<><Link href={`/app/warranties?tab=coverage&vendor=${vendor.id}`}>Applied coverage</Link>{editable?<Link href="/app/warranties/rules/new">Advanced rules</Link>:null}</>}</nav>
+ <section className={styles.surface}><header className={styles.sectionHead}><h2>{store?"Store policy":"Standard warranty"}</h2><span className={styles.badge}>{current&&current.effectiveStartsAt.slice(0,10)>today?`Scheduled · ${formatOperationsDate(current.effectiveStartsAt.slice(0,10))}`:current?.excludeCoverage?"Excluded":current?"Terms recorded":store?"Uses vendor standard":baseLines.length?"Existing vendor terms":"No standard rule recorded"}</span></header><div className={styles.body}>
+ {editable?<form action="/api/ops/warranties/policies" method="post" className={`${styles.body} ${styles.policyForm}`}><input type="hidden" name="vendorId" value={vendor.id}/><input type="hidden" name="storeId" value={store?.id??""}/><input type="hidden" name="ruleId" value={current?.id??""}/>
+ {store?<label>For this store<select name="mode" defaultValue={current?.excludeCoverage?"exclude":"custom"}><option value="custom">Use custom terms</option><option value="exclude">Exclude from vendor standard</option>{current?<option value="inherit">Restore vendor standard</option>:null}</select></label>:<input type="hidden" name="mode" value="custom"/>}
+ <label className={styles.policyDate}>Effective from<input type="date" name="effectiveStart" defaultValue={start} min={start} required/></label><div className={styles.policyTerms}><p>Coverage in days. Leave blank for no coverage. {store?"Exclusion ignores these fields.":""}</p><div className={styles.policyCategories}>{([['labor','Labor'],['part','Parts'],['travel','Travel'],['diagnostic','Diagnostics']] as const).map(([key,label])=><label key={key}>{label}<input type="number" name={key+"Duration"} min="1" max="36500" placeholder="Not covered" defaultValue={currentLines.find(l=>l.coverageType===key)?.duration || undefined}/></label>)}</div>
+ <label>Terms / exclusions<textarea name="terms" rows={3} defaultValue={currentLines[0]?.conditions} placeholder="What work is covered? Any limitations?"/></label></div><label>Reason for change<input name="reason" required maxLength={2000}/></label><button className={styles.button}>Save warranty policy</button><small>New terms apply prospectively. Quote and contract terms take priority.</small></form>:<p>Your role can view these policies. Facilities manages company defaults.</p>}
+ </div></section>
+ <section className={styles.surface}><header className={styles.sectionHead}><h2>Rules and history</h2></header><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Applies to</th><th>Coverage</th><th>Effective dates</th></tr></thead><tbody>{visibleRules.map(r=><tr key={r.id}><td>{r.componentType??r.assetType??r.workType??r.tradeKey??"All qualifying work"}{r.contractVersionId?<small>Contract terms</small>:null}{r.status==="inactive"?<small>Withdrawn before start</small>:null}</td><td>{r.excludeCoverage?"Excluded from vendor standard":lines.filter(l=>l.warrantyRuleId===r.id).map(l=><div key={l.id}>{l.coverageType} · {l.duration ? `${l.duration} ${l.durationUnit}` : "Not covered"}{l.duration>0&&l.conditions?<small>{l.conditions}</small>:null}</div>)}</td><td>{formatOperationsDate(r.effectiveStartsAt.slice(0,10))} – {r.status==="inactive"?"Withdrawn":r.effectiveEndsAt?formatOperationsDate(r.effectiveEndsAt.slice(0,10)):"Ongoing"}</td></tr>)}</tbody></table>{!store&&baseLines.length?<div className={styles.body}><strong>Original vendor base terms</strong>{baseLines.map(l=><p key={l.id}>{l.coverageType}: {l.duration} {l.durationUnit}</p>)}</div>:null}{!visibleRules.length?<p className={styles.body}>{store?"No store override. Vendor rules apply.":"No additional rules recorded."}</p>:null}</div></section>
+ {stores?<section className={styles.surface}><header className={styles.sectionHead}><h2>Store exceptions</h2></header><div className={styles.body}><form className={styles.filters}><input type="hidden" name="vendor" value={vendor.id}/><label>Find a store<input name="q" defaultValue={q.q} placeholder="Store number, name or address"/></label><button>Search</button></form>{stores.items.map(s=><Link key={s.id} href={href({vendor:vendor.id,store:s.id})}>Store {s.storeNumber} · {s.name}<small> · {s.formattedAddress}</small> →</Link>)}<nav>{offset>0?<Link href={href({vendor:vendor.id,q:q.q,offset:String(Math.max(0,offset-25))})}>Previous</Link>:null}{stores.nextCursor?<Link href={href({vendor:vendor.id,q:q.q,offset:String(offset+25)})}>Next →</Link>:null}</nav></div></section>:null}
+ </>}
+ </div>;
+}

@@ -852,3 +852,23 @@ describe("append-only work-order verification and closure", () => {
       .toBe("resolved");
   });
 });
+
+it("attaches vendor labor terms atomically when completed equipment work is confirmed",async()=>{
+ const f=verificationFixture(),work=f.workOrders.find(w=>w.id===workOrderId)!,visit=f.visits.find(v=>v.id===visitId)!;
+ work.assetId=f.assets.find(a=>a.storeId===work.storeId)!.id;
+ const profile={...f.vendorWarrantyProfiles[0],id:"profile-verification-auto",vendorId:visit.vendorId!,effectiveStartsAt:"2026-01-01T00:00:00.000Z"};
+ f.vendorWarrantyProfiles=f.vendorWarrantyProfiles.filter(p=>p.vendorId!==visit.vendorId);f.vendorWarrantyProfiles.push(profile);
+ f.warrantyCoverageLines.push({id:"coverage-verification-auto",organizationId:NORTHLINE_ORGANIZATION_ID,vendorWarrantyProfileId:profile.id,coverageType:"labor",duration:90,durationUnit:"days",startEvent:"repair_completion",provider:"vendor",obligatedVendorId:visit.vendorId,routingRule:"original_vendor_first_right_to_cure",deductible:{amountMinor:0,currency:"USD"}});
+ const test=harness(f);await recordWorkOrderVerification(test.services,decisionInput("verified"));
+ const snap=test.repository.snapshot();const coverage=snap.manufacturerWarranties.find(w=>w.id===`work-warranty-${outcomeId}-labor`);
+ expect(coverage).toMatchObject({assetId:work.assetId,workOrderId,vendorId:visit.vendorId,providerKind:"vendor",startDate:"2026-08-10",expirationDate:"2026-11-08"});
+ expect(snap.auditEvents.some(e=>e.aggregateId===coverage!.id&&e.eventType==="equipment_warranty.automatically_applied")).toBe(true);
+ await expect(recordWorkOrderVerification(test.services,decisionInput("verified"))).rejects.toMatchObject({code:"CONFLICT"});
+ expect(test.repository.snapshot().manufacturerWarranties.filter(w=>w.id===coverage!.id)).toHaveLength(1);
+ // An installation-dependent policy cannot infer an install date from a visit.
+ f.warrantyCoverageLines.find(l=>l.id==="coverage-verification-auto")!.startEvent="installation";
+ const needsReview=harness(f);await recordWorkOrderVerification(needsReview.services,decisionInput("verified"));
+ expect(needsReview.repository.snapshot().workflowTasks.some(t=>t.workOrderId===workOrderId&&t.title==="Review vendor warranty terms"&&!t.blocking&&!t.requiredForProgress)).toBe(true);
+ expect(needsReview.repository.snapshot().manufacturerWarranties.some(w=>w.id===`work-warranty-${outcomeId}-labor`)).toBe(false);
+
+});
