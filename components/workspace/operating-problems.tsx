@@ -1,4 +1,19 @@
 import Link from "next/link";
-import type {OperatingRisk} from "@/lib/ops/operating-risks";
-import styles from "./compliance.module.css";
-export function OperatingProblems({rows}:{rows:OperatingRisk[]}) {return <section className={styles.panel}><h2>Reported operating problems</h2>{rows.length?<div className={styles.scroll}><table className={`${styles.table} ${styles.operatingTable}`}><thead><tr><th>Store</th><th>Reported condition</th><th>Last report</th><th>Next step</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td data-label="Store"><Link href={`/app/stores/${r.storeId}`}>Store {r.storeNumber}</Link></td><td data-label="Reported condition"><strong>{r.state==="unable_to_operate"?"Unable to operate":"Limited operations"}</strong></td><td data-label="Last report">{r.reportedAt.slice(0,10)}</td><td data-label="Next step"><Link href={`/app/requests/${r.id}`}>Review report →</Link></td></tr>)}</tbody></table></div>:<p>No open reports of limited or stopped operations.</p>}<small>Latest assessments on open requests · up to 5 priority reports</small></section>;}
+import type { OperatingRisk } from "@/lib/ops/operating-risks";
+import { formatOperationsDate } from "@/lib/ops/local-time";
+import styles from "./operating-problems.module.css";
+
+export function OperatingProblems({ rows }: { rows: OperatingRisk[] }) {
+  function list(items: OperatingRisk[]) {
+    return <ul className={styles.list}>{items.map(row => <li key={row.id}>
+      <Link href={`/app/requests/${row.id}`}><strong>Store {row.storeNumber} · {row.problem}</strong></Link>
+      <span>{row.state === "unable_to_operate" ? "Unable to operate" : "Limited operations"} · Reported {formatOperationsDate(row.reportedAt, "UTC")}</span>
+      <Link href={`/app/requests/${row.id}`}>Review report →</Link>
+    </li>)}</ul>;
+  }
+  return <section className={styles.panel} aria-label="Reported operating problems">
+    <h2>Reported operating problems</h2>
+    {rows.length ? list(rows.slice(0, 3)) : <p>No open reports of limited or stopped operations.</p>}
+    {rows.length > 3 ? <details><summary>View all {rows.length} priority reports</summary>{list(rows.slice(3))}</details> : null}
+  </section>;
+}

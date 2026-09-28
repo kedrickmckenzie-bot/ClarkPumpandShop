@@ -118,7 +118,7 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
   // safe when fresh isolates running this same release race. The completion
   // marker is written last. Cross-release initialization is an operational
   // deployment boundary because D1 has no cross-version application lock.
-  await seedOpsRepository(repository, buildNorthlinePresentationFixture());
+  await seedOpsRepository(repository, buildNorthlinePresentationFixture(new Date().toISOString()));
   await repository.atomicWrite([buildNorthlineCurrentSeedMarker()]);
 }
 

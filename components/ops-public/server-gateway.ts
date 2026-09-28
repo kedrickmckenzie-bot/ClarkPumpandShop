@@ -50,7 +50,7 @@ import type {
   WorkOrderVisitOutcome,
 } from "./contracts";
 import { PublicWorkflowError } from "./contracts";
-import { getPublicUploadStore, getQuoteUploadStore, usesLocalQuoteStorage } from "./server-file-store";
+import { getQuoteUploadStore, usesLocalQuoteStorage } from "./server-file-store";
 
 export const PUBLIC_DEMO_LINKS = {
   serviceToken: NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104,
@@ -449,7 +449,7 @@ function locationResultLabel(value: string, storeNumber: string): string {
     low_accuracy: "Location captured with low accuracy",
     permission_denied: "Location permission declined",
     unavailable: "Device location unavailable",
-    not_requested: "Location was not requested",
+    not_requested: "Location not collected (skipped or not requested)",
     trusted_store_device: "Recorded on a trusted store device",
   }[value] ?? "Location result unavailable";
 }
@@ -485,7 +485,7 @@ function evaluateLocation(store: Store, input: LocationEvidenceInput): { observa
       position_unavailable: "Device location unavailable",
       timeout: "Location request timed out",
       unsupported: "Location is not supported on this device",
-      not_requested: "Location was not requested by this operator",
+      not_requested: "Location not collected (skipped or not requested)",
     }[input.captureResult];
     return {
       observation: { result, capturedAt: recordedAt },
@@ -768,7 +768,7 @@ function followUpForOutcome(outcome: VisitOutcome, providerName: string): { acco
   return {
     accountableParty: facilitiesOwned ? "Facilities coordinator" : providerName,
     nextAction: outcome === "diagnosed_waiting_parts"
-      ? "Provide parts ETA and schedule the return visit"
+      ? "Review parts timing and schedule the return visit"
       : outcome === "temporary_repair"
         ? "Review permanent repair plan and schedule follow-up"
         : outcome === "return_required"
@@ -788,7 +788,7 @@ function followUpForWorkOrderOutcome(outcome: WorkOrderVisitOutcome, providerNam
     temporary_repair: "Review the temporary repair and plan permanent work",
     diagnosis_only: "Review the diagnosis and confirm the next service step",
     quote_required: "Provide the requested quote for operator review",
-    parts_required: "Provide the parts ETA and proposed return date",
+    parts_required: "Review parts timing and arrange the return visit",
     return_visit_required: "Propose the return service date",
     store_access_unavailable: "Review the access issue and coordinate a workable return",
     work_not_authorized: "Review the additional work and decide whether to authorize it",
@@ -845,7 +845,7 @@ async function receiveUploads(input: {
 }): Promise<{ received: number; attached: number; label?: string }> {
   if (!input.uploads.length) return { received: 0, attached: 0 };
   try {
-    const results = await getPublicUploadStore().store(input);
+    const results = await getQuoteUploadStore(runtime().mode === "demo").store(input);
     let attached = 0;
     for (const stored of results.filter((result) => result.stored)) {
       const existing = await runtime().repository.getStoredFileByStorageKey(input.organizationId, stored.key);
@@ -970,7 +970,7 @@ function checkOutReceipt(input: {
     visitId: input.visit.id,
     checkedOutAt: input.visit.checkedOutAt!,
     observedDurationMinutes: durationMinutes,
-    observedDurationLabel: `${durationMinutes} minutes of approximate observed onsite time`,
+    observedDurationLabel: `${durationMinutes} ${durationMinutes === 1 ? "minute" : "minutes"} of approximate observed onsite time`,
     outcomeLabel: input.outcome
       ? outcomeLabel(input.outcome)
       : input.workOrderOutcomes.length === 1
@@ -1452,6 +1452,7 @@ const gateway: PublicOperationsGateway = {
     const repository = runtime().repository;
     const submissionKey = cleanSubmissionKey(command.submissionKey);
     const vendorId = cleanOptional(command.vendorId, 120);
+    const unlistedVendor = command.unlistedVendor ? { name: cleanRequired(command.unlistedVendor.name, "Company name", 160), email: cleanRequired(command.unlistedVendor.email, "Contact email", 254), phone: cleanOptional(command.unlistedVendor.phone, 60) } : undefined;
     const compatibilityWorkOrderId = cleanOptional(command.workOrderId, 120);
     const listedWorkOrderIds = command.workOrderIds?.map((workOrderId) => cleanRequired(workOrderId, "Work order", 120));
     if (compatibilityWorkOrderId && listedWorkOrderIds && (
@@ -1486,7 +1487,8 @@ const gateway: PublicOperationsGateway = {
     const serviceRunId = cleanOptional(command.serviceRunId, 120);
     const plannedWorkOrderRemovalReason = cleanOptional(command.plannedWorkOrderRemovalReason, 1_000);
     const unmatchedReason = workOrderIds.length ? undefined : cleanRequired(command.noWorkOrderReason ?? "", "Reason for visit", 500);
-    if (!workOrderIds.length && !vendorId) throw new PublicWorkflowError("Choose an approved vendor for a visit without a work order.", 422, "missing_vendor");
+    if (unlistedVendor && (access.kind === "service" || vendorId || workOrderIds.length || heldWorkOrderIds.length || serviceRunId)) throw new PublicWorkflowError("Unlisted companies can record unmatched visits only.", 403, "unlisted_vendor_scope");
+    if (!workOrderIds.length && !vendorId && !unlistedVendor) throw new PublicWorkflowError("Choose an approved vendor for a visit without a work order.", 422, "missing_vendor");
     if (!workOrderIds.length && access.kind === "service") {
       throw new PublicWorkflowError("This link can start its main work order and accepted extras only.", 403, "service_token_work_order_bound");
     }
@@ -1502,6 +1504,7 @@ const gateway: PublicOperationsGateway = {
       storeId: store.id,
       channel: access.channel,
       vendorId: vendorId ?? null,
+      unlistedVendor: unlistedVendor ?? null,
       workOrderIds,
       heldWorkOrderIds,
       unmatchedReason: unmatchedReason ?? null,
@@ -1597,6 +1600,7 @@ const gateway: PublicOperationsGateway = {
         organizationId,
         storeId: store.id,
         vendorId: selected.length ? undefined : vendorId,
+        unlistedVendor,
         workOrderIds: selected.map((workOrder) => workOrder.id),
         heldWorkOrderIds,
         serviceRunId,
@@ -1704,6 +1708,9 @@ const gateway: PublicOperationsGateway = {
     }
     const explicitOutcomes = command.perWorkOrderOutcomes?.map((entry): PerWorkOrderVisitOutcome => {
       if (!allowedWorkOutcomes.has(entry.outcome)) throw new PublicWorkflowError("Choose a valid outcome for every work order.", 422, "invalid_outcome");
+      const partsEta = entry.outcome === "parts_required" ? cleanOptional(entry.partsEta, 120) : undefined;
+      const notes = [cleanOptional(entry.outcomeNotes, 2_000), partsEta ? `Parts ETA: ${partsEta}` : undefined].filter(Boolean).join("\n");
+      if (notes.length > 2000) throw new PublicWorkflowError("Shorten the visit notes to leave room for the parts ETA.",422,"notes_too_long");
       const visitLink = visitLinks.find((link) => link.workOrderId === entry.workOrderId);
       const heldItem = Boolean(visitLink?.workOrderHoldId);
       const requiresFollowUp = heldItem
@@ -1715,6 +1722,7 @@ const gateway: PublicOperationsGateway = {
         dueAt: cleanRequired(entry.followUp.dueAt, "Follow-up due time", 80),
         escalationTo: cleanRequired(entry.followUp.escalationTo, "Follow-up escalation", 160),
       } : requiresFollowUp ? followUpForWorkOrderOutcome(entry.outcome, visit.providerName) : undefined;
+      if (followUp && partsEta) followUp.nextAction = `Confirm parts arrival (${partsEta}) and arrange the return visit`;
       if (followUp && !Number.isFinite(Date.parse(followUp.dueAt))) {
         throw new PublicWorkflowError("Each follow-up needs a valid due time.", 422, "invalid_follow_up_due_at");
       }
@@ -1727,7 +1735,7 @@ const gateway: PublicOperationsGateway = {
       return {
         workOrderId: cleanRequired(entry.workOrderId, "Work order", 120),
         outcome: entry.outcome,
-        outcomeNotes: cleanOptional(entry.outcomeNotes, 2_000),
+        outcomeNotes: notes || undefined,
         vendorFollowUpTiming: entry.vendorFollowUpTiming,
         followUp,
       };

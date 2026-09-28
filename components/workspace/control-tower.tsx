@@ -232,7 +232,7 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
   ) : (
     <section className={styles.section}><div className={styles.empty}><BarChart3 size={24} aria-hidden="true" /><p>No insight records are available for this scope and period.</p></div></section>
   );
-  const metrics = <MetricStrip metrics={model.metrics} />;
+  const metrics = <><MetricStrip metrics={model.metrics} />{operatingSummary}</>;
   const attention = <AttentionSection model={model} />;
   const pipeline = <Pipeline model={model} />;
   const spotlight = model.spotlight ? <Spotlight model={model.spotlight} /> : null;
@@ -255,5 +255,5 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
       content = <>{metrics}{attention}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
   }
 
-  return <div className={styles.workspace}><PageHeader model={model} />{operatingSummary}{content}</div>;
+  return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;
 }

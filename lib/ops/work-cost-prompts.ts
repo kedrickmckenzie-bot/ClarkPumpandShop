@@ -25,7 +25,7 @@ export async function loadWorkCostPrompts(repository:OpsRepository,scope:Organiz
   const related = peers?.items.filter(row => row.id !== workId && row.status !== "cancelled") ?? [];
   if (related.length >= 2) prompts.push({id:"repeat",title:`${related.length}${peers?.nextCursor ? "+" : ""} other recent jobs on this equipment`,detail:"Past 180 days · Review the problem and repair history before another callout.",action:"Review history",href:`/app/work-orders?${new URLSearchParams({store:work.storeId,asset:work.asset!.id,createdFrom:from.slice(0,10),createdThrough:now.slice(0,10),...(work.component ? {component:work.component.id} : {})})}`});
   const otherHeld = held.items.filter(row => row.id !== workId);
-  if (otherHeld.length) prompts.push({id:"combine",title:"Other approved work at this store",detail:`${otherHeld.length}${held.nextCursor ? "+" : ""} jobs held for a suitable visit. Check trade and vendor eligibility.`,action:"Review work",href:`/app/work-orders?store=${work.storeId}&visitPlan=ready`});
+  if (otherHeld.length) prompts.push({id:"combine",title:"Other approved work at this store",detail:`${otherHeld.length}${held.nextCursor ? "+" : ""} ${otherHeld.length === 1 && !held.nextCursor ? "job" : "jobs"} held for a suitable visit. Check trade and vendor eligibility.`,action:"Review work",href:`/app/work-orders?store=${work.storeId}&visitPlan=ready`});
   const superseded = new Set(authorizations.flatMap(row => row.supersedesAuthorizationId ? [row.supersedesAuthorizationId] : []));
   const active = authorizations.filter(row => !superseded.has(row.id));
   const allocations = invoiceReporting(invoices,org).allocations.filter(row => row.workOrderId === workId);

@@ -50,7 +50,7 @@ export function describeLocationAttempt(location: LocationEvidenceInput | null):
     position_unavailable: "Your device could not determine its location. You can continue with that limitation recorded.",
     timeout: "The location request timed out. Try once more or continue with that limitation recorded.",
     unsupported: "This device or browser does not provide location. You can continue with that limitation recorded.",
-    not_requested: "This operator does not require location evidence for this visit.",
+    not_requested: "Location was skipped. No device location was collected.",
   };
   return labels[location.captureResult];
 }

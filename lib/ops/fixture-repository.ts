@@ -1048,7 +1048,7 @@ export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtu
 export function createOpsFixtureReadRepository(fixture: OpsFixture): OpsRepository {
   return new FixtureOpsRepository(fixture, false);
 }
-export function createNorthlineFixtureRepository(): MutableOpsFixtureRepository { return createOpsFixtureRepository(buildNorthlinePresentationFixture()); }
+export function createNorthlineFixtureRepository(anchorDate?: string): MutableOpsFixtureRepository { return createOpsFixtureRepository(buildNorthlinePresentationFixture(anchorDate)); }
 
 const OPS_PRESENTATION_RUNTIME_KEY = "__opsPresentationRuntimeRepository";
 const LEGACY_PRESENTATION_RUNTIME_KEY = "__traceOpsNorthlineRuntimeRepository";
@@ -1073,19 +1073,19 @@ function setPresentationRuntimeRepository(repository: MutableOpsFixtureRepositor
 export function getNorthlineFixtureRepository(): MutableOpsFixtureRepository {
   const repository = fixtureGlobal[OPS_PRESENTATION_RUNTIME_KEY]
     ?? fixtureGlobal[LEGACY_PRESENTATION_RUNTIME_KEY]
-    ?? setPresentationRuntimeRepository(createNorthlineFixtureRepository());
+    ?? setPresentationRuntimeRepository(createNorthlineFixtureRepository(process.env.VITEST ? undefined : new Date().toISOString()));
   // Refresh command/read methods after local hot reload without replacing source records.
   if (Object.getPrototypeOf(repository) !== FixtureOpsRepository.prototype) Object.setPrototypeOf(repository, FixtureOpsRepository.prototype);
   setPresentationRuntimeRepository(repository);
   const snapshot = repository.snapshot() as Partial<OpsFixture>;
   if (!Array.isArray(snapshot.equipmentTemplates) || !Array.isArray(snapshot.componentTemplates) || !Array.isArray(snapshot.replacementProfiles) || !Array.isArray(snapshot.requestImpactAssessments) || !Array.isArray(snapshot.siteVisitWorkOrders)) {
-    return setPresentationRuntimeRepository(createNorthlineFixtureRepository());
+    return setPresentationRuntimeRepository(createNorthlineFixtureRepository(process.env.VITEST ? undefined : new Date().toISOString()));
   }
   return repository;
 }
 
 export function resetNorthlineFixtureRepository() {
-  return setPresentationRuntimeRepository(createNorthlineFixtureRepository());
+  return setPresentationRuntimeRepository(createNorthlineFixtureRepository(process.env.VITEST ? undefined : new Date().toISOString()));
 }
 
 export function getNorthlineDemoRuntime() {

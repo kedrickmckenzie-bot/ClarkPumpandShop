@@ -101,7 +101,7 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
 
     const result = await seedOpsRepository(
       repository,
-      buildNorthlinePresentationFixture(),
+      buildNorthlinePresentationFixture(new Date().toISOString()),
       [buildNorthlineCurrentSeedMarker()],
     );
     await client.query("COMMIT");

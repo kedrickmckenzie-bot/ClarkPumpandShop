@@ -54,7 +54,8 @@ export function WorkRoutingFields({ model, accountabilityOnly }: { model: Create
     {route === "outside_vendor" ? <div>
       <label className={styles.field} htmlFor="vendor-search"><span>Find a vendor</span><input id="vendor-search" type="search" value={search} onChange={(event) => {setSearch(event.target.value);setOffset(0);}} placeholder="Name, specialty, equipment or coverage" /></label>
       {vendorError?<p role="alert">{vendorError}</p>:null}
-      <p role="status">{storeId&&!loaded&&!vendorError?"Loading vendors…":vendors.length ? `${vendors.length} matching vendor${vendors.length === 1 ? "" : "s"}` : "No matching vendors. Try another search."}</p>
+      <p role="status">{storeId&&!loaded&&!vendorError?"Loading vendors…":vendors.length ? `${vendors.length} matching vendor${vendors.length === 1 ? "" : "s"}` : "No matching vendor covers this store."}</p>
+      {search && !vendors.length && loaded ? <button type="button" className={styles.secondaryButton} onClick={()=>{setSearch("");setOffset(0);}}>Show all vendors covering this store</button> : null}
       <fieldset className={styles.assignmentChoices}>
         <legend>Service vendor · Required</legend>
         {available.filter((vendor) => vendors.includes(vendor) || vendor.value === vendorId).map((vendor) => <label key={vendor.value}>

@@ -286,6 +286,7 @@ export interface VendorVisitContextView {
 }
 
 export interface TechnicianCheckInCommand {
+  unlistedVendor?: { name: string; email: string; phone?: string };
   submissionKey: string;
   /** Allowed only for the controlled unmatched path. Matched work infers it. */
   vendorId?: string;
@@ -348,6 +349,7 @@ export interface PublicVisitFollowUp {
 }
 
 export interface PerWorkOrderVisitOutcome {
+  partsEta?: string;
   workOrderId: string;
   outcome: WorkOrderVisitOutcome;
   outcomeNotes?: string;

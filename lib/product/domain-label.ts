@@ -5,6 +5,7 @@ const acronyms: Readonly<Record<string, string>> = {
   csv: "CSV",
   gps: "GPS",
   hvac: "HVAC",
+  not_requested: "Location not collected",
   id: "ID",
   nte: "NTE",
   pm: "PM",

@@ -18,6 +18,7 @@ const followUpSchema = z.object({
 });
 
 const workOrderOutcomeSchema = z.object({
+  partsEta: z.string().trim().max(120).optional(),
   workOrderId: z.string().min(1).max(120),
   outcome: z.enum(["completed", "temporary_repair", "diagnosis_only", "quote_required", "parts_required", "return_visit_required", "no_issue_found", "store_access_unavailable", "work_not_authorized", "not_addressed"]),
   outcomeNotes: z.string().max(2000).optional(),

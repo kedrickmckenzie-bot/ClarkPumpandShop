@@ -283,6 +283,7 @@ describe("manager-approved held work", () => {
     expect(updated.activeVisits.find((visit) => visit.id === checkIn.visitId)?.workOrders).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: DOOR_WORK_ID, selectionSource: "held_work", heldWorkPosture: "complete_using_professional_judgment" }),
     ]));
+    expect((await repository.getVisit(NORTHLINE_ORGANIZATION_ID, checkIn.visitId))?.checkedInAt).toBe(checkIn.checkedInAt);
     expect((await repository.getWorkOrderVisitHold(NORTHLINE_ORGANIZATION_ID, DOOR_WORK_ID))?.status).toBe("claimed");
 
     const replay = await gateway.addHeldWorkToVisit(activeVisitToken, {
@@ -303,8 +304,8 @@ describe("manager-approved held work", () => {
       readFile("components/ops-public/technician-visit-flow.tsx", "utf8"),
       readFile("components/workspace/held-work-actions.tsx", "utf8"),
     ]);
-    expect(technicianSource).toContain("Select anything you can handle today");
-    expect(technicianSource).toContain("Your company decides what it can handle today");
+    expect(technicianSource).toContain("Would you like to handle any of these during this visit?");
+    expect(technicianSource).toContain("Continue with my original job");
     expect(technicianSource).toContain("A photo is strongly recommended for a temporary repair");
     expect(managerSource).toContain("Never shown to the technician; not a price or authorization");
     expect(managerSource).toContain("No estimate or manager reply is required during the visit");

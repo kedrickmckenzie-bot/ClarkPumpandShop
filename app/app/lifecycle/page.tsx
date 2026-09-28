@@ -1,3 +1,4 @@
+import { domainLabel } from "@/lib/product/domain-label";
 import {CapitalQuickEdit} from "@/components/workspace/capital-quick-edit";
 import {roleCanAccessProgramRoute} from "@/components/ops/role-policy";
 import Link from "next/link";
@@ -32,7 +33,7 @@ export default async function LifecyclePage({searchParams}:{searchParams:Promise
  <label>Search<input type="search" name="q" defaultValue={q.q} placeholder="Equipment, store number, name or address"/></label>
  <label>Store<select name="store" defaultValue={q.store??""}><option value="">All accessible stores</option>{filters.stores.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
  <label>Region<select name="region" defaultValue={q.region??""}><option value="">All regions</option>{filters.regions.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
- <label>Category<select name="category" defaultValue={q.category??""}><option value="">All categories</option>{filters.categories.map(c=><option key={c} value={c}>{c.replaceAll("_"," ")}</option>)}</select></label>
+ <label>Category<select name="category" defaultValue={q.category??""}><option value="">All categories</option>{filters.categories.map(c=><option key={c} value={c}>{domainLabel(c)}</option>)}</select></label>
  {capital?<><label>Starting month<input type="month" name="start" defaultValue={start} required/></label><label>Look ahead<select name="months" defaultValue={months}>{[3,6,12,24].map(n=><option key={n} value={n}>{n} months</option>)}</select></label><label>Currency<select name="currency" defaultValue={currency}>{[...new Set([currency,...capital.currencies])].sort().map(c=><option key={c}>{c}</option>)}</select></label></>:null}<button>Apply</button><Link href={`/app/lifecycle?view=${view}`}>Clear</Link></form>
  {capital?<section className={styles.panel}><div className={styles.bar}><div><h2>Capital forecast · {currency}</h2><p><strong>{money(inWindow.reduce((n,b)=>n+b.amountMinor,0))}</strong> scheduled in this window · {dateLabel(start)}–{dateLabel(monthAfter(start,months-1))}</p><small>{inWindow.reduce((n,b)=>n+b.missing,0)} replacements need a cost. The forecast uses each plan’s saved cost. Planning does not approve work.</small></div><Link href={href({month:""})}>Show all plans</Link></div>
  <h3>Annual and unscheduled plans · all years</h3>

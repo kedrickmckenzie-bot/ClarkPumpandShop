@@ -179,10 +179,11 @@ describe("public work-order-first multi-work-order visit", () => {
     expect(getNorthlineFixtureRepository().snapshot().visits.some((visit) => visit.technicianName === "Cross Tenant Probe")).toBe(false);
   });
 
-  it("keeps WO-first routing and exact checkout evidence without burdening technician check-in", async () => {
+  it("keeps company-first routing and exact checkout evidence without burdening technician check-in", async () => {
     const source = await readFile("components/ops-public/technician-visit-flow.tsx", "utf8");
     expect(source).toContain("Choose the work");
-    expect(source).toContain("Assigned Vendor (inferred)");
+    expect(source).toContain("Who are you with?");
+    expect(source).toContain("I’m here for this work");
     expect(source).toContain("No work order provided");
     expect(source).toContain("Reason for visit");
     expect(source).toContain("Number of technicians onsite");

@@ -24,7 +24,7 @@ const LOCK_KEYS = [
 
 async function reset() {
   const target = assertDestructiveResetAllowed(process.env);
-  const fixture = buildNorthlinePresentationFixture();
+  const fixture = buildNorthlinePresentationFixture(new Date().toISOString());
   assertOpsFixture(fixture);
   const migrations = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER });
   const pool = await getPostgresPool();

@@ -1118,3 +1118,11 @@ a.factCard { padding-right: 38px; }
 .costHint a { color: #1d4ed8; text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
 
 .costLines{display:grid;gap:16px}.costLine{display:grid;grid-template-columns:minmax(0,1fr) 160px auto;align-items:end;gap:12px;padding-bottom:16px;border-bottom:1px solid #dbe1ea}.costLines>button{justify-self:start}@media(max-width:650px){.costLine{grid-template-columns:minmax(0,1fr) auto}.costLine>label:first-child{grid-column:1/-1}}
+
+.arrivalReview { margin: 0 0 24px; padding: 24px; background: #fff; border: 1px solid #cbd5e1; border-top: 4px solid #2563eb; border-radius: 8px; }
+.arrivalReview h2 { margin: 0; font-size: 22px; color: #0f172a; }
+.arrivalReview p { color: #475569; max-width: 760px; line-height: 1.5; }
+.arrivalReview form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.arrivalReview .field { margin: 0; }
+.arrivalReview button { align-self: end; justify-self: start; }
+@media (max-width: 640px) { .arrivalReview { padding: 18px; } .arrivalReview form { grid-template-columns: 1fr; } }

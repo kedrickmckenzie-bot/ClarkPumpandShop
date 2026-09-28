@@ -4,6 +4,7 @@ import { setPendingVisitCookie } from "@/components/ops-public/pending-visit-coo
 import { locationEvidenceSchema, publicApiError, publicApiSuccess, readPublicIdempotencyKey } from "@/components/ops-public/server-http";
 
 const checkInSchema = z.object({
+  unlistedVendor: z.object({ name: z.string().trim().min(1).max(160), email: z.string().email().max(254), phone: z.string().max(60).optional() }).strict().optional(),
   vendorId: z.string().min(1).max(120).optional(),
   workOrderIds: z.array(z.string().min(1).max(120)).min(1).max(100).optional(),
   heldWorkOrderIds: z.array(z.string().min(1).max(120)).max(100).optional(),

@@ -25,7 +25,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
   ]);
   const asset = fixture.assets.find((item) => item.organizationId === session.organizationId && item.id === id);
   const review = buildEquipmentReview(fixture, session, id, query);
-  if(asset?.status === "operational"){model.statusLabel="Recorded as operating";model.statusTone="neutral";model.page.description=`${asset.assetTag} · Status from the equipment register. Review current work and repair history below.`;}
+  if(asset?.status === "operational"){model.statusLabel="Recorded as operating";model.statusTone="neutral";model.page.description=`${asset.assetTag} · Operating status from the equipment register · Last confirmed: not recorded. See repair history below.`;}
   if (asset) model.facts.splice(4, 0, { label: "Supplier", value: asset.supplier ?? "Not entered" });
   const componentSection = model.sections.find((section) => section.id === "components");
   if (componentSection?.table) {

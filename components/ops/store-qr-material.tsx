@@ -14,17 +14,23 @@ export function StoreQrMaterial({
   storeName,
   targetPath,
   configuredOrigin,
+  storeId,
 }: {
   storeNumber: string;
   storeName: string;
-  targetPath: string;
+  targetPath?: string;
+  storeId?: string;
   configuredOrigin?: string;
 }) {
+  const [createdPath, setCreatedPath] = useState(targetPath ?? "");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const runtimeOrigin = useBrowserOrigin();
   const origin = selectPublicQrOrigin(configuredOrigin, runtimeOrigin);
-  const publicUrl = useMemo(() => origin ? new URL(targetPath, `${origin}/`).toString() : "", [origin, targetPath]);
+  const publicUrl = useMemo(() => origin && createdPath ? new URL(createdPath, `${origin}/`).toString() : "", [origin, createdPath]);
 
   useEffect(() => {
     if (!publicUrl) return;
@@ -40,6 +46,16 @@ export function StoreQrMaterial({
     return () => { cancelled = true; };
   }, [publicUrl]);
 
+  async function createLink() {
+    setCreating(true); setError("");
+    try {
+      const response = await fetch(`/api/ops/stores/${encodeURIComponent(storeId!)}/access`, { method: "POST" });
+      const data = await response.json() as { publicPath: string; expiresAt: string; error?: string };
+      if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "Could not create the store QR code.");
+      setCreatedPath(data.publicPath); setExpiresAt(data.expiresAt);
+    } catch (error) { setError(error instanceof Error ? error.message : "Try again."); }
+    finally { setCreating(false); }
+  }
   async function copyLink() {
     if (!publicUrl) return;
     await navigator.clipboard.writeText(publicUrl);
@@ -57,7 +73,8 @@ export function StoreQrMaterial({
           <p>Post this code at the service counter or back-room entry. It opens the store&apos;s account-free vendor check-in.</p>
         </div>
       </header>
-      <div className={styles.content}>
+      {error ? <p role="alert">{error}</p> : null}
+      {!createdPath ? <button className={styles.primaryAction} type="button" disabled={creating} onClick={createLink}>{creating ? "Creating…" : "Create store QR code"}</button> : <div className={styles.content}>
         <div className={styles.qrFrame}>
           {qrDataUrl ? (
             <Image
@@ -86,13 +103,15 @@ export function StoreQrMaterial({
             <p><strong>Finish the same visit.</strong> The secure checkout stays available on that device, and rescanning this code brings the technician back to it.</p>
           </div>
           <div className={styles.actions}>
-            <Link className={styles.primaryAction} href={targetPath} target="_blank">Open live page <ExternalLink aria-hidden="true" size={16} /></Link>
+            <Link className={styles.primaryAction} href={createdPath} target="_blank">Open live page <ExternalLink aria-hidden="true" size={16} /></Link>
             <button className={styles.secondaryAction} disabled={!publicUrl} onClick={copyLink} type="button">{copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}{copied ? "Copied" : "Copy link"}</button>
+            {qrDataUrl ? <button className={styles.secondaryAction} type="button" onClick={()=>window.print()}>Print QR</button> : null}
             {qrDataUrl ? <a className={styles.secondaryAction} download={`store-${storeNumber}-vendor-qr.png`} href={qrDataUrl}><Download aria-hidden="true" size={16} />Download QR</a> : null}
           </div>
+          {expiresAt ? <p>Valid through {new Date(expiresAt).toLocaleDateString()}. Download or print this code to keep it.</p> : null}
           {publicUrl ? <p className={styles.url}>{publicUrl}</p> : null}
         </div>
-      </div>
+      </div>}
     </section>
   );
 }

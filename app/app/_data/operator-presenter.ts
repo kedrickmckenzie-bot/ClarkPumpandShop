@@ -1971,7 +1971,7 @@ function buildVendorEvidenceBundle(
     id: vendor.id,
     name: vendor.name,
     code: vendor.code,
-    statusLabel: sentence(vendor.status),
+    statusLabel: vendor.status === "restricted" && vendor.code.startsWith("vendor-arrival-") ? "Needs onboarding" : sentence(vendor.status),
     preferred: vendor.preferred,
     dispatchEmail: vendor.dispatchEmail,
     dispatchPhone: vendor.dispatchPhone,
@@ -4577,7 +4577,7 @@ export function buildDetailModel(
         },
         { label: "Observed arrival", value: formatOperationsDateTime(visit.checkedInAt, storeTimeZone, { seconds: true }), helperText: `Store-local time · started via ${sentence(visit.startedChannel)}` },
         { label: "Observed departure", value: visit.checkedOutAt ? formatOperationsDateTime(visit.checkedOutAt, storeTimeZone, { seconds: true }) : "No checkout recorded", helperText: visit.endedChannel ? `Store-local time · finished via ${sentence(visit.endedChannel)}` : "No checkout event yet" },
-        { label: "Approximate observed time", value: visit.observedDurationSeconds === undefined ? "In progress" : `${Math.round(visit.observedDurationSeconds / 60)} minutes`, helperText: "Presence context, not certified labor" },
+        { label: "Approximate observed time", value: visit.observedDurationSeconds === undefined ? "In progress" : `${Math.round(visit.observedDurationSeconds / 60)} ${Math.round(visit.observedDurationSeconds / 60) === 1 ? "minute" : "minutes"}`, helperText: "Presence context, not certified labor" },
       ],
       sections: [
         ...(linkedWorks.length ? [{
@@ -5096,7 +5096,7 @@ export function buildDetailModel(
   return {
     state: { kind: "ready" },
     page: { title: vendor.name, eyebrow: vendor.preferred ? "Preferred approved vendor" : "Approved vendor", description: specialties.map((item) => item.displayName).join(" · "), scopeLabel: session.scopeLabel, primaryAction: roleCan(session, "create_work_order") ? { label: "Create work order", href: `/app/work-orders/new?vendor=${vendor.id}` } : undefined },
-    statusLabel: sentence(vendor.status),
+    statusLabel: vendor.status === "restricted" && vendor.code.startsWith("vendor-arrival-") ? "Needs onboarding" : sentence(vendor.status),
     statusTone: vendor.status === "approved" ? "positive" : "warning",
     facts: [
       { label: "Dispatch", value: vendor.dispatchEmail, helperText: vendor.dispatchPhone },

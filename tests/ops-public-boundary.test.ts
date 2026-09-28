@@ -1,3 +1,4 @@
+import { approveArrivingVendor } from "@/lib/ops/vendor-arrival-review";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   PUBLIC_DEMO_LINKS,
@@ -23,6 +24,38 @@ async function sha256Hex(value: string) {
 describe("public service and visit capability boundaries", () => {
   beforeEach(() => {
     resetNorthlineFixtureRepository();
+  });
+
+  it("records an unlisted company without approval, replays safely, and permits only its own checkout", async () => {
+    const gateway = getPublicOperationsGateway(), repository = getNorthlineFixtureRepository();
+    const command = { submissionKey: "unlisted-company-arrival-test", unlistedVendor: { name: "New Arrival Repair", email: "dispatch@arrival.example", phone: "555-0100" }, noWorkOrderReason: "Store called about a leaking sink", technicianName: "Arrival Technician", location: { captureResult: "not_requested" as const } };
+    await expect(gateway.checkIn(PUBLIC_DEMO_LINKS.serviceToken, command)).rejects.toMatchObject({status:403});
+    const receipt = await gateway.checkIn(PUBLIC_DEMO_LINKS.storeToken, command);
+    expect((await gateway.checkIn(PUBLIC_DEMO_LINKS.storeToken, command)).visitId).toBe(receipt.visitId);
+    const visit = await repository.getVisit(NORTHLINE_ORGANIZATION_ID, receipt.visitId);
+    expect((await repository.getVendor(NORTHLINE_ORGANIZATION_ID,visit!.vendorId!))?.status).toBe("restricted");
+    expect(repository.snapshot().exceptions.some(e=>e.visitId===receipt.visitId && e.summary.includes("not onboarded"))).toBe(true);
+    expect((await gateway.lookupVendorVisitContext(PUBLIC_DEMO_LINKS.storeToken)).eligibleWorkOrders.some(w=>w.assignedVendor.id===visit!.vendorId)).toBe(false);
+    const token = receipt.checkoutUrl.split("/public/store/")[1].split("/")[0];
+    expect((await gateway.lookupVendorVisitContext(token)).activeVisits.map(v=>v.id)).toEqual([visit!.id]);
+    await expect(gateway.checkOut(token,{submissionKey:"unlisted-company-wrong-checkout",visitId:NORTHLINE_DEMO_HANDLES.activeVisitId,outcome:"resolved",location:{captureResult:"not_requested"},evidence:[]})).rejects.toMatchObject({status:403});
+    await gateway.checkOut(token,{submissionKey:"unlisted-company-own-checkout",visitId:visit!.id,outcome:"resolved",outcomeNotes:"Sink inspected",location:{captureResult:"not_requested"},evidence:[{name:"arrival-note.txt",mediaType:"text/plain",size:11,bytes:new TextEncoder().encode("QA evidence").buffer}]});
+    expect((await repository.getVisit(NORTHLINE_ORGANIZATION_ID,visit!.id))?.status).toBe("checked_out");
+    expect(repository.snapshot().entityFiles.some(f=>f.entityId===visit!.id)).toBe(true);
+    expect((await repository.getVendor(NORTHLINE_ORGANIZATION_ID,visit!.vendorId!))?.status).toBe("restricted");
+    await approveArrivingVendor({repository},{organizationId:NORTHLINE_ORGANIZATION_ID,vendorId:visit!.vendorId!,storeId:visit!.storeId,trade:"plumbing",name:"New Arrival Repair",email:"dispatch@arrival.example",actor:{organizationId:NORTHLINE_ORGANIZATION_ID,actorType:"user",actorName:"Facilities"}});
+    expect((await repository.getVendor(NORTHLINE_ORGANIZATION_ID,visit!.vendorId!))?.status).toBe("approved");
+    expect(await repository.vendorCoversStore(NORTHLINE_ORGANIZATION_ID,visit!.vendorId!,visit!.storeId)).toBe(true);
+    expect(await repository.vendorCoversStore(NORTHLINE_ORGANIZATION_ID,visit!.vendorId!,"store-northline-103")).toBe(false);
+  });
+
+  it("carries an explicit parts ETA into the saved notes and follow-up", async()=>{
+    const gateway=getPublicOperationsGateway(),repository=getNorthlineFixtureRepository();
+    const receipt=await gateway.checkIn(PUBLIC_DEMO_LINKS.serviceToken,{submissionKey:"parts-eta-arrival-test",workOrderId:NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId,technicianName:"Parts Technician",location:{captureResult:"not_requested"}});
+    await gateway.checkOut(PUBLIC_DEMO_LINKS.serviceToken,{submissionKey:"parts-eta-checkout-test",visitId:receipt.visitId,perWorkOrderOutcomes:[{workOrderId:NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId,outcome:"parts_required",partsEta:"about 3 days",outcomeNotes:"Compressor ordered"}],location:{captureResult:"not_requested"},evidence:[]});
+    const work=await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID,NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId);
+    expect(work?.nextAction).toContain("about 3 days");
+    expect((await repository.listSiteVisitWorkOrders(NORTHLINE_ORGANIZATION_ID,receipt.visitId))[0].outcomeNotes).toContain("Parts ETA: about 3 days");
   });
 
   it("renders immutable issuance terms even after live records change", async () => {

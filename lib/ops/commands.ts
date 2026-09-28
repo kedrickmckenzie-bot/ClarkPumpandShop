@@ -1846,6 +1846,7 @@ export async function recordVendorResponse(svc: OpsCommandServices, input: Recor
 }
 
 export interface CheckInVisitInput {
+  unlistedVendor?: { name: string; email: string; phone?: string };
   organizationId: OpsId;
   storeId: OpsId;
   vendorId?: OpsId;
@@ -1888,6 +1889,9 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
   if (!store) throw new OpsDomainError("NOT_FOUND", "Store not found in organization");
   if (input.vendorId && input.internalMembershipId) throw new OpsDomainError("VALIDATION", "A visit cannot identify both an outside vendor and internal maintenance member");
   const workOrderIds = selectedVisitWorkOrderIds(input);
+  const unlisted = input.unlistedVendor;
+  if (unlisted && (input.vendorId || input.internalMembershipId || workOrderIds.length || input.heldWorkOrderIds?.length || input.serviceRunId)) throw new OpsDomainError("FORBIDDEN", "An unlisted company can record an unmatched visit only");
+  if (unlisted && (!unlisted.name.trim() || unlisted.name.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(unlisted.email) || unlisted.email.length > 254 || (unlisted.phone?.length ?? 0) > 60)) throw new OpsDomainError("VALIDATION", "Enter the company name and a valid contact email");
   const heldWorkOrderIds = [...(input.heldWorkOrderIds ?? [])];
   if (heldWorkOrderIds.some((id) => !id.trim()) || new Set(heldWorkOrderIds).size !== heldWorkOrderIds.length) throw new OpsDomainError("VALIDATION", "Choose each held work order only once");
   if (heldWorkOrderIds.some((id) => workOrderIds.includes(id))) throw new OpsDomainError("VALIDATION", "A work order cannot be selected as both assigned and held work");
@@ -1940,16 +1944,16 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
       throw new OpsDomainError("FORBIDDEN", "The supplied provider kind does not match the selected work-order assignments");
     }
   } else {
-    if (Boolean(input.vendorId) === Boolean(input.internalMembershipId)) throw new OpsDomainError("VALIDATION", "Choose exactly one outside vendor or internal maintenance member when no work order is provided");
-    vendorId = input.vendorId;
+    if (!unlisted && Boolean(input.vendorId) === Boolean(input.internalMembershipId)) throw new OpsDomainError("VALIDATION", "Choose exactly one outside vendor or internal maintenance member when no work order is provided");
+    vendorId = unlisted ? ids.next("vendor-arrival") : input.vendorId;
     internalMembershipId = input.internalMembershipId;
     required(input.unmatchedReason ?? "", "Reason when no work order is provided");
   }
-  const vendor = vendorId ? await repository.getVendor(input.organizationId, vendorId) : null;
+  const vendor = unlisted ? { id: vendorId!, name: unlisted.name.trim(), status: "restricted" } : vendorId ? await repository.getVendor(input.organizationId, vendorId) : null;
   const internalMember = internalMembershipId ? await repository.getMembership(input.organizationId, internalMembershipId) : null;
   if (vendorId && !vendor) throw new OpsDomainError("NOT_FOUND", "Vendor not found in organization");
-  if (vendor && vendor.status !== "approved") throw new OpsDomainError("FORBIDDEN", "Vendor is not approved");
-  if (vendor && !(await repository.vendorCoversStore(input.organizationId, vendor.id, input.storeId))) throw new OpsDomainError("FORBIDDEN", "Vendor does not cover this store");
+  if (vendor && !unlisted && vendor.status !== "approved") throw new OpsDomainError("FORBIDDEN", "Vendor is not approved");
+  if (vendor && !unlisted && !(await repository.vendorCoversStore(input.organizationId, vendor.id, input.storeId))) throw new OpsDomainError("FORBIDDEN", "Vendor does not cover this store");
   if (internalMembershipId && (!internalMember || internalMember.status !== "active")) throw new OpsDomainError("NOT_FOUND", "Active internal maintenance member not found in organization");
   if (heldWorkOrders.length && !vendorId) throw new OpsDomainError("FORBIDDEN", "Held work can be selected only by an approved outside vendor");
   if (vendorId) {
@@ -2018,6 +2022,7 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
   });
   const visitWorkByWorkOrderId = new Map(visitWorkOrders.map((link) => [link.workOrderId, link] as const));
   const statements: OpsStatement[] = [
+    ...(unlisted ? [insert("ops_vendors", { id: vendorId, organization_id: input.organizationId, code: vendorId, name: providerName, dispatch_email: unlisted.email.trim(), dispatch_phone: unlisted.phone?.trim(), status: "restricted", preferred: 0, search_text: providerName.toLowerCase(), created_at: now }), ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "vendor", aggregateId: vendorId!, eventType: "vendor.unlisted_arrival_reported", actor: input.actor, occurredAt: now, payload: { storeId: store.id, name: providerName, email: unlisted.email, reviewRequired: true }, ids })] : []),
     insert("ops_visit_sessions", { id, organization_id: input.organizationId, store_id: input.storeId, provider_kind: vendorId ? "outside_vendor" : "internal", vendor_id: vendorId, internal_membership_id: internalMembershipId, work_order_id: scalarWorkOrderId, unmatched_reason: assignedWorkOrders.length ? undefined : input.unmatchedReason?.trim(), technician_name: technicianName, technician_phone_or_pin: technicianPhoneOrPin, crew_count: crewCount, additional_technician_names_json: json(additionalTechnicianNames), vehicle_identifier: vehicleIdentifier, arrival_note: arrivalNote, provider_name: providerName, purpose, status: "active", started_channel: input.channel, checked_in_at: now }),
     ...visitWorkOrders.map((link) => insert("ops_site_visit_work_orders", { id: link.id, organization_id: link.organizationId, visit_id: link.visitId, work_order_id: link.workOrderId, ordinal: link.ordinal, linked_by_actor_type: link.linkedByActorType, linked_by_actor_id: link.linkedByActorId, linked_by_actor_name: link.linkedByActorName, linked_at: link.linkedAt, selection_source: link.selectionSource, work_order_hold_id: link.workOrderHoldId })),
     insert("ops_visit_evidence", { id: evidenceId, organization_id: input.organizationId, visit_id: id, kind: "check_in", channel: input.channel, observed_at: now, location_result: input.location.result, latitude_e6: input.location.latitudeE6, longitude_e6: input.location.longitudeE6, accuracy_m: input.location.accuracyM, distance_m: input.location.distanceM, payload_json: json({ clientCapturedAt: input.location.capturedAt, serverObservedAt: now, crewCount, additionalTechnicianNames, vehicleIdentifier, arrivalNote }) }),
@@ -2036,7 +2041,7 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
       ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.sweep_work_started", actor: input.actor, occurredAt: now, payload: { holdId: hold!.id, visitId: id, vendorId, serviceRunId: serviceRun!.id, deadlineAt: hold!.deadlineAt }, ids }),
     );
   }
-  if (!assignedWorkOrders.length) statements.push(insert("ops_exceptions", { id: ids.next("exception"), organization_id: input.organizationId, kind: "no_work_order", store_id: input.storeId, visit_id: id, vendor_id: vendorId, severity: "attention", status: "open", summary: heldWorkOrders.length ? `${providerName} arrived without an issued work order and selected ${heldWorkOrders.length} approved held ${heldWorkOrders.length === 1 ? "item" : "items"}` : `${providerName} checked in without an operator work order`, detected_at: now }));
+  if (!assignedWorkOrders.length) statements.push(insert("ops_exceptions", { id: ids.next("exception"), organization_id: input.organizationId, kind: "no_work_order", store_id: input.storeId, visit_id: id, vendor_id: vendorId, severity: "attention", status: "open", summary: unlisted ? `${providerName} was not onboarded at arrival — review company details and this visit` : heldWorkOrders.length ? `${providerName} arrived without an issued work order and selected ${heldWorkOrders.length} approved held ${heldWorkOrders.length === 1 ? "item" : "items"}` : `${providerName} checked in without an operator work order`, detected_at: now }));
   for (const { workOrder, hold } of heldPairs) {
     const priorAssignment = await repository.getActiveAssignment(input.organizationId, workOrder!.id);
     if (priorAssignment) statements.push({ sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ? AND status NOT IN ('cancelled','declined','completed','superseded')", params: ["superseded", input.organizationId, priorAssignment.id] });

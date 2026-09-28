@@ -16,18 +16,20 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
   const canSetupEquipment = session.demoEdition === "complete" && roleCan(session, "setup_equipment");
   const canSetupPm = session.demoEdition === "complete" && roleCan(session, "setup_pm");
   const hasDemoVendorQr = id === NORTHLINE_DEMO_HANDLES.storyStoreId;
+  const canCreateQr = model.state.kind === "ready" && roleCan(session, "issue_work_order");
   return (
     <DetailView
       model={model}
       beforeSections={<><StoreWorkspaceNav id={id} />{model.state.kind === "ready" && session.demoEdition === "complete" ? <StoreOperatingContext id={id} /> : null}</>}
-      after={hasDemoVendorQr || canSetupEquipment || canSetupPm ? (
+      after={canCreateQr || canSetupEquipment || canSetupPm ? (
         <>
-          {hasDemoVendorQr ? (
+          {canCreateQr ? (
             <StoreQrMaterial
               configuredOrigin={process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}
               storeName={model.page.eyebrow ?? model.page.title}
               storeNumber={model.page.title.replace(/^Store\s+/i, "")}
-              targetPath={`/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}`}
+              storeId={id}
+              targetPath={hasDemoVendorQr ? `/public/store/${NORTHLINE_DEMO_ENTRY_TOKENS.store104}` : undefined}
             />
           ) : null}
           {canSetupEquipment || canSetupPm ? (

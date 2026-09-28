@@ -4,6 +4,45 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+September 28: user authorized committing and pushing the demo-readiness, arrival-review and company-first check-in changes. Automated validation is recorded below; CI-04 browser acceptance and DR-07 QR download/print acceptance remain open. Local dev4.log is excluded from the commit.
+
+## Company-first check-in — September 28
+
+- [x] CI-01 Search/select company before showing its work; retain unlisted and missing-work-order paths.
+- [x] CI-02 Expand job details before selection; clear crew check-in.
+- [x] CI-03 Offer optional approved work after check-in and append selected jobs to the same visit.
+- [ ] CI-04 Required checks and browser validation.
+
+Checkpoint: implemented company → expandable job details → crew check-in, then optional additional work on confirmation. No new identity gate; vendor selection organizes the work list. Existing tenant and assignment boundaries remain. Earlier uncommitted work and local records preserved.
+
+Implementation: company search supports existing and unlisted companies; switching company clears previous job/planned-visit selections. The missing-work-order path keeps the selected company. Unassigned work remains outside the assigned list. Check-in submits no optional jobs; the confirmation uses the newly issued visit capability to append chosen approved work to the same active visit. The refreshed receipt includes added jobs. Skip leaves the visit unchanged. Inspection instructions stay visible. Later additional-work selection is collapsed during checkout.
+
+Validation checkpoint: seed, typecheck and lint passed. Focused recovery/held-work tests passed 22/22, including preservation of the original check-in timestamp; updated company-first wording test passed 6/6. Full suite: 1,098/1,099 passed, with only the obsolete inferred-vendor wording assertion; its corrected file subsequently passed 6/6. Final workflow suite passed 62/62 and production build passed. Final typecheck, lint and whitespace checks passed. The full suite was not repeated after the wording correction. Logs: `%TEMP%/checkin-*.log`. Browser acceptance remains open: the browser tool rejected navigation to the QR destination as an invalid URL, and the user has been asked to open the destination manually. No browser workaround, reset, external delivery, commit or push.
+
+## Demo readiness and arrival clarity — September 28
+
+- [x] DR-01 Anchor newly created demo fixtures to a supplied current date; preserve existing records.
+- [x] DR-02 Make store QR creation, opening, download and print controls available across stores.
+- [x] DR-03 Compact, specific operating problems with readable dates and source links.
+- [x] DR-04 Everyday vendor search terms with honest empty results.
+- [x] DR-05 Explicit work-order parts ETA, equipment status context and skipped-location evidence.
+- [x] DR-06 PM layout, readable categories, grammar and work heading polish.
+- [ ] DR-07 Complete browser acceptance, including QR download/print verification (remaining).
+- [x] DR-08 Unlisted-company arrival, restricted vendor record, unmatched visit, secure checkout/evidence and manager approval for a selected store.
+
+Checkpoint: implemented the six review improvements and the explicitly approved unlisted-company arrival workflow; excluded the vendor-visibility finding. Existing local records were preserved. Browser acceptance is partial: QR download event timed out and physical/preview printing was not verified. No commit or push in this pass.
+
+Implementation: newly initialized demo fixtures shift source dates relative to the creation date; existing repositories are never rewritten. On-demand store codes are random, hashed at rest, scoped to a store and expire after one year. The overview puts metrics before three specific operating reports with an expandable remainder. Vendor routing recognizes card readers, gas pumps, potholes and frozen-drink terminology; absent roofing coverage stays an honest empty result. Work-order checkout records optional parts ETA in notes and the follow-up action. Skipped location is distinct from permission denial. Equipment register status explicitly has no recorded confirmation date. PM completion has aligned layout and a readable date; Work headings, categories and singular labels were polished.
+
+Arrival workflow: No work order provided → My company isn’t listed → company/contact and reason → check-in → visit-specific checkout with files. This creates a restricted company and review item, never automatic approval or access to assigned work. Facilities can review contact details and approve a service specialty and one store. The missing-work-order review remains separate. New-company matching/merging is not included. Local demo visit evidence now uses the existing temporary upload adapter; hosted storage remains behind the durable adapter.
+
+Validation: seed, typecheck, lint and whitespace checks passed. Full suite: 1,097/1,098 passed; the new approval test exposed a fixture SQL spacing issue, fixed afterward. Both affected files then passed 19/19; a further public-boundary rerun including upload evidence passed 16/16. Final workflow suite passed 62/62 and production build passed. Full 1,098-test suite was not repeated after the focused fix. Logs: `%TEMP%/readiness-*.log`.
+
+Browser evidence: Store 103 QR created and opened the correct store. QA Arrival Plumbing checked in without onboarding, checked out, appeared in manager review, and was approved only for Store 103. A second QA visit uploaded an image; receipt reported one attached file, manager record displayed it, and the image opened successfully. Location skip was shown distinctly. Overview and PM inspected at desktop and 390px; no document overflow on phone. Overview has seven upcoming visits in the freshly anchored fixture and exact problem links. Screenshot: `%TEMP%/readiness-overview.png`. Store 104 QR generated with download/print controls; download-event wait timed out, so download/print end-to-end acceptance remains unchecked. Unchanged principal journeys are covered by the 62 workflow tests and prior browser passes, not all manually repeated.
+
+Limits: generated QR plaintext is returned once; save/download the code when created. Fresh-date anchoring does not refresh an existing hosted tenant. Local uploads remain process-local preview data. No live delivery, production-readiness claim or data reset.
+
+
 ## Vendor handoff and daily usability follow-up — September 28
 
 - [x] VF-01 Show a copyable vendor link and clear delivery outcome without redirecting the operator into vendor actions.

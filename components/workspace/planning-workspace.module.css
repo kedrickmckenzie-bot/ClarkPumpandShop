@@ -231,3 +231,5 @@
 .pmStatuses a[aria-current="page"] { border-color: var(--ops-brand, #2855d9); background: var(--ops-brand-soft, #eef3ff); }
 .workspace .primaryButton { color: #fff; }
 .sourceSection > header > strong { flex-shrink: 0; white-space: nowrap; }
+
+.completionSummary{padding:18px 22px;background:#fff;border:1px solid #d8e0ea;border-left:4px solid #2457d6}.completionSummary h2{margin:0 0 8px;font-size:20px}.completionSummary p{margin:0;color:#526176;line-height:1.5}.completionSummary a{color:#2457d6}

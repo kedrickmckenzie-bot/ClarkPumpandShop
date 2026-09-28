@@ -172,7 +172,7 @@ function UpcomingWorkPlan({ model, savedViews }: { model: TrendAnalysisPageViewM
         <div><span>Not priced in this currency</span><strong>{plan.unpricedCount}</strong><small>Review missing or other-currency prices below</small></div>
         <div><span>Open work to plan</span><strong>{plan.totalCount}</strong><small>Ordered by next-action deadline</small></div>
       </div>
-      <div className={styles.pricingCoverage} aria-label="Open work pricing coverage"><div><strong>{plan.totalCount ? Math.round(plan.pricedCount / plan.totalCount * 100) : 0}% of open jobs priced</strong><span>{plan.pricedCount} of {plan.totalCount} jobs · {plan.unpricedCount} still need a price in {currency}</span></div><div className={styles.coverageTrack} aria-hidden="true"><span style={{ width: `${plan.totalCount ? plan.pricedCount / plan.totalCount * 100 : 0}%` }} /></div><small>Only entered work-order estimates are counted. Missing prices are not treated as zero.</small></div>
+      <div className={styles.pricingCoverage} aria-label="Open work pricing coverage"><div><strong>{plan.totalCount ? Math.round(plan.pricedCount / plan.totalCount * 100) : 0}% of open jobs priced</strong><span>{plan.pricedCount} of {plan.totalCount} {plan.totalCount === 1 ? "job" : "jobs"} · {plan.unpricedCount} still need a price in {currency}</span></div><div className={styles.coverageTrack} aria-hidden="true"><span style={{ width: `${plan.totalCount ? plan.pricedCount / plan.totalCount * 100 : 0}%` }} /></div><small>Only entered work-order estimates are counted. Missing prices are not treated as zero.</small></div>
       <details className={styles.scenario} open={scenarioKeys.some((key) => current.has(key))}>
         <summary>Compare a budget scenario</summary>
         <p>Current estimates + extra-work allowance + contingency. Personal assumptions only; saved scenarios recalculate as work changes.</p>
@@ -182,7 +182,7 @@ function UpcomingWorkPlan({ model, savedViews }: { model: TrendAnalysisPageViewM
           <button type="submit">Compare</button>
         </form>
         {scenario.invalid ? <p role="alert">Use positive amounts with up to two decimal places.</p> : <>
-          <div className={styles.planSummary}><div><span>Scenario total</span><strong>{money(scenario.total)}</strong><small>{money(plan.estimateMinor)} estimates + {money(scenario.allowance)} allowance + {money(scenario.contingency)} contingency</small></div><div><span>{scenario.gap === undefined ? "Target comparison" : scenario.gap < 0 ? "Above target" : "Below target"}</span><strong>{scenario.gap === undefined ? "No target set" : money(Math.abs(scenario.gap))}</strong><small>{plan.unpricedCount} jobs still need a price in {currency}. PM and replacement plans are separate.</small></div></div>
+          <div className={styles.planSummary}><div><span>Scenario total</span><strong>{money(scenario.total)}</strong><small>{money(plan.estimateMinor)} estimates + {money(scenario.allowance)} allowance + {money(scenario.contingency)} contingency</small></div><div><span>{scenario.gap === undefined ? "Target comparison" : scenario.gap < 0 ? "Above target" : "Below target"}</span><strong>{scenario.gap === undefined ? "No target set" : money(Math.abs(scenario.gap))}</strong><small>{plan.unpricedCount} {plan.unpricedCount === 1 ? "job" : "jobs"} still {plan.unpricedCount === 1 ? "needs" : "need"} a price in {currency}. PM and replacement plans are separate.</small></div></div>
           {savedViews}
         </>}
       </details>

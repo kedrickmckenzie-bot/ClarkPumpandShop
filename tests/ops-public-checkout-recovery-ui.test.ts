@@ -37,6 +37,15 @@ const pendingVisit: PendingVisitCheckout = {
 };
 
 describe("public visit checkout recovery and store QR", () => {
+  it("starts QR arrivals with company selection before work selection", () => {
+    const markup = renderToStaticMarkup(createElement(TechnicianVisitFlow, {
+      token: "storeEntryToken_1234567890123456", portal, pendingVisit: null,
+    }));
+    expect(markup).toContain("Who are you with?");
+    expect(markup).not.toContain("Choose the job you came to complete");
+    expect(markup).not.toContain("Other approved work at this store");
+  });
+
   it("uses the deployed browser origin when hosting still supplies localhost", () => {
     expect(selectPublicQrOrigin(
       "http://localhost:3000",

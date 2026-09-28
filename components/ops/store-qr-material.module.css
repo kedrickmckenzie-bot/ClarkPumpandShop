@@ -186,3 +186,5 @@
     min-height: 0;
   }
 }
+
+@media print { :global(body):has(.material) * { visibility:hidden; } .material,.material *{visibility:visible!important}.material{position:absolute;left:0;top:0;width:100%;border:0}.actions{display:none!important} }

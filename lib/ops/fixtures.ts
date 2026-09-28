@@ -2100,8 +2100,30 @@ presentationFixture.complianceSchedules = [
 presentationFixture.inspections = presentationFixture.complianceSchedules.map((s,index)=>({id:`inspection-${s.id}-${s.firstDueDate}`,organizationId:s.organizationId,scheduleId:s.id,storeId:s.storeId,dueDate:s.firstDueDate,status:index===2?"performed" as const:index===4?"action_needed" as const:"pending" as const,completedAt:index===2?"2026-09-25":index===4?"2026-09-26":undefined,resultNote:index===2?"Inspection performed; report requested.":index===4?"Damaged exit light found. Corrective work needs assignment.":undefined,version:0,createdAt:s.createdAt}));
 attestDemoRecordingCoverage(presentationFixture, "2024-08-01", NORTHLINE_AS_OF.slice(0, 10));
 
-export function buildNorthlinePresentationFixture(): OpsFixture {
-  return clone(presentationFixture);
+/** Fresh demo creation only: never apply this transformation to persisted records. */
+export function buildNorthlinePresentationFixture(anchorDate?: string): OpsFixture {
+  const fixture = clone(presentationFixture);
+  if (!anchorDate) return fixture;
+  const anchor = Date.parse(`${anchorDate.slice(0, 10)}T18:00:00.000Z`);
+  if (!Number.isFinite(anchor)) throw new Error("Invalid demo anchor date");
+  const offset = anchor - Date.parse(NORTHLINE_AS_OF);
+  function shift(value: unknown): unknown {
+    if (typeof value === "string") {
+      if (/^\d{4}-\d{2}-\d{2}(T.*Z)?$/.test(value) && Number.isFinite(Date.parse(value))) {
+        const shifted = new Date(Date.parse(value) + offset).toISOString();
+        return value.length === 10 ? shifted.slice(0, 10) : shifted;
+      }
+      // Seed snapshots and audit payloads must describe the same dated source records.
+      if (value.startsWith("{") || value.startsWith("[")) {
+        try { return JSON.stringify(shift(JSON.parse(value))); } catch { return value; }
+      }
+      return value;
+    }
+    if (Array.isArray(value)) return value.map(shift);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, shift(entry)]));
+    return value;
+  }
+  return shift(fixture) as OpsFixture;
 }
 
 export const NORTHLINE_PRESENTATION_FIXTURE: Readonly<OpsFixture> = presentationFixture;
