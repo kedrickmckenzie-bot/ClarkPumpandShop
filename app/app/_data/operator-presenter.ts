@@ -5247,7 +5247,7 @@ export function buildCreateWorkOrderModel(
     lifecycleAsOf: fixture.asOf,
     defaults: {
       vendorId: vendors.some(v=>v.id===first(query.vendor)) ? first(query.vendor) : undefined,
-      priority: "routine",
+      priority: sourceRequest?.priority ?? "routine",
       assignmentKind: session.demoEdition !== "accountability" && first(query.assignmentKind) === "hold_for_visit" ? "hold_for_visit" : vendors.some(v=>v.id===first(query.vendor)) ? "outside_vendor" : "choose_later",
       storeId: sourceRequest?.storeId ?? sourceVisit?.storeId ?? sourcePmOccurrence?.storeId ?? requestedAsset?.storeId ?? requestedStore,
       assetId: sourcePmOccurrence?.assetId ?? requestedAsset?.id,

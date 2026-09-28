@@ -4,6 +4,14 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Report priority preservation — September 28
+
+- [x] RP-01 Prefill converted work with the scoped source report priority; keep Routine for direct work and existing PM/visit defaults.
+- [x] RP-02 Regression, required checks and browser form verification.
+
+Checkpoint: corrected the work-order presenter default. Browser verified Urgent on the Store 104 conversion form and Routine on direct creation. Saved-work regression passed for all four priorities (15/15 tests in the affected file). Final typecheck and lint passed; full suite passed 1,103/1,104 with one PostgreSQL seed test exceeding its 120-second timeout. Workflow suite passed 62/62, including the same PostgreSQL seed test on rerun; production build passed. Seed and whitespace checks passed. Logs: `%TEMP%/priority-*.log`. The full suite was not repeated after the timeout; no assertion failures remained. Only the affected browser forms were rechecked in this narrow pass. No commit or push. Screenshot: `%TEMP%/report-priority-fix.png`. Regression covers urgent, emergency, routine and planned reports, direct-entry fallback and inaccessible source reports. No reset or changes to existing work orders. User-provided Claude review of b9efa1c confirms all five FU fixes, actual report conversion and all 1,100 tests passed on fresh data; that is external validation of the prior commit.
+
+
 ## Focused usability review — September 28
 
 - [x] FU-01 Remove fabricated report approvals; retain priced work-order approval and verify report conversion.

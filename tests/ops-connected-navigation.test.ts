@@ -1,3 +1,4 @@
+import { createWorkOrder } from "@/lib/ops/commands";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -18,6 +19,25 @@ const session: OperatorSession = { organizationId: NORTHLINE_ORGANIZATION_ID, us
 function fixtureContext() { const fixture = buildNorthlinePresentationFixture(); return { fixture, repository: createOpsFixtureRepository(fixture) }; }
 
 describe("connected navigation", () => {
+  it.each(["urgent", "emergency", "routine", "planned"] as const)("preserves %s report priority in the work-order form", async (priority) => {
+    const { fixture } = fixtureContext();
+    const request = fixture.requests.find(row => row.id === "request-current-104-beer-cave-door")!;
+    request.priority = priority;
+    const model = buildCreateWorkOrderModel(fixture, session, { request: request.id });
+    expect(model.defaults!.priority).toBe(priority);
+    let sequence = 0;
+    const saved = await createWorkOrder({ repository: createOpsFixtureRepository(fixture), clock: { now: () => "2026-08-26T12:00:00.000Z" }, ids: { next: prefix => `${prefix}-priority-${++sequence}` } }, {
+      organizationId: session.organizationId, storeId: request.storeId, requestId: request.id,
+      problem: request.problem, priority: model.defaults!.priority,
+      accountableParty: "Facilities", nextAction: "Choose service provider", initialAssignment: { kind: "choose_later" },
+      actor: { organizationId: session.organizationId, actorType: "user", actorId: "membership-northline-facilities", actorName: session.displayName },
+    });
+    expect(saved.priority).toBe(priority);
+    expect(buildCreateWorkOrderModel(fixture, session).defaults!.priority).toBe("routine");
+    expect(buildCreateWorkOrderModel(fixture, { ...session, storeIds: [] }, { request: request.id }).sourceRequest).toBeUndefined();
+  });
+
+
   it("empty explicit location grants never become companywide in compatibility readers", () => {
     const { fixture } = fixtureContext();
     for (const restricted of [{ ...session, storeIds: [] }, { ...session, regionIds: [] }]) {
