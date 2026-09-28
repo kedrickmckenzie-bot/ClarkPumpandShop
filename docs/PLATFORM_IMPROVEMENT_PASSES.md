@@ -4,6 +4,23 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+- **September 27 — component warranty release:** User authorized committing and pushing CW-01–CW-04 to `origin/codex/platform-rebuild`. Validation and browser evidence are recorded below. Local `dev4.log` is excluded; no additional implementation changes were made during release preparation.
+
+- **September 27 — component warranty setup and late classification:** user-authorized extension locally verified. Architecture acceptance remains 26/40.
+- [x] CW-01 Equipment/component selection and structured covered costs, with separate terms.
+- [x] CW-02 Attach vendor terms at completed work or later component classification using the original completion date; retain explicit verification start terms.
+- [x] CW-03 Component matching, audited scope corrections and replacement coverage.
+- [x] CW-04 Required validation and responsive browser acceptance.
+
+### Component warranty acceptance — September 27
+
+- Warranty setup selects entire equipment or one of that equipment's existing components, with serial identity where available. Parts, labor, travel and diagnostics are explicit checked choices, persisted separately from instructions/exclusions. Optional manufacturer coverage during equipment creation uses the same choices. Older written coverage records remain readable without inferred conversion. D1 and PostgreSQL migrations add nullable covered-charge metadata.
+- Completed outside-vendor checkout attaches coverage only when equipment and component are identified. Later classification of the latest completed outcome attaches the applicable historical terms from its original completion date. Explicit verification-based terms wait for the actual verification date. Missing component identification creates no placeholder warranty or extra task. Existing dates/terms are retained during audited scope corrections; duplicate application is prevented. Replacement recording points new work coverage to the installed component. Work-order coverage selection filters to that component plus whole-equipment coverage on the server.
+- Fixture/SQLite/PostgreSQL regressions cover late classification, exact component scope, repeat saves, scope correction without changing dates, recorded covered costs and matching whole-equipment/component coverage. Checkout regression proves coverage before verification and delayed verification-specific terms without duplicate labor coverage.
+- Required seed, typecheck and lint passed. Full suite ran 1,034 tests: 1,033 passed; the PostgreSQL date-format assertion was corrected to compare its date portion, and all 59 end-to-end checks then passed, including that regression. Preview and Render builds passed. Final browser-only checkbox layout polish followed builds; no domain changes followed the successful workflow rerun. `git diff --check` clean. Logs in local temporary directory: `component-warranty-*.log`.
+- Browser acceptance: saved Store 102 compressor parts/labor coverage and verified component, dates, covered/uncovered charges and document entry point. Created equipment with manufacturer parts/diagnostic coverage and verified its linked warranty. Desktop layout inspected and tightened; 390px layout inspected, no horizontal document overflow, viewport reset. Local preview test records cleared on restart. Unchanged broad manager/vendor/visit/invoice/PM flows retain prior browser evidence and the current 59-test workflow suite.
+- No push, deployment, live messages or confirmation-notification work. Existing architecture gates remain open; no retrospective bulk rewrite of old warranties. `dev4.log` preserved.
+
 - **September 27 — release commit:** User authorized committing and pushing the accepted RR, WC, HD and VW changes to `origin/codex/platform-rebuild`. Existing validation evidence below was reviewed; no implementation changes followed those checks. `dev4.log` remains excluded. Automatic warranty coverage still attaches at internal verification; the subsequently discussed completion trigger and dedicated confirmation notification are not implemented in this release.
 
 - **September 27 — vendor warranty defaults:** user-directed extension locally verified. Architecture acceptance remains 26/40.

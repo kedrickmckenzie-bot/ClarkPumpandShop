@@ -644,6 +644,7 @@ export const opsWarrantyAmendments = sqliteTable("ops_warranty_amendments", {
 }, (table) => [index("idx_ops_warranty_amendments_org_applied_time").on(table.organizationId, table.appliedWarrantyId, table.decidedAt)]);
 
 export const opsManufacturerWarranties = sqliteTable("ops_manufacturer_warranties", {
+  coveredChargesJson: text("covered_charges_json"),
   travelCoverage: text("travel_coverage"),
   providerKind: text("provider_kind").notNull().default("manufacturer"), vendorId: text("vendor_id"), workOrderId: text("work_order_id"), title: text("title"),
   id: id(), organizationId: organizationId(), assetId: text("asset_id").notNull(), componentId: text("component_id"), manufacturer: text("manufacturer").notNull(), model: text("model"), serialNumber: text("serial_number"), partsCoverage: text("parts_coverage").notNull(), laborCoverage: text("labor_coverage").notNull(), startDate: text("start_date").notNull(), expirationDate: text("expiration_date").notNull(), authorizedProviderRule: text("authorized_provider_rule"), claimRequirements: text("claim_requirements"), installingVendorId: text("installing_vendor_id"), administrator: text("administrator"), supportingFileId: text("supporting_file_id"), createdAt: createdAt(),

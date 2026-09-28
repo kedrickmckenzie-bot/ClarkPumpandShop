@@ -1,3 +1,4 @@
+import { updateWorkOrderClassification } from "@/lib/ops/work-recording-commands";
 import { expect } from "vitest";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
@@ -22,8 +23,21 @@ export async function vendorWarrantyPolicyRegression(repository:OpsRepository){
  const outcome=f.siteVisitWorkOrders.find(o=>o.outcome==="completed"&&f.visits.some(v=>v.id===o.visitId&&v.vendorId===vendorId)&&f.workOrders.some(w=>w.id===o.workOrderId&&w.assetId)&&!f.repairItems.some(r=>r.siteVisitWorkOrderId===o.id))!;
  expect(outcome).toBeTruthy();const work=(await repository.getWorkOrder(organizationId,outcome.workOrderId))!;
  let n=0;const input={work,outcome:{...outcome,outcomeRecordedAt:"2026-10-07T12:00:00.000Z"},actor,now:"2026-10-08T12:00:00.000Z",ids:{next:(prefix:string)=>`${prefix}-policy-regression-${++n}`}};
- const statements=await buildConfirmedWorkWarrantyStatements(input,repository);expect(statements.length).toBeGreaterThan(0);await repository.atomicWrite(statements);
- const saved=(await repository.getAssetWarrantySources(organizationId,work.assetId!)).manufacturerWarranties.filter(w=>w.id.startsWith(`work-warranty-${outcome.id}-`));expect(saved.length).toBeGreaterThan(0);expect(saved.every(w=>w.vendorId===vendorId&&w.workOrderId===work.id)).toBe(true);
+ const componentId="component-policy-regression";
+ await repository.atomicWrite([{sql:"INSERT INTO ops_asset_components (id,organization_id,asset_id,name,created_at) VALUES (?,?,?,?,?)",params:[componentId,organizationId,work.assetId,"Test compressor",clock.now()]}, {sql:"UPDATE ops_site_visit_work_orders SET outcome_recorded_at = ? WHERE organization_id = ? AND id = ?",params:[input.outcome.outcomeRecordedAt,organizationId,outcome.id]}]);
+ expect(await buildConfirmedWorkWarrantyStatements({...input,work:{...work,componentId:undefined}},repository)).toEqual([]);
+ await updateWorkOrderClassification({...svc,clock:{now:()=>input.now}},{organizationId,workOrderId:work.id,assetId:work.assetId,componentId,note:"Identified compressor after work",actor});
+ input.work={...work,componentId};
+
+ const saved=(await repository.getAssetWarrantySources(organizationId,work.assetId!)).manufacturerWarranties.filter(w=>w.id.startsWith(`work-warranty-${outcome.id}-`));expect(saved.length).toBeGreaterThan(0);expect(saved.every(w=>w.vendorId===vendorId&&w.workOrderId===work.id&&w.componentId===componentId&&w.startDate.slice(0,10)==="2026-10-07")).toBe(true);
+ expect(saved.find(w=>w.coveredCharges?.includes("labor"))).toBeTruthy();
+ await updateWorkOrderClassification({...svc,clock:{now:()=>input.now}},{organizationId,workOrderId:work.id,assetId:work.assetId,componentId,note:"Repeated classification",actor});
+ expect((await repository.getAssetWarrantySources(organizationId,work.assetId!)).manufacturerWarranties.filter(w=>w.id.startsWith(`work-warranty-${outcome.id}-`))).toEqual(saved);
+ const correctedId="component-policy-corrected";
+ await repository.atomicWrite([{sql:"INSERT INTO ops_asset_components (id,organization_id,asset_id,name,created_at) VALUES (?,?,?,?,?)",params:[correctedId,organizationId,work.assetId,"Correct compressor",clock.now()]}]);
+ await updateWorkOrderClassification({...svc,clock:{now:()=>input.now}},{organizationId,workOrderId:work.id,assetId:work.assetId,componentId:correctedId,note:"Correct the selected component",actor});
+ expect((await repository.getAssetWarrantySources(organizationId,work.assetId!)).manufacturerWarranties.filter(w=>w.id.startsWith(`work-warranty-${outcome.id}-`))).toEqual(saved.map(w=>({...w,componentId:correctedId})));
+ await updateWorkOrderClassification({...svc,clock:{now:()=>input.now}},{organizationId,workOrderId:work.id,assetId:work.assetId,componentId,note:"Restore test component",actor});
  expect(await buildConfirmedWorkWarrantyStatements(input,repository)).toEqual([]);
  expect(await buildConfirmedWorkWarrantyStatements({...input,outcome:{...input.outcome,outcome:"no_issue_found"}},repository)).toEqual([]);
  await createFutureWarrantyRule({...common,effectiveStartsAt:"2026-11-01T00:00:00.000Z",supersedesId:master.rule.id,coverages:[{...coverages[0],duration:30}]},svc);

@@ -1,0 +1,1 @@
+ALTER TABLE "ops_manufacturer_warranties" ADD COLUMN "covered_charges_json" text;

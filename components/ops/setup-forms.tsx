@@ -114,11 +114,10 @@ export function CreateAssetSetupForm({ model }: { model: CreateAssetSetupModel }
             <label className={styles.field} htmlFor="asset-warranty"><span>Warranty end date <small>Optional</small></span><input id="asset-warranty" name="warrantyEndsAt" type="date" /></label>
             <label className={styles.field} htmlFor="asset-replacement"><span>Replacement estimate <small>Optional</small></span><input id="asset-replacement" name="replacementEstimate" type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.00" /><small>Planning estimate in USD, separate from recorded repair cost.</small></label>
           </div>
-          <details className={styles.formSection}><summary>Manufacturer warranty details (optional)</summary><p>Add the provider and terms to create a coverage record. Documents can be attached after saving.</p><div className={styles.fieldGrid}>
+          <details className={styles.formSection}><summary>Manufacturer warranty details (optional)</summary><p>Covers the entire equipment. Add component warranties from the equipment record after saving.</p><div className={styles.fieldGrid}>
             <label className={styles.field}>Warranty provider<input name="warrantyProvider" placeholder="Manufacturer or warranty administrator"/></label>
             <label className={styles.field}>Coverage starts<input type="date" name="warrantyStart"/><small>Uses the warranty end date above.</small></label>
-            <label className={styles.field}>Parts coverage<textarea name="warrantyParts" placeholder="Covered parts, or Not covered"/></label>
-            <label className={styles.field}>Labor coverage<textarea name="warrantyLabor" placeholder="Covered labor, or Not covered"/></label>
+            <fieldset className={styles.warrantyChoices}><legend>Costs covered</legend>{([['part','Parts'],['labor','Labor'],['travel','Travel'],['diagnostic','Diagnostics']] as const).map(([value,label])=><label key={value}><input type="checkbox" name="warrantyCharges" value={value}/> {label} </label>)}</fieldset>
             <label className={styles.field}>Terms / claim instructions<textarea name="warrantyTerms"/></label>
           </div></details>
           <Select id="asset-status" name="status" label="Current status" options={model.statusOptions} defaultValue="operational" required />

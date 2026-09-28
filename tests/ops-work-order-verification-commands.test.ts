@@ -856,6 +856,8 @@ describe("append-only work-order verification and closure", () => {
 it("attaches vendor labor terms atomically when completed equipment work is confirmed",async()=>{
  const f=verificationFixture(),work=f.workOrders.find(w=>w.id===workOrderId)!,visit=f.visits.find(v=>v.id===visitId)!;
  work.assetId=f.assets.find(a=>a.storeId===work.storeId)!.id;
+ work.componentId="verification-compressor";
+ f.components.push({id:work.componentId,organizationId:NORTHLINE_ORGANIZATION_ID,assetId:work.assetId,name:"Compressor",createdAt:"2026-01-01T00:00:00Z"});
  const profile={...f.vendorWarrantyProfiles[0],id:"profile-verification-auto",vendorId:visit.vendorId!,effectiveStartsAt:"2026-01-01T00:00:00.000Z"};
  f.vendorWarrantyProfiles=f.vendorWarrantyProfiles.filter(p=>p.vendorId!==visit.vendorId);f.vendorWarrantyProfiles.push(profile);
  f.warrantyCoverageLines.push({id:"coverage-verification-auto",organizationId:NORTHLINE_ORGANIZATION_ID,vendorWarrantyProfileId:profile.id,coverageType:"labor",duration:90,durationUnit:"days",startEvent:"repair_completion",provider:"vendor",obligatedVendorId:visit.vendorId,routingRule:"original_vendor_first_right_to_cure",deductible:{amountMinor:0,currency:"USD"}});
@@ -871,4 +873,27 @@ it("attaches vendor labor terms atomically when completed equipment work is conf
  expect(needsReview.repository.snapshot().workflowTasks.some(t=>t.workOrderId===workOrderId&&t.title==="Review vendor warranty terms"&&!t.blocking&&!t.requiredForProgress)).toBe(true);
  expect(needsReview.repository.snapshot().manufacturerWarranties.some(w=>w.id===`work-warranty-${outcomeId}-labor`)).toBe(false);
 
+});
+
+it("attaches identified component coverage at checkout and waits only for explicitly verification-based terms", async () => {
+  const f=serviceReadyFixture(),work=f.workOrders.find(w=>w.id===workOrderId)!;
+  work.assetId=f.assets.find(a=>a.storeId===work.storeId)!.id;
+  work.componentId="checkout-compressor";
+  f.components.push({id:work.componentId,organizationId:NORTHLINE_ORGANIZATION_ID,assetId:work.assetId,name:"Compressor",createdAt:NOW});
+  const vendorId="vendor-northline-cedar",profile={...f.vendorWarrantyProfiles[0],id:"profile-checkout-auto",vendorId,effectiveStartsAt:"2026-01-01T00:00:00.000Z"};
+  f.vendorWarrantyProfiles=f.vendorWarrantyProfiles.filter(p=>p.vendorId!==vendorId);f.vendorWarrantyProfiles.push(profile);
+  const line={id:"checkout-labor",organizationId:NORTHLINE_ORGANIZATION_ID,vendorWarrantyProfileId:profile.id,coverageType:"labor" as const,duration:90,durationUnit:"days" as const,startEvent:"repair_completion" as const,provider:"vendor" as const,obligatedVendorId:vendorId,routingRule:"original_vendor_first_right_to_cure" as const,deductible:{amountMinor:0,currency:"USD"}};
+  f.warrantyCoverageLines.push(line,{...line,id:"checkout-parts",coverageType:"part",startEvent:"store_verification"});
+  const test=harness(f),actor={organizationId:NORTHLINE_ORGANIZATION_ID,actorType:"technician" as const,actorName:"Imani Lewis"};
+  const visit=await checkInVisit(test.services,{organizationId:NORTHLINE_ORGANIZATION_ID,storeId:work.storeId,workOrderIds:[work.id],technicianName:actor.actorName,purpose:"Repair compressor",channel:"store_device",location:{result:"trusted_store_device",capturedAt:NOW},actor});
+  test.setNow("2026-08-20T18:00:00.000Z");
+  const receipt=await checkOutVisit(test.services,{organizationId:NORTHLINE_ORGANIZATION_ID,visitId:visit.id,channel:"store_device",perWorkOrderOutcomes:[{workOrderId:work.id,outcome:"completed",outcomeNotes:"Compressor repaired"}],location:{result:"trusted_store_device",capturedAt:"2026-08-20T18:00:00.000Z"},actor});
+  const outcome=receipt.siteVisitWorkOrders[0],prefix=`work-warranty-${outcome.id}-`;
+  expect(test.repository.snapshot().manufacturerWarranties.find(w=>w.id===prefix+"labor")).toMatchObject({componentId:work.componentId,startDate:"2026-08-20",expirationDate:"2026-11-18"});
+  expect(test.repository.snapshot().manufacturerWarranties.some(w=>w.id===prefix+"part")).toBe(false);
+  test.setNow("2026-08-22T12:00:00.000Z");
+  const pending=(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID,work.id))!;
+  await recordWorkOrderVerification(test.services,{...decisionInput("verified"),expectedWorkOrderVersion:pending.version??0,expectedSiteVisitWorkOrderId:outcome.id,expectedOutcomeRecordedAt:outcome.outcomeRecordedAt!});
+  expect(test.repository.snapshot().manufacturerWarranties.find(w=>w.id===prefix+"part")?.startDate).toBe("2026-08-22");
+  expect(test.repository.snapshot().manufacturerWarranties.filter(w=>w.id===prefix+"labor")).toHaveLength(1);
 });

@@ -97,6 +97,7 @@ export interface WarrantyPreviewInput {
   verificationDate?: string;
   installationDate?: string;
   commissioningDate?: string;
+  deferVerification?: boolean;
 }
 
 export interface WarrantyPreviewLine {
@@ -171,6 +172,7 @@ export async function previewWarrantyCoverage(input: WarrantyPreviewInput, repos
     if (!winner || winner.rule?.excludeCoverage || winner.coverage.duration===0) continue;
     const samePriority = ranked.filter((candidate) => candidate.precedence === winner.precedence && (candidate.rule?.priority ?? 999) === (winner.rule?.priority ?? 999));
     if (samePriority.length > 1) throw new OpsDomainError("CONFLICT", `Overlapping equal-priority ${type} warranty rules require review: ${samePriority.map((item) => item.rule?.id ?? item.coverage.id).join(", ")}`);
+    if (input.deferVerification && winner.coverage.startEvent === "store_verification" && !input.verificationDate) continue;
     const dates = coverageDates(winner.coverage, input);
     const source = winner.rule?.storeId ? "Store-specific vendor warranty" : winner.precedence === 2 ? "Quote- or Authorization-specific warranty term" : winner.precedence === 3 ? "Contract-specific Component rule" : winner.precedence === 4 ? "Contract-specific Asset or service rule" : winner.precedence === 5 ? "Contract-specific Trade rule" : winner.precedence === 6 ? "Vendor Component rule" : winner.precedence === 7 ? "Vendor Asset or service rule" : winner.precedence === 8 ? "Vendor Trade rule" : "Vendor base warranty";
     byType.set(type, { coverage: winner.coverage, rule: winner.rule, profile, precedence: winner.precedence, policySource: source, ...dates, explanation: `${source} supplies ${type} coverage from ${dates.startDate} through ${dates.endDate}; broader matching rules are overridden for this category only.`, overriddenRuleIds: ranked.slice(1).flatMap((item) => item.rule ? [item.rule.id] : []) });
@@ -228,7 +230,7 @@ export async function recordRepairAndApplyWarranty(input: RecordRepairWarrantyIn
   preview=preview.filter(line=>!existingCoverage.manufacturerWarranties.some(w=>w.id===`work-warranty-${input.siteVisitWorkOrderId}-${line.coverage.coverageType}`));
   if ((await repository.listRepairItemsForAsset(input.organizationId, input.assetId)).some((item) => item.siteVisitWorkOrderId === input.siteVisitWorkOrderId)) throw new OpsDomainError("CONFLICT", "This Site Visit / Work Order outcome already has a Repair Item");
   const installedComponentId = input.componentReplacement ? ids.next("component") : input.installedComponentId;
-  const repair: RepairItem = { ...input, installedComponentId, id: ids.next("repair-item"), createdAt: now };
+  const repair: RepairItem = { ...input, componentId:installedComponentId ?? input.componentId, installedComponentId, id: ids.next("repair-item"), createdAt: now };
   const statements: OpsStatement[] = [insert("ops_repair_items", { id: repair.id, organization_id: repair.organizationId, work_order_id: repair.workOrderId, site_visit_work_order_id: repair.siteVisitWorkOrderId, vendor_id: repair.vendorId, contract_version_id: repair.contractVersionId, asset_id: repair.assetId, component_id: repair.componentId, failure_code: required(repair.failureCode,"Failure code"), repair_action: required(repair.repairAction,"Repair action"), repair_severity: repair.repairSeverity, removed_component_id: repair.removedComponentId, installed_component_id: repair.installedComponentId, part_manufacturer: repair.partManufacturer, part_model: repair.partModel, serial_number: repair.serialNumber, vendor_supplied: repair.vendorSupplied, completion_date: repair.completionDate, verification_date: repair.verificationDate, labor_cost_minor: repair.laborCost.amountMinor, part_cost_minor: repair.partCost.amountMinor, currency: repair.laborCost.currency, root_cause: repair.rootCause, created_at: now })];
   let installedComponent: AssetComponent | undefined;
   let lifecycleEvent: ComponentLifecycleEvent | undefined;
@@ -240,6 +242,11 @@ export async function recordRepairAndApplyWarranty(input: RecordRepairWarrantyIn
       { sql: "UPDATE ops_asset_components SET removed_at = ?, replaced_by_component_id = ? WHERE organization_id = ? AND id = ? AND removed_at IS NULL AND replaced_by_component_id IS NULL", params: [lifecycleEvent.removedAt, installedComponent.id, input.organizationId, removedComponent.id] },
       insert("ops_component_lifecycle_events", { id: lifecycleEvent.id, organization_id: lifecycleEvent.organizationId, asset_id: lifecycleEvent.assetId, removed_component_id: lifecycleEvent.removedComponentId, installed_component_id: lifecycleEvent.installedComponentId, repair_item_id: lifecycleEvent.repairItemId, work_order_id: lifecycleEvent.workOrderId, vendor_id: lifecycleEvent.vendorId, part_manufacturer: lifecycleEvent.partManufacturer, part_model: lifecycleEvent.partModel, serial_number: lifecycleEvent.serialNumber, removed_at: lifecycleEvent.removedAt, installed_at: lifecycleEvent.installedAt, failure_mode: lifecycleEvent.failureMode, root_cause: lifecycleEvent.rootCause, labor_cost_minor: lifecycleEvent.laborCost.amountMinor, part_cost_minor: lifecycleEvent.partCost.amountMinor, currency: lifecycleEvent.laborCost.currency, replacement_kind: lifecycleEvent.replacementKind, expected_life_months: lifecycleEvent.expectedLifeMonths, warranty_ends_at: lifecycleEvent.warrantyEndsAt, created_at: now }),
     );
+  }
+  if(installedComponentId) {
+    for(const coverage of existingCoverage.manufacturerWarranties.filter(w=>w.id.startsWith(`work-warranty-${input.siteVisitWorkOrderId}-`))) {
+      statements.push({sql:"UPDATE ops_manufacturer_warranties SET component_id = ? WHERE organization_id = ? AND id = ?",params:[installedComponentId,input.organizationId,coverage.id]},...auditAndOutbox({organizationId:input.organizationId,aggregateType:"equipment_warranty",aggregateId:coverage.id,eventType:"equipment_warranty.scope_corrected",actor:input.actor,occurredAt:now,payload:{previousComponentId:coverage.componentId,componentId:installedComponentId,reason:"Warranty applies to installed replacement",termsUnchanged:true},ids}));
+    }
   }
   const applied: AppliedWarranty[] = preview.map((item) => ({ id: ids.next("applied-warranty"), organizationId: input.organizationId, repairItemId: repair.id, coverageType: item.coverage.coverageType, provider: item.coverage.provider, obligatedVendorId: item.coverage.obligatedVendorId, startDate: item.startDate, endDate: item.endDate, coveredCharges: [item.coverage.coverageType], routingRule: item.coverage.routingRule, contractVersionId: input.contractVersionId, policySource: item.policySource, ruleSource: item.rule?.id, originalCalculatedTermsJson: JSON.stringify({ coverageLine: item.coverage, rule: item.rule, precedence: item.precedence, explanation: item.explanation, overriddenRuleIds: item.overriddenRuleIds }), createdAt: now }));
   for (const warranty of applied) statements.push(insert("ops_applied_warranties", { id:warranty.id, organization_id:warranty.organizationId, repair_item_id:warranty.repairItemId, coverage_type:warranty.coverageType, provider:warranty.provider, obligated_vendor_id:warranty.obligatedVendorId, start_date:warranty.startDate, end_date:warranty.endDate, covered_charges_json:JSON.stringify(warranty.coveredCharges), routing_rule:warranty.routingRule, contract_version_id:warranty.contractVersionId, policy_source:warranty.policySource, rule_source:warranty.ruleSource, original_calculated_terms_json:warranty.originalCalculatedTermsJson, created_at:now }));
@@ -353,6 +360,7 @@ export async function addEquipmentWarranty(input: {
   organizationId: OpsId; actor: ActorContext; assetId: OpsId; componentId?: OpsId;
   vendorId?:string; providerKind: "manufacturer" | "vendor"; providerName: string; title: string;
   workOrderId?: OpsId; startDate: string; expirationDate: string;
+  coveredCharges?: WarrantyCoverageType[];
   partsCoverage: string; laborCoverage: string; travelCoverage?: string; administrator?: string; authorizedProviderRule?: string; claimRequirements?: string;
 }, dependencies: OpsCommandServices) {
   const { repository, clock, ids } = services(dependencies);
@@ -375,11 +383,12 @@ export async function addEquipmentWarranty(input: {
   if (input.expirationDate < input.startDate) throw new OpsDomainError("VALIDATION", "Warranty end must be on or after its start");
   if(input.vendorId&&input.providerKind!=="vendor")throw new OpsDomainError("VALIDATION","Choose Vendor work warranty to link a vendor.");
   if(input.vendorId&&!await repository.getVendor(input.organizationId,input.vendorId))throw new OpsDomainError("VALIDATION","Vendor not found");
+  if (input.coveredCharges && (!input.coveredCharges.length || input.coveredCharges.some(c => !["part", "labor", "travel", "diagnostic"].includes(c)))) throw new OpsDomainError("VALIDATION", "Select the costs this warranty covers");
   const id = ids.next("equipment-warranty"); const now = clock.now();
   const title = required(input.title, "Warranty name"); const provider = required(input.providerName, "Provider name");
   const parts = required(input.partsCoverage, "Parts coverage"); const labor = required(input.laborCoverage, "Labor coverage");
   await repository.atomicWrite([
-    insert("ops_manufacturer_warranties", { id, organization_id: input.organizationId, asset_id: asset.id, component_id: input.componentId, provider_kind: input.providerKind, vendor_id:input.vendorId, manufacturer: provider, title, work_order_id: input.workOrderId, start_date: input.startDate, expiration_date: input.expirationDate, parts_coverage: parts, labor_coverage: labor, travel_coverage:input.travelCoverage?.trim(), administrator:input.administrator?.trim(), authorized_provider_rule:input.authorizedProviderRule?.trim(), claim_requirements: input.claimRequirements?.trim(), created_at: now }),
+    insert("ops_manufacturer_warranties", { id, organization_id: input.organizationId, asset_id: asset.id, component_id: input.componentId, provider_kind: input.providerKind, vendor_id:input.vendorId, manufacturer: provider, title, work_order_id: input.workOrderId, start_date: input.startDate, expiration_date: input.expirationDate, covered_charges_json:input.coveredCharges ? JSON.stringify([...new Set(input.coveredCharges)]) : undefined, parts_coverage: parts, labor_coverage: labor, travel_coverage:input.travelCoverage?.trim(), administrator:input.administrator?.trim(), authorized_provider_rule:input.authorizedProviderRule?.trim(), claim_requirements: input.claimRequirements?.trim(), created_at: now }),
     ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "equipment_warranty", aggregateId: id, eventType: "equipment_warranty.added", actor: input.actor, occurredAt: now, payload: { ...input, actor: undefined, title, providerName: provider }, ids }),
   ]);
   return { id };
@@ -420,7 +429,7 @@ export async function startWarrantyReview(input:{organizationId:string;actor:Act
  const {repository,clock,ids}=services(dependencies),now=clock.now(),work=await repository.getWorkOrder(input.organizationId,input.workId);
  if(!work?.assetId)throw new OpsDomainError("NOT_FOUND","Equipment work order not found");
  await assertWarrantyActor(repository,input.actor,input.organizationId,work);
- const coverage=(await repository.listWarrantyDirectory({organizationId:input.organizationId,storeIds:[work.storeId]},{today:now.slice(0,10),view:"active",assetId:work.assetId,id:input.coverageId,limit:1})).items[0];
+ const coverage=(await repository.listWarrantyDirectory({organizationId:input.organizationId,storeIds:[work.storeId]},{today:now.slice(0,10),view:"active",assetId:work.assetId,componentId:work.componentId,id:input.coverageId,limit:1})).items[0];
  if(!coverage)throw new OpsDomainError("VALIDATION","Choose active coverage on this equipment");
  const sources=await repository.getAssetWarrantySources(input.organizationId,work.assetId),existing=sources.warrantyCases.find(c=>c.workOrderId===work.id&&!c.closedAt&&(c.manufacturerWarrantyId===coverage.id||c.appliedWarrantyId===coverage.id));if(existing)return {id:existing.id};
  const applied=sources.appliedWarranties.find(w=>w.id===coverage.id),id=ids.next("warranty-case"),due=new Date(Date.parse(now)+86400000).toISOString(),explanation=`Recorded coverage on this equipment: ${coverage.title}. Confirm the diagnosis and applicable terms.`;
@@ -448,30 +457,38 @@ export async function retireStoreWarrantyPolicy(input:{organizationId:OpsId;vend
  const now=clock.now(),future=rule.effectiveStartsAt>now;await repository.atomicWrite([{sql:"UPDATE ops_warranty_rules SET effective_ends_at = ?, status = ? WHERE organization_id = ? AND id = ? AND effective_ends_at IS NULL",params:[future?null:now,future?"inactive":"active",input.organizationId,rule.id]},...auditAndOutbox({organizationId:input.organizationId,aggregateType:"warranty_rule",aggregateId:rule.id,eventType:"warranty.store_default_restored",actor:input.actor,occurredAt:now,payload:{reason:required(input.reason,"Reason"),storeId:input.storeId,vendorId:input.vendorId},ids})]);
 }
 
-/** Builds immutable coverage alongside the exact completed-work confirmation. */
-export async function buildConfirmedWorkWarrantyStatements(input:{work:WorkOrder;outcome:import("./types").SiteVisitWorkOrder;actor:ActorContext;now:string;ids:OpsIdSource},repository:OpsRepository):Promise<OpsStatement[]>{
+/** Attach dated terms to identified completed work; preserve terms during audited scope corrections. */
+export async function buildConfirmedWorkWarrantyStatements(input:{work:WorkOrder;outcome:import("./types").SiteVisitWorkOrder;actor:ActorContext;now:string;ids:OpsIdSource;verificationDate?:string;previousAssetId?:string},repository:OpsRepository):Promise<OpsStatement[]>{
  const {work,outcome,now,ids}=input;
- if(outcome.workOrderId!==work.id||outcome.organizationId!==work.organizationId||!work.assetId||outcome.outcome!=="completed"||!outcome.outcomeRecordedAt)return [];
+ if(outcome.workOrderId!==work.id||outcome.organizationId!==work.organizationId||!work.assetId||!work.componentId||outcome.outcome!=="completed"||!outcome.outcomeRecordedAt)return [];
  const [visit,asset,store,sources]=await Promise.all([repository.getVisit(work.organizationId,outcome.visitId),repository.getAsset(work.organizationId,work.assetId),repository.getStore(work.organizationId,work.storeId),repository.getAssetWarrantySources(work.organizationId,work.assetId)]);
  if(!visit?.vendorId||visit.providerKind!=="outside_vendor"||!asset||asset.storeId!==work.storeId||!store||sources.repairItems.some(r=>r.siteVisitWorkOrderId===outcome.id))return [];
  const vendor=await repository.getVendor(work.organizationId,visit.vendorId);if(!vendor)return [];
  const component=work.componentId?await repository.getComponent(work.organizationId,work.componentId):undefined;
+ if(!component || component.assetId!==asset.id)return [];
+ const priorSources=input.previousAssetId && input.previousAssetId!==asset.id ? await repository.getAssetWarrantySources(work.organizationId,input.previousAssetId) : sources;
+ const existing=priorSources.manufacturerWarranties.filter(w=>w.id.startsWith(`work-warranty-${outcome.id}-`));
+ const scopeStatements:OpsStatement[]=existing.flatMap(w=>w.assetId===asset.id&&w.componentId===component.id?[]:[
+   {sql:"UPDATE ops_manufacturer_warranties SET asset_id = ?, component_id = ? WHERE organization_id = ? AND id = ?",params:[asset.id,component.id,work.organizationId,w.id]},
+   ...auditAndOutbox({organizationId:work.organizationId,aggregateType:"equipment_warranty",aggregateId:w.id,eventType:"equipment_warranty.scope_corrected",actor:input.actor,occurredAt:now,payload:{workOrderId:work.id,siteVisitWorkOrderId:outcome.id,previous:{assetId:w.assetId,componentId:w.componentId},current:{assetId:asset.id,componentId:component.id},termsUnchanged:true},ids})
+ ]);
  const authorization=(await repository.listAuthorizationsForWorkOrder(work.organizationId,work.id)).filter(a=>a.authorizedAt<=outcome.outcomeRecordedAt!).sort((a,b)=>b.authorizedAt.localeCompare(a.authorizedAt))[0];
  let preview:WarrantyPreviewLine[];
- try{preview=await previewWarrantyCoverage({authorizationId:authorization?.id,contractVersionId:authorization?.contractVersionId,organizationId:work.organizationId,vendorId:vendor.id,storeId:store.id,regionId:store.regionId,tradeKey:work.categoryKey,componentType:component?.name,completionDate:outcome.outcomeRecordedAt.slice(0,10),verificationDate:now.slice(0,10)},repository);}
+ try{preview=await previewWarrantyCoverage({authorizationId:authorization?.id,contractVersionId:authorization?.contractVersionId,organizationId:work.organizationId,vendorId:vendor.id,storeId:store.id,regionId:store.regionId,tradeKey:work.categoryKey,componentType:component?.name,completionDate:outcome.outcomeRecordedAt.slice(0,10),verificationDate:input.verificationDate,deferVerification:true},repository);}
  catch(error){
    if(!(error instanceof OpsDomainError)||!["CONFLICT","VALIDATION"].includes(error.code))throw error;
+   if((await repository.listWorkflowTasksForWorkOrder(work.organizationId,work.id)).some(t=>t.taskType==="review_warranty" && isOpenWorkflowTask(t)))return scopeStatements;
    const task=buildWorkflowTaskRecord({id:ids.next("workflow-task"),organizationId:work.organizationId,workOrderId:work.id,actor:input.actor,createdAt:now,draft:{taskType:"review_warranty",title:"Review vendor warranty terms",reason:error.message,assigneeType:"role",assigneeRole:"facilities_admin",assigneeName:"Facilities",priority:"normal",blocking:false,requiredForProgress:false,dueAt:new Date(Date.parse(now)+86400000).toISOString(),applicableSlaClock:"warranty_response",completionCriteria:"Confirm coverage and record the applicable terms",escalationDestination:"Facilities director"}});
-   return [...buildCreateTaskStatements({task,actor:input.actor,ids}),...auditAndOutbox({organizationId:work.organizationId,aggregateType:"work_order",aggregateId:work.id,eventType:"warranty.application_needs_review",actor:input.actor,occurredAt:now,payload:{siteVisitWorkOrderId:outcome.id,reason:error.message},ids})];
+   return [...scopeStatements,...buildCreateTaskStatements({task,actor:input.actor,ids}),...auditAndOutbox({organizationId:work.organizationId,aggregateType:"work_order",aggregateId:work.id,eventType:"warranty.application_needs_review",actor:input.actor,occurredAt:now,payload:{siteVisitWorkOrderId:outcome.id,reason:error.message},ids})];
  }
 
- const statements:OpsStatement[]=[];
+ const statements:OpsStatement[]=[...scopeStatements];
  for(const line of preview){
    if(line.coverage.duration===0||line.coverage.provider!=="vendor")continue;
    const type=line.coverage.coverageType,id=`work-warranty-${outcome.id}-${type}`;
-   if(sources.manufacturerWarranties.some(w=>w.id===id))continue;
-   const terms=[`${line.coverage.duration} ${line.coverage.durationUnit} from completed work.`,line.coverage.conditions,line.coverage.exclusions?`Exclusions: ${line.coverage.exclusions}`:undefined].filter(Boolean).join(" ");
-   statements.push(insert("ops_manufacturer_warranties",{id,organization_id:work.organizationId,asset_id:asset.id,component_id:component?.id,provider_kind:"vendor",vendor_id:vendor.id,manufacturer:vendor.name,title:`${type==="part"?"Parts":type[0].toUpperCase()+type.slice(1)} warranty · ${work.number}`,work_order_id:work.id,start_date:line.startDate,expiration_date:line.endDate,parts_coverage:type==="part"?terms:"Not included in this term",labor_coverage:type==="labor"?terms:"Not included in this term",travel_coverage:type==="travel"?terms:"Not included in this term",authorized_provider_rule:line.coverage.routingRule.replaceAll("_"," "),claim_requirements:`${line.policySource}. ${type==="diagnostic"?terms:""} Work performed: ${outcome.outcomeNotes??work.problem}`,created_at:now}),...auditAndOutbox({organizationId:work.organizationId,aggregateType:"equipment_warranty",aggregateId:id,eventType:"equipment_warranty.automatically_applied",actor:input.actor,occurredAt:now,payload:{workOrderId:work.id,siteVisitWorkOrderId:outcome.id,vendorId:vendor.id,assetId:asset.id,componentId:component?.id,terms:line},ids}));
+   if(existing.some(w=>w.id===id)||sources.manufacturerWarranties.some(w=>w.id===id))continue;
+   const terms=[`${line.coverage.duration} ${line.coverage.durationUnit} from ${line.coverage.startEvent.replaceAll("_", " ")}.`,line.coverage.conditions,line.coverage.exclusions?`Exclusions: ${line.coverage.exclusions}`:undefined].filter(Boolean).join(" ");
+   statements.push(insert("ops_manufacturer_warranties",{id,organization_id:work.organizationId,asset_id:asset.id,component_id:component?.id,provider_kind:"vendor",vendor_id:vendor.id,manufacturer:vendor.name,title:`${type==="part"?"Parts":type[0].toUpperCase()+type.slice(1)} warranty · ${work.number}`,work_order_id:work.id,start_date:line.startDate,expiration_date:line.endDate,covered_charges_json:JSON.stringify([type]),parts_coverage:type==="part"?terms:"Not included in this term",labor_coverage:type==="labor"?terms:"Not included in this term",travel_coverage:type==="travel"?terms:"Not included in this term",authorized_provider_rule:line.coverage.routingRule.replaceAll("_"," "),claim_requirements:`${line.policySource}. ${type==="diagnostic"?terms:""} Work performed: ${outcome.outcomeNotes??work.problem}`,created_at:now}),...auditAndOutbox({organizationId:work.organizationId,aggregateType:"equipment_warranty",aggregateId:id,eventType:"equipment_warranty.automatically_applied",actor:input.actor,occurredAt:now,payload:{workOrderId:work.id,siteVisitWorkOrderId:outcome.id,vendorId:vendor.id,assetId:asset.id,componentId:component?.id,terms:line},ids}));
  }
  return statements;
 }

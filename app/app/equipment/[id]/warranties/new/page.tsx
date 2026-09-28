@@ -14,18 +14,16 @@ export default async function AddWarrantyPage({ params, searchParams }: { params
     <RecordForm action={`/api/ops/equipment/${encodeURIComponent(id)}/warranties`} className={`${styles.surface} ${styles.form}`}>
       <section className={styles.body}><div className={styles.grid}>
         <label className={styles.field}><span>Warranty type</span><select name="providerKind" required><option value="manufacturer">Manufacturer warranty</option><option value="vendor">Vendor work warranty</option></select></label>
-        <label className={styles.field}><span>Covers</span><select name="componentId" defaultValue={query.component ?? ""}><option value="">Whole equipment</option>{asset.components.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label>
+        <label className={styles.field}><span>Equipment or component</span><select name="componentId" defaultValue={query.component ?? ""}><option value="">Entire equipment</option>{asset.components.map(c => <option value={c.id} key={c.id}>{c.name}{c.serialNumber ? ` · ${c.serialNumber}` : ""}</option>)}</select></label>
         <label className={styles.field}><span>Warranty name</span><input name="title" required maxLength={200} placeholder="Compressor parts coverage" /></label>
         <label className={styles.field}><span>Manufacturer or vendor name</span><input name="providerName" required maxLength={200} placeholder="Company providing coverage" /></label>
         <label className={styles.field}><span>Starts</span><input name="startDate" type="date" required /></label>
         <label className={styles.field}><span>Ends</span><input name="expirationDate" type="date" required /></label>
-        <label className={styles.field}><span>Parts coverage</span><input name="partsCoverage" required maxLength={1000} placeholder="Covered, excluded, or specific terms" /></label>
-        <label className={styles.field}><span>Labor coverage</span><input name="laborCoverage" required maxLength={1000} placeholder="Covered, excluded, or specific terms" /></label>
-        <label><span>Travel coverage <small>Optional</small></span><input name="travelCoverage" maxLength={1000} placeholder="Covered, excluded, or not yet confirmed" /></label>
+        <fieldset className={styles.coverageChoices}><legend>Costs covered</legend>{([['part','Parts'],['labor','Labor'],['travel','Travel'],['diagnostic','Diagnostics']] as const).map(([value,label])=><label key={value}><input type="checkbox" name="coveredCharges" value={value}/><span>{label}</span></label>)}</fieldset>
 
       </div><details><summary>More details (optional)</summary><div className={styles.form}><label><span>Contact <small>Optional</small></span><input name="administrator" maxLength={500} placeholder="Name, phone or email" /></label><label><span>Vendor work provider <small>Optional</small></span><select name="vendorId"><option value="">No vendor linked</option>{vendors.items.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label><label className={styles.field}><span>Related work order <small>Optional</small></span><select name="workOrderId"><option value="">No linked work order</option>{asset.workOrders.map(w => <option key={w.id} value={w.id}>{w.number} · {w.problem}</option>)}</select></label>
       <label><span>Required repair provider <small>Optional</small></span><input name="authorizedProviderRule" maxLength={1000} placeholder="Any approved provider, original vendor, or authorized service" /></label>
-      <label className={styles.field}><span>Claim instructions or exclusions <small>Optional</small></span><textarea name="claimRequirements" rows={2} maxLength={2000} /></label></div></details></section>
+      <label className={styles.field}><span>Limitations, exclusions or claim instructions <small>Optional</small></span><textarea name="claimRequirements" rows={2} maxLength={2000} /></label></div></details></section>
       <div className={styles.body}><p className={styles.muted}>You can attach documents and photos after saving.</p><div className={styles.actions}><Link className={styles.secondary} href={`/app/equipment/${id}`}>Cancel</Link><button className={styles.button} type="submit">Add warranty</button></div></div>
     </RecordForm></div>;
 }

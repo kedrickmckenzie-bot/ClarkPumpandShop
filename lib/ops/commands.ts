@@ -1,3 +1,4 @@
+import { buildConfirmedWorkWarrantyStatements } from "./warranty-commands";
 import { prepareOfferedWork, resolveOfferedWork, offerResponseKey } from "./optional-work-policy";
 import { coveredPmAssets, pmCoverageRule } from "./pm-coverage";
 import type { OpsRepository, OpsStatement } from "./repository";
@@ -2341,6 +2342,7 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
     const followUpId = accountableFollowUp ? ids.next("follow-up") : undefined;
     if (accountableFollowUp) statements.push(insert("ops_follow_ups", { id: followUpId, organization_id: input.organizationId, work_order_id: workOrder.id, source_visit_id: visit.id, accountable_party: accountableFollowUp.accountableParty, next_action: accountableFollowUp.nextAction, due_at: accountableFollowUp.dueAt, escalation_to: accountableFollowUp.escalationTo, status: "open", created_at: now }));
     statements.push({ sql: "UPDATE ops_site_visit_work_orders SET outcome = ?, outcome_notes = ?, outcome_recorded_by_actor_type = ?, outcome_recorded_by_actor_id = ?, outcome_recorded_by_actor_name = ?, outcome_recorded_at = ?, follow_up_id = ?, vendor_follow_up_timing = ? WHERE organization_id = ? AND id = ?", params: [normalized.outcome, normalized.outcomeNotes ?? null, input.actor.actorType, input.actor.actorId ?? null, input.actor.actorName, now, followUpId ?? null, normalized.vendorFollowUpTiming ?? null, input.organizationId, normalized.link.id] });
+    if(normalized.outcome === "completed") statements.push(...await buildConfirmedWorkWarrantyStatements({work:workOrder,outcome:{...normalized.link,outcome:"completed",outcomeRecordedAt:now,outcomeNotes:normalized.outcomeNotes},actor:input.actor,now,ids},repository));
     if (normalized.hold) {
       const valueCategory = normalized.outcome === "not_addressed"
         ? undefined

@@ -230,6 +230,7 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_service_run_responses") { row.economicImpact = { amountMinor: row.economicImpactMinor, currency: row.currency }; delete row.economicImpactMinor; delete row.currency; }
   if (table === "ops_warranty_coverage_lines") { row.deductible = { amountMinor: row.deductibleMinor, currency: row.currency }; if (row.maximumCoverageMinor !== undefined) row.maximumCoverage = { amountMinor: row.maximumCoverageMinor, currency: row.currency }; delete row.deductibleMinor; delete row.maximumCoverageMinor; delete row.currency; }
   if (table === "ops_repair_items") { row.laborCost = { amountMinor: row.laborCostMinor, currency: row.currency }; row.partCost = { amountMinor: row.partCostMinor, currency: row.currency }; row.vendorSupplied = Boolean(row.vendorSupplied); delete row.laborCostMinor; delete row.partCostMinor; delete row.currency; }
+  if (table === "ops_manufacturer_warranties" && row.coveredChargesJson) { row.coveredCharges = JSON.parse(String(row.coveredChargesJson)); delete row.coveredChargesJson; }
   if (table === "ops_applied_warranties") { row.coveredCharges = JSON.parse(String(row.coveredChargesJson ?? "[]")); delete row.coveredChargesJson; }
   if (table === "ops_warranty_amendments") row.appliesToRepairOnly = Boolean(row.appliesToRepairOnly);
   if (table === "ops_warranty_cases") { row.diagnosisRequired = Boolean(row.diagnosisRequired); row.invoiceHold = Boolean(row.invoiceHold); }

@@ -264,7 +264,7 @@ export interface CreateAssetInput {
   replacementEstimateMinor?: number;
   currency?: string;
   status?: Asset["status"];
-  manufacturerWarranty?: {provider:string;startDate:string;endDate:string;parts:string;labor:string;terms?:string};
+  manufacturerWarranty?: {coveredCharges?:import("./types").WarrantyCoverageType[];provider:string;startDate:string;endDate:string;parts:string;labor:string;terms?:string};
   actor: ActorContext;
 }
 
@@ -378,10 +378,11 @@ export async function createAsset(svc: OpsCommandServices, input: CreateAssetInp
   let warrantyStatement:OpsStatement|undefined;
   let warrantyId:string|undefined;
   if(warranty){
+    if(warranty.coveredCharges && (!warranty.coveredCharges.length || warranty.coveredCharges.some(c=>!["part","labor","travel","diagnostic"].includes(c))))throw new OpsDomainError("VALIDATION","Select the costs this warranty covers");
     for(const date of [warranty.startDate,warranty.endDate]){if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw new OpsDomainError("VALIDATION","Enter valid manufacturer warranty dates");}
     if(warranty.endDate<warranty.startDate)throw new OpsDomainError("VALIDATION","Warranty end must follow its start");
     warrantyId=ids.next("equipment-warranty");
-    warrantyStatement=insert("ops_manufacturer_warranties",{id:warrantyId,organization_id:input.organizationId,asset_id:id,provider_kind:"manufacturer",manufacturer:required(warranty.provider,"Warranty provider"),title:"Manufacturer warranty",start_date:warranty.startDate,expiration_date:warranty.endDate,parts_coverage:required(warranty.parts,"Parts coverage"),labor_coverage:required(warranty.labor,"Labor coverage"),claim_requirements:warranty.terms,created_at:now});
+    warrantyStatement=insert("ops_manufacturer_warranties",{id:warrantyId,organization_id:input.organizationId,asset_id:id,provider_kind:"manufacturer",manufacturer:required(warranty.provider,"Warranty provider"),title:"Manufacturer warranty",start_date:warranty.startDate,expiration_date:warranty.endDate,covered_charges_json:warranty.coveredCharges?JSON.stringify(warranty.coveredCharges):undefined,travel_coverage:warranty.coveredCharges?(warranty.coveredCharges.includes("travel")?"Covered":"Not covered"):undefined,parts_coverage:required(warranty.parts,"Parts coverage"),labor_coverage:required(warranty.labor,"Labor coverage"),claim_requirements:warranty.terms,created_at:now});
   }
   await repository.atomicWrite([
     insert("ops_assets", {

@@ -1,3 +1,4 @@
+import { buildConfirmedWorkWarrantyStatements } from "./warranty-commands";
 import { buildCreateTaskStatements, buildWorkflowTaskRecord, isOpenWorkflowTask } from "./workflow-task-commands";
 import type { OpsCommandServices, OpsIdSource } from "./commands";
 import { OpsDomainError } from "./commands";
@@ -193,6 +194,14 @@ export async function updateWorkOrderClassification(
       ids,
     }),
   ];
+  if(input.assetId && input.componentId) {
+    const outcomes=await repository.listSiteVisitWorkOrdersForWorkOrder(input.organizationId,workOrder.id);
+    const latest=outcomes.filter(o=>o.outcomeRecordedAt).sort((a,b)=>b.outcomeRecordedAt!.localeCompare(a.outcomeRecordedAt!)||b.id.localeCompare(a.id))[0];
+    if(latest?.outcome==="completed") {
+      const verified=(await repository.listWorkOrderVerifications(input.organizationId,workOrder.id)).find(v=>v.siteVisitWorkOrderId===latest.id && v.decision==="verified");
+      statements.push(...await buildConfirmedWorkWarrantyStatements({work:{...workOrder,assetId:input.assetId,componentId:input.componentId,categoryKey},outcome:latest,actor:input.actor,now,ids,verificationDate:verified?.decidedAt.slice(0,10),previousAssetId:workOrder.assetId},repository));
+    }
+  }
   if (input.idempotency) statements.unshift(idempotencyStatement({ organizationId: input.organizationId, resultId: workOrder.id, command: CLASSIFICATION_COMMAND, now, idempotency: input.idempotency }));
   try {
     await atomicWorkOrderMutation({ repository, workOrder, now, statements });

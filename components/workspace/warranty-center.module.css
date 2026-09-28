@@ -15,3 +15,10 @@
 .body label {display:grid;gap:7px;font-size:15px;font-weight:600}.body input,.body select,.body textarea {width:100%;min-width:0;border:1px solid #b9c5d3;border-radius:5px;padding:10px 12px;font:inherit;font-weight:400;background:#fff}.body form.body{padding:0}.body form>button{justify-self:start}
 
 .policyForm{max-width:900px}.policyTerms{display:grid;gap:18px}.policyCategories{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.policyForm:has(select[name="mode"] option[value="exclude"]:checked) .policyTerms,.policyForm:has(select[name="mode"] option[value="inherit"]:checked) :is(.policyTerms,.policyDate){display:none}@media(max-width:700px){.policyCategories{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.form .coverageChoices { grid-column: 1 / -1; border: 1px solid #cbd5e1; padding: 16px; border-radius: 6px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.form .coverageChoices legend { font-weight: 700; padding: 0 6px; }
+.form .coverageChoices label { display: flex; align-items: center; gap: 8px; }
+.form .coverageChoices input { width: 18px; height: 18px; accent-color: #2563eb; }
+
+@media (max-width: 640px) { .form .coverageChoices { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -1627,6 +1627,7 @@ export interface ManufacturerWarranty {
   manufacturer: string;
   model?: string;
   serialNumber?: string;
+  coveredCharges?: WarrantyCoverageType[];
   partsCoverage: string;
   laborCoverage: string;
   startDate: string;

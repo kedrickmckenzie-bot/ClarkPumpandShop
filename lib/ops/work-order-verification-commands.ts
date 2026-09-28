@@ -486,7 +486,7 @@ export async function recordWorkOrderVerification(
       ids,
     }),
   ];
-  if(input.decision==="verified")statements.push(...await buildConfirmedWorkWarrantyStatements({work:workOrder,outcome,actor:input.actor,now,ids},repository));
+  if(input.decision==="verified")statements.push(...await buildConfirmedWorkWarrantyStatements({work:workOrder,outcome,actor:input.actor,now,ids,verificationDate:now.slice(0,10)},repository));
   await atomicWorkOrderMutation({
     repository,
     workOrder,
