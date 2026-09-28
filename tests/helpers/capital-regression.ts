@@ -46,5 +46,13 @@ export async function capitalRegression(repository:OpsRepository) {
  expect(await repository.getCapitalPlan(org,priced.id)).toMatchObject({amountMinor:choice.amountMinor,costBasis:choice.basis,sourceId:choice.id});
  expect(await repository.listCapitalPlanHistory(org,priced.id)).toHaveLength(2);
  expect(await repository.listCapitalPlanHistory("foreign",priced.id)).toEqual([]);
+ await saveCapitalPlan(svc,{...input,assetId:priced.id,version:2,status:"considering",sourceId:"keep-saved"});
+ expect((await repository.queryCapitalPlans(scope,{...query,search:priced.assetTag})).items.find(r=>r.assetId===priced.id)?.status).toBe("considering");
+ await saveCapitalPlan(svc,{...input,assetId:priced.id,version:3,status:"approved",sourceId:"keep-saved"});
+ expect((await repository.queryCapitalPlans(scope,{...query,search:priced.assetTag})).items.find(r=>r.assetId===priced.id)?.status).toBe("approved");
+ await saveCapitalPlan(svc,{...input,assetId:priced.id,version:4,status:"completed",sourceId:"keep-saved"});
+ expect((await repository.queryCapitalPlans(scope,{...query,search:priced.assetTag})).items).toHaveLength(0);
+ expect(await repository.listCapitalPlanHistory(org,priced.id)).toHaveLength(5);
+
 
 }

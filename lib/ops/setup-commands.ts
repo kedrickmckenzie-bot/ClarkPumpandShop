@@ -427,7 +427,7 @@ export async function createAsset(svc: OpsCommandServices, input: CreateAssetInp
   return asset;
 }
 
-export interface ApplyStoreEquipmentTemplateInput { organizationId: OpsId; storeId: OpsId; selections: Array<{ templateId: OpsId; quantity: number }>; actor: ActorContext; }
+export interface ApplyStoreEquipmentTemplateInput { organizationId: OpsId; storeId: OpsId; selections: Array<{ templateId: OpsId; quantity: number; namePrefix?: string; locationNotes?: string }>; actor: ActorContext; }
 
 export async function applyStoreEquipmentTemplates(svc: OpsCommandServices, input: ApplyStoreEquipmentTemplateInput): Promise<Asset[]> {
   const { repository, clock, ids } = services(svc);
@@ -471,7 +471,7 @@ export async function applyStoreEquipmentTemplates(svc: OpsCommandServices, inpu
       let tag = `${prefix}-${String(counter).padStart(2, "0")}`;
       while (usedTags.has(tag.toLocaleLowerCase("en-US"))) { counter += 1; tag = `${prefix}-${String(counter).padStart(2, "0")}`; }
       usedTags.add(tag.toLocaleLowerCase("en-US"));
-      const asset: Asset = { id: ids.next("asset"), organizationId: input.organizationId, storeId: store.id, categoryKey: category.canonicalKey, taxonomyNodeId: leaf.id, equipmentTemplateId: template.id, groupPath: path.filter((row) => row.nodeKind === "group").map((row) => row.name), assetTag: tag, name: selection.quantity > 1 ? `${template.name} ${index}` : template.name, expectedLifeYears: template.defaultExpectedLifeYears, status: "operational", createdAt: now };
+      const asset: Asset = { id: ids.next("asset"), organizationId: input.organizationId, storeId: store.id, categoryKey: category.canonicalKey, taxonomyNodeId: leaf.id, equipmentTemplateId: template.id, groupPath: path.filter((row) => row.nodeKind === "group").map((row) => row.name), assetTag: tag, name: [selection.quantity > 1 ? `${selection.namePrefix?.trim() || template.name} ${index}` : selection.namePrefix?.trim() || template.name, selection.locationNotes?.trim()].filter(Boolean).join(" · "), expectedLifeYears: template.defaultExpectedLifeYears, status: "operational", createdAt: now };
       assets.push(asset);
       templateByAssetId.set(asset.id, template);
       statements.push(insert("ops_assets", { id: asset.id, organization_id: asset.organizationId, store_id: asset.storeId, category_key: asset.categoryKey, taxonomy_node_id: asset.taxonomyNodeId, equipment_template_id: asset.equipmentTemplateId, group_path_json: JSON.stringify(asset.groupPath), asset_tag: asset.assetTag, name: asset.name, expected_life_years: asset.expectedLifeYears, replacement_attributes_json: "{}", status: asset.status, created_at: asset.createdAt }));

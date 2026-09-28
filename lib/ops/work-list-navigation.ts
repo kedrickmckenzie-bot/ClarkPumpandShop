@@ -5,12 +5,14 @@ const first = (value: Query[string]) => Array.isArray(value) ? value[0] : value;
 export function workListNavigation(query: Query) {
   const status = first(query.status);
   const selected = status === "history" || status === "closed" || status === "cancelled"
-    ? "history" : status === "attention" || status === "waiting" || status === "scheduled" ? status : status === "all" ? "all" : status || first(query.stage) || first(query.visitPlan) || first(query.appointment) ? "open" : "all";
+    ? "history" : status === "attention" || status === "waiting" || ["scheduled", "confirmation", "missed"].includes(status ?? "") ? status : status === "all" ? "all" : status || first(query.stage) || first(query.visitPlan) || first(query.appointment) ? "open" : "all";
   return [
     { value: "open", label: "Active" },
-    { value: "attention", label: "Follow-up due" },
-    { value: "waiting", label: "Waiting on someone" },
+    { value: "attention", label: "Needs action" },
+    { value: "waiting", label: "Waiting until follow-up" },
     { value: "scheduled", label: "Scheduled" },
+    { value: "missed", label: "Appointment overdue" },
+    { value: "confirmation", label: "Confirm result" },
     { value: "history", label: "Completed / cancelled" },
     { value: "all", label: "All work" },
   ].map((view) => {

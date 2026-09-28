@@ -1,3 +1,6 @@
+import { POST as updateControl } from "@/app/api/ops/work-orders/[id]/control/route";
+import { GET as downloadWorkFile } from "@/app/api/ops/work-orders/[id]/files/[fileId]/route";
+import { createWorkOrder } from "@/lib/ops/commands";
 import { beforeEach, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/ops/work-orders/[id]/notes/route";
 import { GET } from "@/app/api/ops/store-work/route";
@@ -36,4 +39,24 @@ it("returns a bounded open-work list and rejects a revoked member", async () => 
   const body = await response.json() as { items: unknown[] }; expect(body.items.length).toBeLessThanOrEqual(5); expect(body.items.length).toBeGreaterThan(0);
   session.membershipId = "revoked";
   expect((await GET(new Request("http://localhost:3000/api/ops/store-work?store=store-northline-104"))).status).toBe(403);
+});
+
+it("uploads completion photos and downloads them only through the scoped work record", async () => {
+  session = { ...session, userId: "user-northline-facilities", membershipId: "membership-northline-facilities", role: "facilities", storeIds: undefined };
+  const actor = { organizationId: session.organizationId, actorType: "user" as const, actorId: session.membershipId, actorName: "Jordan Lee" };
+  const work = await createWorkOrder({ repository }, { organizationId: session.organizationId, storeId: "store-northline-104", problem: "Check back door latch", accountableParty: "Facilities coordinator", nextAction: "Call store", actor });
+  const form = new FormData();
+  for (const [key, value] of Object.entries({ operation: "manual_close", expectedVersion: String(persistedWorkOrderVersion(work)), expectedStatus: work.status, completionSource: "phone", confirmedBy: "Casey", performedDate: new Date().toISOString().slice(0, 10), resultConfirmed: "on", note: "Latch repaired and confirmed by store" })) form.set(key, value);
+  const bytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  form.set("attachments", new File([bytes], "latch.png", { type: "image/png" }));
+  const response = await updateControl(new Request("http://localhost:3000/api/ops/work-orders/control", { method: "POST", body: form }), { params: Promise.resolve({ id: work.id }) });
+  expect(response.status).toBe(303);
+  const files = await repository.listFilesForEntity(session.organizationId, "work_order", work.id);
+  expect(files).toHaveLength(1);
+  const params = { params: Promise.resolve({ id: work.id, fileId: files[0].id }) };
+  const download = await downloadWorkFile(new Request("http://localhost:3000/api/ops/files"), params);
+  expect(download.status).toBe(200); expect(download.headers.get("content-type")).toBe("image/png");
+  expect(new Uint8Array(await download.arrayBuffer())).toEqual(bytes);
+  session = { ...session, userId: "user-northline-store-105", membershipId: "membership-northline-store-105", role: "store_manager", storeIds: ["store-northline-105"] };
+  expect((await downloadWorkFile(new Request("http://localhost:3000/api/ops/files"), params)).status).toBe(403);
 });

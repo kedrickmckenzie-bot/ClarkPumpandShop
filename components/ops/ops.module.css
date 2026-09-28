@@ -1108,3 +1108,6 @@ a.factCard { padding-right: 38px; }
 .recordForm .warrantyChoices label { display: flex; align-items: center; gap: 8px; }
 .recordForm .warrantyChoices input { width: 18px; height: 18px; accent-color: #2563eb; }
 @media (max-width: 640px) { .recordForm .warrantyChoices { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.quickWorkActions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.quickWorkActions a { padding: 8px 12px; border: 1px solid #ccd5df; border-radius: 6px; color: #2455a4; font-weight: 600; }

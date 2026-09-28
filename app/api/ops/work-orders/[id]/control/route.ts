@@ -1,3 +1,5 @@
+import { storeCompletionFiles } from "@/lib/server/work-completion-files";
+import { recordManualAppointment, recordManualServiceDelay } from "@/lib/ops/manual-service-appointment";
 import {
   OpsDomainError,
   recordVendorResponse,
@@ -126,6 +128,22 @@ export async function POST(
 
     const formData = await request.formData();
     const operation = formText(formData, "operation", { max: 30 }) || "update";
+    if (operation === "parts" || operation === "unresolved") {
+      const store = await context.repository.getStore(context.session.organizationId, workOrder.storeId);
+      await recordManualServiceDelay({ repository: context.repository }, { organizationId: context.session.organizationId, workOrderId, expectedVersion: Number(formText(formData, "expectedVersion", { required: true })), kind: operation, dueAt: localDateTimeToIso(formText(formData, "dueAt", { required: true }), store?.timeZone ?? "UTC"), note: formText(formData, "note", { required: true, max: 2000 }), actor: context.actor });
+      return relativeRedirect303(`/app/work-orders/${encodeURIComponent(workOrderId)}?updated=control#recent-updates`);
+    }
+    if (operation === "appointment") {
+      const store = await context.repository.getStore(context.session.organizationId, workOrder.storeId);
+      await recordManualAppointment({ repository: context.repository }, {
+        organizationId: context.session.organizationId, workOrderId,
+        expectedVersion: Number(formText(formData, "expectedVersion", { required: true })),
+        startsAt: localDateTimeToIso(formText(formData, "dueAt", { required: true }), store?.timeZone ?? "UTC"),
+        source: formText(formData, "completionSource", { required: true }), confirmedBy: formText(formData, "confirmedBy", { required: true, max: 200 }),
+        note: formText(formData, "note", { required: true, max: 2000 }), actor: context.actor,
+      });
+      return relativeRedirect303(`/app/work-orders/${encodeURIComponent(workOrderId)}?updated=control#recent-updates`);
+    }
     if (operation === "manual_close") {
       const source = formText(formData, "completionSource", { required: true, max: 20 });
       const expectedVersion = Number(formText(formData, "expectedVersion", { required: true, max: 12 }));
@@ -134,7 +152,7 @@ export async function POST(
         organizationId: context.session.organizationId, workOrderId,
         expectedStatus: formText(formData, "expectedStatus", { required: true, max: 40 }) as WorkOrderStatus,
         expectedVersion, status: "closed",
-        manualCompletion: { source: source as "phone" | "email" | "in_person", confirmedBy: formText(formData, "confirmedBy", { required: true, max: 200 }) },
+        manualCompletion: { source: source as "phone" | "email" | "in_person", confirmedBy: formText(formData, "confirmedBy", { required: true, max: 200 }), performedDate: formText(formData, "performedDate", { max: 10 }) || undefined, files: await storeCompletionFiles(formData, context.session.organizationId, workOrderId, context.session.accessMode === "preview") },
         note: formText(formData, "note", { required: true, max: 2_000 }), actor: context.actor,
       });
       return relativeRedirect303(`/app/work-orders/${encodeURIComponent(workOrderId)}?updated=control#recent-updates`);

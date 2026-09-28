@@ -203,9 +203,10 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
       { key: "work", value: row.number, secondary: row.problem },
       { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
       { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
-      { key: "next", link: { href: `/app/work-orders/${row.id}#add-update`, label: "Add update" }, value: row.nextAction, secondary: `${row.accountableParty}${row.dueAt ? ` · Follow up ${formatOperationsDate(row.dueAt)}` : ""}` },
+      { key: "next", link: { href: `/app/work-orders/${row.id}#add-update`, label: "Record update" }, value: row.nextAction, secondary: `${row.accountableParty}${row.dueAt ? ` · Follow up ${formatOperationsDate(row.dueAt)}` : ""}` },
       { key: "cost", value: row.recordedCostLineCount === 0 ? "Not recorded" : money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
       { key: "status", value: workStatusLabel(row.status), tone: toneForStatus(row.status) },
+      { key: "updated", value: formatOperationsDateTime(row.updatedAt ?? row.createdAt), link: { href: `/app/work-orders/${row.id}?view=activity`, label: "Review history" } },
     ],
   };
 }
@@ -292,7 +293,7 @@ const columns: Record<QueryListRoute, ListPageViewModel["table"]["columns"]> = {
     { key: "request", label: "Request" }, { key: "store", label: "Store" }, { key: "priority", label: "Priority" }, { key: "reported", label: "Reported" }, { key: "status", label: "Status" },
   ],
   "work-orders": [
-    { key: "work", label: "Work order" }, { key: "store", label: "Store" }, { key: "assignment", label: "Assigned to" }, { key: "next", label: "Next action" }, { key: "cost", label: "Recorded cost", align: "end" as const }, { key: "status", label: "Status" },
+    { key: "work", label: "Work order" }, { key: "store", label: "Store" }, { key: "assignment", label: "Assigned to" }, { key: "next", label: "Next action" }, { key: "status", label: "Status" }, { key: "updated", label: "Last update" }, { key: "cost", label: "Recorded cost", align: "end" as const },
   ],
   visits: [
     { key: "visit", label: "Visit" }, { key: "store", label: "Store" }, { key: "vendor", label: "Vendor" }, { key: "work", label: "Work order" }, { key: "observed", label: "Timing" }, { key: "evidence", label: "Evidence" }, { key: "outcome", label: "Outcome" },
@@ -333,15 +334,16 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     const heldStoreGroup = first(query.storeGroup) === "multiple" ? "multiple" as const : undefined;
     const requestedStatus = first(query.status);
     const stageStatuses = WORK_STAGE_STATUSES[first(query.stage) ?? ""];
-    const statuses = requestedStatus === "open" || requestedStatus === "attention"
+    const statuses = requestedStatus === "open" || requestedStatus === "attention" || requestedStatus === "waiting"
       ? ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"]
-      : requestedStatus === "waiting" ? ["issued", "waiting_on_vendor", "waiting_on_parts", "awaiting_approval"] : requestedStatus === "history" ? ["closed", "cancelled"] : requestedStatus && requestedStatus !== "all" ? [requestedStatus] : undefined;
+      : requestedStatus === "confirmation" ? ["completed_pending_review"] : requestedStatus === "missed" ? ["scheduled"] : requestedStatus === "history" ? ["closed", "cancelled"] : requestedStatus && requestedStatus !== "all" ? [requestedStatus] : undefined;
     const [work, held] = await Promise.all([repository.listWorkOrders(scope, {
       ...request,
       ...workCreatedRange(first(query.createdFrom), first(query.createdThrough)),
       search: q,
       statuses,
-      dueBefore: requestedStatus === "attention" ? (session.accessMode === "authenticated" ? new Date().toISOString() : NORTHLINE_AS_OF) : undefined,
+      dueAfter: requestedStatus === "waiting" ? (session.accessMode === "authenticated" ? new Date().toISOString() : NORTHLINE_AS_OF) : undefined,
+      dueBefore: ["attention", "missed"].includes(requestedStatus ?? "") ? (session.accessMode === "authenticated" ? new Date().toISOString() : NORTHLINE_AS_OF) : undefined,
       stage: first(query.stage),
       storeId: first(query.store),
       vendorId: first(query.vendor),
@@ -470,7 +472,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     metrics,
     table: { id: route, caption: title, columns: heldPlan ? [
       { key: "work", label: "Approved work" }, { key: "store", label: "Store" }, { key: "assignment", label: "Authorized during visit" }, { key: "next", label: "Review and owner" }, { key: "cost", label: "Recorded cost", align: "end" as const }, { key: "status", label: "Timing" },
-    ] : columns[route as QueryListRoute], rows },
+    ] : costEvidence ? [...columns["work-orders"].filter(column => ! ["updated", "cost"].includes(column.key)), { key: "cost", label: "Recorded cost", align: "end" as const }] : columns[route as QueryListRoute], rows },
     resultSummary: summary,
     search: searchControl(route, query, `Search ${title}`, placeholder),
     filters: [...(route === "work-orders" ? [{ id: "work-view", label: "Work", options: workListNavigation(query) }] : []), ...(queryFilters(route, query) ?? []), ...(contextualFilters ?? [])],

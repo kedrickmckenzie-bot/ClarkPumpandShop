@@ -451,7 +451,7 @@ function approvalEvidence(
 function auditDescription(payloadJson: string): string | undefined {
   try {
     const payload = JSON.parse(payloadJson) as Record<string, unknown>;
-    if (typeof payload.confirmedBy === "string" && typeof payload.completionSource === "string") return `Confirmed by ${payload.confirmedBy} · ${payload.completionSource.replaceAll("_", " ")}. ${typeof payload.note === "string" ? payload.note : ""}`;
+    if (typeof payload.confirmedBy === "string" && typeof payload.completionSource === "string") return `${typeof payload.performedDate === "string" ? `Completed on ${payload.performedDate}. ` : ""}Confirmed by ${payload.confirmedBy} · ${payload.completionSource.replaceAll("_", " ")}. ${typeof payload.note === "string" ? payload.note : ""}`;
     if (typeof payload.note === "string" && payload.note.trim()) return payload.note;
     if (typeof payload.resolution === "string" && payload.resolution.trim()) return payload.resolution;
     if (typeof payload.message === "string" && payload.message.trim()) return payload.message;
@@ -5859,6 +5859,7 @@ export function buildWorkOrderControlModel(
   return {
     available: true,
     permitted,
+    allowManagerCompletion: (fixture.workflowPolicies ?? []).some(policy => policy.organizationId === work.organizationId && policy.status === "active" && policy.allowManagerCompletion && (policy.appliesToActiveWork || work.createdAt >= policy.createdAt)),
     submitAction: `/api/ops/work-orders/${encodeURIComponent(work.id)}/control`,
     followUpAction: `/api/ops/work-orders/${encodeURIComponent(work.id)}/follow-ups`,
     manualResponseAction: `/api/ops/work-orders/${encodeURIComponent(work.id)}/control`,

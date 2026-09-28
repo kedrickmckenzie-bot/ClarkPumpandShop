@@ -6,24 +6,35 @@ import styles from "./setup-workspaces.module.css";
 
 export function ImportPreviewWorkspace({ organizationName }: { organizationName: string }) {
   const [page,setPage]=useState(1);
+  const [validatedFile, setValidatedFile] = useState<File>();
+  const [saved, setSaved] = useState<number>();
   const [entity, setEntity] = useState<ImportEntity>("stores"); const [preview, setPreview] = useState<ImportPreview>(); const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if(loading)return;
     const form=new FormData(event.currentTarget);
-    setLoading(true);setError("");setPreview(undefined);setPage(1);
+    setLoading(true);setError("");setPreview(undefined);setSaved(undefined);setValidatedFile(undefined);setPage(1);
     try {
       const response=await fetch("/api/ops/imports/preview",{method:"POST",body:form});
       const body=await response.json() as ImportPreview & {error?:string};
       if(!response.ok){setError(body.error??"The file could not be checked.");return;}
-      setPreview(body);
+      setPreview(body);setValidatedFile(form.get("file") as File);
     } catch {setError("Could not check the file. Check your connection and try again.");}
     finally {setLoading(false);}
   }
+  async function save() {
+    if (!preview || !validatedFile || loading) return;
+    const body = new FormData(); body.set("entity", preview.entity); body.set("file", validatedFile);
+    setLoading(true); setError("");
+    try { const response = await fetch("/api/ops/imports/apply", { method: "POST", body }); const result = await response.json() as { imported?: number; error?: string }; if (!response.ok) throw new Error(result.error ?? "Import could not be saved. No records were saved."); setSaved(result.imported); }
+    catch (error) { setError(error instanceof Error ? error.message : "Could not save. Try again."); }
+    finally { setLoading(false); }
+  }
   function downloadErrors() { if (!preview) return; const rows = [["row","status","errors","warnings"], ...preview.rows.filter((row) => row.status !== "ready").map((row) => [String(row.rowNumber),row.status,row.errors.join(" | "),row.warnings.join(" | ")])]; const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"','""')}"`).join(",")).join("\r\n"); const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); link.download = `${preview.entity}-import-errors.csv`; link.click(); URL.revokeObjectURL(link.href); }
-  return <section className={styles.workspace}><header className={styles.heading}><div><p>Company onboarding</p><h1>Check an import file</h1><span>Check records for {organizationName}. No records will be saved.</span></div><Link href="/app/admin">Back to setup</Link></header>
-    <form className={styles.controls} onSubmit={submit}><label>Import type<select disabled={loading} name="entity" value={entity} onChange={(event) => { setEntity(event.target.value as ImportEntity); setPreview(undefined); setPage(1); }}><option value="stores">Stores</option><option value="vendors">Vendors</option><option value="equipment">Equipment quantities</option></select></label><label>CSV file<input className={styles.fileInput} name="file" disabled={loading} type="file" accept=".csv,text/csv" required/></label><button className={styles.uploadButton} type="submit" disabled={loading}>{loading ? "Validating…" : "Validate file"}</button></form>
+  return <section className={styles.workspace}><header className={styles.heading}><div><p>Company onboarding</p><h1>Import records</h1><span>Preview, then save records for {organizationName}. Up to 100 rows per file.</span></div><Link href="/app/admin">Back to setup</Link></header>
+    <form className={styles.controls} onSubmit={submit}><label>Import type<select disabled={loading} name="entity" value={entity} onChange={(event) => { setEntity(event.target.value as ImportEntity); setPreview(undefined); setSaved(undefined); setValidatedFile(undefined); setPage(1); }}><option value="stores">Stores</option><option value="vendors">Vendors</option><option value="equipment">Equipment quantities</option><option value="work">Open work orders</option></select></label><label>CSV file<input className={styles.fileInput} name="file" disabled={loading} type="file" onChange={() => { setPreview(undefined); setSaved(undefined); setValidatedFile(undefined); }} accept=".csv,text/csv" required/></label><button className={styles.uploadButton} type="submit" disabled={loading}>{loading ? "Validating…" : "Validate file"}</button></form>
     <div className={styles.explainer}><strong>Start with the current template.</strong><span><a href={`/api/ops/imports/template?entity=${entity}`}>Download {entity} CSV template</a>. Lists inside a cell use semicolons so the file remains portable.</span></div>
-    {error ? <div className={styles.statusWarning} role="alert"><strong>Preview could not run</strong><span>{error}</span></div> : null}
+    {saved !== undefined ? <p role="status">Imported {saved} {saved === 1 ? "row" : "rows"}. <Link href={entity === "work" ? "/app/work-orders" : `/app/${entity}`}>View records</Link></p> : preview && !preview.summary.error && preview.summary.total > 0 ? <button className={styles.uploadButton} type="button" disabled={loading} onClick={save}>{loading ? "Saving…" : `Import ${preview.summary.total} ${preview.summary.total === 1 ? "row" : "rows"}`}</button> : null}
+    {error ? <div className={styles.statusWarning} role="alert"><strong>Import needs attention</strong><span>{error}</span></div> : null}
     {preview ? <><div className={styles.summary}><div><small>Rows</small><strong>{preview.summary.total}</strong></div><div><small>Ready</small><strong>{preview.summary.ready}</strong></div><div><small>Warnings</small><strong className={styles.warningText}>{preview.summary.warning}</strong></div><div><small>Errors</small><strong className={styles.errorText}>{preview.summary.error}</strong></div></div><div className={styles.tableWrap}><table><caption>CSV validation results</caption><thead><tr><th>Row</th><th>Status</th><th>Identity</th><th>Validation result</th></tr></thead><tbody>{preview.rows.slice((page-1)*25,page*25).map((row) => <tr key={row.rowNumber}><td>{row.rowNumber}</td><td><strong className={row.status === "error" ? styles.errorText : row.status === "warning" ? styles.warningText : undefined}>{row.status}</strong></td><td><strong>{row.values.store_number || row.values.vendor_code || "—"}</strong><small>{row.values.name || row.values.equipment_type || ""}</small></td><td>{row.errors.length ? <span className={styles.errorText}>{row.errors.join(" ")}</span> : row.warnings.length ? <span className={styles.warningText}>{row.warnings.join(" ")}</span> : "No issues found"}</td></tr>)}</tbody></table></div>{preview.rows.length>25?<nav className={styles.previewPages} aria-label="Import preview pages"><button type="button" disabled={page===1} onClick={()=>setPage(p=>p-1)}>Back</button><span> {((page-1)*25)+1}–{Math.min(page*25,preview.rows.length)} of {preview.rows.length} </span><button type="button" disabled={page*25>=preview.rows.length} onClick={()=>setPage(p=>p+1)}>Next</button></nav>:null}{preview.summary.error || preview.summary.warning ? <div className={styles.explainer}><button className={styles.uploadButton} type="button" onClick={downloadErrors}>Download error report</button><span>Correct the source file and run the preview again.</span></div> : null}</> : <div className={styles.empty}>Upload a template-based CSV to see row-by-row validation.</div>}
   </section>;
 }

@@ -15,18 +15,22 @@ export async function saveFollowUpPreference(svc: OpsCommandServices, organizati
 }
 
 async function reminderState(repository: OpsRepository, work: WorkOrder, now: string) {
-  if (["closed","cancelled","resolved","in_progress"].includes(work.status)) return null;
+  if (["closed","cancelled","resolved"].includes(work.status)) return null;
   const [appointments,detail,assignment,tasks] = await Promise.all([
     repository.listServiceAppointmentsForWorkOrder(work.organizationId,work.id),
     repository.getWorkOrderDetail({organizationId:work.organizationId},work.id),
     repository.getActiveAssignment(work.organizationId,work.id),
     repository.listWorkflowTasksForWorkOrder(work.organizationId,work.id),
   ]);
+  if (detail?.visits.some(visit => visit.status === "active")) return null;
   const latest = appointments.filter(row => row.assignmentId === assignment?.id).sort((a,b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0];
   const openTasks = tasks.filter(task => !["completed","cancelled"].includes(task.status));
   const task = selectPrimaryWorkflowTask(openTasks);
   if (task && await repository.getActiveWorkflowTaskSlaPause(work.organizationId,task.id)) return null;
   const missed = latest?.status === "confirmed" && latest.startsAt < now && !detail?.visits.some(visit => visit.vendorId === assignment?.vendorId && visit.checkedInAt >= latest.createdAt && visit.checkedInAt >= new Date(Date.parse(latest.startsAt)-86400000).toISOString());
+  // An agreed future appointment is the current commitment; an older response
+  // deadline must not prompt another chase before that appointment.
+  if (latest?.status === "confirmed" && latest.startsAt > now && work.status === "scheduled") return null;
   const kind = work.status === "completed_pending_review" ? "verify" : missed ? "appointment" : "response";
   const dueAt = missed ? latest.startsAt : task?.dueAt ?? work.dueAt;
   if (!dueAt || dueAt > now) return null;
@@ -44,7 +48,7 @@ export async function runRoutineFollowUpCycle(svc: OpsCommandServices, onlyOrgan
     if (!policy?.cadenceHours) continue;
     let offset = 0;
     for (;;) {
-      const page = await svc.repository.listWorkOrders({organizationId},{statuses:["draft","awaiting_approval","approved","issued","accepted","scheduled","waiting_on_vendor","waiting_on_parts","completed_pending_review"],offset,limit:100});
+      const page = await svc.repository.listWorkOrders({organizationId},{statuses:["draft","awaiting_approval","approved","issued","accepted","scheduled","in_progress","waiting_on_vendor","waiting_on_parts","completed_pending_review"],offset,limit:100});
       for (const row of page.items) {
         try {
           let work = await svc.repository.getWorkOrder(organizationId,row.id);

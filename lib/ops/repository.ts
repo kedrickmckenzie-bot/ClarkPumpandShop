@@ -111,6 +111,7 @@ export interface OrganizationScope {
 
 export interface WorkOrderListQuery extends PageRequest {
   dueBefore?: IsoDateTime;
+  dueAfter?: IsoDateTime;
   stage?: string;
   search?: string;
   statuses?: readonly string[];
@@ -289,6 +290,7 @@ export interface OpsRepository {
   readVendorOnboardingSelection(organizationId: OpsId, scopeIds: string[], specialtyKeys: string[]): Promise<import("./vendor-onboarding-query").VendorOnboardingSelection>;
   listWarrantyDirectory(scope: OrganizationScope, query: import("./warranty-directory").WarrantyDirectoryQuery): Promise<import("./warranty-directory").WarrantyDirectoryPage>;
   listWarrantyQueue(scope: OrganizationScope, query: import("./warranty-queue-query").WarrantyQueueQuery): Promise<import("./warranty-queue-query").WarrantyQueuePage>;
+  readImportReferences(organizationId: OpsId, storeNumbers: string[], vendorCodes: string[], vendorNames: string[]): Promise<Pick<OpsFixture, "stores" | "vendors">>;
   readOnboardingConfiguration(organizationId: OpsId): Promise<import("./vendor-onboarding-query").OnboardingConfiguration>;
   listInvoiceEvidence(scope: OrganizationScope, query: import("./invoice-evidence-query").InvoiceEvidenceQuery): Promise<import("./invoice-evidence-query").InvoiceEvidencePage>;
   listInvoiceQueue(scope: OrganizationScope, query: import("./invoice-queue-query").InvoiceQueueQuery): Promise<import("./invoice-queue-query").InvoiceQueuePage>;

@@ -1,3 +1,7 @@
+import { configureMaintenanceResponsibilities } from "@/lib/ops/maintenance-policy-commands";
+import { applyImport } from "@/lib/ops/import-apply";
+import { importTemplate } from "@/lib/ops/import-preview";
+import { recordManualAppointment, recordManualServiceDelay } from "@/lib/ops/manual-service-appointment";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
@@ -37,6 +41,17 @@ async function basic(repository: OpsRepository) {
 }
 
 for (const [name, repository] of [["fixture", memory], ["SQLite", sql]] as const) describe(`${name}: optional adoption`, () => {
+  it("saves completion photos atomically and rejects foreign evidence", async () => {
+    const work = await basic(repository);
+    const file = { id: `photo-${++sequence}`, organizationId: actor.organizationId, storageKey: "completion-photo", sha256: "a".repeat(64), originalName: "fixed-latch.png", contentType: "image/png", byteLength: 20, status: "available" as const, createdAt: services(repository).clock!.now() };
+    const input = { organizationId: actor.organizationId, workOrderId: work.id, expectedStatus: work.status, expectedVersion: persistedWorkOrderVersion(work), status: "closed" as const, manualCompletion: { source: "phone" as const, confirmedBy: "Casey", files: [{ ...file, organizationId: "other" }] }, note: "Store confirmed latch works", actor };
+    await expect(updateWorkOrderControl(services(repository), input)).rejects.toMatchObject({ code: "VALIDATION" });
+    expect((await repository.getWorkOrder(actor.organizationId, work.id))?.status).toBe(work.status);
+    await updateWorkOrderControl(services(repository), { ...input, manualCompletion: { ...input.manualCompletion, files: [file] } });
+    expect(await repository.listFilesForEntity(actor.organizationId, "work_order", work.id)).toEqual([file]);
+    expect(await repository.listFilesForEntity("other", "work_order", work.id)).toEqual([]);
+    expect((await repository.getWorkOrderDetail({ organizationId: actor.organizationId }, work.id))?.visits).toEqual([]);
+  });
   it("creates, updates and closes basic work without equipment, vendor, visit or invoice", async () => {
     const work = await basic(repository);
     await updateWorkOrderControl(services(repository), { organizationId: actor.organizationId, workOrderId: work.id, expectedStatus: work.status, expectedVersion: persistedWorkOrderVersion(work), status: work.status, nextAction: "Call Casey after lunch", dueAt: "2026-08-27T17:00:00.000Z", note: "Phone update: Casey will check the latch", actor });
@@ -49,6 +64,60 @@ for (const [name, repository] of [["fixture", memory], ["SQLite", sql]] as const
     expect(detail?.visits).toEqual([]);
     expect(await repository.listWorkOrderVerifications(actor.organizationId, work.id)).toEqual([]);
     expect((await repository.listWorkflowTasksForWorkOrder(actor.organizationId, work.id)).every(task => !["open", "in_progress"].includes(task.status))).toBe(true);
+  });
+  it("records parts and unresolved updates with one accountable follow-up", async () => {
+    const work = await basic(repository);
+    const update = async (kind: "parts" | "unresolved", dueAt: string) => { const current = (await repository.getWorkOrder(actor.organizationId, work.id))!; await recordManualServiceDelay(services(repository), { organizationId: actor.organizationId, workOrderId: work.id, expectedVersion: persistedWorkOrderVersion(current), kind, dueAt, note: "Store called with a progress update", actor }); };
+    await update("parts", "2026-08-28T12:00:00.000Z");
+    expect((await repository.getWorkOrder(actor.organizationId, work.id))?.status).toBe("waiting_on_parts");
+    await update("unresolved", "2026-08-29T12:00:00.000Z");
+    const detail = await repository.getWorkOrderDetail({ organizationId: actor.organizationId }, work.id);
+    expect(detail?.followUps.filter(f => f.status === "open")).toHaveLength(1);
+    expect(detail?.followUps[0].dueAt).toBe("2026-08-29T12:00:00.000Z");
+    expect(detail?.nextAction).toBe("Arrange return work for the unresolved problem");
+  });
+  it("imports canonical open work atomically and retries without duplicate work", async () => {
+    const text = importTemplate("work") + "104,Inspect rear door,routine,Call store,,OLD-42\r\n";
+    const input = { organizationId: actor.organizationId, entity: "work" as const, text, actor };
+    const before = await repository.listWorkOrders({ organizationId: actor.organizationId }, { search: "Inspect rear door", limit: 100 });
+    expect(await applyImport(services(repository), input)).toMatchObject({ imported: 1, replayed: false });
+    expect(await applyImport(services(repository), input)).toMatchObject({ imported: 1, replayed: true });
+    const after = await repository.listWorkOrders({ organizationId: actor.organizationId }, { search: "Inspect rear door", limit: 100 });
+    expect(after.items.length).toBe(before.items.length + 1);
+    const invalid = importTemplate("stores") + "901,Import test,1 Demo Rd,,Test,KY,40000,,\r\n902,,2 Demo Rd,,Test,KY,40000,,\r\n";
+    await expect(applyImport(services(repository), { ...input, entity: "stores", text: invalid })).rejects.toMatchObject({ code: "VALIDATION" });
+    expect((await repository.readImportReferences(actor.organizationId, ["901"], [], [])).stores).toHaveLength(0);
+  });
+  it("imports stores, vendors and equipment with components through the same commands", async () => {
+    const base = { organizationId: actor.organizationId, actor };
+    await applyImport(services(repository), { ...base, entity: "stores", text: importTemplate("stores") + "903,Imported store,3 Demo Rd,,Test,KY,40000,,\r\n" });
+    await applyImport(services(repository), { ...base, entity: "vendors", text: importTemplate("vendors") + "new-service,Imported service,service@example.com,,plumbing,all\r\n" });
+    const refs = await repository.readImportReferences(actor.organizationId, ["903"], ["new-service"], []);
+    expect(refs.stores).toHaveLength(1); expect(refs.vendors).toHaveLength(1);
+    const template = fixture.equipmentTemplates.find(t => t.active)!;
+    await applyImport(services(repository), { ...base, entity: "equipment", text: importTemplate("equipment") + `903,${template.id},1,Back room unit,Rear wall\r\n` });
+    const equipment = await repository.searchAssets({ organizationId: actor.organizationId, storeIds: [refs.stores[0].id] }, "");
+    expect(equipment.items).toHaveLength(1); expect(equipment.items[0].name).toBe("Back room unit · Rear wall");
+  });
+  it("records and replaces manual appointments without inventing visit evidence", async () => {
+    const work = await createWorkOrder(services(repository), { organizationId: actor.organizationId, storeId: "store-northline-104", problem: "Schedule a cooler inspection", initialAssignment: { kind: "outside_vendor", vendorId: fixture.vendors[0].id }, accountableParty: "Facilities coordinator", nextAction: "Confirm appointment", actor });
+    const assigned = await repository.getActiveAssignment(actor.organizationId, work.id);
+    expect(assigned).toBeTruthy();
+    const save = async (startsAt: string) => { const current = (await repository.getWorkOrder(actor.organizationId, work.id))!; return recordManualAppointment(services(repository), { organizationId: actor.organizationId, workOrderId: work.id, expectedVersion: persistedWorkOrderVersion(current), startsAt, confirmedBy: "Dispatch", source: "phone", note: "Dispatch confirmed access with the store", actor }); };
+    await save("2026-08-28T15:00:00.000Z");
+    await save("2026-08-29T15:00:00.000Z");
+    const current = (await repository.getWorkOrder(actor.organizationId, work.id))!;
+    expect(current).toMatchObject({ status: "scheduled", dueAt: "2026-08-29T15:00:00.000Z" });
+    const scheduled = (await repository.getWorkOrder(actor.organizationId, work.id))!;
+    await recordManualServiceDelay(services(repository), { organizationId: actor.organizationId, workOrderId: work.id, expectedVersion: persistedWorkOrderVersion(scheduled), kind: "parts", dueAt: "2026-08-29T12:00:00.000Z", note: "Parts ordered; arrange return", actor });
+    const waiting = (await repository.getWorkOrder(actor.organizationId, work.id))!;
+    await recordManualAppointment(services(repository), { organizationId: actor.organizationId, workOrderId: work.id, expectedVersion: persistedWorkOrderVersion(waiting), startsAt: "2026-08-30T12:00:00.000Z", source: "phone", confirmedBy: "Vendor dispatcher", note: "Parts arrived; return booked", actor });
+    expect(((await repository.getWorkOrderDetail({ organizationId: actor.organizationId }, work.id))!.followUps).filter(row => row.status === "open")).toHaveLength(0);
+    const appointments = await repository.listServiceAppointmentsForWorkOrder(actor.organizationId, work.id);
+    expect(appointments.filter(row => row.status === "confirmed")).toHaveLength(1);
+    expect(appointments.filter(row => row.status === "cancelled")).toHaveLength(2);
+    expect((await repository.getWorkOrderDetail({ organizationId: actor.organizationId }, work.id))?.visits).toEqual([]);
+    expect((await repository.listWorkOrders({ organizationId: actor.organizationId }, { search: work.number })).items[0].updatedAt).toBe("2026-08-26T12:00:00.000Z");
   });
   it("records notes without altering accountability and rejects stale notes", async () => {
     const work = await basic(repository);
@@ -84,6 +153,16 @@ for (const [name, repository] of [["fixture", memory], ["SQLite", sql]] as const
     const input = { organizationId: actor.organizationId, workOrderId: work.id, expectedStatus: work.status, expectedVersion: persistedWorkOrderVersion(work), status: "closed" as const, manualCompletion: { source: "email" as const, confirmedBy: "Casey" }, note: "Confirmed result", actor };
     await expect(updateWorkOrderControl(services(repository), { ...input, actor: { ...actor, actorId: "membership-northline-store-104" } })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(updateWorkOrderControl(services(repository), { ...input, organizationId: "other" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+  it("allows explicit manager completion under company policy while retaining observed evidence", async () => {
+    await configureMaintenanceResponsibilities({ repository, organizationId: actor.organizationId, role: "facilities_admin", enabledCapabilities: ["create_work_order", "issue_work_order", "confirm_observable_result"], allowManagerCompletion: true, autoCloseRoutineAfterVerification: false, appliesToActiveWork: true, actor, occurredAt: "2026-08-26T11:00:00.000Z" });
+    expect((await repository.getActiveWorkflowPolicy(actor.organizationId))?.allowManagerCompletion).toBe(true);
+    const work = (await repository.getWorkOrder(actor.organizationId, "wo-recent-aug-101-refrigeration"))!;
+    const before = await repository.getWorkOrderDetail({ organizationId: actor.organizationId }, work.id);
+    await updateWorkOrderControl(services(repository), { organizationId: actor.organizationId, workOrderId: work.id, expectedStatus: work.status, expectedVersion: persistedWorkOrderVersion(work), status: "closed", manualCompletion: { source: "phone", confirmedBy: "Casey, store manager", performedDate: "2026-08-25" }, note: "Casey confirmed cooling was restored", actor });
+    const after = await repository.getWorkOrderDetail({ organizationId: actor.organizationId }, work.id);
+    expect(after?.status).toBe("closed"); expect(after?.visits).toEqual(before?.visits);
+    expect((await repository.listWorkOrderVerifications(actor.organizationId, work.id))).toHaveLength(0);
   });
   it("scopes due-work reads and distinguishes missing from zero cost", async () => {
     const scope = { organizationId: actor.organizationId, storeIds: ["store-northline-104"] };

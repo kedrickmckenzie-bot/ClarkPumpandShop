@@ -694,17 +694,15 @@ export function WorkOrderCase({
 
       <MutationReceipt code={updated} />
 
-      {activeView === "activity" && !accountabilityOnly ? <WorkOrderStageRail model={canonicalCase} /> : null}
+      {activeView === "activity" ? <details className={styles.historyDisclosure}><summary>Workflow details</summary>{!accountabilityOnly ? <WorkOrderStageRail model={canonicalCase} /> : null}<CaseStateDimensions model={canonicalCase} /></details> : null}
 
-      {activeView === "activity" ? <CaseStateDimensions model={canonicalCase} /> : null}
-
+      {activeView === "overview" ? <WorkOrderQuickUpdate model={control} canAddNote={verification.permitted} canComplete={(!visits?.table?.rows.length || control.allowManagerCompletion) && !control.pendingApproval && control.status !== "awaiting_approval"} /> : null}
       {emailHistory}
       {costPrompts}
       {prices}
 
       {activeView === "overview" ? (
         <>
-          <WorkOrderQuickUpdate model={control} canAddNote={verification.permitted} canComplete={!visits?.table?.rows.length && !control.pendingApproval && control.status !== "awaiting_approval"} />
           {verification.available && (verification.canDecide || verification.currentOutcome) ? <details className={styles.historyDisclosure}><summary>Confirm the result</summary><WorkOrderVerificationPanel model={verification} /></details> : null}
           {control.permitted ? <ManualVendorResponseForm model={control} /> : null}
           <div className={styles.inlineActions}>
@@ -751,13 +749,13 @@ export function WorkOrderCase({
             </summary>
             <div className={styles.historyDisclosureBody}>
               <div className={styles.panelRegion}><WorkflowTaskPanel model={control.workflowTasks} /></div>
-              <div className={styles.panelRegion}><WorkOrderControlPanel model={control} /></div>
+              <details className={styles.historyDisclosure}><summary>Advanced work controls</summary><div className={styles.panelRegion}><WorkOrderControlPanel model={control} /></div></details>
             </div>
           </details>
         ) : (
           <>
             <div className={styles.panelRegion}><WorkflowTaskPanel model={control.workflowTasks} /></div>
-            <div className={styles.panelRegion}><WorkOrderControlPanel model={control} /></div>
+            <details className={styles.historyDisclosure}><summary>Advanced work controls</summary><div className={styles.panelRegion}><WorkOrderControlPanel model={control} /></div></details>
           </>
         )}
         <RecordBlock section={relatedReports} icon={<ClipboardCheck aria-hidden="true" size={18} />} />

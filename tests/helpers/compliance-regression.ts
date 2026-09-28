@@ -33,6 +33,7 @@ export async function complianceRegression(repository:OpsRepository) {
  const replay=await runInspectionCycle(svc,org,s.id);expect(replay.created).toBe(0);expect(replay.reminders).toBe(0);expect(replay.failed).toBe(0);
  const result={organizationId:org,inspectionId:i.id,version:0,status:"performed" as const,note:"Performed; awaiting report",performedDate:"2026-09-26",files:[]};
  await recordInspectionResult(svc,result,actor);
+ expect((await repository.getWorkOrder(org,i.workOrderId!))?.nextAction).toBe("Review inspection paperwork");
  expect((await repository.queryInspections({organizationId:org},{today:"2026-09-27",scheduleId:s.id})).summary.missing_docs).toBe(1);
  await expect(recordInspectionResult(svc,{...result,version:1,status:"passed"},actor)).rejects.toMatchObject({code:"VALIDATION"});
  await recordInspectionResult(svc,{...result,version:1,status:"passed",note:"Report reviewed; no findings",files:[{id:`file-${crypto.randomUUID()}`,organizationId:org,storageKey:"test-inspection",sha256:"a".repeat(64),originalName:"inspection-photo.png",contentType:"image/png",byteLength:6,status:"available",createdAt:svc.clock.now()}]},actor);
@@ -43,6 +44,12 @@ export async function complianceRegression(repository:OpsRepository) {
  const second=page.items[1];await recordInspectionResult(svc,{...result,inspectionId:second.id,status:"action_needed",note:"Exit light failed"},actor);
  const failed=(await repository.getInspection(org,second.id))!;const correction=await createInspectionCorrection(svc,failed,"Repair exit light",actor);expect(correction?.id).toBeTruthy();
  await expect(recordInspectionResult(svc,{...result,inspectionId:second.id,version:2,status:"passed"},actor)).rejects.toThrow("corrective work");
+ const third = page.items[2];
+ await recordInspectionResult(svc, {...result, inspectionId: third.id, status: "action_needed", note: "Emergency exit sign needs repair", createCorrection: true}, actor);
+ const combined = (await repository.getInspection(org, third.id))!;
+ expect(combined.correctiveWorkOrderId).toBeTruthy();
+ expect((await repository.getWorkOrder(org, combined.correctiveWorkOrderId!))?.problem).toContain("Emergency exit sign");
+ expect(combined.status).toBe("action_needed");
  const vendors=await repository.listVendors({organizationId:org},"ColdLine",{limit:5});const vendor=vendors.items[0];
  const vendorFile={...template,id:`vendor-file-${crypto.randomUUID()}`,originalName:"insurance.pdf"};
  const vendorDocument=await recordVendorComplianceDocument(svc,{organizationId:org,vendorId:vendor.id,documentType:"insurance",reference:"Policy acceptance",reviewStatus:"pending",file:vendorFile,actor});

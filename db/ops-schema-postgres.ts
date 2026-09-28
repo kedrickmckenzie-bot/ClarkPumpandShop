@@ -286,7 +286,7 @@ export const opsRoleCapabilityOverrides = pgTable("ops_role_capability_overrides
 ]);
 
 export const opsWorkflowPolicies = pgTable("ops_workflow_policies", {
-  id: id(), organizationId: organizationId(), version: integer("version").notNull(), status: text("status").notNull(), autoCloseRoutineAfterVerification: boolean("auto_close_routine_after_verification").notNull().default(false), appliesToActiveWork: boolean("applies_to_active_work").notNull().default(false), createdByMembershipId: text("created_by_membership_id").notNull(), createdByName: text("created_by_name").notNull(), createdAt: createdAt(),
+  id: id(), organizationId: organizationId(), version: integer("version").notNull(), status: text("status").notNull(), allowManagerCompletion: boolean("allow_manager_completion").notNull().default(false), autoCloseRoutineAfterVerification: boolean("auto_close_routine_after_verification").notNull().default(false), appliesToActiveWork: boolean("applies_to_active_work").notNull().default(false), createdByMembershipId: text("created_by_membership_id").notNull(), createdByName: text("created_by_name").notNull(), createdAt: createdAt(),
 }, (table) => [
   unique("uq_ops_workflow_policy_org_id").on(table.organizationId, table.id),
   uniqueIndex("uidx_ops_workflow_policy_org_version").on(table.organizationId, table.version),
@@ -1843,7 +1843,7 @@ export const opsNotificationRules = pgTable("ops_notification_rules", {
     columns: [table.organizationId],
     foreignColumns: [opsOrganizations.id],
   }),
-  check("chk_ops_notification_rules_event", sql`${table.eventKey} IN ('vendor_response_received', 'vendor_commitment_received', 'workflow_task_escalated', 'follow_up_created', 'vendor_reminder_created', 'held_work_claimed', 'held_work_outcomes_recorded', 'vendor_compliance_due')`),
+  check("chk_ops_notification_rules_event", sql`${table.eventKey} IN ('vendor_response_received', 'vendor_commitment_received', 'workflow_task_escalated', 'follow_up_created', 'vendor_reminder_created', 'held_work_claimed', 'held_work_outcomes_recorded', 'vendor_compliance_due', 'repair_confirmation_required')`),
   check("chk_ops_notification_rules_role", sql`${table.recipientRole} IN ('facilities_admin', 'store_manager', 'regional_manager', 'executive', 'finance_reviewer')`),
 ]);
 

@@ -81,7 +81,7 @@ export const opsRoleCapabilityOverrides = sqliteTable("ops_role_capability_overr
 }, (table) => [uniqueIndex("uidx_ops_role_capability_org_role_cap").on(table.organizationId, table.role, table.capability), index("idx_ops_role_capability_org_role").on(table.organizationId, table.role)]);
 
 export const opsWorkflowPolicies = sqliteTable("ops_workflow_policies", {
-  id: id(), organizationId: organizationId(), version: integer("version").notNull(), status: text("status").notNull(), autoCloseRoutineAfterVerification: bool("auto_close_routine_after_verification"), appliesToActiveWork: bool("applies_to_active_work"), createdByMembershipId: text("created_by_membership_id").notNull(), createdByName: text("created_by_name").notNull(), createdAt: createdAt(),
+  id: id(), organizationId: organizationId(), version: integer("version").notNull(), status: text("status").notNull(), allowManagerCompletion: bool("allow_manager_completion"), autoCloseRoutineAfterVerification: bool("auto_close_routine_after_verification"), appliesToActiveWork: bool("applies_to_active_work"), createdByMembershipId: text("created_by_membership_id").notNull(), createdByName: text("created_by_name").notNull(), createdAt: createdAt(),
 }, (table) => [uniqueIndex("uidx_ops_workflow_policy_org_version").on(table.organizationId, table.version), uniqueIndex("uidx_ops_workflow_policy_active").on(table.organizationId).where(sql`${table.status} = 'active'`)]);
 
 export const opsVendors = sqliteTable("ops_vendors", {

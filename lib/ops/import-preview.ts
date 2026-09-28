@@ -1,10 +1,11 @@
 import type { OpsFixture } from "./types";
 
-export type ImportEntity = "stores" | "vendors" | "equipment";
+export type ImportEntity = "stores" | "vendors" | "equipment" | "work";
 export interface ImportPreviewRow { rowNumber: number; status: "ready" | "warning" | "error"; values: Record<string, string>; errors: string[]; warnings: string[] }
 export interface ImportPreview { entity: ImportEntity; headers: string[]; rows: ImportPreviewRow[]; summary: { total: number; ready: number; warning: number; error: number }; writesPerformed: false }
 
 const templates: Record<ImportEntity, string[]> = {
+  work: ["store_number", "problem", "priority", "next_action", "due_at", "source_reference"],
   stores: ["store_number", "name", "address_1", "address_2", "city", "state", "postal_code", "region_code", "aliases"],
   vendors: ["vendor_code", "name", "dispatch_email", "dispatch_phone", "specialties", "coverage"],
   equipment: ["store_number", "equipment_type", "quantity", "name_prefix", "location_notes"],
@@ -26,13 +27,14 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-function normalized(value: string) { return value.trim().toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/g, " ").trim(); }
+function normalized(value: string) { return value.trim().toLocaleLowerCase("en-US"); }
 function emailValid(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
-export function previewImport(entity: ImportEntity, text: string, fixture: OpsFixture, organizationId: string): ImportPreview {
+export function previewImport(entity: ImportEntity, text: string, fixture: Pick<OpsFixture, "stores" | "vendors" | "regions" | "equipmentTemplates">, organizationId: string): ImportPreview {
   if (text.length > 2_000_000) throw new Error("CSV files must be 2 MB or smaller.");
   const parsed = parseCsv(text);
   if (!parsed.length) throw new Error("The CSV file is empty.");
   const headers = parsed[0].map((header) => header.trim().toLocaleLowerCase("en-US"));
+  if (new Set(headers).size !== headers.length || headers.some(header => !header)) throw new Error("Each CSV column needs a unique, nonempty header.");
   const missing = templates[entity].filter((header) => !headers.includes(header));
   if (missing.length) throw new Error(`Missing required template columns: ${missing.join(", ")}. Download the current template and try again.`);
   if (parsed.length > 5_001) throw new Error("A preview supports up to 5,000 data rows.");
@@ -57,11 +59,16 @@ export function previewImport(entity: ImportEntity, text: string, fixture: OpsFi
       if (vendors.some((vendor) => normalized(vendor.code) === key || normalized(vendor.name) === normalized(values.name))) errors.push("Vendor code or name already exists.");
       if (values.dispatch_email && !emailValid(values.dispatch_email)) errors.push("Dispatch email is invalid.");
       if (values.coverage && values.coverage !== "all" && !values.coverage.split(";").every((code) => regions.some((region) => normalized(region.code) === normalized(code)))) errors.push("Coverage must be 'all' or semicolon-separated configured region codes.");
+    } else if (entity === "work") {
+      if (!values.problem) errors.push("Problem is required.");
+      if (!stores.some(store => normalized(store.storeNumber) === normalized(values.store_number))) errors.push("Store number does not exist.");
+      if (values.priority && !["routine", "planned", "urgent", "emergency"].includes(values.priority)) errors.push("Use routine, planned, urgent or emergency priority.");
+      if (values.due_at && (!/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(values.due_at) || !Number.isFinite(Date.parse(values.due_at)))) errors.push("Due date needs an ISO date/time with timezone.");
     } else {
       for (const key of ["store_number", "equipment_type", "quantity"]) if (!values[key]) errors.push(`${key} is required.`);
       if (values.store_number && !stores.some((store) => normalized(store.storeNumber) === normalized(values.store_number))) errors.push("Store number does not exist.");
       if (values.equipment_type && !equipmentTypes.some((template) => normalized(template.id) === normalized(values.equipment_type) || normalized(template.name) === normalized(values.equipment_type))) errors.push("Equipment type does not match a configured company template.");
-      const quantity = Number(values.quantity); if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) errors.push("Quantity must be a whole number from 1 to 100.");
+      const quantity = Number(values.quantity); if (!Number.isInteger(quantity) || quantity < 1 || quantity > 50) errors.push("Quantity must be a whole number from 1 to 50.");
       if (quantity > 1 && !values.name_prefix) warnings.push("Name prefix is blank; generated names will use the equipment type.");
     }
     return { rowNumber: offset + 2, status: errors.length ? "error" : warnings.length ? "warning" : "ready", values, errors, warnings };

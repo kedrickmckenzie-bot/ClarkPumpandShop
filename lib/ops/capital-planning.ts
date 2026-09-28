@@ -4,7 +4,7 @@ import {resolveAssetReplacementEstimate} from "./replacement-intelligence";
 import type {OrganizationScope,OpsRepository} from "./repository";
 import type {ActorContext,OpsFixture} from "./types";
 
-export interface CapitalPlan {id:string;organizationId:string;assetId:string;storeId:string;version:number;targetMonth?:string;amountMinor?:number;currency:string;costBasis:string;sourceId?:string;priority:"flexible"|"soon"|"urgent";owner:string;reason:string;status:"planned"|"cancelled";createdAt:string;}
+export interface CapitalPlan {id:string;organizationId:string;assetId:string;storeId:string;version:number;targetMonth?:string;amountMinor?:number;currency:string;costBasis:string;sourceId?:string;priority:"flexible"|"soon"|"urgent";owner:string;reason:string;status:"considering"|"planned"|"approved"|"completed"|"cancelled";createdAt:string;}
 export interface CapitalPrice {id:string;amountMinor:number;currency:string;basis:string;label:string;href?:string;}
 export interface CapitalRow extends CapitalPlan {assetName:string;assetTag:string;storeNumber:string;storeName:string;category:string;legacyYear?:number;}
 export interface CapitalQuery {start:string;months:number;currency:string;storeId?:string;regionId?:string;category?:string;search?:string;month?:string;offset?:number;}
@@ -42,7 +42,7 @@ export async function saveCapitalPlan(svc:OpsCommandServices,input:{organization
   const before=await r.getCapitalPlan(org,asset.id);
   if(!Number.isSafeInteger(input.version)||input.version!==(before?.version??0))throw new OpsDomainError("CONFLICT","This plan changed. Refresh before saving.");
   if(input.targetMonth&&!validMonth(input.targetMonth))throw new OpsDomainError("VALIDATION","Choose a valid target month.");
-  if(!["flexible","soon","urgent"].includes(input.priority)||!["planned","cancelled"].includes(input.status)||!input.owner.trim()||input.owner.length>200||input.reason.length>2000||!/^[A-Z]{3}$/.test(input.currency))throw new OpsDomainError("VALIDATION","Check the owner, priority and currency.");
+  if(!["flexible","soon","urgent"].includes(input.priority)||!["considering","planned","approved","completed","cancelled"].includes(input.status)||!input.owner.trim()||input.owner.length>200||input.reason.length>2000||!/^[A-Z]{3}$/.test(input.currency))throw new OpsDomainError("VALIDATION","Check the owner, priority and currency.");
   let amountMinor=input.amountMinor,currency=input.currency,costBasis="Planning estimate";
   if(input.sourceId==="keep-saved"&&before){amountMinor=before.amountMinor;currency=before.currency;costBasis=before.costBasis;}
   else if(input.sourceId) {const price=(await capitalPriceChoices(r,org,asset.id)).find(p=>p.id===input.sourceId);if(!price)throw new OpsDomainError("VALIDATION","The selected price is no longer available.");amountMinor=price.amountMinor;currency=price.currency;costBasis=price.basis;}
@@ -61,7 +61,7 @@ export function capitalFromFixture(f:OpsFixture,scope:OrganizationScope,q:Capita
   const all:CapitalRow[]=f.assets.filter(a=>a.organizationId===scope.organizationId&&a.status!=="retired"&&stores.some(s=>s.id===a.storeId)&&(!q.category||a.categoryKey===q.category)).flatMap(a=>{
     if(f.replacementEvents.some(e=>e.organizationId===scope.organizationId&&e.assetId===a.id&&e.status==="completed"))return [];
     const s=stores.find(s=>s.id===a.storeId)!,plan=latestCapitalPlan(f,scope.organizationId,a.id),legacy=f.lifecycleRecommendations.filter(l=>l.organizationId===scope.organizationId&&l.assetId===a.id).sort((x,y)=>y.version-x.version)[0];
-    if(plan?plan.status!=="planned":!legacy||!["replace","defer"].includes(legacy.userDecision))return [];
+    if(plan?!["considering","planned","approved"].includes(plan.status):!legacy||!["replace","defer"].includes(legacy.userDecision))return [];
     if(q.search&&![a.name,a.assetTag,s.storeNumber,s.name,s.address1,s.address2,s.city,s.state,s.postalCode,...s.aliases].join(" ").toLowerCase().includes(q.search.toLowerCase()))return [];
     const p:CapitalPlan=plan??{id:legacy!.id,organizationId:scope.organizationId,assetId:a.id,storeId:a.storeId,version:0,amountMinor:a.replacementEstimate?.amountMinor,currency:a.replacementEstimate?.currency??"USD",costBasis:"Planning estimate",priority:"flexible",owner:"Facilities",reason:legacy!.userReason,status:"planned",createdAt:legacy!.decidedAt};
     return [{...p,assetName:a.name,assetTag:a.assetTag,storeNumber:s.storeNumber,storeName:s.name,category:a.categoryKey,legacyYear:plan?undefined:legacy?.plannedForYear}];

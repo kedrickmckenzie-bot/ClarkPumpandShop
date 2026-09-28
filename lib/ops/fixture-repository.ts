@@ -149,7 +149,7 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
     assignmentStatus: assignment?.status, vendorId: vendor?.id, vendorName: vendor?.name,
     internalAccountableParty: workOrder.internalAccountableParty ?? "Facilities coordinator",
     accountableParty: workOrder.accountableParty, nextAction: workOrder.nextAction, dueAt: workOrder.dueAt,
-    createdAt: workOrder.createdAt, visitCount: new Set(fixture.siteVisitWorkOrders.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).map((row) => row.visitId)).size,
+    updatedAt: fixture.auditEvents.filter(event => event.organizationId === workOrder.organizationId && event.aggregateType === "work_order" && event.aggregateId === workOrder.id).map(event => event.occurredAt).sort().at(-1) ?? workOrder.createdAt, createdAt: workOrder.createdAt, visitCount: new Set(fixture.siteVisitWorkOrders.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).map((row) => row.visitId)).size,
     recordedCostMinor: fixture.costLines.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).reduce((sum, row) => sum + row.amount.amountMinor, 0), currency: "USD",
     visitHoldPosture: visitHold?.posture,
     visitHoldDeadlineAt: visitHold?.deadlineAt,
@@ -211,7 +211,7 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_vendors") { row.preferred = Boolean(row.preferred); delete row.searchText; }
   if (table === "ops_notification_rules") row.emailEnabled = Boolean(row.emailEnabled);
   if (table === "ops_role_capability_overrides") row.enabled = Boolean(row.enabled);
-  if (table === "ops_workflow_policies") { row.autoCloseRoutineAfterVerification = Boolean(row.autoCloseRoutineAfterVerification); row.appliesToActiveWork = Boolean(row.appliesToActiveWork); }
+  if (table === "ops_workflow_policies") { row.allowManagerCompletion = Boolean(row.allowManagerCompletion); row.autoCloseRoutineAfterVerification = Boolean(row.autoCloseRoutineAfterVerification); row.appliesToActiveWork = Boolean(row.appliesToActiveWork); }
   if (table === "ops_vendor_specialties") { row.searchAliases = JSON.parse(String(row.searchAliasesJson ?? "[]")); delete row.searchAliasesJson; }
   if (table === "ops_vendor_qualifications") { row.pmWork = Boolean(row.pmWork); row.emergencyResponse = Boolean(row.emergencyResponse); row.warrantyWork = Boolean(row.warrantyWork); row.afterHours = Boolean(row.afterHours); if (row.maximumJobAmountMinor !== undefined) row.maximumJobAmount = { amountMinor: row.maximumJobAmountMinor, currency: row.currency ?? "USD" }; delete row.maximumJobAmountMinor; delete row.currency; }
   if (table === "ops_vendor_compliance_documents") row.blocking = Boolean(row.blocking);
@@ -616,6 +616,10 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async readVendorOnboardingSelection(organizationId: OpsId, scopeIds: string[], specialtyKeys: string[]) { return (await import("./vendor-onboarding-query")).vendorOnboardingFromFixture(this.fixture,organizationId,scopeIds,specialtyKeys); }
   async listWarrantyDirectory(scope: OrganizationScope, query: import("./warranty-directory").WarrantyDirectoryQuery) { return (await import("./warranty-directory")).warrantyDirectoryFromFixture(this.fixture,scope,query); }
   async listWarrantyQueue(scope: OrganizationScope, query: import("./warranty-queue-query").WarrantyQueueQuery) { return (await import("./warranty-queue-query")).warrantyQueueFromFixture(this.fixture,scope,query); }
+  async readImportReferences(organizationId: OpsId, storeNumbers: string[], vendorCodes: string[], vendorNames: string[]) {
+    const norm = (value: string) => value.trim().toLowerCase();
+    return clone({ stores: this.fixture.stores.filter(s => s.organizationId === organizationId && storeNumbers.includes(norm(s.storeNumber))), vendors: this.fixture.vendors.filter(v => v.organizationId === organizationId && (vendorCodes.includes(norm(v.code)) || vendorNames.includes(norm(v.name)))) });
+  }
   async readOnboardingConfiguration(organizationId: OpsId) { const names=new Map<string,string>();for(const s of this.fixture.vendorSpecialties.filter(s=>s.organizationId===organizationId))if(!names.has(s.canonicalKey)||s.displayName<names.get(s.canonicalKey)!)names.set(s.canonicalKey,s.displayName);return clone({regions:this.fixture.regions.filter(r=>r.organizationId===organizationId).sort((a,b)=>a.id<b.id?-1:1),vendorSpecialties:[...names].sort(([a],[b])=>a<b?-1:1).map(([canonicalKey,displayName])=>({organizationId,canonicalKey,displayName}))}); }
   async listInvoiceEvidence(scope: OrganizationScope, query: import("./invoice-evidence-query").InvoiceEvidenceQuery) { return (await import("./invoice-evidence-query")).invoiceEvidenceFromFixture(this.fixture, scope, query); }
   async listInvoiceQueue(scope: OrganizationScope, query: import("./invoice-queue-query").InvoiceQueueQuery) { return (await import("./invoice-queue-query")).invoiceQueueFromFixture(this.fixture, scope, query); }
@@ -805,6 +809,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.createdFrom || row.createdAt >= query.createdFrom)
         && (!query.createdTo || row.createdAt < query.createdTo)
         && (!query.dueBefore || Boolean(row.dueAt && row.dueAt <= query.dueBefore))
+        && (!query.dueAfter || Boolean(row.dueAt && row.dueAt > query.dueAfter))
         && (!query.heldOnly || activeHeldWork.has(row.id))
         && (!query.heldReviewDeadlineTo || (this.fixture.workOrderVisitHolds ?? []).some((hold) => hold.organizationId === scope.organizationId && hold.workOrderId === row.id && hold.status === "active" && hold.deadlineAt <= query.heldReviewDeadlineTo!))
         && (!query.heldConfirmedOpportunityAfter || (this.fixture.serviceAppointments ?? []).some((appointment) => {

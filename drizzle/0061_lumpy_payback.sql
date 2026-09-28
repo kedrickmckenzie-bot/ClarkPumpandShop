@@ -1,0 +1,1 @@
+ALTER TABLE `ops_workflow_policies` ADD `allow_manager_completion` integer DEFAULT false NOT NULL;

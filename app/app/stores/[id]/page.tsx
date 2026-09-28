@@ -1,3 +1,4 @@
+import { StoreOperatingContext } from "@/components/workspace/store-operating-context";
 import { StoreWorkspaceNav } from "@/components/workspace/store-workspace-nav";
 import type { Metadata } from "next";
 import { roleCan } from "@/components/ops/role-policy";
@@ -18,7 +19,7 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
   return (
     <DetailView
       model={model}
-      beforeSections={<StoreWorkspaceNav id={id} />}
+      beforeSections={<><StoreWorkspaceNav id={id} />{model.state.kind === "ready" && session.demoEdition === "complete" ? <StoreOperatingContext id={id} /> : null}</>}
       after={hasDemoVendorQr || canSetupEquipment || canSetupPm ? (
         <>
           {hasDemoVendorQr ? (

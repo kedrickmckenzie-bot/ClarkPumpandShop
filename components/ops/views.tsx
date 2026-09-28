@@ -698,6 +698,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
                   <header><div><span>Selected record</span><h2>{selectedRow.label}</h2></div><Link href={selectionHref()} aria-label="Close record preview">×</Link></header>
                   {selectedRow.cells[0]?.secondary ? <p className={styles.triageSummary}>{selectedRow.cells[0].secondary}</p> : null}
                   <dl>{model.table.columns.map((column) => { const cell = selectedRow.cells.find((candidate) => candidate.key === column.key); return <div key={column.key}><dt>{column.label}</dt><dd>{cell?.value ?? "—"}{cell?.secondary && cell.secondary !== selectedRow.cells[0]?.secondary ? <small>{cell.secondary}</small> : null}</dd></div>; })}</dl>
+                  {surface === "work-orders" && canManageWorkflowTasks && !["Closed", "Cancelled"].includes(selectedRow.cells.find(cell => cell.key === "status")?.value ?? "") ? <nav className={styles.quickWorkActions} aria-label="Work actions"><Link href={`${selectedRow.href}#add-update`}>Record update</Link><Link href={`${selectedRow.href}?view=service`}>Assign / schedule</Link><Link href={`${selectedRow.href}?view=visits#work-verification`}>Confirm result</Link></nav> : null}
                   <Link className={styles.triageOpen} href={selectedRow.href}>Open full record<ExternalLink aria-hidden="true" size={15} /></Link>
                 </aside> : null}
               </div>

@@ -1,0 +1,2 @@
+ALTER TABLE "ops_notification_rules" DROP CONSTRAINT "chk_ops_notification_rules_event";--> statement-breakpoint
+ALTER TABLE "ops_notification_rules" ADD CONSTRAINT "chk_ops_notification_rules_event" CHECK ("ops_notification_rules"."event_key" IN ('vendor_response_received', 'vendor_commitment_received', 'workflow_task_escalated', 'follow_up_created', 'vendor_reminder_created', 'held_work_claimed', 'held_work_outcomes_recorded', 'vendor_compliance_due', 'repair_confirmation_required'));

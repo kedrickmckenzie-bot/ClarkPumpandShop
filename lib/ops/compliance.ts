@@ -1,3 +1,8 @@
+import { atomicWorkOrderMutation } from "./concurrency";
+import { latestRecordedWorkOutcome } from "./work-order-outcome";
+import { recordWorkOrderVerification } from "./work-order-verification-commands";
+import { resolveInternalAccountability } from "./internal-accountability";
+import { buildReplacePrimaryTaskStatements, buildWorkflowTaskRecord } from "./workflow-task-commands";
 import { createWorkOrder, routeAndIssueWorkOrder, updateWorkOrderControl, OpsDomainError, type OpsCommandServices } from "./commands";
 import { communicationAudit, evidenceFence, evidenceDigest, insertRecord } from "./email-intake";
 import { masterDocuments, masterDocumentSnapshot } from "./compliance-documents";
@@ -73,7 +78,7 @@ export async function runInspectionCycle(svc:OpsCommandServices,onlyOrg?:string,
  }
  return summary;
 }
-export async function recordInspectionResult(svc:OpsCommandServices,input:{inspectionId:string;organizationId:string;version:number;status:"performed"|"passed"|"action_needed";note:string;performedDate:string;documentExpiresOn?:string;files:StoredFile[]},actor:ActorContext) {
+export async function recordInspectionResult(svc:OpsCommandServices,input:{inspectionId:string;organizationId:string;version:number;createCorrection?:boolean;status:"performed"|"passed"|"action_needed";note:string;performedDate:string;documentExpiresOn?:string;files:StoredFile[]},actor:ActorContext) {
  if(actor.organizationId!==input.organizationId)throw new OpsDomainError("FORBIDDEN","Organization mismatch");
  const i=await svc.repository.getInspection(input.organizationId,input.inspectionId);if(!i)throw new OpsDomainError("NOT_FOUND","Inspection not found");
  if(i.version!==input.version)throw new OpsDomainError("CONFLICT","Inspection changed. Refresh before saving.");
@@ -88,8 +93,29 @@ export async function recordInspectionResult(svc:OpsCommandServices,input:{inspe
  if(s.evidenceRequired&&input.status==="passed"&&!existing.length&&!input.files.length)throw new OpsDomainError("VALIDATION","Attach the report or photos before marking this inspection passed.");
  const statements:OpsStatement[]=[evidenceFence(i.organizationId,`inspection-result:${i.id}:${i.version}`,i.id,now),{sql:"UPDATE ops_inspections SET status = ?, completed_at = ?, result_note = ?, document_expires_on = ?, version = ? WHERE organization_id = ? AND id = ?",params:[input.status,input.performedDate,input.note.trim(),input.documentExpiresOn??null,i.version+1,i.organizationId,i.id]},communicationAudit(i.organizationId,i.id,"inspection.result_recorded",actor,now,{status:input.status,performedDate:input.performedDate,note:input.note,files:input.files.map(f=>f.id),previousVersion:i.version},"inspection")];
  for(const f of input.files)statements.push(insertRecord("ops_files",{id:f.id,organization_id:f.organizationId,storage_key:f.storageKey,sha256:f.sha256,original_name:f.originalName,content_type:f.contentType,byte_length:f.byteLength,status:f.status,created_at:now}),insertRecord("ops_entity_files",{id:`link-${crypto.randomUUID()}`,organization_id:i.organizationId,file_id:f.id,entity_type:"work_order",entity_id:work.id,purpose:"service_document",visibility:"internal",created_at:now}));
- if(input.status==="passed"&&!["closed","resolved"].includes(work.status))await updateWorkOrderControl({...svc,repository:withStatements(svc.repository,statements)},{organizationId:i.organizationId,workOrderId:work.id,expectedStatus:work.status,expectedVersion:work.version??0,status:"closed",manualCompletion:{source:"in_person",confirmedBy:actor.actorName},note:`Inspection result reviewed: ${input.note}`,actor});
- else await svc.repository.atomicWrite(statements);
+ if(input.createCorrection && input.status === "action_needed" && !i.correctiveWorkOrderId) {
+   const member = actor.actorId ? await svc.repository.getMembership(i.organizationId, actor.actorId) : null;
+   if (!member || member.status !== "active" || !["facilities_admin","regional_manager"].includes(member.role)) throw new OpsDomainError("FORBIDDEN","A maintenance manager must create corrective work");
+   const correctionId = `correction-${i.id}`;
+   const buffer = new Proxy(svc.repository,{get(target,key){if(key==="atomicWrite")return async(batch:readonly OpsStatement[])=>{statements.push(...batch);};const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;}});
+   await createWorkOrder({...svc,repository:buffer,ids:{next:prefix=>prefix==="work-order"?correctionId:`${prefix}-${crypto.randomUUID()}`}},{organizationId:i.organizationId,storeId:i.storeId,assetId:s.assetId,problem:input.note,accountableParty:"Facilities coordinator",nextAction:"Assign corrective work",actor});
+   statements.push({sql:"UPDATE ops_inspections SET corrective_work_order_id = ? WHERE organization_id = ? AND id = ?",params:[correctionId,i.organizationId,i.id]},communicationAudit(i.organizationId,i.id,"inspection.correction_created",actor,now,{workOrderId:correctionId},"inspection"));
+ }
+ if(input.status==="passed"&&!["closed","resolved"].includes(work.status)) {
+   const outcome=latestRecordedWorkOutcome(await svc.repository.listSiteVisitWorkOrdersForWorkOrder(i.organizationId,work.id));
+   if(outcome?.outcomeRecordedAt) await recordWorkOrderVerification({...svc,repository:withStatements(svc.repository,statements)},{organizationId:i.organizationId,workOrderId:work.id,expectedWorkOrderVersion:work.version??0,expectedSiteVisitWorkOrderId:outcome.id,expectedOutcomeRecordedAt:outcome.outcomeRecordedAt,decision:"verified",basis:"technical_evidence",verificationScope:"technical_work",closeAfterReview:true,reason:input.note,actor});
+   else await updateWorkOrderControl({...svc,repository:withStatements(svc.repository,statements)},{organizationId:i.organizationId,workOrderId:work.id,expectedStatus:work.status,expectedVersion:work.version??0,status:"closed",manualCompletion:{source:"in_person",confirmedBy:actor.actorName},note:`Inspection result reviewed: ${input.note}`,actor});
+ } else if (!["closed","cancelled","resolved"].includes(work.status)) {
+   const [tasks,detail]=await Promise.all([svc.repository.listWorkflowTasksForWorkOrder(i.organizationId,work.id),svc.repository.getWorkOrderDetail({organizationId:i.organizationId},work.id)]);
+   if(detail?.visits.some(v=>v.status==="active")||tasks.some(t=>["open","in_progress","paused"].includes(t.status)&&t.sourceApprovalRequestId))throw new OpsDomainError("CONFLICT","Finish the active visit or approval before recording the inspection result");
+   if(work.status!=="completed_pending_review") {
+     const owner=await resolveInternalAccountability(svc.repository,work),ids=svc.ids??{next:(prefix:string)=>`${prefix}-${crypto.randomUUID()}`};
+     const task=buildWorkflowTaskRecord({id:ids.next("workflow-task"),organizationId:i.organizationId,workOrderId:work.id,actor,createdAt:now,draft:{taskType:"other",title:input.status==="performed"?"Review inspection paperwork":"Resolve inspection finding",reason:input.note,assigneeType:owner.assigneeType,assigneeId:owner.assigneeId,assigneeRole:owner.assigneeRole,assigneeName:owner.assigneeName,priority:"normal",blocking:true,requiredForProgress:true,dueAt:new Date(Date.parse(now)+86400000).toISOString(),applicableSlaClock:"verification",completionCriteria:"Review the inspection result, evidence and corrective work",escalationDestination:owner.escalationDestination}});
+     statements.push(...buildReplacePrimaryTaskStatements({workOrder:work,tasks,replacementTask:task,actor,occurredAt:now,ids,resolutionNote:input.note}));
+   }
+   statements.push(communicationAudit(i.organizationId,work.id,"work_order.inspection_result_recorded",actor,now,{inspectionId:i.id,status:input.status,note:input.note},"work_order"));
+   await atomicWorkOrderMutation({repository:svc.repository,workOrder:work,now,statements});
+ } else await svc.repository.atomicWrite(statements);
 }
 
 export async function createInspectionCorrection(svc:OpsCommandServices,i:Inspection,problem:string,actor:ActorContext) {

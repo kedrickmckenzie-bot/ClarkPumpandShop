@@ -178,6 +178,7 @@ export async function sendVendorStoreSweepEmail(input: {
 }
 
 const topicRules: Array<{ matches(topic: string): boolean; eventKey: NotificationEventKey }> = [
+  { matches: topic => topic === "ops.work_order.confirmation_requested", eventKey: "repair_confirmation_required" },
   { matches: (topic) => ["ops.vendor.accepted", "ops.service_run.vendor_accepted", "ops.service_run.counter_accepted"].includes(topic), eventKey: "vendor_commitment_received" },
   { matches: (topic) => ["ops.vendor.declined", "ops.vendor.proposed_date", "ops.vendor.question"].includes(topic) || topic.startsWith("ops.service_run.vendor_"), eventKey: "vendor_response_received" },
   { matches: (topic) => topic === "ops.workflow_task.escalated", eventKey: "workflow_task_escalated" },
@@ -315,6 +316,7 @@ function notificationCopy(eventKey: NotificationEventKey, message: OutboxDeliver
     return { subject: `${context.vendorName ?? "Vendor"} compliance ${expired ? "expired" : "renewal due"}`, headline: expired ? "A customer-required vendor document has expired" : "Vendor documents need renewal", detail: `${context.vendorName ?? "This vendor"} has ${documents.length} compliance document${documents.length === 1 ? "" : "s"} requiring attention. ${values.routingEffect === "new_routine_work_paused_active_jobs_unchanged" ? "New routine assignments are paused; active jobs are unchanged." : "No active work was changed."}` };
   }
   const recordContext = `${workLabel}${stores.length ? ` · ${scopeLabel}` : ""}`;
+  if (eventKey === "repair_confirmation_required") return { subject: `Confirm repair result · ${record}`, headline: "Did the repair fix the problem?", detail: `${recordContext}. A service result is ready for internal confirmation.` };
   if (eventKey === "workflow_task_escalated") return { subject: `Overdue action escalated · ${record}`, headline: "An accountable action was escalated", detail: `${recordContext}. ${String(values.reason ?? "The response window expired.")}` };
   if (eventKey === "follow_up_created") return { subject: `Service follow-up created · ${record}`, headline: "A follow-up now has an accountable owner", detail: `${recordContext}. Due ${String(values.dueAt ?? "date recorded in the platform")}.` };
   return { subject: "Vendor relationship reminder created", headline: "A vendor relationship reminder needs follow-up", detail: String(values.title ?? "Open the vendor record for the due date and accountable owner.") };
@@ -339,6 +341,7 @@ export function createNotificationEmailTransport(input: {
       }
       const rules = (await input.repository.listNotificationRules(message.organizationId)).filter((candidate) => candidate.eventKey === eventKey && candidate.emailEnabled);
       const context = await loadNotificationContext(input.repository, message);
+      if (eventKey === "repair_confirmation_required" && !context.work.some(item => item.workOrder.status === "completed_pending_review")) return;
       const vendorComplianceRecipient = eventKey === "vendor_compliance_due" ? context.vendor : undefined;
       if (!rules.length && !vendorComplianceRecipient) {
         sink(JSON.stringify({ channel: "ops.notification.skipped", messageId: message.id, eventKey, reason: "no_enabled_rule" }));
@@ -363,7 +366,7 @@ export function createNotificationEmailTransport(input: {
         for (const group of groups) {
           const copy = notificationCopy(eventKey, message, context, group.work);
           const workOrder = group.work[0]?.workOrder ?? context.work[0]?.workOrder;
-          const href = eventKey === "vendor_reminder_created" || eventKey === "vendor_compliance_due" ? `/app/vendors/${encodeURIComponent(message.aggregateId)}` : workOrder ? `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service` : "/app/action-center";
+          const href = eventKey === "vendor_reminder_created" || eventKey === "vendor_compliance_due" ? `/app/vendors/${encodeURIComponent(message.aggregateId)}` : workOrder ? `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=${eventKey === "repair_confirmation_required" ? "visits#work-verification" : "service"}` : "/app/action-center";
           const actionUrl = new URL(href, input.baseUrl).toString();
           const text = `${copy.headline}\n\n${copy.detail}\n\nOpen the supporting record: ${actionUrl}`;
           const html = `<div style="font-family:Arial,sans-serif;color:#172033;line-height:1.55;max-width:680px"><p>Hello ${escapeEmailHtml(group.recipient.displayName)},</p><h2>${escapeEmailHtml(copy.headline)}</h2><p>${escapeEmailHtml(copy.detail)}</p><p><a href="${escapeEmailHtml(actionUrl)}" style="display:inline-block;background:#2457d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">Open supporting record</a></p><p style="color:#64748b;font-size:13px">This notice was generated from source workflow records. Open the platform for the current accountable state.</p></div>`;

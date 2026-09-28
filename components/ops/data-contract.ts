@@ -896,6 +896,7 @@ export interface ApprovalDecisionViewModel {
 }
 
 export interface WorkOrderControlViewModel {
+  allowManagerCompletion?: boolean;
   available: boolean;
   permitted: boolean;
   submitAction: string;

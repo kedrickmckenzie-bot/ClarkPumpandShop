@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const role = formText(form, "role", { required: true, max: 40 }) as OrganizationRole;
     const enabledCapabilities = form.getAll("enabledCapability").map(String) as ConfigurableMaintenanceCapability[];
     if (!roles.has(role) || enabledCapabilities.some((capability) => !configurableMaintenanceCapabilities.includes(capability))) throw new OpsDomainError("VALIDATION", "Choose supported maintenance responsibilities.");
-    await configureMaintenanceResponsibilities({ repository: context.repository, organizationId: context.session.organizationId, role, enabledCapabilities, autoCloseRoutineAfterVerification: form.get("autoCloseRoutineAfterVerification") === "true", appliesToActiveWork: form.get("appliesToActiveWork") === "true", actor: context.actor });
+    await configureMaintenanceResponsibilities({ repository: context.repository, organizationId: context.session.organizationId, role, enabledCapabilities, allowManagerCompletion: form.get("allowManagerCompletion") === "true", autoCloseRoutineAfterVerification: form.get("autoCloseRoutineAfterVerification") === "true", appliesToActiveWork: form.get("appliesToActiveWork") === "true", actor: context.actor });
     return relativeRedirect303(`/app/admin/maintenance-responsibilities?notice=${encodeURIComponent("Maintenance responsibilities saved.")}`);
   } catch (error) { return opsApiError(error); }
 }

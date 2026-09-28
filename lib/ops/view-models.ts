@@ -195,6 +195,7 @@ export interface WorkOrderListRow {
   nextAction: string;
   dueAt?: IsoDateTime;
   createdAt: IsoDateTime;
+  updatedAt?: IsoDateTime;
   visitCount: number;
   recordedCostLineCount?: number;
   recordedCostMinor: number;

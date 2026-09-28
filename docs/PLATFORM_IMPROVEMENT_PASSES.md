@@ -4,6 +4,45 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Daily operation improvements — September 28, 2026
+
+User approved all eleven product improvements. Work proceeds in the order below; existing domain commands, tenant scope and audit remain authoritative. Earlier sales-demo recommendations are separate, pending work.
+
+- [x] DO-01 Daily work queue with store/problem, provider, status, next action/date, last update and quick actions.
+- [x] DO-02 Unified Record update for contact, appointment, parts, completion and unresolved work; connected accountability/history.
+- [x] DO-03 Simple dated completion, optional evidence/cost/classification and configurable internal verification.
+- [x] DO-04 Commitment-based follow-up, confirmation notification and deduplicated reminders.
+- [x] DO-05 Clear work-order header, main action and history; optional advanced controls collapsed.
+- [x] DO-06 Concise store operating summary with work, visits, vendors, compliance, warranties and repeat equipment.
+- [x] DO-07 Obvious equipment/component warranty coverage and late-classification links.
+- [x] DO-08 Connected inspection result, evidence, correction and review without duplicate work updates.
+- [x] DO-09 Inline capital month/cost/planning status, with missing information visible.
+- [x] DO-10 Validated import preview and persistence for stores, vendors, equipment and open work.
+- [x] DO-11 Connected regression and responsive browser acceptance; required seed, typecheck, lint, test, e2e and builds.
+
+Checkpoint: DO-01–DO-11 completed and locally verified. Final preview and Render builds passed; clean local fixture preview restored. Existing local dev4.log preserved and excluded from Git. User authorized committing and pushing DO-01–DO-11 to origin/codex/platform-rebuild on September 28. Validation above remains current; release preparation changes only this checkpoint.
+
+### Daily operation implementation evidence
+
+- Daily queues retain scope/search and expose provider, next action, due date, last recorded update and exact cost records. Record update supports manually attributed contact, dated appointment, parts, unresolved work and completion. Appointment revisions and follow-up changes preserve audit history; scheduling a return visit advances the follow-up without closing the repair or inventing observed visits.
+- Completion records the reported completion date separately from the saved timestamp. Optional photos/documents commit with the result and are downloadable through a scoped internal work-order route. Existing cost and classification actions remain optional. Company policy can allow manager confirmation after observed service; failed outcomes, approvals and unrelated required work still block closure.
+- Future appointments suppress early chasing. Due reminders retain cadence/replay protection and ignore active visits. Completed service emits an internal confirmation notice scoped to the affected store; handled work no longer receives the queued confirmation notice.
+- Work details collapse advanced controls. Store summary adds exact compliance exceptions, active equipment/component coverage and covered/preferred vendors alongside existing work/visits/equipment views. Work orders show matching warranty coverage or an explicit classification/coverage state.
+- Inspection result, uploaded evidence, corrective work creation and linked-work accountability save together. Performed remains distinct from reviewed/passed. Capital rows edit month, estimate and considering/planned/budget-approved/completed status; completed plans leave the forecast, while actual equipment replacement remains a separate recorded fact.
+- Imports now preview and save stores, vendors, equipment quantities and open work through canonical commands. Batches are bounded to 100 rows, scoped server-side, revalidated, atomic and replay-protected. Missing/duplicate headers, foreign stores and invalid references reject the batch. A changed file requires another preview.
+- Automated evidence so far: seed, typecheck and lint passed; full suite 162 files / 1,048 tests passed. Follow-up targeted checks 4 files / 47 tests passed, including photo upload/download and cross-store denial, parts-to-return scheduling, imported records/replay and scoped confirmation notices. Inspection/capital regressions run on fixture, SQLite and PostgreSQL. Final e2e: 4 files / 59 tests passed. Preview and Render builds passed. After presentation polish, typecheck/lint, 37 presenter/navigation tests and both builds passed again; the last warranty padding/scope adjustment is included in the final Render build. `git diff --check` clean. Logs: `%TEMP%/daily-ops-*.log`.
+- Browser acceptance: imported one fictional open work order from CSV, verified its queue row, closed it with a reported date and PNG, downloaded the same attachment, and checked dated history. Recorded a mobile vendor appointment and verified the resulting accountable party/time in the queue and public authorization. Saved a failed inspection with a photo and corrective work in one action, then verified “Resolve inspection finding” on its linked work order. Edited a capital plan inline and reconciled November to one plan / $31,500. Opened Store 104's overdue count, exact component labor warranty and store coverage summary. Checked address search, store creation, optional work routing/classification, vendor authorization/technician entry, no-WO entry, invoice review and PM evidence. Work/store layouts inspected at 390px without horizontal document overflow; viewport restored. Broad cross-channel mutation behavior remains covered by the 59-test workflow/engine suite, rather than a new duplicate browser service run.
+- Final visual polish places Record update before secondary work context, distinguishes each store warranty link by its term, and clarifies capital completion. Temporary browser records were cleared by restarting the local fixture process; the presentation seed still contains exactly 15 stores and five vendors. Local screenshots: `%TEMP%/daily-ops-browser/record-update.png` and `store-mobile.png`. Existing demo-date/content improvements SD-01–SD-04 and architecture acceptance gates remain separate and open.
+
+
+
+
+- **September 27 — sales-demo review:** Read-only review of local Overview, work creation, Store 104, Compliance and CPS-2026-0201 accountability. No product changes or new acceptance claims. Follow-up priorities below are recommendations, not completed work.
+- [ ] SD-01 Use one coherent demo date across reporting, visits, relative deadlines, compliance and capital planning. Observed August 25 reporting alongside September compliance/current capital; Store 104 past August/September appointments still labeled upcoming.
+- [ ] SD-02 Correct seeded internal verification ownership. CPS-2026-0201 shows the vendor as Who acts next for Verify Repair; validate the source fixture and resulting task projection.
+- [ ] SD-03 Prepare connected fictional proof records: dated capital plans (currently $0 forecast / seven missing months), downloadable compliance evidence (all five listed inspections currently have no files), and a completed warranty story. Keep totals derived from source records and preserve the 15-store/five-vendor contract.
+- [ ] SD-04 Polish the sales presentation path: compact demo controls, operational priorities before capital on Overview, concise next-action copy and optional-stage presentation on work orders. Rehearse the deployed build, simple phone/email intake, vendor link, follow-up, exact metric drill-down and store views; distinguish simulated delivery from live delivery.
+
 - **September 27 — component warranty release:** User authorized committing and pushing CW-01–CW-04 to `origin/codex/platform-rebuild`. Validation and browser evidence are recorded below. Local `dev4.log` is excluded; no additional implementation changes were made during release preparation.
 
 - **September 27 — component warranty setup and late classification:** user-authorized extension locally verified. Architecture acceptance remains 26/40.

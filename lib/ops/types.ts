@@ -38,6 +38,7 @@ export interface OrganizationWorkflowPolicy {
   organizationId: OpsId;
   version: number;
   status: "active" | "superseded";
+  allowManagerCompletion?: boolean;
   autoCloseRoutineAfterVerification: boolean;
   appliesToActiveWork: boolean;
   createdByMembershipId: OpsId;
@@ -1882,7 +1883,8 @@ export type NotificationEventKey =
   | "vendor_reminder_created"
   | "held_work_claimed"
   | "held_work_outcomes_recorded"
-  | "vendor_compliance_due";
+  | "vendor_compliance_due"
+  | "repair_confirmation_required";
 
 export type NotificationRecipientRole =
   | "facilities_admin"

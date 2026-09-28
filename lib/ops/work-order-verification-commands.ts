@@ -184,6 +184,7 @@ export interface RecordWorkOrderVerificationInput {
   basis?: WorkOrderVerificationBasis;
   verificationScope?: WorkOrderVerificationScope;
   /** Optional, explicit manager attestation; never inferred from checkout. */
+  closeAfterReview?: boolean;
   avoidedSeparateTripConfirmed?: boolean;
   reason?: string;
   actor: ActorContext;
@@ -333,7 +334,9 @@ export async function recordWorkOrderVerification(
     ignoredTaskIds: new Set([verifyTask.id]),
     ignoredFollowUpIds: sourceFollowUpWillClose && sourceFollowUp ? new Set([sourceFollowUp.id]) : undefined,
   });
-  const autoClosed = input.decision === "verified" && closureEvaluation.eligible;
+  const explicitClose = Boolean(input.closeAfterReview && input.decision === "verified" && closureRoles.has(membership.role) && closureEvaluation.blockers.every(blocker => ["policy_disabled", "policy_not_applicable", "priority_not_routine"].includes(blocker)));
+  if (input.closeAfterReview && !explicitClose) throw new OpsDomainError("CONFLICT", "Resolve the remaining work actions before closing this inspection");
+  const autoClosed = input.decision === "verified" && (closureEvaluation.eligible || explicitClose);
   const replacementTask = buildWorkflowTaskRecord({
     id: ids.next("workflow-task"),
     organizationId: input.organizationId,
@@ -474,8 +477,9 @@ export async function recordWorkOrderVerification(
         basis,
         verificationScope,
         autoClosed,
-        workflowPolicyId: autoClosed ? policy?.id : undefined,
-        workflowPolicyVersion: autoClosed ? policy?.version : undefined,
+        closedAfterManagerReview: explicitClose,
+        workflowPolicyId: autoClosed && !explicitClose ? policy?.id : undefined,
+        workflowPolicyVersion: autoClosed && !explicitClose ? policy?.version : undefined,
         closureBlockers: autoClosed ? [] : closureEvaluation.blockers,
         avoidedSeparateTripConfirmed: Boolean(input.avoidedSeparateTripConfirmed),
         reason,

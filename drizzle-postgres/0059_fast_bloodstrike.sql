@@ -1,0 +1,1 @@
+ALTER TABLE "ops_workflow_policies" ADD COLUMN "allow_manager_completion" boolean DEFAULT false NOT NULL;

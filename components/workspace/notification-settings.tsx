@@ -4,6 +4,7 @@ import type { NotificationEventKey, NotificationRecipientRole, NotificationRule 
 import styles from "./setup-workspaces.module.css";
 
 const events: Array<{ key: NotificationEventKey; label: string; description: string }> = [
+  { key: "repair_confirmation_required", label: "Repair ready for confirmation", description: "Ask an internal owner to check the reported result." },
   { key: "vendor_commitment_received", label: "Vendor accepted work", description: "A vendor accepted a reactive authorization or a proposed multi-store Service Run." },
   { key: "vendor_response_received", label: "Other vendor response received", description: "Decline, proposed date, question, or requested Service Run change." },
   { key: "workflow_task_escalated", label: "Accountable action escalated", description: "The assigned response window expired and the next owner must act." },

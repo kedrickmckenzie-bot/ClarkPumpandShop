@@ -1,3 +1,4 @@
+import { latestRecordedWorkOutcome, applicableOutcomeVerification } from "./work-order-outcome";
 import { buildConfirmedWorkWarrantyStatements } from "./warranty-commands";
 import { prepareOfferedWork, resolveOfferedWork, offerResponseKey } from "./optional-work-policy";
 import { coveredPmAssets, pmCoverageRule } from "./pm-coverage";
@@ -2398,6 +2399,7 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
         eventType: "work_order.held_work_outcome_recorded", actor: input.actor, occurredAt: now,
         payload: { visitId: visit.id, holdId: normalized.hold.id, outcome: normalized.outcome, holdStatus, followUpId, vendorFollowUpTiming: normalized.vendorFollowUpTiming, originalDeadlineAt: normalized.hold.deadlineAt, valueCategory, valueMeaning: valueCategory ? "recorded_operating_fact_without_invented_dollars" : "no_value_claim_recorded" }, ids,
       }));
+      if (normalized.outcome === "completed") statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.confirmation_requested", actor: input.actor, occurredAt: now, payload: { workOrderId: workOrder.id, siteVisitWorkOrderId: normalized.link.id, dueAt: addHours(now, 24) }, ids }));
       if (normalized.outcome === "completed") heldOutcomeSummary.completed += 1;
       else if (normalized.outcome === "temporary_repair") heldOutcomeSummary.temporaryRepair += 1;
       else if (normalized.outcome === "not_addressed") heldOutcomeSummary.notAttempted += 1;
@@ -2440,6 +2442,7 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
         ? { ...task, status: "completed", completedByActorType: input.actor.actorType, completedByActorId: input.actor.actorId, completedByActorName: input.actor.actorName, completedAt: now }
         : task);
     }
+    if (!unresolved) statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.confirmation_requested", actor: input.actor, occurredAt: now, payload: { workOrderId: workOrder.id, siteVisitWorkOrderId: normalized.link.id, dueAt: addHours(now, 24) }, ids }));
     const taskTitle = accountableFollowUp?.nextAction ?? "Verify current service outcome";
     const replacementTask = buildWorkflowTaskRecord({
       id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
@@ -2918,7 +2921,7 @@ export interface UpdateWorkOrderControlInput {
   workOrderId: OpsId;
   expectedStatus: WorkOrderStatus;
   expectedVersion?: number;
-  manualCompletion?: { source: "phone" | "email" | "in_person"; confirmedBy: string };
+  manualCompletion?: { source: "phone" | "email" | "in_person"; confirmedBy: string; performedDate?: string; files?: StoredFile[] };
   status: WorkOrderStatus;
   priority?: WorkOrderPriority;
   accountableParty?: string;
@@ -3116,13 +3119,22 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
   if (input.expectedVersion !== undefined && input.expectedVersion !== persistedWorkOrderVersion(workOrder)) throw new OpsDomainError("CONFLICT", "This work order changed. Refresh before saving your update");
   if (workOrder.status !== input.expectedStatus) throw new OpsDomainError("CONFLICT", "This work order changed. Refresh before recording another update");
   if (terminalWorkOrderStatuses.has(workOrder.status)) throw new OpsDomainError("CONFLICT", "Closed or cancelled work orders cannot be edited");
+  let manuallyConfirmedFollowUpIds: string[] = [];
   if (input.manualCompletion) {
     const membership = input.actor.actorType === "user" && input.actor.actorId ? await repository.getMembership(input.organizationId, input.actor.actorId) : undefined;
     if (!membership || membership.status !== "active" || !["facilities_admin", "regional_manager"].includes(membership.role)) throw new OpsDomainError("FORBIDDEN", "Facilities or regional management must confirm completion");
     if (input.status !== "closed" || input.expectedVersion === undefined || !["phone", "email", "in_person"].includes(input.manualCompletion.source)) throw new OpsDomainError("VALIDATION", "Confirm how completion was checked");
     required(input.manualCompletion.confirmedBy, "Person who confirmed the result");
     const [detail, tasks] = await Promise.all([repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id), repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id)]);
-    if (detail?.visits.length) throw new OpsDomainError("CONFLICT", "This work has visit evidence. Confirm its recorded result before closing");
+    if (detail?.visits.length) {
+      const [policies, outcomes, verifications] = await Promise.all([repository.listWorkflowPolicies(input.organizationId), repository.listSiteVisitWorkOrdersForWorkOrder(input.organizationId, workOrder.id), repository.listWorkOrderVerifications(input.organizationId, workOrder.id)]);
+      const policy = policies.find(row => row.status === "active");
+      const outcome = latestRecordedWorkOutcome(outcomes), verification = applicableOutcomeVerification(verifications, outcome);
+      if (!policy?.allowManagerCompletion || !policy.appliesToActiveWork && workOrder.createdAt < policy.createdAt) throw new OpsDomainError("CONFLICT", "This work has visit evidence. Confirm its recorded result before closing");
+      if (!outcome || !["completed", "no_issue_found"].includes(outcome.outcome ?? "") || verification && verification.decision !== "verified") throw new OpsDomainError("CONFLICT", "Resolve the unsuccessful service result before closing");
+      if (tasks.some(task => ["open", "in_progress", "paused"].includes(task.status) && (task.blocking || task.requiredForProgress) && !["verify_repair", "close_verified_work"].includes(task.taskType))) throw new OpsDomainError("CONFLICT", "Complete the other required actions before closing");
+      manuallyConfirmedFollowUpIds = tasks.filter(task => task.taskType === "verify_repair" && ["open", "in_progress"].includes(task.status) && task.sourceFollowUpId).map(task => task.sourceFollowUpId!);
+    }
     if (workOrder.status === "awaiting_approval" || tasks.some(task => ["open", "in_progress", "paused"].includes(task.status) && task.sourceApprovalRequestId)) throw new OpsDomainError("CONFLICT", "Resolve the pending approval before closing");
   }
   if (!input.manualCompletion && input.status !== workOrder.status && !allowedWorkOrderControlTransitions(workOrder.status).includes(input.status)) {
@@ -3158,7 +3170,7 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
     if (detail?.visits.some((visit) => visit.status === "active")) {
       throw new OpsDomainError("CONFLICT", "Finish the active visit before closing or cancelling this work order");
     }
-    if (detail?.followUps.some((followUp) => followUp.status === "open")) {
+    if (detail?.followUps.some((followUp) => followUp.status === "open" && !manuallyConfirmedFollowUpIds.includes(followUp.id))) {
       throw new OpsDomainError("CONFLICT", "Complete or cancel open follow-ups before closing or cancelling this work order");
     }
     estimateRequestsToRetire = estimateRequests.filter((request) => (
@@ -3177,6 +3189,10 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
     escalationTo = required(input.escalationTo ?? workOrder.escalationTo ?? "Facilities director", "Escalation destination");
     if (!Number.isFinite(Date.parse(dueAt))) throw new OpsDomainError("VALIDATION", "Due date is invalid");
   }
+  const performedDate = input.manualCompletion?.performedDate;
+  if (performedDate && (!/^\d{4}-\d{2}-\d{2}$/.test(performedDate) || !Number.isFinite(Date.parse(performedDate)) || new Date(performedDate).toISOString().slice(0, 10) !== performedDate || performedDate > now.slice(0, 10) || performedDate < workOrder.createdAt.slice(0, 10))) throw new OpsDomainError("VALIDATION", "Completion date must be between work creation and today");
+  const completionFiles = input.manualCompletion?.files ?? [];
+  if (completionFiles.length > 5 || completionFiles.reduce((sum, file) => sum + file.byteLength, 0) > 8 * 1024 * 1024 || completionFiles.some(file => file.organizationId !== input.organizationId || file.status !== "available" || !file.storageKey || !/^[a-f0-9]{64}$/i.test(file.sha256) || !Number.isSafeInteger(file.byteLength) || file.byteLength <= 0 || !["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain"].includes(file.contentType))) throw new OpsDomainError("VALIDATION", "Attach up to five supported files, 8 MB total, from this organization");
   const closedAt = terminal ? now : null;
   const eventType = input.manualCompletion ? "work_order.completed_manually" : input.status !== workOrder.status
     ? input.status === "closed"
@@ -3189,6 +3205,14 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
     sql: "UPDATE ops_work_orders SET status = ?, priority = ?, accountable_party = ?, next_action = ?, due_at = ?, escalation_to = ?, closed_at = ? WHERE organization_id = ? AND id = ? AND status = ?",
     params: [input.status, priority, accountableParty, nextAction, dueAt, escalationTo, closedAt, input.organizationId, workOrder.id, input.expectedStatus],
   }];
+  for (const file of completionFiles) statements.push(
+    insert("ops_files", { id: file.id, organization_id: input.organizationId, storage_key: file.storageKey, sha256: file.sha256, original_name: file.originalName, content_type: file.contentType, byte_length: file.byteLength, status: file.status, created_at: now }),
+    insert("ops_entity_files", { id: ids.next("entity-file"), organization_id: input.organizationId, file_id: file.id, entity_type: "work_order", entity_id: workOrder.id, purpose: file.contentType.startsWith("image/") ? "photo" : "service_document", visibility: "internal", created_at: now }),
+  );
+  for (const followUpId of manuallyConfirmedFollowUpIds) statements.push(
+    { sql: "UPDATE ops_follow_ups SET status = ?, completed_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["completed", now, input.organizationId, followUpId, "open"] },
+    ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "follow_up", aggregateId: followUpId, eventType: "follow_up.confirmed_by_manager", actor: input.actor, occurredAt: now, payload: { workOrderId: workOrder.id, note }, ids }),
+  );
   // Keep the primary task and the work table consistent when a person edits the next step.
   if (!terminal) {
     const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
@@ -3277,7 +3301,7 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
     occurredAt: now,
     payload: {
       note,
-      ...(input.manualCompletion ? { completionSource: input.manualCompletion.source, confirmedBy: input.manualCompletion.confirmedBy, evidenceMeaning: "operator_reported_completion_without_observed_visit" } : {}),
+      ...(input.manualCompletion ? { fileIds: completionFiles.map(file => file.id), completionSource: input.manualCompletion.source, confirmedBy: input.manualCompletion.confirmedBy, performedDate: performedDate ?? now.slice(0, 10), evidenceMeaning: "manager_reported_completion_preserving_source_evidence" } : {}),
       previous: {
         status: workOrder.status,
         priority: workOrder.priority,

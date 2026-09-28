@@ -414,6 +414,20 @@
       "when": 1790534299492,
       "tag": "0058_funny_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790587974646,
+      "tag": "0059_fast_bloodstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790588593143,
+      "tag": "0060_bored_magma",
+      "breakpoints": true
     }
   ]
 }

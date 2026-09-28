@@ -10,6 +10,7 @@ export async function configureMaintenanceResponsibilities(input: {
   organizationId: string;
   role: OrganizationRole;
   enabledCapabilities: readonly ConfigurableMaintenanceCapability[];
+  allowManagerCompletion?: boolean;
   autoCloseRoutineAfterVerification: boolean;
   appliesToActiveWork: boolean;
   actor: ActorContext;
@@ -40,8 +41,8 @@ export async function configureMaintenanceResponsibilities(input: {
   const version = Math.max(0, ...policies.map((row) => row.version)) + 1;
   if (currentPolicy) statements.push({ sql: "UPDATE ops_workflow_policies SET status = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["superseded", input.organizationId, currentPolicy.id, "active"] });
   const policyId = `workflow-policy-${crypto.randomUUID()}`;
-  statements.push({ sql: "INSERT INTO ops_workflow_policies (id, organization_id, version, status, auto_close_routine_after_verification, applies_to_active_work, created_by_membership_id, created_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", params: [policyId, input.organizationId, version, "active", input.autoCloseRoutineAfterVerification ? 1 : 0, input.appliesToActiveWork ? 1 : 0, membership.id, input.actor.actorName, occurredAt] });
-  statements.push({ sql: "INSERT INTO ops_audit_events (id, organization_id, aggregate_type, aggregate_id, event_type, actor_type, actor_id, actor_name, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", params: [`audit-${crypto.randomUUID()}`, input.organizationId, "organization", input.organizationId, "organization.maintenance_responsibilities_changed", input.actor.actorType, input.actor.actorId, input.actor.actorName, occurredAt, JSON.stringify({ role: input.role, enabledCapabilities: [...enabled], workflowPolicyId: policyId, workflowPolicyVersion: version, autoCloseRoutineAfterVerification: input.autoCloseRoutineAfterVerification, appliesToActiveWork: input.appliesToActiveWork })] });
+  statements.push({ sql: "INSERT INTO ops_workflow_policies (id, organization_id, version, status, auto_close_routine_after_verification, allow_manager_completion, applies_to_active_work, created_by_membership_id, created_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", params: [policyId, input.organizationId, version, "active", input.autoCloseRoutineAfterVerification ? 1 : 0, input.allowManagerCompletion ? 1 : 0, input.appliesToActiveWork ? 1 : 0, membership.id, input.actor.actorName, occurredAt] });
+  statements.push({ sql: "INSERT INTO ops_audit_events (id, organization_id, aggregate_type, aggregate_id, event_type, actor_type, actor_id, actor_name, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", params: [`audit-${crypto.randomUUID()}`, input.organizationId, "organization", input.organizationId, "organization.maintenance_responsibilities_changed", input.actor.actorType, input.actor.actorId, input.actor.actorName, occurredAt, JSON.stringify({ role: input.role, enabledCapabilities: [...enabled], workflowPolicyId: policyId, workflowPolicyVersion: version, allowManagerCompletion: Boolean(input.allowManagerCompletion), autoCloseRoutineAfterVerification: input.autoCloseRoutineAfterVerification, appliesToActiveWork: input.appliesToActiveWork })] });
   await input.repository.atomicWrite(statements);
   return { policyId, version };
 }

@@ -34,7 +34,7 @@ export async function POST(request:Request) {
    const status=formText(form,"status");if(!["performed","passed","action_needed"].includes(status)||status==="passed"&&!manage)throw new OpsDomainError("FORBIDDEN","Only a maintenance reviewer can close an inspection.");
    if(inspection.version!==Number(form.get("version")))throw new OpsDomainError("CONFLICT","Inspection changed. Refresh before saving.");
    const storedFiles=await uploadFiles(form,"attachments",org,id,session.accessMode==="preview");
-   await recordInspectionResult(svc,{organizationId:org,inspectionId:id,version:inspection.version,status:status as "performed"|"passed"|"action_needed",note:formText(form,"note",{required:true,max:4000}),performedDate:formText(form,"performedDate"),documentExpiresOn:formText(form,"documentExpiresOn")||undefined,files:storedFiles},actor);
+   await recordInspectionResult(svc,{organizationId:org,inspectionId:id,version:inspection.version,createCorrection:form.get("createCorrection")==="on",status:status as "performed"|"passed"|"action_needed",note:formText(form,"note",{required:true,max:4000}),performedDate:formText(form,"performedDate"),documentExpiresOn:formText(form,"documentExpiresOn")||undefined,files:storedFiles},actor);
   }else throw new OpsDomainError("VALIDATION","Unknown inspection action");
   return relativeRedirect303(`${back}?notice=Inspection+updated`);
  }catch(error){if(error instanceof OpsDomainError&&["VALIDATION","CONFLICT"].includes(error.code))return relativeRedirect303(`${back}?error=${encodeURIComponent(error.message)}`);return opsApiError(error);}

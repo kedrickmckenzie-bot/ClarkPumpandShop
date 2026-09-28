@@ -85,6 +85,22 @@ describe("transactional email and onboarding previews", () => {
     expect(sent[0]!.text).toContain("service date has not been recorded yet");
   });
 
+  it("notifies only the affected store about confirmation and skips already closed work", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const work = fixture.workOrders.find(row => row.status === "completed_pending_review")!;
+    const repository = createOpsFixtureRepository(fixture), sent: TransactionalEmail[] = [];
+    const transport = createNotificationEmailTransport({ repository, baseUrl: "https://ops.example.com", sink: () => {}, provider: { name: "test", async send(email) { sent.push(email); return { messageId: "confirmation" }; } } });
+    const message = { organizationId: NORTHLINE_ORGANIZATION_ID, id: "confirmation-1", topic: "ops.work_order.confirmation_requested", aggregateType: "work_order", aggregateId: work.id, payloadJson: JSON.stringify({ workOrderId: work.id }), attemptCount: 0 };
+    await transport.deliver(message);
+    const store = fixture.stores.find(row => row.id === work.storeId)!;
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe(`store${store.storeNumber}.manager@clark-demo.example`);
+    expect(sent[0].text).toContain("visits#work-verification");
+    await repository.atomicWrite([{ sql: "UPDATE ops_work_orders SET status = ? WHERE organization_id = ? AND id = ?", params: ["closed", work.organizationId, work.id] }]);
+    await transport.deliver(message);
+    expect(sent).toHaveLength(1);
+  });
+
   it("separates accepted commitments from other vendor responses", () => {
     expect(notificationEventForTopic("ops.vendor.accepted")).toBe("vendor_commitment_received");
     expect(notificationEventForTopic("ops.service_run.vendor_accepted")).toBe("vendor_commitment_received");
