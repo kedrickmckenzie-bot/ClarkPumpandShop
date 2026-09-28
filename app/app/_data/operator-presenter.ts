@@ -3350,7 +3350,7 @@ export function buildProgramModel(
       asset: selectedAssetId,
       component: selectedComponentId,
     });
-    const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Entered work costs grouped by service month. Invoice amounts are not included in this basis." : "Confirmed USD invoice allocations grouped by invoice month. Charges awaiting matching are excluded. Use Trends to review other currencies.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: workspaceStartHref(basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : invoiceSourceHref(`${key}-01`, [monthEndDate(key), fixture.asOf.slice(0, 10)].sort()[0])), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open all exact source records" } };
+    const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Saved work costs grouped by service month, including matched invoice costs. Invoice totals are not added a second time." : "Confirmed USD invoice allocations grouped by invoice month. Charges awaiting matching are excluded. Use Trends to review other currencies.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: workspaceStartHref(basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : invoiceSourceHref(`${key}-01`, [monthEndDate(key), fixture.asOf.slice(0, 10)].sort()[0])), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open all exact source records" } };
     const sourceWork = spendWork.filter((work) => (basisAmountByWork.get(work.id) ?? 0) > 0).sort((a, b) => (basisAmountByWork.get(b.id) ?? 0) - (basisAmountByWork.get(a.id) ?? 0) || a.number.localeCompare(b.number));
     const spendPageSize = 25;
     const requestedSpendPage = Number(first(query.page));
@@ -4070,7 +4070,7 @@ export function buildDetailModel(
         { label: "Work order", value: convertedWork?.number ?? linkedWork?.number ?? "No linked work order", helperText: linkedWork ? "Factual association only; not proof this report is resolved" : undefined, link: convertedWork || linkedWork ? { href: `/app/work-orders/${(convertedWork ?? linkedWork)!.id}`, label: "Open work order" } : undefined },
         ...(request.acknowledgedAt ? [{ label: "Acknowledged", value: dateTime(request.acknowledgedAt, store?.timeZone), helperText: `By ${request.acknowledgedByActorName ?? "authorized manager"}` }] : []),
         approval.fact,
-        { label: "Attached evidence", value: String(linkedFiles.length), helperText: "Original evidence remains tied to this report" },
+        { label: "Attached evidence", value: String(linkedFiles.filter(link => fixture.files.some(file => file.organizationId === scoped.organizationId && file.id === link.fileId && file.status === "available")).length), helperText: "Original evidence remains tied to this report" },
       ],
       sections: [
         approval.section,
@@ -4316,7 +4316,7 @@ export function buildDetailModel(
       facts: [
         { label: "Vendor", value: vendor?.name ?? "Unknown vendor", link: vendor ? { href: `/app/vendors/${vendor.id}`, label: "Open vendor" } : undefined },
         { label: "Invoice date", value: date(invoice.invoiceDate) },
-        { label: "Gross amount", value: money(invoice.grossAmount.amountMinor) },
+        { label: "Invoice total", value: money(invoice.grossAmount.amountMinor) },
         { label: "Allocated to work", value: money(allocatedMinor), helperText: `${visibleAllocations.length} visible allocation${visibleAllocations.length === 1 ? "" : "s"}` },
         { label: "Unmatched balance", value: money(Math.max(0, invoice.grossAmount.amountMinor - allocatedMinor)), helperText: "Visible for human review; not an automatic rejection" },
         { label: "Operator WO reference", value: invoice.operatorWorkOrderNumber ?? "Not supplied", helperText: "Supplied reference; allocation is confirmed separately", link: scoped.workOrders.filter((work) => work.number === invoice.operatorWorkOrderNumber).length === 1 ? { href: `/app/work-orders/${scoped.workOrders.find((work) => work.number === invoice.operatorWorkOrderNumber)!.id}`, label: "Review referenced work order" } : undefined },
@@ -4419,7 +4419,7 @@ export function buildDetailModel(
         { label: "Next action owner", value: work.accountableParty },
         { label: "Next action", value: work.nextAction, helperText: work.dueAt ? `Due ${dateTime(work.dueAt, storeTimeZone)}` : "No deadline applies under the current workflow policy" },
         approval.fact,
-        { label: "Recorded work cost", value: money(costByWork.get(work.id) ?? 0), helperText: "Entered source lines; not inferred from observed time" },
+        { label: "Recorded work cost", value: money(costByWork.get(work.id) ?? 0), helperText: "Manual expenses and matched invoice costs" },
         { label: "Classification", value: work.categoryKey ? sentence(work.categoryKey) : "Deferred", helperText: work.assetId
           ? "Equipment linked"
           : ["exterior", "store_sanitation"].includes(work.categoryKey ?? "")
@@ -4490,8 +4490,8 @@ export function buildDetailModel(
           timelineHeading: "Notes and updates",
           timeline: noteHistory,
         },
-        { id: "cost", title: "Recorded work cost", description: "Cost lines are entered facts. Optional invoice evidence is reviewed separately.", table: { id: "work-cost", caption: "Recorded cost lines", columns: [{ key: "date", label: "Service date" }, { key: "kind", label: "Type" }, { key: "description", label: "Description" }, { key: "amount", label: "Amount", align: "end" }], rows: costLines.map((line) => ({ id: line.id, label: line.description, href: `/app/work-orders/${work.id}`, cells: [{ key: "date", value: date(line.serviceDate) }, { key: "kind", value: sentence(line.kind) }, { key: "description", value: line.description }, { key: "amount", value: money(line.amount.amountMinor) }] })) } },
-        { id: "invoice-references", title: "Invoice references", description: "Optional billing evidence is linked for review without making it a prerequisite for maintenance visibility.", table: { id: "work-invoices", caption: `Invoice references linked to ${work.number}`, columns: [{ key: "invoice", label: "Invoice" }, { key: "date", label: "Invoice date" }, { key: "gross", label: "Gross amount", align: "end" }, { key: "allocation", label: "Allocated here", align: "end" }, { key: "status", label: "Match status" }], rows: invoiceLinks.map(({ invoice, allocation }) => ({ id: invoice.id, label: invoice.invoiceNumber, href: `/app/invoices/${invoice.id}`, cells: [{ key: "invoice", value: invoice.invoiceNumber }, { key: "date", value: date(invoice.invoiceDate) }, { key: "gross", value: money(invoice.grossAmount.amountMinor) }, { key: "allocation", value: money(allocation.amount.amountMinor) }, { key: "status", value: sentence(invoice.matchStatus), tone: invoice.matchStatus === "confirmed" ? "positive" : "warning" }] })) } },
+        { id: "cost", title: "Recorded work cost", description: "Manual expenses and matched invoice costs. Each expense is counted once.", table: { id: "work-cost", caption: "Recorded cost lines", columns: [{ key: "date", label: "Service date" }, { key: "kind", label: "Expense" }, { key: "description", label: "Description" }, { key: "amount", label: "Amount", align: "end" }], rows: costLines.map((line) => ({ id: line.id, label: line.description, href: line.invoiceId ? `/app/invoices/${line.invoiceId}` : `/app/work-orders/${work.id}?view=cost`, cells: [{ key: "date", value: date(line.serviceDate) }, { key: "kind", value: line.reversesCostId ? "Correction" : line.providerType === "internal" ? "Internal" : line.invoiceId ? "Vendor invoice" : line.providerType === "vendor" ? "Vendor · entered manually" : sentence(line.kind) }, { key: "description", value: line.description }, { key: "amount", value: money(line.amount.amountMinor) }] })) } },
+        { id: "invoice-references", title: "Invoices", description: "Open a bill to see its document and review status.", table: { id: "work-invoices", caption: `Invoice references linked to ${work.number}`, columns: [{ key: "invoice", label: "Invoice" }, { key: "date", label: "Invoice date" }, { key: "gross", label: "Invoice total", align: "end" }, { key: "allocation", label: "For this work order", align: "end" }, { key: "status", label: "Match status" }], rows: invoiceLinks.map(({ invoice, allocation }) => ({ id: invoice.id, label: invoice.invoiceNumber, href: `/app/invoices/${invoice.id}`, cells: [{ key: "invoice", value: invoice.invoiceNumber }, { key: "date", value: date(invoice.invoiceDate) }, { key: "gross", value: money(invoice.grossAmount.amountMinor) }, { key: "allocation", value: money(allocation.amount.amountMinor) }, { key: "status", value: sentence(invoice.matchStatus), tone: invoice.matchStatus === "confirmed" ? "positive" : "warning" }] })) } },
         { id: "timeline", title: "Work-order activity", description: "See when the work order was created, sent, updated, visited, followed up, or corrected. Times are shown in the store's local timezone.", timeline: audit.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt, storeTimeZone), actorLabel: event.actorName })) },
       ],
       backLink: { label: "Back to work orders", href: "/app/work-orders" },
@@ -4636,7 +4636,7 @@ export function buildDetailModel(
                 ? "Open Work orders and checkout notes for the outcome recorded against each job."
                 : visit.outcomeNotes,
             },
-            { label: "Attached evidence", value: String(linkedFiles.length), helperText: "Photos and documents remain linked to this visit" },
+            { label: "Attached evidence", value: String(linkedFiles.filter(link => fixture.files.some(file => file.organizationId === scoped.organizationId && file.id === link.fileId && file.status === "available")).length), helperText: "Photos and documents remain linked to this visit" },
           ],
           table: {
             id: "visit-evidence",
@@ -6187,6 +6187,8 @@ export function buildWorkOrderRecordingModel(
       .filter((component) => component.organizationId === scoped.organizationId && storeAssetIds.has(component.assetId))
       .sort((left, right) => left.name.localeCompare(right.name))
       .map((component) => ({ value: component.id, label: component.name, description: component.partNumber ?? component.serialNumber, assetId: component.assetId })),
+    defaultCostProvider: assignmentForWork(fixture, scoped.organizationId, work.id)?.kind === "outside_vendor" ? "vendor" : "internal",
+    costVendors: fixture.vendors.filter(v => v.organizationId === scoped.organizationId && v.id === fixture.assignments.filter(a => a.organizationId === scoped.organizationId && a.workOrderId === work.id && !["cancelled","declined","superseded"].includes(a.status)).sort((a,b)=>b.assignedAt.localeCompare(a.assignedAt)||b.id.localeCompare(a.id))[0]?.vendorId).map(v => ({value:v.id,label:v.name})),
     costKinds: [
       { value: "labor", label: "Labor" },
       { value: "parts", label: "Parts" },
@@ -6195,7 +6197,7 @@ export function buildWorkOrderRecordingModel(
       { value: "other", label: "Other recorded cost" },
     ],
     defaultServiceDate: fixture.asOf.slice(0, 10),
-    recordedCostLabel: costLines.length ? recordedMoneyLabel(costLines.map(line => line.amount)) : money(0),
+    recordedCostLabel: costLines.length ? recordedMoneyLabel(costLines.map(line => line.amount)) : "Cost not recorded",
     recordedCostLineCount: costLines.length,
   };
 }

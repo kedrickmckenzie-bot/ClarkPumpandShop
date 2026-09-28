@@ -9,6 +9,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!work) throw new OpsDomainError("NOT_FOUND", "Work order not found");
     await assertStoreInSessionScope(session, work.storeId);
     const files = await repository.listFilesForEntity(session.organizationId, "work_order", id);
-    return quoteFileResponse(files.find(file => file.id === fileId) ?? null);
+    return quoteFileResponse(files.find(file => file.id === fileId) ?? null, request);
   } catch (error) { return opsApiError(error); }
 }

@@ -1,3 +1,4 @@
+import {createInspectionLink,resolveInspectionLink} from "@/lib/ops/inspection-access";
 import {vendorWarrantyPolicyRegression} from "./vendor-warranty-policy-regression";
 import {capitalRegression} from "./capital-regression";
 import { storeVendorRegression } from "./store-vendor-regression";
@@ -31,6 +32,14 @@ export async function complianceRegression(repository:OpsRepository) {
  expect((await repository.queryInspections({organizationId:org,storeIds:[]},{today:"2026-09-27"})).totalCount).toBe(0);
  expect(await repository.getInspection("other",i.id)).toBeNull();
  const replay=await runInspectionCycle(svc,org,s.id);expect(replay.created).toBe(0);expect(replay.reminders).toBe(0);expect(replay.failed).toBe(0);
+ const inspectionPath=await createInspectionLink(repository,org,i.id,actor,svc.clock.now()),token=inspectionPath.split("/").at(-1)!;
+ const access=await resolveInspectionLink(repository,token,svc.clock.now());expect(access.inspection.id).toBe(i.id);expect(access.assignee.actor.actorId).toBe(actor.actorId);
+ expect((await repository.getLatestServiceAssignment(org,i.workOrderId!))?.internalMembershipId).toBe(actor.actorId);
+ await expect(resolveInspectionLink(repository,token,"2026-11-30T12:00:00.000Z")).rejects.toMatchObject({code:"NOT_FOUND"});
+ await expect(resolveInspectionLink(repository,"b".repeat(64),svc.clock.now())).rejects.toMatchObject({code:"NOT_FOUND"});
+ const delivered:Array<{to:string;text:string}>=[];
+ await deliverInspectionEmail({repository,baseUrl:"https://example.test",readAttachment:async()=>new TextEncoder().encode("blank").buffer,provider:{name:"test",async send(email){delivered.push(email);return {messageId:"sent"};}}},{id:"internal-inspection-initial",organizationId:org,aggregateType:"inspection",aggregateId:i.id,topic:"ops.compliance.reminder",payloadJson:"{}",attemptCount:0},svc.clock.now());
+ expect(delivered.some(email=>email.text.includes("/public/inspection/")&&email.to===access.assignee.email)).toBe(true);
  const result={organizationId:org,inspectionId:i.id,version:0,status:"performed" as const,note:"Performed; awaiting report",performedDate:"2026-09-26",files:[]};
  await recordInspectionResult(svc,result,actor);
  expect((await repository.getWorkOrder(org,i.workOrderId!))?.nextAction).toBe("Review inspection paperwork");

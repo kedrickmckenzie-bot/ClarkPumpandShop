@@ -124,7 +124,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     {returnDecision ? <Link href={returnDecision}>← Back to equipment review</Link> : null}
     <WorkOrderCase
       emailHistory={["overview","activity"].includes(view) ? <><WorkFiles workOrderId={id}/><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}
-      costPrompts={["overview", "service", "cost"].includes(view) ? <><WorkWarrantyContext workOrderId={id}/><WorkCostPrompts workOrderId={id}/></> : undefined}
+      costPrompts={["overview", "service"].includes(view) ? <><WorkWarrantyContext workOrderId={id}/><WorkCostPrompts workOrderId={id}/></> : undefined}
       prices={!accountabilityOnly && view === "cost" ? <WorkPricePanel workOrderId={id} /> : undefined}
       connectedReview={connectedReview}
       model={model}

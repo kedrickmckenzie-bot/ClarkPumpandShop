@@ -1,3 +1,4 @@
+import { FileLinks } from "@/components/workspace/file-links";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadOperatorSession } from "../../_data/operator-loader";
@@ -30,7 +31,7 @@ export default async function EmailInbox({searchParams}:{searchParams:Promise<{o
     {!emails.length ? <section className={styles.panel}><h2>{query.view === "all" ? "No email yet" : "Inbox clear"}</h2><p>{query.view === "all" ? "Forwarded messages will appear here when your mailbox is connected." : "There are no messages waiting for review."}</p></section> : null}
     {emails.map(({email,files}) => <section key={email.id} className={styles.panel}>
       <header><h2>{email.subject || "No subject"}</h2><p>{email.sender} · {new Date(email.receivedAt).toLocaleString("en-US",{timeZone})}</p></header>
-      <details><summary>Read email{files.length ? ` · ${files.length} attachments` : ""}</summary><p className={styles.body}>{email.body}</p>{email.reportedDate ? <p>Reported date: {email.reportedDate} · Unconfirmed</p> : null}<ul>{files.map(file => <li key={file.id}><a href={`/api/ops/email-intake/${email.id}/files/${file.id}`}>{file.originalName}</a></li>)}</ul></details>
+      <details><summary>Read email{files.length ? ` · ${files.length} attachments` : ""}</summary><p className={styles.body}>{email.body}</p>{email.reportedDate ? <p>Reported date: {email.reportedDate} · Unconfirmed</p> : null}<ul>{files.map(file => <li key={file.id}><FileLinks file={file} href={`/api/ops/email-intake/${email.id}/files/${file.id}`} /></li>)}</ul></details>
       {email.status === "needs_review" ? <form action="/api/ops/email-intake" method="post" className={styles.routing}>
         <input type="hidden" name="emailId" value={email.id}/>
         <label>Existing work order<input name="workNumber" placeholder="Work order number" maxLength={100}/></label><span>or</span>

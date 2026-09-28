@@ -687,7 +687,7 @@ describe("work-recording presenter policy", () => {
     expect(facilities.costKinds.map((option) => option.value)).toEqual(["labor", "parts", "travel", "materials", "other"]);
     const sourceCostLines = fixture.costLines.filter((line) => line.organizationId === NORTHLINE_ORGANIZATION_ID && line.workOrderId === workOrderId);
     expect(facilities.recordedCostLineCount).toBe(sourceCostLines.length);
-    expect(facilities.recordedCostLabel).toBe(usd(sourceCostLines.reduce((total, line) => total + line.amount.amountMinor, 0)));
+    expect(facilities.recordedCostLabel).toBe(sourceCostLines.length ? usd(sourceCostLines.reduce((total, line) => total + line.amount.amountMinor, 0)) : "Cost not recorded");
 
     expect(buildWorkOrderRecordingModel(fixture, operatorSession("regional"), workOrderId)).toMatchObject({
       available: true,

@@ -29,3 +29,6 @@
 .workspace { width:100%; box-sizing:border-box; }
 .workspace.compact { width:auto; }
 .workspace section[id],.workspace[id] { scroll-margin-top:170px; }
+
+.workspace li { overflow-wrap:anywhere; }
+.workspace li a { color:#2457d6; text-underline-offset:3px; }

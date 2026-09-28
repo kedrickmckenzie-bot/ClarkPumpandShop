@@ -1,3 +1,4 @@
+import { FileLinks } from "@/components/workspace/file-links";
 import { masterDocuments } from "@/lib/ops/compliance-documents";
 import Link from "next/link";
 import { loadOperatorSession } from "@/app/app/_data/operator-loader";
@@ -11,5 +12,5 @@ export async function WorkInspectionContext({workOrderId}:{workOrderId:string}) 
   if(!inspection)return null;
   const schedule=await repository.getComplianceSchedule(session.organizationId,inspection.scheduleId);
   const forms=masterDocuments(inspection);
-  return <section className={`${styles.workspace} ${styles.panel}`}><h2>{inspection.correctiveWorkOrderId===workOrderId ? "Inspection finding" : "Compliance inspection"}</h2><p><Link href={`/app/compliance/${inspection.id}`}>{schedule?.name ?? "View inspection"} · Due {inspection.dueDate}</Link></p><h3>Instructions & blank forms</h3>{forms.length?<ul>{forms.map(f=><li key={f.id}><a href={`/api/ops/compliance/${inspection.id}/files/${f.id}`}>{f.originalName}</a></li>)}</ul>:<p>No blank forms attached.</p>}<p>Review the result and required evidence on the inspection record.</p></section>;
+  return <section className={`${styles.workspace} ${styles.panel}`}><h2>{inspection.correctiveWorkOrderId===workOrderId ? "Inspection finding" : "Compliance inspection"}</h2><p><Link href={`/app/compliance/${inspection.id}`}>{schedule?.name ?? "View inspection"} · Due {inspection.dueDate}</Link></p><h3>Instructions & blank forms</h3>{forms.length?<ul>{forms.map(f=><li key={f.id}><FileLinks file={f} href={`/api/ops/compliance/${inspection.id}/files/${f.id}`} /></li>)}</ul>:<p>No blank forms attached.</p>}<p>Review the result and required evidence on the inspection record.</p></section>;
 }

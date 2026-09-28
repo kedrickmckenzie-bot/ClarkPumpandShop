@@ -217,7 +217,7 @@ export interface OpsRepository {
   listVendorSpecialties(organizationId: OpsId, vendorId: OpsId): Promise<VendorSpecialty[]>;
   inspectionHistory(org:string,id:string):Promise<Array<{id:string;eventType:string;actorName:string;occurredAt:string;payloadJson:string}>>;
   inspectionDelivery(org:string,id:string):Promise<Array<{id:string;topic:string;status:string}>>;
-  listComplianceOwners(org:string):Promise<Array<{id:string;name:string}>>;
+  listComplianceOwners(org:string,search?:string):Promise<Array<{id:string;name:string}>>;
   getComplianceSchedule(org:string,id:string):Promise<import("./compliance-types").ComplianceSchedule|null>;
   listComplianceSchedules(scope:OrganizationScope,offset?:number):Promise<import("./compliance-types").ComplianceSchedule[]>;
   listComplianceOrganizations():Promise<string[]>;
@@ -225,6 +225,11 @@ export interface OpsRepository {
   inspectionForWork(org:string,workId:string):Promise<import("./compliance-types").Inspection|null>;
   latestInspection(org:string,scheduleId:string):Promise<import("./compliance-types").Inspection|null>;
   queryInspections(scope:OrganizationScope,query:import("./compliance-types").InspectionQuery):Promise<import("./compliance-types").InspectionPage>;
+  getInvoiceVendorId(organizationId:string,workOrderId:string):Promise<string|null>;
+  getInvoiceUpload(organizationId: string, id: string): Promise<import("./invoice-upload-types").InvoiceUpload | null>;
+  findInvoiceUpload(organizationId: string, sha256: string): Promise<import("./invoice-upload-types").InvoiceUpload | null>;
+  listInvoiceUploads(organizationId: string, query: { status?: string; offset?: number }): Promise<import("./invoice-upload-types").InvoiceUpload[]>;
+  findWorkOrderByNumber(organizationId: string, number: string): Promise<WorkOrder | null>;
   getInboundEmail(organizationId: OpsId, id: OpsId): Promise<import("./types").InboundEmail | null>;
   listInboundEmails(organizationId: OpsId, query: { offset?: number; status?: string; workOrderId?: string }): Promise<import("./types").InboundEmail[]>;
   getFollowUpPreference(organizationId: OpsId): Promise<import("./types").FollowUpPreference | null>;
@@ -363,6 +368,7 @@ export interface OpsRepository {
   listFilesForEntity(organizationId: OpsId, entityType: string, entityId: OpsId, visibility?: "vendor_shared"): Promise<StoredFile[]>;
   getStoredFileById(organizationId:OpsId,id:OpsId):Promise<StoredFile|null>;
   getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null>;
+  getLatestServiceAssignment(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderAssignment | null>;
   getActiveAssignment(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderAssignment | null>;
   getLatestIssuanceForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderIssuance | null>;
   listIssuancesForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderIssuance[]>;
@@ -411,6 +417,7 @@ export interface OpsRepository {
 
   // Public workflows resolve an opaque token first, then return a deliberately
   // narrow projection. A public token never grants arbitrary repository reads.
+  getInspectionAccessToken(input: PublicTokenLookup): Promise<{organizationId:string;inspectionId:string;assigneeKey:string;tokenId:string} | null>;
   getPublicStoreGatewayByToken(input: PublicTokenLookup): Promise<PublicStoreGatewayView | null>;
   getServiceAuthorizationByToken(input: PublicTokenLookup): Promise<ServiceAuthorizationView | null>;
   getStoreVisitContextByToken(input: PublicTokenLookup): Promise<StoreVisitContextView | null>;

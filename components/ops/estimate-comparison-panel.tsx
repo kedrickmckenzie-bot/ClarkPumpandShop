@@ -169,11 +169,11 @@ function EstimateRequestCard({ request }: { request: EstimateRequestComparisonVi
             <div><dt>Lead time</dt><dd>{request.latestProposal.leadTimeLabel ?? "Not stated"}</dd></div>
             <div><dt>Valid through</dt><dd>{request.latestProposal.validUntilLabel ?? "Not stated"}</dd></div>
           </dl>
-          {request.latestProposal.attachments?.map((file) => <p key={file.href}><a href={file.href}>{file.name}</a></p>)}
+          {request.latestProposal.attachments?.map((file) => <p key={file.href}><a target="_blank" rel="noopener noreferrer" href={file.href}>{file.name}</a> · <a href={`${file.href}?download=1`}>Download</a></p>)}
           {request.previousProposals?.length ? (
             <details>
               <summary>Previous revisions ({request.previousProposals.length})</summary>
-              {request.previousProposals.map((proposal) => <p id={`quote-proposal-${proposal.id}`} key={proposal.id}>Revision {proposal.revision} · {proposal.amountLabel} · {proposal.scope}{proposal.attachments?.map((file) => <span key={file.href}> · <a href={file.href}>{file.name}</a></span>)}</p>)}
+              {request.previousProposals.map((proposal) => <p id={`quote-proposal-${proposal.id}`} key={proposal.id}>Revision {proposal.revision} · {proposal.amountLabel} · {proposal.scope}{proposal.attachments?.map((file) => <span key={file.href}> · <a target="_blank" rel="noopener noreferrer" href={file.href}>{file.name}</a> · <a href={`${file.href}?download=1`}>Download</a></span>)}</p>)}
             </details>
           ) : null}
         </div>

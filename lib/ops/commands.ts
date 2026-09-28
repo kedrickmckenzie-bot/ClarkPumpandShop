@@ -646,6 +646,7 @@ export interface CreateWorkOrderInput {
   internalReviewThresholdMinor?: number;
   repairEstimateAmountMinor?: number; repairEstimateCurrency?: string;
   estimatedServiceExtensionMonths?: number;
+  inspectionScheduleId?: string;
   initialAssignment?: {
     kind: AssignmentKind;
     vendorId?: OpsId;
@@ -771,7 +772,9 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
       throw new OpsDomainError("VALIDATION", "An internal assignment requires exactly one maintenance member");
     }
     const member = await repository.getMembership(input.organizationId, input.initialAssignment.internalMembershipId);
-    if (!member || member.status !== "active" || member.role !== "internal_technician") {
+    const inspectionSchedule = input.inspectionScheduleId ? await repository.getComplianceSchedule(input.organizationId,input.inspectionScheduleId) : null;
+    const inspectionAssignee = inspectionSchedule?.storeId===input.storeId && inspectionSchedule?.membershipId===member?.id && inspectionSchedule?.handler==="internal" && !["vendor_user","support"].includes(member?.role??"") && member && (await repository.listStoreIdsForMembership(input.organizationId,member.id)).includes(input.storeId);
+    if (!member || member.status !== "active" || (member.role !== "internal_technician" && !inspectionAssignee)) {
       throw new OpsDomainError("FORBIDDEN", "Internal assignee is not an active maintenance team member");
     }
   }

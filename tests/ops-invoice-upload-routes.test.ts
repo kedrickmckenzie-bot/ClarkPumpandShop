@@ -1,0 +1,22 @@
+import { beforeEach,expect,it,vi } from "vitest";
+import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
+import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
+import { uploadActor } from "./helpers/invoice-upload-regression";
+import { saveInvoiceUpload } from "@/lib/ops/invoice-upload-commands";
+const mock=vi.hoisted(()=>({context:vi.fn(),bytes:vi.fn(),store:vi.fn()}));
+vi.mock("server-only",()=>({}));
+vi.mock("@/lib/server/ops-request-context",async original=>({...await original<typeof import("@/lib/server/ops-request-context")>(),getOpsRequestContext:mock.context}));
+vi.mock("@/components/ops-public/server-file-store",()=>({readPrivateUpload:mock.bytes,getQuoteUploadStore:()=>({store:mock.store})}));
+import { POST } from "@/app/api/ops/invoice-uploads/route";
+import { GET } from "@/app/api/ops/invoice-uploads/[id]/file/route";
+import { processInvoiceUpload } from "@/lib/server/invoice-upload-processing";
+let repository:ReturnType<typeof createOpsFixtureRepository>;
+let session:{organizationId:string;accessMode:string;storeIds?:string[]};
+beforeEach(()=>{vi.clearAllMocks();repository=createOpsFixtureRepository(buildNorthlinePresentationFixture());session={organizationId:uploadActor.organizationId,accessMode:"preview"};mock.context.mockImplementation(async()=>({repository,session,actor:uploadActor}));mock.bytes.mockResolvedValue(new TextEncoder().encode("%PDF-1.7 test").buffer);mock.store.mockImplementation(async ({uploads})=>[{stored:true,key:"test/file",sha256:"a".repeat(64),originalName:uploads[0].name,mediaType:uploads[0].mediaType,size:uploads[0].size}]);});
+it("saves original bytes before reading and preserves failures for manual review",async()=>{
+ const form=new FormData();form.set("file",new File(["%PDF-1.7 test"],"test.pdf",{type:"application/pdf"}));const response=await POST(new Request("http://localhost/upload",{method:"POST",body:form}));expect(response.status).toBe(201);const row=await response.json() as {id:string};const saved=(await repository.getInvoiceUpload(session.organizationId,row.id))!;expect(saved.status).toBe("queued");
+ const result=await processInvoiceUpload(repository,uploadActor,saved,async()=>{throw new Error("Provider private error");});expect(result.status).toBe("review");expect(result.issuesJson).not.toContain("private error");
+ const opened=await GET(new Request("http://localhost/file"),{params:Promise.resolve({id:row.id})});expect(opened.headers.get("content-disposition")).toContain("inline");expect(await opened.text()).toBe("%PDF-1.7 test");
+});
+it("rejects content disguised as a PDF before saving",async()=>{const form=new FormData();form.set("file",new File(["<script>bad</script>"],"fake.pdf",{type:"application/pdf"}));expect((await POST(new Request("http://localhost/upload",{method:"POST",body:form}))).status).toBe(422);expect(mock.store).not.toHaveBeenCalled();});
+it("denies files outside the company and selected store scope before storage access",async()=>{const row=await saveInvoiceUpload(repository,uploadActor,{id:"file-test",organizationId:session.organizationId,sha256:"a".repeat(64),storageKey:"file",originalName:"test.pdf",byteLength:12,contentType:"application/pdf",status:"available",createdAt:new Date().toISOString()});session.storeIds=[];expect((await GET(new Request("http://localhost/file"),{params:Promise.resolve({id:row.id})})).status).toBe(403);session.storeIds=undefined;session.organizationId="other";expect((await GET(new Request("http://localhost/file"),{params:Promise.resolve({id:row.id})})).status).toBe(404);expect(mock.bytes).not.toHaveBeenCalled();});

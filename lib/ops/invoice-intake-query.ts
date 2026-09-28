@@ -15,7 +15,7 @@ export function invoiceIntakeFromFixture(f: OpsFixture, scope: OrganizationScope
   if (scope.storeIds !== undefined || scope.regionIds !== undefined) return { items: [], totalCount: 0 };
   const org = scope.organizationId;
   let items: InvoiceIntakeOption[];
-  if (q.kind === "work") items = f.workOrders.filter(w => w.organizationId === org && w.status !== "cancelled").flatMap(w => { const s = f.stores.find(s => s.organizationId === org && s.id === w.storeId); return s ? [{ id: w.id, label: w.number, detail: `Store ${s.storeNumber} · ${w.problem}` }] : []; });
+  if (q.kind === "work") items = f.workOrders.filter(w => w.organizationId === org && w.status !== "cancelled").flatMap(w => { const s = f.stores.find(s => s.organizationId === org && s.id === w.storeId); return s ? [{ id: w.id, label: w.number, detail: `Store ${s.storeNumber} · ${s.name} · ${s.address1}, ${s.city} ${s.state} ${s.postalCode} · ${w.problem}` }] : []; });
   else if (q.kind === "vendor") items = f.vendors.filter(v => v.organizationId === org && v.status !== "inactive").map(v => ({ id: v.id, label: v.name, detail: "Approved vendor" }));
   else items = f.contractVersions.filter(c => c.organizationId === org && c.vendorId === q.vendorId && c.status === "active" && f.vendors.some(v => v.organizationId === org && v.id === c.vendorId && v.status !== "inactive")).map(c => ({ id: c.id, label: c.sourceAgreementReference, detail: `Version ${c.version}` }));
   if (q.search) items = items.filter(r => `${r.label} ${r.detail}`.toLowerCase().includes(q.search!.toLowerCase()));

@@ -58,17 +58,34 @@ export async function POST(
         },
       );
     } else if (operation === "cost") {
-      const kind = formText(formData, "kind", { required: true, max: 30 });
+      const kind = formText(formData, "kind", { max: 30 }) || "other";
       if (!costKinds.has(kind as CostLineKind)) throw new OpsDomainError("VALIDATION", "Choose a supported cost type.");
       const amountMinor = optionalMoneyMinor(formText(formData, "amount", { required: true, max: 30 }));
       if (amountMinor === undefined) throw new OpsDomainError("VALIDATION", "Recorded work cost is required.");
-      const description = formText(formData, "description", { required: true, max: 500 });
+      const providerType = formText(formData,"providerType",{max:20}) || undefined;
+      if (providerType && !["internal","vendor"].includes(providerType)) throw new OpsDomainError("VALIDATION","Choose internal expense or vendor cost.");
+      const vendorId = providerType === "vendor" ? formText(formData,"vendorId",{max:160}) || undefined : undefined;
+      const additionalExpense = formData.get("additionalExpense") === "yes";
+      let breakdown: Array<{kind:CostLineKind;amountMinor:number;description?:string}> = [...costKinds].flatMap(kind => { const value = formText(formData,`breakdown_${kind}`,{max:30}); if(!value)return [];const amountMinor=optionalMoneyMinor(value);if(amountMinor===undefined || amountMinor<=0)throw new OpsDomainError("VALIDATION","Breakdown amounts must be greater than zero.");return [{kind,amountMinor}]; });
+      const lineCountText = formText(formData,"lineCount",{max:3});
+      if (lineCountText) {
+        const count=Number(lineCountText);
+        if(providerType!=="vendor" || !Number.isInteger(count) || count<1 || count>100) throw new OpsDomainError("VALIDATION","Add between 1 and 100 vendor line items.");
+        breakdown=Array.from({length:count},(_,index)=>{
+          const description=formText(formData,`lineDescription_${index}`,{required:true,max:500});
+          const amountMinor=optionalMoneyMinor(formText(formData,`lineAmount_${index}`,{required:true,max:30}));
+          if(amountMinor===undefined || amountMinor<=0) throw new OpsDomainError("VALIDATION","Each line item needs an amount greater than zero.");
+          return {kind:"other",description,amountMinor};
+        });
+      }
+      const description = formText(formData, "description", { max: 500 }) || (providerType === "internal" ? "Internal expense" : "Vendor cost");
       const serviceDate = formText(formData, "serviceDate", { required: true, max: 10 });
       await recordWorkOrderCost(
         { repository: context.repository },
         {
           organizationId: context.session.organizationId,
           workOrderId,
+          providerType: providerType as "internal" | "vendor" | undefined, vendorId, additionalExpense, breakdown,
           kind: kind as CostLineKind,
           description,
           amountMinor,
@@ -76,7 +93,7 @@ export async function POST(
           serviceDate,
           idempotency: {
             key: submissionKey,
-            requestHash: await sha256Hex(JSON.stringify({ operation, workOrderId, kind, description, amountMinor, currency: "USD", serviceDate })),
+            requestHash: await sha256Hex(JSON.stringify({ operation, workOrderId, kind, description, amountMinor, currency: "USD", serviceDate, providerType, vendorId, additionalExpense, breakdown })),
             expiresAt,
           },
           actor: context.actor,

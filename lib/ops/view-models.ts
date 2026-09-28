@@ -101,7 +101,7 @@ export interface WorkOrderDetailView extends WorkOrderListRow {
   externalAccountingPo?: string;
   visits: VisitListRow[];
   followUps: Array<{ id: OpsId; nextAction: string; accountableParty: string; dueAt: IsoDateTime; status: string }>;
-  costs: Array<{ id: OpsId; kind: string; description: string; amountMinor: number; currency: CurrencyCode; serviceDate: string }>;
+  costs: Array<{ providerType?: "internal" | "vendor"; vendorId?: string; invoiceId?: string; costGroupId?: string; reversesCostId?: string; id: OpsId; kind: string; description: string; amountMinor: number; currency: CurrencyCode; serviceDate: string }>;
 }
 
 export interface StoreDetailView extends StoreSearchRow {

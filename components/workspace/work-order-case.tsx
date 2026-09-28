@@ -158,7 +158,7 @@ function DataStatePanel({ state }: { state: DataState }) {
 }
 
 function FactValue({ fact }: { fact?: DetailFactViewModel }) {
-  if (!fact) return <strong>Not recorded</strong>;
+  if (!fact) return <strong>Cost not recorded</strong>;
   const content = (
     <>
       <strong>{fact.value}</strong>
@@ -699,7 +699,6 @@ export function WorkOrderCase({
       {activeView === "overview" ? <WorkOrderQuickUpdate model={control} canAddNote={verification.permitted} canComplete={(!visits?.table?.rows.length || control.allowManagerCompletion) && !control.pendingApproval && control.status !== "awaiting_approval"} /> : null}
       {emailHistory}
       {costPrompts}
-      {prices}
 
       {activeView === "overview" ? (
         <>
@@ -801,17 +800,18 @@ export function WorkOrderCase({
         id="cost"
         eyebrow="Costs"
         title="Work costs and invoices"
-        description="Entered work costs, authorization limits, and optional invoice references stay separate and easy to trace."
+        description="Add costs when you know them. Matched invoices supply the vendor cost."
         icon={<ReceiptText aria-hidden="true" size={20} />}
       >
         <div className={styles.costSummary}>
-          <div><small>Recorded work cost</small>{recording.recordedCostLineCount ? <FactValue fact={recordedCost} /> : <strong>Not recorded</strong>}</div>
+          <div><small>Recorded work cost</small>{recording.recordedCostLineCount ? <FactValue fact={recordedCost} /> : <strong>Cost not recorded</strong>}</div>
           <div><small>Authorization limit</small><FactValue fact={nte} /></div>
-          <div><small>Invoice references</small><strong>{invoices?.table?.rows.length ?? 0} linked reference{invoices?.table?.rows.length === 1 ? "" : "s"}</strong></div>
+          <div><small>Invoices</small><strong>{invoices?.table?.rows.length ?? 0} linked invoice{invoices?.table?.rows.length === 1 ? "" : "s"}</strong></div>
         </div>
         <div className={styles.panelRegion}><WorkOrderRecordingPanel model={recording} section="cost" /></div>
         <RecordBlock section={costs} icon={<CircleDollarSign aria-hidden="true" size={18} />} keepAnchor={false} />
         <RecordBlock section={invoices} icon={<ReceiptText aria-hidden="true" size={18} />} />
+        {prices}
       </WorkspaceSection> : null}
 
       {activeView === "equipment" ? <WorkspaceSection

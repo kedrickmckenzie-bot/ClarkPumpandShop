@@ -2,7 +2,8 @@ import { getOpsRequestContext,assertStoreInSessionScope,formText,opsApiError } f
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { OpsDomainError } from "@/lib/ops/commands";
 import { createComplianceSchedule,runInspectionCycle,recordInspectionResult,setComplianceScheduleStatus,createInspectionCorrection,replaceComplianceDocuments } from "@/lib/ops/compliance";
-import { getQuoteUploadStore } from "@/components/ops-public/server-file-store";
+import { uploadInspectionFiles as uploadFiles } from "@/lib/server/inspection-uploads";
+import { createInspectionLink } from "@/lib/ops/inspection-access";
 import type { ComplianceSchedule } from "@/lib/ops/compliance-types";
 export async function POST(request:Request) {
  let back="/app/compliance";
@@ -27,6 +28,7 @@ export async function POST(request:Request) {
   const id=formText(form,"inspectionId",{required:true,max:200});back=`/app/compliance/${encodeURIComponent(id)}`;
   const inspection=await repository.getInspection(org,id);if(!inspection)throw new OpsDomainError("NOT_FOUND","Inspection not found");await assertStoreInSessionScope(session,inspection.storeId);
   const schedule=await repository.getComplianceSchedule(org,inspection.scheduleId);if(!schedule)throw new OpsDomainError("NOT_FOUND","Schedule not found");
+  if(action==="link") { return relativeRedirect303(await createInspectionLink(repository,org,id,actor)); }
   if(action==="templates") { await replaceComplianceDocuments(svc,schedule,await uploadFiles(form,"templates",org,schedule.id,session.accessMode==="preview"),actor); }
   else if(action==="pause") {const status=formText(form,"scheduleStatus");if(status!=="active"&&status!=="paused")throw new OpsDomainError("VALIDATION","Choose a schedule status");await setComplianceScheduleStatus(svc,schedule,status,actor);}
   else if(action==="correction") {await createInspectionCorrection(svc,inspection,formText(form,"problem",{required:true,max:4000}),actor);}
@@ -38,13 +40,4 @@ export async function POST(request:Request) {
   }else throw new OpsDomainError("VALIDATION","Unknown inspection action");
   return relativeRedirect303(`${back}?notice=Inspection+updated`);
  }catch(error){if(error instanceof OpsDomainError&&["VALIDATION","CONFLICT"].includes(error.code))return relativeRedirect303(`${back}?error=${encodeURIComponent(error.message)}`);return opsApiError(error);}
-}
-
-async function uploadFiles(form:FormData,field:string,org:string,id:string,preview:boolean) {
- const files=form.getAll(field).filter((f):f is File=>f instanceof File&&f.size>0);
- if(files.length>5||files.reduce((n,f)=>n+f.size,0)>8*1024*1024||files.some(f=>!["application/pdf","image/jpeg","image/png","image/webp","text/plain"].includes(f.type)))throw new OpsDomainError("VALIDATION","Attach up to five PDF, JPG, PNG, WebP or text files, 8 MB total.");
- const uploads=await Promise.all(files.map(async f=>({name:f.name.slice(0,180),mediaType:f.type,size:f.size,bytes:await f.arrayBuffer()})));
- const stored=await getQuoteUploadStore(preview).store({organizationId:org,subjectType:"inspection",subjectId:id,uploads,idempotencyKey:`${id}:${crypto.randomUUID()}`});
- if(stored.some(f=>!f.stored))throw new OpsDomainError("VALIDATION","Files could not be stored. Please try again.");
- return stored.map(f=>({id:`file-${crypto.randomUUID()}`,organizationId:org,storageKey:f.key,sha256:f.sha256,originalName:f.originalName,contentType:f.mediaType,byteLength:f.size,status:"available" as const,createdAt:new Date().toISOString()}));
 }

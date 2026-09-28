@@ -430,7 +430,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       { id: "stores-in-scope", label: "Stores in scope", value: String(storeSummary.stores), supportingText: "Portfolio-wide for your operating scope; search below filters the directory", tone: "neutral", link: { href: "/app/stores", label: "Open full directory" } },
       { id: "store-open-work", label: "Open work orders", value: String(storeSummary.openWorkOrders), supportingText: "Current open work across the scoped store portfolio", tone: storeSummary.openWorkOrders ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open source work" } },
       { id: "store-onsite-now", label: "Onsite visits", value: String(storeSummary.activeVisits), supportingText: "Active server-timestamped check-ins across the scoped portfolio", tone: storeSummary.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open active visits" } },
-      { id: "store-recorded-cost", label: "Recorded work cost · all history", value: money(storeSummary.recordedCostMinor), supportingText: "Entered cost lines across the full scoped history; not invoice totals", tone: "neutral", link: { href: "/app/work-orders?hasCost=true", label: "Open every work order with recorded cost" } },
+      { id: "store-recorded-cost", label: "Recorded work cost · all history", value: money(storeSummary.recordedCostMinor), supportingText: "Saved work costs across the full scoped history, including matched invoice costs", tone: "neutral", link: { href: "/app/work-orders?hasCost=true", label: "Open every work order with recorded cost" } },
     ];
   } else {
     const vendors = await repository.listVendors(scope, q, request);

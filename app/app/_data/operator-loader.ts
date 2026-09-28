@@ -796,8 +796,22 @@ export async function loadAttentionItemModel(itemId: string) {
   if (!roleCanAccessListRoute(context.session.role, "action-center")) notFound();
   const model = buildAttentionItemModel(context.fixture, context.session, itemId);
   if (!model.control.available) notFound();
+  const sourceEvent = context.fixture.auditEvents.find(event => event.organizationId === context.session.organizationId && event.aggregateType === "exception" && event.aggregateId === itemId && event.eventType === "exception.source_linked");
+  let sourceInvoiceId: string | undefined;
+  if (sourceEvent && roleCanAccessDetailRoute(context.session.role, "invoice")) {
+    let source: { invoiceId?: string } = {};
+    try { source = JSON.parse(sourceEvent.payloadJson); } catch { /* Invalid historical source metadata is not a link. */ }
+    if (typeof source?.invoiceId === "string") {
+      const result = await (await getServerOpsRepository()).readInvoiceRecord(context.session, source.invoiceId, { section: "items", limit: 1 });
+      if (result.invoice) {
+        sourceInvoiceId = result.invoice.id;
+        model.detail.page.primaryAction = { label: `Open invoice ${result.invoice.number}`, href: `/app/invoices/${encodeURIComponent(sourceInvoiceId)}` };
+        model.detail.sections.find(section => section.id === "source-evidence")?.facts?.push({ label: "Invoice", value: result.invoice.number, link: model.detail.page.primaryAction });
+      }
+    }
+  }
   model.detail = enforceDetailLinkPolicy(model.detail, context.session);
-  return model;
+  return { ...model, sourceInvoiceId };
 }
 
 export async function loadOwnerBriefModel(query: OperatorSearchParameters = {}) {

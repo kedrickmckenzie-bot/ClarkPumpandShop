@@ -1111,3 +1111,10 @@ a.factCard { padding-right: 38px; }
 
 .quickWorkActions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .quickWorkActions a { padding: 8px 12px; border: 1px solid #ccd5df; border-radius: 6px; color: #2455a4; font-weight: 600; }
+
+.costHint { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; margin-top: 18px; border: 1px solid #dbe4f0; border-radius: 6px; background: #f5f8fc; color: #334155; font-size: 15px; line-height: 1.5; }
+.costHint svg { flex: 0 0 auto; margin-top: 2px; color: #2563eb; }
+.costHint p { margin: 0; }
+.costHint a { color: #1d4ed8; text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+
+.costLines{display:grid;gap:16px}.costLine{display:grid;grid-template-columns:minmax(0,1fr) 160px auto;align-items:end;gap:12px;padding-bottom:16px;border-bottom:1px solid #dbe1ea}.costLines>button{justify-self:start}@media(max-width:650px){.costLine{grid-template-columns:minmax(0,1fr) auto}.costLine>label:first-child{grid-column:1/-1}}

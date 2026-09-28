@@ -1,3 +1,4 @@
+import { RecordFiles } from "@/components/workspace/record-files";
 import type { Metadata } from "next";
 import { AttentionItemPanel, MutationReceipt } from "@/components/ops/service-control-panels";
 import { DetailView } from "@/components/ops/views";
@@ -13,5 +14,5 @@ export default async function AttentionItemPage({ params, searchParams }: { para
   const model = await loadAttentionItemModel(id);
   const selectedWork = Array.isArray(query.workOrder) ? query.workOrder[0] : query.workOrder;
   if (model.control.reconciliationOptions?.some((option) => option.value === selectedWork)) model.control.selectedReconciliationWorkOrderId = selectedWork;
-  return <DetailView model={model.detail} initialSection="service-visits" beforeSections={<div className={styles.controlStack}><MutationReceipt code={updated} /><AttentionItemPanel model={model.control} /></div>} />;
+  return <DetailView model={model.detail} initialSection="service-visits" beforeSections={<div className={styles.controlStack}>{model.sourceInvoiceId ? <RecordFiles kind="invoice" id={model.sourceInvoiceId} /> : null}<MutationReceipt code={updated} /><AttentionItemPanel model={model.control} /></div>} />;
 }

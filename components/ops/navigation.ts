@@ -111,7 +111,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
       { id: "spend", label: "Spending", href: "/app/spend" },
       { id: "lifecycle", label: "Repair or replace", href: "/app/lifecycle" },
       { id: "warranties", label: "Warranties", href: "/app/warranties" },
-      { id: "invoice-review", label: "Invoice review", href: "/app/invoices" },
+      { id: "invoice-review", label: "Invoices", href: "/app/invoices" },
       { id: "value-ledger", label: "Savings", href: "/app/reports/value" },
       { id: "reports", label: "Reports", href: "/app/reports" },
     ],

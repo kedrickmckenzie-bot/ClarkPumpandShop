@@ -16,7 +16,7 @@ export async function queryInvoiceIntake(driver: OpsSqlDriver, scope: Organizati
   if (scope.storeIds !== undefined || scope.regionIds !== undefined) return { items: [], totalCount: 0 };
   const params: unknown[] = [scope.organizationId], binary = driver.dialect === "postgres" ? 'COLLATE "C"' : "COLLATE BINARY";
   let source: string;
-  if (q.kind === "work") source = "SELECT w.id,w.number AS label,'Store '||s.store_number||' · '||w.problem AS detail FROM ops_work_orders w JOIN ops_stores s ON s.organization_id=w.organization_id AND s.id=w.store_id WHERE w.organization_id=? AND w.status<>'cancelled'";
+  if (q.kind === "work") source = "SELECT w.id,w.number AS label,'Store '||s.store_number||' · '||s.name||' · '||s.address_1||', '||s.city||' '||s.state||' '||s.postal_code||' · '||w.problem AS detail FROM ops_work_orders w JOIN ops_stores s ON s.organization_id=w.organization_id AND s.id=w.store_id WHERE w.organization_id=? AND w.status<>'cancelled'";
   else if (q.kind === "vendor") source = "SELECT v.id,v.name AS label,'Approved vendor' AS detail FROM ops_vendors v WHERE v.organization_id=? AND v.status<>'inactive'";
   else { source = "SELECT c.id,c.source_agreement_reference AS label,'Version '||CAST(c.version AS TEXT) AS detail FROM ops_contract_versions c JOIN ops_vendors v ON v.organization_id=c.organization_id AND v.id=c.vendor_id AND v.status<>'inactive' WHERE c.organization_id=? AND c.vendor_id=? AND c.status='active'"; params.push(q.vendorId ?? ""); }
   const search = q.search ? " WHERE LOWER(label||' '||detail) LIKE ? ESCAPE '\\'" : "";

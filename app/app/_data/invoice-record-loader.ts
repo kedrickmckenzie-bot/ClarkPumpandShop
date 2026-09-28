@@ -1,4 +1,5 @@
 import "server-only";
+import { invoiceWork, unmatchedCostGroups } from "@/lib/ops/invoice-cost-recording";
 import { notFound } from "next/navigation";
 import { roleCanAccessDetailRoute } from "@/components/ops/role-policy";
 import { invoiceRecordSections, type InvoiceRecordSection } from "@/lib/ops/invoice-record-query";
@@ -21,5 +22,9 @@ export async function loadInvoiceRecord(id: string, params: Record<string, strin
   const writable = session.accessMode === "preview" || Boolean(session.permissions?.length) && (session.permissions ?? []).every(p => ["ops:*", "ops:write", "ops:read_write", "ops:store_manage"].includes(p));
   const canDecide = result.invoice.submittedByMembershipId !== session.membershipId && unrestricted && ["executive", "finance"].includes(session.role) && writable;
   const decisionNote = result.invoice.submittedByMembershipId === session.membershipId ? "Another reviewer must review invoices you submitted." : !writable ? "This account has read-only access." : "A company finance reviewer can record a decision.";
-  return { result, section, page, line: first(params.line), match: first(params.match), flag: first(params.flag), basis, open, scopeLabel: session.scopeLabel, canDecide, decisionNote, updated: first(params.updated) === "decision" };
+  const repository=await getServerOpsRepository();
+  const costWork=canDecide ? await invoiceWork(repository,session.organizationId,id) : null;
+  const detail=costWork ? await repository.getWorkOrderDetail(session,costWork.id) : null;
+  const costChoices=detail && result.invoice.vendorId ? unmatchedCostGroups(detail.costs,result.invoice.vendorId).map(g=>({value:g.id,label:`Use invoice instead of ${new Intl.NumberFormat("en-US",{style:"currency",currency:g.currency}).format(g.amountMinor/100)} · ${g.rows[0].description}`})) : [];
+  return { costChoices, result, section, page, line: first(params.line), match: first(params.match), flag: first(params.flag), basis, open, scopeLabel: session.scopeLabel, canDecide, decisionNote, updated: first(params.updated) === "decision" };
 }

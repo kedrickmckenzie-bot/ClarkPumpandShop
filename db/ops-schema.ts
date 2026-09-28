@@ -358,7 +358,7 @@ export const opsVisitEvidence = sqliteTable("ops_visit_evidence", {
 
 export const opsFiles = sqliteTable("ops_files", {
   id: id(), organizationId: organizationId(), storageKey: text("storage_key").notNull(), sha256: text("sha256").notNull(), originalName: text("original_name").notNull(), contentType: text("content_type").notNull(), byteLength: integer("byte_length").notNull(), status: text("status").notNull().default("available"), createdAt: createdAt(),
-}, (table) => [uniqueIndex("uidx_ops_files_org_storage_key").on(table.organizationId, table.storageKey), index("idx_ops_files_org_sha256").on(table.organizationId, table.sha256)]);
+}, (table) => [uniqueIndex("uidx_ops_files_org_id").on(table.organizationId,table.id), uniqueIndex("uidx_ops_files_org_storage_key").on(table.organizationId, table.storageKey), index("idx_ops_files_org_sha256").on(table.organizationId, table.sha256)]);
 
 export const opsEntityFiles = sqliteTable("ops_entity_files", {
   id: id(), organizationId: organizationId(), fileId: text("file_id").notNull(), entityType: text("entity_type").notNull(), entityId: text("entity_id").notNull(), purpose: text("purpose").notNull(), visibility: text("visibility").notNull(), createdAt: createdAt(),
@@ -665,7 +665,7 @@ export const opsAuthorizations = sqliteTable("ops_authorizations", {
 
 export const opsInvoices = sqliteTable("ops_invoices", {
   id: id(), version: integer("version").notNull().default(0), organizationId: organizationId(), vendorId: text("vendor_id").notNull(), contractVersionId: text("contract_version_id"), vendorInvoiceNumber: text("vendor_invoice_number").notNull(), invoiceDate: text("invoice_date").notNull(), subtotalMinor: integer("subtotal_minor").notNull(), taxMinor: integer("tax_minor").notNull(), feesMinor: integer("fees_minor").notNull(), totalMinor: integer("total_minor").notNull(), approvedForPaymentMinor: integer("approved_for_payment_minor").notNull(), paidAmountMinor: integer("paid_amount_minor").notNull(), currency: text("currency").notNull(), status: text("status").notNull(), exceptionReason: text("exception_reason"), supportingFileId: text("supporting_file_id"), submittedByMembershipId: text("submitted_by_membership_id"), createdAt: createdAt(),
-}, (table) => [uniqueIndex("uidx_ops_invoice_records_org_vendor_number").on(table.organizationId, table.vendorId, table.vendorInvoiceNumber), index("idx_ops_invoices_org_status_date").on(table.organizationId, table.status, table.invoiceDate)]);
+}, (table) => [uniqueIndex("uidx_ops_invoice_records_org_id").on(table.organizationId,table.id), uniqueIndex("uidx_ops_invoice_records_org_vendor_number").on(table.organizationId, table.vendorId, table.vendorInvoiceNumber), index("idx_ops_invoices_org_status_date").on(table.organizationId, table.status, table.invoiceDate)]);
 
 export const opsInvoiceLines = sqliteTable("ops_invoice_lines", {
   id: id(), organizationId: organizationId(), invoiceId: text("invoice_id").notNull(), lineNumber: integer("line_number").notNull(), category: text("category").notNull(), description: text("description").notNull(), quantityThousandths: integer("quantity_thousandths").notNull(), unitAmountMinor: integer("unit_amount_minor").notNull(), lineAmountMinor: integer("line_amount_minor").notNull(), currency: text("currency").notNull(), contractRateCardLineId: text("contract_rate_card_line_id"), createdAt: createdAt(),
@@ -693,6 +693,7 @@ export const opsValueEvents = sqliteTable("ops_value_events", {
 
 export const opsCostLines = sqliteTable("ops_cost_lines", {
   id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), kind: text("kind").notNull(), description: text("description").notNull(), amountMinor: integer("amount_minor").notNull(), currency: text("currency").notNull(), serviceDate: text("service_date").notNull(), recordedAt: text("recorded_at").notNull(),
+  providerType: text("provider_type"), vendorId: text("vendor_id"), invoiceId: text("invoice_id"), costGroupId: text("cost_group_id"), reversesCostId: text("reverses_cost_id"),
 }, (table) => [index("idx_ops_cost_lines_org_work_date").on(table.organizationId, table.workOrderId, table.serviceDate), index("idx_ops_cost_lines_org_date_kind").on(table.organizationId, table.serviceDate, table.kind)]);
 
 export const opsInvoiceReferences = sqliteTable("ops_invoice_references", {
@@ -902,3 +903,11 @@ export const opsInspections = sqliteTable("ops_inspections", {
  foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
  check("chk_ops_inspection_status",sql`${t.status} IN ('pending','performed','passed','action_needed')`)
 ]);
+
+export const opsInvoiceUploads = sqliteTable("ops_invoice_uploads", {
+ id:text("id").primaryKey(),organizationId:text("organization_id").notNull(),fileId:text("file_id").notNull(),sha256:text("sha256").notNull(),filename:text("filename").notNull(),
+ status:text("status").notNull(),version:integer("version").notNull(),extractedJson:text("extracted_json"),issuesJson:text("issues_json").notNull(),invoiceId:text("invoice_id"),uploadedByMembershipId:text("uploaded_by_membership_id").notNull(),createdAt:text("created_at").notNull(),updatedAt:text("updated_at").notNull(),
+}, t => [uniqueIndex("idx_ops_invoice_upload_org_hash").on(t.organizationId,t.sha256),index("idx_ops_invoice_upload_queue").on(t.organizationId,t.status,t.createdAt,t.id),
+ foreignKey({columns:[t.organizationId,t.fileId],foreignColumns:[opsFiles.organizationId,opsFiles.id]}),
+ foreignKey({columns:[t.organizationId,t.invoiceId],foreignColumns:[opsInvoices.organizationId,opsInvoices.id]}),
+ check("chk_ops_invoice_upload_status",sql`${t.status} IN ('queued','review','recorded','dismissed')`)]);

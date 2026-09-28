@@ -16,5 +16,7 @@ export async function loadInvoiceQueue(params: Record<string, string | string[] 
   const companywide = session.storeIds === undefined && session.regionIds === undefined;
   const writable = session.accessMode === "preview" || Boolean(session.permissions?.length) && (session.permissions ?? []).every(p => ["ops:*", "ops:write", "ops:read_write", "ops:store_manage"].includes(p));
   const financeRole = ["executive", "facilities", "finance"].includes(session.role);
-  return { result, view, page, currency, search, scopeLabel: session.scopeLabel, canReceive: companywide && financeRole && writable, canReadAccounting: companywide && financeRole };
+  const grants=session.membershipId?await (await getServerOpsRepository()).listScopeGrantsForMembership(session.organizationId,session.membershipId):[];
+  const uploadWrite=grants.some(g=>g.scopeKind==="organization"&&g.scopeId===session.organizationId&&["ops:*","ops:write","ops:read_write"].includes(g.permission));
+  return { result, view, page, currency, search, scopeLabel: session.scopeLabel, canReceive: companywide && financeRole && writable && uploadWrite, canReadAccounting: companywide && financeRole };
 }

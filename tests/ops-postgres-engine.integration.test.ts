@@ -1,6 +1,8 @@
+import { invoiceUploadRegression } from "./helpers/invoice-upload-regression";
 import { complianceRegression } from "./helpers/compliance-regression";
 import { communicationRegression } from "./helpers/communication-regression";
 import { addEquipmentWarranty } from "@/lib/ops/warranty-commands";
+import { receiveInvoice } from "@/lib/ops/financial-control-commands";
 import { recordWorkOrderCost } from "@/lib/ops/work-recording-commands";
 import { workCostDrilldownRegression } from "./helpers/work-cost-drilldown-regression";
 import { dashboardQueryRegression } from "./helpers/dashboard-query-regression";
@@ -119,6 +121,7 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     await dashboardQueryRegression(repository, fixture);
     await workCostDrilldownRegression(repository);
     await connectedReviewRegression(repository);
+    await invoiceUploadRegression(repository);
 
     const counts = await database.query<{
       stores: number;
@@ -855,6 +858,7 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
 
   it("persists equipment coverage types and internal cost flags through SQL and snapshots", async () => {
     const fixture = buildNorthlinePresentationFixture(); const repository = createOpsPostgresRepository(pool);
+    await seedOpsRepository(repository, fixture);
     const organizationId = fixture.organizations[0].id;
     const actor = { organizationId, actorType: "user" as const, actorId: "membership-northline-facilities", actorName: "Jordan Lee" };
     const services = { repository, clock: { now: () => "2026-08-25T14:00:00.000Z" } };
@@ -865,6 +869,15 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     expect(await repository.getWorkOrder(organizationId, work.id)).toMatchObject({ internalReviewThresholdMinor: 10000, internalReviewCurrency: "USD" });
     await recordWorkOrderCost(services, { organizationId, actor, workOrderId: work.id, kind: "labor", description: "Labor", amountMinor: 10001, currency: "USD", serviceDate: "2026-08-20" });
     expect((await repository.listWorkflowTasksForWorkOrder(organizationId, work.id)).some(t => t.title === "Review costs above internal flag")).toBe(true);
+    const vendorId="vendor-northline-forecourt";
+    const invoiceWork=await createWorkOrder(services,{organizationId,actor,storeId:asset.storeId,problem:"Invoice cost matching",accountableParty:"Facilities",nextAction:"Choose service"});
+    await assignWorkOrder(services,{organizationId,actor,workOrderId:invoiceWork.id,kind:"outside_vendor",vendorId});
+    const manual=await recordWorkOrderCost(services,{organizationId,actor,workOrderId:invoiceWork.id,kind:"other",description:"Vendor total",providerType:"vendor",vendorId,amountMinor:60000,currency:"USD",serviceDate:"2026-08-20"});
+    const invoice=await receiveInvoice({organizationId,actor,workOrderId:invoiceWork.id,vendorId,vendorInvoiceNumber:"PG-COST-MATCH",invoiceDate:"2026-08-20",currency:"USD",automatic:true,optionalControls:true,lines:[{category:"other_fee",description:"Service total",amount:{amountMinor:60000,currency:"USD"}}]},services);
+    expect(invoice.flagCount).toBe(0);
+    const costs=(await repository.getWorkOrderDetail({organizationId},invoiceWork.id))!.costs;
+    expect(costs).toHaveLength(1);expect(costs[0]).toMatchObject({id:manual.id,providerType:"vendor",vendorId,invoiceId:invoice.invoiceId,amountMinor:60000});
+
   });
 
   it("persists email routing and stale-safe routine follow-ups", async () => { const repository = createOpsPostgresRepository(pool); await seedOpsRepository(repository,buildNorthlinePresentationFixture()); await communicationRegression(repository); }, 60000);

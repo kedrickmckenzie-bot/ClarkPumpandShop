@@ -977,6 +977,8 @@ export interface WorkOrderControlViewModel {
 }
 
 export interface WorkOrderRecordingViewModel {
+  defaultCostProvider?: "internal" | "vendor";
+  costVendors?: SelectOptionViewModel[];
   available: boolean;
   canClassify: boolean;
   canRecordCost: boolean;

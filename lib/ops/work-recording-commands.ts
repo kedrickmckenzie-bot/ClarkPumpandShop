@@ -224,6 +224,10 @@ export async function updateWorkOrderClassification(
 }
 
 export interface RecordWorkOrderCostInput {
+  providerType?: "internal" | "vendor";
+  vendorId?: string;
+  additionalExpense?: boolean;
+  breakdown?: Array<{kind: CostLineKind; amountMinor:number; description?:string}>;
   organizationId: OpsId;
   workOrderId: OpsId;
   kind: CostLineKind;
@@ -259,28 +263,29 @@ export async function recordWorkOrderCost(
   const id = ids.next("cost");
   const currency = input.currency?.trim().toUpperCase() || "USD";
   if (!/^[A-Z]{3}$/u.test(currency)) throw new OpsDomainError("VALIDATION", "Currency must use a three-letter code");
-  const statements: OpsStatement[] = [
-    insert("ops_cost_lines", {
-      id,
-      organization_id: input.organizationId,
-      work_order_id: workOrder.id,
-      kind: input.kind,
-      description,
-      amount_minor: input.amountMinor,
-      currency,
-      service_date: input.serviceDate,
-      recorded_at: now,
-    }),
-    ...auditAndOutbox({
-      organizationId: input.organizationId,
-      aggregateId: workOrder.id,
-      eventType: "work_order.cost_recorded",
-      actor: input.actor,
-      occurredAt: now,
-      payload: { costLineId: id, kind: input.kind, description, amountMinor: input.amountMinor, currency, serviceDate: input.serviceDate, costBasis: "recorded_work_cost" },
-      ids,
-    }),
-  ];
+  if (input.providerType && !["internal", "vendor"].includes(input.providerType)) throw new OpsDomainError("VALIDATION", "Choose internal expense or vendor cost.");
+  let vendorId: string | undefined;
+  if (input.providerType === "vendor") {
+    const assignment = await repository.getLatestServiceAssignment(input.organizationId,workOrder.id);
+    if (assignment?.kind !== "outside_vendor" || !assignment.vendorId) throw new OpsDomainError("VALIDATION", "Assign a vendor to this work order before adding a vendor cost.");
+    vendorId = assignment.vendorId;
+    if (input.vendorId && input.vendorId !== vendorId) throw new OpsDomainError("CONFLICT", "The vendor changed. Refresh this work order before adding the cost.");
+  } else if (input.vendorId) throw new OpsDomainError("VALIDATION", "Internal expenses do not use a vendor.");
+  const detail = await repository.getWorkOrderDetail({organizationId:input.organizationId},workOrder.id);
+  if (input.providerType === "vendor" && !input.additionalExpense && detail?.costs.some(c => c.invoiceId && c.vendorId === vendorId)) throw new OpsDomainError("CONFLICT", "An invoice already supplies a vendor cost. Open the invoice, or mark this as a separate expense.");
+  const entries = input.breakdown?.length ? input.breakdown : [{kind:input.kind,amountMinor:input.amountMinor}];
+  if (entries.length > (input.providerType === "vendor" ? 100 : 5) || entries.some(e => !["labor","parts","travel","materials","other"].includes(e.kind) || !Number.isSafeInteger(e.amountMinor) || e.amountMinor <= 0) || entries.reduce((sum,e)=>sum+e.amountMinor,0) !== input.amountMinor) throw new OpsDomainError("VALIDATION", "The breakdown must add up to the total.");
+  for (const entry of entries) {
+    if (entry.description !== undefined && (!entry.description.trim() || entry.description.trim().length > 500)) throw new OpsDomainError("VALIDATION", "Enter a description for each line item (up to 500 characters).");
+  }
+  const statements: OpsStatement[] = entries.map((entry,index) => insert("ops_cost_lines", {
+    id: index === 0 ? id : ids.next("cost"), organization_id:input.organizationId,work_order_id:workOrder.id,
+    kind:entry.kind,description:entry.description?.trim() ?? (entries.length > 1 ? `${description} · ${entry.kind}` : description),
+    amount_minor:entry.amountMinor,currency,service_date:input.serviceDate,recorded_at:now,
+    provider_type:input.providerType,vendor_id:vendorId,cost_group_id:id,
+  }));
+  statements.push(...auditAndOutbox({organizationId:input.organizationId,aggregateId:workOrder.id,eventType:"work_order.cost_recorded",actor:input.actor,occurredAt:now,
+    payload:{costLineId:id,kind:input.kind,description,amountMinor:input.amountMinor,currency,serviceDate:input.serviceDate,providerType:input.providerType,vendorId,breakdown:entries,additionalExpense:input.additionalExpense,costBasis:"recorded_work_cost"},ids}));
   const threshold = workOrder.internalReviewThresholdMinor;
   if (threshold != null && currency === workOrder.internalReviewCurrency) {
     const [detail, tasks] = await Promise.all([repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id), repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id)]);

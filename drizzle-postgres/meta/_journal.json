@@ -428,6 +428,20 @@
       "when": 1790588593143,
       "tag": "0060_bored_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790597801618,
+      "tag": "0061_white_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790604172626,
+      "tag": "0062_simple_work_costs",
+      "breakpoints": true
     }
   ]
 }

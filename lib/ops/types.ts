@@ -216,7 +216,7 @@ export type WarrantyCaseStatus = "potential" | "diagnosis_required" | "confirmed
 export type CustomerChargeStatus = "undetermined" | "customer_responsible" | "warranty_covered" | "split";
 export type InvoiceStatus = "received" | "matching" | "exception" | "warranty_hold" | "discrepancy_hold" | "approved_for_payment" | "partially_paid" | "paid" | "void";
 export type InvoiceLineCategory = "labor" | "part" | "travel" | "diagnostic" | "equipment_rental" | "disposal" | "permit" | "tax" | "other_fee";
-export type InvoiceAllocationMethod = "equal" | "labor" | "work_order_value" | "manual" | "contract_rule";
+export type InvoiceAllocationMethod = "exact_work_order" | "equal" | "labor" | "work_order_value" | "manual" | "contract_rule";
 export type ValueEventCategory = "realized_verified" | "identified_exposure" | "estimated_opportunity";
 export type ActorType = "user" | "vendor_link" | "technician" | "store_device" | "system" | "support";
 
@@ -1758,7 +1758,7 @@ export interface InvoiceException {
   organizationId: OpsId;
   invoiceId: OpsId;
   invoiceLineId?: OpsId;
-  kind: "duplicate_invoice" | "contract_rate" | "authorization" | "unsupported_trip_charge" | "warranty_hold" | "service_discrepancy_hold" | "allocation_mismatch";
+  kind: "cost_match" | "duplicate_invoice" | "contract_rate" | "authorization" | "unsupported_trip_charge" | "warranty_hold" | "service_discrepancy_hold" | "allocation_mismatch";
   status: "open" | "resolved" | "waived";
   summary: string;
   amount: Money;
@@ -1812,6 +1812,7 @@ export interface ValueEvent {
 }
 
 export interface CostLine {
+  providerType?: "internal" | "vendor"; vendorId?: string; invoiceId?: string; costGroupId?: string; reversesCostId?: string;
   id: OpsId;
   organizationId: OpsId;
   workOrderId: OpsId;
@@ -2075,6 +2076,7 @@ export interface OpsFixture {
   auditEvents: AuditEvent[];
   complianceSchedules?: import("./compliance-types").ComplianceSchedule[];
   inspections?: import("./compliance-types").Inspection[];
+  invoiceUploads?: import("./invoice-upload-types").InvoiceUpload[];
   inboundEmails?: InboundEmail[];
   followUpPreferences?: FollowUpPreference[];
   notificationRules?: NotificationRule[];

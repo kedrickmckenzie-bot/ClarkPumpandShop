@@ -16,7 +16,7 @@ it("serves only the saved master forms through the matching vendor capability",a
  expect(await resolveInspectionMasterFiles("invalid-token".repeat(4))).toEqual([]);
  const request=new Request("http://localhost:3000/api/ops-public/service/files");
  const allowed=await GET(request,{params:Promise.resolve({token:PUBLIC_DEMO_LINKS.serviceToken,fileId:file.id})});
- expect(allowed.status).toBe(200);expect(await allowed.text()).toBe("Blank checklist");expect(allowed.headers.get("content-disposition")).toContain("attachment;");
+ expect(allowed.status).toBe(200);expect(await allowed.text()).toBe("Blank checklist");expect(allowed.headers.get("content-disposition")).toContain("inline;");
  expect((await GET(request,{params:Promise.resolve({token:PUBLIC_DEMO_LINKS.serviceToken,fileId:"completed-evidence"})})).status).toBe(404);
  expect((await GET(request,{params:Promise.resolve({token:"invalid-token".repeat(4),fileId:file.id})})).status).toBe(404);
 });

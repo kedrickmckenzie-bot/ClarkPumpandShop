@@ -13,12 +13,12 @@ export function WorkPriceForm({ workOrderId, version, scope, vendors, currency }
       router.push("/app/work-orders/" + workOrderId + "?view=overview&notice=Price+saved#work-prices"); router.refresh();
     } catch { setError("Could not save. Try again."); } finally { setBusy(false); }
   }}>
-    <label>Price for<select name="kind" value={kind} onChange={event => setKind(event.target.value)}><option value="repair">Repair</option><option value="replace">Replace</option></select></label>
-    <label>Price ({currency})<input name="amount" inputMode="decimal" required placeholder="0.00" /></label><input name="currency" type="hidden" value={currency}/>
+    <label>Estimate for<select name="kind" value={kind} onChange={event => setKind(event.target.value)}><option value="repair">Repair</option><option value="replace">Replacement</option></select></label>
+    <label>Estimated amount ({currency})<input name="amount" inputMode="decimal" required placeholder="0.00" /></label><input name="currency" type="hidden" value={currency}/>
     <label>Vendor<select name="vendorId" required defaultValue=""><option value="" disabled>Choose</option>{vendors.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
-    <label>Covers<select name="scopeKind" key={kind} required defaultValue={kind === "repair" ? "job" : ""}><option value="" disabled>Choose</option><option value="job">This job</option><option value="part">One part</option><option value="whole">Whole unit + setup</option></select></label>
-    <label className={styles.wide}>Work<input name="scope" defaultValue={scope} required maxLength={2000}/></label>
+    <label>Estimate covers<select name="scopeKind" key={kind} required defaultValue={kind === "repair" ? "job" : ""}><option value="" disabled>Choose</option><option value="job">This work order</option><option value="part">One component</option><option value="whole">Equipment and installation</option></select></label>
+    <label className={styles.wide}>Work included<input name="scope" defaultValue={scope} required maxLength={2000}/></label>
     {error ? <p role="alert" className={styles.wide}>{error}</p> : null}
-    <button disabled={busy}>{busy ? "Saving…" : "Save price"}</button>
+    <button disabled={busy}>{busy ? "Saving…" : "Save estimate"}</button>
   </form>;
 }

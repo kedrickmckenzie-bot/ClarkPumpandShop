@@ -1,3 +1,4 @@
+import { RecordFiles } from "@/components/workspace/record-files";
 import type { Metadata } from "next";
 import { MutationReceipt, RequestReviewPanel } from "@/components/ops/service-control-panels";
 import { DetailView } from "@/components/ops/views";
@@ -14,5 +15,5 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     loadDetailModel("request", id),
     loadRequestReviewModel(id),
   ]);
-  return <DetailView model={model} beforeSections={<div className={styles.controlStack}><MutationReceipt code={updated} /><RequestReviewPanel model={review} /></div>} />;
+  return <DetailView model={model} beforeSections={<div className={styles.controlStack}><RecordFiles kind="request" id={id} /><MutationReceipt code={updated} /><RequestReviewPanel model={review} /></div>} />;
 }

@@ -171,7 +171,7 @@ function displayDateFormatter(timeZone: string) {
 const metricCopy: Record<TrendMetricId, { label: string; definition: string }> = {
   recorded_cost: {
     label: "Recorded work cost",
-    definition: "Costs entered on work orders, grouped by service month. Estimates and invoices are not included.",
+    definition: "Saved work costs, including matched invoice costs, grouped by service month. Estimates stay separate.",
   },
   linked_invoice: {
     label: "Linked invoice amount",

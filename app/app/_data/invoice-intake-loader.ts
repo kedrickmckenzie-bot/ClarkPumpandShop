@@ -1,5 +1,6 @@
 import "server-only";
-import { notFound } from "next/navigation";
+import { invoiceExtractionSchema } from "@/lib/ops/invoice-extraction";
+import { notFound,redirect } from "next/navigation";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import { loadOperatorSession } from "./operator-loader";
 import type { InvoiceIntakeQuery } from "@/lib/ops/invoice-intake-query";
@@ -10,12 +11,20 @@ export async function loadInvoiceIntake(params: Record<string, string | string[]
   const writable = session.accessMode === "preview" || Boolean(session.permissions?.length) && session.permissions!.every(p => ["ops:*", "ops:write", "ops:read_write", "ops:store_manage"].includes(p));
   if (!writable || !["executive", "facilities", "finance"].includes(session.role) || session.storeIds !== undefined || session.regionIds !== undefined) notFound();
   const repository = await getServerOpsRepository(), org = session.organizationId;
+  const grants=session.membershipId?await repository.listScopeGrantsForMembership(org,session.membershipId):[];
+  if(!grants.some(g=>g.scopeKind==="organization"&&g.scopeId===org&&["ops:*","ops:write","ops:read_write"].includes(g.permission)))notFound();
+  const uploadId=first(params.upload),upload=uploadId?await repository.getInvoiceUpload(org,uploadId):null;
+  if(uploadId&&!upload)notFound();
+  if(upload?.status==="recorded"&&upload.invoiceId)redirect(`/app/invoices/${encodeURIComponent(upload.invoiceId)}`);
+  if(upload?.status==="dismissed")redirect("/app/invoices");
+  const parsed=upload?.extractedJson?invoiceExtractionSchema.safeParse(JSON.parse(upload.extractedJson)):null;
+  const extracted=parsed?.success?parsed.data:undefined;
   const workId = first(params.work), work = workId ? await repository.getWorkOrder(org, workId) : null;
   if (workId && (!work || work.status === "cancelled")) notFound();
   const store = work ? await repository.getStore(org, work.storeId) : null;
   if (work && !store) notFound();
   const assignment = work ? await repository.getActiveAssignment(org, work.id) : null;
-  const vendorId = first(params.vendor) ?? (assignment?.kind === "outside_vendor" ? assignment.vendorId : undefined);
+  const vendorId = first(params.vendor) ?? (assignment?.kind === "outside_vendor" ? assignment.vendorId : work ? await repository.getInvoiceVendorId(org, work.id) : undefined);
   let vendor = vendorId ? await repository.getVendor(org, vendorId) : null;
   if (first(params.vendor) && (!vendor || vendor.status === "inactive")) notFound();
   if (vendor?.status === "inactive") vendor = null;
@@ -25,5 +34,5 @@ export async function loadInvoiceIntake(params: Record<string, string | string[]
   const kind: InvoiceIntakeQuery["kind"] | undefined = !work ? "work" : choose === "vendor" || !vendor ? "vendor" : choose === "agreement" ? "agreement" : undefined;
   const search = first(params.q)?.trim().slice(0, 160) ?? "", requested = Number(first(params.page) ?? 1), page = Number.isSafeInteger(requested) && requested > 0 && requested <= 1_000_000 ? requested : 1;
   const options = kind ? await repository.listInvoiceIntakeOptions(session, { kind, search, vendorId: vendor?.id, limit: 25, offset: (page - 1) * 25 }) : undefined;
-  return { scopeLabel: session.scopeLabel, work: work ? { id: work.id, number: work.number, problem: work.problem, storeNumber: store!.storeNumber } : undefined, vendor: vendor ? { id: vendor.id, name: vendor.name } : undefined, agreement: agreement ? { id: agreement.id, label: `${agreement.sourceAgreementReference} · Version ${agreement.version}` } : undefined, kind, options, search, page };
+  return { upload:upload?{id:upload.id,version:upload.version,filename:upload.filename,status:upload.status,issues:JSON.parse(upload.issuesJson) as string[],extracted}:undefined, scopeLabel: session.scopeLabel, work: work ? { id: work.id, number: work.number, problem: work.problem, storeNumber: store!.storeNumber } : undefined, vendor: vendor ? { id: vendor.id, name: vendor.name } : undefined, agreement: agreement ? { id: agreement.id, label: `${agreement.sourceAgreementReference} · Version ${agreement.version}` } : undefined, kind, options, search, page };
 }

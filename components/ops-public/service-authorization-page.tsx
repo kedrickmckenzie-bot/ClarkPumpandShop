@@ -45,7 +45,7 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { t
             <div className={styles.callout} style={{ marginTop: "1rem" }}><strong>What to do next</strong><p>{authorization.nextStep}</p></div>
           </section>
 
-          {forms.length?<section className={styles.card}><h2 className={styles.cardTitle}>Instructions & blank forms</h2><p>Download or print, then return the completed paperwork and photos.</p><ul>{forms.map(f=><li key={f.href}><a href={f.href}>{f.name}</a></li>)}</ul></section>:null}
+          {forms.length?<section className={styles.card}><h2 className={styles.cardTitle}>Instructions & blank forms</h2><p>Download or print, then return the completed paperwork and photos.</p><ul>{forms.map(f=><li key={f.href}><a target="_blank" rel="noopener noreferrer" href={f.href}>{f.name}</a> · <a href={`${f.href}?download=1`}>Download</a></li>)}</ul></section>:null}
           {authorization.priorResponse ? (
             <section className={styles.notice} aria-label="Recorded vendor response">
               <strong>{authorization.priorResponse.label}</strong>

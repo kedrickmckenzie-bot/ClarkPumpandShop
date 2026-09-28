@@ -1,3 +1,4 @@
+import { invoiceUploadRegression } from "./helpers/invoice-upload-regression";
 import { Miniflare } from "miniflare";
 import { readdirSync, readFileSync } from "node:fs";
 import { expect, it } from "vitest";
@@ -26,5 +27,6 @@ it("loads the hosted dashboard within actual D1 query limits", async () => {
       expect(await repository.listAttention(scoped, access, {asOf:fixture.asOf, limit:7})).toEqual(await reference.listAttention(scoped, access, {asOf:fixture.asOf, limit:7}));
       expect(await repository.getDashboardLifecycle(scoped, fixture.asOf)).toEqual(await reference.getDashboardLifecycle(scoped, fixture.asOf));
     }
+    await invoiceUploadRegression(repository);
   } finally { await runtime.dispose(); }
 }, 120_000);

@@ -8,7 +8,7 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string;do
     const {id,documentId}=await params;
     const document=(await repository.listVendorComplianceDocuments(session.organizationId,id)).find(d=>d.id===documentId);
     const file=document?.storedFileId?await repository.getStoredFileById(session.organizationId,document.storedFileId):null;
-    const response=await quoteFileResponse(file);
+    const response=await quoteFileResponse(file, request);
     if(response.ok&&file&&new URL(request.url).searchParams.get("download")!=="1"&&["application/pdf","image/jpeg","image/png","image/webp","text/plain"].includes(file.contentType)) {
       response.headers.set("content-disposition",`inline; filename*=UTF-8''${encodeURIComponent(file.originalName)}`);
       response.headers.set("content-security-policy","sandbox; default-src 'none'; frame-ancestors 'self'");

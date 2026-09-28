@@ -1,3 +1,4 @@
+import { RecordFiles } from "@/components/workspace/record-files";
 import { safeDecisionReturn } from "@/lib/ops/review-navigation";
 import type { Metadata } from "next";
 import { roleCan } from "@/components/ops/role-policy";
@@ -53,7 +54,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
     <DetailView
       model={model}
       initialSection="overview"
-      beforeSections={<>{review ? <EquipmentReview model={review} /> : null}{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
+      beforeSections={<><RecordFiles kind="asset" id={id} />{review ? <EquipmentReview model={review} /> : null}{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
       after={canSetupEquipment || canSetupPm ? <SetupActions
           title="Build out this equipment record"
           description="Add component depth or schedule preventive work. Both features stay optional and connect back to this equipment history."

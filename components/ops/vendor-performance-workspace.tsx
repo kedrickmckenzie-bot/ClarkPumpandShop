@@ -613,7 +613,7 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
         </section>
 
         <section className={styles.evidenceSection} aria-labelledby="cost-evidence" id="cost-evidence">
-          <SectionHeader id="cost-evidence-heading" icon={<CircleDollarSign size={20} />} title="Recorded work costs" description="Work-order costs entered in the platform. Quotes, approval limits, and invoices are not added to this total." count={money(vendor.recordedCostMinor)} />
+          <SectionHeader id="cost-evidence-heading" icon={<CircleDollarSign size={20} />} title="Recorded work costs" description="Saved work costs, including matched invoice costs. Quotes and approval limits stay separate." count={money(vendor.recordedCostMinor)} />
           {model.costRows.length ? (
             <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Work orders with recorded cost attributed to this vendor</caption><thead><tr><th>Work / store</th><th>Status</th><th>Source lines</th><th>Recorded cost</th></tr></thead><tbody>
               {model.costRows.map((row) => <tr key={row.id}><td><Link href={row.href}><strong>{row.workOrderNumber}</strong><small>{row.storeLabel} · {row.problem}</small></Link><WorkReviewButton href={row.href} label={row.workOrderNumber} /></td><td><Link href={row.href}>{row.statusLabel}</Link></td><td><Link href={row.href}>{row.costLineCount}</Link></td><td><Link href={`${row.href.split("?")[0]}?view=cost`}>{row.costLabel}<ArrowRight aria-hidden="true" size={14} /></Link></td></tr>)}

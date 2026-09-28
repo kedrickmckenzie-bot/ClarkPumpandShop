@@ -15,8 +15,10 @@ export default async function OverviewPage() {
     throw error;
   });
   const session=await loadOperatorSession(),repository=await getServerOpsRepository(),start=new Date().toISOString().slice(0,7);
-  if(!roleCanAccessProgramRoute(session.role,"lifecycle"))return <ControlTower model={model}/>;
+  const pendingInvoices=["executive","facilities","finance"].includes(session.role)&&session.storeIds===undefined&&session.regionIds===undefined?await repository.listInvoiceUploads(session.organizationId,{status:"pending"}):[];
+  const invoiceAttention=pendingInvoices.length?<div className={`${styles.panel} ${styles.bar}`}><div><strong>Invoices need attention</strong><p>Review unmatched files or resume interrupted reading.</p></div><Link href="/app/invoices?view=review#uploaded-invoices">Review invoices →</Link></div>:null;
+  if(!roleCanAccessProgramRoute(session.role,"lifecycle"))return <ControlTower model={model} capitalSummary={invoiceAttention}/>;
   const capital=await repository.queryCapitalPlans(session,{start,months:12,currency:"USD"}),buckets=capital.buckets.filter(b=>validMonth(b.month));
   const amount=buckets.reduce((n,b)=>n+b.amountMinor,0),missing=buckets.reduce((n,b)=>n+b.missing,0),undated=capital.buckets.find(b=>b.month==="undated")?.count??0;
-  return <ControlTower model={model} capitalSummary={<div className={`${styles.panel} ${styles.bar}`}><div><strong>Replacement planning · next 12 months</strong><p>{new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(amount/100)} USD known planned cost · {missing} need a cost · {undated} need a month</p></div><Link href={`/app/lifecycle?view=capital&start=${start}&months=12&currency=USD`}>View capital forecast →</Link></div>} />;
+  return <ControlTower model={model} capitalSummary={<>{invoiceAttention}<div className={`${styles.panel} ${styles.bar}`}><div><strong>Replacement planning · next 12 months</strong><p>{new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(amount/100)} USD known planned cost · {missing} need a cost · {undated} need a month</p></div><Link href={`/app/lifecycle?view=capital&start=${start}&months=12&currency=USD`}>View capital forecast →</Link></div></>} />;
 }

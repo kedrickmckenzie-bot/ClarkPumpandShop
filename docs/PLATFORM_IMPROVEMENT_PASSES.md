@@ -4,6 +4,80 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Inspection assignments and shared upload links — September 28, 2026
+
+- [x] IL-01 One searchable Assigned to field finds active employee accounts and approved vendors covering the selected store. Generated internal work uses the selected employee; existing ordinary technician routing stays intact.
+- [x] IL-02 Internal and vendor inspection emails carry the work-order number and an expiring secure link. The assignee remains a recipient during escalation. Instructions are attached to initial delivery; reminders refer to the same inspection.
+- [x] IL-03 The secure page downloads master forms and accepts results, paperwork and photos. App and link submissions use the same domain command, version checks, private storage and inspection history. The link cannot approve closure or open unrelated files. Current assignment, organization, active account, store coverage, token purpose and expiry are checked.
+- [x] IL-04 Seed, final typecheck, lint and Vinext build passed. Full suite: 1,087 passed, two timeouts (PostgreSQL seed at 120 seconds and PM review at 30 seconds), with no assertion failures. The subsequent single-worker workflow run passed all 59 tests, including PostgreSQL; the focused rerun passed all 10 compliance/route/PM-review tests. New regression coverage checks internal assignment, email recipients/attachments/secure URLs, expired and unknown links, paused schedules, stale submissions, cross-origin denial, public approval denial, private file scope and shared app/link evidence. `git diff --check` passed. Logs: `%TEMP%/inspection-final-*.log` and `%TEMP%/inspection-last-*.log`. Architecture acceptance remains unchanged; this bounded inspection improvement does not close outstanding rebuild gates.
+
+Browser acceptance: created a weekly Store 104 walk assigned by search to Maria Santos, with a blank checklist. Generated CPS-2026-2282. Submitted completed paperwork through its secure link, then added a PNG through the app; both files appeared on both surfaces and the inspection remained awaiting review, with separate attributed history entries. Phone view had no document overflow; viewport restored. Master download browser automation timed out; a direct read-only endpoint check returned HTTP 200, attachment headers and the original checklist contents. Screenshot: `%TEMP%/inspection-link-proof.png`. Prior broader browser journey evidence under IA-04 remains applicable; this change was checked through its affected inspection journey.
+
+Actual delivery needs the existing email provider and worker. Mock delivery verifies recipients, secure links and attachments; no live email was sent. Existing records and dev4.log preserved. No commit, push or publication. Details: [Compliance schedules](COMPLIANCE_SCHEDULES.md).
+
+## Assigned vendor costs — September 28, 2026
+
+- [x] AV-01 Cost entry shows the assigned vendor without a dropdown. Server resolves the vendor from the work assignment, retains completed assignments and rejects stale/different vendor submissions. Missing vendor assignment has a direct work-order link and disables vendor-cost submission.
+- [x] AV-02 Invoice vendor mismatch checks include completed assignments. Comparison estimates retain their independent vendor selection.
+- [x] AV-03 Seed, typecheck, lint, 59 end-to-end checks and Vinext build passed. Full suite: 1,087 passed with one outdated PostgreSQL fixture failing because it had no vendor assignment. Added the assignment to that fixture; the subsequent complete end-to-end run passed all 59 checks, including the corrected PostgreSQL test. New tests verify automatic vendor attribution on completed work, rejection of missing/mismatched assignments, and invoice mismatch flags after completion. Browser confirmed ClearFlow as the fixed vendor on Store 111's work order and no horizontal overflow at 390px; normal viewport restored. No additional browser records created or reset. Prior broader journey evidence remains under IA-04.
+
+Logs: `%TEMP%/assigned-vendor-*.log`. Existing dev4.log preserved. No external messages, commit or push.
+
+## Vendor line items and estimate clarity — September 28, 2026
+
+- [x] VL-01 Optional vendor description/amount rows, add/remove controls, automatic total, bounded server validation and grouped audited cost records. Internal breakdown remains optional.
+- [x] VL-02 New invoice costs retain invoice descriptions and amounts; existing exact matches remain linked without another cost, and corrections preserve original rows.
+- [x] VL-03 Estimates and equipment history use distinct labels, a collapsed estimate form, and responsive fields. Removed the unsupported “Worth a look” prompt.
+- [x] VL-04 Required checks passed: seed, typecheck, lint, 168 test files / 1,085 tests, 59 end-to-end checks and Vinext build. New regressions verify descriptive vendor rows, grouped matching without duplication, and preservation of imported invoice line descriptions/amounts. `git diff --check` clean apart from the existing journal line-ending notice.
+
+Browser evidence: saved two fictional vendor rows ($50 service call and $25 connector) on closed CPS-2026-0103; recorded total changed $550 to $625 and the descriptions persisted. Rows are labeled “Line item check”. Checked vendor total calculation and estimate entry at 390px without document overflow; restored normal viewport. Inspected the exact Store 111 example and opened its estimate history. Screenshot: `%TEMP%/vendor-estimate-update.png`. Prior broader journey evidence under IA-04 remains applicable. No reset, external messages, commit or push. Existing dev4.log preserved. Logs: `%TEMP%/vendor-lines-*.log`.
+
+## Simple work costs — September 28, 2026
+
+- [x] SC-01 Optional total-first cost entry, internal/vendor choice, optional note and breakdown; closed work remains closed and absent costs read “Cost not recorded.”
+- [x] SC-02 Structured expense ownership, grouped breakdowns and invoice provenance persisted in SQLite/PostgreSQL schemas.
+- [x] SC-03 Clean invoices add the vendor cost once; exact vendor/amount matches link prior entries; uncertain/different costs require a review choice. Replacement appends reversing entries and retains original amounts and audit history.
+- [x] SC-04 Cost form leads the page, linked invoices open their source, report definitions explain matched invoice costs, mobile layout stays within viewport.
+- [x] SC-05 Required checks passed: deterministic seed, typecheck, lint, 168 test files / 1,083 tests, 59 end-to-end checks, and Vinext build. Final focused cost/finance checks: 13 passed; typecheck and lint repeated after final copy and matching refinements. Initial failures were corrected: invoice-version conflicts now report a domain conflict, the interrupted PostgreSQL migration was completed, and migration count / absent-cost expectations were updated. PostgreSQL verifies a manual vendor total links to its invoice without a second cost; SQLite verifies retained originals, reversing corrections and total reconciliation.
+
+Browser acceptance: saved one fictional $85 internal expense on closed CPS-2026-0103 (total $465 → $550), inspected the saved Internal row and unchanged Closed state, checked the optional breakdown, invoice-upload link and source links, and inspected a 390px viewport without document overflow. Restored the normal viewport. The form now precedes historical prices and uses a restrained blue invoice hint. Prior broader journey evidence under IA-04 remains applicable, with current end-to-end checks covering unchanged workflows. The $85 browser test entry remains labeled “Cost workflow check — internal parts”; user state was not reset. Historical/accounting imports keep their existing financial basis; new intake invoices provide recorded work costs after review clears. No external messages, deployment, commit or push. Existing dev4.log preserved.
+
+Validation logs: `%TEMP%/simple-cost-final-*.log`, `simple-cost-verified-typecheck.log`, `simple-cost-verified-lint.log`, `cost-final-focused.log`.
+
+## Invoice review wording — September 28, 2026
+
+- [x] IW-01 Plain-language invoice flags, including display of older saved messages without overwriting history; “Dismiss flag” replaces “Waive flag.”
+- [x] IW-02 Manual invoice entry uses the same optional-control behavior as upload intake. Missing spending approval or an unused vendor agreement does not create a new review flag. Entered limits and actual discrepancies remain checked.
+- [x] IW-03 Verification: seed, typecheck, lint, full suite (167 files / 1,077 tests), end-to-end suite (59 tests), and Vinext build passed. Final copy changes also passed typecheck and focused lint. Added regression for a $5,000 invoice with no internal flag amount. Browser confirmed the older saved missing-approval flag renders as “No approved spending amount is saved on this work order,” under “Spending check,” and the duplicate message is shortened. Existing flags are retained for an explicit review decision. Logs: `%TEMP%/invoice-plain-*.log`. Prior broader journey evidence under IA-04 remains applicable; this follow-up changed invoice entry and copy only. No state reset, external messages, commit or push.
+
+## Automatic invoice intake — September 28, 2026
+
+User requested upload-first intake, drag/drop and file selection, with review only for exceptions. This authorized follow-up takes priority over older backlog items.
+
+- [x] IA-01 Saved original documents, bounded upload queue, open/download, retry and audited dismissal.
+- [x] IA-02 Configurable document reader; exact WO/vendor/store matching, reconciled line amounts, internal threshold and existing safeguards.
+- [x] IA-03 Discoverable Invoices, editable exception review, manual fallback and Overview attention link.
+- [x] IA-04 Persistence/concurrency/scope tests, required checks and responsive browser acceptance.
+
+Checkpoint: IA-01–IA-04 implemented and locally verified. Final seed, typecheck, lint, full suite (167 files / 1,076 tests), end-to-end suite (59 tests), and Vinext build passed. SQL migration parent keys, address search and test-fixture storage uniqueness were corrected before the final clean run. Automatic allocations are labeled as exact-work-order matches without inventing human confirmation or a specific visit. Focused invoice, reader, upload-route, SQLite persistence and migration checks: 25 passed. Browser verified batch file selection, saved original/download, duplicate reuse, manual correction with work/vendor selection, the Needs review queue, Overview follow-up, retained-file dismissal and a 390px layout without horizontal overflow. Drag/drop shares the same upload handler; a native drag gesture has not been exercised. Provider calls require server-side OPENAI_API_KEY and INVOICE_EXTRACTION_MODEL. Missing provider configuration retains the source file for manual review; no synthetic extraction is presented as real.
+
+Validation logs: `%TEMP%/invoice-auto-verified-suite.log`, `invoice-auto-e2e.log`, `invoice-auto-build.log`, `invoice-auto-typecheck.log`, `invoice-auto-lint.log`, `invoice-auto-seed.log`. Additional browser inspection covered store-address search/drill-through, store creation, deferred work classification/routing, vendor authorization, technician/no-WO entry, PM and lifecycle. Cross-channel visit mutations are covered by the passing end-to-end suite. A fictional `BROWSER-UPLOAD-TEST` invoice and one dismissed test upload remain in the local fixture; user state was not reset. No live provider request, production deployment, commit or push was performed. Existing `dev4.log` remains untouched.
+
+## File access — September 28, 2026
+
+User requested openable file references throughout the platform after finding an invoice exception without its source document. This follow-up takes priority over the older sales-demo backlog.
+
+- [x] FA-01 Invoice source link and document section, plus scoped request, visit and equipment attachment access.
+- [x] FA-02 Shared inline preview and explicit download controls for saved documents/photos; current compliance master forms open separately from saved inspection copies.
+- [x] FA-03 Correct metadata-only demo attachments so they are not presented as available documents; retain their historical references.
+- [x] FA-04 Required regression/build checks and browser acceptance.
+
+Checkpoint: FA-01–FA-04 complete and locally verified. Invoice, request, visit and equipment files require access to the exact parent record. Invoice access preserves all-store allocation checks. Unsupported preview formats download. PDFs, photos and text open privately with no-store/nosniff/sandbox headers. The seeded Store 109 exception has an explicit audited source link; no invoice relationship is guessed from a vendor or filename.
+
+Browser evidence: followed the exception to INV-109-26 and verified the missing-document message. Created a temporary local invoice with a PNG, opened its file in a new tab, downloaded it, and inspected the invoice at 390px with no horizontal overflow. Temporary test records were cleared by restarting the local fixture preview. No production deployment or external messages.
+
+Validation: seed, typecheck, lint and preview build passed. Full suite: 163 files / 1,053 tests passed. End-to-end suite: 59 passed. Final attachment checks: 5 files / 16 tests passed, including current master forms versus saved inspection snapshots, inline/download headers, missing bytes, unrelated files, and tenant/store denial. Initial parallel broad runs suffered resource-contention timeouts and were superseded by successful single-worker runs. Manager search, source invoice drill-through, store creation, optional work routing, work/store/equipment, compliance, no-WO review, PM and lifecycle screens inspected; unchanged vendor/cross-channel mutations retain existing browser evidence plus the current end-to-end suite. `git diff --check` clean. Logs: `%TEMP%/file-access-*.log`. Existing `dev4.log` remains untouched.
+
 ## Daily operation improvements — September 28, 2026
 
 User approved all eleven product improvements. Work proceeds in the order below; existing domain commands, tenant scope and audit remain authoritative. Earlier sales-demo recommendations are separate, pending work.

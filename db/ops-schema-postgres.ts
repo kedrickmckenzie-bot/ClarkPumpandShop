@@ -1691,6 +1691,7 @@ export const opsCostLines = pgTable("ops_cost_lines", {
   currency: text("currency").notNull(),
   serviceDate: date("service_date", { mode: "string" }).notNull(),
   recordedAt: instant("recorded_at").notNull(),
+  providerType: text("provider_type"), vendorId: text("vendor_id"), invoiceId: text("invoice_id"), costGroupId: text("cost_group_id"), reversesCostId: text("reverses_cost_id"),
 }, (table) => [
   unique("uq_ops_cost_lines_org_id").on(table.organizationId, table.id),
   index("idx_ops_cost_lines_org_work_date").on(table.organizationId, table.workOrderId, table.serviceDate),
@@ -2135,3 +2136,11 @@ export const opsInspections = pgTable("ops_inspections", {
  foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
  check("chk_ops_inspection_status",sql`${t.status} IN ('pending','performed','passed','action_needed')`)
 ]);
+
+export const opsInvoiceUploads = pgTable("ops_invoice_uploads", {
+ id:text("id").primaryKey(),organizationId:text("organization_id").notNull(),fileId:text("file_id").notNull(),sha256:text("sha256").notNull(),filename:text("filename").notNull(),
+ status:text("status").notNull(),version:integer("version").notNull(),extractedJson:text("extracted_json"),issuesJson:text("issues_json").notNull(),invoiceId:text("invoice_id"),uploadedByMembershipId:text("uploaded_by_membership_id").notNull(),createdAt:text("created_at").notNull(),updatedAt:text("updated_at").notNull(),
+}, t => [uniqueIndex("idx_ops_invoice_upload_org_hash").on(t.organizationId,t.sha256),index("idx_ops_invoice_upload_queue").on(t.organizationId,t.status,t.createdAt,t.id),
+ foreignKey({columns:[t.organizationId,t.fileId],foreignColumns:[opsFiles.organizationId,opsFiles.id]}),
+ foreignKey({columns:[t.organizationId,t.invoiceId],foreignColumns:[opsInvoices.organizationId,opsInvoices.id]}),
+ check("chk_ops_invoice_upload_status",sql`${t.status} IN ('queued','review','recorded','dismissed')`)]);
