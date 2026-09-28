@@ -78,11 +78,13 @@ export function PublicLinkUnavailable({ kind = "link" }: { kind?: "link" | "serv
 
 export function ServerReceipt({
   receipt,
+  headingOverride,
   restartHref,
   restartLabel,
   timeZone,
 }: {
   receipt: PublicActionReceipt | TechnicianCheckInReceipt | TechnicianCheckOutReceipt | StoreIssueReceipt;
+  headingOverride?: string;
   restartHref?: string;
   restartLabel?: string;
   timeZone?: string;
@@ -93,7 +95,7 @@ export function ServerReceipt({
   return (
     <section className={styles.receipt} aria-live="polite" aria-labelledby="receipt-title">
       <span className={styles.receiptIcon} aria-hidden="true"><Check size={24} /></span>
-      <h2 className={styles.receiptTitle} id="receipt-title">{receipt.heading}</h2>
+      <h2 className={styles.receiptTitle} id="receipt-title">{headingOverride ?? receipt.heading}</h2>
       <p className={styles.receiptMessage}>{receipt.message}</p>
       <div className={styles.receiptGrid}>
         {checkIn ? (

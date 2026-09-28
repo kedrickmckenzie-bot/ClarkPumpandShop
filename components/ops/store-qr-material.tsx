@@ -36,7 +36,7 @@ export function StoreQrMaterial({
     if (!publicUrl) return;
     let cancelled = false;
     void QRCode.toDataURL(publicUrl, {
-      width: 360,
+      width: 900,
       margin: 2,
       errorCorrectionLevel: "M",
       color: { dark: "#172033", light: "#ffffff" },
@@ -92,11 +92,11 @@ export function StoreQrMaterial({
         <div className={styles.instructions}>
           <div>
             <span className={styles.step}>1</span>
-            <p><strong>Scan and choose the work.</strong> The technician selects the operator work order or records that no work order was provided.</p>
+            <p><strong>Scan and choose your company.</strong> Select your work order, or choose “I don’t see my work order.”</p>
           </div>
           <div>
             <span className={styles.step}>2</span>
-            <p><strong>Record the exact arrival time.</strong> The platform displays it in the store&apos;s local timezone. Location is requested only for the arrival event when policy enables it.</p>
+            <p><strong>Check in.</strong> Enter your name and crew size. After check-in, you can add other approved work to your visit.</p>
           </div>
           <div>
             <span className={styles.step}>3</span>

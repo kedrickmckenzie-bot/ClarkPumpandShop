@@ -4,6 +4,22 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## QR and visit polish — September 28
+
+- [ ] QP-01 Remove reserved blank print pages, enlarge QR and update company-first instructions.
+- [x] QP-02 Distinguish ended-window PM completion from all completed work.
+- [x] QP-03 Remove repeated receipt heading and name job checkboxes explicitly.
+- [x] QP-04 Show existing additional-work descriptions upfront; preserve main job list and vendor search.
+- [ ] QP-05 Required checks and affected browser journeys.
+
+Checkpoint: polish implementation and automated validation are complete; final printed page-count verification remains open. QP-01 and QP-05 remain partial until that print check passes. Vendor-search changes are deferred. No new problem-title field or Render reset. User-provided external review reports company-first phone check-in and QR download/scan passed on a fresh independent copy; print had trailing blank pages. This is external evidence, not an assistant-run result.
+
+Implementation: print CSS removes unrelated records from layout rather than hiding their visibility, resets ancestor height/spacing, and uses a 110mm QR generated at 900px. Instructions now start with choosing the company. PM labels distinguish completion for ended service windows from all completed records and explain early completions. Optional-job descriptions appear directly in each offer. Job selectors have visible native checkboxes and work-order-specific accessible names. The check-in receipt uses “Visit details” beneath the single “You’re checked in” heading.
+
+Browser evidence: assistant opened the live Store 104 QR destination, chose ClearFlow, recorded a QA-only unmatched arrival, confirmed both optional descriptions and their accessible names, skipped additional work and completed checkout. QA visit: visit-0a8f3442-076c-45f7-bcec-c0be568b4fcb. Phone layout had no horizontal overflow. After loading the latest assets, ColdLine’s two equipment-based job headings remained intact; expansion showed a visible, named checkbox. PM All completed opens 119 supporting records; the ended-window percentage opens its 99 source records. Screenshot: `%TEMP%/polish-job-checkbox.png`. The in-app browser’s Print action did not expose a print preview, so the final printed page count is not confirmed. No Render reset, vendor-search changes, commit or push.
+
+Validation: seed, typecheck, lint, full suite (1,099/1,099), workflow suite (62/62), production build and whitespace checks passed. Final typecheck/lint also passed after the checkbox styling update. Logs: `%TEMP%/polish-*.log`. Affected phone and manager journeys were checked as described above; unrelated browser journeys were not repeated. Print preview/page count remains the only acceptance gap for this polish pass.
+
 September 28: user authorized committing and pushing the demo-readiness, arrival-review and company-first check-in changes. Automated validation is recorded below; CI-04 browser acceptance and DR-07 QR download/print acceptance remain open. Local dev4.log is excluded from the commit.
 
 ## Company-first check-in — September 28

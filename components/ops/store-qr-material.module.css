@@ -187,4 +187,24 @@
   }
 }
 
-@media print { :global(body):has(.material) * { visibility:hidden; } .material,.material *{visibility:visible!important}.material{position:absolute;left:0;top:0;width:100%;border:0}.actions{display:none!important} }
+@media print {
+  @page { margin: 12mm; }
+  /* Remove other records from print layout, rather than reserving invisible pages. */
+  :global(body):has(.material) *:not(:has(.material)):not(.material):not(.material *) { display: none !important; }
+  :global(html):has(.material), :global(body):has(.material), :global(body) *:has(.material) {
+    display: block !important; position: static !important; width: auto !important;
+    height: auto !important; min-height: 0 !important; max-height: none !important;
+    margin: 0 !important; padding: 0 !important; overflow: visible !important;
+    background: white !important; border: 0 !important;
+  }
+  .material { border: 0; border-radius: 0; box-shadow: none; break-inside: avoid; overflow: visible; }
+  .header { padding: 0 0 4mm; justify-content: center; text-align: center; }
+  .header h2 { font-size: 24pt; }
+  .header span, .header p, .icon, .actions, .url { display: none !important; }
+  .content { display: flex; flex-direction: column; gap: 5mm; padding: 4mm 0 0; }
+  .qrFrame { min-height: 0; border: 0; padding: 0; }
+  .qrFrame img { width: 110mm; height: 110mm; max-width: 100%; }
+  .qrFrame strong { margin-top: 2mm; }
+  .instructions { width: 100%; gap: 3mm; }
+  .instructions p { font-size: 12pt; line-height: 1.35; }
+}

@@ -151,7 +151,7 @@ function Filters({ model }: { model: ProgramPageViewModel }) {
 
 function MetricStrip({ model, kind }: { model: ProgramPageViewModel; kind: PlanningWorkspaceKind }) {
   const copy = workspaceCopy[kind];
-  if (kind === "pm") return <>{model.metrics.filter(m=>m.id==="pm-completion-rate").map(m=><section className={styles.completionSummary} key={m.id}><h2>{m.label} · <Link href={m.link.href}>{m.value}</Link></h2><p>{m.supportingText}</p></section>)}<nav className={styles.pmStatuses} aria-label="PM status filters">{model.metrics.filter(m=>m.id!=="pm-completion-rate").map(metric => <Link href={metric.link.href} aria-current={metric.selected ? "page" : undefined} key={metric.id}><span>{metric.label}</span><strong>{metric.value}</strong></Link>)}</nav></>;
+  if (kind === "pm") return <>{model.metrics.filter(m=>m.id==="pm-completion-rate").map(m=><section className={styles.completionSummary} key={m.id}><h2>{m.label} · <Link href={m.link.href}>{m.value}</Link></h2><p>{m.supportingText}</p><p>All completed also includes work finished before its service window ends.</p></section>)}<nav className={styles.pmStatuses} aria-label="PM status filters">{model.metrics.filter(m=>m.id!=="pm-completion-rate").map(metric => <Link href={metric.link.href} aria-current={metric.selected ? "page" : undefined} key={metric.id}><span>{metric.label}</span><strong>{metric.value}</strong></Link>)}</nav></>;
   return (
     <section className={styles.metricExplorer} aria-label="Key planning measures">
       <header><div><small>Common questions</small><h2>{copy.metricTitle}</h2></div><p>{copy.metricDescription}</p></header>

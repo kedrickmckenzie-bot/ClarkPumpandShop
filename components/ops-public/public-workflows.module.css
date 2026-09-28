@@ -986,3 +986,8 @@
   .actions > * { min-height: 44px; }
 }
 .locationBox > button + button { margin-top: 10px; }
+
+.jobSelection { display: flex; align-items: center; gap: 12px; min-height: 44px; margin-top: 12px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; cursor: pointer; }
+.jobSelection input { flex: 0 0 auto; width: 20px; height: 20px; accent-color: #2563eb; }
+.jobSelection:has(input:checked) { border-color: #2563eb; background: #eff6ff; }
+.jobSelection:focus-within { outline: 2px solid #2563eb; outline-offset: 2px; }
