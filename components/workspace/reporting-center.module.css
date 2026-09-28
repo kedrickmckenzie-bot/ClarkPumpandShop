@@ -51,3 +51,5 @@
   .grid footer { align-items: stretch; flex-direction: column; }
   .grid footer a { width: 100%; }
 }
+
+.grid article{min-height:0;grid-template-rows:auto auto auto auto}.grid article>details{padding:0 18px 12px}.grid article>details summary{cursor:pointer;color:#2457d6}.grid article>details dl{padding:12px 0 0}.grid{gap:12px}.grid article>header{padding:12px 18px 8px}

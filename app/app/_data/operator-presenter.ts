@@ -173,7 +173,7 @@ function workOrderVisitRows(visits: WorkOrderVisit[], timeZone: string, sourceVi
       { key: "provider", value: visit.technicianName, secondary: visit.providerName },
       {
         key: "checkout",
-        value: visit.checkedOutAt ? dateTime(visit.checkedOutAt, timeZone) : "Still onsite",
+        value: visit.checkedOutAt ? dateTime(visit.checkedOutAt, timeZone) : "No checkout recorded",
         secondary: visit.checkedOutAt ? "Recorded checkout" : "No checkout yet",
       },
       {
@@ -1152,7 +1152,7 @@ export function buildAccountabilityDashboardModel(
       },
       {
         id: "active-visits",
-        label: "Onsite visits",
+        label: "Visits without checkout",
         value: String(activeVisits.length),
         supportingText: `${scoped.visits.length} observed service visits in scope`,
         tone: activeVisits.length ? "info" : "neutral",
@@ -1256,7 +1256,7 @@ const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
     { key: "region", label: "Region" },
     { key: "address", label: "Address" },
     { key: "work", label: "Open work", align: "end" },
-    { key: "onsite", label: "Onsite now", align: "end" },
+    { key: "onsite", label: "No checkout recorded", align: "end" },
     { key: "cost", label: "Recorded cost", align: "end" },
   ],
   vendors: [
@@ -1304,7 +1304,7 @@ const listMeta: Record<OperatorListRoute, { title: string; eyebrow: string; desc
 };
 
 const filterLabels: Record<string, string> = {
-  active: "Onsite now",
+  active: "No checkout recorded",
   checked_out: "Completed visits",
   amended: "Amended visits",
   open: "Open",
@@ -1627,7 +1627,7 @@ function visitRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
           { key: "work", value: work?.number ?? "No work order", secondary: visit.unmatchedReason },
           { key: "observed", value: visit.checkedOutAt ? `${dateTime(visit.checkedInAt, storeTimeZone)} – ${dateTime(visit.checkedOutAt, storeTimeZone)}` : `Since ${dateTime(visit.checkedInAt, storeTimeZone)}`, secondary: "Store-local time · approximate presence, not labor" },
           { key: "evidence", value: checkIn?.location?.result ? sentence(checkIn.location.result) : "No location evidence", tone: checkIn?.location?.result === "verified" ? "positive" : "warning" },
-          { key: "outcome", value: visit.outcome ? sentence(visit.outcome) : "Onsite now", tone: visit.status === "active" ? "info" : "neutral" },
+          { key: "outcome", value: visit.outcome ? sentence(visit.outcome) : "No checkout recorded", tone: visit.status === "active" ? "info" : "neutral" },
         ],
       };
     });
@@ -1671,7 +1671,7 @@ function visitMetrics(fixture: OpsFixture, scoped: ScopedFixture, query: Operato
   );
   return [
     { id: "upcoming-visits", label: "Upcoming", value: String(upcoming), supportingText: "Vendor-confirmed appointments", tone: upcoming ? "info" : "neutral", link: { href: withContext("upcoming"), label: "Show upcoming" } },
-    { id: "active-visits", label: "Onsite now", value: String(active), supportingText: "Active check-ins", tone: active ? "info" : "neutral", link: { href: withContext("active"), label: "Show onsite" } },
+    { id: "active-visits", label: "No checkout recorded", value: String(active), supportingText: "Active check-ins", tone: active ? "info" : "neutral", link: { href: withContext("active"), label: "Show visits without checkout" } },
     { id: "completed-visits", label: "Completed", value: String(completed), supportingText: "Checked-out visit history", tone: "positive", link: { href: withContext("checked_out"), label: "Show history" } },
     { id: "visit-review", label: "Needs review", value: String(needsReviewIds.size), supportingText: `${noWorkOrder} without a work order`, tone: needsReviewIds.size ? "warning" : "positive", link: { href: hrefWithQuery("/app/visits", { store: selectedStore, vendor: selectedVendor, review: "true" }), label: "Review visits" } },
   ];
@@ -2145,7 +2145,7 @@ function buildVendorEvidenceBundle(
         problem: work.problem,
         storeLabel: storeLabel(storeById.get(work.storeId)),
         visitCount: visits.length,
-        latestOutcomeLabel: latest?.outcome ? sentence(latest.outcome) : latest?.status === "active" ? "Onsite now" : "Outcome not recorded",
+        latestOutcomeLabel: latest?.outcome ? sentence(latest.outcome) : latest?.status === "active" ? "No checkout recorded" : "Outcome not recorded",
         recordedCostLabel: money(costByWork.get(work.id) ?? 0),
         href: `/app/work-orders/${work.id}`,
       } : undefined;
@@ -2165,8 +2165,8 @@ function buildVendorEvidenceBundle(
       storeHref: `/app/stores/${visit.storeId}`,
       observedLabel: visit.checkedOutAt
         ? `${dateTime(visit.checkedInAt, storeTimeZone)} – ${dateTime(visit.checkedOutAt, storeTimeZone)}`
-        : `Onsite since ${dateTime(visit.checkedInAt, storeTimeZone)}`,
-      outcomeLabel: visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "Onsite now" : "Outcome not recorded",
+        : `Checked in ${dateTime(visit.checkedInAt, storeTimeZone)}`,
+      outcomeLabel: visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "No checkout recorded" : "Outcome not recorded",
       isNoWorkOrder: !visit.workOrderId,
       isUnresolved: Boolean(visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome)),
       href: `/app/visits/${visit.id}`,
@@ -2805,7 +2805,7 @@ export function buildListModel(
         options: [
           { value: "all", label: `History (${visitTotal})`, href: hrefWithoutQueryKey(route, query, "status"), selected: !visitStatus },
           { value: "upcoming", label: `Upcoming (${upcomingVisitCount})`, href: hrefWithQuery(routePath(route), { store: first(query.store), vendor: first(query.vendor), status: "upcoming" }), selected: visitStatus === "upcoming" },
-          { value: "active", label: `Onsite (${scoped.visits.filter((visit) => visit.status === "active").length})`, href: hrefWithQuery(routePath(route), { store: first(query.store), vendor: first(query.vendor), status: "active" }), selected: visitStatus === "active" },
+          { value: "active", label: `No checkout (${scoped.visits.filter((visit) => visit.status === "active").length})`, href: hrefWithQuery(routePath(route), { store: first(query.store), vendor: first(query.vendor), status: "active" }), selected: visitStatus === "active" },
           { value: "checked_out", label: `Completed (${scoped.visits.filter((visit) => visit.status === "checked_out").length})`, href: hrefWithQuery(routePath(route), { store: first(query.store), vendor: first(query.vendor), status: "checked_out" }), selected: visitStatus === "checked_out" },
         ],
       }]
@@ -2929,7 +2929,7 @@ export function buildListModel(
     state: rows.length || !q ? { kind: "ready" } : { kind: "empty", title: "No matching records", message: "Try another store number, address, vendor, or keyword." },
     page: {
       title: route === "visits" && visitStatus === "active"
-        ? "Onsite visits"
+        ? "Visits without checkout"
         : route === "visits" && visitStatus === "upcoming"
           ? "Upcoming visits"
           : route === "work-orders" && visitPlan === "ready"
@@ -2959,7 +2959,7 @@ export function buildListModel(
         ? [
             { id: "stores-in-scope", label: "Stores in scope", value: String(scoped.stores.length), supportingText: "Every location available to your role", tone: "neutral", link: { href: "/app/stores", label: "Open store directory" } },
             { id: "store-open-work", label: "Open work orders", value: String(openStoreWork.length), supportingText: `${new Set(openStoreWork.map((work) => work.storeId)).size} store${new Set(openStoreWork.map((work) => work.storeId)).size === 1 ? "" : "s"} currently have open work`, tone: openStoreWork.length ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open source work" } },
-            { id: "store-onsite-now", label: "Onsite visits", value: String(scoped.visits.filter((visit) => visit.status === "active").length), supportingText: "Active, server-timestamped check-ins", tone: scoped.visits.some((visit) => visit.status === "active") ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open active visits" } },
+            { id: "store-onsite-now", label: "Visits without checkout", value: String(scoped.visits.filter((visit) => visit.status === "active").length), supportingText: "Active, server-timestamped check-ins", tone: scoped.visits.some((visit) => visit.status === "active") ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open active visits" } },
             { id: "store-recorded-cost", label: "Recorded work cost", value: money(storeRecordedCostMinor), supportingText: "Entered cost lines for these stores", tone: "neutral", link: { href: "/app/spend", label: "Open cost breakdown" } },
           ]
       : route === "action-center"
@@ -4165,7 +4165,7 @@ export function buildDetailModel(
         { label: "Serial number", value: asset.serialNumber ?? "Not entered" },
         { label: "Installed", value: date(asset.installedAt), helperText: asset.expectedLifeYears ? `${asset.expectedLifeYears}-year expected-life planning reference; not an expiration date` : "Expected-life reference not entered" },
         { label: "Warranty", value: asset.warrantyEndsAt ? date(asset.warrantyEndsAt) : "Not entered", helperText: asset.warrantyEndsAt && Date.parse(asset.warrantyEndsAt) < Date.parse(fixture.asOf) ? "Expired as of this view" : "Check coverage before authorizing work" },
-        { label: "Recorded work cost", value: money(lifecycle?.workCost ?? 0), helperText: "Entered cost lines only" },
+        { label: "Recorded work cost · all history", value: money(lifecycle?.workCost ?? 0), helperText: "All saved USD costs for this equipment; period-filtered history below can differ" },
         { label: "Replacement outlook", value: lifecycle?.replacement ? money(lifecycle.replacement) : "Not entered", helperText: lifecycle ? `${lifecycle.replacementResolution.explanation}${expectedReplacementYear ? ` Expected-life year ${expectedReplacementYear}.` : ""}` : "Planning inputs remain optional" },
       ],
       sections: [
@@ -4547,7 +4547,7 @@ export function buildDetailModel(
       state: { kind: "ready" },
       page: {
         title: `${visit.providerName} at Store ${store?.storeNumber ?? ""}`.trim(),
-        eyebrow: visit.status === "active" ? "Onsite now" : "Observed service visit",
+        eyebrow: visit.status === "active" ? "No checkout recorded" : "Observed service visit",
         description: visit.purpose,
         scopeLabel: storeLabel(store),
         primaryAction: canCreateVisitWorkOrder && createFromVisitHref
@@ -4561,7 +4561,7 @@ export function buildDetailModel(
           ? { label: "Review other options", href: `/app/action-center/${openUnmatchedException.id}` }
           : store ? { label: "Open store", href: `/app/stores/${store.id}` } : undefined,
       },
-      statusLabel: visit.status === "active" ? "Onsite now" : sentence(visit.outcome ?? visit.status),
+      statusLabel: visit.status === "active" ? "No checkout recorded" : sentence(visit.outcome ?? visit.status),
       statusTone: visit.status === "active" ? "info" : visit.outcome && unresolvedOutcomesForPresentation.has(visit.outcome) ? "warning" : "positive",
       facts: [
         { label: "Technician", value: visit.technicianName, helperText: visit.providerName },
@@ -4576,7 +4576,7 @@ export function buildDetailModel(
           link: linkedWorks.length === 1 ? { href: `/app/work-orders/${linkedWorks[0].work.id}`, label: "Open work order" } : undefined,
         },
         { label: "Observed arrival", value: formatOperationsDateTime(visit.checkedInAt, storeTimeZone, { seconds: true }), helperText: `Store-local time · started via ${sentence(visit.startedChannel)}` },
-        { label: "Observed departure", value: visit.checkedOutAt ? formatOperationsDateTime(visit.checkedOutAt, storeTimeZone, { seconds: true }) : "Still onsite", helperText: visit.endedChannel ? `Store-local time · finished via ${sentence(visit.endedChannel)}` : "No checkout event yet" },
+        { label: "Observed departure", value: visit.checkedOutAt ? formatOperationsDateTime(visit.checkedOutAt, storeTimeZone, { seconds: true }) : "No checkout recorded", helperText: visit.endedChannel ? `Store-local time · finished via ${sentence(visit.endedChannel)}` : "No checkout event yet" },
         { label: "Approximate observed time", value: visit.observedDurationSeconds === undefined ? "In progress" : `${Math.round(visit.observedDurationSeconds / 60)} minutes`, helperText: "Presence context, not certified labor" },
       ],
       sections: [
@@ -4611,7 +4611,7 @@ export function buildDetailModel(
           title: "Create the missing work order",
           description: "Use this when the vendor was called directly and service began before anyone could create the operator record.",
           facts: [
-            { label: "Technician checkout", value: visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "Still onsite" : "Outcome not recorded", helperText: visit.outcomeNotes ?? "No technician notes were entered." },
+            { label: "Technician checkout", value: visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "No checkout recorded" : "Outcome not recorded", helperText: visit.outcomeNotes ?? "No technician notes were entered." },
             { label: "What stays unchanged", value: "Original check-in and checkout evidence", helperText: "Observed times are never backdated or replaced." },
             { label: "What gets added", value: "One work order linked to this visit", helperText: "Recorded costs and optional invoice evidence can then use the operator work-order number." },
             { label: "Authorization treatment", value: "Created after service began", helperText: "The record documents the verbal or emergency path; it does not claim a prior written authorization." },
@@ -4719,6 +4719,7 @@ export function buildDetailModel(
     );
     const currentOperatingStates = fixture.requestImpactAssessments
       .filter((assessment) => assessment.organizationId === scoped.organizationId && assessment.storeId === store.id && openStoreRequestIds.has(assessment.requestId))
+      .filter(assessment => !fixture.requestImpactAssessments.some(newer=>newer.organizationId===assessment.organizationId&&newer.requestId===assessment.requestId&&(newer.assessedAt>assessment.assessedAt||newer.assessedAt===assessment.assessedAt&&newer.id>assessment.id)))
       .map((assessment) => assessment.storeOperatingState);
     const storeStatusLabel = store.status === "inactive"
       ? "Inactive"
@@ -4752,7 +4753,7 @@ export function buildDetailModel(
           { label: "Open work orders", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work orders" } },
           { label: "Upcoming visits", value: String(storeUpcomingVisits.length), link: { href: `/app/visits?store=${store.id}&status=upcoming`, label: "Open upcoming visits" } },
           { label: "Approved for next suitable visit", value: String(storeActiveHolds.length), link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
-          { label: "Onsite visits", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open active visits" } },
+          { label: "Visits without checkout", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open active visits" } },
           { label: "Recorded visits", value: String(storeVisits.length), link: { href: `/app/visits?store=${store.id}`, label: "Open visit history" } },
         ],
         sections: [
@@ -4885,7 +4886,7 @@ export function buildDetailModel(
       .slice(0, 8)
       .map((visit) => {
         const work = visit.workOrderId ? storeWork.find((candidate) => candidate.id === visit.workOrderId) : undefined;
-        const outcome = visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "Onsite now" : "Outcome not recorded";
+        const outcome = visit.outcome ? sentence(visit.outcome) : visit.status === "active" ? "No checkout recorded" : "Outcome not recorded";
         return {
           id: visit.id,
           title: `${visit.providerName} · ${visit.technicianName}`,
@@ -4934,7 +4935,7 @@ export function buildDetailModel(
         { label: "Open work", value: String(storeWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length), link: { href: `/app/work-orders?store=${store.id}&status=open`, label: "Open work" } },
         { label: "Upcoming visits", value: String(storeUpcomingVisits.length), helperText: storeUpcomingVisits.length ? "Vendor-confirmed appointments" : "No confirmed appointments", link: { href: `/app/visits?store=${store.id}&status=upcoming`, label: "Open upcoming visits" } },
         { label: "Approved for next suitable visit", value: String(storeActiveHolds.length), helperText: storeActiveHolds.length ? "Approved work waiting for a practical opportunity" : "No work is waiting for a suitable visit", link: { href: `/app/work-orders?store=${store.id}&visitPlan=ready`, label: "Open approved work" } },
-        { label: "Onsite now", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open visits" } },
+        { label: "No checkout recorded", value: String(storeVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?store=${store.id}&status=active`, label: "Open visits" } },
         { label: "Rolling 12-month cost", value: money(costForWorkIds(rollingCostByWork, storeWork.map((work) => work.id))), link: { href: `/app/spend?store=${store.id}`, label: "Explain cost" } },
         { label: "PM compliance", value: eligiblePm.length ? `${Math.round((completedPm.length / eligiblePm.length) * 100)}%` : "No closed window", helperText: eligiblePm.length ? `${completedPm.length} completed / ${eligiblePm.length} eligible occurrences` : "Future and open windows are excluded", link: { href: `/app/pm?store=${store.id}`, label: "Open PM evidence" } },
         { label: "Tracked equipment", value: String(storeAssets.length), link: { href: `/app/equipment?store=${store.id}`, label: "Open equipment" } },
@@ -5100,7 +5101,7 @@ export function buildDetailModel(
     facts: [
       { label: "Dispatch", value: vendor.dispatchEmail, helperText: vendor.dispatchPhone },
       { label: "Open work", value: String(vendorWork.filter((work) => !["closed", "cancelled"].includes(work.status)).length) },
-      { label: "Onsite now", value: String(vendorVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?vendor=${vendor.id}&status=active`, label: "Open active visits" } },
+      { label: "No checkout recorded", value: String(vendorVisits.filter((visit) => visit.status === "active").length), link: { href: `/app/visits?vendor=${vendor.id}&status=active`, label: "Open active visits" } },
       { label: "Recorded visits", value: String(vendorVisits.length), helperText: `${returnVisitWork} work order${returnVisitWork === 1 ? "" : "s"} required more than one visit`, link: { href: `/app/visits?vendor=${vendor.id}`, label: "Open visit records" } },
       { label: "Response time", value: averageResponseHours === undefined ? "Not enough history" : averageResponseHours < 1 ? `${Math.round(averageResponseHours * 60)} min average` : `${averageResponseHours.toFixed(1)} hr average`, helperText: `${responseHours.length} recorded vendor response time${responseHours.length === 1 ? "" : "s"}` },
       { label: "Accepted authorizations", value: terminalResponses.length ? `${Math.round((acceptedResponses.length / terminalResponses.length) * 100)}%` : "No terminal responses", helperText: terminalResponses.length ? `${acceptedResponses.length} accepted / ${terminalResponses.length} accepted or declined` : "Questions and proposed dates are not counted" },
@@ -5342,7 +5343,7 @@ export function buildVendorIssuanceModel(fixture: OpsFixture, session: OperatorS
         && (!selectedEstimate || vendor.id === selectedEstimate.vendorId)
       ))
       .map((vendor) => ({ value: vendor.id, label: vendor.name })),
-    channels: [{ value: "email", label: "Generate email-ready link" }, { value: "sms", label: "Generate SMS-ready link" }, { value: "print", label: "Print / PDF handoff" }, { value: "manual", label: "Record phone or manual handoff" }],
+    channels: [{ value: "manual", label: "Copy link and share" }, { value: "email", label: "Send email (requires setup)" }, { value: "print", label: "Print / PDF handoff" }],
     currentRevision: revisions.length ? Math.max(...revisions.map((item) => item.revision)) : 0,
     helperText: workflowBlocked
       ? "Finish reviewing the open quote requests before sending this work to a vendor."

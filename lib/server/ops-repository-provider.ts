@@ -8,7 +8,6 @@ import { loadOpsFixtureSnapshotFromD1 } from "@/lib/ops/d1-snapshot";
 import { getNorthlineFixtureRepository } from "@/lib/ops/fixture-repository";
 import {
   buildNorthlinePresentationFixture,
-  NORTHLINE_AS_OF,
   NORTHLINE_ORGANIZATION_ID,
 } from "@/lib/ops/fixtures";
 import { ensureNorthlinePostgresSeed } from "@/lib/ops/northline-postgres-bootstrap";
@@ -193,8 +192,8 @@ export function getServerOpsRepositoryProxy(): OpsRepository {
   return repositoryProxy;
 }
 
-/** The showcase uses the same reporting date on source and planning screens. */
-export function getServerOpsReportingAsOf() { return isFictionalPreview() ? NORTHLINE_AS_OF : new Date().toISOString(); }
+/** Current status is evaluated at request time, including the fictional preview. */
+export function getServerOpsReportingAsOf() { return new Date().toISOString(); }
 
 export async function getServerOpsFixtureSnapshot(
   organizationId: OpsId,
@@ -207,18 +206,18 @@ export async function getServerOpsFixtureSnapshot(
   }
 
   if (isRenderNodeRuntime()) {
-    if (isLocalRenderDevelopment()) return tenantFixture(getNorthlineFixtureRepository().snapshot(), organizationId);
+    if (isLocalRenderDevelopment()) return {...tenantFixture(getNorthlineFixtureRepository().snapshot(), organizationId),asOf:getServerOpsReportingAsOf()};
     throw new Error("The Render runtime requires DATABASE_URL; operator data cannot use a fallback.");
   }
 
-  if (shouldUseDevelopmentFixture()) return tenantFixture(getNorthlineFixtureRepository().snapshot(), organizationId);
+  if (shouldUseDevelopmentFixture()) return {...tenantFixture(getNorthlineFixtureRepository().snapshot(), organizationId),asOf:getServerOpsReportingAsOf()};
 
   const binding = await getD1BindingLazily();
   if (!binding) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("Operator data cannot load without the Cloudflare D1 `DB` binding.");
     }
-    return tenantFixture(getNorthlineFixtureRepository().snapshot(), organizationId);
+    return {...tenantFixture(getNorthlineFixtureRepository().snapshot(), organizationId),asOf:getServerOpsReportingAsOf()};
   }
   await getServerOpsRepository();
   return loadOpsFixtureSnapshotFromD1(binding, organizationId, getServerOpsReportingAsOf());

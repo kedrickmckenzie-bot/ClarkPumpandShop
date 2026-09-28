@@ -33,7 +33,7 @@ export function presentQueryDashboard(data: DashboardQueryInputs, session: Opera
     : estimates.length ? estimates.map(amount => `${amount.currency} ${priceLabel(amount)}`).join(" · ") : "No estimates entered";
   return presentDashboard({
     activity: data.activity, costFrom: window.costFrom, costTo: window.costTo,
-    pageBase: { scopeLabel: session.scopeLabel, periodLabel: `Rolling 12 months from ${formatOperationsDate(window.costFrom)}`, updatedLabel: `Source data through ${formatOperationsDate(window.asOf)}` },
+    pageBase: { scopeLabel: session.scopeLabel, periodLabel: `Rolling 12 months from ${formatOperationsDate(window.costFrom)}`, updatedLabel: `Status as of ${formatOperationsDate(window.asOf)}` },
     journey: presentDashboardJourney(data.activity, data.attention.followUpCount),
     review: { items: data.attention.items.map(item => presentAttentionRow(item, window.asOf)), totalCount: data.attention.totalCount, mineCount: data.attention.mineCount },
     repairComparisonCount: data.lifecycle.repairComparisonCount, replacementEstimateLabel,

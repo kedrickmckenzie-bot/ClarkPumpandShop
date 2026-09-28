@@ -17,7 +17,7 @@ const acronyms: Readonly<Record<string, string>> = {
 
 const operatorLabels: Readonly<Record<string, string>> = {
   realized_verified: "Confirmed financial benefits",
-  identified_exposure: "Possible recoveries and risks",
+  identified_exposure: "Amount flagged for review",
   estimated_opportunity: "Estimated opportunities",
   invoice_deduction_requested: "Deduction requested — awaiting confirmation",
   awaiting_approval: "Waiting for approval",

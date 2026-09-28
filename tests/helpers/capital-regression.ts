@@ -55,4 +55,14 @@ export async function capitalRegression(repository:OpsRepository) {
  expect(await repository.listCapitalPlanHistory(org,priced.id)).toHaveLength(5);
 
 
+ await saveCapitalPlan(svc,{...input,version:6,targetMonth:"2029",amountMinor:1230000});
+ const annual=await repository.queryCapitalPlans(scope,{...query,month:"2029"});
+ expect(annual.buckets).toContainEqual({month:"2029",count:1,missing:0,amountMinor:1230000});
+ expect(annual.items.map(r=>r.assetId)).toEqual([asset.id]);
+ expect((await repository.queryCapitalPlans(scope,{...query,start:"2030-01",month:"overdue"})).items).toEqual([]);
+ const risks=await repository.listOperatingRisks(scope);
+ expect(risks.length).toBeGreaterThan(0);
+ expect(await repository.listOperatingRisks({...scope,storeIds:[]})).toEqual([]);
+ expect(await repository.listOperatingRisks({organizationId:"foreign"})).toEqual([]);
+
 }

@@ -11,8 +11,9 @@ export interface CapitalQuery {start:string;months:number;currency:string;storeI
 export interface CapitalBucket {month:string;count:number;amountMinor:number;missing:number;}
 export interface CapitalPage {items:CapitalRow[];total:number;buckets:CapitalBucket[];currencies:string[];}
 export function validMonth(value:string) {return /^(20\d{2}|21\d{2}|2200)-(0[1-9]|1[0-2])$/.test(value);}
+export function validTarget(value:string) {return validMonth(value)||/^(20\d{2}|21\d{2}|2200)$/.test(value);}
 export function monthAfter(value:string,delta:number) {const [year,month]=value.split("-").map(Number);return new Date(Date.UTC(year,month-1+delta,1)).toISOString().slice(0,7);}
-export function validateCapitalQuery(q:CapitalQuery) {if(!validMonth(q.start)||![3,6,12,24].includes(q.months)||!/^[A-Z]{3}$/.test(q.currency)||q.month&&!validMonth(q.month)&&!["undated","overdue"].includes(q.month))throw new OpsDomainError("VALIDATION","Choose a valid planning period.");}
+export function validateCapitalQuery(q:CapitalQuery) {if(!validMonth(q.start)||![3,6,12,24].includes(q.months)||!/^[A-Z]{3}$/.test(q.currency)||q.month&&!validTarget(q.month)&&!["undated","overdue"].includes(q.month))throw new OpsDomainError("VALIDATION","Choose a valid planning period.");}
 export function capitalPlanFrom(row:Record<string,unknown>):CapitalPlan {
   return {id:String(row.id),organizationId:String(row.organization_id),assetId:String(row.asset_id),storeId:String(row.store_id),version:Number(row.version),targetMonth:row.target_month?String(row.target_month):undefined,amountMinor:row.amount_minor==null?undefined:Number(row.amount_minor),currency:String(row.currency),costBasis:String(row.cost_basis),sourceId:row.source_id?String(row.source_id):undefined,priority:String(row.priority) as CapitalPlan["priority"],owner:String(row.owner),reason:String(row.reason),status:String(row.status) as CapitalPlan["status"],createdAt:String(row.created_at)};
 }
@@ -41,7 +42,7 @@ export async function saveCapitalPlan(svc:OpsCommandServices,input:{organization
   const asset=await r.getAsset(org,input.assetId);if(!asset||asset.status==="retired")throw new OpsDomainError("VALIDATION","Choose active equipment.");
   const before=await r.getCapitalPlan(org,asset.id);
   if(!Number.isSafeInteger(input.version)||input.version!==(before?.version??0))throw new OpsDomainError("CONFLICT","This plan changed. Refresh before saving.");
-  if(input.targetMonth&&!validMonth(input.targetMonth))throw new OpsDomainError("VALIDATION","Choose a valid target month.");
+  if(input.targetMonth&&!validTarget(input.targetMonth))throw new OpsDomainError("VALIDATION","Choose a valid month or year.");
   if(!["flexible","soon","urgent"].includes(input.priority)||!["considering","planned","approved","completed","cancelled"].includes(input.status)||!input.owner.trim()||input.owner.length>200||input.reason.length>2000||!/^[A-Z]{3}$/.test(input.currency))throw new OpsDomainError("VALIDATION","Check the owner, priority and currency.");
   let amountMinor=input.amountMinor,currency=input.currency,costBasis="Planning estimate";
   if(input.sourceId==="keep-saved"&&before){amountMinor=before.amountMinor;currency=before.currency;costBasis=before.costBasis;}
@@ -63,11 +64,11 @@ export function capitalFromFixture(f:OpsFixture,scope:OrganizationScope,q:Capita
     const s=stores.find(s=>s.id===a.storeId)!,plan=latestCapitalPlan(f,scope.organizationId,a.id),legacy=f.lifecycleRecommendations.filter(l=>l.organizationId===scope.organizationId&&l.assetId===a.id).sort((x,y)=>y.version-x.version)[0];
     if(plan?!["considering","planned","approved"].includes(plan.status):!legacy||!["replace","defer"].includes(legacy.userDecision))return [];
     if(q.search&&![a.name,a.assetTag,s.storeNumber,s.name,s.address1,s.address2,s.city,s.state,s.postalCode,...s.aliases].join(" ").toLowerCase().includes(q.search.toLowerCase()))return [];
-    const p:CapitalPlan=plan??{id:legacy!.id,organizationId:scope.organizationId,assetId:a.id,storeId:a.storeId,version:0,amountMinor:a.replacementEstimate?.amountMinor,currency:a.replacementEstimate?.currency??"USD",costBasis:"Planning estimate",priority:"flexible",owner:"Facilities",reason:legacy!.userReason,status:"planned",createdAt:legacy!.decidedAt};
+    const p:CapitalPlan=plan??{id:legacy!.id,organizationId:scope.organizationId,assetId:a.id,storeId:a.storeId,version:0,targetMonth:legacy?.plannedForYear?String(legacy.plannedForYear):undefined,amountMinor:a.replacementEstimate?.amountMinor,currency:a.replacementEstimate?.currency??"USD",costBasis:"Planning estimate",priority:"flexible",owner:"Facilities",reason:legacy!.userReason,status:"planned",createdAt:legacy!.decidedAt};
     return [{...p,assetName:a.name,assetTag:a.assetTag,storeNumber:s.storeNumber,storeName:s.name,category:a.categoryKey,legacyYear:plan?undefined:legacy?.plannedForYear}];
   });
   const currencies=[...new Set(all.map(r=>r.currency))].sort(),rows=all.filter(r=>r.currency===q.currency),groups=new Map<string,CapitalBucket>();
-  for(const row of rows){const month=!row.targetMonth?"undated":row.targetMonth<q.start?"overdue":row.targetMonth;if(month!=="undated"&&month!=="overdue"&&month>=end)continue;const b=groups.get(month)??{month,count:0,amountMinor:0,missing:0};b.count++;if(row.amountMinor===undefined)b.missing++;else b.amountMinor+=row.amountMinor;groups.set(month,b);}
-  const filtered=rows.filter(r=>q.month?q.month==="undated"?!r.targetMonth:q.month==="overdue"?Boolean(r.targetMonth&&r.targetMonth<q.start):r.targetMonth===q.month:!r.targetMonth||r.targetMonth<end).sort((a,b)=>(a.targetMonth??"9999").localeCompare(b.targetMonth??"9999")||a.assetId.localeCompare(b.assetId));
+  for(const row of rows){const month=!row.targetMonth?"undated":row.targetMonth.length===4?row.targetMonth:row.targetMonth<q.start?"overdue":row.targetMonth;if(month!=="undated"&&month!=="overdue"&&month.length!==4&&month>=end)continue;const b=groups.get(month)??{month,count:0,amountMinor:0,missing:0};b.count++;if(row.amountMinor===undefined)b.missing++;else b.amountMinor+=row.amountMinor;groups.set(month,b);}
+  const filtered=rows.filter(r=>q.month?q.month==="undated"?!r.targetMonth:q.month==="overdue"?Boolean(r.targetMonth&&r.targetMonth.length===7&&r.targetMonth<q.start):r.targetMonth===q.month:!r.targetMonth||r.targetMonth.length===4||r.targetMonth<end).sort((a,b)=>(a.targetMonth??"9999").localeCompare(b.targetMonth??"9999")||a.assetId.localeCompare(b.assetId));
   return {items:filtered.slice(q.offset??0,(q.offset??0)+25),total:filtered.length,buckets:[...groups.values()].sort((a,b)=>a.month.localeCompare(b.month)),currencies};
 }

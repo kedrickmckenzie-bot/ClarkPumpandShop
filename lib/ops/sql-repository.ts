@@ -1,3 +1,4 @@
+import { queryOperatingRisks } from "./operating-risks";
 import {capitalPlanFrom,type CapitalQuery} from "./capital-planning";
 import {capitalFilters,queryCapital,queryCapitalPrices} from "./capital-planning-sql";
 import {queryLifecycleQueue,type LifecycleQueueQuery} from "./lifecycle-queue";
@@ -420,6 +421,7 @@ class SqlOpsRepository implements OpsRepository {
   async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: PageRequest = {}) {
     return queryEquipmentIssues(this.driver, scope, window, query);
   }
+  async listOperatingRisks(scope: OrganizationScope) { return queryOperatingRisks(this.driver,scope); }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return queryDashboardActivity(this.driver, scope, window);
   }

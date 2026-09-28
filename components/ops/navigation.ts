@@ -119,6 +119,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
 ];
 
 export function pathMatches(pathname: string, href: string) {
+  if(href === "/app/reports" && pathname.startsWith("/app/reports/value")) return false;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

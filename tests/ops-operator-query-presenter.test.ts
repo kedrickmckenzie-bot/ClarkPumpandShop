@@ -101,9 +101,9 @@ describe("operator query presenter", () => {
   it("keeps visit filter controls and applied-filter removal links in the query projection", async () => {
     const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
     const model = await buildQueryListModel(repository, session(), "visits", { status: "active", vendor: "vendor-northline-summit" });
-    expect(model.filters?.find((filter) => filter.id === "status")?.options.map((option) => option.label)).toEqual(["All visits", "Onsite now", "Completed"]);
-    expect(model.filters?.find((filter) => filter.id === "status")?.options.find((option) => option.label === "Onsite now")?.selected).toBe(true);
-    expect(model.appliedFilters?.map((filter) => filter.label)).toContain("Onsite now");
+    expect(model.filters?.find((filter) => filter.id === "status")?.options.map((option) => option.label)).toEqual(["All visits", "No checkout recorded", "Completed"]);
+    expect(model.filters?.find((filter) => filter.id === "status")?.options.find((option) => option.label === "No checkout recorded")?.selected).toBe(true);
+    expect(model.appliedFilters?.map((filter) => filter.label)).toContain("No checkout recorded");
     expect(model.appliedFilters?.find((filter) => filter.id === "status")?.removeHref).toContain("vendor=vendor-northline-summit");
   });
 

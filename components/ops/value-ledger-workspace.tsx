@@ -1,3 +1,4 @@
+import { uniqueExposureTotal } from "@/lib/ops/value-exposure";
 import Link from "next/link";
 import { domainLabel as label } from "@/lib/product/domain-label";
 import type { OpsFixture, ValueEvent, ValueEventCategory } from "@/lib/ops/types";
@@ -50,7 +51,7 @@ export function ValueLedgerWorkspace({
   const totalLabel = (category: ValueEventCategory) => {
     const currencies = new Map<string, number>();
     for (const event of allEvents.filter((event) => event.category === category)) currencies.set(event.amount.currency, (currencies.get(event.amount.currency) ?? 0) + event.amount.amountMinor);
-    return currencies.size ? [...currencies].map(([currency, total]) => money(total, currency)).join(" · ") : "No recorded amount";
+    return currencies.size ? [...currencies].map(([currency, total]) => money(category === "identified_exposure" ? uniqueExposureTotal(allEvents.filter(e=>e.category===category&&e.amount.currency===currency)) : total, currency)).join(" · ") : "No recorded amount";
   };
   return (
     <div className={styles.page}>
@@ -65,16 +66,16 @@ export function ValueLedgerWorkspace({
 
       <section className={styles.metrics}>
         {categories.map((item) => <div className={styles.metric} key={item}>
-          <span>{label(item)}</span>
+          <span>{item === "identified_exposure" ? "Unique amount flagged" : label(item)}</span>
           <strong>{totalLabel(item)}</strong>
           <Link className={styles.sectionLink} href={`/app/reports/value?category=${item}`}>Review supporting records</Link>
         </div>)}
       </section>
 
       <div className={styles.evidence}>
-        <p className={styles.safe}><strong>Confirmed financial benefits</strong><span>Requires evidence of an applied credit or other verified benefit. A requested deduction, deferred purchase, or expected avoided trip does not qualify.</span></p>
-        <p className={styles.notice}><strong>Identified exposure</strong><span>A reviewable risk or possible recovery. It is not a deduction, credit, or savings claim.</span></p>
-        <p className={styles.fact}><small>Estimated opportunity</small><strong>Planning only</strong><span>Forward-looking scenarios remain separate from realized value and require supporting evidence before they can become a savings claim.</span></p>
+        <p className={styles.safe}><strong>Confirmed financial benefits</strong>{" "}<span>Requires evidence of an applied credit or other verified benefit. A requested deduction, deferred purchase, or expected avoided trip does not qualify.</span></p>
+        <p className={styles.notice}><strong>Unique amount flagged</strong>{" "}<span>Uses the largest flag per invoice line once. Flags can overlap; this is not confirmed savings. All dates.</span></p>
+        <p className={styles.fact}><small>Estimated opportunity</small><strong>Planning only</strong>{" "}<span>Forward-looking scenarios remain separate from realized value and require supporting evidence before they can become a savings claim.</span></p>
       </div>
 
       <section className={styles.panel}>

@@ -86,9 +86,9 @@ function ActionRow({ action }: { action: ActionItemViewModel }) {
         <strong>{action.title}</strong>
         <p>{action.description}</p>
       </span>
-      <span className={styles.actionMeta}><span>Owner</span><strong>{action.ownerLabel}</strong></span>
+      <span className={styles.actionMeta}><span>Who acts next</span><strong>{action.ownerLabel}</strong></span>
       <span className={styles.actionMeta}><span>Due</span><strong>{action.dueLabel}</strong></span>
-      <ChevronRight size={18} aria-hidden="true" />
+      <span className={styles.actionCta}>{action.link.label}<ChevronRight size={18} aria-hidden="true" /></span>
     </Link>
   );
 }
@@ -211,7 +211,7 @@ export function EquipmentIssues({ model }: { model: NonNullable<DashboardPageVie
   </section>;
 }
 
-export function ControlTower({ model, capitalSummary }: { model: DashboardPageViewModel; capitalSummary?: ReactNode }) {
+export function ControlTower({ model, capitalSummary, operatingSummary }: { model: DashboardPageViewModel; capitalSummary?: ReactNode; operatingSummary?: ReactNode }) {
   if (model.state.kind !== "ready") {
     return <div className={styles.workspace}><PageHeader model={model} /><StatePanel model={model} /></div>;
   }
@@ -242,18 +242,18 @@ export function ControlTower({ model, capitalSummary }: { model: DashboardPageVi
   switch (model.layout) {
     case "executive":
     case "finance":
-      content = <>{metrics}{equipment}{insights}{spotlight}{attention}{pipeline}</>;
+      content = <>{attention}{metrics}{capitalSummary}{pipeline}{equipment}<details className={styles.section}><summary>Spending and equipment insights</summary>{insights}{spotlight}</details></>;
       break;
     case "regional":
-      content = <>{metrics}{attention}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      content = <>{metrics}{attention}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
       break;
     case "store":
-      content = <>{attention}{metrics}{equipment}{pipeline}{insights}{spotlight}</>;
+      content = <>{attention}{metrics}{capitalSummary}{equipment}{pipeline}{insights}{spotlight}</>;
       break;
     case "operations":
     default:
-      content = <>{metrics}{attention}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      content = <>{metrics}{attention}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
   }
 
-  return <div className={styles.workspace}><PageHeader model={model} />{capitalSummary}{content}</div>;
+  return <div className={styles.workspace}><PageHeader model={model} />{operatingSummary}{content}</div>;
 }

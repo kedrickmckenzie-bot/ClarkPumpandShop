@@ -1,3 +1,6 @@
+import {OperatingProblems} from "@/components/workspace/operating-problems";
+import {loadOperatorSession} from "../_data/operator-loader";
+import {getServerOpsRepository} from "@/lib/server/ops-repository-provider";
 import styles from "@/components/workspace/brief-summary.module.css";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -20,6 +23,7 @@ export default async function OwnerBriefPage({ searchParams }: { searchParams: P
   }
   const coverageQuality = await loadCoverageQualityModel();
   if (!brief && !coverageQuality) notFound();
+  const session=await loadOperatorSession(),risks=await (await getServerOpsRepository()).listOperatingRisks(session);
   const equipmentIssues = await loadEquipmentIssueSummary();
   return (
     <div className={styles.page}>
@@ -27,6 +31,7 @@ export default async function OwnerBriefPage({ searchParams }: { searchParams: P
         <h1>Owner brief</h1>
         <p className="brief-page-sub">Costs, work and decisions across your stores.</p>
       </header>
+      <OperatingProblems rows={risks}/>
       {brief ? <OwnerBriefSection model={brief} equipmentIssues={equipmentIssues ? <div className={dashboardStyles.workspace}><EquipmentIssues model={equipmentIssues} /></div> : null} /> : null}
       {coverageQuality ? <CoverageQualitySection model={coverageQuality} /> : null}
     </div>

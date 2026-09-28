@@ -15,6 +15,9 @@ export function OwnerBriefSection({ model, equipmentIssues }: { model: BriefSumm
   const notes = { recorded_cost: "Costs dated in this period", invoice_review: "Current flags · each invoice counted once", verified_value: "Confirmed credits and recoveries", opportunity: "Estimates awaiting confirmation" };
   return <section className={styles.summary} aria-label="Owner brief summary">
     <p className={styles.context}>{model.scopeLabel}<br />{formatOperationsDate(period.from)} – {formatOperationsDate(period.to)} · {period.currency}</p>
+    <section className={styles.section}><header><h2>Decisions to review <span>{sources.decisions.totalCount}</span></h2><Link href={href("decisions")}>View all →</Link></header>
+      {sources.decisions.items.length ? <ul className={styles.decisions}>{sources.decisions.items.map(row => <li key={`${row.status}-${row.id}`}><span>{row.status === "lifecycle" ? "Equipment" : row.status === "approval" ? "Approval" : "Escalation"}</span><Link href={briefRecordHref(row)!}>{row.label}</Link></li>)}</ul> : <p>No decisions are waiting.</p>}
+    </section>
     <div className={styles.money}>
       {(["recorded_cost", "invoice_review", "verified_value", "opportunity"] as const).map(kind => <Link key={kind} href={href(kind)} className={styles.metric}>
         <span>{BRIEF_SOURCES[kind]}</span><strong>{money(sources[kind].totalAmountMinor)}</strong><small>{notes[kind]}</small><span className={styles.open}>View records →</span>
@@ -31,9 +34,7 @@ export function OwnerBriefSection({ model, equipmentIssues }: { model: BriefSumm
       <div><h2>Escalations</h2><Link href={href("escalations")} className={styles.value}>{sources.escalations.totalCount} active now</Link><small>Work needing the next level of review</small></div>
     </div>
     {equipmentIssues}
-    <section className={styles.section}><header><h2>Decisions to review <span>{sources.decisions.totalCount}</span></h2><Link href={href("decisions")}>View all →</Link></header>
-      {sources.decisions.items.length ? <ul className={styles.decisions}>{sources.decisions.items.map(row => <li key={`${row.status}-${row.id}`}><span>{row.status === "lifecycle" ? "Equipment" : row.status === "approval" ? "Approval" : "Escalation"}</span><Link href={briefRecordHref(row)!}>{row.label}</Link></li>)}</ul> : <p>No decisions are waiting.</p>}
-    </section>
+
     <section className={styles.section}><header><h2>Cost by store</h2><Link href={href("stores")}>View all {sources.stores.totalCount} stores →</Link></header>
       <div className={styles.tableScroll}><table><thead><tr><th>Store</th><th>Work opened</th><th>Recorded work cost</th></tr></thead><tbody>{sources.stores.items.map(row => <tr key={row.id}><th scope="row"><Link href={briefRecordHref(row)!}>{row.label}</Link></th><td><Link href={href("opened_work", row.id)}>{row.openedWork}</Link></td><td><Link href={href("recorded_cost", row.id)}>{money(row.amountMinor)}</Link></td></tr>)}</tbody></table></div>
     </section>

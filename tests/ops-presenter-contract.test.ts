@@ -54,9 +54,9 @@ describe("operator presenter drill-through contracts", () => {
     expect(allVisits.table.rows).toHaveLength(Math.min(25, fixture.visits.length));
     expect(allVisits.pagination?.summary).toBe(`Showing 1–${Math.min(25, fixture.visits.length)} of ${fixture.visits.length}`);
     expect(onsite.table.rows).toHaveLength(activeCount);
-    expect(onsite.page.title).toBe("Onsite visits");
+    expect(onsite.page.title).toBe("Visits without checkout");
     expect(onsite.resultSummary).toBe(`${activeCount} matching of ${fixture.visits.length} visits`);
-    expect(onsite.appliedFilters?.map((filter) => filter.label)).toContain("Onsite now");
+    expect(onsite.appliedFilters?.map((filter) => filter.label)).toContain("No checkout recorded");
     expect(onsite.clearFiltersHref).toBe("/app/visits");
     expect(onsite.metrics?.find((metric) => metric.id === "completed-visits")?.value).toBe(
       String(fixture.visits.filter((visit) => visit.status !== "active").length),
@@ -478,7 +478,7 @@ describe("operator presenter drill-through contracts", () => {
     expect(detail.state.kind).toBe("ready");
     expect(detail.page.title).toBe(asset.name);
     expect(detail.facts.map((fact) => fact.label)).toEqual(
-      expect.arrayContaining(["Asset tag", "Manufacturer / model", "Serial number", "Warranty", "Recorded work cost", "Replacement outlook"]),
+      expect.arrayContaining(["Asset tag", "Manufacturer / model", "Serial number", "Warranty", "Recorded work cost · all history", "Replacement outlook"]),
     );
     expect(detail.sections.map((section) => section.id)).toEqual(
       expect.arrayContaining(["lifecycle-evidence", "components", "service-history", "preventive-maintenance"]),

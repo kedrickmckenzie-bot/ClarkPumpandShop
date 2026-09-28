@@ -67,7 +67,7 @@ export interface ServiceAuthorizationView {
   responseDueAt?: string;
   opened: boolean;
   status: "awaiting_response" | "accepted" | "declined" | "date_proposed" | "question_received";
-  priority: "Routine" | "Priority" | "Emergency";
+  priority: "Routine" | "Urgent" | "Emergency";
   store: {
     number: string;
     name: string;
@@ -210,7 +210,7 @@ export interface StorePortalView {
 export interface EligibleWorkOrderView {
   id: string;
   number: string;
-  priority: "Routine" | "Priority" | "Emergency";
+  priority: "Routine" | "Urgent" | "Emergency";
   problem: string;
   area?: string;
   category?: string;

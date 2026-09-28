@@ -1,3 +1,4 @@
+import { uniqueExposureTotal } from "./value-exposure";
 import type { OrganizationScope } from "./repository";
 import type { Money, OpsFixture, PageRequest } from "./types";
 import { dashboardPageBounds } from "./dashboard-query";
@@ -31,5 +32,5 @@ export function invoiceQueueFromFixture(fixture: OpsFixture, scope: Organization
   else rows = invoices.map(i => base(i.id)).filter(i => query.view !== "review" || i.openFlags > 0);
   rows.sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const { limit, offset } = dashboardPageBounds(query), totalCount = rows.length;
-  return { rows: rows.slice(offset, offset + limit), totalCount, nextOffset: offset + limit < totalCount ? offset + limit : undefined, counts: { invoices: invoices.length, review: new Set(flags.map(f => f.invoiceId)).size, flags: flags.length, exposure: events.length }, exposureAmount: { amountMinor: events.reduce((sum, e) => sum + e.amount.amountMinor, 0), currency: query.currency } };
+  return { rows: rows.slice(offset, offset + limit), totalCount, nextOffset: offset + limit < totalCount ? offset + limit : undefined, counts: { invoices: invoices.length, review: new Set(flags.map(f => f.invoiceId)).size, flags: flags.length, exposure: events.length }, exposureAmount: { amountMinor: uniqueExposureTotal(events), currency: query.currency } };
 }

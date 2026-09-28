@@ -53,6 +53,7 @@ const vendorTaskTypes = new Set<WorkflowTask["taskType"]>([
 const financeExceptionKinds = new Set<ExceptionKind>(["unmatched_invoice", "amount_above_authorization"]);
 
 function laneForTask(task: WorkflowTask, input: AttentionProjectionInput): AttentionLane {
+  if (task.taskType === "verify_repair" && task.assigneeType === "vendor") return input.role === "store_manager" ? "mine" : "team";
   if (task.assigneeType === "vendor") return "waiting";
   if (task.assigneeType === "user") return task.assigneeId === input.membershipId ? "mine" : "team";
   if (task.assigneeType === "role") return task.assigneeRole === input.role ? "mine" : "waiting";
@@ -137,7 +138,7 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
         storeId: work?.storeId ?? request?.storeId,
         title: task.taskType === "review_warranty" ? WARRANTY_REVIEW_TITLE : task.title,
         reason: task.reason,
-        owner: task.assigneeName,
+        owner: task.taskType === "verify_repair" && task.assigneeType === "vendor" ? "Store team" : task.assigneeName,
         dueAt: task.dueAt,
         priority: task.priority,
         lane: input.history ? "history" : laneForTask(task, input),

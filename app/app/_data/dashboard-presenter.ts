@@ -30,7 +30,7 @@ export function presentDashboardJourney(activity: DashboardActivitySummary, foll
     { id: "intake", label: "Requests to review", value: String(activity.pendingRequests), supportingText: "Waiting for review", tone: activity.pendingRequests ? "warning" : "neutral", link: { href: "/app/requests?status=pending", label: "Review requests" } },
     { id: "not-sent", label: "Approved · not sent", value: String(activity.approvedNotSent), supportingText: "Includes work held for a later visit", link: { href: "/app/work-orders?stage=not-sent", label: "Review approved work" } },
     { id: "authorization", label: "Waiting on vendor", value: String(activity.awaitingVendor), supportingText: "Sent work needing a response", tone: activity.awaitingVendor ? "warning" : "neutral", link: { href: "/app/work-orders?stage=vendor-response", label: "Open vendor queue" } },
-    { id: "onsite", label: "Onsite now", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} total visits in scope`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
+    { id: "onsite", label: "Visits without checkout", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} total visits in scope`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Review open visits" } },
     { id: "follow-up", label: "Work follow-ups", value: String(followUpCount), supportingText: "Open tasks and follow-ups", tone: followUpCount ? "critical" : "positive", link: { href: "/app/action-center?type=follow-up", label: "Open follow-ups" } },
     { id: "history", label: "Completed visits", value: String(activity.completedVisits), supportingText: "Observed service history", tone: "positive", link: { href: "/app/visits?status=checked_out", label: "Open visit history" } },
   ];
@@ -61,7 +61,7 @@ function dashboardShortcut(options: {
 }
 
 export function presentDashboard(data: DashboardPresentationData, session: OperatorSession): DashboardPageViewModel {
-  const { activity, pageBase, costFrom, costTo, journey, review, repairComparisonCount, replacementEstimateLabel, store, highestCostStore, storeBreakdown, categoryBreakdown, vendorAccountabilityBreakdown, workStatusBreakdown, activeVendorBreakdown, trend, spotlight, invoiceSpotlight } = data;
+  const { activity, pageBase, costFrom, costTo, journey, review, replacementEstimateLabel, store, storeBreakdown, categoryBreakdown, vendorAccountabilityBreakdown, workStatusBreakdown, activeVendorBreakdown, trend, spotlight, invoiceSpotlight } = data;
   if (session.role === "executive") {
     return {
       state: { kind: "ready" },
@@ -80,13 +80,8 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
         { id: "open-exceptions", label: "Items to review", value: String(review.totalCount), supportingText: "Open the queue for source records and next steps", tone: review.totalCount ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
         { id: "watch-assets", label: "Equipment to review", value: String(activity.watchAssets), supportingText: "Equipment flagged for a closer look", tone: "warning", link: { href: "/app/equipment?status=watch", label: "Review equipment" } },
       ],
-      priorityActions: [
-        dashboardShortcut({ id: "executive-attention", title: `Review ${review.totalCount} item${review.totalCount === 1 ? "" : "s"}`, description: "Open the complete queue for source records, owners, and next steps.", categoryLabel: "Company overview", dueLabel: "Current", ownerLabel: "Maintenance leadership", tone: review.totalCount ? "warning" : "positive", href: "/app/action-center", linkLabel: "Open review queue" }),
-        dashboardShortcut({ id: "executive-store-cost", title: highestCostStore ? `${highestCostStore.label} has the highest recorded cost` : "Compare store costs", description: highestCostStore ? `${money(highestCostStore.value)} of rolling recorded work cost; open the hierarchy and source work before drawing a conclusion.` : "No store cost is recorded in this period.", categoryLabel: "Cost visibility", dueLabel: "Rolling 12 months", ownerLabel: "Operations leadership", tone: "info", href: highestCostStore ? hrefWithQuery("/app/spend", { store: highestCostStore.id }) : "/app/spend", linkLabel: "Explain the store total" }),
-        dashboardShortcut({ id: "executive-capital", title: `${repairComparisonCount} repair comparison${repairComparisonCount === 1 ? "" : "s"} to review`, description: "Compare larger repairs with age, expected life, replacement cost, and service history.", categoryLabel: "Equipment planning", dueLabel: "Planning view", ownerLabel: "Maintenance and finance", tone: repairComparisonCount ? "warning" : "positive", href: "/app/lifecycle?reason=compare+alternatives", linkLabel: "Open equipment planning" }),
-        dashboardShortcut({ id: "executive-reports", title: "Open reports", description: "Share or archive reports for open work, costs, vendors, preventive maintenance, and invoice review.", categoryLabel: "Reporting", dueLabel: "Available now", ownerLabel: "Leadership", href: "/app/reports", linkLabel: "Open reports" }),
-      ],
-      prioritySection: { title: "Owner decisions", description: "The company-level items most likely to need your attention.", link: { href: "/app/action-center", label: "See all" } },
+      priorityActions: review.items,
+      prioritySection: { title: "Decisions and overdue work", description: "Who acts next, when it is due, and the supporting record.", link: { href: "/app/action-center", label: "View review queue" } },
       breakdowns: [storeBreakdown, vendorAccountabilityBreakdown, categoryBreakdown],
       trends: [trend],
       spotlight,
@@ -140,7 +135,7 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
       metrics: [
         { id: "open-work", label: "Open work", value: String(activity.openWork), supportingText: "Open work orders at this store", tone: activity.openWork ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open current work" } },
         { id: "upcoming-visits", label: "Upcoming visits", value: String(activity.upcomingAppointments), supportingText: "Confirmed vendor appointments", tone: "info", link: { href: "/app/visits?status=upcoming", label: "See expected visits" } },
-        { id: "recorded-visits", label: "Recorded service visits", value: String(activity.totalVisits), supportingText: `${activity.activeVisits} onsite now · ${activity.completedVisits} completed`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits", label: "Open visit history" } },
+        { id: "recorded-visits", label: "Recorded service visits", value: String(activity.totalVisits), supportingText: `${activity.activeVisits} without checkout · ${activity.completedVisits} completed`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits", label: "Open visit history" } },
         { id: "recorded-cost", label: "Recorded work cost", value: money(activity.recordedCostMinor), supportingText: "Rolling source cost for this store", link: { href: "/app/spend", label: "Explain the total" } },
       ],
       priorityActions: [
@@ -173,13 +168,13 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
       ? [
           { id: "open-exceptions", label: "Items to review", value: String(review.totalCount), supportingText: "Open the queue for records, owners, and next steps", tone: review.totalCount ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
           { id: "upcoming-visits", label: "Upcoming visits", value: String(activity.upcomingAppointments), supportingText: "Confirmed vendor appointments", tone: "info", link: { href: "/app/visits?status=upcoming", label: "See expected visits" } },
-          { id: "active-visits", label: "Onsite visits", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} total visits recorded`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
+          { id: "active-visits", label: "Visits without checkout", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} total visits recorded`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Review open visits" } },
           { id: "recorded-cost", label: "Recorded work cost", value: money(activity.recordedCostMinor), supportingText: "Entered work costs for the last 12 months", link: { href: "/app/spend", label: "See the costs" } },
         ]
       : [
           { id: "open-work", label: "Open work", value: String(activity.openWork), supportingText: "Each item has an owner, next step, and due date", tone: activity.openWork ? "info" : "positive", link: { href: "/app/work-orders?status=open", label: "Open regional work" } },
           { id: "open-exceptions", label: "Items to review", value: String(review.totalCount), supportingText: "Open the regional queue for records and next steps", tone: review.totalCount ? "warning" : "positive", link: { href: "/app/action-center", label: "Open review queue" } },
-          { id: "active-visits", label: "Onsite visits", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} recorded visits in regional scope`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open live visits" } },
+          { id: "active-visits", label: "Visits without checkout", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} recorded visits in regional scope`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Review open visits" } },
           { id: "recorded-cost", label: "Recorded work cost", value: money(activity.recordedCostMinor), supportingText: "Rolling source cost inside your region", link: { href: "/app/spend", label: "Explain the total" } },
         ],
     priorityActions: review.items,

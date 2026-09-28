@@ -184,10 +184,10 @@ export async function POST(request: Request) {
           workOrderId: result.id,
           vendorId,
           expectedRevision: 0,
-          channel: "email",
+          channel: "manual",
           actor: context.actor,
         });
-        return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&notice=${encodeURIComponent(issued.notice)}`);
+        return Response.json({handoff:{publicPath:issued.publicPath,notice:issued.notice,workOrderNumber:result.number,recordPath:`/app/work-orders/${encodeURIComponent(result.id)}?view=service`}}, {headers:{"Cache-Control":"no-store"}});
       } catch {
         return relativeRedirect303(`/app/work-orders/${encodeURIComponent(result.id)}?view=service&error=${encodeURIComponent(`${result.number} was created, but the vendor handoff was not sent. Review the vendor and send it from this work order; do not create another record.`)}`);
       }

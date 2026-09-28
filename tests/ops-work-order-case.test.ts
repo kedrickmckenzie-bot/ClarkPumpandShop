@@ -46,7 +46,7 @@ describe("work-order case stage projector", () => {
         now: NOW, workOrder: baseWork, siteVisitWorkOrders: outcomes,
         verifications: [{ id: `old-${decision}`, workOrderId: "wo-cycle", siteVisitWorkOrderId: "cycle-1", outcome: "completed", decision, decidedByName: "Earlier reviewer", decidedAt: "2026-08-10T12:00:00.000Z" }],
       });
-      expect(view.plainLanguageState).toBe("Work reported complete; confirmation needed");
+      expect(view.plainLanguageState).toBe("Awaiting store verification");
       expect(view.operatingCondition.id).toBe("provider_reported_complete");
     }
   });

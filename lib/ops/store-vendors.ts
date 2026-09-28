@@ -5,6 +5,8 @@ import type { OpsSqlDriver } from "./sql-driver";
 import { scopeWhere } from "./sql-scope";
 import type { ActorContext, OpsFixture } from "./types";
 
+export function vendorSearchTerm(value:string){return value.trim().toLowerCase().replace(/card readers?/g,"payment terminal").replace(/gas pumps?/g,"dispenser").replace(/^gas$/,"fuel");}
+
 export interface StoreVendorPreference {
   id: string; organizationId: string; storeId: string; vendorId: string;
   tradeKeysJson: string; version: number; createdAt: string;
@@ -30,7 +32,7 @@ export function storeVendorsFromFixture(f: OpsFixture, scope: OrganizationScope,
     const pref = latestStorePreference(f,scope.organizationId,storeId,v.id), keys = preferenceKeys(pref);
     const specialties = f.vendorSpecialties.filter(s => s.organizationId === scope.organizationId && s.vendorId === v.id).map(s => ({key:s.canonicalKey,label:s.displayName}));
     if ((!coverage.length || v.status !== "approved") && !keys.length) return [];
-    if (query.search && ![v.name,...specialties.map(s => s.label),...f.vendorSpecialties.filter(s=>s.organizationId===scope.organizationId&&s.vendorId===v.id).flatMap(s=>s.searchAliases)].join(" ").toLowerCase().includes(query.search.toLowerCase())) return [];
+    if (query.search && ![v.name,...specialties.map(s => s.label),...f.vendorSpecialties.filter(s=>s.organizationId===scope.organizationId&&s.vendorId===v.id).flatMap(s=>s.searchAliases)].join(" ").toLowerCase().includes(vendorSearchTerm(query.search))) return [];
     return [{id:v.id,name:v.name,email:v.dispatchEmail,phone:v.dispatchPhone,covered:coverage.length>0&&v.status==="approved",coverage,specialties,preferenceKeys:keys,version:pref?.version??0}];
   }).sort((a,b) => Number(b.preferenceKeys.length>0)-Number(a.preferenceKeys.length>0) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
   const offset = Math.max(0,query.offset??0);
@@ -43,7 +45,7 @@ export async function queryStoreVendors(driver: OpsSqlDriver, scope: Organizatio
   if (!store) return {items:[],total:0};
   const coverage = "c.organization_id=v.organization_id AND c.vendor_id=v.id AND (c.scope_kind='organization' AND c.scope_id=v.organization_id OR c.scope_kind='region' AND c.scope_id=? OR c.scope_kind='store' AND c.scope_id=?)";
   const base = `FROM ops_vendors v LEFT JOIN ops_store_vendor_preferences p ON p.organization_id=v.organization_id AND p.vendor_id=v.id AND p.store_id=? AND p.version=(SELECT MAX(p2.version) FROM ops_store_vendor_preferences p2 WHERE p2.organization_id=p.organization_id AND p2.store_id=p.store_id AND p2.vendor_id=p.vendor_id) WHERE v.organization_id=? AND ((v.status='approved' AND EXISTS(SELECT 1 FROM ops_vendor_coverage c WHERE ${coverage})) OR COALESCE(p.trade_keys_json,'[]')<>'[]') AND (LOWER(v.search_text) LIKE ? OR EXISTS(SELECT 1 FROM ops_vendor_specialties t WHERE t.organization_id=v.organization_id AND t.vendor_id=v.id AND LOWER(t.display_name) LIKE ?))`;
-  const search = `%${(query.search??"").trim().toLowerCase()}%`, values=[storeId,scope.organizationId,store.region_id??"",storeId,search,search];
+  const search = `%${vendorSearchTerm(query.search??"")}%`, values=[storeId,scope.organizationId,store.region_id??"",storeId,search,search];
   const total=Number((await driver.query({sql:`SELECT COUNT(*) AS total ${base}`,params:values})).rows[0]?.total??0);
   const rows=(await driver.query({sql:`SELECT v.*,p.trade_keys_json,p.version ${base} ORDER BY CASE WHEN COALESCE(p.trade_keys_json,'[]')<>'[]' THEN 0 ELSE 1 END,v.name,v.id LIMIT 25 OFFSET ?`,params:[...values,Math.max(0,query.offset??0)]})).rows;
   if(!rows.length)return {items:[],total};

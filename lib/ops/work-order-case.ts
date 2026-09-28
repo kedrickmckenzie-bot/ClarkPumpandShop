@@ -320,6 +320,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   if (blockingTask) accountableParty = blockingTask.assigneeName;
   if (stage === "followup_closeout" && closeoutFollowUps[0]) accountableParty = closeoutFollowUps[0].accountableParty;
   if (activeAssignment?.kind === "internal" && input.providerName && accountableParty === "Internal maintenance" && (!blockingTask || blockingTask.assigneeId === activeAssignment.internalMembershipId)) accountableParty = input.providerName;
+  if (stage === "followup_closeout" && closeoutTask?.taskType === "verify_repair") accountableParty = closeoutTask.assigneeType === "vendor" ? "Store team" : closeoutTask.assigneeName;
   if (fullyClosed) accountableParty = "No active owner";
 
   let dueAt: string | undefined = blockingTask?.dueAt ?? closeoutFollowUps[0]?.dueAt ?? workOrder.dueAt;
@@ -356,7 +357,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
 
   const plainLanguageState = fullyClosed
     ? workOrder.status === "cancelled" ? "Cancelled" : "Closed"
-    : activeVisit && !activeVisit.checkedOutAt ? "Technician onsite"
+    : activeVisit && !activeVisit.checkedOutAt ? (Date.parse(input.now)-Date.parse(activeVisit.checkedInAt)>24*60*60*1000 ? "Missing checkout · confirm visit status" : "Technician onsite")
     : appointmentStartsNewCycle ? "Return visit scheduled"
     : latestWorkOutcome?.outcome === "completed"
       ? latestVerification?.siteVisitWorkOrderId === latestWorkOutcome.id
@@ -365,7 +366,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
           : latestVerification.decision === "rejected"
             ? "Completion rejected; corrective work required"
             : "Result could not be confirmed; review required"
-        : "Work reported complete; confirmation needed"
+        : "Awaiting store verification"
     : latestWorkOutcome?.outcome === "temporary_repair" ? "Temporary repair completed; permanent repair pending"
     : latestWorkOutcome?.outcome === "parts_required" ? "Waiting on parts"
     : latestWorkOutcome?.outcome === "quote_required" ? "Quote or approval needed"
@@ -500,7 +501,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     internalAccountabilityStructured,
     nextActionOwner,
     accountableParty: fullyClosed ? "No active owner" : nextActionOwner,
-    primaryNextAction: stageActions[stage] ?? { label: "Open the work order", href: base },
+    primaryNextAction: stage === "followup_closeout" && closeoutTask?.taskType === "verify_repair" ? {label:"Verify repair",href:`${base}?view=visits#work-verification`} : stageActions[stage] ?? { label: "Open the work order", href: base },
     dueAt,
     deadlinePolicy,
     escalationDestination,

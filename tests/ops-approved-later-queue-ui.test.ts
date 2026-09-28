@@ -89,6 +89,6 @@ describe("approved-for-later queue management", () => {
     expect(source).toContain("name=\"vendorId\"");
     expect(source).toContain("name=\"expectedRevision\"");
     expect(source).toContain("/api/ops/work-orders/${encodeURIComponent(model.workOrderId)}/issue");
-    expect(source).toContain("Send work order to {selectedVendor?.label");
+    expect(source).toContain("Create vendor link");
   });
 });

@@ -259,12 +259,11 @@ describe("enterprise service-control presenter contracts", () => {
     const pending = buildWorkOrderControlModel(fixture, operatorSession("facilities"), workId);
 
     expect(issuance.channels.map((channel) => channel.label)).toEqual([
-      "Generate email-ready link",
-      "Generate SMS-ready link",
+      "Copy link and share",
+      "Send email (requires setup)",
       "Print / PDF handoff",
-      "Record phone or manual handoff",
     ]);
-    expect(issuance.channels.every((channel) => !/^Send\b/i.test(channel.label))).toBe(true);
+    expect(issuance.channels[0].value).toBe("manual");
     expect(issuance.helperText).toMatch(/email delivery is configured in Setup/i);
     expect(issuance.helperText).toMatch(/SMS requires a later integration/i);
     expect(pending.latestIssuance).toMatchObject({
@@ -560,7 +559,7 @@ describe("enterprise service-control presenter contracts", () => {
     expect(detail.facts.map((fact) => fact.label)).toEqual([
       "Dispatch",
       "Open work",
-      "Onsite now",
+      "No checkout recorded",
       "Recorded visits",
       "Response time",
       "Accepted authorizations",

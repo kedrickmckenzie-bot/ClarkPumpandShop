@@ -128,7 +128,7 @@ export function ServerReceipt({
           </>
         ) : null}
       </div>
-      {checkOut ? <p className={styles.disclaimer}>Observed onsite duration is approximate presence evidence. It is not certified labor time or automatic invoice proof.</p> : null}
+      {checkOut ? <p className={styles.disclaimer}>Visit time is approximate. Labor charges and invoices are reviewed separately.</p> : null}
       <p className={styles.receiptMeta}>Receipt {receipt.receiptId} · recorded {formatPublicDateTime(receipt.receivedAt, timeZone)} local store time</p>
       {restartHref && restartLabel ? <Link className={styles.textLink} href={restartHref}>{restartLabel} <ArrowRight size={16} aria-hidden="true" /></Link> : null}
       {"nextHref" in receipt && receipt.nextHref && receipt.nextLabel ? <a className={styles.textLink} href={receipt.nextHref}>{receipt.nextLabel} <ArrowRight size={16} aria-hidden="true" /></a> : null}

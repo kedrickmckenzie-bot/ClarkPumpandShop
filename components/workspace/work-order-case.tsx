@@ -412,7 +412,7 @@ function CaseOverview({
         <Link href={canonicalCase.stage === "closed" ? `${base}?view=service` : canonicalCase.primaryNextAction.href}>
           <span><Truck size={18} aria-hidden="true" />Service workflow</span>
           <strong>{canonicalCase.plainLanguageState}</strong>
-          <small>{canonicalCase.primaryNextAction.label} · {control.assignment?.providerLabel ?? "Provider not selected"}</small>
+          <small>{canonicalCase.primaryNextAction.label} · {canonicalCase.nextActionOwner}</small>
           <em>Open service workflow<ChevronRight size={15} aria-hidden="true" /></em>
         </Link>
         <Link href={`${base}?view=visits`}>
@@ -646,7 +646,7 @@ export function WorkOrderCase({
           </div>
         </div>
         {canonicalCase.stage !== "closed" ? <section className={styles.accountableHeader} aria-label="Next step">
-          <div><span>Next action</span><strong>{control.nextAction}</strong></div>
+          <div><span>Next action</span><strong>{canonicalCase.primaryNextAction.label}</strong></div>
           <div><span>Who acts next</span><strong>{canonicalCase.nextActionOwner}</strong></div>
           <div><span>Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
           <div><span>Escalates to</span><strong>{canonicalCase.escalationDestination}</strong></div>
@@ -681,6 +681,7 @@ export function WorkOrderCase({
             </p>
           </div>
           <dl className={styles.caseMeta}>
+            <div><dt>Operating impact</dt><dd>{canonicalCase.operatingCondition.label}</dd></div>
             <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
             <div><dt>Handled by</dt><dd><FactValue fact={assigned} /></dd></div>
 

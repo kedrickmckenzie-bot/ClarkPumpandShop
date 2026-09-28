@@ -3,7 +3,7 @@ import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 
 const mocked = vi.hoisted(() => ({ repository: vi.fn(), snapshot: vi.fn() }));
-vi.mock("@/lib/server/ops-repository-provider", () => ({ getServerOpsRepository: mocked.repository, getServerOpsFixtureSnapshot: mocked.snapshot, getServerOpsTrendsFixtureSnapshot: mocked.snapshot }));
+vi.mock("@/lib/server/ops-repository-provider", () => ({ getServerOpsReportingAsOf: () => "2026-09-28T12:00:00.000Z", getServerOpsRepository: mocked.repository, getServerOpsFixtureSnapshot: mocked.snapshot, getServerOpsTrendsFixtureSnapshot: mocked.snapshot }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }), headers: async () => new Headers() }));
 vi.mock("@/app/chatgpt-auth", () => ({ getChatGPTUser: async () => null }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("Not found"); } }));

@@ -16,7 +16,7 @@ export function CapitalQuickEdit({ plan, returnTo }: { plan: CapitalPlan; return
     finally { setPending(false); }
   }}>
     <input type="hidden" name="assetId" value={plan.assetId}/><input type="hidden" name="version" value={plan.version}/><input type="hidden" name="owner" value={plan.owner}/><input type="hidden" name="reason" value={plan.reason}/><input type="hidden" name="priority" value={plan.priority}/><input type="hidden" name="currency" value={plan.currency}/><input type="hidden" name="returnTo" value={returnTo}/>
-    <label>Month<input type="month" name="targetMonth" defaultValue={plan.targetMonth}/></label>
+    <label>Month or year<input placeholder="2027 or 2027-06" pattern="[0-9]{4}(-[0-9]{2})?" name="targetMonth" defaultValue={plan.targetMonth}/></label>
     <label>Estimated cost · {plan.currency}<input type="number" min="0" step="0.01" name="amount" defaultValue={initialAmount}/></label>
     <label>Planning status<select name="status" defaultValue={plan.status}><option value="considering">Considering</option><option value="planned">Planned</option><option value="approved">Budget approved</option><option value="completed">Completed</option></select></label>
     <small>Budget approval does not authorize work. Completed removes the plan from the forecast.</small>

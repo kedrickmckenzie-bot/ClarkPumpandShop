@@ -81,7 +81,7 @@ export async function issueWorkOrderToVendor(input: {
   );
   const publicPath = `/public/service/${encodeURIComponent(rawToken)}`;
   if (input.channel !== "email") {
-    return { issued, workOrder, vendor, store, publicPath, notice: `Authorization ${workOrder.number} was issued.` };
+    return { issued, workOrder, vendor, store, publicPath, notice: `${workOrder.number} is ready. Copy the link and send it to ${vendor.name}. No email or text was sent.` };
   }
 
   const runtime = emailRuntimeFromEnvironment({
@@ -100,7 +100,7 @@ export async function issueWorkOrderToVendor(input: {
     recipient: vendor.dispatchEmail,
     provider: runtime.providerLabel,
   };
-  let notice = "The authorization was issued, but email delivery is not configured. Open Administration → Notifications before using live vendor addresses.";
+  let notice = "Email is not set up. Copy the link below and send it to the vendor.";
   if (runtime.provider) {
     try {
       const delivery = await sendVendorServiceAuthorizationEmail({
@@ -121,7 +121,7 @@ export async function issueWorkOrderToVendor(input: {
       notice = `Authorization ${workOrder.number} was emailed to ${vendor.name}.`;
     } catch (error) {
       payload = { ...payload, error: (error instanceof Error ? error.message : String(error)).slice(0, 500) };
-      notice = `Authorization ${workOrder.number} was issued, but the email could not be delivered. Review notification status before reissuing.`;
+      notice = `Authorization ${workOrder.number} is ready, but email failed. Copy the link below and send it to the vendor.`;
     }
   } else {
     payload = { ...payload, missingConfiguration: runtime.missing };

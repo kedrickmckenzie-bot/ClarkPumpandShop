@@ -187,7 +187,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
           <div className={styles.formFooter}>
             <Link className={styles.secondaryButton} href={model.cancelLink.href}>Cancel</Link>
             <button className={styles.primaryButton} type="submit" name="intent" value="save">{model.sourceVisit ? "Create and link work order" : "Create work order"}</button>
-            {!model.sourceVisit ? <button className={`${styles.primaryButton} ${styles.sendConditional}`} type="submit" name="intent" value="create_and_send">Create and send to vendor<Send aria-hidden="true" size={18} /></button> : null}
+            {!model.sourceVisit ? <button className={`${styles.primaryButton} ${styles.sendConditional}`} type="submit" name="intent" value="create_and_send">Create vendor link<Send aria-hidden="true" size={18} /></button> : null}
           </div>
         </RecordForm></WorkOrderScope>
       ) : null}

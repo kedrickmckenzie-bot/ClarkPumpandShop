@@ -659,7 +659,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
               ) : <span className={styles.toolbarTitle}>Records</span>}
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
-            <FilterGroups filters={model.filters} />
+            {surface === "work-orders" ? <details><summary>Filter work orders</summary><FilterGroups filters={model.filters} /></details> : <FilterGroups filters={model.filters} />}
             <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
             {surface === "work-orders" ? <details className={styles.workDateFilters} open={Boolean(searchParams.createdFrom || searchParams.createdThrough)}><summary>Created date (UTC)</summary><form action="/app/work-orders" method="get">
               {Object.entries(searchParams).filter(([key]) => !["createdFrom", "createdThrough", "page", "selected"].includes(key)).map(([key, value]) => <input type="hidden" name={key} value={Array.isArray(value) ? value[0] : value ?? ""} key={key} />)}
@@ -875,21 +875,22 @@ export function ProgramView({ model, beforeContent, compact = false }: { model: 
   );
 }
 
-export function DetailView({ model, beforeSections, after, initialSection }: { model: DetailPageViewModel; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string }) {
+export function DetailView({ model, beforeSections, after, initialSection, compactFacts = false }: { compactFacts?: boolean; model: DetailPageViewModel; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string }) {
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={16} />{model.backLink.label}</Link>
       <PageHeader page={model.page} status={{ label: model.statusLabel, tone: model.statusTone }} />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
-          <section className={styles.recordSummary} aria-label="Record summary">
+          {compactFacts ? beforeSections : null}
+          <details className={styles.recordSummary} open={!compactFacts} aria-label="Record summary"><summary>{compactFacts ? "Equipment details" : "Key facts"}</summary>
             {model.facts.length ? <><header className={styles.recordSummaryHeader}>
               <div><small>Record summary</small><h2>Key facts</h2></div>
             </header><div className={styles.recordSummaryGrid}>
               {model.facts.map((fact) => <div className={styles.factItem} key={fact.label}><span className={styles.factLabel}>{fact.label}</span>{fact.link ? <Link className={styles.connectedFact} href={workspaceStartHref(fact.link.href)} aria-label={`${fact.link.label}: ${fact.value}`}><strong>{fact.value}</strong><ChevronRight aria-hidden="true" size={15} /></Link> : <strong>{fact.value}</strong>}{fact.link ? <WorkReviewButton href={fact.link.href} label={fact.value} /> : null}{fact.helperText ? <small>{fact.helperText}</small> : null}</div>)}
             </div></> : null}
-          </section>
-          {beforeSections}
+          </details>
+          {!compactFacts ? beforeSections : null}
           <RecordSections sections={model.sections} initialSection={initialSection} />
           {after}
         </>

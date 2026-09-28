@@ -9,7 +9,7 @@ import styles from "./enterprise-workspace.module.css";
 type IssuanceStep = "vendor" | "review";
 
 const deliveryOptions = [
-  { value: "email", label: "Email-ready vendor link", helper: "Email dispatch and keep the secure response link on the record." },
+  { value: "email", label: "Send email (requires setup)", helper: "Email dispatch and keep the secure response link on the record." },
   { value: "manual", label: "Manual handoff", helper: "Generate the secure link for phone, text, or another documented handoff." },
   { value: "print", label: "Print / PDF handoff", helper: "Generate the authorization for a printed or PDF handoff." },
 ] as const;
@@ -19,7 +19,7 @@ export function ApprovedLaterIssuanceDialog({ model }: { model: ApprovedLaterMan
   const [step, setStep] = useState<IssuanceStep>("vendor");
   const [query, setQuery] = useState("");
   const [vendorId, setVendorId] = useState(model.selectedVendorId ?? "");
-  const [channel, setChannel] = useState<(typeof deliveryOptions)[number]["value"]>("email");
+  const [channel, setChannel] = useState<(typeof deliveryOptions)[number]["value"]>("manual");
   const [message, setMessage] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const dialogTitleRef = useRef<HTMLHeadingElement>(null);
@@ -150,7 +150,7 @@ export function ApprovedLaterIssuanceDialog({ model }: { model: ApprovedLaterMan
               <input type="hidden" name="message" value={message} />
               <input type="hidden" name="expectedRevision" value={model.currentIssuanceRevision} />
               <button type="button" onClick={() => setStep("vendor")}><ArrowLeft aria-hidden="true" size={16} />Change vendor or details</button>
-              <button className={styles.issuancePrimaryButton} type="submit">Send work order to {selectedVendor?.label ?? "vendor"}<Send aria-hidden="true" size={17} /></button>
+              <button className={styles.issuancePrimaryButton} type="submit">{channel === "email" ? "Email work order" : "Create vendor link"}<Send aria-hidden="true" size={17} /></button>
             </RecordForm>
           )}
         </footer>

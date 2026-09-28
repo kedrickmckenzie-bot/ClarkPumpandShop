@@ -1,3 +1,4 @@
+import { operatingRisksFromFixture } from "./operating-risks";
 import {latestCapitalPlan, capitalPricesFromFixture, capitalFromFixture, type CapitalQuery} from "./capital-planning";
 import {lifecycleQueueFromFixture, type LifecycleQueueQuery} from "./lifecycle-queue";
 import { latestStorePreference, storeVendorsFromFixture } from "./store-vendors";
@@ -510,6 +511,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: PageRequest = {}) {
     return equipmentIssuesFromFixture(this.fixture, scope, window, query);
   }
+  async listOperatingRisks(scope: OrganizationScope) { return operatingRisksFromFixture(this.fixture,scope); }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return dashboardActivityFromFixture(this.fixture, scope, window);
   }

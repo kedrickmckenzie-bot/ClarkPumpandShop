@@ -29,12 +29,11 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
       <header className={styles.header}>
         <p className={styles.eyebrow}>{model.workOrderNumber}{model.storeName ? ` · ${model.storeName}` : ""}</p>
         <h2 id="stage-rail-heading">
-          {model.stageLabel}
-          {model.serviceSubStage ? ` — ${model.serviceSubStage.label}` : ""}
+          {model.plainLanguageState}
         </h2>
       </header>
 
-      <ol className={styles.stageRail} aria-label="Service progress">
+      <details><summary>Work progress</summary><ol className={styles.stageRail} aria-label="Service progress">
         {model.stages.map((stage, index) => (
           <li className={styles.stageStep} data-state={stage.state} key={stage.id} aria-current={stage.state === "current" ? "step" : undefined}>
             <Link className={styles.stageLink} href={stageHref(stage.id)}>
@@ -47,11 +46,11 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
             </Link>
           </li>
         ))}
-      </ol>
+      </ol></details>
 
       <dl className={styles.factsRow}>
         <div>
-          <dt>{terminal ? "Record" : "Owner"}</dt>
+          <dt>{terminal ? "Record" : "Who acts next"}</dt>
           <dd>{model.accountableParty}</dd>
         </div>
         <div>
@@ -68,14 +67,14 @@ export function WorkOrderStageRail({ model }: { model: WorkOrderCaseView }) {
       </dl>
 
       {model.blockingReason ? (
-        <p className={styles.decisionDetail}>Waiting on: {model.blockingReason}</p>
+        <p className={styles.decisionDetail}>{model.blockingReason}</p>
       ) : null}
 
       <div className={styles.moneyRow}>
         <Link className={styles.moneyCell} href={model.primaryNextAction.href}>
-          <span className={styles.moneyLabel}>{terminal ? "Record" : "Recommended action"}</span>
+          <span className={styles.moneyLabel}>{terminal ? "Record" : "Next action"}</span>
           <strong>{model.primaryNextAction.label}</strong>
-          <span className={styles.moneyNote}>{terminal ? "This case has no open action or escalation." : "The most likely action for this status; supporting records and other tools remain available."}</span>
+
           <span className={styles.actionPrompt}>Open action<ArrowRight aria-hidden="true" size={14} /></span>
         </Link>
       </div>

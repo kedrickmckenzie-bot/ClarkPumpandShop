@@ -61,7 +61,7 @@ describe("public service and visit capability boundaries", () => {
     expect(authorization?.service.requestedWork).toContain("Inspect the evaporator fan assembly");
     expect(authorization?.service.requestedWork).not.toMatch(/authorization limit|exceeding authorization|not-to-exceed|\bNTE\b/iu);
     expect(authorization?.authorization).not.toHaveProperty("notToExceedLabel");
-    expect(authorization?.priority).toBe("Priority");
+    expect(authorization?.priority).toBe("Urgent");
   });
 
   it("resolves the public token to one exact issuance and purpose", async () => {
@@ -270,6 +270,20 @@ describe("public service and visit capability boundaries", () => {
         }),
       ]),
     );
+  });
+
+  it("recovers only the authorized visit from the original service link without a device cookie", async () => {
+    const gateway=getPublicOperationsGateway();
+    const vendorId="vendor-northline-summit";
+    const receipt=await gateway.checkIn(PUBLIC_DEMO_LINKS.serviceToken,{submissionKey:"new-phone-arrival-check",vendorId,workOrderId:NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId,technicianName:"New phone technician",location:{captureResult:"permission_denied"}});
+    expect((await gateway.loadStorePortal(PUBLIC_DEMO_LINKS.serviceToken))?.capabilities.finishVisit).toBe(true);
+    const recovered=await gateway.lookupVendorVisitContext(PUBLIC_DEMO_LINKS.serviceToken,vendorId);
+    expect(recovered.activeVisits.map(v=>v.id)).toEqual([receipt.visitId]);
+    const unrelated=await gateway.checkIn(PUBLIC_DEMO_LINKS.storeToken,{submissionKey:"other-arrival-check",vendorId,noWorkOrderReason:"Unrelated call",technicianName:"Other technician",location:{captureResult:"permission_denied"}});
+    const command={submissionKey:"new-phone-departure-check",vendorId,visitId:receipt.visitId,outcome:"resolved" as const,outcomeNotes:"Completed the repair",location:{captureResult:"permission_denied" as const},evidence:[]};
+    await expect(gateway.checkOut(PUBLIC_DEMO_LINKS.serviceToken,{...command,visitId:unrelated.visitId})).rejects.toMatchObject({status:403});
+    expect((await gateway.checkOut(PUBLIC_DEMO_LINKS.serviceToken,command)).visitId).toBe(receipt.visitId);
+    expect((await gateway.checkOut(PUBLIC_DEMO_LINKS.serviceToken,command)).visitId).toBe(receipt.visitId);
   });
 
   it("creates a visit-bound checkout capability and rejects generic or cross-vendor use", async () => {

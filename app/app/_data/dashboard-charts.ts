@@ -50,7 +50,7 @@ export function presentDashboardCharts(pages: DashboardChartPages, activity: Das
     categoryBreakdown: cost(categories, "recorded-cost-by-service-area", "Recorded cost by service area", "category", { href: href("/app/work-orders", { hasCost: "true", ...costContext }), label: "View all cost records" }),
     vendorAccountabilityBreakdown: count(pages.observed_vendor, "observed-visits-by-vendor", "Observed service visits by vendor", "observed outside-vendor visits", id => href("/app/visits", { vendor: id }), { href: "/app/vendors", label: "Open vendor accountability" }),
     workStatusBreakdown: count(pages.work_status, "open-work-status", "Open work by status", "open work orders", id => href("/app/work-orders", { status: id }), { href: "/app/work-orders?status=open", label: "View all open work orders" }, true),
-    activeVendorBreakdown: { ...count(pages.active_vendor, "onsite-vendor", "Who is onsite now", "active visits", id => href("/app/visits", { status: "active", vendor: id }), { href: "/app/visits?status=active", label: "Open all live visits" }), description: "Active check-ins by outside vendor." },
+    activeVendorBreakdown: { ...count(pages.active_vendor, "onsite-vendor", "Visits without checkout", "active visits", id => href("/app/visits", { status: "active", vendor: id }), { href: "/app/visits?status=active", label: "Review open visits" }), description: "Active check-ins by outside vendor." },
     highestCostStore: pages.cost_store.items[0] ? { ...pages.cost_store.items[0], label: compactStoreLabel(pages.cost_store.items[0].label, organizationName) } : undefined, trend,
   };
 }

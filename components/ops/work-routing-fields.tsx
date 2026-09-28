@@ -19,7 +19,7 @@ export function WorkRoutingFields({ model, accountabilityOnly }: { model: Create
     if(!storeId || route!=="outside_vendor")return;
     const controller=new AbortController();
     const timer=setTimeout(async()=>{
-      try { const response=await fetch(`/api/ops/stores/${encodeURIComponent(storeId)}/vendors?${new URLSearchParams({q:search.replace(/gas pumps?/g,"dispenser").replace(/^gas$/,"fuel"),offset:String(offset)})}`,{signal:controller.signal});
+      try { const response=await fetch(`/api/ops/stores/${encodeURIComponent(storeId)}/vendors?${new URLSearchParams({q:search.toLowerCase().replace(/gas pumps?/g,"dispenser").replace(/^gas$/,"fuel").replace(/card readers?/g,"payment terminal"),offset:String(offset)})}`,{signal:controller.signal});
         if(!response.ok)throw new Error("Could not load vendors for this store.");
         const page=await response.json() as StoreVendorPage;
         if(!controller.signal.aborted){setStoreVendors({storeId,search,page});setVendorError("");}

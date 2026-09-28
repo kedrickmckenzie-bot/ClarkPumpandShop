@@ -4,6 +4,48 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Vendor handoff and daily usability follow-up — September 28
+
+- [x] VF-01 Show a copyable vendor link and clear delivery outcome without redirecting the operator into vendor actions.
+- [x] VF-02 Recover and finish an authorized active visit from the original work link on another device; preserve scope and replay protections.
+- [x] VF-03 Put work/report/equipment content first and expose a defined PM completion rate.
+- [x] VF-04 Clarify costs/status, priority, empty states, search aliases, dates and wording.
+- [x] VF-05 Required checks and affected desktop/mobile browser journeys.
+
+Checkpoint: this bounded vendor-handoff/usability pass is complete. Previous uncommitted work and local data preserved.
+
+Implementation: vendor issuance returns a manager receipt with a copyable secure link and explicit delivery outcome; manual sharing is the default. Email remains an explicit option and missing/failed delivery retains the link. The original service link can recover an active visit only when its store, vendor and every linked work order are authorized. Generic QR links still cannot enumerate active visits. Completed work can replay its saved checkout receipt but cannot create a new checkout. Work filters and report definitions collapse, equipment history precedes details, and PM exposes completed/eligible ended windows with an exact source drill-through. Cost labels distinguish all history from the selected period; operating status is explicitly register status. Priority, inspection dates, invoice empty amounts, savings wording/spacing and card-reader vendor search were clarified.
+
+Browser evidence: local QA work order CPS-2026-2283 was created with deferred classification, card-reader search returned PumpPro, the copy button confirmed Copied, and no email/text was sent. Reopening the original service link recovered and completed its active visit. Automated tests additionally verify recovery without a device cookie and reject an unrelated same-vendor visit. The PM 86% link opens 139 ended windows (119 completed, late completion included). Equipment history shows its selected dates before collapsed facts. Reports show four complete report actions at desktop size; reports/compliance fit a 390px viewport without document overflow. Work filters remain collapsed with the applied scope visible. Existing local records were not reset. Screenshots: `%TEMP%/vendor-handoff-proof.png`, `%TEMP%/vendor-recovery-proof.png`, `%TEMP%/vendor-usability-reports.png`.
+
+Validation: full suite ran 1,093 tests with 1,089 passes and four obsolete label expectations. After updating those expectations, all 45 tests across the four affected files passed. Final public-boundary rerun passed 14 tests. Seed, initial typecheck/lint and whitespace checks passed. Final workflow suite passed all 60 tests; the production build passed. Final typecheck/lint and diff checks passed. Logs: `%TEMP%/vendor-final-*`, `%TEMP%/vendor-corrected-tests.log`, `%TEMP%/vendor-corrected-e2e.log`, `%TEMP%/vendor-last-*`. The full 1,093-test suite was not repeated after correcting the four wording expectations.
+
+Limits: the receipt exposes the freshly generated link; plaintext capability tokens are not stored for later retrieval. Visit recovery does not expose unrelated jobs or unmatched visits through an ordinary QR link. No live external delivery, production-readiness claim, commit or push.
+
+
+## Trust and daily usability — September 28, 2026
+
+User approved verifying the review findings, fixing dates and financial totals, then simplifying overview and next actions. This follow-up takes priority over the older backlog.
+
+- [x] TU-01 Current-date status across source, planning and compliance views; open visits never imply verified ongoing presence.
+- [x] TU-02 Unique flagged invoice amounts, explicit cost basis and visible annual/unscheduled capital.
+- [x] TU-03 Operator verification ownership and direct next actions.
+- [x] TU-04 Reported operating problems and real priority records ahead of owner reporting.
+- [x] TU-05 Concise record headers, specific actions and clear responsibility filters.
+- [x] TU-06 Domain/persistence regressions, required checks and browser workflow acceptance.
+
+Checkpoint: completed this bounded trust/usability pass. All 59 workflow tests and the Vinext production build passed; final typecheck, lint and diff checks passed. Existing data and local dev4.log preserved; no delivery, reset, commit or push authorized in this pass.
+
+Implementation evidence: current request time drives preview/source status and query deadlines without rewriting recorded dates. Open visits are labeled “No checkout recorded”; work records older than 24 hours explicitly request a visit-status check. Exposure summaries count the largest flag per invoice line once, with currencies separate and the basis visible. Annual capital targets remain distinct from monthly scheduling, with exact year drill-downs and saved planning costs shown separately from approved amounts and selected quotes. Fixture, SQLite and PostgreSQL repositories expose the same scoped operating-report query; only the latest assessment of an open request is shown. Verification tasks name the Store team, while internal accountability stays visible; the direct verification action is limited to the closeout stage. Owner decisions precede reporting, and phone operating rows expose the source report without horizontal scrolling.
+
+Validation so far: seed, final typecheck/lint and diff whitespace check passed. The 1,092-test full run had 1,085 passes and seven failures: four obsolete wording expectations and three failures from one incomplete clock mock. Corrected expectations/mock; all 51 tests across those five files passed. Final work-case/clock/exposure regressions passed 35 tests. The full suite was not repeated after these targeted fixes.
+
+Browser evidence: owner decisions precede metrics; facilities overview shows current dates, visits without checkout and annual capital. The 2029 capital link returns exactly two plans totaling $60,600. Store 115 explicitly separates the $29,150 planning estimate from its $32,800 approval/selected quote. CPS-2026-0201 shows Awaiting store verification, Store team, the deadline/escalation and the existing result-check controls. Savings shows $21,874 unique flagged amount; two $12 flags on one uploaded invoice line remain in history but contribute $12 once. Operating-report drill-through reaches Store 104’s exact source request. Address search for 55 Pine Valley Parkway returns Store 105 and its equipment. Basic work intake still permits store/problem with deferred equipment and provider selection. Overview and capital checked at 390px with no document overflow; desktop action rows inspected after spacing adjustment.
+
+The 59-test workflow suite includes service routing, vendor/public boundaries, cross-channel visits, unmatched visits, invoice safeguards, PM/lifecycle and PostgreSQL persistence. Browser checks covered the changed owner/overview, search/source drill-down, verification, financial and capital journeys plus intake controls; unchanged store-creation and public visit flows were covered by the automated suite and prior browser acceptance, not manually submitted again. Temporary viewport overrides were restored. Screenshot evidence: `%TEMP%/trust-review-verification.png`. Logs: `%TEMP%/trust-final-*`, `%TEMP%/trust-fixed-tests.log` and `%TEMP%/trust-last-*`.
+
+Acceptance limits: no seed reset or timestamp rewriting; historical reports remain visibly dated. Operating problems represent the latest assessments on open requests, not live sensor status. Flagged amounts are review exposure, not confirmed savings. Existing broader architecture gates remain unchanged. No live external delivery or production readiness is claimed.
+
 ## Inspection assignments and shared upload links — September 28, 2026
 
 - [x] IL-01 One searchable Assigned to field finds active employee accounts and approved vendors covering the selected store. Generated internal work uses the selected employee; existing ordinary technician routing stays intact.

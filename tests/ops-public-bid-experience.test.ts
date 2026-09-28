@@ -46,7 +46,7 @@ const serviceAuthorization: ServiceAuthorizationView = {
   issuedAt: "2026-08-10T14:00:00.000Z",
   opened: true,
   status: "awaiting_response",
-  priority: "Priority",
+  priority: "Urgent",
   store: {
     number: "104",
     name: "Northline Ridgeview",

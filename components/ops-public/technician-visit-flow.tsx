@@ -137,6 +137,7 @@ export function TechnicianVisitFlow({
       if (!result.ok) throw new Error(body.error ?? "The store's visit context could not be loaded.");
       if (!cancelled) {
         setContext(body);
+        if(body.workOrderSelectionBound && body.activeVisits.length && mode === "check_in")setMode("check_out");
         if (mode === "check_out" && body.activeVisits.length === 1) {
           const visit = body.activeVisits[0]!;
           setActiveVisitId(visit.id);
@@ -505,7 +506,7 @@ export function TechnicianVisitFlow({
 
         <aside className={styles.stack} aria-label="Visit information">
 
-          <section className={styles.notice}><strong>Presence evidence, not a timesheet</strong><p className={styles.helper}>The observed onsite window is approximate. It does not certify billable labor or automatically approve an invoice.</p></section>
+          <section className={styles.notice}><strong>Recorded arrival and departure</strong><p className={styles.helper}>Visit time is approximate. Labor charges and invoices are reviewed separately.</p></section>
         </aside>
       </div>
     </PublicFrame>

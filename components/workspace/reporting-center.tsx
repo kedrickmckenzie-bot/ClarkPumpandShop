@@ -29,10 +29,6 @@ export function ReportingCenter({ model }: { model: ListPageViewModel }) {
       </div>
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
-          <section className={styles.intro}>
-            <span><FileBarChart2 size={21} aria-hidden="true" /></span>
-            <div><small>Management reports</small><strong>Open a live report, then export it when you are ready to share or archive it.</strong><p>Each report explains what is counted and lets you open the work behind the totals. The export contains the same rows shown on screen.</p></div>
-          </section>
           <section className={styles.grid} aria-label="Available management reports">
             {model.table.rows.map((row) => {
               const definition = reportCatalogEntry(row.id);
@@ -44,12 +40,12 @@ export function ReportingCenter({ model }: { model: ListPageViewModel }) {
                 <article key={row.id}>
                   <header><span><FileBarChart2 size={18} aria-hidden="true" /></span><div><small>Live report</small><h2>{report?.value ?? row.label}</h2></div></header>
                   <p>{definition?.description ?? basis?.value}</p>
-                  <dl>
+                  <details><summary>Scope, period and calculation</summary><dl>
                     <div><dt>Scope</dt><dd>{scope?.value ?? model.page.scopeLabel}</dd></div>
                     <div><dt>Period</dt><dd>{period?.value ?? "Current source view"}</dd></div>
                     <div><dt>Definition</dt><dd>{basis?.value ?? definition?.definition}</dd></div>
                     <div><dt>Source</dt><dd>{report?.secondary ?? "Scoped operational records"}</dd></div>
-                  </dl>
+                  </dl></details>
                   <footer>
                     <Link href={row.href}>Open live view<ArrowRight size={14} aria-hidden="true" /></Link>
                     {definition ? <a href={`/api/ops/reports/${definition.id}`}>Export CSV<Download size={14} aria-hidden="true" /></a> : null}

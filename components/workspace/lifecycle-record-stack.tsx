@@ -46,7 +46,7 @@ export interface LifecycleDecisionWorkspaceModel {
 
 export function LifecycleRecordStack({ model,plans=[] }: { plans?:CapitalPlan[]; model: LifecycleDecisionWorkspaceModel; equipmentDetail?: DetailPageViewModel; workOrderDetail?: DetailPageViewModel; workOrderCase?: WorkOrderCaseView }) {
   const currentPlan=plans[0];
-  const planLabel=currentPlan?.status==="planned"?`Replacement planned${currentPlan.targetMonth?` for ${new Date(`${currentPlan.targetMonth}-01T12:00:00Z`).toLocaleDateString("en-US",{month:"short",year:"numeric",timeZone:"UTC"})}`:" · month needed"}`:currentPlan?"Replacement plan removed":undefined;
+  const planLabel=currentPlan?.status==="planned"?`Replacement planned${currentPlan.targetMonth?` for ${currentPlan.targetMonth.length===4?`${currentPlan.targetMonth} · month not chosen`:new Date(`${currentPlan.targetMonth}-01T12:00:00Z`).toLocaleDateString("en-US",{month:"short",year:"numeric",timeZone:"UTC"})}`:" · month needed"}`:currentPlan?"Replacement plan removed":undefined;
   const prices = model.prices;
   const review = model.review;
   return <div className={styles.page}>

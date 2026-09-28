@@ -401,7 +401,7 @@ function portalFromAccess(access: PublicAccess): StorePortalView {
     capabilities: {
       reportIssue: access.kind === "trusted_store" || (access.kind === "store" && access.storeGateway.actions.includes("report_issue")),
       startVisit: access.kind === "store" || access.kind === "trusted_store" || access.kind === "service",
-      finishVisit: access.kind === "trusted_store" || access.kind === "visit",
+      finishVisit: access.kind === "trusted_store" || access.kind === "visit" || access.kind === "service",
     },
     visitChannel: access.channel,
     mode: runtime().mode,
@@ -413,8 +413,8 @@ function titleCase(value: string | undefined): string | undefined {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function displayPriority(value: string): "Routine" | "Priority" | "Emergency" {
-  return value === "emergency" ? "Emergency" : value === "urgent" ? "Priority" : "Routine";
+function displayPriority(value: string): "Routine" | "Urgent" | "Emergency" {
+  return value === "emergency" ? "Emergency" : value === "urgent" ? "Urgent" : "Routine";
 }
 
 function estimateMoneyLabel(amountMinor: number, currency: string): string {
@@ -700,10 +700,12 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
       }))).filter((row): row is NonNullable<typeof row> => Boolean(row))
     : [];
 
-  // Generic QR and service links never disclose active-visit identifiers. A
+  // Generic QR links never disclose active-visit identifiers. Service links expose only their authorized work. A
   // visit capability discloses only itself. A trusted device is already bound
   // by repository lookup to exactly one store and may list that store's visits.
-  const activeSources = access.kind === "visit"
+  const serviceVisits = access.kind === "service" ? await repository.listSiteVisitWorkOrdersForWorkOrder(organizationId, access.serviceAuthorization.workOrderId) : [];
+  const recoverable = access.kind === "service" ? (await Promise.all([...new Set(serviceVisits.map(l=>l.visitId))].map(async id=>await serviceVisitAllowed(repository,access,id) ? await repository.getVisit(organizationId,id) : null))).filter(v=>v && v.status==="active" && !v.checkedOutAt) : [];
+  const activeSources = access.kind === "service" ? recoverable.filter((v):v is NonNullable<typeof v>=>Boolean(v)) : access.kind === "visit"
     ? [access.activeVisit]
     : access.kind === "trusted_store"
       ? access.trustedStore.activeVisits.filter((visit) => (
@@ -749,6 +751,15 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
     plannedServiceRuns,
     activeVisits,
   };
+}
+
+async function serviceVisitAllowed(repository: OpsRepository, access: Extract<PublicAccess,{kind:"service"}>, visitId: string) {
+  const auth=access.serviceAuthorization;
+  const visit=await repository.getVisit(auth.organizationId,visitId);
+  if(!visit || visit.storeId!==auth.store.id || visit.vendorId!==auth.vendor.id || visit.providerKind!=="outside_vendor")return false;
+  const links=await repository.listSiteVisitWorkOrders(auth.organizationId,visitId);
+  const allowed=new Set([auth.workOrderId,...(await acceptedOptionalVisitWork(repository,auth)).map(w=>w.id)]);
+  return links.some(l=>l.workOrderId===auth.workOrderId) && links.every(l=>allowed.has(l.workOrderId));
 }
 
 function followUpForOutcome(outcome: VisitOutcome, providerName: string): { accountableParty: string; nextAction: string; dueAt: string; escalationTo: string } | undefined {
@@ -1638,8 +1649,15 @@ const gateway: PublicOperationsGateway = {
     const suppliedVendorId = cleanOptional(command.vendorId, 120);
     const visitId = cleanRequired(command.visitId, "Visit", 120);
     const tokenHash = await hashOpaqueToken(token);
-    const access = await resolvePublicAccess(token);
-    if (access && access.kind !== "visit" && access.kind !== "trusted_store") {
+    let access = await resolvePublicAccess(token);
+    const replayOnly = !access;
+    // A completed work order may replay its saved receipt, but cannot start a new checkout.
+    if(!access){
+      const authorization=await repository.getServiceAuthorizationByToken({tokenHash,purpose:"service_authorization",now:now()});
+      const storeRecord=authorization ? await repository.getStore(authorization.organizationId,authorization.store.id) : null;
+      if(authorization && storeRecord)access={kind:"service",tokenHash,channel:"secure_link",serviceAuthorization:authorization,storeRecord};
+    }
+    if (access && access.kind !== "visit" && access.kind !== "trusted_store" && access.kind !== "service") {
       throw new PublicWorkflowError("Use the secure checkout link from the check-in receipt to finish this visit.", 403, "visit_token_required");
     }
 
@@ -1666,6 +1684,7 @@ const gateway: PublicOperationsGateway = {
       throw new PublicWorkflowError("That visit does not match this secure checkout link.", 403, "visit_not_available");
     }
 
+    if(access?.kind === "service" && !await serviceVisitAllowed(repository,access,visitId))throw new PublicWorkflowError("This visit is not covered by this work-order link.",403,"visit_not_available");
     const visit = await repository.getVisit(organizationId, visitId);
     if (!visit || visit.storeId !== storeId || visit.providerKind !== "outside_vendor" || !visit.vendorId || (suppliedVendorId && visit.vendorId !== suppliedVendorId)) {
       throw new PublicWorkflowError("That visit is not available from this store link.", 403, "visit_not_available");
@@ -1821,7 +1840,7 @@ const gateway: PublicOperationsGateway = {
     const replayed = await replayPrior();
     if (replayed) return replayed;
 
-    if (!access || visit.status !== "active" || visit.checkedOutAt) {
+    if (!access || replayOnly || visit.status !== "active" || visit.checkedOutAt) {
       throw new PublicWorkflowError("That active visit is not available from this store link.", 403, "visit_not_available");
     }
     if (access.kind === "trusted_store") {

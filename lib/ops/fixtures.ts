@@ -1750,6 +1750,7 @@ function buildFixture(): OpsFixture {
           ? { assigneeType: "user" as const, assigneeId: assignment.internalMembershipId }
           : { assigneeType: "role" as const, assigneeRole: "facilities_admin" as const };
       const type = taskType(workOrder, followUp);
+      if(type === "verify_repair") {workOrder.accountableParty="Store team";if(followUp)followUp.accountableParty="Store team";}
       workflowTasks.push({
         id: followUp ? `workflow-task-${followUp.id}` : `workflow-task-${workOrder.id}-${index + 1}`,
         organizationId: workOrder.organizationId,
@@ -1757,8 +1758,8 @@ function buildFixture(): OpsFixture {
         taskType: type,
         title: followUp?.nextAction ?? workOrder.nextAction,
         reason: `Keep ${workOrder.number} moving: ${workOrder.problem}`,
-        ...assignee,
-        assigneeName,
+        ...(type === "verify_repair" ? {assigneeType:"role" as const,assigneeRole:"store_manager" as const} : assignee),
+        assigneeName: type === "verify_repair" ? "Store team" : assigneeName,
         priority: taskPriority(workOrder.priority),
         status: workOrder.status === "in_progress" ? "in_progress" : "open",
         blocking: ["approved", "awaiting_approval", "waiting_on_vendor", "waiting_on_parts"].includes(workOrder.status),

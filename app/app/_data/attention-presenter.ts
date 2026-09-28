@@ -35,6 +35,6 @@ export function presentAttentionRow(item: AttentionQueueRow, asOf: string): Acti
     dueAt: item.dueAt, dueLabel: history ? item.completedAt ? `Ended ${date(item.completedAt)}` : "End date not recorded" : exception ? `Open since ${date(item.dueAt!)}` : !item.dueAt ? "No deadline — reason recorded" : overdue && waiting ? `Commitment missed ${date(item.dueAt)}` : overdue ? `Overdue since ${date(item.dueAt)}` : `Due ${date(item.dueAt)}`,
     ownerLabel: item.owner, priorityLabel: history ? "Completed / canceled" : overdue ? "Overdue" : item.priority === "critical" ? "Critical" : item.priority[0].toUpperCase() + item.priority.slice(1),
     tone: history ? "neutral" : overdue || item.priority === "critical" ? "critical" : item.priority === "high" ? "warning" : "neutral",
-    link: { href: item.linkHref, label: exception ? "Review and decide" : "Open review" },
+    link: { href: item.linkHref, label: item.group === "completion" ? "Review completion" : item.group === "financial" ? "Review amount" : exception ? "Check record" : "Open next action" },
   };
 }

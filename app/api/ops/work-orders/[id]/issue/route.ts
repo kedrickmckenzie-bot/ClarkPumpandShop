@@ -5,7 +5,7 @@ import {
   getOpsRequestContext,
   opsApiError,
 } from "@/lib/server/ops-request-context";
-import { relativeRedirect303 } from "@/lib/server/relative-redirect";
+
 import { issueWorkOrderToVendor } from "@/lib/server/work-order-issuance";
 
 const channels = new Set(["email", "sms", "print", "manual"]);
@@ -49,9 +49,7 @@ export async function POST(
       message: formText(formData, "message", { max: 1_000 }) || undefined,
       actor: context.actor,
     });
-    return channel === "email"
-      ? relativeRedirect303(`/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service&notice=${encodeURIComponent(result.notice)}`)
-      : relativeRedirect303(result.publicPath);
+    return Response.json({ handoff: { publicPath: result.publicPath, notice: result.notice, workOrderNumber: workOrder.number, recordPath: `/app/work-orders/${encodeURIComponent(workOrder.id)}?view=service` } }, {headers:{"Cache-Control":"no-store"}});
   } catch (error) {
     return opsApiError(error);
   }

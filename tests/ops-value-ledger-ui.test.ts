@@ -28,10 +28,10 @@ describe("source-linked Value Ledger", () => {
     }));
 
     expect(markup).toContain("Confirmed financial benefits");
-    expect(markup).toContain("Identified exposure");
+    expect(markup).toContain("Unique amount flagged");
     expect(markup).toContain("Estimated opportunity");
     expect(markup).toContain("Review confirmed benefits, possible recoveries, and planning estimates separately");
-    expect(markup).toContain("It is not a deduction, credit, or savings claim");
+    expect(markup).toContain("this is not confirmed savings");
     expect(markup).toContain("Each entry keeps its source and review history");
     expect(markup).toContain("Invoice COLDLINE-202603-104-4");
     expect(markup).toContain("Invoice COLDLINE-202603-104-4-COPY");

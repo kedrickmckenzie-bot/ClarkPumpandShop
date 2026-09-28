@@ -25,6 +25,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
   ]);
   const asset = fixture.assets.find((item) => item.organizationId === session.organizationId && item.id === id);
   const review = buildEquipmentReview(fixture, session, id, query);
+  if(asset?.status === "operational"){model.statusLabel="Recorded as operating";model.statusTone="neutral";model.page.description=`${asset.assetTag} · Status from the equipment register. Review current work and repair history below.`;}
   if (asset) model.facts.splice(4, 0, { label: "Supplier", value: asset.supplier ?? "Not entered" });
   const componentSection = model.sections.find((section) => section.id === "components");
   if (componentSection?.table) {
@@ -52,9 +53,10 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
   const storeId = model.facts.find((fact) => fact.label === "Store")?.link?.href.split("/").at(-1);
   return (
     <DetailView
+      compactFacts
       model={model}
       initialSection="overview"
-      beforeSections={<><RecordFiles kind="asset" id={id} />{review ? <EquipmentReview model={review} /> : null}{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
+      beforeSections={<>{review ? <EquipmentReview model={review} /> : null}<details><summary>Equipment documents</summary><RecordFiles kind="asset" id={id} /></details>{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
       after={canSetupEquipment || canSetupPm ? <SetupActions
           title="Build out this equipment record"
           description="Add component depth or schedule preventive work. Both features stay optional and connect back to this equipment history."
