@@ -50,6 +50,8 @@ describe("request impact presentation", () => {
 
   it("makes a pending request-level authorization executable from the request record", () => {
     const fixture = buildNorthlinePresentationFixture();
+    // Explicit test-only approval; unpriced presentation reports have none.
+    fixture.approvalRequests.push({ id: "approval-request-106-facilities-pending", organizationId: NORTHLINE_ORGANIZATION_ID, subjectType: "service_request", subjectId: "request-current-106-ceiling-stain", storeId: "store-northline-106", categoryKey: "exterior", amount: { amountMinor: 180_000, currency: "USD" }, policyId: "approval-policy-regional-service-v1", policyKey: "regional-service", policyVersion: 1, policyName: "Regional service authorization", policyScopeKind: "organization", policyScopeId: NORTHLINE_ORGANIZATION_ID, requiredRole: "facilities_admin", requestedByMembershipId: "membership-northline-regional-2", requestedByName: "Morgan Hayes", reason: "Escalated from Regional manager: possible roof penetration needs facilities review", requestedAt: "2026-08-25T14:30:00.000Z", dueAt: "2026-08-26T14:30:00.000Z" });
     const requestId = "request-current-106-ceiling-stain";
     const model = buildRequestReviewModel(fixture, session, requestId);
     const detail = buildDetailModel(fixture, session, "request", requestId);

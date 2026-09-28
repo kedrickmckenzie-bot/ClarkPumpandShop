@@ -10,8 +10,8 @@ export default async function AdministrationPage({ searchParams }: { searchParam
   const [model, health] = await Promise.all([loadListModel("admin", await searchParams), loadJobHealthModel()]);
   return (
     <>
-      {health ? <JobHealthSection model={health} /> : null}
       <ListView model={model} />
+      {health ? <details style={{ marginTop: 24 }}><summary style={{ cursor: "pointer", padding: 16, fontWeight: 600 }}>Admin diagnostics</summary><JobHealthSection model={health} /></details> : null}
     </>
   );
 }

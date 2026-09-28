@@ -2723,10 +2723,10 @@ export function buildListModel(
       { id: "stores", label: "Stores", href: "/app/stores", cells: [{ key: "area", value: "Store directory" }, { key: "summary", value: `${scoped.stores.length} stores in scope` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configured", tone: "positive" }] },
       { id: "vendors", label: "Vendors", href: "/app/vendors", cells: [{ key: "area", value: "Approved vendor network" }, { key: "summary", value: `${fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).length} approved vendors` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configured", tone: "positive" }] },
       { id: "taxonomy", label: "Service areas and equipment templates", href: "/app/admin/service-areas", cells: [{ key: "area", value: "Company equipment setup" }, { key: "summary", value: `${(fixture.equipmentTemplates ?? []).filter((template) => template.organizationId === scoped.organizationId && template.active).length} reusable equipment types` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Ready to reuse", tone: "positive" }] },
-      { id: "approval-policies", label: "Approval policies", href: "/app/admin/approval-policies", cells: [{ key: "area", value: "Authorization governance" }, { key: "summary", value: `${fixture.approvalPolicies.filter((policy) => policy.organizationId === scoped.organizationId && policy.status === "active").length} active policies · ${fixture.approvalRequests.filter((request) => request.organizationId === scoped.organizationId && approvalRequestState(request, fixture.approvalDecisions) === "pending").length} pending decisions` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Auditable", tone: "positive" }] },
-      { id: "maintenance-responsibilities", label: "Maintenance responsibilities", href: "/app/admin/maintenance-responsibilities", cells: [{ key: "area", value: "Role permissions and closure policy" }, { key: "summary", value: "Configure store confirmation, routine creation, dispatch, and eligible auto-close" }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Organization-specific", tone: "info" }] },
+      { id: "approval-policies", label: "Approval policies", href: "/app/admin/approval-policies", cells: [{ key: "area", value: "Spending approvals" }, { key: "summary", value: `${fixture.approvalPolicies.filter((policy) => policy.organizationId === scoped.organizationId && policy.status === "active").length} active policies · ${fixture.approvalRequests.filter((request) => request.organizationId === scoped.organizationId && approvalRequestState(request, fixture.approvalDecisions) === "pending").length} pending decisions` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Auditable", tone: "positive" }] },
+      { id: "maintenance-responsibilities", label: "Maintenance responsibilities", href: "/app/admin/maintenance-responsibilities", cells: [{ key: "area", value: "Team permissions and work completion" }, { key: "summary", value: "Choose who creates, assigns and confirms work" }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Organization-specific", tone: "info" }] },
       { id: "notifications", label: "Notification delivery", href: "/app/admin/notifications", cells: [{ key: "area", value: "Email and escalation rules" }, { key: "summary", value: `${(fixture.notificationRules ?? []).filter((rule) => rule.organizationId === scoped.organizationId && rule.emailEnabled).length} email rules enabled` }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Configurable", tone: "info" }] },
-      { id: "imports", label: "Data imports", href: "/app/admin/imports", cells: [{ key: "area", value: "Store, vendor, and equipment onboarding" }, { key: "summary", value: "Validate CSV files before any records are written" }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Dry-run preview", tone: "info" }] },
+      { id: "imports", label: "Data imports", href: "/app/admin/imports", cells: [{ key: "area", value: "Store, vendor, and equipment onboarding" }, { key: "summary", value: "Validate CSV files before any records are written" }, { key: "owner", value: "Facilities administration" }, { key: "status", value: "Preview before import", tone: "info" }] },
     ];
     rows = administrationRows.filter((row) => !q || searchable(row.label, ...row.cells.map((cell) => cell.value)).includes(q));
   }
@@ -3880,27 +3880,27 @@ export function buildApprovalPolicyWorkspaceModel(
     state: { kind: "ready" },
     page: {
       title: "Approval policies",
-      eyebrow: "Governed authorization",
-      description: "Define who reviews service commitments by company, region, store, category, and amount. Every request freezes the exact policy version used; every decision is appended and attributed.",
+      eyebrow: "Spending approvals",
+      description: "Choose who approves spending by location, work type and amount. Each request keeps the rules used at the time and a record of who decided.",
       scopeLabel: session.scopeLabel,
       updatedLabel: `Source data through ${date(fixture.asOf)}`,
     },
     statusLabel: `${policies.filter((policy) => policy.status === "active").length} active policies`,
     statusTone: "positive",
     facts: [
-      { label: "Pending decisions", value: String(stateCount("pending")), helperText: "Each item retains an accountable role and due time" },
+      { label: "Pending decisions", value: String(stateCount("pending")), helperText: "Shows who decides next and when" },
       { label: "Approved", value: String(stateCount("approved")), helperText: "Recorded approval decisions" },
-      { label: "Escalated", value: String(stateCount("escalated")), helperText: "Original escalation evidence remains visible beside the next review" },
-      { label: "Access", value: session.role === "facilities" ? "Facilities administrator" : sentence(session.role), helperText: "This setup workspace is restricted by the server-side role policy" },
+      { label: "Escalated", value: String(stateCount("escalated")), helperText: "Requests sent to the next approver" },
+      { label: "Access", value: session.role === "facilities" ? "Facilities administrator" : sentence(session.role), helperText: "Only authorized roles can use these settings" },
     ],
     sections: [
       {
         id: "policy-versions",
-        title: "Effective policy versions",
+        title: "Approval rules",
         description: "A rule change creates a new version. Historical approval requests keep the name, scope, threshold, and required role that applied when review began.",
         table: {
           id: "approval-policies",
-          caption: "Tenant-scoped approval policy versions",
+          caption: "Company approval rules",
           columns: [
             { key: "policy", label: "Policy" },
             { key: "applies", label: "Applies to" },
@@ -3926,17 +3926,17 @@ export function buildApprovalPolicyWorkspaceModel(
       },
       {
         id: "approval-ledger",
-        title: "Approval request ledger",
-        description: "Pending, approved, and escalated examples point back to the exact operational record. Basic work with no triggering amount does not appear here.",
+        title: "Approval history",
+        description: "Open a request to see the work and decision. Work without an amount requiring approval is not listed.",
         table: {
           id: "approval-requests",
           caption: "Approval requests and decision history",
           columns: [
-            { key: "record", label: "Operational record" },
+            { key: "record", label: "Work or report" },
             { key: "store", label: "Store" },
             { key: "amount", label: "Amount", align: "end" },
-            { key: "policy", label: "Policy snapshot" },
-            { key: "owner", label: "Accountable role" },
+            { key: "policy", label: "Rule used" },
+            { key: "owner", label: "Approver" },
             { key: "status", label: "State" },
           ],
           rows: requests.map((request) => {
@@ -3952,7 +3952,7 @@ export function buildApprovalPolicyWorkspaceModel(
                 { key: "record", value: workOrder?.number ?? serviceRequest?.reference ?? "Unknown record", secondary: workOrder?.problem ?? serviceRequest?.problem },
                 { key: "store", value: store ? `Store ${store.storeNumber}` : "Unknown store" },
                 { key: "amount", value: estimateMoney(request.amount.amountMinor, request.amount.currency) },
-                { key: "policy", value: request.policyName, secondary: `Frozen version ${request.policyVersion}` },
+                { key: "policy", value: request.policyName, secondary: `Version ${request.policyVersion}` },
                 { key: "owner", value: sentence(request.requiredRole), secondary: request.dueAt ? `Due ${dateTime(request.dueAt)}` : "No due time" },
                 { key: "status", value: sentence(state), tone: state === "approved" ? "positive" : state === "rejected" || state === "cancelled" ? "critical" : "warning" },
               ],

@@ -128,6 +128,7 @@ export function navigationItemIsActive(item: NavigationItem, pathname: string) {
 }
 
 function roleCanSeeNavigationItem(role: OperatorRole, item: NavigationItem) {
+  if (role === "store_manager" && ["vendors", "planning", "compliance"].includes(item.id)) return false;
   switch (item.id) {
     case "compliance":
       return ["facilities","regional","store_manager","executive","finance"].includes(role);

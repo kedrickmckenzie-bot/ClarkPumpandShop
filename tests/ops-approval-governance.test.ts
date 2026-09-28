@@ -1,3 +1,4 @@
+import { reviewRequestImpactAssessment } from "@/lib/ops/request-impact-assessment";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import {
@@ -12,9 +13,26 @@ import {
 } from "@/lib/ops/fixture-repository";
 import {
   NORTHLINE_ORGANIZATION_ID,
-  buildNorthlinePresentationFixture,
+  buildNorthlinePresentationFixture as buildPresentationFixture,
 } from "@/lib/ops/fixtures";
 import type { ApprovalDecisionKind } from "@/lib/ops/types";
+
+
+// Explicit synthetic request approvals exercise the optional domain guard.
+// Presentation data must not put an invented price on an issue report.
+function buildNorthlinePresentationFixture() {
+  const fixture = buildPresentationFixture();
+  const organization = fixture.organizations[0]!;
+  const at = (_month: number, _day: number, hour: number, minute = 0) => new Date(Date.UTC(2026, 7, 25, hour, minute)).toISOString();
+  fixture.approvalRequests.push(
+    { id: "approval-request-101-pending", organizationId: organization.id, subjectType: "service_request", subjectId: "request-current-101-freezer-door", storeId: "store-northline-101", categoryKey: "refrigeration", amount: { amountMinor: 65_000, currency: "USD" }, policyId: "approval-policy-store-routine-v1", policyKey: "store-routine", policyVersion: 1, policyName: "Routine store authorization", policyScopeKind: "organization", policyScopeId: organization.id, requiredRole: "store_manager", escalationRole: "regional_manager", requestedByMembershipId: "membership-northline-facilities", requestedByName: "Jordan Lee", reason: "Authorize a door-adjustment diagnostic allowance before work-order creation", requestedAt: at(8, 10, 15, 20), dueAt: at(8, 11, 15, 20) },
+    { id: "approval-request-104-pending", organizationId: organization.id, subjectType: "service_request", subjectId: "request-current-104-beer-cave-door", storeId: "store-northline-104", categoryKey: "refrigeration", amount: { amountMinor: 65_000, currency: "USD" }, policyId: "approval-policy-store-routine-v1", policyKey: "store-routine", policyVersion: 1, policyName: "Routine store authorization", policyScopeKind: "organization", policyScopeId: organization.id, requiredRole: "store_manager", escalationRole: "regional_manager", requestedByMembershipId: "membership-northline-facilities", requestedByName: "Jordan Lee", reason: "Authorize a door-alignment diagnostic allowance before work-order creation", requestedAt: at(8, 10, 15, 55), dueAt: at(8, 11, 15, 55) },
+    { id: "approval-request-106-escalated", organizationId: organization.id, subjectType: "service_request", subjectId: "request-current-106-ceiling-stain", storeId: "store-northline-106", categoryKey: "exterior", amount: { amountMinor: 180_000, currency: "USD" }, policyId: "approval-policy-regional-service-v1", policyKey: "regional-service", policyVersion: 1, policyName: "Regional service authorization", policyScopeKind: "organization", policyScopeId: organization.id, requiredRole: "regional_manager", escalationRole: "facilities_admin", requestedByMembershipId: "membership-northline-facilities", requestedByName: "Jordan Lee", reason: "Authorize investigation above the stockroom ceiling", requestedAt: at(8, 10, 13, 50), dueAt: at(8, 11, 13, 50) },
+    { id: "approval-request-106-facilities-pending", organizationId: organization.id, subjectType: "service_request", subjectId: "request-current-106-ceiling-stain", storeId: "store-northline-106", categoryKey: "exterior", amount: { amountMinor: 180_000, currency: "USD" }, policyId: "approval-policy-regional-service-v1", policyKey: "regional-service", policyVersion: 1, policyName: "Regional service authorization", policyScopeKind: "organization", policyScopeId: organization.id, requiredRole: "facilities_admin", requestedByMembershipId: "membership-northline-regional-2", requestedByName: "Morgan Hayes", reason: "Escalated from Regional manager: possible roof penetration needs facilities review", requestedAt: at(8, 10, 14, 30), dueAt: at(8, 11, 14, 30), parentApprovalRequestId: "approval-request-106-escalated" },
+  );
+  fixture.approvalDecisions.push({ id: "approval-decision-106-escalated", organizationId: organization.id, approvalRequestId: "approval-request-106-escalated", decision: "escalated", decidedByMembershipId: "membership-northline-regional-2", decidedByName: "Morgan Hayes", decidedByRole: "regional_manager", reason: "Synthetic escalation", escalatedToRole: "facilities_admin", decidedAt: at(8, 25, 14, 30) });
+  return fixture;
+}
 
 vi.mock("server-only", () => ({}));
 
@@ -73,7 +91,7 @@ describe("approval governance", () => {
     expect([...membershipsByRole.values()].filter((membership) => membership.role === "facilities_admin")).toHaveLength(2);
   });
 
-  it("seeds a Store 104 issue whose impact, review task, and routine approval are actionable by the visible manager", async () => {
+  it("allows the visible store manager to decide an explicitly added request approval", async () => {
     const fixture = buildNorthlinePresentationFixture();
     const repository = createOpsFixtureRepository(fixture);
     const request = fixture.requests.find((candidate) => candidate.id === "request-current-104-beer-cave-door")!;
@@ -256,6 +274,30 @@ describe("approval governance", () => {
     const match = resolveApprovalPolicy({ policies, organizationId: NORTHLINE_ORGANIZATION_ID, store, categoryKey: "refrigeration", amountMinor: 180_000, currency: "USD" });
 
     expect(match?.id).toBe("approval-policy-store-104-refrigeration");
+  });
+
+  it("converts unpriced presentation reports without invented approval amounts", async () => {
+    const fixture = buildPresentationFixture();
+    expect(fixture.approvalRequests.some(row => row.subjectType === "service_request")).toBe(false);
+    const priced = fixture.approvalRequests.find(row => row.id === "approval-request-115-approved")!;
+    const pricedWork = fixture.workOrders.find(row => row.id === priced.subjectId)!;
+    expect(priced.subjectType).toBe("work_order");
+    expect(Date.parse(priced.requestedAt)).toBeGreaterThanOrEqual(Date.parse(pricedWork.createdAt));
+    const repository = createOpsFixtureRepository(fixture);
+    let sequence = 0;
+    for (const number of [101, 104, 106]) {
+      const request = fixture.requests.find(row => row.id.startsWith(`request-current-${number}-`))!;
+      const services: OpsCommandServices = { repository, clock: { now: () => "2026-08-26T12:00:00.000Z" }, ids: { next: prefix => `${prefix}-unpriced-${++sequence}` } };
+      const latest = (await repository.listRequestImpactAssessments(request.organizationId, request.id)).at(-1)!;
+      await reviewRequestImpactAssessment(services, { organizationId: request.organizationId, requestId: request.id, expectedRequestStatus: request.status as "submitted" | "under_review", expectedLatestAssessmentId: latest.id, disposition: "confirmed", assessment: latest, actor: facilitiesActor });
+      const work = await createWorkOrder(services, {
+        organizationId: NORTHLINE_ORGANIZATION_ID, storeId: request.storeId, requestId: request.id,
+        problem: "Inspect the reported problem", accountableParty: "Facilities coordinator",
+        nextAction: "Choose service provider", initialAssignment: { kind: "choose_later" }, actor: facilitiesActor,
+      });
+      expect(work.status).toBe("approved");
+      expect(repository.snapshot().approvalRequests.some(row => row.subjectId === work.id)).toBe(false);
+    }
   });
 
   it("keeps basic store-and-problem work valid when no policy-triggering amount is entered", async () => {

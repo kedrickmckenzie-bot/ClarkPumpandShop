@@ -294,7 +294,7 @@ function BenchmarkTable({ model }: { model: TrendAnalysisPageViewModel }) {
       </header>
       <div className={`${styles.tableScroller} ${styles.storeTableScroller}`}>
         <table className={styles.benchmarkTable}>
-          <caption>{model.benchmark.methodology}</caption>
+          <caption><details><summary>How stores are compared</summary>{model.benchmark.methodology}</details></caption>
           <thead><tr><th><SortHeading id="store" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="comparable" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="expected" links={model.benchmark.sortLinks} /></th><th className={styles.number}><SortHeading id="variance" links={model.benchmark.sortLinks} /></th><th><SortHeading id="signal" links={model.benchmark.sortLinks} /></th><th><SortHeading id="coverage" links={model.benchmark.sortLinks} /></th></tr></thead>
           <tbody>
             {model.benchmark.rows.map((row) => (

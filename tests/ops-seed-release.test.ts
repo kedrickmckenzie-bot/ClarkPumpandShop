@@ -134,7 +134,7 @@ describe("Northline deterministic seed release", () => {
     expect(inserts.some((query) => /INTO ops_requests/i.test(query.text) && query.values[0] === "request-current-104-beer-cave-door")).toBe(true);
     expect(inserts.some((query) => /INTO ops_request_impact_assessments/i.test(query.text) && query.values[0] === "impact-request-current-104-beer-cave-door-review")).toBe(true);
     expect(inserts.some((query) => /INTO ops_workflow_tasks/i.test(query.text) && query.values[0] === "workflow-task-request-current-104-beer-cave-door-review")).toBe(true);
-    expect(inserts.some((query) => /INTO ops_approval_requests/i.test(query.text) && query.values[0] === "approval-request-104-pending")).toBe(true);
+    expect(inserts.some((query) => /INTO ops_approval_requests/i.test(query.text) && query.values[0] === "approval-request-115-approved")).toBe(true);
     const completionMarker = inserts.at(-1)!;
     expect(completionMarker.text).toMatch(/INTO ops_idempotency_keys/i);
     expect(completionMarker.values).toContain(NORTHLINE_SEED_VERSION);

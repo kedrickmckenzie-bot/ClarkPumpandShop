@@ -4,13 +4,29 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Focused usability review — September 28
+
+- [x] FU-01 Remove fabricated report approvals; retain priced work-order approval and verify report conversion.
+- [x] FU-02 Put Setup first and collapse admin diagnostics.
+- [x] FU-03 Simplify planner, approval and comparison wording.
+- [x] FU-04 Readable, labeled compliance dates.
+- [x] FU-05 Simplify store-manager navigation while preserving store-level inspection, vendor and equipment access.
+- [x] FU-06 Required validation and affected browser journeys.
+
+Checkpoint: all five changes implemented and validated; full-suite exception and successful targeted correction are recorded below. No role permission changes, hosted reset, vendor-search expansion or production-readiness work. Existing local records are preserved; fixture corrections apply to fresh data. Claude's user-supplied review of commit 04dbd75 independently verified single-page QR printing, QR download/scan and company-first phone check-in. This closes QP-01, QP-05, CI-04 and DR-07 as externally verified acceptance; historical notes below describe the earlier local limitations.
+
+
+Implementation: removed four fabricated approval requests and one escalation decision from the three unpriced presentation reports (101, 104, 106). The existing Store 115 priced replacement approval remains. Domain approval guards are unchanged; synthetic request approvals now live only in their guard tests. Added a regression proving impact-reviewed presentation reports convert without a price/approval gate. Setup starts with settings, with diagnostics collapsed below. Planner and approval copy is plain language; comparison methodology is shorter in exports and expandable in the UI. Inspection dates use readable calendar dates, labeled escalation dates and local-time audit timestamps. Store-manager primary navigation has four entries; existing store links preserve compliance, vendor contacts, warranties and equipment access.
+
+Validation: seed, typecheck, lint and whitespace checks passed; final approval and trends tests passed 76/76. Full suite passed 1,099/1,100: the sole failure was the old UI test relying on the removed presentation approval. It now creates its own synthetic approval and its entire file passed 5/5. The full suite was not repeated after that test-only correction. Workflow suite passed 62/62 and production build passed. Logs: `%TEMP%/focused-*.log`. Unrelated browser journeys were not repeated in this bounded polish pass. Browser verified Setup-first order, collapsed diagnostics, planner and approval wording, store-manager four-item menu, Store 104 vendor contacts and scoped inspections, and collapsed/expandable comparison help. Inspection detail checked at 390px with no document overflow (375px client/scroll width). Screenshot: `%TEMP%/focused-compliance-phone.png`. Preview role and viewport restored. No records reset, commit or push; existing local demo approval records still display until fresh data is initialized.
+
 ## QR and visit polish — September 28
 
-- [ ] QP-01 Remove reserved blank print pages, enlarge QR and update company-first instructions.
+- [x] QP-01 Remove reserved blank print pages, enlarge QR and update company-first instructions.
 - [x] QP-02 Distinguish ended-window PM completion from all completed work.
 - [x] QP-03 Remove repeated receipt heading and name job checkboxes explicitly.
 - [x] QP-04 Show existing additional-work descriptions upfront; preserve main job list and vendor search.
-- [ ] QP-05 Required checks and affected browser journeys.
+- [x] QP-05 Required checks and affected browser journeys.
 
 Checkpoint: polish implementation and automated validation are complete; final printed page-count verification remains open. QP-01 and QP-05 remain partial until that print check passes. Vendor-search changes are deferred. No new problem-title field or Render reset. User-provided external review reports company-first phone check-in and QR download/scan passed on a fresh independent copy; print had trailing blank pages. This is external evidence, not an assistant-run result.
 
@@ -27,7 +43,7 @@ September 28: user authorized committing and pushing the demo-readiness, arrival
 - [x] CI-01 Search/select company before showing its work; retain unlisted and missing-work-order paths.
 - [x] CI-02 Expand job details before selection; clear crew check-in.
 - [x] CI-03 Offer optional approved work after check-in and append selected jobs to the same visit.
-- [ ] CI-04 Required checks and browser validation.
+- [x] CI-04 Required checks and browser validation.
 
 Checkpoint: implemented company → expandable job details → crew check-in, then optional additional work on confirmation. No new identity gate; vendor selection organizes the work list. Existing tenant and assignment boundaries remain. Earlier uncommitted work and local records preserved.
 
@@ -43,7 +59,7 @@ Validation checkpoint: seed, typecheck and lint passed. Focused recovery/held-wo
 - [x] DR-04 Everyday vendor search terms with honest empty results.
 - [x] DR-05 Explicit work-order parts ETA, equipment status context and skipped-location evidence.
 - [x] DR-06 PM layout, readable categories, grammar and work heading polish.
-- [ ] DR-07 Complete browser acceptance, including QR download/print verification (remaining).
+- [x] DR-07 Complete browser acceptance, including QR download/print verification (remaining).
 - [x] DR-08 Unlisted-company arrival, restricted vendor record, unmatched visit, secure checkout/evidence and manager approval for a selected store.
 
 Checkpoint: implemented the six review improvements and the explicitly approved unlisted-company arrival workflow; excluded the vendor-visibility finding. Existing local records were preserved. Browser acceptance is partial: QR download event timed out and physical/preview printing was not verified. No commit or push in this pass.

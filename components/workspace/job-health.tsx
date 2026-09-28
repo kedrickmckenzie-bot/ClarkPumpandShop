@@ -17,11 +17,11 @@ export function JobHealthSection({ model }: { model: JobHealthModel }) {
     <section className={styles.health} aria-labelledby="job-health-heading">
       <h2 id="job-health-heading">Background jobs</h2>
       <p className={styles.note}>
-        Every cycle is recorded per organization and slot, so a repeated schedule can never double-execute. Outbox depth shows undelivered platform events.
+        Recent scheduled tasks and messages waiting to be processed.
       </p>
       <div className={styles.outboxRow}>
         {model.outboxCounts.length === 0 ? (
-          <span className={styles.pill}>Outbox empty</span>
+          <span className={styles.pill}>No messages waiting</span>
         ) : (
           model.outboxCounts.map((entry) => (
             <span key={entry.status} className={`${styles.pill} ${entry.status === "failed" ? styles.pillCritical : entry.status === "pending" ? styles.pillInfo : styles.pillNeutral}`}>
