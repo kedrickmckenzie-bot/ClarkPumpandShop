@@ -1,3 +1,4 @@
+import {cameraInput} from "@/lib/ops/store-task-time";
 import Link from "next/link";
 import {getOpsRequestContext,assertStoreInSessionScope} from "@/lib/server/ops-request-context";
 import {taskRoles,type CameraWindow} from "@/lib/ops/store-task-types";
@@ -13,7 +14,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
  if(q.asset){const a=await r.getAsset(session.organizationId,q.asset);if(!a)notFound();store=a.storeId;sources.assetId=a.id;sourceLinks.push({label:a.name,href:`/app/equipment/${a.id}`});}
  if(q.visit){const v=await r.getVisit(session.organizationId,q.visit);if(!v)notFound();store=v.storeId;sources.visitId=v.id;sourceLinks.push({label:"Service visit",href:`/app/visits/${v.id}`});if(v.checkedOutAt)windows=[{start:new Date(Date.parse(v.checkedInAt)-15*60000).toISOString(),end:new Date(Date.parse(v.checkedOutAt)+15*60000).toISOString(),area:''}];}
  if(q.invoice){const inv=await r.getInvoice(session.organizationId,q.invoice);if(!inv)notFound();const allocations=(await Promise.all((await r.listInvoiceLines(session.organizationId,inv.id)).map(l=>r.listInvoiceLineAllocations(session.organizationId,l.id)))).flat();if(!store&&allocations.length)store=allocations[0].storeId;const grants=await r.listScopeGrantsForMembership(session.organizationId,actor.actorId!);if(!allocations.length&&!grants.some(g=>g.scopeKind==='organization'&&g.scopeId===session.organizationId))notFound();if(allocations.some(a=>a.storeId!==store))notFound();sources.invoiceId=inv.id;sourceLinks.push({label:`Invoice ${inv.vendorInvoiceNumber}`,href:`/app/invoices/${inv.id}`});}
- if(store)await assertStoreInSessionScope(session,store);
+ if(store){const location=await assertStoreInSessionScope(session,store);windows=windows.map(w=>({...w,start:cameraInput(w.start,location.timeZone),end:cameraInput(w.end,location.timeZone)}));}
  const stores=await r.searchStores(await taskScope(r,session,actor.actorId!),'',{limit:50});
  const selected=store?await r.getStore(session.organizationId,store):null;
  const options=stores.items.map(s=>({id:s.id,storeNumber:s.storeNumber,name:s.name,formattedAddress:s.formattedAddress}));if(selected&&!options.some(s=>s.id===selected.id))options.unshift({id:selected.id,storeNumber:selected.storeNumber,name:selected.name,formattedAddress:selected.address1});

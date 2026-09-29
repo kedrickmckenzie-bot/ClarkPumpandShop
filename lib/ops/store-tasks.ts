@@ -1,3 +1,5 @@
+import {formatOperationsDateTime} from "./local-time";
+import {cameraTime} from "./store-task-time";
 import { OpsDomainError } from "./errors";
 import type { OpsRepository,OpsStatement,OrganizationScope } from "./repository";
 import type { ActorContext,StoredFile } from "./types";
@@ -9,6 +11,7 @@ function fail(message:string):never {throw new OpsDomainError('VALIDATION',messa
 function forbidden():never {throw new OpsDomainError('FORBIDDEN','This task is not available to your account.');}
 function text(value:string,max:number,label:string) {if(!value?.trim()||value.trim().length>max)fail(`${label} is required (up to ${max} characters).`);return value.trim();}
 function date(value:string) {if(!value||!Number.isFinite(Date.parse(value)))fail('Choose a valid date and time.');return new Date(value).toISOString();}
+function futureDate(value:string,now:string) {const result=date(value);if(result<=date(now))fail('Choose a due date in the future.');return result;}
 export async function taskIdentity(r:OpsRepository,org:string,id:string,storeId?:string):Promise<TaskAccess> {
  const m=await r.getMembership(org,id);if(!m||m.status!=='active'||!['executive','facilities_admin','regional_manager','store_manager','finance_reviewer'].includes(m.role))forbidden();
  const u=await r.getUserInOrganization(org,m.userId);if(!u||u.status!=='active')forbidden();
@@ -41,7 +44,7 @@ function fileStatements(t:StoreTask,files:StoredFile[],messageId:string,now:stri
 function participant(t:StoreTask,id:string,now:string) {return insertRecord('ops_store_task_people',{id:`task-person-${crypto.randomUUID()}`,organization_id:t.organizationId,task_id:t.id,membership_id:id,seen_at:now});}
 function record(t:StoreTask,actor:ActorContext,kind:string,body:string,findings:CameraFinding[],now:string,files:StoredFile[]=[]) {
  const id=`task-message-${crypto.randomUUID()}`;
- return [insertRecord('ops_store_task_messages',{id,organization_id:t.organizationId,task_id:t.id,actor_id:actor.actorId!,actor_name:actor.actorName,kind,body,findings_json:JSON.stringify(findings),created_at:now}),communicationAudit(t.organizationId,t.id,`store_task.${kind}`,actor,now,{body,findings,messageId:id,version:t.version,status:t.status,result:t.result,assigneeId:t.assigneeId,claimantId:t.claimantId,fallbackId:t.fallbackId,files:files.map(f=>f.id)},'store_task'),...fileStatements(t,files,id,now)];
+ return [insertRecord('ops_store_task_messages',{id,organization_id:t.organizationId,task_id:t.id,actor_id:actor.actorId!,actor_name:actor.actorName,kind,body,findings_json:JSON.stringify(findings),created_at:now}),communicationAudit(t.organizationId,t.id,`store_task.${kind}`,actor,now,{body,findings,messageId:id,version:t.version,status:t.status,result:t.result,dueAt:t.dueAt,assigneeId:t.assigneeId,claimantId:t.claimantId,fallbackId:t.fallbackId,files:files.map(f=>f.id)},'store_task'),...fileStatements(t,files,id,now)];
 }
 export interface NewStoreTask {storeId:string;title:string;instructions:string;kind:TaskKind;assignment:TaskAssignment;assigneeId?:string;fallbackId:string;priority:'routine'|'urgent';dueAt:string;notifyRequester:boolean;windows:CameraWindow[];workOrderId?:string;invoiceId?:string;visitId?:string;assetId?:string;}
 export async function validateTaskAssignment(r:OpsRepository,org:string,store:string,assignment:TaskAssignment,assignee:string|undefined,fallback:string) {
@@ -65,9 +68,9 @@ export async function createStoreTask(r:OpsRepository,actor:ActorContext,input:N
    if(!allocations.length){const grants=await r.listScopeGrantsForMembership(org,actor.actorId!);if(!grants.some(g=>g.scopeKind==='organization'&&g.scopeId===org&&writers.includes(g.permission)))forbidden();}
  }
  if(!Array.isArray(input.windows)||input.windows.length>12||input.windows.some(w=>!w||typeof w.start!=='string'||typeof w.end!=='string'||typeof w.area!=='string'))fail('Add up to 12 camera windows.');
- const windows=input.kind==='camera'?input.windows.map(w=>({start:date(w.start),end:date(w.end),area:w.area.trim().slice(0,160)})):[];
+ const windows=input.kind==='camera'?input.windows.map(w=>({start:cameraTime(w.start),end:cameraTime(w.end),area:w.area.trim().slice(0,160)})):[];
  if(input.kind==='camera'&&(!windows.length||windows.length>12||windows.some(w=>w.end<=w.start)))fail('Add 1–12 time windows, with the end after the start.');
- const task:StoreTask={id:`task-${crypto.randomUUID()}`,organizationId:org,storeId:input.storeId,title:text(input.title,160,'Title'),instructions:text(input.instructions,4000,'Instructions'),kind:input.kind,assignment:input.assignment,assigneeId:input.assignment==='person'?input.assigneeId!:null,claimantId:null,requesterId:actor.actorId!,fallbackId:input.fallbackId,status:'open',priority:input.priority,dueAt:date(input.dueAt),notifyRequester:input.notifyRequester?1:0,workOrderId:input.workOrderId||null,invoiceId:input.invoiceId||null,visitId:input.visitId||null,assetId:input.assetId||null,windowsJson:JSON.stringify(windows),result:null,version:1,createdAt:now,updatedAt:now};
+ const task:StoreTask={id:`task-${crypto.randomUUID()}`,organizationId:org,storeId:input.storeId,title:text(input.title,160,'Title'),instructions:text(input.instructions,4000,'Instructions'),kind:input.kind,assignment:input.assignment,assigneeId:input.assignment==='person'?input.assigneeId!:null,claimantId:null,requesterId:actor.actorId!,fallbackId:input.fallbackId,status:'open',priority:input.priority,dueAt:futureDate(input.dueAt,now),notifyRequester:input.notifyRequester?1:0,workOrderId:input.workOrderId||null,invoiceId:input.invoiceId||null,visitId:input.visitId||null,assetId:input.assetId||null,windowsJson:JSON.stringify(windows),result:null,version:1,createdAt:now,updatedAt:now};
  const values=Object.fromEntries(Object.entries(task).map(([k,v])=>[k.replace(/[A-Z]/g,c=>'_'+c.toLowerCase()),v]));
  await r.atomicWrite([insertRecord('ops_store_tasks',values),...Array.from(new Set([task.requesterId,task.fallbackId,task.assigneeId].filter((v):v is string=>!!v))).map(id=>participant(task,id,id===actor.actorId!?now:'1970-01-01T00:00:00.000Z')),...record(task,actor,'created','Task created.',[],now,files)]);
  return task;
@@ -91,7 +94,7 @@ export async function updateStoreTask(r:OpsRepository,actor:ActorContext,id:stri
   if(t.kind==='camera'){
    const windows=JSON.parse(t.windowsJson) as CameraWindow[];
    if(findings.length!==windows.length)fail('Record a finding for every camera window.');
-   findings.forEach(f=>{if(!f||typeof f.notes!=='string'||!['matches','different','partial','unavailable'].includes(f.result)||!f.notes?.trim()||f.notes.length>2000)fail('Add a result and notes for every camera window.');if(f.start||f.end){f.start=date(f.start);f.end=date(f.end);if(f.end<f.start)fail('Observed end must follow observed start.');}});
+   findings.forEach(f=>{if(!f||typeof f.notes!=='string'||!['matches','different','partial','unavailable'].includes(f.result)||!f.notes?.trim()||f.notes.length>2000)fail('Add a result and notes for every camera window.');if(f.start||f.end){f.start=cameraTime(f.start);f.end=cameraTime(f.end);if(f.end<f.start)fail('Observed end must follow observed start.');}});
    if(input.result==='done'&&findings.some(f=>f.result!=='matches'))fail('Choose Needs attention or Couldn’t complete when a camera window does not match.');
   }
   body=({done:'Done — no issues',attention:'Needs attention',unable:'Couldn’t complete'}[input.result])+': '+body;
@@ -99,7 +102,7 @@ export async function updateStoreTask(r:OpsRepository,actor:ActorContext,id:stri
  }else if(input.action==='review'||input.action==='send_back'){
   if(t.status!=='review'||t.requesterId!==actor.actorId!)forbidden();
   next.status=input.action==='review'?'closed':'open';
-  if(input.action==='send_back'){body=text(body,6000,'What else is needed');next.dueAt=date(input.dueAt??'');next.result=null;}
+  if(input.action==='send_back'){body=text(body,6000,'What else is needed');next.dueAt=futureDate(input.dueAt??'',now);next.result=null;const zone=(await r.getStore(t.organizationId,t.storeId))?.timeZone;body+=`\nCheck deadline changed from ${formatOperationsDateTime(t.dueAt,zone)} to ${formatOperationsDateTime(next.dueAt,zone)}.`;}
   else body=body||'Reviewed and closed.';
  }else if(input.action==='reassign'){
   if(t.status==='closed'||!access.supervisor&&t.requesterId!==actor.actorId!)forbidden();

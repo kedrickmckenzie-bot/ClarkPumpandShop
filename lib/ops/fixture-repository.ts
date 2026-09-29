@@ -477,7 +477,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     }
     return people.filter(p=>!localOnly||p.local).sort((a,b)=>a.name.localeCompare(b.name)||a.id.localeCompare(b.id)).slice(0,50);
   }
-  async listTaskMessages(org:string,id:string,offset=0) {return clone((this.fixture.storeTaskMessages??[]).filter(t=>t.organizationId===org&&t.taskId===id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id)).slice(offset,offset+50));}
+  async listTaskMessages(org:string,id:string,offset=0,kind?:string) {return clone((this.fixture.storeTaskMessages??[]).filter(t=>t.organizationId===org&&t.taskId===id&&(!kind||t.kind===kind)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id)).slice(offset,offset+50));}
   async listTaskParticipants(org:string,id:string) {return clone((this.fixture.storeTaskPeople??[]).filter(t=>t.organizationId===org&&t.taskId===id));}
   async queryStoreTasks(scope:OrganizationScope,q:import("./store-task-types").TaskQuery):Promise<import("./store-task-types").TaskPage> {
     const rows:import("./store-task-types").TaskRow[]=[];
@@ -493,13 +493,13 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       if(!q.supervisor&&!participant&&!(t.status==='open'&&!t.claimantId&&shared))continue;
       if(q.storeId&&s.id!==q.storeId||q.sourceId&&![t.workOrderId,t.invoiceId,t.visitId,t.assetId].includes(q.sourceId))continue;
       if(q.search&&!`${t.title} ${s.storeNumber} ${s.name} ${s.address1} ${s.city} ${s.state} ${s.postalCode}`.toLowerCase().includes(q.search.toLowerCase()))continue;
-      const mine=t.status==='review'&&t.requesterId===q.membershipId||t.status==='open'&&(t.claimantId===q.membershipId||!t.claimantId&&t.assigneeId===q.membershipId )||t.status!=='closed'&&t.fallbackId===q.membershipId&&t.dueAt<q.now;
+      const mine=t.status==='review'&&t.requesterId===q.membershipId||t.status==='open'&&(t.claimantId===q.membershipId||!t.claimantId&&t.assigneeId===q.membershipId )||t.status==='open'&&t.fallbackId===q.membershipId&&t.dueAt<q.now;
       if(q.view==='mine'&&!mine||q.view==='shared'&&!(t.status==='open'&&!t.claimantId&&t.assignment!=='person'&&shared)||q.view==='history'&&t.status!=='closed'||q.view==='waiting'&&!(participant&&t.status!=='closed'&&!(t.status==='review'&&t.requesterId===q.membershipId)&&(t.claimantId??t.assigneeId)!==q.membershipId))continue;
       const name=(id:string|null)=>this.fixture.users.find(u=>u.id===this.fixture.memberships.find(m=>m.organizationId===scope.organizationId&&m.id===id)?.userId)?.displayName??'';
       const seen=people.find(p=>p.membershipId===q.membershipId)?.seenAt;
-      rows.push({...t,storeNumber:s.storeNumber,storeName:s.name,handlerName:name(t.claimantId??t.assigneeId),requesterName:name(t.requesterId),fallbackName:name(t.fallbackId),newReply:seen&&(this.fixture.storeTaskMessages??[]).some(m=>m.organizationId===scope.organizationId&&m.taskId===t.id&&m.kind==='reply'&&m.actorId!==q.membershipId&&m.createdAt>seen)?1:0});
+      rows.push({...t,storeNumber:s.storeNumber,storeName:s.name,timeZone:s.timeZone,handlerName:name(t.claimantId??t.assigneeId),requesterName:name(t.requesterId),fallbackName:name(t.fallbackId),newReply:seen&&(this.fixture.storeTaskMessages??[]).some(m=>m.organizationId===scope.organizationId&&m.taskId===t.id&&m.kind==='reply'&&m.actorId!==q.membershipId&&m.createdAt>seen)?1:0});
     }
-    rows.sort((a,b)=>(a.priority==='urgent'?0:1)-(b.priority==='urgent'?0:1)||Number(b.status!=='closed'&&b.dueAt<q.now)-Number(a.status!=='closed'&&a.dueAt<q.now)||b.newReply-a.newReply||a.dueAt.localeCompare(b.dueAt)||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
+    rows.sort((a,b)=>(a.priority==='urgent'?0:1)-(b.priority==='urgent'?0:1)||Number(b.status==='open'&&b.dueAt<q.now)-Number(a.status==='open'&&a.dueAt<q.now)||b.newReply-a.newReply||a.dueAt.localeCompare(b.dueAt)||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
     return {items:clone(rows.slice(q.offset??0,(q.offset??0)+Math.min(50,q.limit??25))),totalCount:rows.length};
   }
   async listComplianceOwners(org:string,search="") {return this.fixture.memberships.filter(m=>m.organizationId===org&&m.status==="active"&&!["vendor_user","support"].includes(m.role)&&this.fixture.users.some(u=>u.id===m.userId&&u.status==="active"&&u.displayName.toLowerCase().includes(search.toLowerCase()))).slice(0,20).map(m=>({id:m.id,name:this.fixture.users.find(u=>u.id===m.userId)?.displayName??m.id}));}

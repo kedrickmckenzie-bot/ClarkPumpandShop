@@ -365,7 +365,7 @@ class SqlOpsRepository implements OpsRepository {
   async inspectionDelivery(org:string,id:string) {return (await this.all("SELECT id,topic,status FROM ops_outbox_messages WHERE organization_id = ? AND aggregate_type = 'inspection' AND aggregate_id = ? ORDER BY created_at DESC,id DESC LIMIT 10",[org,id])).map(r=>complianceRow<{id:string;topic:string;status:string}>(r));}
   async getStoreTask(org:string,id:string) {return getTaskSql(this.driver,org,id);}
   async listTaskPeople(org:string,store:string,search:string,localOnly=false) {return taskPeopleSql(this.driver,org,store,search,localOnly);}
-  async listTaskMessages(org:string,id:string,offset=0) {return taskMessagesSql(this.driver,org,id,offset);}
+  async listTaskMessages(org:string,id:string,offset=0,kind?:string) {return taskMessagesSql(this.driver,org,id,offset,kind);}
   async listTaskParticipants(org:string,id:string) {return taskParticipantsSql(this.driver,org,id);}
   async queryStoreTasks(scope:OrganizationScope,q:import("./store-task-types").TaskQuery) {return taskQuerySql(this.driver,scope,q);}
   async listComplianceOwners(org:string,search="") {return (await this.all("SELECT m.id,u.display_name FROM ops_memberships m JOIN ops_users u ON u.id=m.user_id WHERE m.organization_id = ? AND m.status = 'active' AND m.role NOT IN ('vendor_user','support') AND u.status = 'active' AND LOWER(u.display_name) LIKE ? ORDER BY u.display_name,m.id LIMIT 20",[org,`%${search.toLowerCase()}%`])).map(r=>({id:String(r.id),name:String(r.display_name)}));}

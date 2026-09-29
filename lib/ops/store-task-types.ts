@@ -18,12 +18,12 @@ export interface TaskMessage { id:string; organizationId:string; taskId:string; 
 export interface TaskParticipant { id:string; organizationId:string; taskId:string; membershipId:string; seenAt:string; }
 export interface TaskAccess { membershipId:string; supervisor:boolean; local:boolean; }
 export interface TaskQuery extends TaskAccess { view:TaskView; storeId?:string; sourceId?:string; search?:string; offset?:number; limit?:number; now:string; }
-export interface TaskRow extends StoreTask { storeNumber:string; storeName:string; handlerName:string; requesterName:string; fallbackName:string; newReply:number; }
+export interface TaskRow extends StoreTask { storeNumber:string; storeName:string; timeZone?:string; handlerName:string; requesterName:string; fallbackName:string; newReply:number; }
 export interface TaskPage { items:TaskRow[]; totalCount:number; }
 export interface TaskRepository {
  getStoreTask(org:string,id:string):Promise<StoreTask|null>;
  listTaskPeople(org:string,storeId:string,search:string,localOnly?:boolean):Promise<TaskPerson[]>;
- listTaskMessages(org:string,id:string,offset?:number):Promise<TaskMessage[]>;
+ listTaskMessages(org:string,id:string,offset?:number,kind?:string):Promise<TaskMessage[]>;
  listTaskParticipants(org:string,id:string):Promise<TaskParticipant[]>;
  queryStoreTasks(scope:OrganizationScope,query:TaskQuery):Promise<TaskPage>;
 }

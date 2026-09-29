@@ -4,6 +4,19 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Store-task review polish — September 28
+
+- [x] TP-01 Literal camera clock entries and store-local visit defaults.
+- [x] TP-02 Camera findings and recorded visit times visible beside each other.
+- [x] TP-03 Store-zone deadlines, future-date validation for create/send-back.
+- [x] TP-04 Submitted checks stop overdue escalation; original deadline retained.
+- [x] TP-05 Clear denied-access state; regression and browser verification.
+
+Checkpoint: implementation, browser checks and automated validation complete. User explicitly chose literal camera-clock values and deferred deactivation. Existing instant-based camera evidence remains preserved and displayed in its store zone; new entries are saved without a timezone. No automatic mismatch inference.
+
+Implemented server-validated future deadlines using store time; literal camera inputs; store-local visit prefill; latest findings independent of history pagination; plain finding labels; recorded visit comparison; open-only overdue routing/sorting; explicit permission/not-found views. Browser verified literal 1:00–3:30 PM request and 1:05–3:20 PM findings, past-deadline rejection, access denial, 390px layout without horizontal overflow, visit defaults (8:00–9:52 from an 8:15–9:37 visit), and a three-minute camera drift accepted as Done/no issues. Two clearly named QA tasks were completed and closed. Preview role and viewport restored. Screenshot: `%TEMP%/task-camera-comparison.png`. Validation: seed, final typecheck, lint, whitespace check and production build passed. Full suite passed 1,107/1,107; the newly added clock tests and updated fixture/SQLite regressions passed separately (4/4). Workflow suite passed 63/63, including PostgreSQL task regression. The full suite was not rerun after the final deadline-history amendment; affected regressions and typecheck passed afterward, and the final build includes it. Logs: `%TEMP%/task-polish-*.log`. No commit/push.
+
+
 ## Store tasks — September 28
 
 - [x] ST-01 Independent store tasks and durable optional source links.
