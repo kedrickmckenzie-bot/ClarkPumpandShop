@@ -22,4 +22,3 @@ it("counts beyond the preview and pages every matching report without duplicates
  for(const scoped of [{...scope,storeIds:[]},{organizationId:"foreign"},{...scope,storeIds:[source.storeId]}])expect(await queryOperatingRisks(driver,scoped)).toEqual(operatingRisksFromFixture(f,scoped));
  }finally{db.close();}
 });
-
