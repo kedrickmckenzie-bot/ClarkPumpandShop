@@ -1043,7 +1043,7 @@ const gateway: PublicOperationsGateway = {
           ? "The operator answered your question. Review the answer, then accept, propose a visit time, ask a follow-up question, or decline."
           : source.latestResponse?.response === "accepted"
             ? "The work is accepted, but no visit time is confirmed yet. Coordinate timing or use the technician check-in when arriving under the operator's instructions."
-            : "Review the authorized scope, then accept, propose a visit time, ask a question, or decline.";
+            : "Review the requested work, then accept, suggest a visit time, ask a question or decline.";
     return {
       serviceDecisionsClosed,
       organizationName: source.organizationName,

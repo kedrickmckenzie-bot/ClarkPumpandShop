@@ -42,7 +42,10 @@ describe("operator query presenter", () => {
     expect(model.table.rows.length).toBeGreaterThan(0);
     expect(model.table.rows.length).toBeLessThanOrEqual(25);
     expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "store")?.value === "Store 104")).toBe(true);
-    expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "next")?.link?.href.endsWith("#add-update"))).toBe(true);
+    expect(model.table.columns.find((column) => column.key === "next")?.label).toBe("Description");
+    for (const row of model.table.rows) {
+      expect(row.cells.find((cell) => cell.key === "next")).toMatchObject({ expandable: true, value: fixture.workOrders.find((work) => work.id === row.id)!.problem });
+    }
   });
 
   it("restores the facilities journey from default work to held-work bundling without abandoning query-first rows", async () => {

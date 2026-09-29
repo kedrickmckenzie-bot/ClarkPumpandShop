@@ -1,6 +1,6 @@
 import { OptionalVisitWork } from "./optional-visit-work";
 import Link from "next/link";
-import { ArrowRight, Building2, CalendarDays, FileCheck2, MapPin, Phone } from "lucide-react";
+import { ArrowRight, Building2, CalendarDays, MapPin, Phone } from "lucide-react";
 import type { ServiceAuthorizationView } from "./contracts";
 import { formatPublicDateTime, PublicFrame } from "./public-ui";
 import { VendorResponseForm } from "./vendor-response-form";
@@ -9,10 +9,10 @@ import styles from "./public-workflows.module.css";
 export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { token: string; authorization: ServiceAuthorizationView;forms?:Array<{name:string;href:string}> }) {
   const hasFinalResponse = authorization.serviceDecisionsClosed || authorization.status === "accepted" || authorization.status === "declined";
   return (
-    <PublicFrame organizationName={authorization.organizationName} context="Work Order / Service Authorization" mode={authorization.mode}>
+    <PublicFrame organizationName={authorization.organizationName} context="Work order" mode={authorization.mode}>
       <div className={styles.hero}>
         <div>
-          <span className={styles.eyebrow}>Authorized work issued to {authorization.vendorName}</span>
+          <span className={styles.eyebrow}>Assigned to {authorization.vendorName}</span>
           <h1 className={styles.title}>{authorization.operatorWorkOrderNumber}</h1>
           <p className={styles.lede}>{authorization.store.name} · Store {authorization.store.number}</p>
         </div>
@@ -24,25 +24,23 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { t
           <section className={styles.card} aria-labelledby="service-request-title">
             <div className={styles.cardHeader}>
               <div>
-                <span className={styles.eyebrow}>Customer-authorized service</span>
-                <h2 className={styles.cardTitle} id="service-request-title">Work to complete</h2>
+                <span className={styles.eyebrow}>Job details</span>
+                <h2 className={styles.cardTitle} id="service-request-title">What’s wrong?</h2>
               </div>
-              <FileCheck2 aria-hidden="true" color="#315dcc" size={24} />
             </div>
 
-            <p className={styles.problem}>{authorization.service.problem}</p>
-            <div className={styles.callout} style={{ marginTop: "1rem" }}>
-              <strong>Authorized scope</strong>
-              <p>{authorization.service.requestedWork}</p>
+            <p className={styles.serviceText}>{authorization.service.problem}</p>
+            <div className={styles.requestedWork}>
+              <h2 className={styles.cardTitle}>What we need you to do</h2>
+              <p className={styles.serviceText}>{authorization.service.requestedWork}</p>
             </div>
             <div className={styles.detailGrid} style={{ marginTop: "1.2rem" }}>
-              <div className={styles.detail}><span className={styles.detailLabel}>Category</span><p className={styles.detailValue}>{authorization.service.category ?? "To be classified"}</p></div>
-              <div className={styles.detail}><span className={styles.detailLabel}>Equipment</span><p className={styles.detailValue}>{authorization.service.asset ?? "Not required for this work"}</p></div>
+              {authorization.service.category ? <div className={styles.detail}><span className={styles.detailLabel}>Service type</span><p className={styles.detailValue}>{authorization.service.category}</p></div> : null}
+              <div className={styles.detail}><span className={styles.detailLabel}>Equipment</span><p className={styles.detailValue}>{authorization.service.asset ?? "See the job description"}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Issued</span><p className={styles.detailValue}>{formatPublicDateTime(authorization.issuedAt, authorization.store.timeZone)}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Response due</span><p className={styles.detailValue}>{authorization.responseDueAt ? formatPublicDateTime(authorization.responseDueAt, authorization.store.timeZone) : "No response deadline stated"}</p></div>
-              <div className={styles.detail}><span className={styles.detailLabel}>Revision</span><p className={styles.detailValue}>Revision {authorization.revision}</p></div>
             </div>
-            <div className={styles.callout} style={{ marginTop: "1rem" }}><strong>What to do next</strong><p>{authorization.nextStep}</p></div>
+            <div className={styles.callout} style={{ marginTop: "1rem" }}><strong>Your next step</strong><p>{authorization.nextStep}</p></div>
           </section>
 
           {forms.length?<section className={styles.card}><h2 className={styles.cardTitle}>Instructions & blank forms</h2><p>Download or print, then return the completed paperwork and photos.</p><ul>{forms.map(f=><li key={f.href}><a target="_blank" rel="noopener noreferrer" href={f.href}>{f.name}</a> · <a href={`${f.href}?download=1`}>Download</a></li>)}</ul></section>:null}
@@ -64,7 +62,7 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { t
 
         <aside className={styles.stack} aria-label="Service authorization details">
           <section className={styles.card}>
-            <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Store access</h2><Building2 aria-hidden="true" color="#315dcc" size={22} /></div>
+            <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Where to go</h2><Building2 aria-hidden="true" color="#315dcc" size={22} /></div>
             <div className={styles.stack}>
               <div className={styles.detail}><span className={styles.detailLabel}>Location</span><p className={styles.detailValue}><MapPin aria-hidden="true" size={16} /> {authorization.store.address}</p></div>
               {authorization.store.phone ? <div className={styles.detail}><span className={styles.detailLabel}>Store phone</span><p className={styles.detailValue}><Phone aria-hidden="true" size={16} /> {authorization.store.phone}</p></div> : null}
@@ -81,9 +79,10 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { t
           ) : null}
 
           <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Work reference & billing</h2>
+            <h2 className={styles.cardTitle}>When you invoice</h2>
             <div className={styles.stack} style={{ marginTop: "1rem" }}>
-              <div className={styles.detail}><span className={styles.detailLabel}>Billing reference</span><p className={styles.detailValue}>{authorization.authorization.billingInstruction}</p></div>
+              <div className={styles.detail}><span className={styles.detailLabel}>Include this work-order number</span><p className={styles.detailValue}>{authorization.authorization.billingInstruction}</p></div>
+              <div className={styles.detail}><span className={styles.detailLabel}>Work-order version</span><p className={styles.detailValue}>{authorization.revision}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Issued by</span><p className={styles.detailValue}>{authorization.authorization.requestedBy}</p></div>
             </div>
           </section>

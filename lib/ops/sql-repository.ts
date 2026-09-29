@@ -857,11 +857,13 @@ class SqlOpsRepository implements OpsRepository {
   async listRequests(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId } = {}) {
     const params: unknown[] = [];
     const clauses = [scopeWhere(scope, "s", params)];
-    if (query.status === "acknowledged_unlinked") clauses.push("r.status = 'acknowledged' AND r.linked_work_order_id IS NULL");
+    if (query.status === "open_unlinked") clauses.push("r.status IN ('submitted','under_review','acknowledged') AND r.linked_work_order_id IS NULL AND r.converted_work_order_id IS NULL");
+    else if (query.status === "acknowledged_unlinked") clauses.push("r.status = 'acknowledged' AND r.linked_work_order_id IS NULL");
     else if (query.status === "pending") { clauses.push(`r.status IN (${PENDING_REQUEST_STATUSES.map(() => "?").join(",")})`); params.push(...PENDING_REQUEST_STATUSES); }
     else if (query.status) { clauses.push("r.status = ?"); params.push(query.status); }
     if (query.storeId) { clauses.push("r.store_id = ?"); params.push(query.storeId); }
     if (query.search?.trim()) { clauses.push("lower(r.reference || ' ' || r.problem || ' ' || r.reporter_name || ' ' || s.search_text) LIKE ?"); params.push(`%${query.search.trim().toLocaleLowerCase("en-US")}%`); }
+    const totalCount=query.status === "open_unlinked" ? Number((await this.all(`SELECT COUNT(*) AS total FROM ops_requests r JOIN ops_stores s ON s.organization_id=r.organization_id AND s.id=r.store_id WHERE ${clauses.join(" AND ")}`,params))[0]?.total??0) : undefined;
     addKeysetCursor(clauses, params, query.cursor, "r.submitted_at", "r.id", "desc");
     const max = limit(query.limit);
     params.push(max + 1, offset(query.offset));
@@ -871,7 +873,7 @@ class SqlOpsRepository implements OpsRepository {
     const visibleRows = rows.slice(0, max);
     const items = visibleRows.map((row): RequestListRow => ({ id: text(row, "id"), reference: text(row, "reference"), storeId: text(row, "store_id"), storeNumber: text(row, "store_number"), storeName: text(row, "store_name"), reporterName: text(row, "reporter_name"), problem: text(row, "problem"), priority: text(row, "priority") as RequestListRow["priority"], status: text(row, "status"), submittedAt: text(row, "submitted_at"), acknowledgedAt: maybeText(row, "acknowledged_at"), acknowledgedByActorName: maybeText(row, "acknowledged_by_actor_name"), linkedWorkOrderId: maybeText(row, "linked_work_order_id"), convertedWorkOrderId: maybeText(row, "converted_work_order_id") }));
     const last = visibleRows.at(-1);
-    return { items, nextCursor: rows.length > max && last ? encodeCursor(text(last, "submitted_at"), text(last, "id")) : undefined };
+    return { items, ...(totalCount===undefined?{}:{totalCount}), nextCursor: rows.length > max && last ? encodeCursor(text(last, "submitted_at"), text(last, "id")) : undefined };
   }
 
   async listVisits(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId; vendorId?: OpsId; review?: boolean } = {}) {

@@ -442,6 +442,7 @@ export interface TableColumnViewModel {
 }
 
 export interface TableCellViewModel {
+  expandable?: boolean;
   link?: SupportingLink;
   key: string;
   value: string;

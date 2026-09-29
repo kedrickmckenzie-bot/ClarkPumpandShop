@@ -386,11 +386,11 @@ function DataTable({ table, selectedId, rowHref, selection, context, openRecord 
                   const href = cellLink?.href ?? (openRecord ? row.href : rowHref?.(row) ?? row.href);
                   return (
                     <td data-column={column.key} data-label={column.label} className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
-                      <Link href={openRecord || cellLink || !rowHref ? workspaceStartHref(href) : href} aria-current={!cellLink && row.id === selectedId ? "true" : undefined} aria-label={cellLink ? `${cellLink.label}: ${cell?.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
+                      {cell?.expandable ? <div className={styles.workDescription}>{cell.value.length > 160 ? <details><summary>{cell.value.slice(0, 157).trimEnd()}… <span>Read full description</span></summary><p>{cell.value}</p></details> : <p>{cell.value}</p>}{cell.secondary ? <small>{cell.secondary}</small> : null}</div> : <Link href={openRecord || cellLink || !rowHref ? workspaceStartHref(href) : href} aria-current={!cellLink && row.id === selectedId ? "true" : undefined} aria-label={cellLink ? `${cellLink.label}: ${cell?.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
                         <span>{cell?.value ?? "—"}</span>
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
                         {index === table.columns.length - 1 ? <ChevronRight className={styles.cellChevron} aria-hidden="true" size={15} /> : null}
-                      </Link>
+                      </Link>}
                       {openRecord ? null : index === 0 ? <WorkReviewButton href={row.href} label={row.label} context={context} /> : cell?.link && workReviewTarget(cell.link.href) !== workReviewTarget(row.href) ? <WorkReviewButton href={cell.link.href} label={cell.value} context={context} /> : null}
                     </td>
                   );
@@ -875,13 +875,14 @@ export function ProgramView({ model, beforeContent, compact = false }: { model: 
   );
 }
 
-export function DetailView({ model, beforeSections, after, initialSection, compactFacts = false }: { compactFacts?: boolean; model: DetailPageViewModel; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string }) {
+export function DetailView({ model, beforeFacts, beforeSections, after, initialSection, compactFacts = false }: { compactFacts?: boolean; model: DetailPageViewModel; beforeFacts?: ReactNode; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string }) {
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={16} />{model.backLink.label}</Link>
       <PageHeader page={model.page} status={{ label: model.statusLabel, tone: model.statusTone }} />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
+          {beforeFacts}
           {compactFacts ? beforeSections : null}
           <details className={styles.recordSummary} open={!compactFacts} aria-label="Record summary"><summary>{compactFacts ? "Equipment details" : "Key facts"}</summary>
             {model.facts.length ? <><header className={styles.recordSummaryHeader}>

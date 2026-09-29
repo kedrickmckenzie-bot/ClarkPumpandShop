@@ -1,7 +1,7 @@
+import { buildShowcaseFixture } from "../lib/ops/showcase-fixture";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import {
   assertOpsFixture,
-  buildNorthlinePresentationFixture,
   NORTHLINE_AS_OF,
   NORTHLINE_ORGANIZATION_ID,
 } from "../lib/ops/fixtures";
@@ -24,7 +24,7 @@ const LOCK_KEYS = [
 
 async function reset() {
   const target = assertDestructiveResetAllowed(process.env);
-  const fixture = buildNorthlinePresentationFixture(new Date().toISOString());
+  const fixture = buildShowcaseFixture(new Date().toISOString());
   assertOpsFixture(fixture);
   const migrations = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER });
   const pool = await getPostgresPool();

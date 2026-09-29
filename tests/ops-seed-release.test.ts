@@ -1,3 +1,4 @@
+import { buildShowcaseFixture } from "@/lib/ops/showcase-fixture";
 import { describe, expect, it } from "vitest";
 import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";
 import {
@@ -97,8 +98,8 @@ describe("Northline deterministic seed release", () => {
       ]);
   });
 
-  it("writes the complete v15 fixture and full-version marker to a fresh PostgreSQL database", async () => {
-    const fixture = buildNorthlinePresentationFixture();
+  it("writes the refreshed showcase and full-version marker to a fresh PostgreSQL database", async () => {
+    const fixture = buildShowcaseFixture();
     const expectedSourceStatements = buildOpsSeedStatements(fixture);
     const client = new RecordingPostgresClient([]);
 

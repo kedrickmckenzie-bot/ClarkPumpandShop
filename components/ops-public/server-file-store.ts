@@ -1,3 +1,4 @@
+import { showcaseDocuments } from "@/lib/ops/showcase-documents";
 import type { PublicUpload } from "./contracts";
 
 export interface StoredPublicUpload {
@@ -423,6 +424,8 @@ export function getQuoteUploadStore(demo: boolean): PublicUploadStore {
 
 /** Call only after checking the tenant and entity permission. Keys never come from client input. */
 export async function readPrivateUpload(key: string): Promise<ArrayBuffer | null> {
+  const sample = Object.hasOwn(showcaseDocuments, key) ? showcaseDocuments[key] : undefined;
+  if (sample) return new TextEncoder().encode(sample.text).buffer;
   if (quoteMemory.has(key)) return quoteMemory.get(key)!.slice(0);
   const environment = currentEnvironment();
   if (configuredProvider(environment) === "r2") {

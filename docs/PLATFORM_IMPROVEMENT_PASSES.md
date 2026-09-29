@@ -4,6 +4,45 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Refreshed showcase and bounded demo reset — September 29
+
+- [x] DS-01 Extend the historical fixture with current weekly inspections, completed/missing/failed evidence states, corrective work, standalone/source-linked tasks, monthly capital plans and store preferences.
+- [x] DS-02 Bundled fictional checklist and completed paperwork have actual downloadable bytes; counts derive from source records. Exact 15-store/five-vendor contract retained.
+- [x] DS-03 Fresh local/PostgreSQL/D1 initialization uses the refreshed showcase. Existing hosted tenants are never silently reset.
+- [x] DS-04 New guarded PostgreSQL demo-only reset preserves schema, other tenants and objects; tested repeat reset and rollback on invalid seed.
+- [x] DS-05 Required automated and affected browser validation; evidence and remaining hosted step below.
+- [ ] DS-06 Apply hosted reset after updated code is deployed and Render access is available.
+
+Checkpoint: local demo restarted with refreshed data. User authorized local and Render demo resets, prioritizing Render. Render dashboard URL opens a sign-in screen; this workspace has no Render connection or DATABASE_URL. Hosted data is unchanged. Deployment/reset instructions and story guide: `docs/SHOWCASE_REFRESH.md`. Existing whole-database reset guard remains unchanged. New reset uses explicit demo environment and exact tenant confirmation, transaction, dependency-ordered tenant deletes, and post-seed count checks. No commit/push yet.
+
+Validation: seed, final typecheck/lint, whitespace check and production build passed. Full suite: 1,117/1,119 passed; the old fresh-seed size expectation was updated, and a fixture test that loaded an earlier in-progress version passed on rerun. Final affected regressions passed 7/7; reset/rollback and evidence tests passed 6/6. Workflow suite passed 63/63. No full-suite rerun after those targeted corrections. Logs: `%TEMP%/showcase-*.log`. Browser verified the compliance dashboard, completed evidence record, capital plans, Store 103 open report and camera findings. Browser navigation to the text download was blocked by the client; exact document bytes and hashes were verified through automated file-store tests. Screenshots: `%TEMP%/showcase-compliance.png`, `%TEMP%/showcase-capital.png`. Local server restarted after final fixture edits; temporary browser tab closed.
+
+
+## Work description and vendor clarity — September 29
+
+- [x] WV-01 Open-work description column with expandable long text, retaining responsible party and follow-up.
+- [x] WV-02 Vendor job page separates reported problem, requested work, next step, location and billing using saved issuance fields.
+- [x] WV-03 Browser verified main Open work description column and vendor job page on desktop and 390px phone (375px content width, no overflow). Screenshots: `%TEMP%/vendor-work-clarity.png`, `%TEMP%/vendor-work-phone.png`, `%TEMP%/open-work-descriptions.png`. No records changed; temporary tab closed and viewport restored. Long text uses native keyboard-accessible details after 160 characters; no long-description fixture was manually created. Seed, final typecheck/lint, production build and whitespace checks passed. Full suite: 1,109/1,113 passed, with two old UI expectations and two timeouts. Updated expectations passed in 11/11 focused tests; separate workflow suite passed 63/63 including both timed-out cases. Logs: `%TEMP%/work-clarity-*.log`. No full-suite rerun after those targeted corrections. Changes remain local, uncommitted and unpushed.
+
+
+## Issue submission cleanup — September 29
+
+- [x] IS-01 Remove the open-work preview and its fetch from issue submission; retain searchable store selection.
+- [x] IS-02 Keep related-work suggestions and linking in the reviewer flow. Browser verified Store 104 intake has no open-work list and its report review retains both related-work selection and Browse this store’s open work.
+- [x] IS-03 Validation complete: seed, typecheck, lint and production build passed. Full suite passed 1,112/1,113; PostgreSQL seed exceeded its 120-second limit. Separate workflow run passed 63/63, including that seed test. Logs: `%TEMP%/intake-*.log`. Browser intake and reviewer checks passed; no records mutated. Temporary tab closed. Existing changes preserved; no commit or push.
+
+
+## Store reports and optional task uploads — September 29
+
+- [x] SR-01 Skip storage setup when no files are attached; explain actual upload failures.
+- [x] SR-02 Exact store-scoped open-report count and review queue near the top of the store page.
+- [x] SR-03 Matching full-list filter, scope/count regressions, and desktop/phone verification.
+
+Checkpoint: implementation, affected browser checks and automated validation complete. Hosted task error was an empty upload initializing an unconfigured S3 provider. Actual attachments still require configured private storage. Open reports include new, under-review and acknowledged reports without linked/converted work; closed and converted reports are excluded. No changes to hosted secrets or storage configuration.
+
+Browser: created Routine report REQ-31F33106 at Store 104; its overview count rose from 1 to 2 with a New row. Exact filtered review link retained Store 104 and Open reports. Closed the QA report through the normal decision flow; count returned to 1. Created and completed a QA internal task from CPS-2026-0116 with no attachments. Store reports render above key facts, support zero state and a five-row preview with full-list link; 390px page fits without document overflow. Screenshot: `%TEMP%/store-open-reports.png`. Focused upload and fixture/SQLite scope/count/pagination tests passed 4/4. Final typecheck, seed and lint passed. Full suite: 1,112/1,113 passed; the existing PostgreSQL seed test exceeded its 120-second limit. Workflow rerun passed 63/63, including the timed-out PostgreSQL seed test; production build passed. Full suite was not repeated after that successful rerun. Logs: `%TEMP%/store-reports-*.log`. Store 102 zero-state was also verified, and the new section respects report-role access. Temporary browser tab closed; no commit/push.
+
+
 ## Store-task review polish — September 28
 
 - [x] TP-01 Literal camera clock entries and store-local visit defaults.

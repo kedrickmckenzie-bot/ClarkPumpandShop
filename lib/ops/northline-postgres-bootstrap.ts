@@ -1,3 +1,4 @@
+import { buildShowcaseFixture } from "./showcase-fixture";
 import {
   buildNorthlinePresentationFixture,
   NORTHLINE_ORGANIZATION_ID,
@@ -101,7 +102,7 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
 
     const result = await seedOpsRepository(
       repository,
-      buildNorthlinePresentationFixture(new Date().toISOString()),
+      buildShowcaseFixture(new Date().toISOString()),
       [buildNorthlineCurrentSeedMarker()],
     );
     await client.query("COMMIT");

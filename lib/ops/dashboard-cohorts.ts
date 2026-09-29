@@ -8,8 +8,8 @@ export const WORK_STAGE_STATUSES: Record<string, readonly string[]> = {
   "vendor-response": ["issued", "waiting_on_vendor"],
 };
 
-export function matchesRequestStatus(request: { status: string; linkedWorkOrderId?: string }, status?: string) {
-  return !status || (status === "pending"
+export function matchesRequestStatus(request: { status: string; linkedWorkOrderId?: string; convertedWorkOrderId?: string }, status?: string) {
+  return !status || (status === "open_unlinked" ? ["submitted","under_review","acknowledged"].includes(request.status) && !request.linkedWorkOrderId && !request.convertedWorkOrderId : status === "pending"
     ? PENDING_REQUEST_STATUSES.some((value) => value === request.status)
     : status === "acknowledged_unlinked"
       ? request.status === "acknowledged" && !request.linkedWorkOrderId

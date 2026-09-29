@@ -1,3 +1,4 @@
+import { StoreOpenReports } from "@/components/workspace/store-open-reports";
 import { StoreOperatingContext } from "@/components/workspace/store-operating-context";
 import { StoreWorkspaceNav } from "@/components/workspace/store-workspace-nav";
 import type { Metadata } from "next";
@@ -20,7 +21,8 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
   return (
     <DetailView
       model={model}
-      beforeSections={<><StoreWorkspaceNav id={id} />{model.state.kind === "ready" && session.demoEdition === "complete" ? <StoreOperatingContext id={id} /> : null}</>}
+      beforeFacts={<><StoreWorkspaceNav id={id} />{model.state.kind === "ready" ? <StoreOpenReports id={id} /> : null}</>}
+      beforeSections={<>{model.state.kind === "ready" && session.demoEdition === "complete" ? <StoreOperatingContext id={id} /> : null}</>}
       after={canCreateQr || canSetupEquipment || canSetupPm ? (
         <>
           {canCreateQr ? (

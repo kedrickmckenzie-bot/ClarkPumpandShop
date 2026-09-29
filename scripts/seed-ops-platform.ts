@@ -1,12 +1,12 @@
+import { buildShowcaseFixture } from "../lib/ops/showcase-fixture";
 import {
   NORTHLINE_PRESENTATION_FIXTURE,
   assertOpsFixture,
-  buildNorthlinePresentationFixture,
   buildSyntheticScaleFixture,
 } from "../lib/ops/fixtures";
 import { buildOpsSeedStatements } from "../lib/ops/seed";
 
-const presentation = buildNorthlinePresentationFixture();
+const presentation = buildShowcaseFixture();
 const scale = buildSyntheticScaleFixture(65);
 assertOpsFixture(presentation);
 assertOpsFixture(scale);
@@ -22,6 +22,9 @@ const summary = {
   workOrders: presentation.workOrders.length,
   visits: presentation.visits.length,
   assets: presentation.assets.length,
+  inspections: presentation.inspections?.length,
+  storeTasks: presentation.storeTasks?.length,
+  capitalPlans: presentation.capitalPlans?.length,
   pmOccurrences: presentation.pmOccurrences.length,
   seedStatements: buildOpsSeedStatements(presentation).length,
   scaleFixtureStores: scale.stores.length,

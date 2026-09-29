@@ -93,7 +93,7 @@ function queryFilters(route: OperatorListRoute, query: OperatorSearchParameters)
         ? [{ value: "history", label: "All history" }, { value: "closed", label: "Closed" }, { value: "cancelled", label: "Cancelled" }]
         : [{ value: "waiting_on_vendor", label: "Vendor follow-up" }, { value: "waiting_on_parts", label: "Waiting on parts" }, { value: "completed_pending_review", label: "Needs verification" }]
       : route === "requests"
-        ? [{ value: "", label: "All reports" }, { value: "pending", label: "Needs review" }, { value: "submitted", label: "New" }, { value: "under_review", label: "Under review" }, { value: "acknowledged_unlinked", label: "Acknowledged without linked work" }, { value: "converted", label: "Converted to work" }, { value: "closed", label: "Closed" }]
+        ? [{ value: "", label: "All reports" }, { value: "pending", label: "Needs review" }, { value: "open_unlinked", label: "Open reports" }, { value: "submitted", label: "New" }, { value: "under_review", label: "Under review" }, { value: "acknowledged_unlinked", label: "Acknowledged without linked work" }, { value: "converted", label: "Converted to work" }, { value: "closed", label: "Closed" }]
         : [];
   return statusOptions.length ? [{
     id: "status",
@@ -107,7 +107,7 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
     pending: "Needs review", "not-sent": "Approved · not sent", "vendor-response": "Waiting on vendor",
     active: "No checkout recorded", checked_out: "Completed visits", open: "Open work", waiting_on_vendor: "Vendor follow-up",
     waiting_on_parts: "Waiting on parts", completed_pending_review: "Needs verification", submitted: "New reports",
-    under_review: "Reports under review", acknowledged_unlinked: "Acknowledged without linked work", converted: "Reports converted to work", unlinked: "Not linked",
+    open_unlinked: "Open reports", under_review: "Reports under review", acknowledged_unlinked: "Acknowledged without linked work", converted: "Reports converted to work", unlinked: "Not linked",
   };
   return Object.entries(query).flatMap(([key, raw]) => {
     if (["q", "page", "selected", "basis", "period", "currency", "saved", "updated", "notice", "error"].includes(key)) return [];
@@ -200,10 +200,10 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
     label: row.number,
     href: `/app/work-orders/${row.id}`,
     cells: [
-      { key: "work", value: row.number, secondary: row.problem },
+      { key: "work", value: row.number },
       { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
       { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
-      { key: "next", link: { href: `/app/work-orders/${row.id}#add-update`, label: "Record update" }, value: row.nextAction, secondary: `${row.accountableParty}${row.dueAt ? ` · Follow up ${formatOperationsDate(row.dueAt)}` : ""}` },
+      { key: "next", expandable: true, value: row.problem, secondary: `${row.accountableParty}${row.dueAt ? ` · Follow up ${formatOperationsDate(row.dueAt)}` : ""}` },
       { key: "cost", value: row.recordedCostLineCount === 0 ? "Not recorded" : money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
       { key: "status", value: workStatusLabel(row.status), tone: toneForStatus(row.status) },
       { key: "updated", value: formatOperationsDateTime(row.updatedAt ?? row.createdAt), link: { href: `/app/work-orders/${row.id}?view=activity`, label: "Review history" } },
@@ -293,7 +293,7 @@ const columns: Record<QueryListRoute, ListPageViewModel["table"]["columns"]> = {
     { key: "request", label: "Request" }, { key: "store", label: "Store" }, { key: "priority", label: "Priority" }, { key: "reported", label: "Reported" }, { key: "status", label: "Status" },
   ],
   "work-orders": [
-    { key: "work", label: "Work order" }, { key: "store", label: "Store" }, { key: "assignment", label: "Assigned to" }, { key: "next", label: "Next action" }, { key: "status", label: "Status" }, { key: "updated", label: "Last update" }, { key: "cost", label: "Recorded cost · all history", align: "end" as const },
+    { key: "work", label: "Work order" }, { key: "store", label: "Store" }, { key: "assignment", label: "Assigned to" }, { key: "next", label: "Description" }, { key: "status", label: "Status" }, { key: "updated", label: "Last update" }, { key: "cost", label: "Recorded cost · all history", align: "end" as const },
   ],
   visits: [
     { key: "visit", label: "Visit" }, { key: "store", label: "Store" }, { key: "vendor", label: "Vendor" }, { key: "work", label: "Work order" }, { key: "observed", label: "Timing" }, { key: "evidence", label: "Evidence" }, { key: "outcome", label: "Outcome" },

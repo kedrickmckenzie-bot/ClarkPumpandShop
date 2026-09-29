@@ -40,18 +40,18 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
           body: JSON.stringify({ action: "open" }),
         });
         const body = (await result.json()) as PublicActionReceipt & { error?: string };
-        if (!result.ok) throw new Error(body.error ?? "The service authorization could not be opened.");
+        if (!result.ok) throw new Error(body.error ?? "The work order could not be opened.");
         window.location.reload();
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "The service authorization could not be opened.");
+        setError(caught instanceof Error ? caught.message : "The work order could not be opened.");
         setSubmitting(false);
       }
     }
     return (
       <section className={styles.card} aria-labelledby="open-service-title">
         <span className={styles.eyebrow}>Vendor response</span>
-        <h2 className={styles.cardTitle} id="open-service-title">Review this service authorization</h2>
-        <p className={styles.helper}>This records that you opened the authorization.</p>
+        <h2 className={styles.cardTitle} id="open-service-title">Ready to respond?</h2>
+        <p className={styles.helper}>Accept the work, suggest a date, ask a question or decline.</p>
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
         <div className={styles.actions}>
           <button className={styles.button} disabled={submitting} onClick={openAuthorization} type="button">

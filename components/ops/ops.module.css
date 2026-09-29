@@ -1126,3 +1126,10 @@ a.factCard { padding-right: 38px; }
 .arrivalReview .field { margin: 0; }
 .arrivalReview button { align-self: end; justify-self: start; }
 @media (max-width: 640px) { .arrivalReview { padding: 18px; } .arrivalReview form { grid-template-columns: 1fr; } }
+
+.workDescription { min-width: 15rem; max-width: 36rem; padding: .8rem 1rem; line-height: 1.5; overflow-wrap: anywhere; }
+.workDescription p { margin: 0 0 .5rem; white-space: pre-wrap; }
+.workDescription summary { cursor: pointer; }
+.workDescription summary span { color: #315dcc; font-weight: 600; display: block; }
+.workDescription details[open] summary { margin-bottom: .75rem; }
+.workDescription small { display: block; margin-top: .5rem; color: #526176; }

@@ -1,3 +1,4 @@
+import { buildShowcaseFixture } from "./showcase-fixture";
 import { operatingRisksFromFixture } from "./operating-risks";
 import {latestCapitalPlan, capitalPricesFromFixture, capitalFromFixture, type CapitalQuery} from "./capital-planning";
 import {lifecycleQueueFromFixture, type LifecycleQueueQuery} from "./lifecycle-queue";
@@ -822,7 +823,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listRequests(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId } = {}) {
     const search = normalize(query.search ?? "");
     const rows = this.fixture.requests.filter((row) => row.organizationId === scope.organizationId && storeAllowed(this.fixture, scope, row.storeId)).filter((row) => matchesRequestStatus(row, query.status) && (!query.storeId || row.storeId === query.storeId)).map((row) => requestRow(this.fixture, row)).filter((row) => !search || normalize([row.reference, row.problem, row.reporterName, row.storeNumber, row.storeName].join(" ")).includes(search)).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt) || b.id.localeCompare(a.id));
-    return page(rows, query);
+    return {...page(rows, query),...(query.status==="open_unlinked"?{totalCount:rows.length}:{})};
   }
 
   async listWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery = {}) {
@@ -1085,7 +1086,7 @@ export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtu
 export function createOpsFixtureReadRepository(fixture: OpsFixture): OpsRepository {
   return new FixtureOpsRepository(fixture, false);
 }
-export function createNorthlineFixtureRepository(anchorDate?: string): MutableOpsFixtureRepository { return createOpsFixtureRepository(buildNorthlinePresentationFixture(anchorDate)); }
+export function createNorthlineFixtureRepository(anchorDate?: string): MutableOpsFixtureRepository { return createOpsFixtureRepository(anchorDate ? buildShowcaseFixture(anchorDate) : buildNorthlinePresentationFixture()); }
 
 const OPS_PRESENTATION_RUNTIME_KEY = "__opsPresentationRuntimeRepository";
 const LEGACY_PRESENTATION_RUNTIME_KEY = "__traceOpsNorthlineRuntimeRepository";
