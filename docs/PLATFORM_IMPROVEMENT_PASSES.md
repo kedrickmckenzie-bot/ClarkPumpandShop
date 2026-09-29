@@ -4,6 +4,38 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Store tasks — September 28
+
+- [x] ST-01 Independent store tasks and durable optional source links.
+- [x] ST-02 Task version and atomic concurrency protection.
+- [x] ST-03 Scoped individual/shared assignment and named fallback.
+- [x] ST-04 Participant and supervisor access checks.
+- [x] ST-05 Searchable internal people directory with roles.
+- [x] ST-06 Create form with files, deadline and default completion notice.
+- [x] ST-07 Editable camera windows and safe source defaults.
+- [x] ST-08 Atomic shared claiming.
+- [x] ST-09 Replies and new-reply indicators.
+- [x] ST-10 Authorized reassignment.
+- [x] ST-11 Structured results and per-window findings.
+- [x] ST-12 Completion return and requester review/send-back.
+- [x] ST-13 Overdue follow-up without releasing claimed work.
+- [x] ST-14 Audit, files and source record links.
+- [x] ST-15 My / Shared / Waiting / History queues.
+- [x] ST-16 Create and store entry points.
+- [x] ST-17 Permission, concurrency and routing regression tests.
+- [x] ST-18 Required checks and desktop/mobile end-to-end verification.
+
+Checkpoint: implementation, desktop/phone camera loop and validation are complete; the full-suite timeout and successful isolated rerun are recorded below. Account deactivation and unavailable-requester handling are explicitly deferred by the user. Existing work-order tasks remain supported.
+
+Implementation: independent tenant/store task tables, immutable messages and audit, transactional version fences, scoped internal account search, person/responsible/local assignment, claiming, reassignment, replies/read markers, photo/document uploads and protected downloads. Added Work → Tasks, Create → New task, store Tasks tab and source-record entry points. Queue tabs are My tasks / Shared tasks / Waiting on others / History / All visible tasks, with server filtering and pagination. Overdue tasks appear in the named fallback person's My tasks without releasing the claimant. Notifications in this pass are in-app task/queue updates; no external email delivery was added. Directory choices are active internal accounts with supported operator access and write scope; vendors and accounts that cannot act are excluded.
+
+Results use one durable task: ordinary completion returns for requester review when the default checkbox is enabled; Needs attention and Couldn't complete always return. Review closes it, or send-back keeps previous findings and gives a new deadline. Camera checks accept up to 12 time windows and require findings for each. Visit start/end prefill with a 15-minute buffer, editable by the requester. The invoice model has no reliable claimed-service date, so invoice-origin camera checks require dates entered by the requester; invoice date is never substituted.
+
+Browser evidence: created standalone Store 104 camera task `task-302ab712-eaf0-48cb-bf7f-9d00e16e94c9`, two windows, completion notice unchecked; store manager claimed, replied, recorded observed times and an unavailable second window, uploaded a PNG and submitted Needs attention. Requester saw New reply in Waiting, then the result in My tasks, reviewed and closed it. File opened successfully; closed task remains in store history. Checked at 390×844 and desktop. QA record is clearly named and closed; existing records were not reset. Screenshots: `%TEMP%/store-task-phone.png`, `%TEMP%/store-task-review.png`, `%TEMP%/store-tasks-finished.png`.
+
+Validation: final seed, typecheck, lint, build and whitespace checks passed. New regression passed against fixture and SQLite; workflow suite 63/63 passed, including PostgreSQL task regression. Initial full run found migration-index ordering, an outdated migration-count assertion, and a public-flow timeout. Migration and assertion were corrected; affected migration tests passed and the public-flow test passed in the workflow rerun. Final full suite: 1,106/1,107 passed; the existing PostgreSQL seed test exceeded 120 seconds. Its entire file subsequently passed 20/20 in isolation, including the seed test. The full suite was not repeated after that successful rerun. Additional browser smoke checked manager search, store/work creation, invoice/PM/lifecycle pages, work-order task entry, visit camera defaults (15-minute buffer), company-first QR arrival and missing-work-order option. Latest UI typecheck/lint passed and the final build includes those changes. Preview role/viewport restored and temporary tab closed. Logs: `%TEMP%/store-task-*.log`. No commit or push.
+
+
 ## Report priority preservation — September 28
 
 - [x] RP-01 Prefill converted work with the scoped source report priority; keep Routine for direct work and existing PM/visit defaults.

@@ -165,7 +165,7 @@ function requestRow(fixture: OpsFixture, request: OpsFixture["requests"][number]
 function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unknown>> {
   if (table === "ops_accounting_invoice_sources") fixture.accountingInvoiceSources ??= [];
   const mapping: Record<string, keyof OpsFixture> = {
-    ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
+    ops_store_tasks: "storeTasks", ops_store_task_messages: "storeTaskMessages", ops_store_task_people: "storeTaskPeople", ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
     ops_equipment_templates: "equipmentTemplates", ops_component_templates: "componentTemplates",
     ops_stores: "stores", ops_users: "users", ops_memberships: "memberships",
     ops_scope_grants: "scopeGrants", ops_role_capability_overrides: "roleCapabilityOverrides", ops_workflow_policies: "workflowPolicies", ops_vendors: "vendors", ops_vendor_specialties: "vendorSpecialties",
@@ -465,6 +465,43 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async inspectionHistory(org:string,id:string) {return clone(this.fixture.auditEvents.filter(r=>r.organizationId===org&&r.aggregateId===id&&r.aggregateType==="inspection").sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)).slice(0,30));}
   async inspectionDelivery(org:string,id:string) {return clone(this.fixture.outboxMessages.filter(r=>r.organizationId===org&&r.aggregateId===id&&r.aggregateType==="inspection").sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,10).map(r=>({id:r.id,topic:r.topic,status:r.status})));}
+  async getStoreTask(org:string,id:string) {return clone(this.fixture.storeTasks?.find(t=>t.organizationId===org&&t.id===id)??null);}
+  async listTaskPeople(org:string,storeId:string,search:string,localOnly=false) {
+    const people:import("./store-task-types").TaskPerson[]=[];
+    const store=await this.getStore(org,storeId);if(!store)return people;
+    for(const m of this.fixture.memberships.filter(m=>m.organizationId===org&&m.status==='active'&&['executive','facilities_admin','regional_manager','store_manager','finance_reviewer'].includes(m.role))) {
+      const u=this.fixture.users.find(u=>u.id===m.userId&&u.status==='active');if(!u||!`${u.displayName} ${m.role}`.toLowerCase().includes(search.toLowerCase()))continue;
+      const grants=this.fixture.scopeGrants.filter(g=>g.organizationId===org&&g.membershipId===m.id&&['ops:*','ops:write','ops:read_write','ops:store_manage'].includes(g.permission));
+      if(!grants.some(g=>g.scopeKind==='organization'&&g.scopeId===org||g.scopeKind==='region'&&g.scopeId===store.regionId||g.scopeKind==='division'&&g.scopeId===store.divisionId||g.scopeKind==='store'&&g.scopeId===store.id))continue;
+      people.push({id:m.id,name:u.displayName,role:m.role,local:grants.some(g=>g.scopeKind==='store'&&g.scopeId===store.id)});
+    }
+    return people.filter(p=>!localOnly||p.local).sort((a,b)=>a.name.localeCompare(b.name)||a.id.localeCompare(b.id)).slice(0,50);
+  }
+  async listTaskMessages(org:string,id:string,offset=0) {return clone((this.fixture.storeTaskMessages??[]).filter(t=>t.organizationId===org&&t.taskId===id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id)).slice(offset,offset+50));}
+  async listTaskParticipants(org:string,id:string) {return clone((this.fixture.storeTaskPeople??[]).filter(t=>t.organizationId===org&&t.taskId===id));}
+  async queryStoreTasks(scope:OrganizationScope,q:import("./store-task-types").TaskQuery):Promise<import("./store-task-types").TaskPage> {
+    const rows:import("./store-task-types").TaskRow[]=[];
+    for(const t of this.fixture.storeTasks??[]) {
+      const s=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===t.storeId);if(t.organizationId!==scope.organizationId||!s||scope.storeIds&&!scope.storeIds.includes(s.id)||scope.regionIds&&!scope.regionIds.includes(s.regionId??''))continue;
+      const member=await this.getMembership(scope.organizationId,q.membershipId);const user=member?await this.getUserInOrganization(scope.organizationId,member.userId):null;
+      if(!member||member.status!=='active'||user?.status!=='active'||!['executive','facilities_admin','regional_manager','store_manager','finance_reviewer'].includes(member.role))continue;
+      const grants=this.fixture.scopeGrants.filter(g=>g.organizationId===scope.organizationId&&g.membershipId===q.membershipId&&['ops:*','ops:write','ops:read_write','ops:store_manage'].includes(g.permission));
+      if(!grants.some(g=>g.scopeKind==='organization'&&g.scopeId===scope.organizationId||g.scopeKind==='store'&&g.scopeId===s.id||g.scopeKind==='region'&&g.scopeId===s.regionId||g.scopeKind==='division'&&g.scopeId===s.divisionId))continue;
+      const people=await this.listTaskParticipants(scope.organizationId,t.id),participant=people.some(p=>p.membershipId===q.membershipId);
+      const local=this.fixture.scopeGrants.some(g=>g.organizationId===scope.organizationId&&g.membershipId===q.membershipId&&g.scopeKind==='store'&&g.scopeId===s.id&&['ops:*','ops:write','ops:read_write','ops:store_manage'].includes(g.permission));
+      const shared=t.assignment==='responsible'||t.assignment==='local'&&local;
+      if(!q.supervisor&&!participant&&!(t.status==='open'&&!t.claimantId&&shared))continue;
+      if(q.storeId&&s.id!==q.storeId||q.sourceId&&![t.workOrderId,t.invoiceId,t.visitId,t.assetId].includes(q.sourceId))continue;
+      if(q.search&&!`${t.title} ${s.storeNumber} ${s.name} ${s.address1} ${s.city} ${s.state} ${s.postalCode}`.toLowerCase().includes(q.search.toLowerCase()))continue;
+      const mine=t.status==='review'&&t.requesterId===q.membershipId||t.status==='open'&&(t.claimantId===q.membershipId||!t.claimantId&&t.assigneeId===q.membershipId )||t.status!=='closed'&&t.fallbackId===q.membershipId&&t.dueAt<q.now;
+      if(q.view==='mine'&&!mine||q.view==='shared'&&!(t.status==='open'&&!t.claimantId&&t.assignment!=='person'&&shared)||q.view==='history'&&t.status!=='closed'||q.view==='waiting'&&!(participant&&t.status!=='closed'&&!(t.status==='review'&&t.requesterId===q.membershipId)&&(t.claimantId??t.assigneeId)!==q.membershipId))continue;
+      const name=(id:string|null)=>this.fixture.users.find(u=>u.id===this.fixture.memberships.find(m=>m.organizationId===scope.organizationId&&m.id===id)?.userId)?.displayName??'';
+      const seen=people.find(p=>p.membershipId===q.membershipId)?.seenAt;
+      rows.push({...t,storeNumber:s.storeNumber,storeName:s.name,handlerName:name(t.claimantId??t.assigneeId),requesterName:name(t.requesterId),fallbackName:name(t.fallbackId),newReply:seen&&(this.fixture.storeTaskMessages??[]).some(m=>m.organizationId===scope.organizationId&&m.taskId===t.id&&m.kind==='reply'&&m.actorId!==q.membershipId&&m.createdAt>seen)?1:0});
+    }
+    rows.sort((a,b)=>(a.priority==='urgent'?0:1)-(b.priority==='urgent'?0:1)||Number(b.status!=='closed'&&b.dueAt<q.now)-Number(a.status!=='closed'&&a.dueAt<q.now)||b.newReply-a.newReply||a.dueAt.localeCompare(b.dueAt)||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
+    return {items:clone(rows.slice(q.offset??0,(q.offset??0)+Math.min(50,q.limit??25))),totalCount:rows.length};
+  }
   async listComplianceOwners(org:string,search="") {return this.fixture.memberships.filter(m=>m.organizationId===org&&m.status==="active"&&!["vendor_user","support"].includes(m.role)&&this.fixture.users.some(u=>u.id===m.userId&&u.status==="active"&&u.displayName.toLowerCase().includes(search.toLowerCase()))).slice(0,20).map(m=>({id:m.id,name:this.fixture.users.find(u=>u.id===m.userId)?.displayName??m.id}));}
   async getComplianceSchedule(org:string,id:string) { return clone(this.fixture.complianceSchedules?.find(r=>r.organizationId===org&&r.id===id)??null); }
   async listComplianceSchedules(scope:OrganizationScope,offset=0) { const stores=this.fixture.stores.filter(s=>s.organizationId===scope.organizationId&&(scope.storeIds===undefined||scope.storeIds.includes(s.id))&&(scope.regionIds===undefined||scope.regionIds.includes(s.regionId??"")));return clone((this.fixture.complianceSchedules??[]).filter(r=>r.organizationId===scope.organizationId&&stores.some(s=>s.id===r.storeId)).sort((a,b)=>a.id.localeCompare(b.id)).slice(offset,offset+100)); }

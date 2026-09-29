@@ -51,7 +51,7 @@ export const operatorNavigation: NavigationItem[] = [
     id: "work",
     label: "Work",
     href: "/app/work-orders?status=open",
-    matchPrefixes: ["/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits"],
+    matchPrefixes: ["/app/tasks", "/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits"],
     contextGroup: "work",
   },
   {
@@ -89,6 +89,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
     label: "Work",
     items: [
       { id: "needs-attention", label: "Review queue", href: "/app/action-center" },
+      { id: "tasks", label: "Tasks", href: "/app/tasks" },
       { id: "requests", label: "Requests", href: "/app/requests" },
       { id: "work-orders", label: "Work orders", href: "/app/work-orders" },
       { id: "estimates", label: "Quote requests", href: "/app/estimates" },

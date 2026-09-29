@@ -12,7 +12,7 @@ export interface StoredPublicUpload {
 export interface PublicUploadStore {
   store(input: {
     organizationId: string;
-    subjectType: "work_order" | "warranty" | "vendor_document" | "inspection" | "inbound_email" | "request" | "visit" | "invoice" | "estimate_proposal";
+    subjectType: "store_task" | "work_order" | "warranty" | "vendor_document" | "inspection" | "inbound_email" | "request" | "visit" | "invoice" | "estimate_proposal";
     subjectId: string;
     uploads: PublicUpload[];
     idempotencyKey?: string;
@@ -170,7 +170,7 @@ function encodePath(value: string): string {
 
 async function privateObjectKey(input: {
   organizationId: string;
-  subjectType: "work_order" | "warranty" | "vendor_document" | "inspection" | "inbound_email" | "request" | "visit" | "invoice" | "estimate_proposal";
+  subjectType: "store_task" | "work_order" | "warranty" | "vendor_document" | "inspection" | "inbound_email" | "request" | "visit" | "invoice" | "estimate_proposal";
   subjectId: string;
   randomUUID: () => string;
   stableSuffix?: string;
@@ -211,7 +211,7 @@ class SitesR2PublicUploadStore implements PublicUploadStore {
 
   async store(input: {
     organizationId: string;
-    subjectType: "work_order" | "warranty" | "vendor_document" | "inspection" | "inbound_email" | "request" | "visit" | "invoice" | "estimate_proposal";
+    subjectType: "store_task" | "work_order" | "warranty" | "vendor_document" | "inspection" | "inbound_email" | "request" | "visit" | "invoice" | "estimate_proposal";
     subjectId: string;
     uploads: PublicUpload[];
     idempotencyKey?: string;
@@ -322,7 +322,7 @@ class S3PublicUploadStore implements PublicUploadStore {
 
   async store(input: {
     organizationId: string;
-    subjectType: "work_order" | "warranty" | "vendor_document" | "inspection" | "inbound_email" | "request" | "visit" | "invoice" | "estimate_proposal";
+    subjectType: "store_task" | "work_order" | "warranty" | "vendor_document" | "inspection" | "inbound_email" | "request" | "visit" | "invoice" | "estimate_proposal";
     subjectId: string;
     uploads: PublicUpload[];
     idempotencyKey?: string;

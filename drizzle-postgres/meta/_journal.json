@@ -442,6 +442,13 @@
       "when": 1790604172626,
       "tag": "0062_simple_work_costs",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790650354019,
+      "tag": "0063_freezing_argent",
+      "breakpoints": true
     }
   ]
 }

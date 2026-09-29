@@ -131,6 +131,9 @@ export function buildOpsSeedStatements(fixture: OpsFixture): OpsStatement[] {
   push("ops_capital_plans",(fixture.capitalPlans??[]).map(columns));
   push("ops_compliance_schedules",(fixture.complianceSchedules??[]).map(columns));
   push("ops_inspections",(fixture.inspections??[]).map(columns));
+  push("ops_store_tasks",(fixture.storeTasks??[]).map(columns));
+  push("ops_store_task_people",(fixture.storeTaskPeople??[]).map(columns));
+  push("ops_store_task_messages",(fixture.storeTaskMessages??[]).map(columns));
   return statements;
 }
 

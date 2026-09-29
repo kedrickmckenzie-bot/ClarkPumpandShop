@@ -911,3 +911,30 @@ export const opsInvoiceUploads = sqliteTable("ops_invoice_uploads", {
  foreignKey({columns:[t.organizationId,t.fileId],foreignColumns:[opsFiles.organizationId,opsFiles.id]}),
  foreignKey({columns:[t.organizationId,t.invoiceId],foreignColumns:[opsInvoices.organizationId,opsInvoices.id]}),
  check("chk_ops_invoice_upload_status",sql`${t.status} IN ('queued','review','recorded','dismissed')`)]);
+
+export const opsStoreTasks = sqliteTable("ops_store_tasks", {
+ id:text("id").primaryKey(), organizationId:text("organization_id").notNull(), storeId:text("store_id").notNull(),
+ title:text("title").notNull(),instructions:text("instructions").notNull(),kind:text("kind").notNull(),assignment:text("assignment").notNull(),
+ assigneeId:text("assignee_id"),claimantId:text("claimant_id"),requesterId:text("requester_id").notNull(),fallbackId:text("fallback_id").notNull(),
+ status:text("status").notNull(),priority:text("priority").notNull(),dueAt:text("due_at").notNull(),notifyRequester:integer("notify_requester").notNull(),
+ workOrderId:text("work_order_id"),invoiceId:text("invoice_id"),visitId:text("visit_id"),assetId:text("asset_id"),
+ windowsJson:text("windows_json").notNull(),result:text("result"),version:integer("version").notNull(),createdAt:text("created_at").notNull(),updatedAt:text("updated_at").notNull(),
+},t=>[
+ uniqueIndex("idx_ops_store_task_org_id").on(t.organizationId,t.id),
+ index("idx_ops_store_task_queue").on(t.organizationId,t.storeId,t.status,t.dueAt,t.id),
+ index("idx_ops_store_task_requester").on(t.organizationId,t.requesterId,t.status,t.updatedAt,t.id),
+ foreignKey({columns:[t.organizationId,t.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),
+ foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
+ foreignKey({columns:[t.organizationId,t.invoiceId],foreignColumns:[opsInvoices.organizationId,opsInvoices.id]}),
+ foreignKey({columns:[t.organizationId,t.visitId],foreignColumns:[opsVisitSessions.organizationId,opsVisitSessions.id]}),
+ foreignKey({columns:[t.organizationId,t.assetId],foreignColumns:[opsAssets.organizationId,opsAssets.id]}),
+ ...[t.requesterId,t.fallbackId,t.assigneeId,t.claimantId].map(c=>foreignKey({columns:[t.organizationId,c],foreignColumns:[opsMemberships.organizationId,opsMemberships.id]})),
+ check("chk_ops_store_task_state",sql`${t.status} IN ('open','review','closed') AND ${t.kind} IN ('general','camera','equipment') AND ${t.priority} IN ('routine','urgent') AND ${t.notifyRequester} IN (0,1) AND ${t.version} >= 1`),
+ check("chk_ops_store_task_assignment",sql`(${t.assignment} = 'person' AND ${t.assigneeId} IS NOT NULL) OR (${t.assignment} IN ('responsible','local') AND ${t.assigneeId} IS NULL)`),
+]);
+export const opsStoreTaskMessages = sqliteTable("ops_store_task_messages", {
+ id:text("id").primaryKey(),organizationId:text("organization_id").notNull(),taskId:text("task_id").notNull(),actorId:text("actor_id").notNull(),actorName:text("actor_name").notNull(),kind:text("kind").notNull(),body:text("body").notNull(),findingsJson:text("findings_json").notNull(),createdAt:text("created_at").notNull(),
+},t=>[index("idx_ops_task_messages").on(t.organizationId,t.taskId,t.createdAt,t.id),foreignKey({columns:[t.organizationId,t.taskId],foreignColumns:[opsStoreTasks.organizationId,opsStoreTasks.id]})]);
+export const opsStoreTaskPeople = sqliteTable("ops_store_task_people", {
+ id:text("id").primaryKey(),organizationId:text("organization_id").notNull(),taskId:text("task_id").notNull(),membershipId:text("membership_id").notNull(),seenAt:text("seen_at").notNull(),
+},t=>[uniqueIndex("idx_ops_task_person").on(t.organizationId,t.taskId,t.membershipId),foreignKey({columns:[t.organizationId,t.taskId],foreignColumns:[opsStoreTasks.organizationId,opsStoreTasks.id]}),foreignKey({columns:[t.organizationId,t.membershipId],foreignColumns:[opsMemberships.organizationId,opsMemberships.id]})]);

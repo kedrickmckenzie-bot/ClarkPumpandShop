@@ -1,3 +1,4 @@
+import {LinkedStoreTasks} from "@/components/workspace/linked-store-tasks";
 import { RecordFiles } from "@/components/workspace/record-files";
 import type { Metadata } from "next";
 import { InvoiceRecordWorkspace } from "@/components/workspace/invoice-record-workspace";
@@ -11,5 +12,5 @@ export default async function InvoiceReferenceDetailPage({ params, searchParams 
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const model = await loadInvoiceRecord(id, query);
-  return <InvoiceRecordWorkspace {...model} documents={<RecordFiles kind="invoice" id={id} />} />;
+  return <InvoiceRecordWorkspace {...model} documents={<><RecordFiles kind="invoice" id={id} /><LinkedStoreTasks kind="invoice" id={id} /></>} />;
 }

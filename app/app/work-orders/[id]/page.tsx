@@ -1,3 +1,4 @@
+import {LinkedStoreTasks} from "@/components/workspace/linked-store-tasks";
 import { WorkFiles } from "@/components/workspace/work-files";
 import {WorkWarrantyContext} from "@/components/workspace/work-warranty-context";
 import { WorkInspectionContext } from "@/components/workspace/work-inspection-context";
@@ -123,7 +124,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     ) : null}
     {returnDecision ? <Link href={returnDecision}>← Back to equipment review</Link> : null}
     <WorkOrderCase
-      emailHistory={["overview","activity"].includes(view) ? <><WorkFiles workOrderId={id}/><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}
+      emailHistory={["overview","activity"].includes(view) ? <><LinkedStoreTasks kind="work" id={id}/><WorkFiles workOrderId={id}/><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}
       costPrompts={["overview", "service"].includes(view) ? <><WorkWarrantyContext workOrderId={id}/><WorkCostPrompts workOrderId={id}/></> : undefined}
       prices={!accountabilityOnly && view === "cost" ? <WorkPricePanel workOrderId={id} /> : undefined}
       connectedReview={connectedReview}

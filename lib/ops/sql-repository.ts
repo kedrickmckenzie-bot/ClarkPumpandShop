@@ -1,3 +1,4 @@
+import { taskPeopleSql,taskQuerySql,getTaskSql,taskMessagesSql,taskParticipantsSql } from "./store-task-sql";
 import { queryOperatingRisks } from "./operating-risks";
 import {capitalPlanFrom,type CapitalQuery} from "./capital-planning";
 import {capitalFilters,queryCapital,queryCapitalPrices} from "./capital-planning-sql";
@@ -362,6 +363,11 @@ function inboundEmailFrom(row: Row): import("./types").InboundEmail { return { i
 class SqlOpsRepository implements OpsRepository {
   async inspectionHistory(org:string,id:string) {return (await this.all("SELECT id,event_type,actor_name,occurred_at,payload_json FROM ops_audit_events WHERE organization_id = ? AND aggregate_type = 'inspection' AND aggregate_id = ? ORDER BY occurred_at DESC,id DESC LIMIT 30",[org,id])).map(r=>complianceRow<{id:string;eventType:string;actorName:string;occurredAt:string;payloadJson:string}>(r));}
   async inspectionDelivery(org:string,id:string) {return (await this.all("SELECT id,topic,status FROM ops_outbox_messages WHERE organization_id = ? AND aggregate_type = 'inspection' AND aggregate_id = ? ORDER BY created_at DESC,id DESC LIMIT 10",[org,id])).map(r=>complianceRow<{id:string;topic:string;status:string}>(r));}
+  async getStoreTask(org:string,id:string) {return getTaskSql(this.driver,org,id);}
+  async listTaskPeople(org:string,store:string,search:string,localOnly=false) {return taskPeopleSql(this.driver,org,store,search,localOnly);}
+  async listTaskMessages(org:string,id:string,offset=0) {return taskMessagesSql(this.driver,org,id,offset);}
+  async listTaskParticipants(org:string,id:string) {return taskParticipantsSql(this.driver,org,id);}
+  async queryStoreTasks(scope:OrganizationScope,q:import("./store-task-types").TaskQuery) {return taskQuerySql(this.driver,scope,q);}
   async listComplianceOwners(org:string,search="") {return (await this.all("SELECT m.id,u.display_name FROM ops_memberships m JOIN ops_users u ON u.id=m.user_id WHERE m.organization_id = ? AND m.status = 'active' AND m.role NOT IN ('vendor_user','support') AND u.status = 'active' AND LOWER(u.display_name) LIKE ? ORDER BY u.display_name,m.id LIMIT 20",[org,`%${search.toLowerCase()}%`])).map(r=>({id:String(r.id),name:String(r.display_name)}));}
   async getComplianceSchedule(org:string,id:string) { const r=await this.first("SELECT * FROM ops_compliance_schedules WHERE organization_id = ? AND id = ?",[org,id]);return r?complianceRow<ComplianceSchedule>(r):null; }
   async listComplianceSchedules(scope:OrganizationScope,start=0) { const params:unknown[]=[];const where=scopeWhere(scope,"s",params);return (await this.all(`SELECT c.* FROM ops_compliance_schedules c JOIN ops_stores s ON s.organization_id=c.organization_id AND s.id=c.store_id WHERE ${where} ORDER BY c.id LIMIT 100 OFFSET ?`,[...params,start])).map(r=>complianceRow<ComplianceSchedule>(r)); }

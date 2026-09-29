@@ -1,3 +1,4 @@
+import {LinkedStoreTasks} from "@/components/workspace/linked-store-tasks";
 import { RecordFiles } from "@/components/workspace/record-files";
 import { safeDecisionReturn } from "@/lib/ops/review-navigation";
 import type { Metadata } from "next";
@@ -56,7 +57,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
       compactFacts
       model={model}
       initialSection="overview"
-      beforeSections={<>{review ? <EquipmentReview model={review} /> : null}<details><summary>Equipment documents</summary><RecordFiles kind="asset" id={id} /></details>{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
+      beforeSections={<>{review ? <EquipmentReview model={review} /> : null}<details><summary>Equipment documents</summary><RecordFiles kind="asset" id={id} /></details><LinkedStoreTasks kind="asset" id={id} />{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
       after={canSetupEquipment || canSetupPm ? <SetupActions
           title="Build out this equipment record"
           description="Add component depth or schedule preventive work. Both features stay optional and connect back to this equipment history."

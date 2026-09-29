@@ -1,3 +1,4 @@
+import type { TaskRepository } from "./store-task-types";
 import type {
   IsoDateTime,
   ApprovalDecision,
@@ -195,7 +196,7 @@ export interface OpsStatement {
   params: readonly unknown[];
 }
 
-export interface OpsRepository {
+export interface OpsRepository extends TaskRepository {
   getWorkPrice(organizationId: OpsId, id: OpsId): Promise<import("./work-price-types").WorkPrice | null>;
   listWorkPrices(organizationId: OpsId, query: import("./work-price-types").WorkPriceQuery): Promise<{ items: import("./work-price-types").WorkPrice[]; total: number }>;
   readonly kind: "d1" | "postgres" | "fixture";

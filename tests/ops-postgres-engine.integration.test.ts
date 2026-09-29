@@ -1,3 +1,4 @@
+import { storeTaskRegression } from "./helpers/store-task-regression";
 import { invoiceUploadRegression } from "./helpers/invoice-upload-regression";
 import { complianceRegression } from "./helpers/compliance-regression";
 import { communicationRegression } from "./helpers/communication-regression";
@@ -883,5 +884,9 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
   it("persists email routing and stale-safe routine follow-ups", async () => { const repository = createOpsPostgresRepository(pool); await seedOpsRepository(repository,buildNorthlinePresentationFixture()); await communicationRegression(repository); }, 60000);
 
   it("persists custom inspection schedules, evidence and linked corrective work", async()=>{const repository=createOpsPostgresRepository(pool);await seedOpsRepository(repository,buildNorthlinePresentationFixture());await complianceRegression(repository);},60000);
+
+  it("supports independent store tasks, scope and atomic handoff", async () => {
+    await storeTaskRegression(createOpsPostgresRepository(new PGlitePool(database)));
+  },120000);
 
 });

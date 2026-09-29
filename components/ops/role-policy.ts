@@ -45,7 +45,7 @@ export type OperatorDetailRoutePolicyId =
   | "invoice";
 
 export type OperatorPrimaryNavigationId = "home" | "work" | "stores" | "vendors" | "insights" | "reports";
-export type OperatorWorkNavigationId = "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "invoice-review";
+export type OperatorWorkNavigationId = "tasks" | "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "invoice-review";
 export type OperatorInsightsNavigationId = "trends" | "spend" | "equipment" | "pm" | "lifecycle";
 
 interface DemoOperatorRolePolicy {
@@ -157,7 +157,7 @@ export function roleCanSeePrimaryNavigation(role: OperatorRole, item: OperatorPr
 }
 
 export function roleCanSeeWorkNavigation(role: OperatorRole, item: OperatorWorkNavigationId) {
-  return demoOperatorRolePolicy[role].workNavigation.includes(item);
+  return item === "tasks" || demoOperatorRolePolicy[role].workNavigation.includes(item);
 }
 
 export function roleCanSeeInsightsNavigation(role: OperatorRole, item: OperatorInsightsNavigationId) {

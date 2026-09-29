@@ -22,7 +22,7 @@ describe("D1 migration chain", () => {
       .sort();
 
     try {
-      expect(migrations).toHaveLength(64);
+      expect(migrations).toHaveLength(65);
       for (const migration of migrations) {
         database.exec("BEGIN");
         try {
@@ -47,13 +47,13 @@ describe("D1 migration chain", () => {
             'ops_warranty_cases',
             'ops_applied_warranties',
             'ops_invoices',
-            'ops_value_events'
+            'ops_value_events', 'ops_store_tasks', 'ops_store_task_messages', 'ops_store_task_people'
             ,'ops_component_lifecycle_events'
             ,'ops_notification_rules'
           )
         ORDER BY name
       `).all();
-      expect(tables).toHaveLength(10);
+      expect(tables).toHaveLength(13);
       expect(database.prepare("PRAGMA table_info(ops_manufacturer_warranties)").all()).toEqual(expect.arrayContaining([expect.objectContaining({ name: "provider_kind" }), expect.objectContaining({ name: "work_order_id" })]));
       expect(database.prepare("PRAGMA table_info(ops_work_orders)").all()).toEqual(expect.arrayContaining([expect.objectContaining({ name: "internal_review_threshold_minor" })]));
       expect(database.prepare("PRAGMA table_info(ops_requests)").all())

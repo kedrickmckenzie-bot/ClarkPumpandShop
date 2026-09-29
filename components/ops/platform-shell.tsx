@@ -75,8 +75,9 @@ const createActions: Array<{
   label: string;
   description: string;
   href: string;
-  capability: OperatorCapability;
+  capability?: OperatorCapability;
 }> = [
+  {label:"New task",description:"Ask someone to check or do something",href:"/app/tasks/new"},
   {
     label: "Report an issue",
     description: "Capture a problem at a store",
@@ -266,15 +267,20 @@ function SidebarFooter({ session, edition }: { session: OperatorSession; edition
 function CreateMenu({ session, edition }: { session: OperatorSession; edition: DemoEdition }) {
   const pathname = usePathname();
   const query = useSearchParams();
-  const storeMatch = pathname.match(/^\/app\/stores\/([^/]+)$/);
+  const storeMatch = pathname.match(/^\/app\/stores\/([^/]+)(?:\/|$)/);
   const store = storeMatch && storeMatch[1] !== "new" ? storeMatch[1] : query.get("store");
   const contextualHref = (href: string) => {
-    if (!store || !["/app/requests/new", "/app/work-orders/new", "/app/equipment/new"].includes(href)) return href;
+    if (href === "/app/tasks/new") {
+      const source = pathname.match(/^\/app\/(work-orders|visits|invoices|equipment)\/([^/]+)$/);
+      const sourceKeys: Record<string,string> = {"work-orders":"work",visits:"visit",invoices:"invoice",equipment:"asset"};
+      if (source && source[2] !== "new") return `${href}?${new URLSearchParams({[sourceKeys[source[1]]]:source[2]})}`;
+    }
+    if (!store || !["/app/tasks/new", "/app/requests/new", "/app/work-orders/new", "/app/equipment/new"].includes(href)) return href;
     return `${href}?${new URLSearchParams({ store })}`;
   };
   const actions = createActions.filter(
-    (action) => roleCan(session, action.capability) && (
-      edition === "complete" || action.capability === "create_work_order"
+    (action) => (!action.capability ? (session.accessMode === "preview" ? session.role !== "finance" : !!session.permissions?.length && session.permissions.every(p => ["ops:*","ops:write","ops:read_write","ops:store_manage"].includes(p))) : roleCan(session, action.capability)) && (
+      edition === "complete" || !action.capability || action.capability === "create_work_order"
     ),
   );
   if (!actions.length) return null;

@@ -1981,6 +1981,9 @@ export interface Page<T> {
 }
 
 export interface OpsFixture {
+ storeTasks?: import("./store-task-types").StoreTask[];
+ storeTaskMessages?: import("./store-task-types").TaskMessage[];
+ storeTaskPeople?: import("./store-task-types").TaskParticipant[];
   workPrices?: import("./work-price-types").WorkPrice[];
   accountingInvoiceSources?: AccountingInvoiceSource[];
   asOf: IsoDateTime;
