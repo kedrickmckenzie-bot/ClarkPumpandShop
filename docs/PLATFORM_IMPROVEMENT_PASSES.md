@@ -4,6 +4,15 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Unresolved operating problems — September 29
+
+- [x] OU-01 Default Needs review excludes converted/linked reports; All unresolved includes acknowledged/converted reports still affecting operations.
+- [x] OU-02 Existing problem link opens scoped linked work when present, otherwise the report; no extra columns.
+- [x] OU-03 Resolved/closed work and closed reports leave the unresolved list; cancellation alone does not imply a fix. Pagination preserves the selected filter.
+- [x] OU-04 Required validation and browser check; authorized release prepared.
+
+Checkpoint: four focused tests passed, covering SQL/fixture parity across active, pending-verification, resolved, closed and canceled work, plus acknowledged links, pagination and tenant scope. Browser verified five needing review and 15 unresolved, linked work-order navigation, Back preserving the filter, and desktop/390px layouts without horizontal overflow. Screenshot: `%TEMP%/unresolved-reports.png`. Seed, typecheck, lint and build passed. Full suite: 1,121/1,122 passed; PostgreSQL demo seeding timed out at 120 seconds. Separate workflow run passed 63/63, including that test. Full suite was not repeated after the successful workflow run. Logs: `%TEMP%/unresolved-*.log`. Commit/push authorized. No migration or reset needed.
+
 ## Operating report totals and drill-through — September 29
 
 - [x] OR-01 Source-derived total across all qualifying reports; dashboard previews three without capping the count.

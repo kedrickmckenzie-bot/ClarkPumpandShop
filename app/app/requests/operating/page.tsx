@@ -11,13 +11,16 @@ export default async function OperatingReportsPage({searchParams}:{searchParams:
  if(!roleCanOpenOperatorHref(session.role,"/app/requests"))notFound();
  const query=await searchParams,page=Number(query.page??1),size=25;
  if(!Number.isSafeInteger(page)||page<1)return <div><h1>Choose a valid page</h1><Link href="/app/requests/operating">Return to operating reports</Link></div>;
- const result=await (await getServerOpsRepository()).listOperatingRisks(session,{limit:size,offset:(page-1)*size});
+ const view=query.view === "unresolved" ? "unresolved" : "review";
+ const href=(page=1)=>`/app/requests/operating?view=${view}&page=${page}`;
+ const result=await (await getServerOpsRepository()).listOperatingRisks(session,{view,limit:size,offset:(page-1)*size});
  const pages=Math.max(1,Math.ceil(result.totalCount/size));
  return <div className={`${styles.page} ${styles.summary}`}>
   <header className={styles.head}><Link href="/app/overview">← Overview</Link><h1>Reported operating problems</h1><p>Open reports of limited or stopped operations.</p><p className={styles.context}>{session.scopeLabel} · {result.totalCount} reports</p></header>
+  <nav className={styles.operatingFilters} aria-label="Operating problem filters"><Link href="/app/requests/operating" aria-current={view==="review"?"page":undefined}>Needs review</Link><Link href="/app/requests/operating?view=unresolved" aria-current={view==="unresolved"?"page":undefined}>All unresolved problems</Link></nav>
   <section className={styles.section}>
-   {result.items.length?<div className={styles.tableScroll}><table className={`${styles.recordsTable} ${styles.operatingTable}`}><caption className={styles.caption}>Priority reports awaiting review</caption><thead><tr><th scope="col">Store</th><th scope="col">Problem</th><th scope="col">Operations</th><th scope="col">Reported</th></tr></thead><tbody>{result.items.map(row=><tr key={row.id}><td data-label="Store">Store {row.storeNumber}</td><td data-label="Problem"><Link href={`/app/requests/${row.id}`}>{row.problem}</Link></td><td data-label="Operations">{row.state==="unable_to_operate"?"Unable to operate":"Limited operations"}</td><td data-label="Reported">{formatOperationsDate(row.reportedAt,"UTC")}</td></tr>)}</tbody></table></div>:<p>{result.totalCount?"No reports on this page.":"No open reports of limited or stopped operations."}</p>}
-   {pages>1||page>1?<nav className={styles.pagination} aria-label="Operating report pages">{page>1?<Link href={`/app/requests/operating?page=${page-1}`}>← Previous</Link>:null}<span>Page {page} of {pages}</span>{page<pages?<Link href={`/app/requests/operating?page=${page+1}`}>Next →</Link>:null}</nav>:null}
+   {result.items.length?<div className={styles.tableScroll}><table className={`${styles.recordsTable} ${styles.operatingTable}`}><caption className={styles.caption}>{view==="review"?"Priority reports awaiting review":"All unresolved operating problems"}</caption><thead><tr><th scope="col">Store</th><th scope="col">Problem</th><th scope="col">Operations</th><th scope="col">Reported</th></tr></thead><tbody>{result.items.map(row=><tr key={row.id}><td data-label="Store">Store {row.storeNumber}</td><td data-label="Problem"><Link href={row.workOrderId?`/app/work-orders/${row.workOrderId}`:`/app/requests/${row.id}`}>{row.problem}</Link></td><td data-label="Operations">{row.state==="unable_to_operate"?"Unable to operate":"Limited operations"}</td><td data-label="Reported">{formatOperationsDate(row.reportedAt,"UTC")}</td></tr>)}</tbody></table></div>:<p>{result.totalCount?"No reports on this page.":"No open reports of limited or stopped operations."}</p>}
+   {pages>1||page>1?<nav className={styles.pagination} aria-label="Operating report pages">{page>1?<Link href={href(page-1)}>← Previous</Link>:null}<span>Page {page} of {pages}</span>{page<pages?<Link href={href(page+1)}>Next →</Link>:null}</nav>:null}
   </section>
  </div>;
 }

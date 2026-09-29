@@ -68,3 +68,7 @@
 .summary .operatingTable th:first-child { width: 110px; }
 .summary .operatingTable th:nth-child(3) { width: 150px; }
 .summary .operatingTable th:nth-child(4) { width: 135px; }
+
+.operatingFilters { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.operatingFilters a { padding: 8px 14px; border: 1px solid var(--ops-border); border-radius: 4px; text-decoration: none; background: var(--ops-panel); }
+.operatingFilters a[aria-current="page"] { background: #eff6ff; border-color: var(--ops-brand, #2563eb); font-weight: 650; }

@@ -549,7 +549,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: PageRequest = {}) {
     return equipmentIssuesFromFixture(this.fixture, scope, window, query);
   }
-  async listOperatingRisks(scope: OrganizationScope, page?: PageRequest) { return operatingRisksFromFixture(this.fixture,scope,page); }
+  async listOperatingRisks(scope: OrganizationScope, page?: import("./operating-risks").OperatingRiskQuery) { return operatingRisksFromFixture(this.fixture,scope,page); }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return dashboardActivityFromFixture(this.fixture, scope, window);
   }

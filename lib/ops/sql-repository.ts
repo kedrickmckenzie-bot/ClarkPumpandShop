@@ -427,7 +427,7 @@ class SqlOpsRepository implements OpsRepository {
   async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: PageRequest = {}) {
     return queryEquipmentIssues(this.driver, scope, window, query);
   }
-  async listOperatingRisks(scope: OrganizationScope, page?: PageRequest) { return queryOperatingRisks(this.driver,scope,page); }
+  async listOperatingRisks(scope: OrganizationScope, page?: import("./operating-risks").OperatingRiskQuery) { return queryOperatingRisks(this.driver,scope,page); }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return queryDashboardActivity(this.driver, scope, window);
   }

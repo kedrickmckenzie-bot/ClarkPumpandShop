@@ -20,5 +20,22 @@ it("counts beyond the preview and pages every matching report without duplicates
  expect(new Set(ids).size).toBe(preview.totalCount);
  expect(await queryOperatingRisks(driver,scope,{limit:25,offset:1000})).toEqual({items:[],totalCount:preview.totalCount});
  for(const scoped of [{...scope,storeIds:[]},{organizationId:"foreign"},{...scope,storeIds:[source.storeId]}])expect(await queryOperatingRisks(driver,scoped)).toEqual(operatingRisksFromFixture(f,scoped));
+ const work=f.workOrders.find(w=>w.storeId===source.storeId)!;
+ for(const state of ["in_progress","completed_pending_review","resolved","closed","cancelled"] as const){
+   source.status="converted";source.convertedWorkOrderId=work.id;work.status=state;
+   db.prepare("UPDATE ops_requests SET status=?,converted_work_order_id=? WHERE id=?").run(source.status,work.id,source.id);
+   db.prepare("UPDATE ops_work_orders SET status=? WHERE id=?").run(state,work.id);
+   for(const view of ["review","unresolved"] as const){
+     const result=await queryOperatingRisks(driver,scope,{view,limit:100});
+     expect(result).toEqual(operatingRisksFromFixture(f,scope,{view,limit:100}));
+     const found=result.items.find(r=>r.id===source.id);
+     if(view==="unresolved" && !["resolved","closed"].includes(state))expect(found?.workOrderId).toBe(work.id);else expect(found).toBeUndefined();
+   }
+ }
+ source.status="acknowledged";source.convertedWorkOrderId=undefined;source.linkedWorkOrderId=work.id;
+ db.prepare("UPDATE ops_requests SET status='acknowledged',converted_work_order_id=NULL,linked_work_order_id=? WHERE id=?").run(work.id,source.id);
+ expect((await queryOperatingRisks(driver,scope,{view:"unresolved",limit:100})).items.find(r=>r.id===source.id)?.workOrderId).toBe(work.id);
+ source.status="closed";db.prepare("UPDATE ops_requests SET status='closed' WHERE id=?").run(source.id);
+ expect((await queryOperatingRisks(driver,scope,{view:"unresolved",limit:100})).items.some(r=>r.id===source.id)).toBe(false);
  }finally{db.close();}
 });
