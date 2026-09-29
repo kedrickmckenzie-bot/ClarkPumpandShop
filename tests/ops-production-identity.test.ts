@@ -229,11 +229,11 @@ describe("production identity and organization selection", () => {
     await expect(loadPmPlanScheduleSetupModel(occurrence.planId)).rejects.toThrow();
     expect(boundary.snapshot).not.toHaveBeenCalled();
   });
-  it("loads the complete review queue, filtered metrics and supporting sources without a snapshot", async()=>{
+  it("loads the complete review queue, stable metrics and supporting sources without a snapshot", async()=>{
     const model=await loadListModel("action-center",{q:"104",priority:"urgent"});
     expect(model.table.rows.length).toBeGreaterThan(0);
     expect(model.table.rows.every(row=>row.cells.find(cell=>cell.key==="store")?.value.includes("104"))).toBe(true);
-    expect(model.metrics?.find(metric=>metric.id==="attention-urgent")?.value).toBe(model.resultSummary.split(" ")[0]);
+    expect(model.metrics).toEqual((await loadListModel("action-center",{})).metrics);
     const link=new URL(model.table.rows[0].sourceLink!.href,"https://ops.invalid");
     expect((await loadReviewSourcesModel(Object.fromEntries(link.searchParams)))!.rows.length).toBeGreaterThan(0);
     expect(await ActionCenterPage({searchParams:Promise.resolve({lane:"history"})})).toBeTruthy();
@@ -243,7 +243,7 @@ describe("production identity and organization selection", () => {
     expect(storeQueue.search?.preservedParameters).toContainEqual({name:"store",value:"store-northline-104"});
     const lastOnPage=(await loadListModel("action-center",{})).table.rows.at(-1)!;
     const nextIds=new URL(lastOnPage.href,"https://ops.invalid").searchParams.get("reviewAfter")!.split(",");
-    expect(nextIds.length).toBe(25);
+    expect(nextIds.length).toBe(24);
     const selection=await loadReviewSelection({},nextIds);
     expect(selection.table.rows.some(row=>row.id===nextIds[0])).toBe(true);
     expect(boundary.snapshot).not.toHaveBeenCalled();
@@ -277,7 +277,10 @@ describe("production identity and organization selection", () => {
   });
   it("loads the actual manager home without requesting a tenant snapshot", async () => {
     const model = await loadDashboardModel();
-    expect(model.metrics.find(row => row.id === "open-exceptions")?.value).toBe("61");
+    const queue=await loadListModel("action-center",{});
+    expect(model.metrics.find(row => row.id === "open-exceptions")?.value).toBe(queue.metrics?.find(row=>row.id==="attention-mine")?.value);
+    expect(model.metrics.find(row => row.id === "open-items")?.value).toBe("49");
+    expect(model.metrics.find(row => row.id === "open-exceptions")?.link?.href).toBe("/app/action-center?lane=mine");
     expect(model.spotlight?.facts.find(row => row.label === "Approved replacement")?.value).toBe("$32,800.00");
     expect(model.equipmentIssues?.rows).toHaveLength(5);
     expect(model.equipmentIssues?.rows[0]).toMatchObject({ id: "asset-104-beer-cave", issueCount: 5, cost: "$24,110.00" });

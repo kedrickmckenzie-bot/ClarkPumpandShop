@@ -122,6 +122,7 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
     .filter((task) => task.organizationId === organizationId && (input.history ? ["completed", "cancelled"] : ["open", "in_progress"]).includes(task.status))
     .filter((task) => (task.workOrderId ? workById.has(task.workOrderId) : Boolean(task.serviceRequestId && requestById.has(task.serviceRequestId))))
     .filter((task) => isTaskVisible(task, input.role))
+    .filter((task) => input.history || task.taskType !== "choose_service_provider" || !(fixture.workOrderVisitHolds ?? []).some(hold => hold.organizationId === organizationId && hold.workOrderId === task.workOrderId && hold.status === "active"))
     .map<AttentionProjectionItem>((task) => {
       if (task.sourceFollowUpId) representedFollowUps.add(task.sourceFollowUpId);
       const work = task.workOrderId ? workById.get(task.workOrderId) : undefined;
@@ -260,7 +261,7 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
           owner: "Facilities coordinator",
           dueAt: hold.deadlineAt,
           priority: Date.parse(hold.deadlineAt) <= Date.parse(input.asOf) ? "critical" : "low",
-          lane: Date.parse(hold.deadlineAt) <= Date.parse(input.asOf) ? "team" : "upcoming",
+          lane: Date.parse(hold.deadlineAt) <= Date.parse(input.asOf) ? (input.role === "facilities_admin" ? "mine" : "team") : "upcoming",
           group: "work_vendor",
           linkHref: `/app/work-orders/${encodeURIComponent(hold.workOrderId)}?view=service#visit-hold`,
         }))

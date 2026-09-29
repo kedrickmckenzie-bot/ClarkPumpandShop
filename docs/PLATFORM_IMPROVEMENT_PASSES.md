@@ -4,6 +4,15 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Queue tiles and responsibility — September 29
+
+- [x] QT-01 Facilities/regional overview shows Open items and Needs your action; cost remains in spending breakdowns.
+- [x] QT-02 Review tiles use scope-only counts and replace search/type/priority/responsibility/page filters; clear filters retains store scope.
+- [x] QT-03 Active held work has one queue entry, upcoming until review due, then assigned to facilities; fixture and SQL projections agree.
+- [x] QT-04 Automated validation and browser switching, history and responsive checks.
+
+Checkpoint: browser verified 69 open items and 14 needing facilities action, vendor-to-personal tile reset, search clearing, page-two reset, Back/Forward and 390px layout (375px content width, no overflow). Scope-only metrics and store-preserving clear filters covered by tests. Screenshot: `%TEMP%/queue-overview.png`. Focused tests passed 14/14, final SQL/presenter regressions 3/3, updated dashboard/access tests 46/46. Full suite passed 1,117/1,121; four old dashboard/count expectations in two files were updated and passed in the 46-test rerun. No full-suite rerun after those corrections. Seed, final typecheck/lint, whitespace check, 63/63 workflow tests and production build passed. Logs: `%TEMP%/queue-*.log`. No hosted changes or new commit/push.
+
 ## Refreshed showcase and bounded demo reset — September 29
 
 - [x] DS-01 Extend the historical fixture with current weekly inspections, completed/missing/failed evidence states, corrective work, standalone/source-linked tasks, monthly capital plans and store preferences.
@@ -11,7 +20,7 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 - [x] DS-03 Fresh local/PostgreSQL/D1 initialization uses the refreshed showcase. Existing hosted tenants are never silently reset.
 - [x] DS-04 New guarded PostgreSQL demo-only reset preserves schema, other tenants and objects; tested repeat reset and rollback on invalid seed.
 - [x] DS-05 Required automated and affected browser validation; evidence and remaining hosted step below.
-- [ ] DS-06 Apply hosted reset after updated code is deployed and Render access is available.
+- [x] DS-06 User ran the hosted reset after deploying 50a6094; supplied successful Render output: 15 stores, five vendors, 21 inspections, five tasks, five capital plans and 10,919 seed statements.
 
 Checkpoint: local demo restarted with refreshed data. User authorized local and Render demo resets, prioritizing Render. Render dashboard URL opens a sign-in screen; this workspace has no Render connection or DATABASE_URL. Hosted data is unchanged. Deployment/reset instructions and story guide: `docs/SHOWCASE_REFRESH.md`. Existing whole-database reset guard remains unchanged. New reset uses explicit demo environment and exact tenant confirmation, transaction, dependency-ordered tenant deletes, and post-seed count checks. No commit/push yet.
 

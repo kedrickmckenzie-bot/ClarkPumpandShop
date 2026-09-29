@@ -424,7 +424,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
           <section className={`${styles.listWorkspace} ${styles.reviewQueueWorkspace}`}>
             <div className={styles.listToolbar}>
               {model.search ? (
-                <LiveSearchForm className={styles.listSearch} action={model.search.action} method="get" role="search">
+                <LiveSearchForm key={JSON.stringify([model.search.value, model.search.preservedParameters])} className={styles.listSearch} action={model.search.action} method="get" role="search">
                   <Search aria-hidden="true" size={18} />
                   <label className={styles.visuallyHidden} htmlFor={`${model.table.id}-search`}>{model.search.label}</label>
                   <input id={`${model.table.id}-search`} name="q" type="search" defaultValue={model.search.value} placeholder={model.search.placeholder} />

@@ -23,6 +23,13 @@ it("pages completed history and large quote evidence while excluding conflicting
     db.exec("PRAGMA foreign_keys=ON");
     for(const file of readdirSync("drizzle").filter(file=>/^\d.*\.sql$/.test(file)).sort()) db.exec(readFileSync(`drizzle/${file}`,"utf8"));
     for(const statement of buildOpsSeedStatements(fixture)) db.prepare(statement.sql).run(...statement.params.map(v=>typeof v==="boolean"?Number(v):v??null) as SQLInputValue[]);
+    const hold=fixture.workOrderVisitHolds!.find(h=>h.status==="active")!;
+    for(const asOf of [fixture.asOf,hold.deadlineAt]) {
+      const held=await queryAttention(driver,scope,access,{asOf,itemIds:[hold.id],limit:1});
+      expect(held.items).toEqual(attentionFromFixture(fixture,scope,access,{asOf,itemIds:[hold.id],limit:1}).items);
+    }
+    const duplicate=fixture.workflowTasks.find(t=>t.workOrderId===hold.workOrderId && t.taskType==="choose_service_provider")!;
+    expect((await queryAttention(driver,scope,access,{asOf:fixture.asOf,itemIds:[duplicate.id],limit:1})).totalCount).toBe(0);
     const history:AttentionQueueRow[]=[];let cursor:string|undefined;
     do {const page=await queryAttention(driver,scope,access,{asOf:fixture.asOf,lane:"history",q:"History density",limit:25,cursor});expect(page.totalCount).toBe(230);history.push(...page.items);cursor=page.nextCursor;if(history.length>230)throw new Error("Cursor did not advance");}while(cursor);
     expect(history.map(row=>row.id)).toEqual(Array.from({length:230},(_,i)=>`history-density-${String(i).padStart(3,"0")}`));

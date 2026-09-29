@@ -27,7 +27,7 @@ it("keeps the full review count while sending only the seven visible home rows",
   const model = buildDashboardModel(fixture, viewer);
   const sourceRows = fixtureRows(viewer, "/app/action-center");
   expect(sourceRows.length).toBeGreaterThan(7);
-  expect(model.metrics.find(metric => metric.id === "open-exceptions")?.value).toBe(String(sourceRows.length));
+  expect(model.metrics.find(metric => metric.id === "open-items")?.value).toBe(String(sourceRows.length));
   expect(model.priorityActions).toHaveLength(7);
   expect(model.priorityActions.map(row => row.id)).toEqual(sourceRows.slice(0, 7).map(row => row.id));
 });
@@ -121,7 +121,8 @@ describe("Pass 2 dashboard source contracts", () => {
     expect((await queryRows(viewer, "/app/work-orders?stage=vendor-response&status=closed"))).toEqual([]);
     const html = renderToStaticMarkup(createElement(ControlTower, { model }));
     expect(html).toContain('id="attention-heading"');
-    expect(html).toContain("Items to review");
+    expect(html).toContain("Needs your action");
+    expect(html).toContain("Open items");
     expect(html).toContain("Where maintenance dollars go");
     for (const breakdown of model.breakdowns.filter(row => row.id.startsWith("recorded-cost-by-"))) {
       for (const segment of breakdown.segments) expect(html).toContain(segment.link.href.replaceAll("&", "&amp;"));
