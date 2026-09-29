@@ -61,8 +61,8 @@ export async function capitalRegression(repository:OpsRepository) {
  expect(annual.items.map(r=>r.assetId)).toEqual([asset.id]);
  expect((await repository.queryCapitalPlans(scope,{...query,start:"2030-01",month:"overdue"})).items).toEqual([]);
  const risks=await repository.listOperatingRisks(scope);
- expect(risks.length).toBeGreaterThan(0);
- expect(await repository.listOperatingRisks({...scope,storeIds:[]})).toEqual([]);
- expect(await repository.listOperatingRisks({organizationId:"foreign"})).toEqual([]);
+ expect(risks.totalCount).toBeGreaterThan(0);
+ expect(await repository.listOperatingRisks({...scope,storeIds:[]})).toEqual({items:[],totalCount:0});
+ expect(await repository.listOperatingRisks({organizationId:"foreign"})).toEqual({items:[],totalCount:0});
 
 }

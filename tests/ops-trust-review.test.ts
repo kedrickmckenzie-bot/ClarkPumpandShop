@@ -9,11 +9,11 @@ it("counts overlapping invoice line flags once while retaining distinct lines an
  expect(uniqueExposureTotal([a,{...a,id:"b",amount:{amountMinor:500,currency:"USD"}},{...a,id:"c",invoiceLineId:"other"}])).toBe(2400);
 });
 it("uses the latest operating assessment and respects store scope",()=>{
- const f=buildNorthlinePresentationFixture(),scope={organizationId:f.organizations[0].id},risk=operatingRisksFromFixture(f,scope)[0];expect(risk).toBeTruthy();
+ const f=buildNorthlinePresentationFixture(),scope={organizationId:f.organizations[0].id},risk=operatingRisksFromFixture(f,scope).items[0];expect(risk).toBeTruthy();
  const assessment=f.requestImpactAssessments.find(a=>a.requestId===risk.id)!;
  f.requestImpactAssessments.push({...assessment,id:"new-assessment",assessedAt:"2026-09-28T12:00:00Z",storeOperatingState:"open"});
- expect(operatingRisksFromFixture(f,scope).some(r=>r.id===risk.id)).toBe(false);
- expect(operatingRisksFromFixture(f,{...scope,storeIds:[]})).toEqual([]);
+ expect(operatingRisksFromFixture(f,scope).items.some(r=>r.id===risk.id)).toBe(false);
+ expect(operatingRisksFromFixture(f,{...scope,storeIds:[]})).toEqual({items:[],totalCount:0});
 });
 it("routes completed repair verification to the operator and flags stale open visits",()=>{
  const f=buildNorthlinePresentationFixture(),work=f.workOrders.find(w=>w.id==="wo-recent-aug-101-refrigeration")!;

@@ -393,7 +393,7 @@ export interface OpsRepository extends TaskRepository {
   listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query?: PageRequest): Promise<import("./equipment-issues").EquipmentIssuePage>;
   getDashboardContext(scope: OrganizationScope): Promise<import("./dashboard-context").DashboardContext>;
   getDashboardLifecycle(scope: OrganizationScope, asOf: string): Promise<import("./lifecycle-summary").DashboardLifecycleSummary>;
-  listOperatingRisks(scope: OrganizationScope): Promise<import("./operating-risks").OperatingRisk[]>;
+  listOperatingRisks(scope: OrganizationScope, page?: PageRequest): Promise<import("./operating-risks").OperatingRiskPage>;
   getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow): Promise<import("./dashboard-query").DashboardActivitySummary>;
   listAttention(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery): Promise<import("./attention-query").AttentionPage>;
   listAttentionSources(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery, itemId: string, page: PageRequest): Promise<import("./attention-sources").AttentionSourcePage | null>;

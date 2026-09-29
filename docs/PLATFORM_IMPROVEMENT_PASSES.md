@@ -4,6 +4,14 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Operating report totals and drill-through — September 29
+
+- [x] OR-01 Source-derived total across all qualifying reports; dashboard previews three without capping the count.
+- [x] OR-02 Complete server-paginated report list in the same organization/store/region scope, with source links and empty states.
+- [x] OR-03 Required validation and browser verification; authorized release prepared.
+
+Checkpoint: four focused tests passed, including a 30-plus-report SQL/fixture pagination regression, exact totals on empty pages and tenant isolation. Browser verified overview link, complete list, source request and desktop/390px layouts without horizontal page overflow. Screenshot: `%TEMP%/operating-reports.png`; temporary tabs closed and viewport restored. Seed, final typecheck, lint and whitespace checks passed. Full suite: 1,120/1,122 passed; PostgreSQL seeding and public-link recovery timed out (120 seconds and 15 seconds). Separate workflow rerun passed 63/63, including both timed-out tests, and production build passed. Full suite was not repeated after the successful workflow rerun. Logs: `%TEMP%/operating-*.log`. Commit/push authorized after validation. No migration or data reset required.
+
 ## Queue tiles and responsibility — September 29
 
 - [x] QT-01 Facilities/regional overview shows Open items and Needs your action; cost remains in spending breakdowns.

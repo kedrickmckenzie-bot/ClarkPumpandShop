@@ -63,3 +63,8 @@
   .evidenceTable td { text-align: left; border: 0; padding: 4px 0; }
   .evidenceTable td::before { content: attr(data-label) ": "; color: var(--ops-muted); }
 }
+
+.summary .operatingTable th, .summary .operatingTable td { text-align: left; white-space: normal; min-width: 0; overflow-wrap: anywhere; vertical-align: top; }
+.summary .operatingTable th:first-child { width: 110px; }
+.summary .operatingTable th:nth-child(3) { width: 150px; }
+.summary .operatingTable th:nth-child(4) { width: 135px; }
