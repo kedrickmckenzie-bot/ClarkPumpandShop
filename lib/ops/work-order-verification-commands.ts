@@ -279,13 +279,10 @@ export async function recordWorkOrderVerification(
       && task.createdAt >= outcome.outcomeRecordedAt!
     ))
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))[0];
-  if (!verifyTask) {
-    throw new OpsDomainError("CONFLICT", "The current repair-verification obligation is missing or already complete");
-  }
-  const sourceFollowUp = verifyTask.sourceFollowUpId
+  const sourceFollowUp = verifyTask?.sourceFollowUpId
     ? await repository.getFollowUp(input.organizationId, verifyTask.sourceFollowUpId)
     : undefined;
-  if (verifyTask.sourceFollowUpId && (!sourceFollowUp || sourceFollowUp.workOrderId !== workOrder.id)) {
+  if (verifyTask?.sourceFollowUpId && (!sourceFollowUp || sourceFollowUp.workOrderId !== workOrder.id)) {
     throw new OpsDomainError("CONFLICT", "The repair-verification task has an invalid source follow-up");
   }
 
@@ -316,7 +313,7 @@ export async function recordWorkOrderVerification(
       ? `Rejected ${outcome.outcome} outcome: ${reason}`
       : `Could not confirm ${outcome.outcome} outcome: ${reason}`;
   const correctedTasks = priorDecision ? tasks.filter(t => isOpenWorkflowTask(t) && t.createdAt === priorDecision.decidedAt && ([CLOSE_VERIFIED_WORK_TASK_TITLE, RETURN_REJECTED_WORK_TASK_TITLE, "Review an inconclusive store confirmation"].includes(t.title))) : [];
-  const resolvedVerifyTask = completedTask(verifyTask, input.actor, now, resolutionNote);
+  const resolvedVerifyTask = verifyTask ? completedTask(verifyTask, input.actor, now, resolutionNote) : undefined;
   const accountability = await resolveInternalAccountability(repository, workOrder);
   const [policy, detail] = await Promise.all([
     repository.getActiveWorkflowPolicy(input.organizationId),
@@ -335,7 +332,7 @@ export async function recordWorkOrderVerification(
     tasks,
     visits: relatedVisits,
     openFollowUpIds: new Set(detail?.followUps.filter((followUp) => followUp.status === "open").map((followUp) => followUp.id) ?? []),
-    ignoredTaskIds: new Set([verifyTask.id, ...correctedTasks.map(t => t.id)]),
+    ignoredTaskIds: new Set([...(verifyTask ? [verifyTask.id] : []), ...correctedTasks.map(t => t.id)]),
     ignoredFollowUpIds: sourceFollowUpWillClose && sourceFollowUp ? new Set([sourceFollowUp.id]) : undefined,
   });
   const explicitClose = Boolean(input.closeAfterReview && input.decision === "verified" && closureRoles.has(membership.role) && closureEvaluation.blockers.every(blocker => ["policy_disabled", "policy_not_applicable", "priority_not_routine"].includes(blocker)));
@@ -382,7 +379,7 @@ export async function recordWorkOrderVerification(
     createdAt: now,
   });
   const projectedTasks = tasks
-    .map((task) => task.id === verifyTask.id ? resolvedVerifyTask : correctedTasks.some(t => t.id === task.id) ? completedTask(task, input.actor, now, "Previous confirmation corrected") : task)
+    .map((task) => resolvedVerifyTask && task.id === resolvedVerifyTask.id ? resolvedVerifyTask : correctedTasks.some(t => t.id === task.id) ? completedTask(task, input.actor, now, "Previous confirmation corrected") : task)
     .concat(autoClosed ? [] : replacementTask);
   const nextStatus: WorkOrder["status"] = autoClosed ? "closed" : input.decision === "verified" ? "resolved" : "in_progress";
 
@@ -438,13 +435,13 @@ export async function recordWorkOrderVerification(
           }),
         ]
       : []),
-    ...buildCompleteWorkflowTaskStatements({
+    ...(verifyTask ? buildCompleteWorkflowTaskStatements({
       task: verifyTask,
       actor: input.actor,
       occurredAt: now,
       ids,
       resolutionNote,
-    }),
+    }) : []),
     ...(autoClosed ? [] : buildCreateTaskStatements({ task: replacementTask, actor: input.actor, ids })),
     buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, projectedTasks),
     ...(input.avoidedSeparateTripConfirmed

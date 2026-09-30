@@ -293,7 +293,7 @@ function WorkspaceSection({
   id: string;
   eyebrow: string;
   title: string;
-  description: string;
+  description?: string;
   icon: ReactNode;
   children: ReactNode;
 }) {
@@ -301,7 +301,7 @@ function WorkspaceSection({
     <section className={styles.workspaceSection} id={id} aria-labelledby={`${id}-heading`}>
       <header className={styles.sectionHeader}>
         <span>{icon}</span>
-        <div><p>{eyebrow}</p><h2 id={`${id}-heading`}>{title}</h2><span>{description}</span></div>
+        <div><p>{eyebrow}</p><h2 id={`${id}-heading`}>{title}</h2>{description ? <span>{description}</span> : null}</div>
       </header>
       <div className={styles.sectionBody}>{children}</div>
     </section>
@@ -790,8 +790,7 @@ export function WorkOrderCase({
       {activeView === "visits" ? <WorkspaceSection
         id="visits"
         eyebrow="Service record"
-        title="Technician visits and notes"
-        description="See every linked check-in, checkout, outcome, and service note. This history remains with the work order after it is closed."
+        title="Visits & confirmation"
         icon={<MapPin aria-hidden="true" size={20} />}
       >
         <div className={styles.panelRegion}><WorkOrderVerificationPanel model={verification} /></div>

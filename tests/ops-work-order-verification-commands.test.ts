@@ -173,7 +173,7 @@ function harness(fixture = verificationFixture()) {
   return { repository, services, setNow(value: string) { now = value; } };
 }
 
-function decisionInput(decision: "verified" | "rejected", reason?: string) {
+function decisionInput(decision: "verified" | "rejected" | "inconclusive", reason?: string) {
   return {
     organizationId: NORTHLINE_ORGANIZATION_ID,
     workOrderId,
@@ -933,8 +933,7 @@ describe("optional confirmation and checks after closure", () => {
     const test=harness();
     const original=await recordWorkOrderVerification(test.services,decisionInput("rejected","Wrong button"));
     test.setNow("2026-08-20T17:00:00.000Z");
-    await requestWorkOrderConfirmation(test.services,{organizationId:NORTHLINE_ORGANIZATION_ID,workOrderId,expectedVersion:8,reason:"Correct mistaken result",actor:facilitiesActor});
-    const corrected=await recordWorkOrderVerification(test.services,{...decisionInput("verified"),expectedWorkOrderVersion:9,correctionReason:"The first result was entered in error"});
+    const corrected=await recordWorkOrderVerification(test.services,{...decisionInput("verified"),expectedWorkOrderVersion:8,correctionReason:"The first result was entered in error"});
     const decisions=await test.repository.listWorkOrderVerifications(NORTHLINE_ORGANIZATION_ID,workOrderId);
     expect(decisions).toContainEqual(expect.objectContaining({id:original.id,decision:original.decision,reason:original.reason,decidedAt:original.decidedAt}));
     expect(corrected.cycle).toBe(original.cycle+1);
@@ -954,4 +953,20 @@ it("amends an incorrect checkout with an attributed original record and a fresh 
   expect(JSON.parse(amendment.payloadJson).previous).toMatchObject({outcome:"return_visit_required",outcomeRecordedAt});
   expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID,workOrderId)).toMatchObject({status:"completed_pending_review",version:8});
   await expect(correctWorkOrderOutcome(test.services,{organizationId:NORTHLINE_ORGANIZATION_ID,workOrderId,expectedVersion:7,expectedOutcomeId:outcomeId,outcome:"completed",reason:"Stale correction",actor:facilitiesActor})).rejects.toMatchObject({code:"CONFLICT"});
+});
+
+
+it.each(["verified", "rejected", "inconclusive"] as const)("records %s directly on closed work without a request task", async decision => {
+  const fixture = verificationFixture();
+  const work = fixture.workOrders.find(w => w.id === workOrderId)!;
+  work.status = "closed";
+  work.storeId = "store-northline-104";
+  fixture.workflowTasks = fixture.workflowTasks.filter(t => t.workOrderId !== workOrderId);
+  fixture.followUps = fixture.followUps.filter(t => t.workOrderId !== workOrderId);
+  const test = harness(fixture);
+  const result = await recordWorkOrderVerification(test.services, {...decisionInput(decision, "Checked the completed work"), actor: {...facilitiesActor, actorId: "membership-northline-store-104", actorName: "Casey Morgan"}});
+  expect(result.resultingStatus).toBe(decision === "verified" ? "closed" : "in_progress");
+  expect(test.repository.snapshot().workOrderVerifications).toContainEqual(expect.objectContaining({id:result.id, decision}));
+  expect(test.repository.snapshot().workflowTasks.some(t => t.workOrderId === workOrderId && t.taskType === "verify_repair")).toBe(false);
+  await expect(recordWorkOrderVerification(test.services, decisionInput(decision, "Stale retry"))).rejects.toMatchObject({code:"CONFLICT"});
 });

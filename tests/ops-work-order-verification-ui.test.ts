@@ -107,7 +107,8 @@ describe("embedded work-order verification surface", () => {
     expect(markup).toContain('name="verificationScope"');
     expect(markup).toContain('name="basis"');
     expect(markup).toContain(`type="hidden" name="expectedSiteVisitWorkOrderId" value="${outcomeId}"`);
-    expect(markup).toContain("Eligible routine work may close automatically");
+    expect(markup).not.toContain("Request confirmation");
+    expect(markup).not.toContain("Who should confirm?");
     expect(markup).not.toContain("Confirm a separate trip was avoided");
   });
 
@@ -129,7 +130,7 @@ describe("embedded work-order verification surface", () => {
 
     expect(model.currentOutcome?.canConfirmAvoidedSeparateTrip).toBe(true);
     expect(markup).toContain("Confirm a separate trip was avoided");
-    expect(markup).toContain("No dollar value is inferred");
+
     expect(markup).toContain('name="avoidedSeparateTripConfirmed"');
   });
 
@@ -155,9 +156,10 @@ describe("embedded work-order verification surface", () => {
 
     expect(model.canDecide).toBe(false);
     expect(model.history).toHaveLength(1);
-    expect(markup).toContain("Cycle 1 · Not fixed");
+    expect(markup).toContain("Needs follow-up");
     expect(markup).toContain("The sink cabinet is still wet after normal use.");
-    expect(markup).toContain("A new observed visit and outcome are required");
+    expect(model.canCorrect).toBe(true);
+    expect(markup).toContain("Correct this confirmation");
     expect(markup).not.toContain("Verify and mark resolved");
   });
 
@@ -185,8 +187,8 @@ describe("embedded work-order verification surface", () => {
     const markup = renderToStaticMarkup(createElement(WorkOrderVerificationPanel, { model }));
 
     expect(model.canDecide).toBe(false);
-    expect(markup).toContain("Cycle 1 · Not sure");
-    expect(markup).toContain("Facilities review is required before closing or arranging return work.");
+    expect(markup).toContain("Not sure");
+    expect(model.canCorrect).toBe(true);
     expect(markup).not.toContain("This outcome was rejected");
   });
 
@@ -207,7 +209,7 @@ describe("embedded work-order verification surface", () => {
     expect(model.available).toBe(true);
     expect(model.permitted).toBe(false);
     expect(markup).toContain("Work completed");
-    expect(markup).toContain("Decision unavailable");
+    expect(markup).toContain("your role cannot record confirmation");
     expect(markup).not.toContain('name="decision"');
   });
 
@@ -236,6 +238,25 @@ describe("embedded work-order verification surface", () => {
     expect(model.workOrderStatus).toBe("resolved");
     expect(model.resolvedLabel).toBeTruthy();
     expect(model.canDecide).toBe(false);
-    expect(model.decisionBlockReason).toContain("Facilities can close it");
+    expect(model.canCorrect).toBe(true);
   });
+});
+
+
+it.each(["facilities", "regional", "store_manager"] as const)("lets %s record a closed job directly without a request", (role) => {
+  const fixture = verificationFixture();
+  const work = fixture.workOrders.find(w => w.id === workOrderId)!;
+  work.status = "closed";
+  work.storeId = "store-northline-104";
+  fixture.workflowTasks = fixture.workflowTasks.filter(t => t.workOrderId !== workOrderId);
+  const viewer = session(role);
+  if (role === "regional") { viewer.membershipId = "membership-northline-regional-1"; viewer.regionIds = ["region-northline-north"]; }
+  const model = buildWorkOrderVerificationModel(fixture, viewer, workOrderId);
+  const markup = renderToStaticMarkup(createElement(WorkOrderVerificationPanel, {model}));
+  expect(model.canDecide).toBe(true);
+  expect(markup).toContain('name="decision"');
+  expect(markup).not.toContain("Request confirmation");
+  expect(markup).not.toContain("Who should confirm?");
+  expect(markup).not.toContain("Basis for this decision");
+  expect(markup).not.toContain("What are you confirming?");
 });

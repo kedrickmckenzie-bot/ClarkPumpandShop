@@ -4,6 +4,17 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Simplify work confirmation — September 29
+
+- [x] RC-09 User correction supersedes the request UI in RC-01/RC-06: every role uses the work order to record results. Remove the separate request action, recipient picker and request form; ad hoc requests belong in existing Tasks.
+- [x] RC-10 Eligible completed work, including closed work, accepts a direct confirmation without a prerequisite verification task. Existing verification tasks still complete atomically. Positive checks preserve closure; negative/inconclusive checks create follow-up. Corrections append decisions with a required reason and stale-write protection.
+- [x] RC-11 Replace the cramped two-column panel with a full-width notes field and three result buttons. Collapse corrections/history, remove duplicate problem text and jargon, and use “Completed as expected” for routine service as well as repairs. Preserve earlier outcomes in history. Missing negative-result notes use inline browser validation.
+- [x] RC-12 Validation complete: seed, final typecheck, lint, standard build and Render build passed. Final focused confirmation tests passed 39/39; workflow suite passed 63/63 with one worker.
+
+Validation detail: the full suite initially passed 1,137/1,139. One new regional UI test omitted its region scope; corrected and covered by the final focused run. The PostgreSQL seed test timed out while the full suite, workflow suite and build overlapped. The concurrent workflow run also hit two public-boundary timeouts. All 63 workflow tests, including PostgreSQL and public boundaries, passed on the separate one-worker retry. The full suite was not repeated after the bounded UI refinements; final focused tests and both builds cover those changes. Logs: `%TEMP%/simple-confirm-*.log`. No new migration. User authorized commit and push after validation; `dev4.log` is excluded and untouched.
+
+Browser: Store 104 grounds work tested locally as store manager. Saved a direct correction, preserved Closed status and previous history, checked the Visits page and 390px layout (375px content/scroll width), and verified missing-note guidance. Restored facilities role and desktop viewport; closed temporary tabs. Screenshot: `%TEMP%/simple-confirmation.png`. No hosted changes or demo reset in this pass.
+
 ## Configurable work confirmation — September 29
 
 - [x] RC-01 Activated by the user's current request: default confirmation ownership and email routing to the store team, with a store-scoped named reviewer on new work and later confirmation requests.

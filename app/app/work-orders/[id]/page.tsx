@@ -101,8 +101,8 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   if (estimateComparison.replacementApproved && issuance.permitted) model.page.primaryAction = stageCase.primaryNextAction;
   const viewerAction = verification.canDecide
     ? { label: "Confirm work", href: `/app/work-orders/${id}?view=confirmation#work-verification` }
-    : verification.canRequest
-      ? { label: verification.correcting ? "Review confirmation" : "Request confirmation", href: `/app/work-orders/${id}?view=confirmation#work-verification` }
+    : verification.canCorrect
+      ? { label: "View confirmation", href: `/app/work-orders/${id}?view=confirmation#work-verification` }
     : responseActions
       ? { label: responseActions.kind === "question" ? "Answer the vendor question" : responseActions.kind === "proposed_date" ? "Review the proposed visit time" : responseActions.kind === "declined" ? "Choose another provider" : "Review vendor response", href: `/app/work-orders/${id}?view=service#vendor-response` }
       : heldStatus && ["active", "claimed", "review_required"].includes(heldStatus)

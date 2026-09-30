@@ -5,7 +5,6 @@ import type {
   OpsFixture,
   SiteVisitWorkOrderOutcome,
   WorkOrder,
-  WorkflowTask,
 } from "@/lib/ops/types";
 import { persistedWorkOrderVersion } from "@/lib/ops/concurrency";
 import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
@@ -17,9 +16,8 @@ import { roleCan } from "@/components/ops/role-policy";
 export interface WorkOrderVerificationViewModel {
   outcomeCorrections?: Array<{id:string;original:string;corrected:string;reason:string;by:string;when:string}>;
   confirmationSetting?: string;
-  canRequest?: boolean;
+  canCorrect?: boolean;
   correcting?: boolean;
-  confirmationAssignees?: Array<{ value: string; label: string }>;
   available: boolean;
   permitted: boolean;
   permissionMessage: string;
@@ -174,39 +172,18 @@ export function buildWorkOrderVerificationModel(
     fixture.routeStops.some((stop) => stop.organizationId === session.organizationId && stop.siteVisitId === currentOutcome.visitId)
     || visitWork.some((record) => record.selectionSource === "assigned_work" || record.selectionSource === "service_run")
   );
-  const activeVerifyTask = fixture.workflowTasks.some((task: WorkflowTask) => (
-    task.organizationId === session.organizationId
-    && task.workOrderId === workOrder.id
-    && task.taskType === "verify_repair"
-    && (task.status === "open" || task.status === "in_progress")
-  ));
-  const canDecide = Boolean(
+  const canRecord = Boolean(
     permitted
     && ["completed_pending_review", "closed", "resolved", "in_progress"].includes(workOrder.status)
     && currentOutcome?.outcome
-    && reviewableOutcomes.has(currentOutcome.outcome)
-    && (!currentDecision || fixture.workflowTasks.some(task => task.organizationId === session.organizationId && task.workOrderId === workOrder.id && task.taskType === "verify_repair" && task.title === "Correct the confirmation result" && ["open", "in_progress"].includes(task.status)))
-    && activeVerifyTask,
+    && reviewableOutcomes.has(currentOutcome.outcome),
   );
-  const decisionBlockReason = canDecide
-    ? undefined
-    : !permitted
-      ? "You can view the repair history, but you do not have permission to confirm the repair."
-      : workOrder.status === "closed"
-        ? "This work order is closed. " + (currentDecision ? "A confirmation is recorded below." : "No confirmation was recorded.")
-      : (workOrder.status as string) === "resolved"
-        ? "The current outcome is verified and resolved. Facilities can close it after the remaining closure checks pass."
-        : currentDecision?.decision === "rejected"
-          ? "This outcome was rejected. A new observed visit and outcome are required before another verification."
-          : currentDecision?.decision === "inconclusive"
-            ? "This result could not be confirmed. Facilities review is required before closing or arranging return work."
-          : currentDecision?.decision === "verified"
-            ? "This repair result has already been confirmed."
-            : workOrder.status !== "completed_pending_review"
-              ? "Verification becomes available after checkout records a completed result for this work order."
-              : !activeVerifyTask
-                ? "The required repair-verification task is missing or already complete."
-                : "The vendor needs to follow up before this repair can be confirmed.";
+  const canDecide = canRecord && !currentDecision;
+  const decisionBlockReason = !permitted
+    ? "You can view the result, but your role cannot record confirmation."
+    : currentDecision
+      ? undefined
+      : "Record confirmation after a completed service result has been recorded.";
 
   return {
     ...base,
@@ -214,9 +191,8 @@ export function buildWorkOrderVerificationModel(
       try { const payload=JSON.parse(e.payloadJson) as {previous:{outcome:SiteVisitWorkOrderOutcome;outcomeNotes?:string};correctedOutcome:SiteVisitWorkOrderOutcome;reason:string}; return [{id:e.id,original:`${outcomeLabels[payload.previous.outcome]}${payload.previous.outcomeNotes ? ` — ${payload.previous.outcomeNotes}` : ""}`,corrected:outcomeLabels[payload.correctedOutcome],reason:payload.reason,by:e.actorName,when:dateTime(e.occurredAt,storeTimeZone)}]; } catch { return []; }
     }),
     confirmationSetting: workOrder.requireConfirmation === false ? "Confirmation is optional for this job." : "Confirmation is required for this job.",
-    canRequest: permitted && !activeVerifyTask && workOrder.status !== "cancelled" && Boolean(currentOutcome?.outcome && reviewableOutcomes.has(currentOutcome.outcome)),
+    canCorrect: canRecord && Boolean(currentDecision),
     correcting: Boolean(currentDecision),
-    confirmationAssignees: fixture.memberships.filter(m => m.organizationId === session.organizationId && m.status === "active" && ["facilities_admin", "regional_manager", "store_manager"].includes(m.role) && fixture.scopeGrants.some(g => g.organizationId === session.organizationId && g.membershipId === m.id && (g.scopeKind === "organization" || g.scopeKind === "store" && g.scopeId === workOrder.storeId || g.scopeKind === "region" && g.scopeId === store?.regionId))).map(m => ({value:m.id,label:`${fixture.users.find(u => u.id === m.userId)?.displayName ?? "Team member"} · ${m.role.replaceAll("_"," ")}`})),
     permitted,
     permissionMessage: permitted
       ? "Confirm only what you can observe about the reported problem. Provider evidence remains separate."
@@ -249,7 +225,7 @@ export function buildWorkOrderVerificationModel(
         id: verification.id,
         cycle: verification.cycle,
         decision: verification.decision,
-        decisionLabel: verification.decision === "verified" ? "Fixed" : verification.decision === "rejected" ? "Not fixed" : "Not sure",
+        decisionLabel: verification.decision === "verified" ? "Completed as expected" : verification.decision === "rejected" ? "Needs follow-up" : "Not sure",
         tone: verification.decision === "verified" ? "positive" : verification.decision === "rejected" ? "critical" : "warning",
         outcomeLabel: outcomeLabels[verification.outcome],
         decidedByLabel: verification.decidedByName,

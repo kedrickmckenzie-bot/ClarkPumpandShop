@@ -1,7 +1,6 @@
 import { OpsDomainError } from "@/lib/ops/errors";
 import {
   recordWorkOrderVerification,
-  requestWorkOrderConfirmation,
   correctWorkOrderOutcome,
   type WorkOrderVerificationDecision,
 } from "@/lib/ops/work-order-verification-commands";
@@ -36,10 +35,6 @@ export async function POST(
     const formData = await request.formData();
     if (formData.get("action") === "correct-outcome") {
       await correctWorkOrderOutcome({repository:context.repository},{organizationId,workOrderId,expectedVersion:Number(formData.get("expectedWorkOrderVersion")),expectedOutcomeId:formText(formData,"expectedSiteVisitWorkOrderId",{required:true,max:120}),outcome:formText(formData,"outcome",{required:true,max:40}) as "completed" | "no_issue_found" | "return_visit_required",reason:formText(formData,"reason",{required:true,max:2000}),actor:context.actor});
-      return relativeRedirect303(`/app/work-orders/${encodeURIComponent(workOrderId)}?view=confirmation#work-verification`);
-    }
-    if (formData.get("action") === "request") {
-      await requestWorkOrderConfirmation({ repository: context.repository }, { organizationId, workOrderId, expectedVersion: Number(formData.get("expectedWorkOrderVersion")), confirmationMembershipId: formText(formData,"confirmationMembershipId",{max:120}) || undefined, reason: formText(formData,"reason",{max:2000}) || undefined, actor: context.actor });
       return relativeRedirect303(`/app/work-orders/${encodeURIComponent(workOrderId)}?view=confirmation#work-verification`);
     }
     const decision = formText(formData, "decision", { required: true, max: 20 });
