@@ -15,6 +15,11 @@ import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "@/lib/
 import { roleCan } from "@/components/ops/role-policy";
 
 export interface WorkOrderVerificationViewModel {
+  outcomeCorrections?: Array<{id:string;original:string;corrected:string;reason:string;by:string;when:string}>;
+  confirmationSetting?: string;
+  canRequest?: boolean;
+  correcting?: boolean;
+  confirmationAssignees?: Array<{ value: string; label: string }>;
   available: boolean;
   permitted: boolean;
   permissionMessage: string;
@@ -177,16 +182,18 @@ export function buildWorkOrderVerificationModel(
   ));
   const canDecide = Boolean(
     permitted
-    && workOrder.status === "completed_pending_review"
+    && ["completed_pending_review", "closed", "resolved", "in_progress"].includes(workOrder.status)
     && currentOutcome?.outcome
     && reviewableOutcomes.has(currentOutcome.outcome)
-    && !currentDecision
+    && (!currentDecision || fixture.workflowTasks.some(task => task.organizationId === session.organizationId && task.workOrderId === workOrder.id && task.taskType === "verify_repair" && task.title === "Correct the confirmation result" && ["open", "in_progress"].includes(task.status)))
     && activeVerifyTask,
   );
   const decisionBlockReason = canDecide
     ? undefined
     : !permitted
       ? "You can view the repair history, but you do not have permission to confirm the repair."
+      : workOrder.status === "closed"
+        ? "This work order is closed. " + (currentDecision ? "A confirmation is recorded below." : "No confirmation was recorded.")
       : (workOrder.status as string) === "resolved"
         ? "The current outcome is verified and resolved. Facilities can close it after the remaining closure checks pass."
         : currentDecision?.decision === "rejected"
@@ -203,6 +210,13 @@ export function buildWorkOrderVerificationModel(
 
   return {
     ...base,
+    outcomeCorrections: fixture.auditEvents.filter(e => e.organizationId === session.organizationId && e.aggregateId === workOrder.id && e.eventType === "work_order.service_result_corrected").flatMap(e => {
+      try { const payload=JSON.parse(e.payloadJson) as {previous:{outcome:SiteVisitWorkOrderOutcome;outcomeNotes?:string};correctedOutcome:SiteVisitWorkOrderOutcome;reason:string}; return [{id:e.id,original:`${outcomeLabels[payload.previous.outcome]}${payload.previous.outcomeNotes ? ` — ${payload.previous.outcomeNotes}` : ""}`,corrected:outcomeLabels[payload.correctedOutcome],reason:payload.reason,by:e.actorName,when:dateTime(e.occurredAt,storeTimeZone)}]; } catch { return []; }
+    }),
+    confirmationSetting: workOrder.requireConfirmation === false ? "Confirmation is optional for this job." : "Confirmation is required for this job.",
+    canRequest: permitted && !activeVerifyTask && workOrder.status !== "cancelled" && Boolean(currentOutcome?.outcome && reviewableOutcomes.has(currentOutcome.outcome)),
+    correcting: Boolean(currentDecision),
+    confirmationAssignees: fixture.memberships.filter(m => m.organizationId === session.organizationId && m.status === "active" && ["facilities_admin", "regional_manager", "store_manager"].includes(m.role) && fixture.scopeGrants.some(g => g.organizationId === session.organizationId && g.membershipId === m.id && (g.scopeKind === "organization" || g.scopeKind === "store" && g.scopeId === workOrder.storeId || g.scopeKind === "region" && g.scopeId === store?.regionId))).map(m => ({value:m.id,label:`${fixture.users.find(u => u.id === m.userId)?.displayName ?? "Team member"} · ${m.role.replaceAll("_"," ")}`})),
     permitted,
     permissionMessage: permitted
       ? "Confirm only what you can observe about the reported problem. Provider evidence remains separate."
@@ -217,7 +231,9 @@ export function buildWorkOrderVerificationModel(
           recordedAt: currentOutcome.outcomeRecordedAt,
           recordedLabel: dateTime(currentOutcome.outcomeRecordedAt, storeTimeZone),
           visitId: currentOutcome.visitId,
-          technicianLabel: visit
+          technicianLabel: currentOutcome.outcomeRecordedByActorType === "user"
+            ? `Corrected by ${currentOutcome.outcomeRecordedByActorName ?? "management"}${visit ? ` · Visit: ${visit.providerName}` : ""}`
+            : visit
             ? `${visit.technicianName} · ${visit.providerName}`
             : "Linked technician visit",
           canConfirmAvoidedSeparateTrip: currentOutcomeCanConfirmAvoidedSeparateTrip,
@@ -251,7 +267,7 @@ export function buildWorkOrderVerificationModel(
             return false;
           }
         }),
-        current: verification.siteVisitWorkOrderId === currentOutcome?.id,
+        current: verification.id === currentDecision?.id,
       })),
   };
 }

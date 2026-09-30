@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { OpsCommandServices } from "@/lib/ops/commands";
+import { createWorkOrder, type OpsCommandServices } from "@/lib/ops/commands";
 import {
   addAssetComponent,
   createAsset,
@@ -236,4 +236,12 @@ describe("preventive-maintenance setup command", () => {
       actor,
     })).rejects.toMatchObject({ code: "VALIDATION" });
   });
+});
+
+it("inherits a recurring schedule's confirmation choice when it creates work", async () => {
+  const svc=commandServices();
+  const created=await createPmPlanWithFirstOccurrence(svc,{organizationId:NORTHLINE_ORGANIZATION_ID,name:"Routine grounds visit",storeId:"store-northline-104",categoryKey:"exterior",cadenceDays:7,completionWindowDays:1,firstDueAt:"2026-08-12T00:00:00.000Z",requireConfirmation:false,actor});
+  expect(await svc.repository.getPmPlan(NORTHLINE_ORGANIZATION_ID,created.plan.id)).toMatchObject({requireConfirmation:false});
+  const work=await createWorkOrder(svc,{accountableParty:"Facilities coordination",nextAction:"Assign service",organizationId:NORTHLINE_ORGANIZATION_ID,storeId:"store-northline-104",problem:"Routine grounds visit",pmOccurrenceId:created.firstOccurrence.id,actor});
+  expect(await svc.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID,work.id)).toMatchObject({requireConfirmation:false});
 });

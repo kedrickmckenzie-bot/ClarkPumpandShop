@@ -36,6 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         cadenceDays: wholeNumber(formText(formData, "cadenceDays", { required: true, max: 5 }), "Cadence"),
         completionWindowDays: wholeNumber(formText(formData, "completionWindowDays", { required: true, max: 4 }), "Completion window"),
         reason: formText(formData, "reason", { required: formData.get("mode") !== "defaults", max: 500 }),
+        requireConfirmation: formData.has("confirmationSettingPresent") ? formData.get("requireConfirmation") === "true" : undefined,
         actor: context.actor,
       },
     );

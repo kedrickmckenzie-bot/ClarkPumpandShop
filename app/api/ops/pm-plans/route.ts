@@ -47,6 +47,7 @@ export async function POST(request: Request) {
           "Completion window",
         ),
         firstDueAt,
+        requireConfirmation: formData.has("confirmationSettingPresent") ? formData.get("requireConfirmation") === "true" : undefined,
         actor: context.actor,
       },
     );

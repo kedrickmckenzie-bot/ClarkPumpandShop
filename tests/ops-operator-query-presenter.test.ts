@@ -39,7 +39,7 @@ describe("operator query presenter", () => {
       for (const row of model.table.rows) {
         expect(fixture.workOrders.find(work => work.id === row.id)?.status).toBe("completed_pending_review");
         if (role === "finance") expect(row.action).toBeUndefined();
-        else expect(row.action).toEqual({ label: "Confirm repair", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` });
+        else expect(row.action).toEqual({ label: "Confirm work", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` });
       }
       expect(model.filters?.flatMap(filter => filter.options).some(option => option.label === "Needs confirmation" && option.selected)).toBe(true);
     }

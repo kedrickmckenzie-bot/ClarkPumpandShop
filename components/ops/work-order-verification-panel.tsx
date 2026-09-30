@@ -20,12 +20,13 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
       <header className={styles.header}>
         <span><ClipboardCheck aria-hidden="true" size={20} /></span>
         <div>
-          <p>Store result check</p>
-          <h3 id="work-verification-heading">Is the reported problem fixed?</h3>
+          <p>Work confirmation</p>
+          <h3 id="work-verification-heading">Was the work completed as expected?</h3>
           <small>Confirm only what you can observe. This does not certify the technician&apos;s methods, labor, or invoice.</small>
         </div>
       </header>
 
+      {model.confirmationSetting ? <p className={styles.empty}>{model.confirmationSetting}</p> : null}
       {model.currentOutcome ? (
         <article className={styles.outcome}>
           <div>
@@ -33,7 +34,7 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
             <strong>{model.originalProblem}</strong>
           </div>
           <div>
-            <small>Latest provider result</small>
+            <small>Latest recorded result</small>
             <strong>{model.currentOutcome.outcomeLabel}</strong>
             <span>{model.currentOutcome.technicianLabel} · {model.currentOutcome.recordedLabel}</span>
           </div>
@@ -47,6 +48,7 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
         <div className={styles.decisions}>
           <form action={model.action} method="post" className={styles.acceptForm}>
             <DecisionFence model={model} />
+            {model.correcting ? <label>Reason for correcting the previous result<textarea name="correctionReason" required maxLength={2000} rows={2}/></label> : null}
             <label>
               What are you confirming?
               <select name="verificationScope" defaultValue="reported_problem">
@@ -64,7 +66,7 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
               </select>
             </label> : <input name="basis" type="hidden" value="observable_result" />}
             <label>
-              What did you observe? <span>Required for “not fixed” or “not sure”</span>
+              What did you observe? <span>Required for “needs follow-up” or “not sure”</span>
               <textarea name="reason" maxLength={2000} placeholder="For example: case temperature is holding at 36°F, or the alarm returned after 20 minutes." rows={3} />
             </label>
             {model.currentOutcome?.canConfirmAvoidedSeparateTrip ? <label>
@@ -72,8 +74,8 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
               <small>Check only if this approved item would have required its own vendor visit. No dollar value is inferred.</small>
             </label> : null}
             <div className={styles.decisions}>
-              <button type="submit" name="decision" value="verified"><CheckCircle2 aria-hidden="true" size={17} />Yes, it&apos;s fixed</button>
-              <button type="submit" name="decision" value="rejected"><RotateCcw aria-hidden="true" size={17} />No, it&apos;s not fixed</button>
+              <button type="submit" name="decision" value="verified"><CheckCircle2 aria-hidden="true" size={17} />Yes, completed as expected</button>
+              <button type="submit" name="decision" value="rejected"><RotateCcw aria-hidden="true" size={17} />No, needs follow-up</button>
               <button type="submit" name="decision" value="inconclusive"><HelpCircle aria-hidden="true" size={17} />I&apos;m not sure</button>
             </div>
             <small>Eligible routine work may close automatically. Invoice or cost review remains open and separate.</small>
@@ -82,10 +84,28 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
       ) : (
         <div className={styles.blocked}>
           <ShieldAlert aria-hidden="true" size={18} />
-          <div><strong>Decision unavailable</strong><p>{model.decisionBlockReason ?? model.permissionMessage}</p></div>
+          <div><strong>{model.canRequest ? "Confirmation" : "Decision unavailable"}</strong><p>{model.decisionBlockReason ?? model.permissionMessage}</p></div>
         </div>
       )}
 
+      {model.canRequest ? <details open={!model.correcting} className={styles.history}><summary>{model.correcting ? "Correct a confirmation" : "Request confirmation"}</summary><form action={model.action} method="post" className={styles.acceptForm}>
+        <input type="hidden" name="action" value="request"/><input type="hidden" name="expectedWorkOrderVersion" value={model.expectedWorkOrderVersion}/>
+        <label>Who should confirm?<select name="confirmationMembershipId"><option value="">Store team</option>{model.confirmationAssignees?.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select></label>
+        <label>{model.correcting ? "Why does this result need correcting?" : "What should they check?"}<textarea name="reason" required={model.correcting} maxLength={2000} rows={2}/></label>
+        <button type="submit">{model.correcting ? "Correct result" : "Request confirmation"}</button>
+      </form></details> : null}
+
+      {model.canUseTechnicalBasis && model.currentOutcome && model.workOrderStatus !== "cancelled" ? <details className={styles.outcome}>
+        <summary>Correct a reported service result</summary>
+        <form action={model.action} method="post" className={styles.acceptForm}>
+          <DecisionFence model={model}/><input type="hidden" name="action" value="correct-outcome"/>
+          <label>Correct result<select name="outcome" defaultValue={model.currentOutcome.outcome}><option value="completed">Work completed</option><option value="no_issue_found">No issue found</option><option value="return_visit_required">Return visit needed</option></select></label>
+          <label>Why is the recorded result incorrect?<textarea name="reason" required maxLength={2000} rows={2}/></label>
+          <small>The original result stays in history. A corrected completed result requires confirmation.</small>
+          <button type="submit">Save correction</button>
+        </form>
+      </details> : null}
+      {model.outcomeCorrections?.length ? <section className={styles.history}><h4>Service result corrections</h4><ol>{model.outcomeCorrections.map(change => <li key={change.id}><span/><div><strong>{change.corrected}</strong><p>Previously: {change.original}</p><p>{change.reason}</p><small>{change.by} · {change.when}</small></div></li>)}</ol></section> : null}
       <section className={styles.history} aria-labelledby="verification-history-heading">
         <header>
           <h4 id="verification-history-heading">Confirmation history</h4>

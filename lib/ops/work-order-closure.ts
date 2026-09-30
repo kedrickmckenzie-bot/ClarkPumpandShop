@@ -52,14 +52,15 @@ export function evaluateWorkOrderClosureEligibility(input: {
   const blockers: WorkOrderClosureBlocker[] = [];
   const latestOutcome = latestRecordedWorkOutcome(input.outcomes);
   const verification = input.verificationOverride ?? applicableOutcomeVerification(input.verifications, latestOutcome);
-  if (
+  const confirmationNotRequired = input.workOrder.requireConfirmation === false && latestOutcome && ["completed", "no_issue_found"].includes(latestOutcome.outcome!) && !verification;
+  if (!confirmationNotRequired && (
     !latestOutcome
     || !verification
     || verification.decision !== "verified"
     || verification.siteVisitWorkOrderId !== latestOutcome.id
     || verification.outcome !== latestOutcome.outcome
     || verification.outcomeRecordedAt !== latestOutcome.outcomeRecordedAt
-  ) blockers.push("latest_outcome_not_verified");
+  )) blockers.push("latest_outcome_not_verified");
 
   if (input.visits.some((visit) => visit?.status === "active")) blockers.push("active_visit");
   if ([...input.openFollowUpIds].some((id) => !input.ignoredFollowUpIds?.has(id))) blockers.push("open_follow_up");

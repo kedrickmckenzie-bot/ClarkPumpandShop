@@ -111,6 +111,7 @@ export interface OrganizationScope {
 }
 
 export interface WorkOrderListQuery extends PageRequest {
+  needsConfirmation?: boolean;
   dueBefore?: IsoDateTime;
   dueAfter?: IsoDateTime;
   stage?: string;

@@ -160,3 +160,14 @@ describe("client maintenance responsibility policy", () => {
     })).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("outside") });
   });
 });
+
+it("uses the company confirmation default for new work while honoring a per-job override", async () => {
+  const {repository,services}=harness();
+  await configureMaintenanceResponsibilities({repository,organizationId:NORTHLINE_ORGANIZATION_ID,role:"store_manager",enabledCapabilities:["confirm_observable_result"],requireConfirmationDefault:false,autoCloseRoutineAfterVerification:false,appliesToActiveWork:false,actor:adminActor,occurredAt:NOW});
+  expect(await repository.getActiveWorkflowPolicy(NORTHLINE_ORGANIZATION_ID)).toMatchObject({requireConfirmationDefault:false});
+  const automatic=await createWorkOrder(services,{accountableParty:"Facilities coordination",nextAction:"Assign service",organizationId:NORTHLINE_ORGANIZATION_ID,storeId:"store-northline-104",problem:"Routine service",actor:adminActor});
+  const explicit=await createWorkOrder(services,{accountableParty:"Facilities coordination",nextAction:"Assign service",organizationId:NORTHLINE_ORGANIZATION_ID,storeId:"store-northline-104",problem:"Major repair",requireConfirmation:true,confirmationMembershipId:adminActor.actorId,actor:adminActor});
+  expect(await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID,automatic.id)).toMatchObject({requireConfirmation:false});
+  expect(await repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID,explicit.id)).toMatchObject({requireConfirmation:true,confirmationMembershipId:adminActor.actorId});
+  await expect(createWorkOrder(services,{accountableParty:"Facilities coordination",nextAction:"Assign service",organizationId:NORTHLINE_ORGANIZATION_ID,storeId:"store-northline-111",problem:"Wrong reviewer",confirmationMembershipId:storeManagerActor.actorId,actor:adminActor})).rejects.toMatchObject({code:"VALIDATION"});
+});

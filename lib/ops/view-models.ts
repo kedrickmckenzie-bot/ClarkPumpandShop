@@ -176,6 +176,7 @@ export interface AssetSearchRow {
 }
 
 export interface WorkOrderListRow {
+  needsConfirmation?: boolean;
   id: OpsId;
   number: string;
   storeId: OpsId;

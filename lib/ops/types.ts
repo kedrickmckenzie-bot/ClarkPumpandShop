@@ -34,6 +34,7 @@ export interface RoleCapabilityOverride {
 
 /** Append-only, versioned policy for the operational close decision. */
 export interface OrganizationWorkflowPolicy {
+  requireConfirmationDefault?: boolean;
   id: OpsId;
   organizationId: OpsId;
   version: number;
@@ -619,6 +620,8 @@ export interface RequestImpactAssessment {
 }
 
 export interface WorkOrder {
+  requireConfirmation?: boolean;
+  confirmationMembershipId?: OpsId;
   id: OpsId;
   organizationId: OpsId;
   number: string;
@@ -1278,6 +1281,7 @@ export interface ComponentLifecycleEvent {
 }
 
 export interface MaintenanceProgram {
+  requireConfirmation?: boolean;
   id: OpsId;
   organizationId: OpsId;
   programKey: string;
@@ -1325,6 +1329,7 @@ export interface ChecklistTemplate {
 }
 
 export interface PmPlan {
+  requireConfirmation?: boolean;
   id: OpsId;
   organizationId: OpsId;
   name: string;

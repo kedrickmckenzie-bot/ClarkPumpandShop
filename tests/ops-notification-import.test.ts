@@ -85,7 +85,7 @@ describe("transactional email and onboarding previews", () => {
     expect(sent[0]!.text).toContain("service date has not been recorded yet");
   });
 
-  it("notifies only the affected store about confirmation and skips already closed work", async () => {
+  it("notifies only the affected store about confirmation and skips completed confirmation tasks", async () => {
     const fixture = buildNorthlinePresentationFixture();
     const work = fixture.workOrders.find(row => row.status === "completed_pending_review")!;
     const repository = createOpsFixtureRepository(fixture), sent: TransactionalEmail[] = [];
@@ -95,8 +95,8 @@ describe("transactional email and onboarding previews", () => {
     const store = fixture.stores.find(row => row.id === work.storeId)!;
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe(`store${store.storeNumber}.manager@clark-demo.example`);
-    expect(sent[0].text).toContain("visits#work-verification");
-    await repository.atomicWrite([{ sql: "UPDATE ops_work_orders SET status = ? WHERE organization_id = ? AND id = ?", params: ["closed", work.organizationId, work.id] }]);
+    expect(sent[0].text).toContain("confirmation#work-verification");
+    await repository.atomicWrite([{ sql: "UPDATE ops_work_orders SET status = ? WHERE organization_id = ? AND id = ?", params: ["closed", work.organizationId, work.id] }, { sql: "UPDATE ops_workflow_tasks SET status = ? WHERE organization_id = ? AND work_order_id = ? AND task_type = ?", params: ["completed",work.organizationId,work.id,"verify_repair"] }]);
     await transport.deliver(message);
     expect(sent).toHaveLength(1);
   });
@@ -128,4 +128,16 @@ describe("transactional email and onboarding previews", () => {
     const equipment = previewImport("equipment", `${importTemplate("equipment")}999,Unknown machine,2,Machine,Rear room\r\n`, fixture, NORTHLINE_ORGANIZATION_ID);
     expect(equipment.summary.error).toBe(1);
   });
+});
+
+it("routes a requested closed-job check to its selected reviewer instead of the store default", async () => {
+  const fixture=buildNorthlinePresentationFixture();
+  const work=fixture.workOrders.find(w=>w.status==="completed_pending_review")!;
+  work.status="closed";
+  work.confirmationMembershipId="membership-northline-facilities";
+  const sent:TransactionalEmail[]=[];
+  const transport=createNotificationEmailTransport({repository:createOpsFixtureRepository(fixture),baseUrl:"https://ops.example.com",sink:()=>{},provider:{name:"test",async send(email){sent.push(email);return {messageId:"named-confirmation"};}}});
+  await transport.deliver({organizationId:NORTHLINE_ORGANIZATION_ID,id:"named-confirmation",topic:"ops.work_order.confirmation_requested",aggregateType:"work_order",aggregateId:work.id,payloadJson:JSON.stringify({workOrderId:work.id}),attemptCount:0});
+  const member=fixture.memberships.find(m=>m.id===work.confirmationMembershipId)!;
+  expect(sent.map(e=>e.to)).toEqual([fixture.users.find(u=>u.id===member.userId)!.email]);
 });

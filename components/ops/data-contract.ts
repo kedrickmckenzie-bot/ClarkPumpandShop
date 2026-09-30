@@ -671,6 +671,7 @@ export interface CreateRequestPageViewModel {
 }
 
 export interface CreateWorkOrderPageViewModel {
+  requireConfirmation?: boolean;
   state: DataState;
   page: PageContext;
   submitAction: string;

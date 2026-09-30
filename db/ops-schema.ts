@@ -81,6 +81,7 @@ export const opsRoleCapabilityOverrides = sqliteTable("ops_role_capability_overr
 }, (table) => [uniqueIndex("uidx_ops_role_capability_org_role_cap").on(table.organizationId, table.role, table.capability), index("idx_ops_role_capability_org_role").on(table.organizationId, table.role)]);
 
 export const opsWorkflowPolicies = sqliteTable("ops_workflow_policies", {
+  requireConfirmationDefault: integer("require_confirmation_default").notNull().default(1),
   id: id(), organizationId: organizationId(), version: integer("version").notNull(), status: text("status").notNull(), allowManagerCompletion: bool("allow_manager_completion"), autoCloseRoutineAfterVerification: bool("auto_close_routine_after_verification"), appliesToActiveWork: bool("applies_to_active_work"), createdByMembershipId: text("created_by_membership_id").notNull(), createdByName: text("created_by_name").notNull(), createdAt: createdAt(),
 }, (table) => [uniqueIndex("uidx_ops_workflow_policy_org_version").on(table.organizationId, table.version), uniqueIndex("uidx_ops_workflow_policy_active").on(table.organizationId).where(sql`${table.status} = 'active'`)]);
 
@@ -207,6 +208,8 @@ export const opsRequestImpactAssessments = sqliteTable("ops_request_impact_asses
 ]);
 
 export const opsWorkOrders = sqliteTable("ops_work_orders", {
+  confirmationMembershipId: text("confirmation_membership_id"),
+  requireConfirmation: integer("require_confirmation").notNull().default(1),
   internalReviewThresholdMinor: integer("internal_review_threshold_minor"), internalReviewCurrency: text("internal_review_currency"),
   id: id(), organizationId: organizationId(), number: text("number").notNull(), storeId: text("store_id").notNull(), requestId: text("request_id"), problem: text("problem").notNull(), authorizedScope: text("authorized_scope"), categoryKey: text("category_key"), taxonomyNodeId: text("taxonomy_node_id"), assetId: text("asset_id"), componentId: text("component_id"),
   priority: text("priority").notNull(), status: text("status").notNull(), version: integer("version").notNull().default(0), internalAccountableParty: text("internal_accountable_party").notNull().default("Facilities coordinator"), internalAccountableType: text("internal_accountable_type"), internalAccountableId: text("internal_accountable_id"), accountableParty: text("accountable_party").notNull(), nextAction: text("next_action").notNull(), dueAt: text("due_at"), escalationTo: text("escalation_to"),
@@ -425,7 +428,6 @@ export const opsWorkOrderVerifications = sqliteTable("ops_work_order_verificatio
 }, (table) => [
   uniqueIndex("uidx_ops_work_verifications_org_id").on(table.organizationId, table.id),
   uniqueIndex("uidx_ops_work_verifications_org_cycle").on(table.organizationId, table.workOrderId, table.cycle),
-  uniqueIndex("uidx_ops_work_verifications_org_outcome").on(table.organizationId, table.siteVisitWorkOrderId),
   index("idx_ops_work_verifications_org_work_time").on(table.organizationId, table.workOrderId, table.decidedAt),
   foreignKey({ name: "fk_ops_work_verifications_work", columns: [table.organizationId, table.workOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
   foreignKey({ name: "fk_ops_work_verifications_outcome", columns: [table.organizationId, table.siteVisitWorkOrderId, table.workOrderId], foreignColumns: [opsSiteVisitWorkOrders.organizationId, opsSiteVisitWorkOrders.id, opsSiteVisitWorkOrders.workOrderId] }),
@@ -579,6 +581,7 @@ export const opsComponentLifecycleEvents = sqliteTable("ops_component_lifecycle_
 }, (table) => [uniqueIndex("uidx_ops_component_lifecycle_org_removed").on(table.organizationId, table.removedComponentId), uniqueIndex("uidx_ops_component_lifecycle_org_repair").on(table.organizationId, table.repairItemId), index("idx_ops_component_lifecycle_org_model_removed").on(table.organizationId, table.partManufacturer, table.partModel, table.removedAt), index("idx_ops_component_lifecycle_org_vendor_removed").on(table.organizationId, table.vendorId, table.removedAt)]);
 
 export const opsMaintenancePrograms = sqliteTable("ops_maintenance_programs", {
+  requireConfirmation: integer("require_confirmation").notNull().default(1),
   id: id(), organizationId: organizationId(), programKey: text("program_key").notNull(), version: integer("version").notNull(), name: text("name").notNull(), tradeKey: text("trade_key").notNull(), workType: text("work_type").notNull(), applicableAssetTypesJson: text("applicable_asset_types_json").notNull().default("[]"), frequencyDays: integer("frequency_days").notNull(), recurrenceKind: text("recurrence_kind").notNull(), dueWindowDays: integer("due_window_days").notNull(), scheduleAnchorAt: text("schedule_anchor_at"), seasonalStartMonth: integer("seasonal_start_month"), seasonalEndMonth: integer("seasonal_end_month"), checklistTemplateId: text("checklist_template_id").notNull(), requiredEvidenceKindsJson: text("required_evidence_kinds_json").notNull().default("[]"), expectedDurationMinutes: integer("expected_duration_minutes").notNull(), completionCriteria: text("completion_criteria").notNull(), correctiveWorkAuthorityMinor: integer("corrective_work_authority_minor").notNull(), currency: text("currency").notNull(), deficiencyHandling: text("deficiency_handling").notNull(), status: text("status").notNull(), supersedesProgramId: text("supersedes_program_id"), createdAt: createdAt(),
 }, (table) => [uniqueIndex("uidx_ops_maintenance_program_org_key_version").on(table.organizationId, table.programKey, table.version), index("idx_ops_maintenance_program_org_status_trade").on(table.organizationId, table.status, table.tradeKey)]);
 
@@ -587,6 +590,7 @@ export const opsChecklistTemplates = sqliteTable("ops_checklist_templates", {
 }, (table) => [uniqueIndex("uidx_ops_checklist_templates_org_name_version").on(table.organizationId, table.name, table.version)]);
 
 export const opsPmPlans = sqliteTable("ops_pm_plans", {
+  requireConfirmation: integer("require_confirmation").notNull().default(1),
   id: id(), organizationId: organizationId(), name: text("name").notNull(), programId: text("program_id"), programVersion: integer("program_version"), storeId: text("store_id"), assetId: text("asset_id"), assetSelectionRule: text("asset_selection_rule"), categoryKey: text("category_key"), cadenceDays: integer("cadence_days").notNull(), completionWindowDays: integer("completion_window_days").notNull(), preferredVendorId: text("preferred_vendor_id"), backupVendorId: text("backup_vendor_id"), contractVersionId: text("contract_version_id"), effectiveStartsAt: text("effective_starts_at"), effectiveEndsAt: text("effective_ends_at"), accessRequirements: text("access_requirements"), programAuthorizationMinor: integer("program_authorization_minor"), budgetMinor: integer("budget_minor"), currency: text("currency"), serviceLevelPolicyId: text("service_level_policy_id"), schedulingMode: text("scheduling_mode"), escalationRules: text("escalation_rules"), cadenceOverrideReason: text("cadence_override_reason"), cadenceOverriddenAt: text("cadence_overridden_at"), cadenceOverriddenByMembershipId: text("cadence_overridden_by_membership_id"), active: bool("active"), createdAt: createdAt(),
 }, (table) => [index("idx_ops_pm_plans_org_active_store").on(table.organizationId, table.active, table.storeId), index("idx_ops_pm_plans_org_asset").on(table.organizationId, table.assetId), uniqueIndex("uidx_ops_pm_plans_org_program_asset").on(table.organizationId, table.programId, table.assetId)]);
 

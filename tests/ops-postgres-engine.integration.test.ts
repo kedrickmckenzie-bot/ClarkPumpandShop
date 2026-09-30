@@ -46,7 +46,7 @@ import {
   reviewRequestImpactAssessment,
   type RequestImpactAssessmentDraft,
 } from "@/lib/ops/request-impact-assessment";
-import { recordWorkOrderVerification } from "@/lib/ops/work-order-verification-commands";
+import { recordWorkOrderVerification, requestWorkOrderConfirmation } from "@/lib/ops/work-order-verification-commands";
 import type { ServiceRequest, WorkOrder } from "@/lib/ops/types";
 
 class PGliteClient implements PostgresClientLike {
@@ -636,6 +636,16 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
       { cycle: 1, decision: "rejected", siteVisitWorkOrderId: outcomeTwo.id },
       { cycle: 2, decision: "verified", siteVisitWorkOrderId: returnCheckout.siteVisitWorkOrders[0]!.id },
     ]);
+    advance(5);
+    await requestWorkOrderConfirmation(services,{organizationId,workOrderId:workTwo.id,expectedVersion:currentTwo.version??0,confirmationMembershipId:facilitiesActor.actorId,reason:"Correct the recorded decision",actor:facilitiesActor});
+    const pendingCheck=(await repository.getWorkOrder(organizationId,workTwo.id))!;
+    expect(pendingCheck).toMatchObject({status:"closed",confirmationMembershipId:facilitiesActor.actorId,requireConfirmation:true});
+    const queue=await repository.listWorkOrders({organizationId},{needsConfirmation:true,limit:100});
+    expect(queue.items.some(row=>row.id===workTwo.id&&row.needsConfirmation)).toBe(true);
+    advance(5);
+    await recordWorkOrderVerification(services,{organizationId,workOrderId:workTwo.id,expectedWorkOrderVersion:pendingCheck.version??0,expectedSiteVisitWorkOrderId:returnCheckout.siteVisitWorkOrders[0]!.id,expectedOutcomeRecordedAt:returnCheckout.siteVisitWorkOrders[0]!.outcomeRecordedAt!,decision:"verified",correctionReason:"Confirmed the corrected report",actor:facilitiesActor});
+    expect(await repository.listWorkOrderVerifications(organizationId,workTwo.id)).toHaveLength(3);
+
   }, 120_000);
 
   it("runs the SLA escalation worker through the SQL adapter without bind mismatches", async () => {

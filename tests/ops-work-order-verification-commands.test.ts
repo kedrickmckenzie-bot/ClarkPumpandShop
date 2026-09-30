@@ -15,6 +15,8 @@ import {
   CLOSE_VERIFIED_WORK_TASK_TITLE,
   RETURN_REJECTED_WORK_TASK_TITLE,
   recordWorkOrderVerification,
+  requestWorkOrderConfirmation,
+  correctWorkOrderOutcome,
   type WorkOrderVerificationRecord,
 } from "@/lib/ops/work-order-verification-commands";
 import { completeWorkflowTask } from "@/lib/ops/workflow-task-commands";
@@ -896,4 +898,60 @@ it("attaches identified component coverage at checkout and waits only for explic
   await recordWorkOrderVerification(test.services,{...decisionInput("verified"),expectedWorkOrderVersion:pending.version??0,expectedSiteVisitWorkOrderId:outcome.id,expectedOutcomeRecordedAt:outcome.outcomeRecordedAt!});
   expect(test.repository.snapshot().manufacturerWarranties.find(w=>w.id===prefix+"part")?.startDate).toBe("2026-08-22");
   expect(test.repository.snapshot().manufacturerWarranties.filter(w=>w.id===prefix+"labor")).toHaveLength(1);
+});
+
+
+describe("optional confirmation and checks after closure", () => {
+  it("closes successful optional work without creating a confirmation task", async () => {
+    const fixture = serviceReadyFixture();
+    fixture.workOrders.find(w => w.id === workOrderId)!.requireConfirmation = false;
+    fixture.workflowTasks.push({...fixture.workflowTasks.find(t=>t.workOrderId===workOrderId)!,id:"optional-financial-review",taskType:"resolve_invoice_exception",title:"Review invoice"});
+    const test = harness(fixture);
+    const actor = { organizationId: NORTHLINE_ORGANIZATION_ID, actorType: "technician" as const, actorName: "Imani Lewis" };
+    const visit = await checkInVisit(test.services, { organizationId: NORTHLINE_ORGANIZATION_ID, storeId: "store-northline-111", workOrderIds: [workOrderId], technicianName: actor.actorName, purpose: "Routine service", channel: "store_device", location: {result:"trusted_store_device",capturedAt:NOW}, actor });
+    test.setNow("2026-08-20T18:00:00.000Z");
+    await checkOutVisit(test.services, { organizationId: NORTHLINE_ORGANIZATION_ID, visitId: visit.id, channel: "store_device", perWorkOrderOutcomes:[{workOrderId,outcome:"completed",outcomeNotes:"Service completed"}],location:{result:"trusted_store_device",capturedAt:"2026-08-20T18:00:00.000Z"},actor });
+    expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID, workOrderId)).toMatchObject({status:"closed"});
+    expect((await test.repository.listWorkflowTasksForWorkOrder(NORTHLINE_ORGANIZATION_ID,workOrderId)).some(t => t.taskType === "verify_repair" && t.status === "open")).toBe(false);
+    expect(test.repository.snapshot().workflowTasks.find(t=>t.id==="optional-financial-review")?.status).toBe("open");
+  });
+  it("requests a named check on closed work, keeps it discoverable, and reopens only on a negative result", async () => {
+    const fixture = verificationFixture();
+    fixture.workOrders.find(w => w.id === workOrderId)!.status = "closed";
+    fixture.workflowTasks = fixture.workflowTasks.filter(t => t.workOrderId !== workOrderId);
+    fixture.followUps = fixture.followUps.filter(t => t.workOrderId !== workOrderId);
+    const test = harness(fixture);
+    const task = await requestWorkOrderConfirmation(test.services, {organizationId:NORTHLINE_ORGANIZATION_ID,workOrderId,expectedVersion:7,confirmationMembershipId:facilitiesActor.actorId,actor:facilitiesActor});
+    expect(task).toMatchObject({assigneeType:"user",assigneeId:facilitiesActor.actorId});
+    expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID,workOrderId)).toMatchObject({status:"closed",version:8});
+    const listed = await test.repository.listWorkOrders({organizationId:NORTHLINE_ORGANIZATION_ID},{needsConfirmation:true,limit:100});
+    expect(listed.items.find(w=>w.id===workOrderId)).toMatchObject({needsConfirmation:true});
+    await recordWorkOrderVerification(test.services, {...decisionInput("rejected","Still leaking"),expectedWorkOrderVersion:8});
+    expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID,workOrderId)).toMatchObject({status:"in_progress"});
+  });
+  it("corrects a mistaken confirmation with another decision while preserving the first", async () => {
+    const test=harness();
+    const original=await recordWorkOrderVerification(test.services,decisionInput("rejected","Wrong button"));
+    test.setNow("2026-08-20T17:00:00.000Z");
+    await requestWorkOrderConfirmation(test.services,{organizationId:NORTHLINE_ORGANIZATION_ID,workOrderId,expectedVersion:8,reason:"Correct mistaken result",actor:facilitiesActor});
+    const corrected=await recordWorkOrderVerification(test.services,{...decisionInput("verified"),expectedWorkOrderVersion:9,correctionReason:"The first result was entered in error"});
+    const decisions=await test.repository.listWorkOrderVerifications(NORTHLINE_ORGANIZATION_ID,workOrderId);
+    expect(decisions).toContainEqual(expect.objectContaining({id:original.id,decision:original.decision,reason:original.reason,decidedAt:original.decidedAt}));
+    expect(corrected.cycle).toBe(original.cycle+1);
+    expect(test.repository.snapshot().workflowTasks.filter(t=>t.workOrderId===workOrderId && t.taskType === "schedule_return_visit" && t.status === "open")).toHaveLength(0);
+  });
+});
+
+it("amends an incorrect checkout with an attributed original record and a fresh confirmation", async () => {
+  const fixture=verificationFixture();
+  const outcome=fixture.siteVisitWorkOrders.find(o=>o.id===outcomeId)!;
+  outcome.outcome="return_visit_required";
+  const test=harness(fixture);
+  await correctWorkOrderOutcome(test.services,{organizationId:NORTHLINE_ORGANIZATION_ID,workOrderId,expectedVersion:7,expectedOutcomeId:outcomeId,outcome:"completed",reason:"Technician selected the wrong checkout result; work was completed",actor:facilitiesActor});
+  const current=(await test.repository.listSiteVisitWorkOrdersForWorkOrder(NORTHLINE_ORGANIZATION_ID,workOrderId)).find(o=>o.id===outcomeId)!;
+  expect(current).toMatchObject({outcome:"completed",outcomeRecordedByActorName:facilitiesActor.actorName,outcomeRecordedAt:NOW});
+  const amendment=test.repository.snapshot().auditEvents.find(e=>e.eventType==="work_order.service_result_corrected")!;
+  expect(JSON.parse(amendment.payloadJson).previous).toMatchObject({outcome:"return_visit_required",outcomeRecordedAt});
+  expect(await test.repository.getWorkOrder(NORTHLINE_ORGANIZATION_ID,workOrderId)).toMatchObject({status:"completed_pending_review",version:8});
+  await expect(correctWorkOrderOutcome(test.services,{organizationId:NORTHLINE_ORGANIZATION_ID,workOrderId,expectedVersion:7,expectedOutcomeId:outcomeId,outcome:"completed",reason:"Stale correction",actor:facilitiesActor})).rejects.toMatchObject({code:"CONFLICT"});
 });

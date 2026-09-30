@@ -96,13 +96,13 @@ describe("embedded work-order verification surface", () => {
       expectedSiteVisitWorkOrderId: outcomeId,
       expectedOutcomeRecordedAt: outcomeTime,
     });
-    expect(markup).toContain("Is the reported problem fixed?");
+    expect(markup).toContain("Was the work completed as expected?");
     expect(markup).toContain("Work completed");
     expect(markup).toContain('value="verified" name="decision"');
     expect(markup).toContain('value="rejected" name="decision"');
     expect(markup).toContain('value="inconclusive" name="decision"');
-    expect(markup).toContain("Yes, it&#x27;s fixed");
-    expect(markup).toContain("No, it&#x27;s not fixed");
+    expect(markup).toContain("Yes, completed as expected");
+    expect(markup).toContain("No, needs follow-up");
     expect(markup).toContain("I&#x27;m not sure");
     expect(markup).toContain('name="verificationScope"');
     expect(markup).toContain('name="basis"');

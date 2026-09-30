@@ -91,7 +91,7 @@ describe("work-order verification route", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      `/app/work-orders/${workOrder.id}?view=visits&updated=verification-verified#work-verification`,
+      `/app/work-orders/${workOrder.id}?view=confirmation&updated=verification-verified#work-verification`,
     );
     expect(mocks.getOpsRequestContext).toHaveBeenCalledWith(
       ["facilities", "regional", "store_manager"],

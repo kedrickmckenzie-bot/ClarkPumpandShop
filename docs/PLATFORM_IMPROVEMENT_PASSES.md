@@ -4,6 +4,18 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Configurable work confirmation — September 29
+
+- [x] RC-01 Activated by the user's current request: default confirmation ownership and email routing to the store team, with a store-scoped named reviewer on new work and later confirmation requests.
+- [x] RC-05 Company default and per-work-order Require confirmation setting. PM schedules carry the choice into generated work; company changes do not rewrite existing work. Customized store plans retain their setting when the master schedule changes.
+- [x] RC-06 Successful optional work closes only without remaining operational blockers; financial review stays separate. Closed work can receive a confirmation request without reopening, appears in Needs confirmation, and reopens for a negative finding.
+- [x] RC-07 Audited corrections preserve earlier confirmation decisions and the original checkout result/actor/time. Corrected completed checkout results require a fresh confirmation; stale writes, scope and role restrictions are enforced.
+- [x] RC-08 Final release validation complete; authorized commit/push prepared.
+
+Checkpoint: seed passed. Full suite passed 1,130/1,133; the new migration changed the expected migration count, and two newly added test inputs omitted existing required accountability fields. All three were corrected: migration-chain tests passed 2/2, focused tests passed 52/52, final domain tests 35/35, final presenter/setup tests 24/24. The separate workflow suite passed 63/63, including a PostgreSQL closed-job request, queue lookup, and appended correction against the same outcome. Final typecheck/lint and both standard and Render builds passed. The final panel refinement also passed its seven UI tests and both builds. Full suite was not repeated after targeted fixes and the final bounded refinements.
+
+Browser: locally requested confirmation from Jordan Lee on the closed Store 104 grounds job, then recorded a positive PM result. It remained Closed and retained the new decision in history. New-work reviewer search scoped to Store 104 returned Jordan; unchecking Require confirmation removed reviewer controls. PM schedule toggle and 390px layout were verified (375px content width, no horizontal overflow), including corrected 18px checkbox sizing. Other established flows remain covered by the workflow suite; this pass did not repeat every unrelated browser journey. Screenshot: `%TEMP%/confirmation-closed-history.png`. Logs: `%TEMP%/confirmation-*.log`. PostgreSQL migration 0064 and D1 migration 0065 are required; no demo reset. Hosted deployment unverified. `dev4.log` excluded.
+
 ## Repair confirmation access — September 29
 
 - [x] RC-02 Visible Needs confirmation work filter, with direct Confirm repair actions in rows/cards and the work-order header.
@@ -22,9 +34,9 @@ Checkpoint: 25 final focused tests passed. Browser verified Overview’s seven-v
 
 ## Reminder for the next major improvement pass
 
-- [ ] RC-01 Review repair-confirmation routing with the user at the start of the next major pass. Default the confirmation task and notification to the store team, with a simple work-order option to choose another authorized person who will receive the notification and confirm the result. For major work, the facilities manager may choose to confirm personally. Keep task ownership and notification recipients aligned.
+- [x] RC-01 Review repair-confirmation routing with the user at the start of the next major pass. Default the confirmation task and notification to the store team, with a simple work-order option to choose another authorized person who will receive the notification and confirm the result. For major work, the facilities manager may choose to confirm personally. Keep task ownership and notification recipients aligned.
 
-Checkpoint (September 29): user explicitly deferred implementation until the next major pass. Reminder recorded only; no workflow changes made.
+Checkpoint (September 29): initially deferred; subsequently authorized and implemented in the configurable work-confirmation pass above.
 
 ## Unresolved operating problems — September 29
 

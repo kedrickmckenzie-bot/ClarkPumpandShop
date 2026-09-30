@@ -20,7 +20,7 @@ export function CreatePmProgramSetupForm({ model }: { model: CreatePmProgramSetu
     <form className={styles.recordForm} action={model.submitAction} method="post">
       {model.initial ? <input type="hidden" name="programId" value={model.initial.programId} /> : null}
       <section className={styles.formSection}>
-        <h2>1. Schedule</h2>{model.initial ? <><input type="hidden" name="categoryKey" value={category} /><p>Changes apply to future cycles. Store exceptions are kept.</p></> : null}
+        <h2>1. Schedule</h2><div className={styles.confirmationSetting}><input type="hidden" name="confirmationSettingPresent" value="true" /><label><input type="checkbox" name="requireConfirmation" value="true" defaultChecked={model.requireConfirmation ?? true} /> Require confirmation</label><small>Ask the store to confirm each completed visit.</small></div>{model.initial ? <><input type="hidden" name="categoryKey" value={category} /><p>Changes apply to future cycles. Store exceptions are kept.</p></> : null}
         <label className={styles.field}><span>Schedule name</span><input name="name" required maxLength={180} placeholder="Quarterly HVAC service" defaultValue={model.initial?.name} /></label>
         <div className={styles.fieldGrid}>
           <label className={styles.field}><span>Service area</span><select name="categoryKey" disabled={Boolean(model.initial)} value={category} onChange={e => setCategory(e.target.value)} required>{model.categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select></label>

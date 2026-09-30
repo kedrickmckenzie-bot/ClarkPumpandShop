@@ -530,7 +530,8 @@ export async function loadCreateRequestModel(query: OperatorSearchParameters = {
 export async function loadCreateWorkOrderModel(searchParams: OperatorSearchParameters = {}) {
   const context = await sessionAndFixture();
   requireCapability(context.session, "create_work_order");
-  return buildCreateWorkOrderModel(context.fixture, context.session, searchParams);
+  const policy = await (await getServerOpsRepository()).getActiveWorkflowPolicy(context.session.organizationId);
+  return buildCreateWorkOrderModel({ ...context.fixture, workflowPolicies: policy ? [policy] : [] }, context.session, searchParams);
 }
 
 export async function loadCreateStoreModel() {

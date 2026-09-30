@@ -32,6 +32,7 @@ export interface AddComponentSetupModel extends SetupPageContext {
 }
 
 export interface CreatePmSetupModel extends SetupPageContext {
+  requireConfirmation?: boolean;
   stores: SetupOption[];
   assets: SetupOption[];
   categories: SetupOption[];
@@ -41,6 +42,7 @@ export interface CreatePmSetupModel extends SetupPageContext {
 }
 
 export interface CreatePmProgramSetupModel extends SetupPageContext {
+  requireConfirmation?: boolean;
   defaultStoreIds?: string[];
   initial?: { programId: string; name: string; categoryKey: string; storeIds: string[]; cadenceDays: number; completionWindowDays: number; firstDueAt: string; checklist: string };
   categories: SetupOption[];
@@ -49,6 +51,7 @@ export interface CreatePmProgramSetupModel extends SetupPageContext {
 }
 
 export interface PmPlanScheduleSetupModel extends SetupPageContext {
+  requireConfirmation?: boolean;
   editScheduleHref?: string;
   coverage?: { categoryKey: string; assets: Array<{ id: string; name: string; categoryKey: string; included: boolean }>; active: boolean };
   instructions?: string;

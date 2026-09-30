@@ -165,6 +165,7 @@ function pmPlanStatements(plan: PmPlan, occurrence: PmOccurrence): OpsStatement[
   return [
     insert("ops_pm_plans", {
       id: plan.id,
+      require_confirmation: plan.requireConfirmation === false ? 0 : 1,
       organization_id: plan.organizationId,
       name: plan.name,
       program_id: plan.programId,
@@ -207,6 +208,7 @@ function programPlanForAsset(input: {
 }) {
   const timing = occurrenceTiming(input.dueAt, input.program.dueWindowDays, input.now);
   const plan: PmPlan = {
+    requireConfirmation: input.program.requireConfirmation,
     id: input.ids.next("pm-plan"),
     organizationId: input.program.organizationId,
     name: `${input.program.name} · ${input.asset.name}`,
@@ -675,6 +677,7 @@ export async function addAssetComponent(
 }
 
 export interface CreateMaintenanceProgramInput {
+  requireConfirmation?: boolean;
   organizationId: OpsId;
   name: string;
   applicableEquipmentTemplateIds: OpsId[];
@@ -768,6 +771,7 @@ export async function createMaintenanceProgramAndEnrollEquipment(
     createdAt: now,
   };
   const program: MaintenanceProgram = {
+    requireConfirmation: input.requireConfirmation ?? (await repository.getActiveWorkflowPolicy(input.organizationId))?.requireConfirmationDefault ?? true,
     id: ids.next("maintenance-program"),
     organizationId: input.organizationId,
     programKey,
@@ -796,13 +800,13 @@ export async function createMaintenanceProgramAndEnrollEquipment(
     selectedTemplates.map((template) => template.id),
   );
   const enrolled = input.categoryKey && selectedStores ? selectedStores.map(storeId => {
-    const plan: PmPlan = { id: ids.next("pm-plan"), organizationId: input.organizationId, name, programId: program.id, programVersion: program.version, storeId, categoryKey: input.categoryKey, assetSelectionRule: JSON.stringify({ kind: "store_category", categoryKey: input.categoryKey, includedAssetIds: [], excludedAssetIds: [] }), cadenceDays, completionWindowDays, active: true, createdAt: now };
+    const plan: PmPlan = { requireConfirmation: program.requireConfirmation, id: ids.next("pm-plan"), organizationId: input.organizationId, name, programId: program.id, programVersion: program.version, storeId, categoryKey: input.categoryKey, assetSelectionRule: JSON.stringify({ kind: "store_category", categoryKey: input.categoryKey, includedAssetIds: [], excludedAssetIds: [] }), cadenceDays, completionWindowDays, active: true, createdAt: now };
     const occurrence: PmOccurrence = { id: ids.next("pm-occurrence"), organizationId: input.organizationId, planId: plan.id, storeId, programId: program.id, programVersion: program.version, planVersion: 1, dueAt: firstDueAt, ...occurrenceTiming(firstDueAt, completionWindowDays, now), recurrenceKey: firstDueAt.slice(0,10), createdAt: now };
     return { plan, occurrence };
   }) : assets.map((asset) => programPlanForAsset({ program, asset, dueAt: firstDueAt, now, ids }));
   const retained = enrolled.flatMap(({ plan }) => {
     const prior = previousPlans.find(p => p.storeId === plan.storeId);
-    return prior ? [{ ...prior, programId: program.id, programVersion: program.version, name, active: true, cadenceDays: (pmCoverageRule(prior)?.cadenceOverride ?? Boolean(prior.cadenceOverrideReason)) ? prior.cadenceDays : cadenceDays, completionWindowDays: (pmCoverageRule(prior)?.cadenceOverride ?? Boolean(prior.cadenceOverrideReason)) ? prior.completionWindowDays : completionWindowDays }] : [];
+    return prior ? [{ ...prior, requireConfirmation: prior.cadenceOverrideReason ? prior.requireConfirmation : program.requireConfirmation, programId: program.id, programVersion: program.version, name, active: true, cadenceDays: (pmCoverageRule(prior)?.cadenceOverride ?? Boolean(prior.cadenceOverrideReason)) ? prior.cadenceDays : cadenceDays, completionWindowDays: (pmCoverageRule(prior)?.cadenceOverride ?? Boolean(prior.cadenceOverrideReason)) ? prior.completionWindowDays : completionWindowDays }] : [];
   });
   const newEnrollments = enrolled.filter(({ plan }) => !retained.some(p => p.storeId === plan.storeId));
   const statements: OpsStatement[] = [
@@ -818,6 +822,7 @@ export async function createMaintenanceProgramAndEnrollEquipment(
     }),
     insert("ops_maintenance_programs", {
       id: program.id,
+      require_confirmation: program.requireConfirmation === false ? 0 : 1,
       organization_id: program.organizationId,
       program_key: program.programKey,
       supersedes_program_id: program.supersedesProgramId,
@@ -841,7 +846,7 @@ export async function createMaintenanceProgramAndEnrollEquipment(
       created_at: program.createdAt,
     }),
     ...newEnrollments.flatMap(({ plan, occurrence }) => pmPlanStatements(plan, occurrence)),
-    ...retained.map(plan => update("ops_pm_plans", { name, program_id: program.id, program_version: program.version, active: 1, cadence_days: plan.cadenceDays, completion_window_days: plan.completionWindowDays }, { organization_id: input.organizationId, id: plan.id })),
+    ...retained.map(plan => update("ops_pm_plans", { require_confirmation: plan.requireConfirmation === false ? 0 : 1, name, program_id: program.id, program_version: program.version, active: 1, cadence_days: plan.cadenceDays, completion_window_days: plan.completionWindowDays }, { organization_id: input.organizationId, id: plan.id })),
     ...previousPlans.filter(p => !selectedStores?.includes(p.storeId ?? "")).map(plan => update("ops_pm_plans", { active: 0 }, { organization_id: input.organizationId, id: plan.id })),
     ...auditAndOutbox({
       organizationId: input.organizationId,
@@ -851,6 +856,7 @@ export async function createMaintenanceProgramAndEnrollEquipment(
       actor: input.actor,
       occurredAt: now,
       payload: {
+        requireConfirmation: program.requireConfirmation,
         equipmentTemplateIds: program.applicableAssetTypes,
         storeIds: selectedStores,
         categoryKey: input.categoryKey,
@@ -873,6 +879,7 @@ export async function createMaintenanceProgramAndEnrollEquipment(
 }
 
 export interface OverridePmPlanCadenceInput {
+  requireConfirmation?: boolean;
   coverage?: { includedAssetIds: string[]; excludedAssetIds: string[] };
   useDefaults?: boolean;
   active?: boolean;
@@ -919,6 +926,7 @@ export async function overridePmPlanCadence(
   const now = clock.now();
   const updated: PmPlan = {
     ...plan,
+    requireConfirmation: input.useDefaults ? program?.requireConfirmation ?? true : input.requireConfirmation ?? plan.requireConfirmation ?? true,
     assetSelectionRule, preferredVendorId, accessRequirements, active,
     cadenceDays,
     completionWindowDays,
@@ -928,6 +936,7 @@ export async function overridePmPlanCadence(
   };
   await repository.atomicWrite([
     update("ops_pm_plans", {
+      require_confirmation: updated.requireConfirmation ? 1 : 0,
       cadence_days: cadenceDays,
       completion_window_days: completionWindowDays,
       asset_selection_rule: assetSelectionRule ?? null, preferred_vendor_id: preferredVendorId ?? null, access_requirements: accessRequirements ?? null, active: active ? 1 : 0,
@@ -946,8 +955,8 @@ export async function overridePmPlanCadence(
         storeId: plan.storeId,
         assetId: plan.assetId,
         programId: plan.programId,
-        before: { cadenceDays: plan.cadenceDays, completionWindowDays: plan.completionWindowDays },
-        after: { cadenceDays, completionWindowDays, assetSelectionRule, preferredVendorId, accessRequirements, active },
+        before: { requireConfirmation: plan.requireConfirmation, cadenceDays: plan.cadenceDays, completionWindowDays: plan.completionWindowDays },
+        after: { requireConfirmation: updated.requireConfirmation, cadenceDays, completionWindowDays, assetSelectionRule, preferredVendorId, accessRequirements, active },
         reason,
       },
       ids,
@@ -957,6 +966,7 @@ export async function overridePmPlanCadence(
 }
 
 export interface CreatePmPlanInput {
+  requireConfirmation?: boolean;
   organizationId: OpsId;
   name: string;
   storeId: OpsId;
@@ -1017,6 +1027,7 @@ export async function createPmPlanWithFirstOccurrence(
       : "missed";
 
   const plan: PmPlan = {
+    requireConfirmation: input.requireConfirmation ?? (await repository.getActiveWorkflowPolicy(input.organizationId))?.requireConfirmationDefault ?? true,
     id: ids.next("pm-plan"),
     organizationId: input.organizationId,
     name: required(input.name, "PM plan name"),
@@ -1043,6 +1054,7 @@ export async function createPmPlanWithFirstOccurrence(
   await repository.atomicWrite([
     insert("ops_pm_plans", {
       id: plan.id,
+      require_confirmation: plan.requireConfirmation === false ? 0 : 1,
       organization_id: plan.organizationId,
       name: plan.name,
       store_id: plan.storeId,
@@ -1076,6 +1088,7 @@ export async function createPmPlanWithFirstOccurrence(
         assetId: plan.assetId,
         cadenceDays: plan.cadenceDays,
         completionWindowDays: plan.completionWindowDays,
+        requireConfirmation: plan.requireConfirmation,
         firstOccurrenceId: firstOccurrence.id,
       },
       ids,

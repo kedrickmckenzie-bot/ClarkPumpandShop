@@ -5244,6 +5244,7 @@ export function buildCreateWorkOrderModel(
       expectedLifeYears: asset.expectedLifeYears,
       replacementEstimate: asset.replacementEstimate,
     })),
+    requireConfirmation: (sourcePmOccurrence ? fixture.pmPlans.find(p => p.id === sourcePmOccurrence.planId)?.requireConfirmation : undefined) ?? fixture.workflowPolicies?.find(p => p.organizationId === session.organizationId && p.status === "active")?.requireConfirmationDefault ?? true,
     lifecycleAsOf: fixture.asOf,
     defaults: {
       vendorId: vendors.some(v=>v.id===first(query.vendor)) ? first(query.vendor) : undefined,

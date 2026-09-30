@@ -1,3 +1,4 @@
+import { WorkConfirmationFields } from "./work-confirmation-fields";
 import { RequestStorePicker } from "./request-store-picker";
 import Link from "next/link";
 import { WorkRoutingFields } from "./work-routing-fields";
@@ -141,6 +142,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
               <textarea id="work-problem" name="problem" rows={3} required placeholder="What needs to be inspected, repaired, or maintained?" defaultValue={model.sourceRequest?.problem ?? model.defaults?.problem} />
             </label>
             <SelectField id="work-priority" name="priority" label="Priority" required options={model.priorityOptions} defaultValue={model.defaults?.priority ?? "routine"} />
+            <WorkConfirmationFields required={model.requireConfirmation ?? true} />
             {!accountabilityOnly ? (
               <details className={styles.optionalFormSection} open={Boolean(componentId || model.defaults?.assetId || model.defaults?.categoryKey)}>
                 <summary><strong>Classify equipment</strong><span>Optional · add now or later</span></summary>

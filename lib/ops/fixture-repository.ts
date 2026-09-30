@@ -146,6 +146,7 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
   const vendor = assignment?.vendorId ? fixture.vendors.find((row) => row.organizationId === workOrder.organizationId && row.id === assignment.vendorId) : undefined;
   const visitHold = (fixture.workOrderVisitHolds ?? []).find((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id && row.status === "active");
   return {
+    needsConfirmation: (fixture.workflowTasks ?? []).some(t => t.organizationId === workOrder.organizationId && t.workOrderId === workOrder.id && t.taskType === "verify_repair" && ["open", "in_progress"].includes(t.status)),
     id: workOrder.id, number: workOrder.number, storeId: store.id, storeNumber: store.storeNumber,
     storeName: store.name, problem: workOrder.problem, categoryKey: workOrder.categoryKey,
     priority: workOrder.priority, status: workOrder.status, assignmentKind: assignment?.kind ?? "choose_later",
@@ -214,7 +215,8 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_vendors") { row.preferred = Boolean(row.preferred); delete row.searchText; }
   if (table === "ops_notification_rules") row.emailEnabled = Boolean(row.emailEnabled);
   if (table === "ops_role_capability_overrides") row.enabled = Boolean(row.enabled);
-  if (table === "ops_workflow_policies") { row.allowManagerCompletion = Boolean(row.allowManagerCompletion); row.autoCloseRoutineAfterVerification = Boolean(row.autoCloseRoutineAfterVerification); row.appliesToActiveWork = Boolean(row.appliesToActiveWork); }
+  if (["ops_work_orders", "ops_pm_plans", "ops_maintenance_programs"].includes(table) && row.requireConfirmation != null) row.requireConfirmation = Boolean(row.requireConfirmation);
+  if (table === "ops_workflow_policies") { row.requireConfirmationDefault = row.requireConfirmationDefault == null ? true : Boolean(row.requireConfirmationDefault); row.allowManagerCompletion = Boolean(row.allowManagerCompletion); row.autoCloseRoutineAfterVerification = Boolean(row.autoCloseRoutineAfterVerification); row.appliesToActiveWork = Boolean(row.appliesToActiveWork); }
   if (table === "ops_vendor_specialties") { row.searchAliases = JSON.parse(String(row.searchAliasesJson ?? "[]")); delete row.searchAliasesJson; }
   if (table === "ops_vendor_qualifications") { row.pmWork = Boolean(row.pmWork); row.emergencyResponse = Boolean(row.emergencyResponse); row.warrantyWork = Boolean(row.warrantyWork); row.afterHours = Boolean(row.afterHours); if (row.maximumJobAmountMinor !== undefined) row.maximumJobAmount = { amountMinor: row.maximumJobAmountMinor, currency: row.currency ?? "USD" }; delete row.maximumJobAmountMinor; delete row.currency; }
   if (table === "ops_vendor_compliance_documents") row.blocking = Boolean(row.blocking);
@@ -411,7 +413,7 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
     }
     if (table === "ops_workflow_task_sla_resumes" && rows.some((item) => item.organizationId === row.organizationId && item.pauseId === row.pauseId)) throw new Error("SLA pause already has an immutable resume");
     if (table === "ops_site_visit_work_orders" && rows.some((item) => item.organizationId === row.organizationId && (item.visitId === row.visitId && item.workOrderId === row.workOrderId || item.visitId === row.visitId && item.ordinal === row.ordinal))) throw new Error("Visit work selection is duplicated");
-    if (table === "ops_work_order_verifications" && rows.some((item) => item.organizationId === row.organizationId && (item.siteVisitWorkOrderId === row.siteVisitWorkOrderId || item.workOrderId === row.workOrderId && item.cycle === row.cycle))) throw new Error("Work-order verification decision is duplicated");
+    if (table === "ops_work_order_verifications" && rows.some((item) => item.organizationId === row.organizationId && (item.workOrderId === row.workOrderId && item.cycle === row.cycle))) throw new Error("Work-order verification decision is duplicated");
     if (table === "ops_visit_evidence" && ["check_in", "check_out"].includes(String(row.kind)) && rows.some((item) => item.organizationId === row.organizationId && item.visitId === row.visitId && item.kind === row.kind)) throw new Error(`Visit already has ${String(row.kind)} evidence`);
     rows.push(row);
     if (table === "ops_work_order_estimate_requests") assertEstimateRequestUniqueness(rows);
@@ -843,7 +845,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     }
     const rows = this.fixture.workOrders.filter((row) => storeAllowed(this.fixture, scope, row.storeId)).filter((row) => {
       const costLines = this.fixture.costLines.filter((cost) => cost.organizationId === scope.organizationId && cost.workOrderId === row.id);
-      return (!query.statuses?.length || query.statuses.includes(row.status))
+      return (!query.needsConfirmation || row.status === "completed_pending_review" || workOrderRow(this.fixture, row).needsConfirmation)
+        && (!query.statuses?.length || query.statuses.includes(row.status))
         && matchesWorkStage(row, query.stage, this.fixture)
         && (!query.priorities?.length || query.priorities.includes(row.priority))
         && (!query.storeId || row.storeId === query.storeId)

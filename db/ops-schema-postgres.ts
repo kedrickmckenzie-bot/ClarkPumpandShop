@@ -286,6 +286,7 @@ export const opsRoleCapabilityOverrides = pgTable("ops_role_capability_overrides
 ]);
 
 export const opsWorkflowPolicies = pgTable("ops_workflow_policies", {
+  requireConfirmationDefault: integer("require_confirmation_default").notNull().default(1),
   id: id(), organizationId: organizationId(), version: integer("version").notNull(), status: text("status").notNull(), allowManagerCompletion: boolean("allow_manager_completion").notNull().default(false), autoCloseRoutineAfterVerification: boolean("auto_close_routine_after_verification").notNull().default(false), appliesToActiveWork: boolean("applies_to_active_work").notNull().default(false), createdByMembershipId: text("created_by_membership_id").notNull(), createdByName: text("created_by_name").notNull(), createdAt: createdAt(),
 }, (table) => [
   unique("uq_ops_workflow_policy_org_id").on(table.organizationId, table.id),
@@ -679,6 +680,8 @@ export const opsAssetComponents = pgTable("ops_asset_components", {
 ]);
 
 export const opsWorkOrders = pgTable("ops_work_orders", {
+  confirmationMembershipId: text("confirmation_membership_id"),
+  requireConfirmation: integer("require_confirmation").notNull().default(1),
   internalReviewThresholdMinor: bigint("internal_review_threshold_minor", { mode: "number" }), internalReviewCurrency: text("internal_review_currency"),
   id: id(),
   organizationId: organizationId(),
@@ -1371,7 +1374,6 @@ export const opsWorkOrderVerifications = pgTable("ops_work_order_verifications",
 }, (table) => [
   unique("uq_ops_work_verifications_org_id").on(table.organizationId, table.id),
   unique("uq_ops_work_verifications_org_cycle").on(table.organizationId, table.workOrderId, table.cycle),
-  unique("uq_ops_work_verifications_org_outcome").on(table.organizationId, table.siteVisitWorkOrderId),
   index("idx_ops_work_verifications_org_work_time").on(table.organizationId, table.workOrderId, table.decidedAt),
   foreignKey({ name: "fk_ops_work_verifications_org", columns: [table.organizationId], foreignColumns: [opsOrganizations.id] }),
   foreignKey({ name: "fk_ops_work_verifications_work", columns: [table.organizationId, table.workOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
@@ -1531,6 +1533,7 @@ export const opsExceptions = pgTable("ops_exceptions", {
 ]);
 
 export const opsMaintenancePrograms = pgTable("ops_maintenance_programs", {
+  requireConfirmation: integer("require_confirmation").notNull().default(1),
   id: id(), organizationId: organizationId(), programKey: text("program_key").notNull(), version: integer("version").notNull(), name: text("name").notNull(), tradeKey: text("trade_key").notNull(), workType: text("work_type").notNull(), applicableAssetTypesJson: jsonb("applicable_asset_types_json").$type<string[]>().notNull().default(sql`'[]'::jsonb`), frequencyDays: integer("frequency_days").notNull(), recurrenceKind: text("recurrence_kind").notNull(), dueWindowDays: integer("due_window_days").notNull(), scheduleAnchorAt: instant("schedule_anchor_at"), seasonalStartMonth: integer("seasonal_start_month"), seasonalEndMonth: integer("seasonal_end_month"), checklistTemplateId: text("checklist_template_id").notNull(), requiredEvidenceKindsJson: jsonb("required_evidence_kinds_json").$type<string[]>().notNull().default(sql`'[]'::jsonb`), expectedDurationMinutes: integer("expected_duration_minutes").notNull(), completionCriteria: text("completion_criteria").notNull(), correctiveWorkAuthorityMinor: bigint("corrective_work_authority_minor", { mode: "number" }).notNull(), currency: text("currency").notNull(), deficiencyHandling: text("deficiency_handling").notNull(), status: text("status").notNull(), supersedesProgramId: text("supersedes_program_id"), createdAt: createdAt(),
 }, (table) => [unique("uq_ops_maintenance_program_org_id").on(table.organizationId, table.id), uniqueIndex("uidx_ops_maintenance_program_org_key_version").on(table.organizationId, table.programKey, table.version), index("idx_ops_maintenance_program_org_status_trade").on(table.organizationId, table.status, table.tradeKey)]);
 
@@ -1539,6 +1542,7 @@ export const opsChecklistTemplates = pgTable("ops_checklist_templates", {
 }, (table) => [unique("uq_ops_checklist_templates_org_id").on(table.organizationId, table.id), uniqueIndex("uidx_ops_checklist_templates_org_name_version").on(table.organizationId, table.name, table.version)]);
 
 export const opsPmPlans = pgTable("ops_pm_plans", {
+  requireConfirmation: integer("require_confirmation").notNull().default(1),
   id: id(), organizationId: organizationId(), name: text("name").notNull(), programId: text("program_id"), programVersion: integer("program_version"), storeId: text("store_id"), assetId: text("asset_id"), assetSelectionRule: text("asset_selection_rule"), categoryKey: text("category_key"), cadenceDays: integer("cadence_days").notNull(), completionWindowDays: integer("completion_window_days").notNull(), preferredVendorId: text("preferred_vendor_id"), backupVendorId: text("backup_vendor_id"), contractVersionId: text("contract_version_id"), effectiveStartsAt: instant("effective_starts_at"), effectiveEndsAt: instant("effective_ends_at"), accessRequirements: text("access_requirements"), programAuthorizationMinor: bigint("program_authorization_minor", { mode: "number" }), budgetMinor: bigint("budget_minor", { mode: "number" }), currency: text("currency"), serviceLevelPolicyId: text("service_level_policy_id"), schedulingMode: text("scheduling_mode"), escalationRules: text("escalation_rules"), cadenceOverrideReason: text("cadence_override_reason"), cadenceOverriddenAt: instant("cadence_overridden_at"), cadenceOverriddenByMembershipId: text("cadence_overridden_by_membership_id"), active: boolean("active").notNull().default(false), createdAt: createdAt(),
 }, (table) => [
   unique("uq_ops_pm_plans_org_id").on(table.organizationId, table.id), index("idx_ops_pm_plans_org_active_store").on(table.organizationId, table.active, table.storeId), index("idx_ops_pm_plans_org_asset").on(table.organizationId, table.assetId), uniqueIndex("uidx_ops_pm_plans_org_program_asset").on(table.organizationId, table.programId, table.assetId),

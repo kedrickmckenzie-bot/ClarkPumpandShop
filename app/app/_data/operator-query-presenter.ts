@@ -336,12 +336,12 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     const stageStatuses = WORK_STAGE_STATUSES[first(query.stage) ?? ""];
     const statuses = requestedStatus === "open" || requestedStatus === "attention" || requestedStatus === "waiting"
       ? ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"]
-      : requestedStatus === "confirmation" ? ["completed_pending_review"] : requestedStatus === "missed" ? ["scheduled"] : requestedStatus === "history" ? ["closed", "cancelled"] : requestedStatus && requestedStatus !== "all" ? [requestedStatus] : undefined;
+      : requestedStatus === "confirmation" ? undefined : requestedStatus === "missed" ? ["scheduled"] : requestedStatus === "history" ? ["closed", "cancelled"] : requestedStatus && requestedStatus !== "all" ? [requestedStatus] : undefined;
     const [work, held] = await Promise.all([repository.listWorkOrders(scope, {
       ...request,
       ...workCreatedRange(first(query.createdFrom), first(query.createdThrough)),
       search: q,
-      statuses,
+      statuses, needsConfirmation: requestedStatus === "confirmation",
       dueAfter: requestedStatus === "waiting" ? (session.accessMode === "authenticated" ? new Date().toISOString() : getServerOpsReportingAsOf()) : undefined,
       dueBefore: ["attention", "missed"].includes(requestedStatus ?? "") ? (session.accessMode === "authenticated" ? new Date().toISOString() : getServerOpsReportingAsOf()) : undefined,
       stage: first(query.stage),
@@ -363,7 +363,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       heldConfirmedOpportunityAfter: heldPlan && heldOpportunity === "confirmed" ? getServerOpsReportingAsOf() : undefined,
       upcomingAppointmentAfter: upcomingAppointments ? getServerOpsReportingAsOf() : undefined,
     }), costEvidence ? Promise.resolve({ approvedWorkOrders: 0, storesWithApprovedWork: 0, storesWithMultipleApprovedJobs: 0 }) : repository.getHeldWorkPortfolioSummary(scope)]);
-    result = work; rows = work.items.map(heldPlan ? heldWorkRow : (row) => ({ ...workRow(row), action: row.status === "completed_pending_review" && roleCan(session, "confirm_observable_result") ? { label: "Confirm repair", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` } : undefined })); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "See who is handling each job and what happens next."; placeholder = "Search number, problem, store, vendor, or category";
+    result = work; rows = work.items.map(heldPlan ? heldWorkRow : (row) => ({ ...workRow(row), action: (row.status === "completed_pending_review" || row.needsConfirmation) && roleCan(session, "confirm_observable_result") ? { label: "Confirm work", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` } : undefined })); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "See who is handling each job and what happens next."; placeholder = "Search number, problem, store, vendor, or category";
     if (stageStatuses) {
       title = first(query.stage) === "not-sent" ? "Approved · not sent" : "Waiting on vendor";
       description = first(query.stage) === "not-sent" ? "Approved work, including jobs held for a later visit." : "Sent work needing a vendor response.";

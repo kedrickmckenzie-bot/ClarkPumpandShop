@@ -148,6 +148,8 @@ export async function POST(request: Request) {
           requestHash,
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
         },
+        confirmationMembershipId: String(formData.get("confirmationMembershipId") ?? "").trim() || undefined,
+        requireConfirmation: formData.has("confirmationSettingPresent") ? formData.get("requireConfirmation") === "true" : undefined,
         actor: context.actor,
       },
     );

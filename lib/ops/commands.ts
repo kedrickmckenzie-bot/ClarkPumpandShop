@@ -1,3 +1,4 @@
+import { confirmationAssignee } from "./confirmation-policy";
 import { latestRecordedWorkOutcome, applicableOutcomeVerification } from "./work-order-outcome";
 import { buildConfirmedWorkWarrantyStatements } from "./warranty-commands";
 import { prepareOfferedWork, resolveOfferedWork, offerResponseKey } from "./optional-work-policy";
@@ -639,6 +640,8 @@ export async function createServiceRequest(svc: OpsCommandServices, input: Creat
 }
 
 export interface CreateWorkOrderInput {
+  requireConfirmation?: boolean;
+  confirmationMembershipId?: string;
   organizationId: OpsId; number?: string; storeId: OpsId; requestId?: OpsId; pmOccurrenceId?: OpsId; problem: string;
   authorizedScope?: string; categoryKey?: string; taxonomyNodeId?: OpsId; assetId?: OpsId; componentId?: OpsId;
   priority?: WorkOrderPriority; accountableParty: string; nextAction: string; dueAt?: IsoDateTime;
@@ -829,7 +832,10 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   const nextAction = approval.request ? "Review authorization" : assignmentProjection?.nextAction ?? required(input.nextAction, "Next action");
   const dueAt = approval.request?.dueAt ?? input.holdForVisit?.deadlineAt ?? input.dueAt ?? defaultWorkOrderDueAt(priority, now);
   const escalationTo = required(input.escalationTo ?? "Facilities director", "Escalation destination");
-  const statements: OpsStatement[] = [insert("ops_work_orders", { id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, internal_review_threshold_minor: input.internalReviewThresholdMinor, internal_review_currency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
+  const sourceConfirmationPlan = sourcePmOccurrence ? await repository.getPmPlan(input.organizationId, sourcePmOccurrence.planId) : undefined;
+  const requireConfirmation = input.requireConfirmation ?? sourceConfirmationPlan?.requireConfirmation ?? (await repository.getActiveWorkflowPolicy(input.organizationId))?.requireConfirmationDefault ?? true;
+  if (input.confirmationMembershipId) await confirmationAssignee(repository, { organizationId: input.organizationId, storeId: input.storeId, confirmationMembershipId: input.confirmationMembershipId });
+  const statements: OpsStatement[] = [insert("ops_work_orders", { require_confirmation: requireConfirmation ? 1 : 0, confirmation_membership_id: input.confirmationMembershipId, id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, internal_review_threshold_minor: input.internalReviewThresholdMinor, internal_review_currency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
   if (input.idempotency) statements.unshift(idempotencyStatement(input.organizationId, id, now, input.idempotency));
   if (sourcePmOccurrence) {
     const sourceProgram = sourcePmOccurrence.programId
@@ -876,7 +882,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   sourceReviewTasks.filter((task) => task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => {
     statements.push(...buildCompleteWorkflowTaskStatements({ task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Impact review completed; converted to ${number}` }));
   });
-  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.created", actor: input.actor, occurredAt: now, payload: { internalReviewThresholdMinor: input.internalReviewThresholdMinor, internalReviewCurrency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", number, storeId: input.storeId, requestId: input.requestId, pmOccurrenceId: input.pmOccurrenceId, classified: Boolean(input.categoryKey), assetLinked: Boolean(input.assetId), repairPlanning: input.repairEstimateAmountMinor === undefined && input.estimatedServiceExtensionMonths === undefined ? undefined : { repairEstimateAmountMinor: input.repairEstimateAmountMinor, repairEstimateCurrency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimatedServiceExtensionMonths: input.estimatedServiceExtensionMonths } }, ids }));
+  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.created", actor: input.actor, occurredAt: now, payload: { requireConfirmation, confirmationMembershipId: input.confirmationMembershipId, internalReviewThresholdMinor: input.internalReviewThresholdMinor, internalReviewCurrency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", number, storeId: input.storeId, requestId: input.requestId, pmOccurrenceId: input.pmOccurrenceId, classified: Boolean(input.categoryKey), assetLinked: Boolean(input.assetId), repairPlanning: input.repairEstimateAmountMinor === undefined && input.estimatedServiceExtensionMonths === undefined ? undefined : { repairEstimateAmountMinor: input.repairEstimateAmountMinor, repairEstimateCurrency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimatedServiceExtensionMonths: input.estimatedServiceExtensionMonths } }, ids }));
   if (input.holdForVisit) statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.visit_hold_created", actor: input.actor, occurredAt: now, payload: { holdId: visitHoldId, posture: input.holdForVisit.posture, deadlineAt: input.holdForVisit.deadlineAt, internalReviewThresholdRecorded: input.holdForVisit.internalReviewThresholdAmountMinor !== undefined, thresholdMeaning: "internal_invoice_review_not_vendor_price_or_authorization" }, ids }));
   let initialAssignment: Awaited<ReturnType<typeof assignWorkOrder>> | undefined;
   if (input.initialAssignment) {
@@ -921,6 +927,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     };
   }
   const createdWorkOrder: WorkOrder = {
+    requireConfirmation, confirmationMembershipId: input.confirmationMembershipId,
     id, organizationId: input.organizationId, number, storeId: input.storeId, requestId: input.requestId,
     problem, authorizedScope: input.authorizedScope, categoryKey: input.categoryKey,
     taxonomyNodeId: input.taxonomyNodeId, assetId: input.assetId, componentId: input.componentId,
@@ -2384,9 +2391,9 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
         id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
         draft: taskDraft({
           workOrder,
-          taskType: normalized.outcome === "completed" ? "verify_repair" : normalized.outcome === "not_addressed" ? "choose_service_provider" : "schedule_return_visit",
+          taskType: normalized.outcome === "completed" ? (workOrder.requireConfirmation === false ? "close_verified_work" : "verify_repair") : normalized.outcome === "not_addressed" ? "choose_service_provider" : "schedule_return_visit",
           title: taskTitle,
-          assignee: { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName },
+          assignee: ["completed", "no_issue_found"].includes(normalized.outcome) && workOrder.requireConfirmation !== false ? await confirmationAssignee(repository, workOrder) : { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName },
           dueAt: workOrderProjection.dueAt,
           applicableSlaClock: normalized.outcome === "completed" ? "verification" : "scheduling",
           sourceFollowUpId: followUpId,
@@ -2407,14 +2414,22 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
         eventType: "work_order.held_work_outcome_recorded", actor: input.actor, occurredAt: now,
         payload: { visitId: visit.id, holdId: normalized.hold.id, outcome: normalized.outcome, holdStatus, followUpId, vendorFollowUpTiming: normalized.vendorFollowUpTiming, originalDeadlineAt: normalized.hold.deadlineAt, valueCategory, valueMeaning: valueCategory ? "recorded_operating_fact_without_invented_dollars" : "no_value_claim_recorded" }, ids,
       }));
-      if (normalized.outcome === "completed") statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.confirmation_requested", actor: input.actor, occurredAt: now, payload: { workOrderId: workOrder.id, siteVisitWorkOrderId: normalized.link.id, dueAt: addHours(now, 24) }, ids }));
+      if (normalized.outcome === "completed" && workOrder.requireConfirmation !== false) statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.confirmation_requested", actor: input.actor, occurredAt: now, payload: { workOrderId: workOrder.id, siteVisitWorkOrderId: normalized.link.id, dueAt: addHours(now, 24) }, ids }));
       if (normalized.outcome === "completed") heldOutcomeSummary.completed += 1;
       else if (normalized.outcome === "temporary_repair") heldOutcomeSummary.temporaryRepair += 1;
       else if (normalized.outcome === "not_addressed") heldOutcomeSummary.notAttempted += 1;
       else heldOutcomeSummary.inspectionCaptured += 1;
       if (valueCategory === "planned_visit_bundle") heldOutcomeSummary.plannedVisitBundle += 1;
       if (valueCategory === "unplanned_onsite_pickup") heldOutcomeSummary.unplannedOnsitePickup += 1;
-      updatedLinks.push({ ...normalized.link, outcome: normalized.outcome, outcomeNotes: normalized.outcomeNotes, outcomeRecordedByActorType: input.actor.actorType, outcomeRecordedByActorId: input.actor.actorId, outcomeRecordedByActorName: input.actor.actorName, outcomeRecordedAt: now, followUpId, vendorFollowUpTiming: normalized.vendorFollowUpTiming });
+      if (["completed", "no_issue_found"].includes(normalized.outcome) && workOrder.requireConfirmation === false) {
+      const pending = (tasksByWorkOrder.get(workOrder.id) ?? []).filter(t => ["open", "in_progress", "paused"].includes(t.status) && (t.blocking || t.requiredForProgress) && !["record_service_outcome", "close_verified_work", "resolve_invoice_exception", "respond_service_discrepancy"].includes(t.taskType));
+      const detail = await repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id);
+      const canClose = !pending.length && !(detail?.visits.some(v => v.id !== visit.id && v.status === "active")) && !(detail?.followUps.some(f => f.status === "open"));
+      statements.push({ sql: "UPDATE ops_work_orders SET status = ?, closed_at = ?, accountable_party = ?, next_action = ?, due_at = ? WHERE organization_id = ? AND id = ?", params: [canClose ? "closed" : "resolved", canClose ? now : null, canClose ? "No action required" : internalAccountability.assigneeName, canClose ? "Work completed; confirmation not required" : "Complete remaining follow-up", canClose ? null : addHours(now,24), input.organizationId, workOrder.id] });
+      if (canClose) statements.push({ sql: "UPDATE ops_workflow_tasks SET status = ?, completed_at = ?, completed_by_actor_name = ?, resolution_note = ? WHERE organization_id = ? AND work_order_id = ? AND task_type = ? AND status = ?", params: ["completed", now, input.actor.actorName, "Confirmation not required", input.organizationId, workOrder.id, "close_verified_work", "open"] });
+      statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.completed_without_confirmation", actor: input.actor, occurredAt: now, payload: { visitId: visit.id, closed: canClose }, ids }));
+    }
+    updatedLinks.push({ ...normalized.link, outcome: normalized.outcome, outcomeNotes: normalized.outcomeNotes, outcomeRecordedByActorType: input.actor.actorType, outcomeRecordedByActorId: input.actor.actorId, outcomeRecordedByActorName: input.actor.actorName, outcomeRecordedAt: now, followUpId, vendorFollowUpTiming: normalized.vendorFollowUpTiming });
       continue;
     }
     const unresolved = siteVisitOutcomeRequiresFollowUp(normalized.outcome);
@@ -2450,14 +2465,14 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
         ? { ...task, status: "completed", completedByActorType: input.actor.actorType, completedByActorId: input.actor.actorId, completedByActorName: input.actor.actorName, completedAt: now }
         : task);
     }
-    if (!unresolved) statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.confirmation_requested", actor: input.actor, occurredAt: now, payload: { workOrderId: workOrder.id, siteVisitWorkOrderId: normalized.link.id, dueAt: addHours(now, 24) }, ids }));
-    const taskTitle = accountableFollowUp?.nextAction ?? "Verify current service outcome";
+    if (!unresolved && workOrder.requireConfirmation !== false) statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.confirmation_requested", actor: input.actor, occurredAt: now, payload: { workOrderId: workOrder.id, siteVisitWorkOrderId: normalized.link.id, dueAt: addHours(now, 24) }, ids }));
+    const taskTitle = accountableFollowUp?.nextAction ?? (workOrder.requireConfirmation === false ? "Close completed work" : "Confirm work was completed as expected");
     const replacementTask = buildWorkflowTaskRecord({
       id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id,
       draft: taskDraft({ workOrder,
-        taskType: unresolved ? "schedule_return_visit" : "verify_repair",
+        taskType: unresolved ? "schedule_return_visit" : workOrder.requireConfirmation === false ? "close_verified_work" : "verify_repair",
         title: taskTitle,
-        assignee: { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName },
+        assignee: ["completed", "no_issue_found"].includes(normalized.outcome) && workOrder.requireConfirmation !== false ? await confirmationAssignee(repository, workOrder) : { assigneeType: internalAccountability.assigneeType, assigneeId: internalAccountability.assigneeId, assigneeRole: internalAccountability.assigneeRole, assigneeName: internalAccountability.assigneeName },
         dueAt: accountableFollowUp?.dueAt ?? addHours(now, 24),
         applicableSlaClock: unresolved ? "scheduling" : "verification",
         sourceFollowUpId: followUpId,
@@ -2475,6 +2490,14 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
       resolutionNote: `Visit checkout recorded with outcome ${normalized.outcome}`,
     }));
     statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.visit_outcome_recorded", actor: input.actor, occurredAt: now, payload: { visitId: visit.id, siteVisitWorkOrderId: normalized.link.id, outcome: normalized.outcome, followUpId, observedDurationSeconds, durationMeaning: "approximate_presence_not_labor" }, ids }));
+    if (["completed", "no_issue_found"].includes(normalized.outcome) && workOrder.requireConfirmation === false) {
+      const pending = tasksForReplacement.filter(t => ["open", "in_progress", "paused"].includes(t.status) && (t.blocking || t.requiredForProgress) && !["record_service_outcome", "close_verified_work", "resolve_invoice_exception", "respond_service_discrepancy"].includes(t.taskType));
+      const detail = await repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id);
+      const canClose = !pending.length && !(detail?.visits.some(v => v.id !== visit.id && v.status === "active")) && !(detail?.followUps.some(f => f.status === "open" && f.id !== originatingFollowUp?.id));
+      statements.push({ sql: "UPDATE ops_work_orders SET status = ?, closed_at = ?, accountable_party = ?, next_action = ?, due_at = ? WHERE organization_id = ? AND id = ?", params: [canClose ? "closed" : "resolved", canClose ? now : null, canClose ? "No action required" : internalAccountability.assigneeName, canClose ? "Work completed; confirmation not required" : "Complete remaining follow-up", canClose ? null : addHours(now,24), input.organizationId, workOrder.id] });
+      if (canClose) statements.push({ sql: "UPDATE ops_workflow_tasks SET status = ?, completed_at = ?, completed_by_actor_name = ?, resolution_note = ? WHERE organization_id = ? AND work_order_id = ? AND task_type = ? AND status = ?", params: ["completed", now, input.actor.actorName, "Confirmation not required", input.organizationId, workOrder.id, "close_verified_work", "open"] });
+      statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: "work_order.completed_without_confirmation", actor: input.actor, occurredAt: now, payload: { visitId: visit.id, closed: canClose }, ids }));
+    }
     updatedLinks.push({ ...normalized.link, outcome: normalized.outcome, outcomeNotes: normalized.outcomeNotes, outcomeRecordedByActorType: input.actor.actorType, outcomeRecordedByActorId: input.actor.actorId, outcomeRecordedByActorName: input.actor.actorName, outcomeRecordedAt: now, followUpId, vendorFollowUpTiming: normalized.vendorFollowUpTiming });
   }
   const heldOutcomeCount = normalizedOutcomes.filter((row) => Boolean(row.link.workOrderHoldId)).length;

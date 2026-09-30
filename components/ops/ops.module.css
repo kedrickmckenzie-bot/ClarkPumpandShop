@@ -1133,3 +1133,7 @@ a.factCard { padding-right: 38px; }
 .workDescription summary span { color: #315dcc; font-weight: 600; display: block; }
 .workDescription details[open] summary { margin-bottom: .75rem; }
 .workDescription small { display: block; margin-top: .5rem; color: #526176; }
+
+.confirmationSetting { display: grid; gap: .65rem; align-content: start; }
+.confirmationSetting > label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: .6rem; font-weight: 650; }
+.confirmationSetting input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 0; padding: 0; accent-color: #2457d6; }

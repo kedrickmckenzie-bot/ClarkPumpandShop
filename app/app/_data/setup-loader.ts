@@ -43,7 +43,8 @@ async function setupContext(capability: OperatorCapability) {
   const session = await loadOperatorSession();
   if (!roleCan(session, capability)) notFound();
   const fixture = await getRequestOpsFixtureSnapshot(session.organizationId);
-  return { session, fixture };
+  const policy = await (await getServerOpsRepository()).getActiveWorkflowPolicy(session.organizationId);
+  return { session, fixture: { ...fixture, workflowPolicies: policy ? [policy] : [] } };
 }
 
 async function equipmentDetailContext() {
@@ -182,6 +183,7 @@ export async function loadCreatePmSetupModel(query: Query = {}): Promise<CreateP
   const requestedStoreId = first(query.store);
   const defaultStoreId = requestedAsset?.storeId ?? (visibleStoreIds.has(requestedStoreId ?? "") ? requestedStoreId : undefined);
   return {
+    requireConfirmation: fixture.workflowPolicies?.find(p => p.status === "active")?.requireConfirmationDefault ?? true,
     title: "Create PM plan",
     eyebrow: "Preventive maintenance",
     description: "Define the cadence and completion window, then create the first source occurrence immediately so due work and compliance are visible from day one.",
@@ -216,6 +218,7 @@ export async function loadCreatePmProgramSetupModel(programId?: string): Promise
   const byId = new Map(nodes.map((node) => [node.id, node]));
   return {
     initial: program ? { programId: program.id, name: program.name, categoryKey: program.tradeKey, storeIds: fixture.pmPlans.filter(p => p.organizationId === session.organizationId && p.programId === program.id && p.active).flatMap(p => p.storeId ? [p.storeId] : []), cadenceDays: program.frequencyDays, completionWindowDays: program.dueWindowDays, firstDueAt: (program.scheduleAnchorAt ?? fixture.asOf).slice(0,10), checklist: program.completionCriteria } : undefined,
+    requireConfirmation: program?.requireConfirmation == null ? fixture.workflowPolicies?.find(p => p.status === "active")?.requireConfirmationDefault ?? true : Boolean(program.requireConfirmation),
     title: program ? "Edit PM schedule" : "Create company PM schedule",
     eyebrow: "Preventive maintenance standards",
     description: "Set the schedule, choose stores, and cover their equipment automatically.",
@@ -274,6 +277,7 @@ export async function loadPmPlanScheduleSetupModel(planId: string): Promise<PmPl
     masterProgramName: program?.name,
     masterCadenceDays: program?.frequencyDays,
     masterWindowDays: program?.dueWindowDays,
+    requireConfirmation: plan.requireConfirmation ?? true,
     cadenceDays: plan.cadenceDays,
     completionWindowDays: plan.completionWindowDays,
     overrideReason: plan.cadenceOverrideReason,
