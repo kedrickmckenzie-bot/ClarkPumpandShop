@@ -49,11 +49,12 @@ describe("summary-first enterprise records", () => {
       readFile("components/workspace/work-order-case.tsx", "utf8"),
     ]);
 
-    expect(page).toContain('const workOrderViews = ["overview", "service", "visits", "cost", "equipment", "activity"]');
+    expect(page).toContain('const workOrderViews = ["overview", "service", "visits", "confirmation", "cost", "equipment", "activity"]');
     expect(page).toContain("activeView={view}");
     expect(workspace).toContain('activeView === "overview"');
     expect(workspace).toContain('activeView === "service"');
     expect(workspace).toContain('activeView === "visits"');
+    expect(workspace).toContain('activeView === "confirmation"');
     expect(workspace).toContain('activeView === "cost"');
     expect(workspace).toContain('activeView === "equipment"');
     expect(workspace).toContain('activeView === "activity"');

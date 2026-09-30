@@ -89,7 +89,7 @@ interface WorkOrderCaseProps {
   updated?: string;
 }
 
-export type WorkOrderView = "overview" | "service" | "visits" | "cost" | "equipment" | "activity";
+export type WorkOrderView = "overview" | "service" | "visits" | "confirmation" | "cost" | "equipment" | "activity";
 
 const caseViews: Array<{ id: WorkOrderView; label: string; icon: ReactNode }> = [
   { id: "overview", label: "Overview", icon: <Gauge aria-hidden="true" size={16} /> },
@@ -784,6 +784,8 @@ export function WorkOrderCase({
         {workspaceMode === "bids" && !accountabilityOnly ? <div className={styles.panelRegion} data-panel="pricing"><EstimateComparisonPanel model={estimateComparison} /></div> : null}
         {workspaceMode !== "held" ? <ServiceRecordHistory authorization={authorization} estimateComparison={estimateComparison} /> : null}
       </WorkspaceSection> : null}
+
+      {activeView === "confirmation" ? <WorkOrderVerificationPanel model={verification} /> : null}
 
       {activeView === "visits" ? <WorkspaceSection
         id="visits"

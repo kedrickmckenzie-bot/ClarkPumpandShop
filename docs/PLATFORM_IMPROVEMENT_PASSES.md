@@ -4,6 +4,28 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Repair confirmation access — September 29
+
+- [x] RC-02 Visible Needs confirmation work filter, with direct Confirm repair actions in rows/cards and the work-order header.
+- [x] RC-03 Dedicated confirmation screen reuses existing decision, permissions, concurrency and audit rules; no new approval or recipient-routing changes.
+- [x] RC-04 Automated checks and browser verification complete; authorized release prepared.
+
+Checkpoint: facilities browser verified three pending records and direct confirmation of CPS-2026-0201. Store-manager preview is scoped to Store 104 and correctly cannot open that Store 101 job. Browser also verified the Store 104 empty confirmation queue and 390px confirmation layout (375px content, no overflow); no results submitted and preview role restored. Seed passed in the combined pass, final typecheck/lint and both builds passed. Full suite: 1,124/1,126 passed; PostgreSQL seeding timed out and an old screen-list expectation needed the confirmation view. Workflow suite: 61/63 passed with seed/public-link timeouts. All failed cases passed on targeted reruns; 10 presenter tests and four workspace tests passed. Full suites were not repeated after those reruns. Logs: `%TEMP%/confirm-*.log`; screenshot: `%TEMP%/repair-confirmation.png`. Commit/push authorized; Render deployment unverified. RC-01 remains deferred.
+
+## Demo visit and inspection fixes — September 29
+
+- [x] DV-01 Upcoming visits use a bounded appointment query instead of the legacy snapshot that omitted persisted appointments; matching tenant/store/region scope, search, stable pages and direct work-order links.
+- [x] DV-02 Normalize PostgreSQL JSON history at the repository boundary so inspection details can render findings and history.
+- [x] DV-03 Required checks, PostgreSQL regressions and local browser retest. Hosted deployment and hosted retest remain pending.
+
+Checkpoint: 25 final focused tests passed. Browser verified Overview’s seven-visit tile opens seven appointments, direct work-order navigation and inline review, plus a 390px layout without page overflow; Store 114 inspection opens with history and links to corrective work CPS-2026-3199. Seed, final typecheck/lint, Render build and standard build passed. Full suite: 1,123/1,125 passed; a filter-label expectation was updated for Upcoming and passed its focused rerun, and a public-link test hit a 15-second timeout. Separate workflow suite passed 63/63, including that public-link test and real PostgreSQL appointment/count and inspection-history regressions. Full suite was not repeated after targeted corrections. Logs: `%TEMP%/demo-fix-*.log`; screenshots: `%TEMP%/upcoming-visits-fixed.png` and `%TEMP%/inspection-detail-fixed.png`. Commit/push authorized with the repair-confirmation access pass; hosted deployment remains pending. Repair-confirmation routing remains deferred as requested. No schema change or demo reset required.
+
+## Reminder for the next major improvement pass
+
+- [ ] RC-01 Review repair-confirmation routing with the user at the start of the next major pass. Default the confirmation task and notification to the store team, with a simple work-order option to choose another authorized person who will receive the notification and confirm the result. For major work, the facilities manager may choose to confirm personally. Keep task ownership and notification recipients aligned.
+
+Checkpoint (September 29): user explicitly deferred implementation until the next major pass. Reminder recorded only; no workflow changes made.
+
 ## Unresolved operating problems — September 29
 
 - [x] OU-01 Default Needs review excludes converted/linked reports; All unresolved includes acknowledged/converted reports still affecting operations.

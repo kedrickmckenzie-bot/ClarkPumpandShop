@@ -299,12 +299,11 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
   const supportedQueryKeys: Partial<Record<ListRouteId, ReadonlySet<string>>> = {
     requests: new Set(["q", "page", "status", "store", "selected"]),
     "work-orders": new Set(["q", "page", "status", "stage", "store", "vendor", "region", "category", "path", "asset", "component", "hasCost", "createdFrom", "createdThrough", "costFrom", "costTo", "costMonth", "currency", "basis", "period", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity"]),
-    visits: new Set(["q", "page", "status", "store", "vendor", "review", "selected"]),
+    visits: new Set(["q", "page", "status", "store", "vendor", "review", "selected", "layout"]),
     stores: new Set(["q", "page", "selected"]),
     vendors: new Set(["q", "page", "selected"]),
   };
-  const usesSpecialFixtureProjection = requestedKeys.some((key) => !supportedQueryKeys[route]?.has(key))
-    || route === "visits" && (Array.isArray(searchParams.status) ? searchParams.status[0] : searchParams.status) === "upcoming";
+  const usesSpecialFixtureProjection = requestedKeys.some((key) => !supportedQueryKeys[route]?.has(key));
   if (QUERY_FIRST_LIST_ROUTES.has(route) && !usesSpecialFixtureProjection) {
     const repository = await getServerOpsRepository();
     return enforceListLinkPolicy(await buildQueryListModel(repository, session, route, searchParams), session);

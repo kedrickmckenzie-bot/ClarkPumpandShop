@@ -15,6 +15,18 @@ describe("query-first route loading", () => {
     mocked.repository.mockResolvedValue(createOpsFixtureRepository(buildNorthlinePresentationFixture()));
     mocked.snapshot.mockRejectedValue(new Error("This list must not load a tenant snapshot"));
   });
+  it("loads upcoming appointments without the snapshot that omits them", async () => {
+    const fixture=buildNorthlinePresentationFixture();
+    for(const appointment of fixture.serviceAppointments??[]) if(appointment.status==="confirmed") appointment.startsAt="2026-10-01T12:00:00.000Z";
+    const repository=createOpsFixtureRepository(fixture);mocked.repository.mockResolvedValue(repository);
+    const expected=await repository.listUpcomingAppointments({organizationId:fixture.organizations[0].id},{now:"2026-09-28T12:00:00.000Z",limit:25});
+    const model=await loadListModel("visits",{status:"upcoming",layout:"tile"});
+    expect(model.table.rows.length).toBeGreaterThan(0);
+    expect(model.table.rows.map(r=>r.id)).toEqual(expected.items.map(r=>r.id));
+    expect(model.rowNavigation).toBe("record");
+    expect(model.table.rows.every(r=>r.href.startsWith("/app/work-orders/"))).toBe(true);
+    expect(mocked.snapshot).not.toHaveBeenCalled();
+  });
   it("loads saved views without fetching unrelated tenant data", async () => {
     expect(await loadSavedViewsModel("work-orders")).toEqual([]);
     expect(mocked.snapshot).not.toHaveBeenCalled();

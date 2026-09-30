@@ -3,7 +3,7 @@ const first = (value: Query[string]) => Array.isArray(value) ? value[0] : value;
 
 /** Switching queues keeps the user's evidence scope, not incompatible workflow filters. */
 export function workListNavigation(query: Query) {
-  const status = first(query.status);
+  const status = first(query.status) === "completed_pending_review" ? "confirmation" : first(query.status);
   const selected = status === "history" || status === "closed" || status === "cancelled"
     ? "history" : status === "attention" || status === "waiting" || ["scheduled", "confirmation", "missed"].includes(status ?? "") ? status : status === "all" ? "all" : status || first(query.stage) || first(query.visitPlan) || first(query.appointment) ? "open" : "all";
   return [
@@ -12,7 +12,7 @@ export function workListNavigation(query: Query) {
     { value: "waiting", label: "Waiting until follow-up" },
     { value: "scheduled", label: "Scheduled" },
     { value: "missed", label: "Appointment overdue" },
-    { value: "confirmation", label: "Confirm result" },
+    { value: "confirmation", label: "Needs confirmation" },
     { value: "history", label: "Completed / cancelled" },
     { value: "all", label: "All work" },
   ].map((view) => {

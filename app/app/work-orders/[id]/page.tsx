@@ -17,7 +17,7 @@ import type { WorkOrderServicePath } from "@/lib/ops/work-order-workspace";
 
 export const metadata: Metadata = { title: "Work order" };
 
-const workOrderViews = ["overview", "service", "visits", "cost", "equipment", "activity"] as const;
+const workOrderViews = ["overview", "service", "visits", "confirmation", "cost", "equipment", "activity"] as const;
 
 type WorkOrderView = (typeof workOrderViews)[number];
 
@@ -59,7 +59,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     ["overview", "equipment"].includes(requestedView) ? loadConnectedWorkReview(id) : null,
   ]);
   const accountabilityOnly = session.demoEdition === "accountability";
-  const view = accountabilityOnly && !["overview", "service", "visits"].includes(requestedView)
+  const view = accountabilityOnly && !["overview", "service", "visits", "confirmation"].includes(requestedView)
     ? "overview"
     : requestedView;
   const hasServiceAuthorization = Boolean(issuance.currentRevision);
@@ -100,7 +100,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   }
   if (estimateComparison.replacementApproved && issuance.permitted) model.page.primaryAction = stageCase.primaryNextAction;
   const viewerAction = verification.canDecide
-    ? { label: "Confirm whether the problem is resolved", href: `/app/work-orders/${id}?view=visits#work-verification` }
+    ? { label: "Confirm repair", href: `/app/work-orders/${id}?view=confirmation#work-verification` }
     : responseActions
       ? { label: responseActions.kind === "question" ? "Answer the vendor question" : responseActions.kind === "proposed_date" ? "Review the proposed visit time" : responseActions.kind === "declined" ? "Choose another provider" : "Review vendor response", href: `/app/work-orders/${id}?view=service#vendor-response` }
       : heldStatus && ["active", "claimed", "review_required"].includes(heldStatus)

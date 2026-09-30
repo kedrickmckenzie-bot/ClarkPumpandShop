@@ -391,6 +391,7 @@ function DataTable({ table, selectedId, rowHref, selection, context, openRecord 
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
                         {index === table.columns.length - 1 ? <ChevronRight className={styles.cellChevron} aria-hidden="true" size={15} /> : null}
                       </Link>}
+                      {index === 0 && row.action ? <Link className={styles.reviewSourcesLink} href={row.action.href}>{row.action.label}</Link> : null}
                       {openRecord ? null : index === 0 ? <WorkReviewButton href={row.href} label={row.label} context={context} /> : cell?.link && workReviewTarget(cell.link.href) !== workReviewTarget(row.href) ? <WorkReviewButton href={cell.link.href} label={cell.value} context={context} /> : null}
                     </td>
                   );
@@ -659,7 +660,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
               ) : <span className={styles.toolbarTitle}>Records</span>}
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
-            {surface === "work-orders" ? <details><summary>Filter work orders</summary><FilterGroups filters={model.filters} /></details> : <FilterGroups filters={model.filters} />}
+            <FilterGroups filters={model.filters} />
             <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
             {surface === "work-orders" ? <details className={styles.workDateFilters} open={Boolean(searchParams.createdFrom || searchParams.createdThrough)}><summary>Created date (UTC)</summary><form action="/app/work-orders" method="get">
               {Object.entries(searchParams).filter(([key]) => !["createdFrom", "createdThrough", "page", "selected"].includes(key)).map(([key, value]) => <input type="hidden" name={key} value={Array.isArray(value) ? value[0] : value ?? ""} key={key} />)}
@@ -743,7 +744,8 @@ function RecordTileGrid({ table }: { table: TableViewModel }) {
           .filter((fact) => fact.cell != null && fact.cell.value !== "" && fact.cell.value !== "—")
           .slice(0, 5);
         return (
-          <Link key={row.id} href={row.href} className={styles.tile}>
+          <div key={row.id} className={styles.tile}>
+          <Link href={row.href}>
             <span className={styles.tileTitle}>{row.label}</span>
             {row.cells[0]?.secondary ? <span className={styles.tileSubtitle}>{row.cells[0].secondary}</span> : null}
             <dl className={styles.tileFacts}>
@@ -755,6 +757,8 @@ function RecordTileGrid({ table }: { table: TableViewModel }) {
               ))}
             </dl>
           </Link>
+          {row.action ? <Link className={styles.reviewSourcesLink} href={row.action.href}>{row.action.label}</Link> : null}
+          </div>
         );
       })}
     </div>

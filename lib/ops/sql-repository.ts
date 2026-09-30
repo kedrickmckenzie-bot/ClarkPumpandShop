@@ -1,3 +1,4 @@
+import { queryUpcomingAppointments } from "./upcoming-appointments";
 import { taskPeopleSql,taskQuerySql,getTaskSql,taskMessagesSql,taskParticipantsSql } from "./store-task-sql";
 import { queryOperatingRisks } from "./operating-risks";
 import {capitalPlanFrom,type CapitalQuery} from "./capital-planning";
@@ -427,6 +428,7 @@ class SqlOpsRepository implements OpsRepository {
   async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: PageRequest = {}) {
     return queryEquipmentIssues(this.driver, scope, window, query);
   }
+  async listUpcomingAppointments(scope: OrganizationScope, query: import("./upcoming-appointments").UpcomingAppointmentQuery) { return queryUpcomingAppointments(this.driver,scope,query); }
   async listOperatingRisks(scope: OrganizationScope, page?: import("./operating-risks").OperatingRiskQuery) { return queryOperatingRisks(this.driver,scope,page); }
   async getDashboardActivity(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow) {
     return queryDashboardActivity(this.driver, scope, window);
@@ -1157,4 +1159,4 @@ export function createOpsSqlRepository(
 function accountingSourceFrom(row: Row): import("./types").AccountingInvoiceSource { return { id: text(row, "id"), organizationId: text(row, "organization_id"), connectionKey: text(row, "connection_key"), companyKey: text(row, "company_key"), externalInvoiceId: text(row, "external_invoice_id"), sourceRevision: Number(row.source_revision), version: Number(row.version), payloadJson: text(row, "payload_json"), invoiceId: maybeText(row, "invoice_id"), matchState: text(row, "match_state") as import("./types").AccountingInvoiceSource["matchState"], updatedAt: text(row, "updated_at") }; }
 import { queryRecordIntegrity } from "./record-integrity-sql";
 
-function complianceRow<T>(r:Record<string,unknown>):T {return Object.fromEntries(Object.entries(r).map(([k,v])=>[k.replace(/_([a-z])/g,(_,c:string)=>c.toUpperCase()),v===null?undefined:v instanceof Date?v.toISOString():v])) as T;}
+function complianceRow<T>(r:Record<string,unknown>):T {return Object.fromEntries(Object.entries(r).map(([k,v])=>[k.replace(/_([a-z])/g,(_,c:string)=>c.toUpperCase()),v===null?undefined:v instanceof Date?v.toISOString():k.endsWith("_json") && typeof v!=="string"?JSON.stringify(v):v])) as T;}

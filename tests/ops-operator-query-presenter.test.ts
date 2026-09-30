@@ -30,6 +30,21 @@ function session(overrides: Partial<OperatorSession> = {}): OperatorSession {
 }
 
 describe("operator query presenter", () => {
+  it("shows only pending confirmations and permission-aware repair actions", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const repository = createOpsFixtureRepository(fixture);
+    for (const role of ["facilities", "regional", "store_manager", "finance"] as const) {
+      const model = await buildQueryListModel(repository, session({ role }), "work-orders", { status: "completed_pending_review" });
+      expect(model.table.rows.length).toBeGreaterThan(0);
+      for (const row of model.table.rows) {
+        expect(fixture.workOrders.find(work => work.id === row.id)?.status).toBe("completed_pending_review");
+        if (role === "finance") expect(row.action).toBeUndefined();
+        else expect(row.action).toEqual({ label: "Confirm repair", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` });
+      }
+      expect(model.filters?.flatMap(filter => filter.options).some(option => option.label === "Needs confirmation" && option.selected)).toBe(true);
+    }
+  });
+
   it("filters and paginates work orders before building table rows", async () => {
     const fixture = buildNorthlinePresentationFixture();
     const repository = createOpsFixtureRepository(fixture);
@@ -104,7 +119,7 @@ describe("operator query presenter", () => {
   it("keeps visit filter controls and applied-filter removal links in the query projection", async () => {
     const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
     const model = await buildQueryListModel(repository, session(), "visits", { status: "active", vendor: "vendor-northline-summit" });
-    expect(model.filters?.find((filter) => filter.id === "status")?.options.map((option) => option.label)).toEqual(["All visits", "No checkout recorded", "Completed"]);
+    expect(model.filters?.find((filter) => filter.id === "status")?.options.map((option) => option.label)).toEqual(["Upcoming", "All visits", "No checkout recorded", "Completed"]);
     expect(model.filters?.find((filter) => filter.id === "status")?.options.find((option) => option.label === "No checkout recorded")?.selected).toBe(true);
     expect(model.appliedFilters?.map((filter) => filter.label)).toContain("No checkout recorded");
     expect(model.appliedFilters?.find((filter) => filter.id === "status")?.removeHref).toContain("vendor=vendor-northline-summit");

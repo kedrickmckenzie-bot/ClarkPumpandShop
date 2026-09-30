@@ -253,3 +253,10 @@ describe("PostgreSQL repository boundary", () => {
     expect(client.releaseCount).toBe(1);
   });
 });
+
+it("normalizes PostgreSQL inspection history JSON before rendering detail",async()=>{
+ const repository=createOpsPostgresRepository(new FakePostgresPool(new FakePostgresClient(),()=>({rows:[{id:"history",event_type:"inspection.result_recorded",actor_name:"Manager",occurred_at:new Date("2026-09-29T18:00:00Z"),payload_json:{note:"Exit light failed",status:"action_needed"}}]})));
+ const [history]=await repository.inspectionHistory("org","inspection");
+ expect(JSON.parse(history.payloadJson)).toEqual({note:"Exit light failed",status:"action_needed"});
+ expect(history.occurredAt).toBe("2026-09-29T18:00:00.000Z");
+});

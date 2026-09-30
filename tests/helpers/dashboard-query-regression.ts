@@ -44,6 +44,9 @@ export async function dashboardQueryRegression(repository: OpsRepository, fixtur
     expect(await repository.getDashboardLifecycle(scope, fixture.asOf)).toEqual(await reference.getDashboardLifecycle(scope, fixture.asOf));
     const summary = await repository.getDashboardActivity(scope, window);
     expect(summary).toEqual(await reference.getDashboardActivity(scope, window));
+    const appointments=await repository.listUpcomingAppointments(scope,{now:fixture.asOf,limit:100});
+    expect(appointments).toEqual(await reference.listUpcomingAppointments(scope,{now:fixture.asOf,limit:100}));
+    expect(appointments.totalCount).toBe(summary.upcomingAppointments);
     const pending = await repository.listRequests(scope, { status: "pending", limit: 100 });
     const vendorWait = await repository.listWorkOrders(scope, { stage: "vendor-response", limit: 100 });
     expect(summary.pendingRequests).toBe(pending.items.length);

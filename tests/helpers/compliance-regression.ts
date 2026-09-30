@@ -48,6 +48,7 @@ export async function complianceRegression(repository:OpsRepository) {
  await recordInspectionResult(svc,{...result,version:1,status:"passed",note:"Report reviewed; no findings",files:[{id:`file-${crypto.randomUUID()}`,organizationId:org,storageKey:"test-inspection",sha256:"a".repeat(64),originalName:"inspection-photo.png",contentType:"image/png",byteLength:6,status:"available",createdAt:svc.clock.now()}]},actor);
  expect((await repository.getInspection(org,i.id))?.status).toBe("passed");expect((await repository.getWorkOrder(org,i.workOrderId!))?.status).toBe("closed");
  await expect(recordInspectionResult(svc,result,actor)).rejects.toMatchObject({code:"CONFLICT"});
+ for (const entry of await repository.inspectionHistory(org,i.id)) expect(() => JSON.parse(entry.payloadJson)).not.toThrow();
  expect((await repository.inspectionHistory(org,i.id)).filter(h=>h.eventType==="inspection.result_recorded")).toHaveLength(2);
  const sent:string[]=[];await deliverInspectionEmail({repository,baseUrl:"https://example.test",provider:{name:"fake",async send(email){sent.push(email.to);return {messageId:"fake"};}}},{id:"test",organizationId:org,aggregateType:"inspection",aggregateId:i.id,topic:"ops.compliance.reminder",payloadJson:"{}",attemptCount:0},svc.clock.now());expect(sent).toHaveLength(0);
  const second=page.items[1];await recordInspectionResult(svc,{...result,inspectionId:second.id,status:"action_needed",note:"Exit light failed"},actor);
