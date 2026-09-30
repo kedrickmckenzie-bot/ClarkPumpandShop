@@ -4,6 +4,17 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Sent vendor work orders — September 30
+
+- [x] SV-01 Service tab lists every saved sent version with vendor, date and handoff method. Scoped internal readers can open the original snapshot without a public token, including superseded versions and expired links. Current work-order edits are not substituted.
+- [x] SV-02 Copy vendor link creates fresh, expiring access to the same current eligible revision without issuing a new revision, sending email, or revoking an existing link. Raw tokens are never persisted. Membership, capability, tenant/store scope, assignment state and concurrency checks apply; token and audit commit together.
+- [x] SV-03 Saved service notes now reach the vendor page through both persistence adapters. Internal thresholds stay off the vendor page and saved vendor-facing scope uses the same visibility rule.
+- [x] SV-04 Validation complete; authorized commit/push prepared. Seed, typecheck, lint, standard build and Render build passed. Focused tests passed 8/8; end-to-end suite passed 64/64 with one worker.
+
+Validation detail: full suite passed 1,143/1,148; five existing seed/public-boundary tests timed out during the long-running local dev server restart. All five passed in the separate end-to-end run. The new PostgreSQL link test passed in both runs. Render build initially encountered a corrupted generated .next/dev/types/validator.ts; removing that generated file and rerunning passed. Browser coverage is recorded below. No migration or demo reset required. Logs: %TEMP%/sent-work-*.log. dev4.log remains excluded.
+
+Browser: opened a saved sent version, copied a fresh link and opened the vendor page with matching work-order/version/instructions. Verified list and detail at 390px (375px content/scroll width). Restored viewport and closed agent tabs. The long-running local Next server restarted during testing; no hosted reset or deployment was performed. Screenshot: `%TEMP%/sent-work-orders.png`.
+
 ## Simplify work confirmation — September 29
 
 - [x] RC-09 User correction supersedes the request UI in RC-01/RC-06: every role uses the work order to record results. Remove the separate request action, recipient picker and request form; ad hoc requests belong in existing Tasks.

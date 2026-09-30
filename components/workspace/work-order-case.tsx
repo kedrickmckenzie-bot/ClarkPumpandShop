@@ -67,6 +67,7 @@ import {
 } from "@/lib/ops/work-order-workspace";
 
 interface WorkOrderCaseProps {
+  sentWork?: ReactNode;
   emailHistory?: ReactNode;
   costPrompts?: ReactNode;
   prices?: ReactNode;
@@ -557,6 +558,7 @@ function workspaceHeading(mode: WorkOrderWorkspaceMode, accountabilityOnly: bool
 }
 
 export function WorkOrderCase({
+  sentWork,
   emailHistory,
   costPrompts,
   prices,
@@ -774,6 +776,7 @@ export function WorkOrderCase({
         {(workspaceMode === "vendor_response" || vendorResponse?.kind === "question") && vendorResponse ? <VendorResponseActions model={vendorResponse} /> : null}
         {workspaceMode === "waiting_on_vendor" && vendorResponse && vendorResponse.kind !== "question" ? <VendorUpdateSummary model={vendorResponse} /> : null}
         {workspaceMode === "choose_path" ? <ServicePathChoice control={control} issuance={issuance} estimateComparison={estimateComparison} workOrderId={control.workOrderId} /> : null}
+        {sentWork}
         {canChangeRequestedServicePath && (workspaceMode === "direct_service" || workspaceMode === "bids") ? (
           <Link className={styles.changePathLink} href={`/app/work-orders/${control.workOrderId}?view=service`}>
             <ArrowLeft aria-hidden="true" size={15} />Change service path

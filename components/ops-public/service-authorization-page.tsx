@@ -34,6 +34,7 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { t
               <h2 className={styles.cardTitle}>What we need you to do</h2>
               <p className={styles.serviceText}>{authorization.service.requestedWork}</p>
             </div>
+            {authorization.service.serviceNote ? <div className={styles.requestedWork}><h2 className={styles.cardTitle}>Service note</h2><p className={styles.serviceText}>{authorization.service.serviceNote}</p></div> : null}
             <div className={styles.detailGrid} style={{ marginTop: "1.2rem" }}>
               {authorization.service.category ? <div className={styles.detail}><span className={styles.detailLabel}>Service type</span><p className={styles.detailValue}>{authorization.service.category}</p></div> : null}
               <div className={styles.detail}><span className={styles.detailLabel}>Equipment</span><p className={styles.detailValue}>{authorization.service.asset ?? "See the job description"}</p></div>

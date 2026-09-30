@@ -1,3 +1,4 @@
+import { createSentWorkLink } from "@/lib/ops/sent-work-orders";
 import { storeTaskRegression } from "./helpers/store-task-regression";
 import { invoiceUploadRegression } from "./helpers/invoice-upload-regression";
 import { complianceRegression } from "./helpers/compliance-regression";
@@ -898,5 +899,19 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
   it("supports independent store tasks, scope and atomic handoff", async () => {
     await storeTaskRegression(createOpsPostgresRepository(new PGlitePool(database)));
   },120000);
+
+  it("shares the existing sent revision through a hashed PostgreSQL token", async () => {
+    const repository=createOpsPostgresRepository(pool);
+    const organizationId="org-northline-demo";
+    const workOrderId="wo-northline-104-issued";
+    const issuance=await repository.getLatestIssuanceForWorkOrder(organizationId,workOrderId);
+    expect(issuance).toBeTruthy();
+    const result=await createSentWorkLink({repository,clock:{now:()=>"2026-09-30T12:00:00.000Z"}}, {organizationId,workOrderId,issuanceId:issuance!.id,actor:{organizationId,actorType:"user",actorId:"membership-northline-facilities",actorName:"Jordan Lee"}});
+    const raw=result.publicPath.split("/").at(-1)!;
+    const tokenHash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(raw))),byte=>byte.toString(16).padStart(2,"0")).join("");
+    const opened=await repository.getServiceAuthorizationByToken({purpose:"service_authorization",tokenHash,now:"2026-09-30T12:00:01.000Z"});
+    expect(opened?.issuanceId).toBe(issuance!.id);
+    expect((await repository.getLatestIssuanceForWorkOrder(organizationId,workOrderId))?.immutablePayloadJson).toBe(issuance!.immutablePayloadJson);
+  });
 
 });

@@ -226,6 +226,7 @@ export interface ServiceAuthorizationView {
   vendor: { id: OpsId; name: string };
   problem: string;
   priority: WorkOrderPriority;
+  dispatchMessage?: string;
   authorizedScope?: string;
   categoryKey?: string;
   asset?: { id: OpsId; name: string; assetTag: string };

@@ -1023,6 +1023,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       vendor: snapshot.vendor ?? { id: vendor.id, name: vendor.name },
       problem: snapshot.problem ?? workOrder.problem,
       priority: snapshot.priority ?? workOrder.priority,
+      dispatchMessage: snapshot.dispatchMessage,
       authorizedScope: snapshot.authorizedScope,
       categoryKey: snapshot.categoryKey,
       asset: snapshot.asset ?? (asset ? { id: asset.id, name: asset.name, assetTag: asset.assetTag } : undefined),

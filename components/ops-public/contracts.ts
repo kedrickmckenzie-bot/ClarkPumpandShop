@@ -78,6 +78,7 @@ export interface ServiceAuthorizationView {
   service: {
     problem: string;
     requestedWork: string;
+    serviceNote?: string;
     category?: string;
     asset?: string;
     accessNotes?: string;

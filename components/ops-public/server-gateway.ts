@@ -1065,6 +1065,7 @@ const gateway: PublicOperationsGateway = {
       service: {
         problem: source.problem,
         requestedWork: vendorFacingScope(source.authorizedScope),
+        serviceNote: source.dispatchMessage,
         category: titleCase(source.categoryKey),
         asset: source.asset ? `${source.asset.name} · ${source.asset.assetTag}` : undefined,
         accessNotes: source.store.accessNotes,
