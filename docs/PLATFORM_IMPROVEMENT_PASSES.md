@@ -4,6 +4,21 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Usability pass 3 — simpler records and a clickable-looking interface (October 1, Claude)
+
+User asked for phase 3 plus a UI pass: anything clickable must look clickable, and actions must be visibly separated.
+
+- [x] UP3-01 Vendors can add other open jobs at the same store when accepting a work order ("Accept this job + N more") and tick several jobs at check-in.
+- [x] UP3-02 Owner Overview leads with 90-day spend compared with the prior 90 days (change shown only when both periods have costs) and opens the matching cost records.
+- [x] UP3-03 Vendor page split into four tabs (`?tab=contact|jobs|costs|documents`): Contact & performance, Current jobs, Costs, Documents & warranties. Older section links and save redirects open the tab holding the section; active tab highlighted.
+- [x] UP3-04 Invoice review lists check-in, checkout and approximate onsite time for visits on the matched work (same vendor), says when none are linked, and labels onsite time as approximate, not billable labor.
+- [x] UP3-05 Equipment page leads with cost, jobs, open-now count, warranties and next PM due; open jobs come next; the part picker is one dropdown beside the period choices above the history. Header action reads "Open current job" or "See N open jobs".
+- [x] UP3-06 Plain words replace service authorization, commitments, liability, source records, evidence links and amount basis on vendor, spend and work screens (for example "Send the work order", "Jobs accepted", "Missed promised date", "See replies"). The vendor-facing printed document keeps its formal title.
+- [x] UP3-07 Preview controls: role picker and demo-package switch render only in preview; signed-in workspaces show Switch company. Server ignores preview cookies and refuses the switch endpoints outside preview (existing production-identity tests) and a new render test covers the shell.
+- [x] UP3-08 UI pass. Root cause: the shell link reset (`.shell a`) out-ranked page link colors, so many table links rendered as plain text; it is now zero-specificity. List rows show the record name as the blue link and statuses as tinted tags (info status no longer uses link blue). Review-queue actions are buttons with "Review here" inside the row. Work-order status chip no longer looks like a button; side actions sit in one labeled "More actions" bar, including Assign a task; header reads "Work order"; history titles read in plain words. Store vendor list "Create work order" is a button; stronger keyboard focus ring.
+
+Evidence: browser checks at 1440px and 390px for vendor tabs, invoice visit times, equipment page, review queue, work-order page, lists, store and PM screens. An automated crawl of 120 facilities pages found 2,253 plain-looking links before and 825 after; the rest are secondary cells in rows whose name is already a blue link, and tab rows. No clickable element lacks a pointer cursor. Typecheck, lint and build pass. Unit suite 1,166/1,168 and e2e 64/65; the failures are the known container timeouts (PostgreSQL seed, invoice record query) that also fail without these changes.
+
 ## Usability pass 2 corrections — responsibility and navigation (October 1, Claude)
 
 Review feedback on passes 1–2: keep the direction, fix where a shorter page could still leave the wrong person looking responsible or send someone somewhere other than the button promised.
