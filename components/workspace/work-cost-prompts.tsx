@@ -6,7 +6,7 @@ import styles from "./communications.module.css";
 export async function WorkCostPrompts({workOrderId}:{workOrderId:string}) {
   const session = await loadOperatorSession();
   if (!["facilities","regional","executive","finance"].includes(session.role) || session.demoEdition === "accountability") return null;
-  const rows = await loadWorkCostPrompts(await getServerOpsRepository(),session,workOrderId,await getServerOpsReportingAsOf());
+  const rows = (await loadWorkCostPrompts(await getServerOpsRepository(),session,workOrderId,await getServerOpsReportingAsOf())).filter(row=>row.id!=="warranty");
   if (!rows.length) return null;
   return <section className={styles.prompts} aria-label="Before the next repair"><h2>Before the next repair</h2>{rows.map(row => <div key={row.id} className={styles.prompt}><div><strong>{row.title}</strong><p>{row.detail}</p></div><Link href={row.href}>{row.action} →</Link></div>)}</section>;
 }

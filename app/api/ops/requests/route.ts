@@ -1,3 +1,4 @@
+import { REPORT_PROBLEM_MAX_LENGTH } from "@/lib/ops/report-limits";
 import { createServiceRequest, OpsDomainError } from "@/lib/ops/commands";
 import {
   assertStoreInSessionScope,
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
         storeId,
         reporterName: formText(formData, "reporterName", { required: true, max: 100 }),
         reporterEmployeeId: formText(formData, "reporterEmployeeId", { max: 80 }) || undefined,
-        problem: formText(formData, "problem", { required: true, max: 2_000 }),
+        problem: formText(formData, "problem", { required: true, max: REPORT_PROBLEM_MAX_LENGTH }),
         priority: priority as "routine" | "urgent" | "emergency",
         impact: parseRequestImpactForm(formData, { source: "store_report", required: false }),
         actor: context.actor,

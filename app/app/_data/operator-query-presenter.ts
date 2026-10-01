@@ -1,4 +1,5 @@
 import { workStatusLabel } from "@/lib/product/work-status-label";
+import { workWarrantyMarkers } from "@/lib/ops/work-warranty-review";
 import "server-only";
 import { WORK_STAGE_STATUSES } from "@/lib/ops/dashboard-cohorts";
 import { workListNavigation } from "@/lib/ops/work-list-navigation";
@@ -205,7 +206,7 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
       { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
       { key: "next", expandable: true, value: row.problem, secondary: `${row.accountableParty}${row.dueAt ? ` · Follow up ${formatOperationsDate(row.dueAt)}` : ""}` },
       { key: "cost", value: row.recordedCostLineCount === 0 ? "Not recorded" : money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
-      { key: "status", value: workStatusLabel(row.status), tone: toneForStatus(row.status) },
+      { key: "status", value: workStatusLabel(row.status,row.assignmentKind), tone: toneForStatus(row.status) },
       { key: "updated", value: formatOperationsDateTime(row.updatedAt ?? row.createdAt), link: { href: `/app/work-orders/${row.id}?view=activity`, label: "Review history" } },
     ],
   };
@@ -364,6 +365,8 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       upcomingAppointmentAfter: upcomingAppointments ? getServerOpsReportingAsOf() : undefined,
     }), costEvidence ? Promise.resolve({ approvedWorkOrders: 0, storesWithApprovedWork: 0, storesWithMultipleApprovedJobs: 0 }) : repository.getHeldWorkPortfolioSummary(scope)]);
     result = work; rows = work.items.map(heldPlan ? heldWorkRow : (row) => ({ ...workRow(row), action: (row.status === "completed_pending_review" || row.needsConfirmation) && roleCan(session, "confirm_observable_result") ? { label: "Confirm work", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` } : undefined })); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "See who is handling each job and what happens next."; placeholder = "Search number, problem, store, vendor, or category";
+    const warranty = await workWarrantyMarkers(repository,scope,work.items.map(row=>row.id),getServerOpsReportingAsOf().slice(0,10));
+    rows.forEach(row=>{if(warranty.get(row.id)){const cell=row.cells.find(c=>c.key==="work");if(cell)cell.secondary="Warranty?";}});
     if (stageStatuses) {
       title = first(query.stage) === "not-sent" ? "Approved · not sent" : "Waiting on vendor";
       description = first(query.stage) === "not-sent" ? "Approved work, including jobs held for a later visit." : "Sent work needing a vendor response.";

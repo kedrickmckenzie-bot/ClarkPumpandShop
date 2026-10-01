@@ -1,0 +1,41 @@
+import { expect,it,vi } from "vitest";
+import { loadWorkCostPrompts } from "@/lib/ops/work-cost-prompts";
+import { workStatusLabel } from "@/lib/product/work-status-label";
+import { createNorthlineFixtureRepository } from "@/lib/ops/fixture-repository";
+import { NORTHLINE_ORGANIZATION_ID as org } from "@/lib/ops/fixtures";
+import { assignWorkOrder,createWorkOrder } from "@/lib/ops/commands";
+import { workWarrantyReview } from "@/lib/ops/work-warranty-review";
+import { dismissWorkWarranty } from "@/lib/ops/warranty-commands";
+const actor={organizationId:org,actorType:"user" as const,actorId:"membership-northline-facilities",actorName:"Jordan Lee"};
+it("distinguishes an explicit zero spending limit from a missing limit",async()=>{
+  const repository=createNorthlineFixtureRepository(),id="wo-warranty-104-compressor-callback";
+  const detail=await repository.getWorkOrderDetail({organizationId:org},id);
+  expect(detail?.nte?.amountMinor).toBe(0);
+  expect((await loadWorkCostPrompts(repository,{organizationId:org},id,"2026-08-25T16:00:00Z")).some(p=>p.id.startsWith("amount-"))).toBe(true);
+  vi.spyOn(repository,"getWorkOrderDetail").mockResolvedValue({...detail!,nte:undefined});
+  expect((await loadWorkCostPrompts(repository,{organizationId:org},id,"2026-08-25T16:00:00Z")).some(p=>p.id.startsWith("amount-"))).toBe(false);
+});
+it("reassignment gives internal maintenance an actionable task and rejects a non-technician",async()=>{
+  expect(workStatusLabel("approved","internal")).toBe("Internal work assigned");
+  expect(workStatusLabel("accepted","internal")).toBe("Assignment acknowledged");
+  expect(workStatusLabel("accepted","outside_vendor")).toBe("Vendor accepted");
+  const repository=createNorthlineFixtureRepository(),svc={repository};
+  const work=await createWorkOrder(svc,{organizationId:org,storeId:"store-northline-104",problem:"Inspect the leaking sink",accountableParty:"Facilities",nextAction:"Choose provider",actor});
+  await expect(assignWorkOrder(svc,{organizationId:org,workOrderId:work.id,kind:"internal",internalMembershipId:actor.actorId,actor})).rejects.toThrow("active internal");
+  await assignWorkOrder(svc,{organizationId:org,workOrderId:work.id,kind:"internal",internalMembershipId:"membership-northline-tech-1",actor});
+  expect((await repository.getWorkOrder(org,work.id))?.nextAction).toBe("Begin internal maintenance work");
+  expect((await repository.listWorkflowTasksForWorkOrder(org,work.id)).some(t=>t.status==="open"&&t.title==="Begin internal maintenance work"&&t.assigneeId==="membership-northline-tech-1")).toBe(true);
+});
+it("records a scoped warranty dismissal without changing terms and rejects stale coverage",async()=>{
+  const repository=createNorthlineFixtureRepository(),work=repository.snapshot().workOrders.find(w=>w.id==="wo-warranty-104-compressor-callback")!;
+  const review=await workWarrantyReview(repository,{organizationId:org},work.id,"2026-08-25");
+  expect(review?.possible).toBe(true);
+  const terms=repository.snapshot().manufacturerWarranties;
+  const svc={repository,clock:{now:()=>"2026-08-25T16:00:00.000Z"}};
+  const input={organizationId:org,workId:work.id,reason:"Damage is unrelated to covered repair",signature:review!.signature,actor};
+  await expect(dismissWorkWarranty({...input,signature:"stale"},svc)).rejects.toThrow("Coverage changed");
+  await dismissWorkWarranty(input,svc);
+  expect((await workWarrantyReview(repository,{organizationId:org},work.id,"2026-08-25"))?.possible).toBe(false);
+  expect(repository.snapshot().manufacturerWarranties).toEqual(terms);
+  expect(await workWarrantyReview(repository,{organizationId:org,storeIds:[]},work.id,"2026-08-25")).toBeNull();
+});

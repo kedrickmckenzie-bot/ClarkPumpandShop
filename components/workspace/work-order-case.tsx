@@ -70,6 +70,7 @@ interface WorkOrderCaseProps {
   sentWork?: ReactNode;
   emailHistory?: ReactNode;
   costPrompts?: ReactNode;
+  warrantyContext?: ReactNode;
   prices?: ReactNode;
   canAttachInvoice?: boolean;
   connectedReview?: WorkReviewModel | null;
@@ -561,6 +562,7 @@ export function WorkOrderCase({
   sentWork,
   emailHistory,
   costPrompts,
+  warrantyContext,
   prices,
   canAttachInvoice = false,
   connectedReview,
@@ -654,6 +656,7 @@ export function WorkOrderCase({
           <div><span>Escalates to</span><strong>{canonicalCase.escalationDestination}</strong></div>
           <small>Internal owner: {canonicalCase.internalAccountableParty}</small>
         </section> : null}
+        {warrantyContext}
         <nav className={styles.caseTabs} aria-label="Work-order sections">
           {visibleCaseViews.map((view) => (
             <Link

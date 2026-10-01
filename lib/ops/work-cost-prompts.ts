@@ -21,7 +21,7 @@ export async function loadWorkCostPrompts(repository:OpsRepository,scope:Organiz
   const covered = warranty?.manufacturerWarranties.some(row => (!work.component || !row.componentId || row.componentId === work.component.id) && row.startDate.slice(0,10) <= day && row.expirationDate.slice(0,10) >= day)
     || warranty?.appliedWarranties.some(row => row.startDate.slice(0,10) <= day && row.endDate.slice(0,10) >= day && warranty.repairItems.some(repair => repair.id === row.repairItemId && (!work.component || repair.componentId === work.component.id)))
     || work.asset?.warrantyEndsAt && work.asset.warrantyEndsAt.slice(0,10) >= day;
-  if (covered) prompts.push({id:"warranty",title:"Check warranty before authorizing repair",detail:"A recorded warranty term is current. Confirm coverage for this problem.",action:"Review warranty",href:`${base}?view=equipment#work-equipment-context`});
+  if (covered) prompts.push({id:"warranty",title:"Check warranty before authorizing repair",detail:"A recorded warranty term is current. Confirm coverage for this problem.",action:"Review warranty",href:`${base}#work-warranty`});
   const related = peers?.items.filter(row => row.id !== workId && row.status !== "cancelled") ?? [];
   if (related.length >= 2) prompts.push({id:"repeat",title:`${related.length}${peers?.nextCursor ? "+" : ""} other recent jobs on this equipment`,detail:"Past 180 days · Review the problem and repair history before another callout.",action:"Review history",href:`/app/work-orders?${new URLSearchParams({store:work.storeId,asset:work.asset!.id,createdFrom:from.slice(0,10),createdThrough:now.slice(0,10),...(work.component ? {component:work.component.id} : {})})}`});
   const otherHeld = held.items.filter(row => row.id !== workId);

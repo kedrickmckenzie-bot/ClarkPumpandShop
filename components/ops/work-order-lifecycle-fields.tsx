@@ -6,6 +6,7 @@ import { CircleDollarSign, Info } from "lucide-react";
 import { calculateRepairReplacementScreening } from "@/lib/ops/lifecycle-analytics";
 import type { AssetLifecycleInputViewModel } from "./data-contract";
 import styles from "./ops.module.css";
+import { WorkWarrantyHint } from "./work-warranty-hint";
 
 const dollars = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -35,10 +36,12 @@ export function WorkOrderLifecycleFields({
   assets,
   asOf,
   defaultAssetId,
+  componentId,
 }: {
   assets: AssetLifecycleInputViewModel[];
   asOf: string;
   defaultAssetId?: string;
+  componentId?: string;
 }) {
   const [search, setSearch] = useState("");
   const [assetId, setAssetId] = useState(defaultAssetId ?? "");
@@ -113,6 +116,7 @@ export function WorkOrderLifecycleFields({
         <small>Leaving this blank will not create a placeholder asset. It can be linked after diagnosis.</small>
       </label>
 
+      <WorkWarrantyHint assetId={assetId} componentId={componentId}/>
       <details className={styles.lifecyclePlanningPanel}>
         <summary className={styles.lifecyclePlanningHeading}>
           <CircleDollarSign aria-hidden="true" size={21} />

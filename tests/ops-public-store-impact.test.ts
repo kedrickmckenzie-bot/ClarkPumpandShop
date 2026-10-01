@@ -23,7 +23,7 @@ describe("public store issue business-impact intake", () => {
         submissionKey: "public-store-impact-report-0001",
         reporterName: "Avery Clerk",
         employeeId: "NFM-4102",
-        problem: "The beer cave is warming and the evaporator fan is grinding.",
+        problem: "Detailed readings and observations. ".repeat(200),
         urgency: "priority",
         area: "Beer cave",
         impact: {
@@ -38,6 +38,7 @@ describe("public store issue business-impact intake", () => {
 
     const after = repository.snapshot();
     const request = after.requests.find((candidate) => candidate.reference === receipt.requestNumber)!;
+    expect(request.problem).toContain("Detailed readings and observations. ".repeat(200).trim());
     const assessment = after.requestImpactAssessments.find((candidate) => candidate.requestId === request.id)!;
     const reviewTask = after.workflowTasks.find((candidate) => candidate.serviceRequestId === request.id)!;
 

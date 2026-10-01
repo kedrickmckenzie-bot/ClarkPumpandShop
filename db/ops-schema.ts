@@ -407,7 +407,7 @@ export const opsSiteVisitWorkOrders = sqliteTable("ops_site_visit_work_orders", 
   check("chk_ops_site_visit_work_outcome", sql`${table.outcome} IS NULL OR ${table.outcome} IN ('completed', 'temporary_repair', 'diagnosis_only', 'quote_required', 'parts_required', 'return_visit_required', 'no_issue_found', 'store_access_unavailable', 'work_not_authorized', 'not_addressed')`),
   check("chk_ops_site_visit_work_outcome_actor", sql`${table.outcomeRecordedByActorType} IS NULL OR ${table.outcomeRecordedByActorType} IN ('user', 'vendor_link', 'technician', 'store_device', 'system', 'support')`),
   check("chk_ops_site_visit_work_outcome_state", sql`(${table.outcome} IS NULL AND ${table.outcomeNotes} IS NULL AND ${table.outcomeRecordedByActorType} IS NULL AND ${table.outcomeRecordedByActorId} IS NULL AND ${table.outcomeRecordedByActorName} IS NULL AND ${table.outcomeRecordedAt} IS NULL AND ${table.followUpId} IS NULL) OR (${table.outcome} IS NOT NULL AND ${table.outcomeRecordedByActorType} IS NOT NULL AND length(trim(${table.outcomeRecordedByActorName})) > 0 AND ${table.outcomeRecordedAt} IS NOT NULL)`),
-  check("chk_ops_site_visit_work_followup_outcome", sql`${table.followUpId} IS NULL OR ${table.outcome} NOT IN ('completed', 'no_issue_found')`),
+  check("chk_ops_site_visit_work_followup_outcome", sql`${table.followUpId} IS NULL OR ${table.outcome} NOT IN ('completed', 'no_issue_found') OR (${table.outcome} = 'no_issue_found' AND ${table.selectionSource} = 'held_work' AND ${table.workOrderHoldId} IS NOT NULL)`),
 ]);
 
 export const opsWorkOrderVerifications = sqliteTable("ops_work_order_verifications", {

@@ -4,7 +4,7 @@ import { pmStoreAllowed } from "./pm-record-query";
 import { dashboardPageBounds } from "./dashboard-query";
 export const coverageViews = ["active", "expiring", "review", "expired", "all"] as const;
 export type CoverageView = typeof coverageViews[number];
-export interface WarrantyDirectoryQuery extends PageRequest { today: string; view: CoverageView; search?: string; id?: string; assetId?: string; vendorId?: string; componentId?: string }
+export interface WarrantyDirectoryQuery extends PageRequest { today: string; view: CoverageView; categoryKey?: string; search?: string; id?: string; assetId?: string; vendorId?: string; componentId?: string }
 export interface WarrantyDirectoryRow {
  id: string; kind: "registered" | "repair"; assetId: string; assetName: string; assetTag: string;
  storeId: string; storeNumber: string; storeName: string; address: string; component?: string; componentId?: string;
@@ -17,7 +17,7 @@ export function warrantyStatus(start:string,end:string,amended:boolean,today:str
 export function coverageEndWindow(today:string) { const d=new Date(today+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+90);return d.toISOString().slice(0,10); }
 export function warrantyDirectoryFromFixture(f:OpsFixture,scope:OrganizationScope,q:WarrantyDirectoryQuery):WarrantyDirectoryPage {
  const stores=new Map(f.stores.filter(s=>pmStoreAllowed(scope,s)).map(s=>[s.id,s]));
- const assets=new Map(f.assets.filter(a=>a.organizationId===scope.organizationId&&stores.has(a.storeId)).map(a=>[a.id,a]));
+ const assets=new Map(f.assets.filter(a=>a.organizationId===scope.organizationId&&stores.has(a.storeId)&&(!q.categoryKey||a.categoryKey===q.categoryKey)).map(a=>[a.id,a]));
  const items:WarrantyDirectoryRow[]=[];
  const base=(assetId:string)=>{const a=assets.get(assetId)!;const s=stores.get(a.storeId)!;return {assetId,assetName:a.name,assetTag:a.assetTag,storeId:s.id,storeNumber:s.storeNumber,storeName:s.name,address:[s.address1,s.city,s.state,s.postalCode].filter(Boolean).join(" ")};};
  const component=(id?:string)=>f.components.find(c=>c.organizationId===scope.organizationId&&c.id===id)?.name;

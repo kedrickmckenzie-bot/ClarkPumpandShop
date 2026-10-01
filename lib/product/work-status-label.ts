@@ -1,7 +1,11 @@
 import type { WorkOrder } from "@/lib/ops/types";
 
 /** A status describes the work; the separate next-action owner says who must act. */
-export function workStatusLabel(status: WorkOrder["status"]): string {
+export function workStatusLabel(status: WorkOrder["status"], assignmentKind?: string): string {
+  if (assignmentKind === "internal") {
+    if (status === "approved" || status === "issued") return "Internal work assigned";
+    if (status === "accepted") return "Assignment acknowledged";
+  }
   return {
     draft: "Draft", awaiting_approval: "Approval needed", approved: "Approved · not sent",
     issued: "Sent to vendor", accepted: "Vendor accepted", scheduled: "Scheduled",

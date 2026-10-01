@@ -995,6 +995,10 @@ class SqlOpsRepository implements OpsRepository {
     };
   }
 
+  async listWorkWarrantyDecisions(organizationId: string, workId: string) {
+    return (await this.all("SELECT actor_name, occurred_at, payload_json FROM ops_audit_events WHERE organization_id = ? AND aggregate_type = 'work_order' AND aggregate_id = ? AND event_type = 'work_order.warranty_dismissed' ORDER BY occurred_at DESC, id DESC LIMIT 50", [organizationId, workId])).map(r => ({actorName: text(r,"actor_name"), occurredAt: new Date(text(r,"occurred_at")).toISOString(), payloadJson:text(r,"payload_json")}));
+  }
+
   async getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null> {
     const workOrder = await this.getWorkOrder(scope.organizationId, workOrderId);
     if (!workOrder) return null;

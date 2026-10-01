@@ -12,7 +12,7 @@ export interface PmReviewQuery extends PageRequest {
 }
 export interface PmReviewRow {
   id:string; storeId:string; storeNumber:string; storeName:string; programId:string; programName:string;
-  createdAt:string; periodLabel:string; invoiceCount:number; visitCount:number; occurrenceCount:number; missingCount:number; unavailableLinks:number;
+  createdAt:string; periodLabel:string; invoiceCount:number; visitCount:number; occurrenceCount:number; completedCount:number; missingCount:number; unavailableLinks:number;
   currency?:string; amountMinor?:number; missingAmountMinor?:number;
 }
 export interface PmReviewSourceRow {
@@ -62,11 +62,11 @@ export function pmReviewFromFixture(fixture:OpsFixture,scope:OrganizationScope,q
     const allocations=invoices.flatMap(i=>i.allocations),currencies=new Set(allocations.map(a=>a.amount.currency)),currency=currencies.size===1?[...currencies][0]:undefined;
     const store=stores.get(parent.storeId)!;
     const row:PmReviewRow={id:record.id,storeId:store.id,storeNumber:store.storeNumber,storeName:store.name,programId:program.id,programName:program.name,createdAt:new Date(record.createdAt).toISOString(),periodLabel:typeof facts.periodLabel==="string"?facts.periodLabel:"Recorded review period",
-      invoiceCount:invoices.length,visitCount:visits.length,occurrenceCount:occurrences.length,missingCount:missing.length,unavailableLinks,currency,amountMinor:currency?allocations.reduce((n,a)=>n+a.amount.amountMinor,0):undefined,missingAmountMinor:currency?allocations.filter(a=>!visited(a.workOrderId)).reduce((n,a)=>n+a.amount.amountMinor,0):undefined};
+      invoiceCount:invoices.length,visitCount:visits.length,occurrenceCount:occurrences.length,completedCount:occurrences.filter(o=>Boolean(o.completedAt)).length,missingCount:missing.length,unavailableLinks,currency,amountMinor:currency?allocations.reduce((n,a)=>n+a.amount.amountMinor,0):undefined,missingAmountMinor:currency?allocations.filter(a=>!visited(a.workOrderId)).reduce((n,a)=>n+a.amount.amountMinor,0):undefined};
     reviews.push(row);
     sourceById.set(record.id,{
       invoices:invoices.flatMap(({invoice,allocations})=>{const selected=query.missing?allocations.filter(a=>!visited(a.workOrderId)):allocations;if(!selected.length)return [];const currencies=new Set(selected.map(a=>a.amount.currency));return [{id:invoice.id,label:invoice.vendorInvoiceNumber,detail:"Linked invoice amount",date:invoice.invoiceDate,status:invoice.status,currency:currencies.size===1?[...currencies][0]:undefined,amountMinor:currencies.size===1?selected.reduce((n,a)=>n+a.amount.amountMinor,0):undefined}];}),
-      occurrences:(query.missing?missing:occurrences).map(o=>({id:o.id,label:work.get(o.workOrderId!)!.number,detail:program.name,date:new Date(o.dueAt).toISOString(),status:visited(o.workOrderId!)?"Visit recorded":"No visit recorded",workId:o.workOrderId,workNumber:work.get(o.workOrderId!)!.number})),
+      occurrences:(query.missing?missing:occurrences).map(o=>({id:o.id,label:work.get(o.workOrderId!)!.number,detail:`${program.name} · ${o.completedAt ? "Marked complete" : "Not completed"}`,date:new Date(o.dueAt).toISOString(),status:visited(o.workOrderId!)?"Visit recorded":"No visit recorded",workId:o.workOrderId,workNumber:work.get(o.workOrderId!)!.number})),
       visits:visits.map(v=>({id:v.id,label:v.technicianName,detail:v.providerName??v.purpose,date:new Date(v.checkedInAt).toISOString(),status:v.status})),
     });
   }

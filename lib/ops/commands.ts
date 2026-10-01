@@ -1,4 +1,5 @@
 import { confirmationAssignee } from "./confirmation-policy";
+import { workWarrantyReview } from "./work-warranty-review";
 import { latestRecordedWorkOutcome, applicableOutcomeVerification } from "./work-order-outcome";
 import { buildConfirmedWorkWarrantyStatements } from "./warranty-commands";
 import { prepareOfferedWork, resolveOfferedWork, offerResponseKey } from "./optional-work-policy";
@@ -780,6 +781,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     if (!member || member.status !== "active" || (member.role !== "internal_technician" && !inspectionAssignee)) {
       throw new OpsDomainError("FORBIDDEN", "Internal assignee is not an active maintenance team member");
     }
+    if (!(await repository.listStoreIdsForMembership(input.organizationId,member.id)).includes(input.storeId)) throw new OpsDomainError("FORBIDDEN", "Internal maintenance member does not cover this store");
   }
   if (input.initialAssignment?.kind === "choose_later" && (input.initialAssignment.vendorId || input.initialAssignment.internalMembershipId)) {
     throw new OpsDomainError("VALIDATION", "Choose later cannot include a provider");
@@ -1212,7 +1214,13 @@ export async function assignWorkOrder(svc: OpsCommandServices, input: AssignWork
       if (complianceIssue) throw new OpsDomainError("FORBIDDEN", `New routine work is paused because the vendor's customer-required ${complianceIssue.documentType} record is not current. Active jobs are not cancelled.`);
     }
   }
-  if (input.kind === "internal" && (!input.internalMembershipId || !(await repository.getMembership(input.organizationId, input.internalMembershipId)))) throw new OpsDomainError("VALIDATION", "Internal maintenance member is required");
+  if (input.kind === "internal") {
+    const member = input.internalMembershipId ? await repository.getMembership(input.organizationId, input.internalMembershipId) : null;
+    if (!member || member.status !== "active" || member.role !== "internal_technician" || input.vendorId) {
+      throw new OpsDomainError("VALIDATION", "Choose an active internal maintenance team member.");
+    }
+    if (!(await repository.listStoreIdsForMembership(input.organizationId,member.id)).includes(workOrder.storeId)) throw new OpsDomainError("FORBIDDEN", "Internal maintenance member does not cover this store");
+  }
   if (input.kind === "choose_later" && (input.vendorId || input.internalMembershipId)) throw new OpsDomainError("VALIDATION", "Choose later cannot include a provider");
   const now = clock.now(); const id = ids.next("assignment"); const status: AssignmentStatus = "pending";
   const prior = await repository.getActiveAssignment(input.organizationId, input.workOrderId);
@@ -1229,9 +1237,9 @@ export async function assignWorkOrder(svc: OpsCommandServices, input: AssignWork
     { sql: "UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ? AND work_order_id = ? AND status NOT IN (?, ?, ?, ?)", params: ["superseded", input.organizationId, prior.id, input.workOrderId, "cancelled", "declined", "completed", "superseded"] },
     ...revokeServiceAuthorizationTokens(input.organizationId, priorIssuances.map((issuance) => issuance.id), now),
   );
-  statements.push(insert("ops_work_order_assignments", { id, organization_id: input.organizationId, work_order_id: input.workOrderId, kind: input.kind, vendor_id: input.vendorId, internal_membership_id: input.internalMembershipId, status, assigned_at: now, supersedes_assignment_id: prior?.id }), { sql: "UPDATE ops_work_orders SET next_action = ?, accountable_party = ? WHERE organization_id = ? AND id = ?", params: [input.kind === "choose_later" ? "Choose service provider" : "Issue service authorization", input.kind === "outside_vendor" ? "Facilities coordinator" : input.kind === "internal" ? "Internal maintenance" : "Facilities coordinator", input.organizationId, input.workOrderId] }, ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: input.workOrderId, eventType: "work_order.assigned", actor: input.actor, occurredAt: now, payload: { assignmentId: id, supersedesAssignmentId: prior?.id, kind: input.kind, vendorId: input.vendorId, internalMembershipId: input.internalMembershipId }, ids }));
+  statements.push(insert("ops_work_order_assignments", { id, organization_id: input.organizationId, work_order_id: input.workOrderId, kind: input.kind, vendor_id: input.vendorId, internal_membership_id: input.internalMembershipId, status, assigned_at: now, supersedes_assignment_id: prior?.id }), { sql: "UPDATE ops_work_orders SET next_action = ?, accountable_party = ? WHERE organization_id = ? AND id = ?", params: [input.kind === "choose_later" ? "Choose service provider" : input.kind === "internal" ? "Begin internal maintenance work" : "Issue service authorization", input.kind === "outside_vendor" ? "Facilities coordinator" : input.kind === "internal" ? "Internal maintenance" : "Facilities coordinator", input.organizationId, input.workOrderId] }, ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: input.workOrderId, eventType: "work_order.assigned", actor: input.actor, occurredAt: now, payload: { assignmentId: id, supersedesAssignmentId: prior?.id, kind: input.kind, vendorId: input.vendorId, internalMembershipId: input.internalMembershipId }, ids }));
   const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, input.workOrderId);
-  const taskTitle = input.kind === "choose_later" ? "Choose service provider" : "Issue service authorization";
+  const taskTitle = input.kind === "choose_later" ? "Choose service provider" : input.kind === "internal" ? "Begin internal maintenance work" : "Issue service authorization";
   const taskAssignee = input.kind === "internal" && input.internalMembershipId
     ? { assigneeType: "user" as const, assigneeId: input.internalMembershipId, assigneeName: "Internal maintenance" }
     : facilitiesAssignee();
@@ -1547,7 +1555,7 @@ export async function routeAndIssueWorkOrder(
       eventType: "work_order.issued",
       actor: input.actor,
       occurredAt: now,
-      payload: { issuanceId, assignmentId, revision, channel: input.channel, vendorId: vendor.id, supersedesIssuanceId: latest?.id },
+      payload: { issuanceId, assignmentId, revision, channel: input.channel, vendorId: vendor.id, supersedesIssuanceId: latest?.id, activeWarrantyCoverageIds: (await workWarrantyReview(repository,{organizationId:input.organizationId,storeIds:[workOrder.storeId]},workOrder.id,now.slice(0,10)))?.coverage.items.map(c=>c.id) ?? [] },
       ids,
     }),
   );

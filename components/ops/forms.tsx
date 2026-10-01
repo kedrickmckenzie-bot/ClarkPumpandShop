@@ -146,7 +146,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
             {!accountabilityOnly ? (
               <details className={styles.optionalFormSection} open={Boolean(componentId || model.defaults?.assetId || model.defaults?.categoryKey)}>
                 <summary><strong>Classify equipment</strong><span>Optional · add now or later</span></summary>
-                <WorkOrderEquipment model={model} />
+                <WorkOrderEquipment model={model} componentId={componentId} />
               </details>
             ) : null}
           </section>
@@ -237,7 +237,7 @@ export function VendorIssuancePanel({ model, edition = "complete" }: { model: Ve
               <span>Service note <small>Optional</small></span>
               <textarea id="issuance-message" name="message" rows={3} placeholder="Add access instructions, preferred arrival times, or other details for the vendor." />
             </label>
-            <div className={styles.formFooter}><span className={styles.formMeta}>{model.workOrderNumber}{model.currentRevision ? ` · next revision ${model.currentRevision + 1}` : ""}</span><button className={styles.primaryButton} type="submit">Generate service authorization<Send aria-hidden="true" size={17} /></button></div>
+            <div className={styles.formFooter}><span className={styles.formMeta}>{model.workOrderNumber}{model.currentRevision ? ` · next revision ${model.currentRevision + 1}` : ""}</span><button className={styles.primaryButton} type="submit">{model.possibleWarranty ? "Issue anyway (possible warranty)" : "Generate service authorization"}<Send aria-hidden="true" size={17} /></button></div>
           </RecordForm>
         </details>
       )}

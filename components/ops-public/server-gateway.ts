@@ -1,3 +1,4 @@
+import { REPORT_PROBLEM_MAX_LENGTH } from "@/lib/ops/report-limits";
 import { masterDocuments } from "@/lib/ops/compliance-documents";
 import { offerResponseKey } from "@/lib/ops/optional-work-policy";
 import type { ServiceAuthorizationSnapshot } from "@/lib/ops/view-models";
@@ -1543,7 +1544,9 @@ const gateway: PublicOperationsGateway = {
         throw new PublicWorkflowError("The prior visit receipt does not match this store action.", 409, "idempotency_result_mismatch");
       }
       const priorWorkOrders = await publicWorkOrdersForVisit(repository, organizationId, prior);
-      if (!sameStringList(priorWorkOrders.map((workOrder) => workOrder.id), [...workOrderIds, ...heldWorkOrderIds])) {
+      // The request hash already verifies the original selection. Additional work may
+      // have been attached since check-in; it must not invalidate that receipt.
+      if ([...workOrderIds, ...heldWorkOrderIds].some(id => !priorWorkOrders.some(work => work.id === id))) {
         throw new PublicWorkflowError("The prior visit receipt does not match this work selection.", 409, "idempotency_result_mismatch");
       }
       const checkout = await replayCheckoutCapability({ repository, visit: prior, accessToken: token, submissionKey });
@@ -1920,7 +1923,7 @@ const gateway: PublicOperationsGateway = {
     const organizationId = accessOrganizationId(access);
     const storeView = accessStore(access);
     const reporterName = cleanRequired(command.reporterName, "Your name", 100);
-    const problem = cleanRequired(command.problem, "Problem description", 2000);
+    const problem = cleanRequired(command.problem, "Problem description", REPORT_PROBLEM_MAX_LENGTH);
     const employeeId = cleanOptional(command.employeeId, 80);
     const area = cleanOptional(command.area, 120);
     const storedProblem = area ? `Area or equipment: ${area}\n\n${problem}` : problem;

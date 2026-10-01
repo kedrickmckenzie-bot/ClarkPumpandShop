@@ -6,6 +6,7 @@ import { reviewItemHref, safeReviewQueue } from "@/lib/ops/review-navigation";
 import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { attentionAccess, presentAttentionRow } from "./attention-presenter";
 import { compactStoreLabel } from "@/lib/product/store-label";
+import { workWarrantyMarkers } from "@/lib/ops/work-warranty-review";
 
 type Query = Record<string,string | string[] | undefined>;
 const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
@@ -37,6 +38,8 @@ export async function buildReviewQueue(repository: OpsRepository,session: Operat
   const metricQueries=[base,{...base,lane:"mine" as const},{...base,priority:"urgent" as const},{...base,type:"service-record" as const},{...base,type:"follow-up" as const},{...base,type:"vendor-task" as const}];
   const totals=itemIds ? [] : await Promise.all(metricQueries.map(metric=>repository.listAttention(scope,access,{...metric,limit:1})));
   const actions=result.items.map(row=>presentAttentionRow({...row,storeLabel:row.storeLabel?compactStoreLabel(row.storeLabel,session.organizationName):undefined},asOf));
+  const warranty=await workWarrantyMarkers(repository,scope,result.items.slice(0,PAGE_SIZE).flatMap(r=>r.workOrderId?[r.workOrderId]:[]),asOf.slice(0,10));
+  actions.slice(0,PAGE_SIZE).forEach((action,index)=>{if(warranty.get(result.items[index].workOrderId??""))action.reasonLabel=`Warranty? · ${action.reasonLabel??""}`;});
   const labels=["Open items","Needs your action","Do now","Records to check","Follow-ups","Vendor tasks"];
   const filter=(key:"lane"|"type"|"priority",label:string,options:Array<[string,string]>)=>({id:`attention-${key}`,label,options:options.map(([value,title])=>({value:value||"all",label:title,selected:(query[key]??"")===value,href:reviewHref({...query,[key]:value||undefined})}))});
   return {state:{kind:"ready"},page:{title:"Review queue",description:query.lane === "history" ? "Completed and canceled tasks." : "Open an item and take the next step.",scopeLabel,updatedLabel:`Updated ${formatOperationsDate(asOf)}`},

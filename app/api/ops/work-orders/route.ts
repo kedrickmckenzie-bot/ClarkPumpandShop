@@ -1,3 +1,4 @@
+import { WORK_PROBLEM_MAX_LENGTH } from "@/lib/ops/report-limits";
 import { createWorkOrder, OpsDomainError, reconcileUnmatchedVisit } from "@/lib/ops/commands";
 import { localDateTimeToIso } from "@/lib/ops/local-date-time";
 import {
@@ -115,7 +116,7 @@ export async function POST(request: Request) {
         storeId,
         requestId: formText(formData, "requestId", { max: 120 }) || undefined,
         pmOccurrenceId: formText(formData, "pmOccurrenceId", { max: 120 }) || undefined,
-        problem: formText(formData, "problem", { required: true, max: 2_000 }),
+        problem: formText(formData, "problem", { required: true, max: WORK_PROBLEM_MAX_LENGTH }),
         authorizedScope: formText(formData, "authorizedScope", { max: 2_000 }) || undefined,
         categoryKey: (assignmentKind === "hold_for_visit" ? formText(formData, "holdCategoryKey", { max: 120 }) : "") || formText(formData, "categoryKey", { max: 120 }) || undefined,
         assetId: formText(formData, "assetId", { max: 120 }) || undefined,

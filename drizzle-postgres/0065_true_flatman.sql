@@ -1,0 +1,2 @@
+ALTER TABLE "ops_site_visit_work_orders" DROP CONSTRAINT "chk_ops_site_visit_work_followup_outcome";--> statement-breakpoint
+ALTER TABLE "ops_site_visit_work_orders" ADD CONSTRAINT "chk_ops_site_visit_work_followup_outcome" CHECK ("ops_site_visit_work_orders"."follow_up_id" IS NULL OR "ops_site_visit_work_orders"."outcome" NOT IN ('completed', 'no_issue_found') OR ("ops_site_visit_work_orders"."outcome" = 'no_issue_found' AND "ops_site_visit_work_orders"."selection_source" = 'held_work' AND "ops_site_visit_work_orders"."work_order_hold_id" IS NOT NULL));

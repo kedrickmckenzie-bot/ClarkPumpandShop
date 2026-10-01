@@ -1,4 +1,5 @@
 import { createSentWorkLink } from "@/lib/ops/sent-work-orders";
+import { multipleHeldWorkRegression } from "./helpers/multiple-held-work-regression";
 import { storeTaskRegression } from "./helpers/store-task-regression";
 import { invoiceUploadRegression } from "./helpers/invoice-upload-regression";
 import { complianceRegression } from "./helpers/compliance-regression";
@@ -764,6 +765,12 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
 
     await expect(repository.deleteSavedView(organizationId, membershipId, "saved-view-pg-roundtrip-2")).resolves.toBe(true);
   }, 60_000);
+
+  it("adds multiple held jobs and checks out all outcomes on PostgreSQL", async () => {
+    const repository = createOpsPostgresRepository(pool);
+    await seedOpsRepository(repository, buildNorthlinePresentationFixture());
+    await multipleHeldWorkRegression(repository);
+  }, 120_000);
 
   it.each([
     ["2026-09-01T12:00:00.000Z", false],

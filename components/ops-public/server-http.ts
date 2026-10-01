@@ -39,8 +39,13 @@ export function publicApiError(error: unknown): Response {
       { status: 422, headers: { "cache-control": "no-store" } },
     );
   }
+  const reference = crypto.randomUUID();
+  const failure = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const identifier = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_]{1,120}$/.test(value) ? value : undefined;
+  // Do not log raw queries, parameters, public tokens, or uploaded/customer data.
+  console.error("Public workflow failed", { reference, name: identifier(failure.name), code: identifier(failure.code), constraint: identifier(failure.constraint), table: identifier(failure.table) });
   return Response.json(
-    { error: "The request could not be completed. Try again.", code: "unexpected_error" },
+    { error: `The request could not be completed. Try again. If it keeps happening, share this reference: ${reference}`, code: "unexpected_error", reference },
     { status: 500, headers: { "cache-control": "no-store" } },
   );
 }

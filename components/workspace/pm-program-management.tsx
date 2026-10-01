@@ -69,7 +69,7 @@ export interface PmProgramManagementModel {
   reconciliationHref?: string;
   reconciliations: Array<{
     id:string; programName:string; storeLabel:string; periodLabel:string;
-    invoiceCount:number; visitCount:number; missingCount:number; unavailableLinks:number;
+    invoiceCount:number; visitCount:number; missingCount:number; unavailableLinks:number; occurrenceCount?:number; completedCount?:number; occurrencesHref?:string;
     amountLabel:string; missingAmountLabel:string;
     href:string; invoicesHref:string; visitsHref:string; missingHref:string; missingAmountHref:string;
   }>;
@@ -115,9 +115,9 @@ export function PmProgramManagement({ model }: { model: PmProgramManagementModel
       {model.programPagination ? <PaginationControls pagination={model.programPagination} label="Company schedule pages" /> : null}
       {model.canReviewInvoices !== false && model.reconciliations.length ? <section className={styles.reviewSection} aria-labelledby="pm-evidence-review-title">
         <header><div><h3 id="pm-evidence-review-title">PM invoice review</h3><p>Check linked invoices and visit evidence.</p></div><Link href={model.reconciliationHref ?? "#pm-evidence-review-title"}>All reviews ({model.summary.evidenceReviews})<ArrowRight size={16} aria-hidden="true" /></Link></header>
-        <div className={styles.tableWrap}><table><caption>Open PM invoice reviews</caption><thead><tr><th>Store / schedule</th><th>Linked invoice amount</th><th>Recorded visits</th><th>Without visit evidence</th></tr></thead><tbody>{model.reconciliations.map(item=><tr key={item.id}>
+        <div className={styles.tableWrap}><table><caption>Open PM invoice reviews</caption><thead><tr><th>Store / schedule</th><th>PM windows in review</th><th>Linked invoice amount</th><th>Recorded visits</th><th>Without visit evidence</th></tr></thead><tbody>{model.reconciliations.map(item=><tr key={item.id}>
           <td><Link href={item.href}><strong>{item.storeLabel}</strong><small>{item.programName}</small><small>{item.periodLabel}</small></Link></td>
-          <td><Link href={item.invoicesHref}><strong>{item.amountLabel}</strong><small>{item.invoiceCount} invoices</small></Link></td>
+          <td><Link href={item.occurrencesHref ?? item.href}><strong>{item.occurrenceCount ?? "—"} windows</strong><small>{item.completedCount ?? "—"} marked complete</small></Link></td><td><Link href={item.invoicesHref}><strong>{item.amountLabel}</strong><small>{item.invoiceCount} invoices</small></Link></td>
           <td><Link href={item.visitsHref}><strong>{item.visitCount} visits</strong><small>{item.unavailableLinks ? `${item.unavailableLinks} links unavailable` : "Open visit records"}</small></Link></td>
           <td><Link href={item.missingHref}><strong>{item.missingCount} PM windows</strong><small>Open windows without visits</small></Link><Link href={item.missingAmountHref}><strong>{item.missingAmountLabel}</strong><small>Linked invoice amount</small></Link></td>
         </tr>)}</tbody></table></div>

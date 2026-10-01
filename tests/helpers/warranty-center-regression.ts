@@ -3,6 +3,8 @@ import type {OpsRepository} from "@/lib/ops/repository";
 import {addEquipmentWarranty,startWarrantyReview,decideWarrantyCoverage,updateWarrantyProgress,attachWarrantyFiles} from "@/lib/ops/warranty-commands";
 import {buildNorthlinePresentationFixture} from "@/lib/ops/fixtures";
 import {warrantyDirectoryFromFixture} from "@/lib/ops/warranty-directory";
+import {workWarrantyReview} from "@/lib/ops/work-warranty-review";
+import {dismissWorkWarranty} from "@/lib/ops/warranty-commands";
 export async function warrantyCenterRegression(repository:OpsRepository) {
  const organizationId="org-northline-demo",fixture=buildNorthlinePresentationFixture(),scope={organizationId},today="2026-09-27",actor={organizationId,actorType:"user" as const,actorId:"membership-northline-facilities",actorName:"Jordan Lee"},svc={repository,clock:{now:()=>today+"T14:00:00.000Z"}};
  for(const view of ["active","expiring","review","expired","all"] as const) {const q={today,view,limit:100};const expected=warrantyDirectoryFromFixture(fixture,scope,q),actual=await repository.listWarrantyDirectory(scope,q);const seedIds=new Set([...fixture.manufacturerWarranties,...fixture.appliedWarranties].map(w=>w.id));expect(actual.items.filter(r=>seedIds.has(r.id))).toEqual(expected.items);expect(actual.totalCount).toBeGreaterThanOrEqual(expected.totalCount);}
@@ -37,4 +39,12 @@ export async function warrantyCenterRegression(repository:OpsRepository) {
  await attachWarrantyFiles({organizationId,actor,id:saved.id,files:[file]},svc);expect((await repository.listFilesForEntity(organizationId,"warranty",saved.id)).map(f=>f.originalName)).toEqual([file.originalName]);
  expect(await repository.listFilesForEntity(organizationId,"warranty",saved.id,"vendor_shared")).toEqual([]);
  await expect(attachWarrantyFiles({organizationId,actor,id:saved.id,files:[{...file,id:"foreign-file",organizationId:"other"}]},svc)).rejects.toMatchObject({code:"VALIDATION"});
+ const categoryRows=await repository.listWarrantyDirectory({...scope,storeIds:[store.id]},{today,view:"active",categoryKey:"refrigeration",limit:100});
+ expect(categoryRows.items.some(c=>c.id===saved.id)).toBe(true);
+ expect((await repository.listWarrantyDirectory({...scope,storeIds:[store.id]},{today,view:"active",categoryKey:"nonexistent"})).totalCount).toBe(0);
+ const review=await workWarrantyReview(repository,scope,workId,today);expect(review?.possible).toBe(true);
+ await dismissWorkWarranty({organizationId,actor,workId,signature:review!.signature,reason:"Diagnosis confirms an unrelated problem"},svc);
+ expect((await workWarrantyReview(repository,scope,workId,today))?.decision?.actorName).toBe(actor.actorName);
+ expect((await workWarrantyReview(repository,scope,workId,today))?.possible).toBe(false);
+ expect(await repository.listWorkWarrantyDecisions("other",workId)).toEqual([]);
 }

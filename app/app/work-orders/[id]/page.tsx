@@ -1,4 +1,6 @@
 import { SentWorkOrders } from "@/components/workspace/sent-work-orders";
+import { workWarrantyReview } from "@/lib/ops/work-warranty-review";
+import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import {LinkedStoreTasks} from "@/components/workspace/linked-store-tasks";
 import { WorkFiles } from "@/components/workspace/work-files";
 import {WorkWarrantyContext} from "@/components/workspace/work-warranty-context";
@@ -60,6 +62,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     ["overview", "equipment"].includes(requestedView) ? loadConnectedWorkReview(id) : null,
   ]);
   const accountabilityOnly = session.demoEdition === "accountability";
+  issuance.possibleWarranty = (await workWarrantyReview(await getServerOpsRepository(),session,id,new Date().toISOString().slice(0,10)))?.possible ?? false;
   const view = accountabilityOnly && !["overview", "service", "visits", "confirmation"].includes(requestedView)
     ? "overview"
     : requestedView;
@@ -112,6 +115,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
           ?? (session.role === "finance"
             ? { label: "Review financial evidence", href: `/app/work-orders/${id}?view=cost` }
             : heldCase.primaryNextAction);
+  if (issuance.possibleWarranty && viewerAction?.href?.includes("#issue-work")) viewerAction.label = "Issue anyway (possible warranty)";
   return (
     <>
     {notice ? (
@@ -127,9 +131,10 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     ) : null}
     {returnDecision ? <Link href={returnDecision}>← Back to equipment review</Link> : null}
     <WorkOrderCase
+      warrantyContext={<WorkWarrantyContext workOrderId={id}/>}
       sentWork={view === "service" ? <SentWorkOrders workOrderId={id}/> : undefined}
       emailHistory={["overview","activity"].includes(view) ? <><LinkedStoreTasks kind="work" id={id}/><WorkFiles workOrderId={id}/><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}
-      costPrompts={["overview", "service"].includes(view) ? <><WorkWarrantyContext workOrderId={id}/><WorkCostPrompts workOrderId={id}/></> : undefined}
+      costPrompts={["overview", "service"].includes(view) ? <WorkCostPrompts workOrderId={id}/> : undefined}
       prices={!accountabilityOnly && view === "cost" ? <WorkPricePanel workOrderId={id} /> : undefined}
       connectedReview={connectedReview}
       model={model}

@@ -463,6 +463,13 @@
       "when": 1790732658074,
       "tag": "0065_round_mephisto",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "6",
+      "when": 1790866766406,
+      "tag": "0066_opposite_vin_gonzales",
+      "breakpoints": true
     }
   ]
 }

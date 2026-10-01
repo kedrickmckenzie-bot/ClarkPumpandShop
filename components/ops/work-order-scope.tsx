@@ -15,17 +15,17 @@ export function WorkOrderStore({ model, locked }: { model: CreateWorkOrderPageVi
   if (locked) return <label className={styles.field}><span>Store</span><input type="hidden" name="storeId" value={storeId} /><input readOnly value={model.stores.find(s => s.value === storeId)?.label ?? "Selected store"} /></label>;
   return <StorePicker searchable initial={model.stores} defaultStoreId={storeId} onSelect={setStoreId} />;
 }
-export function WorkOrderEquipment({ model }: { model: CreateWorkOrderPageViewModel }) {
+export function WorkOrderEquipment({ model, componentId }: { model: CreateWorkOrderPageViewModel; componentId?: string }) {
   const { storeId } = useContext(Scope);
-  return <EquipmentAtStore key={storeId} model={model} storeId={storeId} />;
+  return <EquipmentAtStore key={storeId} model={model} storeId={storeId} componentId={componentId} />;
 }
-function EquipmentAtStore({ model, storeId }: { model: CreateWorkOrderPageViewModel; storeId: string }) {
+function EquipmentAtStore({ model, storeId, componentId }: { model: CreateWorkOrderPageViewModel; storeId: string; componentId?: string }) {
   const initial = storeId === model.defaults?.storeId;
   const [category, setCategory] = useState(initial ? model.defaults?.categoryKey ?? "" : "");
   const assets = model.assetLifecycleInputs.filter(a => a.storeId === storeId && (!category || a.categoryKey === category));
   return <div className={styles.optionalFormBody}>
     <label className={styles.field}><span>Category <small>Optional</small></span><select name="categoryKey" value={category} onChange={e => setCategory(e.target.value)}><option value="">Classify later</option>{model.categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select></label>
-    {!storeId ? <p>Choose a store to see its equipment.</p> : <WorkOrderLifecycleFields key={category} assets={assets} asOf={model.lifecycleAsOf} defaultAssetId={initial && assets.some(a => a.id === model.defaults?.assetId) ? model.defaults?.assetId : undefined} />}
+    {!storeId ? <p>Choose a store to see its equipment.</p> : <WorkOrderLifecycleFields key={category} componentId={componentId} assets={assets} asOf={model.lifecycleAsOf} defaultAssetId={initial && assets.some(a => a.id === model.defaults?.assetId) ? model.defaults?.assetId : undefined} />}
     {storeId && !assets.length ? <p>No equipment listed for this selection. You can still create the work order.</p> : null}
   </div>;
 }

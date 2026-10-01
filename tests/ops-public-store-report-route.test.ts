@@ -62,6 +62,18 @@ describe("public store report route idempotency boundary", () => {
     });
   });
 
+  it("accepts a detailed report and rejects oversized input without forwarding it", async () => {
+    for (const length of [10000, 10001]) {
+      gatewayMocks.reportStoreIssue.mockClear();
+      const form = new FormData();
+      form.set("command", JSON.stringify({...command,problem:"x".repeat(length)}));
+      const response = await POST(new Request("https://operations.example/report",{method:"POST",headers:{"idempotency-key":"long-report-check-0001"},body:form}),{params:Promise.resolve({token:"store-token"})});
+      expect(response.status).toBe(length===10000?201:422);
+      if(length===10000) expect(gatewayMocks.reportStoreIssue.mock.calls[0][1].problem).toHaveLength(10000);
+      else expect(gatewayMocks.reportStoreIssue).not.toHaveBeenCalled();
+    }
+  });
+
   it("rejects a report without a retry key before invoking the gateway", async () => {
     const response = await POST(request(), { params: Promise.resolve({ token: "store-token" }) });
 

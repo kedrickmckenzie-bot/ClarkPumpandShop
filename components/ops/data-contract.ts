@@ -721,6 +721,7 @@ export interface CreateWorkOrderPageViewModel {
 }
 
 export interface VendorIssuanceViewModel {
+  possibleWarranty?: boolean;
   available: boolean;
   permitted: boolean;
   rolePermitted: boolean;

@@ -922,6 +922,10 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     };
   }
 
+  async listWorkWarrantyDecisions(organizationId: string, workId: string) {
+    return this.fixture.auditEvents.filter(e => e.organizationId === organizationId && e.aggregateType === "work_order" && e.aggregateId === workId && e.eventType === "work_order.warranty_dismissed").sort((a,b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0,50);
+  }
+
   async getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null> {
     const workOrder = this.fixture.workOrders.find((row) => row.organizationId === scope.organizationId && row.id === workOrderId);
     if (!workOrder || !storeAllowed(this.fixture, scope, workOrder.storeId)) return null;

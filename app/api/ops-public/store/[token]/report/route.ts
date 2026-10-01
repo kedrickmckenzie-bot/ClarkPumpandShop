@@ -1,3 +1,4 @@
+import { REPORT_PROBLEM_MAX_LENGTH, REPORT_LENGTH_MESSAGE } from "@/lib/ops/report-limits";
 import { z } from "zod";
 import { getPublicOperationsGateway } from "@/components/ops-public/server-gateway";
 import {
@@ -11,7 +12,7 @@ import {
 const reportSchema = z.object({
   reporterName: z.string().max(100),
   employeeId: z.string().max(80).optional(),
-  problem: z.string().max(2000),
+  problem: z.string().max(REPORT_PROBLEM_MAX_LENGTH, REPORT_LENGTH_MESSAGE),
   urgency: z.enum(["routine", "priority", "urgent_safety"]),
   area: z.string().max(120).optional(),
   impact: z.object({

@@ -1,5 +1,6 @@
 "use client";
 
+import { REPORT_PROBLEM_MAX_LENGTH, REPORT_LENGTH_MESSAGE } from "@/lib/ops/report-limits";
 import { useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Camera, ShieldAlert } from "lucide-react";
 import type { StoreIssueReceipt, StorePortalView } from "./contracts";
@@ -113,6 +114,7 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
       if (!storeOperatingState || !safetyConcern || !productInventoryRisk || !customersAffected) {
         throw new Error("Complete each business-impact question before sending the report.");
       }
+      if (problem.length > REPORT_PROBLEM_MAX_LENGTH) throw new Error(REPORT_LENGTH_MESSAGE);
       const command = {
         reporterName,
         employeeId,
@@ -178,7 +180,8 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
           {step === 2 ? (
             <div className={styles.form} style={{ marginTop: "1.1rem" }}>
               <label className={styles.label}>What needs attention? <span className={styles.required} aria-hidden="true">*</span>
-                <textarea className={styles.textarea} maxLength={2000} onChange={(event) => setProblem(event.target.value)} placeholder="Describe what you see, hear, smell, or cannot use. Include readings or error messages if available." value={problem} />
+                <textarea className={styles.textarea} aria-describedby="report-length" aria-invalid={problem.length > REPORT_PROBLEM_MAX_LENGTH} onChange={(event) => setProblem(event.target.value)} placeholder="Describe what you see, hear, smell, or cannot use. Include readings or error messages if available." value={problem} />
+                <span id="report-length" className={styles.helper}>{problem.length > REPORT_PROBLEM_MAX_LENGTH ? REPORT_LENGTH_MESSAGE : `${problem.length.toLocaleString()} / 10,000 characters`}</span>
               </label>
               <label className={styles.label}>Area or equipment <span className={styles.helper}>(optional)</span>
                 <input className={styles.input} maxLength={120} onChange={(event) => setArea(event.target.value)} placeholder="Example: Beer cave, pump 4, women's restroom" value={area} />
@@ -229,7 +232,7 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
               {files.length ? <ul className={styles.fileList}>{files.map((file) => <li key={`${file.name}-${file.size}`}>{file.name} · {Math.max(1, Math.round(file.size / 1024))} KB</li>)}</ul> : null}
               <div className={styles.actions}>
                 <button className={styles.secondaryButton} onClick={() => setStep(1)} type="button"><ArrowLeft aria-hidden="true" size={17} /> Back</button>
-                <button className={styles.button} disabled={!problem.trim() || !storeOperatingState || !safetyConcern || !productInventoryRisk || !customersAffected} onClick={() => setStep(3)} type="button">Review report <ArrowRight aria-hidden="true" size={17} /></button>
+                <button className={styles.button} disabled={!problem.trim() || problem.length > REPORT_PROBLEM_MAX_LENGTH || !storeOperatingState || !safetyConcern || !productInventoryRisk || !customersAffected} onClick={() => setStep(3)} type="button">Review report <ArrowRight aria-hidden="true" size={17} /></button>
               </div>
             </div>
           ) : null}

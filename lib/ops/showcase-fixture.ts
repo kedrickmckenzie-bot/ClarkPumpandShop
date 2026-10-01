@@ -28,6 +28,28 @@ export function buildShowcaseFixture(anchorDate = new Date().toISOString()): Ops
     f.entityFiles = f.entityFiles.filter(e => !(["invoice","invoice_reference"].includes(e.entityType) && e.entityId === invoiceId));
     f.entityFiles.push({id:`showcase-invoice-file-${invoiceId}`,organizationId:org,fileId:file.id,entityType:"invoice",entityId:invoiceId,purpose:"invoice",visibility:"internal",createdAt:file.createdAt});
   }
+  // Replace metadata-only placeholders in fresh demo records with readable sample evidence.
+  for (const [id, fileName] of [["file-invoice-history-104-4", "104-history-invoice-summary.txt"], ["file-104-service-report", "104-service-report.txt"], ["file-104-warranty", "104-warranty-registration.txt"]]) {
+    const existing = f.files.find(file => file.id === id)!;
+    const source = showcaseDocuments[`org-northline-demo/showcase-v1/${fileName}`];
+    Object.assign(existing, {storageKey:`org-northline-demo/showcase-v1/${fileName}`, originalName:source.name, contentType:"text/plain", byteLength:new TextEncoder().encode(source.text).length, sha256:source.sha256, status:"available"});
+  }
+  const callbackFile = document("104-callback-invoice-summary.txt");
+  f.invoices.find(i => i.id === "invoice-summit-104-warranty-callback")!.supportingFileId = callbackFile.id;
+  f.entityFiles.push({id:"showcase-callback-invoice-file",organizationId:org,fileId:callbackFile.id,entityType:"invoice",entityId:"invoice-summit-104-warranty-callback",purpose:"invoice",visibility:"internal",createdAt:callbackFile.createdAt});
+  // No actual photos were supplied for these fictional records; do not advertise missing images.
+  const placeholderPhotos = new Set(["file-104-compressor-before", "file-104-compressor-after", "file-109-unmatched-invoice"]);
+  f.entityFiles = f.entityFiles.filter(e => !placeholderPhotos.has(e.fileId));
+  f.files = f.files.filter(file => !placeholderPhotos.has(file.id));
+  const closedWarrantyWorkId = "showcase-warranty-completed-work";
+  f.workOrders.push({id:closedWarrantyWorkId,organizationId:org,number:`CPS-${date(0).slice(0,4)}-3201`,storeId:"store-northline-104",assetId:"asset-104-beer-cave",componentId:"component-104-compressor",categoryKey:"refrigeration",problem:"Intermittent compressor connection after replacement",authorizedScope:"Correct the covered connection and verify stable operation.",priority:"routine",status:"closed",version:0,accountableParty:"Facilities",nextAction:"Review completed warranty history",createdAt:day(-18),closedAt:day(-16)});
+  const closedWarrantyId = "showcase-warranty-completed";
+  f.warrantyCases.push({id:closedWarrantyId,organizationId:org,workOrderId:closedWarrantyWorkId,assetId:"asset-104-beer-cave",componentId:"component-104-compressor",priorRepairItemId:"repair-item-104-compressor-2026-07",appliedWarrantyId:"applied-warranty-104-compressor-labor",status:"closed",confidence:"high",detectionExplanation:"Fictional completed claim: ColdLine confirmed labor coverage, corrected the connection and returned the service note; the store confirmed stable operation.",diagnosisRequired:false,coverageDecision:"covered",customerChargeStatus:"warranty_covered",invoiceHold:false,routingRule:"original_vendor_first_right_to_cure",obligatedVendorId:"vendor-northline-summit",ownerName:name(facility),nextAction:"Review completed warranty history",createdAt:day(-18),closedAt:day(-16)});
+  const closedWarrantyFile=document("104-closed-warranty.txt");
+  f.entityFiles.push({id:"showcase-closed-warranty-file",organizationId:org,fileId:closedWarrantyFile.id,entityType:"work_order",entityId:closedWarrantyWorkId,purpose:"service_document",visibility:"internal",createdAt:day(-16)});
+  audit("warranty_case",closedWarrantyId,"warranty.coverage_decided",day(-17),{coverageDecision:"covered",reason:"Provider confirmed labor coverage for the connection."});
+  audit("warranty_case",closedWarrantyId,"warranty.closed",day(-16),{reason:"Service note received; store confirmed stable operation.",workOrderId:closedWarrantyWorkId});
+  audit("work_order",closedWarrantyWorkId,"work_order.closed",day(-16),{reason:"Covered correction completed and store confirmation recorded in the attached sample service note."});
   const checklist = document("weekly-walk-checklist.txt");
   const foodReport = document("108-food-inspection.txt");
   const findingReport = document("114-exit-light-finding.txt");

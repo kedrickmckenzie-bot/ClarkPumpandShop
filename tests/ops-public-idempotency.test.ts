@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import {
   PUBLIC_DEMO_LINKS,
   getPublicOperationsGateway,
@@ -14,8 +14,28 @@ import {
 } from "@/lib/ops/fixtures";
 
 describe("public technician action idempotency", () => {
+  afterEach(()=>vi.useRealTimers());
   beforeEach(() => {
     resetNorthlineFixtureRepository();
+  });
+
+  it("retries additional-work attachment without duplicate visits or linked jobs",async()=>{
+    vi.useFakeTimers({toFake:["Date"]});
+    vi.setSystemTime(new Date("2026-08-25T18:00:00Z"));
+    const repository=getNorthlineFixtureRepository(),gateway=getPublicOperationsGateway();
+    const work={id:"wo-held-104-canopy-light"};
+    const arrival={submissionKey:"additional-work-arrival-retry",vendorId:"vendor-northline-brightpath",noWorkOrderReason:"Local regression visit",technicianName:"Retry test",location:{captureResult:"permission_denied" as const}};
+    const before=repository.snapshot().visits.length;
+    const first=await gateway.checkIn(PUBLIC_DEMO_LINKS.storeToken,arrival);
+    const token=first.checkoutUrl.split("/public/store/")[1].split("/")[0];
+    const add={submissionKey:"additional-work-selection-retry",visitId:first.visitId!,heldWorkOrderIds:[work.id]};
+    await gateway.addHeldWorkToVisit(token,add);
+    await gateway.addHeldWorkToVisit(token,add);
+    await gateway.checkIn(PUBLIC_DEMO_LINKS.storeToken,arrival);
+    expect(repository.snapshot().visits).toHaveLength(before+1);
+    expect((await repository.listSiteVisitWorkOrders(NORTHLINE_ORGANIZATION_ID,first.visitId!)).filter(w=>w.workOrderId===work.id)).toHaveLength(1);
+    await expect(gateway.addHeldWorkToVisit(token,{...add,heldWorkOrderIds:["unavailable-work"]})).rejects.toBeTruthy();
+    expect((await repository.listSiteVisitWorkOrders(NORTHLINE_ORGANIZATION_ID,first.visitId!))).toHaveLength(1);
   });
 
   it("replays one committed check-in without creating another visit", async () => {

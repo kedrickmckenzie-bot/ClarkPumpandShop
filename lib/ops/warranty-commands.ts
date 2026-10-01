@@ -1,4 +1,5 @@
 import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE } from "./warranty-review";
+import { workWarrantyReview } from "./work-warranty-review";
 import { atomicWorkOrderMutation } from "./concurrency";
 import type { OpsClock, OpsCommandServices, OpsIdSource } from "./commands";
 import { OpsDomainError } from "./errors";
@@ -28,6 +29,19 @@ import type {
 } from "./types";
 
 const systemClock: OpsClock = { now: () => new Date().toISOString() };
+
+export async function dismissWorkWarranty(input: {organizationId:string; workId:string; reason:string; signature:string; actor:ActorContext}, dependencies:OpsCommandServices) {
+  const {repository,clock,ids}=services(dependencies), now=clock.now();
+  const work=await repository.getWorkOrder(input.organizationId,input.workId);
+  if(!work) throw new OpsDomainError("NOT_FOUND","Work order not found");
+  await assertWarrantyActor(repository,input.actor,input.organizationId,work);
+  const review=await workWarrantyReview(repository,{organizationId:input.organizationId,storeIds:[work.storeId]},work.id,now.slice(0,10));
+  if(!review?.possible || review.signature!==input.signature) throw new OpsDomainError("CONFLICT","Coverage changed. Refresh and review it again.");
+  if(review.coverage.nextOffset!==undefined) throw new OpsDomainError("VALIDATION","Review all equipment terms before dismissing coverage.");
+  const reason=required(input.reason,"Reason");
+  if(reason.length>2000) throw new OpsDomainError("VALIDATION","Keep the reason under 2,000 characters.");
+  await atomicWorkOrderMutation({repository,workOrder:work,now,statements:auditAndOutbox({organizationId:input.organizationId,aggregateType:"work_order",aggregateId:work.id,eventType:"work_order.warranty_dismissed",actor:input.actor,occurredAt:now,payload:{reason,signature:review.signature,coverageIds:review.coverage.items.map(c=>c.id)},ids})});
+}
 const randomIds: OpsIdSource = { next: (prefix) => `${prefix}-${crypto.randomUUID()}` };
 const warrantyRoles = new Set(["executive", "facilities_admin", "regional_manager"]);
 const routingOverrideReasons = new Set([
