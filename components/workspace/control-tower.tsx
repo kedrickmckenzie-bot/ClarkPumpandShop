@@ -241,6 +241,9 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
 
   switch (model.layout) {
     case "executive":
+      // Owner order: money first, where it goes, what is broken, upcoming decisions, then the to-do list.
+      content = <>{metrics}{insights}{equipment}{capitalSummary}{attention}{spotlight}</>;
+      break;
     case "finance":
       content = <>{attention}{metrics}{capitalSummary}{pipeline}{equipment}<details className={styles.section}><summary>Spending and equipment insights</summary>{insights}{spotlight}</details></>;
       break;

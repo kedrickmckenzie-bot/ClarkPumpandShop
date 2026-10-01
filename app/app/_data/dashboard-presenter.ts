@@ -1,4 +1,4 @@
-import type { ActionItemViewModel, BreakdownViewModel, DashboardPageViewModel, OperatorSession, Tone, TrendViewModel } from "@/components/ops/data-contract";
+import type { ActionItemViewModel, BreakdownViewModel, DashboardPageViewModel, MetricViewModel, OperatorSession, Tone, TrendViewModel } from "@/components/ops/data-contract";
 import type { DashboardActivitySummary } from "@/lib/ops/dashboard-query";
 
 /** Presentation accepts aggregate values and a bounded queue, never tenant source records. */
@@ -182,5 +182,41 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
     breakdowns: isFacilities ? [workStatusBreakdown, activeVendorBreakdown, categoryBreakdown, storeBreakdown] : [storeBreakdown, categoryBreakdown],
     trends: [trend],
     spotlight,
+  };
+}
+
+/** Day `days` before an ISO date (date only). */
+function daysBefore(isoDate: string, days: number) {
+  return new Date(Date.parse(`${isoDate}T12:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** The two equal windows the owner comparison uses: the last 90 days and the 90 days before. */
+export function ownerSpendWindows(asOfDate: string) {
+  const currentFrom = daysBefore(asOfDate, 89);
+  const priorTo = daysBefore(currentFrom, 1);
+  return { current: { costFrom: currentFrom, costTo: asOfDate }, prior: { costFrom: daysBefore(priorTo, 89), costTo: priorTo } };
+}
+
+/**
+ * Owner spending tile. Missing costs are said plainly rather than shown as $0, and the
+ * change is only stated when both windows have recorded cost lines.
+ */
+export function ownerSpendMetric(current: Pick<DashboardActivitySummary, "recordedCostMinor" | "costLines">, prior: Pick<DashboardActivitySummary, "recordedCostMinor" | "costLines">, windows: ReturnType<typeof ownerSpendWindows>): MetricViewModel {
+  const label = (from: string, to: string) => `${new Date(`${from}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}–${new Date(`${to}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`;
+  const priorText = !prior.costLines
+    ? "No costs recorded in the 90 days before"
+    : !current.costLines
+      ? `${money(prior.recordedCostMinor)} in the 90 days before`
+      : (() => {
+        const change = prior.recordedCostMinor ? Math.round(((current.recordedCostMinor - prior.recordedCostMinor) / prior.recordedCostMinor) * 100) : 0;
+        return `${change > 0 ? "Up" : change < 0 ? "Down" : "Same as"}${change ? ` ${Math.abs(change)}% from` : ""} ${money(prior.recordedCostMinor)} in the 90 days before`;
+      })();
+  return {
+    id: "recorded-cost-90",
+    label: "Recorded work cost · last 90 days",
+    value: current.costLines ? money(current.recordedCostMinor) : "No costs recorded",
+    supportingText: `${label(windows.current.costFrom, windows.current.costTo)} · ${priorText}`,
+    tone: "info",
+    link: { href: hrefWithQuery("/app/work-orders", { hasCost: "true", costFrom: windows.current.costFrom, costTo: windows.current.costTo }), label: "See the jobs" },
   };
 }

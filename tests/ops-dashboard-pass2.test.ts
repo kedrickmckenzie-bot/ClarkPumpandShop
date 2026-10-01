@@ -219,3 +219,18 @@ describe("Pass 2 dashboard source contracts", () => {
 });
 
 function buildInvoiceEvidenceModel(fixture: import("@/lib/ops/types").OpsFixture, session: import("@/components/ops/data-contract").OperatorSession, query: import("@/app/app/_data/operator-presenter").OperatorSearchParameters) { return buildEvidenceModel(invoiceEvidenceFromFixture(fixture,session,invoiceEvidenceParameters(query)),session,query); }
+
+describe("owner spending comparison", () => {
+  it("compares equal windows and never shows missing cost as zero", async () => {
+    const { ownerSpendMetric, ownerSpendWindows } = await import("@/app/app/_data/dashboard-presenter");
+    const windows = ownerSpendWindows("2026-10-01");
+    expect(windows.current).toEqual({ costFrom: "2026-07-04", costTo: "2026-10-01" });
+    expect(windows.prior).toEqual({ costFrom: "2026-04-05", costTo: "2026-07-03" });
+    const both = ownerSpendMetric({ recordedCostMinor: 11_000, costLines: 3 }, { recordedCostMinor: 10_000, costLines: 2 }, windows);
+    expect(both.value).toBe("$110");
+    expect(both.supportingText).toContain("Up 10% from $100");
+    expect(both.link.href).toBe("/app/work-orders?hasCost=true&costFrom=2026-07-04&costTo=2026-10-01");
+    expect(ownerSpendMetric({ recordedCostMinor: 0, costLines: 0 }, { recordedCostMinor: 0, costLines: 0 }, windows).value).toBe("No costs recorded");
+    expect(ownerSpendMetric({ recordedCostMinor: 5_000, costLines: 1 }, { recordedCostMinor: 0, costLines: 0 }, windows).supportingText).toContain("No costs recorded in the 90 days before");
+  });
+});

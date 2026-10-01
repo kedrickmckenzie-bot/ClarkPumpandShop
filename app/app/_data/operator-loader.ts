@@ -12,6 +12,7 @@ import { buildPmReviewPreview, buildPmReviewSources } from "./pm-review-presente
 
 import { loadDashboardChartPages } from "./dashboard-charts";
 import { presentQueryDashboard } from "./dashboard-query-presenter";
+import { ownerSpendMetric, ownerSpendWindows } from "./dashboard-presenter";
 import { buildStoreCostRanking } from "./store-cost-presenter";
 import "server-only";
 
@@ -386,6 +387,15 @@ export async function loadDashboardModel() {
   ]);
   const model = presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window);
   model.equipmentIssues = presentEquipmentIssues(issues, window, session);
+  if (session.role === "executive") {
+    // Owners start with money: the last 90 days against the 90 days before, on the same cost basis.
+    const windows = ownerSpendWindows(window.costTo);
+    const [current, prior] = await Promise.all([
+      repository.getDashboardActivity(scope, { ...window, ...windows.current }),
+      repository.getDashboardActivity(scope, { ...window, ...windows.prior }),
+    ]);
+    model.metrics = [ownerSpendMetric(current, prior, windows), ...model.metrics.filter((metric) => metric.id !== "open-exceptions").map((metric) => metric.id === "recorded-cost" ? { ...metric, label: "Recorded work cost · last 12 months", supportingText: `${new Date(`${window.costFrom}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })} – ${new Date(`${window.costTo}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}` } : metric)];
+  }
   return enforceDashboardLinkPolicy(model, session);
 }
 
