@@ -382,11 +382,11 @@ function approvalEvidence(
     .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt) || right.id.localeCompare(left.id));
   if (!requests.length) {
     return {
-      fact: { label: "Approval", value: "No approval gate", helperText: "Basic store-and-problem work remains valid when no policy-triggering amount is entered" },
+      fact: { label: "Approval", value: "Not needed" },
       section: {
         id: "approval-governance",
         title: "Approval",
-        description: "No approval is needed for this record. Approval limits do not prevent basic issue reporting or work-order creation.",
+        description: "No approval is needed for this record.",
         facts: [
           { label: "Current state", value: "No approval required" },
           { label: "Source rule", value: "No policy snapshot attached" },

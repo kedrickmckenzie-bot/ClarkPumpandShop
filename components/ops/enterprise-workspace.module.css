@@ -1542,6 +1542,13 @@
   -webkit-line-clamp: 2;
 }
 
+.reviewQueueVerb {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--workspace-action);
+  font-weight: 650;
+}
+
 .reviewQueueContext {
   display: flex;
   min-width: 0;

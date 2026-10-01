@@ -15,8 +15,8 @@ type YesNoUnknown = "yes" | "no" | "unknown";
 
 const URGENCY_OPTIONS: Array<{ id: Urgency; title: string; description: string }> = [
   { id: "routine", title: "Routine", description: "The store can operate normally while this is reviewed." },
-  { id: "priority", title: "Needs attention soon", description: "Product, service, or customer experience may be affected." },
-  { id: "urgent_safety", title: "Safety or shutdown concern", description: "There may be immediate risk or a critical store system is down." },
+  { id: "priority", title: "Urgent", description: "Needs attention soon. Product, service, or customers may be affected." },
+  { id: "urgent_safety", title: "Emergency", description: "Safety risk, or a critical store system is down." },
 ];
 
 const OPERATING_OPTIONS: Array<{ id: StoreOperatingState; label: string }> = [

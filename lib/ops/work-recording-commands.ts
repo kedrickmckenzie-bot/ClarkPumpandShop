@@ -130,7 +130,8 @@ export interface UpdateWorkOrderClassificationInput {
   categoryKey?: string;
   assetId?: OpsId;
   componentId?: OpsId;
-  note: string;
+  /** Optional explanation; the audit event records the before and after classification either way. */
+  note?: string;
   idempotency?: WorkRecordingIdempotency;
   actor: ActorContext;
 }
@@ -174,7 +175,7 @@ export async function updateWorkOrderClassification(
       }
     }
   }
-  const note = required(input.note, "Classification note");
+  const note = input.note?.trim() || undefined;
   const statements: OpsStatement[] = [
     {
       sql: "UPDATE ops_work_orders SET category_key = ?, taxonomy_node_id = ?, asset_id = ?, component_id = ? WHERE organization_id = ? AND id = ?",

@@ -4,6 +4,21 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Usability pass 1 — misleading actions (October 1, Claude)
+
+Scope approved by the user: fix actions that land in the wrong place or ask for unnecessary input, before visual simplification. Phases 2–4 (daily screens, supporting journeys, full journey validation) remain open.
+
+- [x] UP-01 Facilities and regional Overview no longer repeat the review-queue list; the "Needs your action" and "Open items" tiles open the queue. Owner overview unchanged (phase 3 redesign).
+- [x] UP-02 Review-queue task rows open where the action is done. Work-order stage tasks link to `?next=action`, which redirects to the work order's current action (vendor response, confirmation, quotes, held work) and keeps queue navigation parameters; inspection work opens the inspection. Standalone tasks (store access, invoice exception, service discrepancy) stay on the task list. Fixture and SQL queues share `lib/ops/workflow-task-destination.ts`.
+- [x] UP-03 Queue rows show a verb for the action they open (Review visit date, Confirm result, Choose vendor, Review quotes, Review invoice, Arrange next visit, Record result, Review report). "Pause response or completion timer" renamed "Pause deadline (waiting on someone)".
+- [x] UP-04 Request review starts with three choices — Create work order / Add to existing job / Just acknowledge — with the create section first. "No approval gate" jargon replaced by "Approval: Not needed".
+- [x] UP-05 Linking equipment to a work order no longer requires a note; the audit event still records before/after classification.
+- [x] UP-06 Inspection detail shows "Overdue · not yet inspected" when past due; corrective work is offered only when the result is Failed.
+- [ ] UP-07 Multi-store inspection setup. Not started: the create API accepts one store, and per-store assignment (one vendor for all vs each store's own assignee) needs a user decision.
+- [x] UP-08 Employee report urgency uses the same words as managers: Routine / Urgent / Emergency, each with a short explanation.
+
+Validation: typecheck and lint clean; full unit suite 1,159/1,160 after updating two overview assertions for UP-01 — the remaining failure is the PostgreSQL showcase-seed test timing out at 120 s on this container (it also timed out before these changes); e2e 64/65 with the same timeout; seed and build passed. Browser (desktop 1440 and 390 px): Overview tiles without list for facilities/regional; all 25 page-one queue rows opened their action page with queue navigation kept, including the proposed-date row landing on Accept proposed date / Send counterproposal; request choices scroll to each section; equipment saved with no note; overdue inspection label and Failed-only corrective option; employee urgency labels. No horizontal overflow.
+
 ### October 1 follow-up — report length, visit retries and demo evidence
 
 Live invoice reader setup/testing is deferred at the user's request. No AI credentials configured and no provider calls made. Earlier extraction-contract tests remain valid but do not establish live reading.

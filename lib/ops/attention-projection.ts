@@ -1,3 +1,4 @@
+import { workflowTaskHref } from "./workflow-task-destination";
 import { WARRANTY_REVIEW_TITLE, warrantyTaskHref } from "./warranty-review";
 import type {
   ExceptionKind,
@@ -29,6 +30,8 @@ export interface AttentionProjectionItem {
   lane: AttentionLane;
   group: AttentionGroup;
   linkHref: string;
+  /** Workflow task type, when the row is a task; used to name the row's action. */
+  taskType?: WorkflowTask["taskType"];
 }
 
 const financialTaskTypes = new Set<WorkflowTask["taskType"]>([
@@ -145,9 +148,8 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
         lane: input.history ? "history" : laneForTask(task, input),
         completedAt: task.completedAt ?? task.cancelledAt,
         group: groupForTask(task),
-        linkHref: warrantyTaskHref(fixture, task) ?? (task.workOrderId
-          ? `/app/work-orders/${encodeURIComponent(task.workOrderId)}?view=accountability#workflow-tasks`
-          : `/app/requests/${encodeURIComponent(task.serviceRequestId!)}`),
+        linkHref: warrantyTaskHref(fixture, task) ?? workflowTaskHref(task),
+        taskType: task.taskType,
       };
     });
 

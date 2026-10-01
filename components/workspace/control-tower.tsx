@@ -245,14 +245,15 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
       content = <>{attention}{metrics}{capitalSummary}{pipeline}{equipment}<details className={styles.section}><summary>Spending and equipment insights</summary>{insights}{spotlight}</details></>;
       break;
     case "regional":
-      content = <>{metrics}{attention}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      content = <>{metrics}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
       break;
     case "store":
       content = <>{attention}{metrics}{capitalSummary}{equipment}{pipeline}{insights}{spotlight}</>;
       break;
     case "operations":
     default:
-      content = <>{metrics}{attention}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      // The "Needs your action" and "Open items" tiles open the review queue, so the list is not repeated here.
+      content = <>{metrics}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
   }
 
   return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;

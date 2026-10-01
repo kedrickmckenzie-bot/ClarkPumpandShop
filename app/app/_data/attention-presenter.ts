@@ -17,6 +17,32 @@ export function attentionAccess(session: OperatorSession): AttentionAccess {
 
 export { reviewQueueExceptionCopy } from '@/lib/ops/attention-copy';
 
+const taskActionLabels: Partial<Record<NonNullable<AttentionQueueRow["taskType"]>, string>> = {
+  review_issue: "Review report",
+  approve_quote: "Review quotes",
+  submit_quote: "Review quotes",
+  vendor_response_required: "Review vendor reply",
+  choose_service_provider: "Choose vendor",
+  schedule_service: "Review visit date",
+  schedule_return_visit: "Arrange next visit",
+  record_service_outcome: "Record result",
+  verify_repair: "Confirm result",
+  close_verified_work: "Close work",
+  review_warranty: "Review warranty",
+  resolve_invoice_exception: "Review invoice",
+};
+
+/** A short verb phrase naming what happens when the row is opened. */
+function actionLabel(item: AttentionQueueRow, exception: boolean) {
+  if (item.lane === "history") return "View history";
+  if (item.taskType) return taskActionLabels[item.taskType] ?? "Open next step";
+  if (item.sourceKind === "quote_round") return "Review quotes";
+  if (item.sourceKind === "held_work") return "Review saved job";
+  if (item.sourceKind === "vendor_reminder") return "Open vendor";
+  if (exception) return item.group === "financial" ? "Review invoice" : "Check record";
+  return item.group === "completion" ? "Confirm result" : "Open follow-up";
+}
+
 /** Dashboard rows show the next step; full source details stay on the linked record. */
 export function presentAttentionRow(item: AttentionQueueRow, asOf: string): ActionItemViewModel {
   const history = item.lane === "history";
@@ -35,6 +61,6 @@ export function presentAttentionRow(item: AttentionQueueRow, asOf: string): Acti
     dueAt: item.dueAt, dueLabel: history ? item.completedAt ? `Ended ${date(item.completedAt)}` : "End date not recorded" : exception ? `Open since ${date(item.dueAt!)}` : !item.dueAt ? "No deadline — reason recorded" : overdue && waiting ? `Commitment missed ${date(item.dueAt)}` : overdue ? `Overdue since ${date(item.dueAt)}` : `Due ${date(item.dueAt)}`,
     ownerLabel: item.owner, priorityLabel: history ? "Completed / canceled" : overdue ? "Overdue" : item.priority === "critical" ? "Critical" : item.priority[0].toUpperCase() + item.priority.slice(1),
     tone: history ? "neutral" : overdue || item.priority === "critical" ? "critical" : item.priority === "high" ? "warning" : "neutral",
-    link: { href: item.linkHref, label: item.group === "completion" ? "Review completion" : item.group === "financial" ? "Review amount" : exception ? "Check record" : "Open next action" },
+    link: { href: item.linkHref, label: actionLabel(item, exception) },
   };
 }

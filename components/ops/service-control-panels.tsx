@@ -83,7 +83,7 @@ const receiptMessages: Record<string, string> = {
   reconcile: "Visit linked. The original check-in is saved in history.",
   update: "Follow-up owner, action, deadline, and escalation updated.",
   complete: "Follow-up completed and the work order's next action recalculated.",
-  classification: "Service area, equipment, and component classification updated with an auditable note.",
+  classification: "Equipment details saved. The change is recorded in history.",
   cost: "Recorded work cost added to this work order and portfolio reporting.",
   "bid-request-created": "Work order created for pricing. Send quote requests below; no vendor is assigned and no site visit is authorized.",
   "service-work-created": "Work order created with a chosen service vendor. Review the service details below, then send the authorization.",
@@ -202,7 +202,7 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
         id="request-review-heading"
         icon={<ClipboardCheck aria-hidden="true" size={19} />}
         title={model.expectedStatus === "acknowledged" ? "Request acknowledgment" : "Review the request"}
-        description={model.expectedStatus === "acknowledged" ? "This report has been acknowledged. Review the linked work or request a follow-up if needed." : model.pendingApproval ? "The request facts are preserved. Complete the current approval before creating work." : "Acknowledge the report, link related work, or decide what should happen next."}
+        description={model.expectedStatus === "acknowledged" ? "This report has been acknowledged. Review the linked work or request a follow-up if needed." : model.pendingApproval ? "The request facts are preserved. Complete the current approval before creating work." : "Create a work order, add this report to a job that is already open, or just acknowledge it."}
       />
       <div className={styles.controlSummary}>
         <span><small>Request</small><strong>{model.reference}</strong></span>
@@ -214,36 +214,14 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
       {model.pendingApproval ? <PendingApprovalPanel approval={model.pendingApproval} /> : null}
       {!model.permitted ? <p className={styles.inlineEmpty}>Your role can review this request but cannot record a decision.</p> : (
         <>
-          <div className={styles.subControlPanel}>
-            <div className={styles.subControlHeading}><ShieldCheck aria-hidden="true" size={18} /><div><h3>{model.expectedStatus === "acknowledged" ? "Acknowledged — being handled" : "Acknowledge this report"}</h3><p>{model.expectedStatus === "acknowledged" ? `${model.acknowledgedBy ?? "An authorized manager"} acknowledged this report${model.acknowledgedAtLabel ? ` on ${model.acknowledgedAtLabel}` : ""}.` : "Acknowledge that this is being handled. No note or work-order link is needed."}</p></div></div>
-            {model.linkedWorkOrder ? <div className={styles.controlSummary}><Link href={`/app/work-orders/${model.linkedWorkOrder.id}`}><small>{model.linkedWorkOrder.number} · {model.linkedWorkOrder.statusLabel}</small><strong>{model.linkedWorkOrder.problem}</strong><small>Linked work does not mean the repair is complete</small></Link></div> : <p className={styles.inlineEmpty}><strong>No linked work order.</strong> You can link related work or ask for a follow-up below.</p>}
-            {model.acknowledgeAction ? <form action={model.acknowledgeAction} method="post" onSubmit={acknowledgeMutation.submit} className={styles.controlForm}>
-              <input type="hidden" name="expectedStatus" value={model.expectedStatus} />
-              <MutationError message={acknowledgeMutation.state.error} />
-              <div className={styles.formFooter}><span className={styles.formMeta}>Clears routine intake. Safety and emergency follow-ups stay open.</span><button className={styles.primaryButton} type="submit" disabled={acknowledgeMutation.state.pending}>{acknowledgeMutation.state.pending ? "Acknowledging…" : "Aware — being handled"}<ShieldCheck aria-hidden="true" size={17} /></button><SaveOpenNext disabled={acknowledgeMutation.state.pending} /></div>
-            </form> : null}
-            {model.unlinkAction && model.linkedWorkOrder ? <details className={styles.controlDisclosure}><summary>Remove incorrect work-order link</summary><form action={model.unlinkAction} method="post" onSubmit={unlinkMutation.submit} className={styles.controlForm}>
-              <input type="hidden" name="expectedVersion" value={model.expectedVersion} />
-              <input type="hidden" name="expectedWorkOrderId" value={model.linkedWorkOrder.id} />
-              <label className={styles.field}><span>Correction reason <em>Required</em></span><textarea name="correctionReason" required minLength={3} maxLength={1000} rows={2} /></label>
-              <MutationError message={unlinkMutation.state.error} />
-              <div className={styles.formFooter}><span className={styles.formMeta}>Keeps the acknowledgment and original work order.</span><button className={styles.secondaryButton} type="submit" disabled={unlinkMutation.state.pending}>{unlinkMutation.state.pending ? "Removing…" : "Remove link"}</button></div>
-            </form></details> : null}
-            {model.linkExistingWorkAction ? <div className={styles.controlForm}>
-              <div className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Potentially related work</h3><p>Suggestions are not confirmed duplicates. Select a work order explicitly or browse the store’s full open-work list.</p></div></div>
-              {model.relatedOpenWork.length ? <form action={model.linkExistingWorkAction} method="post" onSubmit={linkMutation.submit} className={styles.controlForm}>
-                <input type="hidden" name="expectedStatus" value={model.expectedStatus} />
-                <label className={styles.field} htmlFor={`related-work-${model.requestId}`}><span>{model.linkedWorkOrder ? "Correct the linked work order" : model.expectedStatus === "acknowledged" ? "Link work order" : "Acknowledge and link"}</span><select id={`related-work-${model.requestId}`} name="workOrderId" required defaultValue=""><option value="" disabled>Choose a work order</option>{model.relatedOpenWork.map((work) => <option value={work.id} key={work.id}>{work.number} — {work.problem}{work.equipmentLabel ? ` · ${work.equipmentLabel}` : ""}</option>)}</select><small>The report’s original equipment and location details remain unchanged.</small></label>
-                {model.linkedWorkOrder ? <label className={styles.field} htmlFor={`correction-reason-${model.requestId}`}><span>Correction reason <em>Required</em></span><textarea id={`correction-reason-${model.requestId}`} name="correctionReason" required minLength={3} rows={2} /></label> : null}
-                <MutationError message={linkMutation.state.error} />
-                <div className={styles.formFooter}><span className={styles.formMeta}>Links this report to the selected work order.</span><button className={styles.secondaryButton} type="submit" disabled={linkMutation.state.pending}>{linkMutation.state.pending ? "Saving…" : model.linkedWorkOrder ? "Correct link" : model.expectedStatus === "acknowledged" ? "Link report" : "Acknowledge and link"}</button></div>
-              </form> : <p className={styles.inlineEmpty}>No open work-order suggestion is available for this store.</p>}
-              {model.browseOpenWorkHref ? <div className={styles.formFooter}><span className={styles.formMeta}>Search and page through every active work order at this store.</span><Link className={styles.secondaryButton} href={model.browseOpenWorkHref}>Browse this store’s open work</Link></div> : null}
-            </div> : null}
-            {model.followUpAction ? <details className={styles.controlDisclosure}><summary className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Request follow-up</h3><p>Ask someone to follow up on this report.</p></div></summary><form action={model.followUpAction} method="post" onSubmit={followUpMutation.submit} className={styles.controlForm}><label className={styles.field} htmlFor={`follow-up-${model.requestId}`}><span>Why follow-up is needed <em>Required</em></span><textarea id={`follow-up-${model.requestId}`} name="explanation" required minLength={3} maxLength={1000} rows={3} /></label><MutationError message={followUpMutation.state.error} /><div className={styles.formFooter}><span className={styles.formMeta}>Creates a follow-up task. The earlier acknowledgment stays in history.</span><button className={styles.secondaryButton} type="submit" disabled={followUpMutation.state.pending}>{followUpMutation.state.pending ? "Requesting…" : "Request follow-up"}</button></div></form></details> : null}
-          </div>
-          {model.expectedStatus !== "acknowledged" && !model.pendingApproval ? <div className={styles.subControlPanel}>
-            <div className={styles.subControlHeading}><ShieldCheck aria-hidden="true" size={18} /><div><h3>Choose what happens next</h3><p>Most requests can move directly into a work order. Equipment and detailed impact can remain unknown.</p></div></div>
+          {model.expectedStatus !== "acknowledged" && !model.pendingApproval ? <nav className={styles.formFooter} aria-label="Choose what happens next">
+            <span className={styles.formMeta}>Choose one</span>
+            <a className={styles.primaryButton} href="#request-create-work">Create work order</a>
+            {model.linkExistingWorkAction ? <a className={styles.secondaryButton} href="#request-link-work">Add to existing job</a> : null}
+            {model.acknowledgeAction ? <a className={styles.secondaryButton} href="#request-acknowledge">Just acknowledge</a> : null}
+          </nav> : null}
+          {model.expectedStatus !== "acknowledged" && !model.pendingApproval ? <div className={styles.subControlPanel} id="request-create-work">
+            <div className={styles.subControlHeading}><ShieldCheck aria-hidden="true" size={18} /><div><h3>Create a work order</h3><p>Equipment and details can stay unknown for now.</p></div></div>
             {model.canCreateWorkOrder && model.createWorkOrderHref ? (
               <div className={styles.formFooter}><span className={styles.formMeta}>The manager review is complete. Define the work and choose the service path next.</span><Link className={styles.primaryButton} href={model.createWorkOrderHref}>Create work order<ShieldCheck aria-hidden="true" size={17} /></Link></div>
             ) : model.impactReviewed ? (
@@ -260,6 +238,34 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
               </form>
             )}
           </div> : null}
+          <div className={styles.subControlPanel} id="request-acknowledge">
+            <div className={styles.subControlHeading}><ShieldCheck aria-hidden="true" size={18} /><div><h3>{model.expectedStatus === "acknowledged" ? "Acknowledged — being handled" : "Acknowledge this report"}</h3><p>{model.expectedStatus === "acknowledged" ? `${model.acknowledgedBy ?? "An authorized manager"} acknowledged this report${model.acknowledgedAtLabel ? ` on ${model.acknowledgedAtLabel}` : ""}.` : "Acknowledge that this is being handled. No note or work-order link is needed."}</p></div></div>
+            {model.linkedWorkOrder ? <div className={styles.controlSummary}><Link href={`/app/work-orders/${model.linkedWorkOrder.id}`}><small>{model.linkedWorkOrder.number} · {model.linkedWorkOrder.statusLabel}</small><strong>{model.linkedWorkOrder.problem}</strong><small>Linked work does not mean the repair is complete</small></Link></div> : <p className={styles.inlineEmpty}><strong>No linked work order.</strong> You can link related work or ask for a follow-up below.</p>}
+            {model.acknowledgeAction ? <form action={model.acknowledgeAction} method="post" onSubmit={acknowledgeMutation.submit} className={styles.controlForm}>
+              <input type="hidden" name="expectedStatus" value={model.expectedStatus} />
+              <MutationError message={acknowledgeMutation.state.error} />
+              <div className={styles.formFooter}><span className={styles.formMeta}>Clears routine intake. Safety and emergency follow-ups stay open.</span><button className={styles.primaryButton} type="submit" disabled={acknowledgeMutation.state.pending}>{acknowledgeMutation.state.pending ? "Acknowledging…" : "Aware — being handled"}<ShieldCheck aria-hidden="true" size={17} /></button><SaveOpenNext disabled={acknowledgeMutation.state.pending} /></div>
+            </form> : null}
+            {model.unlinkAction && model.linkedWorkOrder ? <details className={styles.controlDisclosure}><summary>Remove incorrect work-order link</summary><form action={model.unlinkAction} method="post" onSubmit={unlinkMutation.submit} className={styles.controlForm}>
+              <input type="hidden" name="expectedVersion" value={model.expectedVersion} />
+              <input type="hidden" name="expectedWorkOrderId" value={model.linkedWorkOrder.id} />
+              <label className={styles.field}><span>Correction reason <em>Required</em></span><textarea name="correctionReason" required minLength={3} maxLength={1000} rows={2} /></label>
+              <MutationError message={unlinkMutation.state.error} />
+              <div className={styles.formFooter}><span className={styles.formMeta}>Keeps the acknowledgment and original work order.</span><button className={styles.secondaryButton} type="submit" disabled={unlinkMutation.state.pending}>{unlinkMutation.state.pending ? "Removing…" : "Remove link"}</button></div>
+            </form></details> : null}
+            {model.linkExistingWorkAction ? <div className={styles.controlForm} id="request-link-work">
+              <div className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Potentially related work</h3><p>Suggestions are not confirmed duplicates. Select a work order explicitly or browse the store’s full open-work list.</p></div></div>
+              {model.relatedOpenWork.length ? <form action={model.linkExistingWorkAction} method="post" onSubmit={linkMutation.submit} className={styles.controlForm}>
+                <input type="hidden" name="expectedStatus" value={model.expectedStatus} />
+                <label className={styles.field} htmlFor={`related-work-${model.requestId}`}><span>{model.linkedWorkOrder ? "Correct the linked work order" : model.expectedStatus === "acknowledged" ? "Link work order" : "Acknowledge and link"}</span><select id={`related-work-${model.requestId}`} name="workOrderId" required defaultValue=""><option value="" disabled>Choose a work order</option>{model.relatedOpenWork.map((work) => <option value={work.id} key={work.id}>{work.number} — {work.problem}{work.equipmentLabel ? ` · ${work.equipmentLabel}` : ""}</option>)}</select><small>The report’s original equipment and location details remain unchanged.</small></label>
+                {model.linkedWorkOrder ? <label className={styles.field} htmlFor={`correction-reason-${model.requestId}`}><span>Correction reason <em>Required</em></span><textarea id={`correction-reason-${model.requestId}`} name="correctionReason" required minLength={3} rows={2} /></label> : null}
+                <MutationError message={linkMutation.state.error} />
+                <div className={styles.formFooter}><span className={styles.formMeta}>Links this report to the selected work order.</span><button className={styles.secondaryButton} type="submit" disabled={linkMutation.state.pending}>{linkMutation.state.pending ? "Saving…" : model.linkedWorkOrder ? "Correct link" : model.expectedStatus === "acknowledged" ? "Link report" : "Acknowledge and link"}</button></div>
+              </form> : <p className={styles.inlineEmpty}>No open work-order suggestion is available for this store.</p>}
+              {model.browseOpenWorkHref ? <div className={styles.formFooter}><span className={styles.formMeta}>Search and page through every active work order at this store.</span><Link className={styles.secondaryButton} href={model.browseOpenWorkHref}>Browse this store’s open work</Link></div> : null}
+            </div> : null}
+            {model.followUpAction ? <details className={styles.controlDisclosure}><summary className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Request follow-up</h3><p>Ask someone to follow up on this report.</p></div></summary><form action={model.followUpAction} method="post" onSubmit={followUpMutation.submit} className={styles.controlForm}><label className={styles.field} htmlFor={`follow-up-${model.requestId}`}><span>Why follow-up is needed <em>Required</em></span><textarea id={`follow-up-${model.requestId}`} name="explanation" required minLength={3} maxLength={1000} rows={3} /></label><MutationError message={followUpMutation.state.error} /><div className={styles.formFooter}><span className={styles.formMeta}>Creates a follow-up task. The earlier acknowledgment stays in history.</span><button className={styles.secondaryButton} type="submit" disabled={followUpMutation.state.pending}>{followUpMutation.state.pending ? "Requesting…" : "Request follow-up"}</button></div></form></details> : null}
+          </div>
 
           <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`} hidden={model.expectedStatus === "acknowledged"}>
             <summary className={styles.subControlHeading}><ClipboardCheck aria-hidden="true" size={18} /><div><h3>Add or correct business impact</h3><p>Add what you know about safety, affected products, store operations, or sales.</p></div></summary>

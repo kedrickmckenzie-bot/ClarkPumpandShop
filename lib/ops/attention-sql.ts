@@ -1,3 +1,4 @@
+import { workflowTaskHref } from "./workflow-task-destination";
 import type { OrganizationScope } from "./repository";
 import type { OpsSqlDriver, SqlRow } from "./sql-driver";
 import { scopeWhere } from "./sql-scope";
@@ -75,13 +76,13 @@ function attentionRow(row: SqlRow): AttentionQueueRow {
   const id = String(row.id), sourceKind = String(row.source_kind) as AttentionQueueRow["sourceKind"];
   const workOrderId = text("work_order_id"), serviceRequestId = text("service_request_id"), vendorId = text("vendor_id");
   const copy = sourceKind === "quote_round" ? quoteRoundCopy(Number(row.requested_count), Number(row.submitted_count), Number(row.missed_count)) : undefined;
-  const linkHref = sourceKind === "workflow_task" ? row.warranty_id ? `/app/warranties/${row.warranty_id}#diagnosis` : workOrderId ? `/app/work-orders/${encodeURIComponent(workOrderId)}?view=accountability#workflow-tasks` : `/app/requests/${encodeURIComponent(serviceRequestId!)}`
+  const linkHref = sourceKind === "workflow_task" ? row.warranty_id ? `/app/warranties/${row.warranty_id}#diagnosis` : workflowTaskHref({ taskType: text("task_type"), workOrderId, serviceRequestId })
     : sourceKind === "vendor_reminder" ? `/app/vendors/${encodeURIComponent(vendorId!)}#vendor-reminders`
       : sourceKind === "quote_round" ? `/app/work-orders/${encodeURIComponent(workOrderId!)}?view=service&path=bids#bid-requests`
         : sourceKind === "held_work" ? `/app/work-orders/${encodeURIComponent(workOrderId!)}?view=service#visit-hold` : `/app/action-center/${encodeURIComponent(id)}`;
   return { id, sourceKind, sourceCount: Number(row.source_count), workOrderId, serviceRequestId, vendorId, storeId: text("store_id"),
     title: row.task_type === "review_warranty" ? WARRANTY_REVIEW_TITLE : copy?.title ?? String(row.title), reason: copy?.reason ?? String(row.reason), owner: String(row.owner),
     dueAt: text("normalized_due"), completedAt: row.completed_at ? new Date(String(row.completed_at)).toISOString() : undefined,
-    priority: String(row.priority) as AttentionQueueRow["priority"], lane: String(row.lane) as AttentionQueueRow["lane"], group: String(row.group_name) as AttentionQueueRow["group"], linkHref,
+    priority: String(row.priority) as AttentionQueueRow["priority"], lane: String(row.lane) as AttentionQueueRow["lane"], group: String(row.group_name) as AttentionQueueRow["group"], linkHref, taskType: text("task_type") as AttentionQueueRow["taskType"],
     storeLabel: row.store_id ? row.store_number ? `Store ${row.store_number} · ${row.store_name}` : "Unknown store" : undefined, workNumber: text("work_number"), requestReference: text("request_reference"), vendorName: text("vendor_name") };
 }

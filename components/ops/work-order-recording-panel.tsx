@@ -76,11 +76,11 @@ function ClassificationForm({ model }: { model: WorkOrderRecordingViewModel }) {
         <small>Select a component if known.</small>
       </label>
       <label className={styles.field} htmlFor={`record-classification-note-${model.workOrderId}`}>
-        <span>Classification note <em>Required</em></span>
-        <textarea id={`record-classification-note-${model.workOrderId}`} name="note" required rows={3} placeholder="Record what was identified, diagnosed, or corrected." />
+        <span>Note <small>Optional</small></span>
+        <textarea id={`record-classification-note-${model.workOrderId}`} name="note" rows={2} placeholder="What was identified, if anything." />
       </label>
       <ErrorMessage message={mutation.state.error} />
-      <div className={styles.formFooter}><span className={styles.formMeta}>Changes are additive and attributed.</span><button className={styles.secondaryButton} type="submit" disabled={mutation.state.pending}>{mutation.state.pending ? "Recording…" : "Update classification"}<Boxes aria-hidden="true" size={17} /></button></div>
+      <div className={styles.formFooter}><span className={styles.formMeta}>Changes are additive and attributed.</span><button className={styles.secondaryButton} type="submit" disabled={mutation.state.pending}>{mutation.state.pending ? "Saving…" : "Save equipment"}<Boxes aria-hidden="true" size={17} /></button></div>
     </form>
   );
 }

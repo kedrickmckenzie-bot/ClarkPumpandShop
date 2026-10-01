@@ -456,6 +456,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                       const due = queueCell(row, "due");
                       const priority = queueCell(row, "priority");
                       const type = queueCell(row, "type");
+                      const action = queueCell(row, "action");
                       return (
                         <li key={row.id}>
                           <Link
@@ -474,6 +475,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                                 <span><MapPin aria-hidden="true" size={15} />{store?.value ?? "Companywide"}</span>
                                 <span><CircleDot aria-hidden="true" size={15} />{record?.value ?? "Related record"}{record?.secondary && record.secondary !== record.value ? ` · ${record.secondary}` : ""}</span>
                               </div>
+                              {action?.value ? <span className={styles.reviewQueueVerb}>{action.value}</span> : null}
                             </div>
                             <div className={styles.reviewQueueOwner}>
                               <span><UserRound aria-hidden="true" size={15} />Owner</span>

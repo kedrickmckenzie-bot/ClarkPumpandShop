@@ -120,8 +120,9 @@ describe("Pass 2 dashboard source contracts", () => {
     expect(foundVendor.every((row) => fixture.workOrders.find((work) => work.id === row.id)!.status !== "approved")).toBe(true);
     expect((await queryRows(viewer, "/app/work-orders?stage=vendor-response&status=closed"))).toEqual([]);
     const html = renderToStaticMarkup(createElement(ControlTower, { model }));
-    expect(html).toContain('id="attention-heading"');
+    expect(html).not.toContain('id="attention-heading"');
     expect(html).toContain("Needs your action");
+    expect(html).toContain('href="/app/action-center?lane=mine"');
     expect(html).toContain("Open items");
     expect(html).toContain("Where maintenance dollars go");
     for (const breakdown of model.breakdowns.filter(row => row.id.startsWith("recorded-cost-by-"))) {

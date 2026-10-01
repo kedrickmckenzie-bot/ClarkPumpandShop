@@ -216,7 +216,7 @@ function PauseTaskForm({ task, model }: { task: WorkflowTaskItemViewModel; model
   const defaultClock = model.slaClockOptions.find((option) => option.label === task.slaClockLabel)?.value;
   return (
     <details className={styles.taskActionDisclosure}>
-      <summary><PauseCircle aria-hidden="true" size={16} /><span>Pause response or completion timer</span></summary>
+      <summary><PauseCircle aria-hidden="true" size={16} /><span>Pause deadline (waiting on someone)</span></summary>
       <form action={task.action} method="post" onSubmit={submit} className={styles.controlForm}>
         <input type="hidden" name="operation" value="pause" />
         <input type="hidden" name="expectedStatus" value={task.status} />

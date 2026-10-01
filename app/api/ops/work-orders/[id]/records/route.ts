@@ -39,7 +39,7 @@ export async function POST(
       const categoryKey = formText(formData, "categoryKey", { max: 120 }) || undefined;
       const assetId = formText(formData, "assetId", { max: 120 }) || undefined;
       const componentId = formText(formData, "componentId", { max: 120 }) || undefined;
-      const note = formText(formData, "note", { required: true, max: 2_000 });
+      const note = formText(formData, "note", { max: 2_000 }) || undefined;
       await updateWorkOrderClassification(
         { repository: context.repository },
         {

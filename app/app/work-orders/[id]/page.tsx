@@ -9,6 +9,8 @@ import { WorkEmailHistory } from "@/components/workspace/work-email-history";
 import { WorkCostPrompts } from "@/components/workspace/work-cost-prompts";
 import { safeDecisionReturn } from "@/lib/ops/review-navigation";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { nextActionRedirect } from "@/lib/ops/workflow-task-destination";
 import type { Metadata } from "next";
 import { WorkPricePanel } from "@/components/workspace/work-price-panel";
 import { WorkOrderCase } from "@/components/workspace/work-order-case";
@@ -35,7 +37,7 @@ function selectedServicePath(value: string | string[] | undefined): WorkOrderSer
   return candidate === "direct" || candidate === "bids" ? candidate : undefined;
 }
 
-export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ returnDecision?: string | string[]; updated?: string | string[]; view?: string | string[]; path?: string | string[]; notice?: string | string[]; error?: string | string[]; reconcile?: string | string[] }> }) {
+export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ returnDecision?: string | string[]; updated?: string | string[]; view?: string | string[]; path?: string | string[]; notice?: string | string[]; error?: string | string[]; reconcile?: string | string[]; next?: string | string[]; reviewQueue?: string | string[]; reviewItem?: string | string[]; reviewAfter?: string | string[]; reviewNext?: string | string[] }> }) {
   const { id } = await params;
   const query = await searchParams;
   const returnDecision = safeDecisionReturn(Array.isArray(query.returnDecision) ? query.returnDecision[0] : query.returnDecision);
@@ -116,6 +118,16 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             ? { label: "Review financial evidence", href: `/app/work-orders/${id}?view=cost` }
             : heldCase.primaryNextAction);
   if (issuance.possibleWarranty && viewerAction?.href?.includes("#issue-work")) viewerAction.label = "Issue anyway (possible warranty)";
+  // Queue links ask for the current action; send them where that action is actually done.
+  if ((Array.isArray(query.next) ? query.next[0] : query.next) === "action") {
+    let target = viewerAction?.href;
+    // Inspection work is done on the inspection itself, not on the work order's task list.
+    if (!target || target.includes("#workflow-tasks")) {
+      const inspection = await (await getServerOpsRepository()).inspectionForWork(session.organizationId, id);
+      if (inspection && inspection.correctiveWorkOrderId !== id && inspection.status !== "passed") target = `/app/compliance/${encodeURIComponent(inspection.id)}`;
+    }
+    if (target?.startsWith("/app/")) redirect(nextActionRedirect(target, query));
+  }
   return (
     <>
     {notice ? (

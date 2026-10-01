@@ -125,6 +125,15 @@ describe("work-order progressive classification", () => {
       component: { id: "component-104-evaporator-fan" },
     });
 
+    const withoutNote = await updateWorkOrderClassification(harness.services, {
+      organizationId: NORTHLINE_ORGANIZATION_ID,
+      workOrderId: work.id,
+      categoryKey: "refrigeration",
+      assetId: "asset-104-beer-cave",
+      actor: facilitiesActor,
+    });
+    expect(withoutNote.assetId).toBe("asset-104-beer-cave");
+
     const categoryOnly = await updateWorkOrderClassification(harness.services, {
       organizationId: NORTHLINE_ORGANIZATION_ID,
       workOrderId: work.id,
@@ -160,9 +169,10 @@ describe("work-order progressive classification", () => {
     const classificationAudit = snapshot(harness.repository).auditEvents.filter(
       (event) => event.aggregateId === work.id && event.eventType === "work_order.classification_updated",
     );
-    expect(classificationAudit).toHaveLength(3);
+    expect(classificationAudit).toHaveLength(4);
     expect(classificationAudit.map((event) => JSON.parse(event.payloadJson))).toEqual([
       expect.objectContaining({ current: expect.objectContaining({ categoryKey: "refrigeration", assetId: "asset-104-beer-cave", componentId: "component-104-evaporator-fan" }) }),
+      expect.objectContaining({ previous: expect.objectContaining({ componentId: "component-104-evaporator-fan" }), current: expect.objectContaining({ assetId: "asset-104-beer-cave" }) }),
       expect.objectContaining({ current: expect.objectContaining({ categoryKey: "plumbing" }) }),
       expect.objectContaining({ current: expect.objectContaining({}) }),
     ]);
