@@ -30,6 +30,7 @@ export interface EquipmentReviewModel {
   pages: Array<{ label: string; href: string }>;
   componentHref?: string;
   addWarrantyHref?: string;
+  nextPm?: { label: string; href: string };
   notice?: string;
 }
 
@@ -95,7 +96,11 @@ export function buildEquipmentReview(fixture: OpsFixture, session: OperatorSessi
     if (!warranty.length && end) warranty.push({ id: "reference", label: "Recorded warranty date", detail: `${date(end)} · Coverage terms and responsibility need checking.` });
   }
   const records = new URLSearchParams({ store: store.id, asset: asset.id, ...(selectedId ? { component: selectedId } : {}) });
+  const nextOccurrence = fixture.pmOccurrences
+    .filter((row) => row.organizationId === org && row.assetId === asset.id && !["completed", "completed_early", "completed_on_time", "completed_late", "missed", "waived"].includes(row.status))
+    .sort((a, b) => a.dueAt.localeCompare(b.dueAt))[0];
   return {
+    nextPm: nextOccurrence ? { label: date(nextOccurrence.dueAt), href: `/app/pm/occurrences/${encodeURIComponent(nextOccurrence.id)}` } : undefined,
     issueCohort, currency: issueCohort ? issueWindow.currency : undefined,
     rankingHref: issueCohort ? equipmentIssueRankingHref(issueWindow) : undefined,
     allHistoryHref: issueCohort ? href({ cohort: undefined, issueFrom: undefined, issueTo: undefined, currency: undefined, history: "all" }) : undefined,

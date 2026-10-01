@@ -44,8 +44,8 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
     // The connected workspace owns history/components now; keep setup and PM sections.
     model.sections = model.sections.filter((section) => !["service-history", "components", "lifecycle-evidence"].includes(section.id));
     if (review.currentWork.length) model.page.primaryAction = review.currentWork.length === 1
-      ? { label: "Continue existing work", href: review.currentWork[0].href }
-      : { label: "Review existing work", href: "#equipment-review" };
+      ? { label: "Open current job", href: review.currentWork[0].href }
+      : { label: `See ${review.currentWork.length} open jobs`, href: "#open-work" };
   }
   if (asset?.status!=="retired" && ["facilities","regional"].includes(session.role)) model.page.secondaryAction={label:"Plan replacement",href:`/app/lifecycle/plan?asset=${encodeURIComponent(id)}`};
   if (returnDecision) model.backLink = { label: "Back to equipment review", href: returnDecision };
