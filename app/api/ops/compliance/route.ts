@@ -1,7 +1,7 @@
 import { getOpsRequestContext,assertStoreInSessionScope,formText,opsApiError } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { OpsDomainError } from "@/lib/ops/commands";
-import { createComplianceSchedule,runInspectionCycle,recordInspectionResult,setComplianceScheduleStatus,createInspectionCorrection,replaceComplianceDocuments } from "@/lib/ops/compliance";
+import { createComplianceSchedulesForStores,type ScheduleAssignment,runInspectionCycle,recordInspectionResult,setComplianceScheduleStatus,createInspectionCorrection,replaceComplianceDocuments } from "@/lib/ops/compliance";
 import { uploadInspectionFiles as uploadFiles } from "@/lib/server/inspection-uploads";
 import { createInspectionLink } from "@/lib/ops/inspection-access";
 import type { ComplianceSchedule } from "@/lib/ops/compliance-types";
@@ -17,13 +17,22 @@ export async function POST(request:Request) {
    const result=await runInspectionCycle(svc,org);return relativeRedirect303(`/app/compliance?notice=${encodeURIComponent(`${result.created} dates created; ${result.prepared} inspections prepared; ${result.reminders} reminders queued; ${result.failed} need review.${result.errors.length?` ${result.errors.join("; ")}`:""} No email sent by this action.`)}`);
   }
   if(action==="create") {
-   back="/app/compliance/new";const storeId=formText(form,"storeId",{required:true});await assertStoreInSessionScope(session,storeId);
-   const tag=formText(form,"assetTag",{max:100});const assets=tag?(await repository.searchAssets({...session,storeIds:[storeId]},tag,{limit:100})).items.filter(a=>a.assetTag===tag):[];
+   back="/app/compliance/new";
+   const storeIds=[...new Set(form.getAll("storeId").map(String).filter(Boolean))];
+   if(!storeIds.length)throw new OpsDomainError("VALIDATION","Choose at least one store.");
+   for(const storeId of storeIds)await assertStoreInSessionScope(session,storeId);
+   const tag=formText(form,"assetTag",{max:100});
+   if(tag&&storeIds.length!==1)throw new OpsDomainError("VALIDATION","An equipment tag applies to one store. Leave it blank for several stores.");
+   const assets=tag?(await repository.searchAssets({...session,storeIds},tag,{limit:100})).items.filter(a=>a.assetTag===tag):[];
    if(tag&&assets.length!==1)throw new OpsDomainError("VALIDATION","Enter an exact equipment tag at the selected store.");
+   const who=formText(form,"assignment");
+   const assignment:ScheduleAssignment=who==="team"?{kind:"team"}:who==="vendor"?{kind:"vendor",vendorId:formText(form,"assignmentVendorId",{required:true,max:200})}:formText(form,"handler")==="vendor"?{kind:"vendor",vendorId:formText(form,"vendorId",{required:true,max:200})}:{kind:"person",membershipId:formText(form,"membershipId",{required:true,max:200})};
    const templates=await uploadFiles(form,"templates",org,`schedule-${crypto.randomUUID()}`,session.accessMode==="preview");
-   const schedule=await createComplianceSchedule(svc,{organizationId:org,storeId,name:formText(form,"name",{required:true,max:160}),instructions:formText(form,"instructions",{max:4000}),requirementSource:formText(form,"requirementSource",{max:500}),evidenceLabel:formText(form,"evidenceLabel",{required:true,max:300}),assetId:assets[0]?.id,kind:formText(form,"kind") as ComplianceSchedule["kind"],firstDueDate:formText(form,"firstDueDate"),intervalUnit:formText(form,"intervalUnit") as ComplianceSchedule["intervalUnit"],intervalCount:Number(form.get("intervalCount")),leadDays:Number(form.get("leadDays")),handler:formText(form,"handler") as ComplianceSchedule["handler"],membershipId:formText(form,"membershipId")||undefined,vendorId:formText(form,"vendorId")||undefined,evidenceRequired:Number(form.get("evidenceRequired")),escalationDays:Number(form.get("escalationDays")),escalationTo:formText(form,"escalationTo",{required:true,max:160})},actor,templates);
-   const result=await runInspectionCycle(svc,org,schedule.id);const first=await repository.queryInspections(session,{today:new Date().toISOString().slice(0,10),scheduleId:schedule.id,limit:1});
-   return relativeRedirect303(`/app/compliance/${first.items[0].id}?notice=${encodeURIComponent(result.failed?"Schedule saved. Work preparation needs review; check the assigned provider and work order.":"Schedule created. Eligible work and reminders queued.")}`);
+   const schedules=await createComplianceSchedulesForStores(svc,{organizationId:org,name:formText(form,"name",{required:true,max:160}),instructions:formText(form,"instructions",{max:4000}),requirementSource:formText(form,"requirementSource",{max:500}),evidenceLabel:formText(form,"evidenceLabel",{required:true,max:300}),assetId:assets[0]?.id,kind:formText(form,"kind") as ComplianceSchedule["kind"],firstDueDate:formText(form,"firstDueDate"),intervalUnit:formText(form,"intervalUnit") as ComplianceSchedule["intervalUnit"],intervalCount:Number(form.get("intervalCount")),leadDays:Number(form.get("leadDays")),evidenceRequired:Number(form.get("evidenceRequired")),escalationDays:Number(form.get("escalationDays")),escalationTo:formText(form,"escalationTo",{required:true,max:160})},storeIds,assignment,actor,templates);
+   let failed=0;for(const schedule of schedules)failed+=(await runInspectionCycle(svc,org,schedule.id)).failed;
+   if(schedules.length>1)return relativeRedirect303(`/app/compliance?notice=${encodeURIComponent(`${schedules.length} store schedules created.${failed?` ${failed} need review; check the assigned provider and work orders.`:" Eligible work and reminders queued."}`)}`);
+   const first=await repository.queryInspections(session,{today:new Date().toISOString().slice(0,10),scheduleId:schedules[0].id,limit:1});
+   return relativeRedirect303(`/app/compliance/${first.items[0].id}?notice=${encodeURIComponent(failed?"Schedule saved. Work preparation needs review; check the assigned provider and work order.":"Schedule created. Eligible work and reminders queued.")}`);
   }
   const id=formText(form,"inspectionId",{required:true,max:200});back=`/app/compliance/${encodeURIComponent(id)}`;
   const inspection=await repository.getInspection(org,id);if(!inspection)throw new OpsDomainError("NOT_FOUND","Inspection not found");await assertStoreInSessionScope(session,inspection.storeId);

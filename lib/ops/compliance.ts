@@ -38,6 +38,39 @@ export async function createComplianceSchedule(svc:OpsCommandServices,input:Omit
  await svc.repository.atomicWrite([insertRecord("ops_compliance_schedules",{id:s.id,organization_id:s.organizationId,store_id:s.storeId,master_documents_json:s.masterDocumentsJson,name:s.name,instructions:s.instructions,requirement_source:s.requirementSource,evidence_label:s.evidenceLabel,asset_id:s.assetId,kind:s.kind,escalation_days:s.escalationDays,escalation_to:s.escalationTo,first_due_date:s.firstDueDate,interval_unit:s.intervalUnit,interval_count:s.intervalCount,lead_days:s.leadDays,handler:s.handler,membership_id:s.membershipId,vendor_id:s.vendorId,evidence_required:s.evidenceRequired,status:s.status,created_at:now}),inspectionInsert(occurrence(s,s.firstDueDate,now)),communicationAudit(s.organizationId,s.id,"compliance.schedule_created",actor,now,s,"compliance_schedule")]);
  return s;
 }
+export type ScheduleAssignment =
+  | { kind: "team" }
+  | { kind: "vendor"; vendorId: string }
+  | { kind: "person"; membershipId: string };
+
+/**
+ * One schedule per store. "team" assigns each store's own store manager; "vendor" assigns one
+ * outside vendor to every store; "person" is a named internal owner and needs a single store.
+ * Every store is checked before anything is saved, so a problem at one store saves nothing.
+ */
+export async function createComplianceSchedulesForStores(svc:OpsCommandServices,input:Omit<ComplianceSchedule,"id"|"status"|"createdAt"|"storeId"|"handler"|"membershipId"|"vendorId">,storeIds:string[],assignment:ScheduleAssignment,actor:ActorContext,templates:StoredFile[] = []) {
+ const ids=[...new Set(storeIds.filter(Boolean))];
+ if(!ids.length)throw new OpsDomainError("VALIDATION","Choose at least one store.");
+ if(ids.length>200)throw new OpsDomainError("VALIDATION","Choose 200 stores or fewer at a time.");
+ if(ids.length>1&&assignment.kind==="person")throw new OpsDomainError("VALIDATION","A named person can handle one store. For several stores choose the store team or an outside vendor.");
+ if(ids.length>1&&input.assetId)throw new OpsDomainError("VALIDATION","An equipment tag applies to one store. Leave it blank for several stores.");
+ const stores=await Promise.all(ids.map(id=>svc.repository.getStore(input.organizationId,id)));
+ if(stores.some(store=>!store))throw new OpsDomainError("NOT_FOUND","Store not found");
+ const owners=new Map<string,Pick<ComplianceSchedule,"handler"|"membershipId"|"vendorId">>();
+ const problems:string[]=[];
+ for(const store of stores as NonNullable<(typeof stores)[number]>[]) {
+  if(assignment.kind==="team") {
+   const managers=(await svc.repository.listNotificationRecipients(input.organizationId,"store_manager",{storeId:store.id,regionId:store.regionId})).sort((a,b)=>a.membershipId.localeCompare(b.membershipId));
+   if(managers[0])owners.set(store.id,{handler:"internal",membershipId:managers[0].membershipId});else problems.push(`Store ${store.storeNumber}`);
+  } else if(assignment.kind==="vendor") {
+   if(await svc.repository.vendorCoversStore(input.organizationId,assignment.vendorId,store.id))owners.set(store.id,{handler:"vendor",vendorId:assignment.vendorId});else problems.push(`Store ${store.storeNumber}`);
+  } else owners.set(store.id,{handler:"internal",membershipId:assignment.membershipId});
+ }
+ if(problems.length)throw new OpsDomainError("VALIDATION",assignment.kind==="team"?`No store manager is set up for ${problems.join(", ")}. Choose an outside vendor for those stores or add a store manager first.`:`The vendor does not cover ${problems.join(", ")}. Remove those stores or choose another vendor.`);
+ const created:ComplianceSchedule[]=[];
+ for(const id of ids)created.push(await createComplianceSchedule(svc,{...input,storeId:id,...owners.get(id)!} as Omit<ComplianceSchedule,"id"|"status"|"createdAt">,actor,templates));
+ return created;
+}
 export async function setComplianceScheduleStatus(svc:OpsCommandServices,s:ComplianceSchedule,status:"active"|"paused",actor:ActorContext) {
  if(actor.organizationId!==s.organizationId)throw new OpsDomainError("FORBIDDEN","Organization mismatch");
  await svc.repository.atomicWrite([{sql:"UPDATE ops_compliance_schedules SET status = ? WHERE organization_id = ? AND id = ?",params:[status,s.organizationId,s.id]},communicationAudit(s.organizationId,s.id,"compliance.schedule_status",actor,nowOf(svc),{status},"compliance_schedule")]);
