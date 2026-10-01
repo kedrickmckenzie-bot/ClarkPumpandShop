@@ -40,3 +40,5 @@
 .page .rowAction{display:inline-flex;align-items:center;min-height:36px;padding:6px 12px;border:1px solid #2457d6;border-radius:6px;background:#fff;color:#1d4ed8;font-weight:650;white-space:nowrap;text-decoration:none}
 .page .rowAction:hover,.page .rowAction:focus-visible{background:#2457d6;color:#fff}
 .page .table td a:not(.rowAction):hover{text-decoration:underline;text-underline-offset:3px}
+
+.teamOwners{padding:12px 14px;background:#f8fafc;border-left:3px solid #2457d6}.teamOwners ul{margin:6px 0 0;padding-left:18px;display:grid;gap:4px;max-height:220px;overflow:auto}

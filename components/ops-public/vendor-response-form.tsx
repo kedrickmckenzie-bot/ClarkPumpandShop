@@ -87,16 +87,25 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
       });
       const body = (await result.json()) as PublicActionReceipt & { error?: string };
       if (!result.ok) throw new Error(body.error ?? `${organizationName} could not receive the response. Try again.`);
+      // The main response is saved. Show its receipt even if an extra job below fails.
+      setReceipt(body);
       if (response === "accepted") {
         const chosen = extras.filter((job) => extraIds.includes(job.id) && job.status === "offered");
         const failed: string[] = [];
+        if (chosen.length) setExtraNote("Main job accepted. Adding the other jobs…");
         for (const job of chosen) {
-          const saved = await fetch("/api/public/service-optional-work", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, workId: job.id, decision: "accepted", name: responderName }) });
-          if (!saved.ok) failed.push(job.number);
+          try {
+            const saved = await fetch("/api/public/service-optional-work", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, workId: job.id, decision: "accepted", name: responderName }) });
+            if (!saved.ok) failed.push(job.number);
+          } catch {
+            failed.push(job.number);
+          }
         }
-        if (chosen.length) setExtraNote(failed.length ? `Accepted, but ${failed.join(", ")} could not be added. You can add it at check-in.` : `Also accepted: ${chosen.map((job) => job.number).join(", ")}.`);
+        const added = chosen.filter((job) => !failed.includes(job.number)).map((job) => job.number);
+        if (chosen.length) setExtraNote(failed.length
+          ? `Main job accepted.${added.length ? ` Also accepted: ${added.join(", ")}.` : ""} These additional jobs still need confirmation: ${failed.join(", ")}. You can add them at check-in.`
+          : `Main job accepted. Also accepted: ${added.join(", ")}.`);
       }
-      setReceipt(body);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The response could not be sent. Try again.");
     } finally {

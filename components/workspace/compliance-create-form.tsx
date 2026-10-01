@@ -31,7 +31,8 @@ function VendorPicker({ storeId }: { storeId: string }) {
   </div>;
 }
 
-export function ComplianceCreateForm({ stores, defaultStoreId }: { defaultStoreId?: string; stores: StoreOption[] }) {
+export function ComplianceCreateForm({ stores, defaultStoreId, teamOwners = {} }: { defaultStoreId?: string; stores: StoreOption[]; teamOwners?: Record<string, string | null> }) {
+  const [submissionId] = useState(() => crypto.randomUUID());
   const [selected, setSelected] = useState<string[]>(defaultStoreId ? [defaultStoreId] : []);
   const [search, setSearch] = useState(""), [region, setRegion] = useState(""), [unit, setUnit] = useState("months");
   const [who, setWho] = useState<Who>("team");
@@ -40,6 +41,7 @@ export function ComplianceCreateForm({ stores, defaultStoreId }: { defaultStoreI
   const effectiveWho: Who = who === "person" && !single ? "team" : who;
   return <form action="/api/ops/compliance" method="post" encType="multipart/form-data" className={styles.form}>
     <input type="hidden" name="action" value="create" />
+    <input type="hidden" name="submissionId" value={submissionId} />
     <label>Inspection or renewal name<input name="name" required maxLength={160} placeholder="e.g. Fire extinguisher inspection" /></label>
     <label>Type<select name="kind"><option value="inspection">Inspection</option><option value="permit">Permit / renewal</option></select></label>
 
@@ -58,6 +60,10 @@ export function ComplianceCreateForm({ stores, defaultStoreId }: { defaultStoreI
     <fieldset className={styles.form}>
       <legend>Who does it?</legend>
       <label><input type="radio" name="assignment" value="team" checked={effectiveWho === "team"} onChange={() => setWho("team")} /> Store team — each store&apos;s manager handles their own store</label>
+      {effectiveWho === "team" && selected.length ? <div role="status" className={styles.teamOwners}>
+        <strong>Each inspection goes to:</strong>
+        <ul>{selected.map((id) => { const store = stores.find((s) => s.id === id); const owner = teamOwners[id]; return <li key={id}>Store {store?.storeNumber ?? "?"} → {owner ?? <span className={styles.danger}>No store manager set up. Choose a vendor, or add a manager first.</span>}</li>; })}</ul>
+      </div> : null}
       <label><input type="radio" name="assignment" value="vendor" checked={effectiveWho === "vendor"} onChange={() => setWho("vendor")} /> Outside vendor — one company handles every selected store</label>
       {single ? <label><input type="radio" name="assignment" value="person" checked={effectiveWho === "person"} onChange={() => setWho("person")} /> A specific person or vendor at this store</label> : null}
       {effectiveWho === "vendor" && selected[0] ? <VendorPicker storeId={selected[0]} /> : null}

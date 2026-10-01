@@ -24,7 +24,8 @@ export function nextInspectionDate(s:ComplianceSchedule,after:string):string|nul
 function occurrence(s:ComplianceSchedule,dueDate:string,now:string):Inspection {return {id:`inspection-${s.id}-${dueDate}`,organizationId:s.organizationId,scheduleId:s.id,storeId:s.storeId,masterDocumentsJson:s.masterDocumentsJson,dueDate,status:"pending",version:0,createdAt:now};}
 function inspectionInsert(i:Inspection) {return insertRecord("ops_inspections",{id:i.id,organization_id:i.organizationId,schedule_id:i.scheduleId,store_id:i.storeId,due_date:i.dueDate,master_documents_json:i.masterDocumentsJson,status:i.status,version:0,created_at:i.createdAt});}
 function withStatements(repository:OpsRepository,extra:OpsStatement[]):OpsRepository {return new Proxy(repository,{get(target,key){if(key==="atomicWrite")return(statements:readonly OpsStatement[])=>target.atomicWrite([...statements,...extra]);const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;}});}
-export async function createComplianceSchedule(svc:OpsCommandServices,input:Omit<ComplianceSchedule,"id"|"status"|"createdAt">,actor:ActorContext,templates:StoredFile[] = []) {
+/** Validate one schedule and build its insert statements without writing them. */
+async function prepareComplianceSchedule(svc:OpsCommandServices,input:Omit<ComplianceSchedule,"id"|"status"|"createdAt">,actor:ActorContext,templates:StoredFile[],id:string) {
  if(actor.organizationId!==input.organizationId)throw new OpsDomainError("FORBIDDEN","Organization mismatch");
  if(!input.name.trim()||input.name.length>160||input.instructions.length>4000||!/^\d{4}-\d{2}-\d{2}$/.test(input.firstDueDate)||!Number.isFinite(Date.parse(input.firstDueDate))||new Date(input.firstDueDate).toISOString().slice(0,10)!==input.firstDueDate)throw new OpsDomainError("VALIDATION","Enter an inspection name and valid due date.");
  if(!["once","days","months"].includes(input.intervalUnit)||!Number.isInteger(input.intervalCount)||input.intervalCount<1||input.intervalCount>365||!Number.isInteger(input.leadDays)||input.leadDays<0||input.leadDays>90||![0,1].includes(input.evidenceRequired))throw new OpsDomainError("VALIDATION","Check the inspection frequency and reminder timing.");
@@ -34,9 +35,14 @@ export async function createComplianceSchedule(svc:OpsCommandServices,input:Omit
  if(input.handler==="vendor") {const v=input.vendorId?await svc.repository.getVendor(input.organizationId,input.vendorId):null;if(!v||v.status!=="approved"||input.membershipId||!await svc.repository.vendorCoversStore(input.organizationId,v.id,input.storeId))throw new OpsDomainError("VALIDATION","Choose an approved vendor covering this store.");}
  else if(input.handler==="internal") {const member=input.membershipId?await svc.repository.getMembership(input.organizationId,input.membershipId):null;if(!member||member.status!=="active"||["vendor_user","support"].includes(member.role)||input.vendorId)throw new OpsDomainError("VALIDATION","Choose an active internal owner.");const grants=await svc.repository.listStoreIdsForMembership(input.organizationId,member.id);if(!grants.includes(input.storeId))throw new OpsDomainError("VALIDATION","The internal owner must have access to this store.");}
  else throw new OpsDomainError("VALIDATION","Choose internal or outside vendor.");
- const now=nowOf(svc),s:ComplianceSchedule={...input,masterDocumentsJson:masterDocumentSnapshot(templates,input.organizationId),name:input.name.trim(),id:`schedule-${crypto.randomUUID()}`,status:"active",createdAt:now};
- await svc.repository.atomicWrite([insertRecord("ops_compliance_schedules",{id:s.id,organization_id:s.organizationId,store_id:s.storeId,master_documents_json:s.masterDocumentsJson,name:s.name,instructions:s.instructions,requirement_source:s.requirementSource,evidence_label:s.evidenceLabel,asset_id:s.assetId,kind:s.kind,escalation_days:s.escalationDays,escalation_to:s.escalationTo,first_due_date:s.firstDueDate,interval_unit:s.intervalUnit,interval_count:s.intervalCount,lead_days:s.leadDays,handler:s.handler,membership_id:s.membershipId,vendor_id:s.vendorId,evidence_required:s.evidenceRequired,status:s.status,created_at:now}),inspectionInsert(occurrence(s,s.firstDueDate,now)),communicationAudit(s.organizationId,s.id,"compliance.schedule_created",actor,now,s,"compliance_schedule")]);
- return s;
+ const now=nowOf(svc),s:ComplianceSchedule={...input,masterDocumentsJson:masterDocumentSnapshot(templates,input.organizationId),name:input.name.trim(),id,status:"active",createdAt:now};
+ const statements=[insertRecord("ops_compliance_schedules",{id:s.id,organization_id:s.organizationId,store_id:s.storeId,master_documents_json:s.masterDocumentsJson,name:s.name,instructions:s.instructions,requirement_source:s.requirementSource,evidence_label:s.evidenceLabel,asset_id:s.assetId,kind:s.kind,escalation_days:s.escalationDays,escalation_to:s.escalationTo,first_due_date:s.firstDueDate,interval_unit:s.intervalUnit,interval_count:s.intervalCount,lead_days:s.leadDays,handler:s.handler,membership_id:s.membershipId,vendor_id:s.vendorId,evidence_required:s.evidenceRequired,status:s.status,created_at:now}),inspectionInsert(occurrence(s,s.firstDueDate,now)),communicationAudit(s.organizationId,s.id,"compliance.schedule_created",actor,now,s,"compliance_schedule")];
+ return {schedule:s,statements};
+}
+export async function createComplianceSchedule(svc:OpsCommandServices,input:Omit<ComplianceSchedule,"id"|"status"|"createdAt">,actor:ActorContext,templates:StoredFile[] = []) {
+ const prepared=await prepareComplianceSchedule(svc,input,actor,templates,`schedule-${crypto.randomUUID()}`);
+ await svc.repository.atomicWrite(prepared.statements);
+ return prepared.schedule;
 }
 export type ScheduleAssignment =
   | { kind: "team" }
@@ -48,28 +54,48 @@ export type ScheduleAssignment =
  * outside vendor to every store; "person" is a named internal owner and needs a single store.
  * Every store is checked before anything is saved, so a problem at one store saves nothing.
  */
-export async function createComplianceSchedulesForStores(svc:OpsCommandServices,input:Omit<ComplianceSchedule,"id"|"status"|"createdAt"|"storeId"|"handler"|"membershipId"|"vendorId">,storeIds:string[],assignment:ScheduleAssignment,actor:ActorContext,templates:StoredFile[] = []) {
+/**
+ * The store-team owner for a store: its store manager, chosen by name so the
+ * person shown on the setup form is the person who receives the inspection.
+ */
+export async function storeTeamOwner(repository:OpsCommandServices["repository"],organizationId:string,store:{id:string;regionId?:string}) {
+ const managers=await repository.listNotificationRecipients(organizationId,"store_manager",{storeId:store.id,regionId:store.regionId});
+ return managers.sort((a,b)=>a.displayName.localeCompare(b.displayName)||a.membershipId.localeCompare(b.membershipId))[0] ?? null;
+}
+export async function createComplianceSchedulesForStores(svc:OpsCommandServices,input:Omit<ComplianceSchedule,"id"|"status"|"createdAt"|"storeId"|"handler"|"membershipId"|"vendorId">,storeIds:string[],assignment:ScheduleAssignment,actor:ActorContext,templates:StoredFile[] = [],submissionId?:string) {
  const ids=[...new Set(storeIds.filter(Boolean))];
  if(!ids.length)throw new OpsDomainError("VALIDATION","Choose at least one store.");
  if(ids.length>200)throw new OpsDomainError("VALIDATION","Choose 200 stores or fewer at a time.");
  if(ids.length>1&&assignment.kind==="person")throw new OpsDomainError("VALIDATION","A named person can handle one store. For several stores choose the store team or an outside vendor.");
  if(ids.length>1&&input.assetId)throw new OpsDomainError("VALIDATION","An equipment tag applies to one store. Leave it blank for several stores.");
+ if(submissionId!==undefined&&!/^[A-Za-z0-9-]{8,64}$/.test(submissionId))throw new OpsDomainError("VALIDATION","Reload the form and try again.");
+ // A repeated submission (double click, retry after a timeout) returns the schedules it already created.
+ const scheduleIds=ids.map(id=>submissionId?`schedule-${submissionId}-${id}`:`schedule-${crypto.randomUUID()}`);
+ if(submissionId) {
+  const existing=await Promise.all(scheduleIds.map(id=>svc.repository.getComplianceSchedule(input.organizationId,id)));
+  if(existing.some(Boolean)) {
+   if(existing.some(item=>!item))throw new OpsDomainError("CONFLICT","This form was already submitted with different stores. Reload the form and try again.");
+   return existing as ComplianceSchedule[];
+  }
+ }
  const stores=await Promise.all(ids.map(id=>svc.repository.getStore(input.organizationId,id)));
  if(stores.some(store=>!store))throw new OpsDomainError("NOT_FOUND","Store not found");
  const owners=new Map<string,Pick<ComplianceSchedule,"handler"|"membershipId"|"vendorId">>();
  const problems:string[]=[];
  for(const store of stores as NonNullable<(typeof stores)[number]>[]) {
   if(assignment.kind==="team") {
-   const managers=(await svc.repository.listNotificationRecipients(input.organizationId,"store_manager",{storeId:store.id,regionId:store.regionId})).sort((a,b)=>a.membershipId.localeCompare(b.membershipId));
-   if(managers[0])owners.set(store.id,{handler:"internal",membershipId:managers[0].membershipId});else problems.push(`Store ${store.storeNumber}`);
+   const manager=await storeTeamOwner(svc.repository,input.organizationId,store);
+   if(manager)owners.set(store.id,{handler:"internal",membershipId:manager.membershipId});else problems.push(`Store ${store.storeNumber}`);
   } else if(assignment.kind==="vendor") {
    if(await svc.repository.vendorCoversStore(input.organizationId,assignment.vendorId,store.id))owners.set(store.id,{handler:"vendor",vendorId:assignment.vendorId});else problems.push(`Store ${store.storeNumber}`);
   } else owners.set(store.id,{handler:"internal",membershipId:assignment.membershipId});
  }
  if(problems.length)throw new OpsDomainError("VALIDATION",assignment.kind==="team"?`No store manager is set up for ${problems.join(", ")}. Choose an outside vendor for those stores or add a store manager first.`:`The vendor does not cover ${problems.join(", ")}. Remove those stores or choose another vendor.`);
- const created:ComplianceSchedule[]=[];
- for(const id of ids)created.push(await createComplianceSchedule(svc,{...input,storeId:id,...owners.get(id)!} as Omit<ComplianceSchedule,"id"|"status"|"createdAt">,actor,templates));
- return created;
+ // All stores are saved together: either every schedule is created or none is.
+ const prepared=[];
+ for(const [index,id] of ids.entries())prepared.push(await prepareComplianceSchedule(svc,{...input,storeId:id,...owners.get(id)!} as Omit<ComplianceSchedule,"id"|"status"|"createdAt">,actor,templates,scheduleIds[index]));
+ await svc.repository.atomicWrite(prepared.flatMap(item=>item.statements));
+ return prepared.map(item=>item.schedule);
 }
 export async function setComplianceScheduleStatus(svc:OpsCommandServices,s:ComplianceSchedule,status:"active"|"paused",actor:ActorContext) {
  if(actor.organizationId!==s.organizationId)throw new OpsDomainError("FORBIDDEN","Organization mismatch");

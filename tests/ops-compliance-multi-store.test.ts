@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createComplianceSchedulesForStores } from "@/lib/ops/compliance";
+import { createComplianceSchedulesForStores, storeTeamOwner } from "@/lib/ops/compliance";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 import type { ActorContext } from "@/lib/ops/types";
@@ -48,5 +48,37 @@ describe("inspection schedules for several stores", () => {
     await expect(createComplianceSchedulesForStores({ repository }, base, ids, { kind: "person", membershipId: "membership-northline-facilities" }, actor)).rejects.toMatchObject({ code: "VALIDATION" });
     await expect(createComplianceSchedulesForStores({ repository }, { ...base, assetId: "asset-101-beer-cave" }, ids, { kind: "team" }, actor)).rejects.toMatchObject({ code: "VALIDATION" });
     await expect(createComplianceSchedulesForStores({ repository }, base, [], { kind: "team" }, actor)).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("names the store manager the form shows, and saves that same person", async () => {
+    const { repository, stores } = setup();
+    const store = stores[0];
+    const owner = await storeTeamOwner(repository, NORTHLINE_ORGANIZATION_ID, store);
+    expect(owner?.displayName).toBeTruthy();
+    const [schedule] = await createComplianceSchedulesForStores({ repository }, base, [store.id], { kind: "team" }, actor);
+    expect(schedule.membershipId).toBe(owner!.membershipId);
+  });
+
+  it("returns the same schedules when the same form is submitted twice", async () => {
+    const { repository, stores } = setup();
+    const ids = stores.slice(0, 3).map((store) => store.id);
+    const before = (await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length;
+    const first = await createComplianceSchedulesForStores({ repository }, base, ids, { kind: "team" }, actor, [], "submission-retry-1");
+    const again = await createComplianceSchedulesForStores({ repository }, base, ids, { kind: "team" }, actor, [], "submission-retry-1");
+    expect(again.map((row) => row.id)).toEqual(first.map((row) => row.id));
+    expect((await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length).toBe(before + 3);
+  });
+
+  it("saves every store or none when the save itself fails", async () => {
+    const { repository, stores } = setup();
+    const before = (await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length;
+    let writes = 0;
+    const failing = new Proxy(repository, { get(target, key, receiver) {
+      if (key === "atomicWrite") return async () => { writes += 1; throw new Error("database unavailable"); };
+      return Reflect.get(target, key, receiver);
+    } });
+    await expect(createComplianceSchedulesForStores({ repository: failing }, base, stores.slice(0, 3).map((store) => store.id), { kind: "team" }, actor)).rejects.toThrow("database unavailable");
+    expect(writes).toBe(1);
+    expect((await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length).toBe(before);
   });
 });

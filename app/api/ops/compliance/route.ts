@@ -1,7 +1,7 @@
 import { getOpsRequestContext,assertStoreInSessionScope,formText,opsApiError } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { OpsDomainError } from "@/lib/ops/commands";
-import { createComplianceSchedulesForStores,type ScheduleAssignment,runInspectionCycle,recordInspectionResult,setComplianceScheduleStatus,createInspectionCorrection,replaceComplianceDocuments } from "@/lib/ops/compliance";
+import { createComplianceSchedulesForStores,storeTeamOwner,type ScheduleAssignment,runInspectionCycle,recordInspectionResult,setComplianceScheduleStatus,createInspectionCorrection,replaceComplianceDocuments } from "@/lib/ops/compliance";
 import { uploadInspectionFiles as uploadFiles } from "@/lib/server/inspection-uploads";
 import { createInspectionLink } from "@/lib/ops/inspection-access";
 import type { ComplianceSchedule } from "@/lib/ops/compliance-types";
@@ -28,11 +28,13 @@ export async function POST(request:Request) {
    const who=formText(form,"assignment");
    const assignment:ScheduleAssignment=who==="team"?{kind:"team"}:who==="vendor"?{kind:"vendor",vendorId:formText(form,"assignmentVendorId",{required:true,max:200})}:formText(form,"handler")==="vendor"?{kind:"vendor",vendorId:formText(form,"vendorId",{required:true,max:200})}:{kind:"person",membershipId:formText(form,"membershipId",{required:true,max:200})};
    const templates=await uploadFiles(form,"templates",org,`schedule-${crypto.randomUUID()}`,session.accessMode==="preview");
-   const schedules=await createComplianceSchedulesForStores(svc,{organizationId:org,name:formText(form,"name",{required:true,max:160}),instructions:formText(form,"instructions",{max:4000}),requirementSource:formText(form,"requirementSource",{max:500}),evidenceLabel:formText(form,"evidenceLabel",{required:true,max:300}),assetId:assets[0]?.id,kind:formText(form,"kind") as ComplianceSchedule["kind"],firstDueDate:formText(form,"firstDueDate"),intervalUnit:formText(form,"intervalUnit") as ComplianceSchedule["intervalUnit"],intervalCount:Number(form.get("intervalCount")),leadDays:Number(form.get("leadDays")),evidenceRequired:Number(form.get("evidenceRequired")),escalationDays:Number(form.get("escalationDays")),escalationTo:formText(form,"escalationTo",{required:true,max:160})},storeIds,assignment,actor,templates);
-   let failed=0;for(const schedule of schedules)failed+=(await runInspectionCycle(svc,org,schedule.id)).failed;
-   if(schedules.length>1)return relativeRedirect303(`/app/compliance?notice=${encodeURIComponent(`${schedules.length} store schedules created.${failed?` ${failed} need review; check the assigned provider and work orders.`:" Eligible work and reminders queued."}`)}`);
+   const schedules=await createComplianceSchedulesForStores(svc,{organizationId:org,name:formText(form,"name",{required:true,max:160}),instructions:formText(form,"instructions",{max:4000}),requirementSource:formText(form,"requirementSource",{max:500}),evidenceLabel:formText(form,"evidenceLabel",{required:true,max:300}),assetId:assets[0]?.id,kind:formText(form,"kind") as ComplianceSchedule["kind"],firstDueDate:formText(form,"firstDueDate"),intervalUnit:formText(form,"intervalUnit") as ComplianceSchedule["intervalUnit"],intervalCount:Number(form.get("intervalCount")),leadDays:Number(form.get("leadDays")),evidenceRequired:Number(form.get("evidenceRequired")),escalationDays:Number(form.get("escalationDays")),escalationTo:formText(form,"escalationTo",{required:true,max:160})},storeIds,assignment,actor,templates,formText(form,"submissionId",{max:64})||undefined);
+   // Schedules are saved. Preparing their first work is a follow-up step: a failure is reported, not thrown.
+   let failed=0;for(const schedule of schedules){try{failed+=(await runInspectionCycle(svc,org,schedule.id)).failed;}catch{failed+=1;}}
+   const owners=assignment.kind==="team"?await teamOwnerSummary(repository,org,schedules):"";
+   if(schedules.length>1)return relativeRedirect303(`/app/compliance?notice=${encodeURIComponent(`${schedules.length} store schedules created.${owners}${failed?` ${failed} need review; check the assigned provider and work orders.`:" Eligible work and reminders queued."}`)}`);
    const first=await repository.queryInspections(session,{today:new Date().toISOString().slice(0,10),scheduleId:schedules[0].id,limit:1});
-   return relativeRedirect303(`/app/compliance/${first.items[0].id}?notice=${encodeURIComponent(failed?"Schedule saved. Work preparation needs review; check the assigned provider and work order.":"Schedule created. Eligible work and reminders queued.")}`);
+   return relativeRedirect303(`/app/compliance/${first.items[0].id}?notice=${encodeURIComponent(`${failed?"Schedule saved. Work preparation needs review; check the assigned provider and work order.":"Schedule created. Eligible work and reminders queued."}${owners}`)}`);
   }
   const id=formText(form,"inspectionId",{required:true,max:200});back=`/app/compliance/${encodeURIComponent(id)}`;
   const inspection=await repository.getInspection(org,id);if(!inspection)throw new OpsDomainError("NOT_FOUND","Inspection not found");await assertStoreInSessionScope(session,inspection.storeId);
@@ -49,4 +51,10 @@ export async function POST(request:Request) {
   }else throw new OpsDomainError("VALIDATION","Unknown inspection action");
   return relativeRedirect303(`${back}?notice=Inspection+updated`);
  }catch(error){if(error instanceof OpsDomainError&&["VALIDATION","CONFLICT"].includes(error.code))return relativeRedirect303(`${back}?error=${encodeURIComponent(error.message)}`);return opsApiError(error);}
+}
+
+/** "Assigned to …" for store-team schedules, naming each store's manager. */
+async function teamOwnerSummary(repository:Parameters<typeof storeTeamOwner>[0],org:string,schedules:ComplianceSchedule[]) {
+ const rows=await Promise.all(schedules.slice(0,5).map(async schedule=>{const [store,member]=await Promise.all([repository.getStore(org,schedule.storeId),schedule.membershipId?repository.getMembership(org,schedule.membershipId):null]);const user=member?await repository.getUserInOrganization(org,member.userId):null;return `Store ${store?.storeNumber ?? "?"}: ${user?.displayName ?? "store manager"}`;}));
+ return ` Assigned to ${rows.join("; ")}${schedules.length>5?` and ${schedules.length-5} more`:""}.`;
 }

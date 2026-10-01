@@ -38,4 +38,9 @@ it('opens on my actions when I have some, otherwise everything open, and keeps A
  const lane=opened.filters!.find(g=>g.id==='attention-lane')!;
  expect(lane.options.find(o=>o.label==='All open')!.href).toBe('/app/action-center?lane=all');
  expect(lane.options.find(o=>o.label==='Needs my action')!.selected).toBe(true);
+ // Searching keeps the chosen lane, so a search from All open never falls back to Needs my action.
+ expect(all.search!.preservedParameters).toContainEqual({name:'lane',value:'all'});
+ expect(mine.search!.preservedParameters).toContainEqual({name:'lane',value:'mine'});
+ const searched=await buildReviewQueue(repo,session,{lane:'all',q:'Store'},f.asOf);
+ expect(searched.filters!.find(g=>g.id==='attention-lane')!.options.find(o=>o.label==='All open')!.selected).toBe(true);
 });
