@@ -1,6 +1,6 @@
 import { StoreOpenReports } from "@/components/workspace/store-open-reports";
-import { StoreOperatingContext } from "@/components/workspace/store-operating-context";
-import { StoreWorkspaceNav } from "@/components/workspace/store-workspace-nav";
+import { StoreActiveWork } from "@/components/workspace/store-active-work";
+import { STORE_SECTION_TABS, StoreWorkspaceNav } from "@/components/workspace/store-workspace-nav";
 import type { Metadata } from "next";
 import { roleCan } from "@/components/ops/role-policy";
 import { SetupActions } from "@/components/ops/setup-forms";
@@ -11,19 +11,28 @@ import { loadDetailModel, loadOperatorSession } from "../../_data/operator-loade
 
 export const metadata: Metadata = { title: "Store" };
 
-export default async function StoreDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StoreDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ section?: string | string[] }> }) {
   const { id } = await params;
+  const requested = (await searchParams).section;
+  const section = STORE_SECTION_TABS.find((tab) => tab.id === (Array.isArray(requested) ? requested[0] : requested))?.id;
   const [model, session] = await Promise.all([loadDetailModel("store", id), loadOperatorSession()]);
   const canSetupEquipment = session.demoEdition === "complete" && roleCan(session, "setup_equipment");
   const canSetupPm = session.demoEdition === "complete" && roleCan(session, "setup_pm");
   const hasDemoVendorQr = id === NORTHLINE_DEMO_HANDLES.storyStoreId;
   const canCreateQr = model.state.kind === "ready" && roleCan(session, "issue_work_order");
+  const ready = model.state.kind === "ready";
+  // The page's main action is the work people start here: create work, or report a problem.
+  if (!ready) model.page.primaryAction = undefined;
+  else if (roleCan(session, "create_work_order")) model.page.primaryAction = { label: "Create work order", href: `/app/work-orders/new?store=${encodeURIComponent(id)}` };
+  else if (roleCan(session, "create_request")) model.page.primaryAction = { label: "Report an issue", href: `/app/requests/new?store=${encodeURIComponent(id)}` };
+  model.page.secondaryAction = undefined;
   return (
     <DetailView
       model={model}
-      beforeFacts={<><StoreWorkspaceNav id={id} />{model.state.kind === "ready" ? <StoreOpenReports id={id} /> : null}</>}
-      beforeSections={<>{model.state.kind === "ready" && session.demoEdition === "complete" ? <StoreOperatingContext id={id} /> : null}</>}
-      after={canCreateQr || canSetupEquipment || canSetupPm ? (
+      embeddedSections
+      hideFacts
+      beforeFacts={<><StoreWorkspaceNav id={id} active={section ?? "overview"} />{ready && !section ? <><StoreOpenReports id={id} /><StoreActiveWork id={id} /></> : null}</>}
+      after={!section && (canCreateQr || canSetupEquipment || canSetupPm) ? (
         <>
           {canCreateQr ? (
             <StoreQrMaterial

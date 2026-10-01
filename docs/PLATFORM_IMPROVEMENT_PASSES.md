@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Usability pass 2 — daily screens (October 1, Claude)
+
+- [x] UP-11 Store page: one tab row (Overview, Work & visits, Upcoming visits, Saved jobs, Equipment, PM, Spending, Tasks, Compliance, Warranties, Vendors). Record sections open as tabs (`?section=`) instead of all previewing on the overview. Overview shows open reports, "Needs attention" (repairs to confirm, overdue inspections, findings) and open jobs with who is handling each, next step and due date. Key facts and the coverage summary are removed from the store page (their content lives in the tabs). Primary action: Create work order, or Report an issue for roles that cannot create work. Store 104 page height 6,409→2,826 px desktop and 13,166→4,346 px on the store-manager phone view; clickables 132→35.
+- [x] UP-12 Work order: possible-warranty work shows "Check warranty with [provider]" (one provider) or "Review warranty coverage" (several) as the next step, linking to the warranty banner, with "Send anyway" beside it. One "Record update" entry asks whether the update is from our team/store or the vendor; vendor replies keep their own attributed command. Empty linked-task cards (work orders, invoices, visits, equipment) became a one-line "Ask someone to check or do something" link. Duplicate bottom "Visits & notes / Full history" links removed.
+- [x] UP-13 Review queue tiles: Needs your action / Waiting on others / All open items. "Related tasks and records" link shown only when a row combines more than one record.
+- [x] UP-14 Lists: first filter group stays visible with up to five choices (rest under "More"); other groups fold under "More filters" unless in use. "N source records" replaced with "N results". On phones the page description and secondary context are hidden, filter chips scroll sideways and summary tiles are compact. First record is on the first screen for work orders and requests (desktop and 390 px) and visits (390 px); the review queue's first item starts just below on a phone.
+- [x] UP-15 Tasks: first visit with nothing assigned opens Shared tasks when some exist; a chosen tab is kept. "Take task" everywhere. When the findings form is shown, the reply form (with its own upload) is folded under "Send a message instead of findings".
+
+Validation: typecheck and lint clean; full unit suite 1,157/1,160 — failures are the PostgreSQL showcase-seed test (120 s timeout) and the invoice-record query test (30 s timeout), both of which also time out on this container with these changes stashed, plus none attributable to this pass after updating two assertions (queue tiles; review rows without a sources link). e2e 64/65 (same PostgreSQL timeout). Build passed. Browser: store page all roles desktop/390 px, every store tab active state, out-of-scope store shows no action, work-order warranty/next step/Send anyway, merged update form fields, invoice task line, queue tiles, store-manager task defaults and Take task. No horizontal overflow; no page errors.
+
 ## Usability pass 1 — misleading actions (October 1, Claude)
 
 Scope approved by the user: fix actions that land in the wrong place or ask for unnecessary input, before visual simplification. Phases 2–4 (daily screens, supporting journeys, full journey validation) remain open.

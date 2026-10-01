@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import type { WorkOrderControlViewModel } from "./data-contract";
 import styles from "./ops.module.css";
 
 /** Uses the same audited command as the full work controls. A reported update is not visit evidence. */
-export function WorkOrderQuickUpdate({ model, canComplete = false, canAddNote = false }: { model: WorkOrderControlViewModel; canComplete?: boolean; canAddNote?: boolean }) {
+/** `vendorReply`, when present, is offered as "From the vendor" so updates have one entry point. */
+export function WorkOrderQuickUpdate({ model, canComplete = false, canAddNote = false, vendorReply }: { model: WorkOrderControlViewModel; canComplete?: boolean; canAddNote?: boolean; vendorReply?: ReactNode }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   const [kind, setKind] = useState("note");
   const [source, setSource] = useState("Phone");
+  const [from, setFrom] = useState<"team" | "vendor">("team");
   if (!model.available || (!model.permitted && !canAddNote) || model.isTerminal) return null;
   const presets = [
     { value: "note", label: "Note / message received", status: model.status, next: model.nextAction },
@@ -36,8 +38,12 @@ export function WorkOrderQuickUpdate({ model, canComplete = false, canAddNote = 
   }
   return <section id="add-update" className={styles.controlPanel} aria-labelledby="quick-update-title">
     <details className={styles.controlDisclosure}>
-      <summary className={styles.controlDisclosureSummary}><strong id="quick-update-title">Record update</strong><span>Phone call, email or follow-up</span></summary>
-      <form action={model.submitAction} method="post" onSubmit={submit} className={styles.controlForm}>
+      <summary className={styles.controlDisclosureSummary}><strong id="quick-update-title">Record update</strong><span>{vendorReply ? "Phone call, email, follow-up or vendor reply" : "Phone call, email or follow-up"}</span></summary>
+      {vendorReply ? <fieldset className={styles.fieldGrid}><legend className={styles.formMeta}>Who is this update from?</legend>
+        <label><input type="radio" name="update-from" checked={from === "team"} onChange={() => setFrom("team")} /> Our team or the store</label>
+        <label><input type="radio" name="update-from" checked={from === "vendor"} onChange={() => setFrom("vendor")} /> The vendor (accepted, declined, new date or question)</label>
+      </fieldset> : null}
+      {vendorReply && from === "vendor" ? vendorReply : <form action={model.submitAction} method="post" onSubmit={submit} className={styles.controlForm}>
         <input type="hidden" name="operation" value={kind === "done" ? "manual_close" : ["appointment", "parts", "unresolved"].includes(kind) ? kind : "update"} />
         <input type="hidden" name="expectedVersion" value={model.expectedVersion} />
         <input type="hidden" name="expectedStatus" value={model.expectedStatus} />
@@ -68,7 +74,7 @@ export function WorkOrderQuickUpdate({ model, canComplete = false, canAddNote = 
         </details> : null}
         {error ? <p role="alert" className={styles.controlError}>{error}</p> : null}
         <div className={styles.formFooter}><small>Saved with your name and the time.</small><button type="submit" disabled={pending} className={styles.primaryButton}>{pending ? "Saving…" : "Save update"}</button></div>
-      </form>
+      </form>}
     </details>
   </section>;
 }

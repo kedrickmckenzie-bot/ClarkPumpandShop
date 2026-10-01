@@ -228,7 +228,7 @@ function enforceListLinkPolicy<T extends ListPageViewModel>(model: T, session: O
   const rowCount = model.table.rows.length;
   model.table.rows = model.table.rows.filter((row) => roleCanOpenOperatorHref(session.role, row.href));
   if (model.table.rows.length !== rowCount) {
-    model.resultSummary = `${model.table.rows.length} source record${model.table.rows.length === 1 ? "" : "s"}`;
+    model.resultSummary = `${model.table.rows.length} ${model.table.rows.length === 1 ? "result" : "results"}`;
     model.pagination = undefined;
   }
   return model;

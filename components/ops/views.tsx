@@ -340,27 +340,43 @@ export function DashboardView({ model }: { model: DashboardPageViewModel }) {
   );
 }
 
+const VISIBLE_FILTER_OPTIONS = 5;
+
+function FilterChip({ option }: { option: FilterGroupViewModel["options"][number] }) {
+  return <Link href={option.href} className={option.selected ? styles.filterChipActive : styles.filterChip} aria-current={option.selected ? "page" : undefined}>{option.label}</Link>;
+}
+
+/** A filter group shows its first few choices; the rest, unless selected, sit behind "More". */
+function FilterGroupRow({ filter, primary }: { filter: FilterGroupViewModel; primary?: boolean }) {
+  const shown = filter.options.filter((option, index) => index < VISIBLE_FILTER_OPTIONS || option.selected);
+  const extra = filter.options.filter((option) => !shown.includes(option));
+  return (
+    <div className={styles.filterGroup} data-primary={primary || undefined}>
+      <span>{filter.label}</span>
+      <div>
+        {shown.map((option) => <FilterChip option={option} key={option.value} />)}
+        {extra.length ? <details className={styles.filterMore}><summary>More ({extra.length})</summary><div>{extra.map((option) => <FilterChip option={option} key={option.value} />)}</div></details> : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The first group stays visible so records reach the first screen; other groups
+ * fold under "More filters" unless one of them is in use.
+ */
 function FilterGroups({ filters }: { filters?: FilterGroupViewModel[] }) {
   if (!filters?.length) return null;
-
+  const [first, ...rest] = filters;
+  const inUse = (filter: FilterGroupViewModel) => filter.options.some((option, index) => option.selected && index > 0);
   return (
     <div className={styles.filters} aria-label="Filter results">
       <span className={styles.filterHeading}><Filter aria-hidden="true" size={16} />Filters</span>
-      {filters.map((filter) => (
-        <div className={styles.filterGroup} data-primary={filter.id === "work-view" || filter.id === "browse" || undefined} key={filter.id}>
-          <span>{filter.label}</span>
-          <div>
-            {filter.options.map((option) => (
-              <Link
-                href={option.href}
-                key={option.value}
-                className={option.selected ? styles.filterChipActive : styles.filterChip}
-                aria-current={option.selected ? "page" : undefined}
-              >{option.label}</Link>
-            ))}
-          </div>
-        </div>
-      ))}
+      <FilterGroupRow filter={first} primary />
+      {rest.length ? <details className={styles.filterMoreGroups} open={rest.some(inUse) || undefined}>
+        <summary>More filters</summary>
+        {rest.map((filter) => <FilterGroupRow filter={filter} key={filter.id} />)}
+      </details> : null}
     </div>
   );
 }
@@ -881,7 +897,7 @@ export function ProgramView({ model, beforeContent, compact = false }: { model: 
   );
 }
 
-export function DetailView({ model, beforeFacts, beforeSections, after, initialSection, compactFacts = false }: { compactFacts?: boolean; model: DetailPageViewModel; beforeFacts?: ReactNode; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string }) {
+export function DetailView({ model, beforeFacts, beforeSections, after, initialSection, compactFacts = false, embeddedSections = false, hideFacts = false }: { compactFacts?: boolean; model: DetailPageViewModel; beforeFacts?: ReactNode; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string; embeddedSections?: boolean; hideFacts?: boolean }) {
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={16} />{model.backLink.label}</Link>
@@ -890,15 +906,15 @@ export function DetailView({ model, beforeFacts, beforeSections, after, initialS
         <>
           {beforeFacts}
           {compactFacts ? beforeSections : null}
-          <details className={styles.recordSummary} open={!compactFacts} aria-label="Record summary"><summary>{compactFacts ? "Equipment details" : "Key facts"}</summary>
+          {hideFacts ? null : <details className={styles.recordSummary} open={!compactFacts} aria-label="Record summary"><summary>{compactFacts ? "Equipment details" : "Key facts"}</summary>
             {model.facts.length ? <><header className={styles.recordSummaryHeader}>
               <div><small>Record summary</small><h2>Key facts</h2></div>
             </header><div className={styles.recordSummaryGrid}>
               {model.facts.map((fact) => <div className={styles.factItem} key={fact.label}><span className={styles.factLabel}>{fact.label}</span>{fact.link ? <Link className={styles.connectedFact} href={workspaceStartHref(fact.link.href)} aria-label={`${fact.link.label}: ${fact.value}`}><strong>{fact.value}</strong><ChevronRight aria-hidden="true" size={15} /></Link> : <strong>{fact.value}</strong>}{fact.link ? <WorkReviewButton href={fact.link.href} label={fact.value} /> : null}{fact.helperText ? <small>{fact.helperText}</small> : null}</div>)}
             </div></> : null}
-          </details>
+          </details>}
           {!compactFacts ? beforeSections : null}
-          <RecordSections sections={model.sections} initialSection={initialSection} />
+          <RecordSections sections={model.sections} initialSection={initialSection} embedded={embeddedSections} />
           {after}
         </>
       )}

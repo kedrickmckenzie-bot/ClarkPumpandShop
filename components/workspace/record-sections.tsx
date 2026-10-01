@@ -79,7 +79,11 @@ function SectionContent({ section, previewHref }: { section: DetailSectionViewMo
   );
 }
 
-export function RecordSections({ sections, initialSection = "overview" }: { sections: DetailSectionViewModel[]; initialSection?: string }) {
+/**
+ * `embedded`: the page supplies its own tab row (store page). Only the requested
+ * section renders; the overview shows no section previews.
+ */
+export function RecordSections({ sections, initialSection = "overview", embedded = false }: { sections: DetailSectionViewModel[]; initialSection?: string; embedded?: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const requestedSection = searchParams.get("section");
@@ -102,6 +106,10 @@ export function RecordSections({ sections, initialSection = "overview" }: { sect
     return `${pathname}${query ? `?${query}` : ""}#record-review-start`;
   };
 
+  if (embedded) {
+    if (!requestedSection) return null;
+    return <div className={styles.workspace} id="record-review-start">{active ? <SectionContent section={active} /> : <div className={styles.empty}><FileSearch aria-hidden="true" size={20} /><p>Nothing to show here yet.</p></div>}</div>;
+  }
   if (!sections.length) return <div className={styles.empty}><FileSearch aria-hidden="true" size={20} /><p>No record history is available yet.</p></div>;
 
   return (

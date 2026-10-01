@@ -12,8 +12,10 @@ it('keeps scope counts stable and makes tile links replace all list filters',asy
  const narrowed=await buildReviewQueue(repo,session,{store,lane:'history',type:'vendor-task',q:'no match',priority:'urgent',page:'2'},f.asOf);
  expect(narrowed.metrics).toEqual(base.metrics);
  expect(narrowed.clearFiltersHref).toBe(`/app/action-center?store=${store}`);
- expect(narrowed.metrics?.[0].link?.href).toBe(`/app/action-center?store=${store}`);
- expect(narrowed.metrics?.[1].link?.href).toBe(`/app/action-center?lane=mine&store=${store}`);
+ expect(narrowed.metrics?.map(m=>m.label)).toEqual(['Needs your action','Waiting on others','All open items']);
+ expect(narrowed.metrics?.[0].link?.href).toBe(`/app/action-center?lane=mine&store=${store}`);
+ expect(narrowed.metrics?.[1].link?.href).toBe(`/app/action-center?lane=waiting&store=${store}`);
+ expect(narrowed.metrics?.[2].link?.href).toBe(`/app/action-center?store=${store}`);
 });
 it('shows a held job once, preserves other tasks and moves its review to facilities when due',()=>{
  const f=buildShowcaseFixture('2026-09-29T18:00:00Z');

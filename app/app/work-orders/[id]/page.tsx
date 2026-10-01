@@ -64,7 +64,8 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     ["overview", "equipment"].includes(requestedView) ? loadConnectedWorkReview(id) : null,
   ]);
   const accountabilityOnly = session.demoEdition === "accountability";
-  issuance.possibleWarranty = (await workWarrantyReview(await getServerOpsRepository(),session,id,new Date().toISOString().slice(0,10)))?.possible ?? false;
+  const warrantyReview = await workWarrantyReview(await getServerOpsRepository(),session,id,new Date().toISOString().slice(0,10));
+  issuance.possibleWarranty = warrantyReview?.possible ?? false;
   const view = accountabilityOnly && !["overview", "service", "visits", "confirmation"].includes(requestedView)
     ? "overview"
     : requestedView;
@@ -117,7 +118,13 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
           ?? (session.role === "finance"
             ? { label: "Review financial evidence", href: `/app/work-orders/${id}?view=cost` }
             : heldCase.primaryNextAction);
-  if (issuance.possibleWarranty && viewerAction?.href?.includes("#issue-work")) viewerAction.label = "Issue anyway (possible warranty)";
+  if (warrantyReview?.possible && viewerAction?.href?.includes("#issue-work")) {
+    // Before sending work that may be covered, the next step is checking coverage; sending stays one click away.
+    const providers = [...new Set(warrantyReview.coverage.items.map((term) => term.provider).filter(Boolean))];
+    model.page.secondaryAction = { label: "Send anyway", href: viewerAction.href };
+    viewerAction.label = providers.length === 1 ? `Check warranty with ${providers[0]}` : "Review warranty coverage";
+    viewerAction.href = `/app/work-orders/${id}#work-warranty`;
+  }
   // Queue links ask for the current action; send them where that action is actually done.
   if ((Array.isArray(query.next) ? query.next[0] : query.next) === "action") {
     let target = viewerAction?.href;

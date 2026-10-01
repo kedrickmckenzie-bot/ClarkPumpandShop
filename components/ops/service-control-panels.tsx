@@ -447,15 +447,14 @@ function PendingApprovalPanel({ approval }: { approval: ApprovalDecisionViewMode
   );
 }
 
-export function ManualVendorResponseForm({ model }: { model: WorkOrderControlViewModel }) {
+/** `embedded` renders only the form, for use inside the single "Record update" entry point. */
+export function ManualVendorResponseForm({ model, embedded = false }: { model: WorkOrderControlViewModel; embedded?: boolean }) {
   const { state, submit } = useMutation();
   const [response, setResponse] = useState("accepted");
   const target = model.manualVendorResponseTarget;
   if (!model.canRecordManualVendorResponse || !target) return null;
 
-  return (
-    <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`}>
-      <summary className={styles.subControlHeading}><MessageSquareText aria-hidden="true" size={18} /><div><h3>Record vendor reply</h3><p>Phone, email or in person.</p></div></summary>
+  const form = (
       <form action={model.manualResponseAction} method="post" onSubmit={submit} className={styles.controlForm}>
         <input type="hidden" name="operation" value="vendor_response" />
         <input type="hidden" name="expectedAssignmentId" value={target.expectedAssignmentId} />
@@ -481,6 +480,12 @@ export function ManualVendorResponseForm({ model }: { model: WorkOrderControlVie
         <MutationError message={state.error} />
         <div className={styles.formFooter}><button className={styles.secondaryButton} type="submit" disabled={state.pending}>{state.pending ? "Recording…" : "Save reply"}</button></div>
       </form>
+  );
+  if (embedded) return form;
+  return (
+    <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`}>
+      <summary className={styles.subControlHeading}><MessageSquareText aria-hidden="true" size={18} /><div><h3>Record vendor reply</h3><p>Phone, email or in person.</p></div></summary>
+      {form}
     </details>
   );
 }

@@ -469,7 +469,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   const heldPlan = route === "work-orders" && first(query.visitPlan) === "ready";
   const summary = heldPlan
     ? `${rows.length}${result.nextCursor ? "+" : ""} approved job${rows.length === 1 && !result.nextCursor ? "" : "s"} on this page · portfolio counts shown above`
-    : total === undefined ? `${rows.length}${result.nextCursor ? "+" : ""} matching source records` : `${total} source record${total === 1 ? "" : "s"}`;
+    : total === undefined ? `${rows.length}${result.nextCursor ? "+" : ""} matching` : `${total} ${total === 1 ? "result" : "results"}`;
   for (const row of rows) {
     for (const cell of row.cells) {
       if (cell.link && !roleCanOpenOperatorHref(session.role, cell.link.href)) cell.link = undefined;

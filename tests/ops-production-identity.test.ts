@@ -234,7 +234,9 @@ describe("production identity and organization selection", () => {
     expect(model.table.rows.length).toBeGreaterThan(0);
     expect(model.table.rows.every(row=>row.cells.find(cell=>cell.key==="store")?.value.includes("104"))).toBe(true);
     expect(model.metrics).toEqual((await loadListModel("action-center",{})).metrics);
-    const link=new URL(model.table.rows[0].sourceLink!.href,"https://ops.invalid");
+    // Rows link to supporting records only when more than one record is involved; the sources page serves every row.
+    const sourceRow=model.table.rows[0];
+    const link=new URL(sourceRow.sourceLink?.href ?? `/app/action-center/sources?${new URLSearchParams({item:sourceRow.id,queue:"/app/action-center"})}`,"https://ops.invalid");
     expect((await loadReviewSourcesModel(Object.fromEntries(link.searchParams)))!.rows.length).toBeGreaterThan(0);
     expect(await ActionCenterPage({searchParams:Promise.resolve({lane:"history"})})).toBeTruthy();
     expect((await loadReviewSelection({q:"no matching record"},[model.table.rows[0].id])).table.rows).toEqual([]);

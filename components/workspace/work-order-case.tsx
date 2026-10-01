@@ -702,14 +702,13 @@ export function WorkOrderCase({
 
       {activeView === "activity" ? <details className={styles.historyDisclosure}><summary>Workflow details</summary>{!accountabilityOnly ? <WorkOrderStageRail model={canonicalCase} /> : null}<CaseStateDimensions model={canonicalCase} /></details> : null}
 
-      {activeView === "overview" ? <WorkOrderQuickUpdate model={control} canAddNote={verification.permitted} canComplete={(!visits?.table?.rows.length || control.allowManagerCompletion) && !control.pendingApproval && control.status !== "awaiting_approval"} /> : null}
+      {activeView === "overview" ? <WorkOrderQuickUpdate model={control} vendorReply={control.permitted && control.canRecordManualVendorResponse && control.manualVendorResponseTarget ? <ManualVendorResponseForm model={control} embedded /> : undefined} canAddNote={verification.permitted} canComplete={(!visits?.table?.rows.length || control.allowManagerCompletion) && !control.pendingApproval && control.status !== "awaiting_approval"} /> : null}
       {emailHistory}
       {costPrompts}
 
       {activeView === "overview" ? (
         <>
           {verification.available && (verification.canDecide || verification.currentOutcome) ? <details className={styles.historyDisclosure}><summary>Confirm the result</summary><WorkOrderVerificationPanel model={verification} /></details> : null}
-          {control.permitted ? <ManualVendorResponseForm model={control} /> : null}
           <div className={styles.inlineActions}>
             {recording.canClassify ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=equipment#work-records`}>Link equipment</Link> : null}
             {estimateComparison.permitted && !estimateComparison.workflowBlocked && ["choose_path", "direct_service", "bids"].includes(workspaceMode) ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=service&path=bids`}>Request a price</Link> : null}
@@ -731,7 +730,6 @@ export function WorkOrderCase({
             canonicalCase={canonicalCase}
           />
           </div></details>
-          <div className={styles.inlineActions}><Link href={`/app/work-orders/${control.workOrderId}?view=visits`}>Visits & notes<ArrowRight size={16} aria-hidden="true" /></Link><Link href={`/app/work-orders/${control.workOrderId}?view=activity`}>Full history<ArrowRight size={16} aria-hidden="true" /></Link></div>
         </>
       ) : null}
 

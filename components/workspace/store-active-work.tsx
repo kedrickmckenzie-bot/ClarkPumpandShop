@@ -1,0 +1,49 @@
+import Link from "next/link";
+import { roleCanAccessListRoute } from "@/components/ops/role-policy";
+import { formatOperationsDateTime } from "@/lib/ops/local-time";
+import { storeWorkspaceContext } from "@/lib/server/store-workspace-context";
+import styles from "./store-tasks.module.css";
+
+const OPEN_STATUSES = ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"] as const;
+const SHOWN = 8;
+
+/** Store overview: what needs attention and the work that is open, with who handles it and what happens next. */
+export async function StoreActiveWork({ id }: { id: string }) {
+  const { session, repository, store } = await storeWorkspaceContext(id);
+  if (!roleCanAccessListRoute(session.role, "work-orders")) return null;
+  const scope = { ...session, storeIds: [id] }, today = new Date().toISOString().slice(0, 10);
+  const [open, confirm, inspections] = await Promise.all([
+    repository.listWorkOrders(scope, { storeId: id, statuses: OPEN_STATUSES, limit: 50 }),
+    repository.listWorkOrders(scope, { storeId: id, needsConfirmation: true, limit: 5 }),
+    repository.queryInspections(scope, { today, storeId: id, limit: 1 }),
+  ]);
+  const base = `/app/stores/${encodeURIComponent(id)}`;
+  const openCount = open.totalCount ?? open.items.length;
+  const rows = [...open.items].sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999")).slice(0, SHOWN);
+  const nowIso = new Date().toISOString();
+  const attention = [
+    ...confirm.items.map((work) => ({ key: work.id, href: `/app/work-orders/${encodeURIComponent(work.id)}?view=confirmation#work-verification`, text: `Confirm the repair: ${work.number} · ${work.problem}` })),
+    ...(inspections.summary.overdue ? [{ key: "overdue", href: `${base}/compliance?view=overdue`, text: `${inspections.summary.overdue} overdue inspection${inspections.summary.overdue === 1 ? "" : "s"}` }] : []),
+    ...(inspections.summary.action_needed ? [{ key: "findings", href: `${base}/compliance?view=action_needed`, text: `${inspections.summary.action_needed} inspection finding${inspections.summary.action_needed === 1 ? "" : "s"} to fix` }] : []),
+  ];
+  const allHref = `/app/work-orders?${new URLSearchParams({ store: id, status: "open" })}`;
+  return <>
+    {attention.length ? <section className={`${styles.page} ${styles.panel} ${styles.fullWidth}`} aria-labelledby="store-attention">
+      <header className={styles.header}><h2 id="store-attention">Needs attention</h2></header>
+      <ul className={styles.attentionList}>{attention.map((item) => <li key={item.key}><Link href={item.href}>{item.text}</Link></li>)}</ul>
+    </section> : null}
+    <section className={`${styles.page} ${styles.panel} ${styles.fullWidth}`} aria-labelledby="store-active-work">
+      <header className={styles.header}><h2 id="store-active-work"><Link href={allHref}>{openCount} open job{openCount === 1 ? "" : "s"}</Link></h2><Link href={allHref}>All open work →</Link></header>
+      {rows.length ? <div className={styles.scroll}><table className={styles.table}>
+        <thead><tr><th>Job</th><th>Who&apos;s handling it</th><th>Next step</th><th>Due</th></tr></thead>
+        <tbody>{rows.map((work) => <tr key={work.id}>
+          <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(work.id)}`}>{work.problem}</Link><p className={styles.muted}>{work.number}{work.priority === "urgent" || work.priority === "emergency" ? ` · ${work.priority === "urgent" ? "Urgent" : "Emergency"}` : ""}</p></td>
+          <td data-label="Who's handling it">{work.vendorName ?? work.accountableParty}</td>
+          <td data-label="Next step">{work.nextAction}</td>
+          <td data-label="Due">{work.dueAt ? <>{formatOperationsDateTime(work.dueAt, store.timeZone)}{work.dueAt < nowIso ? <p className={styles.muted}>Overdue</p> : null}</> : "No date"}</td>
+        </tr>)}</tbody>
+      </table></div> : <p className={styles.muted}>No open work at this store.</p>}
+      {openCount > rows.length ? <p className={styles.muted}><Link href={allHref}>Show all {openCount} open jobs</Link></p> : null}
+    </section>
+  </>;
+}
