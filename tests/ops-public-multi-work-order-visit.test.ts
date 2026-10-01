@@ -183,7 +183,7 @@ describe("public work-order-first multi-work-order visit", () => {
     const source = await readFile("components/ops-public/technician-visit-flow.tsx", "utf8");
     expect(source).toContain("Choose the work");
     expect(source).toContain("Who are you with?");
-    expect(source).toContain("I’m here for this work");
+    expect(source).toContain("Tick each job you are here for.");
     expect(source).toContain("No work order provided");
     expect(source).toContain("Reason for visit");
     expect(source).toContain("Number of technicians onsite");

@@ -134,3 +134,7 @@ select {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Modal dialogs sit centered over a dimmed page. */
+dialog[open] { margin: auto; }
+dialog::backdrop { background: rgba(15, 23, 42, 0.45); }

@@ -58,7 +58,8 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { t
             </section>
           ) : null}
           <VendorResponseForm disabled={hasFinalResponse} opened={authorization.opened} organizationName={authorization.organizationName} token={token} />
-          <details className={styles.card}><summary>Other approved work at this store</summary><OptionalVisitWork token={token} /></details>
+          {/* Before a response, saved jobs are offered inside "Accept work". Afterwards they stay available here. */}
+          {hasFinalResponse ? <OptionalVisitWork token={token} /> : null}
         </div>
 
         <aside className={styles.stack} aria-label="Service authorization details">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarClock, Check, FileCheck2, HelpCircle, X } from "lucide-react";
 import type { PublicActionReceipt, PublicVendorResponseKind } from "./contracts";
 import { ServerReceipt } from "./public-ui";
@@ -26,8 +26,20 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<PublicActionReceipt | null>(null);
+  // Saved jobs the vendor may also take on this visit; chosen in the same step as accepting.
+  const [extras, setExtras] = useState<Array<{ id: string; number: string; problem: string; scope: string; status: string; unavailable?: string }>>([]);
+  const [extraIds, setExtraIds] = useState<string[]>([]);
+  const [extraNote, setExtraNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (response !== "accepted") return;
+    const controller = new AbortController();
+    fetch(`/api/public/service-optional-work?${new URLSearchParams({ token })}`, { signal: controller.signal })
+      .then(async (result) => { if (result.ok) { const data = await result.json() as { rows: typeof extras }; setExtras(data.rows.filter((row) => !row.unavailable)); } })
+      .catch(() => { /* extras stay optional; they are also offered at check-in */ });
+    return () => controller.abort();
+  }, [response, token]);
 
-  if (receipt) return <ServerReceipt receipt={receipt} />;
+  if (receipt) return <>{extraNote ? <p className={styles.notice} role="status">{extraNote}</p> : null}<ServerReceipt receipt={receipt} /></>;
 
   if (!opened) {
     async function openAuthorization() {
@@ -75,6 +87,15 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
       });
       const body = (await result.json()) as PublicActionReceipt & { error?: string };
       if (!result.ok) throw new Error(body.error ?? `${organizationName} could not receive the response. Try again.`);
+      if (response === "accepted") {
+        const chosen = extras.filter((job) => extraIds.includes(job.id) && job.status === "offered");
+        const failed: string[] = [];
+        for (const job of chosen) {
+          const saved = await fetch("/api/public/service-optional-work", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, workId: job.id, decision: "accepted", name: responderName }) });
+          if (!saved.ok) failed.push(job.number);
+        }
+        if (chosen.length) setExtraNote(failed.length ? `Accepted, but ${failed.join(", ")} could not be added. You can add it at check-in.` : `Also accepted: ${chosen.map((job) => job.number).join(", ")}.`);
+      }
       setReceipt(body);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The response could not be sent. Try again.");
@@ -127,6 +148,17 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
             <input className={styles.input} onChange={(event) => setProposedArrival(event.target.value)} required type="datetime-local" value={proposedArrival} />
           </label>
         ) : null}
+        {response === "accepted" && extras.some((job) => job.status === "offered" || job.status === "accepted") ? (
+          <fieldset className={styles.fieldset}>
+            <legend className={styles.legend}>Also do these jobs on this visit? (optional)</legend>
+            <p className={styles.helper}>Skipped jobs stay saved. You can also add them when you check in.</p>
+            {extras.map((job) => job.status === "accepted"
+              ? <p className={styles.callout} key={job.id}><strong>{job.number} · {job.problem}</strong><br />Already accepted for this visit</p>
+              : job.status === "offered"
+                ? <label className={`${styles.choiceCard} ${extraIds.includes(job.id) ? styles.choiceCardSelected : ""}`} key={job.id}><input className={styles.choiceInput} type="checkbox" checked={extraIds.includes(job.id)} onChange={() => setExtraIds((ids) => ids.includes(job.id) ? ids.filter((id) => id !== job.id) : [...ids, job.id])} /><span className={styles.choiceTitle}>{job.number} · {job.problem}</span><span className={styles.choiceDescription}>{job.scope}</span></label>
+                : null)}
+          </fieldset>
+        ) : null}
         {response !== "accepted" ? (
           <label className={styles.label}>
             {response === "question" ? "Question" : response === "declined" ? "Reason for declining" : "Scheduling note"}
@@ -136,7 +168,7 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
         <div className={styles.actions}>
           <button className={response === "declined" ? styles.dangerButton : styles.button} disabled={submitting} type="submit">
-            {submitting ? "Sending…" : `Send: ${chosen.title}`}
+            {submitting ? "Sending…" : response === "accepted" && extraIds.length ? `Accept this job + ${extraIds.length} more` : `Send: ${chosen.title}`}
           </button>
         </div>
       </form>
