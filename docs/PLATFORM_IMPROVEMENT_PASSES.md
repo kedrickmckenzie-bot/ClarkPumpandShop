@@ -4,6 +4,27 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Outstanding review findings (October 1, Claude)
+
+Four findings from review of `1aba331`, each verified against the code before editing. No layout changes or new features.
+
+- [x] OF-01 Store "Upcoming visits" used scheduled work orders and their deadline (`dueAt`). It now uses `listUpcomingAppointments`: the next three confirmed appointments for the authorized store by arrival time, in store-local time. Cancelled and past appointments are excluded whatever the work-order status. "All upcoming visits" opens `/app/visits?status=upcoming&store=…`. Tests: appointment time differs from deadline; a confirmed appointment on an in-progress (not scheduled) work order is listed; cancelled, past and deadline-only work is not.
+- [x] OF-02 The confirmation line used the work order's last update time and assumed the assigned vendor reported completion. It now reads the current recorded job outcome (`latestRecordedWorkOutcome`) and shows its author and time ("Chris Walker recorded the work completed Sep 8, 2026, 11:02 AM EDT"; the old line showed 11:32 from a later update). Without a reliable author and time it says "Work reported complete—confirmation needed." The reviewer line and Confirm result button are kept. Test: a later note and equipment change do not alter the line.
+- [x] OF-03 Schedule retries matched only the submission ID and stores. A submission key (`ops_idempotency_keys`, command `compliance.create_schedules`) now stores a fingerprint of the whole request: name, type, instructions, requirement, evidence, dates, recurrence, reminders, escalation, equipment, store set and assignment, plus document content (sha256, name, type, size). The key is written in the same atomic write as every store's schedule. An identical retry returns the original schedules. Any change is a CONFLICT. A simultaneous duplicate that loses the race returns the winner's schedules or a conflict. Tests: identical (including stores in another order and a re-uploaded identical file), seven kinds of change, concurrent identical and concurrent different.
+- [x] OF-04 Pickers silently capped results: stores at 100, vendor routing at one page, inspection vendors at 20. The picker now pages from the server ("Load more"). The count line says "Showing 25 of 70 matches · load more or type to narrow" (or "Showing the first 25 matches · more available" when the total is unknown) and never reads as complete while more exist. The selection is kept while searching and loading more. Stores page 25 at a time by cursor, vendor routing 25 by offset, and inspection vendors 20 by cursor. Tests: 65-store synthetic fixture walked over 3 pages; 35 covered vendors over 2 pages, with vendors reachable only on page 2; count wording; de-duplication; a selection kept off-page.
+
+Evidence: `db:seed` passed; typecheck, lint and build passed; unit suite 1,184/1,184; e2e 65/65. Browser checks:
+- Desktop and 390px, with the API answering 70 stores and 30 vendors: pages went 25, 50, 70, then Load more disappeared. A store from page 3 and a vendor from page 2 stayed selected while typing.
+- Store 104 as facilities and as store manager: two confirmed appointments (Oct 6 and Oct 8, EDT), and "All upcoming visits" opened the same two.
+- Store 101 completion line as above.
+
+Remaining limitations:
+- The browser paging check used stubbed API responses, because the 15-store demo fits on one page. Real multi-page data is covered by the repository tests.
+- Inspection people are not paged; that list is all active internal users who match the search.
+- Vendor routing hides vendors that are not covered, so a page can show fewer than 25.
+- Files attached to a retried schedule form are uploaded again before the duplicate is detected, so a retry can leave unused stored copies.
+- The submission key expires after 30 days.
+
 ## Decision context restored (October 1, Claude)
 
 Review of passes 1–3: navigation improved but some context needed to act was hidden. Goal: show what is needed to act; tuck away what is needed occasionally.

@@ -4,7 +4,25 @@ import { Check } from "lucide-react";
 import styles from "./search-picker.module.css";
 
 export interface PickOption { value: string; label: string; detail?: string; tag?: string }
-export type PickLoader = (query: string, signal: AbortSignal) => Promise<PickOption[]>;
+/** One page of server results; `next` means more matches exist beyond this page. */
+export interface PickPage { items: PickOption[]; next?: string; total?: number }
+/** Server search. Return a plain list only when it is the complete set of matches. */
+export type PickLoader = (query: string, signal: AbortSignal, cursor?: string) => Promise<PickOption[] | PickPage>;
+const asPage = (result: PickOption[] | PickPage): PickPage => Array.isArray(result) ? { items: result } : result;
+
+/** Adds a further page to what is shown, without repeating an option already listed. */
+export function mergePickPage(shown: readonly PickOption[], page: readonly PickOption[]) {
+  const seen = new Set(shown.map((item) => item.value));
+  return [...shown, ...page.filter((item) => !seen.has(item.value))];
+}
+
+/** The count line under the list. Never implies the list is complete when more matches exist. */
+export function pickerCountText({ shown, total, next, serverTotal, query }: { shown: number; total?: number; next?: string; serverTotal?: number; query: string }) {
+  const noun = shown === 1 ? "match" : "matches";
+  if (total !== undefined) return query ? `${shown} of ${total} shown` : `${total} to choose from · type to narrow`;
+  if (next) return serverTotal !== undefined ? `Showing ${shown} of ${serverTotal} ${serverTotal === 1 ? "match" : "matches"} · load more or type to narrow` : `Showing the first ${shown} ${noun} · more available`;
+  return `${shown} ${noun}${query ? "" : " · type to narrow"}`;
+}
 
 /** Every typed word must appear somewhere in the option's text. */
 export function matchesQuery(option: PickOption, query: string) {
@@ -50,23 +68,44 @@ export function SearchPicker({ name, label, options, load, required = false, pla
   const validity = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
 
+  const [next, setNext] = useState<string | undefined>(undefined);
+  const [serverTotal, setServerTotal] = useState<number | undefined>(undefined);
+  // Ignores a page that arrives after the search text changed.
+  const generation = useRef(0);
+
   useEffect(() => {
     if (!load || disabled) return;
     const controller = new AbortController();
+    const current = ++generation.current;
     const timer = setTimeout(async () => {
       setBusy(true);
       try {
-        const items = await load(query, controller.signal);
-        if (controller.signal.aborted) return;
-        setLoaded(items); setError("");
+        const page = asPage(await load(query, controller.signal));
+        if (controller.signal.aborted || current !== generation.current) return;
+        setLoaded(page.items); setNext(page.next); setServerTotal(page.total); setError("");
         // A preset choice (for example, today's assignee) is shown once the list arrives.
-        if (defaultValue) setSelected((current) => current ?? items.find((item) => item.value === defaultValue));
+        if (defaultValue) setSelected((chosen) => chosen ?? page.items.find((item) => item.value === defaultValue));
       }
       catch (caught) { if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Search is unavailable. Try again."); }
       finally { if (!controller.signal.aborted) setBusy(false); }
     }, 150);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [load, query, disabled, defaultValue]);
+
+  async function loadMore() {
+    if (!load || !next || busy) return;
+    const current = generation.current, controller = new AbortController();
+    setBusy(true);
+    try {
+      const page = asPage(await load(query, controller.signal, next));
+      if (current !== generation.current) return;
+      setLoaded((shown) => mergePickPage(shown ?? [], page.items));
+      setNext(page.next); if (page.total !== undefined) setServerTotal(page.total); setError("");
+      if (defaultValue) setSelected((chosen) => chosen ?? page.items.find((item) => item.value === defaultValue));
+    }
+    catch (caught) { if (current === generation.current) setError(caught instanceof Error ? caught.message : "Could not load more. Try again."); }
+    finally { if (current === generation.current) setBusy(false); }
+  }
 
   const results = useMemo(() => {
     const source = load ? loaded ?? options ?? [] : options ?? [];
@@ -95,6 +134,7 @@ export function SearchPicker({ name, label, options, load, required = false, pla
   }
 
   const total = load ? undefined : options?.length;
+  const countText = () => pickerCountText({ shown: results.length, total, next, serverTotal, query });
   const extra = hidden?.(selected) ?? {};
   return <div className={styles.picker} ref={root}>
     <label className={styles.label} htmlFor={`${id}-search`}>{label}{required ? <em>Required</em> : null}</label>
@@ -121,7 +161,10 @@ export function SearchPicker({ name, label, options, load, required = false, pla
         })}
         {!rows.length && !busy ? <li className={styles.empty}>{emptyText}</li> : null}
       </ul>
-      <p className={styles.count} aria-live="polite">{error ? <span role="alert">{error}</span> : busy ? "Searching…" : total !== undefined ? (query ? `${results.length} of ${total} shown` : `${total} to choose from · type to narrow`) : `${results.length} shown${query ? "" : " · type to narrow"}`}</p>
+      <div className={styles.footer}>
+        <p className={styles.count} aria-live="polite">{error ? <span role="alert">{error}</span> : busy ? "Searching…" : countText()}</p>
+        {load && next ? <button type="button" className={styles.more} disabled={busy} onClick={loadMore}>Load more</button> : null}
+      </div>
     </>}
   </div>;
 }

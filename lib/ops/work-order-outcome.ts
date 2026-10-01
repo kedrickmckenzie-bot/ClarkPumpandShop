@@ -24,3 +24,26 @@ export function applicableOutcomeVerification<T extends VerificationRecord>(
     .filter((record) => record.siteVisitWorkOrderId === outcome.id && (!record.outcomeRecordedAt || record.outcomeRecordedAt === outcome.outcomeRecordedAt))
     .sort((left, right) => right.decidedAt.localeCompare(left.decidedAt) || (right.cycle ?? 0) - (left.cycle ?? 0))[0];
 }
+
+const OUTCOME_WORDS: Record<string, string> = {
+  completed: "the work completed",
+  temporary_repair: "a temporary repair",
+  diagnosis_only: "a diagnosis only",
+  quote_required: "a quote is needed",
+  parts_required: "parts are needed",
+  return_visit_required: "a return visit is needed",
+  no_issue_found: "no issue found",
+  store_access_unavailable: "no store access",
+};
+
+export const COMPLETION_FALLBACK = "Work reported complete—confirmation needed.";
+
+/**
+ * One line saying who recorded the job result and when, taken from the recorded
+ * outcome itself, so later notes or edits never change it.
+ */
+export function completionSummary(records: readonly SiteVisitWorkOrder[], formatTime: (iso: string) => string): string {
+  const current = latestRecordedWorkOutcome(records);
+  if (!current?.outcome || !current.outcomeRecordedAt || !current.outcomeRecordedByActorName?.trim()) return COMPLETION_FALLBACK;
+  return `${current.outcomeRecordedByActorName.trim()} recorded ${OUTCOME_WORDS[current.outcome] ?? current.outcome.replaceAll("_", " ")} ${formatTime(current.outcomeRecordedAt)}.`;
+}

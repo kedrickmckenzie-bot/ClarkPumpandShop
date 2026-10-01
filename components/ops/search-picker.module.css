@@ -23,3 +23,7 @@
 .list .empty { cursor: default; color: #64748b; }
 .list .empty:hover { background: transparent; }
 .count { margin: 0; font-size: 13px; color: #64748b; }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.more { min-height: 36px; padding: 6px 14px; border: 1px solid #1d4ed8; border-radius: 6px; background: #fff; color: #1d4ed8; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
+.more:hover, .more:focus-visible { background: #eff6ff; }
+.more:disabled { opacity: .6; cursor: wait; }

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { roleCanAccessListRoute } from "@/components/ops/role-policy";
 import { formatOperationsDateTime } from "@/lib/ops/local-time";
+import { completionSummary } from "@/lib/ops/work-order-outcome";
 import { storeWorkspaceContext } from "@/lib/server/store-workspace-context";
+import { getServerOpsReportingAsOf } from "@/lib/server/ops-repository-provider";
 import styles from "./store-tasks.module.css";
 
 const OPEN_STATUSES = ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"] as const;
@@ -12,23 +14,24 @@ export async function StoreActiveWork({ id }: { id: string }) {
   const { session, repository, store } = await storeWorkspaceContext(id);
   if (!roleCanAccessListRoute(session.role, "work-orders")) return null;
   const scope = { ...session, storeIds: [id] }, today = new Date().toISOString().slice(0, 10);
-  const [open, confirm, inspections, scheduled] = await Promise.all([
+  const [open, confirm, inspections, upcoming] = await Promise.all([
     repository.listWorkOrders(scope, { storeId: id, statuses: OPEN_STATUSES, limit: 50 }),
     repository.listWorkOrders(scope, { storeId: id, needsConfirmation: true, limit: 5 }),
     repository.queryInspections(scope, { today, storeId: id, limit: 1 }),
-    repository.listWorkOrders(scope, { storeId: id, statuses: ["scheduled"], limit: 20 }),
+    // Confirmed vendor appointments (not work-order deadlines), next first.
+    repository.listUpcomingAppointments(scope, { storeId: id, now: getServerOpsReportingAsOf(), limit: 3 }),
   ]);
   const base = `/app/stores/${encodeURIComponent(id)}`;
   const openCount = open.totalCount ?? open.items.length;
   const rows = [...open.items].sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999")).slice(0, SHOWN);
   const nowIso = new Date().toISOString();
   const confirmCount = confirm.totalCount ?? confirm.items.length;
-  const upcoming = scheduled.items.filter((work) => work.dueAt && work.dueAt >= nowIso).sort((a, b) => a.dueAt!.localeCompare(b.dueAt!)).slice(0, 3);
-  // Each confirmation says what happened and who confirms, next to the button that does it.
-  const confirmations = confirm.items.slice(0, 3).map((work) => ({
+  // Each confirmation says who recorded the result and when (from the outcome record), next to the button.
+  const outcomes = await Promise.all(confirm.items.slice(0, 3).map((work) => repository.listSiteVisitWorkOrdersForWorkOrder(session.organizationId, work.id)));
+  const confirmations = confirm.items.slice(0, 3).map((work, index) => ({
     key: work.id, href: `/app/work-orders/${encodeURIComponent(work.id)}?view=confirmation#work-verification`,
     title: `${work.number} · ${work.problem}`,
-    detail: `${work.vendorName ?? "The technician"} reports the work completed${work.updatedAt ? ` ${formatOperationsDateTime(work.updatedAt, store.timeZone)}` : ""}.`,
+    detail: completionSummary(outcomes[index], (iso) => formatOperationsDateTime(iso, store.timeZone)),
     who: `${work.accountableParty}: confirm it's working.`,
   }));
   const attention = [
@@ -47,10 +50,10 @@ export async function StoreActiveWork({ id }: { id: string }) {
       {attention.length ? <ul className={styles.attentionList}>{attention.map((item) => <li key={item.key}><Link href={item.href}>{item.text}</Link></li>)}</ul> : null}
     </section> : null}
     <section className={`${styles.page} ${styles.panel} ${styles.fullWidth}`} aria-labelledby="store-upcoming">
-      <header className={styles.header}><h2 id="store-upcoming">Upcoming visits</h2><Link href={`${base}?section=work`}>All visits →</Link></header>
-      {upcoming.length ? <ul className={styles.decisionList}>{upcoming.map((work) => <li key={work.id}>
-        <div><strong>{formatOperationsDateTime(work.dueAt!, store.timeZone)}</strong><p>{work.vendorName ?? work.accountableParty} · <Link href={`/app/work-orders/${encodeURIComponent(work.id)}`}>{work.number}</Link> · {work.problem}</p></div>
-      </li>)}</ul> : <p className={styles.muted}>No visits scheduled.</p>}
+      <header className={styles.header}><h2 id="store-upcoming">Upcoming visits</h2><Link href={`/app/visits?${new URLSearchParams({ status: "upcoming", store: id })}`}>{(upcoming.totalCount ?? 0) > upcoming.items.length ? `All ${upcoming.totalCount} upcoming visits →` : "All upcoming visits →"}</Link></header>
+      {upcoming.items.length ? <ul className={styles.decisionList}>{upcoming.items.map((visit) => <li key={visit.id}>
+        <div><strong>{formatOperationsDateTime(visit.startsAt, visit.timeZone)}</strong><p>{visit.vendorName} · <Link href={`/app/work-orders/${encodeURIComponent(visit.workOrderId)}?view=service`}>{visit.workOrderNumber}</Link> · {visit.problem}</p></div>
+      </li>)}</ul> : <p className={styles.muted}>No confirmed visits coming up.</p>}
     </section>
     <section className={`${styles.page} ${styles.panel} ${styles.fullWidth}`} aria-labelledby="store-active-work">
       <header className={styles.header}><h2 id="store-active-work"><Link href={allHref}>{openCount} open job{openCount === 1 ? "" : "s"}</Link></h2><Link href={allHref}>All open work →</Link></header>

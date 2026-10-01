@@ -64,9 +64,52 @@ describe("inspection schedules for several stores", () => {
     const ids = stores.slice(0, 3).map((store) => store.id);
     const before = (await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length;
     const first = await createComplianceSchedulesForStores({ repository }, base, ids, { kind: "team" }, actor, [], "submission-retry-1");
-    const again = await createComplianceSchedulesForStores({ repository }, base, ids, { kind: "team" }, actor, [], "submission-retry-1");
-    expect(again.map((row) => row.id)).toEqual(first.map((row) => row.id));
+    // Same stores in a different order is the same request.
+    const again = await createComplianceSchedulesForStores({ repository }, base, [...ids].reverse(), { kind: "team" }, actor, [], "submission-retry-1");
+    expect(again.map((row) => row.id).sort()).toEqual(first.map((row) => row.id).sort());
     expect((await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length).toBe(before + 3);
+  });
+
+  it("refuses a retry whose details changed instead of returning the old schedules", async () => {
+    const { fixture, repository, stores } = setup();
+    const ids = stores.slice(0, 3).map((store) => store.id);
+    const file = { id: "file-1", organizationId: NORTHLINE_ORGANIZATION_ID, storageKey: "k1", sha256: "a".repeat(64), originalName: "form.pdf", contentType: "application/pdf", byteLength: 10, status: "available" as const, createdAt: "2026-10-01T00:00:00.000Z" };
+    await createComplianceSchedulesForStores({ repository }, base, ids, { kind: "team" }, actor, [file], "submission-changed");
+    const before = (await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length;
+    const vendor = fixture.vendors.find((row) => row.organizationId === NORTHLINE_ORGANIZATION_ID && row.status === "approved")!;
+    const changes: Array<[string, Parameters<typeof createComplianceSchedulesForStores>]> = [
+      ["name", [{ repository }, { ...base, name: "Hood check" }, ids, { kind: "team" }, actor, [file], "submission-changed"]],
+      ["first due date", [{ repository }, { ...base, firstDueDate: "2026-12-01" }, ids, { kind: "team" }, actor, [file], "submission-changed"]],
+      ["recurrence", [{ repository }, { ...base, intervalCount: 6 }, ids, { kind: "team" }, actor, [file], "submission-changed"]],
+      ["assignment", [{ repository }, base, ids, { kind: "vendor", vendorId: vendor.id }, actor, [file], "submission-changed"]],
+      ["documents", [{ repository }, base, ids, { kind: "team" }, actor, [{ ...file, sha256: "b".repeat(64) }], "submission-changed"]],
+      ["fewer stores", [{ repository }, base, ids.slice(0, 2), { kind: "team" }, actor, [file], "submission-changed"]],
+      ["other stores", [{ repository }, base, stores.slice(3, 6).map((store) => store.id), { kind: "team" }, actor, [file], "submission-changed"]],
+    ];
+    for (const [, args] of changes) await expect(createComplianceSchedulesForStores(...args)).rejects.toMatchObject({ code: "CONFLICT" });
+    // A re-uploaded identical file (new storage key, same content) is still the same request.
+    await expect(createComplianceSchedulesForStores({ repository }, base, ids, { kind: "team" }, actor, [{ ...file, id: "file-2", storageKey: "k2" }], "submission-changed")).resolves.toHaveLength(3);
+    expect((await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length).toBe(before);
+  });
+
+  it("creates one set of schedules when the same form is submitted twice at once", async () => {
+    const { repository, stores } = setup();
+    const ids = stores.slice(0, 3).map((store) => store.id);
+    const before = (await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length;
+    const [left, right] = await Promise.all([
+      createComplianceSchedulesForStores({ repository }, base, ids, { kind: "team" }, actor, [], "submission-race-1"),
+      createComplianceSchedulesForStores({ repository }, base, ids, { kind: "team" }, actor, [], "submission-race-1"),
+    ]);
+    expect(right.map((row) => row.id).sort()).toEqual(left.map((row) => row.id).sort());
+    expect((await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length).toBe(before + 3);
+    // A different request racing on the same key is a conflict, not a silent second result.
+    const outcomes = await Promise.allSettled([
+      createComplianceSchedulesForStores({ repository }, base, ids, { kind: "team" }, actor, [], "submission-race-2"),
+      createComplianceSchedulesForStores({ repository }, { ...base, name: "Different" }, ids, { kind: "team" }, actor, [], "submission-race-2"),
+    ]);
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.find((outcome) => outcome.status === "rejected")).toMatchObject({ reason: { code: "CONFLICT" } });
+    expect((await repository.listComplianceSchedules({ organizationId: NORTHLINE_ORGANIZATION_ID })).length).toBe(before + 6);
   });
 
   it("saves every store or none when the save itself fails", async () => {

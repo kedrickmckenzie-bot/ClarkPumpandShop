@@ -69,15 +69,21 @@ export async function createComplianceSchedulesForStores(svc:OpsCommandServices,
  if(ids.length>1&&assignment.kind==="person")throw new OpsDomainError("VALIDATION","A named person can handle one store. For several stores choose the store team or an outside vendor.");
  if(ids.length>1&&input.assetId)throw new OpsDomainError("VALIDATION","An equipment tag applies to one store. Leave it blank for several stores.");
  if(submissionId!==undefined&&!/^[A-Za-z0-9-]{8,64}$/.test(submissionId))throw new OpsDomainError("VALIDATION","Reload the form and try again.");
- // A repeated submission (double click, retry after a timeout) returns the schedules it already created.
  const scheduleIds=ids.map(id=>submissionId?`schedule-${submissionId}-${id}`:`schedule-${crypto.randomUUID()}`);
- if(submissionId) {
+ // A submission key remembers a fingerprint of the whole request: an identical retry
+ // (double click, retry after a timeout) returns the original schedules; anything changed is a conflict.
+ const replay=submissionId?{key:`compliance-schedules:${submissionId}`,requestHash:await scheduleRequestHash(input,ids,assignment,templates)}:undefined;
+ const replayed=async()=>{
+  if(!replay)return null;
+  const prior=await svc.repository.getIdempotencyKey(input.organizationId,replay.key);
+  if(!prior)return null;
+  if(prior.command!=="compliance.create_schedules"||prior.requestHash.toLowerCase()!==replay.requestHash)throw new OpsDomainError("CONFLICT","This form was already submitted with different details. Reload the form to create another schedule.");
   const existing=await Promise.all(scheduleIds.map(id=>svc.repository.getComplianceSchedule(input.organizationId,id)));
-  if(existing.some(Boolean)) {
-   if(existing.some(item=>!item))throw new OpsDomainError("CONFLICT","This form was already submitted with different stores. Reload the form and try again.");
-   return existing as ComplianceSchedule[];
-  }
- }
+  if(existing.some(item=>!item))throw new OpsDomainError("CONFLICT","The earlier submission cannot be recovered. Check Compliance before trying again.");
+  return existing as ComplianceSchedule[];
+ };
+ const earlier=await replayed();
+ if(earlier)return earlier;
  const stores=await Promise.all(ids.map(id=>svc.repository.getStore(input.organizationId,id)));
  if(stores.some(store=>!store))throw new OpsDomainError("NOT_FOUND","Store not found");
  const owners=new Map<string,Pick<ComplianceSchedule,"handler"|"membershipId"|"vendorId">>();
@@ -94,8 +100,29 @@ export async function createComplianceSchedulesForStores(svc:OpsCommandServices,
  // All stores are saved together: either every schedule is created or none is.
  const prepared=[];
  for(const [index,id] of ids.entries())prepared.push(await prepareComplianceSchedule(svc,{...input,storeId:id,...owners.get(id)!} as Omit<ComplianceSchedule,"id"|"status"|"createdAt">,actor,templates,scheduleIds[index]));
- await svc.repository.atomicWrite(prepared.flatMap(item=>item.statements));
+ const now=nowOf(svc);
+ const statements=prepared.flatMap(item=>item.statements);
+ if(replay)statements.push(insertRecord("ops_idempotency_keys",{organization_id:input.organizationId,key:replay.key,command:"compliance.create_schedules",result_id:`schedule-${submissionId}`,request_hash:replay.requestHash,created_at:now,expires_at:new Date(Date.parse(now)+30*DAY).toISOString()}));
+ try { await svc.repository.atomicWrite(statements); }
+ catch(error) {
+  // A simultaneous identical submission won the race: return its schedules (or report the conflict).
+  const winner=await replayed();
+  if(winner)return winner;
+  throw error;
+ }
  return prepared.map(item=>item.schedule);
+}
+
+/** Fingerprint of everything a multi-store schedule request decides. */
+async function scheduleRequestHash(input:Omit<ComplianceSchedule,"id"|"status"|"createdAt"|"storeId"|"handler"|"membershipId"|"vendorId">,storeIds:string[],assignment:ScheduleAssignment,templates:StoredFile[]) {
+ const request={
+  organizationId:input.organizationId,name:input.name.trim(),kind:input.kind,instructions:input.instructions,requirementSource:input.requirementSource,evidenceLabel:input.evidenceLabel,evidenceRequired:input.evidenceRequired,
+  firstDueDate:input.firstDueDate,intervalUnit:input.intervalUnit,intervalCount:input.intervalCount,leadDays:input.leadDays,escalationDays:input.escalationDays,escalationTo:input.escalationTo,assetId:input.assetId??null,
+  stores:[...storeIds].sort(),assignment,
+  documents:templates.map(file=>[file.sha256,file.originalName,file.contentType,file.byteLength]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))||String(a[1]).localeCompare(String(b[1]))),
+ };
+ const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify(request)));
+ return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,"0")).join("");
 }
 export async function setComplianceScheduleStatus(svc:OpsCommandServices,s:ComplianceSchedule,status:"active"|"paused",actor:ActorContext) {
  if(actor.organizationId!==s.organizationId)throw new OpsDomainError("FORBIDDEN","Organization mismatch");

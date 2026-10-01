@@ -4,7 +4,18 @@ import { SavedWorkSuggestions } from "./saved-work-suggestions";
 import { useWorkOrderScope } from "./work-order-scope";
 import type { StoreVendorPage } from "@/lib/ops/store-vendors";
 import { useCallback, useState } from "react";
-import { SearchPicker, type PickOption } from "./search-picker";
+import { SearchPicker, type PickOption, type PickPage } from "./search-picker";
+
+const VENDOR_PAGE = 25;
+
+/** One page of store vendors for the picker; `next` is the following offset while more remain. */
+export function storeVendorPickPage(page: StoreVendorPage, offset: number): PickPage {
+  const reached = offset + VENDOR_PAGE;
+  return {
+    items: page.items.filter((v) => v.covered).map((v) => ({ value: v.id, label: v.name, detail: v.specialties.slice(0, 3).map((t) => t.label).join(", "), tag: v.preferenceKeys.length ? "Preferred" : undefined })),
+    next: reached < page.total ? String(reached) : undefined,
+  };
+}
 import type { CreateWorkOrderPageViewModel } from "./data-contract";
 import styles from "./ops.module.css";
 
@@ -13,12 +24,13 @@ export function WorkRoutingFields({ model, accountabilityOnly }: { model: Create
   const [route, setRoute] = useState<string>(accountabilityOnly && model.defaults?.assignmentKind === "hold_for_visit" ? "choose_later" : model.defaults?.assignmentKind ?? "choose_later");
   const [vendorId, setVendorId] = useState(model.defaults?.vendorId ?? "");
   // Vendors that cover the chosen store, narrowed on the server as you type.
-  const loadVendors = useCallback(async (query: string, signal: AbortSignal): Promise<PickOption[]> => {
+  const loadVendors = useCallback(async (query: string, signal: AbortSignal, cursor?: string): Promise<PickPage> => {
     const q = query.toLowerCase().replace(/gas pumps?/g, "dispenser").replace(/^gas$/, "fuel").replace(/card readers?/g, "payment terminal");
-    const response = await fetch(`/api/ops/stores/${encodeURIComponent(storeId)}/vendors?${new URLSearchParams({ q })}`, { signal });
+    const offset = Number(cursor ?? 0);
+    const response = await fetch(`/api/ops/stores/${encodeURIComponent(storeId)}/vendors?${new URLSearchParams({ q, offset: String(offset) })}`, { signal });
     if (!response.ok) throw new Error("Could not load vendors for this store.");
     const page = await response.json() as StoreVendorPage;
-    return page.items.filter((v) => v.covered).map((v) => ({ value: v.id, label: v.name, detail: v.specialties.slice(0, 3).map((t) => t.label).join(", "), tag: v.preferenceKeys.length ? "Preferred" : undefined }));
+    return storeVendorPickPage(page, offset);
   }, [storeId]);
   const vendorOptions: PickOption[] = model.vendors.map((v) => ({ value: v.value, label: v.label, detail: v.description }));
   const choices = [
