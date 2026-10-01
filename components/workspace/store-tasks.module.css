@@ -4,3 +4,6 @@
 /* A secondary action: outlined, cobalt text, clearly a button. */
 .page .addAction, .addAction { display:inline-flex; width:max-content; max-width:100%; justify-self:start; align-items:center; min-height:38px; padding:7px 14px; border:1px solid #c9d3e1; border-radius:6px; background:#fff; color:#1d4ed8; font-size:15px; font-weight:650; text-decoration:none; }
 .page .addAction:hover, .page .addAction:focus-visible { border-color:#1d4ed8; background:#eff6ff; }
+
+/* Decision rows: what happened and who acts, with the action button beside it. */
+.decisionList{list-style:none;margin:0;padding:0;display:grid}.decisionList li{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid #e2e8f0}.decisionList li:first-child{border-top:0;padding-top:0}.decisionList p{margin:2px 0 0}.decisionList li>div{min-width:0}@media(max-width:650px){.decisionList li{flex-direction:column;align-items:stretch}.decisionList .addAction{justify-content:center;width:auto}}

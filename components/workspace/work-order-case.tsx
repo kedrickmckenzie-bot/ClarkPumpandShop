@@ -598,6 +598,7 @@ export function WorkOrderCase({
   const costs = sectionById(model, "cost");
   const invoices = sectionById(model, "invoice-references");
   const timeline = sectionById(model, "timeline");
+  const latestUpdate = timeline?.timeline?.[0];
   const nte = sectionFact(authorization, "Not to exceed");
   const selectedAsset = recording.assets.find((asset) => asset.value === recording.currentAssetId);
   const selectedComponent = recording.components.find((component) => component.value === recording.currentComponentId);
@@ -654,6 +655,12 @@ export function WorkOrderCase({
           <div><span>Who acts next</span><strong>{canonicalCase.nextActionOwner}</strong></div>
           <div><span>Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
           <div><span>Escalates to</span><strong>{canonicalCase.escalationDestination}</strong></div>
+          {/* The facts needed to act, on every tab: what is wrong, who has it, and what last happened. */}
+          {activeView !== "overview" ? <dl className={styles.headerContext}>
+            <div><dt>Problem</dt><dd>{originalRequest?.description ?? model.page.description}</dd></div>
+            <div><dt>Handled by</dt><dd>{assigned?.value ?? "Not assigned yet"}</dd></div>
+            {latestUpdate ? <div><dt>Latest update</dt><dd>{latestUpdate.title}{latestUpdate.timestampLabel ? ` · ${latestUpdate.timestampLabel}` : ""}</dd></div> : null}
+          </dl> : null}
           <small>Internal owner: {canonicalCase.internalAccountableParty}</small>
         </section> : null}
         {warrantyContext}
@@ -689,6 +696,7 @@ export function WorkOrderCase({
             <div><dt>Operating impact</dt><dd>{canonicalCase.operatingCondition.label}</dd></div>
             <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
             <div><dt>Handled by</dt><dd><FactValue fact={assigned} /></dd></div>
+            {latestUpdate ? <div><dt>Latest update</dt><dd>{latestUpdate.title}{latestUpdate.timestampLabel ? ` · ${latestUpdate.timestampLabel}` : ""}</dd></div> : null}
 
 
 

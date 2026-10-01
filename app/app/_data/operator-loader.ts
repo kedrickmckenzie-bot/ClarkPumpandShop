@@ -2,7 +2,7 @@ import { pmStoreAllowed } from "@/lib/ops/pm-record-query";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { presentEquipmentIssues, buildEquipmentIssueRanking } from "./equipment-issues-presenter";
-import { attentionAccess } from "./attention-presenter";
+import { attentionAccess, presentAttentionRow } from "./attention-presenter";
 import { buildReviewQueue, buildReviewSources } from "./review-queue-presenter";
 import { buildPmScheduleModel } from "./pm-schedule-presenter";
 import { buildPmSetupManagement, buildPmSetupSources } from "./pm-setup-presenter";
@@ -387,6 +387,12 @@ export async function loadDashboardModel() {
   ]);
   const model = presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window);
   model.equipmentIssues = presentEquipmentIssues(issues, window, session);
+  if (session.role === "facilities" || session.role === "regional") {
+    // Overview preview: the five items waiting on this person, each with the button that does it.
+    const mine = await repository.listAttention(scope, attentionAccess(session), { asOf, lane: "mine", limit: 5 });
+    model.priorityActions = mine.items.map((item) => presentAttentionRow(item, asOf));
+    model.prioritySection = { title: "Needs your action", description: "Your top items, most urgent first.", link: { href: "/app/action-center?lane=mine", label: mine.totalCount > mine.items.length ? `View all ${mine.totalCount}` : "Open review queue" } };
+  }
   if (session.role === "executive") {
     // Owners start with money: the last 90 days against the 90 days before, on the same cost basis.
     const windows = ownerSpendWindows(window.costTo);

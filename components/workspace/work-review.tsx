@@ -16,7 +16,7 @@ export function WorkReviewButton({ href, label, context }: { href: string; label
   const open = useContext(ReviewContext);
   const id = workReviewTarget(href);
   if (!open || !id) return null;
-  return <button type="button" className={styles.reviewButton} aria-label={`Review ${label} here`} onClick={(event) => { event.preventDefault(); event.stopPropagation(); open({ id, href, label, context }); }}><PanelRightOpen size={15} aria-hidden="true" /><span>Review here</span></button>;
+  return <button type="button" className={styles.reviewButton} aria-label={`Quick look at ${label}`} onClick={(event) => { event.preventDefault(); event.stopPropagation(); open({ id, href, label, context }); }}><PanelRightOpen size={15} aria-hidden="true" /><span>Quick look</span></button>;
 }
 
 function EvidenceList({ rows, related = false }: { rows: ReviewEvidence[]; related?: boolean }) {

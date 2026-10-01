@@ -5,8 +5,8 @@ import type { WorkflowTaskType } from "./types";
  * from this one table so a queue row never promises one action and opens another.
  */
 const TASK_DESTINATIONS: Partial<Record<WorkflowTaskType, { view: string; label: string }>> = {
-  vendor_response_required: { view: "view=service#vendor-response", label: "Review vendor reply" },
-  schedule_service: { view: "view=service#vendor-response", label: "Review visit date" },
+  vendor_response_required: { view: "view=service#vendor-response", label: "Answer vendor" },
+  schedule_service: { view: "view=service#vendor-response", label: "Accept or change date" },
   choose_service_provider: { view: "view=service#issue-work", label: "Choose vendor" },
   schedule_return_visit: { view: "view=service", label: "Arrange next visit" },
   approve_quote: { view: "view=service&path=bids#bid-requests", label: "Review quotes" },

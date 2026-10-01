@@ -105,7 +105,7 @@ function AttentionSection({ model }: { model: DashboardPageViewModel }) {
       </header>
       <div className={styles.actionQueue}>
         <div className={styles.actionList}>
-          {actions.length ? actions.map((action) => <ActionRow action={action} key={action.id} />) : <div className={styles.empty}><CheckCircle2 size={22} aria-hidden="true" /><p>Nothing needs attention right now.</p></div>}
+          {actions.length ? actions.map((action) => <ActionRow action={action} key={action.id} />) : <div className={styles.empty}><CheckCircle2 size={22} aria-hidden="true" /><p>Nothing is waiting on you right now.</p></div>}
         </div>
 
       </div>
@@ -248,15 +248,15 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
       content = <>{attention}{metrics}{capitalSummary}{pipeline}{equipment}<details className={styles.section}><summary>Spending and equipment insights</summary>{insights}{spotlight}</details></>;
       break;
     case "regional":
-      content = <>{metrics}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      content = <>{metrics}{attention}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
       break;
     case "store":
       content = <>{attention}{metrics}{capitalSummary}{equipment}{pipeline}{insights}{spotlight}</>;
       break;
     case "operations":
     default:
-      // The "Needs your action" and "Open items" tiles open the review queue, so the list is not repeated here.
-      content = <>{metrics}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      // A short preview of what waits on you; the full list is in the review queue.
+      content = <>{metrics}{attention}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
   }
 
   return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;

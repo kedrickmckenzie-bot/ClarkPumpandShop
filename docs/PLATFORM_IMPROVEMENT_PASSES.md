@@ -4,6 +4,18 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Decision context restored (October 1, Claude)
+
+Review of passes 1–3: navigation improved but some context needed to act was hidden. Goal: show what is needed to act; tuck away what is needed occasionally.
+
+- [x] DC-01 Overview (facilities, regional) shows "Needs your action": the five most urgent items waiting on this person, each with what happened, who acts, due time and a specific action button, plus "View all N". This partly reverses UP-01, which removed the full list; the preview is limited to five.
+- [x] DC-02 Store overview: each repair to confirm reads "CPS-… · problem / Vendor reports the work completed <time>. / Store team: confirm it's working." with a Confirm result button. A compact Upcoming visits box (next three) links to all visits; overdue inspections stay in Needs attention.
+- [x] DC-03 Work order: on every tab except Overview, the header shows Problem, Handled by and Latest update next to next action, owner, due and escalation. The Overview summary adds Latest update.
+- [x] DC-04 Vendor contact tab shows What they handle, Stores covered and Documents (current / renewal due / missing, with a link to the documents tab) beside dispatch and work counts.
+- [x] DC-05 Specific verbs: "Accept or change date" and "Answer vendor" replace "Review visit date" and "Review vendor reply". The side-preview button is renamed "Quick look", so it is not mistaken for the action.
+
+Evidence: typecheck, lint and build pass; unit suite 1,173/1,173 (the two container timeouts passed on this run); e2e 65/65. Browser-checked at 1440px and 390px: Overview preview, store 101 overview, work order CPS-2026-0120 header on Overview and Service tabs, BrightLine vendor contact tab.
+
 ## Review fixes and live pickers (October 1, Claude)
 
 Second review of pass 3 found four issues; the user also asked that choosing a store, vendor or person be one live search over a scrollable list.

@@ -1859,3 +1859,5 @@
 .coverageEditor input[type="search"] { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid #cbd3de; border-radius: 4px; font: inherit; }
 .documentLinks a { color: #315dcc; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .documentLinks a:focus-visible { outline: 2px solid #315dcc; outline-offset: 3px; }
+
+.vendorFacts small a { color: var(--brand); font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }

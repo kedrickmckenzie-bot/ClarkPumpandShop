@@ -425,11 +425,11 @@ function VendorPerformanceDetailComplete({ model, tab = "contact" }: { model: Ve
       {tab === "contact" ? (<>
       <section className={styles.vendorFacts} id="relationship-evidence" aria-label="Vendor identity and coverage">
         <div><span>Dispatch</span><strong>{vendor.dispatchEmail}</strong><small>{vendor.dispatchPhone ?? "Phone not entered"}</small></div>
-        <div><span>Specialties</span><strong>{vendor.specialties.join(" · ") || "Not classified"}</strong><small>Organization-approved search language</small></div>
-        <div><span>Approved coverage</span><strong>{vendor.coverageLabel}</strong><small>{vendor.coverageRegionCount} region{vendor.coverageRegionCount === 1 ? "" : "s"} · {model.regionLabels.join(" · ") || "No region coverage"}</small></div>
+        <div><span>What they handle</span><strong>{vendor.specialties.join(" · ") || "Not classified"}</strong><small>Used to find them when routing work</small></div>
+        <div><span>Stores covered</span><strong>{vendor.coverageLabel}</strong><small>{vendor.coverageRegionCount} region{vendor.coverageRegionCount === 1 ? "" : "s"} · {model.regionLabels.join(" · ") || "No region coverage"}</small></div>
+        <div><span>Documents</span><strong className={styles.complianceState} data-state={vendor.compliance.state}>{vendor.compliance.label}</strong><small>{vendor.compliance.detail} · <Link href={`/app/vendors/${encodeURIComponent(vendor.id)}?tab=documents`}>See documents</Link></small></div>
         <div><span>Stores visited</span><strong>{vendor.observedStoreCount} store{vendor.observedStoreCount === 1 ? "" : "s"}</strong><small>Stores with at least one recorded visit</small></div>
         <div><span>Assigned work</span><strong>{vendor.assignedWorkCount} work orders</strong><small>{vendor.openWorkCount} currently open</small></div>
-        <div><span>Recorded work cost</span><strong>{money(vendor.recordedCostMinor)}</strong><small>{vendor.recordedCostLineCount} entered cost lines</small></div>
       </section>
 
       <section className={styles.measureGrid} aria-label="Vendor evidence measures">

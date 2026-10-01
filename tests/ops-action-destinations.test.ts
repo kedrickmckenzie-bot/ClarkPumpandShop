@@ -18,11 +18,10 @@ describe("queue action destinations", () => {
   });
 
   it("names exactly the place each link opens", () => {
-    const cases: Array<[string, string]> = [["schedule_service", "#vendor-response"], ["vendor_response_required", "#vendor-response"], ["choose_service_provider", "#issue-work"], ["verify_repair", "#work-verification"], ["approve_quote", "#bid-requests"], ["other", "next=action"]];
-    const labels: Record<string, string> = { "#vendor-response": "Review", "#issue-work": "Choose vendor", "#work-verification": "Confirm result", "#bid-requests": "Review quotes", "next=action": "Open next step" };
-    for (const [taskType, place] of cases) {
+    const cases: Array<[string, string, string]> = [["schedule_service", "#vendor-response", "Accept or change date"], ["vendor_response_required", "#vendor-response", "Answer vendor"], ["choose_service_provider", "#issue-work", "Choose vendor"], ["verify_repair", "#work-verification", "Confirm result"], ["approve_quote", "#bid-requests", "Review quotes"], ["other", "next=action", "Open next step"]];
+    for (const [taskType, place, label] of cases) {
       expect(workflowTaskHref({ taskType, workOrderId: "wo-1" })).toContain(place);
-      expect(workflowTaskActionLabel({ taskType, workOrderId: "wo-1" })).toContain(labels[place]);
+      expect(workflowTaskActionLabel({ taskType, workOrderId: "wo-1" })).toBe(label);
     }
   });
 
@@ -40,7 +39,7 @@ describe("queue action destinations", () => {
 
   it("names the action each row opens", () => {
     const asOf = "2026-10-01T12:00:00.000Z";
-    expect(presentAttentionRow(row({ taskType: "schedule_service" }), asOf).link.label).toBe("Review visit date");
+    expect(presentAttentionRow(row({ taskType: "schedule_service" }), asOf).link.label).toBe("Accept or change date");
     expect(presentAttentionRow(row({ taskType: "verify_repair", group: "completion" }), asOf).link.label).toBe("Confirm result");
     expect(presentAttentionRow(row({ taskType: "choose_service_provider" }), asOf).link.label).toBe("Choose vendor");
     expect(presentAttentionRow(row({ sourceKind: "quote_round", taskType: undefined }), asOf).link.label).toBe("Review quotes");

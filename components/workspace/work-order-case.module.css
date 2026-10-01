@@ -1803,3 +1803,9 @@
 .inlineActions:not(:has(a)) {
   display: none;
 }
+
+.headerContext { grid-column: 1 / -1; display: grid; grid-template-columns: 1.7fr 1fr 1.3fr; gap: 14px; margin: 0; padding-top: 12px; border-top: 1px solid var(--case-border); }
+.headerContext > div { min-width: 0; }
+.headerContext dt { font-size: 14px; color: var(--case-muted); margin-bottom: 4px; }
+.headerContext dd { margin: 0; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .headerContext { grid-template-columns: 1fr; gap: 10px; } }
