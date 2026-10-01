@@ -1,3 +1,4 @@
+import { LiveSearchForm } from "@/components/ops/live-search-form";
 import Link from "next/link";
 import {storeWorkspaceContext} from "@/lib/server/store-workspace-context";
 import {StoreWorkspaceNav} from "@/components/workspace/store-workspace-nav";
@@ -13,7 +14,7 @@ export default async function StoreVendors({params,searchParams}:{params:Promise
     <StoreWorkspaceNav id={id} active="vendors"/>
     {q.notice?<p className={styles.notice} role="status">{q.notice}</p>:null}
     <section className={styles.panel}><h2>Vendors for this store</h2><p>Preferred vendors appear first. Choosing a preferred vendor is optional.</p>
-      <form className={styles.filters}><label>Find a vendor<input type="search" name="q" defaultValue={search} placeholder="Name or specialty"/></label><button>Search</button></form>
+      <LiveSearchForm className={styles.filters} method="get"><label>Find a vendor<input type="search" name="q" defaultValue={search} placeholder="Name or specialty"/></label><button>Search</button></LiveSearchForm>
       <div className={styles.scroll}><table className={`${styles.table} ${styles.vendorTable}`}><thead><tr><th>Vendor / services</th><th>Contact</th><th>Coverage</th><th>Store preference</th><th>Actions</th></tr></thead><tbody>{page.items.map(v=><tr key={v.id}>
         <td data-label="Vendor"><Link href={`/app/vendors/${v.id}`}>{v.name}</Link><p>{v.specialties.map(s=>s.label).join(", ")}</p></td>
         <td data-label="Contact"><a href={`mailto:${v.email}`}>{v.email}</a>{v.phone?<p><a href={`tel:${v.phone}`}>{v.phone}</a></p>:null}</td>

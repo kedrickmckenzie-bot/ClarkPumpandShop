@@ -1,0 +1,25 @@
+.picker { display: grid; gap: 6px; min-width: 0; }
+.picker .label { display: flex; flex-wrap: wrap; margin: 0; gap: 8px; align-items: baseline; font-weight: 650; font-size: 15px; color: #1e293b; }
+.picker .label em { font-style: normal; font-weight: 600; font-size: 13px; color: #64748b; }
+.selected { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: 6px; background: #eff6ff; color: #1e3a8a; }
+.selected svg { flex: 0 0 auto; margin-top: 3px; }
+.selected span { display: grid; gap: 1px; min-width: 0; }
+.selected small { color: #475569; font-size: 13px; }
+.searchWrap { position: relative; }
+.search { width: 100%; min-height: 44px; box-sizing: border-box; padding: 10px 12px; border: 1px solid #94a3b8; border-radius: 6px 6px 0 0; background: #fff; font: inherit; }
+.search:disabled { background: #f1f5f9; border-radius: 6px; }
+.validity { position: absolute; left: 12px; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.list { margin: 0; padding: 0; list-style: none; max-height: 264px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #94a3b8; border-top: 0; border-radius: 0 0 6px 6px; background: #fff; }
+.list li { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border-top: 1px solid #eef2f6; cursor: pointer; }
+.list li:first-child { border-top: 0; }
+.list li > span { display: grid; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.list li strong { font-weight: 600; color: #1e293b; }
+.list li small { color: #64748b; font-size: 13px; overflow-wrap: anywhere; }
+.list li em { flex: 0 0 auto; font-style: normal; font-size: 13px; font-weight: 600; color: #475569; background: #f1f5f9; border-radius: 4px; padding: 2px 7px; }
+.list li > svg { flex: 0 0 auto; color: #1d4ed8; }
+.list li:hover, .list li[data-active] { background: #f1f5ff; }
+.list li[aria-selected="true"] { background: #e0eaff; }
+.list li[aria-selected="true"] strong { color: #1e3a8a; }
+.list .empty { cursor: default; color: #64748b; }
+.list .empty:hover { background: transparent; }
+.count { margin: 0; font-size: 13px; color: #64748b; }

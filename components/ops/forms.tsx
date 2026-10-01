@@ -1,5 +1,6 @@
 import { WorkConfirmationFields } from "./work-confirmation-fields";
 import { RequestStorePicker } from "./request-store-picker";
+import { SearchPicker } from "./search-picker";
 import Link from "next/link";
 import { WorkRoutingFields } from "./work-routing-fields";
 import { RecordForm } from "./record-form";
@@ -216,21 +217,13 @@ export function VendorIssuancePanel({ model, edition = "complete" }: { model: Ve
             <input type="hidden" name="workOrderId" value={model.workOrderId} />
             {model.currentRevision !== undefined ? <input type="hidden" name="expectedRevision" value={model.currentRevision} /> : null}
             <div className={styles.fieldGrid}>
-              <label className={styles.field} htmlFor="issuance-vendor">
+              {model.vendorSelectionLocked ? <label className={styles.field} htmlFor="issuance-vendor">
                 <span>Approved vendor <em>Required</em></span>
-                {model.vendorSelectionLocked ? (
-                  <>
-                    <input name="vendorId" type="hidden" value={model.selectedVendorId} />
-                    <input id="issuance-vendor" readOnly value={model.vendors[0]?.label ?? "Selected vendor unavailable"} />
-                    <small>{accountabilityOnly ? "Current vendor selection; later changes remain auditable." : "Locked to the vendor selected from the quote comparison."}</small>
-                  </>
-                ) : (
-                  <select id="issuance-vendor" name="vendorId" required defaultValue={model.selectedVendorId ?? ""}>
-                    <option value="" disabled>Select an approved vendor</option>
-                    {model.vendors.map((vendor) => <option value={vendor.value} key={vendor.value}>{vendor.label}</option>)}
-                  </select>
-                )}
-              </label>
+                <input name="vendorId" type="hidden" value={model.selectedVendorId} />
+                <input id="issuance-vendor" readOnly value={model.vendors[0]?.label ?? "Selected vendor unavailable"} />
+                <small>{accountabilityOnly ? "Current vendor selection; later changes remain auditable." : "Locked to the vendor selected from the quote comparison."}</small>
+              </label> : <div className={styles.field}><SearchPicker name="vendorId" label="Approved vendor" required placeholder="Type a vendor name or specialty"
+                options={model.vendors.map((vendor) => ({ value: vendor.value, label: vendor.label, detail: vendor.description }))} defaultValue={model.selectedVendorId} /></div>}
               <SelectField id="issuance-channel" name="channel" label="Handoff method" required options={model.channels} defaultValue={model.channels[0]?.value} />
             </div>
             <label className={styles.field} htmlFor="issuance-message">

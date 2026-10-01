@@ -1,3 +1,4 @@
+import { SearchPicker } from "./search-picker";
 import Link from "next/link";
 import type { StoreSweepPlannerModel } from "@/app/app/_data/store-sweep-loader";
 import styles from "./store-sweep-planner.module.css";
@@ -28,7 +29,7 @@ export function StoreSweepPlanner({ model, notice }: { model: StoreSweepPlannerM
       <div className={styles.panelHeader}><div><h2>1. Choose the store</h2><p>Stores with the most approved small jobs appear first.</p></div></div>
       <form className={styles.storePicker} action="/app/store-sweeps/new" method="get">
         <input type="hidden" name="returnTo" value={model.returnHref} />
-        <label><span>Store</span><select name="store" defaultValue={model.selectedStoreId}>{model.stores.map((store) => <option key={store.id} value={store.id}>{store.label} · {store.readyCount} approved {store.readyCount === 1 ? "job" : "jobs"}</option>)}</select></label>
+        <SearchPicker name="store" label="Store" submitOnSelect placeholder="Store number or name" options={model.stores.map((store) => ({ value: store.id, label: store.label, tag: `${store.readyCount} approved ${store.readyCount === 1 ? "job" : "jobs"}` }))} defaultValue={model.selectedStoreId} />
         <button type="submit">Show this store</button>
       </form>
     </section>

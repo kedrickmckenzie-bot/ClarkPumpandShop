@@ -1,4 +1,5 @@
 "use client";
+import { SearchPicker } from "./search-picker";
 
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -208,14 +209,11 @@ function RequestEstimateForm({ model }: { model: EstimateComparisonViewModel }) 
             </select>
             <small>A service quote can support a later service authorization. A replacement quote goes to capital review and cannot create a technician assignment.</small>
           </label>
-          <label className={styles.field} htmlFor={`estimate-vendor-${model.workOrderId}`}>
-            <span>Vendor to invite <em>Required</em></span>
-            <select id={`estimate-vendor-${model.workOrderId}`} name="vendorId" required defaultValue="">
-              <option value="" disabled>Select an approved vendor</option>
-              {model.vendors.map((vendor) => <option value={vendor.value} key={vendor.value}>{vendor.label}{vendor.description ? ` — ${vendor.description}` : ""}</option>)}
-            </select>
+          <div className={styles.field}>
+            <SearchPicker name="vendorId" label="Vendor to invite" required placeholder="Type a vendor name or specialty"
+              options={model.vendors.map((vendor) => ({ value: vendor.value, label: vendor.label, detail: vendor.description }))} />
             <small>This vendor is being asked for pricing only. They are not assigned to the work.</small>
-          </label>
+          </div>
         </div>
         <label className={styles.field} htmlFor={`estimate-scope-${model.workOrderId}`}>
           <span>What should this vendor price? <em>Required</em></span>

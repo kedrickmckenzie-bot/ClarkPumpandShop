@@ -1,4 +1,5 @@
 "use client";
+import { SearchPicker } from "@/components/ops/search-picker";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -46,17 +47,25 @@ export function TrendsFilterForm({ action, activeView, clearHref, filters, scope
         <Link href={clearHref}><RotateCcw size={15} aria-hidden="true" />Reset all</Link>
       </header>
       <div className={`${styles.filterGrid} ${styles.commonFilterGrid}`}>
-        {commonFilters.map((filter) => (
+        {commonFilters.map((filter) => filter.options.length > 8 ? <FilterPicker key={`${filter.id}:${filter.value ?? ""}`} filter={filter} /> : (
           <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
         ))}
       </div>
       <details className={styles.filterGroup} open={hasMaintenanceScope}>
         <summary><span><strong>Specialist filters</strong><small>Break down the result or narrow by work, equipment, component, cost type, or vendor.</small></span><ChevronRight size={16} aria-hidden="true" /></summary>
-        <div className={styles.filterGrid}>{specialistFilters.map((filter) => (
+        <div className={styles.filterGrid}>{specialistFilters.map((filter) => filter.options.length > 8 ? <FilterPicker key={`${filter.id}:${filter.value ?? ""}`} filter={filter} /> : (
           <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
         ))}</div>
       </details>
       <button type="submit" disabled={pending}><Filter size={16} aria-hidden="true" />{pending ? "Updating analysis…" : "Apply changes"}</button>
     </form>
   );
+}
+
+/** Long filter lists (stores, vendors, equipment) are searched as you type instead of scrolled in a dropdown. */
+function FilterPicker({ filter }: { filter: { id: string; label: string; value?: string; options: Array<{ value: string; label: string }> } }) {
+  const all = filter.options.find((option) => !option.value);
+  return <SearchPicker name={filter.id} label={filter.label} placeholder={`Type to find ${filter.label.toLowerCase()}`}
+    allowClear={Boolean(all)} clearLabel={all?.label ?? "Any"}
+    options={filter.options.filter((option) => option.value).map((option) => ({ value: option.value, label: option.label }))} defaultValue={filter.value} />;
 }

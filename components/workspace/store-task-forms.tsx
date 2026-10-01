@@ -1,7 +1,8 @@
 "use client";
-import {useEffect,useState,type FormEvent,type ReactNode} from "react";
+import {useCallback,useEffect,useState,type FormEvent,type ReactNode} from "react";
 import {useRouter} from "next/navigation";
 import {StorePicker} from "@/components/ops/store-picker";
+import {SearchPicker,type PickOption} from "@/components/ops/search-picker";
 import {taskRoleLabels,type TaskPerson,type CameraWindow,type StoreTask} from "@/lib/ops/store-task-types";
 import {cameraInput,formatCameraTime} from "@/lib/ops/store-task-time";
 import styles from "./store-tasks.module.css";
@@ -13,13 +14,12 @@ export function TaskForm({children,action,id,version,onPrepare}:{children:ReactN
 }
 export function TaskFiles(){return <label>Photos and paperwork <span className={styles.muted}>Optional · Up to 5 files, 8 MB total</span><input type="file" name="files" multiple accept="application/pdf,image/jpeg,image/png,image/webp,text/plain"/></label>;}
 export function TaskRecipients({storeId,initialAssignee='',initialAssignment='person',fallbackId=''}:{storeId:string;initialAssignee?:string;initialAssignment?:string;fallbackId?:string}) {
- const [selectedId,setSelectedId]=useState(initialAssignee),[fallbackValue,setFallbackValue]=useState(fallbackId),[people,setPeople]=useState<TaskPerson[]>([]),[search,setSearch]=useState(''),[assignment,setAssignment]=useState(initialAssignment),[selected,setSelected]=useState<TaskPerson|null>(null),[fallback,setFallback]=useState<TaskPerson|null>(null),[error,setError]=useState('');
- useEffect(()=>{if(!storeId)return;const controller=new AbortController();const timer=setTimeout(()=>{fetch(`/api/ops/tasks?${new URLSearchParams({store:storeId,q:search})}`,{signal:controller.signal}).then(async r=>{const d=await r.json() as {people:TaskPerson[];error?:string};if(!r.ok)throw new Error(d.error);setPeople(d.people);setSelected(p=>p??d.people.find(p=>p.id===initialAssignee)??null);setFallback(p=>p??d.people.find(p=>p.id===fallbackId)??null);setError('');}).catch(e=>{if(!controller.signal.aborted)setError(e.message);});},200);return()=>{clearTimeout(timer);controller.abort();};},[storeId,search,initialAssignee,fallbackId]);
- const choices=[...people,...[selected,fallback].filter((p):p is TaskPerson=>!!p&&!people.some(x=>x.id===p.id))];
+ const [assignment,setAssignment]=useState(initialAssignment);
+ // One live list of the store's people (name and role) feeds both choices.
+ const load=useCallback(async(query:string,signal:AbortSignal):Promise<PickOption[]>=>{const r=await fetch(`/api/ops/tasks?${new URLSearchParams({store:storeId,q:query})}`,{signal});const d=await r.json() as {people:TaskPerson[];error?:string};if(!r.ok)throw new Error(d.error??'Could not load people.');return d.people.map(p=>({value:p.id,label:p.name,tag:taskRoleLabels[p.role]??p.role}));},[storeId]);
  return <><label>Who should handle it?<select name="assignment" value={assignment} onChange={e=>setAssignment(e.target.value)}><option value="person">A specific person</option><option value="responsible">Anyone responsible for this store</option><option value="local">Someone at the store</option></select></label>
- <label>Find a person<input type="search" placeholder="Search by name" value={search} onChange={e=>setSearch(e.target.value)} disabled={!storeId}/></label>
- {assignment==='person'?<label>Assign to<select name="assigneeId" required value={selectedId} onChange={e=>{setSelectedId(e.target.value);setSelected(choices.find(p=>p.id===e.target.value)??null);}}><option value="">Choose a person</option>{choices.map(p=><option value={p.id} key={p.id}>{p.name} · {taskRoleLabels[p.role]??p.role}</option>)}</select></label>:<p className={styles.muted}>{assignment==='local'?'A person assigned to this store can take the task.':'Anyone with responsibility for this store can take the task.'}</p>}
- <label>If overdue, alert<select name="fallbackId" required value={fallbackValue} onChange={e=>{setFallbackValue(e.target.value);setFallback(choices.find(p=>p.id===e.target.value)??null);}}><option value="">Choose a person</option>{choices.map(p=><option value={p.id} key={p.id}>{p.name} · {taskRoleLabels[p.role]??p.role}</option>)}</select></label>{error?<p role="alert">{error}</p>:null}</>;
+ {assignment==='person'?<SearchPicker name="assigneeId" label="Assign to" required placeholder="Type a name or role" load={storeId?load:undefined} disabled={!storeId} disabledText="Choose a store first" defaultValue={initialAssignee||undefined}/>:<p className={styles.muted}>{assignment==='local'?'A person assigned to this store can take the task.':'Anyone with responsibility for this store can take the task.'}</p>}
+ <SearchPicker name="fallbackId" label="If overdue, alert" required placeholder="Type a name or role" load={storeId?load:undefined} disabled={!storeId} disabledText="Choose a store first" defaultValue={fallbackId||undefined}/></>;
 }
 export function NewTaskForm({stores,storeId='',sources={},windows=[],fallbackId=''}:{stores:Array<{id:string;storeNumber:string;name:string;formattedAddress?:string}>;storeId?:string;sources?:Record<string,string>;windows?:CameraWindow[];fallbackId?:string}) {
  const [store,setStore]=useState(storeId),[kind,setKind]=useState(windows.length||sources.visitId?'camera':sources.assetId?'equipment':'general'),[count,setCount]=useState(Math.max(1,windows.length));

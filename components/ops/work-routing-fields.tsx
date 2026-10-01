@@ -3,33 +3,24 @@
 import { SavedWorkSuggestions } from "./saved-work-suggestions";
 import { useWorkOrderScope } from "./work-order-scope";
 import type { StoreVendorPage } from "@/lib/ops/store-vendors";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { SearchPicker, type PickOption } from "./search-picker";
 import type { CreateWorkOrderPageViewModel } from "./data-contract";
 import styles from "./ops.module.css";
 
 export function WorkRoutingFields({ model, accountabilityOnly }: { model: CreateWorkOrderPageViewModel; accountabilityOnly: boolean }) {
   const { storeId } = useWorkOrderScope();
   const [route, setRoute] = useState<string>(accountabilityOnly && model.defaults?.assignmentKind === "hold_for_visit" ? "choose_later" : model.defaults?.assignmentKind ?? "choose_later");
-  const [search, setSearch] = useState("");
   const [vendorId, setVendorId] = useState(model.defaults?.vendorId ?? "");
-  const [storeVendors,setStoreVendors]=useState<{storeId:string;search:string;page:StoreVendorPage}|null>(null);
-  const [vendorError,setVendorError]=useState("");
-  const [offset,setOffset]=useState(0);
-  useEffect(()=>{
-    if(!storeId || route!=="outside_vendor")return;
-    const controller=new AbortController();
-    const timer=setTimeout(async()=>{
-      try { const response=await fetch(`/api/ops/stores/${encodeURIComponent(storeId)}/vendors?${new URLSearchParams({q:search.toLowerCase().replace(/gas pumps?/g,"dispenser").replace(/^gas$/,"fuel").replace(/card readers?/g,"payment terminal"),offset:String(offset)})}`,{signal:controller.signal});
-        if(!response.ok)throw new Error("Could not load vendors for this store.");
-        const page=await response.json() as StoreVendorPage;
-        if(!controller.signal.aborted){setStoreVendors({storeId,search,page});setVendorError("");}
-      }catch(error){if(!controller.signal.aborted)setVendorError(error instanceof Error?error.message:"Try again.");}
-    },200);
-    return()=>{clearTimeout(timer);controller.abort();};
-  },[storeId,route,search,offset]);
-  const loaded=storeVendors?.storeId===storeId&&storeVendors.search===search;
-  const available=storeId ? loaded ? storeVendors.page.items.filter(v=>v.covered).map(v=>({value:v.id,label:v.name,description:v.specialties.map(t=>t.label).join(", "),preference:v.preferenceKeys.length?`Preferred at this store${v.preferenceKeys.includes("*")?"":` for ${v.preferenceKeys.map(k=>v.specialties.find(t=>t.key===k)?.label??k).join(", ")}`}`:""})) : [] : model.vendors.map(v=>({...v,preference:""}));
-  const vendors = storeId ? available : available.filter((vendor) => `${vendor.label} ${vendor.description ?? ""}`.toLowerCase().includes(search.trim().toLowerCase().replace(/gas pumps?/g, "dispenser").replace(/^gas$/, "fuel")));
+  // Vendors that cover the chosen store, narrowed on the server as you type.
+  const loadVendors = useCallback(async (query: string, signal: AbortSignal): Promise<PickOption[]> => {
+    const q = query.toLowerCase().replace(/gas pumps?/g, "dispenser").replace(/^gas$/, "fuel").replace(/card readers?/g, "payment terminal");
+    const response = await fetch(`/api/ops/stores/${encodeURIComponent(storeId)}/vendors?${new URLSearchParams({ q })}`, { signal });
+    if (!response.ok) throw new Error("Could not load vendors for this store.");
+    const page = await response.json() as StoreVendorPage;
+    return page.items.filter((v) => v.covered).map((v) => ({ value: v.id, label: v.name, detail: v.specialties.slice(0, 3).map((t) => t.label).join(", "), tag: v.preferenceKeys.length ? "Preferred" : undefined }));
+  }, [storeId]);
+  const vendorOptions: PickOption[] = model.vendors.map((v) => ({ value: v.value, label: v.label, detail: v.description }));
   const choices = [
     ...(!accountabilityOnly ? [{ id: "internal", label: "Internal maintenance" }] : []),
     { id: "outside_vendor", label: "Outside vendor" },
@@ -52,21 +43,15 @@ export function WorkRoutingFields({ model, accountabilityOnly }: { model: Create
       </fieldset>
     </details> : null}
     {route === "outside_vendor" ? <div>
-      <label className={styles.field} htmlFor="vendor-search"><span>Find a vendor</span><input id="vendor-search" type="search" value={search} onChange={(event) => {setSearch(event.target.value);setOffset(0);}} placeholder="Name, specialty, equipment or coverage" /></label>
-      {vendorError?<p role="alert">{vendorError}</p>:null}
-      <p role="status">{storeId&&!loaded&&!vendorError?"Loading vendors…":vendors.length ? `${vendors.length} matching vendor${vendors.length === 1 ? "" : "s"}` : "No matching vendor covers this store."}</p>
-      {search && !vendors.length && loaded ? <button type="button" className={styles.secondaryButton} onClick={()=>{setSearch("");setOffset(0);}}>Show all vendors covering this store</button> : null}
-      <fieldset className={styles.assignmentChoices}>
-        <legend>Service vendor · Required</legend>
-        {available.filter((vendor) => vendors.includes(vendor) || vendor.value === vendorId).map((vendor) => <label key={vendor.value}>
-          <input type="radio" name="vendorId" value={vendor.value} required checked={vendorId === vendor.value} onChange={() => setVendorId(vendor.value)} />
-          <span><strong>{vendor.label}</strong>{vendor.preference?<small>{vendor.preference}</small>:null}{vendor.value === vendorId ? <small>Selected{!vendors.includes(vendor) ? " · outside this search" : ""}</small> : null}</span>
-        </label>)}
-      </fieldset>
-      {loaded&&storeVendors.page.total>25?<div><button type="button" disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-25))}>Previous vendors</button><button type="button" disabled={offset+25>=storeVendors.page.total} onClick={()=>setOffset(offset+25)}>More vendors</button></div>:null}
+      <SearchPicker key={storeId || "no-store"} name="vendorId" label="Service vendor" required placeholder="Name, specialty, equipment or coverage"
+        options={storeId ? undefined : vendorOptions} load={storeId ? loadVendors : undefined}
+        defaultValue={vendorId || undefined} defaultOption={vendorOptions.find((v) => v.value === vendorId)}
+        emptyText="No vendor covering this store matches. Try fewer letters." onSelect={(vendor) => setVendorId(vendor?.value ?? "")} />
       {!accountabilityOnly ? <SavedWorkSuggestions storeId={storeId} vendorId={vendorId} preview /> : null}
     </div> : null}
-    {route === "internal" ? <label className={styles.field} htmlFor="work-internal-assignee"><span>Internal assignee <em>Required</em></span><select id="work-internal-assignee" name="internalMembershipId" required defaultValue={model.defaults?.internalMembershipId ?? ""}><option value="">Choose a technician</option>{model.internalAssignees.map((member) => <option key={member.value} value={member.value}>{member.label}</option>)}</select><small>Choose a technician, or use Choose later.</small></label> : null}
+    {route === "internal" ? <div className={styles.field}><SearchPicker name="internalMembershipId" label="Internal assignee" required placeholder="Type a name"
+      options={model.internalAssignees.map((member) => ({ value: member.value, label: member.label, detail: member.description }))}
+      defaultValue={model.defaults?.internalMembershipId} /><small>Choose a technician, or use Choose later.</small></div> : null}
     {route === "hold_for_visit" ? <div className={styles.fieldGrid}>
       <label className={styles.field}><span>Service category <em>Required</em></span><select name="holdCategoryKey" required defaultValue={model.defaults?.categoryKey ?? ""}><option value="">Choose a category</option>{model.categories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</select><small>Used to group compatible jobs.</small></label>
       <label className={styles.field}><span>What may the vendor do?</span><select name="holdPosture" defaultValue="complete_using_professional_judgment"><option value="complete_using_professional_judgment">Complete during the visit if practical</option><option value="look_and_report">Inspect and report back</option></select></label>

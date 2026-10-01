@@ -1,34 +1,15 @@
 "use client";
 import { InspectionAssigneePicker } from "./inspection-assignee-picker";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import styles from "./compliance.module.css";
 import pmStyles from "@/components/ops/pm-schedule.module.css";
 
 type StoreOption = { id: string; storeNumber: string; name: string; formattedAddress?: string; regionName?: string };
 type Who = "team" | "vendor" | "person";
 
-/** Vendor search for several stores; the server confirms the vendor covers every selected store. */
+/** Vendor choice for several stores; the list comes from the first store and the server confirms the vendor covers every selected store. */
 function VendorPicker({ storeId }: { storeId: string }) {
-  const [query, setQuery] = useState(""), [items, setItems] = useState<Array<{ id: string; name: string }>>([]), [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/ops/compliance/assignees?${new URLSearchParams({ store: storeId, q: query })}`, { signal: controller.signal });
-        const data = await response.json() as { items: Array<{ id: string; name: string; kind: string }> };
-        if (response.ok) setItems(data.items.filter((item) => item.kind === "vendor"));
-      } catch { /* search is optional; the list stays as it was */ }
-    }, 250);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [storeId, query]);
-  return <div>
-    <label>Vendor<input type="search" placeholder="Search vendors" value={query} maxLength={160} required={!selected} onChange={(event) => { setQuery(event.target.value); setSelected(null); }} onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} /></label>
-    <input type="hidden" name="assignmentVendorId" value={selected?.id ?? ""} />
-    {selected
-      ? <p role="status"><strong>{selected.name}</strong> <button type="button" onClick={() => { setSelected(null); setQuery(""); }}>Change</button></p>
-      : <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>{items.map((item) => <li key={item.id}><button type="button" onClick={() => { setSelected(item); setQuery(item.name); }}>{item.name}</button></li>)}{!items.length ? <li>No matching vendors.</li> : null}</ul>}
-    <small>The vendor must cover every selected store.</small>
-  </div>;
+  return <div><InspectionAssigneePicker storeId={storeId} only="vendor" label="Vendor" name="assignmentVendorId" /><small>The vendor must cover every selected store.</small></div>;
 }
 
 export function ComplianceCreateForm({ stores, defaultStoreId, teamOwners = {} }: { defaultStoreId?: string; stores: StoreOption[]; teamOwners?: Record<string, string | null> }) {

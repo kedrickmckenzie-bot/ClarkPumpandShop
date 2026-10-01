@@ -1,22 +1,40 @@
 "use client";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { CreateWorkOrderPageViewModel } from "./data-contract";
 import { StorePicker } from "./store-picker";
 import { WorkOrderLifecycleFields } from "./work-order-lifecycle-fields";
 import styles from "./ops.module.css";
 const Scope = createContext({ storeId: "", setStoreId: (() => {}) as (id: string) => void });
-export const useWorkOrderScope = () => useContext(Scope);
+const STORE_EVENT = "ops:work-order-store";
+/**
+ * The chosen store, shared by the store field, equipment and routing. The page
+ * renders these fields as separate client pieces, so a store change is also
+ * announced as a browser event; every piece follows the latest choice.
+ */
+export function useWorkOrderScope() {
+  const scope = useContext(Scope);
+  const [announced, setAnnounced] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const follow = (event: Event) => setAnnounced((event as CustomEvent<string>).detail);
+    window.addEventListener(STORE_EVENT, follow);
+    return () => window.removeEventListener(STORE_EVENT, follow);
+  }, []);
+  return {
+    storeId: announced ?? scope.storeId,
+    setStoreId: (id: string) => { scope.setStoreId(id); window.dispatchEvent(new CustomEvent(STORE_EVENT, { detail: id })); },
+  };
+}
 export function WorkOrderScope({ defaultStoreId, children }: { defaultStoreId?: string; children: ReactNode }) {
   const [storeId, setStoreId] = useState(defaultStoreId ?? "");
   return <Scope.Provider value={{ storeId, setStoreId }}>{children}</Scope.Provider>;
 }
 export function WorkOrderStore({ model, locked }: { model: CreateWorkOrderPageViewModel; locked: boolean }) {
-  const { storeId, setStoreId } = useContext(Scope);
+  const { storeId, setStoreId } = useWorkOrderScope();
   if (locked) return <label className={styles.field}><span>Store</span><input type="hidden" name="storeId" value={storeId} /><input readOnly value={model.stores.find(s => s.value === storeId)?.label ?? "Selected store"} /></label>;
   return <StorePicker searchable initial={model.stores} defaultStoreId={storeId} onSelect={setStoreId} />;
 }
 export function WorkOrderEquipment({ model, componentId }: { model: CreateWorkOrderPageViewModel; componentId?: string }) {
-  const { storeId } = useContext(Scope);
+  const { storeId } = useWorkOrderScope();
   return <EquipmentAtStore key={storeId} model={model} storeId={storeId} componentId={componentId} />;
 }
 function EquipmentAtStore({ model, storeId, componentId }: { model: CreateWorkOrderPageViewModel; storeId: string; componentId?: string }) {

@@ -4,6 +4,19 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Review fixes and live pickers (October 1, Claude)
+
+Second review of pass 3 found four issues; the user also asked that choosing a store, vendor or person be one live search over a scrollable list.
+
+- [x] RF-01 Review-queue search keeps the chosen lane; searching from All open stays on All open (`lane=all` is preserved). Test: `ops-queue-tile-navigation`.
+- [x] RF-02 Vendor accept shows the main-job receipt before saving extra jobs. Network or server failure on an extra reads "Main job accepted. These additional jobs still need confirmation: …". Browser-checked by forcing the extra-job request to fail.
+- [x] RF-03 Store-team inspections go to a named store manager chosen by one rule (`storeTeamOwner`, by name). The setup form lists "Store 101 → Cameron Blake" for each selected store and the saved notice repeats the names. This is a named owner, not shared team ownership.
+- [x] RF-04 Multi-store schedules are saved in one atomic write (all or none). A per-form submission ID makes a repeated submit return the same schedules instead of duplicates. First-work preparation failures after the save are reported, not thrown. Tests cover named owner, retry and all-or-none.
+- [x] RF-05 `SearchPicker`: one search box over a scrollable list that shows every option at once, narrows as you type (every word must match name, details or role), and selects on click or keyboard. Used for stores (work order, report, task, inspection filter, vendor approval, store visits, lifecycle, long trends filters), vendors (work-order routing, sending, quotes, prices, warranty) and people (internal assignee, task assignee and overdue alert, inspection person/vendor). Task, store-vendor and replacement-plan searches now update as you type.
+- [x] RF-06 Pre-existing bug: choosing a store on a new work order did not reach routing or equipment (separate client pieces did not share state), so the vendor list never loaded for the chosen store. Store changes are now shared; verified the vendor list and saved-job check load for the picked store.
+
+Evidence: typecheck, lint and build pass; unit suite 1,169/1,171 (plus 2 new picker tests); e2e 64/65. Remaining failures are the known container timeouts (PostgreSQL seed and invoice record query), so the suite is not fully passing on this machine. Browser-checked at 1440px and 390px: work order store/vendor/assignee, task assignee, inspection owner list, vendor accept failure, queue search.
+
 ## Usability pass 3 — simpler records and a clickable-looking interface (October 1, Claude)
 
 User asked for phase 3 plus a UI pass: anything clickable must look clickable, and actions must be visibly separated.

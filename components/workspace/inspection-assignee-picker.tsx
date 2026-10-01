@@ -1,10 +1,18 @@
 "use client";
-import { useEffect,useState } from "react";
-type Option={id:string;name:string;kind:"internal"|"vendor"};
-export function InspectionAssigneePicker({storeId}:{storeId:string}) {
- const [query,setQuery]=useState(""),[items,setItems]=useState<Option[]>([]),[selected,setSelected]=useState<Option|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
- useEffect(()=>{const controller=new AbortController();const timer=setTimeout(async()=>{if(!storeId)return;setBusy(true);try{const response=await fetch(`/api/ops/compliance/assignees?${new URLSearchParams({store:storeId,q:query})}`,{signal:controller.signal});const data=await response.json() as {items:Option[];error?:string};if(!response.ok)throw new Error(data.error??"Could not find people or vendors.");setItems(data.items);setError("");}catch(e){if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Search unavailable");}finally{if(!controller.signal.aborted)setBusy(false);}},250);return()=>{clearTimeout(timer);controller.abort();};},[storeId,query]);
- return <div><label>Assigned to<input type="search" placeholder={storeId?"Search a person or vendor":"Choose a store first"} disabled={!storeId} value={query} maxLength={160} required={!selected} onChange={e=>{setQuery(e.target.value);setSelected(null);}} onKeyDown={e=>{if(e.key==="Enter")e.preventDefault();}}/></label>
- <input type="hidden" name="handler" value={selected?.kind??""}/><input type="hidden" name="membershipId" value={selected?.kind==="internal"?selected.id:""}/><input type="hidden" name="vendorId" value={selected?.kind==="vendor"?selected.id:""}/>
- {selected?<p role="status"><strong>{selected.name}</strong> · {selected.kind==="vendor"?"Vendor":"Person"} <button type="button" onClick={()=>{setSelected(null);setQuery("");}}>Change</button></p>:storeId?<><p role="status">{busy?"Searching…":"Choose a result below."}</p><ul style={{listStyle:"none",padding:0,display:"grid",gap:8}}>{items.map(item=><li key={`${item.kind}-${item.id}`}><button type="button" onClick={()=>{setSelected(item);setQuery(item.name);}}>{item.name} · {item.kind==="vendor"?"Vendor":"Person"}</button></li>)}</ul>{!busy&&!items.length?<p>No matches. Try another name.</p>:null}</>:null}{error?<p role="alert">{error}</p>:null}</div>;
+import { useCallback } from "react";
+import { SearchPicker, type PickOption } from "@/components/ops/search-picker";
+
+type Option = { id: string; name: string; kind: "internal" | "vendor" };
+
+/** Live list of the people and vendors who can handle an inspection at one store. */
+export function InspectionAssigneePicker({ storeId, only, label = "Assigned to", name }: { storeId: string; only?: "vendor"; label?: string; name?: string }) {
+  const load = useCallback(async (query: string, signal: AbortSignal): Promise<PickOption[]> => {
+    const response = await fetch(`/api/ops/compliance/assignees?${new URLSearchParams({ store: storeId, q: query })}`, { signal });
+    const data = await response.json() as { items: Option[]; error?: string };
+    if (!response.ok) throw new Error(data.error ?? "Could not find people or vendors.");
+    return data.items.filter((item) => !only || item.kind === only).map((item) => ({ value: `${item.kind}:${item.id}`, label: item.name, tag: item.kind === "vendor" ? "Vendor" : "Person" }));
+  }, [storeId, only]);
+  const parts = (option?: PickOption) => { const value = option?.value ?? "", at = value.indexOf(":"); return at < 0 ? { kind: "", id: "" } : { kind: value.slice(0, at), id: value.slice(at + 1) }; };
+  return <SearchPicker label={label} required placeholder={only ? "Type a vendor name" : "Type a name or vendor"} load={storeId ? load : undefined} disabled={!storeId} disabledText="Choose a store first"
+    hidden={(option) => { const { kind, id } = parts(option); return name ? { [name]: id } : { handler: kind, membershipId: kind === "internal" ? id : "", vendorId: kind === "vendor" ? id : "" }; }} />;
 }

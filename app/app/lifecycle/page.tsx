@@ -1,3 +1,4 @@
+import { SearchPicker } from "@/components/ops/search-picker";
 import { domainLabel } from "@/lib/product/domain-label";
 import {CapitalQuickEdit} from "@/components/workspace/capital-quick-edit";
 import {roleCanAccessProgramRoute} from "@/components/ops/role-policy";
@@ -31,7 +32,7 @@ export default async function LifecyclePage({searchParams}:{searchParams:Promise
  <nav className={styles.filters} aria-label="Replacement views">{[["review","Needs a decision"],["capital","Planned replacements"],["history","Decision history"]].map(([key,label])=><Link key={key} href={href({view:key,month:""})} aria-current={view===key?"page":undefined}>{label}</Link>)}</nav>
  <form className={`${styles.panel} ${styles.filters}`}><input type="hidden" name="view" value={view}/>
  <label>Search<input type="search" name="q" defaultValue={q.q} placeholder="Equipment, store number, name or address"/></label>
- <label>Store<select name="store" defaultValue={q.store??""}><option value="">All accessible stores</option>{filters.stores.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
+ <SearchPicker name="store" label="Store" placeholder="Store number or name" allowClear clearLabel="All accessible stores" options={filters.stores.map(s=>({value:s.id,label:s.label}))} defaultValue={q.store}/>
  <label>Region<select name="region" defaultValue={q.region??""}><option value="">All regions</option>{filters.regions.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
  <label>Category<select name="category" defaultValue={q.category??""}><option value="">All categories</option>{filters.categories.map(c=><option key={c} value={c}>{domainLabel(c)}</option>)}</select></label>
  {capital?<><label>Starting month<input type="month" name="start" defaultValue={start} required/></label><label>Look ahead<select name="months" defaultValue={months}>{[3,6,12,24].map(n=><option key={n} value={n}>{n} months</option>)}</select></label><label>Currency<select name="currency" defaultValue={currency}>{[...new Set([currency,...capital.currencies])].sort().map(c=><option key={c}>{c}</option>)}</select></label></>:null}<button>Apply</button><Link href={`/app/lifecycle?view=${view}`}>Clear</Link></form>

@@ -1,4 +1,5 @@
 "use client";
+import { SearchPicker } from "@/components/ops/search-picker";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./work-prices.module.css";
@@ -15,7 +16,7 @@ export function WorkPriceForm({ workOrderId, version, scope, vendors, currency }
   }}>
     <label>Estimate for<select name="kind" value={kind} onChange={event => setKind(event.target.value)}><option value="repair">Repair</option><option value="replace">Replacement</option></select></label>
     <label>Estimated amount ({currency})<input name="amount" inputMode="decimal" required placeholder="0.00" /></label><input name="currency" type="hidden" value={currency}/>
-    <label>Vendor<select name="vendorId" required defaultValue=""><option value="" disabled>Choose</option>{vendors.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+    <SearchPicker name="vendorId" label="Vendor" required placeholder="Type a vendor name" options={vendors.map(row => ({ value: row.id, label: row.name }))} />
     <label>Estimate covers<select name="scopeKind" key={kind} required defaultValue={kind === "repair" ? "job" : ""}><option value="" disabled>Choose</option><option value="job">This work order</option><option value="part">One component</option><option value="whole">Equipment and installation</option></select></label>
     <label className={styles.wide}>Work included<input name="scope" defaultValue={scope} required maxLength={2000}/></label>
     {error ? <p role="alert" className={styles.wide}>{error}</p> : null}
