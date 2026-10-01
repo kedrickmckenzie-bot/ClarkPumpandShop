@@ -88,7 +88,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       }
     : stageCase;
 
-  model.page.eyebrow = hasServiceAuthorization ? "Work Order / Service Authorization" : "Operator work order";
+  model.page.eyebrow = hasServiceAuthorization ? "Work order · sent to vendor" : "Work order";
   if (accountabilityOnly) model.page.secondaryAction = undefined;
   if (model.page.primaryAction?.href === "#issue-work") {
     model.page.primaryAction = hasServiceAuthorization
@@ -152,7 +152,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     <WorkOrderCase
       warrantyContext={<WorkWarrantyContext workOrderId={id}/>}
       sentWork={view === "service" ? <SentWorkOrders workOrderId={id}/> : undefined}
-      emailHistory={["overview","activity"].includes(view) ? <><LinkedStoreTasks kind="work" id={id}/><WorkFiles workOrderId={id}/><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}
+      emailHistory={["overview","activity"].includes(view) ? <><LinkedStoreTasks kind="work" id={id} hideEmpty/><WorkFiles workOrderId={id}/><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}
       costPrompts={["overview", "service"].includes(view) ? <WorkCostPrompts workOrderId={id}/> : undefined}
       prices={!accountabilityOnly && view === "cost" ? <WorkPricePanel workOrderId={id} /> : undefined}
       connectedReview={connectedReview}

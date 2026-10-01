@@ -19,7 +19,7 @@ export default async function StoreVendors({params,searchParams}:{params:Promise
         <td data-label="Contact"><a href={`mailto:${v.email}`}>{v.email}</a>{v.phone?<p><a href={`tel:${v.phone}`}>{v.phone}</a></p>:null}</td>
         <td data-label="Coverage">{v.covered?v.coverage.map(c=>c==="organization"?"Companywide":c==="region"?"Region":"This store").join(", "):<span className={styles.danger}>No current approved coverage</span>}</td>
         <td data-label="Preference">{v.preferenceKeys.length?<><strong>Preferred at this store</strong><p>{v.preferenceKeys.includes("*")?"All services":v.preferenceKeys.map(key=>v.specialties.find(s=>s.key===key)?.label??key).join(", ")}</p></>:"No preference"}{edit?<StoreVendorPreferenceForm storeId={id} vendor={v}/>:null}</td>
-        <td data-label="Actions">{v.covered&&roleCan(session,"create_work_order")?<Link href={`/app/work-orders/new?store=${encodeURIComponent(id)}&vendor=${encodeURIComponent(v.id)}`}>Create work order</Link>:null}</td>
+        <td data-label="Actions">{v.covered&&roleCan(session,"create_work_order")?<Link href={`/app/work-orders/new?store=${encodeURIComponent(id)}&vendor=${encodeURIComponent(v.id)}`} className={styles.rowAction}>Create work order</Link>:null}</td>
       </tr>)}</tbody></table></div>
       {!page.items.length?<p>{search?"No vendors match this search.":"No vendors cover this store yet."} {edit?<Link href="/app/vendors">Manage vendor coverage</Link>:null}</p>:null}
       <nav className={styles.bar} aria-label="Store vendor pages">{offset>0?<Link href={href(Math.max(0,offset-25))}>Previous</Link>:<span/>}<span>{page.total} vendors</span>{offset+25<page.total?<Link href={href(offset+25)}>Next</Link>:null}</nav>

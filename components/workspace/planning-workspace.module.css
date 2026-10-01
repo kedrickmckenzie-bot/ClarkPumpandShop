@@ -233,3 +233,16 @@
 .sourceSection > header > strong { flex-shrink: 0; white-space: nowrap; }
 
 .completionSummary{padding:18px 22px;background:#fff;border:1px solid #d8e0ea;border-left:4px solid #2457d6}.completionSummary h2{margin:0 0 8px;font-size:20px}.completionSummary p{margin:0;color:#526176;line-height:1.5}.completionSummary a{color:#2457d6}
+
+/* The first column names the record; it is the visible link in each row. */
+.tableScroller td:first-child > a strong {
+  color: var(--product-action-hover, #1d4ed8);
+}
+
+.tableScroller tbody tr:hover td:first-child > a strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Row tools line up with the cell text and keep a gap below. */
+.sourceSection td > a + * { margin: 0 13px 10px; }

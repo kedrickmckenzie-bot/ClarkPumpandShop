@@ -122,11 +122,11 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
-  padding: 5px 9px;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  background: var(--case-surface);
-  font-size: 12px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 10%, #ffffff);
+  font-size: 13px;
   font-weight: 720;
   white-space: nowrap;
 }
@@ -1383,14 +1383,32 @@
   border-radius: 6px;
   color: var(--case-action-hover) !important;
   background: #ffffff;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 670;
 }
 
 .inlineActions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--case-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.inlineActions > span {
+  margin-right: 6px;
+  color: var(--case-muted);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.inlineAction:hover,
+.inlineAction:focus-visible {
+  border-color: var(--case-action-hover);
+  background: var(--case-action-soft, #eff6ff);
 }
 
 .emptyMessage {
@@ -1781,3 +1799,7 @@
 .caseMeta dt { font-size: 14px; }
 .caseMeta dd { font-size: 16px; }
 .page :global(#add-update), .page :global(#recent-updates) { scroll-margin-top: 90px; }
+
+.inlineActions:not(:has(a)) {
+  display: none;
+}

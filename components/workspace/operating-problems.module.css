@@ -1,1 +1,4 @@
 .panel{background:white;border:1px solid #d8e0ea;padding:16px 20px}.panel h2{font-size:18px;margin:0 0 8px}.list{list-style:none;padding:0;margin:0}.list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 18px;padding:10px 0;border-top:1px solid #e4e9f0}.list li>a:first-child{color:#182b44;min-width:0}.list span{grid-column:1;color:#58677a;font-size:14px}.list li>a:last-child{grid-column:2;grid-row:1/3;align-self:center;white-space:nowrap;color:#2457d6}.panel summary{padding-top:12px;color:#2457d6;cursor:pointer}@media(max-width:600px){.list li{grid-template-columns:1fr}.list li>a:last-child{grid-column:1;grid-row:auto}.panel{padding:14px}.list a{overflow-wrap:anywhere}}
+
+.panel > a { color: var(--product-action-hover, #1d4ed8); font-weight: 650; }
+.panel a:hover strong, .panel > a:hover { text-decoration: underline; text-underline-offset: 3px; }

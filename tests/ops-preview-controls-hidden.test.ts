@@ -7,7 +7,7 @@ import { PlatformShell } from "@/components/ops/platform-shell";
 vi.mock("next/navigation", () => ({ usePathname: () => "/app/overview", useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 
 const base: OperatorSession = { organizationId: "org-1", userId: "user-1", displayName: "Jordan Lee", email: "jordan@example.test", organizationName: "Example", scopeLabel: "Companywide", role: "facilities", permissions: ["ops:*"], demoEdition: "complete" };
-const render = (session: OperatorSession) => renderToStaticMarkup(createElement(PlatformShell, { session }, createElement("p", null, "Body")));
+const render = (session: OperatorSession) => renderToStaticMarkup(createElement(PlatformShell, { session } as Parameters<typeof PlatformShell>[0], createElement("p", null, "Body")));
 
 describe("preview controls", () => {
   it("shows the role picker and demo package only in preview", () => {

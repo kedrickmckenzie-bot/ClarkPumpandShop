@@ -63,7 +63,7 @@ select {
 }
 
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--app-focus) 30%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--app-focus) 75%, transparent);
   outline-offset: 3px;
 }
 

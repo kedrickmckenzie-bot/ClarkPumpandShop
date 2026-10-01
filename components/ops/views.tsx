@@ -401,7 +401,7 @@ function DataTable({ table, selectedId, rowHref, selection, context, openRecord 
                   const cellLink = openRecord && !cell?.link?.href.startsWith(row.href) ? undefined : cell?.link;
                   const href = cellLink?.href ?? (openRecord ? row.href : rowHref?.(row) ?? row.href);
                   return (
-                    <td data-column={column.key} data-label={column.label} className={`${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
+                    <td data-column={column.key} data-label={column.label} className={`${index === 0 ? styles.recordCell : ""} ${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
                       {cell?.expandable ? <div className={styles.workDescription}>{cell.value.length > 160 ? <details><summary>{cell.value.slice(0, 157).trimEnd()}… <span>Read full description</span></summary><p>{cell.value}</p></details> : <p>{cell.value}</p>}{cell.secondary ? <small>{cell.secondary}</small> : null}</div> : <Link href={openRecord || cellLink || !rowHref ? workspaceStartHref(href) : href} aria-current={!cellLink && row.id === selectedId ? "true" : undefined} aria-label={cellLink ? `${cellLink.label}: ${cell?.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
                         <span>{cell?.value ?? "—"}</span>
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
@@ -503,8 +503,10 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                             </div>
                             <ChevronRight className={styles.reviewQueueChevron} aria-hidden="true" size={19} />
                           </Link>
-                          <WorkReviewButton href={row.href} label={record?.value ?? row.label} context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} />
-                          {row.sourceLink ? <Link className={styles.reviewSourcesLink} href={row.sourceLink.href}>{row.sourceLink.label}</Link> : null}
+                          <div className={styles.reviewQueueExtras}>
+                            <WorkReviewButton href={row.href} label={record?.value ?? row.label} context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} />
+                            {row.sourceLink ? <Link className={styles.reviewSourcesLink} href={row.sourceLink.href}>{row.sourceLink.label}</Link> : null}
+                          </div>
                           {row.sources?.length ? <details className={styles.controlDisclosure}>
                             <summary>Tasks and supporting records ({row.sources.length})</summary>
                             <ul>{row.sources.map((source) => <li key={source.id}>

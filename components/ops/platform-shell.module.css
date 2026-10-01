@@ -42,7 +42,7 @@
   box-sizing: border-box;
 }
 
-.shell a {
+:where(.shell) a {
   color: inherit;
   text-decoration: none;
 }

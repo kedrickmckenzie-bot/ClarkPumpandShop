@@ -1,3 +1,4 @@
+import { activityTitle } from "@/lib/product/activity-title";
 import { buildVendorServiceReport } from "@/lib/ops/vendor-service-report";
 import { recordedMoneyLabel } from "@/lib/ops/work-review";
 import { equipmentType } from "@/lib/ops/equipment-browse";
@@ -4107,7 +4108,7 @@ export function buildDetailModel(
           title: "Audit timeline",
           timeline: audit.map((event) => ({
             id: event.id,
-            title: sentence(event.eventType.replaceAll(".", " ")),
+            title: activityTitle(event.eventType),
             description: auditDescription(event.payloadJson),
             timestampLabel: dateTime(event.occurredAt, store?.timeZone),
             actorLabel: event.actorName,
@@ -4493,7 +4494,7 @@ export function buildDetailModel(
         },
         { id: "cost", title: "Recorded work cost", description: "Manual expenses and matched invoice costs. Each expense is counted once.", table: { id: "work-cost", caption: "Recorded cost lines", columns: [{ key: "date", label: "Service date" }, { key: "kind", label: "Expense" }, { key: "description", label: "Description" }, { key: "amount", label: "Amount", align: "end" }], rows: costLines.map((line) => ({ id: line.id, label: line.description, href: line.invoiceId ? `/app/invoices/${line.invoiceId}` : `/app/work-orders/${work.id}?view=cost`, cells: [{ key: "date", value: date(line.serviceDate) }, { key: "kind", value: line.reversesCostId ? "Correction" : line.providerType === "internal" ? "Internal" : line.invoiceId ? "Vendor invoice" : line.providerType === "vendor" ? "Vendor · entered manually" : sentence(line.kind) }, { key: "description", value: line.description }, { key: "amount", value: money(line.amount.amountMinor) }] })) } },
         { id: "invoice-references", title: "Invoices", description: "Open a bill to see its document and review status.", table: { id: "work-invoices", caption: `Invoice references linked to ${work.number}`, columns: [{ key: "invoice", label: "Invoice" }, { key: "date", label: "Invoice date" }, { key: "gross", label: "Invoice total", align: "end" }, { key: "allocation", label: "For this work order", align: "end" }, { key: "status", label: "Match status" }], rows: invoiceLinks.map(({ invoice, allocation }) => ({ id: invoice.id, label: invoice.invoiceNumber, href: `/app/invoices/${invoice.id}`, cells: [{ key: "invoice", value: invoice.invoiceNumber }, { key: "date", value: date(invoice.invoiceDate) }, { key: "gross", value: money(invoice.grossAmount.amountMinor) }, { key: "allocation", value: money(allocation.amount.amountMinor) }, { key: "status", value: sentence(invoice.matchStatus), tone: invoice.matchStatus === "confirmed" ? "positive" : "warning" }] })) } },
-        { id: "timeline", title: "Work-order activity", description: "See when the work order was created, sent, updated, visited, followed up, or corrected. Times are shown in the store's local timezone.", timeline: audit.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt, storeTimeZone), actorLabel: event.actorName })) },
+        { id: "timeline", title: "Work-order activity", description: "See when the work order was created, sent, updated, visited, followed up, or corrected. Times are shown in the store's local timezone.", timeline: audit.map((event) => ({ id: event.id, title: activityTitle(event.eventType), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt, storeTimeZone), actorLabel: event.actorName })) },
       ],
       backLink: { label: "Back to work orders", href: "/app/work-orders" },
     };
@@ -4681,7 +4682,7 @@ export function buildDetailModel(
           id: "timeline",
           title: "Append-only activity",
           description: "Corrections keep the original times and evidence available in history.",
-          timeline: audit.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt, storeTimeZone), actorLabel: event.actorName })),
+          timeline: audit.map((event) => ({ id: event.id, title: activityTitle(event.eventType), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt, storeTimeZone), actorLabel: event.actorName })),
         },
       ],
       backLink: { label: "Back to visits", href: "/app/visits" },
@@ -6272,7 +6273,7 @@ export function buildAttentionItemModel(
           {
             id: "timeline",
             title: "Decision and evidence timeline",
-            timeline: timeline.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt), actorLabel: event.actorName })),
+            timeline: timeline.map((event) => ({ id: event.id, title: activityTitle(event.eventType), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt), actorLabel: event.actorName })),
           },
         ],
         backLink: { label: "Back to Needs attention", href: "/app/action-center" },
@@ -6354,7 +6355,7 @@ export function buildAttentionItemModel(
             timelineHeading: "Notes and updates",
             timeline: noteHistory,
           },
-          { id: "timeline", title: "Service timeline", timeline: timeline.map((event) => ({ id: event.id, title: sentence(event.eventType.replaceAll(".", " ")), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt), actorLabel: event.actorName })) },
+          { id: "timeline", title: "Service timeline", timeline: timeline.map((event) => ({ id: event.id, title: activityTitle(event.eventType), description: auditDescription(event.payloadJson), timestampLabel: dateTime(event.occurredAt), actorLabel: event.actorName })) },
         ],
         backLink: { label: "Back to Needs attention", href: "/app/action-center" },
       },

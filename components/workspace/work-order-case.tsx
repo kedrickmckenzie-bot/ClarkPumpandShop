@@ -710,10 +710,12 @@ export function WorkOrderCase({
         <>
           {verification.available && (verification.canDecide || verification.currentOutcome) ? <details className={styles.historyDisclosure}><summary>Confirm the result</summary><WorkOrderVerificationPanel model={verification} /></details> : null}
           <div className={styles.inlineActions}>
+            <span>More actions</span>
             {recording.canClassify ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=equipment#work-records`}>Link equipment</Link> : null}
             {estimateComparison.permitted && !estimateComparison.workflowBlocked && ["choose_path", "direct_service", "bids"].includes(workspaceMode) ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=service&path=bids`}>Request a price</Link> : null}
             {canAttachInvoice ? <Link className={styles.inlineAction} href={`/app/invoices/new?work=${control.workOrderId}`}>Attach invoice</Link> : null}
             {recording.canRecordCost ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=cost#work-records`}>Add cost</Link> : null}
+            <Link className={styles.inlineAction} href={`/app/tasks/new?${new URLSearchParams({ work: control.workOrderId })}`}>Assign a task</Link>
           </div>
           <RecordBlock section={{ ...timeline, id: "recent-updates", title: "Recent updates", description: undefined, timeline: timeline?.timeline?.slice(0, 4) ?? [], action: { href: `/app/work-orders/${control.workOrderId}?view=activity`, label: "Full history" } }} icon={<History size={18} aria-hidden="true" />} />
           <details className={styles.historyDisclosure}><summary>More details</summary><div className={styles.historyDisclosureBody}>
