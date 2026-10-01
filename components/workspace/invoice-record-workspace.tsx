@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { invoiceReviewMessage } from "@/lib/product/invoice-review-copy";
 import { domainLabel } from "@/lib/product/domain-label";
-import { formatOperationsDate } from "@/lib/ops/local-time";
+import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { invoiceRecordSections, type InvoiceRecordPage, type InvoiceRecordSection, type InvoiceRecordRow } from "@/lib/ops/invoice-record-query";
 import type { Money } from "@/lib/ops/types";
 import { InvoiceReviewDecision } from "./invoice-review-decision";
@@ -24,8 +24,25 @@ function RelatedLinks({ row }: { row: InvoiceRecordRow }) {
     {row.kind === "accounting" ? <Link href={`/app/invoices/accounting?source=${encodeURIComponent(row.id)}`}>Open accounting source</Link> : null}
   </div>;
 }
-export function InvoiceRecordWorkspace({ costChoices = [], result, section, page = 1, line, match, flag, basis, open = false, scopeLabel, canDecide, decisionNote = "A company finance reviewer can record a decision.", updated = false, documents }: {
-  costChoices?: Array<{value:string;label:string}>; documents?: React.ReactNode; result: InvoiceRecordPage; section: InvoiceRecordSection; page?: number; line?: string; match?: string; flag?: string; basis?: "linked" | "unmatched"; open?: boolean; scopeLabel: string; canDecide: boolean; decisionNote?: string; updated?: boolean;
+export interface InvoiceVisitTime { id: string; workId: string; workNumber: string; technician: string; checkedInAt: string; checkedOutAt?: string; seconds?: number; timeZone?: string }
+const onsite = (seconds?: number) => {
+  if (seconds === undefined) return "Still checked in";
+  const minutes = Math.max(1, Math.round(seconds / 60)), hours = Math.floor(minutes / 60), rest = minutes % 60;
+  return `About ${hours ? `${hours} hr${rest ? ` ${rest} min` : ""}` : `${minutes} min`}`;
+};
+/** Visit times next to the bill, so a reviewer can compare billed time with when the technician was there. */
+function VisitTimes({ visits }: { visits: InvoiceVisitTime[] }) {
+  return <section className={styles.context} aria-labelledby="invoice-visit-times">
+    <strong id="invoice-visit-times">Technician visits</strong>
+    {visits.length ? <ul className={styles.visitTimes}>{visits.map(visit => <li key={visit.id}>
+      <Link href={`/app/visits/${encodeURIComponent(visit.id)}`}>{visit.technician}</Link> · <Link href={`/app/work-orders/${encodeURIComponent(visit.workId)}`}>{visit.workNumber}</Link>
+      <span>In {formatOperationsDateTime(visit.checkedInAt, visit.timeZone)} · Out {visit.checkedOutAt ? formatOperationsDateTime(visit.checkedOutAt, visit.timeZone) : "not yet"} · <b>{onsite(visit.seconds)} onsite</b></span>
+    </li>)}</ul> : <span>No check-in is linked to this invoice&apos;s work.</span>}
+    <p className={styles.muted}>Onsite time is approximate. It is not billable labor.</p>
+  </section>;
+}
+export function InvoiceRecordWorkspace({ visitTimes, costChoices = [], result, section, page = 1, line, match, flag, basis, open = false, scopeLabel, canDecide, decisionNote = "A company finance reviewer can record a decision.", updated = false, documents }: {
+  visitTimes?: InvoiceVisitTime[]; costChoices?: Array<{value:string;label:string}>; documents?: React.ReactNode; result: InvoiceRecordPage; section: InvoiceRecordSection; page?: number; line?: string; match?: string; flag?: string; basis?: "linked" | "unmatched"; open?: boolean; scopeLabel: string; canDecide: boolean; decisionNote?: string; updated?: boolean;
 }) {
   const invoice = result.invoice!; const pages = Math.max(1, Math.ceil(result.totalCount / 25));
   return <div className={styles.page}>
@@ -38,6 +55,7 @@ export function InvoiceRecordWorkspace({ costChoices = [], result, section, page
       <Link href={invoiceRecordHref(invoice.id, "items", 1, undefined, undefined, "unmatched")}><span>Unmatched invoice amount</span><strong>{amount(invoice.unmatched)}</strong></Link>
     </div>
     {!invoice.itemsReconcile ? <p className={styles.status}>Items do not add up to the invoice total. Review all items before matching.</p> : null}<p className={styles.status}>{invoice.reportingState === "excluded" ? "Excluded from linked invoice reporting." : invoice.reportingState === "needs_review" ? "Review item amounts and work matches." : "All invoice items are matched."}{invoice.openFlags ? <> <Link href={invoiceRecordHref(invoice.id, "flags", 1, undefined, undefined, undefined, true)}>{invoice.openFlags} open review {invoice.openFlags === 1 ? "flag" : "flags"}</Link></> : null}</p>
+    {visitTimes ? <VisitTimes visits={visitTimes} /> : null}
     {documents}
     <nav className={styles.tabs} aria-label="Invoice sections">{invoiceRecordSections.map(key => <Link key={key} aria-current={section === key ? "page" : undefined} href={invoiceRecordHref(invoice.id, key)}>{sectionLabels[key]} <span>{invoice.counts[key]}</span></Link>)}</nav>
     {section === "evidence" ? <div className={styles.context}><strong>Vendor agreement</strong><span>{invoice.agreement ?? (invoice.unavailableAgreement ? "Agreement link unavailable" : "No linked agreement")}</span><p>Visit evidence shows approximate presence. Review the work separately.</p></div> : null}
