@@ -83,7 +83,7 @@ function SectionContent({ section, previewHref }: { section: DetailSectionViewMo
  * `embedded`: the page supplies its own tab row (store page). Only the requested
  * section renders; the overview shows no section previews.
  */
-export function RecordSections({ sections, initialSection = "overview", embedded = false }: { sections: DetailSectionViewModel[]; initialSection?: string; embedded?: boolean }) {
+export function RecordSections({ sections, initialSection = "overview", embedded = false, embeddedSectionIds }: { sections: DetailSectionViewModel[]; initialSection?: string; embedded?: boolean; embeddedSectionIds?: readonly string[] }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const requestedSection = searchParams.get("section");
@@ -106,6 +106,10 @@ export function RecordSections({ sections, initialSection = "overview", embedded
     return `${pathname}${query ? `?${query}` : ""}#record-review-start`;
   };
 
+  if (embedded && embeddedSectionIds) {
+    const shown = embeddedSectionIds.map((id) => sections.find((section) => section.id === id)).filter((section): section is DetailSectionViewModel => Boolean(section));
+    return <div className={styles.workspace} id="record-review-start">{shown.length ? shown.map((section) => <SectionContent section={section} key={section.id} />) : <div className={styles.empty}><FileSearch aria-hidden="true" size={20} /><p>Nothing to show here yet.</p></div>}</div>;
+  }
   if (embedded) {
     if (!requestedSection) return null;
     return <div className={styles.workspace} id="record-review-start">{active ? <SectionContent section={active} /> : <div className={styles.empty}><FileSearch aria-hidden="true" size={20} /><p>Nothing to show here yet.</p></div>}</div>;

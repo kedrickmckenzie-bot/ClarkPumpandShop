@@ -183,7 +183,7 @@ export function buildWorkOrderVerificationModel(
     ? "You can view the result, but your role cannot record confirmation."
     : currentDecision
       ? undefined
-      : "Record confirmation after a completed service result has been recorded.";
+      : "The repair can be confirmed once the service result is recorded.";
 
   return {
     ...base,

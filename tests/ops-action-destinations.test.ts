@@ -1,18 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { nextActionRedirect, workflowTaskHref } from "@/lib/ops/workflow-task-destination";
+import { nextActionRedirect, workflowTaskActionLabel, workflowTaskHref } from "@/lib/ops/workflow-task-destination";
 import { presentAttentionRow } from "@/app/app/_data/attention-presenter";
 import type { AttentionQueueRow } from "@/lib/ops/attention-query";
 
 const row = (patch: Partial<AttentionQueueRow>): AttentionQueueRow => ({
   id: "task-1", sourceKind: "workflow_task", sourceCount: 1, title: "Accept or counter ColdLine's proposed service date",
   reason: "ColdLine proposed a time.", owner: "Facilities coordinator", dueAt: "2026-10-02T17:00:00.000Z",
-  priority: "high", lane: "mine", group: "work_vendor", linkHref: "/app/work-orders/wo-1?next=action", ...patch,
+  priority: "high", lane: "mine", group: "work_vendor", workOrderId: "wo-1", linkHref: "/app/work-orders/wo-1?view=service#vendor-response", ...patch,
 });
 
 describe("queue action destinations", () => {
-  it("sends work-order stage tasks to the work order's current action, not the task list", () => {
-    for (const taskType of ["schedule_service", "vendor_response_required", "choose_service_provider", "verify_repair", "approve_quote"]) {
-      expect(workflowTaskHref({ taskType, workOrderId: "wo 1" })).toBe("/app/work-orders/wo%201?next=action");
+  it("sends each work-order task to where that task is done", () => {
+    expect(workflowTaskHref({ taskType: "schedule_service", workOrderId: "wo 1" })).toBe("/app/work-orders/wo%201?view=service#vendor-response");
+    expect(workflowTaskHref({ taskType: "choose_service_provider", workOrderId: "wo-1" })).toBe("/app/work-orders/wo-1?view=service#issue-work");
+    expect(workflowTaskHref({ taskType: "verify_repair", workOrderId: "wo-1" })).toBe("/app/work-orders/wo-1?view=confirmation#work-verification");
+    expect(workflowTaskHref({ taskType: "approve_quote", workOrderId: "wo-1" })).toBe("/app/work-orders/wo-1?view=service&path=bids#bid-requests");
+  });
+
+  it("names exactly the place each link opens", () => {
+    const cases: Array<[string, string]> = [["schedule_service", "#vendor-response"], ["vendor_response_required", "#vendor-response"], ["choose_service_provider", "#issue-work"], ["verify_repair", "#work-verification"], ["approve_quote", "#bid-requests"], ["other", "next=action"]];
+    const labels: Record<string, string> = { "#vendor-response": "Review", "#issue-work": "Choose vendor", "#work-verification": "Confirm result", "#bid-requests": "Review quotes", "next=action": "Open next step" };
+    for (const [taskType, place] of cases) {
+      expect(workflowTaskHref({ taskType, workOrderId: "wo-1" })).toContain(place);
+      expect(workflowTaskActionLabel({ taskType, workOrderId: "wo-1" })).toContain(labels[place]);
     }
   });
 

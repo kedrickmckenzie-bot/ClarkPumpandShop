@@ -2675,7 +2675,8 @@ export function buildListModel(
   } else if (route === "action-center") {
     const requestedType = first(query.type);
     const requestedPriority = first(query.priority);
-    const requestedLane = first(query.lane);
+    const laneParameter = first(query.lane);
+    const requestedLane = laneParameter === "all" ? undefined : laneParameter;
     rows = actionsForSession(fixture, scoped, session, Number.MAX_SAFE_INTEGER, requestedLane === "history")
       .filter((action) => !requestedType || (["service-record", "exception"].includes(requestedType) ? action.attentionType === "service_record" : ["vendor-task", "vendor-reminder"].includes(requestedType) ? action.attentionType === "vendor_task" : action.attentionType === "follow_up"))
       .filter((action) => !requestedPriority || (requestedPriority === "urgent" ? action.tone === "critical" : action.tone !== "critical"))

@@ -21,8 +21,10 @@ export async function StoreActiveWork({ id }: { id: string }) {
   const openCount = open.totalCount ?? open.items.length;
   const rows = [...open.items].sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999")).slice(0, SHOWN);
   const nowIso = new Date().toISOString();
+  const confirmCount = confirm.totalCount ?? confirm.items.length;
   const attention = [
-    ...confirm.items.map((work) => ({ key: work.id, href: `/app/work-orders/${encodeURIComponent(work.id)}?view=confirmation#work-verification`, text: `Confirm the repair: ${work.number} · ${work.problem}` })),
+    ...confirm.items.slice(0, 3).map((work) => ({ key: work.id, href: `/app/work-orders/${encodeURIComponent(work.id)}?view=confirmation#work-verification`, text: `Confirm the repair: ${work.number} · ${work.problem}` })),
+    ...(confirmCount > 3 ? [{ key: "confirm-all", href: `/app/work-orders?${new URLSearchParams({ store: id, status: "confirmation" })}`, text: `See all ${confirmCount} repairs to confirm` }] : []),
     ...(inspections.summary.overdue ? [{ key: "overdue", href: `${base}/compliance?view=overdue`, text: `${inspections.summary.overdue} overdue inspection${inspections.summary.overdue === 1 ? "" : "s"}` }] : []),
     ...(inspections.summary.action_needed ? [{ key: "findings", href: `${base}/compliance?view=action_needed`, text: `${inspections.summary.action_needed} inspection finding${inspections.summary.action_needed === 1 ? "" : "s"} to fix` }] : []),
   ];
@@ -38,7 +40,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
         <thead><tr><th>Job</th><th>Who&apos;s handling it</th><th>Next step</th><th>Due</th></tr></thead>
         <tbody>{rows.map((work) => <tr key={work.id}>
           <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(work.id)}`}>{work.problem}</Link><p className={styles.muted}>{work.number}{work.priority === "urgent" || work.priority === "emergency" ? ` · ${work.priority === "urgent" ? "Urgent" : "Emergency"}` : ""}</p></td>
-          <td data-label="Who's handling it">{work.vendorName ?? work.accountableParty}</td>
+          <td data-label="Who's handling it">{work.accountableParty}{work.vendorName && work.vendorName !== work.accountableParty ? <p className={styles.muted}>Vendor: {work.vendorName}</p> : null}</td>
           <td data-label="Next step">{work.nextAction}</td>
           <td data-label="Due">{work.dueAt ? <>{formatOperationsDateTime(work.dueAt, store.timeZone)}{work.dueAt < nowIso ? <p className={styles.muted}>Overdue</p> : null}</> : "No date"}</td>
         </tr>)}</tbody>

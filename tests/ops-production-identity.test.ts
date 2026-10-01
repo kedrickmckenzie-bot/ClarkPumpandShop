@@ -243,7 +243,7 @@ describe("production identity and organization selection", () => {
     const storeQueue=await loadListModel("action-center",{store:"store-northline-104"});
     expect(storeQueue.page.scopeLabel).toBe("Store 104 · Ridgeview");
     expect(storeQueue.search?.preservedParameters).toContainEqual({name:"store",value:"store-northline-104"});
-    const lastOnPage=(await loadListModel("action-center",{})).table.rows.at(-1)!;
+    const lastOnPage=(await loadListModel("action-center",{lane:"all"})).table.rows.at(-1)!;
     const nextIds=new URL(lastOnPage.href,"https://ops.invalid").searchParams.get("reviewAfter")!.split(",");
     expect(nextIds.length).toBe(24);
     const selection=await loadReviewSelection({},nextIds);

@@ -897,7 +897,7 @@ export function ProgramView({ model, beforeContent, compact = false }: { model: 
   );
 }
 
-export function DetailView({ model, beforeFacts, beforeSections, after, initialSection, compactFacts = false, embeddedSections = false, hideFacts = false }: { compactFacts?: boolean; model: DetailPageViewModel; beforeFacts?: ReactNode; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string; embeddedSections?: boolean; hideFacts?: boolean }) {
+export function DetailView({ model, beforeFacts, beforeSections, after, initialSection, compactFacts = false, embeddedSections = false, embeddedSectionIds, hideFacts = false }: { compactFacts?: boolean; model: DetailPageViewModel; beforeFacts?: ReactNode; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string; embeddedSections?: boolean; embeddedSectionIds?: readonly string[]; hideFacts?: boolean }) {
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={16} />{model.backLink.label}</Link>
@@ -914,7 +914,7 @@ export function DetailView({ model, beforeFacts, beforeSections, after, initialS
             </div></> : null}
           </details>}
           {!compactFacts ? beforeSections : null}
-          <RecordSections sections={model.sections} initialSection={initialSection} embedded={embeddedSections} />
+          <RecordSections sections={model.sections} initialSection={initialSection} embedded={embeddedSections} embeddedSectionIds={embeddedSectionIds} />
           {after}
         </>
       )}

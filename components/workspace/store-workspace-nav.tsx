@@ -1,15 +1,17 @@
 import Link from "next/link";
 import styles from "./compliance.module.css";
 
-/** Store record sections shown as tabs on the store page (`?section=`). */
+/** Store tabs that show record sections; each groups the sections it lists (`?section=`). */
 export const STORE_SECTION_TABS = [
-  { id: "work-history", label: "Work & visits" },
-  { id: "upcoming-visits", label: "Upcoming visits" },
-  { id: "ready-to-bundle", label: "Saved jobs" },
-  { id: "equipment", label: "Equipment" },
-  { id: "preventive-maintenance-plans", label: "PM" },
-  { id: "service-areas", label: "Spending" },
+  { id: "work", label: "Work", sections: ["upcoming-visits", "ready-to-bundle", "work-history"] },
+  { id: "equipment", label: "Equipment & PM", sections: ["equipment", "preventive-maintenance-plans"] },
+  { id: "spending", label: "Spending", sections: ["service-areas"] },
 ] as const;
+
+/** The tab for a `?section=` value: a tab id, or any section a tab groups (older links). */
+export function storeSectionTab(section?: string) {
+  return section ? STORE_SECTION_TABS.find((tab) => tab.id === section || (tab.sections as readonly string[]).includes(section)) : undefined;
+}
 const STORE_PAGES = [
   { id: "tasks", label: "Tasks" },
   { id: "compliance", label: "Compliance" },

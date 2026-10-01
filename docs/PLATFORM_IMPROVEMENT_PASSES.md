@@ -4,6 +4,18 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Usability pass 2 corrections — responsibility and navigation (October 1, Claude)
+
+Review feedback on passes 1–2: keep the direction, fix where a shorter page could still leave the wrong person looking responsible or send someone somewhere other than the button promised.
+
+- [x] UPC-01 Store open-jobs table shows the next-step owner (accountable party) under "Who's handling it"; the vendor is a secondary "Vendor:" line. Example: CPS-2026-0119 shows "Warranty review", vendor ColdLine below.
+- [x] UPC-02 Review queue opens on "Needs my action" when the person has any, otherwise all open items. "All open" is explicit (`lane=all`), used by the Overview "Open items" tile and the All open filter; Clear filters returns to the default view. Lane chips use plain names.
+- [x] UPC-03 Store tabs reduced from 11 to 8: Overview, Work (upcoming visits, saved jobs, work and visit history), Equipment & PM, Spending, Tasks, Compliance, Warranties, Vendors. Older `?section=` links open the tab that contains that section.
+- [x] UPC-04 Store "Needs attention" lists up to three repairs to confirm and, beyond that, "See all N repairs to confirm" linking to `/app/work-orders?store=…&status=confirmation`.
+- [x] UPC-05 Queue row labels and links come from one table (`lib/ops/workflow-task-destination.ts`): each task type opens its own place (vendor response, issue work, quotes, visits, confirmation) with the matching verb; types without a fixed place say "Open next step" and follow the work order's current step. Confirmation that cannot be recorded yet says so and links "Record the result first →".
+
+Validation: typecheck, lint, build clean; full suite 1,163/1,165 (PostgreSQL seed 120 s and invoice-record query 30 s timeouts on this container, unchanged by this work). Browser: store tabs and grouped sections, no empty block on overview, open-jobs owners, queue default 14 of 69 and lane=all 69 of 69, every first-page row's label against its landing view, actions present at the issue-work, provider and confirmation destinations.
+
 ## Usability pass 2 — daily screens (October 1, Claude)
 
 - [x] UP-11 Store page: one tab row (Overview, Work & visits, Upcoming visits, Saved jobs, Equipment, PM, Spending, Tasks, Compliance, Warranties, Vendors). Record sections open as tabs (`?section=`) instead of all previewing on the overview. Overview shows open reports, "Needs attention" (repairs to confirm, overdue inspections, findings) and open jobs with who is handling each, next step and due date. Key facts and the coverage summary are removed from the store page (their content lives in the tabs). Primary action: Create work order, or Report an issue for roles that cannot create work. Store 104 page height 6,409→2,826 px desktop and 13,166→4,346 px on the store-manager phone view; clickables 132→35.

@@ -169,13 +169,13 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
           { id: "open-exceptions", label: "Needs your action", value: String(review.mineCount), supportingText: "Your next decisions and follow-ups", tone: review.mineCount ? "warning" : "positive", link: { href: "/app/action-center?lane=mine", label: "Open your actions" } },
           { id: "upcoming-visits", label: "Upcoming visits", value: String(activity.upcomingAppointments), supportingText: "Confirmed vendor appointments", tone: "info", link: { href: "/app/visits?status=upcoming", label: "See expected visits" } },
           { id: "active-visits", label: "Visits without checkout", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} total visits recorded`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Review open visits" } },
-          { id: "open-items", label: "Open items", value: String(review.totalCount), supportingText: "All open items visible to you", link: { href: "/app/action-center", label: "Open all items" } },
+          { id: "open-items", label: "Open items", value: String(review.totalCount), supportingText: "All open items visible to you", link: { href: "/app/action-center?lane=all", label: "Open all items" } },
         ]
       : [
           { id: "open-work", label: "Open work", value: String(activity.openWork), supportingText: "Each item has an owner, next step, and due date", tone: activity.openWork ? "info" : "positive", link: { href: "/app/work-orders?status=open", label: "Open regional work" } },
           { id: "open-exceptions", label: "Needs your action", value: String(review.mineCount), supportingText: "Your next decisions and follow-ups", tone: review.mineCount ? "warning" : "positive", link: { href: "/app/action-center?lane=mine", label: "Open your actions" } },
           { id: "active-visits", label: "Visits without checkout", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} recorded visits in regional scope`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Review open visits" } },
-          { id: "open-items", label: "Open items", value: String(review.totalCount), supportingText: "All open items visible to you", link: { href: "/app/action-center", label: "Open all items" } },
+          { id: "open-items", label: "Open items", value: String(review.totalCount), supportingText: "All open items visible to you", link: { href: "/app/action-center?lane=all", label: "Open all items" } },
         ],
     priorityActions: review.items,
     prioritySection: { display: "summary", title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" } },

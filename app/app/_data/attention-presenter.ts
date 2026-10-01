@@ -4,6 +4,7 @@ import { roleCanOpenOperatorHref } from "@/components/ops/role-policy";
 import type { AttentionAccess, AttentionQueueRow } from "@/lib/ops/attention-query";
 import type { ExceptionKind } from "@/lib/ops/types";
 import { formatOperationsDate } from "@/lib/ops/local-time";
+import { workflowTaskActionLabel } from "@/lib/ops/workflow-task-destination";
 
 export function attentionAccess(session: OperatorSession): AttentionAccess {
   return {
@@ -17,25 +18,11 @@ export function attentionAccess(session: OperatorSession): AttentionAccess {
 
 export { reviewQueueExceptionCopy } from '@/lib/ops/attention-copy';
 
-const taskActionLabels: Partial<Record<NonNullable<AttentionQueueRow["taskType"]>, string>> = {
-  review_issue: "Review report",
-  approve_quote: "Review quotes",
-  submit_quote: "Review quotes",
-  vendor_response_required: "Review vendor reply",
-  choose_service_provider: "Choose vendor",
-  schedule_service: "Review visit date",
-  schedule_return_visit: "Arrange next visit",
-  record_service_outcome: "Record result",
-  verify_repair: "Confirm result",
-  close_verified_work: "Close work",
-  review_warranty: "Review warranty",
-  resolve_invoice_exception: "Review invoice",
-};
-
 /** A short verb phrase naming what happens when the row is opened. */
 function actionLabel(item: AttentionQueueRow, exception: boolean) {
   if (item.lane === "history") return "View history";
-  if (item.taskType) return taskActionLabels[item.taskType] ?? "Open next step";
+  // Same table as the row's link, so the label always names the place it opens.
+  if (item.sourceKind === "workflow_task") return workflowTaskActionLabel(item);
   if (item.sourceKind === "quote_round") return "Review quotes";
   if (item.sourceKind === "held_work") return "Review saved job";
   if (item.sourceKind === "vendor_reminder") return "Open vendor";

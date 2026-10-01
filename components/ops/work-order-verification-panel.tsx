@@ -59,7 +59,7 @@ export function WorkOrderVerificationPanel({ model }: { model: WorkOrderVerifica
       <span>{model.currentOutcome.technicianLabel} · {model.currentOutcome.recordedLabel}</span>
       {model.currentOutcome.notes ? <p>{model.currentOutcome.notes}</p> : null}
     </div> : null}
-    {model.canDecide ? <ConfirmationForm model={model} /> : !current ? <p className={styles.empty}>{model.decisionBlockReason ?? model.permissionMessage}</p> : null}
+    {model.canDecide ? <ConfirmationForm model={model} /> : !current ? <p className={styles.empty}>{model.decisionBlockReason ?? model.permissionMessage}{model.permitted && !model.currentOutcome ? <> <a href={`/app/work-orders/${encodeURIComponent(model.workOrderId)}?view=visits`}>Record the result first →</a></> : null}</p> : null}
     {model.canCorrect ? <details className={styles.disclosure}><summary>Correct this confirmation</summary><ConfirmationForm model={model} /></details> : null}
     {model.canUseTechnicalBasis && model.currentOutcome && model.workOrderStatus !== "cancelled" ? <details className={styles.disclosure}>
       <summary>Correct the technician’s reported result</summary>
