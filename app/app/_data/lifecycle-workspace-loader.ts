@@ -119,7 +119,7 @@ function activityForDecision(fixture: OpsFixture, organizationId: string, assetI
     const outcome = job ? job.outcome : visit.outcome;
     const notes = job ? job.outcomeNotes : visit.outcomeNotes;
     add({ id: `visit-in-${visit.id}`, title: "Technician checked in", description: visit.arrivalNote || visit.purpose, timestampLabel: timestamp(visit.checkedInAt), actorLabel: `${visit.technicianName} · ${visit.providerName}`, tone: "info" }, visit.checkedInAt);
-    if (visit.checkedOutAt) add({ id: `visit-out-${visit.id}`, title: outcome ? `Provider reported · ${sentence(outcome)}` : "Technician checked out · Job outcome not recorded", description: notes ?? "Checkout recorded without additional notes for this job.", timestampLabel: timestamp(visit.checkedOutAt), actorLabel: `${visit.technicianName} · ${visit.providerName}`, tone: outcome === "completed" || outcome === "resolved" || outcome === "pm_complete" ? "positive" : outcome ? "warning" : "neutral" }, visit.checkedOutAt);
+    if (visit.checkedOutAt) add({ id: `visit-out-${visit.id}`, title: outcome ? `Technician reported · ${sentence(outcome)}` : "Technician checked out · Job outcome not recorded", description: notes ?? "Checkout recorded without additional notes for this job.", timestampLabel: timestamp(visit.checkedOutAt), actorLabel: `${visit.technicianName} · ${visit.providerName}`, tone: outcome === "completed" || outcome === "resolved" || outcome === "pm_complete" ? "positive" : outcome ? "warning" : "neutral" }, visit.checkedOutAt);
   }
 
   for (const decision of fixture.lifecycleRecommendations.filter((row) => row.organizationId === organizationId && row.assetId === assetId && (!workOrderId || !row.workOrderId || row.workOrderId === workOrderId))) {

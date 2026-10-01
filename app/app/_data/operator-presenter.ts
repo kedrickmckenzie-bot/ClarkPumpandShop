@@ -818,7 +818,7 @@ function actionsForSession(
         : !item.dueAt
           ? "No deadline — reason recorded"
           : overdue && externalWait
-            ? `Commitment missed ${date(item.dueAt)}`
+            ? `Missed promised date ${date(item.dueAt)}`
             : overdue
               ? `Overdue since ${date(item.dueAt)}`
               : `Due ${date(item.dueAt)}`,
@@ -2007,21 +2007,21 @@ function buildVendorEvidenceBundle(
         value: responseHours.length >= 3 ? elapsedLabel(medianResponseHours) : "Not enough history",
         numerator: responseHours.length,
         denominator: vendorIssuances.length,
-        denominatorLabel: `${responseHours.length} of ${vendorIssuances.length} issued authorization${vendorIssuances.length === 1 ? "" : "s"} have a timed response`,
-        definition: "Median elapsed time from an issued service authorization to its first recorded vendor response.",
+        denominatorLabel: `${responseHours.length} of ${vendorIssuances.length} work order${vendorIssuances.length === 1 ? "" : "s"} sent have a recorded reply`,
+        definition: "Typical time from sending a work order to the vendor's first reply.",
         state: responseHours.length >= 3 ? "ready" : "insufficient",
-        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#authorization-evidence`, label: "Open response evidence" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#authorization-evidence`, label: "See replies" },
       },
       acceptance: {
         id: "acceptance",
-        label: "Authorization acceptance",
+        label: "Jobs accepted",
         value: terminalResponses.length >= 3 ? ratioLabel(acceptedResponseCount, terminalResponses.length) : "Not enough history",
         numerator: acceptedResponseCount,
         denominator: terminalResponses.length,
         denominatorLabel: `${acceptedResponseCount} accepted of ${terminalResponses.length} accepted-or-declined decision${terminalResponses.length === 1 ? "" : "s"}`,
-        definition: "Accepted service authorizations divided by accepted plus declined authorizations. Questions and proposed dates are excluded.",
+        definition: "Work orders the vendor accepted, out of all they accepted or declined. Questions and proposed dates are not counted.",
         state: terminalResponses.length >= 3 ? "ready" : "insufficient",
-        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#authorization-evidence`, label: "Open decision evidence" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#authorization-evidence`, label: "See accepts and declines" },
       },
       visitCoverage: {
         id: "visit-coverage",
@@ -2032,7 +2032,7 @@ function buildVendorEvidenceBundle(
         denominatorLabel: `${coveredServiceWorkCount} of ${serviceWorkIds.size} issued, accepted, or completed work order${serviceWorkIds.size === 1 ? "" : "s"}`,
         definition: "Vendor-assigned service work with at least one linked observed visit. Declined, cancelled, superseded, and pricing-only requests are excluded.",
         state: serviceWorkIds.size ? "ready" : "insufficient",
-        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#visit-evidence`, label: "Open visit sources" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#visit-evidence`, label: "See visits" },
       },
       noWorkOrder: {
         id: "no-work-order",
@@ -2044,7 +2044,7 @@ function buildVendorEvidenceBundle(
         definition: "Observed visits where the technician selected no work order or could not find one.",
         state: vendorVisits.length ? "ready" : "insufficient",
         tone: noWorkOrderVisits.length ? "warning" : "positive",
-        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#visit-evidence`, label: "Open visit sources" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#visit-evidence`, label: "See visits" },
       },
       accountability: {
         id: "accountability",
@@ -2056,7 +2056,7 @@ function buildVendorEvidenceBundle(
         definition: "Unresolved vendor-specific exceptions plus open follow-ups on work currently attributed to this vendor.",
         state: "ready",
         tone: accountabilityCount ? "warning" : "positive",
-        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#accountability-evidence`, label: "Open source records" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#accountability-evidence`, label: "See the jobs" },
       },
       repeatVisits: {
         id: "repeat-visits",
@@ -2068,7 +2068,7 @@ function buildVendorEvidenceBundle(
         definition: "Work orders with more than one observed visit by this vendor. It is a review fact, not proof of poor work.",
         state: visitedWorkDenominator ? "ready" : "insufficient",
         tone: repeatVisitWorkIds.length ? "warning" : "positive",
-        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#repeat-visits`, label: "Open repeat-visit work" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#repeat-visits`, label: "See repeat visits" },
       },
       unresolvedOutcomes: {
         id: "unresolved-outcomes",
@@ -2080,7 +2080,7 @@ function buildVendorEvidenceBundle(
         definition: "Checked-out visits recorded as temporary repair, waiting on parts, return required, unable to complete, or unable to reproduce.",
         state: checkedOutVisits.length ? "ready" : "insufficient",
         tone: unresolvedVisits.length ? "warning" : "positive",
-        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#visit-evidence`, label: "Open checkout evidence" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#visit-evidence`, label: "See checkouts" },
       },
     },
   };
@@ -2983,7 +2983,7 @@ export function buildListModel(
           ? `${totalRows} matching of ${visitTotal} visits`
           : route === "action-center"
             ? `${totalRows} item${totalRows === 1 ? "" : "s"}`
-          : `${totalRows} source record${totalRows === 1 ? "" : "s"}`,
+          : `${totalRows} record${totalRows === 1 ? "" : "s"}`,
     search: meta.placeholder ? {
       label: `Search ${meta.title}`,
       placeholder: meta.placeholder,
@@ -3372,7 +3372,7 @@ export function buildProgramModel(
         { value: "12m", label: "12 months", href: spendHref({ period: "12m" }), selected: period.key === "12m" },
         { value: "ytd", label: "Year to date", href: spendHref({ period: "ytd" }), selected: period.key === "ytd" },
       ] },
-      { id: "basis", label: "Amount basis", options: [
+      { id: "basis", label: "Amount type", options: [
         { value: "recorded", label: "Recorded work cost", href: spendHref({ basis: "recorded" }), selected: basis === "recorded" },
         { value: "invoiced", label: "Linked invoice amount", href: spendHref({ basis: "invoiced" }), selected: basis === "invoiced" },
       ] },

@@ -1792,7 +1792,7 @@ function buildFixture(): OpsFixture {
   if (warrantyReviewTask) Object.assign(warrantyReviewTask, {
     taskType: "review_warranty" as const,
     title: "Confirm diagnosis and warranty coverage",
-    reason: "Exact-component active coverage was found; liability remains undetermined until diagnosis.",
+    reason: "This part has active coverage. Whether the warranty pays is decided after diagnosis.",
     assigneeType: "role" as const,
     assigneeId: undefined,
     assigneeRole: "facilities_admin" as const,

@@ -344,7 +344,7 @@ describe("stage precedence transition matrix", () => {
       estimateProposals: [{ id: "proposal-selected-service", requestId: "request-selected-service", status: "received" }],
     });
     expect(service.stage).toBe("authorization_or_bidding");
-    expect(service.primaryNextAction.label).toBe("Issue the service authorization");
+    expect(service.primaryNextAction.label).toBe("Send the work order");
 
     const replacement = buildWorkOrderCase({
       now: NOW,

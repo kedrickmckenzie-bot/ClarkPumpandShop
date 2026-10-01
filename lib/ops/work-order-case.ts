@@ -289,7 +289,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
         ? { label: "Advance the selected replacement quote to capital review", href: `${base}?view=service&path=bids#bid-requests` }
       : estimateRequests.length > 0 && !selectedEstimateRequest
         ? { label: estimateProposals.length > 0 ? "Review vendor quotes" : "Track vendor quote requests", href: `${base}?view=service&path=bids#bid-requests` }
-        : { label: "Issue the service authorization", href: `${base}?view=service&path=direct#issue-work` },
+        : { label: "Send the work order", href: `${base}?view=service&path=direct#issue-work` },
     vendor_response_scheduling:
       approvedReplacement && !currentIssuance ? { label: "Set up the replacement", href: `${base}?view=service&path=direct#issue-work` }
       :

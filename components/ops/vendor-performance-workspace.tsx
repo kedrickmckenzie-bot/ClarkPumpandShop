@@ -439,7 +439,7 @@ function VendorPerformanceDetailComplete({ model, tab = "contact" }: { model: Ve
           <strong>{money(vendor.recordedCostMinor)}</strong>
           <small>{vendor.recordedCostLineCount} entered cost line{vendor.recordedCostLineCount === 1 ? "" : "s"}</small>
           <p>Cost lines on work currently attributed to this vendor. Estimate, authorization, and invoice amounts are not combined into this total.</p>
-          <span className={styles.sourcePrompt}>Open cost evidence<ArrowRight aria-hidden="true" size={14} /></span>
+          <span className={styles.sourcePrompt}>See costs<ArrowRight aria-hidden="true" size={14} /></span>
         </Link>
       </section>
 

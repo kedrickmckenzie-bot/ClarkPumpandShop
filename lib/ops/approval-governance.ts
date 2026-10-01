@@ -109,7 +109,7 @@ function buildApprovalResolutionTask(input: {
       priority: approved ? approvalTaskPriority(input.workOrder) : "critical",
       blocking: true, requiredForProgress: true, dueAt: addHours(input.occurredAt, 24),
       applicableSlaClock: approved ? "scheduling" : "approval",
-      completionCriteria: approved ? "Issue the service authorization" : "Record a revised authorization request or cancel the work order",
+      completionCriteria: approved ? "Send the work order" : "Record a revised authorization request or cancel the work order",
       escalationDestination: "Facilities director",
     },
   });

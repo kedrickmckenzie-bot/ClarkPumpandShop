@@ -62,7 +62,7 @@ export function workOutcomeEvidence(work: Pick<WorkOrderDetailView, "id" | "visi
   const visit = current ? work.visits.find((row) => row.id === current.visitId) : undefined;
   return {
     id: latest?.id ?? current?.id ?? work.id,
-    label: latest ? `Provider reported ${words(latest.outcome!)}` : current ? "Current visit has no job outcome yet" : "No linked service outcome recorded",
+    label: latest ? `Technician reported ${words(latest.outcome!)}` : current ? "Current visit has no job outcome yet" : "No linked service outcome recorded",
     detail: latest
       ? [latest.outcomeNotes, verification ? `Manager review: ${words(verification.decision)}${verification.basis ? ` (${words(verification.basis)})` : ""}${verification.reason ? ` — ${verification.reason}` : ""}.` : "No manager verification recorded for this outcome."].filter(Boolean).join(" ")
       : visit?.status === "active" ? `${visit.providerName} checked in; completion has not been reported for this job.` : "A visit or work-order status alone does not establish that the problem was resolved.",

@@ -17,7 +17,7 @@ describe("connected source review", () => {
     const before = JSON.stringify(fixture);
     const work = target();
     const model = await loadWorkReview(createOpsFixtureReadRepository(fixture), session, work.id, fixture.asOf);
-    expect(model?.outcome.label).toBe("Provider reported completed");
+    expect(model?.outcome.label).toBe("Technician reported completed");
     expect(model?.outcome.detail).toContain("Manager review: verified");
     expect(model?.related.some((row) => row.label.includes("CPS-2026-0119"))).toBe(true);
     expect(model?.warranties.some((row) => row.detail.includes("Check whether this problem is covered"))).toBe(true);
