@@ -27,7 +27,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         completionNote: formText(formData, "completionNote", { required: true, max: 2_000 }),
         actor: context.actor,
       });
-      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Reminder+completed#vendor-reminders`);
+      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Reminder+completed&tab=contact#vendor-reminders`);
     }
 
     const dueAt = localDateTimeToIso(
@@ -45,7 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     };
     if (operation === "create") {
       await createVendorReminder({ repository: context.repository }, { ...shared, vendorId });
-      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Vendor+reminder+added#vendor-reminders`);
+      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Vendor+reminder+added&tab=contact#vendor-reminders`);
     }
     if (operation === "update") {
       if (!reminderId) throw new OpsDomainError("VALIDATION", "Choose a vendor reminder to update.");
@@ -56,7 +56,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         reminderId,
         updateNote: formText(formData, "updateNote", { required: true, max: 2_000 }),
       });
-      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Reminder+updated#vendor-reminders`);
+      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Reminder+updated&tab=contact#vendor-reminders`);
     }
     throw new OpsDomainError("VALIDATION", "Choose a supported vendor reminder action.");
   } catch (error) {

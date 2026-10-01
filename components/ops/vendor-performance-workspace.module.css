@@ -785,6 +785,11 @@
   color: var(--brand);
 }
 
+.recordNav a[aria-current="page"] {
+  background: var(--brand);
+  color: #fff;
+}
+
 .heroMark {
   height: 46px;
   width: 46px;

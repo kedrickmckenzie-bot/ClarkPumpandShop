@@ -34,7 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         organizationId: context.session.organizationId, vendorId,
         scopeIds: values as string[], expectedVersion: formText(formData, "coverageVersion", { max: 20000 }), actor: context.actor,
       });
-      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Coverage+updated#coverage-evidence`);
+      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Coverage+updated&tab=contact#coverage-evidence`);
     }
 
     if (operation === "record_compliance") {
@@ -66,7 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           actor: context.actor,
         },
       );
-      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Compliance+record+added#compliance-evidence`);
+      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Compliance+record+added&tab=documents#compliance-evidence`);
     }
 
     if (operation === "record_qualification") {
@@ -93,7 +93,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           actor: context.actor,
         },
       );
-      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Routing+qualification+added#compliance-evidence`);
+      return relativeRedirect303(`/app/vendors/${encodeURIComponent(vendorId)}?notice=Routing+qualification+added&tab=documents#compliance-evidence`);
     }
 
     throw new OpsDomainError("VALIDATION", "Vendor relationship operation is invalid");

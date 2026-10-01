@@ -193,12 +193,12 @@ function VendorPerformanceListComplete({ model }: { model: VendorPerformanceList
                         <span className={styles.openRecord}>Open vendor record<ArrowRight aria-hidden="true" size={14} /></span>
                       </Link>
                     </td>
-                    <td><Link className={styles.directoryCell} href={`${vendor.href}#coverage-evidence`}><strong><MapPinned aria-hidden="true" size={15} />{vendor.coverageLabel}</strong><span>{vendor.coverageRegionCount} region{vendor.coverageRegionCount === 1 ? "" : "s"} · {vendor.observedStoreCount} store{vendor.observedStoreCount === 1 ? "" : "s"} observed</span><div className={styles.tagRow}>{vendor.specialties.slice(0, 3).map((specialty) => <em key={specialty}>{specialty}</em>)}</div></Link></td>
-                    <td><Link className={styles.directoryCell} href={`${vendor.href}#compliance-evidence`}><span className={styles.complianceState} data-state={vendor.compliance.state}><BadgeCheck aria-hidden="true" size={15} />{vendor.compliance.label}</span><span>{vendor.compliance.detail}</span><small>{vendor.compliance.activeQualificationCount} active qualification{vendor.compliance.activeQualificationCount === 1 ? "" : "s"}</small></Link></td>
+                    <td><Link className={styles.directoryCell} href={`${vendor.href}?tab=contact#coverage-evidence`}><strong><MapPinned aria-hidden="true" size={15} />{vendor.coverageLabel}</strong><span>{vendor.coverageRegionCount} region{vendor.coverageRegionCount === 1 ? "" : "s"} · {vendor.observedStoreCount} store{vendor.observedStoreCount === 1 ? "" : "s"} observed</span><div className={styles.tagRow}>{vendor.specialties.slice(0, 3).map((specialty) => <em key={specialty}>{specialty}</em>)}</div></Link></td>
+                    <td><Link className={styles.directoryCell} href={`${vendor.href}?tab=documents#compliance-evidence`}><span className={styles.complianceState} data-state={vendor.compliance.state}><BadgeCheck aria-hidden="true" size={15} />{vendor.compliance.label}</span><span>{vendor.compliance.detail}</span><small>{vendor.compliance.activeQualificationCount} active qualification{vendor.compliance.activeQualificationCount === 1 ? "" : "s"}</small></Link></td>
                     <td><Link className={styles.directoryCell} href={`/app/work-orders?vendor=${vendor.id}&status=open`}><strong>{vendor.openWorkCount} open work order{vendor.openWorkCount === 1 ? "" : "s"}</strong><span>{vendor.assignedWorkCount} total attributed</span><small className={vendor.measures.accountability.numerator ? styles.warningText : undefined}>{vendor.measures.accountability.denominatorLabel}</small></Link></td>
                     <td><Link className={styles.directoryCell} href={vendor.measures.responseTime.sourceLink.href}><strong>{vendor.measures.responseTime.value}</strong><span>Median first response</span><small>{vendor.measures.acceptance.value} acceptance · {vendor.measures.acceptance.denominator} decisions</small></Link></td>
                     <td><Link className={styles.directoryCell} href={vendor.measures.visitCoverage.sourceLink.href}><strong>{vendor.measures.visitCoverage.value}</strong><span>{vendor.measures.visitCoverage.numerator} of {vendor.measures.visitCoverage.denominator} eligible jobs</span><small className={vendor.measures.noWorkOrder.numerator || vendor.measures.unresolvedOutcomes.numerator ? styles.warningText : undefined}>{vendor.measures.noWorkOrder.numerator} no-WO · {vendor.measures.unresolvedOutcomes.numerator} unresolved</small></Link></td>
-                    <td><Link className={`${styles.directoryCell} ${styles.costDirectoryCell}`} href={`${vendor.href}#cost-evidence`}><strong>{money(vendor.recordedCostMinor)}</strong><span>{vendor.recordedCostLineCount} entered cost line{vendor.recordedCostLineCount === 1 ? "" : "s"}</span><small>Recorded work cost only</small></Link></td>
+                    <td><Link className={`${styles.directoryCell} ${styles.costDirectoryCell}`} href={`${vendor.href}?tab=costs#cost-evidence`}><strong>{money(vendor.recordedCostMinor)}</strong><span>{vendor.recordedCostLineCount} entered cost line{vendor.recordedCostLineCount === 1 ? "" : "s"}</span><small>Recorded work cost only</small></Link></td>
                   </tr>
                 ))}
               </tbody>
@@ -266,7 +266,7 @@ function VendorAccountabilityList({ model }: { model: VendorPerformanceListViewM
                     <td className={styles.identityCell}><Link href={vendor.href}><VendorIdentity vendor={vendor} /><span className={styles.openRecord}>Open vendor record<ArrowRight aria-hidden="true" size={14} /></span></Link></td>
                     <td><Link className={styles.directoryCell} href={vendor.href}><strong>{vendor.specialties.join(" · ") || "Not classified"}</strong><span>Used when selecting a vendor for a work order</span></Link></td>
                     <td><Link className={styles.directoryCell} href={vendor.href}><strong>{vendor.dispatchPhone ?? "Phone not entered"}</strong><span>{vendor.dispatchEmail}</span></Link></td>
-                    <td><Link className={styles.directoryCell} href={`${vendor.href}#coverage-evidence`}><strong>{vendor.coverageLabel}</strong><span>{vendor.coverageRegionCount} region{vendor.coverageRegionCount === 1 ? "" : "s"}</span></Link></td>
+                    <td><Link className={styles.directoryCell} href={`${vendor.href}?tab=contact#coverage-evidence`}><strong>{vendor.coverageLabel}</strong><span>{vendor.coverageRegionCount} region{vendor.coverageRegionCount === 1 ? "" : "s"}</span></Link></td>
                     <td><Link className={styles.directoryCell} href={`/app/work-orders?vendor=${vendor.id}&status=open`}><strong>{vendor.openWorkCount} open</strong><span>{vendor.assignedWorkCount} total work order{vendor.assignedWorkCount === 1 ? "" : "s"}</span></Link></td>
                   </tr>
                 ))}
@@ -379,7 +379,7 @@ function VendorAccountabilityDetail({ model }: { model: VendorPerformanceDetailV
   );
 }
 
-function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDetailViewModel }) {
+function VendorPerformanceDetailComplete({ model, tab = "contact" }: { model: VendorPerformanceDetailViewModel; tab?: VendorTab }) {
   if (model.state === "missing" || !model.summary) {
     return (
       <div className={styles.workspace}>
@@ -419,15 +419,10 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
       {model.notice ? <div className={styles.successNotice} role="status"><CheckCircle2 aria-hidden="true" size={18} /><strong>{model.notice}</strong><span>The vendor relationship record and audit history have been updated.</span></div> : null}
 
       <nav className={styles.recordNav} aria-label="Vendor record sections">
-        <a href="#relationship-evidence">Overview</a>
-        <a href="#vendor-reminders">Reminders</a>
-        <a href="#accountability-evidence">Open items</a>
-        <a href="#compliance-evidence">Documents & capabilities</a>
-        <a href="#authorization-evidence">Work sent</a>
-        <a href="#visit-evidence">Visits</a>
-        <a href="#cost-evidence">Costs</a><Link href={`/app/warranties?tab=coverage&vendor=${encodeURIComponent(vendor.id)}`}>Warranties</Link><Link href={`/app/warranties/rules?vendor=${encodeURIComponent(vendor.id)}`}>Warranty rules</Link>
+        {VENDOR_TABS.map((item) => <Link key={item.id} href={`/app/vendors/${encodeURIComponent(vendor.id)}?tab=${item.id}`} aria-current={item.id === tab ? "page" : undefined} data-active={item.id === tab || undefined}>{item.label}</Link>)}
       </nav>
 
+      {tab === "contact" ? (<>
       <section className={styles.vendorFacts} id="relationship-evidence" aria-label="Vendor identity and coverage">
         <div><span>Dispatch</span><strong>{vendor.dispatchEmail}</strong><small>{vendor.dispatchPhone ?? "Phone not entered"}</small></div>
         <div><span>Specialties</span><strong>{vendor.specialties.join(" · ") || "Not classified"}</strong><small>Organization-approved search language</small></div>
@@ -439,7 +434,7 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
 
       <section className={styles.measureGrid} aria-label="Vendor evidence measures">
         {measures.map((measure) => <EvidenceMeasure key={measure.id} measure={measure} />)}
-        <Link className={`${styles.measureCard} ${styles.costMeasure}`} href="#cost-evidence">
+        <Link className={`${styles.measureCard} ${styles.costMeasure}`} href={`/app/vendors/${encodeURIComponent(vendor.id)}?tab=costs`}>
           <span className={styles.measureLabel}>Recorded work cost</span>
           <strong>{money(vendor.recordedCostMinor)}</strong>
           <small>{vendor.recordedCostLineCount} entered cost line{vendor.recordedCostLineCount === 1 ? "" : "s"}</small>
@@ -454,8 +449,10 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
         <span><ShieldCheck aria-hidden="true" size={21} /></span>
         <div><strong>Numbers, not a grade</strong><p>Each measure explains what is counted. Response rates appear after three observations, and visit time is approximate—not certified labor.</p></div>
       </section>
+      </>) : null}
 
       <div className={styles.evidenceStack}>
+        {tab === "contact" ? (
         <section className={styles.evidenceSection} aria-labelledby="vendor-reminders-heading" id="vendor-reminders">
           <SectionHeader id="vendor-reminders-heading" icon={<BellRing size={20} />} title="Vendor relationship reminders" description="General callbacks, renewals, rate reviews, and other vendor obligations that are not tied to a work order." count={`${model.vendorReminderRows.filter((row) => row.status === "open").length} open`} />
           {model.manageRemindersAction ? (
@@ -510,7 +507,9 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
             </div>
           ) : <EmptyEvidence>No relationship reminder has been recorded for this vendor.</EmptyEvidence>}
         </section>
+        ) : null}
 
+        {tab === "jobs" ? (
         <section className={styles.evidenceSection} aria-labelledby="accountability-evidence" id="accountability-evidence">
           <SectionHeader id="accountability-evidence-heading" icon={<AlertTriangle size={20} />} title="Open follow-ups" description="Items tied to this vendor that still need an update or decision." count={`${model.accountabilityRows.length} open`} />
           {model.accountabilityRows.length ? (
@@ -519,7 +518,10 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
             </tbody></table></div>
           ) : <EmptyEvidence>No vendor follow-ups are open.</EmptyEvidence>}
         </section>
+        ) : null}
 
+        {tab === "documents" ? <p className={styles.boundaryNote}><Link href={`/app/warranties?tab=coverage&vendor=${encodeURIComponent(vendor.id)}`}>Warranties from this vendor →</Link> <Link href={`/app/warranties/rules?vendor=${encodeURIComponent(vendor.id)}`}>Warranty rules →</Link></p> : null}
+        {tab === "documents" ? (
         <section className={styles.evidenceSection} aria-labelledby="compliance-evidence-heading" id="compliance-evidence">
           <SectionHeader id="compliance-evidence-heading" icon={<BadgeCheck size={20} />} title="Documents and service capabilities" description="Company-level onboarding documents and the types of work this vendor is approved to receive." count={vendor.compliance.label} />
           <div className={styles.complianceOverview}>
@@ -581,7 +583,9 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
             {model.qualificationRows.length ? <div className={styles.tableShell}><table className={styles.evidenceTable}><caption className={styles.visuallyHidden}>Vendor qualification evidence</caption><thead><tr><th>Trade</th><th>Approved capability</th><th>Service rights</th><th>Job limit</th><th>Expires</th><th>Status</th></tr></thead><tbody>{model.qualificationRows.map((row) => <tr key={row.id}><td className={styles.plainCell}><strong>{row.tradeLabel}</strong></td><td className={styles.plainCell}>{row.capabilityLabel}</td><td className={styles.plainCell}>{row.serviceRightsLabel}</td><td className={styles.plainCell}>{row.limitLabel}</td><td className={styles.plainCell}>{row.expiryLabel}</td><td className={`${styles.plainCell} ${row.tone === "critical" ? styles.criticalText : styles.positiveText}`}>{row.statusLabel}</td></tr>)}</tbody></table></div> : <EmptyEvidence>No routing qualification is configured for this vendor.</EmptyEvidence>}
           </div>
         </section>
+        ) : null}
 
+        {tab === "jobs" ? (
         <section className={styles.evidenceSection} aria-labelledby="authorization-evidence" id="authorization-evidence">
           <SectionHeader id="authorization-evidence-heading" icon={<Clock3 size={20} />} title="Work-order response history" description="See when work was sent and when the vendor first responded." count={model.evidencePagination?.authorizationRows?.summary ?? `${model.authorizationRows.length} sent`} />
           {model.authorizationRows.length ? (
@@ -591,7 +595,9 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
           ) : <EmptyEvidence>Not enough history: no service authorization has been issued to this vendor in the selected scope.</EmptyEvidence>}
           {model.evidencePagination?.authorizationRows ? <PaginationControls pagination={model.evidencePagination.authorizationRows} label="Authorization history pages" /> : null}
         </section>
+        ) : null}
 
+        {tab === "jobs" ? (
         <section className={styles.evidenceSection} aria-labelledby="repeat-visits" id="repeat-visits">
           <SectionHeader id="repeat-visits-heading" icon={<Wrench size={20} />} title="Repeat-visit work orders" description="More than one observed visit on the same work order. This is context for review, not an automatic callback or quality judgment." count={model.evidencePagination?.repeatVisitRows?.summary ?? `${model.repeatVisitRows.length} work orders`} />
           {model.repeatVisitRows.length ? (
@@ -601,7 +607,9 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
           ) : <EmptyEvidence>No work order has more than one observed visit from this vendor.</EmptyEvidence>}
           {model.evidencePagination?.repeatVisitRows ? <PaginationControls pagination={model.evidencePagination.repeatVisitRows} label="Repeat work pages" /> : null}
         </section>
+        ) : null}
 
+        {tab === "jobs" ? (
         <section className={styles.evidenceSection} aria-labelledby="visit-evidence" id="visit-evidence">
           <SectionHeader id="visit-evidence-heading" icon={<MapPinned size={20} />} title="Visit and checkout history" description="See who checked in, where, for which work order, and how the visit ended." count={model.evidencePagination?.visitRows?.summary ?? `${model.visitRows.length} visit${model.visitRows.length === 1 ? "" : "s"}`} />
           {model.visitRows.length ? (
@@ -611,7 +619,9 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
           ) : <EmptyEvidence>Not enough history: no observed visit is linked to this vendor in the selected scope.</EmptyEvidence>}
           {model.evidencePagination?.visitRows ? <PaginationControls pagination={model.evidencePagination.visitRows} label="Visit history pages" /> : null}
         </section>
+        ) : null}
 
+        {tab === "costs" ? (
         <section className={styles.evidenceSection} aria-labelledby="cost-evidence" id="cost-evidence">
           <SectionHeader id="cost-evidence-heading" icon={<CircleDollarSign size={20} />} title="Recorded work costs" description="Saved work costs, including matched invoice costs. Quotes and approval limits stay separate." count={money(vendor.recordedCostMinor)} />
           {model.costRows.length ? (
@@ -621,7 +631,9 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
           ) : <EmptyEvidence>No entered cost line is attached to work currently attributed to this vendor.</EmptyEvidence>}
           {model.evidencePagination?.costRows ? <PaginationControls pagination={model.evidencePagination.costRows} label="Cost history pages" /> : null}
         </section>
+        ) : null}
 
+        {tab === "contact" ? (
         <section className={styles.evidenceSection} aria-labelledby="coverage-evidence-heading" id="coverage-evidence">
           <SectionHeader id="coverage-evidence-heading" icon={<Store size={20} />} title="Service specialties and coverage" description="The stores, regions, and types of work this vendor is approved to receive." count={`${vendor.coverageStoreCount}/${vendor.coverageStoreDenominator} stores`} />
           {model.coverageEditor ? <VendorCoverageEditor model={model.coverageEditor} /> : null}
@@ -632,6 +644,7 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
           </div>
           {model.coverageRows.length ? <div className={styles.coverageRows}>{model.coverageRows.map((row) => <div key={row.id}><strong>{row.scopeLabel}</strong><span>{row.includedStoresLabel}</span><small>{row.preferredRankLabel}</small></div>)}</div> : <EmptyEvidence>No approved coverage relationship is configured.</EmptyEvidence>}
         </section>
+        ) : null}
       </div>
 
       <footer className={styles.boundaryNote}>
@@ -642,8 +655,18 @@ function VendorPerformanceDetailComplete({ model }: { model: VendorPerformanceDe
   );
 }
 
-export function VendorPerformanceDetail({ model, edition = "complete" }: { model: VendorPerformanceDetailViewModel; edition?: DemoEdition }) {
+/** The vendor page is split into four tabs so each opens with one kind of information. */
+const VENDOR_TABS = [
+  { id: "contact", label: "Contact & performance" },
+  { id: "jobs", label: "Current jobs" },
+  { id: "costs", label: "Costs" },
+  { id: "documents", label: "Documents & warranties" },
+] as const;
+export type VendorTab = (typeof VENDOR_TABS)[number]["id"];
+export function vendorTab(value?: string): VendorTab { return VENDOR_TABS.some((item) => item.id === value) ? value as VendorTab : "contact"; }
+
+export function VendorPerformanceDetail({ model, edition = "complete", tab }: { model: VendorPerformanceDetailViewModel; edition?: DemoEdition; tab?: VendorTab }) {
   return edition === "accountability"
     ? <VendorAccountabilityDetail model={model} />
-    : <VendorPerformanceDetailComplete model={model} />;
+    : <VendorPerformanceDetailComplete model={model} tab={tab} />;
 }

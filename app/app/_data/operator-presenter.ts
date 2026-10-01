@@ -2010,7 +2010,7 @@ function buildVendorEvidenceBundle(
         denominatorLabel: `${responseHours.length} of ${vendorIssuances.length} issued authorization${vendorIssuances.length === 1 ? "" : "s"} have a timed response`,
         definition: "Median elapsed time from an issued service authorization to its first recorded vendor response.",
         state: responseHours.length >= 3 ? "ready" : "insufficient",
-        sourceLink: { href: `/app/vendors/${vendor.id}#authorization-evidence`, label: "Open response evidence" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#authorization-evidence`, label: "Open response evidence" },
       },
       acceptance: {
         id: "acceptance",
@@ -2021,7 +2021,7 @@ function buildVendorEvidenceBundle(
         denominatorLabel: `${acceptedResponseCount} accepted of ${terminalResponses.length} accepted-or-declined decision${terminalResponses.length === 1 ? "" : "s"}`,
         definition: "Accepted service authorizations divided by accepted plus declined authorizations. Questions and proposed dates are excluded.",
         state: terminalResponses.length >= 3 ? "ready" : "insufficient",
-        sourceLink: { href: `/app/vendors/${vendor.id}#authorization-evidence`, label: "Open decision evidence" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#authorization-evidence`, label: "Open decision evidence" },
       },
       visitCoverage: {
         id: "visit-coverage",
@@ -2032,7 +2032,7 @@ function buildVendorEvidenceBundle(
         denominatorLabel: `${coveredServiceWorkCount} of ${serviceWorkIds.size} issued, accepted, or completed work order${serviceWorkIds.size === 1 ? "" : "s"}`,
         definition: "Vendor-assigned service work with at least one linked observed visit. Declined, cancelled, superseded, and pricing-only requests are excluded.",
         state: serviceWorkIds.size ? "ready" : "insufficient",
-        sourceLink: { href: `/app/vendors/${vendor.id}#visit-evidence`, label: "Open visit sources" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#visit-evidence`, label: "Open visit sources" },
       },
       noWorkOrder: {
         id: "no-work-order",
@@ -2044,7 +2044,7 @@ function buildVendorEvidenceBundle(
         definition: "Observed visits where the technician selected no work order or could not find one.",
         state: vendorVisits.length ? "ready" : "insufficient",
         tone: noWorkOrderVisits.length ? "warning" : "positive",
-        sourceLink: { href: `/app/vendors/${vendor.id}#visit-evidence`, label: "Open visit sources" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#visit-evidence`, label: "Open visit sources" },
       },
       accountability: {
         id: "accountability",
@@ -2056,7 +2056,7 @@ function buildVendorEvidenceBundle(
         definition: "Unresolved vendor-specific exceptions plus open follow-ups on work currently attributed to this vendor.",
         state: "ready",
         tone: accountabilityCount ? "warning" : "positive",
-        sourceLink: { href: `/app/vendors/${vendor.id}#accountability-evidence`, label: "Open source records" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#accountability-evidence`, label: "Open source records" },
       },
       repeatVisits: {
         id: "repeat-visits",
@@ -2068,7 +2068,7 @@ function buildVendorEvidenceBundle(
         definition: "Work orders with more than one observed visit by this vendor. It is a review fact, not proof of poor work.",
         state: visitedWorkDenominator ? "ready" : "insufficient",
         tone: repeatVisitWorkIds.length ? "warning" : "positive",
-        sourceLink: { href: `/app/vendors/${vendor.id}#repeat-visits`, label: "Open repeat-visit work" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#repeat-visits`, label: "Open repeat-visit work" },
       },
       unresolvedOutcomes: {
         id: "unresolved-outcomes",
@@ -2080,7 +2080,7 @@ function buildVendorEvidenceBundle(
         definition: "Checked-out visits recorded as temporary repair, waiting on parts, return required, unable to complete, or unable to reproduce.",
         state: checkedOutVisits.length ? "ready" : "insufficient",
         tone: unresolvedVisits.length ? "warning" : "positive",
-        sourceLink: { href: `/app/vendors/${vendor.id}#visit-evidence`, label: "Open checkout evidence" },
+        sourceLink: { href: `/app/vendors/${vendor.id}?tab=jobs#visit-evidence`, label: "Open checkout evidence" },
       },
     },
   };
