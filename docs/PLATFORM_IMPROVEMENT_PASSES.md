@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Equipment filter and attention follow-ups (October 2, Claude)
+
+Codex audit of 4c445a7 (568 count-to-record checks passed) reproduced two remaining issues.
+
+- [x] EQ-07 Work-order Equipment filter has three distinct choices: Any equipment, "Needs equipment linked" (`asset=needed`, leaves out site-level work) and "No equipment linked" (`asset=unlinked`, every job without equipment, used by older cost-history links). An older `asset=unlinked` link now shows "No equipment linked" as selected, and clicking it keeps the same 257 jobs on the Render build; "Needs equipment linked" opens 89. Previously the older link showed the other option as selected and clicking it changed the results.
+- [x] EQ-08 Needs attention counts Watch and Out of service equipment, plus any equipment with open work. Retired equipment no longer counts just for being retired. This was older behavior.
+- [x] EQ-09 On phones, choices under "More filters" wrap instead of scrolling sideways, so a selected choice is never hidden off-screen (found during the browser check).
+
+Evidence: db:seed, typecheck, lint, unit suite 195 files / 1,220 tests, workflow suite 4 files / 66 tests, the Sites build and the Render build pass. Two new tests fail on the previous code and pass now. Browser check on the Render build with PostgreSQL at 1440px and 390px: filter selection and results as above, Equipment summary wording, no sideways scroll.
+
 ## Equipment review corrections (October 2, Claude)
 
 Codex review of 1f9e611.

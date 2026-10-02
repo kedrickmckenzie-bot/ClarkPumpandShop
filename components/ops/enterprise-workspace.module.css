@@ -4073,6 +4073,8 @@ a.factItem:hover {
   .contextBar > span:not(:first-child) { display: none; }
   .filterGroup > div { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
   .filterGroup > div > a { flex: 0 0 auto; }
+  /* Under "More filters" every choice stays visible, including a selected one. */
+  .filterMoreGroups .filterGroup > div { flex-wrap: wrap; overflow-x: visible; }
 }
 @media (max-width: 680px) {
   .metricExplorerHeader { display: none; }

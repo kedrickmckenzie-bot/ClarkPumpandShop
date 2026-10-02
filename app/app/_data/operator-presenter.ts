@@ -3477,7 +3477,8 @@ export function buildProgramModel(
       workByAsset.set(work.assetId, list);
     }
     const attentionAssets = scoped.assets.filter((asset) =>
-      asset.status !== "operational" || (workByAsset.get(asset.id) ?? []).some((work) => !terminalWorkStatuses.has(work.status)),
+      // Watch and out of service need a look; retired equipment only does if it still has open work.
+      asset.status === "watch" || asset.status === "out_of_service" || (workByAsset.get(asset.id) ?? []).some((work) => !terminalWorkStatuses.has(work.status)),
     );
     const recentThreshold = new Date(Date.parse(fixture.asOf) - 90 * 24 * 60 * 60 * 1_000).toISOString();
     const recentlyServicedAssets = scoped.assets.filter((asset) =>

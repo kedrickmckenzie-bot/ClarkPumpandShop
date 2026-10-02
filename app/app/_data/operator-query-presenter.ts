@@ -104,13 +104,16 @@ function queryFilters(route: OperatorListRoute, query: OperatorSearchParameters)
   }] : [];
   // Jobs with no equipment chosen yet: their costs are missing from every equipment history until someone links them.
   const selectedAsset = first(query.asset);
-  // Site-level work (snow, lot, cleaning) is left out: it never needs a machine.
+  // Two different questions: "needs equipment linked" leaves out site-level work (snow, lot,
+  // cleaning) that never involves a machine; "no equipment linked" is every job without one
+  // (older cost-history links use it).
   const equipmentGroup = route === "work-orders" && (!selectedAsset || selectedAsset === "unlinked" || selectedAsset === "needed") ? [{
     id: "asset",
     label: "Equipment",
     options: [
       { value: "all", label: "Any equipment", href: hrefWithFilter(route, query, "asset"), selected: !selectedAsset },
-      { value: "needed", label: "Needs equipment linked", href: hrefWithFilter(route, query, "asset", "needed"), selected: selectedAsset === "needed" || selectedAsset === "unlinked" },
+      { value: "needed", label: "Needs equipment linked", href: hrefWithFilter(route, query, "asset", "needed"), selected: selectedAsset === "needed" },
+      { value: "unlinked", label: "No equipment linked", href: hrefWithFilter(route, query, "asset", "unlinked"), selected: selectedAsset === "unlinked" },
     ],
   }] : [];
   const groups = [...statusGroup, ...equipmentGroup];
@@ -139,7 +142,7 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
       : key === "path" ? value.split("|").join(" › ")
       : key === "store" ? "Selected store"
       : key === "region" ? "Selected region"
-      : key === "asset" ? value === "unlinked" ? "Not linked to equipment" : value === "needed" ? "Needs equipment linked" : "Selected equipment"
+      : key === "asset" ? value === "unlinked" ? "No equipment linked" : value === "needed" ? "Needs equipment linked" : "Selected equipment"
       : key === "component" ? value === "unlinked" ? "Not linked to a component" : "Selected component"
       : key === "vendor" ? "Selected vendor"
       : key === "review" && value === "true"

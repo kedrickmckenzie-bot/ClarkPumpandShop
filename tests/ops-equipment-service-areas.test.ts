@@ -113,4 +113,46 @@ describe("equipment by service area", () => {
     for (const id of jobs) expect(regionStores.has(fixture.workOrders.find((work) => work.id === id)!.storeId)).toBe(true);
     expect(Number(metric.value)).toBeLessThan(Number(buildProgramModel(fixture, facilities, "equipment", {}).metrics.find((item) => item.id === "unlinked")!.value));
   });
+  it("keeps older 'all jobs without equipment' links distinct from 'needs equipment linked'", async () => {
+    const { buildQueryListModel } = await import("@/app/app/_data/operator-query-presenter");
+    const repository = createOpsFixtureRepository(fixture);
+    const count = async (query: Record<string, string>) => {
+      let total = 0; let next: Record<string, string> | undefined = query;
+      while (next) { const page = await buildQueryListModel(repository, facilities, "work-orders", next); total += page.table.rows.length; next = page.pagination?.nextHref ? params(page.pagination.nextHref) : undefined; }
+      return total;
+    };
+    const older = await buildQueryListModel(repository, facilities, "work-orders", { asset: "unlinked" });
+    const options = older.filters!.find((filter) => filter.id === "asset")!.options;
+    const selected = options.filter((option) => option.selected);
+    expect(selected.map((option) => [option.value, option.label])).toEqual([["unlinked", "No equipment linked"]]);
+    // Clicking the selected option keeps the same results.
+    expect(params(selected[0].href)).toEqual({ asset: "unlinked" });
+    const needed = options.find((option) => option.value === "needed")!;
+    expect(needed.label).toBe("Needs equipment linked");
+    const all = await count({ asset: "unlinked" }), narrowed = await count(params(needed.href));
+    expect(all).toBe(fixture.workOrders.filter((work) => !work.assetId).length);
+    expect(narrowed).toBeLessThan(all);
+    expect(older.appliedFilters?.map((filter) => filter.label)).toContain("No equipment linked");
+  });
+
+  it("does not treat retired equipment as needing attention unless it has open work", async () => {
+    const { buildProgramModel } = await import("@/app/app/_data/operator-presenter");
+    const copy = structuredClone(fixture);
+    const asset = copy.assets.find((item) => item.status === "operational" && !copy.workOrders.some((work) => work.assetId === item.id))!;
+    asset.status = "retired";
+    const attention = (data: typeof copy) => {
+      const ids = new Set<string>(); let query: Record<string, string> | undefined = { view: "attention" };
+      while (query) { const page = buildProgramModel(data, facilities, "equipment", query); for (const row of page.table?.rows ?? []) ids.add(row.id); query = page.pagination?.nextHref ? params(page.pagination.nextHref) : undefined; }
+      return ids;
+    };
+    expect(attention(copy).has(asset.id)).toBe(false);
+    const metric = buildProgramModel(copy, facilities, "equipment", {}).metrics.find((item) => item.id === "attention")!;
+    expect(Number(metric.value)).toBe(attention(copy).size);
+    const watched = copy.assets.find((item) => item.status === "watch")!;
+    expect(attention(copy).has(watched.id)).toBe(true);
+    const busy = structuredClone(copy);
+    const work = busy.workOrders.find((item) => !["closed", "cancelled", "resolved"].includes(item.status) && item.storeId === asset.storeId)!;
+    work.assetId = asset.id;
+    expect(attention(busy).has(asset.id)).toBe(true);
+  });
 });
