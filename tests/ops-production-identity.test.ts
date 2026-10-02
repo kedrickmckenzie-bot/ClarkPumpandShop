@@ -245,7 +245,8 @@ describe("production identity and organization selection", () => {
     expect(storeQueue.search?.preservedParameters).toContainEqual({name:"store",value:"store-northline-104"});
     const lastOnPage=(await loadListModel("action-center",{lane:"all"})).table.rows.at(-1)!;
     const nextIds=new URL(lastOnPage.href,"https://ops.invalid").searchParams.get("reviewAfter")!.split(",");
-    expect(nextIds.length).toBe(24);
+    // The next-item list is capped at 25; the queue now also carries the inspection awaiting review.
+    expect(nextIds.length).toBe(25);
     const selection=await loadReviewSelection({},nextIds);
     expect(selection.table.rows.some(row=>row.id===nextIds[0])).toBe(true);
     expect(boundary.snapshot).not.toHaveBeenCalled();
@@ -281,7 +282,8 @@ describe("production identity and organization selection", () => {
     const model = await loadDashboardModel();
     const queue=await loadListModel("action-center",{});
     expect(model.metrics.find(row => row.id === "open-exceptions")?.value).toBe(queue.metrics?.find(row=>row.id==="attention-mine")?.value);
-    expect(model.metrics.find(row => row.id === "open-items")?.value).toBe("49");
+    // Includes the one inspection whose results await review.
+    expect(model.metrics.find(row => row.id === "open-items")?.value).toBe("50");
     expect(model.metrics.find(row => row.id === "open-exceptions")?.link?.href).toBe("/app/action-center?lane=mine");
     expect(model.spotlight?.facts.find(row => row.label === "Approved replacement")?.value).toBe("$32,800.00");
     expect(model.equipmentIssues?.rows).toHaveLength(5);

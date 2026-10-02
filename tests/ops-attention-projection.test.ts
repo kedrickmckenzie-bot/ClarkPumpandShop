@@ -26,6 +26,7 @@ describe("shared role-aware attention projection", () => {
     input.fixture.estimateRequests = [];
     input.fixture.estimateProposals = [];
     input.fixture.workOrderVisitHolds = [];
+    input.fixture.inspections = [];
     input.fixture.workflowTasks = Array.from({ length: 225 }, (_, index) => ({
       ...base!,
       id: `attention-scale-${String(index).padStart(3, "0")}`,
@@ -70,6 +71,7 @@ describe("shared role-aware attention projection", () => {
     input.fixture.estimateRequests = [];
     input.fixture.estimateProposals = [];
     input.fixture.workOrderVisitHolds = [];
+    input.fixture.inspections = [];
 
     const items = projectAttentionItems(input);
 
@@ -93,6 +95,7 @@ describe("shared role-aware attention projection", () => {
     input.fixture.exceptions = [];
     input.fixture.vendorReminders = [];
     input.fixture.workOrderVisitHolds = [];
+    input.fixture.inspections = [];
     input.fixture.estimateRequests = [
       { ...baseRequest!, id: "quote-request-a", workOrderId, status: "submitted", dueAt: "2026-08-30T17:00:00.000Z" },
       { ...baseRequest!, id: "quote-request-b", workOrderId, vendorId: "vendor-northline-summit", status: "requested", dueAt: "2026-08-29T17:00:00.000Z" },
