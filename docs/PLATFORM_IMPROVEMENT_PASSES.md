@@ -4,6 +4,25 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Navigation and look pass (October 2, Claude)
+
+User asked whether the platform is easy to look at and navigate. Reviewed ten main screens as facilities and owner at 1440px and 390px, measured page length, and tried the top search with real phrases. Findings: every page opened with a large header card; phone lists were very long (work orders 17 screens, spending 17, equipment 13); the review queue scrolled sideways on phones; search showed job numbers without the problem and missed everyday words, invoices and people; the top bar repeated sidebar information. Nothing was removed; links, permissions and totals are unchanged.
+
+- [x] NV-01 Overview: no review-queue item list for any role (user request). Facilities and regional keep the "Needs your action" tile, the store manager the "Work follow-ups" tile, and owner and finance get an "Open review queue" link.
+- [x] NV-02 Slim page header on list and record pages: title and main action on one row, one quiet scope line, no boxed card.
+- [x] NV-03 Equipment (user request): summary at the top with status first: one status bar and clickable counts in status colors (operational green, watch amber, out of service red; previously out of service showed a green dot), then "21 need attention · 28 need an equipment choice", service areas folded. Was a folded box under 25 rows.
+- [x] NV-04 Phone list rows: label beside value, tighter spacing, job and description full width, then status, store, assignee, equipment, date and cost. Work-order row 576px to 388px. Spending: compact rows and filters folded behind one "Filters" line naming the current choices.
+- [x] NV-05 Phone sideways scroll on the review queue fixed (filter-button rows scroll inside their own box).
+- [x] NV-06 Work orders: the default "Open work" chip is hidden (shown by Active), the extra "Filters" label is gone, Created date moved under More filters; columns reordered to Work order, Status, Store, Description, Assigned to, Equipment, Last update, Cost so status is no longer cut off at 1440px.
+- [x] NV-07 Search: job results show the problem; everyday words also search the platform's terms (gas pump, card reader, credit card machine, air conditioner, fridge); invoices are searchable by number or vendor for roles that can see invoices; people are searchable by name for facilities, regional and owner (opens the open items they handle). Store managers see neither invoices nor people.
+- [x] NV-08 Top bar: the demo-package box and role/stores label (both already in the sidebar) were removed, so the search box is wider.
+
+Measured at 390px (screens of 900px): work orders 16.8 to 11.3, equipment 12.9 to 9.8, Overview 6.2 to 4.7, spending 16.6 to about 14; no page scrolls sideways.
+
+Evidence: typecheck, lint, the Sites build and the Render build pass. Unit suite 1,203/1,204 and workflow suite 65/66; the one failure is the PostgreSQL seed test's 2-minute limit in this container (these changes do not touch the database). Journeys 1-6 re-run and pass. New tests: everyday-word search, invoices and people found for the owner and not for a store manager; two Overview tests updated to the no-list behavior.
+
+Note: after a Render deploy, a page that was already open can show without styling until it is refreshed (the old page points to the previous build's style files). User confirmed a refresh fixed it; no code change needed.
+
 ## Trends change-by switch and inspection queue follow-ups (October 2, Claude)
 
 User approved the "change by" switch and asked whether the Change drivers tab is still needed; an outside review of `890dbc3` found two inspection-queue issues and one wording issue. All three were reproduced in code before fixing.

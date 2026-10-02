@@ -246,3 +246,23 @@
 
 /* Row tools line up with the cell text and keep a gap below. */
 .sourceSection td > a + * { margin: 0 13px 10px; }
+/* Phone spending rows: label beside value, tight spacing; the job and problem span the row. */
+@media (max-width: 520px) {
+  .sourceSection tbody tr { grid-template-columns: minmax(0, 1fr); padding: 6px 0; }
+  .sourceSection td { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: baseline; }
+  .sourceSection td::before { padding: 4px 0 0 13px; }
+  .sourceSection td a { min-height: 30px; padding: 3px 13px 3px 0; }
+  .sourceSection td a > span { display: flex; flex-wrap: wrap; gap: 0 6px; }
+  .sourceSection td:first-child { display: block; }
+  .sourceSection td:first-child::before { content: none; }
+  .sourceSection td:first-child a { padding-left: 13px; }
+  .sourceSection td:first-child a > span { display: grid; }
+}
+.phoneFilters { display: none; }
+@media (max-width: 760px) {
+  .desktopFilters { display: none; }
+  .phoneFilters { display: block; border: 1px solid var(--workspace-border); border-radius: var(--workspace-radius-panel); background: #fff; }
+  .phoneFilters > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 12px 15px; color: #1d4ed8; font-weight: 650; cursor: pointer; }
+  .phoneFilters > summary small { flex-basis: 100%; color: #64748b; font-weight: 500; font-size: 13px; }
+  .phoneFilters > .filters { border: 0; border-top: 1px solid #e5e9ef; border-radius: 0; }
+}

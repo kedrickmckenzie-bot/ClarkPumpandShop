@@ -177,3 +177,28 @@ describe("operator query presenter", () => {
     expect(model.priorityActions.every((item) => item.link.href.startsWith("/app/"))).toBe(true);
   });
 });
+
+describe("workspace search finds what people call things", () => {
+  it("matches everyday words to the platform's terms", async () => {
+    const { vendorSearchTerm } = await import("@/lib/ops/store-vendors");
+    expect(vendorSearchTerm("gas pump")).toBe("dispenser");
+    expect(vendorSearchTerm("Card reader")).toBe("payment terminal");
+    expect(vendorSearchTerm("air conditioner")).toBe("hvac");
+    expect(vendorSearchTerm("fridge")).toBe("refrigeration");
+    expect(vendorSearchTerm("beer cave")).toBe("beer cave");
+    const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const model = await buildQuerySearchModel(repository, session(), { q: "gas pump" });
+    expect(model.groups.find((group) => group.id === "work")?.rows.length).toBeGreaterThan(0);
+  });
+
+  it("finds invoices and people for roles that can see them, and not for a store manager", async () => {
+    const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const owner = await buildQuerySearchModel(repository, session(), { q: "SUM-104" });
+    expect(owner.groups.find((group) => group.id === "invoices")?.rows.map((row) => row.label)).toContain("SUM-104-2611-W");
+    const people = await buildQuerySearchModel(repository, session(), { q: "Robin" });
+    expect(people.groups.find((group) => group.id === "people")?.rows[0]).toMatchObject({ label: "Robin Carter" });
+    const store = session({ role: "store_manager", userId: "user-northline-store-104", membershipId: "membership-northline-store-104", storeIds: ["store-northline-104"] });
+    expect((await buildQuerySearchModel(repository, store, { q: "SUM-104" })).groups.some((group) => group.id === "invoices")).toBe(false);
+    expect((await buildQuerySearchModel(repository, store, { q: "Robin" })).groups.some((group) => group.id === "people")).toBe(false);
+  });
+});

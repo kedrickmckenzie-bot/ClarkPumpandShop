@@ -139,10 +139,19 @@ function BasisBanner({ kind }: { kind: PlanningWorkspaceKind }) {
 
 function Filters({ model }: { model: ProgramPageViewModel }) {
   if (!model.filters?.length) return null;
+  const chosen = model.filters.map((filter) => filter.options.find((option) => option.selected)?.label).filter(Boolean).join(" · ");
+  // Phones: the filters fold behind one line that names the current choices.
+  return <>
+    <details className={styles.phoneFilters}><summary><Filter size={15} aria-hidden="true" />Filters<small>{chosen}</small></summary><FilterRows model={model} /></details>
+    <div className={styles.desktopFilters}><FilterRows model={model} /></div>
+  </>;
+}
+
+function FilterRows({ model }: { model: ProgramPageViewModel }) {
   return (
     <section className={styles.filters} aria-label="Planning filters">
       <span className={styles.filterLabel}><Filter size={15} aria-hidden="true" />View</span>
-      {model.filters.map((filter) => (
+      {(model.filters ?? []).map((filter) => (
         <div key={filter.id}><small>{filter.label}</small><nav aria-label={filter.label}>{filter.options.map((option) => <Link aria-current={option.selected ? "page" : undefined} data-selected={option.selected || undefined} href={option.href} key={option.value}>{option.label}</Link>)}</nav></div>
       ))}
     </section>

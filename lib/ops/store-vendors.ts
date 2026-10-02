@@ -5,7 +5,7 @@ import type { OpsSqlDriver } from "./sql-driver";
 import { scopeWhere } from "./sql-scope";
 import type { ActorContext, OpsFixture } from "./types";
 
-export function vendorSearchTerm(value:string){return value.trim().toLowerCase().replace(/card readers?/g,"payment terminal").replace(/gas pumps?/g,"dispenser").replace(/^gas$/,"fuel").replace(/parking lot potholes?|potholes?/g,"parking lot").replace(/slush(?:ie|y)? machine|slurpee machine|frozen drink machine/g,"refrigeration");}
+export function vendorSearchTerm(value:string){return value.trim().toLowerCase().replace(/credit card machines?|card machines?/g,"payment terminal").replace(/^(a\/c|ac|air ?conditioners?|air ?conditioning)$/,"hvac").replace(/^fridges?$/,"refrigeration").replace(/card readers?/g,"payment terminal").replace(/gas pumps?/g,"dispenser").replace(/^gas$/,"fuel").replace(/parking lot potholes?|potholes?/g,"parking lot").replace(/slush(?:ie|y)? machine|slurpee machine|frozen drink machine/g,"refrigeration");}
 
 export interface StoreVendorPreference {
   id: string; organizationId: string; storeId: string; vendorId: string;

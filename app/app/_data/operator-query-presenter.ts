@@ -14,7 +14,8 @@ import type {
   TableRowViewModel,
   Tone,
 } from "@/components/ops/data-contract";
-import { roleCan, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
+import { roleCan, roleCanAccessListRoute, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
+import { vendorSearchTerm } from "@/lib/ops/store-vendors";
 import { getServerOpsReportingAsOf } from "@/lib/server/ops-repository-provider";
 import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import type { OpsRepository, OrganizationScope } from "@/lib/ops/repository";
@@ -297,7 +298,8 @@ const columns: Record<QueryListRoute, ListPageViewModel["table"]["columns"]> = {
     { key: "request", label: "Request" }, { key: "store", label: "Store" }, { key: "priority", label: "Priority" }, { key: "reported", label: "Reported" }, { key: "status", label: "Status" },
   ],
   "work-orders": [
-    { key: "work", label: "Work order" }, { key: "store", label: "Store" }, { key: "assignment", label: "Assigned to" }, { key: "equipment", label: "Equipment" }, { key: "next", label: "Description" }, { key: "status", label: "Status" }, { key: "updated", label: "Last update" }, { key: "cost", label: "Recorded cost · all history", align: "end" as const },
+    // What it is and where it stands first; who and what equipment next; history and cost last.
+    { key: "work", label: "Work order" }, { key: "status", label: "Status" }, { key: "store", label: "Store" }, { key: "next", label: "Description" }, { key: "assignment", label: "Assigned to" }, { key: "equipment", label: "Equipment" }, { key: "updated", label: "Last update" }, { key: "cost", label: "Recorded cost · all history", align: "end" as const },
   ],
   visits: [
     { key: "visit", label: "Visit" }, { key: "store", label: "Store" }, { key: "vendor", label: "Vendor" }, { key: "work", label: "Work order" }, { key: "observed", label: "Timing" }, { key: "evidence", label: "Evidence" }, { key: "outcome", label: "Outcome" },
@@ -514,15 +516,28 @@ export async function buildQuerySearchModel(repository: OpsRepository, session: 
   const raw = first(query.q)?.trim() ?? "";
   if (!raw) return { state: { kind: "empty", title: "Search the whole operation", message: "Try a store number, address, work order, vendor specialty, equipment tag, serial number, technician, or request." }, page: commonPage(session, "Search the workspace", "One search · Your full scope", "Find a store, work order, request, vendor, visit, or piece of equipment without deciding which module to open first."), query: "", placeholder: "Store, address, work order, vendor, equipment, or serial number", resultSummary: "Enter a search term", groups: [] };
   const scope = scopeFor(session);
-  const [stores, work, vendors, assets, visits, requests] = await Promise.all([
+  // Everyday words ("gas pump", "card reader") also search the platform's own terms ("dispenser", "payment terminal").
+  const plain = vendorSearchTerm(raw), alias = plain !== raw.toLowerCase() ? plain : undefined;
+  const none = { items: [], totalCount: 0, nextCursor: undefined };
+  const withAlias = async <T extends { id: string }>(search: (term: string) => Promise<{ items: T[]; totalCount?: number; nextCursor?: string }>) => {
+    const [main, extra] = await Promise.all([search(raw), alias ? search(alias) : Promise.resolve(undefined)]);
+    if (!extra) return main;
+    const items = [...main.items, ...extra.items.filter((row) => !main.items.some((item) => item.id === row.id))].slice(0, 8);
+    return { items, totalCount: main.totalCount === undefined || extra.totalCount === undefined ? undefined : Math.max(items.length, main.totalCount + extra.totalCount), nextCursor: main.nextCursor ?? extra.nextCursor };
+  };
+  const canSeeInvoices = roleCanAccessListRoute(session.role, "invoices");
+  const canSeePeople = ["executive", "facilities", "regional"].includes(session.role);
+  const [stores, work, vendors, assets, visits, requests, invoices, people] = await Promise.all([
     repository.searchStores(scope, raw, { limit: 8 }),
-    repository.listWorkOrders(scope, { search: raw, limit: 8 }),
+    withAlias((term) => repository.listWorkOrders(scope, { search: term, limit: 8 })),
     repository.listVendors(scope, raw, { limit: 8 }),
-    session.demoEdition === "accountability" ? Promise.resolve({ items: [], totalCount: 0, nextCursor: undefined }) : repository.searchAssets(scope, raw, { limit: 8 }),
-    session.role === "finance" ? Promise.resolve({ items: [], totalCount: 0, nextCursor: undefined }) : repository.listVisits(scope, { search: raw, limit: 8 }),
-    session.demoEdition === "accountability" || session.role === "finance" ? Promise.resolve({ items: [], totalCount: 0, nextCursor: undefined }) : repository.listRequests(scope, { search: raw, limit: 8 }),
+    session.demoEdition === "accountability" ? Promise.resolve(none) : withAlias((term) => repository.searchAssets(scope, term, { limit: 8 })),
+    session.role === "finance" ? Promise.resolve(none) : repository.listVisits(scope, { search: raw, limit: 8 }),
+    session.demoEdition === "accountability" || session.role === "finance" ? Promise.resolve(none) : withAlias((term) => repository.listRequests(scope, { search: term, limit: 8 })),
+    canSeeInvoices ? repository.listInvoiceQueue(scope, { view: "all", search: raw, currency: "USD", limit: 8, offset: 0 }) : Promise.resolve(undefined),
+    canSeePeople && raw.length >= 2 ? repository.listComplianceOwners(session.organizationId, raw) : Promise.resolve([]),
   ]);
-  const totals: Record<string, number | undefined> = { stores: stores.totalCount, work: work.totalCount, vendors: vendors.totalCount, equipment: assets.totalCount, visits: visits.totalCount, requests: requests.totalCount };
+  const totals: Record<string, number | undefined> = { stores: stores.totalCount, work: work.totalCount, vendors: vendors.totalCount, equipment: assets.totalCount, visits: visits.totalCount, requests: requests.totalCount, invoices: invoices?.totalCount, people: people.length };
   const groups = [
     { id: "stores", label: "Stores", rows: stores.items.map(storeRow), resultCount: stores.totalCount ?? stores.items.length, columns: columns.stores, hasMore: Boolean(stores.nextCursor), moreLink: { href: `/app/stores?${new URLSearchParams({ q: raw })}`, label: "Review matching stores" } },
     { id: "work", label: "Work orders", rows: work.items.map(workRow), resultCount: work.totalCount ?? work.items.length, columns: columns["work-orders"], hasMore: Boolean(work.nextCursor), moreLink: { href: `/app/work-orders?${new URLSearchParams({ q: raw })}`, label: "Review matching work orders" } },
@@ -530,6 +545,13 @@ export async function buildQuerySearchModel(repository: OpsRepository, session: 
     ...(session.demoEdition === "accountability" ? [] : [{ id: "equipment", label: "Equipment", rows: assets.items.map(searchAssetRow), resultCount: assets.totalCount ?? assets.items.length, columns: [{ key: "result", label: "Equipment" }, { key: "context", label: "Store and equipment classification" }, { key: "serial", label: "Serial number" }, { key: "status", label: "Operating state" }], hasMore: Boolean(assets.nextCursor), moreLink: { href: `/app/equipment?${new URLSearchParams({ q: raw })}`, label: "Review matching equipment" } }]),
     ...(session.role === "finance" ? [] : [{ id: "visits", label: "Service visits", rows: visits.items.map(visitRow), resultCount: visits.totalCount ?? visits.items.length, columns: columns.visits, hasMore: Boolean(visits.nextCursor), moreLink: { href: `/app/visits?${new URLSearchParams({ q: raw })}`, label: "Review matching visits" } }]),
     ...(session.demoEdition === "accountability" || session.role === "finance" ? [] : [{ id: "requests", label: "Requests", rows: requests.items.map(requestRow), resultCount: requests.totalCount ?? requests.items.length, columns: columns.requests, hasMore: Boolean(requests.nextCursor), moreLink: { href: `/app/requests?${new URLSearchParams({ q: raw })}`, label: "Review matching requests" } }]),
+    ...(invoices ? [{ id: "invoices", label: "Invoices", rows: invoices.rows.map((row): TableRowViewModel => ({ id: row.invoiceId, label: row.number, href: `/app/invoices/${encodeURIComponent(row.invoiceId)}`, cells: [
+      { key: "result", value: row.number, secondary: [row.vendorName, row.storeCount > 1 ? `${row.storeCount} stores` : row.storeNumber ? `Store ${row.storeNumber}` : undefined].filter(Boolean).join(" · ") },
+      { key: "context", value: money(row.amount.amountMinor, row.amount.currency), secondary: row.openFlags ? `${row.openFlags} open ${row.openFlags === 1 ? "flag" : "flags"}` : undefined },
+    ] })), resultCount: invoices.totalCount, columns: [{ key: "result", label: "Invoice" }, { key: "context", label: "Total" }], hasMore: invoices.nextOffset !== undefined, moreLink: { href: `/app/invoices?${new URLSearchParams({ q: raw })}`, label: "Review matching invoices" } }] : []),
+    ...(people.length ? [{ id: "people", label: "People", rows: people.slice(0, 8).map((person): TableRowViewModel => ({ id: person.id, label: person.name, href: `/app/action-center?${new URLSearchParams({ lane: "all", q: person.name })}`, cells: [
+      { key: "result", value: person.name, secondary: "Team member · open items they handle" },
+    ] })), resultCount: people.length, columns: [{ key: "result", label: "Person" }], hasMore: false, moreLink: { href: `/app/action-center?${new URLSearchParams({ lane: "all", q: raw })}`, label: "Search the review queue" } }] : []),
   ].filter((group) => group.rows.length > 0).map((group) => ({ ...group,
     countIsLowerBound: group.hasMore && totals[group.id] === undefined,
     rows: group.rows.map((row) => ({ ...row, cells: row.cells.map((cell) => cell.link && !roleCanOpenOperatorHref(session.role, cell.link.href) ? { ...cell, link: undefined } : cell) })) }));

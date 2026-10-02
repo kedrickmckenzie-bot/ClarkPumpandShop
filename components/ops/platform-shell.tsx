@@ -11,7 +11,6 @@ import {
   BarChart3,
   ChevronDown,
   ClipboardList,
-  Layers3,
   LayoutDashboard,
   Menu,
   PanelLeftClose,
@@ -20,13 +19,12 @@ import {
   Settings2,
   Store,
   Truck,
-  UsersRound,
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { productPresentation, productThemeVariables } from "@/lib/product/presentation";
 import type { DemoEdition, OperatorSession } from "./data-contract";
-import { DEFAULT_DEMO_EDITION, demoEditionPresentation } from "./demo-edition";
+import { DEFAULT_DEMO_EDITION } from "./demo-edition";
 import {
   contextualNavigationForPath,
   navigationForRole,
@@ -357,21 +355,7 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
 
             <WorkspaceSearch placeholder={edition === "accountability" ? "Search work orders, visits, stores, or vendors" : "Search a store, work order, vendor, or equipment"} />
 
-            {session.accessMode !== "authenticated" ? <div className={styles.editionIndicator} aria-label={`Demo package: ${demoEditionPresentation[edition].label}`}>
-              <Layers3 aria-hidden="true" size={17} />
-              <span>
-                <small>Demo package</small>
-                <strong>{demoEditionPresentation[edition].label}</strong>
-              </span>
-            </div> : null}
-
-            <div className={styles.topbarContext} aria-label={session.accessMode === "authenticated" ? "Current role and access scope" : "Current preview role and access scope"}>
-              <UsersRound aria-hidden="true" size={18} />
-              <span>
-                <strong>{roleLabel(session.role)}</strong>
-                <small>{session.scopeLabel}</small>
-              </span>
-            </div>
+            {/* Company, demo package and your role are shown once, in the sidebar. */}
             <CreateMenu session={session} edition={edition} />
           </header>
           {!isRecordDetailPath(pathname) ? (
