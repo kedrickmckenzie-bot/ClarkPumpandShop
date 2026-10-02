@@ -48,6 +48,19 @@ describe("shared role-aware attention projection", () => {
     ]));
   });
 
+  it("shows one row per inspection awaiting review, even when its job also has a confirm task", () => {
+    const input = projectionInput();
+    const inspection = input.fixture.inspections!.find((row) => row.status === "performed")!;
+    const work = input.fixture.workOrders.find((row) => row.storeId === inspection.storeId)!;
+    inspection.workOrderId = work.id;
+    const base = input.fixture.workflowTasks.find((task) => task.workOrderId)!;
+    input.fixture.workflowTasks = [{ ...base, id: "task-confirm-inspection-job", workOrderId: work.id, serviceRequestId: undefined, taskType: "verify_repair", assigneeType: "role", status: "open", sourceFollowUpId: undefined, sourceApprovalRequestId: undefined }];
+    const rows = (items: ReturnType<typeof projectAttentionItems>) => items.filter((item) => item.id === inspection.id || item.id === "task-confirm-inspection-job").map((item) => item.id);
+    expect(rows(projectAttentionItems(input))).toEqual(["task-confirm-inspection-job"]);
+    input.fixture.workflowTasks[0].status = "completed";
+    expect(rows(projectAttentionItems(input))).toEqual([inspection.id]);
+  });
+
   it("groups a task and its source follow-up without losing either durable identity", () => {
     const input = projectionInput();
     const baseTask = input.fixture.workflowTasks.find((task) => task.workOrderId);

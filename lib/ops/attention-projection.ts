@@ -94,6 +94,8 @@ export interface AttentionProjectionInput {
 
 /** Who reviews recorded inspection results (matches the approval rule in compliance). Executives see them as team work. */
 export const INSPECTION_REVIEW_ROLES = new Set<OrganizationRole>(["facilities_admin", "regional_manager", "executive"]);
+/** Tasks on an inspection's job that mean "review the result"; their queue rows open the inspection. */
+export const INSPECTION_RESULT_TASK_TYPES = ["record_service_outcome", "verify_repair", "close_verified_work"] as const;
 export const INSPECTION_REVIEW_REASON = "Results were recorded. Review the findings and paperwork, then approve or send back.";
 /** The SQL query appends the schedule name to `inspectionReviewTitle("")`, so the name stays last. */
 export function inspectionReviewTitle(name: string) { return `Review inspection results: ${name}`; }
@@ -282,6 +284,8 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
   const inspectionItems = INSPECTION_REVIEW_ROLES.has(input.role)
     ? (fixture.inspections ?? [])
         .filter((inspection) => inspection.organizationId === organizationId && inspection.status === "performed" && storeIds.has(inspection.storeId))
+        // One row per inspection: an open result-review task on its job already opens the inspection.
+        .filter((inspection) => !inspection.workOrderId || !taskItems.some((task) => task.workOrderId === inspection.workOrderId && INSPECTION_RESULT_TASK_TYPES.includes(task.taskType as never)))
         .map<AttentionProjectionItem>((inspection) => {
           const schedule = (fixture.complianceSchedules ?? []).find((row) => row.organizationId === organizationId && row.id === inspection.scheduleId);
           const dueAt = inspectionReviewDueAt(inspection.dueDate);

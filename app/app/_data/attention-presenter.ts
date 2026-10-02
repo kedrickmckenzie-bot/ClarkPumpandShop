@@ -6,6 +6,7 @@ import type { AttentionAccess, AttentionQueueRow } from "@/lib/ops/attention-que
 import type { ExceptionKind } from "@/lib/ops/types";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { workflowTaskActionLabel } from "@/lib/ops/workflow-task-destination";
+import { INSPECTION_RESULT_TASK_TYPES } from "@/lib/ops/attention-projection";
 
 export function attentionAccess(session: OperatorSession): AttentionAccess {
   return {
@@ -57,7 +58,7 @@ export function presentAttentionRow(item: AttentionQueueRow, asOf: string): Acti
 }
 
 
-const INSPECTION_RESULT_TASKS = new Set<string>(["record_service_outcome", "verify_repair", "close_verified_work"]);
+const INSPECTION_RESULT_TASKS = new Set<string>(INSPECTION_RESULT_TASK_TYPES);
 
 /**
  * Result-review rows for inspection work (record the outcome, confirm, close) open the

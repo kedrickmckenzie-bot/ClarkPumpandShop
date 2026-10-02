@@ -19,8 +19,16 @@ export async function attentionQueryRegression(repository: OpsRepository, fixtur
   // Recorded inspection results reach reviewers, open the inspection, and never reach store or finance users.
   const performed = (fixture.inspections ?? []).filter(row => row.organizationId === organizationId && row.status === "performed");
   expect(performed.length).toBeGreaterThan(0);
-  const reviews = (await repository.listAttention({ organizationId }, access, query)).items.filter(row => row.sourceKind === "inspection_review");
-  expect(reviews.map(row => row.id).sort()).toEqual(performed.map(row => row.id).sort());
+  const queue = (await repository.listAttention({ organizationId }, access, query)).items;
+  const reviews = queue.filter(row => row.sourceKind === "inspection_review");
+  const resultTasks = new Set(["record_service_outcome", "verify_repair", "close_verified_work"]);
+  // Exactly one queue row per inspection: its own item, or the job's result-review task (which opens the inspection).
+  for (const inspection of performed) {
+    const own = reviews.filter(row => row.id === inspection.id).length;
+    const viaTask = queue.filter(row => row.workOrderId && row.workOrderId === inspection.workOrderId && resultTasks.has(row.taskType ?? "")).length;
+    expect(own + Math.min(viaTask, 1), inspection.id).toBe(1);
+    if (viaTask) expect(own, inspection.id).toBe(0);
+  }
   expect(reviews.every(row => row.linkHref === `/app/compliance/${encodeURIComponent(row.id)}` && row.lane === "mine" && row.title.startsWith("Review inspection results: "))).toBe(true);
   for (const role of ["store_manager", "finance_reviewer"] as const) {
     expect((await repository.listAttention({ organizationId }, { ...access, role }, query)).items.some(row => row.sourceKind === "inspection_review"), role).toBe(false);
