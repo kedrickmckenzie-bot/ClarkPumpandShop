@@ -151,6 +151,21 @@ export function roleCan(subject: OperatorRole | Pick<OperatorSession, "role" | "
   return demoOperatorRolePolicy[role].capabilities.includes(capability);
 }
 
+/** Roles whose access is normally limited to assigned regions or stores. */
+const LOCATION_SCOPED_ROLES = new Set<OperatorRole>(["regional", "store_manager"]);
+
+/**
+ * Whether a session may see no stores at all. An explicitly empty region or store
+ * list means none. A location-scoped role with neither list sees none unless sign-in
+ * confirmed a companywide grant (for example a field manager covering every store),
+ * so a missing list never widens access.
+ */
+export function sessionHasNoStores(session: Pick<OperatorSession, "role" | "regionIds" | "storeIds" | "companywide">) {
+  if (session.regionIds?.length === 0 || session.storeIds?.length === 0) return true;
+  const unlisted = session.regionIds === undefined && session.storeIds === undefined;
+  return unlisted && LOCATION_SCOPED_ROLES.has(session.role) && session.companywide !== true;
+}
+
 export function roleCanAccessListRoute(role: OperatorRole, route: OperatorListRoutePolicyId) {
   return demoOperatorRolePolicy[role].listRoutes.includes(route);
 }

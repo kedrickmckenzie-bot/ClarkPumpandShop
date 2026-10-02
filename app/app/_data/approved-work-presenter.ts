@@ -233,8 +233,6 @@ function visibleStoresForSession(fixture: OpsFixture, session: OperatorSession) 
   if (session.regionIds !== undefined) {
     const regionIds = new Set(session.regionIds);
     stores = stores.filter((store) => Boolean(store.regionId && regionIds.has(store.regionId)));
-  } else if (session.role === "regional") {
-    stores = [];
   }
   if (session.storeIds !== undefined) {
     const storeIds = new Set(session.storeIds);

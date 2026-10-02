@@ -23,6 +23,8 @@ export interface OperatorSession {
   scopeLabel: string;
   regionIds?: string[];
   storeIds?: string[];
+  /** Set by sign-in only when a companywide grant exists; never inferred from missing lists. */
+  companywide?: boolean;
   permissions?: string[];
   /** Server-resolved organization policy; UI visibility mirrors command authorization. */
   effectiveCapabilities?: string[];

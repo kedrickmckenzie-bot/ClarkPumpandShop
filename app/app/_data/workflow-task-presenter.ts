@@ -1,3 +1,4 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE, warrantyTaskHref } from "@/lib/ops/warranty-review";
 import "server-only";
 
@@ -231,8 +232,7 @@ export function buildWorkflowTaskWorkspaceModel(
     store
     && (session.storeIds === undefined || session.storeIds.includes(store.id))
     && (session.regionIds === undefined || Boolean(store.regionId && session.regionIds.includes(store.regionId)))
-    && !(session.role === "store_manager" && !session.storeIds?.length)
-    && !(session.role === "regional" && !session.regionIds?.length)
+    && !sessionHasNoStores(session)
   );
   if (!storeInScope) return emptyWorkspace(false);
 

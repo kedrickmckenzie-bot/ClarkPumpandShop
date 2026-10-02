@@ -1,3 +1,4 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { warrantyCorrectionTerms } from "@/lib/ops/warranty-review";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import { roleCan, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
@@ -41,7 +42,7 @@ export function buildEquipmentReview(fixture: OpsFixture, session: OperatorSessi
   const store = asset && fixture.stores.find((row) => row.organizationId === org && row.id === asset.storeId);
   if (!asset || !store || !roleCanOpenOperatorHref(session.role, `/app/equipment/${assetId}`)) return null;
   if (session.storeIds !== undefined && !session.storeIds.includes(store.id) || session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return null;
-  if (session.role === "store_manager" && !session.storeIds?.length || session.role === "regional" && !session.regionIds?.length) return null;
+  if (sessionHasNoStores(session)) return null;
   const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
   const selectedId = first(query.component);
   const months = first(query.history) === "24" ? 24 : first(query.history) === "all" ? undefined : 12;

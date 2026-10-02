@@ -496,12 +496,10 @@ function scopeFixture(fixture: OpsFixture, session: OperatorSession): ScopedFixt
     const regionIds = new Set(session.regionIds);
     stores = stores.filter((store) => Boolean(store.regionId && regionIds.has(store.regionId)));
   }
-  if (session.role === "regional" && !session.regionIds?.length) stores = [];
   if (session.storeIds !== undefined) {
     const permittedStoreIds = new Set(session.storeIds);
     stores = stores.filter((store) => permittedStoreIds.has(store.id));
   }
-  if (session.role === "store_manager" && !session.storeIds?.length) stores = [];
 
   const storeIds = new Set(stores.map((store) => store.id));
   return {

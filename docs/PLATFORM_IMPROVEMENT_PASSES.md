@@ -27,6 +27,13 @@ Rules that bound this work: one canonical work order for internal, outside and b
   - **Live data:**
     - PostgreSQL migration 0066 allows the new stored role.
     - An insert-only step on start adds the field manager to an already-seeded preview (Render and D1). It never overwrites: checked on a local copy, a later edit to his name survived a rerun.
+  - **Scope fix after Codex review:**
+    - The finding: about ten older screen checks treated "regional role without regions" (and "store manager without stores") as no access. They ignored a companywide grant, so the companywide field manager saw 0 equipment and "Unavailable" verification, even though the work list loaded.
+    - The fix: every one of those checks now uses one rule, `sessionHasNoStores`.
+      - An explicitly empty store or region list means no access.
+      - A regional or store-manager session with neither list sees nothing unless sign-in set `companywide: true` from an actual organization grant (preview and authenticated resolvers). A missing list therefore never widens access, and the existing fail-closed Trends test still holds.
+    - Screens covered: Equipment, verification, workflow tasks, equipment review, work review, lifecycle, warranty finance, setup, Trends, approved work and the request context.
+    - New tests sign in the field manager through the real membership resolver as companywide, one region, one store and no stores (no stores cannot sign in; an explicitly empty scope shows nothing). The companywide and one-store cases fail on the previous code.
   - **Known gaps for later items:** in the demo data Maria Santos has one open job and Devon Price none (IM-03 assignment will let managers give them work). A technician's job page still shows the "Prices & costs" tab and an action button that leads to the job's task history (recording results arrives in IM-05).
   - **Evidence:**
     - db:seed, typecheck, lint, unit 197 files / 1,230 tests, workflow 66 tests, Sites and Render builds pass.
@@ -37,7 +44,7 @@ Rules that bound this work: one canonical work order for internal, outside and b
 - [ ] IM-04 "My day" for technicians: assigned jobs grouped by store, most urgent first, plus "next visit" held items at those stores.
 - [ ] IM-05 Check-in/out attributed to the signed-in technician through the existing visit commands: pick up extra team jobs and held items at the store; one outcome per job (fixed, needs more work, needs an outside vendor) with notes and photos; unresolved outcomes create the follow-up atomically; check-in with no matching job creates a reviewable unmatched visit. Managers can record a result on a technician's behalf, visibly attributed.
 - [ ] IM-06 "Needs an outside vendor" returns the same work order to the field or facilities manager with the technician's findings; a manager with authority issues it to a vendor within existing approval limits. Internal costs stay separate from the vendor invoice.
-- [ ] IM-07 "Next visit" held items as lightweight work orders on the existing held-work behavior (extended to internal providers): store and problem required, equipment optional, review deadline, clearly labeled and kept out of headline open-work counts unless filtered; a manager can close one as not needed. Store managers add them as requests marked "next visit is fine". Urgent problems never wait for a visit.
+- [ ] IM-07 "Next visit" held items as lightweight work orders on the existing held-work behavior (extended to internal providers): store and problem required, equipment optional, review deadline, clearly labeled. They are included in All open work and kept out of "Needs my action" until an action is actually required (agreed with the user; corrected October 2 after Codex review). A manager can close one as not needed. Store managers add them as requests marked "next visit is fine". Urgent problems never wait for a visit.
 - [ ] IM-08 Add nearby work to a trip: when the field manager assigns a technician to a store, suggest unassigned team jobs, held items and inspections coming due at other stores within a company distance setting (store coordinates, labeled "about N mi"); never urgent jobs or work assigned to someone else; nothing is added without confirmation.
 - [ ] IM-09 Work → Team board: who has what, overdue work, held items waiting per store, reassign. Facilities manager sees all teams; field manager sees their own.
 - [ ] IM-10 Company setting: technician check-in optional (default) or required for in-house work, with a recorded manager override.

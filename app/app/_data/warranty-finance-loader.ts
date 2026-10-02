@@ -1,4 +1,5 @@
 import "server-only";
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { scopedInvoiceRecords } from "@/lib/ops/dashboard-cohorts";
 
 import { notFound } from "next/navigation";
@@ -13,7 +14,7 @@ export async function loadWarrantyFinanceWorkspace(input: { warrantyCaseId?: str
   const allowedStore = (storeId: string) => {
     const store = fixture.stores.find((row) => row.organizationId === organizationId && row.id === storeId);
     if (!store) return false;
-    if (session.role === "store_manager" && !session.storeIds?.length || session.role === "regional" && !session.regionIds?.length) return false;
+    if (sessionHasNoStores(session)) return false;
     if (session.storeIds !== undefined && !session.storeIds.includes(store.id)) return false;
     if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
     return true;

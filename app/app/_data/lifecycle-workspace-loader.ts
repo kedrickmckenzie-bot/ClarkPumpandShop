@@ -1,3 +1,4 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { buildDecisionContext } from "./decision-context";
 import { roleCanAccessProgramRoute } from "@/components/ops/role-policy";
@@ -72,7 +73,7 @@ function visibleAsset(fixture: OpsFixture, session: OperatorSession, assetId: st
   if (!asset) return undefined;
   const store = fixture.stores.find((row) => row.organizationId === session.organizationId && row.id === asset.storeId);
   if (!store) return undefined;
-  if (session.role === "store_manager" && !session.storeIds?.length || session.role === "regional" && !session.regionIds?.length) return undefined;
+  if (sessionHasNoStores(session)) return undefined;
   if (session.storeIds && !session.storeIds.includes(store.id)) return undefined;
   if (session.regionIds && (!store.regionId || !session.regionIds.includes(store.regionId))) return undefined;
   return { asset, store };

@@ -171,9 +171,11 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
       : role === "finance"
         ? `${organizationName} companywide · review-only financial scope`
         : `${organizationName} companywide · ${scopedStores.totalCount ?? scopedStores.items.length} stores`;
+  const companywide = grants.some((grant) => grant.scopeKind === "organization" && grant.scopeId === NORTHLINE_ORGANIZATION_ID);
   return {
     accessMode: "preview",
     ...(persona ? { persona } : {}),
+    ...(companywide ? { companywide: true } : {}),
     userId: personaUser.id,
     membershipId: membership?.id,
     displayName: personaUser.displayName,

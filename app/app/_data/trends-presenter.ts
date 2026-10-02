@@ -1,3 +1,4 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { cachedDateTimeFormat, cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
 import { buildMaintenancePlan } from "@/lib/ops/maintenance-plan";
@@ -514,8 +515,7 @@ function assetExposedOnLocalDate(asset: Asset, localDate: string, storeTimeZone:
 function allowedStores(fixture: OpsFixture, session: OperatorSession) {
   // Location-scoped roles must fail closed when their expected grant is
   // missing. An absent grant can never mean companywide access.
-  if (session.role === "store_manager" && !session.storeIds?.length) return [];
-  if (session.role === "regional" && !session.regionIds?.length) return [];
+  if (sessionHasNoStores(session)) return [];
   const regionIds = session.regionIds !== undefined ? new Set(session.regionIds) : undefined;
   const storeIds = session.storeIds !== undefined ? new Set(session.storeIds) : undefined;
   return fixture.stores.filter((store) =>

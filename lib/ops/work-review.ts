@@ -1,3 +1,4 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE } from "./warranty-review";
 import type { OperatorSession } from "@/components/ops/data-contract";
@@ -76,7 +77,7 @@ export function workOutcomeEvidence(work: Pick<WorkOrderDetailView, "id" | "visi
  * Lists of other equipment work are capped and use repository pagination; no tenant snapshot. */
 export async function loadWorkReview(repository: OpsRepository, session: OperatorSession, workOrderId: string, now: string): Promise<WorkReviewModel | null> {
   if (!roleCanAccessDetailRoute(session.role, "work-order")) return null;
-  if (session.role === "store_manager" && !session.storeIds?.length || session.role === "regional" && !session.regionIds?.length) return null;
+  if (sessionHasNoStores(session)) return null;
   const scope: OrganizationScope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
   const work = await repository.getWorkOrderDetail(scope, workOrderId);
   if (!work) return null;

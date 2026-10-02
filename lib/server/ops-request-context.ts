@@ -1,4 +1,5 @@
 import "server-only";
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 
 import type { OperatorRole } from "@/components/ops/data-contract";
 import { roleCan, type OperatorCapability } from "@/components/ops/role-policy";
@@ -76,12 +77,8 @@ export async function assertStoreInSessionScope(
   if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) {
     throw new OpsDomainError("FORBIDDEN", "Store is outside your assigned region.");
   }
-  if (session.role === "store_manager" && !session.storeIds?.length && session.accessMode !== "authenticated") {
-    throw new OpsDomainError("FORBIDDEN", "No store scope is assigned to this role.");
-  }
-  // The field manager uses regional access but may cover the whole company.
-  if (session.role === "regional" && !session.persona && !session.regionIds?.length && session.accessMode !== "authenticated") {
-    throw new OpsDomainError("FORBIDDEN", "No region scope is assigned to this role.");
+  if (sessionHasNoStores(session)) {
+    throw new OpsDomainError("FORBIDDEN", "No stores are assigned to your account.");
   }
   return store;
 }

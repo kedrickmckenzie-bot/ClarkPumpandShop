@@ -1,4 +1,5 @@
 import "server-only";
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 
 import type { OperatorRole, OperatorSession, Tone } from "@/components/ops/data-contract";
 import type {
@@ -95,8 +96,7 @@ function storeInScope(fixture: OpsFixture, session: OperatorSession, workOrder: 
   ));
   if (!store) return false;
   if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
-  if (session.role === "store_manager" && !session.storeIds?.length) return false;
-  if (session.role === "regional" && !session.regionIds?.length) return false;
+  if (sessionHasNoStores(session)) return false;
   return true;
 }
 

@@ -59,7 +59,7 @@ export async function resolveAuthenticatedOperatorSession(repository: OpsReposit
   const scopeLabel = !companywide && storeIds.length === 1 && first
     ? `Store ${first.storeNumber} · ${first.name}`
     : `${companywide ? organization.name + " companywide" : regionIds?.length === 1 ? first?.regionName ?? "Assigned region" : "Assigned stores"} · ${stores.totalCount ?? storeIds.length} stores`;
-  return { ...scope, userId: user.id, membershipId: membership.id, displayName: user.displayName, email: user.email,
+  return { ...scope, ...(companywide ? { companywide: true } : {}), userId: user.id, membershipId: membership.id, displayName: user.displayName, email: user.email,
     role, ...(persona ? { persona } : {}), organizationName: organization.name, scopeLabel, permissions: readable.map(grant => grant.permission),
     effectiveCapabilities: writable ? policy.capabilities : [], capabilityWarnings: policy.warnings, demoEdition: "complete", accessMode: "authenticated" };
 }
