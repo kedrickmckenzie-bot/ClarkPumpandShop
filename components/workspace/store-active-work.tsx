@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { oneLine } from "@/lib/product/one-line";
+import { providerKindLabel, providerName } from "@/lib/product/provider-label";
 import { roleCanAccessListRoute } from "@/components/ops/role-policy";
 import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import { completionSummary } from "@/lib/ops/work-order-outcome";
@@ -65,7 +66,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
         <thead><tr><th>Job</th><th>Who&apos;s handling it</th><th>Next step</th><th>Due</th></tr></thead>
         <tbody>{rows.map((work) => <tr key={work.id}>
           <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(work.id)}`}>{oneLine(work.problem)}</Link><p className={styles.muted}>{work.number}{work.priority === "urgent" || work.priority === "emergency" ? ` · ${work.priority === "urgent" ? "Urgent" : "Emergency"}` : ""}</p></td>
-          <td data-label="Who's handling it">{work.accountableParty}{work.vendorName && work.vendorName !== work.accountableParty ? <p className={styles.muted}>Vendor: {work.vendorName}</p> : null}</td>
+          <td data-label="Who's handling it">{work.accountableParty}{work.assignmentKind !== "choose_later" ? <p className={styles.muted}>{providerKindLabel(work.assignmentKind)}: {providerName({ kind: work.assignmentKind, vendorName: work.vendorName, internalName: work.internalAssigneeName })}</p> : null}</td>
           <td data-label="Next step">{work.nextAction}</td>
           <td data-label="Due">{work.dueAt ? <>{formatOperationsDateTime(work.dueAt, store.timeZone)}{work.dueAt < nowIso ? <p className={styles.muted}>Overdue</p> : null}</> : "No date"}</td>
         </tr>)}</tbody>

@@ -346,7 +346,7 @@ function ServicePathChoice({
       {control.assignment?.kind === "internal" ? (
         <div className={styles.internalAssignment}>
           <span><Wrench aria-hidden="true" size={18} /></span>
-          <div><small>Current fulfillment</small><strong>Internal maintenance</strong><p>{control.assignment.providerLabel} · {sentence(control.assignment.status)}</p></div>
+          <div><small>Internal maintenance</small><strong>{control.assignment.providerLabel}</strong><p>{sentence(control.assignment.status)}</p></div>
         </div>
       ) : null}
       <div className={styles.choiceGuardrail}>
@@ -664,7 +664,7 @@ export function WorkOrderCase({
           {/* The facts needed to act, on every tab: what is wrong, who has it, and what last happened. */}
           {activeView !== "overview" ? <dl className={styles.headerContext}>
             <div><dt>Problem</dt><dd>{originalRequest?.description ?? model.page.description}</dd></div>
-            <div><dt>Handled by</dt><dd>{assigned?.value ?? "Not assigned yet"}</dd></div>
+            <div><dt>Handled by</dt><dd>{assigned ? `${assigned.value}${assigned.helperText ? ` · ${assigned.helperText}` : ""}` : "Not assigned yet"}</dd></div>
             {latestUpdate ? <div><dt>Latest update</dt><dd>{latestUpdate.title}{latestUpdate.timestampLabel ? ` · ${latestUpdate.timestampLabel}` : ""}</dd></div> : null}
           </dl> : null}
           <small>Internal owner: {canonicalCase.internalAccountableParty}</small>

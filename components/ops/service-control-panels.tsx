@@ -1,4 +1,5 @@
 "use client";
+import { providerKindLabel } from "@/lib/product/provider-label";
 
 import type { FormEvent, ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -575,7 +576,7 @@ export function WorkOrderControlPanel({ model }: { model: WorkOrderControlViewMo
       {model.pendingApproval ? <PendingApprovalPanel approval={model.pendingApproval} /> : null}
       {model.assignment ? (
         <div className={styles.handoffStatus}>
-          <span><small>Current provider route</small><strong>{model.assignment.providerLabel}</strong><p>{model.assignment.kind === "outside_vendor" ? "Outside vendor" : model.assignment.kind === "internal" ? "Internal maintenance" : "Provider not selected"} · {domainLabel(model.assignment.status)}</p></span>
+          <span><small>Current provider route</small><strong>{model.assignment.providerLabel}</strong><p>{model.assignment.kind === "choose_later" ? "Provider not selected" : providerKindLabel(model.assignment.kind)} · {domainLabel(model.assignment.status)}</p></span>
           <span><small>Assigned</small><strong>{model.assignment.assignedLabel}</strong></span>
         </div>
       ) : null}

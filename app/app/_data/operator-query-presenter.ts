@@ -1,3 +1,4 @@
+import { providerKindLabel, providerName, providerTag } from "@/lib/product/provider-label";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { workStatusLabel } from "@/lib/product/work-status-label";
 import { workWarrantyMarkers } from "@/lib/ops/work-warranty-review";
@@ -222,7 +223,7 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
     cells: [
       { key: "work", value: row.number },
       { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
-      { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: row.vendorName ?? (row.assignmentKind === "internal" ? "Internal maintenance" : "Choose later") },
+      { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: providerName({ kind: row.assignmentKind, vendorName: row.vendorName, internalName: row.internalAssigneeName }), secondary: row.assignmentKind === "choose_later" ? undefined : providerKindLabel(row.assignmentKind), providerTag: providerTag(row.assignmentKind) },
       { key: "equipment", value: row.assetName ?? "Not linked", secondary: row.assetTag },
       { key: "next", expandable: true, value: row.problem, secondary: `${row.accountableParty}${row.dueAt ? ` · Follow up ${formatOperationsDate(row.dueAt)}` : ""}` },
       { key: "cost", value: row.recordedCostLineCount === 0 ? "Not recorded" : money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
@@ -301,7 +302,7 @@ function visitRow(row: VisitListRow): TableRowViewModel {
   return { id: row.id, label: `${row.providerName} visit`, href: `/app/visits/${row.id}`, cells: [
     { key: "visit", value: row.technicianName, secondary: row.purpose },
     { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
-    { key: "vendor", value: row.providerName, link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined },
+    { key: "vendor", value: row.providerName, secondary: providerKindLabel(row.providerKind), providerTag: providerTag(row.providerKind), link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined },
     { key: "work", value: row.workOrders?.length ? row.workOrders.map((work) => work.number).join(" · ") : row.workOrderNumber ?? "No work order linked", secondary: row.workOrders?.length === 1 ? row.workOrders[0].problem : row.workOrders?.length ? `${row.workOrders.length} linked jobs; each has its own outcome` : row.arrivalNote, link: row.workOrders?.length === 1 ? { href: `/app/work-orders/${row.workOrders[0].id}`, label: "Open work order" } : row.workOrders?.length ? { href: `/app/visits/${row.id}`, label: "Review all linked jobs" } : row.workOrderId ? { href: `/app/work-orders/${row.workOrderId}`, label: "Open work order" } : { href: `/app/visits/${row.id}`, label: "Review visit and work-order links" } },
     { key: "observed", value: observed, secondary: "Store-local display · approximate presence, not labor" },
     { key: "evidence", value: sentence(row.locationResult), tone: row.locationResult === "verified" ? "positive" : "warning" },
@@ -318,7 +319,7 @@ const columns: Record<QueryListRoute, ListPageViewModel["table"]["columns"]> = {
     { key: "work", label: "Work order" }, { key: "status", label: "Status" }, { key: "store", label: "Store" }, { key: "next", label: "Description" }, { key: "assignment", label: "Assigned to" }, { key: "equipment", label: "Equipment" }, { key: "updated", label: "Last update" }, { key: "cost", label: "Recorded cost · all history", align: "end" as const },
   ],
   visits: [
-    { key: "visit", label: "Visit" }, { key: "store", label: "Store" }, { key: "vendor", label: "Vendor" }, { key: "work", label: "Work order" }, { key: "observed", label: "Timing" }, { key: "evidence", label: "Evidence" }, { key: "outcome", label: "Outcome" },
+    { key: "visit", label: "Visit" }, { key: "store", label: "Store" }, { key: "vendor", label: "Who visited" }, { key: "work", label: "Work order" }, { key: "observed", label: "Timing" }, { key: "evidence", label: "Evidence" }, { key: "outcome", label: "Outcome" },
   ],
   stores: [
     { key: "store", label: "Store" }, { key: "region", label: "Region" }, { key: "address", label: "Address" }, { key: "work", label: "Open work", align: "end" as const }, { key: "onsite", label: "No checkout recorded", align: "end" as const }, { key: "cost", label: "Recorded cost · all history", align: "end" as const },

@@ -1,4 +1,5 @@
 import { matchesSearchTerms, searchTerms } from "@/lib/ops/search-terms";
+import { providerDetail, providerKindLabel, providerName, providerTag } from "@/lib/product/provider-label";
 import { needsEquipmentChoice } from "@/lib/ops/equipment-linking";
 import { cachedDateTimeFormat, cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { activityTitle } from "@/lib/product/activity-title";
@@ -1255,7 +1256,7 @@ const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
   visits: [
     { key: "visit", label: "Visit" },
     { key: "store", label: "Store" },
-    { key: "vendor", label: "Vendor" },
+    { key: "vendor", label: "Who visited" },
     { key: "work", label: "Work order" },
     { key: "observed", label: "Timing" },
     { key: "evidence", label: "Evidence" },
@@ -1445,11 +1446,7 @@ function workRows(
     .filter((work) => {
       if (!q) return true;
       const assignment = assignmentForWork(fixture, scoped.organizationId, work.id);
-      const assignee = assignment?.kind === "outside_vendor"
-        ? vendorName(fixture, scoped.organizationId, assignment.vendorId)
-        : assignment?.kind === "internal"
-          ? "Internal maintenance"
-          : "Choose later";
+      const assignee = `${providerLabelForAssignment(fixture, scoped.organizationId, assignment)} ${providerKindLabel(assignment?.kind)}`;
       return searchable(work.number, work.problem, work.categoryKey, storeLabel(storeById.get(work.storeId)), assignee).includes(q);
     })
     .filter((work) => !category || (work.categoryKey ?? "unclassified") === category)
@@ -1475,13 +1472,11 @@ function workRows(
     .map((work) => {
       const assignment = assignmentForWork(fixture, scoped.organizationId, work.id);
       const hold = activeHoldByWork.get(work.id);
-      const assignee = assignment?.kind === "outside_vendor"
-        ? vendorName(fixture, scoped.organizationId, assignment.vendorId)
-        : assignment?.kind === "internal"
-          ? "Internal maintenance"
-          : hold
-            ? "Ready for a suitable visit"
-            : "Choose later";
+      const assignee = assignment?.kind === "outside_vendor" || assignment?.kind === "internal"
+        ? providerLabelForAssignment(fixture, scoped.organizationId, assignment)
+        : hold
+          ? "Ready for a suitable visit"
+          : "Choose later";
       const store = storeById.get(work.storeId);
       const storeTimeZone = store?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
       const coveredVendorIds = new Set(
@@ -1546,7 +1541,7 @@ function workRows(
         cells: [
           { key: "work", value: work.number, secondary: work.problem },
           { key: "store", value: store ? `Store ${store.storeNumber}` : "Store unavailable", secondary: store?.city, link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
-          { key: "assignment", link: assignment?.vendorId ? { href: `/app/vendors/${assignment.vendorId}`, label: "Open vendor" } : undefined, value: hold ? "Waiting for a suitable visit" : assignee ?? "Not assigned", secondary: hold ? heldWorkInstruction(hold.posture) : assignment ? sentence(assignment.status) : "Assignment needed" },
+          { key: "assignment", link: assignment?.vendorId ? { href: `/app/vendors/${assignment.vendorId}`, label: "Open vendor" } : undefined, value: hold ? "Waiting for a suitable visit" : assignee ?? "Not assigned", secondary: hold ? heldWorkInstruction(hold.posture) : assignment && assignment.kind !== "choose_later" ? providerDetail(assignment.kind, sentence(assignment.status)) : assignment ? sentence(assignment.status) : "Assignment needed", providerTag: hold ? undefined : providerTag(assignment?.kind) },
           { key: "next", expandable: !hold, value: hold ? heldWorkReviewLabel(hold.deadlineAt, fixture.asOf) : work.problem, secondary: hold ? `Review if not handled by ${date(hold.deadlineAt)}` : work.accountableParty },
           { key: "cost", value: money(costByWork.get(work.id) ?? 0), link: { href: `/app/work-orders/${work.id}?view=cost`, label: "Review recorded cost" } },
           { key: "status", value: hold ? "Approved for next suitable visit" : workStatusLabel(work.status), tone: hold ? "info" : workStatusTone(work.status) },
@@ -1633,7 +1628,7 @@ function visitRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
         cells: [
           { key: "visit", value: visit.technicianName, secondary: visit.purpose },
           { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
-          { key: "vendor", value: visit.providerName },
+          { key: "vendor", value: visit.providerName, secondary: providerKindLabel(visit.providerKind), providerTag: providerTag(visit.providerKind) },
           { key: "work", value: work?.number ?? "No work order", secondary: visit.unmatchedReason },
           { key: "observed", value: visit.checkedOutAt ? `${dateTime(visit.checkedInAt, storeTimeZone)} – ${dateTime(visit.checkedOutAt, storeTimeZone)}` : `Since ${dateTime(visit.checkedInAt, storeTimeZone)}`, secondary: "Store-local time · approximate presence, not labor" },
           { key: "evidence", value: checkIn?.location?.result ? sentence(checkIn.location.result) : "No location evidence", tone: checkIn?.location?.result === "verified" ? "positive" : "warning" },
@@ -4416,7 +4411,7 @@ export function buildDetailModel(
       statusTone: workStatusTone(work.status),
       facts: [
         { label: "Store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
-        { label: "Assigned to", value: vendor?.name ?? (assignment?.kind === "internal" ? "Internal maintenance" : "Choose later"), link: vendor ? { href: `/app/vendors/${vendor.id}`, label: "Open vendor" } : undefined },
+        { label: "Assigned to", value: providerLabelForAssignment(fixture, scoped.organizationId, assignment), helperText: assignment && assignment.kind !== "choose_later" ? providerKindLabel(assignment.kind) : undefined, link: vendor ? { href: `/app/vendors/${vendor.id}`, label: "Open vendor" } : undefined },
         ...(sourceVisit
           ? [{ label: "Record origin", value: "Created after service began", helperText: "The observed visit started first; this work order does not imply prior written authorization.", link: { href: `/app/visits/${sourceVisit.id}`, label: "Open original visit" } }]
           : pmOccurrence
@@ -5541,7 +5536,7 @@ function providerLabelForAssignment(fixture: OpsFixture, organizationId: string,
   if (assignment.kind === "choose_later") return "Provider to be chosen";
   if (assignment.kind === "outside_vendor") return vendorName(fixture, organizationId, assignment.vendorId) ?? "Outside vendor";
   const membership = fixture.memberships.find((item) => item.organizationId === organizationId && item.id === assignment.internalMembershipId);
-  return fixture.users.find((user) => user.id === membership?.userId)?.displayName ?? "Internal maintenance";
+  return providerName({ kind: "internal", internalName: fixture.users.find((user) => user.id === membership?.userId)?.displayName });
 }
 
 function workOrderStages(

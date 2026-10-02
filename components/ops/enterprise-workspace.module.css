@@ -4180,3 +4180,8 @@ a.factItem:hover {
   .dataTable[data-table] td[data-column="updated"], .dataTable[data-table] td[data-column="cost"] { order: 6; }
   .dataTable[data-table][data-columns] td[class*="alignEnd"], .dataTable[data-table][data-columns] td[class*="alignEnd"] a { text-align: left; justify-content: flex-start; }
 }
+
+/* Who does the work: icon before the provider name (text below always names the kind). */
+.providerIcon { display: inline-block; flex: 0 0 auto; margin-right: 6px; vertical-align: -2px; color: #475569; }
+.providerIcon[data-provider="internal"] { color: #334155; }
+.providerIcon[data-provider="outside_vendor"] { color: #475569; }

@@ -18,7 +18,9 @@ import {
   PencilLine,
   Search,
   Trash2,
+  Truck,
   UserRound,
+  Wrench,
 } from "lucide-react";
 import type {
   ActionItemViewModel,
@@ -342,6 +344,13 @@ export function DashboardView({ model }: { model: DashboardPageViewModel }) {
 
 const VISIBLE_FILTER_OPTIONS = 5;
 
+/** Internal (wrench) or outside vendor (truck); the text beside it always says which, too. */
+function ProviderIcon({ kind }: { kind: "internal" | "outside_vendor" }) {
+  return kind === "internal"
+    ? <Wrench className={styles.providerIcon} data-provider="internal" aria-hidden="true" size={14} />
+    : <Truck className={styles.providerIcon} data-provider="outside_vendor" aria-hidden="true" size={14} />;
+}
+
 function FilterChip({ option }: { option: FilterGroupViewModel["options"][number] }) {
   return <Link href={option.href} className={option.selected ? styles.filterChipActive : styles.filterChip} aria-current={option.selected ? "page" : undefined}>{option.label}</Link>;
 }
@@ -405,7 +414,7 @@ function DataTable({ table: sourceTable, selectedId, rowHref, selection, context
                   return (
                     <td data-column={column.key} data-label={column.label} className={`${index === 0 ? styles.recordCell : ""} ${column.align === "end" ? styles.alignEnd : ""} ${cell?.tone ? toneClass(cell.tone) : ""}`} key={column.key}>
                       {cell?.expandable ? <div className={styles.workDescription}>{cell.value.length > 160 ? <details><summary>{cell.value.slice(0, 157).trimEnd()}… <span>Read full description</span></summary><p>{cell.value}</p></details> : <p>{cell.value}</p>}{cell.secondary ? <small>{cell.secondary}</small> : null}</div> : <Link href={openRecord || cellLink || !rowHref ? workspaceStartHref(href) : href} aria-current={!cellLink && row.id === selectedId ? "true" : undefined} aria-label={cellLink ? `${cellLink.label}: ${cell?.value}` : index === 0 ? `Open ${row.label}` : `${column.label}: ${cell?.value ?? "Not available"}. Open ${row.label}`}>
-                        <span>{cell?.value ?? "—"}</span>
+                        <span>{cell?.providerTag ? <ProviderIcon kind={cell.providerTag} /> : null}{cell?.value ?? "—"}</span>
                         {cell?.secondary ? <small>{cell.secondary}</small> : null}
                         {index === table.columns.length - 1 ? <ChevronRight className={styles.cellChevron} aria-hidden="true" size={15} /> : null}
                       </Link>}

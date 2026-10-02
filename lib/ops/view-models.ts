@@ -190,6 +190,8 @@ export interface WorkOrderListRow {
   assignmentStatus?: AssignmentStatus;
   vendorId?: OpsId;
   vendorName?: string;
+  /** The in-house person the work is assigned to, when it is assigned internally. */
+  internalAssigneeName?: string;
   internalAccountableParty: string;
   /** Primary next-action owner, retained as accountableParty for repository compatibility. */
   accountableParty: string;

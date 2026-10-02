@@ -148,12 +148,15 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
   const vendor = assignment?.vendorId ? fixture.vendors.find((row) => row.organizationId === workOrder.organizationId && row.id === assignment.vendorId) : undefined;
   const visitHold = (fixture.workOrderVisitHolds ?? []).find((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id && row.status === "active");
   const asset = workOrder.assetId ? fixture.assets.find((row) => row.organizationId === workOrder.organizationId && row.id === workOrder.assetId) : undefined;
+  const internalMember = assignment?.internalMembershipId ? fixture.memberships.find((row) => row.organizationId === workOrder.organizationId && row.id === assignment.internalMembershipId) : undefined;
+  const internalName = internalMember ? fixture.users.find((row) => row.id === internalMember.userId)?.displayName : undefined;
   return {
     needsConfirmation: (fixture.workflowTasks ?? []).some(t => t.organizationId === workOrder.organizationId && t.workOrderId === workOrder.id && t.taskType === "verify_repair" && ["open", "in_progress"].includes(t.status)),
     id: workOrder.id, number: workOrder.number, storeId: store.id, storeNumber: store.storeNumber,
     storeName: store.name, problem: workOrder.problem, categoryKey: workOrder.categoryKey,
     priority: workOrder.priority, status: workOrder.status, assignmentKind: assignment?.kind ?? "choose_later",
     assignmentStatus: assignment?.status, vendorId: vendor?.id, vendorName: vendor?.name,
+    ...(internalName ? { internalAssigneeName: internalName } : {}),
     internalAccountableParty: workOrder.internalAccountableParty ?? "Facilities coordinator",
     accountableParty: workOrder.accountableParty, nextAction: workOrder.nextAction, dueAt: workOrder.dueAt,
     updatedAt: fixture.auditEvents.filter(event => event.organizationId === workOrder.organizationId && event.aggregateType === "work_order" && event.aggregateId === workOrder.id).map(event => event.occurredAt).sort().at(-1) ?? workOrder.createdAt, createdAt: workOrder.createdAt, visitCount: new Set(fixture.siteVisitWorkOrders.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).map((row) => row.visitId)).size,
@@ -882,7 +885,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         .filter((line) => line.organizationId === scope.organizationId && line.workOrderId === row.id && matchesWorkCost(line, query))
         .reduce((sum, line) => sum + line.amount.amountMinor, 0);
       return result;
-    }).filter((row) => matchesSearchTerms([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName].filter(Boolean).join(" "), workTerms)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    }).filter((row) => matchesSearchTerms([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName, row.internalAssigneeName].filter(Boolean).join(" "), workTerms)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
     return page(rows, query);
   }
 

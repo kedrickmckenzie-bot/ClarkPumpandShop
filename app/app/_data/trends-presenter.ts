@@ -1929,6 +1929,7 @@ export function buildTrendsModel(
   const vendors = fixture.vendors.filter((vendor) => vendor.organizationId === session.organizationId && (relevantVendorIds.has(vendor.id) || vendor.id === selectedVendor)).sort((left, right) => left.name.localeCompare(right.name));
   const filterOption = (value: string, label: string) => ({ value, label });
   const unclassifiedDriverKey = "__unclassified__";
+  const internalDriverKey = "__internal__";
   const driverIdentity = (row: TrendSourceRecord, dimension: TrendBreakdownId = breakdown) => {
     const store = storeById.get(row.storeId);
     const rowAssets = recordAssetIds(row).map((id) => assetById.get(id)).filter((asset): asset is Asset => Boolean(asset));
@@ -1967,6 +1968,8 @@ export function buildTrendsModel(
       return { key: unclassifiedDriverKey, label: "Component not classified", context: "Component name" };
     }
     const vendorId = row.vendorId;
+    // Internal work is its own provider row, never mixed into costs nobody could attribute.
+    if (!vendorId && row.providerAttribution === "internal") return { key: internalDriverKey, label: "Internal team", context: "Internal maintenance" };
     return { key: vendorId ?? unclassifiedDriverKey, label: vendorId ? vendorNameById.get(vendorId) ?? "Unknown vendor" : "Vendor not attributed", context: "Provider attribution" };
   };
   const currentDriverRows = new Map<string, TrendSourceRecord[]>();
@@ -1994,7 +1997,7 @@ export function buildTrendsModel(
     vendor: "category",
   };
   const driverFocusValues = (dimension: TrendBreakdownId, key: string) => {
-    if (key === unclassifiedDriverKey || key.startsWith("__multiple_")) return undefined;
+    if (key === unclassifiedDriverKey || key === internalDriverKey || key.startsWith("__multiple_")) return undefined;
     const common = {
       breakdown: nextBreakdown[dimension],
       detailKind: undefined,

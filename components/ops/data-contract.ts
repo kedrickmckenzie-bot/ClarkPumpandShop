@@ -481,6 +481,8 @@ export interface TableCellViewModel {
   value: string;
   secondary?: string;
   tone?: Tone;
+  /** Who does the work: shows an internal (wrench) or outside-vendor (truck) icon beside the value. */
+  providerTag?: "internal" | "outside_vendor";
 }
 
 export interface ApprovedLaterManagementViewModel {
