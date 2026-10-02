@@ -153,7 +153,7 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
           <input autoComplete="name" className={styles.input} maxLength={100} onChange={(event) => setResponderName(event.target.value)} required value={responderName} />
         </label>
         {response === "proposed_date" ? (
-          <label className={styles.label}>Proposed arrival <span className={styles.required} aria-hidden="true">*</span>
+          <label className={styles.label}>Proposed arrival (store local time) <span className={styles.required} aria-hidden="true">*</span>
             <input className={styles.input} onChange={(event) => setProposedArrival(event.target.value)} required type="datetime-local" value={proposedArrival} />
           </label>
         ) : null}

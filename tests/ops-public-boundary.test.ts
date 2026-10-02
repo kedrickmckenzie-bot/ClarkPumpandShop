@@ -521,6 +521,14 @@ describe("public service and visit capability boundaries", () => {
     });
   });
 
+  it("reads a vendor's proposed time as the store's local time", async () => {
+    const gateway = getPublicOperationsGateway(), repository = getNorthlineFixtureRepository();
+    const receipt = await gateway.respondToServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken, { response: "proposed_date", responderName: "Vendor", proposedArrival: "2026-10-06T09:30" });
+    const response = await repository.getVendorResponse(NORTHLINE_ORGANIZATION_ID, receipt.receiptId);
+    // Store 104 is on Eastern time: 9:30 AM EDT is 13:30 UTC, whatever the server's clock zone.
+    expect(response?.proposedAt).toBe("2026-10-06T13:30:00.000Z");
+  });
+
   it("accepts a question after vendor acceptance without resetting service", async () => {
     const gateway = getPublicOperationsGateway();
     const repository = getNorthlineFixtureRepository();

@@ -39,6 +39,9 @@ describe("public store issue business-impact intake", () => {
     const after = repository.snapshot();
     const request = after.requests.find((candidate) => candidate.reference === receipt.requestNumber)!;
     expect(request.problem).toContain("Detailed readings and observations. ".repeat(200).trim());
+    // The problem leads so lists and titles show it; the area follows as context.
+    expect(request.problem.startsWith("Detailed readings")).toBe(true);
+    expect(request.problem.endsWith("Area or equipment: Beer cave")).toBe(true);
     const assessment = after.requestImpactAssessments.find((candidate) => candidate.requestId === request.id)!;
     const reviewTask = after.workflowTasks.find((candidate) => candidate.serviceRequestId === request.id)!;
 

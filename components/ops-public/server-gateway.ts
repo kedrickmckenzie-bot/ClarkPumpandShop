@@ -1,3 +1,5 @@
+import { localDateTimeToIso } from "@/lib/ops/local-date-time";
+import { operationsTimeZone } from "@/lib/ops/local-time";
 import { REPORT_PROBLEM_MAX_LENGTH } from "@/lib/ops/report-limits";
 import { masterDocuments } from "@/lib/ops/compliance-documents";
 import { offerResponseKey } from "@/lib/ops/optional-work-policy";
@@ -1149,9 +1151,13 @@ const gateway: PublicOperationsGateway = {
     }
     let proposedAt: string | undefined;
     if (command.response === "proposed_date") {
-      const parsed = Date.parse(command.proposedArrival ?? "");
-      if (!Number.isFinite(parsed)) throw new PublicWorkflowError("Choose a valid proposed arrival date and time.", 422, "proposed_date_required");
-      proposedAt = new Date(parsed).toISOString();
+      // The vendor enters the store's local time (the field says so); a value with its own offset is taken as given.
+      const raw = (command.proposedArrival ?? "").trim();
+      try {
+        proposedAt = /(?:Z|[+-]\d\d:?\d\d)$/.test(raw) ? new Date(raw).toISOString() : localDateTimeToIso(raw, operationsTimeZone(source.store.timeZone));
+      } catch {
+        throw new PublicWorkflowError("Choose a valid proposed arrival date and time.", 422, "proposed_date_required");
+      }
     }
     try {
       const response = await recordVendorResponse({ repository: runtime().repository }, {
@@ -1926,7 +1932,8 @@ const gateway: PublicOperationsGateway = {
     const problem = cleanRequired(command.problem, "Problem description", REPORT_PROBLEM_MAX_LENGTH);
     const employeeId = cleanOptional(command.employeeId, 80);
     const area = cleanOptional(command.area, 120);
-    const storedProblem = area ? `Area or equipment: ${area}\n\n${problem}` : problem;
+    // The problem leads (lists and titles show its start); the area follows as context.
+    const storedProblem = area ? `${problem}\n\nArea or equipment: ${area}` : problem;
     const priority = command.urgency === "urgent_safety"
       || command.impact.safetyConcern === "immediate"
       || command.impact.storeOperatingState === "unable_to_operate"
