@@ -870,7 +870,7 @@ export function SearchView({ model }: { model: SearchPageViewModel }) {
 function followUpText(id: string, value: string) {
   const one = value === "1";
   if (id === "attention") return one ? "has open work or a problem status" : "have open work or a problem status";
-  if (id === "unlinked") return one ? "open job has no equipment linked" : "open jobs have no equipment linked";
+  if (id === "unlinked") return one ? "open job needs equipment linked" : "open jobs need equipment linked";
   return "";
 }
 
@@ -905,7 +905,7 @@ function EquipmentSummary({ model }: { model: ProgramPageViewModel }) {
 
 /**
  * One row per service area: the bar length is the area's equipment count and its colors are the
- * same status colors as the bar above (green working, amber watch, red out of service), so a
+ * same status colors as the bar above (green operational, amber watch, red out of service), so a
  * service area never has a color of its own that could be mistaken for a status.
  */
 function ServiceAreaStatus({ breakdown }: { breakdown: BreakdownViewModel }) {
@@ -915,7 +915,7 @@ function ServiceAreaStatus({ breakdown }: { breakdown: BreakdownViewModel }) {
     <ul>
       {breakdown.segments.map((segment) => {
         const parts = segment.parts?.length ? segment.parts : [{ ...segment, id: "operational", tone: "positive" as const }];
-        const working = parts.find((part) => part.id === "operational")?.value ?? 0;
+        const operational = parts.find((part) => part.id === "operational")?.value ?? 0;
         const problems = parts.filter((part) => part.id !== "operational");
         return <li key={segment.id}>
           <Link className={styles.serviceAreaName} href={segment.link.href}>{segment.label}</Link>
@@ -923,7 +923,7 @@ function ServiceAreaStatus({ breakdown }: { breakdown: BreakdownViewModel }) {
             {parts.map((part) => <i key={part.id} data-tone={part.tone ?? "neutral"} style={{ flexGrow: part.value }} />)}
           </span>
           <span className={styles.serviceAreaCounts}>
-            <span><strong>{working}</strong> of {segment.value} working</span>
+            <span><strong>{operational}</strong> of {segment.value} operational</span>
             {problems.map((part) => <Link key={part.id} href={part.link.href} data-tone={part.tone ?? "neutral"}><span aria-hidden="true" />{part.value} {part.label.toLocaleLowerCase("en-US")}</Link>)}
           </span>
         </li>;

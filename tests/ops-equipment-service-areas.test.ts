@@ -37,16 +37,17 @@ describe("equipment by service area", () => {
     }
   });
 
-  it("shows working out of total per area with problem counts in status colors and plain follow-up wording", async () => {
+  it("shows operational out of total per area with problem counts in status colors and plain follow-up wording", async () => {
     const { buildProgramModel } = await import("@/app/app/_data/operator-presenter");
     const { ProgramView } = await import("@/components/ops/views");
     const model = buildProgramModel(fixture, facilities, "equipment", {});
     const html = renderToStaticMarkup(createElement(ProgramView, { model, compact: true }));
     const hvac = model.breakdowns.find((breakdown) => breakdown.id === "equipment-category")!.segments.find((segment) => segment.id === "hvac")!;
-    const working = hvac.parts!.find((part) => part.id === "operational")?.value ?? 0;
-    expect(html).toContain(`<strong>${working}</strong> of ${hvac.value} working`);
+    const operational = hvac.parts!.find((part) => part.id === "operational")?.value ?? 0;
+    expect(html).toContain(`<strong>${operational}</strong> of ${hvac.value} operational`);
+    expect(html).not.toContain(" working<");
     expect(html).toContain("have open work or a problem status");
-    expect(html).toContain("have no equipment linked");
+    expect(html).toContain("open jobs need equipment linked");
     expect(html).not.toContain("need an equipment choice");
     expect(html).not.toContain("<summary>By service area</summary>");
   });
@@ -71,10 +72,45 @@ describe("equipment by service area", () => {
     // The Active view (open work) is where the filter is normally chosen.
     const active = await buildQueryListModel(repository, facilities, "work-orders", { status: "open" });
     const option = active.filters?.find((filter) => filter.id === "asset")?.options.find((item) => item.value === "needed");
-    expect(option).toMatchObject({ label: "No equipment linked", selected: false });
+    expect(option).toMatchObject({ label: "Needs equipment linked", selected: false });
     const fromFilter = await listed(params(option!.href));
     expect(fromFilter.sort()).toEqual([...fromEquipment].sort());
     const selected = await buildQueryListModel(repository, facilities, "work-orders", params(option!.href));
     expect(selected.filters?.find((filter) => filter.id === "asset")?.options.find((item) => item.value === "needed")?.selected).toBe(true);
+  });
+  it("keeps the selected region on every count link, so each opens only that region's records", async () => {
+    const { buildQueryListModel } = await import("@/app/app/_data/operator-query-presenter");
+    const { buildProgramModel } = await import("@/app/app/_data/operator-presenter");
+    const repository = createOpsFixtureRepository(fixture);
+    const region = fixture.regions[1];
+    const regionStores = new Set(fixture.stores.filter((store) => store.regionId === region.id).map((store) => store.id));
+    const model = buildProgramModel(fixture, facilities, "equipment", { region: region.id });
+    const links = [
+      ...model.metrics.map((metric) => metric.link.href),
+      ...model.breakdowns.flatMap((breakdown) => [breakdown.sourceLink.href, ...breakdown.segments.flatMap((segment) => [segment.link.href, ...(segment.parts ?? []).map((part) => part.link.href)])]),
+    ];
+    expect(links.length).toBeGreaterThan(10);
+    for (const href of links) expect(params(href).region, href).toBe(region.id);
+    const areas = model.breakdowns.find((breakdown) => breakdown.id === "equipment-category")!;
+    for (const part of areas.segments.flatMap((segment) => segment.parts ?? [])) {
+      let query: Record<string, string> | undefined = params(part.link.href), opened = 0;
+      while (query) {
+        const page = buildProgramModel(fixture, facilities, "equipment", query);
+        for (const row of page.table?.rows ?? []) { opened += 1; expect(regionStores.has(fixture.assets.find((asset) => asset.id === row.id)!.storeId)).toBe(true); }
+        query = page.pagination?.nextHref ? params(page.pagination.nextHref) : undefined;
+      }
+      expect(opened).toBe(part.value);
+    }
+    const metric = model.metrics.find((item) => item.id === "unlinked")!;
+    const jobs: string[] = [];
+    let next: Record<string, string> | undefined = params(metric.link.href);
+    while (next) {
+      const page = await buildQueryListModel(repository, facilities, "work-orders", next);
+      jobs.push(...page.table.rows.map((row) => row.id));
+      next = page.pagination?.nextHref ? params(page.pagination.nextHref) : undefined;
+    }
+    expect(jobs).toHaveLength(Number(metric.value));
+    for (const id of jobs) expect(regionStores.has(fixture.workOrders.find((work) => work.id === id)!.storeId)).toBe(true);
+    expect(Number(metric.value)).toBeLessThan(Number(buildProgramModel(fixture, facilities, "equipment", {}).metrics.find((item) => item.id === "unlinked")!.value));
   });
 });

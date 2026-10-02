@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Equipment review corrections (October 2, Claude)
+
+Codex review of 1f9e611.
+
+- [x] EQ-04 The selected region now travels with every count link on the Equipment page: status bar, service-area rows and their status counts, the follow-up counts and "Open all equipment". The status-bar links already had this gap. Checked on the Render build with PostgreSQL: in the north region the page says 12 open jobs need equipment linked, and clicking opens exactly those 12 with the region kept.
+- [x] EQ-05 Service-area rows say "14 of 15 operational · 1 watch" instead of "working", because Watch equipment may still be running. Out of service stays a separate red count.
+- [x] EQ-06 The filter and chip read "Needs equipment linked", and Equipment says "open jobs need equipment linked", because site-level work (snow, lot, cleaning) is deliberately left out.
+
+Evidence: db:seed, typecheck, lint, workflow suite 4 files / 66 tests, the Sites build and the Render build pass. The unit suite passed 195 files / 1,218 tests on its second run. On the first run, `ops-invoice-record-query` exceeded its 30-second limit under full-suite load. It takes about 23 seconds alone with or without these changes, because its SQL invoice-record reads take about 0.1–0.15 s each in SQLite and the test makes many of them on a 231-line invoice. Recorded as follow-up work: speed up that invoice-record query, not the test limit. New test: one region, every count link carries it, and the status counts and job count open only that region's records (fails without the fix).
+
 ## Equipment status by service area (October 2, Claude)
 
 User found "22 need attention · 28 need an equipment choice" unclear, asked whether the equipment choice belongs under Work, and asked for each service-area line to show how many units are not working, without a "down" color that could be mistaken for a service-area color.

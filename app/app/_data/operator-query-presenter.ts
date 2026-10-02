@@ -110,7 +110,7 @@ function queryFilters(route: OperatorListRoute, query: OperatorSearchParameters)
     label: "Equipment",
     options: [
       { value: "all", label: "Any equipment", href: hrefWithFilter(route, query, "asset"), selected: !selectedAsset },
-      { value: "needed", label: "No equipment linked", href: hrefWithFilter(route, query, "asset", "needed"), selected: selectedAsset === "needed" || selectedAsset === "unlinked" },
+      { value: "needed", label: "Needs equipment linked", href: hrefWithFilter(route, query, "asset", "needed"), selected: selectedAsset === "needed" || selectedAsset === "unlinked" },
     ],
   }] : [];
   const groups = [...statusGroup, ...equipmentGroup];
@@ -139,7 +139,7 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
       : key === "path" ? value.split("|").join(" › ")
       : key === "store" ? "Selected store"
       : key === "region" ? "Selected region"
-      : key === "asset" ? value === "unlinked" ? "Not linked to equipment" : value === "needed" ? "No equipment linked" : "Selected equipment"
+      : key === "asset" ? value === "unlinked" ? "Not linked to equipment" : value === "needed" ? "Needs equipment linked" : "Selected equipment"
       : key === "component" ? value === "unlinked" ? "Not linked to a component" : "Selected component"
       : key === "vendor" ? "Selected vendor"
       : key === "review" && value === "true"
