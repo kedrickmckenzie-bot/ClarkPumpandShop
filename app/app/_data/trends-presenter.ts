@@ -3,6 +3,8 @@ import { buildMaintenancePlan } from "@/lib/ops/maintenance-plan";
 import "server-only";
 import { supportedRecordingCoverage } from "@/lib/ops/recording-coverage";
 
+import type { TrendStoryViewModel } from "@/components/ops/data-contract";
+import { oneLine } from "@/lib/product/one-line";
 import type {
   MetricViewModel,
   OperatorSession,
@@ -137,7 +139,7 @@ const compactCurrency = new Intl.NumberFormat("en-US", {
 const integer = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const shortMonthFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
-  year: "2-digit",
+  year: "numeric",
   timeZone: "UTC",
 });
 const longMonthFormatter = new Intl.DateTimeFormat("en-US", {
@@ -1670,8 +1672,8 @@ export function buildTrendsModel(
         : safeMetric === "pm_completion"
           ? low ? "Lower completion—review" : high ? "Higher completion" : "Near other stores"
         : additive
-          ? high ? "Above historical peer range—review" : aboveRange ? "Above historical peer range" : belowRange ? "Below historical peer range" : "Within historical peer range"
-          : high ? "Above peer range—review" : aboveRange ? "Above peer range" : belowRange ? "Below peer range" : "Within peer range";
+          ? high ? "Well above similar stores—review" : aboveRange ? "Above similar stores" : belowRange ? "Below similar stores" : "In line with similar stores"
+          : high ? "Well above similar stores—review" : aboveRange ? "Above similar stores" : belowRange ? "Below similar stores" : "In line with similar stores";
     const signalTone: Tone = noComparison
       ? "neutral"
       : safeMetric === "vendor_response"
@@ -1856,7 +1858,7 @@ export function buildTrendsModel(
   const portfolioWideHistoricalIncrease = historicalComparisonRows.length >= 5
     && aboveHistoricalCount / historicalComparisonRows.length >= 0.6;
   const historicalPortfolioContext = portfolioWideHistoricalIncrease
-    ? `${aboveHistoricalCount} of ${historicalComparisonRows.length} comparable stores are above their historical peer range, which points to a portfolio-wide increase rather than one isolated store.`
+    ? `${aboveHistoricalCount} of ${historicalComparisonRows.length} comparable stores are above similar stores, so the increase is broad rather than one isolated store.`
     : undefined;
 
   const valueForSort = (row: TrendBenchmarkRowViewModel) => {
@@ -2686,9 +2688,42 @@ export function buildTrendsModel(
       allLink: { href: trendHref({ view: "drivers" }), label: `All ${ranked.length} ${breakdownNoun}` },
     };
   })() : undefined;
+  // The short answer: plain sentences from the same records as the charts, each opening its records.
+  const story = bridge ? (() => {
+    const total = currentValue - baselineValue;
+    const money = safeMetric === "recorded_cost" || safeMetric === "linked_invoice";
+    const signed = (value: number) => `${value >= 0 ? "+" : "−"}${formatMetric(safeMetric, Math.abs(value), false, true)}`;
+    const sentences: TrendStoryViewModel["sentences"] = [];
+    const pct = baselineValue ? ` (${Math.abs(Math.round((total / baselineValue) * 100))}%)` : "";
+    sentences.push({ id: "total", text: total === 0
+      ? `${metricCopy[safeMetric].label}: unchanged from the ${compareLabel.toLowerCase()} (${bridge.endFormatted}).`
+      : `${metricCopy[safeMetric].label}: ${total > 0 ? "up" : "down"} ${formatMetric(safeMetric, Math.abs(total), false, true)}${pct}. ${bridge.endFormatted} now, ${bridge.startFormatted} in the ${compareLabel.toLowerCase()}.`,
+      link: { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined })}#source-records`, label: "Open both periods" } });
+    const lead = bridge.steps.find((step) => step.id !== "other");
+    if (lead && total !== 0 && Math.sign(lead.value) === Math.sign(total)) {
+      const share = Math.round((lead.value / total) * 100);
+      const leadRecords = currentRecords.filter((row) => driverIdentity(row).key === lead.id);
+      const largest = money ? [...leadRecords].sort((left, right) => right.value - left.value)[0] : undefined;
+      const shareText = share > 100 ? "more than the whole change, because others moved the other way" : `${share}% of the change`;
+      sentences.push({ id: "lead", text: `The biggest single change is ${lead.label}: ${signed(lead.value)}, ${shareText}.${largest ? ` Its largest item is ${largest.label}${largest.detail ? ` (${oneLine(largest.detail).slice(0, 70)})` : ""} at ${formatMetric(safeMetric, largest.value, false, true)} in ${monthLabel(largest.periodKey)}.` : ""}`, link: lead.link });
+    }
+    const changed = driverRows.filter((row) => row.changeValue !== undefined);
+    const up = changed.filter((row) => row.changeValue! > 0).length, down = changed.filter((row) => row.changeValue! < 0).length;
+    if (changed.length > 1) sentences.push({ id: "breadth", text: `${up} of ${changed.length} ${breakdownNoun} went up${down ? `; ${down} went down` : ""}.${up >= Math.ceil(changed.length * 0.75) && total > 0 ? " The increase is broad, not one location." : ""}`, link: { href: trendHref({ view: "drivers" }), label: `Compare all ${breakdownNoun}` } });
+    if (breakdown !== "category") {
+      const byCategory = new Map<string, { label: string; current: TrendSourceRecord[]; baseline: TrendSourceRecord[] }>();
+      const add = (row: TrendSourceRecord, side: "current" | "baseline") => { const identity = driverIdentity(row, "category"); const entry = byCategory.get(identity.key) ?? { label: identity.label, current: [], baseline: [] }; entry[side].push(row); byCategory.set(identity.key, entry); };
+      currentRecords.forEach((row) => add(row, "current")); baselineRecords.forEach((row) => add(row, "baseline"));
+      const top = [...byCategory.entries()].map(([key, entry]) => ({ key, label: entry.label, change: aggregate(safeMetric, entry.current) - aggregate(safeMetric, entry.baseline) }))
+        .filter((entry) => entry.change !== 0).sort((left, right) => Math.abs(right.change) - Math.abs(left.change) || left.label.localeCompare(right.label))[0];
+      if (top) sentences.push({ id: "category", text: `By service area, ${top.label} moved most (${signed(top.change)}).`, link: { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined, driverBreakdown: "category", driverValue: top.key })}#source-records`, label: `Open ${top.label} records` } });
+    }
+    return { sentences };
+  })() : undefined;
   return {
     bridge,
     heatmap,
+    story,
     state: { kind: "ready" },
     maintenancePlan: activeView === "planning" ? buildMaintenancePlan(fixture, session.organizationId,
       new Set(buildAllRecords(fixture, session, "work_orders").records.filter((row) => scopeRecord(row, true, true, true, false)).flatMap((row) => row.workOrderId ? [row.workOrderId] : [])),

@@ -161,9 +161,10 @@
 .chart { display: flex; align-items: stretch; gap: 8px; height: 390px; padding: 25px 20px 18px; background: repeating-linear-gradient(to top, transparent 0 69px, #edf1f5 69px 70px); }
 .chartColumn { position: relative; display: grid; grid-template-rows: 35px minmax(0, 1fr) 26px; flex: 1; min-width: 62px; text-align: center; }
 .partialColumn { background: linear-gradient(to top, rgba(37, 99, 235, .035), transparent 65%); }
-.barValueRow { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 4px; }
-.barValueRow span { overflow: hidden; color: #5b6678; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.barValueRow span:nth-child(2) { color: #7b8797; }
+/* This period's value on top, the comparison underneath as "was …". */
+.barValueRow { display: grid; justify-items: center; gap: 1px; min-height: 36px; align-content: end; }
+.barValueRow span { overflow: hidden; color: #0f172a; font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.barValueRow small { color: #64748b; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .barArea { display: flex; align-items: flex-end; justify-content: center; gap: 5px; min-height: 0; border-bottom: 1px solid #aeb8c5; }
 .barArea a { width: min(21px, 40%); min-height: 2px; border-radius: 3px 3px 0 0; transition: filter .15s ease, outline-color .15s ease; }
 .barArea a:hover { filter: brightness(.83); }
@@ -217,10 +218,12 @@
 .tableHeaderActions > a { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 11px; border: 1px solid #cdd5df; border-radius: 5px; background: #fff; color: #334155; font-size: 13px; font-weight: 720; }
 .tableHeaderActions > a:hover { border-color: #93a4b8; background: #f8fafc; }
 .tableScroller { max-width: 100%; overflow-x: auto; overflow-y: visible; overscroll-behavior-inline: contain; overscroll-behavior-block: auto; }
-.storeTableScroller { max-height: 590px; overflow: auto; scrollbar-gutter: stable; }
+/* Show every store; scroll sideways only when the screen is narrow. */
+.storeTableScroller { overflow-x: auto; }
 .tablePanel table { width: 100%; min-width: 1060px; border-collapse: separate; border-spacing: 0; }
 .driverTable { min-width: 900px !important; }
-.benchmarkTable { min-width: 1180px !important; }
+.benchmarkTable { min-width: 980px !important; }
+.benchmarkTable td:last-child small { display: block; max-width: 220px; }
 .tablePanel caption { padding: 11px 17px; border-bottom: 1px solid #e5e9ef; background: #f8fafc; color: #657084; font-size: 13px; line-height: 1.45; text-align: left; }
 .tablePanel th { position: sticky; top: 0; z-index: 1; padding: 10px 13px; border-bottom: 1px solid var(--border); background: #f8fafc; color: #657084; font-size: 13px; font-weight: 760; letter-spacing: .025em; text-align: left; text-transform: uppercase; }
 .tablePanel td { padding: 9px 13px; border-bottom: 1px solid #edf0f4; color: #344054; font-size: 14px; vertical-align: middle; }
@@ -403,3 +406,11 @@
 .mainResult > a { display: grid; gap: 8px; color: inherit; text-decoration: none; }
 .inlineComparison { border-top: 1px solid #cbd5e1; padding-top: 12px; margin-top: 8px; font-size: 15px; }
 .inlineComparison small { font-size: 13px; }
+/* A wide table scrolls inside its own panel instead of widening the whole page on phones. */
+.workspace { min-width: 0; }
+.workspace > * { min-width: 0; max-width: 100%; }
+/* Phone month list: a slim bar for this period (blue) and the comparison (gray). */
+.mobileBars { grid-column: 1 / -1; display: grid; gap: 3px; margin-top: 4px; }
+.mobileBars b, .mobileBars em { display: block; height: 6px; min-width: 2px; border-radius: 3px; }
+.mobileBars b { background: #2563eb; }
+.mobileBars em { background: #94a3b8; }

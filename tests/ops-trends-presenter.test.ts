@@ -487,7 +487,7 @@ describe("enterprise trends presenter", () => {
 
       }
       if (aboveRange.length / comparablePortfolioRows.length >= 0.6) {
-        expect(portfolio.benchmark.description).toContain("portfolio-wide increase");
+        expect(portfolio.benchmark.description).toContain("increase is broad rather than one isolated store");
         expect(portfolio.insights.find((insight) => insight.findingType === "store_difference")?.eyebrow).toMatch(/store/i);
       }
     }

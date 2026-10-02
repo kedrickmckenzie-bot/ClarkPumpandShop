@@ -4,6 +4,20 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Trends: clearer answers (October 2, Claude)
+
+User asked to make Trends a main value add. Reviewed every view as an owner at 1440px and 390px first. No totals, filters or permissions changed; every new number comes from the same source records as the charts.
+
+- [x] TR-01 "The short answer" at the top of the Overview: up to four plain sentences, each with a link to its records: the change in the total (the bridge's reconciled totals), the biggest single change and its share (or "more than the whole change" when others moved the other way) with its largest item for money measures, how many stores (or the chosen breakdown) went up or down, and the service area that moved most. Wording works for counts and money. Hidden when there is nothing to compare.
+- [x] TR-02 "Where the change came from" replaces the waterfall, whose change bars were slivers next to the totals: one horizontal bar per biggest mover plus All other, growing right (increase, red) or left (decrease, blue) from a zero line; the zero line moves to the edge when every change goes the same way. Rows still add up exactly; every row opens its records; the two totals in the heading open their periods.
+- [x] TR-03 Months read "May 2026" (was "May 26", which looked like a date). The current month says "so far" (was "MTD"), and its empty value shows "—" instead of $0.
+- [x] TR-04 Monthly chart: this period's value on top, the comparison underneath as "was $X" (was two unlabeled numbers side by side). On phones each month gets slim bars (this period blue, comparison gray).
+- [x] TR-05 Compare stores: the table was inside a fixed-height box and forced to 1180px, so the last column and the lower stores were cut off. All 15 stores now show and the table fits a desktop screen; columns and sorting unchanged. Finding labels read "Well above similar stores—review", "Above / Below / In line with similar stores" (was "historical peer range").
+- [x] TR-06 The data-coverage card moved below the charts.
+- [x] TR-07 Phone: the planning view scrolled sideways (417px on a 390px screen) because a wide table stretched the page; wide tables now scroll inside their panel. All six views measured at 390px with no sideways scroll.
+
+Evidence: typecheck, lint and build pass. Unit suite 1,198/1,199; workflow suite 65/66; the one failure in each is the PostgreSQL seed test's 2-minute limit in this container (it passed with a longer limit earlier the same day; Trends does not touch the database). Two existing Trends tests were updated: one phrase check followed the new wording, and the other correctly caught "spent more" in a count measure, which was fixed to neutral wording. New tests: the short answer's sentences match the bridge totals and share, every sentence link opens existing records, and it is absent without a comparison. Browser checks: summary for recorded cost, work orders, service visits and a single store; change rows, monthly chart and phone month bars; Compare stores with all 15 rows.
+
 ## Review corrections to the depth pass (October 2, Claude)
 
 An outside code review of `21f6943` found one routing bug and smaller gaps; the user asked for all of them plus the open items from the depth pass. Each was checked against the code before editing.

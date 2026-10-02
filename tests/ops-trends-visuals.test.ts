@@ -63,3 +63,36 @@ describe("trends heat map", () => {
     expect(totals).toEqual([...totals].sort((a, b) => b - a));
   });
 });
+
+describe("trends short answer", () => {
+  const count = (fixture: ReturnType<typeof buildNorthlinePresentationFixture>, href: string) => {
+    const model = buildTrendsModel(fixture, session(), Object.fromEntries(new URL(href, "http://x").searchParams));
+    return Number(model.sourceSummary.match(/([\d,]+) records?/)?.[1].replace(/,/g, ""));
+  };
+
+  it("states the change, its biggest driver, how widespread it is and the service area that moved most", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const model = buildTrendsModel(fixture, session(), {});
+    const story = model.story!, bridge = model.bridge!;
+    expect(story.sentences.map((sentence) => sentence.id)).toEqual(["total", "lead", "breadth", "category"]);
+    // The first sentence repeats the reconciled totals, never a separate number.
+    expect(story.sentences[0].text).toContain(bridge.endFormatted);
+    expect(story.sentences[0].text).toContain(bridge.startFormatted);
+    // The lead driver's share matches the bridge, and its link is the bridge row's link.
+    const lead = bridge.steps[0];
+    const share = Math.round((lead.value / (bridge.endValue - bridge.startValue)) * 100);
+    expect(story.sentences[1].text).toContain(`The biggest single change is ${lead.label}`);
+    expect(story.sentences[1].text).toContain(share > 100 ? "more than the whole change" : `${share}% of the change`);
+    expect(story.sentences[1].link).toEqual(lead.link);
+    // Breadth counts every store with a change.
+    const [up, total] = story.sentences[2].text.match(/^(\d+) of (\d+)/)!.slice(1).map(Number);
+    expect(up).toBeLessThanOrEqual(total);
+    // Every sentence opens records that exist.
+    for (const sentence of story.sentences) if (sentence.link?.href.includes("view=records")) expect(count(fixture, sentence.link.href), sentence.id).toBeGreaterThan(0);
+  });
+
+  it("is left out when there is nothing to compare", () => {
+    expect(buildTrendsModel(buildNorthlinePresentationFixture(), session(), { compare: "none" }).story).toBeUndefined();
+  });
+});
+

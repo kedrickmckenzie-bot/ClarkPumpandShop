@@ -303,6 +303,11 @@ export interface TrendBridgeViewModel {
   steps: Array<{ id: string; label: string; value: number; formatted: string; link: SupportingLink }>;
 }
 
+/** Plain-language findings computed from the same records as the charts; each opens its records. */
+export interface TrendStoryViewModel {
+  sentences: Array<{ id: string; text: string; link?: SupportingLink }>;
+}
+
 /** Rows (stores or the chosen breakdown) by month; each cell opens its exact records. */
 export interface TrendHeatmapViewModel {
   noun: string;
@@ -316,6 +321,7 @@ export interface TrendHeatmapViewModel {
 export interface TrendAnalysisPageViewModel {
   bridge?: TrendBridgeViewModel;
   heatmap?: TrendHeatmapViewModel;
+  story?: TrendStoryViewModel;
   maintenancePlan?: import("@/lib/ops/maintenance-plan").MaintenancePlan;
   state: DataState;
   page: PageContext;

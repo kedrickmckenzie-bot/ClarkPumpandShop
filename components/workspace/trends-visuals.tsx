@@ -1,46 +1,48 @@
 import Link from "next/link";
-import type { TrendBridgeViewModel, TrendHeatmapViewModel } from "@/components/ops/data-contract";
+import type { TrendBridgeViewModel, TrendHeatmapViewModel, TrendStoryViewModel } from "@/components/ops/data-contract";
 import styles from "./trends-visuals.module.css";
 
+/** The short answer: a few plain sentences, each opening the records behind it. */
+export function TrendStory({ story }: { story: TrendStoryViewModel }) {
+  if (!story.sentences.length) return null;
+  return <section className={`${styles.panel} ${styles.story}`} aria-labelledby="story-title">
+    <p className={styles.eyebrow} id="story-title">The short answer</p>
+    <ul className={styles.storyList}>
+      {story.sentences.map((sentence) => <li key={sentence.id}><span>{sentence.text}</span>{sentence.link ? <Link href={sentence.link.href}>{sentence.link.label} →</Link> : null}</li>)}
+    </ul>
+  </section>;
+}
+
 /**
- * "What changed": the earlier total, each biggest change stacked on it, then the
- * selected total. Bars start at zero so a change is never exaggerated; every bar
- * opens the records behind it.
+ * "Where the change came from": one row per biggest mover plus "All other",
+ * as bars growing right (increase) or left (decrease) from a shared zero line.
+ * Rows add up exactly to the change in the total; every row opens its records.
  */
 export function ChangeBridge({ bridge, metricLabel }: { bridge: TrendBridgeViewModel; metricLabel: string }) {
-  // Each step starts where the previous one ended.
-  const steps = bridge.steps.map((step, index) => {
-    const from = bridge.startValue + bridge.steps.slice(0, index).reduce((sum, earlier) => sum + earlier.value, 0);
-    const to = from + step.value;
-    return { ...step, low: Math.min(from, to), high: Math.max(from, to) };
-  });
-  const top = Math.max(bridge.startValue, bridge.endValue, ...steps.map((step) => step.high)) * 1.08 || 1;
-  const pct = (value: number) => `${Math.max(0, Math.min(100, (value / top) * 100))}%`;
   const change = bridge.endValue - bridge.startValue;
-  const columns = [
-    { id: "start", label: bridge.startLabel, low: 0, high: bridge.startValue, formatted: bridge.startFormatted, kind: "total", link: bridge.startLink },
-    ...steps.map((step) => ({ id: step.id, label: step.label, low: step.low, high: step.high, formatted: step.formatted, kind: step.value >= 0 ? "up" : "down", link: step.link })),
-    { id: "end", label: bridge.endLabel, low: 0, high: bridge.endValue, formatted: bridge.endFormatted, kind: "end", link: bridge.endLink },
-  ];
+  const largest = Math.max(1, ...bridge.steps.map((step) => Math.abs(step.value)));
+  // The zero line sits in the middle only when changes go both ways; otherwise bars use the full width.
+  const mixed = bridge.steps.some((step) => step.value > 0) && bridge.steps.some((step) => step.value < 0);
+  const zero = mixed ? "middle" : bridge.steps.some((step) => step.value < 0) ? "right" : "left";
+  const width = (value: number) => `${(Math.abs(value) / largest) * (mixed ? 50 : 100)}%`;
   return <section className={styles.panel} aria-labelledby="bridge-title">
     <header className={styles.header}>
-      <div><p className={styles.eyebrow}>What changed</p><h2 id="bridge-title">{metricLabel}: {bridge.startFormatted} → {bridge.endFormatted}</h2>
-        <p className={styles.lede}><strong className={change >= 0 ? styles.upText : styles.downText}>{change >= 0 ? "Up" : "Down"} {bridge.changeFormatted}</strong> · biggest changes first. Each bar opens the records behind it.</p></div>
-      <ul className={styles.key} aria-label="Key"><li><i className={styles.keyUp} aria-hidden="true" />Increase</li><li><i className={styles.keyDown} aria-hidden="true" />Decrease</li><li><i className={styles.keyTotal} aria-hidden="true" />Period total</li></ul>
+      <div><p className={styles.eyebrow}>Where the change came from</p><h2 id="bridge-title">{metricLabel}: <Link href={bridge.startLink.href}>{bridge.startFormatted}</Link> → <Link href={bridge.endLink.href}>{bridge.endFormatted}</Link></h2>
+        <p className={styles.lede}><strong className={change >= 0 ? styles.upText : styles.downText}>{change >= 0 ? "Up" : "Down"} {bridge.changeFormatted}</strong> · {bridge.startLabel.toLowerCase()} → {bridge.endLabel.toLowerCase()}. Biggest changes first; select a row to open its records.</p></div>
+      <ul className={styles.key} aria-label="Key"><li><i className={styles.keyUp} aria-hidden="true" />Increase</li><li><i className={styles.keyDown} aria-hidden="true" />Decrease</li></ul>
     </header>
-    <ol className={styles.bridge} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(64px, 1fr))` }}>
-      {columns.map((column) => <li key={column.id}>
-        <Link href={column.link.href} className={styles.column} aria-label={`${column.label}: ${column.formatted}. ${column.link.label}`} title={`${column.label}: ${column.formatted}`}>
-          <span className={styles.plot}>
-            <span className={`${styles.bar} ${styles[column.kind]}`} style={{ bottom: pct(column.low), height: `max(3px, calc(${pct(column.high)} - ${pct(column.low)}))` }}>
-              <b className={styles.value}>{column.formatted}</b>
-            </span>
+    <ol className={styles.changeRows}>
+      {bridge.steps.map((step) => <li key={step.id}>
+        <Link href={step.link.href} className={styles.changeRow} aria-label={`${step.label}: ${step.formatted}. ${step.link.label}`} title={`${step.label}: ${step.formatted}`}>
+          <span className={styles.changeLabel}>{step.label}</span>
+          <span className={styles.changeTrack} data-zero={zero} aria-hidden="true">
+            <i className={step.value >= 0 ? styles.changeUp : styles.changeDown} style={{ width: width(step.value) }} />
           </span>
-          <span className={styles.label}>{column.label}</span>
+          <b className={step.value >= 0 ? styles.upText : styles.downText}>{step.formatted}</b>
         </Link>
       </li>)}
     </ol>
-    <p className={styles.note}>Changes are differences in {metricLabel.toLowerCase()} between the two periods. They add up exactly to the change in the total.</p>
+    <p className={styles.note}>The rows add up exactly to the change in the total.</p>
   </section>;
 }
 

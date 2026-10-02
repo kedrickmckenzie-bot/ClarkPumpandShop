@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChangeBridge, SpendHeatmap } from "./trends-visuals";
+import { ChangeBridge, SpendHeatmap, TrendStory } from "./trends-visuals";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { planningScenario, scenarioKeys } from "@/lib/ops/planning-scenario";
 import { WorkReviewButton } from "./work-review";
@@ -57,8 +57,8 @@ function ComparisonChart({ model }: { model: TrendAnalysisPageViewModel }) {
             return (
             <div className={`${styles.chartColumn} ${point.isPartialPeriod ? styles.partialColumn : ""}`} key={point.id}>
               <div className={styles.barValueRow}>
-                <span>{point.currentFormattedValue}</span>
-                {point.comparisonFormattedValue ? <span>{point.comparisonFormattedValue}</span> : null}
+                <span>{point.isPartialPeriod && !point.currentValue ? "—" : point.currentFormattedValue}</span>
+                {point.comparisonFormattedValue ? <small>was {point.comparisonFormattedValue}</small> : null}
               </div>
               <div className={styles.barArea}>
                 {point.currentHasData ? <Link
@@ -80,7 +80,7 @@ function ComparisonChart({ model }: { model: TrendAnalysisPageViewModel }) {
                   />
                 ) : point.comparisonMonthLabel ? <span className={`${styles.noDataBar} ${styles.comparisonNoData}`} aria-label={`${point.comparisonMonthLabel}: no observations`} /> : null}
               </div>
-              <strong>{point.label}{point.isPartialPeriod ? <small>MTD</small> : null}</strong>
+              <strong>{point.label}{point.isPartialPeriod ? <small>so far</small> : null}</strong>
               <span className={styles.chartTooltip} id={tooltipId} role="tooltip">
                 <strong>{point.currentMonthLabel}{point.isPartialPeriod ? " · month to date" : ""}</strong>
                 <span><i className={styles.currentKey} /><b>Selected dates</b><em>{point.currentFormattedValue}</em><small>{point.currentSourceCount} record{point.currentSourceCount === 1 ? "" : "s"}</small></span>
@@ -92,7 +92,8 @@ function ComparisonChart({ model }: { model: TrendAnalysisPageViewModel }) {
         </div>
       </div>
       <ol className={styles.mobileChartList} aria-label="Monthly trend values">
-        {model.series.map((point) => <li key={`mobile-${point.id}`}><strong>{point.currentMonthLabel}{point.isPartialPeriod ? " · MTD" : ""}</strong><Link href={point.currentLink.href}>{point.currentFormattedValue}</Link>{point.comparisonMonthLabel ? <span>{point.comparisonMonthLabel}: {point.comparisonFormattedValue ?? "No data"}</span> : null}</li>)}
+        {model.series.map((point) => <li key={`mobile-${point.id}`}><strong>{point.currentMonthLabel}{point.isPartialPeriod ? " · so far" : ""}</strong><Link href={point.currentLink.href}>{point.currentFormattedValue}</Link>{point.comparisonMonthLabel ? <span>{point.comparisonMonthLabel}: {point.comparisonFormattedValue ?? "No data"}</span> : null}
+          <i className={styles.mobileBars} aria-hidden="true"><b style={{ width: `${((point.currentHasData ? point.currentValue : 0) / max) * 100}%` }} />{point.comparisonMonthLabel ? <em style={{ width: `${((point.comparisonHasData ? point.comparisonValue ?? 0 : 0) / max) * 100}%` }} /> : null}</i></li>)}
       </ol>
       <footer><Info size={16} aria-hidden="true" />{model.comparisonNote ? `${model.comparisonNote} ` : ""}Select a month to see its source records. Exact values remain available without hover.</footer>
     </section>
@@ -379,12 +380,13 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
       <AnalysisViews model={model} />
 
       {model.activeView === "overview" ? <>
+        {model.story ? <TrendStory story={model.story} /> : null}
         <ExecutiveResults model={model} />
         {model.bridge ? <ChangeBridge bridge={model.bridge} metricLabel={model.metricLabel} /> : null}
-        <section className={styles.contextMetrics} aria-label="Data coverage">{coverage ? <SummaryCard metric={coverage} /> : null}</section>
         <ComparisonChart model={model} />
         {model.heatmap ? <SpendHeatmap heatmap={model.heatmap} metricLabel={model.metricLabel} /> : model.metricId === "recorded_cost" ? <DriverSnapshot model={model} /> : null}
         <RelatedMeasures model={model} />
+        <section className={styles.contextMetrics} aria-label="Data coverage">{coverage ? <SummaryCard metric={coverage} /> : null}</section>
       </> : null}
       {model.activeView === "drivers" ? <DriversTable model={model} /> : null}
       {model.activeView === "stores" ? <BenchmarkTable model={model} /> : null}
