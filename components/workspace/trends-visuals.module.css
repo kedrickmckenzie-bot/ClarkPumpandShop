@@ -20,7 +20,8 @@
 .story { border-left: 4px solid #1d4ed8; }
 .storyList { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .storyList li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; color: #0f172a; font-size: 16px; line-height: 1.5; }
-.storyList li a { color: #1d4ed8; font-size: 14px; font-weight: 650; text-decoration: none; white-space: nowrap; }
+.storyList li a { color: #1d4ed8; font-size: 14px; font-weight: 650; text-decoration: none; overflow-wrap: anywhere; }
+.storyList li span { min-width: 0; overflow-wrap: anywhere; }
 .storyList li a:hover, .storyList li a:focus-visible { text-decoration: underline; }
 .header h2 a { color: inherit; text-decoration: underline; text-decoration-color: #93c5fd; text-underline-offset: 3px; }
 

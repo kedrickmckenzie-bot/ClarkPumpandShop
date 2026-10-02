@@ -4,6 +4,19 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Trends change-by switch and inspection queue follow-ups (October 2, Claude)
+
+User approved the "change by" switch and asked whether the Change drivers tab is still needed; an outside review of `890dbc3` found two inspection-queue issues and one wording issue. All three were reproduced in code before fixing.
+
+- [x] TS-01 "Show the change by: Store · Service area · Equipment type · Vendor" at the top of the Overview. One click regroups the short answer, the change rows, the heat map and the full table; totals never change and rows still reconcile. Store is hidden when one store is selected.
+- [x] TS-02 Change drivers is no longer a separate tab. Its full sortable table, Focus analysis and records links now sit under the change rows as "See every <grouping>"; it opens automatically for old `view=drivers` links and after sorting, and Overview is highlighted. No capability removed.
+- [x] TS-03 Review fix: the reviewer's inspection item was hidden whenever the job had any open result-review task, even one owned by someone else (e.g. a store confirmation in Waiting). Now it is only folded when the reviewer's own result task (same lane) already opens the inspection. Demo data and SQL (via the task rows' lane) agree.
+- [x] TS-04 Review fix: inspection reviews no longer carry the inspection's own due date, so sorting and the "Do now" filter never treat them as overdue. They show "Results recorded <date>" and normal priority.
+- [x] TS-05 Review fix: "The increase is broad, not one location" is only said when grouped by store or region; other groupings say "spread across most <grouping>".
+- [x] TS-06 Phone: long vendor or equipment names in the short answer no longer widen the page (links wrap).
+
+Evidence: typecheck, lint and build pass. Unit suite 1,201/1,202 and workflow suite 65/66; the one failure in each is the PostgreSQL seed test's built-in 2-minute limit in this container. Run alone after these changes with a temporary longer limit it passed, which also exercises the corrected queue rule on PostgreSQL (limit restored). New tests: switch choices regroup without changing totals; Store choice hidden for a single store; breadth wording by grouping; reviewer item kept when a store manager owns the confirmation and folded when the reviewer owns it; never overdue. Browser (1440px and 390px): every switch choice, full table with sorting, old drivers link, no sideways scroll for any grouping.
+
 ## Trends: clearer answers (October 2, Claude)
 
 User asked to make Trends a main value add. Reviewed every view as an owner at 1440px and 390px first. No totals, filters or permissions changed; every new number comes from the same source records as the charts.

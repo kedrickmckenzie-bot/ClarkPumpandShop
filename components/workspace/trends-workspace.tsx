@@ -100,6 +100,14 @@ function ComparisonChart({ model }: { model: TrendAnalysisPageViewModel }) {
   );
 }
 
+/** "Show the change by": one click regroups the short answer, change rows, heat map and table. */
+function BreakdownSwitch({ options }: { options: NonNullable<TrendAnalysisPageViewModel["breakdownSwitch"]> }) {
+  return <nav className={styles.breakdownSwitch} id="change-by" aria-label="Show the change by">
+    <span>Show the change by</span>
+    <div>{options.map((option) => <Link key={option.id} href={option.href} aria-current={option.selected ? "true" : undefined} data-selected={option.selected || undefined}>{option.label}</Link>)}</div>
+  </nav>;
+}
+
 function DriverSnapshot({ model }: { model: TrendAnalysisPageViewModel }) {
   const rows = [...model.drivers.rows].filter(row => row.currentValue !== undefined).sort((a, b) => (b.currentValue ?? 0) - (a.currentValue ?? 0)).slice(0, 6);
   const max = Math.max(1, ...rows.map(row => row.currentValue ?? 0));
@@ -207,7 +215,8 @@ function UpcomingWorkPlan({ model, savedViews }: { model: TrendAnalysisPageViewM
 function AnalysisViews({ model }: { model: TrendAnalysisPageViewModel }) {
   return (
     <nav className={styles.analysisViews} aria-label="Trend analysis views">
-      {model.views.map((view) => <Link className={view.id === model.activeView ? styles.activeView : undefined} href={view.link.href} key={view.id} aria-current={view.id === model.activeView ? "page" : undefined}><strong>{view.label}</strong><span>{view.description}</span></Link>)}
+      {/* "Change drivers" lives on the overview now (switch + full table), so it has no tab of its own. */}
+      {model.views.filter((view) => view.id !== "drivers").map((view) => { const active = view.id === model.activeView || (view.id === "overview" && model.activeView === "drivers"); return <Link className={active ? styles.activeView : undefined} href={view.link.href} key={view.id} aria-current={active ? "page" : undefined}><strong>{view.label}</strong><span>{view.description}</span></Link>; })}
     </nav>
   );
 }
@@ -379,22 +388,26 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
       <details className={styles.notes}><summary>Filters &amp; views</summary><TrendsFilterForm scenarioQuery={model.canonicalQuery} action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} />{model.activeView !== "planning" ? savedViews : null}</details>
       <AnalysisViews model={model} />
 
-      {model.activeView === "overview" ? <>
+      {model.activeView === "overview" || model.activeView === "drivers" ? <>
+        {model.breakdownSwitch ? <BreakdownSwitch options={model.breakdownSwitch} /> : null}
         {model.story ? <TrendStory story={model.story} /> : null}
         <ExecutiveResults model={model} />
         {model.bridge ? <ChangeBridge bridge={model.bridge} metricLabel={model.metricLabel} /> : null}
+        <details className={styles.allDrivers} open={model.activeView === "drivers" || !model.bridge}>
+          <summary>See every {model.drivers.title.replace(/^What changed by /, "")} · sort, focus or open records</summary>
+          <DriversTable model={model} />
+        </details>
         <ComparisonChart model={model} />
         {model.heatmap ? <SpendHeatmap heatmap={model.heatmap} metricLabel={model.metricLabel} /> : model.metricId === "recorded_cost" ? <DriverSnapshot model={model} /> : null}
         <RelatedMeasures model={model} />
         <section className={styles.contextMetrics} aria-label="Data coverage">{coverage ? <SummaryCard metric={coverage} /> : null}</section>
       </> : null}
-      {model.activeView === "drivers" ? <DriversTable model={model} /> : null}
       {model.activeView === "stores" ? <BenchmarkTable model={model} /> : null}
       {model.activeView === "vendors" ? <VendorAccountability model={model} /> : null}
       {model.activeView === "planning" ? <UpcomingWorkPlan model={model} savedViews={savedViews} /> : null}
       {model.activeView === "records" ? <SourceTable model={model} /> : null}
 
-      {model.activeView !== "overview" && model.activeView !== "planning" ? <ExecutiveResults model={model} /> : null}
+      {model.activeView !== "overview" && model.activeView !== "drivers" && model.activeView !== "planning" ? <ExecutiveResults model={model} /> : null}
       <details className={styles.notes}><summary>Filter details</summary><Investigation model={model} /></details>
       <details className={styles.notes}>
         <summary><Info size={17} aria-hidden="true" />How these numbers work<ChevronRight size={16} aria-hidden="true" /></summary>

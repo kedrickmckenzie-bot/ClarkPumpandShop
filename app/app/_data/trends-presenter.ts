@@ -2685,7 +2685,7 @@ export function buildTrendsModel(
       noun: breakdownNoun, months: currentMonths.map((month) => ({ key: month, label: monthLabel(month) })),
       max: Math.max(0, ...rows.flatMap((row) => row.cells.map((cell) => cell.value))),
       rows, totalRows: ranked.length,
-      allLink: { href: trendHref({ view: "drivers" }), label: `All ${ranked.length} ${breakdownNoun}` },
+      allLink: { href: `${trendHref({ view: "drivers" })}#change-drivers`, label: `All ${ranked.length} ${breakdownNoun}` },
     };
   })() : undefined;
   // The short answer: plain sentences from the same records as the charts, each opening its records.
@@ -2709,7 +2709,7 @@ export function buildTrendsModel(
     }
     const changed = driverRows.filter((row) => row.changeValue !== undefined);
     const up = changed.filter((row) => row.changeValue! > 0).length, down = changed.filter((row) => row.changeValue! < 0).length;
-    if (changed.length > 1) sentences.push({ id: "breadth", text: `${up} of ${changed.length} ${breakdownNoun} went up${down ? `; ${down} went down` : ""}.${up >= Math.ceil(changed.length * 0.75) && total > 0 ? " The increase is broad, not one location." : ""}`, link: { href: trendHref({ view: "drivers" }), label: `Compare all ${breakdownNoun}` } });
+    if (changed.length > 1) sentences.push({ id: "breadth", text: `${up} of ${changed.length} ${breakdownNoun} went up${down ? `; ${down} went down` : ""}.${up >= Math.ceil(changed.length * 0.75) && total > 0 ? breakdown === "store" || breakdown === "region" ? " The increase is broad, not one location." : ` The increase is spread across most ${breakdownNoun}.` : ""}`, link: { href: `${trendHref({ view: "drivers" })}#change-drivers`, label: `See all ${breakdownNoun}` } });
     if (breakdown !== "category") {
       const byCategory = new Map<string, { label: string; current: TrendSourceRecord[]; baseline: TrendSourceRecord[] }>();
       const add = (row: TrendSourceRecord, side: "current" | "baseline") => { const identity = driverIdentity(row, "category"); const entry = byCategory.get(identity.key) ?? { label: identity.label, current: [], baseline: [] }; entry[side].push(row); byCategory.set(identity.key, entry); };
@@ -2720,10 +2720,15 @@ export function buildTrendsModel(
     }
     return { sentences };
   })() : undefined;
+  // One click regroups the overview; keeps every other filter and the current view.
+  const breakdownSwitch = additive && comparison !== "none" ? ([["store", "Store"], ["category", "Service area"], ["profile", "Equipment type"], ["vendor", "Vendor"]] as const)
+    .filter(([id]) => id !== "store" || !selectedStore)
+    .map(([id, label]) => ({ id, label, selected: breakdown === id, href: `${trendHref({ breakdown: id, view: activeView === "drivers" ? "drivers" : "overview", driverPage: undefined, driverSort: undefined, driverDirection: undefined })}#change-by` })) : undefined;
   return {
     bridge,
     heatmap,
     story,
+    breakdownSwitch,
     state: { kind: "ready" },
     maintenancePlan: activeView === "planning" ? buildMaintenancePlan(fixture, session.organizationId,
       new Set(buildAllRecords(fixture, session, "work_orders").records.filter((row) => scopeRecord(row, true, true, true, false)).flatMap((row) => row.workOrderId ? [row.workOrderId] : [])),

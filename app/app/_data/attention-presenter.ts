@@ -38,9 +38,9 @@ export function presentAttentionRow(item: AttentionQueueRow, asOf: string): Acti
   const history = item.lane === "history";
   const exception = item.sourceKind === "exception";
   const copy = exception ? reviewQueueExceptionCopy[item.reason as ExceptionKind] : undefined;
-  // An inspection review carries the inspection's due date; the review itself is not "overdue".
+  // An inspection review has no deadline of its own; it shows when the results were recorded.
   const inspectionReview = item.sourceKind === "inspection_review";
-  const overdue = !inspectionReview && Boolean(item.dueAt && Date.parse(item.dueAt) <= Date.parse(asOf));
+  const overdue = Boolean(item.dueAt && Date.parse(item.dueAt) <= Date.parse(asOf));
   const waiting = item.lane === "waiting";
   const categoryLabel = item.sourceKind === "inspection_review" ? "Inspection review" : item.group === "financial" ? "Financial review" : item.group === "completion" ? "Completion check" : exception ? "Service record to check" : item.sourceKind === "vendor_reminder" ? "Vendor relationship" : "Work and vendor decision";
   const date = (value: string) => formatOperationsDate(value);
@@ -50,7 +50,7 @@ export function presentAttentionRow(item: AttentionQueueRow, asOf: string): Acti
     attentionLane: item.lane, attentionGroup: item.group, sourceCount: item.sourceCount,
     reasonLabel: copy?.label ?? (waiting ? "Waiting on another party" : item.lane === "mine" ? "Needs my action" : item.lane === "upcoming" ? "Upcoming review" : "Team work"),
     storeLabel: item.storeLabel ?? "Companywide", recordLabel: item.workNumber ?? item.requestReference ?? item.vendorName ?? categoryLabel,
-    dueAt: item.dueAt, dueLabel: history ? item.completedAt ? `Ended ${date(item.completedAt)}` : "End date not recorded" : inspectionReview && item.dueAt ? `Inspection due ${date(item.dueAt)}` : exception ? `Open since ${date(item.dueAt!)}` : !item.dueAt ? "No deadline — reason recorded" : overdue && waiting ? `Missed promised date ${date(item.dueAt)}` : overdue ? `Overdue since ${date(item.dueAt)}` : `Due ${date(item.dueAt)}`,
+    dueAt: item.dueAt, dueLabel: history ? item.completedAt ? `Ended ${date(item.completedAt)}` : "End date not recorded" : inspectionReview ? item.completedAt ? `Results recorded ${date(item.completedAt)}` : "Results recorded" : exception ? `Open since ${date(item.dueAt!)}` : !item.dueAt ? "No deadline — reason recorded" : overdue && waiting ? `Missed promised date ${date(item.dueAt)}` : overdue ? `Overdue since ${date(item.dueAt)}` : `Due ${date(item.dueAt)}`,
     ownerLabel: item.owner, priorityLabel: history ? "Completed / canceled" : overdue ? "Overdue" : item.priority === "critical" ? "Critical" : item.priority[0].toUpperCase() + item.priority.slice(1),
     tone: history ? "neutral" : overdue || item.priority === "critical" ? "critical" : item.priority === "high" ? "warning" : "neutral",
     link: { href: item.linkHref, label: actionLabel(item, exception) },

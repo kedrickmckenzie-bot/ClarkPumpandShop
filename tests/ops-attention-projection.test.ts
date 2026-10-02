@@ -48,17 +48,33 @@ describe("shared role-aware attention projection", () => {
     ]));
   });
 
-  it("shows one row per inspection awaiting review, even when its job also has a confirm task", () => {
+  it("keeps the reviewer's own inspection item unless their own result task already opens it", () => {
     const input = projectionInput();
     const inspection = input.fixture.inspections!.find((row) => row.status === "performed")!;
     const work = input.fixture.workOrders.find((row) => row.storeId === inspection.storeId)!;
     inspection.workOrderId = work.id;
     const base = input.fixture.workflowTasks.find((task) => task.workOrderId)!;
-    input.fixture.workflowTasks = [{ ...base, id: "task-confirm-inspection-job", workOrderId: work.id, serviceRequestId: undefined, taskType: "verify_repair", assigneeType: "role", status: "open", sourceFollowUpId: undefined, sourceApprovalRequestId: undefined }];
-    const rows = (items: ReturnType<typeof projectAttentionItems>) => items.filter((item) => item.id === inspection.id || item.id === "task-confirm-inspection-job").map((item) => item.id);
-    expect(rows(projectAttentionItems(input))).toEqual(["task-confirm-inspection-job"]);
-    input.fixture.workflowTasks[0].status = "completed";
-    expect(rows(projectAttentionItems(input))).toEqual([inspection.id]);
+    const task = (patch: Partial<typeof base>) => ({ ...base, id: "task-confirm-inspection-job", workOrderId: work.id, serviceRequestId: undefined, taskType: "verify_repair" as const, status: "open" as const, sourceFollowUpId: undefined, sourceApprovalRequestId: undefined, ...patch });
+    const rows = () => projectAttentionItems(input).filter((item) => item.id === inspection.id || item.id === "task-confirm-inspection-job").map((item) => `${item.id}:${item.lane}`).sort();
+    // The reviewer's own confirm task already opens the inspection: one row.
+    input.fixture.workflowTasks = [task({ assigneeType: "role", assigneeRole: "facilities_admin" })];
+    expect(rows()).toEqual(["task-confirm-inspection-job:mine"]);
+    // A confirmation owned by the store manager must not hide the reviewer's review.
+    input.fixture.workflowTasks = [task({ assigneeType: "role", assigneeRole: "store_manager" })];
+    expect(rows()).toEqual([`${inspection.id}:mine`, "task-confirm-inspection-job:waiting"].sort());
+    // Closed task: the inspection item is back on its own.
+    input.fixture.workflowTasks = [task({ assigneeType: "role", assigneeRole: "facilities_admin", status: "completed" })];
+    expect(rows()).toEqual([`${inspection.id}:mine`]);
+  });
+
+  it("never treats an inspection review as overdue because the inspection's own date passed", () => {
+    const input = projectionInput();
+    const inspection = input.fixture.inspections!.find((row) => row.status === "performed")!;
+    inspection.dueDate = "2020-01-01";
+    const item = projectAttentionItems(input).find((row) => row.id === inspection.id)!;
+    expect(item.dueAt).toBeUndefined();
+    expect(item.priority).toBe("normal");
+    expect(item.completedAt).toBe(inspection.completedAt);
   });
 
   it("groups a task and its source follow-up without losing either durable identity", () => {

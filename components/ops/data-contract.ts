@@ -322,6 +322,8 @@ export interface TrendAnalysisPageViewModel {
   bridge?: TrendBridgeViewModel;
   heatmap?: TrendHeatmapViewModel;
   story?: TrendStoryViewModel;
+  /** "Show the change by": regroups the short answer, change rows, heat map and full table. */
+  breakdownSwitch?: Array<{ id: string; label: string; href: string; selected: boolean }>;
   maintenancePlan?: import("@/lib/ops/maintenance-plan").MaintenancePlan;
   state: DataState;
   page: PageContext;

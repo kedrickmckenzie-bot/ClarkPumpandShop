@@ -100,8 +100,6 @@ export const INSPECTION_REVIEW_REASON = "Results were recorded. Review the findi
 /** The SQL query appends the schedule name to `inspectionReviewTitle("")`, so the name stays last. */
 export function inspectionReviewTitle(name: string) { return `Review inspection results: ${name}`; }
 export function inspectionReviewLane(role: OrganizationRole): AttentionLane { return role === "executive" ? "team" : "mine"; }
-/** The inspection's own due date, at noon UTC so the calendar day never shifts. */
-export function inspectionReviewDueAt(dueDate: string) { return `${dueDate.slice(0, 10)}T12:00:00.000Z`; }
 
 export function quoteRoundCopy(requested: number, submitted: number, missed: number) {
   return {
@@ -284,11 +282,14 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
   const inspectionItems = INSPECTION_REVIEW_ROLES.has(input.role)
     ? (fixture.inspections ?? [])
         .filter((inspection) => inspection.organizationId === organizationId && inspection.status === "performed" && storeIds.has(inspection.storeId))
-        // One row per inspection: an open result-review task on its job already opens the inspection.
-        .filter((inspection) => !inspection.workOrderId || !taskItems.some((task) => task.workOrderId === inspection.workOrderId && INSPECTION_RESULT_TASK_TYPES.includes(task.taskType as never)))
+        // One row per inspection for the reviewer: a result-review task on its job that is already in the
+        // reviewer's own lane opens the inspection, so the separate item is not repeated. A task owned by
+        // someone else (for example a store confirmation) never hides the reviewer's own review.
+        .filter((inspection) => !inspection.workOrderId || !taskItems.some((task) => task.workOrderId === inspection.workOrderId && INSPECTION_RESULT_TASK_TYPES.includes(task.taskType as never) && task.lane === inspectionReviewLane(input.role)))
         .map<AttentionProjectionItem>((inspection) => {
           const schedule = (fixture.complianceSchedules ?? []).find((row) => row.organizationId === organizationId && row.id === inspection.scheduleId);
-          const dueAt = inspectionReviewDueAt(inspection.dueDate);
+          // The inspection's own due date is not the reviewer's deadline, so the review has no due date
+          // (never "overdue"); it carries when the results were recorded instead.
           return {
             id: inspection.id,
             sourceKind: "inspection_review",
@@ -297,8 +298,8 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
             title: inspectionReviewTitle(schedule?.name ?? "Inspection"),
             reason: INSPECTION_REVIEW_REASON,
             owner: "Maintenance reviewer",
-            dueAt,
-            priority: Date.parse(dueAt) <= Date.parse(input.asOf) ? "high" : "normal",
+            completedAt: inspection.completedAt,
+            priority: "normal",
             lane: inspectionReviewLane(input.role),
             group: "completion",
             linkHref: `/app/compliance/${encodeURIComponent(inspection.id)}`,

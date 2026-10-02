@@ -414,3 +414,21 @@
 .mobileBars b, .mobileBars em { display: block; height: 6px; min-width: 2px; border-radius: 3px; }
 .mobileBars b { background: #2563eb; }
 .mobileBars em { background: #94a3b8; }
+/* "Show the change by" switch */
+.breakdownSwitch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; scroll-margin-top: 80px; }
+.breakdownSwitch > span { color: #334155; font-size: 15px; font-weight: 700; }
+.breakdownSwitch > div { display: inline-flex; flex-wrap: wrap; gap: 0; border: 1px solid #c6ced9; border-radius: 8px; overflow: hidden; background: #fff; }
+.breakdownSwitch a { padding: 8px 16px; border-left: 1px solid #c6ced9; color: #1d4ed8; font-size: 15px; font-weight: 650; text-decoration: none; }
+.breakdownSwitch a:first-child { border-left: 0; }
+.breakdownSwitch a:hover, .breakdownSwitch a:focus-visible { background: #eff6ff; }
+.breakdownSwitch a[data-selected] { background: #1d4ed8; color: #fff; }
+@media (max-width: 680px) {
+  .breakdownSwitch > div { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .breakdownSwitch a { text-align: center; border-top: 1px solid #c6ced9; }
+  .breakdownSwitch a:nth-child(-n+2) { border-top: 0; }
+  .breakdownSwitch a:nth-child(odd) { border-left: 0; }
+}
+/* Full change table, folded under the change rows. */
+.allDrivers > summary { cursor: pointer; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: #1d4ed8; font-size: 15px; font-weight: 650; }
+.allDrivers[open] > summary { margin-bottom: 12px; }
+.allDrivers > summary:hover { background: #f5f9ff; }
