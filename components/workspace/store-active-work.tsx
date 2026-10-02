@@ -21,6 +21,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
     // Confirmed vendor appointments (not work-order deadlines), next first.
     repository.listUpcomingAppointments(scope, { storeId: id, now: getServerOpsReportingAsOf(), limit: 3 }),
   ]);
+
   const base = `/app/stores/${encodeURIComponent(id)}`;
   const openCount = open.totalCount ?? open.items.length;
   const rows = [...open.items].sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999")).slice(0, SHOWN);
@@ -37,9 +38,11 @@ export async function StoreActiveWork({ id }: { id: string }) {
   const attention = [
     ...(confirmCount > 3 ? [{ key: "confirm-all", href: `/app/work-orders?${new URLSearchParams({ store: id, status: "confirmation" })}`, text: `See all ${confirmCount} repairs to confirm` }] : []),
     ...(inspections.summary.overdue ? [{ key: "overdue", href: `${base}/compliance?view=overdue`, text: `${inspections.summary.overdue} overdue inspection${inspections.summary.overdue === 1 ? "" : "s"}` }] : []),
+    ...(inspections.summary.performed ? [{ key: "awaiting", href: `${base}/compliance?view=performed`, text: `${inspections.summary.performed} inspection${inspections.summary.performed === 1 ? "" : "s"} awaiting review` }] : []),
     ...(inspections.summary.action_needed ? [{ key: "findings", href: `${base}/compliance?view=action_needed`, text: `${inspections.summary.action_needed} inspection finding${inspections.summary.action_needed === 1 ? "" : "s"} to fix` }] : []),
   ];
   const allHref = `/app/work-orders?${new URLSearchParams({ store: id, status: "open" })}`;
+
   return <>
     {attention.length || confirmations.length ? <section className={`${styles.page} ${styles.panel} ${styles.fullWidth}`} aria-labelledby="store-attention">
       <header className={styles.header}><h2 id="store-attention">Needs attention</h2></header>
@@ -69,4 +72,23 @@ export async function StoreActiveWork({ id }: { id: string }) {
       {openCount > rows.length ? <p className={styles.muted}><Link href={allHref}>Show all {openCount} open jobs</Link></p> : null}
     </section>
   </>;
+}
+
+/** One line of store context: active warranties, vendors and inspections awaiting review, each opening its list. */
+export async function StoreContextRow({ id }: { id: string }) {
+  const { session, repository } = await storeWorkspaceContext(id);
+  const scope = { ...session, storeIds: [id] }, today = new Date().toISOString().slice(0, 10), base = `/app/stores/${encodeURIComponent(id)}`;
+  const inspections = await repository.queryInspections(scope, { today, storeId: id, limit: 1 });
+  const [warranties, vendors] = await Promise.all([
+    repository.listWarrantyDirectory(scope, { today, view: "active", limit: 1 }).catch(() => null),
+    repository.queryStoreVendors(scope, id, {}).catch(() => null),
+  ]);
+  const preferred = vendors?.items.filter((row) => row.preferenceKeys.length).length ?? 0;
+  const covering = vendors?.items.filter((row) => row.covered).length ?? 0;
+  const context = [
+    warranties ? { key: "warranties", href: `${base}/warranties`, text: `${warranties.totalCount} active ${warranties.totalCount === 1 ? "warranty" : "warranties"}` } : null,
+    vendors ? { key: "vendors", href: `${base}/vendors`, text: preferred ? `${preferred} preferred ${preferred === 1 ? "vendor" : "vendors"} · ${covering}${vendors.total > vendors.items.length ? "+" : ""} covering` : `${covering}${vendors.total > vendors.items.length ? "+" : ""} ${covering === 1 ? "vendor covers" : "vendors cover"} this store` } : null,
+    { key: "inspections", href: `${base}/compliance?view=performed`, text: `${inspections.summary.performed ?? 0} ${inspections.summary.performed === 1 ? "inspection" : "inspections"} awaiting review` },
+  ].filter((item): item is { key: string; href: string; text: string } => Boolean(item));
+  return <nav className={`${styles.contextRow} ${styles.fullWidth}`} aria-label="Store context">{context.map((item) => <Link key={item.key} href={item.href}>{item.text} →</Link>)}</nav>;
 }

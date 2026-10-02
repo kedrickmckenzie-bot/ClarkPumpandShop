@@ -17,5 +17,5 @@ export function WorkWarrantyHint({assetId,componentId}:{assetId:string;component
   if(!assetId)return null;
   if(result?.asset!==selection)return failed===selection?<p>Warranty check unavailable. Review equipment coverage before sending.</p>:<p role="status">Checking warranty…</p>;
   if(!result.count)return null;
-  return <aside className={styles.banner}><strong>This may be under warranty</strong><p>Check coverage before agreeing to charges.</p><ul>{result.items.map(c=><li key={c.id}><Link href={`/app/warranties/coverage/${encodeURIComponent(c.id)}`} target="_blank">{c.provider} · {c.component??"Whole equipment"} · ends {formatOperationsDate(c.end)}</Link></li>)}</ul></aside>;
+  return <aside className={styles.banner}><strong>May be covered by warranty</strong><p>Check coverage before agreeing to charges.</p><ul>{result.items.map(c=><li key={c.id}><Link href={`/app/warranties/coverage/${encodeURIComponent(c.id)}`} target="_blank">{c.provider} · {c.component??"Whole equipment"} · ends {formatOperationsDate(c.end)}</Link></li>)}</ul></aside>;
 }

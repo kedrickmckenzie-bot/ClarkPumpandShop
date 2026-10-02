@@ -1,5 +1,5 @@
 import { StoreOpenReports } from "@/components/workspace/store-open-reports";
-import { StoreActiveWork } from "@/components/workspace/store-active-work";
+import { StoreActiveWork, StoreContextRow } from "@/components/workspace/store-active-work";
 import { StoreWorkspaceNav, storeSectionTab } from "@/components/workspace/store-workspace-nav";
 import type { Metadata } from "next";
 import { roleCan } from "@/components/ops/role-policy";
@@ -33,7 +33,7 @@ export default async function StoreDetailPage({ params, searchParams }: { params
       embeddedSections
       embeddedSectionIds={tab?.sections}
       hideFacts
-      beforeFacts={<><StoreWorkspaceNav id={id} active={section ?? "overview"} />{ready && !section ? <><StoreOpenReports id={id} /><StoreActiveWork id={id} /></> : null}</>}
+      beforeFacts={<><StoreWorkspaceNav id={id} active={section ?? "overview"} />{ready && !section ? <><StoreContextRow id={id} /><StoreOpenReports id={id} /><StoreActiveWork id={id} /></> : null}</>}
       after={!section && (canCreateQr || canSetupEquipment || canSetupPm) ? (
         <>
           {canCreateQr ? (

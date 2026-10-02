@@ -67,6 +67,8 @@ import {
 } from "@/lib/ops/work-order-workspace";
 
 interface WorkOrderCaseProps {
+  /** Facts shown in the header on every tab (equipment, scheduled visit). */
+  headerFacts?: Array<{ label: string; value: string; href?: string }>;
   sentWork?: ReactNode;
   emailHistory?: ReactNode;
   costPrompts?: ReactNode;
@@ -559,6 +561,7 @@ function workspaceHeading(mode: WorkOrderWorkspaceMode, accountabilityOnly: bool
 }
 
 export function WorkOrderCase({
+  headerFacts = [],
   sentWork,
   emailHistory,
   costPrompts,
@@ -653,7 +656,8 @@ export function WorkOrderCase({
         {canonicalCase.stage !== "closed" ? <section className={styles.accountableHeader} aria-label="Next step">
           <div><span>Next action</span><strong>{canonicalCase.primaryNextAction.label}</strong></div>
           <div><span>Who acts next</span><strong>{canonicalCase.nextActionOwner}</strong></div>
-          <div><span>Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
+          <div><span>Next step due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
+          {headerFacts.map((fact) => <div key={fact.label}><span>{fact.label}</span><strong>{fact.href ? <Link href={fact.href}>{fact.value}</Link> : fact.value}</strong></div>)}
           <div><span>Escalates to</span><strong>{canonicalCase.escalationDestination}</strong></div>
           {/* The facts needed to act, on every tab: what is wrong, who has it, and what last happened. */}
           {activeView !== "overview" ? <dl className={styles.headerContext}>

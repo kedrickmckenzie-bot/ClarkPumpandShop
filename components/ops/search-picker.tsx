@@ -36,7 +36,7 @@ export function matchesQuery(option: PickOption, query: string) {
  * and a click selects. Pass `options` to filter in the browser, or `load` to
  * ask the server (results update as you type).
  */
-export function SearchPicker({ name, label, options, load, required = false, placeholder = "Type to search", defaultValue, defaultOption, onSelect, emptyText = "No matches. Try fewer letters.", disabled = false, disabledText, hidden, allowClear = false, clearLabel = "Any", submitOnSelect = false }: {
+export function SearchPicker({ name, label, options, load, required = false, placeholder = "Type to search", defaultValue, defaultOption, onSelect, emptyText = "No matches. Try fewer letters.", disabled = false, disabledText, hidden, allowClear = false, clearLabel = "Any", submitOnSelect = false, compact = false }: {
   name?: string;
   label: string;
   options?: PickOption[];
@@ -56,6 +56,8 @@ export function SearchPicker({ name, label, options, load, required = false, pla
   clearLabel?: string;
   /** Filters: apply the choice at once by submitting the surrounding form. */
   submitOnSelect?: boolean;
+  /** Filters: the list opens while searching (focus or typing) instead of always showing. */
+  compact?: boolean;
 }) {
   const id = useId();
   const [query, setQuery] = useState("");
@@ -64,6 +66,7 @@ export function SearchPicker({ name, label, options, load, required = false, pla
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<PickOption | undefined>(() => defaultOption ?? options?.find((option) => option.value === defaultValue));
   const [active, setActive] = useState(-1);
+  const [open, setOpen] = useState(!compact);
   const listRef = useRef<HTMLUListElement>(null);
   const validity = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -118,6 +121,7 @@ export function SearchPicker({ name, label, options, load, required = false, pla
     setSelected(option);
     onSelect?.(option);
     validity.current?.setCustomValidity("");
+    if (compact) setOpen(false);
     // Wait for the hidden field to carry the new value, then apply the filter.
     if (submitOnSelect) setTimeout(() => root.current?.closest("form")?.requestSubmit(), 0);
   }
@@ -127,6 +131,8 @@ export function SearchPicker({ name, label, options, load, required = false, pla
       const next = Math.max(0, Math.min(rows.length - 1, activeIndex + (event.key === "ArrowDown" ? 1 : -1)));
       setActive(next);
       listRef.current?.children[next]?.scrollIntoView({ block: "nearest" });
+    } else if (event.key === "Escape" && compact) {
+      setOpen(false);
     } else if (event.key === "Enter") {
       event.preventDefault();
       if (rows.length) choose(rows[Math.max(0, activeIndex)] ?? undefined);
@@ -136,19 +142,20 @@ export function SearchPicker({ name, label, options, load, required = false, pla
   const total = load ? undefined : options?.length;
   const countText = () => pickerCountText({ shown: results.length, total, next, serverTotal, query });
   const extra = hidden?.(selected) ?? {};
-  return <div className={styles.picker} ref={root}>
+  return <div className={`${styles.picker} ${compact ? styles.compact : ""}`} ref={root}>
     <label className={styles.label} htmlFor={`${id}-search`}>{label}{required ? <em>Required</em> : null}</label>
-    {selected ? <p className={styles.selected} role="status"><Check aria-hidden="true" size={16} /><span><strong>{selected.label}</strong>{selected.detail ? <small>{selected.detail}</small> : null}</span></p> : null}
+    {selected && !compact ? <p className={styles.selected} role="status"><Check aria-hidden="true" size={16} /><span><strong>{selected.label}</strong>{selected.detail ? <small>{selected.detail}</small> : null}</span></p> : null}
     <div className={styles.searchWrap}>
-      <input id={`${id}-search`} className={styles.search} type="search" role="combobox" aria-expanded="true" aria-controls={`${id}-list`} aria-activedescendant={activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined} autoComplete="off" maxLength={160}
-        placeholder={disabled ? disabledText ?? placeholder : placeholder} disabled={disabled} value={query}
-        onChange={(event) => { setQuery(event.target.value); setActive(event.target.value ? 0 : -1); }} onKeyDown={onKey} />
+      <input id={`${id}-search`} className={styles.search} type="search" role="combobox" aria-expanded={open} aria-controls={`${id}-list`} aria-activedescendant={activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined} autoComplete="off" maxLength={160}
+        placeholder={disabled ? disabledText ?? placeholder : compact && selected ? selected.label : placeholder} disabled={disabled} value={query}
+        onChange={(event) => { setQuery(event.target.value); setActive(event.target.value ? 0 : -1); setOpen(true); }} onKeyDown={onKey}
+        onFocus={() => setOpen(true)} onBlur={() => { if (compact) setTimeout(() => { if (!root.current?.contains(document.activeElement)) setOpen(false); }, 150); }} />
       {/* Carries "required" so the browser stops the form and points here when nothing is chosen. */}
       {required ? <input ref={validity} className={styles.validity} tabIndex={-1} aria-hidden="true" required value={selected?.value ?? ""} onChange={() => {}} onInvalid={(event) => event.currentTarget.setCustomValidity(`Choose ${label.toLowerCase()} from the list.`)} /> : null}
     </div>
     {name ? <input type="hidden" name={name} value={selected?.value ?? ""} /> : null}
     {Object.entries(extra).map(([field, value]) => <input key={field} type="hidden" name={field} value={value} />)}
-    {disabled ? null : <>
+    {disabled || !open ? null : <div className={compact ? styles.popup : styles.inline}>
       <ul ref={listRef} id={`${id}-list`} className={styles.list} role="listbox" aria-label={label}>
         {rows.map((option, index) => {
           const isSelected = option ? option.value === selected?.value : !selected;
@@ -165,6 +172,6 @@ export function SearchPicker({ name, label, options, load, required = false, pla
         <p className={styles.count} aria-live="polite">{error ? <span role="alert">{error}</span> : busy ? "Searching…" : countText()}</p>
         {load && next ? <button type="button" className={styles.more} disabled={busy} onClick={loadMore}>Load more</button> : null}
       </div>
-    </>}
+    </div>}
   </div>;
 }

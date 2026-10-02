@@ -2,7 +2,7 @@ import { pmStoreAllowed } from "@/lib/ops/pm-record-query";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { presentEquipmentIssues, buildEquipmentIssueRanking } from "./equipment-issues-presenter";
-import { attentionAccess, presentAttentionRow } from "./attention-presenter";
+import { attentionAccess, presentAttentionRow, routeInspectionRows } from "./attention-presenter";
 import { buildReviewQueue, buildReviewSources } from "./review-queue-presenter";
 import { buildPmScheduleModel } from "./pm-schedule-presenter";
 import { buildPmSetupManagement, buildPmSetupSources } from "./pm-setup-presenter";
@@ -391,9 +391,24 @@ export async function loadDashboardModel() {
     // Overview preview: the five items waiting on this person, each with the button that does it.
     const mine = await repository.listAttention(scope, attentionAccess(session), { asOf, lane: "mine", limit: 5 });
     model.priorityActions = mine.items.map((item) => presentAttentionRow(item, asOf));
+    await routeInspectionRows(repository, session.organizationId, mine.items, model.priorityActions);
     model.prioritySection = { title: "Needs your action", description: "Your top items, most urgent first.", link: { href: "/app/action-center?lane=mine", label: mine.totalCount > mine.items.length ? `View all ${mine.totalCount}` : "Open review queue" } };
   }
   if (session.role === "executive") {
+    // A compact work-status line: where open work stands, each count opening its list.
+    const [toStart, underway, held, confirming] = await Promise.all([
+      repository.listWorkOrders(scope, { stage: "to-start", limit: 1 }),
+      repository.listWorkOrders(scope, { stage: "underway", limit: 1 }),
+      repository.listWorkOrders(scope, { stage: "vendor-or-parts", limit: 1 }),
+      repository.listWorkOrders(scope, { needsConfirmation: true, limit: 1 }),
+    ]);
+    const count = (page: { totalCount?: number; items: unknown[] }) => page.totalCount ?? page.items.length;
+    model.journey = [
+      { id: "to-start", label: "Waiting to start", value: String(count(toStart)), supportingText: "Not yet sent or assigned", tone: "neutral" as const, link: { href: "/app/work-orders?stage=to-start", label: "Open work waiting to start" } },
+      { id: "underway", label: "Underway", value: String(count(underway)), supportingText: "Sent, scheduled or in progress", tone: "info" as const, link: { href: "/app/work-orders?stage=underway", label: "Open work underway" } },
+      { id: "vendor-or-parts", label: "Waiting on vendor or parts", value: String(count(held)), supportingText: "Held up outside the company", tone: count(held) ? "warning" as const : "neutral" as const, link: { href: "/app/work-orders?stage=vendor-or-parts", label: "Open held-up work" } },
+      { id: "confirmation", label: "Needs confirmation", value: String(count(confirming)), supportingText: "Reported done, not yet confirmed", tone: count(confirming) ? "warning" as const : "neutral" as const, link: { href: "/app/work-orders?status=confirmation", label: "Open work needing confirmation" } },
+    ];
     // Owners start with money: the last 90 days against the 90 days before, on the same cost basis.
     const windows = ownerSpendWindows(window.costTo);
     const [current, prior] = await Promise.all([

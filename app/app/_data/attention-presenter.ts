@@ -1,3 +1,4 @@
+import type { OpsRepository } from "@/lib/ops/repository";
 import { reviewQueueExceptionCopy } from '@/lib/ops/attention-copy';
 import type { ActionItemViewModel, OperatorSession } from "@/components/ops/data-contract";
 import { roleCanOpenOperatorHref } from "@/components/ops/role-policy";
@@ -50,4 +51,18 @@ export function presentAttentionRow(item: AttentionQueueRow, asOf: string): Acti
     tone: history ? "neutral" : overdue || item.priority === "critical" ? "critical" : item.priority === "high" ? "warning" : "neutral",
     link: { href: item.linkHref, label: actionLabel(item, exception) },
   };
+}
+
+
+/**
+ * Rows for inspection work open the inspection, where findings and paperwork are
+ * reviewed, rather than the work order's confirmation screen.
+ */
+export async function routeInspectionRows(repository: Pick<OpsRepository, "inspectionForWork">, organizationId: string, items: readonly AttentionQueueRow[], actions: ActionItemViewModel[]) {
+  await Promise.all(items.map(async (item, index) => {
+    if (!item.workOrderId || item.lane === "history" || !actions[index]) return;
+    const inspection = await repository.inspectionForWork(organizationId, item.workOrderId);
+    if (!inspection || inspection.correctiveWorkOrderId === item.workOrderId || inspection.status === "passed") return;
+    actions[index].link = { href: `/app/compliance/${encodeURIComponent(inspection.id)}`, label: inspection.status === "pending" ? "Open inspection" : "Review findings" };
+  }));
 }

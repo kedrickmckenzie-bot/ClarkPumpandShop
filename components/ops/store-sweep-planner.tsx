@@ -29,7 +29,7 @@ export function StoreSweepPlanner({ model, notice }: { model: StoreSweepPlannerM
       <div className={styles.panelHeader}><div><h2>1. Choose the store</h2><p>Stores with the most approved small jobs appear first.</p></div></div>
       <form className={styles.storePicker} action="/app/store-sweeps/new" method="get">
         <input type="hidden" name="returnTo" value={model.returnHref} />
-        <SearchPicker name="store" label="Store" submitOnSelect placeholder="Store number or name" options={model.stores.map((store) => ({ value: store.id, label: store.label, tag: `${store.readyCount} approved ${store.readyCount === 1 ? "job" : "jobs"}` }))} defaultValue={model.selectedStoreId} />
+        <SearchPicker compact name="store" label="Store" submitOnSelect placeholder="Store number or name" options={model.stores.map((store) => ({ value: store.id, label: store.label, tag: `${store.readyCount} approved ${store.readyCount === 1 ? "job" : "jobs"}` }))} defaultValue={model.selectedStoreId} />
         <button type="submit">Show this store</button>
       </form>
     </section>

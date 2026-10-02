@@ -9,3 +9,7 @@
 .banner label { display:flex; flex-direction:column; gap:8px; }
 .banner textarea { font:inherit; padding:10px; border:1px solid #94a3b8; border-radius:4px; max-width:640px; }
 .banner button { margin-top:10px; background:#1d4ed8; color:white; border:0; border-radius:4px; padding:10px 16px; font:inherit; }
+
+.lead{display:grid;gap:4px;margin:10px 0;padding:10px 12px;background:#fff;border:1px solid #f0cf85;border-radius:6px}
+.links{display:flex;flex-wrap:wrap;gap:6px 16px}
+.lead a,.terms a{color:#1d4ed8;font-weight:600}

@@ -373,6 +373,8 @@ export interface ActionItemViewModel {
   id: string;
   title: string;
   description: string;
+  /** The work order or report problem behind the item, when the title does not already say it. */
+  problemLabel?: string;
   categoryLabel: string;
   attentionType?: "service_record" | "follow_up" | "vendor_task";
   attentionLane?: "mine" | "team" | "waiting" | "upcoming" | "history";

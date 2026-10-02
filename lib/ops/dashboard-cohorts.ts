@@ -6,6 +6,10 @@ export const PENDING_REQUEST_STATUSES = ["submitted", "under_review"] as const;
 export const WORK_STAGE_STATUSES: Record<string, readonly string[]> = {
   "not-sent": ["approved"],
   "vendor-response": ["issued", "waiting_on_vendor"],
+  // Owner overview groups: not yet with anyone, being worked, held up.
+  "to-start": ["draft", "awaiting_approval", "approved"],
+  "underway": ["issued", "accepted", "scheduled", "in_progress"],
+  "vendor-or-parts": ["waiting_on_vendor", "waiting_on_parts"],
 };
 
 export function matchesRequestStatus(request: { status: string; linkedWorkOrderId?: string; convertedWorkOrderId?: string }, status?: string) {

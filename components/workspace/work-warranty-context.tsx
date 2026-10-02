@@ -19,23 +19,26 @@ export async function WorkWarrantyContext({workOrderId}:{workOrderId:string}) {
   if(!review?.coverage.totalCount) return null;
   const {coverage,decision,work}=review;
   const originalWork=new Map(await Promise.all([...new Set(coverage.items.flatMap(c=>c.workId?[c.workId]:[]))].map(async id=>[id,await repository.getWorkOrderDetail(session,id)] as const)));
+  // The coverage closest to this job is shown openly; any others stay one click away.
+  const ranked=[...coverage.items].sort((a,b)=>Number(Boolean(b.component&&b.component===work.component?.name))-Number(Boolean(a.component&&a.component===work.component?.name)));
+  const term=(c:typeof coverage.items[number],full:boolean)=><>
+    <strong>{c.provider} · {c.component ?? "Whole equipment"}</strong>
+    <span>{c.title} · ends {formatOperationsDate(c.end)}</span>
+    {full ? <span>Parts: {c.parts} · Labor: {c.labor} · Travel: {c.travel} · Diagnostic: {c.diagnostic}</span> : null}
+    {c.replacementDate ? <span>Replacement recorded {formatOperationsDate(c.replacementDate)}</span> : null}
+    <span className={styles.links}><Link href={`/app/warranties/coverage/${encodeURIComponent(c.id)}`}>Terms and documents →</Link>{c.workId && originalWork.get(c.workId) ? <Link href={`/app/work-orders/${encodeURIComponent(c.workId)}`}>Original work: {originalWork.get(c.workId)!.number} →</Link> : null}</span>
+  </>;
+  const [lead,...others]=ranked;
   return <section className={styles.banner} data-dismissed={Boolean(decision)} id="work-warranty" aria-labelledby="work-warranty-title">
-    <h2 id="work-warranty-title">{decision ? "Warranty reviewed" : "This may be under warranty"}</h2>
+    <h2 id="work-warranty-title">{decision ? "Warranty reviewed" : "May be covered by warranty"}</h2>
     <p>{work.asset?.name}{work.component ? ` · ${work.component.name}` : ""}</p>
-    {!decision ? <p>{[...new Set(coverage.items.map(c=>c.provider))].join(" · ")}</p> : null}
-    {decision ? <p>{JSON.parse(decision.payloadJson).reason} · {decision.actorName} · {formatOperationsDate(decision.occurredAt)}</p> : <p>Check coverage with the listed provider before agreeing to charges.</p>}
-    <details>
-      <summary>See warranty details ({coverage.totalCount})</summary>
-      <ul className={styles.terms}>{coverage.items.map(c=><li key={c.id}>
-        <strong>{c.provider} · {c.component ?? "Whole equipment"}</strong>
-        <span>{c.title} · {formatOperationsDate(c.start)}–{formatOperationsDate(c.end)}</span>
-        <span>Parts: {c.parts} · Labor: {c.labor} · Travel: {c.travel} · Diagnostic: {c.diagnostic}</span>
-        {c.replacementDate ? <span>Replacement recorded {formatOperationsDate(c.replacementDate)}</span> : null}
-        <Link href={`/app/warranties/coverage/${encodeURIComponent(c.id)}`}>Terms and documents →</Link>
-        {c.workId && originalWork.get(c.workId) ? <Link href={`/app/work-orders/${encodeURIComponent(c.workId)}`}>Original work: {originalWork.get(c.workId)!.number} →</Link> : null}
-      </li>)}</ul>
+    {decision ? <p>{JSON.parse(decision.payloadJson).reason} · {decision.actorName} · {formatOperationsDate(decision.occurredAt)}</p> : <p>Check coverage with {lead?.provider ?? "the listed provider"} before agreeing to charges. Whether this repair is covered is not yet established.</p>}
+    {lead ? <div className={styles.lead}>{term(lead,true)}</div> : null}
+    {others.length ? <details>
+      <summary>Other coverage on this equipment ({others.length})</summary>
+      <ul className={styles.terms}>{others.map(c=><li key={c.id}>{term(c,true)}</li>)}</ul>
       {coverage.nextOffset !== undefined ? <Link href={`/app/equipment/${work.asset!.id}#equipment-warranties`}>All equipment coverage →</Link> : null}
-    </details>
+    </details> : null}
     {!decision && ["executive","facilities","regional"].includes(session.role) ? <details>
       <summary>Not a warranty issue</summary>
       <RecordForm action="/api/ops/warranties/dismiss" offerSavedWork={false}>

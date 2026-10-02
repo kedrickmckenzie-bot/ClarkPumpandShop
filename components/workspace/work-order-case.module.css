@@ -1762,7 +1762,7 @@
     scroll-behavior: auto;
   }
 }
-.accountableHeader { display: grid; grid-template-columns: 1.7fr 1fr 1fr 1fr; gap: 14px; border-top: 1px solid var(--case-border); padding: 14px 18px; background: #f8fafc; }
+.accountableHeader { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; border-top: 1px solid var(--case-border); padding: 14px 18px; background: #f8fafc; }
 .accountableHeader > div { min-width: 0; }
 .accountableHeader span { display: block; font-size: 14px; color: var(--case-muted); margin-bottom: 4px; }
 .accountableHeader strong { display: block; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
@@ -1809,3 +1809,8 @@
 .headerContext dt { font-size: 14px; color: var(--case-muted); margin-bottom: 4px; }
 .headerContext dd { margin: 0; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
 @media (max-width: 760px) { .headerContext { grid-template-columns: 1fr; gap: 10px; } }
+
+/* The store always shows in full under the work-order number. */
+.caseIdentity { grid-template-columns: minmax(0, 1fr); }
+.caseIdentity .inlineFactLink strong { white-space: normal; overflow: visible; }
+.caseIdentityRow { flex-wrap: wrap; }

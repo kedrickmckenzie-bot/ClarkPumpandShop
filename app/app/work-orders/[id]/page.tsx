@@ -1,3 +1,4 @@
+import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import { SentWorkOrders } from "@/components/workspace/sent-work-orders";
 import { workWarrantyReview } from "@/lib/ops/work-warranty-review";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
@@ -135,6 +136,18 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     }
     if (target?.startsWith("/app/")) redirect(nextActionRedirect(target, query));
   }
+  // Header facts that explain the job on every tab: equipment, and the confirmed visit (distinct from the due date).
+  const headerRepository = await getServerOpsRepository();
+  const [headerDetail, headerAppointments] = await Promise.all([
+    headerRepository.getWorkOrderDetail(session, id),
+    headerRepository.listServiceAppointmentsForWorkOrder(session.organizationId, id),
+  ]);
+  const headerStore = headerDetail ? await headerRepository.getStore(session.organizationId, headerDetail.storeId) : null;
+  const nextVisit = headerAppointments.filter((row) => row.status === "confirmed" && row.startsAt >= new Date().toISOString()).sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0];
+  const headerFacts = [
+    ...(headerDetail?.asset ? [{ label: "Equipment", value: [headerDetail.asset.name, headerDetail.component?.name].filter(Boolean).join(" · "), href: `/app/equipment/${encodeURIComponent(headerDetail.asset.id)}` }] : []),
+    ...(nextVisit ? [{ label: "Scheduled visit", value: formatOperationsDateTime(nextVisit.startsAt, headerStore?.timeZone) }] : []),
+  ];
   return (
     <>
     {notice ? (
@@ -150,6 +163,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     ) : null}
     {returnDecision ? <Link href={returnDecision}>← Back to equipment review</Link> : null}
     <WorkOrderCase
+      headerFacts={headerFacts}
       warrantyContext={<WorkWarrantyContext workOrderId={id}/>}
       sentWork={view === "service" ? <SentWorkOrders workOrderId={id}/> : undefined}
       emailHistory={["overview","activity"].includes(view) ? <><LinkedStoreTasks kind="work" id={id} hideEmpty/><WorkFiles workOrderId={id}/><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}

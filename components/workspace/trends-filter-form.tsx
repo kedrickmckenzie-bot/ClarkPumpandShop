@@ -65,7 +65,7 @@ export function TrendsFilterForm({ action, activeView, clearHref, filters, scope
 /** Long filter lists (stores, vendors, equipment) are searched as you type instead of scrolled in a dropdown. */
 function FilterPicker({ filter }: { filter: { id: string; label: string; value?: string; options: Array<{ value: string; label: string }> } }) {
   const all = filter.options.find((option) => !option.value);
-  return <SearchPicker name={filter.id} label={filter.label} placeholder={`Type to find ${filter.label.toLowerCase()}`}
+  return <SearchPicker compact name={filter.id} label={filter.label} placeholder={`Type to find ${filter.label.toLowerCase()}`}
     allowClear={Boolean(all)} clearLabel={all?.label ?? "Any"}
     options={filter.options.filter((option) => option.value).map((option) => ({ value: option.value, label: option.label }))} defaultValue={filter.value} />;
 }

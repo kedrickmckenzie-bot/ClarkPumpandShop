@@ -27,3 +27,10 @@
 .more { min-height: 36px; padding: 6px 14px; border: 1px solid #1d4ed8; border-radius: 6px; background: #fff; color: #1d4ed8; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
 .more:hover, .more:focus-visible { background: #eff6ff; }
 .more:disabled { opacity: .6; cursor: wait; }
+.inline { display: contents; }
+/* Filters: the list floats under the search box while searching, so records stay in view. */
+.compact { position: relative; }
+.compact .search { border-radius: 6px; }
+.popup { position: absolute; z-index: 30; top: 100%; left: 0; right: 0; min-width: 260px; margin-top: 2px; padding: 0 0 6px; background: #fff; border-radius: 0 0 6px 6px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18); }
+.popup .list { border-top: 1px solid #94a3b8; border-radius: 6px 6px 0 0; }
+.popup .footer { padding: 6px 10px 0; }

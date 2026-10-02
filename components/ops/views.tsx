@@ -473,6 +473,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                       const priority = queueCell(row, "priority");
                       const type = queueCell(row, "type");
                       const action = queueCell(row, "action");
+                      const problem = queueCell(row, "problem");
                       return (
                         <li key={row.id}>
                           <Link
@@ -486,6 +487,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                                 {priority?.value !== "Review" ? <strong>{priority?.value ?? "Open"}</strong> : null}
                               </div>
                               <h3>{item?.value ?? row.label}</h3>
+                              {problem?.value ? <p className={styles.reviewQueueProblem}>{problem.value}</p> : null}
                               {item?.secondary && type?.value === "Record to check" ? <p>{item.secondary}</p> : null}
                               <div className={styles.reviewQueueContext}>
                                 <span><MapPin aria-hidden="true" size={15} />{store?.value ?? "Companywide"}</span>

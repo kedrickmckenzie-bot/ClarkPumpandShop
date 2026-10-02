@@ -1551,7 +1551,8 @@ function buildFixture(): OpsFixture {
   const taskPriority = (priority: WorkOrder["priority"]): WorkflowTask["priority"] => ({ emergency: "critical", urgent: "high", routine: "normal", planned: "low" })[priority] as WorkflowTask["priority"];
   const taskType = (workOrder: WorkOrder, followUp?: FollowUp): WorkflowTask["taskType"] => {
     if (workOrder.status === "awaiting_approval") return "approve_quote";
-    if (followUp) return /review|confirm|verify/i.test(followUp.nextAction) ? "verify_repair" : "schedule_return_visit";
+    // Follow-ups mirror the task the live commands create: choosing another vendor after a decline is choose_service_provider.
+    if (followUp) return /\b(select|choose)\b.*\bvendor\b/i.test(followUp.nextAction) ? "choose_service_provider" : /review|confirm|verify/i.test(followUp.nextAction) ? "verify_repair" : "schedule_return_visit";
     if (workOrder.status === "approved") return "choose_service_provider";
     if (workOrder.status === "issued") return "vendor_response_required";
     if (workOrder.status === "accepted" || workOrder.status === "scheduled") return "confirm_store_access";
