@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ChangeBridge, SpendHeatmap } from "./trends-visuals";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { planningScenario, scenarioKeys } from "@/lib/ops/planning-scenario";
 import { WorkReviewButton } from "./work-review";
@@ -379,9 +380,10 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
 
       {model.activeView === "overview" ? <>
         <ExecutiveResults model={model} />
+        {model.bridge ? <ChangeBridge bridge={model.bridge} metricLabel={model.metricLabel} /> : null}
         <section className={styles.contextMetrics} aria-label="Data coverage">{coverage ? <SummaryCard metric={coverage} /> : null}</section>
         <ComparisonChart model={model} />
-        {model.metricId === "recorded_cost" ? <DriverSnapshot model={model} /> : null}
+        {model.heatmap ? <SpendHeatmap heatmap={model.heatmap} metricLabel={model.metricLabel} /> : model.metricId === "recorded_cost" ? <DriverSnapshot model={model} /> : null}
         <RelatedMeasures model={model} />
       </> : null}
       {model.activeView === "drivers" ? <DriversTable model={model} /> : null}

@@ -41,13 +41,15 @@ function VisitTimes({ visits }: { visits: InvoiceVisitTime[] }) {
     <p className={styles.muted}>Onsite time is approximate. It is not billable labor.</p>
   </section>;
 }
-export function InvoiceRecordWorkspace({ visitTimes, costChoices = [], result, section, page = 1, line, match, flag, basis, open = false, scopeLabel, canDecide, decisionNote = "A company finance reviewer can record a decision.", updated = false, documents }: {
-  visitTimes?: InvoiceVisitTime[]; costChoices?: Array<{value:string;label:string}>; documents?: React.ReactNode; result: InvoiceRecordPage; section: InvoiceRecordSection; page?: number; line?: string; match?: string; flag?: string; basis?: "linked" | "unmatched"; open?: boolean; scopeLabel: string; canDecide: boolean; decisionNote?: string; updated?: boolean;
+export function InvoiceRecordWorkspace({ linkedWork = [], reviewReasons = [], visitTimes, costChoices = [], result, section, page = 1, line, match, flag, basis, open = false, scopeLabel, canDecide, decisionNote = "A company finance reviewer can record a decision.", updated = false, documents }: {
+  linkedWork?: Array<{ id: string; number: string; storeId?: string; storeNumber?: string }>; reviewReasons?: Array<{ id: string; label: string; detail: string }>; visitTimes?: InvoiceVisitTime[]; costChoices?: Array<{value:string;label:string}>; documents?: React.ReactNode; result: InvoiceRecordPage; section: InvoiceRecordSection; page?: number; line?: string; match?: string; flag?: string; basis?: "linked" | "unmatched"; open?: boolean; scopeLabel: string; canDecide: boolean; decisionNote?: string; updated?: boolean;
 }) {
   const invoice = result.invoice!; const pages = Math.max(1, Math.ceil(result.totalCount / 25));
   return <div className={styles.page}>
     <header className={styles.header}><div><p className={styles.eyebrow}>Invoice review</p><h1>{invoice.number}</h1><p>{invoice.vendorId ? <Link href={`/app/vendors/${encodeURIComponent(invoice.vendorId)}`}>{invoice.vendorName}</Link> : "Vendor unavailable"} · {date(invoice.date)} · {domainLabel(invoice.status)}</p></div><Link className={styles.button} href="/app/invoices">Back to invoices</Link></header>
+    {linkedWork.length ? <p className={styles.workLine}>{[...new Map(linkedWork.filter(w => w.storeId).map(w => [w.storeId!, w])).values()].map(w => <Link key={w.storeId} href={`/app/stores/${encodeURIComponent(w.storeId!)}`}>Store {w.storeNumber}</Link>)}{linkedWork.map(w => <Link key={w.id} href={`/app/work-orders/${encodeURIComponent(w.id)}`}>{w.number}</Link>)}</p> : <p className={styles.workLine}>No work order linked yet · <Link href={invoiceRecordHref(invoice.id, "items")}>Match items to work</Link></p>}
     <p className={styles.scope}>{scopeLabel}</p>
+    {reviewReasons.length ? <section className={styles.why} aria-labelledby="invoice-why"><h2 id="invoice-why">Why this needs review</h2><ul>{reviewReasons.map(reason => <li key={reason.id}><strong>{reason.label === "authorization" ? "Spending check" : domainLabel(reason.label)}</strong> {invoiceReviewMessage(reason.detail)}</li>)}</ul><Link className={styles.button} href={invoiceRecordHref(invoice.id, "flags", 1, undefined, undefined, undefined, true)}>{canDecide ? "Review and decide" : "Review flags"}</Link></section> : null}
     {updated ? <p role="status" className={styles.notice}>Review decision saved.</p> : null}
     <div className={styles.totals} aria-label="Invoice amounts">
       <Link href={invoiceRecordHref(invoice.id, "items")}><span>Invoice total</span><strong>{amount(invoice.total)}</strong></Link>

@@ -27,7 +27,14 @@ export async function loadInvoiceRecord(id: string, params: Record<string, strin
   const detail=costWork ? await repository.getWorkOrderDetail(session,costWork.id) : null;
   const costChoices=detail && result.invoice.vendorId ? unmatchedCostGroups(detail.costs,result.invoice.vendorId).map(g=>({value:g.id,label:`Use invoice instead of ${new Intl.NumberFormat("en-US",{style:"currency",currency:g.currency}).format(g.amountMinor/100)} · ${g.rows[0].description}`})) : [];
   const visitTimes=await invoiceVisitTimes(repository,session,id,result.invoice.vendorId);
-  return { visitTimes, costChoices, result, section, page, line: first(params.line), match: first(params.match), flag: first(params.flag), basis, open, scopeLabel: session.scopeLabel, canDecide, decisionNote, updated: first(params.updated) === "decision" };
+  // What a reviewer needs before opening tabs: the store and work behind the bill, and why it is flagged.
+  const [matched,openFlags]=await Promise.all([
+    repository.readInvoiceRecord(session,id,{section:"matches",limit:50,offset:0}),
+    result.invoice.openFlags?repository.readInvoiceRecord(session,id,{section:"flags",open:true,limit:3,offset:0}):Promise.resolve(null),
+  ]);
+  const linkedWork=[...new Map(matched.rows.filter(row=>row.workId).map(row=>[row.workId!,{id:row.workId!,number:row.workNumber??"Work order",storeId:row.storeId,storeNumber:row.storeNumber}])).values()];
+  const reviewReasons=(openFlags?.rows??[]).map(row=>({id:row.id,label:row.label,detail:row.detail}));
+  return { linkedWork, reviewReasons, visitTimes, costChoices, result, section, page, line: first(params.line), match: first(params.match), flag: first(params.flag), basis, open, scopeLabel: session.scopeLabel, canDecide, decisionNote, updated: first(params.updated) === "decision" };
 }
 
 /** Check-in and checkout times for visits on the work this invoice is matched to. */

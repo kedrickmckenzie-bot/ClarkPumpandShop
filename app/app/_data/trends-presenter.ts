@@ -113,6 +113,11 @@ export interface TrendExportRecord {
   sourcePath: string;
 }
 
+/** Plural, plain name for a breakdown dimension ("stores", "service areas"). */
+function driverDimensionLabel(dimension: TrendBreakdownId) {
+  return ({ region: "regions", store: "stores", category: "service areas", group: "equipment groups", profile: "equipment types", component: "components", vendor: "vendors" } as Record<TrendBreakdownId, string>)[dimension];
+}
+
 export type TrendAnalysisBuildResult = TrendAnalysisPageViewModel & { exportRows?: TrendExportRecord[] };
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -2120,7 +2125,7 @@ export function buildTrendsModel(
             ? `Calculation inputs used for ${benchmarkRows.find((row) => row.id === benchmarkStore)?.label ?? "store"} expected result · ${dateLabel(currentStart)}–${dateLabel(currentEnd)}`
             : detailKind === "projection"
               ? `Complete months used for the planning estimate · ${dateLabel(`${projectionMonths[0]}-01`)}–${dateLabel(endOfMonth(lastCompleteMonth))}`
-            : monthLabel(detailMonth);
+            : `${detailDriverLabel ? `${detailDriverLabel} · ` : ""}${monthLabel(detailMonth)}`;
   const sourceSortValue = (row: TrendSourceRecord) => {
     const store = storeById.get(row.storeId);
     if (sourceSort === "record") return row.label;
@@ -2625,7 +2630,58 @@ export function buildTrendsModel(
     };
   }) : undefined;
 
+  // "What changed" bridge: earlier total → the biggest movers → everything else → selected total.
+  // Built from the same driver rows and totals shown elsewhere, so the steps reconcile exactly.
+  const breakdownNoun = driverDimensionLabel(breakdown);
+  const bridge = additive && comparison !== "none" && currentHasData && baselineHasData ? (() => {
+    const movers = driverRows.filter((row) => row.changeValue !== undefined && row.changeValue !== 0)
+      .sort((left, right) => Math.abs(right.changeValue!) - Math.abs(left.changeValue!)).slice(0, 6);
+    const moved = movers.reduce((sum, row) => sum + row.changeValue!, 0);
+    const other = currentValue - baselineValue - moved;
+    const signed = (value: number) => `${value >= 0 ? "+" : "−"}${formatMetric(safeMetric, Math.abs(value), false, true)}`;
+    return {
+      startLabel: compareLabel, startValue: baselineValue, startFormatted: formatMetric(safeMetric, baselineValue, false, true),
+      startLink: { href: `${trendHref({ view: "records", detailKind: "comparison", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined })}#source-records`, label: `Open ${compareLabel.toLowerCase()} records` },
+      changeFormatted: `${signed(currentValue - baselineValue).replace(/^[+−]/, "")}${baselineValue ? ` (${currentValue >= baselineValue ? "+" : "−"}${Math.abs(Math.round(((currentValue - baselineValue) / baselineValue) * 100))}%)` : ""}`,
+      endLabel: selectedPeriodName, endValue: currentValue, endFormatted: formatMetric(safeMetric, currentValue, false, true),
+      endLink: { href: `${trendHref({ view: "records", detailKind: "current", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined })}#source-records`, label: "Open selected-period records" },
+      steps: [
+        ...movers.map((row) => ({ id: row.id, label: row.label, value: row.changeValue!, formatted: signed(row.changeValue!), link: { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined, driverBreakdown: breakdown, driverValue: row.id })}#source-records`, label: `Open ${row.label} records for both periods` } })),
+        ...(Math.abs(other) >= 0.5 ? [{ id: "other", label: `All other ${breakdownNoun}`, value: other, formatted: signed(other), link: { href: trendHref({ view: "drivers" }), label: "See every change" } }] : []),
+      ],
+    };
+  })() : undefined;
+  // Heat map: each row a store (or the selected breakdown), each column a month, darker = more.
+  const heatmap = additive && currentHasData ? (() => {
+    const groups = new Map<string, { label: string; records: TrendSourceRecord[] }>();
+    for (const row of currentRecords) {
+      const identity = driverIdentity(row);
+      const group = groups.get(identity.key) ?? { label: identity.label, records: [] };
+      group.records.push(row);
+      groups.set(identity.key, group);
+    }
+    const ranked = [...groups.entries()].map(([key, group]) => ({ key, label: group.label, total: aggregate(safeMetric, group.records), records: group.records }))
+      .sort((left, right) => right.total - left.total || left.label.localeCompare(right.label));
+    const shown = ranked.slice(0, 15);
+    const rows = shown.map((group) => ({
+      id: group.key, label: group.label, totalFormatted: formatMetric(safeMetric, group.total, false, true),
+      cells: currentMonths.map((month) => {
+        const monthRecords = group.records.filter((row) => row.periodKey === month);
+        const value = aggregate(safeMetric, monthRecords);
+        return { month, value, formatted: monthRecords.length ? formatMetric(safeMetric, value, true, true) : "None", count: monthRecords.length,
+          href: `${trendHref({ view: "records", detailKind: "month", detailMonth: month, driverBreakdown: breakdown, driverValue: group.key })}#source-records` };
+      }),
+    }));
+    return {
+      noun: breakdownNoun, months: currentMonths.map((month) => ({ key: month, label: monthLabel(month) })),
+      max: Math.max(0, ...rows.flatMap((row) => row.cells.map((cell) => cell.value))),
+      rows, totalRows: ranked.length,
+      allLink: { href: trendHref({ view: "drivers" }), label: `All ${ranked.length} ${breakdownNoun}` },
+    };
+  })() : undefined;
   return {
+    bridge,
+    heatmap,
     state: { kind: "ready" },
     maintenancePlan: activeView === "planning" ? buildMaintenancePlan(fixture, session.organizationId,
       new Set(buildAllRecords(fixture, session, "work_orders").records.filter((row) => scopeRecord(row, true, true, true, false)).flatMap((row) => row.workOrderId ? [row.workOrderId] : [])),

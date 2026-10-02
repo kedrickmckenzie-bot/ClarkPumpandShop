@@ -294,7 +294,28 @@ export interface TrendVendorAccountabilityViewModel {
   methodology: string;
 }
 
+/** Earlier total → biggest movers → everything else → selected total. Steps reconcile to the totals. */
+export interface TrendBridgeViewModel {
+  startLabel: string; startValue: number; startFormatted: string; startLink: SupportingLink;
+  endLabel: string; endValue: number; endFormatted: string; endLink: SupportingLink;
+  /** The change in the total, signed and formatted with its relative change. */
+  changeFormatted: string;
+  steps: Array<{ id: string; label: string; value: number; formatted: string; link: SupportingLink }>;
+}
+
+/** Rows (stores or the chosen breakdown) by month; each cell opens its exact records. */
+export interface TrendHeatmapViewModel {
+  noun: string;
+  months: Array<{ key: string; label: string }>;
+  max: number;
+  rows: Array<{ id: string; label: string; totalFormatted: string; cells: Array<{ month: string; value: number; formatted: string; count: number; href: string }> }>;
+  totalRows: number;
+  allLink: SupportingLink;
+}
+
 export interface TrendAnalysisPageViewModel {
+  bridge?: TrendBridgeViewModel;
+  heatmap?: TrendHeatmapViewModel;
   maintenancePlan?: import("@/lib/ops/maintenance-plan").MaintenancePlan;
   state: DataState;
   page: PageContext;
