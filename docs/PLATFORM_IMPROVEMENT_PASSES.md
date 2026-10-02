@@ -4,6 +4,27 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Internal maintenance release 1 — plan (October 2, Claude)
+
+Status: planned with the user; Codex review of this plan pending (an earlier draft was reviewed; its corrections are folded in). Build in the order below; each item is validated and pushed on its own.
+
+How Clark's works today: the facilities manager decides "our team handles this" and tells the field manager (reports to the facilities manager) by call or text; the field manager sorts it out with the technicians by call or text. Product direction from the user: a flexible version, not a reduced one. Every step is available in the platform and none is forced; technicians have logins and a "My day"; check-in and check-out use the same workflow vendors get and are attributed to the signed-in technician automatically (no typed names).
+
+Rules that bound this work: one canonical work order for internal, outside and blended work; no payroll, shift scheduling, route optimization, inventory or continuous location tracking (location only at check-in/out when policy enables it); vendors keep working without an app; the demo uses the preview role picker, which must not be presented as production sign-in; native apps are later and must not be implied.
+
+- [ ] IM-01 Clear in-house vs outside distinction on existing screens: every place that shows who handles work (work list, work order, store, visits, review queue, approvals, spending/trends, equipment history, search) says "In-house" or "Outside vendor" consistently, and names the technician or field manager instead of the generic "Internal maintenance". Vendors stays vendors only; the team lives under Work.
+- [ ] IM-02 Technician and field manager roles: technician sees only assigned work, team work at stores in their area and those stores' equipment history; field manager sees the facilities manager's pages, simplified and scoped to their area and technicians, including vendor work. Reuse existing permissions and store/region scopes; enforced on the server. Fictional seed: two technicians plus one field manager.
+- [ ] IM-03 Assignment chain, each step optional: facilities manager → field manager → named technician or "anyone on the team" (claim protection so two people cannot take the same job). Exactly one accountable party, next action, due time and escalation at every step.
+- [ ] IM-04 "My day" for technicians: assigned jobs grouped by store, most urgent first, plus "next visit" held items at those stores.
+- [ ] IM-05 Check-in/out attributed to the signed-in technician through the existing visit commands: pick up extra team jobs and held items at the store; one outcome per job (fixed, needs more work, needs an outside vendor) with notes and photos; unresolved outcomes create the follow-up atomically; check-in with no matching job creates a reviewable unmatched visit. Managers can record a result on a technician's behalf, visibly attributed.
+- [ ] IM-06 "Needs an outside vendor" returns the same work order to the field or facilities manager with the technician's findings; a manager with authority issues it to a vendor within existing approval limits. Internal costs stay separate from the vendor invoice.
+- [ ] IM-07 "Next visit" held items as lightweight work orders on the existing held-work behavior (extended to internal providers): store and problem required, equipment optional, review deadline, clearly labeled and kept out of headline open-work counts unless filtered; a manager can close one as not needed. Store managers add them as requests marked "next visit is fine". Urgent problems never wait for a visit.
+- [ ] IM-08 Add nearby work to a trip: when the field manager assigns a technician to a store, suggest unassigned team jobs, held items and inspections coming due at other stores within a company distance setting (store coordinates, labeled "about N mi"); never urgent jobs or work assigned to someone else; nothing is added without confirmation.
+- [ ] IM-09 Work → Team board: who has what, overdue work, held items waiting per store, reassign. Facilities manager sees all teams; field manager sees their own.
+- [ ] IM-10 Company setting: technician check-in optional (default) or required for in-house work, with a recorded manager override.
+
+Later (not release 1): optional travel entry (suggested durations need confirmation; gaps are never assumed to be travel or work), visit time kept at visit level with any per-job split labeled as an allocation, simple parts (description, quantity, actual cost, receipt; remembered prices shown as "last recorded price"), equipment QR stickers that open equipment and ask before linking it to a job, in-house vs vendor comparison in Spending/Reports (time first, optional hourly rate, labeled bases), internal PM rounds, certifications, and Android/iOS apps wrapping the same screens with offline capture.
+
 ## Equipment filter and attention follow-ups (October 2, Claude)
 
 Codex audit of 4c445a7 (568 count-to-record checks passed) reproduced two remaining issues.
