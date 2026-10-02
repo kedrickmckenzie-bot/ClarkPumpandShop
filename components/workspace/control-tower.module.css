@@ -468,3 +468,4 @@
 .actionQueue { min-width: 0; }
 
 .workspace details.section > summary { padding: 18px 24px; font-size: 16px; font-weight: 650; cursor: pointer; }
+.queueLink { margin: 0; }

@@ -5,7 +5,6 @@ import {
   ArrowRight,
   BarChart3,
   CalendarClock,
-  CheckCircle2,
   ChevronRight,
   Clock3,
   ExternalLink,
@@ -13,7 +12,6 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import type {
-  ActionItemViewModel,
   BreakdownViewModel,
   DashboardPageViewModel,
   MetricViewModel,
@@ -73,45 +71,7 @@ function MetricStrip({ metrics }: { metrics: MetricViewModel[] }) {
   );
 }
 
-function ActionRow({ action }: { action: ActionItemViewModel }) {
-  return (
-    <Link href={action.link.href} className={`${styles.actionRow} ${toneClass(action.tone)}`}>
-      <span className={styles.actionRail} aria-hidden="true" />
-      <span className={styles.actionCopy}>
-        <span className={styles.actionIdentity}>
-          <span>{action.categoryLabel}</span>
-          {action.recordLabel ? <span>· {action.recordLabel}</span> : null}
-          {action.storeLabel ? <span>· {action.storeLabel}</span> : null}
-        </span>
-        <strong>{action.title}</strong>
-        <p>{action.description}</p>
-      </span>
-      <span className={styles.actionMeta}><span>Who acts next</span><strong>{action.ownerLabel}</strong></span>
-      <span className={styles.actionMeta}><span>Due</span><strong>{action.dueLabel}</strong></span>
-      <span className={styles.actionCta}>{action.link.label}<ChevronRight size={18} aria-hidden="true" /></span>
-    </Link>
-  );
-}
 
-function AttentionSection({ model }: { model: DashboardPageViewModel }) {
-  const actions = model.priorityActions.slice(0, 5);
-  const source = model.prioritySection?.link ?? { href: "/app/action-center", label: "Open action queue" };
-
-  return (
-    <section className={styles.section} aria-labelledby="attention-heading">
-      <header className={styles.sectionHeader}>
-        <div><h2 id="attention-heading">{model.prioritySection?.title ?? "What needs attention now"}</h2><p>{model.prioritySection?.description ?? "Work ordered by responsibility and deadline."}</p></div>
-        <Link className={styles.textLink} href={source.href}>{source.label}<ArrowRight size={15} aria-hidden="true" /></Link>
-      </header>
-      <div className={styles.actionQueue}>
-        <div className={styles.actionList}>
-          {actions.length ? actions.map((action) => <ActionRow action={action} key={action.id} />) : <div className={styles.empty}><CheckCircle2 size={22} aria-hidden="true" /><p>Nothing is waiting on you right now.</p></div>}
-        </div>
-
-      </div>
-    </section>
-  );
-}
 
 function Pipeline({ model }: { model: DashboardPageViewModel }) {
   if (!model.journey?.length) return null;
@@ -233,7 +193,9 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
     <section className={styles.section}><div className={styles.empty}><BarChart3 size={24} aria-hidden="true" /><p>No insight records are available for this scope and period.</p></div></section>
   );
   const metrics = <><MetricStrip metrics={model.metrics} />{operatingSummary}</>;
-  const attention = <AttentionSection model={model} />;
+  // Every role can reach the review queue from the Overview: a count tile when the layout has one, otherwise one link.
+  const queueLink = model.metrics.some((metric) => metric.link.href.startsWith("/app/action-center")) ? null
+    : <p className={styles.queueLink}><Link className={styles.textLink} href="/app/action-center">Open review queue<ArrowRight size={15} aria-hidden="true" /></Link></p>;
   const pipeline = <Pipeline model={model} />;
   const spotlight = model.spotlight ? <Spotlight model={model.spotlight} /> : null;
   const equipment = model.equipmentIssues ? <EquipmentIssues model={model.equipmentIssues} /> : null;
@@ -241,22 +203,22 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
 
   switch (model.layout) {
     case "executive":
-      // Owner order: money first, where it goes, what is broken, upcoming decisions, then the to-do list.
-      content = <>{metrics}{pipeline}{insights}{equipment}{capitalSummary}{attention}{spotlight}</>;
+      // Owner order: money first, where it goes, what is broken, upcoming decisions.
+      content = <>{metrics}{queueLink}{pipeline}{insights}{equipment}{capitalSummary}{spotlight}</>;
       break;
     case "finance":
-      content = <>{attention}{metrics}{capitalSummary}{pipeline}{equipment}<details className={styles.section}><summary>Spending and equipment insights</summary>{insights}{spotlight}</details></>;
+      content = <>{metrics}{queueLink}{capitalSummary}{pipeline}{equipment}<details className={styles.section}><summary>Spending and equipment insights</summary>{insights}{spotlight}</details></>;
       break;
     case "regional":
-      content = <>{metrics}{attention}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      content = <>{metrics}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
       break;
     case "store":
-      content = <>{attention}{metrics}{capitalSummary}{equipment}{pipeline}{insights}{spotlight}</>;
+      content = <>{metrics}{capitalSummary}{equipment}{pipeline}{insights}{spotlight}</>;
       break;
     case "operations":
     default:
-      // A short preview of what waits on you; the full list is in the review queue.
-      content = <>{metrics}{attention}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      // The "Needs your action" tile opens the review queue; the Overview itself shows no item list.
+      content = <>{metrics}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
   }
 
   return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;

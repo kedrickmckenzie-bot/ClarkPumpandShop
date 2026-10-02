@@ -4091,3 +4091,45 @@ a.factItem:hover {
 }
 /* A record's description keeps the line breaks it was written with (e.g. "Area or equipment: …"). */
 .pageDescription[data-record] { white-space: pre-line; }
+
+/* ── Slim page header (all list and record pages) ──────────────────────────
+   Title and main action on one row, one quiet line for scope, no boxed card,
+   so the records start higher on every screen. */
+.pageHeader.pageHeader { gap: 6px 24px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
+.pageHeader.pageHeader h1 { font-size: clamp(26px, 2.4vw, 32px); }
+.pageHeader .eyebrow { margin-bottom: 4px; font-size: 12px; }
+.pageHeader .pageDescription { margin-top: 6px; font-size: 15px; }
+.contextBar.contextBar { display: flex; flex-wrap: wrap; min-height: 0; margin: 0; padding: 0; gap: 2px 16px; border: 0; background: transparent; overflow: visible; }
+.contextBar.contextBar > span { display: inline-flex; flex-direction: row; align-items: baseline; gap: 6px; min-width: 0; padding: 0; border: 0; }
+.contextBar.contextBar > span + span { padding-left: 0; border-left: 0; border-top: 0; }
+.contextBar.contextBar small { font-size: 12px; letter-spacing: 0.04em; }
+.contextBar.contextBar strong { margin-top: 0; color: var(--workspace-muted); font-size: 13px; font-weight: 600; }
+@media (max-width: 680px) {
+  .pageHeader.pageHeader { grid-template-columns: 1fr; padding: 0 2px; border: 0; }
+  .pageHeader.pageHeader h1 { font-size: 26px; }
+  .pageHeader .pageActions { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .pageHeader .pageActions > a { flex: 1 1 auto; justify-content: center; min-height: 42px; }
+  .contextBar.contextBar { display: flex; }
+  .contextBar.contextBar > span:not(:first-child) { display: none; }
+}
+/* Equipment summary at the top of the list: status, counts, then service areas (folded). */
+.programSummary { display: grid; gap: 12px; min-width: 0; }
+.programSummary > details > summary { cursor: pointer; padding: 12px 16px; color: var(--workspace-action); font-weight: 650; }
+.equipmentSummary { display: grid; gap: 12px; padding: 16px 20px; border: 1px solid var(--workspace-border); border-radius: 8px; background: var(--workspace-surface); }
+.equipmentSummary > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.equipmentSummary h2 { margin: 0; font-size: 18px; }
+.equipmentSummary a { color: var(--workspace-action); font-weight: 650; text-decoration: none; }
+.equipmentSummary a:hover, .equipmentSummary a:focus-visible { text-decoration: underline; }
+.statusBar { display: flex; gap: 2px; height: 10px; overflow: hidden; border-radius: 5px; background: #e2e8f0; }
+.statusBar i { min-width: 4px; }
+.statusBar i[data-tone="positive"], .statusCounts a[data-tone="positive"] span { background: #16a34a; }
+.statusBar i[data-tone="warning"], .statusCounts a[data-tone="warning"] span { background: #d97706; }
+.statusBar i[data-tone="critical"], .statusCounts a[data-tone="critical"] span { background: #dc2626; }
+.statusCounts { display: flex; flex-wrap: wrap; gap: 6px 24px; }
+.statusCounts a { display: inline-flex; align-items: baseline; gap: 6px; color: #1e293b; font-size: 15px; font-weight: 600; }
+.statusCounts a span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; align-self: center; }
+.statusCounts a strong { font-size: 20px; }
+.statusFollowUps { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; font-size: 14px; }
+.equipmentSummary details > summary { cursor: pointer; color: var(--workspace-action); font-weight: 650; }
+/* A row of filter buttons scrolls inside its own box instead of widening the page. */
+.filterGroup > div { min-width: 0; max-width: 100%; flex: 1 1 auto; align-self: stretch; }

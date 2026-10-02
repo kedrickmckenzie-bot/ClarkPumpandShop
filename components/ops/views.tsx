@@ -11,7 +11,6 @@ import {
   CircleDot,
   Clock3,
   ExternalLink,
-  Filter,
   Inbox,
   Layers3,
   LoaderCircle,
@@ -366,17 +365,17 @@ function FilterGroupRow({ filter, primary }: { filter: FilterGroupViewModel; pri
  * The first group stays visible so records reach the first screen; other groups
  * fold under "More filters" unless one of them is in use.
  */
-function FilterGroups({ filters }: { filters?: FilterGroupViewModel[] }) {
+function FilterGroups({ filters, more, moreInUse = false }: { filters?: FilterGroupViewModel[]; /** Extra controls that belong under "More filters" (e.g. a date range). */ more?: ReactNode; moreInUse?: boolean }) {
   if (!filters?.length) return null;
   const [first, ...rest] = filters;
   const inUse = (filter: FilterGroupViewModel) => filter.options.some((option, index) => option.selected && index > 0);
   return (
     <div className={styles.filters} aria-label="Filter results">
-      <span className={styles.filterHeading}><Filter aria-hidden="true" size={16} />Filters</span>
       <FilterGroupRow filter={first} primary />
-      {rest.length ? <details className={styles.filterMoreGroups} open={rest.some(inUse) || undefined}>
+      {rest.length || more ? <details className={styles.filterMoreGroups} open={rest.some(inUse) || moreInUse || undefined}>
         <summary>More filters</summary>
         {rest.map((filter) => <FilterGroupRow filter={filter} key={filter.id} />)}
+        {more}
       </details> : null}
     </div>
   );
@@ -685,12 +684,13 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
               ) : <span className={styles.toolbarTitle}>Records</span>}
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
-            <FilterGroups filters={model.filters} />
-            <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
-            {surface === "work-orders" ? <details className={styles.workDateFilters} open={Boolean(searchParams.createdFrom || searchParams.createdThrough)}><summary>Created date (UTC)</summary><form action="/app/work-orders" method="get">
+            <FilterGroups filters={model.filters} moreInUse={Boolean(searchParams.createdFrom || searchParams.createdThrough)} more={surface === "work-orders" ? (
+<div className={styles.workDateFilters}><strong>Created date</strong><form action="/app/work-orders" method="get">
               {Object.entries(searchParams).filter(([key]) => !["createdFrom", "createdThrough", "page", "selected"].includes(key)).map(([key, value]) => <input type="hidden" name={key} value={Array.isArray(value) ? value[0] : value ?? ""} key={key} />)}
               <label>Created from<input type="date" name="createdFrom" defaultValue={String(searchParams.createdFrom ?? "")} /></label><label>Created through<input type="date" name="createdThrough" defaultValue={String(searchParams.createdThrough ?? "")} /></label><button type="submit">Apply dates</button>
-            </form></details> : null}
+            </form></div>
+            ) : undefined} />
+            <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
             {triageMode ? (
               <div className={styles.triageWorkspace} data-has-preview={selectedRow && !approvedLaterSelection || undefined}>
                 <div className={styles.triageList}>{surface === "work-orders" && !approvedLaterMode && !["history", "closed", "cancelled"].includes(String(searchParams.status ?? "")) && canManageWorkflowTasks ? (
@@ -866,6 +866,33 @@ export function SearchView({ model }: { model: SearchPageViewModel }) {
   );
 }
 
+/** Order of equipment states, worst last, each with its status color. */
+const EQUIPMENT_STATES: Array<{ id: string; tone: string }> = [{ id: "operational", tone: "positive" }, { id: "watch", tone: "warning" }, { id: "out_of_service", tone: "critical" }];
+
+/**
+ * Equipment summary above the list: status first (one bar, three clickable counts in status colors),
+ * then one line of follow-ups; the service-area breakdown folds below. Every number opens its records.
+ */
+function EquipmentSummary({ model }: { model: ProgramPageViewModel }) {
+  const status = model.breakdowns.find((breakdown) => breakdown.id === "equipment-status");
+  const others = model.breakdowns.filter((breakdown) => breakdown.id !== "equipment-status");
+  const metric = (id: string) => model.metrics.find((row) => row.id === id);
+  const segments = status ? [...status.segments].sort((a, b) => EQUIPMENT_STATES.findIndex((s) => s.id === a.id) - EQUIPMENT_STATES.findIndex((s) => s.id === b.id)) : [];
+  const total = segments.reduce((sum, segment) => sum + segment.value, 0) || 1;
+  const tone = (id: string) => EQUIPMENT_STATES.find((state) => state.id === id)?.tone ?? "neutral";
+  const followUps = [metric("attention"), metric("unlinked")].filter((row): row is NonNullable<typeof row> => Boolean(row));
+  const assets = metric("assets");
+  return <section className={styles.equipmentSummary} aria-label="Equipment summary">
+    <header><h2>Equipment status</h2>{assets ? <Link href={assets.link.href}>{assets.value} pieces of equipment →</Link> : null}</header>
+    {segments.length ? <>
+      <div className={styles.statusBar} aria-hidden="true">{segments.map((segment) => <i key={segment.id} data-tone={tone(segment.id)} style={{ width: `${(segment.value / total) * 100}%` }} />)}</div>
+      <div className={styles.statusCounts}>{segments.map((segment) => <Link key={segment.id} href={segment.link.href} data-tone={tone(segment.id)}><span aria-hidden="true" /><strong>{segment.formattedValue}</strong>{segment.label}</Link>)}</div>
+    </> : null}
+    {followUps.length ? <p className={styles.statusFollowUps}>{followUps.map((row) => <Link key={row.id} href={row.link.href}><strong>{row.value}</strong> {row.label.toLowerCase().replace(/^needs /, row.value === "1" ? "needs " : "need ")}</Link>)}</p> : null}
+    {others.length ? <details><summary>By service area</summary>{others.map((breakdown) => <BreakdownPanel breakdown={breakdown} key={breakdown.id} />)}</details> : null}
+  </section>;
+}
+
 export function ProgramView({ model, beforeContent, compact = false }: { model: ProgramPageViewModel; beforeContent?: ReactNode; compact?: boolean }) {
   return (
     <div className={styles.pageStack}>
@@ -873,6 +900,7 @@ export function ProgramView({ model, beforeContent, compact = false }: { model: 
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           {beforeContent}
+          {compact ? <EquipmentSummary model={model} /> : null}
           <FilterGroups filters={model.filters} />
           <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
           {!compact ? <MetricStrip metrics={model.metrics} heading="Explore the equipment register" description="Open a measure to see the exact equipment, stores, planning coverage, or lifecycle records behind it." /> : null}
@@ -897,7 +925,6 @@ export function ProgramView({ model, beforeContent, compact = false }: { model: 
             <DataTable context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} table={model.table} />
             {model.pagination ? <PaginationControls pagination={model.pagination} /> : null}
           </section> : null}
-          {compact ? <details className={styles.listWorkspace}><summary>Equipment summary</summary><MetricStrip metrics={model.metrics} />{model.breakdowns.map((breakdown) => <BreakdownPanel breakdown={breakdown} key={breakdown.id} />)}</details> : null}
         </>
       )}
     </div>

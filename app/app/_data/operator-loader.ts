@@ -2,7 +2,7 @@ import { pmStoreAllowed } from "@/lib/ops/pm-record-query";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { presentEquipmentIssues, buildEquipmentIssueRanking } from "./equipment-issues-presenter";
-import { attentionAccess, presentAttentionRow, routeInspectionRows } from "./attention-presenter";
+import { attentionAccess } from "./attention-presenter";
 import { buildReviewQueue, buildReviewSources } from "./review-queue-presenter";
 import { buildPmScheduleModel } from "./pm-schedule-presenter";
 import { buildPmSetupManagement, buildPmSetupSources } from "./pm-setup-presenter";
@@ -387,13 +387,7 @@ export async function loadDashboardModel() {
   ]);
   const model = presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window);
   model.equipmentIssues = presentEquipmentIssues(issues, window, session);
-  if (session.role === "facilities" || session.role === "regional") {
-    // Overview preview: the five items waiting on this person, each with the button that does it.
-    const mine = await repository.listAttention(scope, attentionAccess(session), { asOf, lane: "mine", limit: 5 });
-    model.priorityActions = mine.items.map((item) => presentAttentionRow(item, asOf));
-    await routeInspectionRows(repository, session.organizationId, mine.items, model.priorityActions);
-    model.prioritySection = { title: "Needs your action", description: "Your top items, most urgent first.", link: { href: "/app/action-center?lane=mine", label: mine.totalCount > mine.items.length ? `View all ${mine.totalCount}` : "Open review queue" } };
-  }
+  // The Overview keeps the "Needs your action" count tile (it opens the queue); the item list lives in the review queue only.
   if (session.role === "executive") {
     // A compact work-status line: where open work stands, each count opening its list.
     const [toStart, underway, held, confirming] = await Promise.all([

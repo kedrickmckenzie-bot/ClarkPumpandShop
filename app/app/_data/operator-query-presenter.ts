@@ -114,6 +114,8 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
     if (["q", "page", "selected", "basis", "period", "currency", "saved", "updated", "notice", "error"].includes(key)) return [];
     const value = first(raw);
     if (!value) return [];
+    // Open work is the list's default view and already shows as the selected "Active" button.
+    if (route === "work-orders" && key === "status" && value === "open") return [];
     const label = key === "hasCost" ? value === "false" ? "Without recorded cost" : "With recorded cost"
       : key === "costMonth" ? `Cost month · ${formatOperationsDate(`${value}-01`)}`
       : key === "createdFrom" ? `Created from ${value} (UTC)`
