@@ -39,7 +39,7 @@ Journeys walked in a real browser (desktop 1440px and phone 390px, preview roles
 15. Facilities assigns a task to Robin Carter; store manager replies, sends findings with a photo; store manager takes a shared task — pass.
 Also checked: Back keeps work-order search, direct links open records, empty searches on work orders, invoices, vendors, stores, tasks and equipment show a clear message, regional manager is correctly refused Store 104.
 
-Evidence: typecheck and lint pass; targeted tests pass (public boundary, store impact, idempotency, multi-work-order visit, invoice queue query and workspace). Full unit, e2e and build results are recorded in the next checkpoint update.
+Evidence: `db:seed`, typecheck, lint and build pass; unit suite 1,190/1,190 after updating the picker test to the intended folded behavior (the first full run failed only that test); e2e 66/66. New tests: vendor proposed time in store time, problem-first report, active-visit flag at check-in, invoice store column (fixture and SQL agree), folded preset picker.
 
 Remaining limitations:
 - The review queue does not list inspections awaiting review; reviewers find them from the Inspections tile and the store page. Adding a queue item type is a larger change, not made here.
