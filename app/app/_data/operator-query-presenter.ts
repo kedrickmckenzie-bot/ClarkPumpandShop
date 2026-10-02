@@ -16,7 +16,6 @@ import type {
   Tone,
 } from "@/components/ops/data-contract";
 import { roleCan, roleCanAccessListRoute, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
-import { vendorSearchTerm } from "@/lib/ops/store-vendors";
 import { getServerOpsReportingAsOf } from "@/lib/server/ops-repository-provider";
 import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import type { OpsRepository, OrganizationScope } from "@/lib/ops/repository";
@@ -513,48 +512,40 @@ function searchAssetRow(row: AssetSearchRow): TableRowViewModel {
   ] };
 }
 
-/** The people lookup returns at most this many names; reaching it means more may match. */
-const PEOPLE_SEARCH_LIMIT = 20;
+/** People shown in the combined results, and per page of "See all matching people". */
+const PEOPLE_PREVIEW_SIZE = 20;
+const PEOPLE_PAGE_SIZE = 50;
 
 export async function buildQuerySearchModel(repository: OpsRepository, session: OperatorSession, query: OperatorSearchParameters): Promise<SearchPageViewModel> {
   const raw = first(query.q)?.trim() ?? "";
   if (!raw) return { state: { kind: "empty", title: "Search the whole operation", message: "Try a store number, address, work order, vendor specialty, equipment tag, serial number, technician, or request." }, page: commonPage(session, "Search the workspace", "One search · Your full scope", "Find a store, work order, request, vendor, visit, or piece of equipment without deciding which module to open first."), query: "", placeholder: "Store, address, work order, vendor, equipment, or serial number", resultSummary: "Enter a search term", groups: [] };
   const scope = scopeFor(session);
-  // Everyday words ("gas pump", "card reader") also search the platform's own terms ("dispenser", "payment terminal").
-  const plain = vendorSearchTerm(raw), alias = plain !== raw.toLowerCase() ? plain : undefined;
+  // Everyday words ("gas pump", "card reader") also match the platform's own terms
+  // ("dispenser", "payment terminal") inside each repository search, so these
+  // counts and the "Review matching…" list pages use the same matches.
   const none = { items: [], totalCount: 0, nextCursor: undefined };
-  const withAlias = async <T extends { id: string }>(search: (term: string) => Promise<{ items: T[]; totalCount?: number; nextCursor?: string }>) => {
-    const [main, extra] = await Promise.all([search(raw), alias ? search(alias) : Promise.resolve(undefined)]);
-    if (!extra) return main;
-    const union = [...main.items, ...extra.items.filter((row) => !main.items.some((item) => item.id === row.id))];
-    const items = union.slice(0, 8);
-    // Both searches can match the same record, so their totals cannot be added.
-    // The exact count is known only when both result sets fit on this page.
-    if (!main.nextCursor && !extra.nextCursor) return { items, totalCount: union.length, nextCursor: union.length > items.length ? "more" : undefined };
-    approximate.add(search);
-    return { items, totalCount: Math.max(union.length, main.totalCount ?? 0, extra.totalCount ?? 0), nextCursor: main.nextCursor ?? extra.nextCursor ?? "more" };
-  };
-  const approximate = new Set<unknown>();
-  const searchWork = (term: string) => repository.listWorkOrders(scope, { search: term, limit: 8 });
-  const searchEquipment = (term: string) => repository.searchAssets(scope, term, { limit: 8 });
-  const searchRequests = (term: string) => repository.listRequests(scope, { search: term, limit: 8 });
   const canSeeInvoices = roleCanAccessListRoute(session.role, "invoices");
   const canSeePeople = ["executive", "facilities", "regional"].includes(session.role);
+  // "See all matching people" opens this page with type=people: names only, 50 at a time.
+  const peopleOnly = canSeePeople && first(query.type) === "people";
+  const peopleLimit = peopleOnly ? PEOPLE_PAGE_SIZE : PEOPLE_PREVIEW_SIZE;
+  const peopleOffset = peopleOnly ? Math.max(0, Math.floor(Number(first(query.offset)) || 0)) : 0;
   const [stores, work, vendors, assets, visits, requests, invoices, people] = await Promise.all([
     repository.searchStores(scope, raw, { limit: 8 }),
-    withAlias(searchWork),
+    repository.listWorkOrders(scope, { search: raw, limit: 8 }),
     repository.listVendors(scope, raw, { limit: 8 }),
-    session.demoEdition === "accountability" ? Promise.resolve(none) : withAlias(searchEquipment),
+    session.demoEdition === "accountability" ? Promise.resolve(none) : repository.searchAssets(scope, raw, { limit: 8 }),
     session.role === "finance" ? Promise.resolve(none) : repository.listVisits(scope, { search: raw, limit: 8 }),
-    session.demoEdition === "accountability" || session.role === "finance" ? Promise.resolve(none) : withAlias(searchRequests),
+    session.demoEdition === "accountability" || session.role === "finance" ? Promise.resolve(none) : repository.listRequests(scope, { search: raw, limit: 8 }),
     canSeeInvoices ? repository.listInvoiceQueue(scope, { view: "all", search: raw, currency: "USD", limit: 8, offset: 0 }) : Promise.resolve(undefined),
-    canSeePeople && raw.length >= 2 ? repository.listComplianceOwners(session.organizationId, raw) : Promise.resolve([]),
+    canSeePeople && raw.length >= 2 ? repository.listComplianceOwners(session.organizationId, raw, { limit: peopleLimit + 1, offset: peopleOffset }) : Promise.resolve([]),
   ]);
-  const estimated = new Set([approximate.has(searchWork) ? "work" : "", approximate.has(searchEquipment) ? "equipment" : "", approximate.has(searchRequests) ? "requests" : "", people.length >= PEOPLE_SEARCH_LIMIT ? "people" : ""]);
+  const morePeople = people.length > peopleLimit;
+  if (morePeople) people.length = peopleLimit;
   const totals: Record<string, number | undefined> = { stores: stores.totalCount, work: work.totalCount, vendors: vendors.totalCount, equipment: assets.totalCount, visits: visits.totalCount, requests: requests.totalCount, invoices: invoices?.totalCount, people: people.length };
   const groups = [
     { id: "stores", label: "Stores", rows: stores.items.map(storeRow), resultCount: stores.totalCount ?? stores.items.length, columns: columns.stores, hasMore: Boolean(stores.nextCursor), moreLink: { href: `/app/stores?${new URLSearchParams({ q: raw })}`, label: "Review matching stores" } },
-    { id: "work", label: "Work orders", rows: work.items.map(workRow), resultCount: work.totalCount ?? work.items.length, columns: columns["work-orders"], hasMore: Boolean(work.nextCursor), moreLink: { href: `/app/work-orders?${new URLSearchParams({ q: raw })}`, label: "Review matching work orders" } },
+    { id: "work", label: "Work orders", rows: work.items.map(workRow), resultCount: work.totalCount ?? work.items.length, columns: columns["work-orders"], hasMore: Boolean(work.nextCursor), moreLink: { href: `/app/work-orders?${new URLSearchParams({ q: raw, status: "all" })}`, label: "Review matching work orders" } },
     { id: "vendors", label: "Vendors", rows: vendors.items.map(vendorRow), resultCount: vendors.totalCount ?? vendors.items.length, columns: columns.vendors, hasMore: Boolean(vendors.nextCursor), moreLink: { href: `/app/vendors?${new URLSearchParams({ q: raw })}`, label: "Review matching vendors" } },
     ...(session.demoEdition === "accountability" ? [] : [{ id: "equipment", label: "Equipment", rows: assets.items.map(searchAssetRow), resultCount: assets.totalCount ?? assets.items.length, columns: [{ key: "result", label: "Equipment" }, { key: "context", label: "Store and equipment classification" }, { key: "serial", label: "Serial number" }, { key: "status", label: "Operating state" }], hasMore: Boolean(assets.nextCursor), moreLink: { href: `/app/equipment?${new URLSearchParams({ q: raw })}`, label: "Review matching equipment" } }]),
     ...(session.role === "finance" ? [] : [{ id: "visits", label: "Service visits", rows: visits.items.map(visitRow), resultCount: visits.totalCount ?? visits.items.length, columns: columns.visits, hasMore: Boolean(visits.nextCursor), moreLink: { href: `/app/visits?${new URLSearchParams({ q: raw })}`, label: "Review matching visits" } }]),
@@ -565,12 +556,19 @@ export async function buildQuerySearchModel(repository: OpsRepository, session: 
     ] })), resultCount: invoices.totalCount, columns: [{ key: "result", label: "Invoice" }, { key: "context", label: "Total" }], hasMore: invoices.nextOffset !== undefined, moreLink: { href: `/app/invoices?${new URLSearchParams({ q: raw })}`, label: "Review matching invoices" } }] : []),
     ...(people.length ? [{ id: "people", label: "People", rows: people.map((person): TableRowViewModel => ({ id: person.id, label: person.name, href: `/app/action-center?${new URLSearchParams({ lane: "all", q: person.name })}`, cells: [
       { key: "result", value: person.name, secondary: "Team member · open items they handle" },
-    ] })), resultCount: people.length, columns: [{ key: "result", label: "Person" }], hasMore: people.length >= PEOPLE_SEARCH_LIMIT, moreLink: { href: `/app/action-center?${new URLSearchParams({ lane: "all", q: raw })}`, label: "Search the review queue" } }] : []),
-  ].filter((group) => group.rows.length > 0).map((group) => ({ ...group,
-    countIsLowerBound: (group.hasMore && totals[group.id] === undefined) || estimated.has(group.id),
+    ] })), resultCount: peopleOffset + people.length, columns: [{ key: "result", label: "Person" }], hasMore: morePeople,
+      moreLink: morePeople
+        ? { href: `/app/search?${new URLSearchParams({ q: raw, type: "people", ...(peopleOnly ? { offset: String(peopleOffset + peopleLimit) } : {}) })}`, label: peopleOnly ? "Show more people" : "See all matching people" }
+        : peopleOnly ? { href: `/app/search?${new URLSearchParams({ q: raw })}`, label: "All results" } : undefined }] : []),
+  ].filter((group) => group.rows.length > 0 && (!peopleOnly || group.id === "people")).map((group) => ({ ...group,
+    countIsLowerBound: group.hasMore && (totals[group.id] === undefined || group.id === "people"),
     rows: group.rows.map((row) => ({ ...row, cells: row.cells.map((cell) => cell.link && !roleCanOpenOperatorHref(session.role, cell.link.href) ? { ...cell, link: undefined } : cell) })) }));
   const total = groups.reduce((sum, group) => sum + group.resultCount, 0);
-  return { state: total ? { kind: "ready" } : { kind: "empty", title: "No matches found", message: `Nothing in your access scope matched “${raw}”. Try a shorter name, number, address, or equipment term.` }, page: commonPage(session, `Search results for “${raw}”`, "One search · Your full scope", "Review matching records and their connected information."), query: raw, placeholder: "Store, address, work order, vendor, equipment, or serial number", resultSummary: `${groups.some((group) => group.countIsLowerBound) ? "At least " : ""}${total} match${total === 1 ? "" : "es"} across ${groups.length} record type${groups.length === 1 ? "" : "s"}`, groups };
+  return { state: total ? { kind: "ready" } : { kind: "empty", title: "No matches found", message: `Nothing in your access scope matched “${raw}”. Try a shorter name, number, address, or equipment term.` }, page: commonPage(session, peopleOnly ? `People matching “${raw}”` : `Search results for “${raw}”`, "One search · Your full scope", peopleOnly ? "Open a person to see the open items they handle." : "Review matching records and their connected information."), query: raw, placeholder: "Store, address, work order, vendor, equipment, or serial number",
+    resultSummary: peopleOnly
+      ? people.length ? `Showing people ${peopleOffset + 1}–${peopleOffset + people.length}${morePeople ? "; more match" : ""}` : "No more people match"
+      : `${groups.some((group) => group.countIsLowerBound) ? "At least " : ""}${total} match${total === 1 ? "" : "es"} across ${groups.length} record type${groups.length === 1 ? "" : "s"}`,
+    groups };
 }
 
 export async function buildQueryDashboardModel(repository: OpsRepository, session: OperatorSession): Promise<DashboardPageViewModel> {

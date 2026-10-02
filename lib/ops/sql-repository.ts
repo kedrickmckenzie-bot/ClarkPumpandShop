@@ -5,6 +5,10 @@ import {capitalPlanFrom,type CapitalQuery} from "./capital-planning";
 import {capitalFilters,queryCapital,queryCapitalPrices} from "./capital-planning-sql";
 import {queryLifecycleQueue,type LifecycleQueueQuery} from "./lifecycle-queue";
 import { queryStoreVendors } from "./store-vendors";
+import { likeAnySearchTerm, searchTerms } from "./search-terms";
+
+/** People lookups default to 20 names and never return more than 101 in one page. */
+function ownerPageLimit(value: number | undefined) { return Math.min(101, Math.max(1, Math.floor(value ?? 20))); }
 import { inspectionViews, type ComplianceSchedule, type Inspection, type InspectionQuery, type InspectionView, type InspectionRow } from "./compliance-types";
 import { queryAttention } from "./attention-sql";
 import { queryPmSchedule } from "./pm-schedule-sql";
@@ -369,7 +373,7 @@ class SqlOpsRepository implements OpsRepository {
   async listTaskMessages(org:string,id:string,offset=0,kind?:string) {return taskMessagesSql(this.driver,org,id,offset,kind);}
   async listTaskParticipants(org:string,id:string) {return taskParticipantsSql(this.driver,org,id);}
   async queryStoreTasks(scope:OrganizationScope,q:import("./store-task-types").TaskQuery) {return taskQuerySql(this.driver,scope,q);}
-  async listComplianceOwners(org:string,search="") {return (await this.all("SELECT m.id,u.display_name FROM ops_memberships m JOIN ops_users u ON u.id=m.user_id WHERE m.organization_id = ? AND m.status = 'active' AND m.role NOT IN ('vendor_user','support') AND u.status = 'active' AND LOWER(u.display_name) LIKE ? ORDER BY u.display_name,m.id LIMIT 20",[org,`%${search.toLowerCase()}%`])).map(r=>({id:String(r.id),name:String(r.display_name)}));}
+  async listComplianceOwners(org:string,search="",page:{limit?:number;offset?:number}={}) {return (await this.all("SELECT m.id,u.display_name FROM ops_memberships m JOIN ops_users u ON u.id=m.user_id WHERE m.organization_id = ? AND m.status = 'active' AND m.role NOT IN ('vendor_user','support') AND u.status = 'active' AND LOWER(u.display_name) LIKE ? ORDER BY u.display_name,m.id LIMIT ? OFFSET ?",[org,`%${search.toLowerCase()}%`,ownerPageLimit(page.limit),Math.max(0,Math.floor(page.offset??0))])).map(r=>({id:String(r.id),name:String(r.display_name)}));}
   async getComplianceSchedule(org:string,id:string) { const r=await this.first("SELECT * FROM ops_compliance_schedules WHERE organization_id = ? AND id = ?",[org,id]);return r?complianceRow<ComplianceSchedule>(r):null; }
   async listComplianceSchedules(scope:OrganizationScope,start=0) { const params:unknown[]=[];const where=scopeWhere(scope,"s",params);return (await this.all(`SELECT c.* FROM ops_compliance_schedules c JOIN ops_stores s ON s.organization_id=c.organization_id AND s.id=c.store_id WHERE ${where} ORDER BY c.id LIMIT 100 OFFSET ?`,[...params,start])).map(r=>complianceRow<ComplianceSchedule>(r)); }
   async listComplianceOrganizations() { return (await this.all("SELECT DISTINCT organization_id FROM ops_compliance_schedules",[])).map(r=>String(r.organization_id)); }
@@ -692,11 +696,8 @@ class SqlOpsRepository implements OpsRepository {
   async searchAssets(scope: OrganizationScope, search: string, request: PageRequest = {}) {
     const params: unknown[] = [];
     const clauses = [scopeWhere(scope, "s", params)];
-    const query = search.trim().toLocaleLowerCase("en-US");
-    if (query) {
-      clauses.push("lower(a.asset_tag || ' ' || a.name || ' ' || a.category_key || ' ' || COALESCE(a.manufacturer,'') || ' ' || COALESCE(a.model,'') || ' ' || COALESCE(a.serial_number,'') || ' ' || s.search_text) LIKE ?");
-      params.push(`%${query}%`);
-    }
+    const assetTerms = searchTerms(search);
+    if (assetTerms.length) clauses.push(likeAnySearchTerm("lower(a.asset_tag || ' ' || a.name || ' ' || a.category_key || ' ' || COALESCE(a.manufacturer,'') || ' ' || COALESCE(a.model,'') || ' ' || COALESCE(a.serial_number,'') || ' ' || s.search_text)", assetTerms, params));
     addKeysetCursor(clauses, params, request.cursor, "a.asset_tag", "a.id", "asc");
     const max = limit(request.limit);
     params.push(max + 1, offset(request.offset));
@@ -780,7 +781,8 @@ class SqlOpsRepository implements OpsRepository {
           AND NOT EXISTS (SELECT 1 FROM ops_vendor_compliance_documents hvd WHERE hvd.organization_id = w.organization_id AND hvd.vendor_id = hav.id AND hvd.blocking = 1 AND NOT EXISTS (SELECT 1 FROM ops_vendor_compliance_documents hva WHERE hva.organization_id = hvd.organization_id AND hva.vendor_id = hvd.vendor_id AND hva.document_type = hvd.document_type AND hva.review_status = 'approved' AND (hva.expires_at IS NULL OR hva.expires_at > ?))))`);
       params.push(query.heldConfirmedOpportunityAfter, query.heldConfirmedOpportunityAfter, query.heldConfirmedOpportunityAfter);
     }
-    if (query.search?.trim()) { clauses.push("lower(w.number || ' ' || w.problem || ' ' || s.store_number || ' ' || s.name || ' ' || COALESCE(v.name,'')) LIKE ?"); params.push(`%${query.search.trim().toLocaleLowerCase("en-US")}%`); }
+    const workTerms = searchTerms(query.search);
+    if (workTerms.length) clauses.push(likeAnySearchTerm("lower(w.number || ' ' || w.problem || ' ' || s.store_number || ' ' || s.name || ' ' || COALESCE(v.name,''))", workTerms, params));
     if (query.workOrderId) { clauses.push("w.id = ?"); params.push(query.workOrderId); }
     addKeysetCursor(clauses, params, query.cursor, "w.created_at", "w.id", "desc");
     if (!query.unbounded) params.push(limit(query.limit) + 1, offset(query.offset));
@@ -866,7 +868,8 @@ class SqlOpsRepository implements OpsRepository {
     else if (query.status === "pending") { clauses.push(`r.status IN (${PENDING_REQUEST_STATUSES.map(() => "?").join(",")})`); params.push(...PENDING_REQUEST_STATUSES); }
     else if (query.status) { clauses.push("r.status = ?"); params.push(query.status); }
     if (query.storeId) { clauses.push("r.store_id = ?"); params.push(query.storeId); }
-    if (query.search?.trim()) { clauses.push("lower(r.reference || ' ' || r.problem || ' ' || r.reporter_name || ' ' || s.search_text) LIKE ?"); params.push(`%${query.search.trim().toLocaleLowerCase("en-US")}%`); }
+    const requestTerms = searchTerms(query.search);
+    if (requestTerms.length) clauses.push(likeAnySearchTerm("lower(r.reference || ' ' || r.problem || ' ' || r.reporter_name || ' ' || s.search_text)", requestTerms, params));
     const totalCount=query.status === "open_unlinked" ? Number((await this.all(`SELECT COUNT(*) AS total FROM ops_requests r JOIN ops_stores s ON s.organization_id=r.organization_id AND s.id=r.store_id WHERE ${clauses.join(" AND ")}`,params))[0]?.total??0) : undefined;
     addKeysetCursor(clauses, params, query.cursor, "r.submitted_at", "r.id", "desc");
     const max = limit(query.limit);

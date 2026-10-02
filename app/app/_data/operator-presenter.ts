@@ -1,3 +1,4 @@
+import { matchesSearchTerms, searchTerms } from "@/lib/ops/search-terms";
 import { cachedDateTimeFormat, cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { activityTitle } from "@/lib/product/activity-title";
 import { buildVendorServiceReport } from "@/lib/ops/vendor-service-report";
@@ -3453,6 +3454,7 @@ export function buildProgramModel(
     const categoryFilter = first(query.category);
     const statusFilter = first(query.status);
     const searchQuery = first(query.q)?.trim().toLocaleLowerCase("en-US");
+    const searchWords = searchTerms(searchQuery);
     const requestedView = first(query.view);
     const equipmentView = requestedView === "all" || requestedView === "recent" || requestedView === "attention"
       ? requestedView
@@ -3484,7 +3486,7 @@ export function buildProgramModel(
         const store = scoped.stores.find((item) => item.id === asset.storeId);
         return [equipmentType(asset, fixture).label, asset.name, asset.assetTag, asset.model, asset.serialNumber, store?.storeNumber, store?.name, store?.address1, store?.address2, store?.city, store?.state, store?.postalCode]
           .filter(Boolean)
-          .some((value) => String(value).toLocaleLowerCase("en-US").includes(searchQuery));
+          .some((value) => matchesSearchTerms(String(value), searchWords));
       })
       .sort((left, right) => {
         const leftLatest = (workByAsset.get(left.id) ?? []).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.createdAt ?? "";

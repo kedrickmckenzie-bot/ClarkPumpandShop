@@ -191,36 +191,61 @@ describe("workspace search finds what people call things", () => {
     expect(model.groups.find((group) => group.id === "work")?.rows.length).toBeGreaterThan(0);
   });
 
-  it("never adds overlapping everyday-word and platform-term matches together", async () => {
-    const base = createOpsFixtureRepository(buildNorthlinePresentationFixture());
-    const all = (await base.listWorkOrders({ organizationId: "org-northline-demo" }, { limit: 8 })).items;
-    const page = (items: typeof all, totalCount: number, more = false) => ({ items, totalCount, nextCursor: more ? "next" : undefined });
-    const stub = (raw: ReturnType<typeof page>, alias: ReturnType<typeof page>) => new Proxy(base, { get(target, key, receiver) {
-      if (key === "listWorkOrders") return async (_scope: unknown, query: { search?: string }) => query.search === "gas pump" ? raw : alias;
-      return Reflect.get(target, key, receiver);
-    } });
-    const exact = await buildQuerySearchModel(stub(page(all.slice(0, 3), 3), page(all.slice(1, 4), 3)), session(), { q: "gas pump" });
-    const work = exact.groups.find((group) => group.id === "work");
-    expect(work).toMatchObject({ resultCount: 4, countIsLowerBound: false });
-    expect(work?.rows).toHaveLength(4);
-    const paged = await buildQuerySearchModel(stub(page(all.slice(0, 8), 30, true), page(all.slice(2, 8), 25, true)), session(), { q: "gas pump" });
-    expect(paged.groups.find((group) => group.id === "work")).toMatchObject({ resultCount: 30, countIsLowerBound: true, hasMore: true });
-    expect(paged.resultSummary).toMatch(/^At least /);
+  it("keeps everyday-word matches when opening the matching list", async () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const repository = createOpsFixtureRepository(fixture);
+    const search = await buildQuerySearchModel(repository, session(), { q: "air conditioner" });
+    const work = search.groups.find((group) => group.id === "work");
+    expect(work?.rows.length).toBeGreaterThan(0);
+    // "air conditioner" appears in no record; every match comes through "hvac".
+    expect(work?.rows.some((row) => /hvac/i.test(JSON.stringify(row)))).toBe(true);
+    const link = new URL(work!.moreLink!.href, "https://example.test");
+    expect(Object.fromEntries(link.searchParams)).toEqual({ q: "air conditioner", status: "all" });
+    const list = await buildQueryListModel(repository, session(), "work-orders", Object.fromEntries(link.searchParams));
+    expect(list.table.rows.slice(0, work!.rows.length).map((row) => row.id)).toEqual(work!.rows.map((row) => row.id));
+    for (const route of ["requests"] as const) {
+      const group = search.groups.find((item) => item.id === route);
+      if (!group) continue;
+      const page = await buildQueryListModel(repository, session(), route, Object.fromEntries(new URL(group.moreLink!.href, "https://example.test").searchParams));
+      expect(page.table.rows.slice(0, group.rows.length).map((row) => row.id)).toEqual(group.rows.map((row) => row.id));
+    }
+    const equipment = search.groups.find((group) => group.id === "equipment");
+    expect(equipment?.rows.length).toBeGreaterThan(0);
+    const { buildProgramModel } = await import("@/app/app/_data/operator-presenter");
+    const equipmentQuery = Object.fromEntries(new URL(equipment!.moreLink!.href, "https://example.test").searchParams);
+    const listed = new Set<string>();
+    let next: string | undefined = "first";
+    while (next) {
+      const model = buildProgramModel(fixture, session(), "equipment", next === "first" ? equipmentQuery : Object.fromEntries(new URL(next, "https://example.test").searchParams));
+      for (const row of model.table?.rows ?? []) listed.add(row.id);
+      next = model.pagination?.nextHref;
+    }
+    expect(equipment!.rows.filter((row) => !listed.has(row.id)).map((row) => row.label)).toEqual([]);
   });
 
-  it("shows every person the lookup returns and says when more may match", async () => {
+  it("previews 20 people and pages through every match", async () => {
     const base = createOpsFixtureRepository(buildNorthlinePresentationFixture());
-    const people = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `membership-${index}`, name: `Robin Person ${index}` }));
-    const stub = (count: number) => new Proxy(base, { get(target, key, receiver) {
-      if (key === "listComplianceOwners") return async () => people(count);
+    const everyone = Array.from({ length: 73 }, (_, index) => ({ id: `membership-${String(index).padStart(2, "0")}`, name: `Robin Person ${String(index).padStart(2, "0")}` }));
+    const calls: Array<{ limit?: number; offset?: number }> = [];
+    const repository = new Proxy(base, { get(target, key, receiver) {
+      if (key === "listComplianceOwners") return async (_org: string, _search: string, page: { limit?: number; offset?: number } = {}) => { calls.push(page); const start = page.offset ?? 0; return everyone.slice(start, start + (page.limit ?? 20)); };
       return Reflect.get(target, key, receiver);
     } });
-    const twelve = (await buildQuerySearchModel(stub(12), session(), { q: "Robin" })).groups.find((group) => group.id === "people");
-    expect(twelve).toMatchObject({ resultCount: 12, hasMore: false, countIsLowerBound: false });
-    expect(twelve?.rows).toHaveLength(12);
-    const capped = (await buildQuerySearchModel(stub(20), session(), { q: "Robin" })).groups.find((group) => group.id === "people");
-    expect(capped).toMatchObject({ resultCount: 20, hasMore: true, countIsLowerBound: true });
-    expect(capped?.rows).toHaveLength(20);
+    const preview = (await buildQuerySearchModel(repository, session(), { q: "Robin" })).groups.find((group) => group.id === "people");
+    expect(preview).toMatchObject({ resultCount: 20, hasMore: true, countIsLowerBound: true, moreLink: { href: "/app/search?q=Robin&type=people", label: "See all matching people" } });
+    expect(preview?.rows).toHaveLength(20);
+    const first = await buildQuerySearchModel(repository, session(), { q: "Robin", type: "people" });
+    expect(first.groups.map((group) => group.id)).toEqual(["people"]);
+    expect(first.groups[0]).toMatchObject({ hasMore: true, moreLink: { href: "/app/search?q=Robin&type=people&offset=50", label: "Show more people" } });
+    expect(first.groups[0].rows).toHaveLength(50);
+    expect(first.resultSummary).toBe("Showing people 1–50; more match");
+    const second = await buildQuerySearchModel(repository, session(), { q: "Robin", type: "people", offset: "50" });
+    expect(second.groups[0].rows.map((row) => row.label)).toEqual(everyone.slice(50).map((person) => person.name));
+    expect(second.groups[0]).toMatchObject({ hasMore: false, countIsLowerBound: false, moreLink: { href: "/app/search?q=Robin", label: "All results" } });
+    expect(second.resultSummary).toBe("Showing people 51–73");
+    expect(calls).toEqual([{ limit: 21, offset: 0 }, { limit: 51, offset: 0 }, { limit: 51, offset: 50 }]);
+    const store = session({ role: "store_manager", userId: "user-northline-store-104", membershipId: "membership-northline-store-104", storeIds: ["store-northline-104"] });
+    expect((await buildQuerySearchModel(repository, store, { q: "Robin", type: "people" })).groups.some((group) => group.id === "people")).toBe(false);
   });
 
   it("finds invoices and people for roles that can see them, and not for a store manager", async () => {

@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Search drill-through follow-up (October 2, Claude)
+
+Codex review of f3a7ae1: everyday-word matches were lost when opening "Review matching…", and the people "20+" link opened the review queue instead of more people.
+
+- [x] SD-01 Everyday words are matched inside the searches themselves (one shared `searchTerms` helper): work orders, requests and equipment in both the fixture and SQL/PostgreSQL repositories, plus the Equipment list page. Global search now runs one query per group, and each "Review matching…" link opens a list with the same matches. Example on the Render build with PostgreSQL: "air conditioner" opens 24 work orders and 25 pieces of equipment (previously none).
+- [x] SD-02 "Review matching work orders" includes `status=all`, because search covers closed work as well as open.
+- [x] SD-03 People: the combined results show up to 20 names; when more match, "See all matching people" opens a people-only results page (50 per page, "Show more people", then "All results"). The people lookup takes a page size and offset (default 20, up to 101). Store managers still see no people.
+
+Evidence: db:seed, typecheck, lint, unit suite 194 files / 1,213 tests, workflow suite 4 files / 66 tests, the Sites build and the Render build pass. New tests: an "air conditioner" search and the list pages its links open show the same work orders, requests and equipment (the test fails if either the repository or the Equipment page change is removed); people preview, paging through 73 names, and no people for a store manager. People pages checked at 1440px and 390px with no sideways scroll.
+
 ## Server memory and speed (October 2, Claude)
 
 Codex reported Render stalls, 502s and memory at 100% and suspected full-tenant snapshot loading. Measured before changing anything: production Render build against a local PostgreSQL 16 seeded with the showcase, a 256 MB JavaScript heap limit (like a small Render instance), opening 17 main pages in turn and then four at a time. Findings: every snapshot-backed page ran about 92 queries and read about 11,000 rows (5.7 MB of raw data) per view; the main memory cost was the Vendors page building a new date formatter for every timestamp (85% of its time, with memory held outside the JavaScript heap); one dashboard query took 52 seconds in the embedded test database because it had no planner statistics.

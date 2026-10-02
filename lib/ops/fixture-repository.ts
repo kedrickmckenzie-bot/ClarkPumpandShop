@@ -4,6 +4,7 @@ import { operatingRisksFromFixture } from "./operating-risks";
 import {latestCapitalPlan, capitalPricesFromFixture, capitalFromFixture, type CapitalQuery} from "./capital-planning";
 import {lifecycleQueueFromFixture, type LifecycleQueueQuery} from "./lifecycle-queue";
 import { latestStorePreference, storeVendorsFromFixture } from "./store-vendors";
+import { matchesSearchTerms, searchTerms } from "./search-terms";
 import { matchesInspection, inspectionViews, type InspectionQuery, type InspectionView } from "./compliance-types";
 import { attentionFromFixture } from "./attention-query";
 import { pmScheduleFromFixture, type PmScheduleQuery } from "./pm-schedule-query";
@@ -508,7 +509,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     rows.sort((a,b)=>(a.priority==='urgent'?0:1)-(b.priority==='urgent'?0:1)||Number(b.status==='open'&&b.dueAt<q.now)-Number(a.status==='open'&&a.dueAt<q.now)||b.newReply-a.newReply||a.dueAt.localeCompare(b.dueAt)||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
     return {items:clone(rows.slice(q.offset??0,(q.offset??0)+Math.min(50,q.limit??25))),totalCount:rows.length};
   }
-  async listComplianceOwners(org:string,search="") {return this.fixture.memberships.filter(m=>m.organizationId===org&&m.status==="active"&&!["vendor_user","support"].includes(m.role)&&this.fixture.users.some(u=>u.id===m.userId&&u.status==="active"&&u.displayName.toLowerCase().includes(search.toLowerCase()))).slice(0,20).map(m=>({id:m.id,name:this.fixture.users.find(u=>u.id===m.userId)?.displayName??m.id}));}
+  async listComplianceOwners(org:string,search="",page:{limit?:number;offset?:number}={}) {const start=Math.max(0,Math.floor(page.offset??0)),size=Math.min(101,Math.max(1,Math.floor(page.limit??20)));return this.fixture.memberships.filter(m=>m.organizationId===org&&m.status==="active"&&!["vendor_user","support"].includes(m.role)&&this.fixture.users.some(u=>u.id===m.userId&&u.status==="active"&&u.displayName.toLowerCase().includes(search.toLowerCase()))).map(m=>({id:m.id,name:this.fixture.users.find(u=>u.id===m.userId)?.displayName??m.id})).sort((a,b)=>a.name.localeCompare(b.name)||a.id.localeCompare(b.id)).slice(start,start+size);}
   async getComplianceSchedule(org:string,id:string) { return clone(this.fixture.complianceSchedules?.find(r=>r.organizationId===org&&r.id===id)??null); }
   async listComplianceSchedules(scope:OrganizationScope,offset=0) { const stores=this.fixture.stores.filter(s=>s.organizationId===scope.organizationId&&(scope.storeIds===undefined||scope.storeIds.includes(s.id))&&(scope.regionIds===undefined||scope.regionIds.includes(s.regionId??"")));return clone((this.fixture.complianceSchedules??[]).filter(r=>r.organizationId===scope.organizationId&&stores.some(s=>s.id===r.storeId)).sort((a,b)=>a.id.localeCompare(b.id)).slice(offset,offset+100)); }
   async listComplianceOrganizations() { return [...new Set((this.fixture.complianceSchedules??[]).map(r=>r.organizationId))]; }
@@ -780,12 +781,12 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   }
 
   async searchAssets(scope: OrganizationScope, search: string, request?: PageRequest) {
-    const query = normalize(search);
+    const terms = searchTerms(search);
     const rows = this.fixture.assets
       .filter((asset) => storeAllowed(this.fixture, scope, asset.storeId))
       .filter((asset) => {
         const store = this.fixture.stores.find((row) => row.organizationId === scope.organizationId && row.id === asset.storeId);
-        return !query || normalize([
+        return matchesSearchTerms([
           asset.assetTag,
           asset.name,
           asset.categoryKey,
@@ -795,7 +796,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
           asset.serialNumber,
           store?.storeNumber,
           store?.name,store?.address1,store?.address2,store?.city,store?.state,store?.postalCode,...(store?.aliases??[]),
-        ].filter(Boolean).join(" ")).includes(query);
+        ].filter(Boolean).join(" "), terms);
       })
       .sort((a, b) => a.assetTag.localeCompare(b.assetTag) || a.id.localeCompare(b.id))
       .map((asset): AssetSearchRow => {
@@ -827,13 +828,13 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   }
 
   async listRequests(scope: OrganizationScope, query: PageRequest & { search?: string; status?: string; storeId?: OpsId } = {}) {
-    const search = normalize(query.search ?? "");
-    const rows = this.fixture.requests.filter((row) => row.organizationId === scope.organizationId && storeAllowed(this.fixture, scope, row.storeId)).filter((row) => matchesRequestStatus(row, query.status) && (!query.storeId || row.storeId === query.storeId)).map((row) => requestRow(this.fixture, row)).filter((row) => !search || normalize([row.reference, row.problem, row.reporterName, row.storeNumber, row.storeName].join(" ")).includes(search)).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt) || b.id.localeCompare(a.id));
+    const terms = searchTerms(query.search);
+    const rows = this.fixture.requests.filter((row) => row.organizationId === scope.organizationId && storeAllowed(this.fixture, scope, row.storeId)).filter((row) => matchesRequestStatus(row, query.status) && (!query.storeId || row.storeId === query.storeId)).map((row) => requestRow(this.fixture, row)).filter((row) => matchesSearchTerms([row.reference, row.problem, row.reporterName, row.storeNumber, row.storeName].join(" "), terms)).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt) || b.id.localeCompare(a.id));
     return {...page(rows, query),...(query.status==="open_unlinked"?{totalCount:rows.length}:{})};
   }
 
   async listWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery = {}) {
-    const search = normalize(query.search ?? "");
+    const workTerms = searchTerms(query.search);
     const approvedWorkIds = new Set(this.fixture.workOrders.filter((workOrder) => workOrder.organizationId === scope.organizationId && workOrder.status === "approved").map((workOrder) => workOrder.id));
     const activeHeldWork = new Set((this.fixture.workOrderVisitHolds ?? [])
       .filter((hold) => hold.organizationId === scope.organizationId && hold.status === "active")
@@ -880,7 +881,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         .filter((line) => line.organizationId === scope.organizationId && line.workOrderId === row.id && matchesWorkCost(line, query))
         .reduce((sum, line) => sum + line.amount.amountMinor, 0);
       return result;
-    }).filter((row) => !search || normalize([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName].filter(Boolean).join(" ")).includes(search)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    }).filter((row) => matchesSearchTerms([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName].filter(Boolean).join(" "), workTerms)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
     return page(rows, query);
   }
 

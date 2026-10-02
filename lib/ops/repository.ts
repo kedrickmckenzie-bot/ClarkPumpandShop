@@ -219,7 +219,7 @@ export interface OpsRepository extends TaskRepository {
   listVendorSpecialties(organizationId: OpsId, vendorId: OpsId): Promise<VendorSpecialty[]>;
   inspectionHistory(org:string,id:string):Promise<Array<{id:string;eventType:string;actorName:string;occurredAt:string;payloadJson:string}>>;
   inspectionDelivery(org:string,id:string):Promise<Array<{id:string;topic:string;status:string}>>;
-  listComplianceOwners(org:string,search?:string):Promise<Array<{id:string;name:string}>>;
+  listComplianceOwners(org:string,search?:string,page?:{limit?:number;offset?:number}):Promise<Array<{id:string;name:string}>>;
   getComplianceSchedule(org:string,id:string):Promise<import("./compliance-types").ComplianceSchedule|null>;
   listComplianceSchedules(scope:OrganizationScope,offset?:number):Promise<import("./compliance-types").ComplianceSchedule[]>;
   listComplianceOrganizations():Promise<string[]>;
