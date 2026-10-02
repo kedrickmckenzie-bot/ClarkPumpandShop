@@ -16,6 +16,15 @@ export async function attentionQueryRegression(repository: OpsRepository, fixtur
       expect(await repository.listAttention(scoped, { ...viewer, accountabilityOnly }, query), `${repository.kind}: ${role}/${accountabilityOnly}`).toEqual(attentionFromFixture(fixture, scoped, { ...viewer, accountabilityOnly }, query));
     }
   }
+  // Recorded inspection results reach reviewers, open the inspection, and never reach store or finance users.
+  const performed = (fixture.inspections ?? []).filter(row => row.organizationId === organizationId && row.status === "performed");
+  expect(performed.length).toBeGreaterThan(0);
+  const reviews = (await repository.listAttention({ organizationId }, access, query)).items.filter(row => row.sourceKind === "inspection_review");
+  expect(reviews.map(row => row.id).sort()).toEqual(performed.map(row => row.id).sort());
+  expect(reviews.every(row => row.linkHref === `/app/compliance/${encodeURIComponent(row.id)}` && row.lane === "mine" && row.title.startsWith("Review inspection results: "))).toBe(true);
+  for (const role of ["store_manager", "finance_reviewer"] as const) {
+    expect((await repository.listAttention({ organizationId }, { ...access, role }, query)).items.some(row => row.sourceKind === "inspection_review"), role).toBe(false);
+  }
   for (const scope of [{ organizationId, storeIds: [] }, { organizationId, regionIds: [] }, { organizationId: "foreign-tenant", storeIds: [store.id] }]) {
     expect(await repository.listAttention(scope, access, query)).toEqual({ items: [], totalCount: 0, mineCount: 0, followUpCount: 0, nextCursor: undefined });
   }

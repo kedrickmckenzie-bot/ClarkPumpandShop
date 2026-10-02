@@ -15,5 +15,6 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     loadDetailModel("request", id),
     loadRequestReviewModel(id),
   ]);
-  return <DetailView model={model} beforeSections={<div className={styles.controlStack}><RecordFiles kind="request" id={id} /><MutationReceipt code={updated} /><RequestReviewPanel model={review} /></div>} />;
+  // The decision comes first; facts, files and the record history follow, the history folded.
+  return <DetailView model={model} foldOverview beforeFacts={<div className={styles.controlStack}><MutationReceipt code={updated} /><RequestReviewPanel model={review} /></div>} beforeSections={<div className={styles.controlStack}><RecordFiles kind="request" id={id} /></div>} />;
 }

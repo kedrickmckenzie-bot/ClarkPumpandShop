@@ -40,6 +40,7 @@ import type {
   TrendViewModel,
 } from "./data-contract";
 import styles from "./enterprise-workspace.module.css";
+import { oneLine } from "@/lib/product/one-line";
 import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import { RecordSections } from "@/components/workspace/record-sections";
 import { WorkReviewButton } from "@/components/workspace/work-review";
@@ -81,13 +82,13 @@ function PageActions({ primary, secondary }: { primary?: SupportingLink; seconda
   );
 }
 
-function PageHeader({ page, status }: { page: DashboardPageViewModel["page"]; status?: { label: string; tone?: Tone } }) {
+function PageHeader({ page, status, record = false }: { page: DashboardPageViewModel["page"]; status?: { label: string; tone?: Tone }; /** Record pages keep the description (the problem) on phones. */ record?: boolean }) {
   return (
     <header className={styles.pageHeader}>
       <div className={styles.pageHeadingCopy}>
         {page.eyebrow ? <p className={styles.eyebrow}>{page.eyebrow}</p> : null}
         <div className={styles.pageTitleLine}><h1>{page.title}</h1>{status ? <span className={`${styles.headerStatus} ${toneClass(status.tone)}`}><CircleDot aria-hidden="true" size={14} />{status.label}</span> : null}</div>
-        <p className={styles.pageDescription}>{page.description}</p>
+        <p className={styles.pageDescription} data-record={record || undefined}>{page.description}</p>
       </div>
       <PageActions primary={page.primaryAction} secondary={page.secondaryAction} />
       <div className={styles.contextBar} aria-label="Current view context">
@@ -381,7 +382,9 @@ function FilterGroups({ filters }: { filters?: FilterGroupViewModel[] }) {
   );
 }
 
-function DataTable({ table, selectedId, rowHref, selection, context, openRecord = false }: { openRecord?: boolean; context?: string; table: TableViewModel; selectedId?: string; rowHref?: (row: TableViewModel["rows"][number]) => string; selection?: { name: string; label: string; isDisabled?: (row: TableViewModel["rows"][number]) => boolean } }) {
+function DataTable({ table: sourceTable, selectedId, rowHref, selection, context, openRecord = false }: { openRecord?: boolean; context?: string; table: TableViewModel; selectedId?: string; rowHref?: (row: TableViewModel["rows"][number]) => string; selection?: { name: string; label: string; isDisabled?: (row: TableViewModel["rows"][number]) => boolean } }) {
+  // Table cells are one line: text typed on several lines keeps a visible separator.
+  const table = { ...sourceTable, rows: sourceTable.rows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell, value: oneLine(cell.value), secondary: oneLine(cell.secondary) })) })) };
   if (!table.rows.length) return <InlineEmpty message="No records match this view. Try a different search or filter." />;
 
   return (
@@ -901,24 +904,22 @@ export function ProgramView({ model, beforeContent, compact = false }: { model: 
   );
 }
 
-export function DetailView({ model, beforeFacts, beforeSections, after, initialSection, compactFacts = false, embeddedSections = false, embeddedSectionIds, hideFacts = false }: { compactFacts?: boolean; model: DetailPageViewModel; beforeFacts?: ReactNode; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string; embeddedSections?: boolean; embeddedSectionIds?: readonly string[]; hideFacts?: boolean }) {
+export function DetailView({ model, beforeFacts, beforeSections, after, initialSection, compactFacts = false, embeddedSections = false, embeddedSectionIds, hideFacts = false, foldOverview = false }: { compactFacts?: boolean; model: DetailPageViewModel; beforeFacts?: ReactNode; beforeSections?: ReactNode; after?: ReactNode; initialSection?: string; embeddedSections?: boolean; embeddedSectionIds?: readonly string[]; hideFacts?: boolean; /** Start the record's section previews folded (tabs still open each one). */ foldOverview?: boolean }) {
   return (
     <div className={styles.pageStack}>
       <Link className={styles.backLink} href={model.backLink.href}><ArrowLeft aria-hidden="true" size={16} />{model.backLink.label}</Link>
-      <PageHeader page={model.page} status={{ label: model.statusLabel, tone: model.statusTone }} />
+      <PageHeader page={model.page} status={{ label: model.statusLabel, tone: model.statusTone }} record />
       {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
         <>
           {beforeFacts}
           {compactFacts ? beforeSections : null}
           {hideFacts ? null : <details className={styles.recordSummary} open={!compactFacts} aria-label="Record summary"><summary>{compactFacts ? "Equipment details" : "Key facts"}</summary>
-            {model.facts.length ? <><header className={styles.recordSummaryHeader}>
-              <div><small>Record summary</small><h2>Key facts</h2></div>
-            </header><div className={styles.recordSummaryGrid}>
+            {model.facts.length ? <><div className={styles.recordSummaryGrid}>
               {model.facts.map((fact) => <div className={styles.factItem} key={fact.label}><span className={styles.factLabel}>{fact.label}</span>{fact.link ? <Link className={styles.connectedFact} href={workspaceStartHref(fact.link.href)} aria-label={`${fact.link.label}: ${fact.value}`}><strong>{fact.value}</strong><ChevronRight aria-hidden="true" size={15} /></Link> : <strong>{fact.value}</strong>}{fact.link ? <WorkReviewButton href={fact.link.href} label={fact.value} /> : null}{fact.helperText ? <small>{fact.helperText}</small> : null}</div>)}
             </div></> : null}
           </details>}
           {!compactFacts ? beforeSections : null}
-          <RecordSections sections={model.sections} initialSection={initialSection} embedded={embeddedSections} embeddedSectionIds={embeddedSectionIds} />
+          <RecordSections sections={model.sections} initialSection={initialSection} embedded={embeddedSections} embeddedSectionIds={embeddedSectionIds} foldOverview={foldOverview} />
           {after}
         </>
       )}

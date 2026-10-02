@@ -7,11 +7,13 @@ export async function storeVendorRegression(repository:OpsRepository) {
   const svc={repository},scope={organizationId:org};
   const page=await repository.queryStoreVendors(scope,storeId,{});
   expect(page.items).toHaveLength(5);expect(page.items.every(v=>v.preferenceKeys.length===0)).toBe(true);
+  expect(page).toMatchObject({total:5,preferredTotal:0,coveredTotal:5});
   const vendor=page.items.find(v=>v.specialties.some(s=>s.key==="electrical"))!;
   const companyPreference=(await repository.getVendor(org,vendor.id))!.preferred;
   const input={organizationId:org,storeId,vendorId:vendor.id,tradeKeys:["electrical"],version:0,actor};
   await setStoreVendorPreference(svc,input);
   expect((await repository.queryStoreVendors(scope,storeId,{})).items[0]).toMatchObject({id:vendor.id,preferenceKeys:["electrical"]});
+  expect(await repository.queryStoreVendors(scope,storeId,{})).toMatchObject({preferredTotal:1,coveredTotal:5});
   expect((await repository.queryStoreVendors(scope,other,{})).items.find(v=>v.id===vendor.id)?.preferenceKeys).toEqual([]);
   expect((await repository.getVendor(org,vendor.id))!.preferred).toBe(companyPreference);
   await expect(setStoreVendorPreference(svc,input)).rejects.toMatchObject({code:"CONFLICT"});

@@ -4086,3 +4086,8 @@ a.factItem:hover {
 }
 
 .reviewQueueProblem { margin: 4px 0 0; color: var(--to-ink); font-size: 15px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 680px) {
+  .pageDescription[data-record] { display: block; font-size: 15px; }
+}
+/* A record's description keeps the line breaks it was written with (e.g. "Area or equipment: …"). */
+.pageDescription[data-record] { white-space: pre-line; }

@@ -22,6 +22,24 @@ describe("trends change bridge", () => {
     expect(movers[0].link.href).toContain(`driverValue=${movers[0].id}`);
   });
 
+  it("opens exactly the remaining records from the All other bar", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const bridge = buildTrendsModel(fixture, session(), {}).bridge!;
+    const other = bridge.steps.find((step) => step.id === "other");
+    expect(other).toBeDefined();
+    const count = (href: string) => {
+      const query = Object.fromEntries(new URL(href, "http://x").searchParams);
+      const model = buildTrendsModel(fixture, session(), query);
+      return { total: Number(model.sourceSummary.match(/([\d,]+) records?/)?.[1].replace(/,/g, "")), label: model.sourcePeriodLabel };
+    };
+    const rest = count(other!.link.href);
+    expect(rest.label).toContain("All other stores");
+    const named = bridge.steps.filter((step) => step.id !== "other").reduce((sum, step) => sum + count(step.link.href).total, 0);
+    const everything = count(bridge.endLink.href.replace("detailKind=current", "detailKind=both")).total;
+    expect(rest.total).toBeGreaterThan(0);
+    expect(rest.total + named).toBe(everything);
+  });
+
   it("is left out when there is nothing to compare", () => {
     expect(buildTrendsModel(buildNorthlinePresentationFixture(), session(), { compare: "none" }).bridge).toBeUndefined();
   });

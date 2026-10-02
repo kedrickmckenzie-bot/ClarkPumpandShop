@@ -1138,3 +1138,12 @@ a.factCard { padding-right: 38px; }
 .confirmationSetting { display: grid; gap: .65rem; align-content: start; }
 .confirmationSetting > label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: .6rem; font-weight: 650; }
 .confirmationSetting input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 0; padding: 0; accent-color: #2457d6; }
+
+/* Three short facts stay on one row, even on a phone. */
+.controlSummary.controlSummaryCompact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.controlSummary.controlSummaryCompact > span { padding: 9px 10px; }
+
+/* Request "Choose one": the three paths in reading order on every screen size. */
+.requestChoices { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.requestChoices > span { flex: 1 0 100%; }
+.requestChoices > a { flex: 1 1 auto; justify-content: center; text-align: center; }

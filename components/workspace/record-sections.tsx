@@ -83,7 +83,7 @@ function SectionContent({ section, previewHref }: { section: DetailSectionViewMo
  * `embedded`: the page supplies its own tab row (store page). Only the requested
  * section renders; the overview shows no section previews.
  */
-export function RecordSections({ sections, initialSection = "overview", embedded = false, embeddedSectionIds }: { sections: DetailSectionViewModel[]; initialSection?: string; embedded?: boolean; embeddedSectionIds?: readonly string[] }) {
+export function RecordSections({ sections, initialSection = "overview", embedded = false, embeddedSectionIds, foldOverview = false }: { sections: DetailSectionViewModel[]; initialSection?: string; embedded?: boolean; embeddedSectionIds?: readonly string[]; foldOverview?: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const requestedSection = searchParams.get("section");
@@ -122,7 +122,12 @@ export function RecordSections({ sections, initialSection = "overview", embedded
         <Link aria-current={activeId === "overview" ? "page" : undefined} data-active={activeId === "overview"} href={sectionHref("overview")}><CircleDot aria-hidden="true" size={15} />Overview</Link>
         {sections.map((section) => <Link aria-current={activeId === section.id ? "page" : undefined} data-active={activeId === section.id} href={sectionHref(section.id)} key={section.id}>{section.title}</Link>)}
       </nav>
-      {active ? <SectionContent section={active} /> : (
+      {active ? <SectionContent section={active} /> : foldOverview ? (
+        <details className={styles.review} aria-label="Record evidence overview">
+          <summary><h2>Record details</h2><p>{sections.map((section) => section.title).join(" · ")}</p></summary>
+          {sections.map((section) => <SectionContent section={section} previewHref={sectionHref(section.id)} key={section.id} />)}
+        </details>
+      ) : (
         <div className={styles.review} aria-label="Record evidence overview">
           <header><h2>Review this record</h2><p>Facts, history, and connected records. Each section shows a preview of the available information.</p></header>
           {sections.map((section) => <SectionContent section={section} previewHref={sectionHref(section.id)} key={section.id} />)}

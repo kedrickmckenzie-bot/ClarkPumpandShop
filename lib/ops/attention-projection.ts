@@ -8,7 +8,7 @@ import type {
   WorkflowTask,
 } from "./types";
 
-export type AttentionSourceKind = "workflow_task" | "follow_up" | "exception" | "vendor_reminder" | "held_work" | "quote_round";
+export type AttentionSourceKind = "workflow_task" | "follow_up" | "exception" | "vendor_reminder" | "held_work" | "quote_round" | "inspection_review";
 export type AttentionLane = "mine" | "team" | "waiting" | "upcoming" | "history";
 export type AttentionGroup = "work_vendor" | "completion" | "service_record" | "financial" | "vendor_relationship";
 
@@ -91,6 +91,15 @@ export interface AttentionProjectionInput {
   asOf: string;
   history?: boolean;
 }
+
+/** Who reviews recorded inspection results (matches the approval rule in compliance). Executives see them as team work. */
+export const INSPECTION_REVIEW_ROLES = new Set<OrganizationRole>(["facilities_admin", "regional_manager", "executive"]);
+export const INSPECTION_REVIEW_REASON = "Results were recorded. Review the findings and paperwork, then approve or send back.";
+/** The SQL query appends the schedule name to `inspectionReviewTitle("")`, so the name stays last. */
+export function inspectionReviewTitle(name: string) { return `Review inspection results: ${name}`; }
+export function inspectionReviewLane(role: OrganizationRole): AttentionLane { return role === "executive" ? "team" : "mine"; }
+/** The inspection's own due date, at noon UTC so the calendar day never shifts. */
+export function inspectionReviewDueAt(dueDate: string) { return `${dueDate.slice(0, 10)}T12:00:00.000Z`; }
 
 export function quoteRoundCopy(requested: number, submitted: number, missed: number) {
   return {
@@ -269,9 +278,33 @@ export function projectAttentionItems(input: AttentionProjectionInput): Attentio
         }))
     : [];
 
+  // Recorded inspection results wait for a maintenance reviewer, who approves or sends them back on the inspection.
+  const inspectionItems = INSPECTION_REVIEW_ROLES.has(input.role)
+    ? (fixture.inspections ?? [])
+        .filter((inspection) => inspection.organizationId === organizationId && inspection.status === "performed" && storeIds.has(inspection.storeId))
+        .map<AttentionProjectionItem>((inspection) => {
+          const schedule = (fixture.complianceSchedules ?? []).find((row) => row.organizationId === organizationId && row.id === inspection.scheduleId);
+          const dueAt = inspectionReviewDueAt(inspection.dueDate);
+          return {
+            id: inspection.id,
+            sourceKind: "inspection_review",
+            sourceIds: [inspection.id],
+            storeId: inspection.storeId,
+            title: inspectionReviewTitle(schedule?.name ?? "Inspection"),
+            reason: INSPECTION_REVIEW_REASON,
+            owner: "Maintenance reviewer",
+            dueAt,
+            priority: Date.parse(dueAt) <= Date.parse(input.asOf) ? "high" : "normal",
+            lane: inspectionReviewLane(input.role),
+            group: "completion",
+            linkHref: `/app/compliance/${encodeURIComponent(inspection.id)}`,
+          };
+        })
+    : [];
+
   if (input.history) return taskItems.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? "") || a.id.localeCompare(b.id));
 
-  return [...taskItems, ...followUpItems, ...exceptionItems, ...vendorReminderItems, ...quoteRoundItems, ...heldWorkItems]
+  return [...taskItems, ...followUpItems, ...exceptionItems, ...vendorReminderItems, ...quoteRoundItems, ...heldWorkItems, ...inspectionItems]
     .sort((left, right) => {
       const leftOverdue = left.dueAt && Date.parse(left.dueAt) <= Date.parse(input.asOf) ? 0 : 1;
       const rightOverdue = right.dueAt && Date.parse(right.dueAt) <= Date.parse(input.asOf) ? 0 : 1;

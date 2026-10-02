@@ -114,6 +114,9 @@ export interface TrendExportRecord {
 }
 
 /** Plural, plain name for a breakdown dimension ("stores", "service areas"). */
+/** Marks a driver filter meaning "every segment except these keys" (the bridge's All other bar). */
+const OTHER_DRIVERS_PREFIX = "~except:";
+
 function driverDimensionLabel(dimension: TrendBreakdownId) {
   return ({ region: "regions", store: "stores", category: "service areas", group: "equipment groups", profile: "equipment types", component: "components", vendor: "vendors" } as Record<TrendBreakdownId, string>)[dimension];
 }
@@ -2107,11 +2110,15 @@ export function buildTrendsModel(
               : baselineSet.has(detailMonth)
                 ? baselineRecords.filter((row) => row.periodKey === detailMonth)
                 : records.filter((row) => row.periodKey === detailMonth);
+  // "All other" in the change bridge: every segment except the named ones.
+  const excludedDriverKeys = detailDriverValue?.startsWith(OTHER_DRIVERS_PREFIX)
+    ? new Set(detailDriverValue.slice(OTHER_DRIVERS_PREFIX.length).split(",").filter(Boolean).map((key) => decodeURIComponent(key)))
+    : undefined;
   const detailRecords = detailDriverBreakdown && detailDriverValue
-    ? detailBaseRecords.filter((row) => driverIdentity(row, detailDriverBreakdown).key === detailDriverValue)
+    ? detailBaseRecords.filter((row) => excludedDriverKeys ? !excludedDriverKeys.has(driverIdentity(row, detailDriverBreakdown).key) : driverIdentity(row, detailDriverBreakdown).key === detailDriverValue)
     : detailBaseRecords;
   const detailDriverLabel = detailDriverBreakdown && detailDriverValue
-    ? detailRecords[0] ? driverIdentity(detailRecords[0], detailDriverBreakdown).label : detailDriverValue === unclassifiedDriverKey ? "Unclassified" : "Selected segment"
+    ? excludedDriverKeys ? `All other ${driverDimensionLabel(detailDriverBreakdown)}` : detailRecords[0] ? driverIdentity(detailRecords[0], detailDriverBreakdown).label : detailDriverValue === unclassifiedDriverKey ? "Unclassified" : "Selected segment"
     : undefined;
   const detailPeriodLabel = detailKind === "vendor_outstanding" ? `Outstanding assignments first issued ${dateLabel(currentStart)}–${dateLabel(currentEnd)}` : (detailKind === "current" || detailKind === "recurring_work")
     ? `${detailDriverLabel ? `${detailDriverLabel} · ` : ""}${selectedPeriodName} · ${dateLabel(currentStart)}–${dateLabel(currentEnd)}`
@@ -2647,7 +2654,7 @@ export function buildTrendsModel(
       endLink: { href: `${trendHref({ view: "records", detailKind: "current", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined })}#source-records`, label: "Open selected-period records" },
       steps: [
         ...movers.map((row) => ({ id: row.id, label: row.label, value: row.changeValue!, formatted: signed(row.changeValue!), link: { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined, driverBreakdown: breakdown, driverValue: row.id })}#source-records`, label: `Open ${row.label} records for both periods` } })),
-        ...(Math.abs(other) >= 0.5 ? [{ id: "other", label: `All other ${breakdownNoun}`, value: other, formatted: signed(other), link: { href: trendHref({ view: "drivers" }), label: "See every change" } }] : []),
+        ...(Math.abs(other) >= 0.5 ? [{ id: "other", label: `All other ${breakdownNoun}`, value: other, formatted: signed(other), link: { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined, driverBreakdown: breakdown, driverValue: `${OTHER_DRIVERS_PREFIX}${movers.map((row) => encodeURIComponent(row.id)).join(",")}` })}#source-records`, label: `Open records for all other ${breakdownNoun} in both periods` } }] : []),
       ],
     };
   })() : undefined;

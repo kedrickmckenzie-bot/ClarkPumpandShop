@@ -70,7 +70,7 @@ export function attentionFromFixture(fixture: OpsFixture, scope: OrganizationSco
   const stores = fixture.stores.filter(row => row.organizationId === scope.organizationId && (scope.storeIds === undefined || scope.storeIds.includes(row.id)) && (scope.regionIds === undefined || Boolean(row.regionId && scope.regionIds.includes(row.regionId))));
   const rows = projectAttentionItems({ fixture, organizationId: scope.organizationId, storeIds: new Set(stores.map(row => row.id)), includeCompanywide: scope.storeIds === undefined && scope.regionIds === undefined, role: access.role, membershipId: access.membershipId, asOf: query.asOf, history: query.lane === "history" })
     .filter(row => (access.canOpenWarranty || !row.linkHref.startsWith("/app/warranties/")) && (access.canOpenRequest || !row.linkHref.startsWith("/app/requests/")))
-    .filter(row => !access.accountabilityOnly || row.sourceKind !== "vendor_reminder" && (row.sourceKind !== "exception" || (ACCOUNTABILITY_EXCEPTION_KINDS as readonly string[]).includes(row.reason)))
+    .filter(row => !access.accountabilityOnly || row.sourceKind !== "vendor_reminder" && row.sourceKind !== "inspection_review" && (row.sourceKind !== "exception" || (ACCOUNTABILITY_EXCEPTION_KINDS as readonly string[]).includes(row.reason)))
     .filter(row => (!query.lane || row.lane === query.lane) && (!query.group || row.group === query.group))
     .map((row): AttentionQueueRow => {
       const { sourceIds, ...item } = row;

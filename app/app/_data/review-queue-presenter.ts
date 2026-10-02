@@ -1,4 +1,5 @@
 import type { ListPageViewModel, OperatorSession, PaginationViewModel } from "@/components/ops/data-contract";
+import { oneLine } from "@/lib/product/one-line";
 import type { OpsRepository } from "@/lib/ops/repository";
 import type { AttentionQuery } from "@/lib/ops/attention-query";
 import { attentionScope, validateAttentionQuery } from "@/lib/ops/attention-query";
@@ -47,11 +48,11 @@ export async function buildReviewQueue(repository: OpsRepository,session: Operat
   const totals=itemIds ? [] : await Promise.all(metricQueries.map(metric=>repository.listAttention(scope,access,{...metric,limit:1})));
   const actions=result.items.map(row=>presentAttentionRow({...row,storeLabel:row.storeLabel?compactStoreLabel(row.storeLabel,session.organizationName):undefined},asOf));
   const warranty=await workWarrantyMarkers(repository,scope,result.items.slice(0,PAGE_SIZE).flatMap(r=>r.workOrderId?[r.workOrderId]:[]),asOf.slice(0,10));
-  actions.slice(0,PAGE_SIZE).forEach((action,index)=>{if(warranty.get(result.items[index].workOrderId??""))action.reasonLabel=`Warranty? · ${action.reasonLabel??""}`;});
+  actions.slice(0,PAGE_SIZE).forEach((action,index)=>{if(warranty.get(result.items[index].workOrderId??""))action.reasonLabel=`May be covered by warranty · ${action.reasonLabel??""}`;});
   await routeInspectionRows(repository,session.organizationId,result.items.slice(0,PAGE_SIZE),actions);
   // Each row names the actual problem, not only the task, so the reason for acting is clear.
   const problems=await Promise.all(result.items.slice(0,PAGE_SIZE).map(async row=>row.workOrderId?(await repository.getWorkOrder(session.organizationId,row.workOrderId))?.problem:row.serviceRequestId?(await repository.getRequest(session.organizationId,row.serviceRequestId))?.problem:undefined));
-  actions.slice(0,PAGE_SIZE).forEach((action,index)=>{const problem=problems[index];if(problem&&!action.title.includes(problem))action.problemLabel=problem;});
+  actions.slice(0,PAGE_SIZE).forEach((action,index)=>{const problem=problems[index];if(problem&&!action.title.includes(problem))action.problemLabel=oneLine(problem);});
   const labels=["Needs your action","Waiting on others","All open items"];
   const filter=(key:"lane"|"type"|"priority",label:string,options:Array<[string,string]>)=>({id:`attention-${key}`,label,options:options.map(([value,title])=>({value:value||"all",label:title,selected:(query[key]??"")===value,href:reviewHref({...query,[key]:value||undefined})}))});
   return {state:{kind:"ready"},page:{title:"Review queue",description:query.lane === "history" ? "Completed and canceled tasks." : "Open an item and take the next step.",scopeLabel,updatedLabel:`Updated ${formatOperationsDate(asOf)}`},

@@ -26,7 +26,7 @@ export function ChangeBridge({ bridge, metricLabel }: { bridge: TrendBridgeViewM
     <header className={styles.header}>
       <div><p className={styles.eyebrow}>What changed</p><h2 id="bridge-title">{metricLabel}: {bridge.startFormatted} → {bridge.endFormatted}</h2>
         <p className={styles.lede}><strong className={change >= 0 ? styles.upText : styles.downText}>{change >= 0 ? "Up" : "Down"} {bridge.changeFormatted}</strong> · biggest changes first. Each bar opens the records behind it.</p></div>
-      <ul className={styles.key} aria-label="Key"><li><i className={styles.keyUp} aria-hidden="true" />Spending up</li><li><i className={styles.keyDown} aria-hidden="true" />Spending down</li><li><i className={styles.keyTotal} aria-hidden="true" />Period total</li></ul>
+      <ul className={styles.key} aria-label="Key"><li><i className={styles.keyUp} aria-hidden="true" />Increase</li><li><i className={styles.keyDown} aria-hidden="true" />Decrease</li><li><i className={styles.keyTotal} aria-hidden="true" />Period total</li></ul>
     </header>
     <ol className={styles.bridge} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(64px, 1fr))` }}>
       {columns.map((column) => <li key={column.id}>
@@ -56,7 +56,7 @@ export function SpendHeatmap({ heatmap, metricLabel }: { heatmap: TrendHeatmapVi
   return <section className={styles.panel} aria-labelledby="heatmap-title">
     <header className={styles.header}>
       <div><p className={styles.eyebrow}>Where and when</p><h2 id="heatmap-title">{metricLabel} by {heatmap.noun.replace(/s$/, "")} and month</h2>
-        <p className={styles.lede}>Darker cells cost more. Select a cell to open exactly those records.</p></div>
+        <p className={styles.lede}>Darker means more. Select a cell to open exactly those records.</p></div>
       <div className={styles.scale} aria-label="Color scale"><span>Less</span>{RAMP.map((color) => <i key={color} style={{ background: color }} aria-hidden="true" />)}<span>More</span></div>
     </header>
     <div className={styles.gridScroll}>

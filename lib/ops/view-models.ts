@@ -203,6 +203,9 @@ export interface WorkOrderListRow {
   currency: CurrencyCode;
   visitHoldPosture?: "complete_using_professional_judgment" | "look_and_report";
   visitHoldDeadlineAt?: IsoDateTime;
+  /** Linked equipment, when the work has been classified to one. */
+  assetName?: string;
+  assetTag?: string;
 }
 
 export interface ServiceAuthorizationView {

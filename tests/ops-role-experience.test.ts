@@ -207,6 +207,11 @@ describe("role-specific operator experiences", () => {
 
   it("does not expose the invoice list to a store manager at the policy boundary", () => {
     expect(roleCanAccessListRoute("store_manager", "invoices")).toBe(false);
+    // Queue rows that open an inspection must not be dropped for people who can open the store.
+    expect(roleCanOpenOperatorHref("facilities", "/app/compliance/inspection-1")).toBe(true);
+    expect(roleCanOpenOperatorHref("store_manager", "/app/compliance/inspection-1")).toBe(true);
+    expect(roleCanOpenOperatorHref("store_manager", "/app/compliance/new")).toBe(false);
+    expect(roleCanOpenOperatorHref("regional", "/app/compliance/new")).toBe(true);
     expect(roleCanOpenOperatorHref("store_manager", "/app/invoices")).toBe(false);
     expect(roleCanOpenOperatorHref("store_manager", "/app/invoices/invoice-northline-104")).toBe(false);
   });

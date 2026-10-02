@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { oneLine } from "@/lib/product/one-line";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Camera, MapPin } from "lucide-react";
 import type {
@@ -494,9 +495,9 @@ export function TechnicianVisitFlow({
                   const selected = selectedWorkOrderIds.includes(work.id);
                   const where = [work.asset, work.area].filter(Boolean).join(" · ") || work.category;
                   // A job someone is already checked in on cannot start a second visit; say who and how to finish.
-                  if (work.activeVisit) return <div className={styles.choiceCard} key={work.id} aria-disabled="true"><span className={styles.choiceTitle}>{work.problem}</span><span className={styles.choiceDescription}>{work.number}{where ? ` · ${where}` : ""}</span><span className={styles.choiceDescription}><strong>Already checked in</strong> by {work.activeVisit.technicianName} at {formatPublicDateTime(work.activeVisit.checkedInAt, portal.store.timeZone)}. Finish it from the checkout link on that phone.</span></div>;
+                  if (work.activeVisit) return <div className={styles.choiceCard} key={work.id} aria-disabled="true"><span className={styles.choiceTitle}>{oneLine(work.problem)}</span><span className={styles.choiceDescription}>{work.number}{where ? ` · ${where}` : ""}</span><span className={styles.choiceDescription}><strong>Already checked in</strong> by {work.activeVisit.technicianName} at {formatPublicDateTime(work.activeVisit.checkedInAt, portal.store.timeZone)}. To finish, use the checkout link from check-in, the vendor work-order link, or the store&apos;s trusted computer.</span></div>;
                   // One tap selects the job; the problem and timing are visible without opening anything.
-                  return <label className={`${styles.choiceCard} ${selected ? styles.choiceCardSelected : ""}`} key={work.id}><input aria-label={`I'm here for work order ${work.number}`} className={styles.choiceInput} checked={selected} onChange={() => toggleWorkOrder(work.id)} type="checkbox" value={work.id} /><span className={styles.choiceTitle}>{work.problem}</span><span className={styles.choiceDescription}>{work.number}{where ? ` · ${where}` : ""} · {work.dueOrScheduledAt ? `${work.dueOrScheduledLabel}: ${formatPublicDateTime(work.dueOrScheduledAt, portal.store.timeZone)}` : "No scheduled date"}</span></label>;
+                  return <label className={`${styles.choiceCard} ${selected ? styles.choiceCardSelected : ""}`} key={work.id}><input aria-label={`I'm here for work order ${work.number}`} className={styles.choiceInput} checked={selected} onChange={() => toggleWorkOrder(work.id)} type="checkbox" value={work.id} /><span className={styles.choiceTitle}>{oneLine(work.problem)}</span><span className={styles.choiceDescription}>{work.number}{where ? ` · ${where}` : ""} · {work.dueOrScheduledAt ? `${work.dueOrScheduledLabel}: ${formatPublicDateTime(work.dueOrScheduledAt, portal.store.timeZone)}` : "No scheduled date"}</span></label>;
                 })}
                 {!visibleEligibleWork.length ? <p className={styles.notice}>No assigned work is listed for your company at this store.</p> : null}
                 {!context.workOrderSelectionBound ? <label className={`${styles.choiceCard} ${unmatched ? styles.choiceCardSelected : ""}`}><input checked={unmatched} className={styles.choiceInput} onChange={chooseUnmatched} type="checkbox" /><span className={styles.choiceTitle}>I don’t see my work order</span><span className={styles.choiceDescription}>Choose this if dispatch did not provide a work-order number or the expected work is not listed. A reason for the visit is required.</span></label> : null}

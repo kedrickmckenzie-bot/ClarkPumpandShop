@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nextActionRedirect, workflowTaskActionLabel, workflowTaskHref } from "@/lib/ops/workflow-task-destination";
-import { presentAttentionRow } from "@/app/app/_data/attention-presenter";
+import { presentAttentionRow, routeInspectionRows } from "@/app/app/_data/attention-presenter";
 import type { AttentionQueueRow } from "@/lib/ops/attention-query";
 
 const row = (patch: Partial<AttentionQueueRow>): AttentionQueueRow => ({
@@ -45,5 +45,22 @@ describe("queue action destinations", () => {
     expect(presentAttentionRow(row({ sourceKind: "quote_round", taskType: undefined }), asOf).link.label).toBe("Review quotes");
     expect(presentAttentionRow(row({ sourceKind: "exception", taskType: undefined, group: "financial", reason: "invoice_without_work_order" }), asOf).link.label).toBe("Review invoice");
     expect(presentAttentionRow(row({ lane: "history" }), asOf).link.label).toBe("View history");
+  });
+
+  it("sends only result-review rows on inspection work to the inspection", async () => {
+    const repository = { inspectionForWork: async () => ({ id: "insp-1", status: "performed", correctiveWorkOrderId: undefined }) } as never;
+    const items = [
+      row({ id: "date", taskType: "schedule_service" }),
+      row({ id: "invoice", sourceKind: "exception", group: "financial", linkHref: "/app/invoices/inv-1" }),
+      row({ id: "confirm", taskType: "verify_repair", group: "completion", linkHref: "/app/work-orders/wo-1?view=confirmation#work-verification" }),
+      row({ id: "follow", sourceKind: "follow_up", group: "completion", linkHref: "/app/action-center/fu-1" }),
+    ];
+    const actions = items.map((item) => presentAttentionRow(item, "2026-10-02T12:00:00.000Z"));
+    const before = actions.map((action) => action.link.href);
+    await routeInspectionRows(repository, "org", items, actions);
+    expect(actions[0].link.href).toBe(before[0]);
+    expect(actions[1].link.href).toBe(before[1]);
+    expect(actions[2].link).toEqual({ href: "/app/compliance/insp-1", label: "Review findings" });
+    expect(actions[3].link.href).toBe(before[3]);
   });
 });

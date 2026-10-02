@@ -4,6 +4,28 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Review corrections to the depth pass (October 2, Claude)
+
+An outside code review of `21f6943` found one routing bug and smaller gaps; the user asked for all of them plus the open items from the depth pass. Each was checked against the code before editing.
+
+- [x] RC-01 Bug: every queue row on a job tied to an unfinished inspection was sent to the inspection, including vendor date replies and invoice reviews. Now only result-review rows (record outcome, confirm repair, close verified work) open the inspection; everything else keeps its own destination. Test in `ops-action-destinations`.
+- [x] RC-02 Bug found while checking RC-05: the review queue silently removed any row whose link pointed at an inspection, because inspection pages were missing from the role link list (`roleCanOpenOperatorHref`). "Needs your action" said 15 while 12 rows showed. Inspection pages are now listed with the same access the pages already enforce (anyone who can open the store; only facilities and regional create schedules). No new access. Test in `ops-role-experience`.
+- [x] RC-03 Store context row counts preferred and covering vendors across every match on the server (`preferredTotal`, `coveredTotal`, demo data and SQL), not the first 25. Tests: `ops-store-vendor-counts` (45 vendors), store-vendor regression.
+- [x] RC-04 Trends wording works for every measure: key reads Increase / Decrease / Period total; the heat map says "Darker means more". The "All other" bar now opens exactly the remaining records (every segment except the named bars) instead of the general breakdown. Test: All other + named bars = all records.
+- [x] RC-05 Inspections with recorded results now appear in the review queue for maintenance reviewers ("Review inspection results: <name>", "Review findings", opens the inspection; Needs my action for facilities and regional, Team work for executives; not shown to store managers or finance). Demo data and SQL agree (attention regression).
+- [x] RC-06 "Already checked in" now names every way to finish: the checkout link from check-in, the vendor work-order link, or the store's trusted computer.
+- [x] RC-07 Work-order list has an Equipment column (name and tag, or "Not linked"); demo data and SQL agree (`ops-work-list-equipment`).
+- [x] RC-08 Request page: the decision comes first, "Choose one" shows only the chosen path (Create work order by default; links to a path open it), the doubled "Key facts" heading is gone, the repeated request number/state boxes are gone, and record history is folded behind one "Record details" line (tabs still open each section). Length: 4.6 → 2.1 screens at 1440px, 7.5 → 3.2 at 390px. The problem now shows at the top on phones.
+- [x] RC-09 One-line displays (tables, queue, store page, technician job list) show "problem · Area or equipment: …" instead of running together; record headers keep the line break. Saved text is unchanged (`oneLine`, display only).
+- [x] RC-10 Queue label "Warranty?" now reads "May be covered by warranty".
+
+Evidence: typecheck passes; targeted tests pass (action destinations, role experience, attention and dashboard regressions, store vendor counts, trends visuals, work list equipment, one-line). Full-suite results follow in the next checkpoint update.
+Browser checks (real browser, 1440px and 390px): queue inspection row for facilities and executive, absent for store manager; Needs your action 15 = 15 listed; Trends key, heat map wording, All other drill ("All other stores · Both date ranges", records listed) and the work-order measure; Equipment column with no sideways scroll at 390px; request page choices, direct link to a path, folded record details; separators on the store page and work-order search. Journeys 1–6 re-run end to end and pass (the test script now waits for the vendor page to finish loading before tapping).
+
+Remaining limitations:
+- An inspection job that also has a confirm-repair task can show two queue rows that both open the inspection.
+- "Test:e2e" is the repository's workflow and integration suite (Vitest), not browser tests; browser checks are the manual walkthroughs above.
+
 ## Depth pass — useful context back, still easy to use (October 2, Claude)
 
 Brief: restore the context people need to act (store, queue, work order, warranty, invoices, inspections, tasks) without bringing back clutter, then walk 15 end-to-end journeys by role at 1440px and 390px. The user also asked for Trends to "blow your socks away". Guardrails held: no permission changes, no money-calculation changes, no new required fields, no hosted reset, no AI invoice reading.
@@ -43,7 +65,7 @@ Evidence: `db:seed`, typecheck, lint and build pass; unit suite 1,190/1,190 afte
 
 Remaining limitations:
 - The review queue does not list inspections awaiting review; reviewers find them from the Inspections tile and the store page. Adding a queue item type is a larger change, not made here.
-- The store QR only starts visits. A technician who loses their checkout link cannot finish from a different phone; an operator has to close the visit.
+- The store QR only starts visits. (Corrected later: a visit can also be finished from the vendor work-order link or the store's trusted computer, not only the checkout link.)
 - Store reports keep the employee's text exactly, so in one-line lists the problem and "Area or equipment: …" run together without punctuation.
 - Not every screen in the brief was rebuilt: the work-order list has no equipment column, and request pages are still long. Recorded for the next pass.
 

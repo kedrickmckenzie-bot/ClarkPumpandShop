@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { oneLine } from "@/lib/product/one-line";
 import { roleCanAccessListRoute } from "@/components/ops/role-policy";
 import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import { completionSummary } from "@/lib/ops/work-order-outcome";
@@ -31,7 +32,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
   const outcomes = await Promise.all(confirm.items.slice(0, 3).map((work) => repository.listSiteVisitWorkOrdersForWorkOrder(session.organizationId, work.id)));
   const confirmations = confirm.items.slice(0, 3).map((work, index) => ({
     key: work.id, href: `/app/work-orders/${encodeURIComponent(work.id)}?view=confirmation#work-verification`,
-    title: `${work.number} · ${work.problem}`,
+    title: `${work.number} · ${oneLine(work.problem)}`,
     detail: completionSummary(outcomes[index], (iso) => formatOperationsDateTime(iso, store.timeZone)),
     who: `${work.accountableParty}: confirm it's working.`,
   }));
@@ -63,7 +64,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
       {rows.length ? <div className={styles.scroll}><table className={styles.table}>
         <thead><tr><th>Job</th><th>Who&apos;s handling it</th><th>Next step</th><th>Due</th></tr></thead>
         <tbody>{rows.map((work) => <tr key={work.id}>
-          <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(work.id)}`}>{work.problem}</Link><p className={styles.muted}>{work.number}{work.priority === "urgent" || work.priority === "emergency" ? ` · ${work.priority === "urgent" ? "Urgent" : "Emergency"}` : ""}</p></td>
+          <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(work.id)}`}>{oneLine(work.problem)}</Link><p className={styles.muted}>{work.number}{work.priority === "urgent" || work.priority === "emergency" ? ` · ${work.priority === "urgent" ? "Urgent" : "Emergency"}` : ""}</p></td>
           <td data-label="Who's handling it">{work.accountableParty}{work.vendorName && work.vendorName !== work.accountableParty ? <p className={styles.muted}>Vendor: {work.vendorName}</p> : null}</td>
           <td data-label="Next step">{work.nextAction}</td>
           <td data-label="Due">{work.dueAt ? <>{formatOperationsDateTime(work.dueAt, store.timeZone)}{work.dueAt < nowIso ? <p className={styles.muted}>Overdue</p> : null}</> : "No date"}</td>
@@ -83,11 +84,10 @@ export async function StoreContextRow({ id }: { id: string }) {
     repository.listWarrantyDirectory(scope, { today, view: "active", limit: 1 }).catch(() => null),
     repository.queryStoreVendors(scope, id, {}).catch(() => null),
   ]);
-  const preferred = vendors?.items.filter((row) => row.preferenceKeys.length).length ?? 0;
-  const covering = vendors?.items.filter((row) => row.covered).length ?? 0;
+  const preferred = vendors?.preferredTotal ?? 0, covering = vendors?.coveredTotal ?? 0;
   const context = [
     warranties ? { key: "warranties", href: `${base}/warranties`, text: `${warranties.totalCount} active ${warranties.totalCount === 1 ? "warranty" : "warranties"}` } : null,
-    vendors ? { key: "vendors", href: `${base}/vendors`, text: preferred ? `${preferred} preferred ${preferred === 1 ? "vendor" : "vendors"} · ${covering}${vendors.total > vendors.items.length ? "+" : ""} covering` : `${covering}${vendors.total > vendors.items.length ? "+" : ""} ${covering === 1 ? "vendor covers" : "vendors cover"} this store` } : null,
+    vendors ? { key: "vendors", href: `${base}/vendors`, text: preferred ? `${preferred} preferred ${preferred === 1 ? "vendor" : "vendors"} · ${covering} covering` : `${covering} ${covering === 1 ? "vendor covers" : "vendors cover"} this store` } : null,
     { key: "inspections", href: `${base}/compliance?view=performed`, text: `${inspections.summary.performed ?? 0} ${inspections.summary.performed === 1 ? "inspection" : "inspections"} awaiting review` },
   ].filter((item): item is { key: string; href: string; text: string } => Boolean(item));
   return <nav className={`${styles.contextRow} ${styles.fullWidth}`} aria-label="Store context">{context.map((item) => <Link key={item.key} href={item.href}>{item.text} →</Link>)}</nav>;

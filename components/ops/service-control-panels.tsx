@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -167,7 +167,20 @@ function WorkflowStages({ stages }: { stages: WorkflowStageViewModel[] }) {
   );
 }
 
+type RequestChoice = "create" | "link" | "acknowledge";
+const REQUEST_CHOICE_BY_HASH: Record<string, RequestChoice> = { "#request-create-work": "create", "#request-link-work": "link", "#request-acknowledge": "acknowledge" };
+
 export function RequestReviewPanel({ model }: { model: RequestReviewViewModel }) {
+  // "Choose one" shows only the chosen path; a link to a path's anchor opens that path.
+  const [choice, setChoice] = useState<RequestChoice>("create");
+  useEffect(() => {
+    const fromHash = () => { const next = REQUEST_CHOICE_BY_HASH[window.location.hash]; if (next) setChoice(next); };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, []);
+  const choosing = model.expectedStatus !== "acknowledged" && !model.pendingApproval && model.permitted;
+  const shows = (path: RequestChoice) => !choosing || choice === path;
   const impactMutation = useMutation();
   const decisionMutation = useMutation();
   const linkMutation = useMutation();
@@ -204,9 +217,7 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
         title={model.expectedStatus === "acknowledged" ? "Request acknowledgment" : "Review the request"}
         description={model.expectedStatus === "acknowledged" ? "This report has been acknowledged. Review the linked work or request a follow-up if needed." : model.pendingApproval ? "The request facts are preserved. Complete the current approval before creating work." : "Create a work order, add this report to a job that is already open, or just acknowledge it."}
       />
-      <div className={styles.controlSummary}>
-        <span><small>Request</small><strong>{model.reference}</strong></span>
-        <span><small>Current state</small><strong>{model.statusLabel}</strong></span>
+      <div className={`${styles.controlSummary} ${styles.controlSummaryCompact}`}>
         <span><small>Store operation</small><strong>{impact ? domainLabel(impact.storeOperatingState) : "Not assessed"}</strong></span>
         <span><small>Safety</small><strong>{impact ? domainLabel(impact.safetyConcern) : "Not assessed"}</strong></span>
         <span><small>Product risk</small><strong>{impact ? domainLabel(impact.productInventoryRisk) : "Not assessed"}</strong></span>
@@ -214,13 +225,13 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
       {model.pendingApproval ? <PendingApprovalPanel approval={model.pendingApproval} /> : null}
       {!model.permitted ? <p className={styles.inlineEmpty}>Your role can review this request but cannot record a decision.</p> : (
         <>
-          {model.expectedStatus !== "acknowledged" && !model.pendingApproval ? <nav className={styles.formFooter} aria-label="Choose what happens next">
+          {model.expectedStatus !== "acknowledged" && !model.pendingApproval ? <nav className={styles.requestChoices} aria-label="Choose what happens next">
             <span className={styles.formMeta}>Choose one</span>
-            <a className={styles.primaryButton} href="#request-create-work">Create work order</a>
-            {model.linkExistingWorkAction ? <a className={styles.secondaryButton} href="#request-link-work">Add to existing job</a> : null}
-            {model.acknowledgeAction ? <a className={styles.secondaryButton} href="#request-acknowledge">Just acknowledge</a> : null}
+            <a className={choice === "create" ? styles.primaryButton : styles.secondaryButton} aria-current={choice === "create" ? "true" : undefined} href="#request-create-work" onClick={() => setChoice("create")}>Create work order</a>
+            {model.linkExistingWorkAction ? <a className={choice === "link" ? styles.primaryButton : styles.secondaryButton} aria-current={choice === "link" ? "true" : undefined} href="#request-link-work" onClick={() => setChoice("link")}>Add to existing job</a> : null}
+            {model.acknowledgeAction ? <a className={choice === "acknowledge" ? styles.primaryButton : styles.secondaryButton} aria-current={choice === "acknowledge" ? "true" : undefined} href="#request-acknowledge" onClick={() => setChoice("acknowledge")}>Just acknowledge</a> : null}
           </nav> : null}
-          {model.expectedStatus !== "acknowledged" && !model.pendingApproval ? <div className={styles.subControlPanel} id="request-create-work">
+          {model.expectedStatus !== "acknowledged" && !model.pendingApproval && shows("create") ? <div className={styles.subControlPanel} id="request-create-work">
             <div className={styles.subControlHeading}><ShieldCheck aria-hidden="true" size={18} /><div><h3>Create a work order</h3><p>Equipment and details can stay unknown for now.</p></div></div>
             {model.canCreateWorkOrder && model.createWorkOrderHref ? (
               <div className={styles.formFooter}><span className={styles.formMeta}>The manager review is complete. Define the work and choose the service path next.</span><Link className={styles.primaryButton} href={model.createWorkOrderHref}>Create work order<ShieldCheck aria-hidden="true" size={17} /></Link></div>
@@ -238,7 +249,8 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
               </form>
             )}
           </div> : null}
-          <div className={styles.subControlPanel} id="request-acknowledge">
+          {shows("acknowledge") || shows("link") ? <div className={styles.subControlPanel} id="request-acknowledge">
+            {shows("acknowledge") ? <>
             <div className={styles.subControlHeading}><ShieldCheck aria-hidden="true" size={18} /><div><h3>{model.expectedStatus === "acknowledged" ? "Acknowledged — being handled" : "Acknowledge this report"}</h3><p>{model.expectedStatus === "acknowledged" ? `${model.acknowledgedBy ?? "An authorized manager"} acknowledged this report${model.acknowledgedAtLabel ? ` on ${model.acknowledgedAtLabel}` : ""}.` : "Acknowledge that this is being handled. No note or work-order link is needed."}</p></div></div>
             {model.linkedWorkOrder ? <div className={styles.controlSummary}><Link href={`/app/work-orders/${model.linkedWorkOrder.id}`}><small>{model.linkedWorkOrder.number} · {model.linkedWorkOrder.statusLabel}</small><strong>{model.linkedWorkOrder.problem}</strong><small>Linked work does not mean the repair is complete</small></Link></div> : <p className={styles.inlineEmpty}><strong>No linked work order.</strong> You can link related work or ask for a follow-up below.</p>}
             {model.acknowledgeAction ? <form action={model.acknowledgeAction} method="post" onSubmit={acknowledgeMutation.submit} className={styles.controlForm}>
@@ -253,7 +265,8 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
               <MutationError message={unlinkMutation.state.error} />
               <div className={styles.formFooter}><span className={styles.formMeta}>Keeps the acknowledgment and original work order.</span><button className={styles.secondaryButton} type="submit" disabled={unlinkMutation.state.pending}>{unlinkMutation.state.pending ? "Removing…" : "Remove link"}</button></div>
             </form></details> : null}
-            {model.linkExistingWorkAction ? <div className={styles.controlForm} id="request-link-work">
+            </> : null}
+            {model.linkExistingWorkAction && shows("link") ? <div className={styles.controlForm} id="request-link-work">
               <div className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Potentially related work</h3><p>Suggestions are not confirmed duplicates. Select a work order explicitly or browse the store’s full open-work list.</p></div></div>
               {model.relatedOpenWork.length ? <form action={model.linkExistingWorkAction} method="post" onSubmit={linkMutation.submit} className={styles.controlForm}>
                 <input type="hidden" name="expectedStatus" value={model.expectedStatus} />
@@ -265,7 +278,7 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
               {model.browseOpenWorkHref ? <div className={styles.formFooter}><span className={styles.formMeta}>Search and page through every active work order at this store.</span><Link className={styles.secondaryButton} href={model.browseOpenWorkHref}>Browse this store’s open work</Link></div> : null}
             </div> : null}
             {model.followUpAction ? <details className={styles.controlDisclosure}><summary className={styles.subControlHeading}><Route aria-hidden="true" size={18} /><div><h3>Request follow-up</h3><p>Ask someone to follow up on this report.</p></div></summary><form action={model.followUpAction} method="post" onSubmit={followUpMutation.submit} className={styles.controlForm}><label className={styles.field} htmlFor={`follow-up-${model.requestId}`}><span>Why follow-up is needed <em>Required</em></span><textarea id={`follow-up-${model.requestId}`} name="explanation" required minLength={3} maxLength={1000} rows={3} /></label><MutationError message={followUpMutation.state.error} /><div className={styles.formFooter}><span className={styles.formMeta}>Creates a follow-up task. The earlier acknowledgment stays in history.</span><button className={styles.secondaryButton} type="submit" disabled={followUpMutation.state.pending}>{followUpMutation.state.pending ? "Requesting…" : "Request follow-up"}</button></div></form></details> : null}
-          </div>
+          </div> : null}
 
           <details className={`${styles.subControlPanel} ${styles.controlDisclosure}`} hidden={model.expectedStatus === "acknowledged"}>
             <summary className={styles.subControlHeading}><ClipboardCheck aria-hidden="true" size={18} /><div><h3>Add or correct business impact</h3><p>Add what you know about safety, affected products, store operations, or sales.</p></div></summary>

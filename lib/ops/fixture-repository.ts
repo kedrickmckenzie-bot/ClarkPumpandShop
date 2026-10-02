@@ -145,6 +145,7 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
   const assignment = fixture.assignments.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).at(-1);
   const vendor = assignment?.vendorId ? fixture.vendors.find((row) => row.organizationId === workOrder.organizationId && row.id === assignment.vendorId) : undefined;
   const visitHold = (fixture.workOrderVisitHolds ?? []).find((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id && row.status === "active");
+  const asset = workOrder.assetId ? fixture.assets.find((row) => row.organizationId === workOrder.organizationId && row.id === workOrder.assetId) : undefined;
   return {
     needsConfirmation: (fixture.workflowTasks ?? []).some(t => t.organizationId === workOrder.organizationId && t.workOrderId === workOrder.id && t.taskType === "verify_repair" && ["open", "in_progress"].includes(t.status)),
     id: workOrder.id, number: workOrder.number, storeId: store.id, storeNumber: store.storeNumber,
@@ -157,6 +158,7 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
     recordedCostMinor: fixture.costLines.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).reduce((sum, row) => sum + row.amount.amountMinor, 0), currency: "USD",
     visitHoldPosture: visitHold?.posture,
     visitHoldDeadlineAt: visitHold?.deadlineAt,
+    ...(asset ? { assetName: asset.name, assetTag: asset.assetTag } : {}),
   };
 }
 

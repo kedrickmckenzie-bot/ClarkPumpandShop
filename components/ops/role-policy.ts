@@ -217,5 +217,10 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
     return roleCanAccessProgramRoute(role, "pm");
   }
   if (area === "lifecycle") return roleCanAccessProgramRoute(role, "lifecycle");
+  // Matches the inspection pages: anyone who can open the store can open its inspections; only facilities and regional set up schedules.
+  if (area === "compliance") {
+    if (record === "new") return role === "facilities" || role === "regional";
+    return roleCanAccessDetailRoute(role, "store");
+  }
   return false;
 }
