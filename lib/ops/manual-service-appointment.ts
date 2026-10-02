@@ -14,7 +14,7 @@ export async function recordManualAppointment(svc: OpsCommandServices, input: {
   const ids = svc.ids ?? { next: (prefix: string) => `${prefix}-${crypto.randomUUID()}` };
   if (input.actor.organizationId !== input.organizationId) throw new OpsDomainError("FORBIDDEN", "Organization access required");
   const member = input.actor.actorId ? await r.getMembership(input.organizationId, input.actor.actorId) : null;
-  if (!member || member.status !== "active" || !["facilities_admin", "regional_manager"].includes(member.role)) throw new OpsDomainError("FORBIDDEN", "An active maintenance manager is required");
+  if (!member || member.status !== "active" || !["facilities_admin", "regional_manager", "field_manager"].includes(member.role)) throw new OpsDomainError("FORBIDDEN", "An active maintenance manager is required");
   const work = await r.getWorkOrder(input.organizationId, input.workOrderId);
   if (!work) throw new OpsDomainError("NOT_FOUND", "Work order not found");
   if (persistedWorkOrderVersion(work) !== input.expectedVersion) throw new OpsDomainError("CONFLICT", "Work changed. Refresh before saving");
@@ -56,7 +56,7 @@ export async function recordManualServiceDelay(svc: OpsCommandServices, input: {
   const r = svc.repository, now = svc.clock?.now() ?? new Date().toISOString();
   if (input.actor.organizationId !== input.organizationId) throw new OpsDomainError("FORBIDDEN", "Organization access required");
   const member = input.actor.actorId ? await r.getMembership(input.organizationId, input.actor.actorId) : null;
-  if (!member || member.status !== "active" || !["facilities_admin", "regional_manager"].includes(member.role)) throw new OpsDomainError("FORBIDDEN", "Maintenance manager access required");
+  if (!member || member.status !== "active" || !["facilities_admin", "regional_manager", "field_manager"].includes(member.role)) throw new OpsDomainError("FORBIDDEN", "Maintenance manager access required");
   const work = await r.getWorkOrder(input.organizationId, input.workOrderId);
   if (!work || persistedWorkOrderVersion(work) !== input.expectedVersion) throw new OpsDomainError("CONFLICT", "Work changed. Refresh before saving");
   if (["closed", "cancelled", "awaiting_approval", "resolved"].includes(work.status) || !input.note.trim() || !Number.isFinite(Date.parse(input.dueAt))) throw new OpsDomainError("VALIDATION", "Check the current work state, note and follow-up date");

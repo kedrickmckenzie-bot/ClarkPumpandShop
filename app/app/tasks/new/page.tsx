@@ -1,3 +1,4 @@
+import {loadOperatorSession} from "@/app/app/_data/operator-loader";
 import {cameraInput} from "@/lib/ops/store-task-time";
 import Link from "next/link";
 import {getOpsRequestContext,assertStoreInSessionScope} from "@/lib/server/ops-request-context";
@@ -7,6 +8,7 @@ import {NewTaskForm} from "@/components/workspace/store-task-forms";
 import styles from "@/components/workspace/store-tasks.module.css";
 import {notFound} from "next/navigation";
 export default async function Page({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}) {
+ if(!(taskRoles as readonly string[]).includes((await loadOperatorSession()).role))notFound();
  const {session,repository:r,actor}=await getOpsRequestContext(taskRoles),q=await searchParams;
  await taskIdentity(r,session.organizationId,actor.actorId!);
  const sources:Record<string,string>={};const sourceLinks:Array<{label:string;href:string}>=[];let store=q.store;let windows:CameraWindow[]=[];

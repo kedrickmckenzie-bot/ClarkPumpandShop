@@ -157,11 +157,14 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
     layout: isFacilities ? "operations" : "regional",
     page: {
       ...pageBase,
-      title: isFacilities ? "Maintenance overview" : "Your region at a glance",
-      eyebrow: isFacilities ? "Daily maintenance" : "Regional overview",
+      // The field manager uses regional access but runs the internal team across the stores it covers.
+      title: isFacilities ? "Maintenance overview" : session.persona === "field_manager" ? "Field operations overview" : "Your region at a glance",
+      eyebrow: isFacilities ? "Daily maintenance" : session.persona === "field_manager" ? "Internal maintenance team" : "Regional overview",
       description: isFacilities
         ? "Review work, visits, and costs across your stores."
-        : "See stores, open work, vendor activity, and recorded costs across your region.",
+        : session.persona === "field_manager"
+          ? "Open work, visits and recorded costs across the stores your team covers."
+          : "See stores, open work, vendor activity, and recorded costs across your region.",
       primaryAction: { label: "Create work order", href: "/app/work-orders/new" },
     },
     journey: journey,

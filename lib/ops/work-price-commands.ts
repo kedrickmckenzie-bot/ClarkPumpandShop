@@ -11,7 +11,7 @@ export function priceInsert(table: string, values: Record<string, unknown>): Ops
 export async function assertPriceAccess(repository: OpsRepository, actor: ActorContext, work: WorkOrder, company = false) {
   if (actor.organizationId !== work.organizationId || actor.actorType !== "user" || !actor.actorId) throw new OpsDomainError("FORBIDDEN", "You cannot save a price here.");
   const member = await repository.getMembership(work.organizationId, actor.actorId);
-  if (!member || member.status !== "active" || !["facilities_admin", "regional_manager"].includes(member.role)) throw new OpsDomainError("FORBIDDEN", "You cannot save a price here.");
+  if (!member || member.status !== "active" || !["facilities_admin", "regional_manager", "field_manager"].includes(member.role)) throw new OpsDomainError("FORBIDDEN", "You cannot save a price here.");
   const grants = (await repository.listScopeGrantsForMembership(work.organizationId, member.id)).filter(row => ["ops:*", "ops:read_write"].includes(row.permission));
   const store = await repository.getStore(work.organizationId, work.storeId);
   const orgGrant = grants.some(row => row.scopeKind === "organization" && row.scopeId === work.organizationId);

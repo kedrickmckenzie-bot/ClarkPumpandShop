@@ -12,6 +12,8 @@ export const configurableMaintenanceCapabilities = [
 const operatorRoleForOrganizationRole = {
   facilities_admin: "facilities",
   regional_manager: "regional",
+  // The field manager reuses the regional manager's capabilities and scoped access.
+  field_manager: "regional",
   store_manager: "store_manager",
   executive: "executive",
   finance_reviewer: "finance",

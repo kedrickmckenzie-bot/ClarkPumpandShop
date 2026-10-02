@@ -1,3 +1,5 @@
+import {notFound} from "next/navigation";
+import {loadOperatorSession} from "@/app/app/_data/operator-loader";
 import { LiveSearchForm } from "@/components/ops/live-search-form";
 import {OpsDomainError} from "@/lib/ops/errors";
 import Link from "next/link";
@@ -7,6 +9,7 @@ import {taskRoles,taskViewLabels,type TaskView} from "@/lib/ops/store-task-types
 import {formatOperationsDateTime} from "@/lib/ops/local-time";
 import styles from "./store-tasks.module.css";
 export default async function StoreTaskWorkspace({searchParams,fixedStore,sourceId}:{searchParams:Promise<Record<string,string|undefined>>;fixedStore?:string;sourceId?:string}) {
+ if(!(taskRoles as readonly string[]).includes((await loadOperatorSession()).role))notFound();
  const {session,repository:r,actor}=await getOpsRequestContext(taskRoles),q=await searchParams;
  let access;
  try {access=await taskIdentity(r,session.organizationId,actor.actorId!);} catch(e) {if(e instanceof OpsDomainError&&e.code==='FORBIDDEN')return <div className={styles.page}><h1>Tasks</h1><p>Tasks aren’t enabled for this account. Ask your administrator for access.</p></div>;throw e;}

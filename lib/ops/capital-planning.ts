@@ -38,7 +38,7 @@ export async function saveCapitalPlan(svc:OpsCommandServices,input:{organization
   const r=svc.repository,org=input.organizationId;
   if(input.actor.organizationId!==org)throw new OpsDomainError("FORBIDDEN","Organization access required.");
   const membership=input.actor.actorId?await r.getMembership(org,input.actor.actorId):null;
-  if(!membership||membership.status!=="active"||!["facilities_admin","regional_manager"].includes(membership.role))throw new OpsDomainError("FORBIDDEN","An active planning role is required.");
+  if(!membership||membership.status!=="active"||!["facilities_admin","regional_manager", "field_manager"].includes(membership.role))throw new OpsDomainError("FORBIDDEN","An active planning role is required.");
   const asset=await r.getAsset(org,input.assetId);if(!asset||asset.status==="retired")throw new OpsDomainError("VALIDATION","Choose active equipment.");
   const before=await r.getCapitalPlan(org,asset.id);
   if(!Number.isSafeInteger(input.version)||input.version!==(before?.version??0))throw new OpsDomainError("CONFLICT","This plan changed. Refresh before saving.");

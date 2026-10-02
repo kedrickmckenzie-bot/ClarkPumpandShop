@@ -6,6 +6,8 @@ export type OrganizationRole =
   | "executive"
   | "facilities_admin"
   | "regional_manager"
+  /** Runs the internal maintenance team; reports to the facilities manager. Same scoped access as a regional manager. */
+  | "field_manager"
   | "store_manager"
   | "store_employee"
   | "internal_technician"
@@ -1896,6 +1898,7 @@ export type NotificationRecipientRole =
   | "facilities_admin"
   | "store_manager"
   | "regional_manager"
+  | "field_manager"
   | "executive"
   | "finance_reviewer";
 

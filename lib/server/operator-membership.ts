@@ -6,8 +6,20 @@ import { OperatorAccessError } from "./operator-access";
 
 export const domainRoleForOperatorRole = {
   executive: "executive", facilities: "facilities_admin", regional: "regional_manager",
-  store_manager: "store_manager", finance: "finance_reviewer",
+  store_manager: "store_manager", finance: "finance_reviewer", technician: "internal_technician",
 } as const;
+
+/** The stored membership role a session must still hold (the field manager persona keeps its own role). */
+export function expectedDomainRole(session: Pick<OperatorSession, "role" | "persona">): string {
+  return session.persona === "field_manager" ? "field_manager" : domainRoleForOperatorRole[session.role];
+}
+
+/** Screen role and optional persona for a stored membership role. */
+export function operatorRoleForDomainRole(role: string): { role: OperatorRole; persona?: "field_manager" } | undefined {
+  if (role === "field_manager") return { role: "regional", persona: "field_manager" };
+  const match = (Object.keys(domainRoleForOperatorRole) as OperatorRole[]).find(key => domainRoleForOperatorRole[key] === role);
+  return match ? { role: match } : undefined;
+}
 
 /** Organization is an untrusted selector; the verified subject must belong to it. */
 export async function resolveAuthenticatedOperatorSession(repository: OpsRepository, input: {
@@ -23,8 +35,9 @@ export async function resolveAuthenticatedOperatorSession(repository: OpsReposit
     throw new OperatorAccessError("membership", "Your account does not have access to this company. Ask your administrator for help.");
   }
   const membership = active[0];
-  const role = (Object.keys(domainRoleForOperatorRole) as OperatorRole[]).find(key => domainRoleForOperatorRole[key] === membership.role);
-  if (!role) throw new OperatorAccessError("membership", "Your account does not have operator access.");
+  const mapped = operatorRoleForDomainRole(membership.role);
+  if (!mapped) throw new OperatorAccessError("membership", "Your account does not have operator access.");
+  const { role, persona } = mapped;
   const [organization, grants, overrides, storeIds] = await Promise.all([
     repository.getOrganization(input.organizationId),
     repository.listScopeGrantsForMembership(input.organizationId, membership.id),
@@ -47,6 +60,6 @@ export async function resolveAuthenticatedOperatorSession(repository: OpsReposit
     ? `Store ${first.storeNumber} · ${first.name}`
     : `${companywide ? organization.name + " companywide" : regionIds?.length === 1 ? first?.regionName ?? "Assigned region" : "Assigned stores"} · ${stores.totalCount ?? storeIds.length} stores`;
   return { ...scope, userId: user.id, membershipId: membership.id, displayName: user.displayName, email: user.email,
-    role, organizationName: organization.name, scopeLabel, permissions: readable.map(grant => grant.permission),
+    role, ...(persona ? { persona } : {}), organizationName: organization.name, scopeLabel, permissions: readable.map(grant => grant.permission),
     effectiveCapabilities: writable ? policy.capabilities : [], capabilityWarnings: policy.warnings, demoEdition: "complete", accessMode: "authenticated" };
 }

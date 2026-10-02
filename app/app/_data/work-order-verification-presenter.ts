@@ -67,6 +67,7 @@ const domainRoleByOperatorRole: Record<OperatorRole, string> = {
   regional: "regional_manager",
   store_manager: "store_manager",
   finance: "finance_reviewer",
+  technician: "internal_technician",
 };
 const reviewableOutcomes = new Set<SiteVisitWorkOrderOutcome>(["completed", "no_issue_found"]);
 const outcomeLabels: Record<SiteVisitWorkOrderOutcome, string> = {

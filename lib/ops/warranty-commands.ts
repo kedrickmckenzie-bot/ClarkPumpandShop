@@ -43,7 +43,7 @@ export async function dismissWorkWarranty(input: {organizationId:string; workId:
   await atomicWorkOrderMutation({repository,workOrder:work,now,statements:auditAndOutbox({organizationId:input.organizationId,aggregateType:"work_order",aggregateId:work.id,eventType:"work_order.warranty_dismissed",actor:input.actor,occurredAt:now,payload:{reason,signature:review.signature,coverageIds:review.coverage.items.map(c=>c.id)},ids})});
 }
 const randomIds: OpsIdSource = { next: (prefix) => `${prefix}-${crypto.randomUUID()}` };
-const warrantyRoles = new Set(["executive", "facilities_admin", "regional_manager"]);
+const warrantyRoles = new Set(["executive", "facilities_admin", "regional_manager", "field_manager"]);
 const routingOverrideReasons = new Set([
   "safety_emergency", "product_loss_emergency", "vendor_decline", "vendor_response_sla_failure",
   "vendor_cannot_meet_completion", "inactive_vendor", "expired_insurance_or_license",
@@ -84,7 +84,7 @@ async function assertWarrantyActor(repository: OpsRepository, actor: ActorContex
   if (actor.organizationId !== organizationId || actor.actorType !== "user" || !actor.actorId) throw new OpsDomainError("FORBIDDEN", "An authenticated warranty reviewer is required");
   const membership = await repository.getMembership(organizationId, actor.actorId);
   if (!membership || membership.status !== "active" || !warrantyRoles.has(membership.role)) throw new OpsDomainError("FORBIDDEN", "Facilities, regional manager, or executive access is required");
-  if (membership.role !== "regional_manager" || !workOrder) return membership;
+  if ((membership.role !== "regional_manager" && membership.role !== "field_manager") || !workOrder) return membership;
   const [store, grants] = await Promise.all([repository.getStore(organizationId, workOrder.storeId), repository.listScopeGrantsForMembership(organizationId, membership.id)]);
   if (!store || !grants.some((grant) => grant.scopeKind === "organization" && grant.scopeId === organizationId || grant.scopeKind === "region" && grant.scopeId === store.regionId || grant.scopeKind === "store" && grant.scopeId === store.id)) throw new OpsDomainError("FORBIDDEN", "The reviewer does not cover this store");
   return membership;
@@ -350,7 +350,7 @@ function rulesMayOverlap(left:WarrantyRule,right:WarrantyRule){
 export async function createFutureWarrantyRule(input:{organizationId:OpsId;vendorId:OpsId;vendorWarrantyProfileId:OpsId;actor:ActorContext;priority:number;effectiveStartsAt:IsoDateTime;effectiveEndsAt?:IsoDateTime;selectors:FutureWarrantySelectors;supersedesId?:OpsId;excludeCoverage?:boolean;coverages:FutureWarrantyCoverageInput[];reason:string},dependencies:OpsCommandServices){
   const {repository,clock,ids}=services(dependencies);const now=clock.now();const membership=await assertWarrantyActor(repository,input.actor,input.organizationId);
   if(input.selectors.storeId){const store=await repository.getStore(input.organizationId,input.selectors.storeId);if(!store)throw new OpsDomainError("NOT_FOUND","Store not found");await assertWarrantyActor(repository,input.actor,input.organizationId,{storeId:store.id} as WorkOrder);}
-  else if(membership.role==="regional_manager")throw new OpsDomainError("FORBIDDEN","Company warranty rules require facilities access");
+  else if(membership.role==="regional_manager"||membership.role==="field_manager")throw new OpsDomainError("FORBIDDEN","Company warranty rules require facilities access");
   if(input.excludeCoverage&&!input.selectors.storeId)throw new OpsDomainError("VALIDATION","Choose a store to exclude");
   const profiles=await repository.listVendorWarrantyProfiles(input.organizationId,input.vendorId);if(!profiles.some((profile)=>profile.id===input.vendorWarrantyProfileId&&profile.status==="active"))throw new OpsDomainError("NOT_FOUND","Active Vendor Warranty Profile not found");
   if(!Number.isInteger(input.priority)||input.priority<0)throw new OpsDomainError("VALIDATION","Warranty rule priority must be a non-negative integer");
@@ -456,7 +456,7 @@ export async function startWarrantyReview(input:{organizationId:string;actor:Act
 /** Initialize a vendor's rule container without inventing coverage. */
 export async function ensureVendorWarrantyProfile(input:{organizationId:OpsId;vendorId:OpsId;actor:ActorContext},dependencies:OpsCommandServices){
  const {repository,clock,ids}=services(dependencies);const membership=await assertWarrantyActor(repository,input.actor,input.organizationId);
- if(membership.role==="regional_manager")throw new OpsDomainError("FORBIDDEN","Facilities must initialize vendor warranty terms");
+ if(membership.role==="regional_manager"||membership.role==="field_manager")throw new OpsDomainError("FORBIDDEN","Facilities must initialize vendor warranty terms");
  if(!await repository.getVendor(input.organizationId,input.vendorId))throw new OpsDomainError("NOT_FOUND","Vendor not found");
  const profiles=await repository.listVendorWarrantyProfiles(input.organizationId,input.vendorId);const current=profiles.find(p=>p.status==="active");if(current)return current;
  const now=clock.now(),id=ids.next("vendor-warranty-profile");

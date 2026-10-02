@@ -30,7 +30,7 @@ import {
   navigationForRole,
   navigationItemIsActive,
   pathMatches,
-  roleLabel,
+  sessionRoleLabel,
   type NavigationItem,
 } from "./navigation";
 import { PreviewRoleSwitcher } from "./preview-role-switcher";
@@ -234,7 +234,7 @@ function UserSummary({ session }: { session: OperatorSession }) {
       <span className={styles.avatar} aria-hidden="true">{initials || "OP"}</span>
       <span className={styles.userCopy}>
         <strong>{session.displayName}</strong>
-        <span>{roleLabel(session.role)}</span>
+        <span>{sessionRoleLabel(session)}</span>
       </span>
     </div>
   );
@@ -256,7 +256,7 @@ function SidebarFooter({ session, edition }: { session: OperatorSession; edition
       </nav>
       <div className={styles.profilePanel}>
         <UserSummary session={session} />
-        {session.accessMode !== "authenticated" ? <PreviewRoleSwitcher role={session.role} /> : <Link className={styles.setupLink} href="/access?reason=company">Switch company</Link>}
+        {session.accessMode !== "authenticated" ? <PreviewRoleSwitcher role={session.persona ?? session.role} /> : <Link className={styles.setupLink} href="/access?reason=company">Switch company</Link>}
       </div>
     </div>
   );
@@ -277,7 +277,7 @@ function CreateMenu({ session, edition }: { session: OperatorSession; edition: D
     return `${href}?${new URLSearchParams({ store })}`;
   };
   const actions = createActions.filter(
-    (action) => (!action.capability ? (session.accessMode === "preview" ? session.role !== "finance" : !!session.permissions?.length && session.permissions.every(p => ["ops:*","ops:write","ops:read_write","ops:store_manage"].includes(p))) : roleCan(session, action.capability)) && (
+    (action) => (!action.capability ? (session.accessMode === "preview" ? session.role !== "finance" && session.role !== "technician" : !!session.permissions?.length && session.permissions.every(p => ["ops:*","ops:write","ops:read_write","ops:store_manage"].includes(p))) : roleCan(session, action.capability)) && (
       edition === "complete" || !action.capability || action.capability === "create_work_order"
     ),
   );

@@ -93,7 +93,7 @@ export async function deliverRoutineReminder(input: {repository:OpsRepository;pr
   } else {
     const membership = state.task?.assigneeType === "user" && state.task.assigneeId ? await input.repository.getMembership(message.organizationId,state.task.assigneeId) : null;
     const candidateRole = membership?.role ?? state.task?.assigneeRole;
-    const role: import("./types").NotificationRecipientRole = state.kind === "verify" ? "store_manager" : escalation ? "facilities_admin" : candidateRole && ["facilities_admin","regional_manager","store_manager","executive","finance_reviewer"].includes(candidateRole) ? candidateRole as import("./types").NotificationRecipientRole : "facilities_admin";
+    const role: import("./types").NotificationRecipientRole = state.kind === "verify" ? "store_manager" : escalation ? "facilities_admin" : candidateRole && ["facilities_admin","regional_manager", "field_manager","store_manager","executive","finance_reviewer"].includes(candidateRole) ? candidateRole as import("./types").NotificationRecipientRole : "facilities_admin";
     const candidates = await input.repository.listNotificationRecipients(message.organizationId,role,{storeId:work.storeId,regionId:store?.regionId});
     const assigned = !escalation && state.task?.assigneeType === "user" ? candidates.filter(person => person.membershipId === state.task?.assigneeId) : candidates;
     for (const person of assigned) recipients.set(person.email.toLowerCase(),person.displayName);

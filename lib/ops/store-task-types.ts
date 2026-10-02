@@ -28,5 +28,5 @@ export interface TaskRepository {
  queryStoreTasks(scope:OrganizationScope,query:TaskQuery):Promise<TaskPage>;
 }
 export const taskRoles = ["executive","facilities","regional","store_manager","finance"] as const;
-export const taskRoleLabels:Record<string,string>={executive:"Company leadership",facilities_admin:"Facilities manager",regional_manager:"District / regional manager",store_manager:"Store manager",store_employee:"Store team",internal_technician:"Internal maintenance",finance_reviewer:"Finance"};
+export const taskRoleLabels:Record<string,string>={executive:"Company leadership",facilities_admin:"Facilities manager",regional_manager:"District / regional manager",field_manager:"Field manager",store_manager:"Store manager",store_employee:"Store team",internal_technician:"Internal maintenance",finance_reviewer:"Finance"};
 export const taskViewLabels:Record<TaskView,string>={mine:"My tasks",shared:"Shared tasks",waiting:"Waiting on others",history:"History",all:"All visible tasks"};

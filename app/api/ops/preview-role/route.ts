@@ -12,6 +12,8 @@ const ALLOWED_ROLES = new Set([
   "regional",
   "store_manager",
   "finance",
+  "technician",
+  "field_manager",
 ]);
 
 function safeReturnPath(value: FormDataEntryValue | null): string {

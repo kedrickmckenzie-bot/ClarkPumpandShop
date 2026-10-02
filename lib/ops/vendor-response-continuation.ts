@@ -25,7 +25,7 @@ export type VendorContinuationDecision =
   | "counter_proposed_date"
   | "reply_to_question";
 
-const CONTINUATION_ROLES = new Set(["facilities_admin", "regional_manager"]);
+const CONTINUATION_ROLES = new Set(["facilities_admin", "regional_manager", "field_manager"]);
 const CONTINUATION_DECISIONS = new Set<VendorContinuationDecision>([
   "accept_proposed_date",
   "counter_proposed_date",

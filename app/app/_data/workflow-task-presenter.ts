@@ -65,7 +65,7 @@ const workflowTaskPauseOwnerTypes = [
 const organizationRoles = [
   "executive",
   "facilities_admin",
-  "regional_manager",
+  "regional_manager", "field_manager",
   "store_manager",
   "store_employee",
   "finance_reviewer",

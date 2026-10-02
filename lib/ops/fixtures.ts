@@ -106,7 +106,20 @@ export const NORTHLINE_PREVIEW_PERSONAS = {
   regional_north: { label: "North regional manager", membershipId: "membership-northline-regional-1", organizationId: NORTHLINE_ORGANIZATION_ID, regionIds: ["region-northline-north"] },
   store_104: { label: "Store 104 manager", membershipId: "membership-northline-store-104", organizationId: NORTHLINE_ORGANIZATION_ID, storeIds: ["store-northline-104"] },
   finance: { label: "Finance reviewer", membershipId: "membership-northline-finance", organizationId: NORTHLINE_ORGANIZATION_ID },
+  technician: { label: "Technician", membershipId: "membership-northline-tech-1", organizationId: NORTHLINE_ORGANIZATION_ID },
+  field_manager: { label: "Field manager", membershipId: "membership-northline-field-manager", organizationId: NORTHLINE_ORGANIZATION_ID },
 } as const;
+
+/**
+ * The internal team's field manager (reports to the facilities manager). Kept as one
+ * small record set so an already-seeded preview database can receive it without
+ * touching any existing record.
+ */
+export const NORTHLINE_FIELD_MANAGER = {
+  user: { id: "user-northline-field-manager", email: "chris.delgado@clark-demo.example", displayName: "Chris Delgado", status: "active" as const, createdAt: "2026-01-02T15:00:00.000Z" },
+  membership: { id: "membership-northline-field-manager", organizationId: NORTHLINE_ORGANIZATION_ID, userId: "user-northline-field-manager", role: "field_manager" as const, status: "active" as const, createdAt: "2026-01-02T15:00:00.000Z" },
+  scopeGrant: { id: "scope-membership-northline-field-manager", organizationId: NORTHLINE_ORGANIZATION_ID, membershipId: "membership-northline-field-manager", scopeKind: "organization" as const, scopeId: NORTHLINE_ORGANIZATION_ID, permission: "ops:*", createdAt: "2026-01-02T15:00:00.000Z" },
+};
 
 export function getNorthlinePreviewPersona(persona: NorthlinePreviewPersona) {
   return clone(NORTHLINE_PREVIEW_PERSONAS[persona]);
@@ -292,6 +305,7 @@ function buildFixture(): OpsFixture {
     ...stores.map((store, index) => ({ id: `user-northline-store-${store.storeNumber}`, email: `store${store.storeNumber}.manager@clark-demo.example`, displayName: storeManagerNames[index]!, status: "active" as const, createdAt: at(1, 2, 15) })),
     { id: "user-northline-finance", email: "finance.review@clark-demo.example", displayName: "Parker Shaw", status: "active", createdAt: at(1, 2, 15) },
     { id: "user-northline-facilities-approver", email: "samir.patel@clark-demo.example", displayName: "Samir Patel", status: "active", createdAt: at(1, 2, 15) },
+    { ...NORTHLINE_FIELD_MANAGER.user },
   ];
   const memberships: Membership[] = [
     { id: "membership-northline-executive", organizationId: organization.id, userId: users[0].id, role: "executive", status: "active", createdAt: users[0].createdAt },
@@ -302,6 +316,7 @@ function buildFixture(): OpsFixture {
     ...stores.map((store) => ({ id: `membership-northline-store-${store.storeNumber}`, organizationId: organization.id, userId: `user-northline-store-${store.storeNumber}`, role: "store_manager" as const, status: "active" as const, createdAt: at(1, 2, 15) })),
     { id: "membership-northline-finance", organizationId: organization.id, userId: "user-northline-finance", role: "finance_reviewer", status: "active", createdAt: at(1, 2, 15) },
     { id: "membership-northline-facilities-approver", organizationId: organization.id, userId: "user-northline-facilities-approver", role: "facilities_admin", status: "active", createdAt: at(1, 2, 15) },
+    { ...NORTHLINE_FIELD_MANAGER.membership },
   ];
   const scopeGrants: ScopeGrant[] = [
     ...memberships.slice(0, 4).map((membership) => ({ id: `scope-${membership.id}`, organizationId: organization.id, membershipId: membership.id, scopeKind: "organization" as const, scopeId: organization.id, permission: "ops:*", createdAt: membership.createdAt })),
@@ -309,6 +324,7 @@ function buildFixture(): OpsFixture {
     ...stores.map((store) => ({ id: `scope-membership-northline-store-${store.storeNumber}`, organizationId: organization.id, membershipId: `membership-northline-store-${store.storeNumber}`, scopeKind: "store" as const, scopeId: store.id, permission: "ops:store_manage", createdAt: at(1, 2, 15) })),
     { id: "scope-membership-northline-finance", organizationId: organization.id, membershipId: "membership-northline-finance", scopeKind: "organization", scopeId: organization.id, permission: "ops:finance_read", createdAt: at(1, 2, 15) },
     { id: "scope-membership-northline-facilities-approver", organizationId: organization.id, membershipId: "membership-northline-facilities-approver", scopeKind: "organization", scopeId: organization.id, permission: "ops:*", createdAt: at(1, 2, 15) },
+    { ...NORTHLINE_FIELD_MANAGER.scopeGrant },
   ];
 
   const vendors: Vendor[] = vendorSeeds.map(([stableKey, code, name, email, phone, preferred]) => ({ id: `vendor-northline-${stableKey}`, organizationId: organization.id, code, name, dispatchEmail: email, dispatchPhone: phone, status: "approved", preferred, createdAt: at(1, 4, 14) }));

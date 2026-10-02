@@ -1,0 +1,2 @@
+ALTER TABLE "ops_memberships" DROP CONSTRAINT "chk_ops_memberships_role";--> statement-breakpoint
+ALTER TABLE "ops_memberships" ADD CONSTRAINT "chk_ops_memberships_role" CHECK ("ops_memberships"."role" IN ('executive', 'facilities_admin', 'regional_manager', 'field_manager', 'store_manager', 'store_employee', 'internal_technician', 'finance_reviewer', 'vendor_user', 'support'));

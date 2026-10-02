@@ -762,7 +762,9 @@ function actionsForSession(
       ? "regional_manager" as const
       : session.role === "finance"
         ? "finance_reviewer" as const
-        : session.role;
+        : session.role === "technician"
+          ? "internal_technician" as const
+          : session.role;
   const storeById = new Map(scoped.stores.map((store) => [store.id, store]));
   const workById = new Map(scoped.workOrders.map((work) => [work.id, work]));
   const requestById = new Map(fixture.requests.filter((request) => request.organizationId === scoped.organizationId).map((request) => [request.id, request]));
@@ -1132,6 +1134,13 @@ export function buildAccountabilityDashboardModel(
       eyebrow: "Accountability package · Read-only view",
       description: "Trace each vendor visit back to the operator work order that authorized it.",
       primaryAction: { label: "Open work orders", href: "/app/work-orders" },
+      secondaryAction: { label: "Open service visits", href: "/app/visits" },
+    },
+    technician: {
+      title: "My work",
+      eyebrow: "Internal maintenance",
+      description: "Your assigned jobs and the stores you cover.",
+      primaryAction: { label: "Open my work", href: "/app/work-orders?assignee=me" },
       secondaryAction: { label: "Open service visits", href: "/app/visits" },
     },
   }[session.role];
@@ -5842,7 +5851,7 @@ export function buildWorkOrderControlModel(
       .filter((membership) => (
         membership.organizationId === scoped.organizationId
         && membership.status === "active"
-        && ["facilities_admin", "regional_manager"].includes(membership.role)
+        && ["facilities_admin", "regional_manager", "field_manager"].includes(membership.role)
       ))
       .filter((membership) => {
         const grants = fixture.scopeGrants.filter((grant) => grant.organizationId === scoped.organizationId && grant.membershipId === membership.id);
@@ -5857,7 +5866,7 @@ export function buildWorkOrderControlModel(
         return user ? [{
           value: `membership:${membership.id}`,
           label: user.displayName,
-          description: membership.role === "regional_manager" ? "Regional facilities owner" : "Facilities owner",
+          description: membership.role === "regional_manager" ? "Regional facilities owner" : membership.role === "field_manager" ? "Internal maintenance team" : "Facilities owner",
         }] : [];
       })
       .sort((left, right) => left.label.localeCompare(right.label)),

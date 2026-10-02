@@ -729,6 +729,7 @@ class SqlOpsRepository implements OpsRepository {
     if (query.storeId) { clauses.push("w.store_id = ?"); params.push(query.storeId); }
     if (query.regionId) { clauses.push("s.region_id = ?"); params.push(query.regionId); }
     if (query.vendorId) { clauses.push("a.vendor_id = ?"); params.push(query.vendorId); }
+    if (query.internalMembershipId) { clauses.push("a.kind = 'internal' AND a.internal_membership_id = ?"); params.push(query.internalMembershipId); }
     if (query.categoryKey === "unclassified") clauses.push("w.category_key IS NULL");
     else if (query.categoryKey) { clauses.push("w.category_key = ?"); params.push(query.categoryKey); }
     if (query.categoryPath?.length) {

@@ -40,7 +40,7 @@ const domainManagedReactiveTaskTypes = new Set<WorkflowTask["taskType"]>([
 ]);
 const priorityRank: Record<WorkflowTaskPriority, number> = { critical: 4, high: 3, normal: 2, low: 1 };
 const organizationRoles = new Set<OrganizationRole>([
-  "executive", "facilities_admin", "regional_manager", "store_manager", "store_employee",
+  "executive", "facilities_admin", "regional_manager", "field_manager", "store_manager", "store_employee",
   "internal_technician", "finance_reviewer", "vendor_user", "support",
 ]);
 const taskTypes = new Set<WorkflowTaskType>([

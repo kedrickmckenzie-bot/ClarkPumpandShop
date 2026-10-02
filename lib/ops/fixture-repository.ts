@@ -480,7 +480,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listTaskPeople(org:string,storeId:string,search:string,localOnly=false) {
     const people:import("./store-task-types").TaskPerson[]=[];
     const store=await this.getStore(org,storeId);if(!store)return people;
-    for(const m of this.fixture.memberships.filter(m=>m.organizationId===org&&m.status==='active'&&['executive','facilities_admin','regional_manager','store_manager','finance_reviewer'].includes(m.role))) {
+    for(const m of this.fixture.memberships.filter(m=>m.organizationId===org&&m.status==='active'&&['executive','facilities_admin','regional_manager','field_manager','store_manager','finance_reviewer'].includes(m.role))) {
       const u=this.fixture.users.find(u=>u.id===m.userId&&u.status==='active');if(!u||!`${u.displayName} ${m.role}`.toLowerCase().includes(search.toLowerCase()))continue;
       const grants=this.fixture.scopeGrants.filter(g=>g.organizationId===org&&g.membershipId===m.id&&['ops:*','ops:write','ops:read_write','ops:store_manage'].includes(g.permission));
       if(!grants.some(g=>g.scopeKind==='organization'&&g.scopeId===org||g.scopeKind==='region'&&g.scopeId===store.regionId||g.scopeKind==='division'&&g.scopeId===store.divisionId||g.scopeKind==='store'&&g.scopeId===store.id))continue;
@@ -495,7 +495,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     for(const t of this.fixture.storeTasks??[]) {
       const s=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===t.storeId);if(t.organizationId!==scope.organizationId||!s||scope.storeIds&&!scope.storeIds.includes(s.id)||scope.regionIds&&!scope.regionIds.includes(s.regionId??''))continue;
       const member=await this.getMembership(scope.organizationId,q.membershipId);const user=member?await this.getUserInOrganization(scope.organizationId,member.userId):null;
-      if(!member||member.status!=='active'||user?.status!=='active'||!['executive','facilities_admin','regional_manager','store_manager','finance_reviewer'].includes(member.role))continue;
+      if(!member||member.status!=='active'||user?.status!=='active'||!['executive','facilities_admin','regional_manager','field_manager','store_manager','finance_reviewer'].includes(member.role))continue;
       const grants=this.fixture.scopeGrants.filter(g=>g.organizationId===scope.organizationId&&g.membershipId===q.membershipId&&['ops:*','ops:write','ops:read_write','ops:store_manage'].includes(g.permission));
       if(!grants.some(g=>g.scopeKind==='organization'&&g.scopeId===scope.organizationId||g.scopeKind==='store'&&g.scopeId===s.id||g.scopeKind==='region'&&g.scopeId===s.regionId||g.scopeKind==='division'&&g.scopeId===s.divisionId))continue;
       const people=await this.listTaskParticipants(scope.organizationId,t.id),participant=people.some(p=>p.membershipId===q.membershipId);
@@ -859,6 +859,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.storeId || row.storeId === query.storeId)
         && (!query.regionId || this.fixture.stores.find((store) => store.organizationId === scope.organizationId && store.id === row.storeId)?.regionId === query.regionId)
         && (!query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.workOrderId === row.id && assignment.vendorId === query.vendorId))
+        && (!query.internalMembershipId || (() => { const current = this.fixture.assignments.filter((assignment) => assignment.organizationId === scope.organizationId && assignment.workOrderId === row.id).at(-1); return current?.kind === "internal" && current.internalMembershipId === query.internalMembershipId; })())
         && (!query.categoryKey || (row.categoryKey ?? "unclassified") === query.categoryKey)
         && matchesWorkCategoryPath(this.fixture.assets.find((asset) => asset.organizationId === scope.organizationId && asset.id === row.assetId), query.categoryPath)
         && (!query.assetId || (query.assetId === "unlinked" ? !row.assetId : query.assetId === "needed" ? needsEquipmentChoice(row) : row.assetId === query.assetId))

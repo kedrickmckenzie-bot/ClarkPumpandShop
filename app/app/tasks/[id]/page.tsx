@@ -1,3 +1,5 @@
+import {notFound} from "next/navigation";
+import {loadOperatorSession} from "@/app/app/_data/operator-loader";
 import {OpsDomainError} from "@/lib/ops/errors";
 import {formatCameraTime,cameraResultLabels} from "@/lib/ops/store-task-time";
 import {roleCanOpenOperatorHref} from "@/components/ops/role-policy";
@@ -10,6 +12,7 @@ import styles from "@/components/workspace/store-tasks.module.css";
 import {formatOperationsDateTime} from "@/lib/ops/local-time";
 const TASK_EVENT_LABEL:Record<string,string>={created:'Created',claim:'Taken',reply:'Replied',complete:'Findings sent',review:'Reviewed',send_back:'Sent back',reassign:'Reassigned'};
 export default async function Page({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{offset?:string}>}) {
+ if(!(taskRoles as readonly string[]).includes((await loadOperatorSession()).role))notFound();
  const {session,repository:r,actor}=await getOpsRequestContext(taskRoles),{id}=await params;
  let granted;
  try {granted=await accessTask(r,session.organizationId,id,actor.actorId!);}catch(e){if(e instanceof OpsDomainError&&(e.code==='FORBIDDEN'||e.code==='NOT_FOUND'))return <div className={styles.page}><h1>{e.code==='FORBIDDEN'?'You don’t have access to this task.':'Task not found.'}</h1><Link href="/app/tasks">Back to tasks</Link></div>;throw e;}

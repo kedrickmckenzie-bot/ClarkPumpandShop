@@ -206,6 +206,8 @@ export function navigationForRole(role: OperatorRole, edition: DemoEdition = DEF
           matchPrefixes: ["/app/work-orders", "/app/visits"],
         };
       }
+      // Technicians open Work on their own jobs.
+      if (item.id === "work" && role === "technician") return { ...item, label: "My work", href: "/app/work-orders?assignee=me&status=open" };
       if (item.id === "work" && roleCanAccessListRoute(role, "work-orders")) return item;
       if (!item.contextGroup) return item;
       const firstVisibleItem = visibleContextGroup(role, item.contextGroup, edition)?.items[0];
@@ -234,6 +236,12 @@ export function roleLabel(role: OperatorRole) {
     regional: "Regional manager",
     store_manager: "Store manager",
     finance: "Invoice reviewer",
+    technician: "Technician",
   };
   return labels[role];
+}
+
+/** The job name people see: a persona (for example "Field manager") wins over its underlying role. */
+export function sessionRoleLabel(session: { role: OperatorRole; persona?: "field_manager" }) {
+  return session.persona === "field_manager" ? "Field manager" : roleLabel(session.role);
 }

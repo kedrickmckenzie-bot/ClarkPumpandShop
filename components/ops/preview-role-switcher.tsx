@@ -4,15 +4,17 @@ import { usePathname, useSearchParams } from "next/navigation";
 import type { OperatorRole } from "./data-contract";
 import styles from "./platform-shell.module.css";
 
-const roles: Array<{ value: OperatorRole; label: string }> = [
+const roles: Array<{ value: OperatorRole | "field_manager"; label: string }> = [
   { value: "facilities", label: "Maintenance / facilities" },
+  { value: "field_manager", label: "Field manager" },
+  { value: "technician", label: "Technician" },
   { value: "executive", label: "Owner / leadership" },
   { value: "regional", label: "Regional manager" },
   { value: "store_manager", label: "Store manager" },
   { value: "finance", label: "Invoice reviewer" },
 ];
 
-export function PreviewRoleSwitcher({ role }: { role: OperatorRole }) {
+export function PreviewRoleSwitcher({ role }: { role: OperatorRole | "field_manager" }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const query = searchParams.toString();

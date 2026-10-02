@@ -93,7 +93,7 @@ export interface AttentionProjectionInput {
 }
 
 /** Who reviews recorded inspection results (matches the approval rule in compliance). Executives see them as team work. */
-export const INSPECTION_REVIEW_ROLES = new Set<OrganizationRole>(["facilities_admin", "regional_manager", "executive"]);
+export const INSPECTION_REVIEW_ROLES = new Set<OrganizationRole>(["facilities_admin", "regional_manager", "field_manager", "executive"]);
 /** Tasks on an inspection's job that mean "review the result"; their queue rows open the inspection. */
 export const INSPECTION_RESULT_TASK_TYPES = ["record_service_outcome", "verify_repair", "close_verified_work"] as const;
 export const INSPECTION_REVIEW_REASON = "Results were recorded. Review the findings and paperwork, then approve or send back.";

@@ -1,6 +1,6 @@
 import type { OpsRepository, OpsStatement } from "./repository";
 import type { OpsFixture } from "./types";
-import { assertOpsFixture } from "./fixtures";
+import { assertOpsFixture, NORTHLINE_FIELD_MANAGER } from "./fixtures";
 
 function insert(table: string, value: Record<string, unknown>): OpsStatement {
   const entries = Object.entries(value).filter(([, item]) => item !== undefined);
@@ -146,4 +146,18 @@ export async function seedOpsRepository(
   const chunkSize = repository.kind === "d1" ? 75 : statements.length;
   for (let index = 0; index < statements.length; index += chunkSize) await repository.atomicWrite(statements.slice(index, index + chunkSize));
   return { statements: statements.length, organizations: fixture.organizations.length, stores: fixture.stores.length, vendors: fixture.vendors.length };
+}
+
+/**
+ * People added to the preview after a database was first seeded. Insert-only
+ * (ON CONFLICT DO NOTHING): an existing record with the same ID always wins,
+ * so running this on every start never changes customer or demo mutations.
+ */
+export function buildPreviewPeopleStatements(): OpsStatement[] {
+  const { user, membership, scopeGrant } = NORTHLINE_FIELD_MANAGER;
+  return [
+    insert("ops_users", { id: user.id, email: user.email, display_name: user.displayName, status: user.status, created_at: user.createdAt }),
+    insert("ops_memberships", { id: membership.id, organization_id: membership.organizationId, user_id: membership.userId, role: membership.role, status: membership.status, created_at: membership.createdAt }),
+    insert("ops_scope_grants", { id: scopeGrant.id, organization_id: scopeGrant.organizationId, membership_id: scopeGrant.membershipId, scope_kind: scopeGrant.scopeKind, scope_id: scopeGrant.scopeId, permission: scopeGrant.permission, created_at: scopeGrant.createdAt }),
+  ];
 }

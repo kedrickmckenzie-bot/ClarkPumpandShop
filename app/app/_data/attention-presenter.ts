@@ -10,7 +10,7 @@ import { INSPECTION_RESULT_TASK_TYPES } from "@/lib/ops/attention-projection";
 
 export function attentionAccess(session: OperatorSession): AttentionAccess {
   return {
-    role: session.role === "facilities" ? "facilities_admin" : session.role === "regional" ? "regional_manager" : session.role === "finance" ? "finance_reviewer" : session.role,
+    role: session.role === "facilities" ? "facilities_admin" : session.role === "regional" ? "regional_manager" : session.role === "finance" ? "finance_reviewer" : session.role === "technician" ? "internal_technician" : session.role,
     membershipId: session.membershipId,
     canOpenWarranty: roleCanOpenOperatorHref(session.role, "/app/warranties/record"),
     canOpenRequest: roleCanOpenOperatorHref(session.role, "/app/requests/record"),

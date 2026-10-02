@@ -14,7 +14,7 @@ import {
 import { ensureNorthlinePostgresSeed } from "@/lib/ops/northline-postgres-bootstrap";
 import { createOpsPostgresRepository } from "@/lib/ops/postgres-repository";
 import type { OpsRepository } from "@/lib/ops/repository";
-import { seedOpsRepository } from "@/lib/ops/seed";
+import { buildPreviewPeopleStatements, seedOpsRepository } from "@/lib/ops/seed";
 import {
   buildNorthlineCompatibilityAmendments,
   buildNorthlineCompatibilityMarker,
@@ -95,7 +95,11 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
     );
   }
   const plan = planNorthlineSeedRelease(markers);
-  if (plan.kind === "already_current" || plan.kind === "already_enriched") return;
+  if (plan.kind === "already_current" || plan.kind === "already_enriched") {
+    // Insert-only: give an existing preview the people added since it was seeded.
+    await repository.atomicWrite(buildPreviewPeopleStatements());
+    return;
+  }
 
   if (plan.kind === "enrich_existing") {
     const links = await binding.prepare(`SELECT organization_id, id, visit_id, work_order_id

@@ -5,7 +5,7 @@ import type { OpsRepository,OpsStatement,OrganizationScope } from "./repository"
 import type { ActorContext,StoredFile } from "./types";
 import type { StoreTask,TaskAccess,TaskAssignment,TaskKind,TaskResult,CameraWindow,CameraFinding } from "./store-task-types";
 import { communicationAudit,evidenceFence,insertRecord } from "./email-intake";
-const supervisors=['executive','facilities_admin','regional_manager'];
+const supervisors=['executive','facilities_admin','regional_manager','field_manager'];
 const writers=['ops:*','ops:write','ops:read_write','ops:store_manage'];
 function fail(message:string):never {throw new OpsDomainError('VALIDATION',message);}
 function forbidden():never {throw new OpsDomainError('FORBIDDEN','This task is not available to your account.');}
@@ -13,7 +13,7 @@ function text(value:string,max:number,label:string) {if(!value?.trim()||value.tr
 function date(value:string) {if(!value||!Number.isFinite(Date.parse(value)))fail('Choose a valid date and time.');return new Date(value).toISOString();}
 function futureDate(value:string,now:string) {const result=date(value);if(result<=date(now))fail('Choose a due date in the future.');return result;}
 export async function taskIdentity(r:OpsRepository,org:string,id:string,storeId?:string):Promise<TaskAccess> {
- const m=await r.getMembership(org,id);if(!m||m.status!=='active'||!['executive','facilities_admin','regional_manager','store_manager','finance_reviewer'].includes(m.role))forbidden();
+ const m=await r.getMembership(org,id);if(!m||m.status!=='active'||!['executive','facilities_admin','regional_manager','field_manager','store_manager','finance_reviewer'].includes(m.role))forbidden();
  const u=await r.getUserInOrganization(org,m.userId);if(!u||u.status!=='active')forbidden();
  const grants=await r.listScopeGrantsForMembership(org,id);
  const store=storeId?await r.getStore(org,storeId):null;

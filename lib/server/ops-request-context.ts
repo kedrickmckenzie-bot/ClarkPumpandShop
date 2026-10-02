@@ -7,7 +7,7 @@ import { OpsDomainError } from "@/lib/ops/commands";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import type { OpsRepository } from "@/lib/ops/repository";
 import type { ActorContext } from "@/lib/ops/types";
-import { domainRoleForOperatorRole } from "./operator-membership";
+import { expectedDomainRole } from "./operator-membership";
 import { OperatorAccessError } from "./operator-access";
 import { isWorkspaceOrigin } from "./request-origin";
 
@@ -22,7 +22,7 @@ export async function assertActiveOperatorMembership(
   if (
     !membership
     || membership.status !== "active"
-    || membership.role !== domainRoleForOperatorRole[session.role]
+    || membership.role !== expectedDomainRole(session)
     || session.accessMode === "authenticated" && membership.userId !== session.userId
   ) {
     throw new OpsDomainError("FORBIDDEN", "Your organization membership or role is no longer active.");
@@ -79,7 +79,8 @@ export async function assertStoreInSessionScope(
   if (session.role === "store_manager" && !session.storeIds?.length && session.accessMode !== "authenticated") {
     throw new OpsDomainError("FORBIDDEN", "No store scope is assigned to this role.");
   }
-  if (session.role === "regional" && !session.regionIds?.length && session.accessMode !== "authenticated") {
+  // The field manager uses regional access but may cover the whole company.
+  if (session.role === "regional" && !session.persona && !session.regionIds?.length && session.accessMode !== "authenticated") {
     throw new OpsDomainError("FORBIDDEN", "No region scope is assigned to this role.");
   }
   return store;

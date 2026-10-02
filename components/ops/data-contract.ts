@@ -3,7 +3,9 @@ export type OperatorRole =
   | "facilities"
   | "regional"
   | "store_manager"
-  | "finance";
+  | "finance"
+  /** Internal maintenance technician: their own jobs, the stores they cover and equipment history. */
+  | "technician";
 
 export type DemoEdition = "accountability" | "complete";
 
@@ -27,6 +29,11 @@ export interface OperatorSession {
   capabilityWarnings?: string[];
   /** Visible showcase packaging only; production entitlements remain server-enforced separately. */
   demoEdition?: DemoEdition;
+  /**
+   * A named job that reuses another role's access. The field manager runs the internal
+   * team with the regional role's pages and permissions (role stays "regional").
+   */
+  persona?: "field_manager";
 }
 
 export interface SupportingLink {

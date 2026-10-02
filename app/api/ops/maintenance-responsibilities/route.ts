@@ -5,7 +5,7 @@ import type { ConfigurableMaintenanceCapability, OrganizationRole } from "@/lib/
 import { formText, getOpsRequestContext, opsApiError } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
-const roles = new Set<OrganizationRole>(["store_manager", "regional_manager", "facilities_admin"]);
+const roles = new Set<OrganizationRole>(["store_manager", "regional_manager", "field_manager", "facilities_admin"]);
 export async function POST(request: Request) {
   try {
     const context = await getOpsRequestContext(["facilities"], "administer", request, true);

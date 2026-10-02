@@ -66,6 +66,11 @@ describe("internal vs outside-vendor work is always distinguishable", () => {
       expect(byName.length).toBeGreaterThan(0);
       expect(byName.every((row) => row.internalAssigneeName === name || `${row.problem} ${row.vendorName ?? ""} ${row.storeName}`.toLowerCase().includes(name.toLowerCase()))).toBe(true);
       expect(ids((await createOpsSqlRepository(driver, "d1").listWorkOrders(scope, { search: name, limit: 300 })).items)).toEqual(ids(byName));
+      for (const membershipId of ["membership-northline-tech-1", "membership-northline-tech-2"]) {
+        const demoMine = (await createOpsFixtureRepository(fixture).listWorkOrders(scope, { internalMembershipId: membershipId, limit: 300 })).items;
+        expect(demoMine.length).toBeGreaterThan(0);
+        expect(ids((await createOpsSqlRepository(driver, "d1").listWorkOrders(scope, { internalMembershipId: membershipId, limit: 300 })).items)).toEqual(ids(demoMine));
+      }
     } finally { db.close(); }
     function ids(rows: Array<{ id: string }>) { return rows.map((row) => row.id); }
   });

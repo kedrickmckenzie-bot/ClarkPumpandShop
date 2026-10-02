@@ -25,7 +25,7 @@ const taskTypes = new Set<WorkflowTaskType>([
 const priorities = new Set<WorkflowTaskPriority>(["critical", "high", "normal", "low"]);
 const assigneeTypes = new Set<WorkflowTaskAssigneeType>(["user", "team", "vendor", "role"]);
 const roles = new Set<OrganizationRole>([
-  "executive", "facilities_admin", "regional_manager", "store_manager", "store_employee",
+  "executive", "facilities_admin", "regional_manager", "field_manager", "store_manager", "store_employee",
   "internal_technician", "finance_reviewer", "vendor_user", "support",
 ]);
 const slaClocks = new Set<WorkflowTaskSlaClock>([

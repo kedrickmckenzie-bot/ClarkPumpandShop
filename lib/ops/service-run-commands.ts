@@ -38,7 +38,7 @@ const terminalWorkOrderStatuses = new Set(["closed", "cancelled"]);
 const schedulableWorkOrderStatuses = new Set([
   "approved", "issued", "accepted", "scheduled", "waiting_on_vendor", "waiting_on_parts",
 ]);
-const internalSchedulerRoles = new Set(["executive", "facilities_admin", "regional_manager"]);
+const internalSchedulerRoles = new Set(["executive", "facilities_admin", "regional_manager", "field_manager"]);
 const responseKinds = new Set<ServiceRunResponseKind>([
   "accepted", "countered", "stop_change_requested", "work_order_change_requested",
   "insufficient_capacity", "declined",
@@ -170,7 +170,7 @@ async function assertSchedulerActor(input: {
   if (!membership || membership.status !== "active" || !internalSchedulerRoles.has(membership.role)) {
     throw new OpsDomainError("FORBIDDEN", "Facilities, regional manager, or executive access is required");
   }
-  if (membership.role !== "regional_manager") return membership;
+  if (membership.role !== "regional_manager" && membership.role !== "field_manager") return membership;
   const grants = await input.repository.listScopeGrantsForMembership(input.organizationId, membership.id);
   const authorized = input.stores.every((store) => grants.some((grant) =>
     grant.scopeKind === "organization" && grant.scopeId === input.organizationId

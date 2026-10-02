@@ -119,6 +119,8 @@ export interface WorkOrderListQuery extends PageRequest {
   statuses?: readonly string[];
   priorities?: readonly string[];
   vendorId?: OpsId;
+  /** Work whose current assignment is internal and names this team member. */
+  internalMembershipId?: OpsId;
   storeId?: OpsId;
   regionId?: OpsId;
   categoryKey?: string;

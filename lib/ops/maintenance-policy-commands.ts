@@ -3,7 +3,7 @@ import { configurableMaintenanceCapabilities } from "./capability-policy";
 import type { OpsRepository, OpsStatement } from "./repository";
 import type { ActorContext, ConfigurableMaintenanceCapability, OrganizationRole } from "./types";
 
-const configurableRoles = new Set<OrganizationRole>(["facilities_admin", "regional_manager", "store_manager"]);
+const configurableRoles = new Set<OrganizationRole>(["facilities_admin", "regional_manager", "field_manager", "store_manager"]);
 
 export async function configureMaintenanceResponsibilities(input: {
   repository: OpsRepository;

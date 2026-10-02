@@ -7,7 +7,7 @@ import {
   createOpsPostgresTransactionRepository,
   type PostgresPoolLike,
 } from "./postgres-repository";
-import { seedOpsRepository } from "./seed";
+import { buildPreviewPeopleStatements, seedOpsRepository } from "./seed";
 import {
   buildNorthlineCompatibilityAmendments,
   buildNorthlineCompatibilityMarker,
@@ -68,9 +68,14 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
       );
     }
     const plan = planNorthlineSeedRelease(markers);
-    if (plan.kind === "already_current") return { seeded: false as const };
-    if (plan.kind === "already_enriched") {
-      return { seeded: false as const, enrichedExisting: true as const };
+    if (plan.kind === "already_current" || plan.kind === "already_enriched") {
+      // Insert-only: give an existing preview the people added since it was seeded.
+      await client.query("BEGIN");
+      inTransaction = true;
+      await createOpsPostgresTransactionRepository(client).atomicWrite(buildPreviewPeopleStatements());
+      await client.query("COMMIT");
+      inTransaction = false;
+      return plan.kind === "already_current" ? { seeded: false as const } : { seeded: false as const, enrichedExisting: true as const };
     }
 
     // Keep the advisory lock, marker check, source seed, and completion marker

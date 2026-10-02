@@ -130,6 +130,17 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     workNavigation: ["needs-attention", "work-orders", "estimates", "invoice-review"],
     insightsNavigation: ["trends", "spend", "equipment", "lifecycle"],
   },
+  // Internal technician: their jobs, the stores they cover, visits and equipment history.
+  // No spending, vendor, approval or setup pages; actions come from the visit workflow.
+  technician: {
+    capabilities: [],
+    listRoutes: ["work-orders", "visits", "stores"],
+    programRoutes: ["equipment"],
+    detailRoutes: ["work-order", "visit", "store", "equipment"],
+    primaryNavigation: ["work", "stores", "insights"],
+    workNavigation: ["work-orders", "visits"],
+    insightsNavigation: [],
+  },
 };
 
 export function roleCan(subject: OperatorRole | Pick<OperatorSession, "role" | "effectiveCapabilities">, capability: OperatorCapability) {
@@ -157,7 +168,8 @@ export function roleCanSeePrimaryNavigation(role: OperatorRole, item: OperatorPr
 }
 
 export function roleCanSeeWorkNavigation(role: OperatorRole, item: OperatorWorkNavigationId) {
-  return item === "tasks" || demoOperatorRolePolicy[role].workNavigation.includes(item);
+  // Store tasks are for managers and store teams; technicians work from their jobs.
+  return (item === "tasks" && role !== "technician") || demoOperatorRolePolicy[role].workNavigation.includes(item);
 }
 
 export function roleCanSeeInsightsNavigation(role: OperatorRole, item: OperatorInsightsNavigationId) {

@@ -22,7 +22,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { isFictionalPreview, trustsSitesIdentity, OPS_ORGANIZATION_COOKIE, OperatorAccessError } from "@/lib/server/operator-access";
-import { resolveAuthenticatedOperatorSession, domainRoleForOperatorRole } from "@/lib/server/operator-membership";
+import { resolveAuthenticatedOperatorSession, expectedDomainRole } from "@/lib/server/operator-membership";
 import type {
   DashboardPageViewModel,
   DetailPageViewModel,
@@ -90,8 +90,10 @@ import {
   QUERY_FIRST_LIST_ROUTES,
 } from "./operator-query-presenter";
 
-function isOperatorRole(value: string | undefined): value is OperatorRole {
-  return value === "executive" || value === "facilities" || value === "regional" || value === "store_manager" || value === "finance";
+/** Preview choices: every screen role plus the field manager persona (regional access, own identity). */
+type PreviewChoice = OperatorRole | "field_manager";
+function isPreviewChoice(value: string | undefined): value is PreviewChoice {
+  return value === "executive" || value === "facilities" || value === "regional" || value === "store_manager" || value === "finance" || value === "technician" || value === "field_manager";
 }
 
 export async function loadOperatorSession(): Promise<OperatorSession> {
@@ -113,11 +115,17 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
     ?? cookieStore.get(LEGACY_OPS_PREVIEW_ROLE_COOKIE)?.value
     ?? process.env.OPS_OPERATOR_PREVIEW_ROLE
     ?? process.env.TRACEOPS_OPERATOR_PREVIEW_ROLE;
-  const role: OperatorRole = isOperatorRole(requestedRole) ? requestedRole : "facilities";
+  const choice: PreviewChoice = isPreviewChoice(requestedRole) ? requestedRole : "facilities";
+  const role: OperatorRole = choice === "field_manager" ? "regional" : choice;
+  const persona = choice === "field_manager" ? "field_manager" as const : undefined;
   const requestedEdition = cookieStore.get(OPS_PREVIEW_EDITION_COOKIE)?.value
     ?? process.env.OPS_OPERATOR_PREVIEW_EDITION;
   const demoEdition: DemoEdition = isDemoEdition(requestedEdition) ? requestedEdition : DEFAULT_DEMO_EDITION;
-  const persona = role === "executive"
+  const personaRecord = persona === "field_manager"
+    ? NORTHLINE_PREVIEW_PERSONAS.field_manager
+    : role === "technician"
+    ? NORTHLINE_PREVIEW_PERSONAS.technician
+    : role === "executive"
     ? NORTHLINE_PREVIEW_PERSONAS.executive
     : role === "regional"
       // Preserve the original demo picker's Central-region persona. The named
@@ -131,12 +139,12 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
           : NORTHLINE_PREVIEW_PERSONAS.facilities;
   const [organization, membership, grants, capabilityOverrides] = await Promise.all([
     repository.getOrganization(NORTHLINE_ORGANIZATION_ID),
-    repository.getMembership(NORTHLINE_ORGANIZATION_ID, persona.membershipId),
-    repository.listScopeGrantsForMembership(NORTHLINE_ORGANIZATION_ID, persona.membershipId),
+    repository.getMembership(NORTHLINE_ORGANIZATION_ID, personaRecord.membershipId),
+    repository.listScopeGrantsForMembership(NORTHLINE_ORGANIZATION_ID, personaRecord.membershipId),
     repository.listRoleCapabilityOverrides(NORTHLINE_ORGANIZATION_ID),
   ]);
   const effectivePolicy = resolveRoleCapabilities(membership?.role ?? "support", capabilityOverrides);
-  if (!organization || !membership || membership.status !== "active" || membership.role !== domainRoleForOperatorRole[role]) {
+  if (!organization || !membership || membership.status !== "active" || membership.role !== expectedDomainRole({ role, persona })) {
     throw new OperatorAccessError("membership", "This preview role is unavailable.");
   }
   const personaUser = await repository.getUserInOrganization(NORTHLINE_ORGANIZATION_ID, membership.userId);
@@ -146,7 +154,7 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
   }
   const regionIds = grants.filter((grant) => grant.scopeKind === "region").map((grant) => grant.scopeId);
   const storeIds = grants.filter((grant) => grant.scopeKind === "store").map((grant) => grant.scopeId);
-  if (role === "regional" && !regionIds.length || role === "store_manager" && !storeIds.length) {
+  if (role === "regional" && !persona && !regionIds.length || role === "store_manager" && !storeIds.length) {
     throw new OperatorAccessError("membership", "No stores are assigned to this preview role.");
   }
   const scopedStores = await repository.searchStores({
@@ -165,6 +173,7 @@ const getRequestOperatorSession = cache(async (): Promise<OperatorSession> => {
         : `${organizationName} companywide · ${scopedStores.totalCount ?? scopedStores.items.length} stores`;
   return {
     accessMode: "preview",
+    ...(persona ? { persona } : {}),
     userId: personaUser.id,
     membershipId: membership?.id,
     displayName: personaUser.displayName,
@@ -300,7 +309,7 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
   const requestedKeys = Object.entries(searchParams).filter(([key, value]) => !["saved", "updated", "created", "success", "notice", "error", "layout"].includes(key) && Boolean(Array.isArray(value) ? value[0] : value)).map(([key]) => key);
   const supportedQueryKeys: Partial<Record<ListRouteId, ReadonlySet<string>>> = {
     requests: new Set(["q", "page", "status", "store", "selected"]),
-    "work-orders": new Set(["q", "page", "status", "stage", "store", "vendor", "region", "category", "path", "asset", "component", "hasCost", "createdFrom", "createdThrough", "costFrom", "costTo", "costMonth", "currency", "basis", "period", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity"]),
+    "work-orders": new Set(["q", "page", "status", "stage", "store", "vendor", "region", "category", "path", "asset", "component", "hasCost", "createdFrom", "createdThrough", "costFrom", "costTo", "costMonth", "currency", "basis", "period", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity", "assignee"]),
     visits: new Set(["q", "page", "status", "store", "vendor", "review", "selected", "layout"]),
     stores: new Set(["q", "page", "selected"]),
     vendors: new Set(["q", "page", "selected"]),

@@ -212,7 +212,7 @@ export const opsMemberships = pgTable("ops_memberships", {
     foreignColumns: [opsUsers.id],
   }),
   check("chk_ops_memberships_status", sql`${table.status} IN ('invited', 'active', 'suspended')`),
-  check("chk_ops_memberships_role", sql`${table.role} IN ('executive', 'facilities_admin', 'regional_manager', 'store_manager', 'store_employee', 'internal_technician', 'finance_reviewer', 'vendor_user', 'support')`),
+  check("chk_ops_memberships_role", sql`${table.role} IN ('executive', 'facilities_admin', 'regional_manager', 'field_manager', 'store_manager', 'store_employee', 'internal_technician', 'finance_reviewer', 'vendor_user', 'support')`),
 ]);
 
 export const opsScopeGrants = pgTable("ops_scope_grants", {

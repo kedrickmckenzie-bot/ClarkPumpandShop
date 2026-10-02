@@ -146,6 +146,7 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
       : key === "asset" ? value === "unlinked" ? "No equipment linked" : value === "needed" ? "Needs equipment linked" : "Selected equipment"
       : key === "component" ? value === "unlinked" ? "Not linked to a component" : "Selected component"
       : key === "vendor" ? "Selected vendor"
+      : key === "assignee" && value === "me" ? "Assigned to me"
       : key === "review" && value === "true"
       ? "Needs review"
       : key === "visitPlan" && value === "ready"
@@ -370,6 +371,8 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       stage: first(query.stage),
       storeId: first(query.store),
       vendorId: first(query.vendor),
+      // "My work": the signed-in team member's current internal assignments.
+      internalMembershipId: first(query.assignee) === "me" ? session.membershipId ?? "__none__" : undefined,
       regionId: first(query.region),
       categoryKey: first(query.category),
       assetId: first(query.asset),
@@ -389,6 +392,17 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     result = work; rows = work.items.map(heldPlan ? heldWorkRow : (row) => ({ ...workRow(row), action: (row.status === "completed_pending_review" || row.needsConfirmation) && roleCan(session, "confirm_observable_result") ? { label: "Confirm work", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` } : undefined })); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "See who is handling each job and what happens next."; placeholder = "Search number, problem, store, vendor, or category";
     const warranty = await workWarrantyMarkers(repository,scope,work.items.map(row=>row.id),getServerOpsReportingAsOf().slice(0,10));
     rows.forEach(row=>{if(warranty.get(row.id)){const cell=row.cells.find(c=>c.key==="work");if(cell)cell.secondary="May be covered by warranty";}});
+    const mine = first(query.assignee) === "me";
+    if (mine) {
+      title = "My work";
+      description = "Jobs assigned to you. Open one to see the store, equipment and history.";
+    }
+    if (session.role === "technician") {
+      contextualFilters = [{ id: "assignee", label: "Show", options: [
+        { value: "me", label: "My jobs", href: hrefWithFilter("work-orders", query, "assignee", "me"), selected: mine },
+        { value: "all", label: "All jobs at my stores", href: hrefWithFilter("work-orders", query, "assignee"), selected: !mine },
+      ] }];
+    }
     if (stageStatuses) {
       title = first(query.stage) === "not-sent" ? "Approved · not sent" : "Waiting on vendor";
       description = first(query.stage) === "not-sent" ? "Approved work, including jobs held for a later visit." : "Sent work needing a vendor response.";
@@ -513,7 +527,10 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     ] : costEvidence ? [...columns["work-orders"].filter(column => ! ["updated", "cost"].includes(column.key)), { key: "cost", label: "Recorded cost", align: "end" as const }] : columns[route as QueryListRoute], rows },
     resultSummary: summary,
     search: searchControl(route, query, `Search ${title}`, placeholder),
-    filters: [...(route === "work-orders" ? [{ id: "work-view", label: "Work", options: workListNavigation(query) }] : []), ...(queryFilters(route, query) ?? []), ...(contextualFilters ?? [])],
+    // A technician's first choice is whose jobs to see, so it leads the filters.
+    filters: session.role === "technician" && route === "work-orders"
+      ? [...(contextualFilters ?? []), { id: "work-view", label: "Work", options: workListNavigation(query) }, ...(queryFilters(route, query) ?? [])]
+      : [...(route === "work-orders" ? [{ id: "work-view", label: "Work", options: workListNavigation(query) }] : []), ...(queryFilters(route, query) ?? []), ...(contextualFilters ?? [])],
     appliedFilters,
     clearFiltersHref: heldPlan ? "/app/work-orders?visitPlan=ready" : `/app/${route}`,
     pagination: pagination(route, query, result, page),

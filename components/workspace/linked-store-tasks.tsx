@@ -1,15 +1,18 @@
 import Link from "next/link";
 import {getOpsRequestContext} from "@/lib/server/ops-request-context";
+import {loadOperatorSession} from "@/app/app/_data/operator-loader";
 import {taskIdentity,taskScope} from "@/lib/ops/store-tasks";
 import {taskRoles} from "@/lib/ops/store-task-types";
 import {OpsDomainError} from "@/lib/ops/errors";
 import styles from "./store-tasks.module.css";
 /** Same access rule as /app/tasks/new, so no one is offered a task form they cannot open. */
 export async function canCreateStoreTasks():Promise<boolean> {
+ if(!(taskRoles as readonly string[]).includes((await loadOperatorSession()).role))return false;
  const {session,repository:r,actor}=await getOpsRequestContext(taskRoles);
  try{await taskIdentity(r,session.organizationId,actor.actorId!);return true;}catch(e){if(e instanceof OpsDomainError&&e.code==='FORBIDDEN')return false;throw e;}
 }
 export async function LinkedStoreTasks({kind,id,hideEmpty=false}:{kind:'work'|'visit'|'invoice'|'asset';id:string;hideEmpty?:boolean}) {
+ if(!(taskRoles as readonly string[]).includes((await loadOperatorSession()).role))return null;
  const {session,repository:r,actor}=await getOpsRequestContext(taskRoles);
  let access;try{access=await taskIdentity(r,session.organizationId,actor.actorId!);}catch(e){if(e instanceof OpsDomainError&&e.code==='FORBIDDEN')return null;throw e;}
  const page=await r.queryStoreTasks(await taskScope(r,session,actor.actorId!),{...access,view:'all',sourceId:id,limit:5,now:new Date().toISOString()});
