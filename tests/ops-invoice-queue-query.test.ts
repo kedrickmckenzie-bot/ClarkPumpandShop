@@ -50,3 +50,16 @@ it("pages exact invoice, flag and currency source cohorts with parent scope enfo
     expect(Math.max(...sizes)).toBeLessThanOrEqual(25);
   } finally { db.close(); }
 }, 120_000);
+
+it("names the store an invoice is linked to, counts split invoices, and leaves unlinked invoices blank", () => {
+  const fixture = buildNorthlinePresentationFixture(), organizationId = fixture.organizations[0].id;
+  const rows = invoiceQueueFromFixture(fixture, { organizationId }, { view: "all", currency: "USD", limit: 500 }).rows;
+  const linked = rows.find(r => r.invoiceId === "invoice-summit-104-warranty-callback")!;
+  expect(linked).toMatchObject({ storeId: "store-northline-104", storeNumber: "104", storeCount: 1 });
+  for (const row of rows) {
+    const lineIds = new Set(fixture.invoiceLines.filter(l => l.invoiceId === row.invoiceId).map(l => l.id));
+    const stores = new Set(fixture.invoiceLineAllocations.filter(a => lineIds.has(a.invoiceLineId)).map(a => a.storeId));
+    expect(row.storeCount, row.number).toBe(stores.size);
+    if (!stores.size) expect(row.storeId).toBeUndefined();
+  }
+});

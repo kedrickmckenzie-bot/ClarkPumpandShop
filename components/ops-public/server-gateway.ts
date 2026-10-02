@@ -621,10 +621,13 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
       repository.getLatestIssuanceForWorkOrder(organizationId, work.id),
     ]);
     if (!record || !assignment || assignment.kind !== "outside_vendor" || assignment.vendorId !== work.vendorId) return null;
-    const [taxonomy, response] = await Promise.all([
+    const [taxonomy, response, visitLinks] = await Promise.all([
       record.taxonomyNodeId ? repository.getTaxonomyNode(organizationId, record.taxonomyNodeId) : null,
       repository.getLatestVendorResponse(organizationId, assignment.id),
+      repository.listSiteVisitWorkOrdersForWorkOrder(organizationId, work.id),
     ]);
+    const activeVisit = (await Promise.all([...new Set(visitLinks.map((link) => link.visitId))].map((visitId) => repository.getVisit(organizationId, visitId))))
+      .find((visit) => visit?.status === "active");
     const scheduledAt = response?.proposedAt;
     return {
       id: work.id,
@@ -638,6 +641,7 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
       dueOrScheduledLabel: scheduledAt ? "Proposed arrival" : record.dueAt ? "Due" : undefined,
       assignedVendor: { id: work.vendorId!, name: work.vendorName ?? vendorById.get(work.vendorId!)!.name },
       issuedAt: issuance?.issuedAt ?? work.createdAt,
+      ...(activeVisit ? { activeVisit: { technicianName: activeVisit.technicianName, checkedInAt: activeVisit.checkedInAt } } : {}),
     };
   }))).filter((work): work is EligibleWorkOrderView => Boolean(work));
   const runVendorIds = requestedVendorId ? [requestedVendorId] : [...new Set(eligibleWorkOrderBase.map((work) => work.assignedVendor.id))];

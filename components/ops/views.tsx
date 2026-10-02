@@ -382,7 +382,7 @@ function FilterGroups({ filters }: { filters?: FilterGroupViewModel[] }) {
 }
 
 function DataTable({ table, selectedId, rowHref, selection, context, openRecord = false }: { openRecord?: boolean; context?: string; table: TableViewModel; selectedId?: string; rowHref?: (row: TableViewModel["rows"][number]) => string; selection?: { name: string; label: string; isDisabled?: (row: TableViewModel["rows"][number]) => boolean } }) {
-  if (!table.rows.length) return <InlineEmpty message="No source records are linked to this section yet." />;
+  if (!table.rows.length) return <InlineEmpty message="No records match this view. Try a different search or filter." />;
 
   return (
     <div className={styles.tableShell}>

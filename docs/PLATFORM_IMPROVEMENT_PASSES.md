@@ -4,6 +4,49 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Depth pass — useful context back, still easy to use (October 2, Claude)
+
+Brief: restore the context people need to act (store, queue, work order, warranty, invoices, inspections, tasks) without bringing back clutter, then walk 15 end-to-end journeys by role at 1440px and 390px. The user also asked for Trends to "blow your socks away". Guardrails held: no permission changes, no money-calculation changes, no new required fields, no hosted reset, no AI invoice reading.
+
+- [x] DP-01 Work order header: Equipment and Scheduled visit beside next step, owner, deadline ("Next step due") and escalation; Problem / Handled by / Latest update on every other tab. (`02b72e2`)
+- [x] DP-02 Warranty: "May be covered by warranty" with the leading coverage shown openly (type, end date, parts/labor/travel/diagnostic, terms link, original work); other coverage folded. The work list badge reads "May be covered by warranty" instead of "Warranty?".
+- [x] DP-03 Store page context row: active warranties, preferred/covering vendors and inspections awaiting review, each a link.
+- [x] DP-04 Review queue rows show the problem; inspection rows open the inspection ("Review findings" / "Open inspection"); vendor-reply rows say "Accept or change date" / "Answer vendor".
+- [x] DP-05 Owner overview: compact pipeline (to start, underway, waiting on vendor or parts) built from live work-order statuses.
+- [x] DP-06 Trends: "What changed" bridge (earlier total, six biggest store/category movers plus "All other", selected total; bars start at zero, red up / blue down, every bar opens its records) and a store-by-month heat map (blue ramp, every cell opens exactly its records; top 15 rows with a link to all). (`f24c1bd`)
+- [x] DP-07 Invoice review: store and work-order links under the title, "Why this needs review" with a decide button, technician visit times labelled as approximate presence, not billable labor. The invoice list gains a Store column (store link, "N stores" when split, "No store linked"), computed the same way in the demo data and SQL.
+- [x] DP-08 Bug: a vendor's proposed time was read as UTC, so 9:30 showed as 5:30 AM. It is now read in the store's time zone; the form says "store local time". Test in `ops-public-boundary`.
+- [x] DP-09 Store reports keep the problem first and the area after it, so lists and titles lead with the problem. Test in `ops-public-store-impact`.
+- [x] DP-10 Bug: at checkout, choosing the visit triggered a reload that wiped the outcome the technician had already chosen, and "Finish visit" then silently did nothing. Answers are now kept, and an incomplete checkout returns to the outcome step with a message.
+- [x] DP-11 Check-in no longer offers a job someone is already checked in on (which failed with "already linked to an active visit"). The job shows "Already checked in by <name> at <time>. Finish it from the checkout link on that phone." Test in `ops-public-multi-work-order-visit`.
+- [x] DP-12 Smaller wording fixes: stray "·" after a job number with no equipment; inspection page shows "Work order CPS-… · Approved" (was raw "approved"); task history reads Created / Replied / Findings sent / Taken (was "created", "reply", "complete"); task list and task page both say "Complete the check"; due label says "store's local time" instead of "America/New_York"; Inspections hides the Store filter for someone who covers one store; invoice empty state no longer says "No all invoices"; generic empty table says "No records match this view".
+- [x] DP-13 Pickers: a preset choice (for example the store on a new task) starts folded instead of showing all 15 stores; choosing folds the list; click, Enter or ↓ reopens it, and Enter never picks an option that is not visible. While the first page loads the list says "Loading…" instead of "No matches".
+
+Journeys walked in a real browser (desktop 1440px and phone 390px, preview roles named):
+1. Store employee reports a problem on the phone link — pass.
+2. Facilities finds it on the store page (title starts with the problem) — pass.
+3–4. Confirm & create work order, choose ColdLine from the live vendor picker, create vendor link — pass.
+5. Vendor proposes a date on the phone — pass (showed 9:30 AM EDT after DP-08).
+6. Queue row "Accept or change date" lands on the reply; accept; Back returns to the filtered queue — pass.
+7. Technician checks in at the store QR, ticks two jobs (the optional extra job) — pass; found DP-11.
+8. Technician checks out with "Work completed", notes and location — pass after DP-10.
+9. Confirm result from the store page → "Completed as expected · Jordan Lee" — pass.
+10. Finance reviews a flagged invoice: store, work order, reason, file, visit time note — pass; Store column added (DP-07).
+11. Store manager records an overdue inspection with a photo → "Performed · awaiting review" — pass.
+12. Facilities finds it from the Inspections "Awaiting review" tile and the store page line — pass (see limitation).
+13. Store manager finds warranty from the store Warranties tab and the work order banner — pass.
+14. Owner (executive) drills Overview spend → work orders, Trends bridge bar → records, lifecycle → equipment decision. Store 104 $37,443 matched its 21 records (rows are rounded to dollars) — pass.
+15. Facilities assigns a task to Robin Carter; store manager replies, sends findings with a photo; store manager takes a shared task — pass.
+Also checked: Back keeps work-order search, direct links open records, empty searches on work orders, invoices, vendors, stores, tasks and equipment show a clear message, regional manager is correctly refused Store 104.
+
+Evidence: typecheck and lint pass; targeted tests pass (public boundary, store impact, idempotency, multi-work-order visit, invoice queue query and workspace). Full unit, e2e and build results are recorded in the next checkpoint update.
+
+Remaining limitations:
+- The review queue does not list inspections awaiting review; reviewers find them from the Inspections tile and the store page. Adding a queue item type is a larger change, not made here.
+- The store QR only starts visits. A technician who loses their checkout link cannot finish from a different phone; an operator has to close the visit.
+- Store reports keep the employee's text exactly, so in one-line lists the problem and "Area or equipment: …" run together without punctuation.
+- Not every screen in the brief was rebuilt: the work-order list has no equipment column, and request pages are still long. Recorded for the next pass.
+
 ## Outstanding review findings (October 1, Claude)
 
 Four findings from review of `1aba331`, each verified against the code before editing. No layout changes or new features.

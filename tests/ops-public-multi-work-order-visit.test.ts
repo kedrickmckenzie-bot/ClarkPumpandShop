@@ -42,6 +42,14 @@ describe("public work-order-first multi-work-order visit", () => {
     resetNorthlineFixtureRepository();
   });
 
+  it("marks work that already has someone checked in instead of offering a second check-in", async () => {
+    await startMultiWorkVisit("public-active-visit-flag-0001");
+    const context = await getPublicOperationsGateway().lookupVendorVisitContext(PUBLIC_DEMO_LINKS.storeToken);
+    const work = context.eligibleWorkOrders.find((workOrder) => workOrder.id === PUBLIC_WORK);
+    expect(work?.activeVisit).toMatchObject({ technicianName: "Morgan Ellis" });
+    expect(Date.parse(work!.activeVisit!.checkedInAt)).not.toBeNaN();
+  });
+
   it("lists eligible work before Vendor selection and infers one read-only assigned Vendor", async () => {
     await reopenSecondSummitWork();
     const gateway = getPublicOperationsGateway();

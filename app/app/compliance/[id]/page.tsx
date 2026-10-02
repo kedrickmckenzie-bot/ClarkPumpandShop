@@ -1,3 +1,4 @@
+import { domainLabel } from "@/lib/product/domain-label";
 import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 const date = (value: string) => formatOperationsDate(`${value.slice(0,10)}T12:00:00Z`, "UTC");
 import { FileLinks } from "@/components/workspace/file-links";
@@ -24,7 +25,7 @@ export default async function InspectionPage({params,searchParams}:{params:Promi
  {q.notice?<p role="status" className={styles.notice}>{q.notice}</p>:null}{q.error?<p role="alert" className={styles.notice}>{q.error}</p>:null}
  <section className={styles.panel}><div className={styles.header}><h2>{status}</h2><span className={styles.tag}>Due {date(i.dueDate)}</span></div><dl className={styles.facts}><div><dt>Assigned to</dt><dd>{vendor?.name??user?.displayName??"Internal team"}</dd></div><div><dt>Evidence required</dt><dd>{s.evidenceLabel}{!s.evidenceRequired?" (optional file)":""}</dd></div><div><dt>Escalation</dt><dd>{s.escalationTo}<p>Notify on {date(new Date(Date.parse(i.dueDate)-s.escalationDays*86400000).toISOString())}</p></dd></div><div><dt>Schedule</dt><dd>{s.status==="paused"?"Paused · ":""}{s.intervalUnit==="once"?"One time":`Every ${s.intervalCount} ${s.intervalCount===1?s.intervalUnit.replace(/s$/, ""):s.intervalUnit}`}</dd></div><div><dt>Performed</dt><dd>{i.completedAt?date(i.completedAt):"Not recorded"}</dd></div><div><dt>Document expires</dt><dd>{i.documentExpiresOn?date(i.documentExpiresOn):"Not recorded"}</dd></div></dl>
  {s.requirementSource?<p><strong>Requirement:</strong> {s.requirementSource}</p>:null}{s.instructions?<p>{s.instructions}</p>:null}{s.assetId?<p><Link href={`/app/equipment/${s.assetId}`}>Equipment history</Link></p>:null}
- <div className={styles.filters}>{work?<Link href={`/app/work-orders/${work.id}`}>{work.number} · {work.status.replaceAll("_"," ")}</Link>:<p>Work is prepared {s.leadDays} days before due.</p>}{i.correctiveWorkOrderId?<Link href={`/app/work-orders/${i.correctiveWorkOrderId}`}>Open corrective work</Link>:null}</div>
+ <div className={styles.filters}>{work?<Link href={`/app/work-orders/${work.id}`}>Work order {work.number} · {domainLabel(work.status)}</Link>:<p>Work is prepared {s.leadDays} days before due.</p>}{i.correctiveWorkOrderId?<Link href={`/app/work-orders/${i.correctiveWorkOrderId}`}>Open corrective work</Link>:null}</div>
  {review&&s.status==="active"&&i.status!=="passed"&&work?<form action="/api/ops/compliance" method="post">{hidden}<input type="hidden" name="action" value="link"/><button type="submit">Open assignee link</button><p>Secure access to this inspection for the assigned person or vendor.</p></form>:null}
  {i.resultNote?<p><strong>Latest result:</strong> {i.resultNote}</p>:null}
  </section>

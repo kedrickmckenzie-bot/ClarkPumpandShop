@@ -66,7 +66,8 @@ export function SearchPicker({ name, label, options, load, required = false, pla
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<PickOption | undefined>(() => defaultOption ?? options?.find((option) => option.value === defaultValue));
   const [active, setActive] = useState(-1);
-  const [open, setOpen] = useState(!compact);
+  // The list starts open for a fresh choice; a preset choice stays folded until the box is used.
+  const [open, setOpen] = useState(!compact && !defaultOption && !defaultValue);
   const listRef = useRef<HTMLUListElement>(null);
   const validity = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -121,17 +122,20 @@ export function SearchPicker({ name, label, options, load, required = false, pla
     setSelected(option);
     onSelect?.(option);
     validity.current?.setCustomValidity("");
-    if (compact) setOpen(false);
+    setOpen(false);
+    setQuery("");
     // Wait for the hidden field to carry the new value, then apply the filter.
     if (submitOnSelect) setTimeout(() => root.current?.closest("form")?.requestSubmit(), 0);
   }
   function onKey(event: React.KeyboardEvent<HTMLInputElement>) {
+    // A folded list opens first, so Enter never picks an option the person cannot see.
+    if (!open && (event.key === "Enter" || event.key === "ArrowDown")) { event.preventDefault(); setOpen(true); return; }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       const next = Math.max(0, Math.min(rows.length - 1, activeIndex + (event.key === "ArrowDown" ? 1 : -1)));
       setActive(next);
       listRef.current?.children[next]?.scrollIntoView({ block: "nearest" });
-    } else if (event.key === "Escape" && compact) {
+    } else if (event.key === "Escape") {
       setOpen(false);
     } else if (event.key === "Enter") {
       event.preventDefault();
@@ -147,9 +151,9 @@ export function SearchPicker({ name, label, options, load, required = false, pla
     {selected && !compact ? <p className={styles.selected} role="status"><Check aria-hidden="true" size={16} /><span><strong>{selected.label}</strong>{selected.detail ? <small>{selected.detail}</small> : null}</span></p> : null}
     <div className={styles.searchWrap}>
       <input id={`${id}-search`} className={styles.search} type="search" role="combobox" aria-expanded={open} aria-controls={`${id}-list`} aria-activedescendant={activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined} autoComplete="off" maxLength={160}
-        placeholder={disabled ? disabledText ?? placeholder : compact && selected ? selected.label : placeholder} disabled={disabled} value={query}
+        placeholder={disabled ? disabledText ?? placeholder : compact && selected ? selected.label : selected && !open ? "Type to change" : placeholder} disabled={disabled} value={query}
         onChange={(event) => { setQuery(event.target.value); setActive(event.target.value ? 0 : -1); setOpen(true); }} onKeyDown={onKey}
-        onFocus={() => setOpen(true)} onBlur={() => { if (compact) setTimeout(() => { if (!root.current?.contains(document.activeElement)) setOpen(false); }, 150); }} />
+        onFocus={() => setOpen(true)} onClick={() => setOpen(true)} onBlur={() => { if (compact) setTimeout(() => { if (!root.current?.contains(document.activeElement)) setOpen(false); }, 150); }} />
       {/* Carries "required" so the browser stops the form and points here when nothing is chosen. */}
       {required ? <input ref={validity} className={styles.validity} tabIndex={-1} aria-hidden="true" required value={selected?.value ?? ""} onChange={() => {}} onInvalid={(event) => event.currentTarget.setCustomValidity(`Choose ${label.toLowerCase()} from the list.`)} /> : null}
     </div>
@@ -166,7 +170,7 @@ export function SearchPicker({ name, label, options, load, required = false, pla
             {isSelected ? <Check aria-hidden="true" size={16} /> : null}
           </li>;
         })}
-        {!rows.length && !busy ? <li className={styles.empty}>{emptyText}</li> : null}
+        {!rows.length && !busy ? <li className={styles.empty}>{load && loaded === null && !error ? "Loading…" : emptyText}</li> : null}
       </ul>
       <div className={styles.footer}>
         <p className={styles.count} aria-live="polite">{error ? <span role="alert">{error}</span> : busy ? "Searching…" : countText()}</p>

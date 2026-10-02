@@ -224,6 +224,8 @@ export interface EligibleWorkOrderView {
   };
   issuedAt: string;
   plannedServiceRun?: { id: string; startsAt: string; stopSequence: number };
+  /** Someone is already checked in on this job; finishing uses that visit's checkout link. */
+  activeVisit?: { technicianName: string; checkedInAt: string };
 }
 
 export interface HeldWorkView {
