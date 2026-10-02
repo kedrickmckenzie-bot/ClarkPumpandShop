@@ -6,6 +6,7 @@ import {capitalFilters,queryCapital,queryCapitalPrices} from "./capital-planning
 import {queryLifecycleQueue,type LifecycleQueueQuery} from "./lifecycle-queue";
 import { queryStoreVendors } from "./store-vendors";
 import { likeAnySearchTerm, searchTerms } from "./search-terms";
+import { SITE_LEVEL_CATEGORIES } from "./equipment-linking";
 
 /** People lookups default to 20 names and never return more than 101 in one page. */
 function ownerPageLimit(value: number | undefined) { return Math.min(101, Math.max(1, Math.floor(value ?? 20))); }
@@ -742,6 +743,7 @@ class SqlOpsRepository implements OpsRepository {
       clauses.push(`EXISTS (SELECT 1 FROM ops_assets wa WHERE wa.organization_id = w.organization_id AND wa.id = w.asset_id AND ${pathConditions.join(" AND ")})`);
     }
     if (query.assetId === "unlinked") clauses.push("w.asset_id IS NULL");
+    else if (query.assetId === "needed") { clauses.push(`w.asset_id IS NULL AND (w.category_key IS NULL OR w.category_key NOT IN (${SITE_LEVEL_CATEGORIES.map(() => "?").join(",")}))`); params.push(...SITE_LEVEL_CATEGORIES); }
     else if (query.assetId) { clauses.push("w.asset_id = ?"); params.push(query.assetId); }
     if (query.componentId === "unlinked") clauses.push("w.component_id IS NULL");
     else if (query.componentId) { clauses.push("w.component_id = ?"); params.push(query.componentId); }

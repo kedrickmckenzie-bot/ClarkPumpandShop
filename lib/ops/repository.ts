@@ -122,7 +122,8 @@ export interface WorkOrderListQuery extends PageRequest {
   storeId?: OpsId;
   regionId?: OpsId;
   categoryKey?: string;
-  assetId?: OpsId | "unlinked";
+  /** "unlinked": no equipment; "needed": no equipment on work that is not site-level. */
+  assetId?: OpsId | "unlinked" | "needed";
   componentId?: OpsId | "unlinked";
   hasCost?: boolean;
   costFrom?: string;

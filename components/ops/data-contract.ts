@@ -70,6 +70,8 @@ export interface SegmentViewModel {
   shareLabel?: string;
   tone?: Tone;
   link: SupportingLink;
+  /** Optional split of this segment (for example by equipment status), each part opening its own records. */
+  parts?: SegmentViewModel[];
 }
 
 export interface SeriesPointViewModel {

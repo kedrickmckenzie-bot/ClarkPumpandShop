@@ -4130,6 +4130,25 @@ a.factItem:hover {
 .statusCounts a span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; align-self: center; }
 .statusCounts a strong { font-size: 20px; }
 .statusFollowUps { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; font-size: 14px; }
+.serviceAreas { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--workspace-border); }
+.serviceAreas h3 { margin: 0; font-size: 15px; color: #334155; }
+.serviceAreas ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.serviceAreas li { display: grid; grid-template-columns: minmax(110px, 160px) minmax(0, 1fr) minmax(0, 320px); align-items: center; gap: 4px 16px; min-width: 0; }
+.serviceAreas .serviceAreaName { font-size: 15px; }
+.serviceAreaBar { display: flex; gap: 2px; min-width: 6px; height: 12px; overflow: hidden; border-radius: 3px; }
+.serviceAreaBar i { min-width: 4px; }
+.serviceAreaBar i[data-tone="positive"], .serviceAreaCounts a[data-tone="positive"] span { background: #16a34a; }
+.serviceAreaBar i[data-tone="warning"], .serviceAreaCounts a[data-tone="warning"] span { background: #d97706; }
+.serviceAreaBar i[data-tone="critical"], .serviceAreaCounts a[data-tone="critical"] span { background: #dc2626; }
+.serviceAreaBar i[data-tone="neutral"], .serviceAreaCounts a[data-tone="neutral"] span { background: #94a3b8; }
+.serviceAreaCounts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; color: #334155; font-size: 14px; }
+.serviceAreaCounts a { display: inline-flex; align-items: baseline; gap: 5px; }
+.serviceAreaCounts a span { display: inline-block; width: 9px; height: 9px; border-radius: 2px; align-self: center; }
+@media (max-width: 640px) {
+  .serviceAreas li { grid-template-columns: minmax(0, 1fr) auto; padding: 6px 0; border-bottom: 1px solid #eef2f6; }
+  .serviceAreaBar { grid-column: 1 / -1; grid-row: 2; }
+  .serviceAreaCounts { grid-column: 1 / -1; grid-row: 3; }
+}
 .equipmentSummary details > summary { cursor: pointer; color: var(--workspace-action); font-weight: 650; }
 /* A row of filter buttons scrolls inside its own box instead of widening the page. */
 .filterGroup > div { min-width: 0; max-width: 100%; flex: 1 1 auto; align-self: stretch; }

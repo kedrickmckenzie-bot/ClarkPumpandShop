@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Equipment status by service area (October 2, Claude)
+
+User found "22 need attention · 28 need an equipment choice" unclear, asked whether the equipment choice belongs under Work, and asked for each service-area line to show how many units are not working, without a "down" color that could be mistaken for a service-area color.
+
+- [x] EQ-01 By service area is shown (no longer folded): one row per area, largest first; the bar length is the area's count and its colors are the same status colors as the bar above (green operational, amber watch, red out of service, gray retired). Service areas have no color of their own, so a status color can never be confused with an area. Each row reads, for example, "24 of 25 working · 1 watch"; every problem count opens exactly that area's equipment in that status.
+- [x] EQ-02 Plain follow-up wording: "21 have open work or a problem status" and "28 open jobs have no equipment linked".
+- [x] EQ-03 Work orders gain an Equipment filter under More filters: "No equipment linked" (`asset=needed`). It uses the same rule as the Equipment count (no equipment, not site-level work such as snow, lot or cleaning) in the fixture and SQL/PostgreSQL repositories. The Equipment link now adds `status=open`. Previously the count showed open jobs only but the link opened every unlinked job, including closed ones (8 vs 235 in the test data).
+
+Evidence: db:seed, typecheck, lint, unit suite 195 files / 1,217 tests, workflow suite 4 files / 66 tests, the Sites build and the Render build pass. A link crawl of 813 pages across five roles shows no server errors. On the Render build with PostgreSQL, the Equipment page says 28 and its link opens exactly 28 jobs. The Equipment summary was checked at 1440px and 390px with no sideways scroll. New tests cover: status parts add up and each opens exactly its equipment; summary wording; the Equipment count equals both drill-throughs; database and demo data give identical results for the new filter and for everyday-word search.
+
 ## Search drill-through follow-up (October 2, Claude)
 
 Codex review of f3a7ae1: everyday-word matches were lost when opening "Review matching…", and the people "20+" link opened the review queue instead of more people.

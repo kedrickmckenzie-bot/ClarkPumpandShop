@@ -5,6 +5,7 @@ import {latestCapitalPlan, capitalPricesFromFixture, capitalFromFixture, type Ca
 import {lifecycleQueueFromFixture, type LifecycleQueueQuery} from "./lifecycle-queue";
 import { latestStorePreference, storeVendorsFromFixture } from "./store-vendors";
 import { matchesSearchTerms, searchTerms } from "./search-terms";
+import { needsEquipmentChoice } from "./equipment-linking";
 import { matchesInspection, inspectionViews, type InspectionQuery, type InspectionView } from "./compliance-types";
 import { attentionFromFixture } from "./attention-query";
 import { pmScheduleFromFixture, type PmScheduleQuery } from "./pm-schedule-query";
@@ -857,7 +858,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.workOrderId === row.id && assignment.vendorId === query.vendorId))
         && (!query.categoryKey || (row.categoryKey ?? "unclassified") === query.categoryKey)
         && matchesWorkCategoryPath(this.fixture.assets.find((asset) => asset.organizationId === scope.organizationId && asset.id === row.assetId), query.categoryPath)
-        && (!query.assetId || (query.assetId === "unlinked" ? !row.assetId : row.assetId === query.assetId))
+        && (!query.assetId || (query.assetId === "unlinked" ? !row.assetId : query.assetId === "needed" ? needsEquipmentChoice(row) : row.assetId === query.assetId))
         && (!query.componentId || (query.componentId === "unlinked" ? !row.componentId : row.componentId === query.componentId))
         && (!hasWorkCostFilter(query) || costLines.some((cost) => matchesWorkCost(cost, query)) !== (query.hasCost === false))
         && (!query.createdFrom || row.createdAt >= query.createdFrom)

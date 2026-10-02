@@ -97,11 +97,24 @@ function queryFilters(route: OperatorListRoute, query: OperatorSearchParameters)
       : route === "requests"
         ? [{ value: "", label: "All reports" }, { value: "pending", label: "Needs review" }, { value: "open_unlinked", label: "Open reports" }, { value: "submitted", label: "New" }, { value: "under_review", label: "Under review" }, { value: "acknowledged_unlinked", label: "Acknowledged without linked work" }, { value: "converted", label: "Converted to work" }, { value: "closed", label: "Closed" }]
         : [];
-  return statusOptions.length ? [{
+  const statusGroup = statusOptions.length ? [{
     id: "status",
     label: "Status",
     options: statusOptions.map((option) => ({ value: option.value || "all", label: option.label, href: hrefWithFilter(route, query, "status", option.value || undefined), selected: (selectedStatus ?? "") === option.value })),
-  }] : undefined;
+  }] : [];
+  // Jobs with no equipment chosen yet: their costs are missing from every equipment history until someone links them.
+  const selectedAsset = first(query.asset);
+  // Site-level work (snow, lot, cleaning) is left out: it never needs a machine.
+  const equipmentGroup = route === "work-orders" && (!selectedAsset || selectedAsset === "unlinked" || selectedAsset === "needed") ? [{
+    id: "asset",
+    label: "Equipment",
+    options: [
+      { value: "all", label: "Any equipment", href: hrefWithFilter(route, query, "asset"), selected: !selectedAsset },
+      { value: "needed", label: "No equipment linked", href: hrefWithFilter(route, query, "asset", "needed"), selected: selectedAsset === "needed" || selectedAsset === "unlinked" },
+    ],
+  }] : [];
+  const groups = [...statusGroup, ...equipmentGroup];
+  return groups.length ? groups : undefined;
 }
 
 function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchParameters) {
@@ -126,7 +139,7 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
       : key === "path" ? value.split("|").join(" › ")
       : key === "store" ? "Selected store"
       : key === "region" ? "Selected region"
-      : key === "asset" ? value === "unlinked" ? "Not linked to equipment" : "Selected equipment"
+      : key === "asset" ? value === "unlinked" ? "Not linked to equipment" : value === "needed" ? "No equipment linked" : "Selected equipment"
       : key === "component" ? value === "unlinked" ? "Not linked to a component" : "Selected component"
       : key === "vendor" ? "Selected vendor"
       : key === "review" && value === "true"
@@ -193,7 +206,7 @@ function creationHref(path: string, query: OperatorSearchParameters) {
   const params = new URLSearchParams();
   for (const key of ["store", "asset", "vendor"]) {
     const value = first(query[key]);
-    if (value && value !== "unlinked") params.set(key, value);
+    if (value && value !== "unlinked" && value !== "needed") params.set(key, value);
   }
   return params.size ? `${path}?${params}` : path;
 }

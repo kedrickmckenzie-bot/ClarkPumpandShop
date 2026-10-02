@@ -866,6 +866,14 @@ export function SearchView({ model }: { model: SearchPageViewModel }) {
   );
 }
 
+/** Plain wording for the two follow-up counts under the status bar. */
+function followUpText(id: string, value: string) {
+  const one = value === "1";
+  if (id === "attention") return one ? "has open work or a problem status" : "have open work or a problem status";
+  if (id === "unlinked") return one ? "open job has no equipment linked" : "open jobs have no equipment linked";
+  return "";
+}
+
 /** Order of equipment states, worst last, each with its status color. */
 const EQUIPMENT_STATES: Array<{ id: string; tone: string }> = [{ id: "operational", tone: "positive" }, { id: "watch", tone: "warning" }, { id: "out_of_service", tone: "critical" }];
 
@@ -876,6 +884,7 @@ const EQUIPMENT_STATES: Array<{ id: string; tone: string }> = [{ id: "operationa
 function EquipmentSummary({ model }: { model: ProgramPageViewModel }) {
   const status = model.breakdowns.find((breakdown) => breakdown.id === "equipment-status");
   const others = model.breakdowns.filter((breakdown) => breakdown.id !== "equipment-status");
+  const areas = others.find((breakdown) => breakdown.id === "equipment-category");
   const metric = (id: string) => model.metrics.find((row) => row.id === id);
   const segments = status ? [...status.segments].sort((a, b) => EQUIPMENT_STATES.findIndex((s) => s.id === a.id) - EQUIPMENT_STATES.findIndex((s) => s.id === b.id)) : [];
   const total = segments.reduce((sum, segment) => sum + segment.value, 0) || 1;
@@ -888,9 +897,39 @@ function EquipmentSummary({ model }: { model: ProgramPageViewModel }) {
       <div className={styles.statusBar} aria-hidden="true">{segments.map((segment) => <i key={segment.id} data-tone={tone(segment.id)} style={{ width: `${(segment.value / total) * 100}%` }} />)}</div>
       <div className={styles.statusCounts}>{segments.map((segment) => <Link key={segment.id} href={segment.link.href} data-tone={tone(segment.id)}><span aria-hidden="true" /><strong>{segment.formattedValue}</strong>{segment.label}</Link>)}</div>
     </> : null}
-    {followUps.length ? <p className={styles.statusFollowUps}>{followUps.map((row) => <Link key={row.id} href={row.link.href}><strong>{row.value}</strong> {row.label.toLowerCase().replace(/^needs /, row.value === "1" ? "needs " : "need ")}</Link>)}</p> : null}
-    {others.length ? <details><summary>By service area</summary>{others.map((breakdown) => <BreakdownPanel breakdown={breakdown} key={breakdown.id} />)}</details> : null}
+    {followUps.length ? <p className={styles.statusFollowUps}>{followUps.map((row) => <Link key={row.id} href={row.link.href}><strong>{row.value}</strong> {followUpText(row.id, row.value)}</Link>)}</p> : null}
+    {areas ? <ServiceAreaStatus breakdown={areas} /> : null}
+    {others.filter((breakdown) => breakdown !== areas).map((breakdown) => <BreakdownPanel breakdown={breakdown} key={breakdown.id} />)}
   </section>;
+}
+
+/**
+ * One row per service area: the bar length is the area's equipment count and its colors are the
+ * same status colors as the bar above (green working, amber watch, red out of service), so a
+ * service area never has a color of its own that could be mistaken for a status.
+ */
+function ServiceAreaStatus({ breakdown }: { breakdown: BreakdownViewModel }) {
+  const largest = Math.max(1, ...breakdown.segments.map((segment) => segment.value));
+  return <div className={styles.serviceAreas}>
+    <h3>By service area</h3>
+    <ul>
+      {breakdown.segments.map((segment) => {
+        const parts = segment.parts?.length ? segment.parts : [{ ...segment, id: "operational", tone: "positive" as const }];
+        const working = parts.find((part) => part.id === "operational")?.value ?? 0;
+        const problems = parts.filter((part) => part.id !== "operational");
+        return <li key={segment.id}>
+          <Link className={styles.serviceAreaName} href={segment.link.href}>{segment.label}</Link>
+          <span className={styles.serviceAreaBar} aria-hidden="true" style={{ width: `${(segment.value / largest) * 100}%` }}>
+            {parts.map((part) => <i key={part.id} data-tone={part.tone ?? "neutral"} style={{ flexGrow: part.value }} />)}
+          </span>
+          <span className={styles.serviceAreaCounts}>
+            <span><strong>{working}</strong> of {segment.value} working</span>
+            {problems.map((part) => <Link key={part.id} href={part.link.href} data-tone={part.tone ?? "neutral"}><span aria-hidden="true" />{part.value} {part.label.toLocaleLowerCase("en-US")}</Link>)}
+          </span>
+        </li>;
+      })}
+    </ul>
+  </div>;
 }
 
 export function ProgramView({ model, beforeContent, compact = false }: { model: ProgramPageViewModel; beforeContent?: ReactNode; compact?: boolean }) {

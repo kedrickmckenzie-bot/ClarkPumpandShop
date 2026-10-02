@@ -1,4 +1,5 @@
 import { matchesSearchTerms, searchTerms } from "@/lib/ops/search-terms";
+import { needsEquipmentChoice } from "@/lib/ops/equipment-linking";
 import { cachedDateTimeFormat, cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { activityTitle } from "@/lib/product/activity-title";
 import { buildVendorServiceReport } from "@/lib/ops/vendor-service-report";
@@ -308,6 +309,12 @@ function dateTimeInputInZone(value: string, timeZone: string) {
 
 function sentence(value: string): string {
   return domainLabel(value);
+}
+
+/** Working first, worst last; the same order and status colors everywhere equipment status is drawn. */
+const EQUIPMENT_STATUS_ORDER = ["operational", "watch", "out_of_service", "retired"] as const;
+function equipmentStatusTone(value: string): Tone {
+  return value === "operational" ? "positive" : value === "watch" ? "warning" : value === "out_of_service" ? "critical" : "neutral";
 }
 
 function equipmentStatusLabel(value: string): string {
@@ -3515,12 +3522,7 @@ export function buildProgramModel(
       ...(categoryFilter ? [{ id: "category", label: `Service area: ${sentence(categoryFilter)}`, removeHref: equipmentHref({ category: undefined, page: undefined }) }] : []),
       ...(statusFilter ? [{ id: "status", label: `Status: ${equipmentStatusLabel(statusFilter)}`, removeHref: equipmentHref({ status: undefined, page: undefined }) }] : []),
     ];
-    const siteLevelCategories = new Set(["exterior", "store_sanitation"]);
-    const workNeedingEquipmentChoice = scoped.workOrders.filter((work) =>
-      !work.assetId
-      && !siteLevelCategories.has(work.categoryKey ?? "")
-      && !["closed", "cancelled"].includes(work.status),
-    );
+    const workNeedingEquipmentChoice = scoped.workOrders.filter((work) => needsEquipmentChoice(work) && !["closed", "cancelled"].includes(work.status));
     const rows = pageAssets.map<TableRowViewModel>((asset) => {
       const store = scoped.stores.find((item) => item.id === asset.storeId);
       const linkedWork = workByAsset.get(asset.id) ?? [];
@@ -3565,10 +3567,11 @@ export function buildProgramModel(
         { id: "assets", label: "Equipment", value: String(scoped.assets.length), supportingText: "Across the stores in this view", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "View all equipment" } },
         { id: "attention", label: "Needs attention", value: String(attentionAssets.length), supportingText: "Active work or an equipment status that needs review", tone: "warning", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "attention" }), label: "Open the attention queue" } },
         { id: "out-of-service", label: "Out of service", value: String(scoped.assets.filter((asset) => asset.status === "out_of_service").length), supportingText: "Unavailable now with the related service record one click away", tone: "critical", link: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, status: "out_of_service", view: "all" }), label: "Open out-of-service equipment" } },
-        { id: "unlinked", label: "Needs an equipment choice", value: String(workNeedingEquipmentChoice.length), supportingText: "Open work where equipment appears relevant but has not been linked yet", tone: workNeedingEquipmentChoice.length ? "warning" : "positive", link: { href: hrefWithQuery("/app/work-orders", { asset: "unlinked", store: selectedStoreId }), label: "Review work needing classification" } },
+        { id: "unlinked", label: "Needs an equipment choice", value: String(workNeedingEquipmentChoice.length), supportingText: "Open work where equipment appears relevant but has not been linked yet", tone: workNeedingEquipmentChoice.length ? "warning" : "positive", link: { href: hrefWithQuery("/app/work-orders", { asset: "needed", status: "open", store: selectedStoreId }), label: "Review open jobs with no equipment linked" } },
       ],
       breakdowns: [
-        { id: "equipment-category", title: "Equipment by service area", description: "Select a row to open the exact equipment in that service area.", totalLabel: `${scoped.assets.length} assets`, segments: [...categoryCounts.entries()].map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), shareLabel: `Open ${value} ${sentence(key).toLocaleLowerCase("en-US")} record${value === 1 ? "" : "s"}`, link: { href: hrefWithQuery("/app/equipment", { category: key, store: selectedStoreId, view: "all" }), label: `Open ${sentence(key)} equipment` } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "Open all equipment" } },
+        { id: "equipment-category", title: "Equipment by service area", description: "Select a row to open the exact equipment in that service area.", totalLabel: `${scoped.assets.length} assets`, segments: [...categoryCounts.entries()].sort((a, b) => b[1] - a[1] || sentence(a[0]).localeCompare(sentence(b[0]))).map(([key, value]) => ({ id: key, label: sentence(key), value, formattedValue: String(value), shareLabel: `Open ${value} ${sentence(key).toLocaleLowerCase("en-US")} record${value === 1 ? "" : "s"}`, link: { href: hrefWithQuery("/app/equipment", { category: key, store: selectedStoreId, view: "all" }), label: `Open ${sentence(key)} equipment` },
+          parts: EQUIPMENT_STATUS_ORDER.map((status) => ({ status, count: scoped.assets.filter((asset) => asset.categoryKey === key && asset.status === status).length })).filter((part) => part.count > 0).map(({ status, count }) => ({ id: status, label: equipmentStatusLabel(status), value: count, formattedValue: String(count), tone: equipmentStatusTone(status), link: { href: hrefWithQuery("/app/equipment", { category: key, status, store: selectedStoreId, view: "all" }), label: `Open ${count} ${equipmentStatusLabel(status).toLocaleLowerCase("en-US")} ${sentence(key).toLocaleLowerCase("en-US")}` } })) })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "Open all equipment" } },
         { id: "equipment-status", title: "Equipment status", description: "Operational, watch, and out-of-service totals come directly from the equipment register.", totalLabel: `${scoped.assets.length} assets`, segments: [...statusCounts.entries()].map(([key, value]) => ({ id: key, label: equipmentStatusLabel(key), value, formattedValue: String(value), shareLabel: `Open ${value} ${equipmentStatusLabel(key).toLocaleLowerCase("en-US")} record${value === 1 ? "" : "s"}`, tone: key === "watch" ? "warning" : key === "operational" ? "positive" : "critical", link: { href: hrefWithQuery("/app/equipment", { status: key, store: selectedStoreId, view: "all" }), label: `Open ${equipmentStatusLabel(key)} equipment` } })), sourceLink: { href: hrefWithQuery("/app/equipment", { store: selectedStoreId, view: "all" }), label: "Open all equipment" } },
       ],
       trends: [],
