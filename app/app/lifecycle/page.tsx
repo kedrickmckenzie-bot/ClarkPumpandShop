@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { SearchPicker } from "@/components/ops/search-picker";
 import { domainLabel } from "@/lib/product/domain-label";
 import {CapitalQuickEdit} from "@/components/workspace/capital-quick-edit";
@@ -24,7 +25,7 @@ export default async function LifecyclePage({searchParams}:{searchParams:Promise
  const [filters,capital,queue]=await Promise.all([repo.getCapitalFilters(session),view==="capital"?repo.queryCapitalPlans(session,{...common,start,months,currency,month}):null,view!=="capital"?repo.queryLifecycleQueue(session,{...common,view}):null]);
  const priceRows=new Map(await Promise.all((capital?.items??[]).map(async r=>[r.assetId,(await repo.getCapitalPrices(session.organizationId,r.assetId)).filter(p=>["Approved amount","Selected quote"].includes(p.basis))] as const)));
  const href=(changes:Record<string,string>)=>{const params=new URLSearchParams();for(const [k,v] of Object.entries({...q,view,start,months:String(months),currency,offset:"0",...changes}))if(v)params.set(k,v);return `/app/lifecycle?${params}${changes.month?"#replacement-plans":""}`;};
- const money=(amount:number,unit=currency)=>new Intl.NumberFormat("en-US",{style:"currency",currency:unit,maximumFractionDigits:0}).format(amount/100);
+ const money=(amount:number,unit=currency)=>cachedNumberFormat("en-US",{style:"currency",currency:unit,maximumFractionDigits:0}).format(amount/100);
  const dateLabel=(m:string)=>m.length===4?`${m} · month not chosen`:new Date(`${m}-01T12:00:00Z`).toLocaleDateString("en-US",{month:"short",year:"numeric",timeZone:"UTC"});
  const inWindow=capital?.buckets.filter(b=>validMonth(b.month))??[],total=capital?.total??queue?.total??0;
  return <div className={styles.page}>

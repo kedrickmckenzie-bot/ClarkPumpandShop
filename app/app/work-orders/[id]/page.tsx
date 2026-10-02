@@ -2,7 +2,7 @@ import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import { SentWorkOrders } from "@/components/workspace/sent-work-orders";
 import { workWarrantyReview } from "@/lib/ops/work-warranty-review";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
-import {LinkedStoreTasks} from "@/components/workspace/linked-store-tasks";
+import {LinkedStoreTasks, canCreateStoreTasks} from "@/components/workspace/linked-store-tasks";
 import { WorkFiles } from "@/components/workspace/work-files";
 import {WorkWarrantyContext} from "@/components/workspace/work-warranty-context";
 import { WorkInspectionContext } from "@/components/workspace/work-inspection-context";
@@ -183,6 +183,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       vendorResponse={responseActions ? { ...responseActions, workOrderId: id } : undefined}
       activeView={view}
       canAttachInvoice={!accountabilityOnly && control.status !== "cancelled" && ["executive", "facilities", "finance"].includes(session.role) && session.storeIds === undefined && session.regionIds === undefined && (session.accessMode === "preview" || Boolean(session.permissions?.length) && session.permissions!.every(p => ["ops:*", "ops:write", "ops:read_write", "ops:store_manage"].includes(p)))}
+      canAssignTask={await canCreateStoreTasks()}
       activeServicePath={requestedServicePath}
       edition={session.demoEdition}
       updated={updated}

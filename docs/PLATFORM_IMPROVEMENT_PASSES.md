@@ -4,6 +4,29 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+## Server memory and speed (October 2, Claude)
+
+Codex reported Render stalls, 502s and memory at 100% and suspected full-tenant snapshot loading. Measured before changing anything: production Render build against a local PostgreSQL 16 seeded with the showcase, a 256 MB JavaScript heap limit (like a small Render instance), opening 17 main pages in turn and then four at a time. Findings: every snapshot-backed page ran about 92 queries and read about 11,000 rows (5.7 MB of raw data) per view; the main memory cost was the Vendors page building a new date formatter for every timestamp (85% of its time, with memory held outside the JavaScript heap); one dashboard query took 52 seconds in the embedded test database because it had no planner statistics.
+
+- [x] SM-01 Shared tenant snapshot on PostgreSQL: one deep-frozen copy per company is reused while the database is unchanged. Each request checks `pg_current_snapshot()`, which moves whenever any write starts or finishes, so a saved change shows on the next page view on every instance (checked by editing a store and a vendor directly in the database). Failed loads are not kept; without a change token it reads directly as before. The D1 preview is unchanged.
+- [x] SM-02 Date and number formatters are created once per format and reused (46 files). Vendors page code went from about 480 ms to 50 ms.
+- [x] SM-03 Search: a word plus its everyday alias (for example "ac" and "hvac") no longer adds both counts; the exact count is shown when both fit on one page, otherwise "8+" and "At least" in the summary. People results show every name returned (up to 20) instead of 8, and say "20+" when the lookup is full.
+- [x] SM-04 PostgreSQL seed test: refresh planner statistics after the bulk load, as a hosted server does. The test went from about 159 seconds (over its 2-minute limit) to 33 seconds; the limit is unchanged. `db:seed:postgres` now also runs `ANALYZE` after a fresh seed.
+- [x] SM-05 "Assign a task" on a work order is shown only to people who can open the task form (finance saw it and got an error page). Found by the post-change crawl; not caused by this pass.
+
+Measured with the same setup (megabytes of server memory; seconds for the slowest of four simultaneous views):
+
+| | Before | After |
+|---|---|---|
+| Memory after opening 17 pages once | 1,018 | 289 |
+| Memory after four people at a time | 1,629 | 319 |
+| Vendors, four at a time | 6.7 s | 0.35 s |
+| Work order, one at a time | 0.58 s | 0.17 s |
+
+Still to do: pages still project from the whole-company copy rather than per-page queries. Each write makes the next request reload it (one load shared by concurrent requests), so at 63-store scale with frequent writes the per-page query work remains the long-term fix.
+
+Evidence: db:seed, typecheck, lint, unit suite 194 files / 1,213 tests, workflow suite 4 files / 66 tests (including the PostgreSQL seed test), the Sites build and the Render build all pass. A link crawl of 813 pages across all five roles on the Render build returned no server errors. Vendors, search, equipment and a work order checked at 1440px and 390px with no sideways scroll. New tests: shared snapshot (reuse, reload after writes, tenant and variant separation, shared in-flight load, failed load not kept, real PostgreSQL change token), guards against per-value formatter construction and uncached snapshot reads, alias count and people paging.
+
 ## Navigation and look pass (October 2, Claude)
 
 User asked whether the platform is easy to look at and navigate. Reviewed ten main screens as facilities and owner at 1440px and 390px, measured page length, and tried the top search with real phrases. Findings: every page opened with a large header card; phone lists were very long (work orders 17 screens, spending 17, equipment 13); the review queue scrolled sideways on phones; search showed job numbers without the problem and missed everyday words, invoices and people; the top bar repeated sidebar information. Nothing was removed; links, permissions and totals are unchanged.

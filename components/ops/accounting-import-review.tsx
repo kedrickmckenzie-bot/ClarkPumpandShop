@@ -1,4 +1,5 @@
 "use client";
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { useRef, useState, type FormEvent } from "react";
 import type { AccountingReviewModel } from "@/lib/ops/accounting-review-model";
 import { accountingDraftAmounts, createAccountingDraft, recoverAccountingDraft, retainAccountingChoices } from "@/lib/ops/accounting-review-draft";
@@ -15,7 +16,7 @@ export function AccountingImportReview({ initial }: { initial: AccountingReviewM
   const [searching, setSearching] = useState(false);
   const sequence = useRef(0);
   const amounts = accountingDraftAmounts(model, draft);
-  const money = (minor: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: model.delivery.currency }).format(minor / 100);
+  const money = (minor: number) => cachedNumberFormat("en-US", { style: "currency", currency: model.delivery.currency }).format(minor / 100);
   async function search(vendorId = draft.vendorId) {
     const current = ++sequence.current;
     setSearching(true);
@@ -55,7 +56,7 @@ export function AccountingImportReview({ initial }: { initial: AccountingReviewM
     {!model.linkedInvoiceId ? <label className={styles.field}>{model.delivery.kind === "credit" ? "Original invoice" : "Existing invoice, if already entered"}<select required={model.delivery.kind === "credit"} value={draft.existingInvoiceId} onChange={(event) => setDraft({ ...draft, existingInvoiceId: event.target.value })}><option value="">{model.delivery.kind === "credit" ? "Choose the original bill" : "Create an invoice after review"}</option>{model.invoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.vendorInvoiceNumber}</option>)}</select></label> : <p>Editing the linked invoice. This does not create another invoice.</p>}
     <div className={layout.search}><label className={styles.field}>Find work by store, work order, or problem<input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(); } }} /></label><button type="button" className={styles.secondaryButton} disabled={searching} onClick={() => void search()}>{searching ? "Searching…" : "Find related work"}</button></div>
     <p>Search updates the choices below. Selected work, amounts and notes stay in your draft.</p>
-    {latest ? <section role="alert"><strong>This invoice changed during review.</strong>{latest.changeReasons.map((reason) => <p key={reason}>{reason}</p>)}<p>Latest source total: {new Intl.NumberFormat("en-US", { style: "currency", currency: latest.delivery.currency }).format(latest.delivery.totalMinor / 100)}. Removed items will leave the draft; retained splits still need your review.</p><button type="button" className={styles.secondaryButton} onClick={() => { setDraft(recoverAccountingDraft(draft, latest)); setModel(latest); setLatest(undefined); setError("Latest invoice loaded. Check every split before saving."); }}>Review latest invoice with my draft</button></section> : null}
+    {latest ? <section role="alert"><strong>This invoice changed during review.</strong>{latest.changeReasons.map((reason) => <p key={reason}>{reason}</p>)}<p>Latest source total: {cachedNumberFormat("en-US", { style: "currency", currency: latest.delivery.currency }).format(latest.delivery.totalMinor / 100)}. Removed items will leave the draft; retained splits still need your review.</p><button type="button" className={styles.secondaryButton} onClick={() => { setDraft(recoverAccountingDraft(draft, latest)); setModel(latest); setLatest(undefined); setError("Latest invoice loaded. Check every split before saving."); }}>Review latest invoice with my draft</button></section> : null}
     {model.delivery.kind === "bill" ? model.delivery.lines.map((line) => { const amount = amounts.find((row) => row.id === line.id)!; return <fieldset key={line.id}><legend>{line.description}</legend>
       <p className={layout.amounts}>Charge {money(amount.total)} · Allocated {money(amount.allocated)} · {amount.remaining < 0 ? `Over by ${money(-amount.remaining)}` : `Remaining ${money(amount.remaining)}`}</p>
       {draft.splits.map((split, index) => split.lineId === line.id ? <div className={layout.split} key={index}>

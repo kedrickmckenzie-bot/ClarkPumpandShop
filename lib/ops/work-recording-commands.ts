@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { buildConfirmedWorkWarrantyStatements } from "./warranty-commands";
 import { buildCreateTaskStatements, buildWorkflowTaskRecord, isOpenWorkflowTask } from "./workflow-task-commands";
 import type { OpsCommandServices, OpsIdSource } from "./commands";
@@ -293,7 +294,7 @@ export async function recordWorkOrderCost(
     const total = (detail?.costs.filter(cost => cost.currency === currency).reduce((sum, cost) => sum + cost.amountMinor, 0) ?? 0) + input.amountMinor;
     const title = "Review costs above internal flag";
     if (total > threshold && !tasks.some(task => task.title === title && isOpenWorkflowTask(task))) {
-      const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value / 100);
+      const money = (value: number) => cachedNumberFormat("en-US", { style: "currency", currency }).format(value / 100);
       const task = buildWorkflowTaskRecord({ id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder.id, actor: input.actor, createdAt: now, draft: {
         taskType: "other", title, reason: `Recorded work cost ${money(total)} exceeds the internal flag of ${money(threshold)}. Review the cost entries; vendor authorization is unchanged.`,
         assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities coordinator", priority: "high", blocking: false, requiredForProgress: false,

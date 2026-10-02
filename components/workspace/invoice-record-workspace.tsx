@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import Link from "next/link";
 import { invoiceReviewMessage } from "@/lib/product/invoice-review-copy";
 import { domainLabel } from "@/lib/product/domain-label";
@@ -8,7 +9,7 @@ import { InvoiceReviewDecision } from "./invoice-review-decision";
 import styles from "./invoice-record-workspace.module.css";
 
 const sectionLabels: Record<InvoiceRecordSection, string> = { items: "Invoice items", matches: "Work matches", evidence: "Service evidence", flags: "Review flags", history: "Review history" };
-const amount = (value: Money) => new Intl.NumberFormat("en-US", { style: "currency", currency: value.currency }).format(value.amountMinor / 100);
+const amount = (value: Money) => cachedNumberFormat("en-US", { style: "currency", currency: value.currency }).format(value.amountMinor / 100);
 const date = (value?: string) => value ? formatOperationsDate(value) : "Not recorded";
 export function invoiceRecordHref(id: string, section: InvoiceRecordSection, page = 1, line?: string, match?: string, basis?: string, open = false) {
   const q = new URLSearchParams({ section }); if (page > 1) q.set("page", String(page)); if (line && section === "matches") q.set("line", line);

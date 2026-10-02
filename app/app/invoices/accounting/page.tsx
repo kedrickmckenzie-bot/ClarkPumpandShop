@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { loadAccountingReviewModel } from "@/lib/ops/accounting-review-model";
 import { notFound } from "next/navigation";
 import { loadOperatorSession } from "../../_data/operator-loader";
@@ -24,7 +25,7 @@ export default async function AccountingImportPage({ searchParams }: { searchPar
   const sourcePayload = source ? accountingPayload(source) : undefined;
   const delivery = sourcePayload ? { ...sourcePayload.delivery, vendorId: sourcePayload.reviewedVendorId ?? sourcePayload.delivery.vendorId } : undefined;
   const reviewModel = source ? await loadAccountingReviewModel(context.repository, context.actor, source.id) : undefined;
-  const money = (amount: number, currency: string) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount / 100);
+  const money = (amount: number, currency: string) => cachedNumberFormat("en-US", { style: "currency", currency }).format(amount / 100);
   const state = { needs_review: "Needs a match or updated review", matched: "Linked to platform invoice", excluded: "Outside maintenance filter" };
   return <div className={layout.page}>
     <header><Link href="/app/invoices">Back to invoices</Link><h1>Invoices from accounting</h1><p>Review incoming maintenance invoices and link them to the work they cover.</p></header>

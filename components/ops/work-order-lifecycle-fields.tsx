@@ -1,4 +1,5 @@
 "use client";
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 
 import { useMemo, useState } from "react";
 import { CircleDollarSign, Info } from "lucide-react";
@@ -8,7 +9,7 @@ import type { AssetLifecycleInputViewModel } from "./data-contract";
 import styles from "./ops.module.css";
 import { WorkWarrantyHint } from "./work-warranty-hint";
 
-const dollars = new Intl.NumberFormat("en-US", {
+const dollars = cachedNumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   maximumFractionDigits: 0,

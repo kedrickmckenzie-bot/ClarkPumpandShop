@@ -191,6 +191,38 @@ describe("workspace search finds what people call things", () => {
     expect(model.groups.find((group) => group.id === "work")?.rows.length).toBeGreaterThan(0);
   });
 
+  it("never adds overlapping everyday-word and platform-term matches together", async () => {
+    const base = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const all = (await base.listWorkOrders({ organizationId: "org-northline-demo" }, { limit: 8 })).items;
+    const page = (items: typeof all, totalCount: number, more = false) => ({ items, totalCount, nextCursor: more ? "next" : undefined });
+    const stub = (raw: ReturnType<typeof page>, alias: ReturnType<typeof page>) => new Proxy(base, { get(target, key, receiver) {
+      if (key === "listWorkOrders") return async (_scope: unknown, query: { search?: string }) => query.search === "gas pump" ? raw : alias;
+      return Reflect.get(target, key, receiver);
+    } });
+    const exact = await buildQuerySearchModel(stub(page(all.slice(0, 3), 3), page(all.slice(1, 4), 3)), session(), { q: "gas pump" });
+    const work = exact.groups.find((group) => group.id === "work");
+    expect(work).toMatchObject({ resultCount: 4, countIsLowerBound: false });
+    expect(work?.rows).toHaveLength(4);
+    const paged = await buildQuerySearchModel(stub(page(all.slice(0, 8), 30, true), page(all.slice(2, 8), 25, true)), session(), { q: "gas pump" });
+    expect(paged.groups.find((group) => group.id === "work")).toMatchObject({ resultCount: 30, countIsLowerBound: true, hasMore: true });
+    expect(paged.resultSummary).toMatch(/^At least /);
+  });
+
+  it("shows every person the lookup returns and says when more may match", async () => {
+    const base = createOpsFixtureRepository(buildNorthlinePresentationFixture());
+    const people = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `membership-${index}`, name: `Robin Person ${index}` }));
+    const stub = (count: number) => new Proxy(base, { get(target, key, receiver) {
+      if (key === "listComplianceOwners") return async () => people(count);
+      return Reflect.get(target, key, receiver);
+    } });
+    const twelve = (await buildQuerySearchModel(stub(12), session(), { q: "Robin" })).groups.find((group) => group.id === "people");
+    expect(twelve).toMatchObject({ resultCount: 12, hasMore: false, countIsLowerBound: false });
+    expect(twelve?.rows).toHaveLength(12);
+    const capped = (await buildQuerySearchModel(stub(20), session(), { q: "Robin" })).groups.find((group) => group.id === "people");
+    expect(capped).toMatchObject({ resultCount: 20, hasMore: true, countIsLowerBound: true });
+    expect(capped?.rows).toHaveLength(20);
+  });
+
   it("finds invoices and people for roles that can see them, and not for a store manager", async () => {
     const repository = createOpsFixtureRepository(buildNorthlinePresentationFixture());
     const owner = await buildQuerySearchModel(repository, session(), { q: "SUM-104" });

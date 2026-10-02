@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import Link from "next/link";
 import type { VendorServiceReport as Report } from "@/lib/ops/vendor-service-report";
 import styles from "./communications.module.css";
@@ -12,7 +13,7 @@ export function VendorServiceReport({model,vendorId}:{model:Report;vendorId:stri
     </tbody></table></div>
     <details><summary>Compare similar work costs</summary><p>Same category, equipment model, part, priority and planned/reactive work. Scope and parts can still differ.</p>
       <small>{model.excludedCostWork} {model.excludedCostWork === 1 ? "job" : "jobs"} excluded: incomplete classification, mixed providers/currencies, or work still open. Medians need 5 recorded jobs.</small>
-      <div className={styles.scroll}><table className={styles.table}><thead><tr><th>Comparable group</th><th>Cost coverage</th><th>Median recorded cost</th><th>Source</th></tr></thead><tbody>{model.cohorts.map(row=><tr key={row.key}><td>{row.label}</td><td>{row.withCost} / {row.count} {row.count === 1 ? "job" : "jobs"}</td><td>{row.medianMinor===null ? "Small sample" : new Intl.NumberFormat("en-US",{style:"currency",currency:row.currency}).format(row.medianMinor/100)}</td><td><Link href={row.href}>View jobs</Link></td></tr>)}</tbody></table></div>{!model.cohorts.length ? <p>No comparable completed work yet.</p> : null}
+      <div className={styles.scroll}><table className={styles.table}><thead><tr><th>Comparable group</th><th>Cost coverage</th><th>Median recorded cost</th><th>Source</th></tr></thead><tbody>{model.cohorts.map(row=><tr key={row.key}><td>{row.label}</td><td>{row.withCost} / {row.count} {row.count === 1 ? "job" : "jobs"}</td><td>{row.medianMinor===null ? "Small sample" : cachedNumberFormat("en-US",{style:"currency",currency:row.currency}).format(row.medianMinor/100)}</td><td><Link href={row.href}>View jobs</Link></td></tr>)}</tbody></table></div>{!model.cohorts.length ? <p>No comparable completed work yet.</p> : null}
     </details>
     <section id="service-report-evidence"><h2>{model.evidenceTitle}</h2><p>{model.evidenceTotal} supporting work orders</p><div className={styles.scroll}><table className={styles.table}><thead><tr><th>Work order</th><th>Evidence</th></tr></thead><tbody>{model.evidence.map(row=><tr key={row.id}><td><Link href={row.href}>{row.number}</Link><p>{row.problem}</p></td><td>{row.detail}</td></tr>)}</tbody></table></div>{!model.evidence.length ? <p>No supporting records in this period.</p> : null}<nav className={styles.bar}>{model.previous ? <Link href={model.previous}>Previous</Link> : <span/>}{model.next ? <Link href={model.next}>Next</Link> : null}</nav></section>
   </section>;

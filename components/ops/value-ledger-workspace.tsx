@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { uniqueExposureTotal } from "@/lib/ops/value-exposure";
 import Link from "next/link";
 import { domainLabel as label } from "@/lib/product/domain-label";
@@ -8,7 +9,7 @@ import styles from "./warranty-finance-workspace.module.css";
 const categories: ValueEventCategory[] = ["realized_verified", "identified_exposure", "estimated_opportunity"];
 
 function money(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount / 100);
+  return cachedNumberFormat("en-US", { style: "currency", currency }).format(amount / 100);
 }
 
 

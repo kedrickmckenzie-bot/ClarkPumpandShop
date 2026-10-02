@@ -121,6 +121,9 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     const repository = createOpsPostgresRepository(pool);
 
     await seedOpsRepository(repository, fixture);
+    // A hosted PostgreSQL server refreshes planner statistics automatically
+    // after a bulk load; the embedded engine needs the same step explicitly.
+    await database.exec("ANALYZE");
     await dashboardQueryRegression(repository, fixture);
     await workCostDrilldownRegression(repository);
     await connectedReviewRegression(repository);

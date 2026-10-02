@@ -1,4 +1,5 @@
 import "server-only";
+import { cachedDateTimeFormat } from "@/lib/ops/intl-format-cache";
 
 import { notFound } from "next/navigation";
 import { roleCan } from "@/components/ops/role-policy";
@@ -46,7 +47,7 @@ function approvedWorkReturnHref(value: string | undefined) {
 }
 
 function dateOnly(value: string, timeZone: string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone }).format(new Date(value));
+  return cachedDateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone }).format(new Date(value));
 }
 
 function reviewLabel(deadlineAt: string, asOf: string, timeZone: string) {

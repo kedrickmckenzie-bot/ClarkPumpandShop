@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { OperatorSession,ProgramPageViewModel,PaginationViewModel,TableRowViewModel } from "@/components/ops/data-contract";
 import type { PmProgramManagementModel } from "@/components/workspace/pm-program-management";
 import type { OpsRepository } from "@/lib/ops/repository";
@@ -10,7 +11,7 @@ import { pmHref } from "./pm-schedule-presenter";
 type Query=Record<string,string|string[]|undefined>;
 const first=(v:string|string[]|undefined)=>Array.isArray(v)?v[0]:v;
 const base=(q:Query)=>({store:first(q.store),region:first(q.region),program:first(q.program)});
-const money=(minor:number|undefined,currency:string|undefined)=>minor===undefined||!currency?"See currency details":new Intl.NumberFormat("en-US",{style:"currency",currency}).format(minor/100);
+const money=(minor:number|undefined,currency:string|undefined)=>minor===undefined||!currency?"See currency details":cachedNumberFormat("en-US",{style:"currency",currency}).format(minor/100);
 const store=(r:PmReviewRow,s:OperatorSession)=>compactStoreLabel(`Store ${r.storeNumber} · ${r.storeName}`,s.organizationName);
 export function pmReviewHref(q:Query,kind:PmReviewQuery["kind"]="reviews",review?:string,missing=false){return pmHref(q,{reviewSource:kind,pmReview:review,reviewMissing:missing?"yes":undefined,reviewPage:undefined,setup:undefined,setupFilter:undefined,setupPage:undefined,evidence:undefined,asset:undefined});}
 function previewRow(r:PmReviewRow,session:OperatorSession,q:Query):PmProgramManagementModel["reconciliations"][number]{return {id:r.id,programName:r.programName,storeLabel:store(r,session),periodLabel:r.periodLabel,occurrenceCount:r.occurrenceCount,completedCount:r.completedCount,occurrencesHref:pmReviewHref(q,"occurrences",r.id),invoiceCount:r.invoiceCount,visitCount:r.visitCount,missingCount:r.missingCount,amountLabel:money(r.amountMinor,r.currency),missingAmountLabel:money(r.missingAmountMinor,r.currency),unavailableLinks:r.unavailableLinks,

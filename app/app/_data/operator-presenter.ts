@@ -1,3 +1,4 @@
+import { cachedDateTimeFormat, cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { activityTitle } from "@/lib/product/activity-title";
 import { buildVendorServiceReport } from "@/lib/ops/vendor-service-report";
 import { recordedMoneyLabel } from "@/lib/ops/work-review";
@@ -118,7 +119,7 @@ interface ScopedFixture {
   assets: Asset[];
 }
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
+const currencyFormatter = cachedNumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   maximumFractionDigits: 0,
@@ -270,7 +271,7 @@ function workOrderNoteHistory(
 }
 
 function estimateMoney(amountMinor: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
+  return cachedNumberFormat("en-US", {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
@@ -291,7 +292,7 @@ function dateTimeInZone(value: string | undefined, timeZone: string): string {
 }
 
 function dateTimeInputInZone(value: string, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const parts = cachedDateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
     month: "2-digit",
@@ -604,7 +605,7 @@ function monthKey(value: string): string {
 }
 
 function monthLabel(key: string): string {
-  return new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${key}-01T00:00:00Z`));
+  return cachedDateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${key}-01T00:00:00Z`));
 }
 
 function monthEndDate(key: string): string {
@@ -4465,7 +4466,7 @@ export function buildDetailModel(
         { id: "authorization", title: sourceVisit ? "Service record and billing reference" : "Authorization", description: sourceVisit ? "This work order was created after the observed visit began. It provides a billing and spend-tracking reference without presenting the record as a prior written service authorization." : "The operator work-order number remains the billing reference; vendor ticket, invoice, and external PO stay separate.", action: work.id === NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId ? { label: "Preview vendor authorization", href: `/public/service/${NORTHLINE_DEMO_ENTRY_TOKENS.serviceAuthorization104}` } : undefined, facts: [
           { label: "Authorized scope", value: work.authorizedScope ?? "No additional scope entered" },
           { label: "Not to exceed", value: work.nte ? money(work.nte.amountMinor) : "Not set" },
-          { label: "Internal cost review above", value: work.internalReviewThresholdMinor == null ? "Not set" : new Intl.NumberFormat("en-US", { style: "currency", currency: work.internalReviewCurrency ?? "USD" }).format(work.internalReviewThresholdMinor / 100) },
+          { label: "Internal cost review above", value: work.internalReviewThresholdMinor == null ? "Not set" : cachedNumberFormat("en-US", { style: "currency", currency: work.internalReviewCurrency ?? "USD" }).format(work.internalReviewThresholdMinor / 100) },
           { label: "Versions sent", value: String(issuances.length), helperText: issuances.length ? `Latest revision ${Math.max(...issuances.map((item) => item.revision))}` : "Not issued yet" },
           { label: "Vendor service ticket", value: work.vendorServiceTicketNumber ?? "Not entered" },
           { label: "Vendor invoice", value: work.vendorInvoiceNumber ?? (invoiceLinks.map((item) => item.invoice.invoiceNumber).join(", ") || "Not entered"), helperText: invoiceLinks.length ? "Optional invoice reference linked below" : undefined, link: invoiceLinks.length === 1 ? { href: `/app/invoices/${invoiceLinks[0].invoice.id}`, label: "Open invoice reference" } : undefined },

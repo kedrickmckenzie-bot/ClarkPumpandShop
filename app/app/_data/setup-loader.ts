@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { coveredPmAssets, pmCoverageRule } from "@/lib/ops/pm-coverage";
 import "server-only";
 
@@ -300,7 +301,7 @@ function dateTime(value: string | undefined, timeZone = DEFAULT_OPERATIONS_TIME_
 }
 
 function money(value: number, currency = "USD") {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(value / 100);
+  return cachedNumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(value / 100);
 }
 
 function duration(seconds: number | undefined) {

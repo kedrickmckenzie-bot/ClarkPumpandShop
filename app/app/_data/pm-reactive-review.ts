@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { BreakdownViewModel, ProgramPageViewModel, TableRowViewModel, TrendViewModel } from "@/components/ops/data-contract";
 import type { Asset, OpsFixture, PmOccurrence, Store, WorkOrder } from "@/lib/ops/types";
 
@@ -40,7 +41,7 @@ export function buildPmReactiveReview(input: {
   const costs = fixture.costLines.filter((line) => line.organizationId === organizationId && reactiveById.has(line.workOrderId) && line.serviceDate >= from.slice(0, 10) && line.serviceDate <= through && line.amount.currency === "USD");
   const byMonth = new Map<string, number>();
   for (const line of costs) byMonth.set(line.serviceDate.slice(0, 7), (byMonth.get(line.serviceDate.slice(0, 7)) ?? 0) + line.amount.amountMinor);
-  const money = (minor: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(minor / 100);
+  const money = (minor: number) => cachedNumberFormat("en-US", { style: "currency", currency: "USD" }).format(minor / 100);
   const rate = (ids: Set<string>) => ids.size ? createdInPeriod.filter((work) => ids.has(work.assetId!)).length / (ids.size * 12) * 100 : 0;
   const workHref = (work: WorkOrder) => `/app/work-orders/${work.id}`;
   const returnHref = href({ evidence: undefined, cohort: undefined, month: undefined, view: "all" });

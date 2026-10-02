@@ -1,3 +1,4 @@
+import { cachedDateTimeFormat } from "@/lib/ops/intl-format-cache";
 import { readPrivateUpload } from "@/components/ops-public/server-file-store";
 import { deliverInspectionEmail } from "./compliance-delivery";
 import { deliverRoutineReminder } from "./routine-follow-ups";
@@ -149,7 +150,7 @@ export async function sendVendorStoreSweepEmail(input: {
 }) {
   const label = `Store ${input.store.storeNumber} · ${input.store.name}`;
   const neededBy = input.run.neededByAt
-    ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: input.store.timeZone }).format(new Date(input.run.neededByAt))
+    ? cachedDateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: input.store.timeZone }).format(new Date(input.run.neededByAt))
     : "the earliest job review date";
   const subject = `${input.organizationName} approved jobs · Store ${input.store.storeNumber}`;
   const jobs = input.workOrders.map((workOrder) => `${workOrder.number} — ${workOrder.problem}`);
@@ -293,7 +294,7 @@ function storeLabel(store: Store) {
 
 function formatWhen(value: string | undefined, timeZone?: string) {
   if (!value) return undefined;
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: timeZone || "America/New_York", timeZoneName: "short" }).format(new Date(value));
+  return cachedDateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: timeZone || "America/New_York", timeZoneName: "short" }).format(new Date(value));
 }
 
 function notificationCopy(eventKey: NotificationEventKey, message: OutboxDeliveryMessage, context: NotificationContext, work: NotificationWorkContext[]) {

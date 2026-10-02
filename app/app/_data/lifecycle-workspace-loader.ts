@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { buildDecisionContext } from "./decision-context";
 import { roleCanAccessProgramRoute } from "@/components/ops/role-policy";
 import { lifecyclePriceEvidence, priceLabel } from "@/lib/ops/lifecycle-price-evidence";
@@ -45,7 +46,7 @@ function hrefWithQuery(query: WorkspaceQuery, changes: Record<string, string | u
 
 function money(amountMinor: number | undefined, currency = "USD"): string {
   if (amountMinor === undefined) return "Not entered";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amountMinor / 100);
+  return cachedNumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amountMinor / 100);
 }
 
 function runway(months: number | undefined): string {

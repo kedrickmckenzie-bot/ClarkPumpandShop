@@ -1,3 +1,4 @@
+import { cachedDateTimeFormat, cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
 import { buildMaintenancePlan } from "@/lib/ops/maintenance-plan";
 import "server-only";
@@ -125,24 +126,24 @@ function driverDimensionLabel(dimension: TrendBreakdownId) {
 
 export type TrendAnalysisBuildResult = TrendAnalysisPageViewModel & { exportRows?: TrendExportRecord[] };
 
-const currency = new Intl.NumberFormat("en-US", {
+const currency = cachedNumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   maximumFractionDigits: 0,
 });
-const compactCurrency = new Intl.NumberFormat("en-US", {
+const compactCurrency = cachedNumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   notation: "compact",
   maximumFractionDigits: 1,
 });
-const integer = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-const shortMonthFormatter = new Intl.DateTimeFormat("en-US", {
+const integer = cachedNumberFormat("en-US", { maximumFractionDigits: 0 });
+const shortMonthFormatter = cachedDateTimeFormat("en-US", {
   month: "short",
   year: "numeric",
   timeZone: "UTC",
 });
-const longMonthFormatter = new Intl.DateTimeFormat("en-US", {
+const longMonthFormatter = cachedDateTimeFormat("en-US", {
   month: "long",
   year: "numeric",
   timeZone: "UTC",
@@ -155,7 +156,7 @@ const displayDateValueCache = new Map<string, string>();
 function localDateFormatter(timeZone: string) {
   const cached = localDateFormatterByTimeZone.get(timeZone);
   if (cached) return cached;
-  const formatter = new Intl.DateTimeFormat("en-US", {
+  const formatter = cachedDateTimeFormat("en-US", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -168,7 +169,7 @@ function localDateFormatter(timeZone: string) {
 function displayDateFormatter(timeZone: string) {
   const cached = displayDateFormatterByTimeZone.get(timeZone);
   if (cached) return cached;
-  const formatter = new Intl.DateTimeFormat("en-US", {
+  const formatter = cachedDateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -744,7 +745,7 @@ function additiveMetricHasData(metric: TrendMetricId, records: TrendSourceRecord
 
 function formatMetricBase(metric: TrendMetricId, value: number, compact = false, hasData = true, currencyCode = "USD") {
   if (!hasData && (metric === "vendor_response" || metric === "pm_completion" || metric === "linked_invoice")) return "No data";
-  if (metric === "recorded_cost" || metric === "linked_invoice") return currencyCode === "USD" ? compact ? compactMoney(value) : money(value) : new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode, notation: compact ? "compact" : "standard" }).format(value / 100);
+  if (metric === "recorded_cost" || metric === "linked_invoice") return currencyCode === "USD" ? compact ? compactMoney(value) : money(value) : cachedNumberFormat("en-US", { style: "currency", currency: currencyCode, notation: compact ? "compact" : "standard" }).format(value / 100);
   if (metric === "vendor_response") return `${value < 10 ? value.toFixed(1) : Math.round(value)} hr`;
   if (metric === "pm_completion") return `${Math.round(value)}%`;
   return integer.format(Math.round(value));

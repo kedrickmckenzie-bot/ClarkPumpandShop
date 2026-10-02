@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChangeBridge, SpendHeatmap, TrendStory } from "./trends-visuals";
@@ -169,7 +170,7 @@ function UpcomingWorkPlan({ model, savedViews }: { model: TrendAnalysisPageViewM
   const current = new URLSearchParams(model.canonicalQuery);
   const scenario = planningScenario(current, plan.estimateMinor);
   const currency = current.get("currency") ?? "USD";
-  const money = (minor: number) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(minor / 100);
+  const money = (minor: number) => cachedNumberFormat("en-US", { style: "currency", currency }).format(minor / 100);
   const context = new URLSearchParams();
   for (const key of ["store", "region"]) { const value = current.get(key); if (value) context.set(key, value); }
   const destination = (path: string, extra: Record<string, string> = {}) => { const query = new URLSearchParams(context); for (const [key, value] of Object.entries(extra)) query.set(key, value); return `${path}${query.size ? `?${query}` : ""}`; };

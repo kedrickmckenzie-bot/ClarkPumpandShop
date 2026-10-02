@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { invoiceReviewMessage } from "@/lib/product/invoice-review-copy";
@@ -7,7 +8,7 @@ import type { InvoiceQueuePage, InvoiceQueueView, InvoiceQueueRow } from "@/lib/
 import type { Money } from "@/lib/ops/types";
 import styles from "./invoice-queue-workspace.module.css";
 
-const money = (m: Money) => new Intl.NumberFormat("en-US", { style: "currency", currency: m.currency }).format(m.amountMinor / 100);
+const money = (m: Money) => cachedNumberFormat("en-US", { style: "currency", currency: m.currency }).format(m.amountMinor / 100);
 const titles = { all: "All invoices", review: "Needs review", flags: "Open review flags", exposure: "Amounts flagged" };
 export function InvoiceQueueWorkspace({ result, view = "all", page = 1, currency = "USD", search = "", scopeLabel, uploads, canReceive = false, canReadAccounting = false }: { uploads?:ReactNode; result: InvoiceQueuePage; view?: InvoiceQueueView; page?: number; currency?: string; search?: string; scopeLabel: string; canReceive?: boolean; canReadAccounting?: boolean }) {
   const href = (view: InvoiceQueueView, page = 1) => { const q = new URLSearchParams({ view }); if (search) q.set("q", search); if (currency !== "USD") q.set("currency", currency); if (page > 1) q.set("page", String(page)); return `/app/invoices?${q}#invoice-register`; };

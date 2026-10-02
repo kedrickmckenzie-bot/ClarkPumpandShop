@@ -1,3 +1,4 @@
+import { cachedDateTimeFormat, cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { pmStoreAllowed } from "@/lib/ops/pm-record-query";
 import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
@@ -662,7 +663,7 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
 }
 
 function localInputValue(value: string, timeZone: string) {
-  const values = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+  const values = Object.fromEntries(cachedDateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
     month: "2-digit",
@@ -696,7 +697,7 @@ export async function loadHeldWorkActionsModel(workOrderId: string): Promise<Hel
   const claimedVendor = hold?.claimedVendorId
     ? await repository.getVendor(session.organizationId, hold.claimedVendorId)
     : null;
-  const formatMoney = (amountMinor: number, currency: string) => new Intl.NumberFormat("en-US", {
+  const formatMoney = (amountMinor: number, currency: string) => cachedNumberFormat("en-US", {
     style: "currency",
     currency,
   }).format(amountMinor / 100);

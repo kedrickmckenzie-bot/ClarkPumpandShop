@@ -1,8 +1,9 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { OpsRepository, OrganizationScope } from "./repository";
 import { invoiceReporting } from "./invoice-reporting";
 
 export interface WorkCostPrompt { id:string; title:string; detail:string; action:string; href:string; }
-const money = (amountMinor:number,currency:string) => new Intl.NumberFormat("en-US",{style:"currency",currency}).format(amountMinor/100);
+const money = (amountMinor:number,currency:string) => cachedNumberFormat("en-US",{style:"currency",currency}).format(amountMinor/100);
 
 export async function loadWorkCostPrompts(repository:OpsRepository,scope:OrganizationScope,workId:string,now:string):Promise<WorkCostPrompt[]> {
   const work = await repository.getWorkOrderDetail(scope,workId);

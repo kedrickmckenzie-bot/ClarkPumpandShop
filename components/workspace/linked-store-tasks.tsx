@@ -4,6 +4,11 @@ import {taskIdentity,taskScope} from "@/lib/ops/store-tasks";
 import {taskRoles} from "@/lib/ops/store-task-types";
 import {OpsDomainError} from "@/lib/ops/errors";
 import styles from "./store-tasks.module.css";
+/** Same access rule as /app/tasks/new, so no one is offered a task form they cannot open. */
+export async function canCreateStoreTasks():Promise<boolean> {
+ const {session,repository:r,actor}=await getOpsRequestContext(taskRoles);
+ try{await taskIdentity(r,session.organizationId,actor.actorId!);return true;}catch(e){if(e instanceof OpsDomainError&&e.code==='FORBIDDEN')return false;throw e;}
+}
 export async function LinkedStoreTasks({kind,id,hideEmpty=false}:{kind:'work'|'visit'|'invoice'|'asset';id:string;hideEmpty?:boolean}) {
  const {session,repository:r,actor}=await getOpsRequestContext(taskRoles);
  let access;try{access=await taskIdentity(r,session.organizationId,actor.actorId!);}catch(e){if(e instanceof OpsDomainError&&e.code==='FORBIDDEN')return null;throw e;}

@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { OpsFixture } from "./types";
 
 export interface MaintenancePlan {
@@ -13,7 +14,7 @@ export interface MaintenancePlan {
 
 /** A work estimate inventory, not an invoice balance or a spending forecast. */
 export function buildMaintenancePlan(fixture: OpsFixture, organizationId: string, eligibleWorkIds: Set<string>, currency: string, requestedPage = 1): MaintenancePlan {
-  const money = new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 });
+  const money = cachedNumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 });
   const stores = new Map(fixture.stores.filter((store) => store.organizationId === organizationId).map((store) => [store.id, store]));
   const work = fixture.workOrders.filter((row) => row.organizationId === organizationId && eligibleWorkIds.has(row.id)
     && stores.has(row.storeId) && !["closed", "cancelled", "resolved", "completed_pending_review"].includes(row.status)
@@ -38,5 +39,5 @@ export function buildMaintenancePlan(fixture: OpsFixture, organizationId: string
 }
 
 function moneyFor(amount: { currency: string; amountMinor: number }) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: amount.currency, maximumFractionDigits: 0 }).format(amount.amountMinor / 100);
+  return cachedNumberFormat("en-US", { style: "currency", currency: amount.currency, maximumFractionDigits: 0 }).format(amount.amountMinor / 100);
 }

@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { OpsFixture, WorkOrder, Money } from "./types";
 import { selectLifecycleReplacementPrice } from "./lifecycle-price-selection";
 
@@ -5,7 +6,7 @@ export interface LifecycleQuoteEvidence {
   id: string; vendor: string; amount: string; scope: string; exclusions: string;
   timing: string; status: string; href: string;
 }
-export const priceLabel = (amount?: Money) => amount ? new Intl.NumberFormat("en-US", { style: "currency", currency: amount.currency }).format(amount.amountMinor / 100) : "Price needed";
+export const priceLabel = (amount?: Money) => amount ? cachedNumberFormat("en-US", { style: "currency", currency: amount.currency }).format(amount.amountMinor / 100) : "Price needed";
 
 /** An approval pins a proposal revision and amount. A newer quote or company benchmark cannot overwrite it. */
 export function lifecyclePriceEvidence(fixture: OpsFixture, work: WorkOrder | undefined, planning?: Money) {

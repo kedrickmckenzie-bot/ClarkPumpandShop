@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { VendorCoverageEditor } from "./vendor-coverage-editor";
 import { VendorServiceReport } from "@/components/workspace/vendor-service-report";
 import { LiveSearchForm } from "./live-search-form";
@@ -33,7 +34,7 @@ import type {
 import type { DemoEdition } from "./data-contract";
 import styles from "./vendor-performance-workspace.module.css";
 
-const currency = new Intl.NumberFormat("en-US", {
+const currency = cachedNumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   maximumFractionDigits: 0,

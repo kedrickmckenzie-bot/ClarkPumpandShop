@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { OperatorSession, PaginationViewModel, ProgramPageViewModel, TableRowViewModel, Tone } from "@/components/ops/data-contract";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { PM_SCHEDULE_STATES, pmScheduleScope, validatePmScheduleQuery, type PmScheduleQuery, type PmScheduleState } from "@/lib/ops/pm-schedule-query";
@@ -29,7 +30,7 @@ export function parsePmScheduleQuery(params: Query, asOf: string): PmScheduleQue
   validatePmScheduleQuery(query); return query;
 }
 const rate = (work: number, equipment: number) => equipment ? work / (equipment * 12) * 100 : 0;
-const money = (minor: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(minor / 100);
+const money = (minor: number) => cachedNumberFormat("en-US", { style: "currency", currency: "USD" }).format(minor / 100);
 
 function analysisContext(result: PmAnalysisPage, params: Query, asOf: string) {
   const period = pmAnalysisPeriod(asOf), stats = result.summary;

@@ -1,3 +1,4 @@
+import { cachedDateTimeFormat } from "@/lib/ops/intl-format-cache";
 import { OpsDomainError } from "./errors";
 
 const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
@@ -13,7 +14,7 @@ type DateParts = {
 function zonedParts(instant: number, timeZone: string): DateParts {
   let formatter: Intl.DateTimeFormat;
   try {
-    formatter = new Intl.DateTimeFormat("en-US", {
+    formatter = cachedDateTimeFormat("en-US", {
       timeZone,
       year: "numeric",
       month: "2-digit",
@@ -90,7 +91,7 @@ export function localDateTimeToIso(value: string, timeZone: string): string {
 }
 
 export function formatInTimeZone(value: string, timeZone: string) {
-  return new Intl.DateTimeFormat("en-US", {
+  return cachedDateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
     month: "short",

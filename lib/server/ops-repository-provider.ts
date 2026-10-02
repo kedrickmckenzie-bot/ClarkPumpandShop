@@ -202,8 +202,8 @@ export async function getServerOpsFixtureSnapshot(
   if (process.env.DATABASE_URL?.trim()) {
     const pool = await getPostgresPool();
     await getServerOpsRepository();
-    const { loadOpsFixtureSnapshotFromPostgres } = await import("@/lib/ops/postgres-snapshot");
-    return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, getServerOpsReportingAsOf());
+    const [{ loadOpsFixtureSnapshotFromPostgres }, { readCachedPostgresSnapshot }] = await Promise.all([import("@/lib/ops/postgres-snapshot"), import("@/lib/ops/postgres-snapshot-cache")]);
+    return readCachedPostgresSnapshot(pool, organizationId, "full", getServerOpsReportingAsOf(), (asOf) => loadOpsFixtureSnapshotFromPostgres(pool, organizationId, asOf));
   }
 
   if (isRenderNodeRuntime()) {
@@ -240,8 +240,8 @@ export async function getServerOpsTrendsFixtureSnapshot(
   if (process.env.DATABASE_URL?.trim()) {
     const pool = await getPostgresPool();
     await getServerOpsRepository();
-    const { loadOpsFixtureSnapshotFromPostgres } = await import("@/lib/ops/postgres-snapshot");
-    return loadOpsFixtureSnapshotFromPostgres(pool, organizationId, getServerOpsReportingAsOf(), { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] });
+    const [{ loadOpsFixtureSnapshotFromPostgres }, { readCachedPostgresSnapshot }] = await Promise.all([import("@/lib/ops/postgres-snapshot"), import("@/lib/ops/postgres-snapshot-cache")]);
+    return readCachedPostgresSnapshot(pool, organizationId, "trends", getServerOpsReportingAsOf(), (asOf) => loadOpsFixtureSnapshotFromPostgres(pool, organizationId, asOf, { includedTables: TREND_SOURCE_TABLES, auditEventTypes: ["recording.coverage_attested"] }));
   }
   if (isRenderNodeRuntime() || shouldUseDevelopmentFixture()) return getServerOpsFixtureSnapshot(organizationId);
   const binding = await getD1BindingLazily();

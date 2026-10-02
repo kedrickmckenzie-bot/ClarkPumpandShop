@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import {OperatingProblems} from "@/components/workspace/operating-problems";
 import {roleCanAccessProgramRoute} from "@/components/ops/role-policy";
 import type { Metadata } from "next";
@@ -23,5 +24,5 @@ export default async function OverviewPage() {
   if(!roleCanAccessProgramRoute(session.role,"lifecycle"))return <ControlTower model={model} operatingSummary={operatingSummary} capitalSummary={invoiceAttention}/>;
   const capital=await repository.queryCapitalPlans(session,{start,months:12,currency:"USD"}),buckets=capital.buckets.filter(b=>validMonth(b.month));
   const amount=buckets.reduce((n,b)=>n+b.amountMinor,0),missing=buckets.reduce((n,b)=>n+b.missing,0),undated=capital.buckets.filter(b=>b.month==="undated"||b.month.length===4).reduce((n,b)=>n+b.count,0),unscheduled=capital.buckets.filter(b=>b.month==="undated"||b.month.length===4).reduce((n,b)=>n+b.amountMinor,0);
-  return <ControlTower model={model} operatingSummary={operatingSummary} capitalSummary={<>{invoiceAttention}<div className={`${styles.panel} ${styles.bar}`}><div><strong>Replacement planning · next 12 months</strong><p>{new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(amount/100)} USD scheduled · {missing} scheduled plans need a cost. {undated} plans without a month · {new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(unscheduled/100)} known cost across all years</p></div><Link href={`/app/lifecycle?view=capital&start=${start}&months=12&currency=USD`}>View capital forecast →</Link></div></>} />;
+  return <ControlTower model={model} operatingSummary={operatingSummary} capitalSummary={<>{invoiceAttention}<div className={`${styles.panel} ${styles.bar}`}><div><strong>Replacement planning · next 12 months</strong><p>{cachedNumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(amount/100)} USD scheduled · {missing} scheduled plans need a cost. {undated} plans without a month · {cachedNumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(unscheduled/100)} known cost across all years</p></div><Link href={`/app/lifecycle?view=capital&start=${start}&months=12&currency=USD`}>View capital forecast →</Link></div></>} />;
 }

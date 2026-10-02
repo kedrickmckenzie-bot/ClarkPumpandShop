@@ -1,3 +1,4 @@
+import { cachedDateTimeFormat, cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { BreakdownViewModel, TrendViewModel } from "@/components/ops/data-contract";
 import type { DashboardActivitySummary, DashboardBreakdownKind, DashboardBreakdownPage, DashboardWindow } from "@/lib/ops/dashboard-query";
 import type { OpsRepository, OrganizationScope } from "@/lib/ops/repository";
@@ -19,7 +20,7 @@ function href(path: string, values: Record<string, string>) { return `${path}?${
 
 /** Totals and shares describe the complete cohort; visible rows are only a short ranking. */
 export function presentDashboardCharts(pages: DashboardChartPages, activity: DashboardActivitySummary, window: DashboardWindow, organizationName?: string) {
-  const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: window.currency, maximumFractionDigits: 0 }).format(value / 100);
+  const money = (value: number) => cachedNumberFormat("en-US", { style: "currency", currency: window.currency, maximumFractionDigits: 0 }).format(value / 100);
   const costContext = { costFrom: window.costFrom, costTo: window.costTo, currency: window.currency };
   const categories = { ...pages.cost_category, items: [...pages.cost_category.items] };
   if (activity.unclassifiedWork && !categories.items.some(row => row.id === "unclassified")) categories.items.push({ id: "unclassified", label: "unclassified", value: activity.unclassifiedCostMinor });
@@ -38,7 +39,7 @@ export function presentDashboardCharts(pages: DashboardChartPages, activity: Das
   const finalMonth = new Date(window.costTo + "T00:00:00Z");
   const months = Array.from({ length: 12 }, (_, index) => new Date(Date.UTC(finalMonth.getUTCFullYear(), finalMonth.getUTCMonth() - 11 + index, 1)).toISOString().slice(0, 7));
   const monthly = new Map(pages.cost_month.items.map(row => [row.id, row.value]));
-  const monthLabel = (key: string) => new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${key}-01T00:00:00Z`));
+  const monthLabel = (key: string) => cachedDateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${key}-01T00:00:00Z`));
   const trend: TrendViewModel = {
     id: "recorded-cost-trend", title: "Recorded work cost — last 12 months",
     description: `Entered work costs by service month. ${monthLabel(months.at(-1)!)} runs through ${formatOperationsDate(window.costTo)}.`,

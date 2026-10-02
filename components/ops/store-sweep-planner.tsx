@@ -1,10 +1,11 @@
+import { cachedDateTimeFormat } from "@/lib/ops/intl-format-cache";
 import { SearchPicker } from "./search-picker";
 import Link from "next/link";
 import type { StoreSweepPlannerModel } from "@/app/app/_data/store-sweep-loader";
 import styles from "./store-sweep-planner.module.css";
 
 function localInputValue(value: Date, timeZone: string) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+  const parts = Object.fromEntries(cachedDateTimeFormat("en-CA", {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   }).formatToParts(value).map((part) => [part.type, part.value]));
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;

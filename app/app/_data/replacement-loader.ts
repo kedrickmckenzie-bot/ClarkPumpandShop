@@ -1,4 +1,5 @@
 import "server-only";
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 
 import type { AssetReplacementIntelligenceViewModel, ReplacementProfileManagerViewModel, ReplacementProfileViewModel, WorkOrderReplacementIntelligenceViewModel } from "@/components/ops/replacement-intelligence-panel";
 import { roleCan } from "@/components/ops/role-policy";
@@ -8,7 +9,7 @@ import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 
-function money(amountMinor: number | undefined, currency = "USD") { return amountMinor === undefined ? "Not available" : new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amountMinor / 100); }
+function money(amountMinor: number | undefined, currency = "USD") { return amountMinor === undefined ? "Not available" : cachedNumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amountMinor / 100); }
 function date(value: string | undefined) { return value ? formatOperationsDate(value) : "No effective date"; }
 function sentence(value: string) { return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 

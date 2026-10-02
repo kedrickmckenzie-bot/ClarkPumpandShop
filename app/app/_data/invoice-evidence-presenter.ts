@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { ListPageViewModel, OperatorSession } from "@/components/ops/data-contract";
 import type { InvoiceEvidencePage, InvoiceEvidenceQuery } from "@/lib/ops/invoice-evidence-query";
 import { formatOperationsDate } from "@/lib/ops/local-time";
@@ -11,7 +12,7 @@ export function invoiceEvidenceParameters(query:OperatorSearchParameters):Invoic
 }
 export function buildInvoiceEvidenceModel(result:InvoiceEvidencePage,session:OperatorSession,query:OperatorSearchParameters):ListPageViewModel {
   const values=Object.fromEntries(Object.entries(query).flatMap(([k,v])=>first(v)?[[k,first(v)!]]:[])),q=invoiceEvidenceParameters(query);
-  const money=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:q.currency}).format(n/100);
+  const money=(n:number)=>cachedNumberFormat("en-US",{style:"currency",currency:q.currency}).format(n/100);
   const page=Math.floor((q.offset??0)/25)+1,pageCount=Math.max(1,Math.ceil(result.totalCount/25));
   const href=(changes:Record<string,string|undefined>)=>`/app/invoices?${new URLSearchParams(Object.entries({...values,...changes}).filter((p):p is [string,string]=>Boolean(p[1])))}`;
   return {state:{kind:"ready"},rowNavigation:"record",page:{title:"Linked invoice amount",eyebrow:"Invoice source records",description:"Confirmed matches behind the selected spending total.",scopeLabel:[session.scopeLabel,...(result.filterLabels??[]),q.category,q.path?.join(" › ")].filter(Boolean).join(" · "),periodLabel:[q.from?`From ${formatOperationsDate(q.from)}`:undefined,q.to?`Through ${formatOperationsDate(q.to)}`:undefined,q.costMonth,q.currency].filter(Boolean).join(" · "),secondaryAction:{label:"All invoices",href:"/app/invoices"}},

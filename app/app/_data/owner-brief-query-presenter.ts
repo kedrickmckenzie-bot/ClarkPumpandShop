@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { OperatorSession, ListPageViewModel } from "@/components/ops/data-contract";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { BRIEF_SOURCES, briefSourceHref, validateBriefPeriod, type BriefSource, type BriefSourceRow, type BriefSummary } from "@/lib/ops/owner-brief-query";
@@ -6,7 +7,7 @@ import { compactStoreLabel } from "@/lib/product/store-label";
 import type { OperatorSearchParameters } from "./operator-presenter";
 
 const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
-export const briefMoney = (minor: number, currency: string) => new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(minor / 100);
+export const briefMoney = (minor: number, currency: string) => cachedNumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(minor / 100);
 export const briefRecordHref = (row: BriefSourceRow) => {
   const routes = { work_order: "work-orders", invoice: "invoices", asset: "equipment", request: "requests", store: "stores", pm_occurrence: "pm/occurrences" };
   return row.entityType && row.entityId ? `/app/${routes[row.entityType]}/${encodeURIComponent(row.entityId)}` : undefined;

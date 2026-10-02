@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { localDateTimeToIso } from "@/lib/ops/local-date-time";
 import { operationsTimeZone } from "@/lib/ops/local-time";
 import { REPORT_PROBLEM_MAX_LENGTH } from "@/lib/ops/report-limits";
@@ -421,7 +422,7 @@ function displayPriority(value: string): "Routine" | "Urgent" | "Emergency" {
 }
 
 function estimateMoneyLabel(amountMinor: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100);
+  return cachedNumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100);
 }
 
 function responseStatus(view: OpsServiceAuthorizationView): ServiceAuthorizationView["status"] {

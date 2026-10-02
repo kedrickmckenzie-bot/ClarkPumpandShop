@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import Link from "next/link";
 import type { OpsFixture, ServiceRun } from "@/lib/ops/types";
 import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
@@ -5,7 +6,7 @@ import styles from "./service-run-workspace.module.css";
 
 function formatDate(value: string, timeZone?: string) { return formatOperationsDateTime(value, timeZone, { year: false }); }
 function formatDateOnly(value: string, timeZone?: string) { return formatOperationsDate(value, timeZone); }
-function money(amountMinor: number, currency: string) { return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amountMinor / 100); }
+function money(amountMinor: number, currency: string) { return cachedNumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amountMinor / 100); }
 
 export function ServiceRunListWorkspace({ fixture, runs }: { fixture: OpsFixture; runs: ServiceRun[] }) {
   const proposed = runs.filter((run) => ["recommended", "proposed", "countered"].includes(run.status)).length;

@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE } from "./warranty-review";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import { roleCanAccessDetailRoute, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
@@ -46,7 +47,7 @@ export interface WorkReviewModel {
 }
 
 const words = (value: string) => value.replaceAll("_", " ");
-const money = (value: Money) => new Intl.NumberFormat("en-US", { style: "currency", currency: value.currency }).format(value.amountMinor / 100);
+const money = (value: Money) => cachedNumberFormat("en-US", { style: "currency", currency: value.currency }).format(value.amountMinor / 100);
 export function recordedMoneyLabel(values: readonly Money[]): string {
   if (!values.length) return "No amounts recorded";
   const totals = new Map<string, number>();

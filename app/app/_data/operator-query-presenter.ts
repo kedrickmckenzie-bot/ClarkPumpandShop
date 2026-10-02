@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { workStatusLabel } from "@/lib/product/work-status-label";
 import { workWarrantyMarkers } from "@/lib/ops/work-warranty-review";
 import "server-only";
@@ -32,7 +33,7 @@ import type { OperatorListRoute, OperatorSearchParameters } from "./operator-pre
 
 const PAGE_SIZE = 25;
 type QueryListRoute = "requests" | "work-orders" | "visits" | "stores" | "vendors";
-const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+const currency = cachedNumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -44,7 +45,7 @@ function queryCurrency(query: OperatorSearchParameters) {
 }
 
 function money(minor: number, currencyCode = "USD") {
-  return (currencyCode === "USD" ? currency : new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode, maximumFractionDigits: 0 })).format(minor / 100);
+  return (currencyCode === "USD" ? currency : cachedNumberFormat("en-US", { style: "currency", currency: currencyCode, maximumFractionDigits: 0 })).format(minor / 100);
 }
 
 function sentence(value: string) {
@@ -512,6 +513,9 @@ function searchAssetRow(row: AssetSearchRow): TableRowViewModel {
   ] };
 }
 
+/** The people lookup returns at most this many names; reaching it means more may match. */
+const PEOPLE_SEARCH_LIMIT = 20;
+
 export async function buildQuerySearchModel(repository: OpsRepository, session: OperatorSession, query: OperatorSearchParameters): Promise<SearchPageViewModel> {
   const raw = first(query.q)?.trim() ?? "";
   if (!raw) return { state: { kind: "empty", title: "Search the whole operation", message: "Try a store number, address, work order, vendor specialty, equipment tag, serial number, technician, or request." }, page: commonPage(session, "Search the workspace", "One search · Your full scope", "Find a store, work order, request, vendor, visit, or piece of equipment without deciding which module to open first."), query: "", placeholder: "Store, address, work order, vendor, equipment, or serial number", resultSummary: "Enter a search term", groups: [] };
@@ -522,21 +526,31 @@ export async function buildQuerySearchModel(repository: OpsRepository, session: 
   const withAlias = async <T extends { id: string }>(search: (term: string) => Promise<{ items: T[]; totalCount?: number; nextCursor?: string }>) => {
     const [main, extra] = await Promise.all([search(raw), alias ? search(alias) : Promise.resolve(undefined)]);
     if (!extra) return main;
-    const items = [...main.items, ...extra.items.filter((row) => !main.items.some((item) => item.id === row.id))].slice(0, 8);
-    return { items, totalCount: main.totalCount === undefined || extra.totalCount === undefined ? undefined : Math.max(items.length, main.totalCount + extra.totalCount), nextCursor: main.nextCursor ?? extra.nextCursor };
+    const union = [...main.items, ...extra.items.filter((row) => !main.items.some((item) => item.id === row.id))];
+    const items = union.slice(0, 8);
+    // Both searches can match the same record, so their totals cannot be added.
+    // The exact count is known only when both result sets fit on this page.
+    if (!main.nextCursor && !extra.nextCursor) return { items, totalCount: union.length, nextCursor: union.length > items.length ? "more" : undefined };
+    approximate.add(search);
+    return { items, totalCount: Math.max(union.length, main.totalCount ?? 0, extra.totalCount ?? 0), nextCursor: main.nextCursor ?? extra.nextCursor ?? "more" };
   };
+  const approximate = new Set<unknown>();
+  const searchWork = (term: string) => repository.listWorkOrders(scope, { search: term, limit: 8 });
+  const searchEquipment = (term: string) => repository.searchAssets(scope, term, { limit: 8 });
+  const searchRequests = (term: string) => repository.listRequests(scope, { search: term, limit: 8 });
   const canSeeInvoices = roleCanAccessListRoute(session.role, "invoices");
   const canSeePeople = ["executive", "facilities", "regional"].includes(session.role);
   const [stores, work, vendors, assets, visits, requests, invoices, people] = await Promise.all([
     repository.searchStores(scope, raw, { limit: 8 }),
-    withAlias((term) => repository.listWorkOrders(scope, { search: term, limit: 8 })),
+    withAlias(searchWork),
     repository.listVendors(scope, raw, { limit: 8 }),
-    session.demoEdition === "accountability" ? Promise.resolve(none) : withAlias((term) => repository.searchAssets(scope, term, { limit: 8 })),
+    session.demoEdition === "accountability" ? Promise.resolve(none) : withAlias(searchEquipment),
     session.role === "finance" ? Promise.resolve(none) : repository.listVisits(scope, { search: raw, limit: 8 }),
-    session.demoEdition === "accountability" || session.role === "finance" ? Promise.resolve(none) : withAlias((term) => repository.listRequests(scope, { search: term, limit: 8 })),
+    session.demoEdition === "accountability" || session.role === "finance" ? Promise.resolve(none) : withAlias(searchRequests),
     canSeeInvoices ? repository.listInvoiceQueue(scope, { view: "all", search: raw, currency: "USD", limit: 8, offset: 0 }) : Promise.resolve(undefined),
     canSeePeople && raw.length >= 2 ? repository.listComplianceOwners(session.organizationId, raw) : Promise.resolve([]),
   ]);
+  const estimated = new Set([approximate.has(searchWork) ? "work" : "", approximate.has(searchEquipment) ? "equipment" : "", approximate.has(searchRequests) ? "requests" : "", people.length >= PEOPLE_SEARCH_LIMIT ? "people" : ""]);
   const totals: Record<string, number | undefined> = { stores: stores.totalCount, work: work.totalCount, vendors: vendors.totalCount, equipment: assets.totalCount, visits: visits.totalCount, requests: requests.totalCount, invoices: invoices?.totalCount, people: people.length };
   const groups = [
     { id: "stores", label: "Stores", rows: stores.items.map(storeRow), resultCount: stores.totalCount ?? stores.items.length, columns: columns.stores, hasMore: Boolean(stores.nextCursor), moreLink: { href: `/app/stores?${new URLSearchParams({ q: raw })}`, label: "Review matching stores" } },
@@ -549,11 +563,11 @@ export async function buildQuerySearchModel(repository: OpsRepository, session: 
       { key: "result", value: row.number, secondary: [row.vendorName, row.storeCount > 1 ? `${row.storeCount} stores` : row.storeNumber ? `Store ${row.storeNumber}` : undefined].filter(Boolean).join(" · ") },
       { key: "context", value: money(row.amount.amountMinor, row.amount.currency), secondary: row.openFlags ? `${row.openFlags} open ${row.openFlags === 1 ? "flag" : "flags"}` : undefined },
     ] })), resultCount: invoices.totalCount, columns: [{ key: "result", label: "Invoice" }, { key: "context", label: "Total" }], hasMore: invoices.nextOffset !== undefined, moreLink: { href: `/app/invoices?${new URLSearchParams({ q: raw })}`, label: "Review matching invoices" } }] : []),
-    ...(people.length ? [{ id: "people", label: "People", rows: people.slice(0, 8).map((person): TableRowViewModel => ({ id: person.id, label: person.name, href: `/app/action-center?${new URLSearchParams({ lane: "all", q: person.name })}`, cells: [
+    ...(people.length ? [{ id: "people", label: "People", rows: people.map((person): TableRowViewModel => ({ id: person.id, label: person.name, href: `/app/action-center?${new URLSearchParams({ lane: "all", q: person.name })}`, cells: [
       { key: "result", value: person.name, secondary: "Team member · open items they handle" },
-    ] })), resultCount: people.length, columns: [{ key: "result", label: "Person" }], hasMore: false, moreLink: { href: `/app/action-center?${new URLSearchParams({ lane: "all", q: raw })}`, label: "Search the review queue" } }] : []),
+    ] })), resultCount: people.length, columns: [{ key: "result", label: "Person" }], hasMore: people.length >= PEOPLE_SEARCH_LIMIT, moreLink: { href: `/app/action-center?${new URLSearchParams({ lane: "all", q: raw })}`, label: "Search the review queue" } }] : []),
   ].filter((group) => group.rows.length > 0).map((group) => ({ ...group,
-    countIsLowerBound: group.hasMore && totals[group.id] === undefined,
+    countIsLowerBound: (group.hasMore && totals[group.id] === undefined) || estimated.has(group.id),
     rows: group.rows.map((row) => ({ ...row, cells: row.cells.map((cell) => cell.link && !roleCanOpenOperatorHref(session.role, cell.link.href) ? { ...cell, link: undefined } : cell) })) }));
   const total = groups.reduce((sum, group) => sum + group.resultCount, 0);
   return { state: total ? { kind: "ready" } : { kind: "empty", title: "No matches found", message: `Nothing in your access scope matched “${raw}”. Try a shorter name, number, address, or equipment term.` }, page: commonPage(session, `Search results for “${raw}”`, "One search · Your full scope", "Review matching records and their connected information."), query: raw, placeholder: "Store, address, work order, vendor, equipment, or serial number", resultSummary: `${groups.some((group) => group.countIsLowerBound) ? "At least " : ""}${total} match${total === 1 ? "" : "es"} across ${groups.length} record type${groups.length === 1 ? "" : "s"}`, groups };

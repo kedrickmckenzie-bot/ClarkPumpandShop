@@ -1,4 +1,5 @@
 import "server-only";
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { invoiceWork, unmatchedCostGroups } from "@/lib/ops/invoice-cost-recording";
 import { notFound } from "next/navigation";
 import { roleCanAccessDetailRoute } from "@/components/ops/role-policy";
@@ -25,7 +26,7 @@ export async function loadInvoiceRecord(id: string, params: Record<string, strin
   const repository=await getServerOpsRepository();
   const costWork=canDecide ? await invoiceWork(repository,session.organizationId,id) : null;
   const detail=costWork ? await repository.getWorkOrderDetail(session,costWork.id) : null;
-  const costChoices=detail && result.invoice.vendorId ? unmatchedCostGroups(detail.costs,result.invoice.vendorId).map(g=>({value:g.id,label:`Use invoice instead of ${new Intl.NumberFormat("en-US",{style:"currency",currency:g.currency}).format(g.amountMinor/100)} · ${g.rows[0].description}`})) : [];
+  const costChoices=detail && result.invoice.vendorId ? unmatchedCostGroups(detail.costs,result.invoice.vendorId).map(g=>({value:g.id,label:`Use invoice instead of ${cachedNumberFormat("en-US",{style:"currency",currency:g.currency}).format(g.amountMinor/100)} · ${g.rows[0].description}`})) : [];
   const visitTimes=await invoiceVisitTimes(repository,session,id,result.invoice.vendorId);
   // What a reviewer needs before opening tabs: the store and work behind the bill, and why it is flagged.
   const [matched,openFlags]=await Promise.all([

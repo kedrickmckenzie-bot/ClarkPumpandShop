@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { OpsRepository } from "./repository";
 import type { OpsId, ServiceRunResponseKind } from "./types";
 
@@ -38,7 +39,7 @@ export interface ServiceRunPublicView {
 }
 
 function money(amountMinor: number, currency: string) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100);
+  return cachedNumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100);
 }
 
 export async function buildServiceRunPublicView(input: {

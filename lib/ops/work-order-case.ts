@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type {
   CostLine,
   FollowUp,
@@ -428,7 +429,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     event.workOrderId === workOrder.id || Boolean(event.invoiceLineId && allocatedLineIds.has(event.invoiceLineId))
   )).reduce((sum, event) => sum + event.amount.amountMinor, 0);
   const hasOpenReview = attributedOpenExceptions.length > 0 || otherLineOpenExceptions.length > 0 || invoiceLevelOpenExceptions.length > 0 || invoiceStatuses.has("unmatched") || invoiceStatuses.has("suggested");
-  const moneyLabel = (amountMinor: number, currency = linkedCurrency) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100);
+  const moneyLabel = (amountMinor: number, currency = linkedCurrency) => cachedNumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100);
   const financialFacts = hasInvoices ? [
     { label: "Linked invoice allocation", value: moneyLabel(linkedAmountMinor) },
     { label: "Open attributed dispute", value: moneyLabel(attributedDisputedMinor) },

@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { DashboardPageViewModel, OperatorSession } from "@/components/ops/data-contract";
 import type { DashboardActivitySummary, DashboardWindow } from "@/lib/ops/dashboard-query";
 import type { DashboardContext } from "@/lib/ops/dashboard-context";
@@ -29,7 +30,7 @@ export function presentQueryDashboard(data: DashboardQueryInputs, session: Opera
   // Multiple currencies stay separate. A single USD total keeps the familiar concise display.
   const estimates = data.lifecycle.replacementEstimates;
   const replacementEstimateLabel = estimates.length === 1 && estimates[0].currency === "USD"
-    ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(estimates[0].amountMinor / 100)
+    ? cachedNumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(estimates[0].amountMinor / 100)
     : estimates.length ? estimates.map(amount => `${amount.currency} ${priceLabel(amount)}`).join(" · ") : "No estimates entered";
   return presentDashboard({
     activity: data.activity, costFrom: window.costFrom, costTo: window.costTo,

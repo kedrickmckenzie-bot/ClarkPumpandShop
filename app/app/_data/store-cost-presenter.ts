@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { ListPageViewModel, OperatorSession } from "@/components/ops/data-contract";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { rollingYearStart, validateDashboardWindow } from "@/lib/ops/dashboard-query";
@@ -25,7 +26,7 @@ export async function buildStoreCostRanking(repository: OpsRepository, session: 
   const scope = { organizationId: session.organizationId, regionIds: session.regionIds, storeIds: session.storeIds };
   const result = await repository.listDashboardBreakdown(scope, window, { kind: "cost_store", limit: PAGE_SIZE, offset: (currentPage - 1) * PAGE_SIZE, search });
   const totalPages = Math.max(1, Math.ceil(result.totalCount / PAGE_SIZE));
-  const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: window.currency, maximumFractionDigits: 0 }).format(value / 100);
+  const money = (value: number) => cachedNumberFormat("en-US", { style: "currency", currency: window.currency, maximumFractionDigits: 0 }).format(value / 100);
   const costHref = (store?: string) => `/app/work-orders?${new URLSearchParams({ hasCost: "true", costFrom: window.costFrom, costTo: window.costTo, currency: window.currency, ...(store ? { store } : {}) })}`;
   return {
     state: result.items.length || result.totalCount === 0 && !search ? { kind: "ready" } : { kind: "empty", title: result.totalCount ? "This page has no stores" : "No matching stores", message: result.totalCount ? "Open the first page of the ranking." : "Try another store name or number." },

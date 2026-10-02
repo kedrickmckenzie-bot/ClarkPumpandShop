@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { ActionItemViewModel, BreakdownViewModel, DashboardPageViewModel, MetricViewModel, OperatorSession, Tone, TrendViewModel } from "@/components/ops/data-contract";
 import type { DashboardActivitySummary } from "@/lib/ops/dashboard-query";
 
@@ -23,7 +24,7 @@ export interface DashboardPresentationData {
   invoiceSpotlight?: DashboardPageViewModel["spotlight"];
 }
 
-function money(amountMinor: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amountMinor / 100); }
+function money(amountMinor: number) { return cachedNumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amountMinor / 100); }
 
 export function presentDashboardJourney(activity: DashboardActivitySummary, followUpCount: number): DashboardPageViewModel["journey"] {
   return [

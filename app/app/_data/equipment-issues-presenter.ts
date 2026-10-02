@@ -1,3 +1,4 @@
+import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { DashboardWindow } from "@/lib/ops/dashboard-query";
 import { rollingYearStart, validateDashboardWindow } from "@/lib/ops/dashboard-query";
 import { equipmentIssueHistoryHref, equipmentIssueRankingHref, type EquipmentIssuePage } from "@/lib/ops/equipment-issues";
@@ -7,7 +8,7 @@ import type { DashboardPageViewModel, ListPageViewModel, OperatorSession } from 
 import { compactStoreLabel } from "@/lib/product/store-label";
 
 export function presentEquipmentIssues(result: EquipmentIssuePage, window: DashboardWindow, session: OperatorSession): NonNullable<DashboardPageViewModel["equipmentIssues"]> {
-  const money = (amount: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: window.currency, minimumFractionDigits: 2 }).format(amount / 100);
+  const money = (amount: number) => cachedNumberFormat("en-US", { style: "currency", currency: window.currency, minimumFractionDigits: 2 }).format(amount / 100);
   return { period: `${formatOperationsDate(window.costFrom)}–${formatOperationsDate(window.costTo)}`, currency: window.currency,
     totalCount: result.totalCount, href: equipmentIssueRankingHref(window),
     rows: result.items.map(row => ({ ...row, storeLabel: compactStoreLabel(row.storeLabel, session.organizationName),
