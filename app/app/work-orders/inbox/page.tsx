@@ -1,3 +1,4 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { FileLinks } from "@/components/workspace/file-links";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -7,7 +8,7 @@ import styles from "@/components/workspace/communications.module.css";
 
 export default async function EmailInbox({searchParams}:{searchParams:Promise<{offset?:string;view?:string;notice?:string;error?:string}>}) {
   const session = await loadOperatorSession();
-  if (session.role !== "facilities" || session.storeIds !== undefined || session.regionIds !== undefined) notFound();
+  if (session.role !== "facilities" || session.storeIds !== undefined || session.regionIds !== undefined || sessionHasNoStores(session)) notFound();
   const query = await searchParams;
   const offset = Math.floor(Math.max(0,Math.min(100000,Number(query.offset) || 0)));
   const repository = await getServerOpsRepository();

@@ -1,9 +1,10 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import { loadOperatorSession } from "@/app/app/_data/operator-loader";
 import styles from "./communications.module.css";
 export async function RoutineFollowUpSettings() {
   const session = await loadOperatorSession();
-  if (session.role !== "facilities" || session.storeIds !== undefined || session.regionIds !== undefined) return null;
+  if (session.role !== "facilities" || session.storeIds !== undefined || session.regionIds !== undefined || sessionHasNoStores(session)) return null;
   const repository = await getServerOpsRepository();
   const policy = await repository.getFollowUpPreference(session.organizationId);
   return <section className={`${styles.workspace} ${styles.panel} ${styles.compact}`}>

@@ -1,3 +1,4 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { updateVendorCoverage } from "@/lib/ops/vendor-coverage";
 import { getQuoteUploadStore } from "@/components/ops-public/server-file-store";
 import {
@@ -27,7 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const operation = formText(formData, "operation", { required: true, max: 40 });
 
     if (operation === "update_coverage") {
-      if (context.session.storeIds !== undefined || context.session.regionIds !== undefined) throw new OpsDomainError("FORBIDDEN", "Company access is required to edit coverage.");
+      if (context.session.storeIds !== undefined || context.session.regionIds !== undefined || sessionHasNoStores(context.session)) throw new OpsDomainError("FORBIDDEN", "Company access is required to edit coverage.");
       const values = formData.getAll("coverageScopeIds");
       if (values.some(value => typeof value !== "string")) throw new OpsDomainError("VALIDATION", "Choose valid coverage areas.");
       await updateVendorCoverage({ repository: context.repository }, {

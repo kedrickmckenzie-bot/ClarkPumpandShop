@@ -63,7 +63,7 @@ import type {
   VendorRepeatVisitEvidenceRow,
   VendorVisitEvidenceRow,
 } from "@/components/ops/vendor-performance-contract";
-import { roleCan, roleCanAccessProgramRoute, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
+import { sessionHasNoStores, roleCan, roleCanAccessProgramRoute, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
 import type {
   ApprovalRequiredRole,
   Asset,
@@ -500,6 +500,8 @@ function scopeFixture(fixture: OpsFixture, session: OperatorSession): ScopedFixt
     const permittedStoreIds = new Set(session.storeIds);
     stores = stores.filter((store) => permittedStoreIds.has(store.id));
   }
+  // Same rule as every other screen: no confirmed stores means none, never all.
+  if (sessionHasNoStores(session)) stores = [];
 
   const storeIds = new Set(stores.map((store) => store.id));
   return {

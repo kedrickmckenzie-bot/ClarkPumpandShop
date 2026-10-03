@@ -2,7 +2,7 @@ import "server-only";
 import { cachedDateTimeFormat } from "@/lib/ops/intl-format-cache";
 
 import { notFound } from "next/navigation";
-import { roleCan } from "@/components/ops/role-policy";
+import { sessionHasNoStores, roleCan } from "@/components/ops/role-policy";
 import { heldWorkVendorEligibility } from "@/lib/ops/held-work-policy";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
@@ -70,6 +70,7 @@ export async function loadStoreSweepPlanner(requestedStoreId?: string, requested
     if (store.organizationId !== session.organizationId) return false;
     if (session.storeIds !== undefined && !session.storeIds.includes(store.id)) return false;
     if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
+    if (sessionHasNoStores(session)) return false;
     return true;
   });
   const activeHolds = (fixture.workOrderVisitHolds ?? []).filter((hold) => hold.organizationId === session.organizationId && hold.status === "active");

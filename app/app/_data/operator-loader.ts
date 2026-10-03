@@ -32,7 +32,7 @@ import type {
   OperatorSession,
   RequestWorkLinkPageViewModel,
 } from "@/components/ops/data-contract";
-import {
+import { sessionHasNoStores,
   roleCan,
   roleCanAccessDetailRoute,
   roleCanAccessListRoute,
@@ -356,7 +356,7 @@ export async function loadApprovedWorkPortfolioModel(searchParams: OperatorSearc
 export async function loadApprovalPolicyWorkspaceModel() {
   const session = await getRequestOperatorSession();
   requireCapability(session, "administer");
-  if (session.storeIds !== undefined || session.regionIds !== undefined) notFound();
+  if (session.storeIds !== undefined || session.regionIds !== undefined || sessionHasNoStores(session)) notFound();
   const context = await sessionAndFixture();
   return enforceDetailLinkPolicy(
     buildApprovalPolicyWorkspaceModel(context.fixture, context.session),
@@ -792,7 +792,8 @@ export async function loadRequestWorkLinkModel(
   const store = await repository.getStore(session.organizationId, request.storeId);
   if (!store
     || (session.storeIds !== undefined && !session.storeIds.includes(store.id))
-    || (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId)))) notFound();
+    || (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId)))
+    || sessionHasNoStores(session)) notFound();
   const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
   const q = first(searchParams.q)?.trim() ?? "";
   const requestedPage = Number(first(searchParams.page) ?? "1");
@@ -867,7 +868,7 @@ export async function loadBriefRecordsModel(query: OperatorSearchParameters) {
 export async function loadJobHealthModel() {
   const session = await getRequestOperatorSession();
   const role = session.role;
-  if (role !== "executive" && role !== "facilities" || session.storeIds !== undefined || session.regionIds !== undefined) return null;
+  if (role !== "executive" && role !== "facilities" || session.storeIds !== undefined || session.regionIds !== undefined || sessionHasNoStores(session)) return null;
   const repository = await getServerOpsRepository();
   const [runs, outboxCounts] = await Promise.all([
     repository.listRecentJobRuns(session.organizationId, 20),

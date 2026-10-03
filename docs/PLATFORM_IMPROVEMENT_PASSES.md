@@ -34,6 +34,11 @@ Rules that bound this work: one canonical work order for internal, outside and b
       - A regional or store-manager session with neither list sees nothing unless sign-in set `companywide: true` from an actual organization grant (preview and authenticated resolvers). A missing list therefore never widens access, and the existing fail-closed Trends test still holds.
     - Screens covered: Equipment, verification, workflow tasks, equipment review, work review, lifecycle, warranty finance, setup, Trends, approved work and the request context.
     - New tests sign in the field manager through the real membership resolver as companywide, one region, one store and no stores (no stores cannot sign in; an explicitly empty scope shows nothing). The companywide and one-store cases fail on the previous code.
+  - **Consistency follow-up after the second Codex review:**
+    - The finding: the main Equipment screen (`scopeFixture`) and held work (`visibleStoresForSession`) still treated missing lists as "all stores".
+    - The fix: both now apply `sessionHasNoStores`. So do the remaining store checks: the store page gate, store sweep, service run, work-order detail, and the companywide-only checks (invoice intake, inbox, vendor relationship, email intake, routine follow-ups and settings, action items). An unconfirmed session can no longer count as companywide anywhere.
+    - New test builds the real Equipment screen and held-work portfolio for regional and store-manager sessions with no lists and no companywide marker: 0 equipment, 0 held items and verification unavailable. The confirmed field manager still sees everything. The test fails on the previous code.
+    - Evidence: db:seed, typecheck, lint, unit 198 files / 1,235 tests, workflow 66 tests, Sites and Render builds pass. Render/PostgreSQL link crawl: 1,047 pages across all seven roles, no errors.
   - **Known gaps for later items:** in the demo data Maria Santos has one open job and Devon Price none (IM-03 assignment will let managers give them work). A technician's job page still shows the "Prices & costs" tab and an action button that leads to the job's task history (recording results arrives in IM-05).
   - **Evidence:**
     - db:seed, typecheck, lint, unit 197 files / 1,230 tests, workflow 66 tests, Sites and Render builds pass.

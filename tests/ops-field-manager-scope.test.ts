@@ -89,4 +89,23 @@ describe("field manager sees exactly the stores the grants allow on every screen
     expect(sessionHasNoStores({ role: "regional", companywide: true })).toBe(false);
     expect(sessionHasNoStores({ role: "facilities" })).toBe(false);
   });
+  it("Equipment and held work agree with every other screen when store lists are missing and companywide was not confirmed", async () => {
+    const { buildProgramModel } = await import("@/app/app/_data/operator-presenter");
+    const { buildApprovedWorkPortfolio } = await import("@/app/app/_data/approved-work-presenter");
+    const { fixture, session } = await fieldManagerSession([{ scopeKind: "organization", scopeId: NORTHLINE_ORGANIZATION_ID }]);
+    const equipment = (who: OperatorSession) => Number(buildProgramModel(fixture, who, "equipment", {}).metrics.find((metric) => metric.id === "assets")!.value);
+    const held = (who: OperatorSession) => buildApprovedWorkPortfolio(fixture, who).totalItems;
+    // Confirmed companywide: everything, matching the facilities manager.
+    expect(equipment(session)).toBe(fixture.assets.length);
+    expect(held(session)).toBeGreaterThan(0);
+    // Missing lists without the companywide marker: nothing, on the actual screens too.
+    for (const unconfirmed of [{ ...session, companywide: undefined }, { ...session, role: "store_manager" as const, persona: undefined, companywide: undefined }]) {
+      expect(sessionHasNoStores(unconfirmed)).toBe(true);
+      expect(equipment(unconfirmed)).toBe(0);
+      expect(held(unconfirmed)).toBe(0);
+      const verificationOn = fixture.workOrders.find((row) => fixture.workflowTasks.some((task) => task.workOrderId === row.id))!;
+      const { buildWorkOrderVerificationModel } = await import("@/app/app/_data/work-order-verification-presenter");
+      expect(buildWorkOrderVerificationModel(fixture, unconfirmed, verificationOn.id).available).toBe(false);
+    }
+  });
 });

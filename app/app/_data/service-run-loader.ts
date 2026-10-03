@@ -1,4 +1,5 @@
 import "server-only";
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 
 import { notFound } from "next/navigation";
 import { NORTHLINE_DEMO_ENTRY_TOKENS } from "@/lib/ops/fixtures";
@@ -15,6 +16,7 @@ export async function loadServiceRunWorkspace(serviceRunId?: string) {
     if (!store) return false;
     if (session.storeIds !== undefined && !session.storeIds.includes(store.id)) return false;
     if (session.regionIds !== undefined && (!store.regionId || !session.regionIds.includes(store.regionId))) return false;
+    if (sessionHasNoStores(session)) return false;
     return true;
   };
   const runs = fixture.serviceRuns.filter((run) => {

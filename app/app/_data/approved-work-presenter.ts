@@ -2,7 +2,7 @@ import { matchesWorkStage } from "@/lib/ops/dashboard-cohorts";
 import "server-only";
 
 import type { OperatorSession } from "@/components/ops/data-contract";
-import { roleCan, roleCanAccessListRoute } from "@/components/ops/role-policy";
+import { sessionHasNoStores, roleCan, roleCanAccessListRoute } from "@/components/ops/role-policy";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { blockingVendorComplianceIssue } from "@/lib/ops/held-work-policy";
 import type { Asset, OpsFixture, ServiceAppointment, Store, WorkOrder, WorkOrderVisitHold } from "@/lib/ops/types";
@@ -237,9 +237,9 @@ function visibleStoresForSession(fixture: OpsFixture, session: OperatorSession) 
   if (session.storeIds !== undefined) {
     const storeIds = new Set(session.storeIds);
     stores = stores.filter((store) => storeIds.has(store.id));
-  } else if (session.role === "store_manager") {
-    stores = [];
   }
+  // Same rule as every other screen: no confirmed stores means none, never all.
+  if (sessionHasNoStores(session)) stores = [];
   return stores;
 }
 

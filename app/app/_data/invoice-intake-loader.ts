@@ -1,4 +1,5 @@
 import "server-only";
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { invoiceExtractionSchema } from "@/lib/ops/invoice-extraction";
 import { notFound,redirect } from "next/navigation";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
@@ -9,7 +10,7 @@ export async function loadInvoiceIntake(params: Record<string, string | string[]
   const first = (v: string | string[] | undefined) => Array.isArray(v) ? v[0] : v;
   const session = await loadOperatorSession();
   const writable = session.accessMode === "preview" || Boolean(session.permissions?.length) && session.permissions!.every(p => ["ops:*", "ops:write", "ops:read_write", "ops:store_manage"].includes(p));
-  if (!writable || !["executive", "facilities", "finance"].includes(session.role) || session.storeIds !== undefined || session.regionIds !== undefined) notFound();
+  if (!writable || !["executive", "facilities", "finance"].includes(session.role) || session.storeIds !== undefined || session.regionIds !== undefined || sessionHasNoStores(session)) notFound();
   const repository = await getServerOpsRepository(), org = session.organizationId;
   const grants=session.membershipId?await repository.listScopeGrantsForMembership(org,session.membershipId):[];
   if(!grants.some(g=>g.scopeKind==="organization"&&g.scopeId===org&&["ops:*","ops:write","ops:read_write"].includes(g.permission)))notFound();

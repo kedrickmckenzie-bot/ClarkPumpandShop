@@ -1,3 +1,4 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import {
   completeFollowUp,
   OpsDomainError,
@@ -27,7 +28,7 @@ async function assertExceptionInScope(
     storeId = (await context.repository.getWorkOrder(context.session.organizationId, exception.workOrderId))?.storeId;
   }
   if (storeId) return assertStoreInSessionScope(context.session, storeId);
-  if (context.session.storeIds !== undefined || context.session.regionIds !== undefined) {
+  if (context.session.storeIds !== undefined || context.session.regionIds !== undefined || sessionHasNoStores(context.session)) {
     throw new OpsDomainError("FORBIDDEN", "This review item's location is outside your assigned operating scope.");
   }
 }

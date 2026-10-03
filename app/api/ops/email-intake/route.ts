@@ -1,3 +1,4 @@
+import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { getOpsRequestContext, formText, opsApiError } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 import { receiveEmail, resolveEmail } from "@/lib/ops/email-intake";
@@ -7,7 +8,7 @@ import { storeEmailFiles } from "@/lib/server/email-intake-ingress";
 export async function POST(request: Request) {
   try {
     const context = await getOpsRequestContext(["facilities"],"create_request",request,true);
-    if (context.session.storeIds !== undefined || context.session.regionIds !== undefined) throw new OpsDomainError("FORBIDDEN","Companywide inbox access is required.");
+    if (context.session.storeIds !== undefined || context.session.regionIds !== undefined || sessionHasNoStores(context.session)) throw new OpsDomainError("FORBIDDEN","Companywide inbox access is required.");
     const form = await request.formData();
     const org = context.session.organizationId;
     if (form.get("emailId")) {
