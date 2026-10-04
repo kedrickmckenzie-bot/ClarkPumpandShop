@@ -25,6 +25,11 @@ Claude reviewed `5d14fa3` (checks, PostgreSQL concurrency tests and a full brows
   - Workflow tests: 68. Sites and Render builds pass.
   - Browser on a Render build with PostgreSQL, at 1440 px and 390 px: schedule → saved note; take job → need parts → manager Mark ready (deadline kept at Oct 7, 2 PM) → fixed → "Done: check the work". No sideways scroll and no page errors.
   - Link crawl: 1,066 pages across all seven roles, no errors.
+- **Codex follow-up on `287ae17` (two P2 findings, fixed):**
+  - Owners and read-only roles opened Dispatch but its job links went to the technician job page, which rejects them. Their links now go to the full work order, and they don't see the Mark ready shortcut.
+  - Checked-in work showed "Ready to work". List rows now say "Work started". The job page says "Onsite now" only when there is an active visit.
+  - Two new tests fail on the previous code and pass now.
+  - Evidence: all required checks pass (unit 1,388; workflow 68; both builds). In the browser, the executive opens a job from Dispatch and lands on the work order; after a technician checks in, the job page shows "Onsite now" and the list shows "Work started".
 - **Still open:** P4–P7 are not built. The independent acceptance gates listed in `docs/internal-dispatch/ACCEPTANCE.md` remain open. The demo still has two technicians.
 
 ### P1–P3 review publication — October 4, 2026

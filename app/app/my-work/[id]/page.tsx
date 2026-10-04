@@ -70,6 +70,8 @@ export default async function InternalJob({ params }: { params: Promise<{ id: st
   // What the technician is waiting for after flagging a problem, in their words.
   const waitingFor = ({ parts: "to get the parts", help: "to arrange help", cannot_today: "to pick a new time", vendor: "to choose an outside vendor" } as Record<string, string>)[results[0]?.blocker ?? ""];
   const status = work.status === "waiting_on_parts" && !terminal ? "Waiting on parts"
+    : active ? "Onsite now"
+    : work.status === "in_progress" && !resultBlocked ? "Work started"
     : resultBlocked && !manager && waitingFor ? `Waiting on manager ${waitingFor}`
     : plainNextAction(work.nextAction);
   const urgent = ["urgent", "emergency"].includes(work.priority);

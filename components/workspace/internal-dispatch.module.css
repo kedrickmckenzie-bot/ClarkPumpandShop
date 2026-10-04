@@ -119,3 +119,4 @@
 }
 .workspace button.linkButton { background: none; border: 0; color: #2457d6; padding: 0; min-height: 0; text-decoration: underline; text-underline-offset: 3px; }
 .jobBody ul.historyList { padding-left: 0; } .jobBody .historyList li { margin: 0; }
+.badgeActive { background: #e6eeff; color: #1e3f9a; }

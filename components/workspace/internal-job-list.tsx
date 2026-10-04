@@ -10,6 +10,8 @@ import { InternalAssignmentFields } from "./internal-assignment-fields";
 import styles from "./internal-dispatch.module.css";
 
 const finished = ["completed_pending_review", "resolved", "closed", "cancelled"];
+// Only these roles can open the focused job page; owners and read-only roles use the full work order.
+const jobPageRoles = ["technician", "facilities", "regional"];
 const notStartable = ["draft", "awaiting_approval", "in_progress", "waiting_on_parts", "waiting_on_vendor", ...finished];
 
 /** One short status a technician or manager can act on. */
@@ -20,6 +22,8 @@ export function jobStatus(row: WorkOrderListRow) {
   if (row.hasOpenFollowUp) return { text: plainNextAction(row.nextAction), tone: "wait" as const };
   if (row.visitHoldPosture) return { text: "Next visit is fine", tone: "calm" as const };
   if (row.inspectionId) return { text: plainNextAction(row.nextAction), tone: "calm" as const };
+  // Started work is not "ready": a check-in moved it on. "Onsite" needs live visit evidence, which a list row doesn't carry.
+  if (row.status === "in_progress") return { text: "Work started", tone: "active" as const };
   if (row.internalTarget === "pool") return { text: "Needs a technician", tone: "calm" as const };
   if (row.internalTarget === "awaiting_allocation") return { text: "Manager to assign", tone: "calm" as const };
   return { text: "Ready to work", tone: "calm" as const };
@@ -41,9 +45,10 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
   const mine = row.internalMembershipId === session.membershipId;
   const ready = !row.inspectionId && !row.hasOpenFollowUp && !notStartable.includes(row.status);
   const status = jobStatus(row);
+  const jobPage = jobPageRoles.includes(session.role);
   const jobHref = row.inspectionId
     ? `/app/compliance/${encodeURIComponent(row.inspectionId)}`
-    : `/app/my-work/${encodeURIComponent(row.id)}`;
+    : jobPage ? `/app/my-work/${encodeURIComponent(row.id)}` : `/app/work-orders/${encodeURIComponent(row.id)}?view=service`;
   const dispatchAction = `/api/ops/work-orders/${encodeURIComponent(row.id)}/internal-dispatch`;
   const canSchedule = !row.inspectionId && (!technician || mine) && roleCan(session, "schedule_internal_work") && !finished.includes(row.status);
   const scheduleHref = `/app/dispatch/schedule/${encodeURIComponent(row.id)}?returnTo=${encodeURIComponent(returnTo)}${week ? `&day=${encodeURIComponent(week)}` : ""}`;
@@ -51,7 +56,7 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
   const canReturn = technician && mine && ready && roleCan(session, "return_internal_work");
   const canAssign = !technician && ready && roleCan(session, "assign_internal_work");
   const urgent = ["urgent", "emergency"].includes(row.priority);
-  const toneClass = { wait: styles.badgeWait, done: styles.badgeDone, calm: styles.badgeCalm }[status.tone];
+  const toneClass = { wait: styles.badgeWait, done: styles.badgeDone, calm: styles.badgeCalm, active: styles.badgeActive }[status.tone];
 
   return <li className={styles.jobRow}>
     <div className={styles.jobMain}>
@@ -75,7 +80,7 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
         <button type="submit" name="action" value="claim">Take job</button>
       </RecordForm> : null}
       {technician && mine && !row.inspectionId ? <Link className={`${styles.btn} ${styles.btnPrimary}`} href={jobHref}>Open job</Link> : null}
-      {!technician && needsManagerReview(row) ? <Link className={`${styles.btn} ${styles.btnPrimary}`} href={`${jobHref}#next-step`}>{row.status === "waiting_on_parts" ? "Mark ready" : "Decide next step"}</Link> : null}
+      {!technician && jobPage && needsManagerReview(row) ? <Link className={`${styles.btn} ${styles.btnPrimary}`} href={`${jobHref}#next-step`}>{row.status === "waiting_on_parts" ? "Mark ready" : "Decide next step"}</Link> : null}
       {canSchedule ? <Link className={`${styles.btn} ${row.schedule || technician || needsManagerReview(row) ? styles.btnSecondary : styles.btnPrimary}`} href={scheduleHref}>{row.schedule ? "Change date" : "Schedule"}</Link> : null}
       {canAssign ? <details>
         <summary className={`${styles.btn} ${styles.btnSecondary}`}>{row.internalTarget === "person" ? "Reassign" : "Assign"}</summary>
@@ -97,7 +102,7 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
           <button type="submit" name="action" value="return">Give back to team</button>
         </RecordForm>
       </details> : null}
-      {!(technician && mine && !row.inspectionId) && !(!technician && needsManagerReview(row))
+      {!(technician && mine && !row.inspectionId) && !(!technician && jobPage && needsManagerReview(row))
         ? <Link className={`${styles.btn} ${styles.btnSecondary}`} href={jobHref}>{row.inspectionId ? "Open inspection" : "Open job"}</Link>
         : null}
     </div>

@@ -7,6 +7,8 @@ import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { buildShowcaseFixture } from "@/lib/ops/showcase-fixture";
 import { saveInternalSchedule } from "@/lib/ops/internal-scheduling";
 import { recordInternalWorkResult } from "@/lib/ops/internal-execution";
+import { checkInVisit } from "@/lib/ops/commands";
+import InternalJob from "@/app/app/my-work/[id]/page";
 import { dispatchActor,dispatchJob,dispatchNow,dispatchOrg,dispatchServices,dispatchTech } from "./helpers/internal-dispatch-regression";
 import type { OperatorSession } from "@/components/ops/data-contract";
 const mocks=vi.hoisted(()=>({session:vi.fn(),repository:vi.fn()}));
@@ -71,6 +73,22 @@ describe("P3 authenticated scheduling and rendered journeys",()=>{
   const html=renderToStaticMarkup(await renderInternalDispatch({},false));
   expect(html).not.toContain("Weekly store walk");
   expect(html).toContain("Not scheduled yet");
+ });
+ it("sends owners and read-only roles to the full work order, not the technician job page",async()=>{
+  const job=await dispatchJob(r,"person");session={...session,role:"executive",userId:"user-northline-executive",membershipId:"membership-northline-executive"};
+  const html=renderToStaticMarkup(await renderInternalDispatch({q:job.problem},false));
+  expect(html).toContain(`/app/work-orders/${job.id}?view=service`);
+  expect(html).not.toContain(`/app/my-work/${job.id}`);
+ });
+ it("labels checked-in work as started, and onsite only with an active visit",async()=>{
+  const job=await dispatchJob(r,"person");
+  await checkInVisit(dispatchServices(r),{organizationId:dispatchOrg,storeId:job.storeId,internalMembershipId:dispatchTech[0],technicianName:"Maria Santos",workOrderIds:[job.id],purpose:"Internal maintenance",channel:"internal_web",location:{result:"not_requested",capturedAt:dispatchNow},actor:dispatchActor(dispatchTech[0])});
+  expect((await r.getWorkOrder(dispatchOrg,job.id))?.status).toBe("in_progress");
+  const board=renderToStaticMarkup(await renderInternalDispatch({q:job.problem},false));
+  expect(board).toContain("Work started");expect(board.match(/>Ready to work</g)??[]).toHaveLength(1); // only the filter option
+  technician();
+  const page=renderToStaticMarkup(await InternalJob({params:Promise.resolve({id:job.id})}));
+  expect(page).toContain("Onsite now");expect(page).not.toContain(">Ready to work<");
  });
  it("retains reported completion in the manager's results-review queue",async()=>{
   const job=await dispatchJob(r,"person");
