@@ -20,9 +20,9 @@ export function InternalAssignmentFields({ storeId, defaultTarget = "pool", defa
   const loadManagers = useCallback((q: string, s: AbortSignal, c?: string) => loader(q, s, c, true), [loader]);
   return <div className={styles.assignmentFields}>
     <label>Who handles it?<select name="internalTarget" value={target} onChange={e => setTarget(e.target.value as InternalTarget)}>
-      <option value="pool">Available to the team</option><option value="person">Named technician</option><option value="awaiting_allocation">Manager to arrange it</option>
+      <option value="person">A specific technician</option><option value="pool">Any technician (first to take it)</option><option value="awaiting_allocation">A manager assigns it later</option>
     </select></label>
-    {target === "person" ? <SearchPicker key={`technician-${storeId}`} name="internalMembershipId" label="Technician" required load={loadPeople} defaultValue={defaultPerson?.id} defaultOption={defaultPerson ? { value: defaultPerson.id, label: defaultPerson.name } : undefined} emptyText="No eligible technician at this store." /> : null}
-    {target === "awaiting_allocation" ? <SearchPicker key={`manager-${storeId}`} name="managerId" label="Responsible manager" required load={loadManagers} defaultValue={defaultManager?.id} defaultOption={defaultManager ? { value: defaultManager.id, label: defaultManager.name } : undefined} emptyText="No eligible manager at this store." /> : <p>Manager: {defaultManager?.name ?? "Facilities coordination"}.{defaultManager ? " Facilities coordination takes responsibility if this manager no longer has store access." : ""}</p>}
+    {target === "person" ? <SearchPicker key={`technician-${storeId}`} name="internalMembershipId" label="Technician" required load={loadPeople} defaultValue={defaultPerson?.id} defaultOption={defaultPerson ? { value: defaultPerson.id, label: defaultPerson.name } : undefined} emptyText="No technician covers this store." /> : null}
+    {target === "awaiting_allocation" ? <SearchPicker key={`manager-${storeId}`} name="managerId" label="Manager" required load={loadManagers} defaultValue={defaultManager?.id} defaultOption={defaultManager ? { value: defaultManager.id, label: defaultManager.name } : undefined} emptyText="No manager covers this store." /> : <p className={styles.muted}>Manager: {defaultManager?.name ?? "Facilities coordination"}{defaultManager ? `. If ${defaultManager.name} loses access to this store, Facilities coordination takes over.` : ""}</p>}
   </div>;
 }

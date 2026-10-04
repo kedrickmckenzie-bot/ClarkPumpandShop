@@ -129,6 +129,8 @@ export interface WorkOrderListQuery extends PageRequest {
   /** Work whose current assignment is internal and names this team member. */
   internalMembershipId?: OpsId;
   internalOnly?: boolean;
+  /** Dispatch shows work for the maintenance team, not store-team checks assigned to store staff. */
+  maintenanceTeamOnly?: boolean;
   internalTarget?: "person" | "pool" | "awaiting_allocation";
   storeId?: OpsId;
   regionId?: OpsId;

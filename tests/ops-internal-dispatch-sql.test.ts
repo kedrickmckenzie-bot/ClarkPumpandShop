@@ -19,6 +19,9 @@ it("runs internal dispatch on the actual D1 SQLite adapter",async()=>{
     const statements=buildOpsSeedStatements(fixture);
     for(let i=0;i<statements.length;i+=100) await db.batch(statements.slice(i,i+100).map(s=>db.prepare(s.sql).bind(...s.params.map(v=>typeof v==="boolean"?Number(v):v??null))));
     await internalDispatchRegression(createOpsD1Repository(db as unknown as D1Database));
+    // Access checks pass inside each save and leave no marker rows behind.
+    const markers=await db.prepare("SELECT COUNT(*) AS n FROM ops_idempotency_keys WHERE command='dispatch.access_assertion'").first<{n:number}>();
+    expect(markers?.n).toBe(0);
   } finally {await runtime.dispose();}
 },120000);
 

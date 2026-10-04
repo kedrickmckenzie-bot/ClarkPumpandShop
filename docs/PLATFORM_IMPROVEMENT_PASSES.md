@@ -4,6 +4,29 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Internal dispatch review fixes and usability pass — October 4, 2026
+
+Claude reviewed `5d14fa3` (checks, PostgreSQL concurrency tests and a full browser loop) and, with the user's go-ahead, fixed the findings on `codex/internal-dispatch-p1`.
+
+- **Deadline bug fixed.** Flagging a blocker no longer shortens the repair deadline. "Mark ready" restores the deadline the job had before the blocker, and it stays overdue if it has already passed. Manager follow-up reviews are now due at 5 PM store time on the next weekday instead of exactly 24 hours later (no 2 AM deadlines). The overdue-readiness test now expects the original deadline.
+- **My work is never empty by mistake.** Today also lists "My jobs without a date", most urgent first.
+- **Dispatch shows team work only.** New `maintenanceTeamOnly` list filter (fixture and SQL) keeps store-team checks assigned to store staff off the board (22 rows → 6 in the demo; phone page about 15,500 px → about 3,000 px).
+- **Mark ready is easy to reach.** Dispatch rows waiting on parts show a "Mark ready" button. The work order's next step and the In-house team panel link straight to the job page's Next step.
+- **Plain wording and clear buttons.** New shared job list with one row per job: status badge, who, when, due, and buttons kept apart, one primary per row. New labels include:
+  - Needs a technician; Jobs to take; Give back to team.
+  - Pick a date / Change date; Missed: pick a new date; Done: check the work.
+  - Not scheduled yet; When you're nearby.
+
+  Raw time zones and "Target completion: Not set" are no longer shown. Saved next-step text such as "Begin internal work" is shown as "Ready to work". After scheduling, a "Saved" note appears and the board opens on that week. Search and filters fold away. The job page puts the problem first, shows a Next step box, and tells a waiting technician exactly what they are waiting for.
+- **Code cleanup.** Dispatch access-check marker rows are deleted inside the same transaction (verified on D1). Dense dispatch domain files were reformatted. `markInternalWorkReady` uses the shared version check. Unused `internal-agenda.tsx` was removed.
+- **Evidence:**
+  - db:seed, typecheck and lint pass.
+  - Unit tests: 1,386 passed, 85 skipped (PostgreSQL-only). The dispatch tests, run against PostgreSQL, pass 224.
+  - Workflow tests: 68. Sites and Render builds pass.
+  - Browser on a Render build with PostgreSQL, at 1440 px and 390 px: schedule → saved note; take job → need parts → manager Mark ready (deadline kept at Oct 7, 2 PM) → fixed → "Done: check the work". No sideways scroll and no page errors.
+  - Link crawl: 1,066 pages across all seven roles, no errors.
+- **Still open:** P4–P7 are not built. The independent acceptance gates listed in `docs/internal-dispatch/ACCEPTANCE.md` remain open. The demo still has two technicians.
+
 ### P1–P3 review publication — October 4, 2026
 
 The user authorized one combined commit and push of P1 assignment/team pickup, P2 technician execution, P3 live scheduling and their review corrections on `codex/internal-dispatch-p1` for Claude's independent review. [P1_P3_REVIEW.md](internal-dispatch/P1_P3_REVIEW.md) records the exact pre-P1 baseline `861630053e7fdff3686926047399f55a9be10495`, committed-diff instructions, AT06–AT48 scope and validation limits. The last application/test source passed seed/typecheck/lint, 1,454 unit tests, 68 workflow tests and both builds; this publication changes documentation only after that run. Local runtime/database/screenshot artifacts remain ignored. IDP-01, IDP-02 and IDP-03 retain their recorded open independent-acceptance gates. P4–P7 have not started. The publication request includes no merge, hosted reset, live delivery or deployment. Older no-commit/no-push checkpoints below remain historical evidence.

@@ -18,7 +18,7 @@ describe("P3 authenticated scheduling and rendered journeys",()=>{
  function technician(index=0){session={...session,role:"technician",userId:"user-northline-tech-"+(index+1),membershipId:dispatchTech[index]};}
  async function form(id:string,values:Record<string,string>={}){const w=(await r.getWorkOrder(dispatchOrg,id))!,a=(await r.getActiveAssignment(dispatchOrg,id))!;const f=new FormData();Object.entries({precision:"day",date:"2026-10-08",expectedVersion:String(w.version??0),expectedAssignmentId:a.id,expectedScheduleId:w.internalScheduleId??"",submissionKey:crypto.randomUUID(),returnTo:"/app/dispatch?week=2026-10-05",...values}).forEach(([k,v])=>f.set(k,v));return f;}
  async function post(id:string,data:FormData,origin="http://localhost"){return POST(new Request("http://localhost/api/ops/work-orders/"+id+"/internal-schedule",{method:"POST",headers:{Origin:origin},body:data}),{params:Promise.resolve({id})});}
- it("saves through the real handler and retains filters on the redirect",async()=>{const job=await dispatchJob(r,"person"),response=await post(job.id,await form(job.id));expect(response.status).toBe(303);expect(response.headers.get("location")).toContain("/app/dispatch?week=2026-10-05");expect((await r.getWorkOrder(dispatchOrg,job.id))?.internalScheduleId).toBeTruthy();});
+ it("saves through the real handler and retains filters on the redirect",async()=>{const job=await dispatchJob(r,"person"),response=await post(job.id,await form(job.id));expect(response.status).toBe(303);expect(response.headers.get("location")).toContain("/app/dispatch?week=2026-10-05");expect(response.headers.get("location")).toContain("saved="+encodeURIComponent(job.number));expect(decodeURIComponent(response.headers.get("location")!.replaceAll("+"," "))).toContain("savedWhen=Oct 8, 2026, any time");expect((await r.getWorkOrder(dispatchOrg,job.id))?.internalScheduleId).toBeTruthy();});
  it("enforces own flexible work and target/appointment authority server-side",async()=>{
   const job=await dispatchJob(r,"person");technician();
   expect((await post(job.id,await form(job.id))).status).toBe(303);
@@ -28,14 +28,14 @@ describe("P3 authenticated scheduling and rendered journeys",()=>{
  });
  it("rejects invalid dates, DST gaps and malformed versions without mutation",async()=>{const job=await dispatchJob(r,"person");for(const fields of [{date:"2026-02-30"},{expectedVersion:"NaN"},{precision:"appointment",localStart:"2026-03-08T02:30"},{precision:"appointment",localStart:"2026-11-01T01:30"}] as Record<string,string>[])expect((await post(job.id,await form(job.id,fields))).status).toBe(422);expect((await r.getWorkOrder(dispatchOrg,job.id))?.version).toBe(0);});
  it("rejects stale forms and cross-origin writes without redirecting externally",async()=>{const job=await dispatchJob(r,"person"),stale=await form(job.id);expect((await post(job.id,await form(job.id),"https://bad.example")).status).toBe(403);await post(job.id,await form(job.id));expect((await post(job.id,stale)).status).toBe(409);const response=await post(job.id,await form(job.id,{returnTo:"https://bad.example"}));expect(response.status).toBe(303);expect(response.headers.get("location")).not.toContain("bad.example");});
- it("uses manager names and live-save wording without exposing draft controls",async()=>{const job=await dispatchJob(r,"person"),html=renderToStaticMarkup(await SchedulePage({params:Promise.resolve({id:job.id}),searchParams:Promise.resolve({})}));expect(html).toContain("Saving changes the live schedule immediately.");expect(html).toContain("Target completion: ");expect(html).toContain("Not set");expect(html).toContain("Appointment");expect(html).not.toContain("Publish");});
- it("renders a focused technician flexible form with no appointment or target editing",async()=>{const job=await dispatchJob(r,"person");technician();const html=renderToStaticMarkup(await SchedulePage({params:Promise.resolve({id:job.id}),searchParams:Promise.resolve({})}));expect(html).toContain("Assigned to you");expect(html).not.toContain('value="appointment"');expect(html).not.toContain('name="localTarget"');expect(html).not.toContain('name="internalMembershipId"');});
+ it("uses manager names and live-save wording without exposing draft controls",async()=>{const job=await dispatchJob(r,"person"),html=renderToStaticMarkup(await SchedulePage({params:Promise.resolve({id:job.id}),searchParams:Promise.resolve({})}));expect(html).toContain("The technician sees the change as soon as you save.");expect(html).toContain("Set a finish-by date");expect(html).toContain("Not scheduled");expect(html).toContain("At a set time");expect(html).not.toContain("Publish");});
+ it("renders a focused technician flexible form with no appointment or target editing",async()=>{const job=await dispatchJob(r,"person");technician();const html=renderToStaticMarkup(await SchedulePage({params:Promise.resolve({id:job.id}),searchParams:Promise.resolve({})}));expect(html).toContain("Your manager sees the change as soon as you save.");expect(html).not.toContain('value="appointment"');expect(html).not.toContain('name="localTarget"');expect(html).not.toContain('name="internalMembershipId"');});
  it("shows week-only allocation once and keeps current and unfinished technician views available",async()=>{
   const job=await dispatchJob(r,"pool");await saveInternalSchedule(dispatchServices(r),{organizationId:dispatchOrg,workOrderId:job.id,actor:dispatchActor(),expectedVersion:0,expectedAssignmentId:job.initialAssignment!.id,expectedScheduleId:null,key:crypto.randomUUID(),precision:"week",date:"2026-10-05"});
-  const html=renderToStaticMarkup(await renderInternalDispatch({week:"2026-10-05",q:job.problem},false));expect(html).toContain("To allocate · Week only");expect((html.match(new RegExp(job.number,"g"))??[])).toHaveLength(1);expect(html).toContain("Week agenda (1)");
-  technician();const tech=renderToStaticMarkup(await renderInternalDispatch({},true));for(const tab of ["Today","Upcoming","All my jobs","Available team work"])expect(tech).toContain(tab);
+  const html=renderToStaticMarkup(await renderInternalDispatch({week:"2026-10-05",q:job.problem},false));expect(html).toContain("Sometime this week");expect(html).toContain("Any technician can take it");expect((html.match(new RegExp(job.number,"g"))??[])).toHaveLength(1);expect(html).toContain("Scheduled this week (1)");
+  technician();const tech=renderToStaticMarkup(await renderInternalDispatch({},true));for(const tab of ["Today","Coming up","All my jobs","Jobs to take"])expect(tech).toContain(tab);
  });
- it("does not reveal job titles through empty store scope",async()=>{const job=await dispatchJob(r,"person");session={...session,companywide:false,storeIds:[]};const html=renderToStaticMarkup(await SchedulePage({params:Promise.resolve({id:job.id}),searchParams:Promise.resolve({})}));expect(html).toContain("Job unavailable");expect(html).not.toContain(job.problem);});
+ it("does not reveal job titles through empty store scope",async()=>{const job=await dispatchJob(r,"person");session={...session,companywide:false,storeIds:[]};const html=renderToStaticMarkup(await SchedulePage({params:Promise.resolve({id:job.id}),searchParams:Promise.resolve({})}));expect(html).toContain("Job not available");expect(html).not.toContain(job.problem);});
  it("returns the current saved plan with a stale scheduling conflict",async()=>{
   const job=await dispatchJob(r,"person"),stale=await form(job.id);
   await post(job.id,await form(job.id,{date:"2026-10-09"}));
@@ -45,7 +45,7 @@ describe("P3 authenticated scheduling and rendered journeys",()=>{
  it("offers pool pickup before technician planning and hides unauthorized schedule controls",async()=>{
   const job=await dispatchJob(r,"pool");technician();
   const page=renderToStaticMarkup(await SchedulePage({params:Promise.resolve({id:job.id}),searchParams:Promise.resolve({})}));
-  expect(page).not.toContain("Save schedule");expect(page).not.toContain("Assigned to you.");
+  expect(page).not.toContain("Save date");expect(page).not.toContain("Your manager sees the change");
   const pool=renderToStaticMarkup(await renderInternalDispatch({view:"pool",q:job.problem},true));
   expect(pool).toContain("Take job");expect(pool).not.toContain("/app/dispatch/schedule/");
  });
@@ -56,15 +56,25 @@ describe("P3 authenticated scheduling and rendered journeys",()=>{
   technician();vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime("2026-10-04T04:30:00.000Z");
   try{
    const today=renderToStaticMarkup(await renderInternalDispatch({},true));
-   expect(today).toContain("Today (1)");expect(today).toContain("Needs replanning (1)");
-   expect(today.indexOf(current.number)).toBeLessThan(today.indexOf("Needs replanning (1)"));
-   expect(today.indexOf(old.number)).toBeGreaterThan(today.indexOf("Needs replanning (1)"));
-   const upcoming=renderToStaticMarkup(await renderInternalDispatch({view:"upcoming"},true));expect(upcoming).toContain("Upcoming (0)");expect(upcoming).not.toContain(current.number);
+   expect(today).toContain("Today (1)");expect(today).toContain("Missed: pick a new date (1)");
+   expect(today.indexOf(current.number)).toBeLessThan(today.indexOf("Missed: pick a new date (1)"));
+   expect(today.indexOf(old.number)).toBeGreaterThan(today.indexOf("Missed: pick a new date (1)"));
+   const upcoming=renderToStaticMarkup(await renderInternalDispatch({view:"upcoming"},true));expect(upcoming).toContain("Coming up (0)");expect(upcoming).not.toContain(current.number);
   }finally{vi.useRealTimers();}
+ });
+ it("shows a technician's jobs without a date on Today so the page is never empty by mistake",async()=>{
+  const job=await dispatchJob(r,"person");technician();
+  const today=renderToStaticMarkup(await renderInternalDispatch({},true));
+  expect(today).toContain("My jobs without a date");expect(today).toContain(job.number);
+ });
+ it("keeps store-team checks assigned to store staff off the dispatch board",async()=>{
+  const html=renderToStaticMarkup(await renderInternalDispatch({},false));
+  expect(html).not.toContain("Weekly store walk");
+  expect(html).toContain("Not scheduled yet");
  });
  it("retains reported completion in the manager's results-review queue",async()=>{
   const job=await dispatchJob(r,"person");
   await recordInternalWorkResult(dispatchServices(r),{organizationId:dispatchOrg,workOrderId:job.id,actor:dispatchActor(dispatchTech[0]),expectedVersion:0,expectedAssignmentId:job.initialAssignment!.id,key:crypto.randomUUID(),outcome:"completed"});
-  const html=renderToStaticMarkup(await renderInternalDispatch({q:job.problem},false));expect(html).toContain("Results to review (1)");expect(html).toContain(job.number);expect(html).toContain("Confirm work was completed as expected");
+  const html=renderToStaticMarkup(await renderInternalDispatch({q:job.problem},false));expect(html).toContain("Done: check the work (1)");expect(html).toContain(job.number);expect(html).toContain("Confirm the work is done");
  });
 });

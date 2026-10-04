@@ -49,3 +49,28 @@ export function scheduleLabel(plan?: ScheduleProjection) {
   const label = plan.precision === "week" ? "Week of " + formatOperationsDate(plan.week) : plan.precision === "appointment" && plan.startsAt ? formatOperationsDateTime(plan.startsAt, plan.entryZone) : formatOperationsDate(plan.day ?? plan.week) + " · Anytime";
   return label + (plan.tentative ? " · Tentative" : "");
 }
+
+/** Plain wording for a job's plan, used on lists and in the "Saved" note. */
+export function plainScheduleLabel(plan?: Pick<ScheduleProjection, "precision" | "week" | "day" | "startsAt" | "entryZone" | "tentative">) {
+  if (!plan || plan.precision === "removed") return "Not scheduled";
+  const label = plan.precision === "week"
+    ? `Week of ${formatOperationsDate(plan.week)}`
+    : plan.precision === "appointment" && plan.startsAt
+      ? formatOperationsDateTime(plan.startsAt, plan.entryZone)
+      : `${formatOperationsDate(plan.day ?? plan.week)}, any time`;
+  return plan.tentative ? `${label} (not confirmed)` : label;
+}
+
+const plainActions: Record<string, string> = {
+  "Begin internal work": "Ready to work",
+  "Arrange team pickup": "Needs a technician",
+  "Arrange internal work": "Manager to assign",
+  "Wait for a suitable internal visit": "Do on the next visit",
+  "Complete planned internal work": "Do the planned work",
+  "Arrange remaining internal work": "Plan the rest of the work",
+  "Confirm work was completed as expected": "Confirm the work is done",
+};
+/** Shows saved next-step wording for in-house work in everyday words. */
+export function plainNextAction(text: string) {
+  return plainActions[text] ?? text;
+}

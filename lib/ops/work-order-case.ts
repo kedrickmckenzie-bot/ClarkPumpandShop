@@ -314,7 +314,8 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     onsite_service: activeVisit
       ? { label: "Follow the onsite visit", href: `/app/visits/${activeVisit.id}` }
       : blockingTask
-        ? { label: blockingTask.title, href: `${base}?view=activity#workflow-tasks` }
+        // An in-house blocker (parts, help, can't get to it) is cleared on the job page's Next step.
+        ? { label: blockingTask.title, href: activeAssignment?.kind === "internal" && blockingTask.sourceFollowUpId ? `${base.replace("/app/work-orders/", "/app/my-work/")}#next-step` : `${base}?view=activity#workflow-tasks` }
         : { label: activeAssignment?.kind === "internal" ? "Start internal service" : "Open visit activity", href: `${base}?view=visits` },
     followup_closeout: closeoutFollowUps.length > 0
       ? { label: closeoutFollowUps[0].nextAction, href: `/app/action-center/${closeoutFollowUps[0].id}` }

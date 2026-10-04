@@ -136,18 +136,22 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     await expect(recordInternalWorkResult(svc(), { ...await current(job.id), outcome: "completed" })).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
-  it("resumes overdue parts work while preserving its elapsed action deadline", async () => {
+  it("resumes parts work with the original repair deadline, which stays overdue when it has passed", async () => {
     const job = await dispatchJob(r, "person");
+    const original = (await r.getWorkOrder(dispatchOrg, job.id))!.dueAt!;
     await recordInternalWorkResult(svc(), { ...await current(job.id), outcome: "parts_required", blocker: "parts", notes: "Replacement ordered" });
     const blocked = (await r.getWorkOrder(dispatchOrg, job.id))!;
-    const late = { ...svc(), clock: { now: () => "2026-10-06T18:00:00.000Z" } };
+    // The manager's parts review is due at 5 PM store time on the next weekday.
+    expect(new Date(blocked.dueAt!).getUTCHours()).toBe(21);
+    const late = { ...svc(), clock: { now: () => "2026-10-08T18:00:00.000Z" } };
     const input = { ...await current(job.id), actor: dispatchActor(dispatchManager), notes: "Replacement arrived after the review deadline" };
     await markInternalWorkReady(late, input);
     await markInternalWorkReady(late, input);
-    expect(await r.getWorkOrder(dispatchOrg, job.id)).toMatchObject({ status: "approved", nextAction: "Begin internal work", dueAt: blocked.dueAt, version: blocked.version! + 1 });
+    expect(await r.getWorkOrder(dispatchOrg, job.id)).toMatchObject({ status: "approved", nextAction: "Begin internal work", dueAt: original, version: blocked.version! + 1 });
     const ready = (await r.listWorkflowTasksForWorkOrder(dispatchOrg, job.id)).filter(task => task.status === "open");
     expect(ready).toHaveLength(1);
-    expect(ready[0]).toMatchObject({ title: "Begin internal work", dueAt: blocked.dueAt, createdAt: late.clock.now() });
+    // The parts delay never makes the repair due sooner than it was before.
+    expect(ready[0]).toMatchObject({ title: "Begin internal work", dueAt: original, createdAt: late.clock.now() });
     expect(ready[0].dueAt! < ready[0].createdAt).toBe(true);
   });
 

@@ -808,6 +808,7 @@ class SqlOpsRepository implements OpsRepository {
     if (query.internalOnly) clauses.push("a.kind = 'internal' AND a.status IN ('pending','issued','opened','accepted')");
     if (query.internalTarget) { clauses.push("a.kind = 'internal' AND COALESCE(a.internal_target, 'person') = ? AND a.status IN ('pending','issued','opened','accepted')"); params.push(query.internalTarget); }
     if (query.internalMembershipId) { clauses.push("a.kind = 'internal' AND a.internal_membership_id = ?"); params.push(query.internalMembershipId); }
+    if (query.maintenanceTeamOnly) clauses.push("a.kind = 'internal' AND (COALESCE(a.internal_target, 'person') <> 'person' OR EXISTS (SELECT 1 FROM ops_memberships tm WHERE tm.organization_id = w.organization_id AND tm.id = a.internal_membership_id AND tm.role = 'internal_technician'))");
     if (query.categoryKey === "unclassified") clauses.push("w.category_key IS NULL");
     else if (query.categoryKey) { clauses.push("w.category_key = ?"); params.push(query.categoryKey); }
     if (query.categoryPath?.length) {
@@ -1249,6 +1250,13 @@ class SqlOpsRepository implements OpsRepository {
   }
 
   async atomicWrite(statements: readonly OpsStatement[]) {
+    // Access checks for in-house dispatch insert a marker row that fails when access is gone.
+    // Once the batch passes those checks, remove the markers in the same transaction.
+    const access = statements.filter(statement => statement.dispatchAccess);
+    if (access.length) statements = [...statements, {
+      sql: `DELETE FROM ops_idempotency_keys WHERE organization_id = ? AND command = 'dispatch.access_assertion' AND key IN (${access.map(() => "?").join(", ")})`,
+      params: [access[0]!.dispatchAccess!.org, ...access.map(statement => statement.params[1])],
+    }];
     try {
       await this.driver.atomic(statements);
     } catch (error) {
