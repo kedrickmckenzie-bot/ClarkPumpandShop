@@ -1,3 +1,4 @@
+import { addDispatchDemo } from "./dispatch-demo-fixture";
 import { attestDemoRecordingCoverage } from "./recording-coverage";
 import type {
   Asset,
@@ -2116,7 +2117,7 @@ attestDemoRecordingCoverage(presentationFixture, "2024-08-01", NORTHLINE_AS_OF.s
 /** Fresh demo creation only: never apply this transformation to persisted records. */
 export function buildNorthlinePresentationFixture(anchorDate?: string): OpsFixture {
   const fixture = clone(presentationFixture);
-  if (!anchorDate) return fixture;
+  if (!anchorDate) return addDispatchDemo(fixture);
   const anchor = Date.parse(`${anchorDate.slice(0, 10)}T18:00:00.000Z`);
   if (!Number.isFinite(anchor)) throw new Error("Invalid demo anchor date");
   const offset = anchor - Date.parse(NORTHLINE_AS_OF);
@@ -2136,15 +2137,15 @@ export function buildNorthlinePresentationFixture(anchorDate?: string): OpsFixtu
     if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, shift(entry)]));
     return value;
   }
-  return shift(fixture) as OpsFixture;
+  return addDispatchDemo(shift(fixture) as OpsFixture);
 }
 
-export const NORTHLINE_PRESENTATION_FIXTURE: Readonly<OpsFixture> = presentationFixture;
+export const NORTHLINE_PRESENTATION_FIXTURE: Readonly<OpsFixture> = addDispatchDemo(clone(presentationFixture));
 
 export function buildSyntheticScaleFixture(storeCount = 65): OpsFixture {
   if (!Number.isInteger(storeCount) || storeCount < 1) throw new Error("storeCount must be a positive integer");
   const fixture = buildNorthlinePresentationFixture();
-  fixture.complianceSchedules=[]; fixture.inspections=[];
+  fixture.complianceSchedules=[]; fixture.inspections=[]; fixture.internalSchedules=[]; fixture.technicianProfiles=[]; fixture.workResults=[];
   const sourceStores = fixture.stores;
   fixture.stores = Array.from({ length: storeCount }, (_, index) => {
     const source = sourceStores[index % sourceStores.length];

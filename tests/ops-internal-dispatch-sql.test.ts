@@ -1,3 +1,4 @@
+import {dispatchBackfillRegression} from "./helpers/dispatch-backfill-regression";
 import {Miniflare} from "miniflare";
 import {readdirSync,readFileSync} from "node:fs";
 import {it,expect} from "vitest";
@@ -18,6 +19,7 @@ it("runs internal dispatch on the actual D1 SQLite adapter",async()=>{
     const fixture=buildShowcaseFixture(dispatchNow); fixture.outboxMessages=[];
     const statements=buildOpsSeedStatements(fixture);
     for(let i=0;i<statements.length;i+=100) await db.batch(statements.slice(i,i+100).map(s=>db.prepare(s.sql).bind(...s.params.map(v=>typeof v==="boolean"?Number(v):v??null))));
+    await dispatchBackfillRegression(createOpsD1Repository(db as unknown as D1Database));
     await internalDispatchRegression(createOpsD1Repository(db as unknown as D1Database));
     // Access checks pass inside each save and leave no marker rows behind.
     const markers=await db.prepare("SELECT COUNT(*) AS n FROM ops_idempotency_keys WHERE command='dispatch.access_assertion'").first<{n:number}>();
@@ -66,6 +68,6 @@ for(const storeCount of [1,65]) it(`pages internal dispatch with ${storeCount} s
     expect((await native.listWorkOrders({organizationId:org,storeIds:[]},{internalOnly:true})).items).toEqual([]);
     const people=await native.listDispatchPeople(scope,storeId,"",undefined,"technician");
     expect(people.items.map(p=>p.id)).toEqual((await memory.listDispatchPeople(scope,storeId,"",undefined,"technician")).items.map(p=>p.id));
-    expect(people.items).toHaveLength(2);
+    expect(people.items).toHaveLength(6);
   } finally {await runtime.dispose();}
 },120000);

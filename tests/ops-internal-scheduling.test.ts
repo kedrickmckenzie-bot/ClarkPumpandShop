@@ -40,8 +40,10 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
    if(adapter==="D1"){runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});const db=await runtime.getD1Database("DB");r=createOpsD1Repository(db as unknown as D1Database);execute=sql=>db.prepare(sql).run();}
    else{const url=new URL(postgresUrl!);if(!["localhost","127.0.0.1"].includes(url.hostname)||!/^\/dispatch_.*test$/.test(url.pathname))throw Error("Disposable localhost database required.");databaseName="dispatch_"+crypto.randomUUID().replaceAll("-","")+"_test";const admin=new Pool({connectionString:postgresUrl});try{await admin.query("CREATE DATABASE "+databaseName);}finally{await admin.end();}url.pathname="/"+databaseName;pool=new Pool({connectionString:url.toString(),max:8});r=createOpsPostgresRepository(pool);execute=sql=>pool!.query(sql);}
    for(const file of files.filter(f=>f<boundary))for(const sql of readFileSync(folder+"/"+file,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await execute(sql);
-   await seedOpsRepository(r,fixture,[],{omitStoreContacts:true});
+   const oldFixture=structuredClone(fixture); oldFixture.technicianProfiles=[];oldFixture.internalSchedules=[];for(const job of oldFixture.workOrders)delete job.internalScheduleId;
+   await seedOpsRepository(r,oldFixture,[],{omitStoreContacts:true});
    for(const file of files.filter(f=>f>=boundary))for(const sql of readFileSync(folder+"/"+file,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await execute(sql);
+   await seedOpsRepository(r,fixture);
   }
  },120000);
  afterAll(async()=>{await runtime?.dispose();await pool?.end();if(databaseName){const admin=new Pool({connectionString:postgresUrl});try{await admin.query("DROP DATABASE "+databaseName);}finally{await admin.end();}}});
@@ -264,7 +266,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   await transport.deliver({...messages.find(m=>JSON.parse(m.payloadJson).scheduleId===second.schedule.id)!,attemptCount:0});expect(sent).toHaveLength(1);
  });
  it("keeps filter choices tenant-scoped and empty-scope reads empty",async()=>{
-  expect((await r.getDispatchFilters({organizationId:dispatchOrg})).people.map(p=>p.id).sort()).toEqual([...dispatchTech].sort());
+  expect((await r.getDispatchFilters({organizationId:dispatchOrg})).people.map(p=>p.id).sort()).toEqual(Array.from({length:6},(_,i)=>`membership-northline-tech-${i+1}`).sort());
   expect(await r.getDispatchFilters({organizationId:dispatchOrg,storeIds:[]})).toEqual({people:[],regions:[]});
   expect((await r.listWorkOrders({organizationId:dispatchOrg,storeIds:[]},{internalOnly:true,scheduleView:"week",scheduleFrom:"2026-10-05",scheduleTo:"2026-10-11"})).items).toEqual([]);
  });

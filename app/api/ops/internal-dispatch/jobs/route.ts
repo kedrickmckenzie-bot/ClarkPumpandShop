@@ -10,10 +10,10 @@ export async function GET(request: Request) {
     const context = await getOpsRequestContext(["facilities", "regional", "executive"], undefined, request);
     const scope = await internalDispatchScope(context.repository, context.session);
     const query = new URL(request.url).searchParams;
-    const day = calendarDate(query.get("day") ?? "");
+    const day = query.get("day") ? calendarDate(query.get("day")!) : undefined;
     const bucket = query.get("bucket") ?? "";
     const page = await context.repository.listWorkOrders(scope, { internalOnly: true, maintenanceTeamOnly: true, statuses: dispatchStatuses,
-      scheduleView: "week", scheduleFrom: day, scheduleTo: day, search: (query.get("q") ?? "").slice(0, 120),
+      scheduleView: day ? "week" : undefined, scheduleFrom: day, scheduleTo: day, search: (query.get("q") ?? "").slice(0, 120),
       regionId: query.get("region") || undefined, storeId: query.get("store") || undefined,
       internalMembershipId: query.get("person") || undefined, dispatchUnassigned: query.get("unassigned") === "yes",
       dispatchBucket: ["parts", "late", "reported", "unassigned"].includes(bucket) ? bucket as WorkOrderListQuery["dispatchBucket"] : undefined,

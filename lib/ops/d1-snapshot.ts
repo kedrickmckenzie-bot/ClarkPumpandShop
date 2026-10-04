@@ -1,6 +1,6 @@
 import { and, eq, getTableName, inArray, type InferSelectModel } from "drizzle-orm";
 import { workPriceFrom } from "./work-price-types";
-import { opsInternalSchedules, opsWorkPrices } from "@/db/ops-schema";
+import { opsTechnicianProfiles, opsInternalSchedules, opsWorkPrices } from "@/db/ops-schema";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { drizzle } from "drizzle-orm/d1";
 import {
@@ -352,6 +352,7 @@ export async function loadOpsFixtureSnapshotFromD1(
   const users = [...new Map(userRows.map((row) => [row.id, row])).values()];
   const internalSchedules=await read(opsInternalSchedules);
   return {
+    technicianProfiles: (await read(opsTechnicianProfiles)).map(row=>({...row,homeRegionId:row.homeRegionId??undefined})),
     internalSchedules: internalSchedules.map(p=>({...p,tentative:Boolean(p.tentative)})) as unknown as OpsFixture["internalSchedules"],
     asOf,
     workPrices: workPriceRows.map((row) => workPriceFrom(row)),

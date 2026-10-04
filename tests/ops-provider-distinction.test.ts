@@ -39,7 +39,7 @@ describe("internal vs outside-vendor work is always distinguishable", () => {
       const assignment = latestAssignment(row.id), cell = row.cells.find((item) => item.key === "assignment")!;
       if (assignment?.kind === "internal") {
         internal += 1;
-        expect(cell).toMatchObject({ value: personFor(assignment.internalMembershipId), secondary: "Internal", providerTag: "internal" });
+        expect(cell).toMatchObject({ value: assignment.internalMembershipId ? personFor(assignment.internalMembershipId) : assignment.internalTarget === "pool" ? "Available to the team" : assignment.internalTarget === "awaiting_allocation" ? "Manager to arrange" : "Internal team", secondary: "Internal", providerTag: "internal" });
       } else if (assignment?.kind === "outside_vendor") {
         outside += 1;
         expect(cell).toMatchObject({ value: fixture.vendors.find((vendor) => vendor.id === assignment.vendorId)!.name, secondary: "Outside vendor", providerTag: "outside_vendor" });

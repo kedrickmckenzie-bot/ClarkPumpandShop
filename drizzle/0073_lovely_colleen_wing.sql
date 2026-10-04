@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS `uidx_ops_regions_org_id` ON `ops_regions` (`organization_id`,`id`);

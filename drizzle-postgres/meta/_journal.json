@@ -512,6 +512,13 @@
       "when": 1791100723645,
       "tag": "0072_robust_reptil",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791125675835,
+      "tag": "0073_left_silhouette",
+      "breakpoints": true
     }
   ]
 }

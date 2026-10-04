@@ -87,7 +87,7 @@ describe("operations fixtures", () => {
     expect(presentation.divisions).toHaveLength(1);
     expect(presentation.taxonomyNodes.some((row) => row.canonicalKey === "beer_caves" && row.depth === 3)).toBe(true);
     expect(presentation.vendors).toHaveLength(5);
-    expect(presentation.memberships.filter((row) => row.role === "internal_technician")).toHaveLength(2);
+    expect(presentation.memberships.filter((row) => row.role === "internal_technician")).toHaveLength(6);
     expect(buildSyntheticScaleFixture()).toMatchObject({ stores: expect.any(Array) });
     expect(buildSyntheticScaleFixture().stores).toHaveLength(65);
   });

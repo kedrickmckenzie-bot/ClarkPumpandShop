@@ -1,3 +1,4 @@
+import {dispatchBackfillRegression} from "./helpers/dispatch-backfill-regression";
 import {Pool} from "pg";
 import {readdirSync,readFileSync} from "node:fs";
 import {beforeAll,afterAll,describe,it,expect} from "vitest";
@@ -30,6 +31,7 @@ describe.skipIf(!url)("internal dispatch on separate PostgreSQL connections",()=
     repository=createOpsPostgresRepository(pool);
     const fixture=buildShowcaseFixture(dispatchNow);fixture.outboxMessages=[];
     await seedOpsRepository(repository,fixture);
+    await dispatchBackfillRegression(repository);
   },120000);
   afterAll(async()=>{await pool?.end();if(databaseName){const cleanup=new Pool({connectionString:url});try{await cleanup.query(`DROP DATABASE ${databaseName}`);}finally{await cleanup.end();}}});
   it("runs the same persistence and policy scenarios as D1 and fixture",async()=>{await internalDispatchRegression(repository);},30000);

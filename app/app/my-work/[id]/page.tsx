@@ -1,7 +1,7 @@
 import { TechnicianHistory } from "@/components/workspace/technician-history";
-import { dispatchPlanLabel, dispatchTime } from "@/lib/ops/dispatch-board";
+import { dispatchPlanLabel, dispatchTime, dueLabel } from "@/lib/ops/dispatch-board";
 import Link from "next/link";
-import { plainNextAction } from "@/lib/ops/dispatch-calendar";
+import { civilDate, plainNextAction } from "@/lib/ops/dispatch-calendar";
 import { randomUUID } from "node:crypto";
 import { RecordForm } from "@/components/ops/record-form";
 import { roleCan } from "@/components/ops/role-policy";
@@ -99,13 +99,13 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
         <div><dt>Who</dt><dd>{work.internalAssigneeName ?? "Any technician can take it"}</dd></div>
         <div><dt>Manager</dt><dd>{work.internalAccountableParty}</dd></div>
         {work.schedule ? <div><dt>When</dt><dd>{dispatchPlanLabel(work.schedule,organization!.timeZone)}</dd></div> : null}
-        {work.dueAt && !(resultBlocked && !manager) ? <div><dt>Due</dt><dd>{dispatchTime(work.dueAt,zone,organization!.timeZone)}</dd></div> : null}
+        {work.dueAt && !(resultBlocked && !manager) ? <div><dt>Due</dt><dd>{dueLabel({dueAt:work.dueAt,storeZone:zone},civilDate(new Date().toISOString(),zone),organization!.timeZone)}</dd></div> : null}
         {work.targetCompletionAt && !(resultBlocked && !manager) ? <div><dt>Finish by</dt><dd>{dispatchTime(work.targetCompletionAt,zone,organization!.timeZone)}</dd></div> : null}
       </dl>
       {work.asset ? <p><strong>Equipment:</strong> {work.asset.name} · {work.asset.assetTag}{work.component ? ` · ${work.component.name}` : ""}</p> : null}
       {work.authorizedScope ? <p><strong>What to do:</strong> {work.authorizedScope}</p> : null}
       {independentFollowUps.filter(f => plainNextAction(f.nextAction) !== status).map(f => <p key={f.id} className={styles.urgent}>
-        Also needed: {plainNextAction(f.nextAction)} · {f.accountableParty} · Due {dispatchTime(f.dueAt,zone,organization!.timeZone)}
+        Also needed: {plainNextAction(f.nextAction)} · {f.accountableParty} · {dueLabel({dueAt:f.dueAt,storeZone:zone},civilDate(new Date().toISOString(),zone),organization!.timeZone)}
       </p>)}
       {lookAndReport ? <p><strong>Look and report only.</strong> Write down what you find. Repairs need a manager&apos;s OK first.</p> : null}
       {files.length ? <div>

@@ -4,10 +4,10 @@ import { SearchPicker, type PickPage } from "@/components/ops/search-picker";
 import type { InternalTarget } from "@/lib/ops/internal-dispatch";
 import styles from "./internal-dispatch.module.css";
 
-export function InternalAssignmentFields({ storeId, defaultTarget = "pool", defaultPerson, defaultManager, onSelectionChange, requireChangeReason = false }: {
+export function InternalAssignmentFields({ storeId, defaultTarget = "pool", defaultPerson, defaultManager, onSelectionChange, requireChangeReason = false, compact = false }: {
   storeId: string; defaultTarget?: InternalTarget; defaultPerson?: { id: string; name: string }; defaultManager?: { id: string; name: string };
   onSelectionChange?: (selection: { target: InternalTarget; personId?: string; managerId?: string }) => void;
-  requireChangeReason?: boolean;
+  compact?: boolean; requireChangeReason?: boolean;
 }) {
   const [target, setTarget] = useState<InternalTarget>(defaultTarget);
   const [personId, setPersonId] = useState(defaultPerson?.id);
@@ -27,7 +27,7 @@ export function InternalAssignmentFields({ storeId, defaultTarget = "pool", defa
       <option value="person">A specific technician</option><option value="pool">Any technician (first to take it)</option><option value="awaiting_allocation">A manager assigns it later</option>
     </select></label>
     {target === "person" ? <SearchPicker key={`technician-${storeId}`} name="internalMembershipId" label="Technician" required load={loadPeople} defaultValue={defaultPerson?.id} defaultOption={defaultPerson ? { value: defaultPerson.id, label: defaultPerson.name } : undefined} emptyText="No technician covers this store." onSelect={option=>{setPersonId(option?.value);onSelectionChange?.({target,personId:option?.value,managerId});}} /> : null}
-    {target === "awaiting_allocation" ? <SearchPicker key={`manager-${storeId}`} name="managerId" label="Manager" required load={loadManagers} defaultValue={defaultManager?.id} defaultOption={defaultManager ? { value: defaultManager.id, label: defaultManager.name } : undefined} emptyText="No manager covers this store." onSelect={option=>{setManagerId(option?.value);onSelectionChange?.({target,personId,managerId:option?.value});}} /> : <p className={styles.muted}>Manager: {defaultManager?.name ?? "Facilities coordination"}{defaultManager ? `. If ${defaultManager.name} loses access to this store, Facilities coordination takes over.` : ""}</p>}
+    {target === "awaiting_allocation" ? <SearchPicker key={`manager-${storeId}`} name="managerId" label="Manager" required load={loadManagers} defaultValue={defaultManager?.id} defaultOption={defaultManager ? { value: defaultManager.id, label: defaultManager.name } : undefined} emptyText="No manager covers this store." onSelect={option=>{setManagerId(option?.value);onSelectionChange?.({target,personId,managerId:option?.value});}} /> : <p className={styles.muted}>Manager: {defaultManager?.name ?? "Facilities coordination"}{defaultManager && !compact ? `. If ${defaultManager.name} loses access to this store, Facilities coordination takes over.` : ""}</p>}
     {requireChangeReason && (target!==defaultTarget || (target==="person" && personId!==defaultPerson?.id) || (target==="awaiting_allocation" && managerId!==defaultManager?.id)) ? <label>Why change who handles this?<textarea name="reason" required rows={2} maxLength={1000}/></label> : null}
   </div>;
 }

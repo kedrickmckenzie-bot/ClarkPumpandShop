@@ -93,11 +93,14 @@ In scope for this bounded extension: internal assignment and team pickup; techni
 
 The exclusions above still prohibit employee shift rosters/payroll, managing outside vendors' workforces, continuous tracking and autonomous dispatch. Route measurement and comparing an added stop are permitted; automatic whole-route ordering/optimization is deferred. Availability means planning capacity or unavailable periods, without leave reasons or HR records. Suggestions cannot silently assign, move other jobs or amend deadlines. The map/drive-time provider and any paid usage require a separate configured, authorized integration.
 
-Planning is optional. Existing `WorkOrder.dueAt` is a projected next-action deadline, not a permanent repair target. New scheduling must keep those meanings distinct. Unknown durations stay unknown; no-visit results never fabricate visit evidence. Exactly 15 fictional stores, five approved vendors and two technicians remain the presentation contract, not a verified fact about a customer's staffing.
+Planning is optional. Existing `WorkOrder.dueAt` is a projected next-action deadline, not a permanent repair target. New scheduling must keep those meanings distinct. Unknown durations stay unknown; no-visit results never fabricate visit evidence. Exactly 15 fictional stores, five approved vendors and six technicians remain the presentation contract, not a verified fact about a customer's staffing.
 
 ## Demo contract
 
-- The presentation tenant is fictional Clark Pump and Shop with **exactly 15 stores and exactly five approved outside vendors**. It also has a two-person internal maintenance team.
+- **Owner-approved dispatch dataset (October 4, 2026):** the selected Assign design uses six fictional technicians and approximately 36 open internal jobs across the same 15 stores. Carry these stable identities across fixture, D1, and PostgreSQL with insert-only backfills. Never reset hosted data or overwrite existing work. See docs/internal-dispatch/MOCKUP_STUDY.md.
+
+
+- The presentation tenant is fictional Clark Pump and Shop with **exactly 15 stores and exactly five approved outside vendors**. It also has a six-person internal maintenance team.
 - Use three regions with five stores each and realistic HVAC/Refrigeration depth plus smaller forecourt, plumbing and exterior-service stories.
 - Every demo total must derive from source seed records. Provide explicit unclassified buckets rather than hiding shallow records.
 - The hosted showcase seeds deterministic source records into D1 and persists mutations through the tenant-scoped repository. R2 stores uploaded evidence. Local development uses an in-memory fixture and resets when the local process restarts.

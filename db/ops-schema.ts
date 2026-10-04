@@ -34,7 +34,7 @@ export const opsOrganizations = sqliteTable("ops_organizations", {
 
 export const opsRegions = sqliteTable("ops_regions", {
   id: id(), organizationId: organizationId(), divisionId: text("division_id"), code: text("code").notNull(), name: text("name").notNull(), createdAt: createdAt(),
-}, (table) => [uniqueIndex("uidx_ops_regions_org_code").on(table.organizationId, table.code), index("idx_ops_regions_org_name").on(table.organizationId, table.name)]);
+}, (table) => [uniqueIndex("uidx_ops_regions_org_id").on(table.organizationId, table.id), uniqueIndex("uidx_ops_regions_org_code").on(table.organizationId, table.code), index("idx_ops_regions_org_name").on(table.organizationId, table.name)]);
 
 export const opsDivisions = sqliteTable("ops_divisions", {
   id: id(), organizationId: organizationId(), code: text("code").notNull(), name: text("name").notNull(), createdAt: createdAt(),
@@ -987,4 +987,14 @@ export const opsInternalSchedules = sqliteTable("ops_internal_schedules", {
   index("idx_ops_internal_schedules_org_week_day").on(table.organizationId, table.week, table.day, table.id),
   foreignKey({name:"fk_ops_internal_schedule_assignment",columns:[table.organizationId,table.assignmentId,table.workOrderId],foreignColumns:[opsWorkOrderAssignments.organizationId,opsWorkOrderAssignments.id,opsWorkOrderAssignments.workOrderId]}),
   check("chk_ops_internal_schedule_shape",sql`${table.revision} > 0 AND ${table.tentative} IN (0,1) AND (${table.durationMinutes} IS NULL OR ${table.durationMinutes} BETWEEN 1 AND 1440) AND (${table.precision} IN ('week','removed') AND ${table.day} IS NULL AND ${table.startsAt} IS NULL AND ${table.endsAt} IS NULL OR ${table.precision}='day' AND ${table.day} IS NOT NULL AND ${table.startsAt} IS NULL AND ${table.endsAt} IS NULL OR ${table.precision}='appointment' AND ${table.day} IS NOT NULL AND ${table.startsAt} IS NOT NULL AND ${table.entryZone} IS NOT NULL AND ${table.localStart} IS NOT NULL AND (${table.endsAt} IS NULL OR ${table.endsAt} > ${table.startsAt}))`),
+]);
+
+/** Optional dispatch context; never an authorization or availability rule. */
+export const opsTechnicianProfiles = sqliteTable("ops_technician_profiles", {
+  id: id(), organizationId: organizationId(), membershipId: text("membership_id").notNull(),
+  homeRegionId: text("home_region_id"), skillsJson: text("skills_json").notNull().default("[]"),
+}, table => [
+  uniqueIndex("idx_ops_technician_profiles_member").on(table.organizationId, table.membershipId),
+  foreignKey({columns:[table.organizationId,table.membershipId],foreignColumns:[opsMemberships.organizationId,opsMemberships.id]}),
+  foreignKey({columns:[table.organizationId,table.homeRegionId],foreignColumns:[opsRegions.organizationId,opsRegions.id]}),
 ]);

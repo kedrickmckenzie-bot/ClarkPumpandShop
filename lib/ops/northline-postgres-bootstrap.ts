@@ -7,7 +7,7 @@ import {
   createOpsPostgresTransactionRepository,
   type PostgresPoolLike,
 } from "./postgres-repository";
-import { buildPreviewPeopleStatements, seedOpsRepository } from "./seed";
+import { buildDispatchDemoBackfill, buildPreviewPeopleStatements, seedOpsRepository } from "./seed";
 import {
   buildNorthlineCompatibilityAmendments,
   buildNorthlineCompatibilityMarker,
@@ -72,7 +72,7 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
       // Insert-only: give an existing preview the people added since it was seeded.
       await client.query("BEGIN");
       inTransaction = true;
-      await createOpsPostgresTransactionRepository(client).atomicWrite(buildPreviewPeopleStatements());
+      await createOpsPostgresTransactionRepository(client).atomicWrite([...buildPreviewPeopleStatements(), ...buildDispatchDemoBackfill()]);
       await client.query("COMMIT");
       inTransaction = false;
       return plan.kind === "already_current" ? { seeded: false as const } : { seeded: false as const, enrichedExisting: true as const };

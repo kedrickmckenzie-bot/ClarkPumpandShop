@@ -2223,3 +2223,13 @@ export const opsInternalSchedules = pgTable("ops_internal_schedules", {
   foreignKey({name:"fk_ops_internal_schedule_assignment",columns:[table.organizationId,table.assignmentId,table.workOrderId],foreignColumns:[opsWorkOrderAssignments.organizationId,opsWorkOrderAssignments.id,opsWorkOrderAssignments.workOrderId]}),
   check("chk_ops_internal_schedule_shape",sql`${table.revision} > 0 AND ${table.tentative} IN (0,1) AND (${table.durationMinutes} IS NULL OR ${table.durationMinutes} BETWEEN 1 AND 1440) AND (${table.precision} IN ('week','removed') AND ${table.day} IS NULL AND ${table.startsAt} IS NULL AND ${table.endsAt} IS NULL OR ${table.precision}='day' AND ${table.day} IS NOT NULL AND ${table.startsAt} IS NULL AND ${table.endsAt} IS NULL OR ${table.precision}='appointment' AND ${table.day} IS NOT NULL AND ${table.startsAt} IS NOT NULL AND ${table.entryZone} IS NOT NULL AND ${table.localStart} IS NOT NULL AND (${table.endsAt} IS NULL OR ${table.endsAt} > ${table.startsAt}))`),
 ]);
+
+/** Optional dispatch context; never an authorization or availability rule. */
+export const opsTechnicianProfiles = pgTable("ops_technician_profiles", {
+  id: id(), organizationId: organizationId(), membershipId: text("membership_id").notNull(),
+  homeRegionId: text("home_region_id"), skillsJson: text("skills_json").notNull().default("[]"),
+}, table => [
+  uniqueIndex("idx_ops_technician_profiles_member").on(table.organizationId, table.membershipId),
+  foreignKey({columns:[table.organizationId,table.membershipId],foreignColumns:[opsMemberships.organizationId,opsMemberships.id]}),
+  foreignKey({columns:[table.organizationId,table.homeRegionId],foreignColumns:[opsRegions.organizationId,opsRegions.id]}),
+]);

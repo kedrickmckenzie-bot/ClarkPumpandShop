@@ -505,6 +505,20 @@
       "when": 1791100720665,
       "tag": "0071_productive_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1791125671157,
+      "tag": "0072_spooky_celestials",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1791126379388,
+      "tag": "0073_lovely_colleen_wing",
+      "breakpoints": true
     }
   ]
 }

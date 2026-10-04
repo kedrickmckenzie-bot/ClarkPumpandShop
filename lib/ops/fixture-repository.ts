@@ -197,7 +197,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
-    ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
+    ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
     ops_approval_policies: "approvalPolicies", ops_approval_requests: "approvalRequests", ops_approval_decisions: "approvalDecisions",
     ops_work_order_visit_holds: "workOrderVisitHolds", ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
     ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
@@ -691,7 +691,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listRequestImpactAssessments(organizationId: OpsId, requestId: OpsId): Promise<RequestImpactAssessment[]> { return clone(this.fixture.requestImpactAssessments.filter((row) => row.organizationId === organizationId && row.requestId === requestId).sort((left, right) => left.assessedAt.localeCompare(right.assessedAt) || left.id.localeCompare(right.id))); }
   async getDispatchFilters(scope: OrganizationScope) {
     const stores=this.fixture.stores.filter(s=>storeAllowed(this.fixture,scope,s.id));
-    const people=this.fixture.memberships.filter(m=>m.organizationId===scope.organizationId&&m.role==="internal_technician"&&m.status==="active"&&this.fixture.scopeGrants.some(g=>g.organizationId===scope.organizationId&&g.membershipId===m.id&&["ops:*","ops:write","ops:read_write","ops:store_manage"].includes(g.permission)&&stores.some(s=>grantCoversStore(g,s)))).flatMap(m=>{const u=this.fixture.users.find(u=>u.id===m.userId&&u.status==="active");return u?[{id:m.id,name:u.displayName}]:[];}).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,100);
+    const people=this.fixture.memberships.filter(m=>m.organizationId===scope.organizationId&&m.role==="internal_technician"&&m.status==="active"&&this.fixture.scopeGrants.some(g=>g.organizationId===scope.organizationId&&g.membershipId===m.id&&["ops:*","ops:write","ops:read_write","ops:store_manage"].includes(g.permission)&&stores.some(s=>grantCoversStore(g,s)))).flatMap(m=>{const u=this.fixture.users.find(u=>u.id===m.userId&&u.status==="active");const profile=this.fixture.technicianProfiles?.find(p=>p.organizationId===scope.organizationId&&p.membershipId===m.id);return u?[{id:m.id,name:u.displayName,homeRegionId:profile?.homeRegionId,skills:profile?JSON.parse(profile.skillsJson) as string[]:[]}]:[];}).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,100);
     const regions=this.fixture.regions.filter(r=>r.organizationId===scope.organizationId&&stores.some(s=>s.regionId===r.id)).map(r=>({id:r.id,name:r.name})).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,100);
     return {people,regions};
   }
@@ -962,7 +962,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         .reduce((sum, line) => sum + line.amount.amountMinor, 0);
       return result;
     }).filter(row => scheduleMatches(row, query.scheduleView, row.schedule && query.scheduleAt && ["today","upcoming","replan"].includes(query.scheduleView??"") ? civilDate(query.scheduleAt,row.schedule.planningZone) : query.scheduleFrom, query.scheduleTo) && (!query.scheduleExcludeWeek||row.schedule?.week!==query.scheduleExcludeWeek) && (!query.dispatchReadiness || (query.dispatchReadiness === "waiting" ? row.hasOpenFollowUp || ["waiting_on_parts","waiting_on_vendor"].includes(row.status) || row.schedule?.tentative : !row.hasOpenFollowUp && !row.schedule?.tentative && !["waiting_on_parts","waiting_on_vendor","in_progress","completed_pending_review","resolved","closed","cancelled"].includes(row.status)))).filter(row =>
-      (!query.dispatchQueue || !row.schedule || row.schedule.precision === "week" || row.internalTarget !== "person" || !row.internalMembershipId)
+      (!query.scheduleDayFrom || Boolean(row.schedule?.day && row.schedule.precision!=="week" && row.schedule.day>=query.scheduleDayFrom))
+      && (!query.dispatchQueue || !row.schedule || row.schedule.precision === "week" || row.internalTarget !== "person" || !row.internalMembershipId)
       && (!query.dispatchUnassigned || row.internalTarget !== "person" || !row.internalMembershipId)
       && (!query.dispatchBoardWeek || row.schedule?.week === query.dispatchBoardWeek || !row.schedule || row.schedule.precision === "week" || row.internalTarget !== "person" || !row.internalMembershipId)
       && (!query.dispatchBucket || (query.dispatchBucket === "unassigned" ? row.internalTarget !== "person" || !row.internalMembershipId
@@ -970,6 +971,13 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         : query.dispatchBucket === "reported" ? ["completed_pending_review", "resolved"].includes(row.status)
         : Boolean(row.dueAt && row.dueAt < (query.dispatchAt ?? new Date().toISOString()) && !["completed_pending_review", "resolved", "closed", "cancelled"].includes(row.status))))
     ).filter((row) => matchesSearchTerms([row.number, row.problem, row.storeNumber, row.storeName, ...(() => { const store=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===row.storeId); return store ? [store.address1,store.city,store.postalCode,...store.aliases] : []; })(), row.vendorName, row.internalAssigneeName].filter(Boolean).join(" "), workTerms)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    if (query.dispatchPlanOrder) {
+      const key=(row:WorkOrderListRow)=>`${row.schedule?.day??row.schedule?.week??"9999"}|${row.schedule?.startsAt??"9999"}|${({emergency:0,urgent:1,routine:2,planned:3} as Record<string,number>)[row.priority]??3}`;
+      let visible=[...rows].sort((a,b)=>key(a).localeCompare(key(b))||a.id.localeCompare(b.id));
+      if(query.cursor!==undefined){try{const parts=query.cursor.split("|").map(decodeURIComponent);if(parts.length!==2||!parts.every(Boolean))return {items:[],totalCount:rows.length};visible=visible.filter(row=>key(row)>parts[0]||key(row)===parts[0]&&row.id>parts[1]);}catch{return {items:[],totalCount:rows.length};}}
+      const max=Math.max(1,Math.min(100,query.limit??25)),start=Math.max(0,query.offset??0),items=visible.slice(start,start+max),last=items.at(-1);
+      return {items,totalCount:rows.length,nextCursor:start+max<visible.length&&last?`${encodeURIComponent(key(last))}|${encodeURIComponent(last.id)}`:undefined};
+    }
     if (query.internalOnly && !query.activityOrder) {
       const rank=(priority:string)=>({emergency:3,urgent:2,routine:1,planned:0} as Record<string,number>)[priority]??0;
       let visible = rows.sort((a,b) => rank(b.priority)-rank(a.priority) || ( a.createdAt === b.createdAt ? a.id === b.id ? 0 : a.id < b.id ? 1 : -1 : a.createdAt < b.createdAt ? 1 : -1));

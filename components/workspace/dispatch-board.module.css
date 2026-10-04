@@ -28,3 +28,5 @@
 
 .sheetBackdrop{position:absolute;inset:0;background:transparent!important;border:0!important;border-radius:0!important;width:100%;height:100%;}.sheet{position:relative;z-index:1;}
 @media(min-width:921px){.chip[data-can-drag="true"]{cursor:grab;touch-action:none}.chip[data-can-drag="true"]:active{cursor:grabbing}}
+
+.wideSheet{width:min(1120px,calc(100vw - 32px));max-width:none;margin:auto;height:calc(100dvh - 48px);border-radius:8px}.wideSheet>div{min-height:0}

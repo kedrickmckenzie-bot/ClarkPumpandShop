@@ -34,11 +34,14 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   beforeAll(async()=>{
     const fixture=buildShowcaseFixture(dispatchNow);fixture.outboxMessages=[];
     if(adapter==="fixture")r=createOpsFixtureRepository(fixture);
+    const historical=structuredClone(fixture);
+    historical.technicianProfiles=[];historical.internalSchedules=[];historical.workResults=[];
+    for(const rows of [historical.workOrders,historical.assignments,historical.workflowTasks,historical.followUps,historical.workOrderVisitHolds??[],historical.auditEvents]){for(let i=rows.length-1;i>=0;i--)if(rows[i].id.startsWith("dispatch-study-"))rows.splice(i,1);}
     if(adapter==="D1"){
       runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});const db=await runtime.getD1Database("DB");
       const migrations=readdirSync("drizzle").filter(f=>/^\d.*\.sql$/.test(f)).sort();
       for(const file of migrations.filter(f=>f<"0068"))for(const sql of readFileSync(`drizzle/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await db.prepare(sql).run();
-      r=createOpsD1Repository(db as unknown as D1Database);await seedOpsRepository(r,fixture,[],{omitStoreContacts:true});
+      r=createOpsD1Repository(db as unknown as D1Database);await seedOpsRepository(r,historical,[],{omitStoreContacts:true});
       for(const file of migrations.filter(f=>f>="0068"))for(const sql of readFileSync(`drizzle/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await db.prepare(sql).run();
     }
     if(adapter==="PostgreSQL"){
@@ -47,9 +50,10 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
       url.pathname=`/${databaseName}`;pool=new Pool({connectionString:url.toString()});
       const migrations=readdirSync("drizzle-postgres").filter(f=>/^\d.*\.sql$/.test(f)).sort();
       for(const file of migrations.filter(f=>f<"0068"))for(const sql of readFileSync(`drizzle-postgres/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await pool.query(sql);
-      r=createOpsPostgresRepository(pool);await seedOpsRepository(r,fixture,[],{omitStoreContacts:true});
+      r=createOpsPostgresRepository(pool);await seedOpsRepository(r,historical,[],{omitStoreContacts:true});
       for(const file of migrations.filter(f=>f>="0068"))for(const sql of readFileSync(`drizzle-postgres/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await pool.query(sql);
     }
+    if(adapter!=="fixture")await seedOpsRepository(r,fixture);
     for(const decision of fixture.workOrderVerifications)expect(await r.listWorkOrderVerifications(dispatchOrg,decision.workOrderId)).toContainEqual(expect.objectContaining({id:decision.id,siteVisitWorkOrderId:decision.siteVisitWorkOrderId,decision:decision.decision}));
   },120000);
   afterAll(async()=>{await runtime?.dispose();await pool?.end();if(databaseName){const admin=new Pool({connectionString:postgresUrl});try{await admin.query(`DROP DATABASE ${databaseName}`);}finally{await admin.end();}}});

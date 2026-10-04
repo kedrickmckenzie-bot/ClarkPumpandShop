@@ -27,6 +27,7 @@ export interface InternalSchedule {
 }
 
 export interface ScheduleProjection {
+  reviewReason?: string; localStart?: string; disambiguation?: "earlier" | "later";
   id: string;
   precision: InternalSchedule["precision"];
   planningZone: string;

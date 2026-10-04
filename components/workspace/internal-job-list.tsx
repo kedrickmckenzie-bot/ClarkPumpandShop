@@ -1,11 +1,11 @@
-import { dispatchPlanLabel, dispatchTime } from "@/lib/ops/dispatch-board";
+import { dispatchPlanLabel, dispatchTime, dueLabel } from "@/lib/ops/dispatch-board";
 import Link from "next/link";
 import { RecordForm } from "@/components/ops/record-form";
 import { roleCan } from "@/components/ops/role-policy";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import type { WorkOrderListPage, WorkOrderListRow } from "@/lib/ops/view-models";
 import { formatOperationsDate } from "@/lib/ops/local-time";
-import { plainNextAction } from "@/lib/ops/dispatch-calendar";
+import { civilDate, plainNextAction } from "@/lib/ops/dispatch-calendar";
 import { DispatchVersionFields } from "./internal-dispatch-fields";
 import { InternalAssignmentFields } from "./internal-assignment-fields";
 import styles from "./internal-dispatch.module.css";
@@ -71,7 +71,7 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
         <span><span className={`${styles.badge} ${toneClass}`} style={{ marginLeft: 0 }}>{status.text}</span></span>
         {showWho && !(technician && mine) ? <span>Who: <strong>{whoLabel(row)}</strong></span> : null}
         {row.schedule ? <span>When: <strong>{dispatchPlanLabel(row.schedule,organizationZone)}</strong></span> : null}
-        {row.dueAt && !(technician && row.hasOpenFollowUp) ? <span>Due: <strong>{dispatchTime(row.dueAt,storeZone,organizationZone)}</strong></span> : null}
+        {row.dueAt && !(technician && row.hasOpenFollowUp) ? <span><strong>{dueLabel({dueAt:row.dueAt,storeZone},civilDate(new Date().toISOString(),storeZone),organizationZone)}</strong></span> : null}
         {row.targetCompletionAt && !(technician && row.hasOpenFollowUp) ? <span>Finish by: <strong>{dispatchTime(row.targetCompletionAt,storeZone,organizationZone)}</strong></span> : null}
       </div>
       {!technician && row.internalAssigneeName ? <p className={styles.jobMeta}>Manager: {row.internalAccountableParty}</p> : null}

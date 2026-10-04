@@ -4,6 +4,8 @@
 
 **Status:** P0 planning is complete. P1's F1–F3 are closed by [Astra's independent reassessment](P1_AUDIT.md); its separate later R1–R3 corrections still await independent reassessment. P2 is implemented on `codex/internal-dispatch-p1`, and [the user-supplied Astra reassessment](P2_CORRECTIONS.md) clears its five reported defects. Broader phase/release acceptance remains open. [P2 handoff](P2_HANDOFF.md) records behavior, validation and review limits. P3 live scheduling and its two reviewed corrections are implemented and verified locally; [P3 handoff](P3_HANDOFF.md) and [P3 corrections](P3_CORRECTIONS.md) record validation and the pending independent reassessment. The user authorized a combined P1–P3 commit and push for Claude; [P1_P3_REVIEW.md](P1_P3_REVIEW.md) defines the committed review scope and exact baseline. P4–P7 remain unimplemented. Earlier uncommitted-status notes are historical implementation checkpoints.
 
+**Current layout and demo contract (October 4):** the owner approved Assign as the main Dispatch view, Today as second, a Compare window, six technicians and approximately 36 open internal jobs. [ASSIGN_RELEASE.md](ASSIGN_RELEASE.md) records this implementation and insert-only backfill. Earlier two-technician evidence remains historical; the current AT80 presentation rule is six. This layout approval does not implement or close P4–P7.
+
 ## 1. Outcome
 
 Build internal dispatch for a convenience-store company's maintenance team. A manager can see incoming work, plan the week across a wide store footprint, assign technicians, and adjust when urgent jobs arrive. A technician gets a simple work list, useful job information, and one place to record a result or ask for help.

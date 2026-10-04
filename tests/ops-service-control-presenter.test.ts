@@ -395,7 +395,8 @@ describe("enterprise service-control presenter contracts", () => {
     expect(followUps.table.rows.some((row) => exceptionIds.includes(row.id))).toBe(false);
     const checkoutProjection = projected.find((item) => item.sourceIds.includes("follow-up-recent-aug-108-electrical"));
     expect(checkoutProjection).toBeDefined();
-    const checkoutFollowUp = followUps.table.rows.find((row) => row.id === checkoutProjection?.id);
+    const checkoutPage = buildListModel(fixture, session, "action-center", { type: "follow-up", page: String(Math.floor(followUpIds.indexOf(checkoutProjection!.id) / 25) + 1) });
+    const checkoutFollowUp = checkoutPage.table.rows.find((row) => row.id === checkoutProjection?.id);
     expect(checkoutFollowUp).toBeDefined();
     expect(new URL(checkoutFollowUp!.href, "https://ops.test").pathname).toBe(new URL(checkoutProjection!.linkHref, "https://ops.test").pathname);
     expect(vendorReminders.table.rows.every((row) => vendorReminderIds.includes(row.id))).toBe(true);

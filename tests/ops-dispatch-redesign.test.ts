@@ -24,12 +24,12 @@ describe("Dispatch redesign boundaries and user choices",()=>{
   let r:ReturnType<typeof createOpsFixtureRepository>,session:OperatorSession;
   beforeEach(()=>{r=createOpsFixtureRepository(buildShowcaseFixture(dispatchNow));session={accessMode:"authenticated",demoEdition:"complete",role:"facilities",userId:"user-northline-facilities",membershipId:"membership-northline-facilities",organizationId:dispatchOrg,organizationName:"Fictional QA",displayName:"Jordan",email:"qa@example.test",companywide:true,scopeLabel:"Test",permissions:["ops:write"]};mocks.repository.mockResolvedValue(r);mocks.session.mockImplementation(async()=>session);});
   function asTechnician(){session={...session,role:"technician",membershipId:dispatchTech[0],userId:"user-northline-tech-1"};}
-  it("opens a week board by default with keyboard scheduling and semantic status filters",async()=>{
-    const html=renderToStaticMarkup(await renderDispatchBoard({week:"2026-10-05"}));
-    expect(html).toContain('aria-label="Technicians and days"');expect((html.match(/role="columnheader"/g)??[])).toHaveLength(7);
-    for(const text of ["Not assigned","Waiting on parts","Late","Reported done","Schedule","Previous","Next","Today"])expect(html).toContain(text);
+  it("opens Assign with readable incoming work and six technicians",async()=>{
+    const html=renderToStaticMarkup(await renderDispatchBoard({}));
+    for(const label of ["Dispatch views", "Needs a tech", "Today", "Compare", "Current job", "Next planned stop", "Duration unknown", "Alex Morgan", "Riley Chen"])expect(html).toContain(label);
+    expect(html).toContain("The back-room floor drain is backing up and water is approaching stored cartons. The manager needs help today.");
     expect(html).not.toContain("Weekly store walk");expect(html).not.toContain("recordedCostMinor");
-    expect(html).toContain('data-can-drag="true"');
+    expect(html).toContain('draggable="true"');expect(html).not.toContain('>0 jobs<');
   });
   it("keeps owner and read-only boards free of editing actions",async()=>{
     session={...session,role:"executive",membershipId:"membership-northline-executive",userId:"user-northline-executive",permissions:["ops:read"]};

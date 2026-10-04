@@ -1,12 +1,14 @@
+import { civilDate } from "./dispatch-calendar";
+import { addCalendarDays } from "./internal-schedule-types";
 import type { WorkOrderListRow } from "./view-models";
 import { cachedDateTimeFormat } from "./intl-format-cache";
 import { formatOperationsDate } from "./local-time";
 
 /** Only operational fields cross the board's client boundary. */
-export type DispatchJob = Omit<WorkOrderListRow, "recordedCostMinor" | "recordedCostLineCount" | "currency"> & { storeZone?: string };
-export function dispatchJob(row: WorkOrderListRow, storeZone?: string): DispatchJob {
+export type DispatchJob = Omit<WorkOrderListRow, "recordedCostMinor" | "recordedCostLineCount" | "currency"> & { storeZone?: string; storeRegionId?: string };
+export function dispatchJob(row: WorkOrderListRow, storeZone?: string, storeRegionId?: string): DispatchJob {
   return { id: row.id, number: row.number, problem: row.problem, storeId: row.storeId, storeNumber: row.storeNumber, storeName: row.storeName,
-    storeZone, priority: row.priority, status: row.status, schedule: row.schedule, targetCompletionAt: row.targetCompletionAt,
+    storeZone, storeRegionId, priority: row.priority, status: row.status, schedule: row.schedule, targetCompletionAt: row.targetCompletionAt,
     categoryKey: row.categoryKey, assignmentKind: row.assignmentKind, assignmentStatus: row.assignmentStatus, assignmentId: row.assignmentId,
     internalMembershipId: row.internalMembershipId, internalAssigneeName: row.internalAssigneeName, internalTarget: row.internalTarget,
     internalAccountableId: row.internalAccountableId, internalAccountableParty: row.internalAccountableParty,
@@ -48,4 +50,12 @@ export function orderedStops(rows: DispatchJob[]) {
   return [...rows].sort((a, b) => (a.schedule?.startsAt ?? "9999").localeCompare(b.schedule?.startsAt ?? "9999")
     || ({ emergency: 0, urgent: 1, routine: 2, planned: 3 }[a.priority] - { emergency: 0, urgent: 1, routine: 2, planned: 3 }[b.priority])
     || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
+
+export function dueLabel(job:Pick<DispatchJob,"dueAt"|"storeZone">,today:string,zone:string,at=new Date().toISOString()) {
+  if(!job.dueAt)return "";
+  const localZone=job.storeZone??zone, date=civilDate(job.dueAt,localZone);
+  const time=cachedDateTimeFormat("en-US",{timeZone:localZone,hour:"numeric",minute:"2-digit"}).format(new Date(job.dueAt)).replace(":00","").replace("12 PM","noon");
+  const label=date===today?"today":date===addCalendarDays(today,1)?"tomorrow":cachedDateTimeFormat("en-US",{timeZone:localZone,month:"short",day:"numeric"}).format(new Date(job.dueAt));
+  return `${Date.parse(job.dueAt)<Date.parse(at)?"Late · due":"Due"} ${label}, ${time}`;
 }

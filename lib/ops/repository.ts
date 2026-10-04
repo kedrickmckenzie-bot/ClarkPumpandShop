@@ -118,6 +118,9 @@ export interface WorkOrderListQuery extends PageRequest {
   dispatchBucket?: "unassigned" | "parts" | "late" | "reported";
   dispatchAt?: IsoDateTime;
   dispatchReadiness?: "ready" | "waiting";
+  /** Order dated dispatch commitments by day/time, then priority and stable id. */
+  dispatchPlanOrder?: boolean;
+  scheduleDayFrom?: string;
   scheduleExcludeWeek?: string;
   scheduleView?: import("./internal-schedule-types").ScheduleView;
   scheduleFrom?: string;
@@ -223,7 +226,7 @@ export interface OpsStatement {
 }
 
 export interface OpsRepository extends TaskRepository {
-  getDispatchFilters(scope: OrganizationScope): Promise<{people:{id:string;name:string}[];regions:{id:string;name:string}[]}>;
+  getDispatchFilters(scope: OrganizationScope): Promise<{people:{id:string;name:string;homeRegionId?:string;skills:string[]}[];regions:{id:string;name:string}[]}>;
   getDispatchDayCounts(scope: OrganizationScope, query: WorkOrderListQuery): Promise<Array<{ membershipId?: string; name?: string; day?: string; count: number }>>;
   getInternalSchedule(org: string, id: string): Promise<import("./internal-schedule-types").InternalSchedule | null>;
   listInternalSchedules(org: string, workId: string): Promise<import("./internal-schedule-types").InternalSchedule[]>;

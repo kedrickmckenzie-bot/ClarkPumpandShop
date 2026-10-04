@@ -8,7 +8,7 @@ import { roleCan } from "@/components/ops/role-policy";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import { InternalAssignmentFields } from "./internal-assignment-fields";
 import { InternalScheduleFields } from "./internal-schedule-fields";
-import { canPlanJob, dispatchPlanLabel, dispatchStatus, dispatchTime, orderedStops, type DispatchJob } from "@/lib/ops/dispatch-board";
+import { dueLabel, canPlanJob, dispatchPlanLabel, dispatchStatus, dispatchTime, orderedStops, type DispatchJob } from "@/lib/ops/dispatch-board";
 import { addCalendarDays } from "@/lib/ops/internal-schedule-types";
 import type { WorkOrderListQuery } from "@/lib/ops/repository";
 import styles from "./dispatch-board.module.css";
@@ -16,18 +16,19 @@ import styles from "./dispatch-board.module.css";
 type JobPage = { items: DispatchJob[]; totalCount?: number; nextCursor?: string };
 type Person = { id: string; name: string };
 type Filters = { q: string; person: string; region: string; store: string };
-type Props = { session: OperatorSession; organizationZone: string; today: string; week: string; day: string; view: string;
+export type DispatchBoardProps = { session: OperatorSession; organizationZone: string; today: string; week: string; day: string; view: string;
   bucket?: WorkOrderListQuery["dispatchBucket"]; filters: Filters; people: Person[]; regions: Person[];
   planned: JobPage; queue: JobPage; list?: JobPage; initialSaved?: string; stats: Record<string, number>;
   dayCounts: { membershipId?: string; name?: string; day?: string; count: number }[] };
 type Detail = { job: DispatchJob; instructions?: string; nextAction: string; canReady: boolean; activeVisit: boolean;
   history: { at: string; name?: string; notes?: string; label: string }[] };
+export type DispatchSaveReceipt = { previous: DispatchJob; version: number };
 type SaveResponse = { error?: string; details?: { kind: string; warnings: string[] }; when?: string; week?: string };
 const dateLabel = (date: string, weekday = false) => cachedDateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", ...(weekday ? { weekday: "short" } : {}) }).format(new Date(`${date}T12:00:00Z`));
 const weekdayLabel = (date: string) => cachedDateTimeFormat("en-US", { timeZone: "UTC", weekday: "short" }).format(new Date(`${date}T12:00:00Z`));
 
 /** A board owns only selected records; current grants and command checks stay server-side. */
-export function DispatchBoard(props: Props) {
+export function DispatchBoard(props: DispatchBoardProps) {
   const router = useRouter();
   const [selected, setSelected] = useState<{ job: DispatchJob; mode?: string; day?: string; person?: Person }>();
   const [cell, setCell] = useState<{ day: string; person?: Person }>();
@@ -99,7 +100,7 @@ export function DispatchBoard(props: Props) {
     <div className={styles.stickyControls}>
       <header className={styles.heading}><h1>Dispatch</h1><Link href="/app/work-orders?status=open">Open work orders</Link></header>
       <div className={styles.toolbar}>
-        <nav className={styles.switcher} aria-label="Dispatch view">{["week", "day", "list"].map(item => <Link key={item} href={href({ view: item })} aria-current={view === item ? "page" : undefined}>{item[0].toUpperCase() + item.slice(1)}</Link>)}</nav>
+        <nav className={styles.switcher} aria-label="Dispatch view">{["assign", "day", "list"].map(item => <Link key={item} href={href({ view: item })} aria-current={view === item ? "page" : undefined}>{item === "day" ? "Today" : item[0].toUpperCase() + item.slice(1)}</Link>)}</nav>
         <nav className={styles.weekControls} aria-label="Planning week">
           <Link href={href({ week: addCalendarDays(week, -7), day: addCalendarDays(week, -7) })}>Previous</Link>
           <strong>Week of {dateLabel(week)}</strong>
@@ -173,7 +174,7 @@ function Pagination({ page, href }: { page: JobPage; href?: string }) {
   return total > page.items.length || href ? <p className={styles.partial}>Showing {page.items.length} of {total}{href ? <> · <Link href={href}>Show more</Link></> : null}</p> : null;
 }
 
-function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function Sheet({ title, onClose, children, wide = false }: { wide?: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -192,11 +193,11 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
     return ()=>{document.body.style.overflow=previous;element?.removeEventListener("keydown",onKeyDown);};
   }, [onClose]);
   return <div className={styles.backdrop}><button type="button" className={styles.sheetBackdrop} onClick={onClose} tabIndex={-1} aria-label="Close job details"/>
-    <div className={styles.sheet} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={panel}><header className={styles.sheetHeader}><strong>{title}</strong><button type="button" onClick={onClose}>Close</button></header>{children}</div>
+    <div className={`${styles.sheet} ${wide ? styles.wideSheet : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={panel}><header className={styles.sheetHeader}><strong>{title}</strong><button type="button" onClick={onClose}>Close</button></header>{children}</div>
   </div>;
 }
 
-function JobSheet({ selection, manager, organizationZone, week, onClose, onSaved }: { selection: { job: DispatchJob; mode?: string; day?: string; person?: Person }; manager: boolean; organizationZone: string; week: string; onClose: () => void; onSaved: (note: string, week?: string) => void }) {
+export function JobSheet({ selection, manager, organizationZone, week, onClose, onSaved }: { selection: { job: DispatchJob; mode?: string; day?: string; person?: Person }; manager: boolean; organizationZone: string; week: string; onClose: () => void; onSaved: (note: string, week?: string, receipt?: DispatchSaveReceipt) => void }) {
   const router = useRouter();
   const [detail, setDetail] = useState<Detail>();
   const [error, setError] = useState("");
@@ -216,7 +217,7 @@ function JobSheet({ selection, manager, organizationZone, week, onClose, onSaved
     <div className={styles.sheetBody}><h2>{job.problem}</h2><p><Link href={`/app/stores/${encodeURIComponent(job.storeId)}`}>Store {job.storeNumber} · {job.storeName}</Link></p>
       <span className={styles.status} data-tone={status.tone}>{status.label}</span>
       <dl className={styles.facts}><div><dt>Technician</dt><dd>{job.internalAssigneeName ?? "Needs a technician"}</dd></div>{job.schedule ? <div><dt>When</dt><dd>{dispatchPlanLabel(job.schedule, organizationZone)}</dd></div> : null}
-        {job.dueAt ? <div><dt>Next step due</dt><dd>{dispatchTime(job.dueAt, job.storeZone ?? organizationZone, organizationZone)}</dd></div> : null}
+        {job.dueAt ? <div><dt>Due</dt><dd>{dueLabel(job,new Date().toLocaleDateString("en-CA",{timeZone:job.storeZone??organizationZone}),organizationZone).replace(/^Due /,"")}</dd></div> : null}
         {job.targetCompletionAt ? <div><dt>Finish by</dt><dd>{dispatchTime(job.targetCompletionAt, job.storeZone ?? organizationZone, organizationZone)}</dd></div> : null}
         <div><dt>Manager</dt><dd>{job.internalAccountableParty}</dd></div></dl>
       {detail?.instructions ? <p>{detail.instructions}</p> : null}
@@ -234,7 +235,7 @@ function JobSheet({ selection, manager, organizationZone, week, onClose, onSaved
   </Sheet>;
 }
 
-function LiveJobForm({ job, mode, organizationZone, day, person, onCancel, onSaved }: { job: DispatchJob; mode: string; organizationZone: string; day: string; person?: Person; onCancel: () => void; onSaved: (note: string, week?: string) => void }) {
+function LiveJobForm({ job, mode, organizationZone, day, person, onCancel, onSaved }: { job: DispatchJob; mode: string; organizationZone: string; day: string; person?: Person; onCancel: () => void; onSaved: (note: string, week?: string, receipt?: DispatchSaveReceipt) => void }) {
   const [pending, setPending] = useState(false), [error, setError] = useState(""), [warnings, setWarnings] = useState<string[]>([]);
   const key = useRef<string | undefined>(undefined), formRef = useRef<HTMLFormElement>(null);
   const [reassigning, setReassigning] = useState(mode === "assign" || Boolean(person && person.id !== job.internalMembershipId));
@@ -246,8 +247,17 @@ function LiveJobForm({ job, mode, organizationZone, day, person, onCancel, onSav
     key.current ??= crypto.randomUUID();
     data.set("submissionKey", key.current); data.set("expectedVersion", String(job.version ?? 0)); data.set("expectedAssignmentId", job.assignmentId ?? "");
     data.set("expectedScheduleId", job.schedule?.id ?? "");
-    const endpoint = mode === "ready" ? "internal-result" : mode === "assign" ? "internal-dispatch" : "internal-schedule";
-    data.set("action", mode === "ready" ? "ready" : mode === "assign" ? "assign" : "schedule");
+    const preservePlan = mode === "assign" && Boolean(job.schedule);
+    if (preservePlan && job.schedule) {
+      data.set("precision", job.schedule.precision); data.set("date", job.schedule.day ?? job.schedule.week);
+      if (localStart) data.set("localStart", localStart);
+      if (job.schedule.durationMinutes) data.set("durationMinutes", String(job.schedule.durationMinutes));
+      if (job.schedule.tentative) data.set("tentative", "yes");
+      if (job.schedule.reviewReason) data.set("reviewReason", job.schedule.reviewReason);
+      if (job.schedule.disambiguation) data.set("disambiguation", job.schedule.disambiguation);
+    }
+    const endpoint = preservePlan ? "internal-schedule" : mode === "ready" ? "internal-result" : mode === "assign" ? "internal-dispatch" : "internal-schedule";
+    data.set("action", preservePlan ? "schedule" : mode === "ready" ? "ready" : mode === "assign" ? "assign" : "schedule");
     setPending(true); setError("");
     try {
       const response = await fetch(`/api/ops/work-orders/${encodeURIComponent(job.id)}/${endpoint}`, { method: "POST", headers: { Accept: "application/json" }, body: data });
@@ -256,7 +266,7 @@ function LiveJobForm({ job, mode, organizationZone, day, person, onCancel, onSav
         if (result.details?.kind === "schedule_warning") { setWarnings(result.details.warnings); return; }
         throw new Error(result.error ?? "Could not save. Your entries are still here. Try again.");
       }
-      onSaved(`Saved. ${job.number}${result.when ? ` is set for ${result.when}.` : mode === "ready" ? " is ready to work." : " was updated."}`, result.week);
+      onSaved(`Saved. ${job.number}${result.when ? ` is set for ${result.when}.` : mode === "ready" ? " is ready to work." : " was updated."}`, result.week, mode === "ready" ? undefined : {previous:job,version:(job.version??0)+1});
       onCancel();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not confirm the save. Refresh before trying again."); }
     finally { setPending(false); }
@@ -266,11 +276,11 @@ function LiveJobForm({ job, mode, organizationZone, day, person, onCancel, onSav
     {error ? <p role="alert">{error}</p> : null}
     <fieldset disabled={pending}>
       {mode === "ready" ? <label>What is ready now?<textarea name="notes" required maxLength={3000} rows={2}/></label> : <>
-        <InternalAssignmentFields storeId={job.storeId} defaultManager={job.internalAccountableId && job.internalAccountableId !== "facilities-coordination" ? {id:job.internalAccountableId,name:job.internalAccountableParty} : undefined} defaultTarget={person ? person.id ? "person" : "pool" : job.internalTarget ?? "pool"}
+        <InternalAssignmentFields compact storeId={job.storeId} defaultManager={job.internalAccountableId && job.internalAccountableId !== "facilities-coordination" ? {id:job.internalAccountableId,name:job.internalAccountableParty} : undefined} defaultTarget={person ? person.id ? "person" : "pool" : job.internalTarget ?? "pool"}
           onSelectionChange={selection=>setReassigning(selection.target!==(job.internalTarget??"pool") || (selection.target==="person" && selection.personId!==job.internalMembershipId) || (selection.target==="awaiting_allocation" && selection.managerId!==job.internalAccountableId))}
           defaultPerson={person?.id ? person : job.internalMembershipId ? { id: job.internalMembershipId, name: job.internalAssigneeName ?? "Technician" } : undefined}/>
         {mode === "schedule" ? <>
-          <InternalScheduleFields plan={person ? undefined : job.schedule ? {...job.schedule, localStart} : undefined} manager storeZone={job.storeZone ?? organizationZone} planningZone={organizationZone} date={day} today={day} waiting={Boolean(job.hasOpenFollowUp || job.visitHoldPosture)} showSubmit={false}/>
+          <InternalScheduleFields plan={job.schedule ? {...job.schedule, localStart, ...(person ? {precision:"day",day} as const : {})} : undefined} manager storeZone={job.storeZone ?? organizationZone} planningZone={organizationZone} date={day} today={day} waiting={Boolean(job.hasOpenFollowUp || job.visitHoldPosture)} showSubmit={false}/>
           {reassigning ? <label>Why change who handles this?<textarea name="reason" required rows={2} maxLength={1000}/></label> : null}
         </> : <label>Why change who handles this?<textarea name="reason" required rows={2} maxLength={1000}/></label>}
       </>}

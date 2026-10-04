@@ -2,7 +2,7 @@ import { internalScheduleStatement } from "./internal-scheduling";
 import { workResultStatement } from "./internal-execution";
 import type { OpsRepository, OpsStatement } from "./repository";
 import type { OpsFixture } from "./types";
-import { assertOpsFixture, NORTHLINE_FIELD_MANAGER } from "./fixtures";
+import { assertOpsFixture, buildNorthlinePresentationFixture, NORTHLINE_FIELD_MANAGER } from "./fixtures";
 
 function insert(table: string, value: Record<string, unknown>): OpsStatement {
   const entries = Object.entries(value).filter(([, item]) => item !== undefined);
@@ -22,6 +22,7 @@ export function buildOpsSeedStatements(fixture: OpsFixture, options: {omitStoreC
   push("ops_stores", fixture.stores.map((row) => ({ ...(options.omitStoreContacts ? {} : {phone:row.phone,access_notes:row.accessNotes,access_notes_version:row.accessNotesVersion}), id: row.id, organization_id: row.organizationId, division_id: row.divisionId, region_id: row.regionId, store_number: row.storeNumber, name: row.name, address_1: row.address1, address_2: row.address2, city: row.city, state: row.state, postal_code: row.postalCode, aliases_json: JSON.stringify(row.aliases), search_text: [row.storeNumber,row.name,row.address1,row.address2,row.city,row.state,row.postalCode,...row.aliases].filter(Boolean).join(" ").toLocaleLowerCase("en-US"), latitude_e6: row.latitudeE6, longitude_e6: row.longitudeE6, geofence_radius_m: row.geofenceRadiusM, location_policy_enabled: row.locationPolicyEnabled ? 1 : 0, time_zone: row.timeZone, status: row.status, created_at: row.createdAt })));
   push("ops_users", fixture.users.map((row) => ({ ...(options.omitStoreContacts ? {} : {phone:row.phone}), id: row.id, email: row.email, display_name: row.displayName, status: row.status, created_at: row.createdAt })));
   push("ops_memberships", fixture.memberships.map((row) => ({ id: row.id, organization_id: row.organizationId, user_id: row.userId, role: row.role, status: row.status, created_at: row.createdAt })));
+  push("ops_technician_profiles", (options.omitStoreContacts ? [] : fixture.technicianProfiles ?? []).map(row=>({id:row.id,organization_id:row.organizationId,membership_id:row.membershipId,home_region_id:row.homeRegionId,skills_json:row.skillsJson})));
   push("ops_scope_grants", fixture.scopeGrants.map((row) => ({ id: row.id, organization_id: row.organizationId, membership_id: row.membershipId, scope_kind: row.scopeKind, scope_id: row.scopeId, permission: row.permission, created_at: row.createdAt })));
   push("ops_vendors", fixture.vendors.map((row) => ({ id: row.id, organization_id: row.organizationId, code: row.code, name: row.name, dispatch_email: row.dispatchEmail, dispatch_phone: row.dispatchPhone, status: row.status, preferred: row.preferred ? 1 : 0, search_text: [row.name,...fixture.vendorSpecialties.filter((item) => item.organizationId === row.organizationId && item.vendorId === row.id).flatMap((item) => [item.displayName,...item.searchAliases])].join(" ").toLocaleLowerCase("en-US"), created_at: row.createdAt })));
   push("ops_vendor_reminders", fixture.vendorReminders.map((row) => ({ id: row.id, organization_id: row.organizationId, vendor_id: row.vendorId, title: row.title, note: row.note, accountable_party: row.accountableParty, due_at: row.dueAt, escalation_to: row.escalationTo, status: row.status, created_by_actor_type: row.createdByActorType, created_by_actor_id: row.createdByActorId, created_by_actor_name: row.createdByActorName, created_at: row.createdAt, completed_by_actor_type: row.completedByActorType, completed_by_actor_id: row.completedByActorId, completed_by_actor_name: row.completedByActorName, completed_at: row.completedAt, completion_note: row.completionNote })));
@@ -165,4 +166,17 @@ export function buildPreviewPeopleStatements(): OpsStatement[] {
     insert("ops_memberships", { id: membership.id, organization_id: membership.organizationId, user_id: membership.userId, role: membership.role, status: membership.status, created_at: membership.createdAt }),
     insert("ops_scope_grants", { id: scopeGrant.id, organization_id: scopeGrant.organizationId, membership_id: scopeGrant.membershipId, scope_kind: scopeGrant.scopeKind, scope_id: scopeGrant.scopeId, permission: scopeGrant.permission, created_at: scopeGrant.createdAt }),
   ];
+}
+
+/** Only new dispatch identities are eligible; existing work is never updated. */
+export function buildDispatchDemoBackfill(anchorDate = new Date().toISOString()): OpsStatement[] {
+  return buildOpsSeedStatements(buildNorthlinePresentationFixture(anchorDate)).filter(statement =>
+    statement.params.some(value=>typeof value === "string" && value.startsWith("dispatch-study-")) &&
+    statement.sql.startsWith("INSERT INTO ") && statement.sql.endsWith("ON CONFLICT DO NOTHING"));
+}
+
+export async function backfillDispatchDemo(repository: OpsRepository, anchorDate?: string) {
+  const statements=buildDispatchDemoBackfill(anchorDate);
+  const size=repository.kind === "d1" ? 75 : statements.length;
+  for(let i=0;i<statements.length;i+=size)await repository.atomicWrite(statements.slice(i,i+size));
 }

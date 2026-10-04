@@ -2023,7 +2023,12 @@ export interface Page<T> {
   totalCount?: number;
 }
 
+export interface TechnicianProfile {
+  id: string; organizationId: string; membershipId: string; homeRegionId?: string; skillsJson: string;
+}
+
 export interface OpsFixture {
+  technicianProfiles?: TechnicianProfile[];
   internalSchedules?: import("./internal-schedule-types").InternalSchedule[];
  storeTasks?: import("./store-task-types").StoreTask[];
  storeTaskMessages?: import("./store-task-types").TaskMessage[];
