@@ -21,7 +21,7 @@ import type {
   PageRequest,
   RequestImpactAssessment,
   ServiceRequest,
-  SiteVisitWorkOrder,
+  SiteVisitWorkOrder, WorkResult, WorkOutcome,
   Store,
   StoredFile,
   TaxonomyNode,
@@ -111,6 +111,13 @@ export interface OrganizationScope {
 }
 
 export interface WorkOrderListQuery extends PageRequest {
+  dispatchReadiness?: "ready" | "waiting";
+  scheduleExcludeWeek?: string;
+  scheduleView?: import("./internal-schedule-types").ScheduleView;
+  scheduleFrom?: string;
+  scheduleTo?: string;
+  /** Relative agenda views evaluate this instant in each plan's saved zone. */
+  scheduleAt?: IsoDateTime;
   needsConfirmation?: boolean;
   dueBefore?: IsoDateTime;
   dueAfter?: IsoDateTime;
@@ -121,6 +128,8 @@ export interface WorkOrderListQuery extends PageRequest {
   vendorId?: OpsId;
   /** Work whose current assignment is internal and names this team member. */
   internalMembershipId?: OpsId;
+  internalOnly?: boolean;
+  internalTarget?: "person" | "pool" | "awaiting_allocation";
   storeId?: OpsId;
   regionId?: OpsId;
   categoryKey?: string;
@@ -136,6 +145,7 @@ export interface WorkOrderListQuery extends PageRequest {
   createdFrom?: IsoDateTime;
   createdTo?: IsoDateTime;
   heldOnly?: boolean;
+  excludeHeld?: boolean;
   heldStoreGroup?: "multiple";
   upcomingAppointmentAfter?: IsoDateTime;
   heldReviewDeadlineTo?: IsoDateTime;
@@ -198,9 +208,16 @@ export interface EstimateRequestPublicCapability {
 export interface OpsStatement {
   sql: string;
   params: readonly unknown[];
+  /** Fixture equivalent of the SQL access assertion executed inside the transaction. */
+  visitSelection?: { org: string; visitId: string; count: number };
+  dispatchAccess?: { org: string; membershipId: string; storeId: string; roles: string[] };
 }
 
 export interface OpsRepository extends TaskRepository {
+  getDispatchFilters(scope: OrganizationScope): Promise<{people:{id:string;name:string}[];regions:{id:string;name:string}[]}>;
+  getInternalSchedule(org: string, id: string): Promise<import("./internal-schedule-types").InternalSchedule | null>;
+  listInternalSchedules(org: string, workId: string): Promise<import("./internal-schedule-types").InternalSchedule[]>;
+  listDispatchPeople(scope: OrganizationScope, storeId: string, search?: string, cursor?: string, kind?: "technician" | "manager"): Promise<{ items: { id: string; name: string; role: string }[]; nextCursor?: string }>;
   getWorkPrice(organizationId: OpsId, id: OpsId): Promise<import("./work-price-types").WorkPrice | null>;
   listWorkPrices(organizationId: OpsId, query: import("./work-price-types").WorkPriceQuery): Promise<{ items: import("./work-price-types").WorkPrice[]; total: number }>;
   readonly kind: "d1" | "postgres" | "fixture";
@@ -357,6 +374,8 @@ export interface OpsRepository extends TaskRepository {
   getSiteVisitWorkOrder(organizationId: OpsId, visitId: OpsId, workOrderId: OpsId): Promise<SiteVisitWorkOrder | null>;
   listSiteVisitWorkOrders(organizationId: OpsId, visitId: OpsId): Promise<SiteVisitWorkOrder[]>;
   listSiteVisitWorkOrdersForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<SiteVisitWorkOrder[]>;
+  listWorkResults(organizationId: OpsId, workOrderId: OpsId): Promise<WorkResult[]>;
+  listWorkOutcomesForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOutcome[]>;
   listWorkOrderVerifications(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderVerification[]>;
   getFollowUp(organizationId: OpsId, followUpId: OpsId): Promise<FollowUp | null>;
   getWorkflowTask(organizationId: OpsId, workflowTaskId: OpsId): Promise<WorkflowTask | null>;

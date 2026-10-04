@@ -62,8 +62,9 @@ export async function POST(request: Request) {
     const store = await assertStoreInSessionScope(context.session, storeId);
     const storeTimeZone = store.timeZone ?? "UTC";
     const dueAtInput = formText(formData, "dueAt", { max: 40 });
+    const internalNextVisit = assignmentKind === "internal" && formData.get("internalNextVisit") === "on";
     const holdDeadlineInput = formText(formData, "holdDeadlineAt", {
-      required: assignmentKind === "hold_for_visit",
+      required: assignmentKind === "hold_for_visit" || internalNextVisit,
       max: 40,
     });
 
@@ -93,7 +94,8 @@ export async function POST(request: Request) {
         throw new OpsDomainError("VALIDATION", "Choose an approved outside vendor.");
       }
     }
-    if (assignmentKind === "internal") {
+    const internalTarget = formText(formData, "internalTarget", { max: 30 }) || "person";
+    if (assignmentKind === "internal" && internalTarget === "person") {
       if (!internalMembershipId || !(await context.repository.getMembership(context.session.organizationId, internalMembershipId))) {
         throw new OpsDomainError("VALIDATION", "Choose an internal maintenance assignee.");
       }
@@ -136,9 +138,11 @@ export async function POST(request: Request) {
           kind: initialAssignmentKind as "internal" | "outside_vendor" | "choose_later",
           vendorId: assignmentKind === "outside_vendor" ? vendorId : undefined,
           internalMembershipId: assignmentKind === "internal" ? internalMembershipId : undefined,
+          internalTarget: assignmentKind === "internal" ? internalTarget as "person" | "pool" | "awaiting_allocation" : undefined,
+          managerId: assignmentKind === "internal" ? formText(formData,"managerId",{max:120}) || undefined : undefined,
         },
-        holdForVisit: assignmentKind === "hold_for_visit" ? {
-          posture: formText(formData, "holdPosture", { required: true, max: 80 }) as "complete_using_professional_judgment" | "look_and_report",
+        holdForVisit: assignmentKind === "hold_for_visit" || internalNextVisit ? {
+          posture: (internalNextVisit ? "complete_using_professional_judgment" : formText(formData, "holdPosture", { required: true, max: 80 })) as "complete_using_professional_judgment" | "look_and_report",
           deadlineAt: localDateTimeToIso(holdDeadlineInput, storeTimeZone),
           internalReviewThresholdAmountMinor: optionalMoneyMinor(formText(formData, "holdInternalReviewThreshold", { max: 30 })),
           currency: "USD",

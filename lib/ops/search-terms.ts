@@ -24,3 +24,10 @@ export function likeAnySearchTerm(expression: string, terms: readonly string[], 
   params.push(...terms.map((term) => `%${term}%`));
   return `(${terms.map(() => `${expression} LIKE ?`).join(" OR ")})`;
 }
+
+/** Literal contains avoids SQLite's small LIKE-pattern limit and wildcard surprises. */
+export function containsAnySearchTerm(expression: string, terms: readonly string[], params: unknown[], dialect: "sqlite" | "postgres") {
+  params.push(...terms);
+  const fn = dialect === "postgres" ? "strpos" : "instr";
+  return `(${terms.map(() => `${fn}(${expression}, ?) > 0`).join(" OR ")})`;
+}

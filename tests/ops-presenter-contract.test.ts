@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { OperatorSession } from "@/components/ops/data-contract";
+import type { WorkResult } from "@/lib/ops/types";
 import {
   NORTHLINE_DEMO_ENTRY_TOKENS,
   NORTHLINE_DEMO_HANDLES,
@@ -515,6 +516,38 @@ describe("operator presenter drill-through contracts", () => {
     expect(visitWork.table?.rows).toHaveLength(2);
     expect(visitWork.table?.rows.find((row) => row.id.includes("wo-northline-104"))?.cells.find((cell) => cell.key === "outcome")?.secondary).toMatch(/compressor replaced/i);
     expect(visitDetail.sections.find((section) => section.id === "missing-work-order")).toBeUndefined();
+  });
+
+  it.each(["visit", "work-order"] as const)("shows the applicable amended visit outcome in the %s record", (route) => {
+    const fixture = buildNorthlinePresentationFixture();
+    const visitId = "visit-northline-104-2";
+    const link = fixture.siteVisitWorkOrders.find((row) => row.visitId === visitId && row.workOrderId === "wo-northline-104")!;
+    expect(link).toBeDefined();
+    const original = structuredClone(link);
+    const result: WorkResult = {
+      id: "result-presenter-checkout", organizationId: link.organizationId, workOrderId: link.workOrderId,
+      siteVisitWorkOrderId: link.id, linkedAt: link.linkedAt, cycleVersion: 20,
+      performerName: "Maria Santos", performerMembershipId: "membership-northline-tech-1", source: "visit_checkout",
+      outcome: "completed", outcomeNotes: "Original visit result", outcomeRecordedAt: "2026-08-19T10:00:00.000Z",
+      outcomeRecordedByActorType: "user", outcomeRecordedByActorName: "Maria Santos",
+    };
+    const correction: WorkResult = {
+      ...result, id: "result-presenter-correction", source: "correction", supersedesResultId: result.id,
+      outcome: "return_visit_required", outcomeNotes: "The latch still needs adjustment", cycleVersion: 21,
+      outcomeRecordedAt: "2026-08-19T11:00:00.000Z", outcomeRecordedByActorName: "Jordan Lee",
+    };
+    (fixture.workResults ??= []).push(result, correction,
+      { ...correction, id: "result-other-tenant", organizationId: "org-other", cycleVersion: 99, outcomeNotes: "Private other-tenant result" },
+      { ...result, id: "result-visitless", siteVisitWorkOrderId: undefined, source: "technician_report", cycleVersion: 100, outcomeNotes: "A later visitless report" },
+    );
+    const model = buildDetailModel(fixture, executiveSession(), route, route === "visit" ? visitId : link.workOrderId);
+    const section = model.sections.find((item) => item.id === (route === "visit" ? "work-orders" : "visits"));
+    const row = section?.table?.rows.find((item) => item.id === (route === "visit" ? link.id : visitId));
+    expect(row?.cells.find((cell) => cell.key === "outcome")).toMatchObject({
+      value: "Return Visit Required", secondary: "The latch still needs adjustment",
+    });
+    expect(link).toEqual(original);
+    expect(result.outcome).toBe("completed");
   });
 
   it("promotes a current large repair comparison instead of accumulated historical spend", () => {

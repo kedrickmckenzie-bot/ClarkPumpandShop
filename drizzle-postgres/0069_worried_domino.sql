@@ -1,0 +1,6 @@
+ALTER TABLE "ops_visit_evidence" DROP CONSTRAINT "chk_ops_visit_evidence_channel";--> statement-breakpoint
+ALTER TABLE "ops_visit_sessions" DROP CONSTRAINT "chk_ops_visits_started_channel";--> statement-breakpoint
+ALTER TABLE "ops_visit_sessions" DROP CONSTRAINT "chk_ops_visits_ended_channel";--> statement-breakpoint
+ALTER TABLE "ops_visit_evidence" ADD CONSTRAINT "chk_ops_visit_evidence_channel" CHECK ("ops_visit_evidence"."channel" IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app', 'internal_web'));--> statement-breakpoint
+ALTER TABLE "ops_visit_sessions" ADD CONSTRAINT "chk_ops_visits_started_channel" CHECK ("ops_visit_sessions"."started_channel" IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app', 'internal_web'));--> statement-breakpoint
+ALTER TABLE "ops_visit_sessions" ADD CONSTRAINT "chk_ops_visits_ended_channel" CHECK ("ops_visit_sessions"."ended_channel" IS NULL OR "ops_visit_sessions"."ended_channel" IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app', 'internal_web'));

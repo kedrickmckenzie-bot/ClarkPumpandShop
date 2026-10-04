@@ -36,6 +36,7 @@ export interface RoleCapabilityOverride {
 
 /** Append-only, versioned policy for the operational close decision. */
 export interface OrganizationWorkflowPolicy {
+  internalCheckInRequired?: boolean;
   requireConfirmationDefault?: boolean;
   id: OpsId;
   organizationId: OpsId;
@@ -88,7 +89,7 @@ export type EstimateRequestStatus =
   | "selected"
   | "not_selected";
 export type EstimateRequestChannel = "email" | "sms" | "manual";
-export type VisitChannel = "qr" | "secure_link" | "store_device" | "vendor_portal" | "future_app";
+export type VisitChannel = "internal_web" | "qr" | "secure_link" | "store_device" | "vendor_portal" | "future_app";
 export type VisitStatus = "active" | "checked_out" | "amended";
 export type VisitOutcome =
   | "resolved"
@@ -622,6 +623,9 @@ export interface RequestImpactAssessment {
 }
 
 export interface WorkOrder {
+  internalScheduleId?: string;
+  targetCompletionAt?: IsoDateTime;
+  targetCompletionSource?: string;
   requireConfirmation?: boolean;
   confirmationMembershipId?: OpsId;
   id: OpsId;
@@ -671,6 +675,8 @@ export interface WorkOrderAssignment {
   kind: AssignmentKind;
   vendorId?: OpsId;
   internalMembershipId?: OpsId;
+  /** Named legacy assignments are read as person; only explicit pool work is claimable. */
+  internalTarget?: "person" | "pool" | "awaiting_allocation";
   status: AssignmentStatus;
   assignedAt: IsoDateTime;
   supersedesAssignmentId?: OpsId;
@@ -882,6 +888,7 @@ export interface VisitSession {
  * for exactly one selected operator work order.
  */
 export interface SiteVisitWorkOrder {
+  cycleVersion?: number;
   id: OpsId;
   organizationId: OpsId;
   visitId: OpsId;
@@ -926,6 +933,27 @@ export interface WorkOrderVisitHold {
   updatedAt: IsoDateTime;
 }
 
+/** Reported work evidence; corrections append successors without fabricating a visit. */
+export interface WorkResult extends Omit<SiteVisitWorkOrder, "visitId" | "ordinal" | "linkedByActorType" | "linkedByActorId" | "linkedByActorName"> {
+  siteVisitWorkOrderId?: OpsId;
+  assignmentId?: OpsId;
+  performerMembershipId?: OpsId;
+  performerName: string;
+  source: "technician_report" | "visit_checkout" | "phone" | "email" | "in_person" | "correction";
+  reportedPerformedAt?: IsoDateTime;
+  supersedesResultId?: OpsId;
+  correctionReason?: string;
+  blocker?: "parts" | "help" | "vendor" | "cannot_today";
+  outcome: SiteVisitWorkOrderOutcome;
+  outcomeRecordedAt: IsoDateTime;
+  outcomeRecordedByActorType: ActorType;
+  outcomeRecordedByActorName: string;
+  cycleVersion: number;
+}
+export type WorkOutcome = Omit<SiteVisitWorkOrder, "visitId" | "ordinal"> & {
+  visitId?: OpsId; ordinal?: number; siteVisitWorkOrderId?: OpsId; workResultId?: OpsId; source?: WorkResult["source"]; performerName?: string;
+};
+
 export type WorkOrderVerificationDecision = "verified" | "rejected" | "inconclusive";
 export type WorkOrderVerificationBasis = "observable_result" | "technical_evidence" | "operational_review";
 export type WorkOrderVerificationScope = "reported_problem" | "pm_task" | "technical_work";
@@ -935,7 +963,8 @@ export interface WorkOrderVerification {
   id: OpsId;
   organizationId: OpsId;
   workOrderId: OpsId;
-  siteVisitWorkOrderId: OpsId;
+  siteVisitWorkOrderId?: OpsId;
+  workResultId?: OpsId;
   outcome: SiteVisitWorkOrderOutcome;
   outcomeRecordedAt: IsoDateTime;
   cycle: number;
@@ -1892,9 +1921,11 @@ export type NotificationEventKey =
   | "held_work_claimed"
   | "held_work_outcomes_recorded"
   | "vendor_compliance_due"
-  | "repair_confirmation_required";
+  | "repair_confirmation_required"
+  | "internal_dispatch_changed";
 
 export type NotificationRecipientRole =
+  | "internal_technician"
   | "facilities_admin"
   | "store_manager"
   | "regional_manager"
@@ -1989,6 +2020,7 @@ export interface Page<T> {
 }
 
 export interface OpsFixture {
+  internalSchedules?: import("./internal-schedule-types").InternalSchedule[];
  storeTasks?: import("./store-task-types").StoreTask[];
  storeTaskMessages?: import("./store-task-types").TaskMessage[];
  storeTaskPeople?: import("./store-task-types").TaskParticipant[];
@@ -2035,6 +2067,7 @@ export interface OpsFixture {
   estimateRequests: WorkOrderEstimateRequest[];
   estimateProposals: VendorEstimateProposal[];
   visits: VisitSession[];
+  workResults?: WorkResult[];
   siteVisitWorkOrders: SiteVisitWorkOrder[];
   workOrderVerifications: WorkOrderVerification[];
   visitEvidence: VisitEvidence[];

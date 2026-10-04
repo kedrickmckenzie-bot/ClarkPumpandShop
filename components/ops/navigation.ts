@@ -51,7 +51,7 @@ export const operatorNavigation: NavigationItem[] = [
     id: "work",
     label: "Work",
     href: "/app/work-orders?status=open",
-    matchPrefixes: ["/app/tasks", "/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits"],
+    matchPrefixes: ["/app/tasks", "/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits", "/app/dispatch", "/app/my-work"],
     contextGroup: "work",
   },
   {
@@ -91,6 +91,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
       { id: "needs-attention", label: "Review queue", href: "/app/action-center" },
       { id: "tasks", label: "Tasks", href: "/app/tasks" },
       { id: "requests", label: "Requests", href: "/app/requests" },
+      { id: "dispatch", label: "Dispatch", href: "/app/dispatch" },
       { id: "work-orders", label: "Work orders", href: "/app/work-orders" },
       { id: "estimates", label: "Quote requests", href: "/app/estimates" },
       { id: "visits", label: "Service visits", href: "/app/visits" },
@@ -207,7 +208,7 @@ export function navigationForRole(role: OperatorRole, edition: DemoEdition = DEF
         };
       }
       // Technicians open Work on their own jobs.
-      if (item.id === "work" && role === "technician") return { ...item, label: "My work", href: "/app/work-orders?assignee=me&status=open" };
+      if (item.id === "work" && role === "technician") return { ...item, label: "My work", href: "/app/my-work" };
       if (item.id === "work" && roleCanAccessListRoute(role, "work-orders")) return item;
       if (!item.contextGroup) return item;
       const firstVisibleItem = visibleContextGroup(role, item.contextGroup, edition)?.items[0];

@@ -142,7 +142,7 @@ export interface WorkflowTaskDraft {
   initialStatus?: "open" | "in_progress";
 }
 
-function validateDraftShape(draft: WorkflowTaskDraft, createdAt: IsoDateTime) {
+function validateDraftShape(draft: WorkflowTaskDraft, createdAt: IsoDateTime, inheritedDueAt?: IsoDateTime) {
   if (!taskTypes.has(draft.taskType)) throw new OpsDomainError("VALIDATION", "Workflow task type is invalid");
   if (!taskPriorities.has(draft.priority)) throw new OpsDomainError("VALIDATION", "Workflow task priority is invalid");
   required(draft.title, "Task title");
@@ -160,7 +160,7 @@ function validateDraftShape(draft: WorkflowTaskDraft, createdAt: IsoDateTime) {
   assertInstant(createdAt, "Task creation time");
   if (draft.dueAt) {
     assertInstant(draft.dueAt, "Task due time");
-    if (Date.parse(draft.dueAt) < Date.parse(createdAt)) throw new OpsDomainError("VALIDATION", "Task due time cannot precede task creation");
+    if (Date.parse(draft.dueAt) < Date.parse(createdAt) && draft.dueAt !== inheritedDueAt) throw new OpsDomainError("VALIDATION", "Task due time cannot precede task creation");
   }
   if (draft.applicableSlaClock && !slaClocks.has(draft.applicableSlaClock)) throw new OpsDomainError("VALIDATION", "Applicable SLA clock is invalid");
   if (!Number.isInteger(draft.escalationLevel ?? 0) || (draft.escalationLevel ?? 0) < 0) throw new OpsDomainError("VALIDATION", "Task escalation level must be a non-negative integer");
@@ -173,9 +173,11 @@ export function buildWorkflowTaskRecord(input: {
   draft: WorkflowTaskDraft;
   actor: ActorContext;
   createdAt: IsoDateTime;
+  /** Preserve an existing overdue obligation during an ownership handoff. */
+  inheritedDueAt?: IsoDateTime;
 }): WorkflowTask {
   assertActorOrganization(input.actor, input.organizationId);
-  validateDraftShape(input.draft, input.createdAt);
+  validateDraftShape(input.draft, input.createdAt, input.inheritedDueAt);
   const status = input.draft.initialStatus ?? "open";
   return {
     id: input.id,
@@ -539,11 +541,11 @@ async function resolveWorkflowTask(svc: OpsCommandServices, input: ResolveWorkfl
   if (outcome === "completed" && !replacementTask && workOrder.status === "resolved") {
     const [policy, outcomes, verifications, detail] = await Promise.all([
       repository.getActiveWorkflowPolicy(input.organizationId),
-      repository.listSiteVisitWorkOrdersForWorkOrder(input.organizationId, workOrder.id),
+      repository.listWorkOutcomesForWorkOrder(input.organizationId, workOrder.id),
       repository.listWorkOrderVerifications(input.organizationId, workOrder.id),
       repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id),
     ]);
-    const visitIds = [...new Set(outcomes.map((record) => record.visitId))];
+    const visitIds = [...new Set(outcomes.flatMap((record) => record.visitId ? [record.visitId] : []))];
     const visits = await Promise.all(visitIds.map((visitId) => repository.getVisit(input.organizationId, visitId)));
     automaticClosure = evaluateWorkOrderClosureEligibility({
       mode: "automatic",

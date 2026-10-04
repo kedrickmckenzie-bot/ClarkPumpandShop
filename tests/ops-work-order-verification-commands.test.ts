@@ -1,3 +1,4 @@
+import { latestRecordedWorkOutcome } from "@/lib/ops/work-order-outcome";
 import { describe, expect, it } from "vitest";
 import {
   checkInVisit,
@@ -947,7 +948,9 @@ it("amends an incorrect checkout with an attributed original record and a fresh 
   outcome.outcome="return_visit_required";
   const test=harness(fixture);
   await correctWorkOrderOutcome(test.services,{organizationId:NORTHLINE_ORGANIZATION_ID,workOrderId,expectedVersion:7,expectedOutcomeId:outcomeId,outcome:"completed",reason:"Technician selected the wrong checkout result; work was completed",actor:facilitiesActor});
-  const current=(await test.repository.listSiteVisitWorkOrdersForWorkOrder(NORTHLINE_ORGANIZATION_ID,workOrderId)).find(o=>o.id===outcomeId)!;
+  const original=(await test.repository.listSiteVisitWorkOrdersForWorkOrder(NORTHLINE_ORGANIZATION_ID,workOrderId)).find(o=>o.id===outcomeId)!;
+  expect(original).toMatchObject({outcome:"return_visit_required",outcomeRecordedAt});
+  const current=latestRecordedWorkOutcome(await test.repository.listWorkOutcomesForWorkOrder(NORTHLINE_ORGANIZATION_ID,workOrderId))!;
   expect(current).toMatchObject({outcome:"completed",outcomeRecordedByActorName:facilitiesActor.actorName,outcomeRecordedAt:NOW});
   const amendment=test.repository.snapshot().auditEvents.find(e=>e.eventType==="work_order.service_result_corrected")!;
   expect(JSON.parse(amendment.payloadJson).previous).toMatchObject({outcome:"return_visit_required",outcomeRecordedAt});

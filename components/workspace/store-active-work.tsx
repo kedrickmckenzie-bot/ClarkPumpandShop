@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { scheduleLabel } from "@/lib/ops/dispatch-calendar";
 import { oneLine } from "@/lib/product/one-line";
 import { providerKindLabel, providerName } from "@/lib/product/provider-label";
 import { roleCanAccessListRoute } from "@/components/ops/role-policy";
@@ -30,7 +31,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
   const nowIso = new Date().toISOString();
   const confirmCount = confirm.totalCount ?? confirm.items.length;
   // Each confirmation says who recorded the result and when (from the outcome record), next to the button.
-  const outcomes = await Promise.all(confirm.items.slice(0, 3).map((work) => repository.listSiteVisitWorkOrdersForWorkOrder(session.organizationId, work.id)));
+  const outcomes = await Promise.all(confirm.items.slice(0, 3).map((work) => repository.listWorkOutcomesForWorkOrder(session.organizationId, work.id)));
   const confirmations = confirm.items.slice(0, 3).map((work, index) => ({
     key: work.id, href: `/app/work-orders/${encodeURIComponent(work.id)}?view=confirmation#work-verification`,
     title: `${work.number} · ${oneLine(work.problem)}`,
@@ -67,7 +68,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
         <tbody>{rows.map((work) => <tr key={work.id}>
           <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(work.id)}`}>{oneLine(work.problem)}</Link><p className={styles.muted}>{work.number}{work.priority === "urgent" || work.priority === "emergency" ? ` · ${work.priority === "urgent" ? "Urgent" : "Emergency"}` : ""}</p></td>
           <td data-label="Who's handling it">{work.accountableParty}{work.assignmentKind !== "choose_later" ? <p className={styles.muted}>{providerKindLabel(work.assignmentKind)}: {providerName({ kind: work.assignmentKind, vendorName: work.vendorName, internalName: work.internalAssigneeName })}</p> : null}</td>
-          <td data-label="Next step">{work.nextAction}</td>
+          <td data-label="Next step">{work.nextAction}{work.assignmentKind==="internal"?<><p>Planned: {scheduleLabel(work.schedule)}</p><p>Target completion: {work.targetCompletionAt?formatOperationsDateTime(work.targetCompletionAt,store.timeZone):"Not set"}</p></>:null}</td>
           <td data-label="Due">{work.dueAt ? <>{formatOperationsDateTime(work.dueAt, store.timeZone)}{work.dueAt < nowIso ? <p className={styles.muted}>Overdue</p> : null}</> : "No date"}</td>
         </tr>)}</tbody>
       </table></div> : <p className={styles.muted}>No open work at this store.</p>}

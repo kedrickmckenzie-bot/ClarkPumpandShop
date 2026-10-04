@@ -3,7 +3,7 @@ import { warrantyCorrectionTerms } from "@/lib/ops/warranty-review";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import { roleCan, roleCanOpenOperatorHref } from "@/components/ops/role-policy";
 import { recordedMoneyLabel, type ReviewEvidence } from "@/lib/ops/work-review";
-import { latestRecordedWorkOutcome, applicableOutcomeVerification } from "@/lib/ops/work-order-outcome";
+import { latestRecordedWorkOutcome, applicableOutcomeVerification, normalizeWorkOutcomes } from "@/lib/ops/work-order-outcome";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import type { OpsFixture } from "@/lib/ops/types";
 import { equipmentIssueRankingHref, isEquipmentIssue } from "@/lib/ops/equipment-issues";
@@ -111,7 +111,7 @@ export function buildEquipmentReview(fixture: OpsFixture, session: OperatorSessi
     choices: [{ label: "Whole equipment", href: href({ component: undefined }), selected: !selectedId }, ...components.map((row) => ({ label: `${row.name}${row.removedAt && !row.name.toLowerCase().includes("removed") ? " (removed)" : ""}`, href: href({ component: row.id }), selected: row.id === selectedId })), { label: "Component not specified", href: href({ component: "unlinked" }), selected: selectedId === "unlinked" }],
     periods: issueCohort ? [] : ["12", "24", "all"].map((value) => ({ label: value === "all" ? "All recorded dates" : `${value} months`, href: href({ history: value }), selected: value === (months?.toString() ?? "all") })),
     rows: work.slice((page - 1) * 12, page * 12).map((row) => {
-      const outcome = latestRecordedWorkOutcome(links.filter((link) => link.workOrderId === row.id));
+      const outcome = latestRecordedWorkOutcome(normalizeWorkOutcomes(links.filter((link) => link.workOrderId === row.id),(fixture.workResults??[]).filter(result=>result.organizationId===org&&result.workOrderId===row.id)));
       const verification = applicableOutcomeVerification(fixture.workOrderVerifications.filter((item) => item.organizationId === org && item.workOrderId === row.id), outcome);
       const estimates = fixture.estimateRequests.filter((item) => item.organizationId === org && item.workOrderId === row.id && !["withdrawn", "declined", "expired", "not_selected"].includes(item.status));
       const visitIds = new Set(links.filter(link => link.workOrderId === row.id).map(link => link.visitId));

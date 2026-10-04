@@ -10,6 +10,7 @@ export const configurableMaintenanceCapabilities = [
 ] as const satisfies readonly ConfigurableMaintenanceCapability[];
 
 const operatorRoleForOrganizationRole = {
+  internal_technician: "technician",
   facilities_admin: "facilities",
   regional_manager: "regional",
   // The field manager reuses the regional manager's capabilities and scoped access.

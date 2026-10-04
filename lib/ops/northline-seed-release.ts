@@ -13,12 +13,12 @@ import {
  * real preview mutations, so a new fixture version never merges or reprojects
  * records underneath an older completed bootstrap.
  */
-export const NORTHLINE_SEED_VERSION = "northline-ops-2026-08-27-v15";
+export const NORTHLINE_SEED_VERSION = "northline-ops-2026-10-03-v16";
 
 /**
  * An older completed fixture is enriched only with missing deterministic rows.
  * Existing IDs and user mutations are never overwritten. This separate
- * receipt remains honest that the database was not freshly seeded as v15.
+ * receipt remains honest that the database was not freshly seeded as v16.
  */
 export const NORTHLINE_SEED_COMPATIBILITY_MARKER = `${NORTHLINE_SEED_VERSION}:enriched-existing`;
 
@@ -80,7 +80,7 @@ export function remapNorthlineFixtureVisitWorkIds(fixture: OpsFixture, existing:
     idMap.set(row.id, id);
     return { ...row, id };
   });
-  clone.workOrderVerifications = clone.workOrderVerifications.map((row) => ({ ...row, siteVisitWorkOrderId: idMap.get(row.siteVisitWorkOrderId) ?? row.siteVisitWorkOrderId }));
+  clone.workOrderVerifications = clone.workOrderVerifications.map((row) => ({ ...row, siteVisitWorkOrderId: row.siteVisitWorkOrderId ? idMap.get(row.siteVisitWorkOrderId) ?? row.siteVisitWorkOrderId : undefined }));
   clone.repairItems = clone.repairItems.map((row) => ({ ...row, siteVisitWorkOrderId: idMap.get(row.siteVisitWorkOrderId) ?? row.siteVisitWorkOrderId }));
   clone.invoiceLineAllocations = clone.invoiceLineAllocations.map((row) => ({ ...row, siteVisitWorkOrderId: row.siteVisitWorkOrderId ? idMap.get(row.siteVisitWorkOrderId) ?? row.siteVisitWorkOrderId : undefined }));
   clone.serviceDiscrepancies = clone.serviceDiscrepancies.map((row) => ({ ...row, siteVisitWorkOrderId: row.siteVisitWorkOrderId ? idMap.get(row.siteVisitWorkOrderId) ?? row.siteVisitWorkOrderId : undefined }));

@@ -1,3 +1,4 @@
+import { applicableVisitWorkOutcomes, verificationMatchesOutcome } from "./work-order-outcome";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { OpsFixture, WorkOrder } from "./types";
 
@@ -25,7 +26,7 @@ export function buildVendorServiceReport(fixture:OpsFixture,org:string,vendorId:
   const assigned = work.filter(row=>assignedIds.has(row.id));
   const visits = fixture.visits.filter(row=>row.organizationId===org && row.vendorId===vendorId && row.checkedInAt<=fixture.asOf);
   const visitIds = new Set(visits.map(row=>row.id));
-  const outcomes = fixture.siteVisitWorkOrders.filter(row=>row.organizationId===org && assignedIds.has(row.workOrderId) && visitIds.has(row.visitId));
+  const outcomes = applicableVisitWorkOutcomes(fixture.siteVisitWorkOrders.filter(row=>row.organizationId===org),(fixture.workResults??[]).filter(row=>row.organizationId===org)).filter(row=>assignedIds.has(row.workOrderId) && row.visitId && visitIds.has(row.visitId));
   const latestAppointments = new Map<string,NonNullable<OpsFixture["serviceAppointments"]>[number]>();
   for (const row of (fixture.serviceAppointments ?? []).filter(row=>row.organizationId===org && assignmentIds.has(row.assignmentId) && row.createdAt<=fixture.asOf).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id))) latestAppointments.set(row.assignmentId,row);
   const due = [...latestAppointments.values()].filter(row=>row.status==="confirmed" && row.startsAt<=fixture.asOf);
@@ -35,8 +36,7 @@ export function buildVendorServiceReport(fixture:OpsFixture,org:string,vendorId:
   });
   const followUpIds = new Set(outcomes.flatMap(row=>row.followUpId ? [row.followUpId] : []));
   const followUpWork = new Set(fixture.followUps.filter(row=>row.organizationId===org && followUpIds.has(row.id)).map(row=>row.workOrderId));
-  const outcomeIds = new Set(outcomes.map(row=>row.id));
-  const verified = fixture.workOrderVerifications.filter(row=>row.organizationId===org && outcomeIds.has(row.siteVisitWorkOrderId) && row.decidedAt<=fixture.asOf && row.decision!=="inconclusive");
+  const verified = fixture.workOrderVerifications.filter(row=>row.organizationId===org && outcomes.some(outcome=>verificationMatchesOutcome(row,outcome)&&row.outcomeRecordedAt===outcome.outcomeRecordedAt) && row.decidedAt<=fixture.asOf && row.decision!=="inconclusive");
   const callbacks = new Set(verified.filter(row=>row.decision==="rejected" && outcomes.some(outcome=>outcome.workOrderId===row.workOrderId && visits.some(visit=>visit.id===outcome.visitId && visit.checkedInAt>row.decidedAt))).map(row=>row.workOrderId));
   const pmIds = new Set(fixture.pmOccurrences.filter(row=>row.organizationId===org).flatMap(row=>row.workOrderId ? [row.workOrderId] : []));
   const groups = new Map<string,{label:string;work:WorkOrder[];values:number[];currency:string}>();

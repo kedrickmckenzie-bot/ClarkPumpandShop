@@ -224,7 +224,7 @@ function workRow(row: WorkOrderListRow): TableRowViewModel {
     cells: [
       { key: "work", value: row.number },
       { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
-      { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: providerName({ kind: row.assignmentKind, vendorName: row.vendorName, internalName: row.internalAssigneeName }), secondary: row.assignmentKind === "choose_later" ? undefined : providerKindLabel(row.assignmentKind), providerTag: providerTag(row.assignmentKind) },
+      { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: providerName({ kind: row.assignmentKind, vendorName: row.vendorName, internalName: row.internalAssigneeName, internalTarget: row.internalTarget }), secondary: row.assignmentKind === "choose_later" ? undefined : providerKindLabel(row.assignmentKind), providerTag: providerTag(row.assignmentKind) },
       { key: "equipment", value: row.assetName ?? "Not linked", secondary: row.assetTag },
       { key: "next", expandable: true, value: row.problem, secondary: `${row.accountableParty}${row.dueAt ? ` · Follow up ${formatOperationsDate(row.dueAt)}` : ""}` },
       { key: "cost", value: row.recordedCostLineCount === 0 ? "Not recorded" : money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },

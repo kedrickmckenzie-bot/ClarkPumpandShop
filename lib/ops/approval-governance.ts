@@ -1,5 +1,6 @@
 import { atomicRequestMutation, atomicWorkOrderMutation } from "./concurrency";
 import { OpsDomainError } from "./errors";
+import { isInternalAssignmentTask, prepareApprovedInternalDispatch } from "./internal-dispatch";
 import {
   buildCompleteWorkflowTaskStatements,
   buildCreateTaskStatements,
@@ -390,28 +391,39 @@ export async function recordApprovalDecision(svc: ApprovalServices, input: Recor
   if (request.subjectType === "work_order") {
     const workOrder = await repository.getWorkOrder(input.organizationId, request.subjectId);
     if (!workOrder) throw new OpsDomainError("NOT_FOUND", "Approval work order no longer exists");
-    const projection = input.decision === "approved"
-      ? ["approved", "Facilities coordinator", "Issue service authorization", workOrder.dueAt]
-      : input.decision === "escalated" && escalatedRequest
-        ? ["awaiting_approval", roleLabel(escalatedRequest.requiredRole), "Review escalated authorization", escalatedRequest.dueAt]
-        : ["awaiting_approval", "Facilities coordinator", "Revise or cancel authorization", workOrder.dueAt];
-    statements.push({ sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ? WHERE organization_id = ? AND id = ?", params: [...projection, input.organizationId, workOrder.id] });
     const tasks = await repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id);
     const sourceTask = tasks.find((task) => task.sourceApprovalRequestId === request.id && ["open", "in_progress"].includes(task.status));
     const resolutionNote = `Approval decision recorded: ${input.decision}`;
-    const resolvedTasks = tasks.map((task): WorkflowTask => task.id === sourceTask?.id
+    let resolvedTasks = tasks.map((task): WorkflowTask => task.id === sourceTask?.id
       ? { ...task, status: "completed", completedByActorType: input.actor.actorType,
           completedByActorId: input.actor.actorId, completedByActorName: input.actor.actorName,
           completedAt: now, resolutionNote }
       : task);
     const remainingRequired = resolvedTasks.some((task) => ["open", "in_progress"].includes(task.status) && task.requiredForProgress);
+    const remainingApproval = resolvedTasks.some((task) => task.sourceApprovalRequestId && ["open", "in_progress"].includes(task.status));
+    const internal = input.decision === "approved" && !remainingApproval
+      ? await prepareApprovedInternalDispatch({ repository, work: workOrder, actor: input.actor, now, ids }) : null;
+    const dispatchTasks = internal ? resolvedTasks.filter(task => ["open", "in_progress"].includes(task.status) && isInternalAssignmentTask(task)) : [];
+    const dispatchTaskIds = new Set(dispatchTasks.map(task => task.id));
+    resolvedTasks = resolvedTasks.map(task => dispatchTaskIds.has(task.id) ? { ...task, status: "completed" } : task);
+    const projection = input.decision === "approved"
+      ? [remainingApproval ? "awaiting_approval" : "approved", "Facilities coordinator", "Issue service authorization", workOrder.dueAt]
+      : input.decision === "escalated" && escalatedRequest
+        ? ["awaiting_approval", roleLabel(escalatedRequest.requiredRole), "Review escalated authorization", escalatedRequest.dueAt]
+        : ["awaiting_approval", "Facilities coordinator", "Revise or cancel authorization", workOrder.dueAt];
+    statements.push({ sql: "UPDATE ops_work_orders SET status = ?, accountable_party = ?, next_action = ?, due_at = ? WHERE organization_id = ? AND id = ?", params: [...projection, input.organizationId, workOrder.id] },
+      ...(internal?.statements ?? []));
     const replacementTask = input.decision === "escalated" && escalatedRequest
       ? buildApprovalWorkflowTask({ workOrder, request: escalatedRequest, actor: input.actor, occurredAt: now, ids, title: "Review escalated authorization" })
+      : internal
+        ? buildWorkflowTaskRecord({ id: ids.next("workflow-task"), organizationId: workOrder.organizationId, workOrderId: workOrder.id,
+            draft: internal.draft, actor: input.actor, createdAt: now, inheritedDueAt: workOrder.dueAt })
       : !remainingRequired || input.decision !== "approved"
         ? buildApprovalResolutionTask({ workOrder, actor: input.actor, occurredAt: now, ids, decision: input.decision })
         : undefined;
     statements.push(
       ...(sourceTask ? buildCompleteWorkflowTaskStatements({ task: sourceTask, actor: input.actor, occurredAt: now, ids, resolutionNote }) : []),
+      ...dispatchTasks.flatMap(task => buildCompleteWorkflowTaskStatements({ task, actor: input.actor, occurredAt: now, ids, resolutionNote: "Internal assignment resumed after approval" })),
       ...(replacementTask ? buildCreateTaskStatements({ task: replacementTask, actor: input.actor, ids }) : []),
       buildWorkflowTaskProjectionStatement(input.organizationId, workOrder.id, [...resolvedTasks, ...(replacementTask ? [replacementTask] : [])]),
     );

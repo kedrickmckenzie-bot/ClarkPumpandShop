@@ -1,3 +1,4 @@
+import { normalizeWorkOutcomes, latestRecordedWorkOutcome, applicableOutcomeVerification } from "./work-order-outcome";
 import type { OpsFixture, PageRequest } from "./types";
 import type { OrganizationScope } from "./repository";
 import type { BriefSourceRow } from "./owner-brief-query";
@@ -5,7 +6,7 @@ import { dashboardPageBounds } from "./dashboard-query";
 import { scopedInvoiceRecords } from "./dashboard-cohorts";
 
 export const INTEGRITY_SOURCES = {
-  closed_work: "Closed work", with_outcome: "Visit outcome recorded", without_outcome: "No visit outcome recorded",
+  closed_work: "Closed work", with_outcome: "Work result recorded", without_outcome: "No work result recorded",
   vendor_closed: "Closed work with an outside assignment", verified: "Latest outside-work outcome verified", unverified: "Latest outside-work outcome not verified",
   with_cost: "Work cost recorded", without_cost: "No work cost recorded",
   missing_action: "Work without a next action", aged_invoice: "Invoice reviews 30+ days old",
@@ -33,14 +34,13 @@ export function integrityFromFixture(fixture: OpsFixture, scope: OrganizationSco
     const row: BriefSourceRow = { id: work.id, label: `${work.number} · Store ${stores.find(store => store.id === work.storeId)!.storeNumber}`, detail: work.problem, entityId: work.id, entityType: "work_order", storeId: work.storeId, amountMinor: 0, date: new Date(work.closedAt ?? work.resolvedAt ?? work.createdAt).toISOString(), status: work.status };
     if (["resolved", "closed"].includes(work.status)) {
       add("closed_work", row);
-      const latest = fixture.siteVisitWorkOrders.filter(item => item.organizationId === scope.organizationId && item.workOrderId === work.id).sort((a, b) => Date.parse(b.linkedAt) - Date.parse(a.linkedAt) || Date.parse(b.outcomeRecordedAt ?? "1970-01-01") - Date.parse(a.outcomeRecordedAt ?? "1970-01-01") || binary(b.id, a.id))[0];
-      const outcome = latest?.outcome && latest.outcomeRecordedAt ? latest : undefined;
+      const outcome = latestRecordedWorkOutcome(normalizeWorkOutcomes(fixture.siteVisitWorkOrders.filter(item=>item.organizationId===scope.organizationId&&item.workOrderId===work.id),(fixture.workResults??[]).filter(item=>item.organizationId===scope.organizationId&&item.workOrderId===work.id)));
       add(outcome ? "with_outcome" : "without_outcome", row);
       const hasCost = fixture.costLines.some(item => item.organizationId === scope.organizationId && item.workOrderId === work.id);
       add(hasCost ? "with_cost" : "without_cost", row);
       if (fixture.assignments.some(item => item.organizationId === scope.organizationId && item.workOrderId === work.id && item.vendorId)) {
         add("vendor_closed", row);
-        const check = outcome ? fixture.workOrderVerifications.filter(item => item.organizationId === scope.organizationId && item.workOrderId === work.id && item.siteVisitWorkOrderId === outcome.id).sort((a, b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt) || binary(b.id, a.id))[0] : undefined;
+        const check = applicableOutcomeVerification(fixture.workOrderVerifications.filter(item=>item.organizationId===scope.organizationId&&item.workOrderId===work.id),outcome);
         add(check?.decision === "verified" && check.outcome === outcome?.outcome && Date.parse(check.outcomeRecordedAt) === Date.parse(outcome?.outcomeRecordedAt ?? "") ? "verified" : "unverified", row);
       }
     } else if (work.status !== "cancelled" && !fixture.workflowTasks.some(task => task.organizationId === scope.organizationId && task.workOrderId === work.id && ["open", "in_progress"].includes(task.status))) add("missing_action", row);

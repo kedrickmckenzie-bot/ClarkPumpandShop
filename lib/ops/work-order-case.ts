@@ -8,7 +8,7 @@ import type {
   InvoiceLineAllocation,
   RequestImpactAssessment,
   ServiceAppointment,
-  SiteVisitWorkOrder,
+  SiteVisitWorkOrder, WorkResult,
   VendorResponse,
   VisitSession,
   WorkOrder,
@@ -19,7 +19,7 @@ import type {
   ValueEvent,
 } from "./types";
 import { selectWorkflowTaskProjection } from "./workflow-task-commands";
-import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "./work-order-outcome";
+import { applicableOutcomeVerification, latestRecordedWorkOutcome, normalizeWorkOutcomes } from "./work-order-outcome";
 
 /**
  * The canonical stage rail: one computed plain-language service stage for every
@@ -182,7 +182,8 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const hasCost = (input.costLines ?? []).some((row) => row.workOrderId === workOrder.id);
   const hasInvoices = (input.invoices ?? []).length > 0;
   const workCycles = (input.siteVisitWorkOrders ?? []).filter((row) => row.workOrderId === workOrder.id);
-  const latestWorkOutcome = latestRecordedWorkOutcome(workCycles);
+  const workOutcomes = normalizeWorkOutcomes(workCycles as SiteVisitWorkOrder[],input.workResults);
+  const latestWorkOutcome = latestRecordedWorkOutcome(workOutcomes);
   const verifications = (input.verifications ?? []).filter((row) => row.workOrderId === workOrder.id);
   const latestVerification = applicableOutcomeVerification(verifications, latestWorkOutcome);
   const verificationNeedsOperationalReview = latestVerification?.decision === "rejected" || latestVerification?.decision === "inconclusive";
@@ -192,6 +193,13 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const selectedEstimateRequest = estimateRequests.find((request) => request.status === "selected");
   const issuances = (input.issuances ?? []).filter((row) => !activeAssignment || row.assignmentId === activeAssignment.id);
   const currentIssuance = [...issuances].sort((a, b) => b.revision - a.revision)[0];
+  const resultAssignmentId = input.workResults?.find(row => row.id === latestWorkOutcome?.workResultId)?.assignmentId;
+  // A manager's internal-to-vendor handoff starts the next service step. The
+  // internal finding and completed shared stop remain evidence, not closeout.
+  const internalVendorHandoff = Boolean(activeAssignment?.kind === "outside_vendor"
+    && latestWorkOutcome?.outcome === "quote_required"
+    && resultAssignmentId !== activeAssignment.id
+    && allAssignments.some(row => row.id === resultAssignmentId && row.kind === "internal"));
   const responses = (input.vendorResponses ?? []).filter((row) => !currentIssuance || row.issuanceId === currentIssuance.id);
   const latestResponse = latest(responses, (row) => row.respondedAt);
   const appointments = (input.appointments ?? []).filter((row) =>
@@ -233,6 +241,8 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     stage = "onsite_service";
   } else if (appointmentStartsNewCycle) {
     stage = "vendor_response_scheduling";
+  } else if (internalVendorHandoff) {
+    stage = currentIssuance ? "vendor_response_scheduling" : "authorization_or_bidding";
   } else if (closeoutFollowUps.length > 0 || closeoutTask || verificationNeedsOperationalReview || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
     stage = "followup_closeout";
   } else if (!currentIssuance && activeAssignment.kind === "outside_vendor" && visits.length === 0 && !hasCost) {
@@ -254,7 +264,8 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   // superseded assignments are not active fulfillment.
   let serviceSubStage: WorkOrderServiceSubStage | undefined;
   const onsiteNow = Boolean(activeVisit && !activeVisit.checkedOutAt && activeVisit.workOrderId === workOrder.id);
-  const unresolvedCheckout = visits.some((row) => row.checkedOutAt && !row.outcome);
+  const unresolvedCheckout = visits.some(row => row.checkedOutAt && !row.outcome
+    && !workOutcomes.some(outcome => outcome.visitId === row.id && outcome.outcome && outcome.outcomeRecordedAt));
   if (fullyClosed) {
     stage = "closed";
     serviceSubStage = undefined;
@@ -264,7 +275,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   } else if (appointmentStartsNewCycle) {
     stage = "vendor_response_scheduling";
     serviceSubStage = "scheduled";
-  } else if (closeoutFollowUps.length > 0 || closeoutTask || verificationNeedsOperationalReview || unresolvedCheckout || workOrder.status === "completed_pending_review" || workOrder.status === "resolved") {
+  } else if (!internalVendorHandoff && (closeoutFollowUps.length > 0 || closeoutTask || verificationNeedsOperationalReview || unresolvedCheckout || workOrder.status === "completed_pending_review" || workOrder.status === "resolved")) {
     stage = "followup_closeout";
     serviceSubStage = closeoutFollowUps.length > 0 || unresolvedCheckout || closeoutTask?.taskType === "verify_repair" ? "followup_required" : "closeout_review";
   } else if (stage === "cost_invoice_evidence") {
@@ -360,8 +371,9 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     ? workOrder.status === "cancelled" ? "Cancelled" : "Closed"
     : activeVisit && !activeVisit.checkedOutAt ? (Date.parse(input.now)-Date.parse(activeVisit.checkedInAt)>24*60*60*1000 ? "Missing checkout · confirm visit status" : "Technician onsite")
     : appointmentStartsNewCycle ? "Return visit scheduled"
+    : internalVendorHandoff ? !currentIssuance ? "Ready to send to selected provider" : serviceSubStage ? SERVICE_SUB_STAGE_LABELS[serviceSubStage] : "Waiting on vendor"
     : latestWorkOutcome?.outcome === "completed"
-      ? latestVerification?.siteVisitWorkOrderId === latestWorkOutcome.id
+      ? latestVerification
         ? latestVerification.decision === "verified"
           ? "Work verified complete"
           : latestVerification.decision === "rejected"
@@ -373,7 +385,14 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
     : latestWorkOutcome?.outcome === "quote_required" ? "Quote or approval needed"
     : latestWorkOutcome?.outcome === "return_visit_required" ? "Return visit required"
     : latestWorkOutcome?.outcome === "diagnosis_only" ? "Diagnosis recorded; next step needed"
-    : latestWorkOutcome?.outcome === "no_issue_found" ? "Issue could not be reproduced; review needed"
+    : latestWorkOutcome?.outcome === "no_issue_found"
+      ? latestVerification?.decision === "verified"
+        ? "No issue found; result verified"
+        : latestVerification?.decision === "rejected"
+          ? "Finding rejected; corrective work required"
+          : latestVerification?.decision === "inconclusive"
+            ? "Result could not be confirmed; review required"
+            : "Issue could not be reproduced; review needed"
     : latestWorkOutcome?.outcome === "store_access_unavailable" ? "Store access needed"
     : latestWorkOutcome?.outcome === "work_not_authorized" ? "Authorization needed"
     : latestWorkOutcome?.outcome === "not_addressed" ? "Work was not attempted"
@@ -390,7 +409,7 @@ export function buildWorkOrderCase(input: WorkOrderCaseInput): WorkOrderCaseView
   const technicalPmWithoutOperatingObservation = latestOutcomeVisit?.outcome === "pm_complete" && !latestImpact;
   const operatingCondition: WorkOrderCaseDimension = technicalPmWithoutOperatingObservation
     ? { id: "unknown", label: "Operating condition not assessed", detail: "The preventive-maintenance checklist was completed, but no operating-condition observation was recorded.", certainty: "unknown", sourceLabel: "Technical PM completion only" }
-    : latestVerification?.decision === "verified" && latestWorkOutcome?.outcome === "completed"
+    : latestVerification?.decision === "verified" && (latestWorkOutcome?.outcome === "completed" || latestWorkOutcome?.outcome === "no_issue_found")
     ? { id: "verified_operating", label: "Operating result verified", detail: latestVerification.reason ?? "An authorized reviewer confirmed the reported result.", certainty: "verified", sourceLabel: `Verification by ${latestVerification.decidedByName}`, observedAt: latestVerification.decidedAt }
     : latestVerification?.decision === "rejected"
       ? { id: "result_rejected", label: "Current result not confirmed", detail: latestVerification.reason ?? "The completion claim was rejected and remains preserved in the record.", certainty: "uncertain", sourceLabel: `Verification by ${latestVerification.decidedByName}`, observedAt: latestVerification.decidedAt }
@@ -543,8 +562,9 @@ export interface WorkOrderCaseInput {
   followUps?: Pick<FollowUp, "id" | "workOrderId" | "sourceVisitId" | "status" | "accountableParty" | "nextAction" | "dueAt" | "escalationTo">[];
   costLines?: Pick<CostLine, "workOrderId">[];
   impactAssessments?: Pick<RequestImpactAssessment, "id" | "storeOperatingState" | "confidence" | "source" | "notes" | "assessedByActorName" | "assessedAt">[];
-  siteVisitWorkOrders?: Pick<SiteVisitWorkOrder, "id" | "visitId" | "workOrderId" | "outcome" | "outcomeNotes" | "outcomeRecordedByActorName" | "outcomeRecordedAt" | "linkedAt">[];
-  verifications?: Pick<WorkOrderVerification, "id" | "workOrderId" | "siteVisitWorkOrderId" | "outcome" | "decision" | "reason" | "decidedByName" | "decidedAt">[];
+  workResults?: WorkResult[];
+  siteVisitWorkOrders?: Pick<SiteVisitWorkOrder, "id" | "visitId" | "workOrderId" | "outcome" | "outcomeNotes" | "outcomeRecordedByActorName" | "outcomeRecordedAt" | "linkedAt" | "cycleVersion">[];
+  verifications?: Pick<WorkOrderVerification, "id" | "workOrderId" | "siteVisitWorkOrderId" | "workResultId" | "outcome" | "decision" | "reason" | "decidedByName" | "decidedAt">[];
   /** Invoice evidence linked to THIS work order (already scoped by the caller). */
   invoices?: { id: string; status?: string }[];
   invoiceLines?: Pick<InvoiceLine, "id" | "invoiceId">[];

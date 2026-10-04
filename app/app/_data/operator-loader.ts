@@ -609,7 +609,7 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
   const estimateRequests = fixture.estimateRequests.filter((row) => row.workOrderId === workOrderId);
   const requestIds = new Set(estimateRequests.map((row) => row.id));
   const assignments = fixture.assignments.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId);
-  const currentAssignment = [...assignments].sort((left, right) => right.assignedAt.localeCompare(left.assignedAt))[0];
+  const currentAssignment = [...assignments].sort((left, right) => Number(!["pending","issued","opened","accepted"].includes(left.status)) - Number(!["pending","issued","opened","accepted"].includes(right.status)) || right.assignedAt.localeCompare(left.assignedAt) || right.id.localeCompare(left.id))[0];
   const internalMembership = currentAssignment?.internalMembershipId
     ? fixture.memberships.find((row) => row.organizationId === context.session.organizationId && row.id === currentAssignment.internalMembershipId)
     : undefined;
@@ -617,7 +617,7 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
     ? fixture.vendors.find((row) => row.organizationId === context.session.organizationId && row.id === currentAssignment.vendorId)?.name
     : internalMembership
       ? fixture.users.find((row) => row.id === internalMembership.userId)?.displayName
-      : undefined;
+      : currentAssignment?.kind === "internal" ? currentAssignment.internalTarget === "pool" ? "Available to the team" : "Manager to arrange" : undefined;
   const siteVisitWorkOrders = fixture.siteVisitWorkOrders.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId);
   const linkedVisitIds = new Set(siteVisitWorkOrders.map((row) => row.visitId));
   return buildWorkOrderCase({
@@ -633,6 +633,7 @@ export async function loadWorkOrderCaseModel(workOrderId: string) {
     appointments: await (await getServerOpsRepository()).listServiceAppointmentsForWorkOrder(context.session.organizationId, workOrderId),
     continuations: await (await getServerOpsRepository()).listVendorContinuationsForWorkOrder(context.session.organizationId, workOrderId),
     visits: fixture.visits.filter((row) => row.organizationId === context.session.organizationId && (row.workOrderId === workOrderId || linkedVisitIds.has(row.id))),
+    workResults: (fixture.workResults ?? []).filter(row => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     siteVisitWorkOrders,
     verifications: fixture.workOrderVerifications.filter((row) => row.organizationId === context.session.organizationId && row.workOrderId === workOrderId),
     impactAssessments: workOrder.requestId
@@ -694,9 +695,11 @@ export async function loadHeldWorkActionsModel(workOrderId: string): Promise<Hel
   if (!workOrder) notFound();
   const scopeStore = await repository.getStore(session.organizationId,workOrder.storeId);
   if (!scopeStore || !pmStoreAllowed(session,scopeStore)) notFound();
-  const [hold, store] = await Promise.all([
+  const [hold, store, heldAssignment, inspection] = await Promise.all([
     repository.getWorkOrderVisitHold(session.organizationId, workOrderId),
     repository.getStore(session.organizationId, workOrder.storeId),
+    repository.getActiveAssignment(session.organizationId, workOrderId),
+    repository.inspectionForWork(session.organizationId, workOrderId),
   ]);
   const organizationTimeZone = (await repository.getOrganization(session.organizationId))?.timeZone ?? DEFAULT_OPERATIONS_TIME_ZONE;
   const storeTimeZone = store?.timeZone ?? organizationTimeZone;
@@ -715,7 +718,8 @@ export async function loadHeldWorkActionsModel(workOrderId: string): Promise<Hel
   return {
     workOrderId,
     permitted: roleCan(session, "control_work_order"),
-    eligible: Boolean(workOrder.categoryKey) && workOrder.status === "approved",
+    internal: heldAssignment?.kind === "internal",
+    eligible: inspection?.workOrderId !== workOrderId && workOrder.status === "approved" && (heldAssignment?.kind === "internal" ? !["urgent","emergency"].includes(workOrder.priority) : Boolean(workOrder.categoryKey)),
     categoryLabel: workOrder.categoryKey
       ? workOrder.categoryKey.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase())
       : undefined,

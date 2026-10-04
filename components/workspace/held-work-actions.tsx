@@ -4,6 +4,7 @@ export interface HeldWorkActionsModel {
   workOrderId: string;
   permitted: boolean;
   eligible: boolean;
+  internal?: boolean;
   categoryLabel?: string;
   storeTimeZone: string;
   deadlineInputValue: string;
@@ -28,9 +29,9 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
   const hold = model.hold;
   const openHold = hold && ["active", "review_required"].includes(hold.status);
   const stateTitle = hold?.status === "claimed"
-    ? "A vendor is reviewing this work onsite"
+    ? model.internal ? "Internal work is being reviewed onsite" : "A vendor is reviewing this work onsite"
     : hold?.status === "review_required"
-      ? "Vendor findings need manager review"
+      ? model.internal ? "Internal findings need manager review" : "Vendor findings need manager review"
       : hold?.status === "completed"
         ? "Completed during another visit"
         : openHold
@@ -45,13 +46,13 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
       </header>
       {hold ? (
         <dl className={styles.factsRow}>
-          <div><dt>Vendor instruction</dt><dd>{postureLabel(hold.posture)}</dd></div>
+          <div><dt>{model.internal ? "Team instruction" : "Vendor instruction"}</dt><dd>{postureLabel(hold.posture)}</dd></div>
           <div><dt>Review deadline</dt><dd>{hold.deadlineLabel}</dd></div>
-          <div><dt>Service category</dt><dd>{model.categoryLabel ?? "Choose a category first"}</dd></div>
+          <div><dt>Service category</dt><dd>{model.categoryLabel ?? (model.internal ? "Unclassified · add later" : "Choose a category first")}</dd></div>
           {hold.internalReviewThreshold ? <div><dt>Review invoices above</dt><dd>{hold.internalReviewThreshold}</dd><small>Never shown to the technician; not a price or authorization.</small></div> : null}
         </dl>
       ) : (
-        <p className={styles.decisionDetail}>Approve this low-priority work now. When a vendor in a matching service category is already onsite, they may choose whether they can address it. No estimate or manager reply is required during the visit.</p>
+        <p className={styles.decisionDetail}>{model.internal ? "Keep this small job open for a suitable internal visit. A review deadline keeps it visible to the responsible manager." : "Approve this low-priority work now. When a vendor in a matching service category is already onsite, they may choose whether they can address it. No estimate or manager reply is required during the visit."}</p>
       )}
       {hold?.status === "claimed" ? (
         <p className={styles.allClear}>{hold.claimedVendorName ?? "The selected vendor"} claimed this item during an active visit. Its outcome will be recorded at checkout.</p>
@@ -65,7 +66,7 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
             <input type="hidden" name="operation" value="place" />
             <span className={styles.moneyLabel}>{openHold ? "Update how this should be handled" : "Approve for the next suitable visit"}</span>
             <label>
-              <span>What may the vendor do?</span>
+              <span>{model.internal ? "What may the team do?" : "What may the vendor do?"}</span>
               <select name="posture" defaultValue={hold?.posture ?? "complete_using_professional_judgment"}>
                 <option value="complete_using_professional_judgment">Complete during the visit if practical</option>
                 <option value="look_and_report">Inspect and report back</option>
@@ -76,11 +77,11 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
               <input type="datetime-local" name="deadlineAt" required defaultValue={hold?.deadlineInputValue ?? model.deadlineInputValue} />
               <small>Store-local time ({model.storeTimeZone}). The work returns to manager review if it is not handled by this date.</small>
             </label>
-            <label>
+            {!model.internal ? <label>
               <span>Flag the invoice for review above <small>Optional</small></span>
               <input type="number" name="internalReviewThreshold" min="0" step="0.01" inputMode="decimal" placeholder="Not shown to the vendor" defaultValue={hold?.internalReviewThreshold?.replace(/[^0-9.]/g, "")} />
               <small>This only flags a later invoice for review. It is not shown to the vendor and is not an approved price.</small>
-            </label>
+            </label> : null}
             <button type="submit">{openHold ? "Save changes" : "Approve for next suitable visit"}</button>
           </form>
           {openHold ? (
@@ -88,7 +89,7 @@ export function HeldWorkActions({ model }: { model: HeldWorkActionsModel }) {
               <input type="hidden" name="operation" value="release" />
               <span className={styles.moneyLabel}>Send it through the normal service path</span>
               <strong>Remove from the next-visit list</strong>
-              <span className={styles.moneyNote}>The work stays open and returns to facilities for vendor selection. Nothing is deleted.</span>
+              <span className={styles.moneyNote}>{model.internal ? "The work stays with its current internal assignment and becomes ready to arrange." : "The work stays open and returns to facilities for vendor selection. Nothing is deleted."}</span>
               <button type="submit" className={styles.secondaryAction}>Send through normal service</button>
             </form>
           ) : null}

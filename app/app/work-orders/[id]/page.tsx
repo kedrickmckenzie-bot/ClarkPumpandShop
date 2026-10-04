@@ -1,3 +1,5 @@
+import { InternalPlanningPanel } from "@/components/workspace/internal-planning-panel";
+import { InternalAssignmentPanel } from "@/components/workspace/internal-assignment-panel";
 import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import { SentWorkOrders } from "@/components/workspace/sent-work-orders";
 import { workWarrantyReview } from "@/lib/ops/work-warranty-review";
@@ -79,13 +81,13 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const heldCase = heldStatus && ["active", "claimed", "review_required"].includes(heldStatus)
     ? {
         ...stageCase,
-        stageLabel: heldStatus === "claimed" ? "Being reviewed onsite" : heldStatus === "review_required" ? "Vendor findings need review" : "Approved for a future visit",
+        stageLabel: heldStatus === "claimed" ? "Being reviewed onsite" : heldStatus === "review_required" ? heldWork.internal ? "Internal findings need review" : "Vendor findings need review" : "Approved for a future visit",
         accountableParty: heldStatus === "claimed" ? heldWork.hold?.claimedVendorName ?? "Onsite vendor" : stageCase.internalAccountableParty,
         primaryNextAction: {
-          label: heldStatus === "claimed" ? "Track the active visit" : heldStatus === "review_required" ? "Review the vendor findings" : "Wait for a suitable vendor visit",
-          href: `/app/work-orders/${id}?view=service#future-visit-hold`,
+          label: heldStatus === "claimed" ? "Track the active visit" : heldStatus === "review_required" ? heldWork.internal ? "Review the internal findings" : "Review the vendor findings" : heldWork.internal ? "Wait for a suitable internal visit" : "Wait for a suitable vendor visit",
+          href: heldStatus === "review_required" && heldWork.internal ? `/app/my-work/${encodeURIComponent(id)}` : `/app/work-orders/${id}?view=service#future-visit-hold`,
         },
-        blockingReason: heldStatus === "active" ? "This work is approved and waiting to be offered during a suitable vendor visit." : stageCase.blockingReason,
+        blockingReason: heldStatus === "active" ? heldWork.internal ? "This work is approved for a suitable internal visit." : "This work is approved and waiting to be offered during a suitable vendor visit." : stageCase.blockingReason,
       }
     : stageCase;
 
@@ -165,7 +167,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     <WorkOrderCase
       headerFacts={headerFacts}
       warrantyContext={<WorkWarrantyContext workOrderId={id}/>}
-      sentWork={view === "service" ? <SentWorkOrders workOrderId={id}/> : undefined}
+      sentWork={view === "service" ? <><InternalAssignmentPanel workOrderId={id}/><InternalPlanningPanel workOrderId={id}/><SentWorkOrders workOrderId={id}/></> : undefined}
       emailHistory={["overview","activity"].includes(view) ? <><LinkedStoreTasks kind="work" id={id} hideEmpty/><WorkFiles workOrderId={id}/><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}
       costPrompts={["overview", "service"].includes(view) ? <WorkCostPrompts workOrderId={id}/> : undefined}
       prices={!accountabilityOnly && view === "cost" ? <WorkPricePanel workOrderId={id} /> : undefined}

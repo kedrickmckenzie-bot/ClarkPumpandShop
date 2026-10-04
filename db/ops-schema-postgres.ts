@@ -286,6 +286,7 @@ export const opsRoleCapabilityOverrides = pgTable("ops_role_capability_overrides
 ]);
 
 export const opsWorkflowPolicies = pgTable("ops_workflow_policies", {
+  internalCheckInRequired: boolean("internal_check_in_required").notNull().default(false),
   requireConfirmationDefault: integer("require_confirmation_default").notNull().default(1),
   id: id(), organizationId: organizationId(), version: integer("version").notNull(), status: text("status").notNull(), allowManagerCompletion: boolean("allow_manager_completion").notNull().default(false), autoCloseRoutineAfterVerification: boolean("auto_close_routine_after_verification").notNull().default(false), appliesToActiveWork: boolean("applies_to_active_work").notNull().default(false), createdByMembershipId: text("created_by_membership_id").notNull(), createdByName: text("created_by_name").notNull(), createdAt: createdAt(),
 }, (table) => [
@@ -680,6 +681,9 @@ export const opsAssetComponents = pgTable("ops_asset_components", {
 ]);
 
 export const opsWorkOrders = pgTable("ops_work_orders", {
+  internalScheduleId: text("internal_schedule_id"),
+  targetCompletionAt: text("target_completion_at"),
+  targetCompletionSource: text("target_completion_source"),
   confirmationMembershipId: text("confirmation_membership_id"),
   requireConfirmation: integer("require_confirmation").notNull().default(1),
   internalReviewThresholdMinor: bigint("internal_review_threshold_minor", { mode: "number" }), internalReviewCurrency: text("internal_review_currency"),
@@ -770,14 +774,17 @@ export const opsWorkOrderAssignments = pgTable("ops_work_order_assignments", {
   kind: text("kind").notNull(),
   vendorId: text("vendor_id"),
   internalMembershipId: text("internal_membership_id"),
+  internalTarget: text("internal_target"),
   status: text("status").notNull(),
   assignedAt: instant("assigned_at").notNull(),
   supersedesAssignmentId: text("supersedes_assignment_id"),
 }, (table): PgTableExtraConfigValue[] => [
   unique("uq_ops_assignments_org_id").on(table.organizationId, table.id),
+  uniqueIndex("uidx_ops_assignments_org_id_work").on(table.organizationId, table.id, table.workOrderId),
   uniqueIndex("uidx_ops_assignments_org_work_active").on(table.organizationId, table.workOrderId).where(sql`${table.status} IN ('pending', 'issued', 'opened', 'accepted')`),
   index("idx_ops_assignments_org_work_status").on(table.organizationId, table.workOrderId, table.status),
   index("idx_ops_assignments_org_vendor_status").on(table.organizationId, table.vendorId, table.status),
+  index("idx_ops_assignments_org_target_member").on(table.organizationId, table.kind, table.internalTarget, table.internalMembershipId, table.status),
   foreignKey({
     name: "fk_ops_assignments_org",
     columns: [table.organizationId],
@@ -803,11 +810,12 @@ export const opsWorkOrderAssignments = pgTable("ops_work_order_assignments", {
     columns: [table.organizationId, table.supersedesAssignmentId],
     foreignColumns: [opsWorkOrderAssignments.organizationId, opsWorkOrderAssignments.id],
   }),
+  check("chk_ops_assignments_internal_target", sql`${table.internalTarget} IS NULL OR ${table.kind} = 'internal' AND ${table.internalTarget} IN ('person', 'pool', 'awaiting_allocation')`),
   check("chk_ops_assignments_kind", sql`${table.kind} IN ('internal', 'outside_vendor', 'choose_later')`),
   check("chk_ops_assignments_status", sql`${table.status} IN ('pending', 'issued', 'opened', 'accepted', 'declined', 'completed', 'cancelled', 'superseded')`),
   check("chk_ops_assignments_provider", sql`
     (${table.kind} = 'outside_vendor' AND ${table.vendorId} IS NOT NULL AND ${table.internalMembershipId} IS NULL)
-    OR (${table.kind} = 'internal' AND ${table.vendorId} IS NULL AND ${table.internalMembershipId} IS NOT NULL)
+    OR (${table.kind} = 'internal' AND ${table.vendorId} IS NULL AND (COALESCE(${table.internalTarget}, 'person') = 'person' AND ${table.internalMembershipId} IS NOT NULL OR ${table.internalTarget} IS NOT NULL AND ${table.internalTarget} IN ('pool', 'awaiting_allocation') AND ${table.internalMembershipId} IS NULL))
     OR (${table.kind} = 'choose_later' AND ${table.vendorId} IS NULL AND ${table.internalMembershipId} IS NULL)
   `),
 ]);
@@ -1181,8 +1189,8 @@ export const opsVisitSessions = pgTable("ops_visit_sessions", {
   check("chk_ops_visits_crew_count", sql`${table.crewCount} BETWEEN 1 AND 100`),
   check("chk_ops_visits_additional_technicians", sql`jsonb_typeof(${table.additionalTechnicianNamesJson}) = 'array' AND jsonb_array_length(${table.additionalTechnicianNamesJson}) < ${table.crewCount}`),
   check("chk_ops_visits_status", sql`${table.status} IN ('active', 'checked_out', 'amended')`),
-  check("chk_ops_visits_started_channel", sql`${table.startedChannel} IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app')`),
-  check("chk_ops_visits_ended_channel", sql`${table.endedChannel} IS NULL OR ${table.endedChannel} IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app')`),
+  check("chk_ops_visits_started_channel", sql`${table.startedChannel} IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app', 'internal_web')`),
+  check("chk_ops_visits_ended_channel", sql`${table.endedChannel} IS NULL OR ${table.endedChannel} IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app', 'internal_web')`),
   check("chk_ops_visits_outcome", sql`${table.outcome} IS NULL OR ${table.outcome} IN ('resolved', 'temporary_repair', 'diagnosed_waiting_parts', 'return_required', 'unable_to_complete', 'unable_to_reproduce', 'no_issue_found', 'inspection_complete', 'pm_complete', 'other')`),
   check("chk_ops_visits_chronology", sql`${table.checkedOutAt} IS NULL OR ${table.checkedOutAt} >= ${table.checkedInAt}`),
   check("chk_ops_visits_duration", sql`${table.observedDurationSeconds} IS NULL OR ${table.observedDurationSeconds} >= 0`),
@@ -1221,7 +1229,7 @@ export const opsVisitEvidence = pgTable("ops_visit_evidence", {
     foreignColumns: [opsVisitSessions.organizationId, opsVisitSessions.id],
   }),
   check("chk_ops_visit_evidence_kind", sql`${table.kind} IN ('check_in', 'check_out', 'reported_arrival', 'identity_assertion', 'photo', 'file', 'store_confirmation', 'amendment')`),
-  check("chk_ops_visit_evidence_channel", sql`${table.channel} IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app')`),
+  check("chk_ops_visit_evidence_channel", sql`${table.channel} IN ('qr', 'secure_link', 'store_device', 'vendor_portal', 'future_app', 'internal_web')`),
   check("chk_ops_visit_evidence_location", sql`${table.locationResult} IS NULL OR ${table.locationResult} IN ('verified', 'outside_geofence', 'low_accuracy', 'permission_denied', 'unavailable', 'not_requested', 'trusted_store_device')`),
   check("chk_ops_visit_evidence_latitude", sql`${table.latitudeE6} IS NULL OR ${table.latitudeE6} BETWEEN -90000000 AND 90000000`),
   check("chk_ops_visit_evidence_longitude", sql`${table.longitudeE6} IS NULL OR ${table.longitudeE6} BETWEEN -180000000 AND 180000000`),
@@ -1317,6 +1325,7 @@ export const opsFollowUps = pgTable("ops_follow_ups", {
 ]);
 
 export const opsSiteVisitWorkOrders = pgTable("ops_site_visit_work_orders", {
+  cycleVersion: integer("cycle_version"),
   id: id(),
   organizationId: organizationId(),
   visitId: text("visit_id").notNull(),
@@ -1356,11 +1365,32 @@ export const opsSiteVisitWorkOrders = pgTable("ops_site_visit_work_orders", {
   check("chk_ops_site_visit_work_followup_outcome", sql`${table.followUpId} IS NULL OR ${table.outcome} NOT IN ('completed', 'no_issue_found') OR (${table.outcome} = 'no_issue_found' AND ${table.selectionSource} = 'held_work' AND ${table.workOrderHoldId} IS NOT NULL)`),
 ]);
 
+export const opsWorkResults = pgTable("ops_work_results", {
+  id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(),
+  assignmentId: text("assignment_id"), siteVisitWorkOrderId: text("site_visit_work_order_id"),
+  performerMembershipId: text("performer_membership_id"), performerName: text("performer_name").notNull(),
+  source: text("source").notNull(), outcome: text("outcome").notNull(), outcomeNotes: text("outcome_notes"), blocker: text("blocker"),
+  linkedAt: instant("linked_at").notNull(), outcomeRecordedAt: instant("outcome_recorded_at").notNull(), cycleVersion: integer("cycle_version").notNull(),
+  outcomeRecordedByActorType: text("outcome_recorded_by_actor_type").notNull(), outcomeRecordedByActorId: text("outcome_recorded_by_actor_id"), outcomeRecordedByActorName: text("outcome_recorded_by_actor_name").notNull(),
+  reportedPerformedAt: instant("reported_performed_at"), supersedesResultId: text("supersedes_result_id"), correctionReason: text("correction_reason"), followUpId: text("follow_up_id"),
+}, (table) => [
+  uniqueIndex("uidx_ops_work_results_org_id_work").on(table.organizationId, table.id, table.workOrderId),
+  uniqueIndex("uidx_ops_work_results_org_work_cycle").on(table.organizationId, table.workOrderId, table.cycleVersion),
+  index("idx_ops_work_results_org_work_time").on(table.organizationId, table.workOrderId, table.outcomeRecordedAt),
+  foreignKey({name:"fk_ops_work_results_work",columns:[table.organizationId,table.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
+  foreignKey({name:"fk_ops_work_results_visit",columns:[table.organizationId,table.siteVisitWorkOrderId,table.workOrderId],foreignColumns:[opsSiteVisitWorkOrders.organizationId,opsSiteVisitWorkOrders.id,opsSiteVisitWorkOrders.workOrderId]}),
+  check("chk_ops_work_results_source",sql`${table.source} IN ('technician_report','visit_checkout','phone','email','in_person','correction')`),
+  check("chk_ops_work_results_outcome",sql`${table.outcome} IN ('completed','temporary_repair','diagnosis_only','quote_required','parts_required','return_visit_required','no_issue_found','store_access_unavailable','work_not_authorized','not_addressed')`),
+  check("chk_ops_work_results_cycle",sql`${table.cycleVersion} > 0`),
+  check("chk_ops_work_results_correction",sql`${table.source} <> 'correction' OR (${table.correctionReason} IS NOT NULL AND length(trim(${table.correctionReason})) > 0)`),
+]);
+
 export const opsWorkOrderVerifications = pgTable("ops_work_order_verifications", {
   id: id(),
   organizationId: organizationId(),
   workOrderId: text("work_order_id").notNull(),
-  siteVisitWorkOrderId: text("site_visit_work_order_id").notNull(),
+  siteVisitWorkOrderId: text("site_visit_work_order_id"),
+  workResultId: text("work_result_id"),
   outcome: text("outcome").notNull(),
   outcomeRecordedAt: instant("outcome_recorded_at").notNull(),
   cycle: integer("cycle").notNull(),
@@ -1379,6 +1409,8 @@ export const opsWorkOrderVerifications = pgTable("ops_work_order_verifications",
   foreignKey({ name: "fk_ops_work_verifications_work", columns: [table.organizationId, table.workOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
   foreignKey({ name: "fk_ops_work_verifications_outcome", columns: [table.organizationId, table.siteVisitWorkOrderId, table.workOrderId], foreignColumns: [opsSiteVisitWorkOrders.organizationId, opsSiteVisitWorkOrders.id, opsSiteVisitWorkOrders.workOrderId] }),
   foreignKey({ name: "fk_ops_work_verifications_member", columns: [table.organizationId, table.decidedByMembershipId], foreignColumns: [opsMemberships.organizationId, opsMemberships.id] }),
+  foreignKey({name:"fk_ops_work_verifications_result",columns:[table.organizationId,table.workResultId,table.workOrderId],foreignColumns:[opsWorkResults.organizationId,opsWorkResults.id,opsWorkResults.workOrderId]}),
+  check("chk_ops_work_verifications_target",sql`(${table.siteVisitWorkOrderId} IS NOT NULL AND ${table.workResultId} IS NULL) OR (${table.siteVisitWorkOrderId} IS NULL AND ${table.workResultId} IS NOT NULL)`),
   check("chk_ops_work_verifications_outcome", sql`${table.outcome} IN ('completed', 'diagnosis_only', 'quote_required', 'parts_required', 'return_visit_required', 'no_issue_found', 'store_access_unavailable', 'work_not_authorized', 'not_addressed')`),
   check("chk_ops_work_verifications_cycle", sql`${table.cycle} > 0`),
   check("chk_ops_work_verifications_decision", sql`${table.decision} IN ('verified', 'rejected', 'inconclusive')`),
@@ -1848,8 +1880,8 @@ export const opsNotificationRules = pgTable("ops_notification_rules", {
     columns: [table.organizationId],
     foreignColumns: [opsOrganizations.id],
   }),
-  check("chk_ops_notification_rules_event", sql`${table.eventKey} IN ('vendor_response_received', 'vendor_commitment_received', 'workflow_task_escalated', 'follow_up_created', 'vendor_reminder_created', 'held_work_claimed', 'held_work_outcomes_recorded', 'vendor_compliance_due', 'repair_confirmation_required')`),
-  check("chk_ops_notification_rules_role", sql`${table.recipientRole} IN ('facilities_admin', 'store_manager', 'regional_manager', 'executive', 'finance_reviewer')`),
+  check("chk_ops_notification_rules_event", sql`${table.eventKey} IN ('vendor_response_received', 'vendor_commitment_received', 'workflow_task_escalated', 'follow_up_created', 'vendor_reminder_created', 'held_work_claimed', 'held_work_outcomes_recorded', 'vendor_compliance_due', 'repair_confirmation_required', 'internal_dispatch_changed')`),
+  check("chk_ops_notification_rules_role", sql`${table.recipientRole} IN ('facilities_admin', 'store_manager', 'regional_manager', 'field_manager', 'executive', 'finance_reviewer', 'internal_technician')`),
 ]);
 
 export const opsJobRuns = pgTable("ops_job_runs", {
@@ -2027,6 +2059,7 @@ export const opsPostgresSchema = {
   opsFiles,
   opsEntityFiles,
   opsFollowUps,
+  opsWorkResults,
   opsSiteVisitWorkOrders,
   opsWorkOrderVerifications,
   opsWorkflowTasks,
@@ -2134,7 +2167,7 @@ export const opsInspections = pgTable("ops_inspections", {
  id:text("id").primaryKey(),organizationId:text("organization_id").notNull(),scheduleId:text("schedule_id").notNull(),storeId:text("store_id").notNull(),dueDate:text("due_date").notNull(),
  status:text("status").notNull(),workOrderId:text("work_order_id"),correctiveWorkOrderId:text("corrective_work_order_id"),documentExpiresOn:text("document_expires_on"),completedAt:text("completed_at"),resultNote:text("result_note"),version:integer("version").notNull(),createdAt:text("created_at").notNull(),
 },t=>[
- uniqueIndex("idx_ops_inspection_cycle").on(t.organizationId,t.scheduleId,t.dueDate),index("idx_ops_inspection_due").on(t.organizationId,t.storeId,t.status,t.dueDate,t.id),
+ uniqueIndex("idx_ops_inspection_cycle").on(t.organizationId,t.scheduleId,t.dueDate),index("idx_ops_inspection_due").on(t.organizationId,t.storeId,t.status,t.dueDate,t.id),index("idx_ops_inspection_org_work").on(t.organizationId,t.workOrderId,t.id),
  foreignKey({columns:[t.organizationId,t.scheduleId],foreignColumns:[opsComplianceSchedules.organizationId,opsComplianceSchedules.id]}),
  foreignKey({columns:[t.organizationId,t.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),
  foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
@@ -2175,3 +2208,16 @@ export const opsStoreTaskMessages = pgTable("ops_store_task_messages", {
 export const opsStoreTaskPeople = pgTable("ops_store_task_people", {
  id:text("id").primaryKey(),organizationId:text("organization_id").notNull(),taskId:text("task_id").notNull(),membershipId:text("membership_id").notNull(),seenAt:text("seen_at").notNull(),
 },t=>[uniqueIndex("idx_ops_task_person").on(t.organizationId,t.taskId,t.membershipId),foreignKey({columns:[t.organizationId,t.taskId],foreignColumns:[opsStoreTasks.organizationId,opsStoreTasks.id]}),foreignKey({columns:[t.organizationId,t.membershipId],foreignColumns:[opsMemberships.organizationId,opsMemberships.id]})]);
+
+export const opsInternalSchedules = pgTable("ops_internal_schedules", {
+  id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), assignmentId: text("assignment_id").notNull(),
+  revision: integer("revision").notNull(), attempt: integer("attempt").notNull().default(1), precision: text("precision").notNull(), planningZone: text("planning_zone").notNull(),
+  week: text("week").notNull(), day: text("day"), startsAt: text("starts_at"), endsAt: text("ends_at"), entryZone: text("entry_zone"), localStart: text("local_start"),
+  disambiguation: text("disambiguation"), durationMinutes: integer("duration_minutes"), tentative: integer("tentative").notNull().default(0),
+  reviewReason: text("review_reason"), supersedesId: text("supersedes_id"), recordedBy: text("recorded_by").notNull(), recordedByName: text("recorded_by_name").notNull(), recordedAt: text("recorded_at").notNull(),
+}, table => [
+  uniqueIndex("uidx_ops_internal_schedules_org_work_revision").on(table.organizationId, table.workOrderId, table.revision),
+  index("idx_ops_internal_schedules_org_week_day").on(table.organizationId, table.week, table.day, table.id),
+  foreignKey({name:"fk_ops_internal_schedule_assignment",columns:[table.organizationId,table.assignmentId,table.workOrderId],foreignColumns:[opsWorkOrderAssignments.organizationId,opsWorkOrderAssignments.id,opsWorkOrderAssignments.workOrderId]}),
+  check("chk_ops_internal_schedule_shape",sql`${table.revision} > 0 AND ${table.tentative} IN (0,1) AND (${table.durationMinutes} IS NULL OR ${table.durationMinutes} BETWEEN 1 AND 1440) AND (${table.precision} IN ('week','removed') AND ${table.day} IS NULL AND ${table.startsAt} IS NULL AND ${table.endsAt} IS NULL OR ${table.precision}='day' AND ${table.day} IS NOT NULL AND ${table.startsAt} IS NULL AND ${table.endsAt} IS NULL OR ${table.precision}='appointment' AND ${table.day} IS NOT NULL AND ${table.startsAt} IS NOT NULL AND ${table.entryZone} IS NOT NULL AND ${table.localStart} IS NOT NULL AND (${table.endsAt} IS NULL OR ${table.endsAt} > ${table.startsAt}))`),
+]);

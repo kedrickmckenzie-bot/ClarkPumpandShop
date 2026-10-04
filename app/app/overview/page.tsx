@@ -11,7 +11,7 @@ import styles from "@/components/workspace/compliance.module.css";
 import { loadOperatorSession, loadDashboardModel } from "../_data/operator-loader";
 
 export const metadata: Metadata = { title: "Overview" };
-const TECHNICIAN_HOME = "/app/work-orders?assignee=me&status=open";
+const TECHNICIAN_HOME = "/app/my-work";
 
 export default async function OverviewPage() {
   // Technicians have no manager overview; their home is their own open jobs.

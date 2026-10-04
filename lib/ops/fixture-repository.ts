@@ -1,4 +1,8 @@
+import { scheduleMatches } from "./internal-schedule-types";
+import { civilDate } from "./dispatch-calendar";
+import { normalizeWorkOutcomes } from "./work-order-outcome";
 import { upcomingAppointmentsFromFixture } from "./upcoming-appointments";
+import { grantCoversStore } from "./store-scope";
 import { buildShowcaseFixture } from "./showcase-fixture";
 import { operatingRisksFromFixture } from "./operating-risks";
 import {latestCapitalPlan, capitalPricesFromFixture, capitalFromFixture, type CapitalQuery} from "./capital-planning";
@@ -54,7 +58,7 @@ import type {
   ReplacementEvent,
   ReplacementProfile,
   RequestImpactAssessment,
-  SiteVisitWorkOrder,
+  SiteVisitWorkOrder, WorkResult,
   VisitSession,
   WorkOrder,
   WorkOrderVerification,
@@ -142,22 +146,32 @@ function visitRow(fixture: OpsFixture, visit: VisitSession, siteVisitWorkOrder?:
   };
 }
 
+function currentAssignment(fixture: OpsFixture, org: string, workId: string) {
+  return fixture.assignments.filter(a => a.organizationId === org && a.workOrderId === workId)
+    .sort((a,b) => Number(!["pending","issued","opened","accepted"].includes(a.status)) - Number(!["pending","issued","opened","accepted"].includes(b.status)) || b.assignedAt.localeCompare(a.assignedAt) || b.id.localeCompare(a.id))[0];
+}
+
 function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListRow {
   const store = fixture.stores.find((row) => row.organizationId === workOrder.organizationId && row.id === workOrder.storeId)!;
-  const assignment = fixture.assignments.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).at(-1);
+  const assignment = currentAssignment(fixture, workOrder.organizationId, workOrder.id);
   const vendor = assignment?.vendorId ? fixture.vendors.find((row) => row.organizationId === workOrder.organizationId && row.id === assignment.vendorId) : undefined;
   const visitHold = (fixture.workOrderVisitHolds ?? []).find((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id && row.status === "active");
   const asset = workOrder.assetId ? fixture.assets.find((row) => row.organizationId === workOrder.organizationId && row.id === workOrder.assetId) : undefined;
   const internalMember = assignment?.internalMembershipId ? fixture.memberships.find((row) => row.organizationId === workOrder.organizationId && row.id === assignment.internalMembershipId) : undefined;
   const internalName = internalMember ? fixture.users.find((row) => row.id === internalMember.userId)?.displayName : undefined;
   return {
+    targetCompletionAt: workOrder.targetCompletionAt, targetCompletionSource: workOrder.targetCompletionSource,
+    schedule: (fixture.internalSchedules ?? []).find(p => p.organizationId === workOrder.organizationId && p.id === workOrder.internalScheduleId && p.assignmentId === assignment?.id && assignment.kind === "internal"),
     needsConfirmation: (fixture.workflowTasks ?? []).some(t => t.organizationId === workOrder.organizationId && t.workOrderId === workOrder.id && t.taskType === "verify_repair" && ["open", "in_progress"].includes(t.status)),
+    hasOpenFollowUp: fixture.followUps.some(f => f.organizationId === workOrder.organizationId && f.workOrderId === workOrder.id && f.status === "open")
+      || (fixture.workflowTasks ?? []).some(t => t.organizationId === workOrder.organizationId && t.workOrderId === workOrder.id && t.sourceFollowUpId && ["open", "in_progress"].includes(t.status)),
     id: workOrder.id, number: workOrder.number, storeId: store.id, storeNumber: store.storeNumber,
     storeName: store.name, problem: workOrder.problem, categoryKey: workOrder.categoryKey,
+    version: workOrder.version ?? 0, assignmentId: assignment?.id, inspectionId: fixture.inspections?.find(i=>i.organizationId===workOrder.organizationId && i.workOrderId===workOrder.id)?.id, internalMembershipId: assignment?.internalMembershipId, internalTarget: assignment?.kind === "internal" ? assignment.internalTarget ?? (assignment.internalMembershipId ? "person" : undefined) : undefined,
     priority: workOrder.priority, status: workOrder.status, assignmentKind: assignment?.kind ?? "choose_later",
     assignmentStatus: assignment?.status, vendorId: vendor?.id, vendorName: vendor?.name,
     ...(internalName ? { internalAssigneeName: internalName } : {}),
-    internalAccountableParty: workOrder.internalAccountableParty ?? "Facilities coordinator",
+    internalAccountableParty: workOrder.internalAccountableParty ?? "Facilities coordinator", internalAccountableId: workOrder.internalAccountableId,
     accountableParty: workOrder.accountableParty, nextAction: workOrder.nextAction, dueAt: workOrder.dueAt,
     updatedAt: fixture.auditEvents.filter(event => event.organizationId === workOrder.organizationId && event.aggregateType === "work_order" && event.aggregateId === workOrder.id).map(event => event.occurredAt).sort().at(-1) ?? workOrder.createdAt, createdAt: workOrder.createdAt, visitCount: new Set(fixture.siteVisitWorkOrders.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).map((row) => row.visitId)).size,
     recordedCostMinor: fixture.costLines.filter((row) => row.organizationId === workOrder.organizationId && row.workOrderId === workOrder.id).reduce((sum, row) => sum + row.amount.amountMinor, 0), currency: "USD",
@@ -183,11 +197,11 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
-    ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
+    ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
     ops_approval_policies: "approvalPolicies", ops_approval_requests: "approvalRequests", ops_approval_decisions: "approvalDecisions",
     ops_work_order_visit_holds: "workOrderVisitHolds", ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
     ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
-    ops_vendor_estimate_proposals: "estimateProposals", ops_visit_sessions: "visits", ops_site_visit_work_orders: "siteVisitWorkOrders", ops_work_order_verifications: "workOrderVerifications", ops_visit_evidence: "visitEvidence",
+    ops_vendor_estimate_proposals: "estimateProposals", ops_visit_sessions: "visits", ops_site_visit_work_orders: "siteVisitWorkOrders", ops_work_results: "workResults", ops_work_order_verifications: "workOrderVerifications", ops_visit_evidence: "visitEvidence",
     ops_files: "files", ops_entity_files: "entityFiles",
     ops_follow_ups: "followUps", ops_workflow_tasks: "workflowTasks",
     ops_workflow_task_sla_pauses: "workflowTaskSlaPauses", ops_workflow_task_sla_resumes: "workflowTaskSlaResumes",
@@ -223,7 +237,7 @@ function hydrateInserted(table: string, raw: Record<string, unknown>) {
   if (table === "ops_notification_rules") row.emailEnabled = Boolean(row.emailEnabled);
   if (table === "ops_role_capability_overrides") row.enabled = Boolean(row.enabled);
   if (["ops_work_orders", "ops_pm_plans", "ops_maintenance_programs"].includes(table) && row.requireConfirmation != null) row.requireConfirmation = Boolean(row.requireConfirmation);
-  if (table === "ops_workflow_policies") { row.requireConfirmationDefault = row.requireConfirmationDefault == null ? true : Boolean(row.requireConfirmationDefault); row.allowManagerCompletion = Boolean(row.allowManagerCompletion); row.autoCloseRoutineAfterVerification = Boolean(row.autoCloseRoutineAfterVerification); row.appliesToActiveWork = Boolean(row.appliesToActiveWork); }
+  if (table === "ops_workflow_policies") { row.internalCheckInRequired = Boolean(row.internalCheckInRequired); row.requireConfirmationDefault = row.requireConfirmationDefault == null ? true : Boolean(row.requireConfirmationDefault); row.allowManagerCompletion = Boolean(row.allowManagerCompletion); row.autoCloseRoutineAfterVerification = Boolean(row.autoCloseRoutineAfterVerification); row.appliesToActiveWork = Boolean(row.appliesToActiveWork); }
   if (table === "ops_vendor_specialties") { row.searchAliases = JSON.parse(String(row.searchAliasesJson ?? "[]")); delete row.searchAliasesJson; }
   if (table === "ops_vendor_qualifications") { row.pmWork = Boolean(row.pmWork); row.emergencyResponse = Boolean(row.emergencyResponse); row.warrantyWork = Boolean(row.warrantyWork); row.afterHours = Boolean(row.afterHours); if (row.maximumJobAmountMinor !== undefined) row.maximumJobAmount = { amountMinor: row.maximumJobAmountMinor, currency: row.currency ?? "USD" }; delete row.maximumJobAmountMinor; delete row.currency; }
   if (table === "ops_vendor_compliance_documents") row.blocking = Boolean(row.blocking);
@@ -347,6 +361,8 @@ function assertEstimateRequestUniqueness(rows: Array<Record<string, unknown>>) {
 function assertActiveAssignmentUniqueness(rows: Array<Record<string, unknown>>) {
   const active = new Set<string>();
   for (const row of rows) {
+    const target = row.internalTarget ?? "person";
+    if (row.kind === "internal" ? Boolean(row.vendorId) || !["person","pool","awaiting_allocation"].includes(String(target)) || ((target === "person") !== Boolean(row.internalMembershipId)) : Boolean(row.internalTarget) || row.kind === "outside_vendor" && (!row.vendorId || Boolean(row.internalMembershipId)) || row.kind === "choose_later" && Boolean(row.vendorId || row.internalMembershipId)) throw new Error("Invalid internal assignment target");
     if (!["pending", "issued", "opened", "accepted"].includes(String(row.status))) continue;
     const key = `${String(row.organizationId)}:${String(row.workOrderId)}`;
     if (active.has(key)) throw new Error("Work order already has an active assignment");
@@ -371,6 +387,22 @@ function assertReplacementUniqueness(table: string, rows: Array<Record<string, u
 }
 
 function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], statement: OpsStatement) {
+  if (statement.visitSelection) {
+    const {org,visitId,count}=statement.visitSelection;
+    if(!fixture.visits.some(v=>v.organizationId===org&&v.id===visitId&&v.status==="active")||fixture.siteVisitWorkOrders.filter(l=>l.organizationId===org&&l.visitId===visitId).length!==count)throw new OpsDomainError("CONFLICT","This visit changed. Refresh before saving.");
+    const [organizationId,key,command,resultId]=statement.params;
+    if(idempotencyKeys.some(k=>k.organizationId===organizationId&&k.key===key))throw new OpsDomainError("CONFLICT","This visit changed. Refresh before saving.");
+    idempotencyKeys.push({organizationId:String(organizationId),key:String(key),command:String(command),resultId:String(resultId),requestHash:"valid",createdAt:String(statement.params[8]),expiresAt:String(statement.params[9])});return;
+  }
+  if (statement.dispatchAccess) {
+    const a=statement.dispatchAccess;
+    const member=fixture.memberships.find(m=>m.organizationId===a.org&&m.id===a.membershipId);
+    const user=fixture.users.find(u=>u.id===member?.userId);
+    const store=fixture.stores.find(s=>s.organizationId===a.org&&s.id===a.storeId);
+    const allowed=member?.status==='active'&&user?.status==='active'&&a.roles.includes(member.role)&&store&&fixture.scopeGrants.some(g=>g.organizationId===a.org&&g.membershipId===a.membershipId&&['ops:*','ops:write','ops:read_write','ops:store_manage'].includes(g.permission)&&(g.scopeKind==='organization'&&g.scopeId===a.org||g.scopeKind==='store'&&g.scopeId===store.id||g.scopeKind==='region'&&g.scopeId===store.regionId||g.scopeKind==='division'&&g.scopeId===store.divisionId));
+    if(!allowed) throw new OpsDomainError('FORBIDDEN','Store access changed. Refresh before assigning work.');
+    return;
+  }
   if (statement.sql === "DELETE FROM ops_vendor_coverage WHERE organization_id = ? AND vendor_id = ?") {
     const [org, vendorId] = statement.params;
     fixture.vendorCoverage = fixture.vendorCoverage.filter(row => row.organizationId !== org || row.vendorId !== vendorId);
@@ -422,6 +454,11 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
     if (table === "ops_site_visit_work_orders" && rows.some((item) => item.organizationId === row.organizationId && (item.visitId === row.visitId && item.workOrderId === row.workOrderId || item.visitId === row.visitId && item.ordinal === row.ordinal))) throw new Error("Visit work selection is duplicated");
     if (table === "ops_work_order_verifications" && rows.some((item) => item.organizationId === row.organizationId && (item.workOrderId === row.workOrderId && item.cycle === row.cycle))) throw new Error("Work-order verification decision is duplicated");
     if (table === "ops_visit_evidence" && ["check_in", "check_out"].includes(String(row.kind)) && rows.some((item) => item.organizationId === row.organizationId && item.visitId === row.visitId && item.kind === row.kind)) throw new Error(`Visit already has ${String(row.kind)} evidence`);
+    if(table==="ops_internal_schedules"){
+      row.tentative=Boolean(row.tentative);
+      const assignment=fixture.assignments.find(a=>a.organizationId===row.organizationId&&a.id===row.assignmentId&&a.workOrderId===row.workOrderId);
+      if(!assignment||rows.some(p=>p.organizationId===row.organizationId&&p.workOrderId===row.workOrderId&&p.revision===row.revision)||!["week","day","appointment","removed"].includes(String(row.precision)))throw Error("Invalid internal schedule");
+    }
     rows.push(row);
     if (table === "ops_work_order_estimate_requests") assertEstimateRequestUniqueness(rows);
     if (table === "ops_work_order_assignments") assertActiveAssignmentUniqueness(rows);
@@ -474,6 +511,18 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
 }
 
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
+  async listDispatchPeople(scope: OrganizationScope, storeId: string, search = "", cursor?: string, kind?: "technician" | "manager") {
+    const store=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===storeId); if(!store||!storeAllowed(this.fixture,scope,storeId)) return {items:[]};
+    const terms=searchTerms(search);
+    const rows=this.fixture.memberships.filter(m=>m.organizationId===scope.organizationId&&m.status==='active'&&['internal_technician','facilities_admin','regional_manager','field_manager'].includes(m.role))
+      .filter(m=>!kind || (kind==='technician') === (m.role==='internal_technician'))
+      .filter(m=>this.fixture.scopeGrants.some(g=>g.organizationId===scope.organizationId&&g.membershipId===m.id&&['ops:*','ops:write','ops:read_write','ops:store_manage'].includes(g.permission)&&(g.scopeKind==='organization'&&g.scopeId===scope.organizationId||g.scopeKind==='store'&&g.scopeId===store.id||g.scopeKind==='region'&&g.scopeId===store.regionId||g.scopeKind==='division'&&g.scopeId===store.divisionId)))
+      .flatMap(m=>{const u=this.fixture.users.find(u=>u.id===m.userId&&u.status==='active');return u?[{id:m.id,name:u.displayName,role:m.role}]:[];})
+      .filter(p=>matchesSearchTerms(p.name,terms)).sort((a,b)=>a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
+    const parts=cursor?.split('|').map(decodeURIComponent); if(cursor&&parts?.length!==2) return {items:[]};
+    const eligible=parts?rows.filter(p=>p.name>parts[0]||p.name===parts[0]&&p.id>parts[1]):rows;
+    const items=eligible.slice(0,25);const last=items.at(-1);return {items,nextCursor:eligible.length>25&&last?`${encodeURIComponent(last.name)}|${encodeURIComponent(last.id)}`:undefined};
+  }
   async inspectionHistory(org:string,id:string) {return clone(this.fixture.auditEvents.filter(r=>r.organizationId===org&&r.aggregateId===id&&r.aggregateType==="inspection").sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)).slice(0,30));}
   async inspectionDelivery(org:string,id:string) {return clone(this.fixture.outboxMessages.filter(r=>r.organizationId===org&&r.aggregateId===id&&r.aggregateType==="inspection").sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,10).map(r=>({id:r.id,topic:r.topic,status:r.status})));}
   async getStoreTask(org:string,id:string) {return clone(this.fixture.storeTasks?.find(t=>t.organizationId===org&&t.id===id)??null);}
@@ -611,7 +660,15 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listVendorSpecialties(organizationId: OpsId, vendorId: OpsId) { return clone(this.fixture.vendorSpecialties.filter((row) => row.organizationId === organizationId && row.vendorId === vendorId).sort((a, b) => a.displayName.localeCompare(b.displayName) || a.id.localeCompare(b.id))); }
   async listNotificationRules(organizationId: OpsId) { return clone((this.fixture.notificationRules ?? []).filter((row) => row.organizationId === organizationId).sort((a, b) => a.eventKey.localeCompare(b.eventKey) || a.recipientRole.localeCompare(b.recipientRole))); }
   async upsertNotificationRule(input: Parameters<OpsRepository["upsertNotificationRule"]>[0]) { const candidate = clone(this.fixture); candidate.notificationRules ??= []; const existing = candidate.notificationRules.find((row) => row.organizationId === input.organizationId && row.eventKey === input.eventKey && row.recipientRole === input.recipientRole); if (existing) Object.assign(existing, { emailEnabled: input.emailEnabled, updatedByMembershipId: input.updatedByMembershipId, updatedAt: input.occurredAt }); else candidate.notificationRules.push({ id: input.id, organizationId: input.organizationId, eventKey: input.eventKey, emailEnabled: input.emailEnabled, recipientRole: input.recipientRole, updatedByMembershipId: input.updatedByMembershipId, createdAt: input.occurredAt, updatedAt: input.occurredAt }); this.fixture = candidate; }
-  async listNotificationRecipients(organizationId: OpsId, role: NotificationRule["recipientRole"], scope?: { storeId: OpsId; regionId?: OpsId }): Promise<NotificationRecipient[]> { return clone(this.fixture.memberships.filter((membership) => membership.organizationId === organizationId && membership.role === role && membership.status === "active").filter((membership) => !scope || this.fixture.scopeGrants.some((grant) => grant.organizationId === organizationId && grant.membershipId === membership.id && (grant.scopeKind === "organization" && grant.scopeId === organizationId || grant.scopeKind === "store" && grant.scopeId === scope.storeId || grant.scopeKind === "region" && grant.scopeId === scope.regionId))).flatMap((membership) => { const user = this.fixture.users.find((candidate) => candidate.id === membership.userId && candidate.status === "active"); return user ? [{ membershipId: membership.id, userId: user.id, email: user.email, displayName: user.displayName, role }] : []; })); }
+  async listNotificationRecipients(organizationId: OpsId, role: NotificationRule["recipientRole"], scope?: { storeId: OpsId; regionId?: OpsId }): Promise<NotificationRecipient[]> {
+    const store = scope ? this.fixture.stores.find(row => row.organizationId === organizationId && row.id === scope.storeId) : undefined;
+    return clone(this.fixture.memberships.filter(membership => membership.organizationId === organizationId && membership.role === role && membership.status === "active")
+      .filter(membership => !scope || store && this.fixture.scopeGrants.some(grant => grant.membershipId === membership.id && grantCoversStore(grant, store)))
+      .flatMap(membership => {
+        const user = this.fixture.users.find(candidate => candidate.id === membership.userId && candidate.status === "active");
+        return user ? [{ membershipId: membership.id, userId: user.id, email: user.email, displayName: user.displayName, role }] : [];
+      }));
+  }
   async getMembership(organizationId: OpsId, membershipId: OpsId) { return clone(this.fixture.memberships.find((row) => row.organizationId === organizationId && row.id === membershipId) ?? null); }
   async getUserInOrganization(organizationId: OpsId, userId: OpsId) { return clone(this.fixture.memberships.some(row => row.organizationId === organizationId && row.userId === userId) ? this.fixture.users.find(row => row.id === userId) ?? null : null); }
   async listMembershipsForUser(organizationId: OpsId, userId: OpsId) { return clone(this.fixture.memberships.filter(row => row.organizationId === organizationId && row.userId === userId).sort((a, b) => a.id.localeCompare(b.id))); }
@@ -628,7 +685,15 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listWorkflowPolicies(organizationId: OpsId): Promise<OrganizationWorkflowPolicy[]> { return clone((this.fixture.workflowPolicies ?? []).filter((row) => row.organizationId === organizationId).sort((a, b) => b.version - a.version)); }
   async getRequest(organizationId: OpsId, requestId: OpsId) { return clone(this.fixture.requests.find((row) => row.organizationId === organizationId && row.id === requestId) ?? null); }
   async listRequestImpactAssessments(organizationId: OpsId, requestId: OpsId): Promise<RequestImpactAssessment[]> { return clone(this.fixture.requestImpactAssessments.filter((row) => row.organizationId === organizationId && row.requestId === requestId).sort((left, right) => left.assessedAt.localeCompare(right.assessedAt) || left.id.localeCompare(right.id))); }
-  async getWorkOrder(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.workOrders.find((row) => row.organizationId === organizationId && row.id === workOrderId) ?? null); }
+  async getDispatchFilters(scope: OrganizationScope) {
+    const stores=this.fixture.stores.filter(s=>storeAllowed(this.fixture,scope,s.id));
+    const people=this.fixture.memberships.filter(m=>m.organizationId===scope.organizationId&&m.role==="internal_technician"&&m.status==="active"&&this.fixture.scopeGrants.some(g=>g.organizationId===scope.organizationId&&g.membershipId===m.id&&["ops:*","ops:write","ops:read_write","ops:store_manage"].includes(g.permission)&&stores.some(s=>grantCoversStore(g,s)))).flatMap(m=>{const u=this.fixture.users.find(u=>u.id===m.userId&&u.status==="active");return u?[{id:m.id,name:u.displayName}]:[];}).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,100);
+    const regions=this.fixture.regions.filter(r=>r.organizationId===scope.organizationId&&stores.some(s=>s.regionId===r.id)).map(r=>({id:r.id,name:r.name})).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,100);
+    return {people,regions};
+  }
+  async getInternalSchedule(org: string, id: string) { return clone((this.fixture.internalSchedules ?? []).find(p=>p.organizationId===org&&p.id===id) ?? null); }
+  async listInternalSchedules(org: string, workId: string) { return clone((this.fixture.internalSchedules ?? []).filter(p=>p.organizationId===org&&p.workOrderId===workId).sort((a,b)=>b.revision-a.revision).slice(0,50)); }
+  async getWorkOrder(organizationId: OpsId, workOrderId: OpsId) { const row=this.fixture.workOrders.find(row=>row.organizationId===organizationId&&row.id===workOrderId);return row?clone({...row,internalScheduleId:row.internalScheduleId??undefined,targetCompletionAt:row.targetCompletionAt??undefined,targetCompletionSource:row.targetCompletionSource??undefined}):null; }
   async getWorkOrderVisitHold(organizationId: OpsId, workOrderId: OpsId) { return clone((this.fixture.workOrderVisitHolds ?? []).find((row) => row.organizationId === organizationId && row.workOrderId === workOrderId) ?? null); }
   async listActiveWorkOrderVisitHoldsForStore(organizationId: OpsId, storeId: OpsId) { const workIds = new Set(this.fixture.workOrders.filter((row) => row.organizationId === organizationId && row.storeId === storeId).map((row) => row.id)); return clone((this.fixture.workOrderVisitHolds ?? []).filter((row) => row.organizationId === organizationId && workIds.has(row.workOrderId) && row.status === "active").sort((a, b) => a.deadlineAt.localeCompare(b.deadlineAt) || a.id.localeCompare(b.id))); }
   async getApprovalPolicy(organizationId: OpsId, policyId: OpsId) { return clone(this.fixture.approvalPolicies.find((row) => row.organizationId === organizationId && row.id === policyId) ?? null); }
@@ -732,6 +797,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async getSiteVisitWorkOrder(organizationId: OpsId, visitId: OpsId, workOrderId: OpsId): Promise<SiteVisitWorkOrder | null> { return clone(this.fixture.siteVisitWorkOrders.find((row) => row.organizationId === organizationId && row.visitId === visitId && row.workOrderId === workOrderId) ?? null); }
   async listSiteVisitWorkOrders(organizationId: OpsId, visitId: OpsId): Promise<SiteVisitWorkOrder[]> { return clone(this.fixture.siteVisitWorkOrders.filter((row) => row.organizationId === organizationId && row.visitId === visitId).sort((left, right) => left.ordinal - right.ordinal || left.id.localeCompare(right.id))); }
   async listSiteVisitWorkOrdersForWorkOrder(organizationId: OpsId, workOrderId: OpsId): Promise<SiteVisitWorkOrder[]> { return clone(this.fixture.siteVisitWorkOrders.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((left, right) => right.linkedAt.localeCompare(left.linkedAt) || right.id.localeCompare(left.id))); }
+  async listWorkResults(org: string, workId: string): Promise<WorkResult[]> { return clone((this.fixture.workResults ?? []).filter(r => r.organizationId === org && r.workOrderId === workId).sort((a,b) => b.cycleVersion - a.cycleVersion)); }
+  async listWorkOutcomesForWorkOrder(org: string, workId: string) { return normalizeWorkOutcomes(await this.listSiteVisitWorkOrdersForWorkOrder(org,workId), await this.listWorkResults(org,workId)); }
   async listWorkOrderVerifications(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderVerification[]> { return clone(this.fixture.workOrderVerifications.filter((row) => row.organizationId === organizationId && row.workOrderId === workOrderId).sort((left, right) => left.cycle - right.cycle || left.decidedAt.localeCompare(right.decidedAt) || left.id.localeCompare(right.id))); }
   async getFollowUp(organizationId: OpsId, followUpId: OpsId) { return clone(this.fixture.followUps.find((row) => row.organizationId === organizationId && row.id === followUpId) ?? null); }
   async getVendorReminder(organizationId: OpsId, reminderId: OpsId) { return clone(this.fixture.vendorReminders.find((row) => row.organizationId === organizationId && row.id === reminderId) ?? null); }
@@ -859,7 +926,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.storeId || row.storeId === query.storeId)
         && (!query.regionId || this.fixture.stores.find((store) => store.organizationId === scope.organizationId && store.id === row.storeId)?.regionId === query.regionId)
         && (!query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.workOrderId === row.id && assignment.vendorId === query.vendorId))
-        && (!query.internalMembershipId || (() => { const current = this.fixture.assignments.filter((assignment) => assignment.organizationId === scope.organizationId && assignment.workOrderId === row.id).at(-1); return current?.kind === "internal" && current.internalMembershipId === query.internalMembershipId; })())
+        && (!query.internalOnly || (() => {const a=currentAssignment(this.fixture, scope.organizationId, row.id);return a?.kind==='internal'&&['pending','issued','opened','accepted'].includes(a.status);})())
+        && (!query.internalTarget || (() => {const a=currentAssignment(this.fixture, scope.organizationId, row.id);return a?.kind==='internal'&&['pending','issued','opened','accepted'].includes(a.status)&&(a.internalTarget??(a.internalMembershipId?'person':undefined))===query.internalTarget;})())
+        && (!query.internalMembershipId || (() => { const current = currentAssignment(this.fixture, scope.organizationId, row.id); return current?.kind === "internal" && current.internalMembershipId === query.internalMembershipId; })())
         && (!query.categoryKey || (row.categoryKey ?? "unclassified") === query.categoryKey)
         && matchesWorkCategoryPath(this.fixture.assets.find((asset) => asset.organizationId === scope.organizationId && asset.id === row.assetId), query.categoryPath)
         && (!query.assetId || (query.assetId === "unlinked" ? !row.assetId : query.assetId === "needed" ? needsEquipmentChoice(row) : row.assetId === query.assetId))
@@ -869,6 +938,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.createdTo || row.createdAt < query.createdTo)
         && (!query.dueBefore || Boolean(row.dueAt && row.dueAt <= query.dueBefore))
         && (!query.dueAfter || Boolean(row.dueAt && row.dueAt > query.dueAfter))
+        && (!query.excludeHeld || !(this.fixture.workOrderVisitHolds??[]).some(h=>h.organizationId===scope.organizationId&&h.workOrderId===row.id&&h.status==="active"&&row.status==="approved"))
         && (!query.heldOnly || activeHeldWork.has(row.id))
         && (!query.heldReviewDeadlineTo || (this.fixture.workOrderVisitHolds ?? []).some((hold) => hold.organizationId === scope.organizationId && hold.workOrderId === row.id && hold.status === "active" && hold.deadlineAt <= query.heldReviewDeadlineTo!))
         && (!query.heldConfirmedOpportunityAfter || (this.fixture.serviceAppointments ?? []).some((appointment) => {
@@ -886,7 +956,22 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         .filter((line) => line.organizationId === scope.organizationId && line.workOrderId === row.id && matchesWorkCost(line, query))
         .reduce((sum, line) => sum + line.amount.amountMinor, 0);
       return result;
-    }).filter((row) => matchesSearchTerms([row.number, row.problem, row.storeNumber, row.storeName, row.vendorName, row.internalAssigneeName].filter(Boolean).join(" "), workTerms)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    }).filter(row => scheduleMatches(row, query.scheduleView, row.schedule && query.scheduleAt && ["today","upcoming","replan"].includes(query.scheduleView??"") ? civilDate(query.scheduleAt,row.schedule.planningZone) : query.scheduleFrom, query.scheduleTo) && (!query.scheduleExcludeWeek||row.schedule?.week!==query.scheduleExcludeWeek) && (!query.dispatchReadiness || (query.dispatchReadiness === "waiting" ? row.hasOpenFollowUp || ["waiting_on_parts","waiting_on_vendor"].includes(row.status) || row.schedule?.tentative : !row.hasOpenFollowUp && !row.schedule?.tentative && !["waiting_on_parts","waiting_on_vendor","in_progress","completed_pending_review","resolved","closed","cancelled"].includes(row.status)))).filter((row) => matchesSearchTerms([row.number, row.problem, row.storeNumber, row.storeName, ...(() => { const store=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===row.storeId); return store ? [store.address1,store.city,store.postalCode,...store.aliases] : []; })(), row.vendorName, row.internalAssigneeName].filter(Boolean).join(" "), workTerms)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    if (query.internalOnly) {
+      const rank=(priority:string)=>({emergency:3,urgent:2,routine:1,planned:0} as Record<string,number>)[priority]??0;
+      let visible = rows.sort((a,b) => rank(b.priority)-rank(a.priority) || ( a.createdAt === b.createdAt ? a.id === b.id ? 0 : a.id < b.id ? 1 : -1 : a.createdAt < b.createdAt ? 1 : -1));
+      if (query.cursor !== undefined) {
+        try {
+          const parts=query.cursor.split("|").map(decodeURIComponent);
+          if (parts.length!==3 || !parts.every(Boolean)) return {items:[]};
+          const [priority,createdAt,id]=parts;
+          visible=visible.filter(row=>rank(row.priority)<Number(priority) || rank(row.priority)===Number(priority)&&(row.createdAt<createdAt || row.createdAt===createdAt && row.id<id));
+        } catch {return {items:[]};}
+      }
+      const max=Math.max(1,Math.min(100,query.limit??25)),start=Math.max(0,Math.floor(query.offset??0));
+      const items=visible.slice(start,start+max),last=items.at(-1);
+      return {items,totalCount:rows.length,nextCursor:start+max<visible.length&&last?`${rank(last.priority)}|${encodeURIComponent(last.createdAt)}|${encodeURIComponent(last.id)}`:undefined};
+    }
     return page(rows, query);
   }
 

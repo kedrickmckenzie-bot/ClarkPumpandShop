@@ -2,6 +2,7 @@ import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import Link from "next/link";
 import type { Asset, AssetComponent, OpsFixture } from "@/lib/ops/types";
 import { formatOperationsDate } from "@/lib/ops/local-time";
+import { applicableOutcomeVerification, applicableVisitWorkOutcomes } from "@/lib/ops/work-order-outcome";
 import styles from "./component-lifecycle-panel.module.css";
 
 const money = (minor: number, currency = "USD") => cachedNumberFormat("en-US", { style: "currency", currency }).format(minor / 100);
@@ -23,12 +24,13 @@ export function ComponentLifecyclePanel({ fixture, asset, component, canManage }
   const modelCohort = currentEvent ? eventStats.filter(({ event }) => event.partManufacturer === currentEvent.partManufacturer && event.partModel === currentEvent.partModel && event.expectedLifeMonths && monthsBetween(fixture.components.find((item) => item.id === event.removedComponentId)?.installedAt, event.removedAt) !== undefined) : [];
   const prematureRate = modelCohort.length ? modelCohort.filter(({ event, actualMonths: life }) => life! < event.expectedLifeMonths! * .75).length / modelCohort.length : undefined;
   const assetWork = fixture.workOrders.filter((work) => work.assetId === asset.id);
-  const eligible = fixture.siteVisitWorkOrders.flatMap((visitWork) => {
+  const eligible = applicableVisitWorkOutcomes(fixture.siteVisitWorkOrders, fixture.workResults).flatMap((outcome) => {
+    const visitWork = { ...outcome, id: outcome.siteVisitWorkOrderId ?? outcome.id };
     const work = assetWork.find((item) => item.id === visitWork.workOrderId);
     const visit = fixture.visits.find((item) => item.id === visitWork.visitId);
-    const verified = fixture.workOrderVerifications.find((item) => item.siteVisitWorkOrderId === visitWork.id && item.decision === "verified");
+    const verified = applicableOutcomeVerification(fixture.workOrderVerifications, outcome);
     const recorded = fixture.repairItems.some((item) => item.siteVisitWorkOrderId === visitWork.id);
-    return work && visit?.vendorId && verified && !recorded && ["completed", "no_issue_found"].includes(visitWork.outcome ?? "") && (!work.componentId || work.componentId === component.id) ? [{ visitWork, work, visit }] : [];
+    return work && visit?.vendorId && verified?.decision === "verified" && !recorded && ["completed", "no_issue_found"].includes(visitWork.outcome ?? "") && (!work.componentId || work.componentId === component.id) ? [{ visitWork, work, visit }] : [];
   });
   const warrantyCases = currentEvent ? fixture.warrantyCases.filter((item) => item.priorRepairItemId === currentEvent.repairItemId) : [];
   const repeatWork = currentEvent ? fixture.workOrders.filter((work) => work.componentId === currentEvent.installedComponentId && Date.parse(work.createdAt) > Date.parse(currentEvent.installedAt)) : [];

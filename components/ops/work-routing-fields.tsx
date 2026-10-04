@@ -1,5 +1,6 @@
 "use client";
 
+import { InternalAssignmentFields } from "@/components/workspace/internal-assignment-fields";
 import { SavedWorkSuggestions } from "./saved-work-suggestions";
 import { useWorkOrderScope } from "./work-order-scope";
 import type { StoreVendorPage } from "@/lib/ops/store-vendors";
@@ -22,6 +23,7 @@ import styles from "./ops.module.css";
 export function WorkRoutingFields({ model, accountabilityOnly }: { model: CreateWorkOrderPageViewModel; accountabilityOnly: boolean }) {
   const { storeId } = useWorkOrderScope();
   const [route, setRoute] = useState<string>(accountabilityOnly && model.defaults?.assignmentKind === "hold_for_visit" ? "choose_later" : model.defaults?.assignmentKind ?? "choose_later");
+  const [internalNextVisit, setInternalNextVisit] = useState(false);
   const [vendorId, setVendorId] = useState(model.defaults?.vendorId ?? "");
   // Vendors that cover the chosen store, narrowed on the server as you type.
   const loadVendors = useCallback(async (query: string, signal: AbortSignal, cursor?: string): Promise<PickPage> => {
@@ -61,9 +63,11 @@ export function WorkRoutingFields({ model, accountabilityOnly }: { model: Create
         emptyText="No vendor covering this store matches. Try fewer letters." onSelect={(vendor) => setVendorId(vendor?.value ?? "")} />
       {!accountabilityOnly ? <SavedWorkSuggestions storeId={storeId} vendorId={vendorId} preview /> : null}
     </div> : null}
-    {route === "internal" ? <div className={styles.field}><SearchPicker name="internalMembershipId" label="Internal assignee" required placeholder="Type a name"
-      options={model.internalAssignees.map((member) => ({ value: member.value, label: member.label, detail: member.description }))}
-      defaultValue={model.defaults?.internalMembershipId} /><small>Choose a technician, or use Choose later.</small></div> : null}
+    {route === "internal" ? <div className={styles.fieldGrid}>
+      <InternalAssignmentFields storeId={storeId} defaultTarget={model.defaults?.internalMembershipId ? "person" : "pool"} defaultPerson={model.defaults?.internalMembershipId ? {id:model.defaults.internalMembershipId,name:model.internalAssignees.find(p=>p.value===model.defaults?.internalMembershipId)?.label??"Technician"} : undefined}/>
+      <label className={styles.checkField}><input name="internalNextVisit" type="checkbox" onChange={e => setInternalNextVisit(e.target.checked)}/>Next visit is fine</label>
+      {internalNextVisit ? <label className={styles.field}><span>Review by <em>Required</em></span><input name="holdDeadlineAt" type="datetime-local" required/></label> : null}
+    </div> : null}
     {route === "hold_for_visit" ? <div className={styles.fieldGrid}>
       <label className={styles.field}><span>Service category <em>Required</em></span><select name="holdCategoryKey" required defaultValue={model.defaults?.categoryKey ?? ""}><option value="">Choose a category</option>{model.categories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</select><small>Used to group compatible jobs.</small></label>
       <label className={styles.field}><span>What may the vendor do?</span><select name="holdPosture" defaultValue="complete_using_professional_judgment"><option value="complete_using_professional_judgment">Complete during the visit if practical</option><option value="look_and_report">Inspect and report back</option></select></label>

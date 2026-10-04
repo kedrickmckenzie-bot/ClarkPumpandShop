@@ -23,8 +23,8 @@ it("reassignment gives internal maintenance an actionable task and rejects a non
   const work=await createWorkOrder(svc,{organizationId:org,storeId:"store-northline-104",problem:"Inspect the leaking sink",accountableParty:"Facilities",nextAction:"Choose provider",actor});
   await expect(assignWorkOrder(svc,{organizationId:org,workOrderId:work.id,kind:"internal",internalMembershipId:actor.actorId,actor})).rejects.toThrow("active internal");
   await assignWorkOrder(svc,{organizationId:org,workOrderId:work.id,kind:"internal",internalMembershipId:"membership-northline-tech-1",actor});
-  expect((await repository.getWorkOrder(org,work.id))?.nextAction).toBe("Begin internal maintenance work");
-  expect((await repository.listWorkflowTasksForWorkOrder(org,work.id)).some(t=>t.status==="open"&&t.title==="Begin internal maintenance work"&&t.assigneeId==="membership-northline-tech-1")).toBe(true);
+  expect((await repository.getWorkOrder(org,work.id))?.nextAction).toBe("Begin internal work");
+  expect((await repository.listWorkflowTasksForWorkOrder(org,work.id)).some(t=>t.status==="open"&&t.title==="Begin internal work"&&t.assigneeId==="membership-northline-tech-1")).toBe(true);
 });
 it("records a scoped warranty dismissal without changing terms and rejects stale coverage",async()=>{
   const repository=createNorthlineFixtureRepository(),work=repository.snapshot().workOrders.find(w=>w.id==="wo-warranty-104-compressor-callback")!;

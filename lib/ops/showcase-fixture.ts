@@ -141,6 +141,25 @@ export function buildShowcaseFixture(anchorDate = new Date().toISOString()): Ops
     const awaitingReview = work.status === "completed_pending_review";
     f.workflowTasks.push({id:`showcase-flow-${work.id}`,organizationId:org,workOrderId:work.id,taskType:awaitingReview?"verify_repair":"other",title:work.nextAction,reason:work.problem,assigneeType:awaitingReview?"user":assignment.vendorId?"vendor":"user",assigneeId:awaitingReview?facility:assignment.vendorId??assignment.internalMembershipId,assigneeName:work.accountableParty,priority:work.priority==="urgent"?"high":"normal",status:"open",blocking:true,requiredForProgress:true,dueAt:work.dueAt,completionCriteria:awaitingReview?"Review findings and required evidence.":"Record the outcome and required evidence.",escalationDestination:work.escalationTo!,escalationLevel:0,createdByActorType:"user",createdByActorId:facility,createdByActorName:name(facility),createdAt:work.createdAt});
   }
+  const dispatchExamples = [
+    { key: "maria", store: 101, target: "person" as const, technician: "membership-northline-tech-1", problem: "Restroom faucet drips after closing.", held: false },
+    { key: "devon", store: 106, target: "person" as const, technician: "membership-northline-tech-2", problem: "Stockroom door closer needs adjustment.", held: false },
+    { key: "pool", store: 111, target: "pool" as const, technician: undefined, problem: "Parking lot sign bracket is loose.", held: false },
+    { key: "manager", store: 104, target: "awaiting_allocation" as const, technician: undefined, problem: "Coordinate replacement of a damaged cooler door handle.", held: false },
+    { key: "next-visit", store: 108, target: "pool" as const, technician: undefined, problem: "Tighten the stockroom shelf bracket on the next suitable visit.", held: true },
+  ];
+  dispatchExamples.forEach((example, index) => {
+    const workId = `dispatch-demo-${example.key}`;
+    const owner = "membership-northline-field-manager";
+    const who = example.technician ? name(example.technician) : name(owner);
+    const nextAction = example.held ? "Wait for a suitable internal visit" : example.target === "person" ? "Begin internal work" : example.target === "pool" ? "Arrange team pickup" : "Arrange internal work";
+    const dueAt = day(example.held ? 14 : 3);
+    f.workOrders.push({ id: workId, organizationId: org, number: `CPS-2026-${String(301+index).padStart(4,"0")}`, storeId: `store-northline-${example.store}`, problem: example.problem, priority: "routine", status: "approved", version: 0, internalAccountableType: "membership", internalAccountableId: owner, internalAccountableParty: name(owner), accountableParty: example.held ? name(owner) : who, nextAction, dueAt, escalationTo: "Facilities leadership", createdAt: day(-1) });
+    f.assignments.push({ id: `${workId}-assignment`, organizationId: org, workOrderId: workId, kind: "internal", internalTarget: example.target, internalMembershipId: example.technician, status: "pending", assignedAt: day(-1) });
+    f.workflowTasks.push({ id: `${workId}-task`, organizationId: org, workOrderId: workId, taskType: "other", title: nextAction, reason: example.problem, assigneeType: "user", assigneeId: example.held ? owner : example.technician ?? owner, assigneeName: example.held ? name(owner) : who, priority: "normal", status: "open", blocking: true, requiredForProgress: true, dueAt, completionCriteria: "Arrange internal service and record its outcome", escalationDestination: "Facilities leadership", escalationLevel: 0, createdByActorType: "user", createdByActorId: facility, createdByActorName: name(facility), createdAt: day(-1) });
+    if (example.held) (f.workOrderVisitHolds ??= []).push({ id: `${workId}-hold`, organizationId: org, workOrderId: workId, posture: "complete_using_professional_judgment", status: "active", deadlineAt: dueAt, version: 0, createdByMembershipId: facility, createdByName: name(facility), createdAt: day(-1), updatedAt: day(-1) });
+    audit("work_order",workId,"internal_dispatch.seeded",day(-1),{ internalTarget: example.target, meaning: "fictional_example" });
+  });
   audit("organization",org,"showcase.refreshed",f.asOf,{version:"2026-09-29",stores:f.stores.length,inspections:f.inspections!.length,tasks:f.storeTasks!.length,capitalPlans:f.capitalPlans!.length});
   return f;
 }

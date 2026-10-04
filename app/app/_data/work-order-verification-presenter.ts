@@ -11,7 +11,7 @@ import { persistedWorkOrderVersion } from "@/lib/ops/concurrency";
 import { getRequestOpsFixtureSnapshot } from "@/app/app/_data/request-data";
 import { loadOperatorSession } from "./operator-loader";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
-import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "@/lib/ops/work-order-outcome";
+import { applicableOutcomeVerification, latestRecordedWorkOutcome, normalizeWorkOutcomes } from "@/lib/ops/work-order-outcome";
 import { roleCan } from "@/components/ops/role-policy";
 
 export interface WorkOrderVerificationViewModel {
@@ -36,7 +36,7 @@ export interface WorkOrderVerificationViewModel {
     notes?: string;
     recordedAt: string;
     recordedLabel: string;
-    visitId: string;
+    visitId?: string;
     technicianLabel: string;
     canConfirmAvoidedSeparateTrip: boolean;
   };
@@ -158,7 +158,7 @@ export function buildWorkOrderVerificationModel(
   const outcomes = fixture.siteVisitWorkOrders.filter((record) => (
     record.organizationId === session.organizationId && record.workOrderId === workOrder.id
   ));
-  const currentOutcome = latestRecordedWorkOutcome(outcomes);
+  const currentOutcome = latestRecordedWorkOutcome(normalizeWorkOutcomes(outcomes,(fixture.workResults??[]).filter(row=>row.organizationId===session.organizationId&&row.workOrderId===workOrder.id)));
   const visit = currentOutcome
     ? fixture.visits.find((candidate) => (
         candidate.organizationId === session.organizationId && candidate.id === currentOutcome.visitId
@@ -208,7 +208,7 @@ export function buildWorkOrderVerificationModel(
           recordedAt: currentOutcome.outcomeRecordedAt,
           recordedLabel: dateTime(currentOutcome.outcomeRecordedAt, storeTimeZone),
           visitId: currentOutcome.visitId,
-          technicianLabel: currentOutcome.outcomeRecordedByActorType === "user"
+          technicianLabel: currentOutcome.workResultId ? `${currentOutcome.performerName ?? currentOutcome.outcomeRecordedByActorName} · ${currentOutcome.source?.replaceAll("_"," ")} · Recorded by ${currentOutcome.outcomeRecordedByActorName}` : currentOutcome.outcomeRecordedByActorType === "user"
             ? `Corrected by ${currentOutcome.outcomeRecordedByActorName ?? "management"}${visit ? ` · Visit: ${visit.providerName}` : ""}`
             : visit
             ? `${visit.technicianName} · ${visit.providerName}`

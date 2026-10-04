@@ -176,6 +176,9 @@ export interface AssetSearchRow {
 }
 
 export interface WorkOrderListRow {
+  schedule?: import("./internal-schedule-types").ScheduleProjection;
+  targetCompletionAt?: IsoDateTime;
+  targetCompletionSource?: string;
   needsConfirmation?: boolean;
   id: OpsId;
   number: string;
@@ -192,7 +195,14 @@ export interface WorkOrderListRow {
   vendorName?: string;
   /** The in-house person the work is assigned to, when it is assigned internally. */
   internalAssigneeName?: string;
+  assignmentId?: string;
+  inspectionId?: string;
+  hasOpenFollowUp?: boolean;
+  internalMembershipId?: string;
+  internalTarget?: "person" | "pool" | "awaiting_allocation";
+  version?: number;
   internalAccountableParty: string;
+  internalAccountableId?: string;
   /** Primary next-action owner, retained as accountableParty for repository compatibility. */
   accountableParty: string;
   nextAction: string;

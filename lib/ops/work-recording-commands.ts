@@ -1,3 +1,4 @@
+import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "./work-order-outcome";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { buildConfirmedWorkWarrantyStatements } from "./warranty-commands";
 import { buildCreateTaskStatements, buildWorkflowTaskRecord, isOpenWorkflowTask } from "./workflow-task-commands";
@@ -197,10 +198,10 @@ export async function updateWorkOrderClassification(
     }),
   ];
   if(input.assetId && input.componentId) {
-    const outcomes=await repository.listSiteVisitWorkOrdersForWorkOrder(input.organizationId,workOrder.id);
-    const latest=outcomes.filter(o=>o.outcomeRecordedAt).sort((a,b)=>b.outcomeRecordedAt!.localeCompare(a.outcomeRecordedAt!)||b.id.localeCompare(a.id))[0];
+    const outcomes=await repository.listWorkOutcomesForWorkOrder(input.organizationId,workOrder.id);
+    const latest=latestRecordedWorkOutcome(outcomes);
     if(latest?.outcome==="completed") {
-      const verified=(await repository.listWorkOrderVerifications(input.organizationId,workOrder.id)).find(v=>v.siteVisitWorkOrderId===latest.id && v.decision==="verified");
+      const verified=applicableOutcomeVerification(await repository.listWorkOrderVerifications(input.organizationId,workOrder.id),latest);
       statements.push(...await buildConfirmedWorkWarrantyStatements({work:{...workOrder,assetId:input.assetId,componentId:input.componentId,categoryKey},outcome:latest,actor:input.actor,now,ids,verificationDate:verified?.decidedAt.slice(0,10),previousAssetId:workOrder.assetId},repository));
     }
   }

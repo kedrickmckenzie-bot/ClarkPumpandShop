@@ -1,3 +1,4 @@
+import { buildInternalResultStatements, workResultStatement } from "./internal-execution";
 import { buildConfirmedWorkWarrantyStatements } from "./warranty-commands";
 import { confirmationAssignee } from "./confirmation-policy";
 import { atomicWorkOrderMutation, persistedWorkOrderVersion } from "./concurrency";
@@ -24,7 +25,7 @@ import type {
   WorkOrderVerificationScope,
   WorkflowTask,
 } from "./types";
-import { latestRecordedWorkOutcome } from "./work-order-outcome";
+import { latestRecordedWorkOutcome, verificationMatchesOutcome } from "./work-order-outcome";
 import { membershipHasCapability } from "./capability-policy";
 import { resolveInternalAccountability } from "./internal-accountability";
 import {
@@ -236,14 +237,14 @@ export async function recordWorkOrderVerification(
   }
 
   const [outcomes, priorVerifications, tasks] = await Promise.all([
-    repository.listSiteVisitWorkOrdersForWorkOrder(input.organizationId, workOrder.id),
+    repository.listWorkOutcomesForWorkOrder(input.organizationId, workOrder.id),
     repository.listWorkOrderVerifications(input.organizationId, workOrder.id),
     repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id),
   ]);
   const outcome = latestRecordedWorkOutcome(outcomes);
   if (
     !outcome
-    || outcome.id !== input.expectedSiteVisitWorkOrderId
+    || (outcome.id !== input.expectedSiteVisitWorkOrderId && outcome.siteVisitWorkOrderId !== input.expectedSiteVisitWorkOrderId)
     || outcome.outcomeRecordedAt !== input.expectedOutcomeRecordedAt
   ) {
     throw new OpsDomainError("CONFLICT", "The current technician outcome changed. Refresh before recording verification");
@@ -251,13 +252,13 @@ export async function recordWorkOrderVerification(
   if (!outcome.outcome || !reviewableOutcomes.has(outcome.outcome)) {
     throw new OpsDomainError("CONFLICT", "The current technician outcome requires follow-up instead of verification");
   }
-  const [visitWork, plannedRouteStop] = outcome.selectionSource === "held_work"
+  const [visitWork, plannedRouteStop] = outcome.visitId && outcome.selectionSource === "held_work"
     ? await Promise.all([
         repository.listSiteVisitWorkOrders(input.organizationId, outcome.visitId),
         repository.getRouteStopForVisit(input.organizationId, outcome.visitId),
       ])
     : [[], undefined];
-  const mayConfirmAvoidedSeparateTrip = outcome.selectionSource === "held_work" && (
+  const mayConfirmAvoidedSeparateTrip = outcome.visitId && outcome.selectionSource === "held_work" && (
     Boolean(plannedRouteStop)
     || visitWork.some((link) => link.selectionSource === "assigned_work" || link.selectionSource === "service_run")
   );
@@ -267,7 +268,7 @@ export async function recordWorkOrderVerification(
   if (input.avoidedSeparateTripConfirmed && !mayConfirmAvoidedSeparateTrip) {
     throw new OpsDomainError("VALIDATION", "This visit was not already planned, so a separate avoided trip cannot be verified");
   }
-  const priorDecision = [...priorVerifications].filter(v => v.siteVisitWorkOrderId === outcome.id && v.outcomeRecordedAt === outcome.outcomeRecordedAt).sort((a,b) => b.cycle-a.cycle)[0];
+  const priorDecision = [...priorVerifications].filter(v => verificationMatchesOutcome(v,outcome) && v.outcomeRecordedAt === outcome.outcomeRecordedAt).sort((a,b) => b.cycle-a.cycle)[0];
   if (priorDecision && !clean(input.correctionReason)) {
     throw new OpsDomainError("CONFLICT", "This technician outcome already has an immutable verification decision");
   }
@@ -291,11 +292,13 @@ export async function recordWorkOrderVerification(
     throw new OpsDomainError("VALIDATION", "Verification time cannot precede the recorded technician outcome");
   }
   const cycle = priorVerifications.reduce((maximum, verification) => Math.max(maximum, verification.cycle), 0) + 1;
+  const canonicalConfirmation = Boolean(outcome.workResultId && (outcome.source === "correction" || input.expectedSiteVisitWorkOrderId !== outcome.siteVisitWorkOrderId));
   const verification: WorkOrderVerificationRecord = {
     id: ids.next("work-order-verification"),
     organizationId: input.organizationId,
     workOrderId: workOrder.id,
-    siteVisitWorkOrderId: outcome.id,
+    siteVisitWorkOrderId: canonicalConfirmation ? undefined : outcome.siteVisitWorkOrderId ?? outcome.id,
+    workResultId: canonicalConfirmation ? outcome.workResultId : undefined,
     outcome: outcome.outcome,
     outcomeRecordedAt: outcome.outcomeRecordedAt!,
     cycle,
@@ -320,7 +323,7 @@ export async function recordWorkOrderVerification(
     repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id),
   ]);
   const sourceFollowUpWillClose = sourceFollowUp?.status === "open";
-  const visitIds = [...new Set(outcomes.map((record) => record.visitId))];
+  const visitIds = [...new Set(outcomes.flatMap((record) => record.visitId ? [record.visitId] : []))];
   const relatedVisits = await Promise.all(visitIds.map((visitId) => repository.getVisit(input.organizationId, visitId)));
   const closureEvaluation = evaluateWorkOrderClosureEligibility({
     mode: "automatic",
@@ -390,6 +393,7 @@ export async function recordWorkOrderVerification(
       organization_id: verification.organizationId,
       work_order_id: verification.workOrderId,
       site_visit_work_order_id: verification.siteVisitWorkOrderId,
+      work_result_id: verification.workResultId,
       outcome: verification.outcome,
       outcome_recorded_at: verification.outcomeRecordedAt,
       cycle: verification.cycle,
@@ -525,12 +529,12 @@ export async function assertWorkOrderReadyForClosure(
     throw new OpsDomainError("CONFLICT", "Only resolved work can be closed");
   }
   const [outcomes, verifications, tasks, detail] = await Promise.all([
-    repository.listSiteVisitWorkOrdersForWorkOrder(workOrder.organizationId, workOrder.id),
+    repository.listWorkOutcomesForWorkOrder(workOrder.organizationId, workOrder.id),
     repository.listWorkOrderVerifications(workOrder.organizationId, workOrder.id),
     repository.listWorkflowTasksForWorkOrder(workOrder.organizationId, workOrder.id),
     repository.getWorkOrderDetail({ organizationId: workOrder.organizationId }, workOrder.id),
   ]);
-  const visitIds = [...new Set(outcomes.map((record) => record.visitId))];
+  const visitIds = [...new Set(outcomes.flatMap((record) => record.visitId ? [record.visitId] : []))];
   const visits = await Promise.all(visitIds.map((visitId) => repository.getVisit(workOrder.organizationId, visitId)));
   const evaluation = evaluateWorkOrderClosureEligibility({
     mode: "manual",
@@ -582,14 +586,14 @@ export async function requestWorkOrderConfirmation(svc: OpsCommandServices, inpu
   if (persistedWorkOrderVersion(work) !== input.expectedVersion) throw new OpsDomainError("CONFLICT", "This job changed. Refresh and try again");
   if (work.status === "cancelled") throw new OpsDomainError("CONFLICT", "Cancelled work cannot be confirmed");
   const [outcomes, decisions, tasks] = await Promise.all([
-    repository.listSiteVisitWorkOrdersForWorkOrder(input.organizationId, work.id),
+    repository.listWorkOutcomesForWorkOrder(input.organizationId, work.id),
     repository.listWorkOrderVerifications(input.organizationId, work.id),
     repository.listWorkflowTasksForWorkOrder(input.organizationId, work.id),
   ]);
   const outcome = latestRecordedWorkOutcome(outcomes);
   if (!outcome?.outcome || !reviewableOutcomes.has(outcome.outcome)) throw new OpsDomainError("CONFLICT", "Record a completed service result before requesting confirmation");
   if (tasks.some(t => t.taskType === "verify_repair" && isOpenWorkflowTask(t))) throw new OpsDomainError("CONFLICT", "Confirmation has already been requested");
-  const prior = decisions.filter(d => d.siteVisitWorkOrderId === outcome.id && d.outcomeRecordedAt === outcome.outcomeRecordedAt).sort((a,b) => b.cycle-a.cycle)[0];
+  const prior = decisions.filter(d => verificationMatchesOutcome(d,outcome) && d.outcomeRecordedAt === outcome.outcomeRecordedAt).sort((a,b) => b.cycle-a.cycle)[0];
   if (prior && !clean(input.reason)) throw new OpsDomainError("VALIDATION", "Explain why the previous result needs another check");
   const now = clock.now();
   const assignee = await confirmationAssignee(repository, { ...work, confirmationMembershipId: input.confirmationMembershipId });
@@ -619,23 +623,33 @@ export async function correctWorkOrderOutcome(svc: OpsCommandServices, input: {
   await assertMembershipCoversWorkOrder(repository,member,work);
   if (work.status === "cancelled" || persistedWorkOrderVersion(work)!==input.expectedVersion) throw new OpsDomainError("CONFLICT","This job changed. Refresh and try again");
   if (!["completed","no_issue_found","return_visit_required"].includes(input.outcome) || !clean(input.reason)) throw new OpsDomainError("VALIDATION","Choose a result and explain the correction");
-  const [outcomes,tasks,detail]=await Promise.all([repository.listSiteVisitWorkOrdersForWorkOrder(input.organizationId,work.id),repository.listWorkflowTasksForWorkOrder(input.organizationId,work.id),repository.getWorkOrderDetail({organizationId:input.organizationId},work.id)]);
+  const [outcomes,tasks,detail]=await Promise.all([repository.listWorkOutcomesForWorkOrder(input.organizationId,work.id),repository.listWorkflowTasksForWorkOrder(input.organizationId,work.id),repository.getWorkOrderDetail({organizationId:input.organizationId},work.id)]);
   const previous=latestRecordedWorkOutcome(outcomes);
   if (!previous || previous.id!==input.expectedOutcomeId || detail?.visits.some(v=>v.status==="active")) throw new OpsDomainError("CONFLICT","Finish the current visit before correcting its result");
+  if (previous.outcome===input.outcome) throw new OpsDomainError("VALIDATION","Choose the corrected result");
+  if (previous.workResultId && (previous.source === "technician_report" || previous.source === "phone" || previous.source === "email" || previous.source === "in_person" || previous.source === "correction" && !previous.visitId || detail?.visits.find(v=>v.id===previous.visitId)?.providerKind === "internal")) {
+    const link = previous.siteVisitWorkOrderId ? await repository.getSiteVisitWorkOrderById(input.organizationId, previous.siteVisitWorkOrderId) : undefined;
+    if (previous.siteVisitWorkOrderId && (!link || link.workOrderId !== work.id)) throw new OpsDomainError("CONFLICT", "The original visit result is unavailable. Refresh before correcting it.");
+    const built = await buildInternalResultStatements(repository,{work,actor:input.actor,now:clock.now(),ids,outcome:input.outcome,notes:input.reason,source:"correction",performerName:previous.performerName??previous.outcomeRecordedByActorName??"Reported technician",link:link??undefined,supersedesResultId:previous.workResultId,correctionReason:input.reason});
+    await atomicWorkOrderMutation({repository,workOrder:work,now:built.result.outcomeRecordedAt,statements:built.statements});
+    return;
+  }
   if (previous.outcome===input.outcome) throw new OpsDomainError("VALIDATION","Choose the corrected result");
   const now=clock.now();
   const successful=input.outcome!=="return_visit_required";
   const accountability=await resolveInternalAccountability(repository,work);
-  const replacement=buildWorkflowTaskRecord({id:ids.next("workflow-task"),organizationId:work.organizationId,workOrderId:work.id,actor:input.actor,createdAt:now,draft:{taskType:successful?"verify_repair":"schedule_return_visit",title:successful?"Confirm corrected service result":"Coordinate return work after corrected result",reason:input.reason,...(successful?await confirmationAssignee(repository,work):accountability),priority:"normal",blocking:true,requiredForProgress:true,dueAt:addHours(now,24),applicableSlaClock:"verification",completionCriteria:successful?"Confirm the corrected service result":"Arrange follow-up service",escalationDestination:accountability.escalationDestination}});
+  const followUpId = successful ? undefined : ids.next("follow-up");
+  const replacement=buildWorkflowTaskRecord({id:ids.next("workflow-task"),organizationId:work.organizationId,workOrderId:work.id,actor:input.actor,createdAt:now,draft:{sourceFollowUpId:followUpId,taskType:successful?"verify_repair":"schedule_return_visit",title:successful?"Confirm corrected service result":"Coordinate return work after corrected result",reason:input.reason,...(successful?await confirmationAssignee(repository,work):accountability),priority:"normal",blocking:true,requiredForProgress:true,dueAt:addHours(now,24),applicableSlaClock:"verification",completionCriteria:successful?"Confirm the corrected service result":"Arrange follow-up service",escalationDestination:accountability.escalationDestination}});
   const superseded=tasks.filter(t=>isOpenWorkflowTask(t)&&(["verify_repair","close_verified_work"].includes(t.taskType)||Boolean(previous.followUpId&&t.sourceFollowUpId===previous.followUpId)));
   const statements:OpsStatement[]=[
-    {sql:"UPDATE ops_site_visit_work_orders SET outcome = ?, outcome_notes = ?, outcome_recorded_at = ?, outcome_recorded_by_actor_type = ?, outcome_recorded_by_actor_id = ?, outcome_recorded_by_actor_name = ? WHERE organization_id = ? AND id = ?",params:[input.outcome,input.reason,now,input.actor.actorType,input.actor.actorId??null,input.actor.actorName,input.organizationId,previous.id]},
+    workResultStatement({id:ids.next("work-result"),organizationId:input.organizationId,workOrderId:work.id,siteVisitWorkOrderId:previous.siteVisitWorkOrderId??previous.id,linkedAt:previous.linkedAt,cycleVersion:persistedWorkOrderVersion(work)+1,performerName:previous.performerName??detail?.visits.find(v=>v.id===previous.visitId)?.technicianName??previous.outcomeRecordedByActorName??"Reported technician",source:"correction",outcome:input.outcome,outcomeNotes:input.reason,outcomeRecordedAt:now,outcomeRecordedByActorType:input.actor.actorType,outcomeRecordedByActorId:input.actor.actorId,outcomeRecordedByActorName:input.actor.actorName,supersedesResultId:previous.workResultId,correctionReason:input.reason,followUpId}),
     ...superseded.flatMap(task=>buildCompleteWorkflowTaskStatements({task,actor:input.actor,occurredAt:now,ids,resolutionNote:"Service result corrected; original result retained in history"})),
     ...buildCreateTaskStatements({task:replacement,actor:input.actor,ids}),
     {sql:"UPDATE ops_work_orders SET status = ?, closed_at = ?, resolved_at = ? WHERE organization_id = ? AND id = ?",params:[successful?"completed_pending_review":"in_progress",null,null,input.organizationId,work.id]},
     buildWorkflowTaskProjectionStatement(input.organizationId,work.id,[...tasks.filter(t=>!superseded.some(old=>old.id===t.id)),replacement]),
     ...auditAndOutbox({organizationId:input.organizationId,aggregateId:work.id,eventType:"work_order.service_result_corrected",actor:input.actor,occurredAt:now,payload:{previous,correctedOutcome:input.outcome,reason:input.reason,confirmationRequiredAfterCorrection:successful},ids}),
   ];
+  if (followUpId) statements.push({sql:"INSERT INTO ops_follow_ups (id,organization_id,work_order_id,source_visit_id,accountable_party,next_action,due_at,escalation_to,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",params:[followUpId,input.organizationId,work.id,previous.visitId??null,accountability.assigneeName,replacement.title,replacement.dueAt,accountability.escalationDestination,"open",now]});
   if (previous.followUpId) statements.push({sql:"UPDATE ops_follow_ups SET status = ?, completed_at = ? WHERE organization_id = ? AND id = ? AND status = ?",params:["completed",now,input.organizationId,previous.followUpId,"open"]});
   if (successful) statements.push(...auditAndOutbox({organizationId:input.organizationId,aggregateId:work.id,eventType:"work_order.confirmation_requested",actor:input.actor,occurredAt:now,payload:{workOrderId:work.id},ids}));
   await atomicWorkOrderMutation({repository,workOrder:work,now,statements});

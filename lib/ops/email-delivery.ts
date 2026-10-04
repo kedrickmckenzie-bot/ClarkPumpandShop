@@ -179,6 +179,7 @@ export async function sendVendorStoreSweepEmail(input: {
 }
 
 const topicRules: Array<{ matches(topic: string): boolean; eventKey: NotificationEventKey }> = [
+  { matches: topic => topic === "ops.internal_dispatch.notification", eventKey: "internal_dispatch_changed" },
   { matches: topic => topic === "ops.work_order.confirmation_requested", eventKey: "repair_confirmation_required" },
   { matches: (topic) => ["ops.vendor.accepted", "ops.service_run.vendor_accepted", "ops.service_run.counter_accepted"].includes(topic), eventKey: "vendor_commitment_received" },
   { matches: (topic) => ["ops.vendor.declined", "ops.vendor.proposed_date", "ops.vendor.question"].includes(topic) || topic.startsWith("ops.service_run.vendor_"), eventKey: "vendor_response_received" },
@@ -266,6 +267,29 @@ async function loadNotificationContext(repository: OpsRepository, message: Outbo
 }
 
 async function recipientGroups(repository: OpsRepository, message: OutboxDeliveryMessage, role: NotificationRecipientRole, context: NotificationContext): Promise<RecipientGroup[]> {
+  if (message.topic === "ops.internal_dispatch.notification") {
+    const values = payload(message);
+    const requested = Array.isArray(values.recipientMembershipIds) ? values.recipientMembershipIds : [];
+    const groups: RecipientGroup[] = [];
+    for (const item of context.work) {
+      const current = await repository.getActiveAssignment(message.organizationId, item.workOrder.id);
+      if (current?.id !== values.assignmentId || ["closed","cancelled","resolved"].includes(item.workOrder.status)) continue;
+      if("targetCompletionAt" in values && (item.workOrder.targetCompletionAt??null)!==values.targetCompletionAt)continue;
+      if(values.scheduleId) {
+        const latest=values.scheduleRemoved===true?(await repository.listInternalSchedules(message.organizationId,item.workOrder.id))[0]?.id:item.workOrder.internalScheduleId;
+        if(latest!==values.scheduleId||["completed_pending_review","resolved","closed","cancelled"].includes(item.workOrder.status))continue;
+      }
+      const recipients = await repository.listNotificationRecipients(message.organizationId, role, {storeId: item.store.id, regionId: item.store.regionId});
+      for (const recipient of recipients) {
+        if (!requested.includes(recipient.membershipId) && !(values.notifyCoordinationTeam === true && role === "facilities_admin")) continue;
+        const {dispatchIdentity,internalManagerRoles} = await import("./internal-dispatch");
+        try { await dispatchIdentity(repository,message.organizationId,recipient.membershipId,item.store.id,role === "internal_technician" ? ["internal_technician"] : internalManagerRoles); }
+        catch { continue; }
+        groups.push({recipient,work:[item]});
+      }
+    }
+    return groups;
+  }
   if (message.topic === "ops.work_order.confirmation_requested" && context.work[0]?.workOrder.confirmationMembershipId) {
     const item = context.work[0];
     const member = await repository.getMembership(message.organizationId, item.workOrder.confirmationMembershipId!);
@@ -303,6 +327,7 @@ function notificationCopy(eventKey: NotificationEventKey, message: OutboxDeliver
   const stores = uniqueById(work.map((item) => item.store));
   const scopeLabel = stores.length === 1 ? storeLabel(stores[0]!) : `${stores.length} stores`;
   const workLabel = work.length === 1 ? record : `${work.length} work orders`;
+  if (eventKey === "internal_dispatch_changed") return { subject: `Internal work update · ${record}`, headline: String(values.headline ?? "Internal assignment changed"), detail: `${record} · ${scopeLabel}. ${values.plannedLabel ? "Planned: " + String(values.plannedLabel) + ". " : ""}Open the work order to see the current assignment and next action.` };
   if (eventKey === "vendor_commitment_received") {
     const vendorName = context.vendorName ?? "The vendor";
     const startsAt = context.serviceRun?.committedStartsAt ?? context.serviceRun?.proposedStartsAt;
@@ -389,6 +414,7 @@ export function createNotificationEmailTransport(input: {
           sink(JSON.stringify({ channel: "ops.notification.delivered", transport: input.provider.name, messageId: message.id, providerMessageId: result.messageId, eventKey, recipientRole: rule.recipientRole, recipientMembershipId: group.recipient.membershipId }));
         }
       }
+      if (!delivered && eventKey === "internal_dispatch_changed") { sink(JSON.stringify({channel:"ops.notification.skipped",messageId:message.id,eventKey,reason:"obsolete_or_no_current_recipient"})); return; }
       if (!delivered) throw new Error(`No scoped email recipient is configured for ${eventKey}`);
     },
   };

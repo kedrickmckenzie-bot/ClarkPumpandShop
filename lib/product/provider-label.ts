@@ -17,8 +17,8 @@ export function providerKindLabel(kind: ProviderKind | null | undefined): string
 }
 
 /** The name to show: the internal person, the vendor company, or "Choose later". */
-export function providerName(input: { kind?: ProviderKind | null; vendorName?: string | null; internalName?: string | null }): string {
-  if (input.kind === "internal") return input.internalName?.trim() || "Internal team";
+export function providerName(input: { kind?: ProviderKind | null; vendorName?: string | null; internalName?: string | null; internalTarget?: "person" | "pool" | "awaiting_allocation" | null }): string {
+  if (input.kind === "internal") return input.internalName?.trim() || (input.internalTarget === "pool" ? "Available to the team" : input.internalTarget === "awaiting_allocation" ? "Manager to arrange" : "Internal team");
   if (input.kind === "outside_vendor") return input.vendorName?.trim() || "Outside vendor";
   return "Choose later";
 }

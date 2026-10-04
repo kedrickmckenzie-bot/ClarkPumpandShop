@@ -146,7 +146,7 @@ function assetMatchesPath(asset: Asset | undefined, path: readonly string[]) {
 function assignmentForWork(fixture: OpsFixture, organizationId: string, workOrderId: string) {
   return fixture.assignments
     .filter((assignment) => assignment.organizationId === organizationId && assignment.workOrderId === workOrderId)
-    .sort((left, right) => right.assignedAt.localeCompare(left.assignedAt))[0];
+    .sort((left, right) => Number(!["pending","issued","opened","accepted"].includes(left.status)) - Number(!["pending","issued","opened","accepted"].includes(right.status)) || right.assignedAt.localeCompare(left.assignedAt) || right.id.localeCompare(left.id))[0];
 }
 
 function normalized(value: string | undefined) {

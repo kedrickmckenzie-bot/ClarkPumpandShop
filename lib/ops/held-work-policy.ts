@@ -1,5 +1,14 @@
+import { dispatchIdentity, internalTarget } from "./internal-dispatch";
 import type { OpsRepository } from "./repository";
-import type { VendorComplianceDocument, WorkOrder } from "./types";
+import type { HeldWorkPosture, SiteVisitWorkOrderOutcome, VendorComplianceDocument, WorkOrder } from "./types";
+import { OpsDomainError } from "./errors";
+
+/** Every result channel respects the manager's held-work authorization. */
+export function assertHeldWorkOutcome(posture: HeldWorkPosture | undefined, outcome: SiteVisitWorkOrderOutcome) {
+  if (posture === "look_and_report" && ["completed", "temporary_repair"].includes(outcome)) {
+    throw new OpsDomainError("VALIDATION", "Look-and-report work can be inspected or left unattempted, but not marked complete");
+  }
+}
 
 function normalize(value: string | undefined) {
   return value?.trim().toLocaleLowerCase("en-US") ?? "";
@@ -42,6 +51,9 @@ export async function heldWorkVendorEligibility(input: {
   if (!vendor || vendor.status !== "approved") return { allowed: false, reason: "Vendor is not currently approved." };
   if (!store || !(await repository.vendorCoversStore(organizationId, vendorId, store.id))) return { allowed: false, reason: "Vendor does not cover this store." };
 
+  const assignment = await repository.getActiveAssignment(organizationId, workOrder.id);
+  if (assignment?.kind === "internal") return { allowed: false, reason: "This work is assigned to internal maintenance." };
+
   const category = normalize(workOrder.categoryKey);
   if (!category) return { allowed: false, reason: "Work needs a service category before it can be offered onsite." };
   const activeQualifications = qualifications.filter((row) => row.status === "active"
@@ -59,4 +71,15 @@ export async function heldWorkVendorEligibility(input: {
     return { allowed: false, reason: "Warranty-covered equipment requires an approved warranty service provider." };
   }
   return { allowed: true as const };
+}
+
+/** Internal eligibility is independent of outside vendor category/coverage rules. */
+export async function heldWorkInternalEligibility(input: { repository: OpsRepository; organizationId: string; workOrder: WorkOrder; membershipId: string }) {
+  const {repository, organizationId, workOrder, membershipId} = input;
+  if (workOrder.organizationId !== organizationId || ["urgent", "emergency"].includes(workOrder.priority) || workOrder.status !== "approved") return {allowed: false, reason: "This work needs direct review."};
+  const [hold, assignment] = await Promise.all([repository.getWorkOrderVisitHold(organizationId, workOrder.id), repository.getActiveAssignment(organizationId, workOrder.id)]);
+  if (hold?.status !== "active" || assignment?.kind !== "internal" || !(internalTarget(assignment) === "pool" || internalTarget(assignment) === "person" && assignment.internalMembershipId === membershipId)) return {allowed: false, reason: "This work is not available to this technician."};
+  try { await dispatchIdentity(repository, organizationId, membershipId, workOrder.storeId, ["internal_technician"]); }
+  catch { return {allowed: false, reason: "This technician no longer has access to the store."}; }
+  return {allowed: true};
 }

@@ -1,3 +1,4 @@
+import { applicableOutcomeVerification, applicableVisitWorkOutcomes, latestRecordedWorkOutcome, normalizeWorkOutcomes } from "@/lib/ops/work-order-outcome";
 import { matchesSearchTerms, searchTerms } from "@/lib/ops/search-terms";
 import { providerDetail, providerKindLabel, providerName, providerTag } from "@/lib/product/provider-label";
 import { needsEquipmentChoice } from "@/lib/ops/equipment-linking";
@@ -155,10 +156,14 @@ function visitsForWorkOrder(fixture: OpsFixture, scoped: ScopedFixture, workOrde
       .filter((link) => link.organizationId === scoped.organizationId && link.workOrderId === workOrderId)
       .map((link) => link.visitId),
   );
+  const outcomes = applicableVisitWorkOutcomes(
+    fixture.siteVisitWorkOrders.filter((link) => link.organizationId === scoped.organizationId && link.workOrderId === workOrderId),
+    (fixture.workResults ?? []).filter((result) => result.organizationId === scoped.organizationId && result.workOrderId === workOrderId),
+  );
   return scoped.visits
     .filter((visit) => visit.workOrderId === workOrderId || linkedVisitIds.has(visit.id))
     .map((visit) => {
-      const link = fixture.siteVisitWorkOrders.find((item) => item.organizationId === scoped.organizationId && item.visitId === visit.id && item.workOrderId === workOrderId);
+      const link = outcomes.find((item) => item.visitId === visit.id && item.workOrderId === workOrderId);
       return link ? { ...visit, noteActorName: link.outcomeRecordedByActorName, noteRecordedAt: link.outcomeRecordedAt, outcome: link.outcome ?? (visit.workOrderId === workOrderId ? visit.outcome : undefined), outcomeNotes: link.outcomeNotes ?? (visit.workOrderId === workOrderId ? visit.outcomeNotes : undefined) } : visit;
     })
     .sort((left, right) => right.checkedInAt.localeCompare(left.checkedInAt));
@@ -601,7 +606,7 @@ function costForWorkIds(costByWork: Map<string, number>, workIds: Iterable<strin
 function assignmentForWork(fixture: OpsFixture, organizationId: string, workOrderId: string) {
   return fixture.assignments
     .filter((assignment) => assignment.organizationId === organizationId && assignment.workOrderId === workOrderId)
-    .sort((a, b) => b.assignedAt.localeCompare(a.assignedAt))[0];
+    .sort((a, b) => Number(!["pending","issued","opened","accepted"].includes(a.status)) - Number(!["pending","issued","opened","accepted"].includes(b.status)) || b.assignedAt.localeCompare(a.assignedAt) || b.id.localeCompare(a.id))[0];
 }
 
 function vendorName(fixture: OpsFixture, organizationId: string, vendorId: string | undefined): string | undefined {
@@ -4521,9 +4526,14 @@ export function buildDetailModel(
     const visitWorkLinks = fixture.siteVisitWorkOrders
       .filter((link) => link.organizationId === scoped.organizationId && link.visitId === visit.id)
       .sort((left, right) => left.ordinal - right.ordinal);
+    const visitWorkIds = new Set(visitWorkLinks.map((link) => link.workOrderId));
+    const visitOutcomes = new Map(applicableVisitWorkOutcomes(
+      visitWorkLinks,
+      (fixture.workResults ?? []).filter((result) => result.organizationId === scoped.organizationId && visitWorkIds.has(result.workOrderId)),
+    ).map((outcome) => [outcome.siteVisitWorkOrderId ?? outcome.id, outcome]));
     const linkedWorks = visitWorkLinks.flatMap((link) => {
       const linkedWork = scoped.workOrders.find((item) => item.id === link.workOrderId);
-      return linkedWork ? [{ link, work: linkedWork }] : [];
+      return linkedWork ? [{ link, outcome: visitOutcomes.get(link.id) ?? link, work: linkedWork }] : [];
     });
     const work = visit.workOrderId
       ? scoped.workOrders.find((item) => item.id === visit.workOrderId) ?? linkedWorks[0]?.work
@@ -4606,14 +4616,14 @@ export function buildDetailModel(
               { key: "outcome", label: "Outcome and technician note" },
               { key: "status", label: "Work status" },
             ],
-            rows: linkedWorks.map(({ link, work: linkedWork }) => ({
+            rows: linkedWorks.map(({ link, outcome, work: linkedWork }) => ({
               id: link.id,
               label: linkedWork.number,
               href: `/app/work-orders/${linkedWork.id}`,
               cells: [
                 { key: "work", value: linkedWork.number },
                 { key: "problem", value: linkedWork.problem },
-                { key: "outcome", value: link.outcome ? sentence(link.outcome) : "Not recorded", secondary: link.outcomeNotes?.trim() || "No checkout note recorded", tone: link.outcome ? (["completed", "no_issue_found"].includes(link.outcome) ? "positive" : "warning") : workStatusTone(linkedWork.status) },
+                { key: "outcome", value: outcome.outcome ? sentence(outcome.outcome) : "Not recorded", secondary: outcome.outcomeNotes?.trim() || "No checkout note recorded", tone: outcome.outcome ? (["completed", "no_issue_found"].includes(outcome.outcome) ? "positive" : "warning") : workStatusTone(linkedWork.status) },
                 { key: "status", value: workStatusLabel(linkedWork.status), tone: workStatusTone(linkedWork.status) },
               ],
             })),
@@ -5545,7 +5555,7 @@ function providerLabelForAssignment(fixture: OpsFixture, organizationId: string,
   if (assignment.kind === "choose_later") return "Provider to be chosen";
   if (assignment.kind === "outside_vendor") return vendorName(fixture, organizationId, assignment.vendorId) ?? "Outside vendor";
   const membership = fixture.memberships.find((item) => item.organizationId === organizationId && item.id === assignment.internalMembershipId);
-  return providerName({ kind: "internal", internalName: fixture.users.find((user) => user.id === membership?.userId)?.displayName });
+  return providerName({ kind: "internal", internalTarget: assignment.internalTarget, internalName: fixture.users.find((user) => user.id === membership?.userId)?.displayName });
 }
 
 function workOrderStages(
@@ -5563,8 +5573,11 @@ function workOrderStages(
   const responses = fixture.vendorResponses
     .filter((item) => item.organizationId === organizationId && item.workOrderId === work.id && (!issuances[0] || item.issuanceId === issuances[0].id))
     .sort((left, right) => right.respondedAt.localeCompare(left.respondedAt));
+  const outcomes = normalizeWorkOutcomes(fixture.siteVisitWorkOrders.filter(item => item.organizationId === organizationId && item.workOrderId === work.id), fixture.workResults?.filter(item => item.organizationId === organizationId && item.workOrderId === work.id));
+  const outcome = latestRecordedWorkOutcome(outcomes);
+  const linkedVisits = new Set(outcomes.flatMap(item => item.visitId ? [item.visitId] : []));
   const visits = fixture.visits
-    .filter((item) => item.organizationId === organizationId && item.workOrderId === work.id)
+    .filter(item => item.organizationId === organizationId && (item.workOrderId === work.id || linkedVisits.has(item.id)))
     .sort((left, right) => right.checkedInAt.localeCompare(left.checkedInAt));
   const latestVisit = visits[0];
   const authorizationOpened = fixture.auditEvents
@@ -5632,9 +5645,9 @@ function workOrderStages(
     {
       id: "outcome",
       label: "Outcome recorded",
-      state: latestVisit?.outcome ? "complete" : latestVisit?.status === "active" ? "current" : "upcoming",
-      detail: latestVisit?.outcome ? sentence(latestVisit.outcome) : "Checkout records the observable service outcome",
-      timestampLabel: latestVisit?.checkedOutAt ? dateTime(latestVisit.checkedOutAt, storeTimeZone) : undefined,
+      state: outcome ? "complete" : latestVisit?.status === "active" ? "current" : "upcoming",
+      detail: outcome ? `${sentence(outcome.outcome!)} · ${outcome.performerName ?? outcome.outcomeRecordedByActorName ?? "Reported result"}${outcome.visitId ? "" : " · No visit recorded"}` : "Record the work result",
+      timestampLabel: outcome?.outcomeRecordedAt ? dateTime(outcome.outcomeRecordedAt, storeTimeZone) : undefined,
     },
     {
       id: "closeout",
@@ -5815,9 +5828,8 @@ export function buildWorkOrderControlModel(
       .filter((visit) => visit.organizationId === scoped.organizationId && visit.workOrderId === work.id)
       .map((visit) => visit.id),
   ]);
-  const closeoutVerification = fixture.workOrderVerifications
-    .filter((verification) => verification.organizationId === scoped.organizationId && verification.workOrderId === work.id)
-    .sort((left, right) => right.decidedAt.localeCompare(left.decidedAt))[0];
+  const closeoutOutcome = latestRecordedWorkOutcome(normalizeWorkOutcomes(fixture.siteVisitWorkOrders.filter(row => row.organizationId === scoped.organizationId && row.workOrderId === work.id), fixture.workResults?.filter(row => row.organizationId === scoped.organizationId && row.workOrderId === work.id)));
+  const closeoutVerification = applicableOutcomeVerification(fixture.workOrderVerifications.filter(row => row.organizationId === scoped.organizationId && row.workOrderId === work.id), closeoutOutcome);
   const closeoutCostMinor = fixture.costLines
     .filter((line) => line.organizationId === scoped.organizationId && line.workOrderId === work.id)
     .reduce((total, line) => total + line.amount.amountMinor, 0);
@@ -6203,7 +6215,7 @@ export function buildWorkOrderRecordingModel(
       .sort((left, right) => left.name.localeCompare(right.name))
       .map((component) => ({ value: component.id, label: component.name, description: component.partNumber ?? component.serialNumber, assetId: component.assetId })),
     defaultCostProvider: assignmentForWork(fixture, scoped.organizationId, work.id)?.kind === "outside_vendor" ? "vendor" : "internal",
-    costVendors: fixture.vendors.filter(v => v.organizationId === scoped.organizationId && v.id === fixture.assignments.filter(a => a.organizationId === scoped.organizationId && a.workOrderId === work.id && !["cancelled","declined","superseded"].includes(a.status)).sort((a,b)=>b.assignedAt.localeCompare(a.assignedAt)||b.id.localeCompare(a.id))[0]?.vendorId).map(v => ({value:v.id,label:v.name})),
+    costVendors: fixture.vendors.filter(v => v.organizationId === scoped.organizationId && v.id === fixture.assignments.filter(a => a.organizationId === scoped.organizationId && a.workOrderId === work.id && !["cancelled","declined","superseded"].includes(a.status)).sort((a,b)=>Number(!["pending","issued","opened","accepted"].includes(a.status)) - Number(!["pending","issued","opened","accepted"].includes(b.status)) || b.assignedAt.localeCompare(a.assignedAt) || b.id.localeCompare(a.id)||b.id.localeCompare(a.id))[0]?.vendorId).map(v => ({value:v.id,label:v.name})),
     costKinds: [
       { value: "labor", label: "Labor" },
       { value: "parts", label: "Parts" },

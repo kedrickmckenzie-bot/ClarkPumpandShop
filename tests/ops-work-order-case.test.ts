@@ -22,6 +22,29 @@ function wo(id: string, status: "draft" | "issued" | "accepted" | "closed") {
 }
 
 describe("work-order case stage projector", () => {
+  it("shows confirmation of the exact visitless result and ignores an older source", () => {
+    const result = { id: "result-1", organizationId: "org-northline-demo", workOrderId: "internal-report", performerName: "Maria Santos", source: "technician_report" as const, outcome: "completed" as const, linkedAt: NOW, cycleVersion: 1, outcomeRecordedAt: NOW, outcomeRecordedByActorType: "user" as const, outcomeRecordedByActorName: "Maria Santos" };
+    const confirmation = { id: "decision-1", organizationId: "org-northline-demo", workOrderId: result.workOrderId, workResultId: result.id, cycle: 1, outcome: "completed" as const, decision: "verified" as const, decidedByName: "Store manager", decidedAt: NOW };
+    const input = { now: NOW, workOrder: wo(result.workOrderId, "accepted"), workResults: [result], verifications: [confirmation] };
+    expect(buildWorkOrderCase(input).plainLanguageState).toBe("Work verified complete");
+    expect(buildWorkOrderCase({ ...input, verifications: [{ ...confirmation, workResultId: "older-result" }] }).plainLanguageState).toBe("Awaiting store verification");
+  });
+  it.each([
+    ["verified", "No issue found; result verified", "verified_operating"],
+    ["rejected", "Finding rejected; corrective work required", "result_rejected"],
+    ["inconclusive", "Result could not be confirmed; review required", "result_inconclusive"],
+  ] as const)("keeps a corrected no-issue finding consistent with its %s confirmation", (decision, state, condition) => {
+    const original = { id: "result-original", organizationId: "org-northline-demo", workOrderId: "corrected-no-issue", performerName: "Maria Santos", source: "visit_checkout" as const, outcome: "completed" as const, linkedAt: NOW, cycleVersion: 1, outcomeRecordedAt: NOW, outcomeRecordedByActorType: "user" as const, outcomeRecordedByActorName: "Maria Santos" };
+    const correction = { ...original, id: "result-no-issue", source: "correction" as const, outcome: "no_issue_found" as const, supersedesResultId: original.id, cycleVersion: 2, outcomeRecordedByActorName: "Jordan Lee" };
+    const confirmation = { id: "decision-current", organizationId: original.organizationId, workOrderId: original.workOrderId, workResultId: correction.id, outcomeRecordedAt: NOW, cycle: 1, outcome: "no_issue_found" as const, decision, decidedByName: "Store manager", decidedAt: NOW };
+    const input = { now: NOW, workOrder: wo(original.workOrderId, "accepted"), workResults: [original, correction], verifications: [confirmation] };
+    const model = buildWorkOrderCase(input);
+    expect(model.plainLanguageState).toBe(state);
+    expect(model.operatingCondition.id).toBe(condition);
+    expect(buildWorkOrderCase({ ...input, verifications: [{ ...confirmation, workResultId: original.id }] }).plainLanguageState).toBe("Issue could not be reproduced; review needed");
+    expect(original.outcome).toBe("completed");
+  });
+
   it("names the assigned internal technician without claiming an observed visit", () => {
     const model = buildWorkOrderCase({ now: NOW, workOrder: { ...wo("internal-ui", "accepted"), accountableParty: "Internal maintenance" }, providerName: "Maria Santos", assignments: [{ id: "assignment-ui", kind: "internal", status: "accepted", assignedAt: NOW, internalMembershipId: "member-maria" }] });
     expect(model.nextActionOwner).toBe("Maria Santos");

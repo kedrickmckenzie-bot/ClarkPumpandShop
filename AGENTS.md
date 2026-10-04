@@ -85,6 +85,16 @@ In scope: store network, issue intake, operator work orders, internal teams, ven
 
 Out of scope: full accounting/AP, general ledger, payments, tax, formal purchasing/receiving, POS, merchandising, retail inventory, payroll, shift scheduling, route optimization, vendor dispatch replacement, vendor marketplace and continuous tracking.
 
+### Internal dispatch planning addendum — October 3, 2026
+
+The user has expanded the internal-maintenance direction to manager-controlled dispatch. Follow [`docs/internal-dispatch/README.md`](docs/internal-dispatch/README.md) and its linked engineering, UX, acceptance and phase-prompt documents. This is an approved planning direction, not a claim that the feature is implemented. Preserve original IM checklist IDs and their crosswalk to the new phase checkpoints.
+
+In scope for this bounded extension: internal assignment and team pickup; technician results and blockers; optional/required check-in policy; scheduling by week/day/exact appointment; shared plans; simple planning availability; optional duration estimates; complete-trip travel estimates; and explainable, user-confirmed scheduling/insertion suggestions. Dispatch remains under Work. These records share the existing canonical work orders, history, confirmation and tenant/store access rules.
+
+The exclusions above still prohibit employee shift rosters/payroll, managing outside vendors' workforces, continuous tracking and autonomous dispatch. Route measurement and comparing an added stop are permitted; automatic whole-route ordering/optimization is deferred. Availability means planning capacity or unavailable periods, without leave reasons or HR records. Suggestions cannot silently assign, move other jobs or amend deadlines. The map/drive-time provider and any paid usage require a separate configured, authorized integration.
+
+Planning is optional. Existing `WorkOrder.dueAt` is a projected next-action deadline, not a permanent repair target. New scheduling must keep those meanings distinct. Unknown durations stay unknown; no-visit results never fabricate visit evidence. Exactly 15 fictional stores, five approved vendors and two technicians remain the presentation contract, not a verified fact about a customer's staffing.
+
 ## Demo contract
 
 - The presentation tenant is fictional Clark Pump and Shop with **exactly 15 stores and exactly five approved outside vendors**. It also has a two-person internal maintenance team.

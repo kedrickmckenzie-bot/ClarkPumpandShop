@@ -6,7 +6,7 @@ import styles from "./ops.module.css";
 import handoffStyles from "./vendor-handoff.module.css";
 
 /** Preserve entered fields on a rejected save and prevent duplicate clicks. */
-export function RecordForm({ action, children, className, offerSavedWork = true }: { action: string; children: ReactNode; className?: string; offerSavedWork?: boolean }) {
+export function RecordForm({ action, children, className, offerSavedWork = true, attachmentLimit }: { action: string; children: ReactNode; className?: string; offerSavedWork?: boolean; attachmentLimit?: { files: number; bytes: number } }) {
   const optionalWork = useOptionalWorkConfirmation();
   const [handoff, setHandoff] = useState<{publicPath:string;notice:string;workOrderNumber:string;recordPath:string}|null>(null);
   const [copied,setCopied]=useState(false);
@@ -25,6 +25,12 @@ export function RecordForm({ action, children, className, offerSavedWork = true 
     setPending(true);
     setError("");
     try {
+      if (attachmentLimit) {
+        const files = [...data.values()].filter((value): value is File => value instanceof File && value.size > 0);
+        if (files.length > attachmentLimit.files || files.reduce((total, file) => total + file.size, 0) > attachmentLimit.bytes) {
+          throw new Error(`Attach up to ${attachmentLimit.files} files, ${attachmentLimit.bytes / (1024 * 1024)} MB total. Your notes are still here.`);
+        }
+      }
       const extras = offerSavedWork ? await optionalWork.confirm(action, data) : [];
       if (extras === null) { submitting.current = false; setPending(false); return; }
       extras.forEach(id=>data.append("offeredWorkId",id));
@@ -35,7 +41,7 @@ export function RecordForm({ action, children, className, offerSavedWork = true 
       }
       const result = await response.json().catch(() => null) as { error?: string | { message?: string }; message?: string; handoff?: {publicPath:string;notice:string;workOrderNumber:string;recordPath:string} } | null;
       if(response.ok && result?.handoff){setHandoff(result.handoff);setPending(false);return;}
-      setError(typeof result?.error === "string" ? result.error : typeof result?.message === "string" ? result.message : typeof result?.error === "object" && typeof result.error?.message === "string" ? result.error.message : "Could not save. Check the details and try again.");
+      setError(typeof result?.error === "string" ? result.error : typeof result?.message === "string" ? result.message : typeof result?.error === "object" && typeof result.error?.message === "string" ? result.error.message : response.status === 413 ? "Files are too large for this save. Reduce the attachments and try again. Your notes are still here." : "Could not save. Check the details and try again.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not confirm the save. Check the record list before trying again. Your entries are still here.");
     }

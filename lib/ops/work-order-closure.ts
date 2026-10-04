@@ -6,7 +6,7 @@ import type {
   WorkOrderVerification,
   WorkflowTask,
 } from "./types";
-import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "./work-order-outcome";
+import { applicableOutcomeVerification, latestRecordedWorkOutcome, verificationMatchesOutcome } from "./work-order-outcome";
 
 const openTaskStatuses = new Set<WorkflowTask["status"]>(["open", "in_progress"]);
 const financialTaskTypes = new Set<WorkflowTask["taskType"]>([
@@ -40,7 +40,7 @@ export function evaluateWorkOrderClosureEligibility(input: {
   mode: "automatic" | "manual";
   workOrder: WorkOrder;
   policy?: OrganizationWorkflowPolicy | null;
-  outcomes: Awaited<ReturnType<OpsRepository["listSiteVisitWorkOrdersForWorkOrder"]>>;
+  outcomes: Awaited<ReturnType<OpsRepository["listWorkOutcomesForWorkOrder"]>>;
   verifications: WorkOrderVerification[];
   tasks: WorkflowTask[];
   visits: Array<{ status: string } | null>;
@@ -57,7 +57,7 @@ export function evaluateWorkOrderClosureEligibility(input: {
     !latestOutcome
     || !verification
     || verification.decision !== "verified"
-    || verification.siteVisitWorkOrderId !== latestOutcome.id
+    || !verificationMatchesOutcome(verification, latestOutcome)
     || verification.outcome !== latestOutcome.outcome
     || verification.outcomeRecordedAt !== latestOutcome.outcomeRecordedAt
   )) blockers.push("latest_outcome_not_verified");

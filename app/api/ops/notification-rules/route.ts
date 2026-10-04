@@ -3,8 +3,8 @@ import { OpsDomainError } from "@/lib/ops/commands";
 import { formText, getOpsRequestContext, opsApiError } from "@/lib/server/ops-request-context";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
 
-const events = new Set<NotificationEventKey>(["vendor_response_received", "vendor_commitment_received", "workflow_task_escalated", "follow_up_created", "vendor_reminder_created", "held_work_claimed", "held_work_outcomes_recorded", "vendor_compliance_due", "repair_confirmation_required"]);
-const roles = new Set<NotificationRecipientRole>(["facilities_admin", "store_manager", "regional_manager", "field_manager", "executive", "finance_reviewer"]);
+const events = new Set<NotificationEventKey>(["vendor_response_received", "vendor_commitment_received", "workflow_task_escalated", "follow_up_created", "vendor_reminder_created", "held_work_claimed", "held_work_outcomes_recorded", "vendor_compliance_due", "repair_confirmation_required", "internal_dispatch_changed"]);
+const roles = new Set<NotificationRecipientRole>(["facilities_admin", "store_manager", "regional_manager", "field_manager", "executive", "finance_reviewer", "internal_technician"]);
 export async function POST(request: Request) {
   try {
     const context = await getOpsRequestContext(["facilities"], undefined, request, true);

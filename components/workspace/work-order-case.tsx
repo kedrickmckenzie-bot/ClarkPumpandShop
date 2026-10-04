@@ -551,7 +551,7 @@ function ServiceRecordHistory({
 }
 
 function workspaceHeading(mode: WorkOrderWorkspaceMode, accountabilityOnly: boolean) {
-  if (mode === "held") return { eyebrow: "Approved work", title: "Approved for a future visit", description: "This work stays open until a suitable onsite vendor accepts it, or a manager returns it to normal service." };
+  if (mode === "held") return { eyebrow: "Approved work", title: "Approved for a future visit", description: "This work stays open for a suitable visit. A manager can return it to normal service." };
   if (mode === "closed") return { eyebrow: "Completed case", title: "Service record", description: "Review what happened. No authorization, quote, or routing action is available on a closed work order." };
   if (mode === "vendor_response") return { eyebrow: "Vendor response", title: "Respond to the vendor", description: "Resolve the vendor's current response before any later service step becomes available." };
   if (mode === "waiting_on_vendor") return { eyebrow: "Vendor handoff", title: "Waiting on the current vendor step", description: "The work is already routed. Track the current response or confirmed appointment without starting another sourcing path." };

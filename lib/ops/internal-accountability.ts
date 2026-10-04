@@ -1,5 +1,6 @@
 import type { OpsRepository } from "./repository";
 import type { OrganizationRole, WorkOrder, WorkflowTaskAssigneeType } from "./types";
+import { grantCoversStore, writableOpsPermissions } from "./store-scope";
 
 export interface ResolvedInternalAccountability {
   assigneeType: WorkflowTaskAssigneeType;
@@ -7,12 +8,6 @@ export interface ResolvedInternalAccountability {
   assigneeRole?: OrganizationRole;
   assigneeName: string;
   escalationDestination: string;
-}
-
-function grantCoversStore(grant: { scopeKind: string; scopeId: string }, workOrder: WorkOrder, regionId?: string) {
-  return (grant.scopeKind === "organization" && grant.scopeId === workOrder.organizationId)
-    || (grant.scopeKind === "store" && grant.scopeId === workOrder.storeId)
-    || (grant.scopeKind === "region" && Boolean(regionId) && grant.scopeId === regionId);
 }
 
 /**
@@ -31,7 +26,8 @@ export async function resolveInternalAccountability(
       repository.listScopeGrantsForMembership(workOrder.organizationId, workOrder.internalAccountableId),
       repository.getStore(workOrder.organizationId, workOrder.storeId),
     ]);
-    if (membership?.status === "active" && grants.some((grant) => grantCoversStore(grant, workOrder, store?.regionId))) {
+    const user = membership ? await repository.getUserInOrganization(workOrder.organizationId, membership.userId) : null;
+    if (membership?.status === "active" && user?.status === "active" && store && grants.some((grant) => grantCoversStore(grant, store) && writableOpsPermissions.includes(grant.permission))) {
       return {
         assigneeType: "user",
         assigneeId: membership.id,
@@ -51,7 +47,7 @@ export async function resolveInternalAccountability(
   return {
     assigneeType: "team",
     assigneeId: "facilities-coordination",
-    assigneeName: workOrder.internalAccountableParty?.trim() || "Facilities coordination",
+    assigneeName: workOrder.internalAccountableType === "membership" ? "Facilities coordination" : workOrder.internalAccountableParty?.trim() || "Facilities coordination",
     escalationDestination,
   };
 }

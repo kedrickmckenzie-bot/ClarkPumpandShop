@@ -189,7 +189,7 @@ export async function recordInspectionResult(svc:OpsCommandServices,input:{inspe
    statements.push({sql:"UPDATE ops_inspections SET corrective_work_order_id = ? WHERE organization_id = ? AND id = ?",params:[correctionId,i.organizationId,i.id]},communicationAudit(i.organizationId,i.id,"inspection.correction_created",actor,now,{workOrderId:correctionId},"inspection"));
  }
  if(input.status==="passed"&&!["closed","resolved"].includes(work.status)) {
-   const outcome=latestRecordedWorkOutcome(await svc.repository.listSiteVisitWorkOrdersForWorkOrder(i.organizationId,work.id));
+   const outcome=latestRecordedWorkOutcome(await svc.repository.listWorkOutcomesForWorkOrder(i.organizationId,work.id));
    if(outcome?.outcomeRecordedAt) await recordWorkOrderVerification({...svc,repository:withStatements(svc.repository,statements)},{organizationId:i.organizationId,workOrderId:work.id,expectedWorkOrderVersion:work.version??0,expectedSiteVisitWorkOrderId:outcome.id,expectedOutcomeRecordedAt:outcome.outcomeRecordedAt,decision:"verified",basis:"technical_evidence",verificationScope:"technical_work",closeAfterReview:true,reason:input.note,actor});
    else await updateWorkOrderControl({...svc,repository:withStatements(svc.repository,statements)},{organizationId:i.organizationId,workOrderId:work.id,expectedStatus:work.status,expectedVersion:work.version??0,status:"closed",manualCompletion:{source:"in_person",confirmedBy:actor.actorName},note:`Inspection result reviewed: ${input.note}`,actor});
  } else if (!["closed","cancelled","resolved"].includes(work.status)) {

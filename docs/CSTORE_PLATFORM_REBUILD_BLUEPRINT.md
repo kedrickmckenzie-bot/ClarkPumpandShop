@@ -7,6 +7,14 @@
 
 This is the primary product, UX, architecture, and execution source of truth. Detailed market evidence is in [`competitive-research.md`](competitive-research.md), the full behavior contract is in [`product-spec.md`](product-spec.md), and technical boundaries are in [`architecture.md`](architecture.md).
 
+### Internal dispatch scope addendum — October 3, 2026
+
+The user's newer internal-maintenance direction adds a manager dispatch workspace and a simple technician work list over the same canonical work orders. The implementation contract is [`internal-dispatch/README.md`](internal-dispatch/README.md), with linked screen specification, engineering model, phase prompts and acceptance matrix. It is a saved plan; the new phases are not implemented by this addendum.
+
+Allow internal assignment/team pickup, field results, week/day/appointment planning, shared plan revisions, limited planning availability, and manager-reviewed travel/scheduling comparisons. Keep phone/text coordination and optional planning; company policy governs internal check-in. A planned stop is not an observed visit, a reported result is not confirmation, and an existing primary-task deadline is not a historical repair-completion target.
+
+Dispatch lives within Work. New dispatch screens must use bounded tenant/store-scoped repository reads instead of extending the full-tenant presenter path. Preserve vendor contract/issuance/response workflows. Do not add payroll, shift rosters, outside-vendor workforce management, continuous employee tracking, autonomous dispatch or automatic whole-route optimization. Paid map/provider choice remains a separate integration decision. Follow the saved phase order and retain prior checklist IDs/evidence.
+
 ## 1. Executive decision
 
 The current product contains a credible service-evidence engine and several correct domain behaviors. It does not contain the singular enterprise platform the customer should buy.

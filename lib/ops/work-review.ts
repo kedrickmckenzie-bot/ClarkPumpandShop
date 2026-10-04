@@ -6,9 +6,9 @@ import { roleCanAccessDetailRoute, roleCanOpenOperatorHref } from "@/components/
 import { invoiceReporting } from "./invoice-reporting";
 import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDate, formatOperationsDateTime } from "./local-time";
 import type { OpsRepository, OrganizationScope } from "./repository";
-import type { Money, SiteVisitWorkOrder, WorkOrderVerification } from "./types";
+import type { Money, WorkOrderVerification } from "./types";
 import type { WorkOrderDetailView } from "./view-models";
-import { applicableOutcomeVerification, latestRecordedWorkOutcome } from "./work-order-outcome";
+import { applicableOutcomeVerification, latestRecordedWorkOutcome, latestWorkOutcomeCycle } from "./work-order-outcome";
 
 export interface ReviewEvidence {
   id: string;
@@ -57,10 +57,10 @@ export function recordedMoneyLabel(values: readonly Money[]): string {
 }
 
 /** Verification belongs to one service cycle. A new visit cannot inherit an older sign-off. */
-export function workOutcomeEvidence(work: Pick<WorkOrderDetailView, "id" | "visits">, links: SiteVisitWorkOrder[], verifications: WorkOrderVerification[]): ReviewEvidence {
+export function workOutcomeEvidence(work: Pick<WorkOrderDetailView, "id" | "visits">, links: import("./types").WorkOutcome[], verifications: WorkOrderVerification[]): ReviewEvidence {
   const latest = latestRecordedWorkOutcome(links);
   const verification = applicableOutcomeVerification(verifications, latest);
-  const current = [...links].sort((a, b) => b.linkedAt.localeCompare(a.linkedAt) || b.id.localeCompare(a.id))[0];
+  const current = latestWorkOutcomeCycle(links);
   const visit = current ? work.visits.find((row) => row.id === current.visitId) : undefined;
   return {
     id: latest?.id ?? current?.id ?? work.id,
@@ -84,7 +84,7 @@ export async function loadWorkReview(repository: OpsRepository, session: Operato
   const org = session.organizationId;
   const base = `/app/work-orders/${work.id}`;
   const [links, verifications, tasks, estimates, financial, store, equipment, sourceWork, impacts, activeAssignment, requestTasks] = await Promise.all([
-    repository.listSiteVisitWorkOrdersForWorkOrder(org, work.id),
+    repository.listWorkOutcomesForWorkOrder(org, work.id),
     repository.listWorkOrderVerifications(org, work.id),
     repository.listWorkflowTasksForWorkOrder(org, work.id),
     repository.listEstimateRequestsForWorkOrder(org, work.id),
@@ -112,7 +112,7 @@ export async function loadWorkReview(repository: OpsRepository, session: Operato
   const peers = await Promise.all(peerRows.map(async (row) => {
     const [detail, outcomes, confirmations] = await Promise.all([
       repository.getWorkOrderDetail(scope, row.id),
-      repository.listSiteVisitWorkOrdersForWorkOrder(org, row.id),
+      repository.listWorkOutcomesForWorkOrder(org, row.id),
       repository.listWorkOrderVerifications(org, row.id),
     ]);
     const outcome = detail ? workOutcomeEvidence(detail, outcomes, confirmations) : undefined;
@@ -139,6 +139,10 @@ export async function loadWorkReview(repository: OpsRepository, session: Operato
     const verification = link ? applicableOutcomeVerification(verifications, link) : undefined;
     history.push({ id: visit.id, label: `${dateTime(visit.checkedInAt)} · ${visit.providerName}`, date: visit.checkedInAt,
       detail: [visit.checkedOutAt ? `Checked out ${dateTime(visit.checkedOutAt)}.` : "Visit still active.", link?.outcome ? `For this job: ${words(link.outcome)}.${link.outcomeNotes ? ` ${link.outcomeNotes}` : ""}` : "No per-job outcome recorded.", verification ? `Manager review: ${words(verification.decision)}${verification.reason ? ` — ${verification.reason}` : ""}.` : "No manager review of this outcome."].join(" "), href: `/app/visits/${visit.id}` });
+  }
+  for(const result of links.filter(row=>row.workResultId)) {
+    const decision=applicableOutcomeVerification(verifications,result);
+    history.push({id:result.id,label:`${words(result.outcome ?? "result")} · ${result.performerName ?? result.outcomeRecordedByActorName}`,date:result.outcomeRecordedAt,detail:[`${words(result.source ?? "reported result")} · Recorded by ${result.outcomeRecordedByActorName}.`,result.outcomeNotes,result.source === "correction" ? "Original result preserved; this amendment requires its own review." : undefined,decision ? `Review: ${words(decision.decision)}.` : "No confirmation of this result."].filter(Boolean).join(" "),href:`${base}?view=visits#work-verification`});
   }
   const reporting = invoiceReporting(financial, org);
   const allocations = reporting.allocations.filter((row) => row.workOrderId === work.id && (!row.storeId || row.storeId === work.storeId));

@@ -1,6 +1,6 @@
 import { and, eq, getTableName, inArray, type InferSelectModel } from "drizzle-orm";
 import { workPriceFrom } from "./work-price-types";
-import { opsWorkPrices } from "@/db/ops-schema";
+import { opsInternalSchedules, opsWorkPrices } from "@/db/ops-schema";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { drizzle } from "drizzle-orm/d1";
 import {
@@ -66,6 +66,7 @@ import {
   opsLifecycleRecommendations,
   opsReplacementProfiles,
   opsScopeGrants,
+  opsWorkResults,
   opsSiteVisitWorkOrders,
   opsWorkOrderVerifications,
   opsStores,
@@ -197,6 +198,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     estimateProposalRows,
     workPriceRows,
     visitRows,
+    workResultRows,
     siteVisitWorkOrderRows,
     workOrderVerificationRows,
     evidenceRows,
@@ -291,6 +293,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     read(opsVendorEstimateProposals),
     read(opsWorkPrices),
     read(opsVisitSessions),
+    read(opsWorkResults),
     read(opsSiteVisitWorkOrders),
     read(opsWorkOrderVerifications),
     read(opsVisitEvidence),
@@ -347,7 +350,9 @@ export async function loadOpsFixtureSnapshotFromD1(
   ]);
 
   const users = [...new Map(userRows.map((row) => [row.id, row])).values()];
+  const internalSchedules=await read(opsInternalSchedules);
   return {
+    internalSchedules: internalSchedules.map(p=>({...p,tentative:Boolean(p.tentative)})) as unknown as OpsFixture["internalSchedules"],
     asOf,
     workPrices: workPriceRows.map((row) => workPriceFrom(row)),
     organizations: organizations as OpsFixture["organizations"],
@@ -444,8 +449,10 @@ export async function loadOpsFixtureSnapshotFromD1(
       outcomeNotes: optional(row.outcomeNotes),
       observedDurationSeconds: optional(row.observedDurationSeconds),
     })) as OpsFixture["visits"],
+    workResults: workResultRows.map(row => Object.fromEntries(Object.entries(row).map(([key,value])=>[key,value??undefined]))) as unknown as OpsFixture["workResults"],
     siteVisitWorkOrders: siteVisitWorkOrderRows.map((row) => ({
       ...row,
+      cycleVersion: row.cycleVersion == null ? undefined : Number(row.cycleVersion),
       linkedByActorId: optional(row.linkedByActorId),
       selectionSource: row.selectionSource,
       workOrderHoldId: optional(row.workOrderHoldId),
@@ -460,6 +467,8 @@ export async function loadOpsFixtureSnapshotFromD1(
     })) as OpsFixture["siteVisitWorkOrders"],
     workOrderVerifications: workOrderVerificationRows.map((row) => ({
       ...row,
+      workResultId: optional(row.workResultId),
+      siteVisitWorkOrderId: optional(row.siteVisitWorkOrderId),
       cycle: Number(row.cycle),
       basis: optional(row.basis),
       verificationScope: optional(row.verificationScope),

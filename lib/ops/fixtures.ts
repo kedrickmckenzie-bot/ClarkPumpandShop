@@ -2536,7 +2536,7 @@ export function assertOpsFixture(fixture: OpsFixture) {
   fixture.assignments.forEach((row) => {
     if (!workOrderIds.has(row.workOrderId)) throw new Error(`Assignment ${row.id} has no work order`);
     if (row.vendorId && !vendorIds.has(row.vendorId)) throw new Error(`Assignment ${row.id} has no vendor`);
-    if (row.kind === "outside_vendor" && !row.vendorId || row.kind === "internal" && !row.internalMembershipId || row.kind === "choose_later" && (row.vendorId || row.internalMembershipId)) throw new Error(`Assignment ${row.id} has an invalid provider shape`);
+    if (row.kind === "outside_vendor" && !row.vendorId || row.kind === "internal" && (Boolean(row.vendorId) || ((row.internalTarget ?? "person") === "person" ? !row.internalMembershipId : !["pool", "awaiting_allocation"].includes(row.internalTarget!) || Boolean(row.internalMembershipId))) || row.kind === "choose_later" && (row.vendorId || row.internalMembershipId)) throw new Error(`Assignment ${row.id} has an invalid provider shape`);
     if (row.supersedesAssignmentId) {
       const superseded = fixture.assignments.find((item) => item.organizationId === row.organizationId && item.id === row.supersedesAssignmentId);
       if (!superseded || superseded.workOrderId !== row.workOrderId || superseded.assignedAt > row.assignedAt) throw new Error(`Assignment ${row.id} has an invalid supersedes link`);

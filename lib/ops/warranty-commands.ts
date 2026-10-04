@@ -1,3 +1,4 @@
+import { applicableOutcomeVerification, latestWorkOutcomeCycle } from "./work-order-outcome";
 import { WARRANTY_REVIEW_TITLE, WARRANTY_REVIEW_DONE } from "./warranty-review";
 import { workWarrantyReview } from "./work-warranty-review";
 import { atomicWorkOrderMutation } from "./concurrency";
@@ -217,11 +218,12 @@ export interface RecordRepairWarrantyInput extends Omit<RepairItem, "id" | "orga
 export async function recordRepairAndApplyWarranty(input: RecordRepairWarrantyInput, dependencies: OpsCommandServices) {
   const { repository, clock, ids } = services(dependencies);
   const now = clock.now();
-  const [workOrder, visitWork] = await Promise.all([repository.getWorkOrder(input.organizationId, input.workOrderId), repository.getSiteVisitWorkOrderById(input.organizationId, input.siteVisitWorkOrderId)]);
+  const [workOrder, outcomes] = await Promise.all([repository.getWorkOrder(input.organizationId, input.workOrderId), repository.listWorkOutcomesForWorkOrder(input.organizationId, input.workOrderId)]);
+  const visitWork=latestWorkOutcomeCycle(outcomes.filter(row=>row.siteVisitWorkOrderId===input.siteVisitWorkOrderId||!row.workResultId&&row.id===input.siteVisitWorkOrderId));
   if (!workOrder || !visitWork || visitWork.workOrderId !== input.workOrderId || !["completed", "no_issue_found"].includes(visitWork.outcome ?? "")) throw new OpsDomainError("CONFLICT", "Repair Items require an exact completed Site Visit / Work Order outcome");
   await assertWarrantyActor(repository, input.actor, input.organizationId, workOrder);
   const decisions = await repository.listWorkOrderVerifications(input.organizationId, input.workOrderId);
-  const verification = decisions.findLast((item) => item.siteVisitWorkOrderId === input.siteVisitWorkOrderId);
+  const verification = applicableOutcomeVerification(decisions,visitWork);
   if (!verification || verification.decision !== "verified") throw new OpsDomainError("CONFLICT", "Repair Items require the exact outcome to be internally verified");
   if (workOrder.assetId !== input.assetId || workOrder.componentId && input.componentId && workOrder.componentId !== input.componentId) throw new OpsDomainError("CONFLICT", "Repair Item Asset or Component does not match the Work Order");
   const removedComponent = input.componentReplacement && input.removedComponentId
@@ -472,11 +474,14 @@ export async function retireStoreWarrantyPolicy(input:{organizationId:OpsId;vend
 }
 
 /** Attach dated terms to identified completed work; preserve terms during audited scope corrections. */
-export async function buildConfirmedWorkWarrantyStatements(input:{work:WorkOrder;outcome:import("./types").SiteVisitWorkOrder;actor:ActorContext;now:string;ids:OpsIdSource;verificationDate?:string;previousAssetId?:string},repository:OpsRepository):Promise<OpsStatement[]>{
- const {work,outcome,now,ids}=input;
- if(outcome.workOrderId!==work.id||outcome.organizationId!==work.organizationId||!work.assetId||!work.componentId||outcome.outcome!=="completed"||!outcome.outcomeRecordedAt)return [];
+export async function buildConfirmedWorkWarrantyStatements(input:{work:WorkOrder;outcome:import("./types").WorkOutcome;actor:ActorContext;now:string;ids:OpsIdSource;verificationDate?:string;previousAssetId?:string},repository:OpsRepository):Promise<OpsStatement[]>{
+ const {work,now,ids}=input;
+ const outcome={...input.outcome,id:input.outcome.siteVisitWorkOrderId??input.outcome.id};
+ if(!outcome.visitId||outcome.workOrderId!==work.id||outcome.organizationId!==work.organizationId||!work.assetId||!work.componentId||outcome.outcome!=="completed"||!outcome.outcomeRecordedAt)return [];
  const [visit,asset,store,sources]=await Promise.all([repository.getVisit(work.organizationId,outcome.visitId),repository.getAsset(work.organizationId,work.assetId),repository.getStore(work.organizationId,work.storeId),repository.getAssetWarrantySources(work.organizationId,work.assetId)]);
  if(!visit?.vendorId||visit.providerKind!=="outside_vendor"||!asset||asset.storeId!==work.storeId||!store||sources.repairItems.some(r=>r.siteVisitWorkOrderId===outcome.id))return [];
+ // A correction timestamp records the amendment, never a new work-performance date.
+ if(input.outcome.source === "correction"){const original=await repository.getSiteVisitWorkOrderById(work.organizationId,outcome.id);outcome.outcomeRecordedAt=original?.outcomeRecordedAt??visit.checkedOutAt;if(!outcome.outcomeRecordedAt)return [];}
  const vendor=await repository.getVendor(work.organizationId,visit.vendorId);if(!vendor)return [];
  const component=work.componentId?await repository.getComponent(work.organizationId,work.componentId):undefined;
  if(!component || component.assetId!==asset.id)return [];

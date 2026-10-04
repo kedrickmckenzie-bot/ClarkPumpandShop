@@ -1,3 +1,4 @@
+import { applicableVisitWorkOutcomes, verificationMatchesOutcome } from "./work-order-outcome";
 import type { OpsFixture } from "./types";
 
 /**
@@ -31,13 +32,13 @@ export interface VendorScorecard {
 const SMALL_SAMPLE_FLOOR = 5;
 
 export function buildVendorScorecards(
-  fixture: Pick<OpsFixture, "vendors" | "assignments" | "visits" | "siteVisitWorkOrders" | "workOrderVerifications" | "invoices" | "invoiceExceptions" | "vendorResponses" | "followUps">,
+  fixture: Pick<OpsFixture, "workResults" | "vendors" | "assignments" | "visits" | "siteVisitWorkOrders" | "workOrderVerifications" | "invoices" | "invoiceExceptions" | "vendorResponses" | "followUps">,
   organizationId: string,
 ): VendorScorecard[] {
   const vendors = fixture.vendors.filter((row) => row.organizationId === organizationId);
   const assignments = fixture.assignments.filter((row) => row.organizationId === organizationId);
   const visits = fixture.visits.filter((row) => row.organizationId === organizationId);
-  const outcomes = fixture.siteVisitWorkOrders.filter((row) => row.organizationId === organizationId);
+  const outcomes = applicableVisitWorkOutcomes(fixture.siteVisitWorkOrders.filter((row) => row.organizationId === organizationId),(fixture.workResults??[]).filter(row=>row.organizationId===organizationId));
   const verifications = fixture.workOrderVerifications.filter((row) => row.organizationId === organizationId);
   const invoices = fixture.invoices.filter((row) => row.organizationId === organizationId);
   const exceptions = fixture.invoiceExceptions.filter((row) => row.organizationId === organizationId);
@@ -47,9 +48,8 @@ export function buildVendorScorecards(
     const assignmentIds = new Set(assignments.filter((row) => row.vendorId === vendor.id).map((row) => row.id));
     const vendorVisits = visits.filter((row) => row.vendorId === vendor.id);
     const visitIds = new Set(vendorVisits.map((row) => row.id));
-    const vendorOutcomes = outcomes.filter((row) => visitIds.has(row.visitId));
-    const outcomeIds = new Set(vendorOutcomes.map((row) => row.id));
-    const vendorVerifications = verifications.filter((row) => outcomeIds.has(row.siteVisitWorkOrderId));
+    const vendorOutcomes = outcomes.filter((row) => Boolean(row.visitId && visitIds.has(row.visitId)));
+    const vendorVerifications = verifications.filter((row) => vendorOutcomes.some(outcome=>verificationMatchesOutcome(row,outcome)&&row.outcomeRecordedAt===outcome.outcomeRecordedAt));
     const verifiedCount = vendorVerifications.filter((row) => row.decision === "verified").length;
     const rejectedCount = vendorVerifications.length - verifiedCount;
     const vendorInvoices = invoices.filter((row) => row.vendorId === vendor.id);

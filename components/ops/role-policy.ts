@@ -1,6 +1,12 @@
 import type { OperatorRole, OperatorSession } from "./data-contract";
 
 export type OperatorCapability =
+  | "schedule_internal_work"
+  | "manage_internal_target"
+  | "record_internal_result"
+  | "assign_internal_work"
+  | "claim_internal_work"
+  | "return_internal_work"
   | "create_request"
   | "review_request"
   | "create_work_order"
@@ -45,7 +51,7 @@ export type OperatorDetailRoutePolicyId =
   | "invoice";
 
 export type OperatorPrimaryNavigationId = "home" | "work" | "stores" | "vendors" | "insights" | "reports";
-export type OperatorWorkNavigationId = "tasks" | "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "invoice-review";
+export type OperatorWorkNavigationId = "dispatch" | "tasks" | "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "invoice-review";
 export type OperatorInsightsNavigationId = "trends" | "spend" | "equipment" | "pm" | "lifecycle";
 
 interface DemoOperatorRolePolicy {
@@ -68,6 +74,9 @@ interface DemoOperatorRolePolicy {
 export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy> = {
   facilities: {
     capabilities: [
+      "schedule_internal_work",
+      "manage_internal_target",
+      "assign_internal_work",
       "create_request",
       "review_request",
       "create_work_order",
@@ -91,16 +100,16 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     programRoutes: ["trends", "spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
+    workNavigation: ["dispatch", "needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
     insightsNavigation: ["trends", "spend", "equipment", "pm", "lifecycle"],
   },
   regional: {
-    capabilities: ["create_request", "review_request", "create_work_order", "control_work_order", "manage_workflow_tasks", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "manage_lifecycle", "request_estimate", "select_estimate", "issue_work_order", "confirm_observable_result"],
+    capabilities: ["schedule_internal_work", "manage_internal_target", "assign_internal_work", "create_request", "review_request", "create_work_order", "control_work_order", "manage_workflow_tasks", "classify_work_order", "record_work_cost", "review_attention", "setup_equipment", "setup_pm", "manage_lifecycle", "request_estimate", "select_estimate", "issue_work_order", "confirm_observable_result"],
     listRoutes: ["action-center", "requests", "work-orders", "estimates", "visits", "stores", "vendors", "warranties", "invoices", "reports"],
     programRoutes: ["trends", "spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
+    workNavigation: ["dispatch", "needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
     insightsNavigation: ["trends", "spend", "equipment", "pm", "lifecycle"],
   },
   store_manager: {
@@ -133,7 +142,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
   // Internal technician: their jobs, the stores they cover, visits and equipment history.
   // No spending, vendor, approval or setup pages; actions come from the visit workflow.
   technician: {
-    capabilities: [],
+    capabilities: ["schedule_internal_work", "record_internal_result", "claim_internal_work", "return_internal_work"],
     listRoutes: ["work-orders", "visits", "stores"],
     programRoutes: ["equipment"],
     detailRoutes: ["work-order", "visit", "store", "equipment"],
@@ -207,6 +216,8 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
     if (record === "new") return roleCan(role, "create_request");
     return record ? roleCanAccessDetailRoute(role, "request") : roleCanAccessListRoute(role, "requests");
   }
+  if (area === "dispatch") return ["facilities", "regional", "executive"].includes(role);
+  if (area === "my-work") return role === "technician";
   if (area === "work-orders") {
     if (record === "new") return roleCan(role, "create_work_order");
     return record ? roleCanAccessDetailRoute(role, "work-order") : roleCanAccessListRoute(role, "work-orders");
