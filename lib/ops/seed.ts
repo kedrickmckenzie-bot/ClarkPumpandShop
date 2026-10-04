@@ -9,7 +9,7 @@ function insert(table: string, value: Record<string, unknown>): OpsStatement {
   return { sql: `INSERT INTO ${table} (${entries.map(([key]) => key).join(", ")}) VALUES (${entries.map(() => "?").join(", ")}) ON CONFLICT DO NOTHING`, params: entries.map(([, item]) => item) };
 }
 
-export function buildOpsSeedStatements(fixture: OpsFixture): OpsStatement[] {
+export function buildOpsSeedStatements(fixture: OpsFixture, options: {omitStoreContacts?: boolean} = {}): OpsStatement[] {
   assertOpsFixture(fixture);
   const statements: OpsStatement[] = [];
   const push = (table: string, rows: Record<string, unknown>[]) => rows.forEach((row) => statements.push(insert(table, row)));
@@ -19,8 +19,8 @@ export function buildOpsSeedStatements(fixture: OpsFixture): OpsStatement[] {
   push("ops_taxonomy_nodes", fixture.taxonomyNodes.map((row) => ({ id: row.id, organization_id: row.organizationId, parent_node_id: row.parentNodeId, node_kind: row.nodeKind, canonical_key: row.canonicalKey, name: row.name, aliases_json: JSON.stringify(row.aliases), depth: row.depth, sort_order: row.sortOrder, active: row.active ? 1 : 0, created_at: row.createdAt })));
   push("ops_equipment_templates", fixture.equipmentTemplates.map((row) => ({ id: row.id, organization_id: row.organizationId, taxonomy_node_id: row.taxonomyNodeId, name: row.name, default_expected_life_years: row.defaultExpectedLifeYears, active: row.active ? 1 : 0, created_at: row.createdAt })));
   push("ops_component_templates", fixture.componentTemplates.map((row) => ({ id: row.id, organization_id: row.organizationId, equipment_template_id: row.equipmentTemplateId, parent_component_template_id: row.parentComponentTemplateId, name: row.name, sort_order: row.sortOrder, created_at: row.createdAt })));
-  push("ops_stores", fixture.stores.map((row) => ({ id: row.id, organization_id: row.organizationId, division_id: row.divisionId, region_id: row.regionId, store_number: row.storeNumber, name: row.name, address_1: row.address1, address_2: row.address2, city: row.city, state: row.state, postal_code: row.postalCode, aliases_json: JSON.stringify(row.aliases), search_text: [row.storeNumber,row.name,row.address1,row.address2,row.city,row.state,row.postalCode,...row.aliases].filter(Boolean).join(" ").toLocaleLowerCase("en-US"), latitude_e6: row.latitudeE6, longitude_e6: row.longitudeE6, geofence_radius_m: row.geofenceRadiusM, location_policy_enabled: row.locationPolicyEnabled ? 1 : 0, time_zone: row.timeZone, status: row.status, created_at: row.createdAt })));
-  push("ops_users", fixture.users.map((row) => ({ id: row.id, email: row.email, display_name: row.displayName, status: row.status, created_at: row.createdAt })));
+  push("ops_stores", fixture.stores.map((row) => ({ ...(options.omitStoreContacts ? {} : {phone:row.phone,access_notes:row.accessNotes,access_notes_version:row.accessNotesVersion}), id: row.id, organization_id: row.organizationId, division_id: row.divisionId, region_id: row.regionId, store_number: row.storeNumber, name: row.name, address_1: row.address1, address_2: row.address2, city: row.city, state: row.state, postal_code: row.postalCode, aliases_json: JSON.stringify(row.aliases), search_text: [row.storeNumber,row.name,row.address1,row.address2,row.city,row.state,row.postalCode,...row.aliases].filter(Boolean).join(" ").toLocaleLowerCase("en-US"), latitude_e6: row.latitudeE6, longitude_e6: row.longitudeE6, geofence_radius_m: row.geofenceRadiusM, location_policy_enabled: row.locationPolicyEnabled ? 1 : 0, time_zone: row.timeZone, status: row.status, created_at: row.createdAt })));
+  push("ops_users", fixture.users.map((row) => ({ ...(options.omitStoreContacts ? {} : {phone:row.phone}), id: row.id, email: row.email, display_name: row.displayName, status: row.status, created_at: row.createdAt })));
   push("ops_memberships", fixture.memberships.map((row) => ({ id: row.id, organization_id: row.organizationId, user_id: row.userId, role: row.role, status: row.status, created_at: row.createdAt })));
   push("ops_scope_grants", fixture.scopeGrants.map((row) => ({ id: row.id, organization_id: row.organizationId, membership_id: row.membershipId, scope_kind: row.scopeKind, scope_id: row.scopeId, permission: row.permission, created_at: row.createdAt })));
   push("ops_vendors", fixture.vendors.map((row) => ({ id: row.id, organization_id: row.organizationId, code: row.code, name: row.name, dispatch_email: row.dispatchEmail, dispatch_phone: row.dispatchPhone, status: row.status, preferred: row.preferred ? 1 : 0, search_text: [row.name,...fixture.vendorSpecialties.filter((item) => item.organizationId === row.organizationId && item.vendorId === row.id).flatMap((item) => [item.displayName,...item.searchAliases])].join(" ").toLocaleLowerCase("en-US"), created_at: row.createdAt })));
@@ -145,8 +145,9 @@ export async function seedOpsRepository(
   repository: OpsRepository,
   fixture: OpsFixture,
   finalStatements: readonly OpsStatement[] = [],
+  options: {omitStoreContacts?:boolean} = {},
 ) {
-  const statements = [...buildOpsSeedStatements(fixture), ...finalStatements];
+  const statements = [...buildOpsSeedStatements(fixture,options), ...finalStatements];
   const chunkSize = repository.kind === "d1" ? 75 : statements.length;
   for (let index = 0; index < statements.length; index += chunkSize) await repository.atomicWrite(statements.slice(index, index + chunkSize));
   return { statements: statements.length, organizations: fixture.organizations.length, stores: fixture.stores.length, vendors: fixture.vendors.length };

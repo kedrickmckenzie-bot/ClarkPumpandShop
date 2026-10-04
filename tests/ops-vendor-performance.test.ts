@@ -132,7 +132,7 @@ describe("vendor performance workspace", () => {
     expect(list.portfolioMetrics.find((metric) => metric.id === "attention")?.sourceLink.href).toBe("#vendor-attention-heading");
     expect(list.portfolioMetrics.find((metric) => metric.id === "visits")?.sourceLink.href).toBe("#vendor-directory-heading");
     const markup = renderToStaticMarkup(createElement(VendorPerformanceList, { model: list }));
-    expect(markup).toContain("Vendor network");
+    expect(markup).toContain("Vendors");
     expect(markup).toContain("How vendor measures work");
     expect(markup).toContain("Ready to use");
     expect(markup).toContain("Documents current");

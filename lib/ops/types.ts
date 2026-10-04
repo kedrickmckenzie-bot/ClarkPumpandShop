@@ -287,6 +287,9 @@ export interface TaxonomyNode {
 }
 
 export interface Store {
+  phone?: string;
+  accessNotes?: string;
+  accessNotesVersion?: number;
   id: OpsId;
   organizationId: OpsId;
   divisionId?: OpsId;
@@ -312,6 +315,7 @@ export interface User {
   id: OpsId;
   email: string;
   displayName: string;
+  phone?: string;
   status: "invited" | "active" | "suspended";
   createdAt: IsoDateTime;
 }

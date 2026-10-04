@@ -1,3 +1,5 @@
+import { TechnicianStore } from "@/lib/server/technician-tools";
+import { StoreAccessNotes } from "@/components/workspace/store-access-notes";
 import { StoreOpenReports } from "@/components/workspace/store-open-reports";
 import { StoreActiveWork, StoreContextRow } from "@/components/workspace/store-active-work";
 import { StoreWorkspaceNav, storeSectionTab } from "@/components/workspace/store-workspace-nav";
@@ -11,12 +13,15 @@ import { loadDetailModel, loadOperatorSession } from "../../_data/operator-loade
 
 export const metadata: Metadata = { title: "Store" };
 
-export default async function StoreDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ section?: string | string[] }> }) {
+export default async function StoreDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ section?: string | string[]; saved?:string; jobsCursor?:string }> }) {
   const { id } = await params;
-  const requested = (await searchParams).section;
+  const query=await searchParams;
+  const session=await loadOperatorSession();
+  if(session.role==="technician")return <TechnicianStore id={id} cursor={query.jobsCursor}/>;
+  const requested = query.section;
   const tab = storeSectionTab(Array.isArray(requested) ? requested[0] : requested);
   const section = tab?.id;
-  const [model, session] = await Promise.all([loadDetailModel("store", id), loadOperatorSession()]);
+  const model = await loadDetailModel("store", id);
   const canSetupEquipment = session.demoEdition === "complete" && roleCan(session, "setup_equipment");
   const canSetupPm = session.demoEdition === "complete" && roleCan(session, "setup_pm");
   const hasDemoVendorQr = id === NORTHLINE_DEMO_HANDLES.storyStoreId;
@@ -33,7 +38,7 @@ export default async function StoreDetailPage({ params, searchParams }: { params
       embeddedSections
       embeddedSectionIds={tab?.sections}
       hideFacts
-      beforeFacts={<><StoreWorkspaceNav id={id} active={section ?? "overview"} />{ready && !section ? <><StoreContextRow id={id} /><StoreOpenReports id={id} /><StoreActiveWork id={id} /></> : null}</>}
+      beforeFacts={<><StoreWorkspaceNav id={id} active={section ?? "overview"} />{ready && !section ? <><StoreContextRow id={id} /><StoreAccessNotes id={id} saved={query.saved==="access"}/><StoreOpenReports id={id} /><StoreActiveWork id={id} /></> : null}</>}
       after={!section && (canCreateQr || canSetupEquipment || canSetupPm) ? (
         <>
           {canCreateQr ? (

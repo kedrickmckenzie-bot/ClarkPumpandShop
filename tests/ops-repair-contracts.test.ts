@@ -23,11 +23,11 @@ describe("repair contracts", () => {
     expect(foreignCounts.reduce((sum, row) => sum + row.count, 0)).toBe(2);
   });
 
-  it("keeps the primary navigation at seven destinations including Compliance with one role-aware Overview slot", () => {
+  it("keeps the primary navigation at six destinations with Compliance under Work with one role-aware Overview slot", () => {
     for (const role of ["executive", "facilities", "regional", "store_manager", "finance"] as const) {
       const items = navigationForRole(role);
       expect(items.map((item) => item.id)).not.toContain("brief");
-      expect(items.length).toBeLessThanOrEqual(7);
+      expect(items.length).toBeLessThanOrEqual(6);
       const overview = items.find((item) => item.id === "overview")!;
       if (role === "executive") {
         expect(overview.href).toBe("/app/brief");

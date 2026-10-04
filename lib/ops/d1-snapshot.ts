@@ -260,7 +260,7 @@ export async function loadOpsFixtureSnapshotFromD1(
     read(opsEquipmentTemplates),
     read(opsComponentTemplates),
     read(opsStores),
-    db.select({ id: opsUsers.id, email: opsUsers.email, displayName: opsUsers.displayName, status: opsUsers.status, createdAt: opsUsers.createdAt })
+    db.select({ id: opsUsers.id, email: opsUsers.email, displayName: opsUsers.displayName, phone: opsUsers.phone, status: opsUsers.status, createdAt: opsUsers.createdAt })
       .from(opsUsers)
       .innerJoin(opsMemberships, and(eq(opsMemberships.userId, opsUsers.id), eq(opsMemberships.organizationId, organizationId))),
     read(opsMemberships),
@@ -366,6 +366,7 @@ export async function loadOpsFixtureSnapshotFromD1(
       divisionId: optional(row.divisionId),
       regionId: optional(row.regionId),
       address2: optional(row.address2),
+      phone: optional(row.phone), accessNotes: optional(row.accessNotes),
       aliases: parseStringArray(row.aliasesJson),
       latitudeE6: optional(row.latitudeE6),
       longitudeE6: optional(row.longitudeE6),

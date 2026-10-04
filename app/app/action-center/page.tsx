@@ -3,7 +3,7 @@ import { ListSurface } from "@/components/ops/views";
 import { loadListModel } from "../_data/operator-loader";
 import Link from "next/link";
 
-export const metadata: Metadata = { title: "Action center" };
+export const metadata: Metadata = { title: "Review queue" };
 type Query = Record<string, string | string[] | undefined>;
 
 export default async function ActionCenterPage({ searchParams }: { searchParams: Promise<Query> }) {

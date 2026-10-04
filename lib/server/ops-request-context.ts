@@ -115,7 +115,7 @@ export function opsApiError(error: unknown) {
   if (error instanceof OperatorAccessError) return Response.json({ error: error.message, code: error.reason }, { status: error.reason === "sign_in" ? 401 : 403 });
   if (error instanceof OpsDomainError) {
     const status = error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404 : error.code === "CONFLICT" ? 409 : 422;
-    return Response.json({ error: error.message, code: error.code }, { status });
+    return Response.json({ error: error.message, code: error.code, ...(error.details ? { details: error.details } : {}) }, { status });
   }
   console.error("Unhandled facilities API error", error);
   return Response.json({ error: "The action could not be completed." }, { status: 500 });

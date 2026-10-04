@@ -108,6 +108,10 @@ select {
   letter-spacing: 0;
 }
 
+/* Operator headings follow the compact enterprise hierarchy. */
+#main-content h1 { font-size: 28px; }
+#main-content :is(h3, h4, h5, h6) { font-size: 19px; }
+
 :is(#main-content, #public-main) thead th {
   background: #eef2f7;
   color: #344256;

@@ -387,6 +387,10 @@ function assertReplacementUniqueness(table: string, rows: Array<Record<string, u
 }
 
 function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], statement: OpsStatement) {
+  if (statement.storeNotesFence) {
+    const {org,storeId,version}=statement.storeNotesFence;
+    if (!fixture.stores.some(row => row.organizationId===org && row.id===storeId && (row.accessNotesVersion ?? 0)===version)) throw new OpsDomainError("CONFLICT","These notes changed. Refresh before saving.");
+  }
   if (statement.visitSelection) {
     const {org,visitId,count}=statement.visitSelection;
     if(!fixture.visits.some(v=>v.organizationId===org&&v.id===visitId&&v.status==="active")||fixture.siteVisitWorkOrders.filter(l=>l.organizationId===org&&l.visitId===visitId).length!==count)throw new OpsDomainError("CONFLICT","This visit changed. Refresh before saving.");
@@ -492,7 +496,7 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
             : { amountMinor, currency: currencyIndex < 0 ? "USD" : setValues[currencyIndex] ?? "USD" };
         }
         else if (
-          (table === "ops_site_visit_work_orders" || table === "ops_vendor_reminders") &&
+          (table === "ops_site_visit_work_orders" || table === "ops_vendor_reminders" || table === "ops_stores") &&
           setValues[index] === null
         ) {
           row[snakeToCamel(column)] = undefined;
@@ -848,7 +852,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       recordedCostMinor: this.fixture.costLines.filter((cost) => cost.organizationId === scope.organizationId && this.fixture.workOrders.some((workOrder) => workOrder.organizationId === scope.organizationId && workOrder.id === cost.workOrderId && workOrder.storeId === store.id)).reduce((sum, row) => sum + row.amount.amountMinor, 0),
       currency: "USD",
     }));
-    return page(rows, request);
+    return {...page(rows,request),totalCount:rows.length};
   }
 
   async searchAssets(scope: OrganizationScope, search: string, request?: PageRequest) {
@@ -887,7 +891,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
           status: asset.status,
         };
       });
-    return page(rows, request);
+    return {...page(rows,request),totalCount:rows.length};
   }
 
   async getStoreDetail(scope: OrganizationScope, storeId: OpsId): Promise<StoreDetailView | null> {
@@ -957,8 +961,16 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         .filter((line) => line.organizationId === scope.organizationId && line.workOrderId === row.id && matchesWorkCost(line, query))
         .reduce((sum, line) => sum + line.amount.amountMinor, 0);
       return result;
-    }).filter(row => scheduleMatches(row, query.scheduleView, row.schedule && query.scheduleAt && ["today","upcoming","replan"].includes(query.scheduleView??"") ? civilDate(query.scheduleAt,row.schedule.planningZone) : query.scheduleFrom, query.scheduleTo) && (!query.scheduleExcludeWeek||row.schedule?.week!==query.scheduleExcludeWeek) && (!query.dispatchReadiness || (query.dispatchReadiness === "waiting" ? row.hasOpenFollowUp || ["waiting_on_parts","waiting_on_vendor"].includes(row.status) || row.schedule?.tentative : !row.hasOpenFollowUp && !row.schedule?.tentative && !["waiting_on_parts","waiting_on_vendor","in_progress","completed_pending_review","resolved","closed","cancelled"].includes(row.status)))).filter((row) => matchesSearchTerms([row.number, row.problem, row.storeNumber, row.storeName, ...(() => { const store=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===row.storeId); return store ? [store.address1,store.city,store.postalCode,...store.aliases] : []; })(), row.vendorName, row.internalAssigneeName].filter(Boolean).join(" "), workTerms)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
-    if (query.internalOnly) {
+    }).filter(row => scheduleMatches(row, query.scheduleView, row.schedule && query.scheduleAt && ["today","upcoming","replan"].includes(query.scheduleView??"") ? civilDate(query.scheduleAt,row.schedule.planningZone) : query.scheduleFrom, query.scheduleTo) && (!query.scheduleExcludeWeek||row.schedule?.week!==query.scheduleExcludeWeek) && (!query.dispatchReadiness || (query.dispatchReadiness === "waiting" ? row.hasOpenFollowUp || ["waiting_on_parts","waiting_on_vendor"].includes(row.status) || row.schedule?.tentative : !row.hasOpenFollowUp && !row.schedule?.tentative && !["waiting_on_parts","waiting_on_vendor","in_progress","completed_pending_review","resolved","closed","cancelled"].includes(row.status)))).filter(row =>
+      (!query.dispatchQueue || !row.schedule || row.schedule.precision === "week" || row.internalTarget !== "person" || !row.internalMembershipId)
+      && (!query.dispatchUnassigned || row.internalTarget !== "person" || !row.internalMembershipId)
+      && (!query.dispatchBoardWeek || row.schedule?.week === query.dispatchBoardWeek || !row.schedule || row.schedule.precision === "week" || row.internalTarget !== "person" || !row.internalMembershipId)
+      && (!query.dispatchBucket || (query.dispatchBucket === "unassigned" ? row.internalTarget !== "person" || !row.internalMembershipId
+        : query.dispatchBucket === "parts" ? row.status === "waiting_on_parts"
+        : query.dispatchBucket === "reported" ? ["completed_pending_review", "resolved"].includes(row.status)
+        : Boolean(row.dueAt && row.dueAt < (query.dispatchAt ?? new Date().toISOString()) && !["completed_pending_review", "resolved", "closed", "cancelled"].includes(row.status))))
+    ).filter((row) => matchesSearchTerms([row.number, row.problem, row.storeNumber, row.storeName, ...(() => { const store=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===row.storeId); return store ? [store.address1,store.city,store.postalCode,...store.aliases] : []; })(), row.vendorName, row.internalAssigneeName].filter(Boolean).join(" "), workTerms)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    if (query.internalOnly && !query.activityOrder) {
       const rank=(priority:string)=>({emergency:3,urgent:2,routine:1,planned:0} as Record<string,number>)[priority]??0;
       let visible = rows.sort((a,b) => rank(b.priority)-rank(a.priority) || ( a.createdAt === b.createdAt ? a.id === b.id ? 0 : a.id < b.id ? 1 : -1 : a.createdAt < b.createdAt ? 1 : -1));
       if (query.cursor !== undefined) {
@@ -973,7 +985,38 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       const items=visible.slice(start,start+max),last=items.at(-1);
       return {items,totalCount:rows.length,nextCursor:start+max<visible.length&&last?`${rank(last.priority)}|${encodeURIComponent(last.createdAt)}|${encodeURIComponent(last.id)}`:undefined};
     }
+    if (query.activityOrder) {
+      const ordered = rows.map(row => ({ ...row, updatedAt: this.fixture.auditEvents.filter(event => event.organizationId === scope.organizationId && event.aggregateType === "work_order" && event.aggregateId === row.id).map(event => event.occurredAt).sort().at(-1) ?? row.createdAt }))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id));
+      let visible = ordered;
+      if (query.cursor) {
+        try {
+          const parts = query.cursor.split("|").map(decodeURIComponent);
+          if (parts.length !== 2 || !parts.every(Boolean)) return { items: [], totalCount: rows.length };
+          visible = visible.filter(row => row.updatedAt < parts[0]! || row.updatedAt === parts[0] && row.id < parts[1]!);
+        } catch { return { items: [], totalCount: rows.length }; }
+      }
+      const max = Math.max(1, Math.min(100, query.limit ?? 25)), start = Math.max(0, query.offset ?? 0);
+      const items = visible.slice(start, start + max), last = items.at(-1);
+      return { items, totalCount: rows.length, nextCursor: start + max < visible.length && last ? `${encodeURIComponent(last.updatedAt)}|${encodeURIComponent(last.id)}` : undefined };
+    }
     return page(rows, query);
+  }
+
+  async getDispatchDayCounts(scope: OrganizationScope, query: WorkOrderListQuery) {
+    const groups = new Map<string, { membershipId?: string; name?: string; day?: string; count: number }>();
+    let cursor: string | undefined;
+    do {
+      const result = await this.listWorkOrders(scope, { ...query, internalOnly: true, limit: 100, cursor, offset: undefined });
+      for (const row of result.items) {
+        const key = `${row.internalMembershipId ?? ""}|${row.schedule?.day ?? ""}`;
+        const group = groups.get(key) ?? { membershipId: row.internalMembershipId, name: row.internalAssigneeName, day: row.schedule?.day, count: 0 };
+        group.count++;
+        groups.set(key, group);
+      }
+      cursor = result.nextCursor;
+    } while (cursor);
+    return [...groups.values()];
   }
 
   async getHeldWorkPortfolioSummary(scope: OrganizationScope) {

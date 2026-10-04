@@ -69,7 +69,7 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
       layout: "executive",
       page: {
         ...pageBase,
-        title: "Your company at a glance",
+        title: "Overview",
         eyebrow: "Owner overview",
         description: "See spending, open work, vendor activity, and upcoming equipment decisions across the company.",
         primaryAction: { label: "View spending", href: "/app/spend" },
@@ -95,7 +95,7 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
       layout: "finance",
       page: {
         ...pageBase,
-        title: "Maintenance cost and evidence",
+        title: "Overview",
         eyebrow: "Finance overview",
         description: "Review work costs, invoices, and equipment plans.",
         primaryAction: { label: "Explore recorded cost", href: "/app/spend" },
@@ -126,7 +126,7 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
       layout: "store",
       page: {
         ...pageBase,
-        title: store ? `Store ${store.storeNumber} at a glance` : "Your store at a glance",
+        title: "Overview",
         eyebrow: "Store manager home",
         description: "Report problems and follow work at your store.",
         primaryAction: { label: "Report an issue", href: "/app/requests/new" },
@@ -158,7 +158,7 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
     page: {
       ...pageBase,
       // The field manager uses regional access but runs the internal team across the stores it covers.
-      title: isFacilities ? "Maintenance overview" : session.persona === "field_manager" ? "Field operations overview" : "Your region at a glance",
+      title: "Overview",
       eyebrow: isFacilities ? "Daily maintenance" : session.persona === "field_manager" ? "Internal maintenance team" : "Regional overview",
       description: isFacilities
         ? "Review work, visits, and costs across your stores."

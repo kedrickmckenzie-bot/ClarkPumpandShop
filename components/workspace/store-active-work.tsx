@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { scheduleLabel } from "@/lib/ops/dispatch-calendar";
+import { dispatchPlanLabel } from "@/lib/ops/dispatch-board";
 import { oneLine } from "@/lib/product/one-line";
 import { providerKindLabel, providerName } from "@/lib/product/provider-label";
 import { roleCanAccessListRoute } from "@/components/ops/role-policy";
@@ -68,7 +68,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
         <tbody>{rows.map((work) => <tr key={work.id}>
           <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(work.id)}`}>{oneLine(work.problem)}</Link><p className={styles.muted}>{work.number}{work.priority === "urgent" || work.priority === "emergency" ? ` · ${work.priority === "urgent" ? "Urgent" : "Emergency"}` : ""}</p></td>
           <td data-label="Who's handling it">{work.accountableParty}{work.assignmentKind !== "choose_later" ? <p className={styles.muted}>{providerKindLabel(work.assignmentKind)}: {providerName({ kind: work.assignmentKind, vendorName: work.vendorName, internalName: work.internalAssigneeName })}</p> : null}</td>
-          <td data-label="Next step">{work.nextAction}{work.assignmentKind==="internal"?<><p>Planned: {scheduleLabel(work.schedule)}</p><p>Target completion: {work.targetCompletionAt?formatOperationsDateTime(work.targetCompletionAt,store.timeZone):"Not set"}</p></>:null}</td>
+          <td data-label="Next step">{work.nextAction}{work.assignmentKind==="internal"?<>{work.schedule?<p>When: {dispatchPlanLabel(work.schedule,store.timeZone??"America/New_York")}</p>:null}{work.targetCompletionAt?<p>Finish by: {formatOperationsDateTime(work.targetCompletionAt,store.timeZone)}</p>:null}</>:null}</td>
           <td data-label="Due">{work.dueAt ? <>{formatOperationsDateTime(work.dueAt, store.timeZone)}{work.dueAt < nowIso ? <p className={styles.muted}>Overdue</p> : null}</> : "No date"}</td>
         </tr>)}</tbody>
       </table></div> : <p className={styles.muted}>No open work at this store.</p>}

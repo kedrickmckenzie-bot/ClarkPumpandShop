@@ -23,8 +23,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       key: formText(data, "submissionKey", { required: true, max: 120 }), reason: formText(data, "reason", { max: 1000 }) || undefined,
     });
     const destination = formText(data, "returnTo", { max: 1500 });
+    if (request.headers.get("accept")?.includes("application/json")) return Response.json({ saved: true, number: work.number });
     // Retain scoped filters, without permitting an external/open redirect.
-    const path = destination === "/app/my-work" || destination.startsWith("/app/my-work?") || destination === "/app/dispatch" || destination.startsWith("/app/dispatch?") ? destination : `/app/work-orders/${encodeURIComponent(id)}?view=service#internal-assignment`;
-    return relativeRedirect303(path);
+    const path = destination === `/app/my-work/${encodeURIComponent(id)}` || destination === "/app/my-work" || destination.startsWith("/app/my-work?") || destination === "/app/dispatch" || destination.startsWith("/app/dispatch?") ? destination : `/app/work-orders/${encodeURIComponent(id)}?view=service#internal-assignment`;
+    const next=new URL(path,"http://local.invalid");next.searchParams.set(next.pathname.startsWith("/app/work-orders/")?"updated":"saved",next.pathname.startsWith("/app/work-orders/")?"1":work.number);
+    return relativeRedirect303(next.pathname+next.search+next.hash);
   } catch (error) { return opsApiError(error); }
 }

@@ -438,7 +438,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     }
   } else if (route === "requests") {
     const requests = await repository.listRequests(scope, { ...request, search: q, status: first(query.status), storeId: first(query.store) });
-    result = requests; rows = requests.items.map(requestRow); title = first(query.status) === "pending" ? "Requests to review" : "Service requests"; eyebrow = "Reported issues"; description = "Review reported problems and choose the next step."; placeholder = "Search problem, reporter, request, or store";
+    result = requests; rows = requests.items.map(requestRow); title = "Requests"; eyebrow = "Reported issues"; description = "Review reported problems and choose the next step."; placeholder = "Search problem, reporter, request, or store";
     if (roleCan(session, "create_request")) primaryAction = { label: "Report an issue", href: creationHref("/app/requests/new", query) };
   } else if (route === "visits") {
     const visitContext = { storeId: first(query.store), vendorId: first(query.vendor) };
@@ -486,7 +486,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     ];
   } else {
     const vendors = await repository.listVendors(scope, q, request);
-    result = vendors; rows = vendors.items.map(vendorRow); title = "Approved vendors"; eyebrow = "Vendor network"; description = "Search by name, specialty, plain-language alias, equipment type, and coverage."; placeholder = "Search vendor, plumber, refrigeration, dispenser, or equipment";
+    result = vendors; rows = vendors.items.map(vendorRow); title = "Vendors"; eyebrow = "Vendor network"; description = "Search by name, specialty, plain-language alias, equipment type, and coverage."; placeholder = "Search vendor, plumber, refrigeration, dispenser, or equipment";
     if (roleCan(session, "onboard_vendor")) primaryAction = { label: "Add vendor", href: "/app/vendors/new" };
   }
 

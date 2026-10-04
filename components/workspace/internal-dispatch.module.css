@@ -113,10 +113,15 @@
   .jobRow { grid-template-columns: 1fr; padding: 16px; }
   .rowActions { justify-content: flex-start; max-width: none; }
   .rowActions > .btn, .rowActions > form, .rowActions > details:not([open]) { flex: 1 1 140px; }
+  .rowActions > .btnPrimary, .rowActions > form { flex: 0 0 100%; width: 100%; order: -1; }
+  .rowActions .btn { min-height: 44px; }
   .rowActions > form button, .rowActions > details > summary.btn { width: 100%; }
+  .form button[type=submit] { width: 100%; }
   .sectionHead { padding: 14px 16px; }
   .dayHeading { padding: 10px 16px; }
 }
 .workspace button.linkButton { background: none; border: 0; color: #2457d6; padding: 0; min-height: 0; text-decoration: underline; text-underline-offset: 3px; }
 .jobBody ul.historyList { padding-left: 0; } .jobBody .historyList li { margin: 0; }
 .badgeActive { background: #e6eeff; color: #1e3f9a; }
+
+.jobBody .historyList {list-style:none;display:grid;gap:16px;padding:0;} .jobBody .historyList > li {border-bottom:1px solid #e2e7ee;padding:0 0 16px;} .jobBody .historyList p {margin:8px 0;}

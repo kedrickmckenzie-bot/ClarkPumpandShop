@@ -1,3 +1,4 @@
+import { TechnicianEquipment } from "@/lib/server/technician-tools";
 import {LinkedStoreTasks} from "@/components/workspace/linked-store-tasks";
 import { RecordFiles } from "@/components/workspace/record-files";
 import { safeDecisionReturn } from "@/lib/ops/review-navigation";
@@ -19,6 +20,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
   const query = await searchParams;
   const returnDecision = safeDecisionReturn(Array.isArray(query.returnDecision) ? query.returnDecision[0] : query.returnDecision);
   const session = await loadOperatorSession();
+  if(session.role==="technician")return <TechnicianEquipment id={id}/>;
   const [model, fixture, replacement] = await Promise.all([
     loadDetailModel("equipment", id),
     getRequestOpsFixtureSnapshot(session.organizationId),

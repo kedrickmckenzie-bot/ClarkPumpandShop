@@ -505,6 +505,13 @@
       "when": 1791083300026,
       "tag": "0071_dazzling_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1791100723645,
+      "tag": "0072_robust_reptil",
+      "breakpoints": true
     }
   ]
 }

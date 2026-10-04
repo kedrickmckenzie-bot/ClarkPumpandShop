@@ -57,7 +57,7 @@ export function TrendsFilterForm({ action, activeView, clearHref, filters, scope
           <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
         ))}</div>
       </details>
-      <button type="submit" disabled={pending}><Filter size={16} aria-hidden="true" />{pending ? "Updating analysis…" : "Apply changes"}</button>
+      <button type="submit" disabled={pending}><Filter size={16} aria-hidden="true" />{pending ? "Updating analysis…" : "Update view"}</button>
     </form>
   );
 }
@@ -65,7 +65,7 @@ export function TrendsFilterForm({ action, activeView, clearHref, filters, scope
 /** Long filter lists (stores, vendors, equipment) are searched as you type instead of scrolled in a dropdown. */
 function FilterPicker({ filter }: { filter: { id: string; label: string; value?: string; options: Array<{ value: string; label: string }> } }) {
   const all = filter.options.find((option) => !option.value);
-  return <SearchPicker compact name={filter.id} label={filter.label} placeholder={`Type to find ${filter.label.toLowerCase()}`}
+  return <SearchPicker id={`trends-filter-${filter.id}`} compact name={filter.id} label={filter.label} placeholder={`Type to find ${filter.label.toLowerCase()}`}
     allowClear={Boolean(all)} clearLabel={all?.label ?? "Any"}
     options={filter.options.filter((option) => option.value).map((option) => ({ value: option.value, label: option.label }))} defaultValue={filter.value} />;
 }

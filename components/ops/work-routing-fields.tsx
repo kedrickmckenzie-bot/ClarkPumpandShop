@@ -65,7 +65,7 @@ export function WorkRoutingFields({ model, accountabilityOnly }: { model: Create
     </div> : null}
     {route === "internal" ? <div className={styles.fieldGrid}>
       <InternalAssignmentFields storeId={storeId} defaultTarget={model.defaults?.internalMembershipId ? "person" : "pool"} defaultPerson={model.defaults?.internalMembershipId ? {id:model.defaults.internalMembershipId,name:model.internalAssignees.find(p=>p.value===model.defaults?.internalMembershipId)?.label??"Technician"} : undefined}/>
-      <label className={styles.checkField}><input name="internalNextVisit" type="checkbox" onChange={e => setInternalNextVisit(e.target.checked)}/>Next visit is fine</label>
+      <label className={styles.checkField}><input name="internalNextVisit" type="checkbox" onChange={e => setInternalNextVisit(e.target.checked)}/>Do on next visit</label>
       {internalNextVisit ? <label className={styles.field}><span>Review by <em>Required</em></span><input name="holdDeadlineAt" type="datetime-local" required/></label> : null}
     </div> : null}
     {route === "hold_for_visit" ? <div className={styles.fieldGrid}>

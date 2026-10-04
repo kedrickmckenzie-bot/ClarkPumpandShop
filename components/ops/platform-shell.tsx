@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { WorkspaceSearch } from "./workspace-search";
 import Image from "next/image";
 import { NavigationTrail } from "@/components/workspace/navigation-trail";
@@ -18,7 +18,7 @@ import {
   Plus,
   Settings2,
   Store,
-  Truck,
+  Truck, History, Search,
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -26,7 +26,7 @@ import { productPresentation, productThemeVariables } from "@/lib/product/presen
 import type { DemoEdition, OperatorSession } from "./data-contract";
 import { DEFAULT_DEMO_EDITION } from "./demo-edition";
 import {
-  contextualNavigationForPath,
+  navigationChildren,
   navigationForRole,
   navigationItemIsActive,
   pathMatches,
@@ -60,7 +60,7 @@ function toggleSidebar() {
 const expandedSidebarOnServer = () => false;
 
 const iconByNavigationId: Record<NavigationItem["id"], LucideIcon> = {
-  compliance: ClipboardList,
+  compliance: ClipboardList, history:History,search:Search,
   overview: LayoutDashboard,
   work: ClipboardList,
   stores: Store,
@@ -162,63 +162,17 @@ function PrimaryNavigation({
   pathname: string;
   edition: DemoEdition;
 }) {
-  return (
-    <nav aria-label="Primary navigation" className={styles.navGroups}>
-      {navigationForRole(session.role, edition).map((item) => (
-        <NavigationLink item={item} pathname={pathname} key={item.id} />
-      ))}
-    </nav>
-  );
-}
-
-function ContextualNavigation({
-  session,
-  pathname,
-  edition,
-}: {
-  session: OperatorSession;
-  pathname: string;
-  edition: DemoEdition;
-}) {
-  const group = contextualNavigationForPath(session.role, pathname, edition);
-  if (!group) return null;
-
-  return (
-    <div className={styles.contextNavBar}>
-      <nav aria-label={`${group.label} sections`} className={styles.contextNav}>
-        {group.items.map((item) => {
-          const active = pathMatches(pathname, item.href);
-          return (
-            <Link
-              className={`${styles.contextNavLink} ${active ? styles.contextNavLinkActive : ""}`}
-              href={workspaceStartHref(item.href)}
-              aria-current={active ? "page" : undefined}
-              key={item.id}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-    </div>
-  );
-}
-
-const recordDetailRoots = new Set([
-  "action-center",
-  "equipment",
-  "invoices",
-  "requests",
-  "stores",
-  "vendors",
-  "visits",
-  "warranties",
-  "work-orders",
-]);
-
-function isRecordDetailPath(pathname: string) {
-  const parts = pathname.split("/").filter(Boolean);
-  return parts[0] === "app" && parts.length >= 3 && recordDetailRoots.has(parts[1]);
+  const [expanded,setExpanded]=useState<string[]>([]);
+  return <nav aria-label="Primary navigation" className={styles.navGroups}>
+    {navigationForRole(session.role,edition).map(item=>{
+      const children=navigationChildren(session.role,item,edition), active=navigationItemIsActive(item,pathname), open=active||expanded.includes(item.id), Icon=iconByNavigationId[item.id];
+      if(!children.length)return <NavigationLink key={item.id} item={item} pathname={pathname}/>;
+      return <div key={item.id} className={styles.navSection}>
+        <button type="button" aria-expanded={open} className={`${styles.navLink} ${active?styles.navLinkActive:""}`} onClick={()=>{if(!active)setExpanded(values=>values.includes(item.id)?values.filter(id=>id!==item.id):[...values,item.id]);}}><Icon aria-hidden="true" size={19}/><span>{item.label}</span><ChevronDown aria-hidden="true" size={16} className={open?styles.navChevronOpen:""}/></button>
+        {open?<nav aria-label={`${item.label} sections`} className={styles.navChildren}>{children.map(child=><Link key={child.id} href={workspaceStartHref(child.href)} aria-current={pathMatches(pathname,child.href)?"page":undefined} className={pathMatches(pathname,child.href)?styles.navChildActive:""}>{child.label}</Link>)}</nav>:null}
+      </div>;
+    })}
+  </nav>;
 }
 
 function UserSummary({ session }: { session: OperatorSession }) {
@@ -358,9 +312,6 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
             {/* Company, demo package and your role are shown once, in the sidebar. */}
             <CreateMenu session={session} edition={edition} />
           </header>
-          {!isRecordDetailPath(pathname) ? (
-            <ContextualNavigation session={session} pathname={pathname} edition={edition} />
-          ) : null}
         </div>
 
         <main className={styles.main} id="main-content" tabIndex={-1}><NavigationTrail scopeKey={JSON.stringify([session.organizationId, session.userId, session.role, session.storeIds, session.regionIds, session.effectiveCapabilities, session.demoEdition])} />{children}</main>

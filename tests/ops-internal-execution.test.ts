@@ -38,7 +38,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
       runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});const db=await runtime.getD1Database("DB");
       const migrations=readdirSync("drizzle").filter(f=>/^\d.*\.sql$/.test(f)).sort();
       for(const file of migrations.filter(f=>f<"0068"))for(const sql of readFileSync(`drizzle/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await db.prepare(sql).run();
-      r=createOpsD1Repository(db as unknown as D1Database);await seedOpsRepository(r,fixture);
+      r=createOpsD1Repository(db as unknown as D1Database);await seedOpsRepository(r,fixture,[],{omitStoreContacts:true});
       for(const file of migrations.filter(f=>f>="0068"))for(const sql of readFileSync(`drizzle/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await db.prepare(sql).run();
     }
     if(adapter==="PostgreSQL"){
@@ -47,7 +47,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
       url.pathname=`/${databaseName}`;pool=new Pool({connectionString:url.toString()});
       const migrations=readdirSync("drizzle-postgres").filter(f=>/^\d.*\.sql$/.test(f)).sort();
       for(const file of migrations.filter(f=>f<"0068"))for(const sql of readFileSync(`drizzle-postgres/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await pool.query(sql);
-      r=createOpsPostgresRepository(pool);await seedOpsRepository(r,fixture);
+      r=createOpsPostgresRepository(pool);await seedOpsRepository(r,fixture,[],{omitStoreContacts:true});
       for(const file of migrations.filter(f=>f>="0068"))for(const sql of readFileSync(`drizzle-postgres/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await pool.query(sql);
     }
     for(const decision of fixture.workOrderVerifications)expect(await r.listWorkOrderVerifications(dispatchOrg,decision.workOrderId)).toContainEqual(expect.objectContaining({id:decision.id,siteVisitWorkOrderId:decision.siteVisitWorkOrderId,decision:decision.decision}));

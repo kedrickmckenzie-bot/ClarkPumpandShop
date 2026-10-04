@@ -26,6 +26,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
       if(receipt){if(receipt.requestHash!==await internalResultRequestHash({...resultInput,files:await completionFileIntent(form)}))throw new OpsDomainError("CONFLICT","This submission key was already used for different details.");}
       else await recordInternalWorkResult({repository:c.repository},{...resultInput,files:await storeCompletionFiles(form,c.session.organizationId,id,c.session.accessMode==="preview",input.key)});
     }
-    return relativeRedirect303(`/app/my-work/${encodeURIComponent(id)}`);
+    if (request.headers.get("accept")?.includes("application/json")) return Response.json({ saved: true, number: work.number });
+    return relativeRedirect303(`/app/my-work/${encodeURIComponent(id)}?saved=1`);
   }catch(error){return opsApiError(error);}
 }

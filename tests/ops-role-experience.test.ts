@@ -93,7 +93,8 @@ describe("role-specific operator experiences", () => {
       finance: buildDashboardModel(fixture, session("finance")),
     };
 
-    expect(new Set(Object.values(dashboards).map((model) => model.page.title))).toHaveLength(5);
+    expect(Object.values(dashboards).map((model) => model.page.title)).toEqual(Array(5).fill("Overview"));
+    expect(new Set(Object.values(dashboards).map((model) => model.page.description))).toHaveLength(5);
     expect(
       new Set(
         Object.values(dashboards).map((model) =>
@@ -140,7 +141,8 @@ describe("role-specific operator experiences", () => {
     const dashboard = buildDashboardModel(fixture, storeManager);
     const hrefs = dashboardHrefs(dashboard);
 
-    expect(dashboard.page.title).toContain("Store 104");
+    expect(dashboard.page.title).toBe("Overview");
+    expect(dashboard.page.scopeLabel).toContain("Store 104");
     expect(hrefs.some((href) => href.startsWith("/app/lifecycle"))).toBe(false);
     expect(hrefs).not.toContain("/app/work-orders/new");
     expect(dashboard.spotlight).toBeUndefined();

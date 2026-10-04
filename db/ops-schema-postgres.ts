@@ -60,6 +60,7 @@ export const opsOrganizations = pgTable("ops_organizations", {
 ]);
 
 export const opsUsers = pgTable("ops_users", {
+  phone: text("phone"),
   id: id(),
   email: text("email").notNull(),
   displayName: text("display_name").notNull(),
@@ -142,6 +143,7 @@ export const opsTaxonomyNodes = pgTable("ops_taxonomy_nodes", {
 ]);
 
 export const opsStores = pgTable("ops_stores", {
+  phone: text("phone"), accessNotes: text("access_notes"), accessNotesVersion: integer("access_notes_version").notNull().default(0),
   id: id(),
   organizationId: organizationId(),
   divisionId: text("division_id"),

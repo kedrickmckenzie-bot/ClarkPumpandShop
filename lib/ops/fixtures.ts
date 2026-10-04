@@ -287,6 +287,7 @@ function buildFixture(): OpsFixture {
   addTemplateComponents("plumbing-fixture", [["fixture", "Fixture"], ["faucet", "Faucet and handles", "fixture"], ["supply", "Supply connection", "fixture"], ["shutoff", "Shutoff valve", "supply"], ["drain", "Drain and trap", "fixture"]]);
   const stores: Store[] = storeSeeds.map(([number, name, address1, city, state, postalCode, latitudeE6, longitudeE6], index) => ({
     id: `store-northline-${number}`, organizationId: organization.id, divisionId: divisions[0].id, regionId: regions[Math.floor(index / 5)].id,
+    phone: `606-555-01${String(index + 1).padStart(2,"0")}`, accessNotes: index === 3 ? "Ask the manager for the rear service door key. Keep the delivery lane clear." : undefined, accessNotesVersion: 0,
     storeNumber: number, name: `${DEMO_ORGANIZATION_NAME} - ${name}`, address1, city, state, postalCode,
     aliases: [name, `Store ${number}`, `${number} ${city}`], latitudeE6, longitudeE6, geofenceRadiusM: index === 6 ? 125 : 180, locationPolicyEnabled: true, timeZone: "America/New_York", status: "active", createdAt: at(1, 3, 14),
   }));
@@ -299,10 +300,10 @@ function buildFixture(): OpsFixture {
   const users: User[] = [
     { id: "user-northline-executive", email: "alex.morgan@clark-demo.example", displayName: "Alex Morgan", status: "active", createdAt: at(1, 2, 15) },
     { id: "user-northline-facilities", email: "jordan.lee@clark-demo.example", displayName: "Jordan Lee", status: "active", createdAt: at(1, 2, 15) },
-    { id: "user-northline-tech-1", email: "maria.santos@clark-demo.example", displayName: "Maria Santos", status: "active", createdAt: at(1, 2, 15) },
-    { id: "user-northline-tech-2", email: "devon.price@clark-demo.example", displayName: "Devon Price", status: "active", createdAt: at(1, 2, 15) },
+    { id: "user-northline-tech-1", email: "maria.santos@clark-demo.example", displayName: "Maria Santos", phone: "606-555-0161", status: "active", createdAt: at(1, 2, 15) },
+    { id: "user-northline-tech-2", email: "devon.price@clark-demo.example", displayName: "Devon Price", phone: "606-555-0162", status: "active", createdAt: at(1, 2, 15) },
     ...regions.map((region, index) => ({ id: `user-northline-regional-${index + 1}`, email: `regional${index + 1}@clark-demo.example`, displayName: ["Taylor Reed", "Morgan Hayes", "Casey Brooks"][index], status: "active" as const, createdAt: at(1, 2, 15) })),
-    ...stores.map((store, index) => ({ id: `user-northline-store-${store.storeNumber}`, email: `store${store.storeNumber}.manager@clark-demo.example`, displayName: storeManagerNames[index]!, status: "active" as const, createdAt: at(1, 2, 15) })),
+    ...stores.map((store, index) => ({ id: `user-northline-store-${store.storeNumber}`, email: `store${store.storeNumber}.manager@clark-demo.example`, displayName: storeManagerNames[index]!, phone: `606-555-01${String(index + 21).padStart(2,"0")}`, status: "active" as const, createdAt: at(1, 2, 15) })),
     { id: "user-northline-finance", email: "finance.review@clark-demo.example", displayName: "Parker Shaw", status: "active", createdAt: at(1, 2, 15) },
     { id: "user-northline-facilities-approver", email: "samir.patel@clark-demo.example", displayName: "Samir Patel", status: "active", createdAt: at(1, 2, 15) },
     { ...NORTHLINE_FIELD_MANAGER.user },

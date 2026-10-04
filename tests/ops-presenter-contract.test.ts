@@ -134,7 +134,7 @@ describe("operator presenter drill-through contracts", () => {
     const dashboard = buildDashboardModel(fixture, session);
     const search = buildSearchModel(fixture, session, { q: "Ridgeview" });
 
-    expect(dashboard.page.title).toBe("Your company at a glance");
+    expect(dashboard.page.title).toBe("Overview");
     expect(dashboard.journey).toBeUndefined();
     expect(dashboard.metrics.map((metric) => metric.id)).toEqual(
       expect.arrayContaining(["recorded-cost", "open-work", "open-exceptions", "watch-assets"]),

@@ -498,6 +498,13 @@
       "when": 1791083297286,
       "tag": "0070_flippant_leopardon",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1791100720665,
+      "tag": "0071_productive_vampiro",
+      "breakpoints": true
     }
   ]
 }

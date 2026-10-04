@@ -15,9 +15,11 @@ export type PrimaryNavigationId =
   | "stores"
   | "equipment"
   | "vendors"
-  | "planning";
+  | "planning"
+  | "history"
+  | "search";
 
-export type NavigationGroupId = "work" | "equipment" | "planning";
+export type NavigationGroupId = "work" | "equipment" | "planning" | "stores" | "vendors";
 
 export interface NavigationItem {
   id: PrimaryNavigationId;
@@ -39,7 +41,7 @@ export interface ContextualNavigationGroup {
   items: ContextualNavigationItem[];
 }
 
-/** Compliance is a dedicated destination requested by the operator. */
+/** Six manager sections; related pages stay in their sidebar section. */
 export const operatorNavigation: NavigationItem[] = [
   {
     id: "overview",
@@ -51,14 +53,14 @@ export const operatorNavigation: NavigationItem[] = [
     id: "work",
     label: "Work",
     href: "/app/work-orders?status=open",
-    matchPrefixes: ["/app/tasks", "/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits", "/app/dispatch", "/app/my-work"],
+    matchPrefixes: ["/app/compliance", "/app/tasks", "/app/action-center", "/app/requests", "/app/work-orders", "/app/estimates", "/app/visits", "/app/dispatch", "/app/my-work"],
     contextGroup: "work",
   },
   {
     id: "stores",
     label: "Stores",
     href: "/app/stores",
-    matchPrefixes: ["/app/stores"],
+    matchPrefixes: ["/app/stores"], contextGroup:"stores",
   },
   {
     id: "equipment",
@@ -67,16 +69,15 @@ export const operatorNavigation: NavigationItem[] = [
     matchPrefixes: ["/app/equipment", "/app/pm"],
     contextGroup: "equipment",
   },
-  { id:"compliance", label:"Compliance", href:"/app/compliance", matchPrefixes:["/app/compliance"] },
   {
     id: "vendors",
     label: "Vendors",
     href: "/app/vendors",
-    matchPrefixes: ["/app/vendors"],
+    matchPrefixes: ["/app/vendors"], contextGroup:"vendors",
   },
   {
     id: "planning",
-    label: "Spending & planning",
+    label: "Spend & planning",
     href: "/app/trends",
     matchPrefixes: ["/app/trends", "/app/spend", "/app/lifecycle", "/app/warranties", "/app/invoices", "/app/reports"],
     contextGroup: "planning",
@@ -84,30 +85,33 @@ export const operatorNavigation: NavigationItem[] = [
 ];
 
 export const contextualNavigation: ContextualNavigationGroup[] = [
+  {id:"stores",label:"Stores",items:[{id:"stores",label:"Stores",href:"/app/stores"}]},
+  {id:"vendors",label:"Vendors",items:[{id:"vendors",label:"Vendors",href:"/app/vendors"}]},
   {
     id: "work",
     label: "Work",
     items: [
       { id: "needs-attention", label: "Review queue", href: "/app/action-center" },
-      { id: "tasks", label: "Tasks", href: "/app/tasks" },
-      { id: "requests", label: "Requests", href: "/app/requests" },
       { id: "dispatch", label: "Dispatch", href: "/app/dispatch" },
       { id: "work-orders", label: "Work orders", href: "/app/work-orders" },
-      { id: "estimates", label: "Quote requests", href: "/app/estimates" },
+      { id: "requests", label: "Requests", href: "/app/requests" },
+      { id: "estimates", label: "Quotes", href: "/app/estimates" },
       { id: "visits", label: "Service visits", href: "/app/visits" },
+      { id: "tasks", label: "Tasks", href: "/app/tasks" },
+      { id: "compliance", label: "Compliance", href: "/app/compliance" },
     ],
   },
   {
     id: "equipment",
     label: "Equipment",
     items: [
-      { id: "equipment", label: "Equipment list", href: "/app/equipment" },
+      { id: "equipment", label: "Equipment", href: "/app/equipment" },
       { id: "pm", label: "Preventive maintenance", href: "/app/pm" },
     ],
   },
   {
     id: "planning",
-    label: "Spending & planning",
+    label: "Spend & planning",
     items: [
       { id: "trends", label: "Trends", href: "/app/trends" },
       { id: "spend", label: "Spending", href: "/app/spend" },
@@ -132,6 +136,7 @@ export function navigationItemIsActive(item: NavigationItem, pathname: string) {
 function roleCanSeeNavigationItem(role: OperatorRole, item: NavigationItem) {
   if (role === "store_manager" && ["vendors", "planning", "compliance"].includes(item.id)) return false;
   switch (item.id) {
+    case "history": case "search": return role==="technician";
     case "compliance":
       return ["facilities","regional","store_manager","executive","finance"].includes(role);
     case "overview":
@@ -156,7 +161,10 @@ function roleCanSeeNavigationItem(role: OperatorRole, item: NavigationItem) {
 }
 
 function roleCanSeeContextItem(role: OperatorRole, groupId: NavigationGroupId, item: ContextualNavigationItem) {
+  if(groupId==="stores")return roleCanAccessListRoute(role,"stores");
+  if(groupId==="vendors")return roleCanAccessListRoute(role,"vendors");
   if (groupId === "work") {
+    if(item.id==="compliance")return ["facilities","regional","executive","finance"].includes(role);
     return roleCanSeeWorkNavigation(role, item.id as OperatorWorkNavigationId);
   }
 
@@ -189,6 +197,13 @@ function visibleContextGroup(role: OperatorRole, groupId: NavigationGroupId, edi
 }
 
 export function navigationForRole(role: OperatorRole, edition: DemoEdition = DEFAULT_DEMO_EDITION) {
+  if(role==="technician" && edition==="complete")return [
+    {id:"work",label:"My work",href:"/app/my-work",matchPrefixes:["/app/my-work","/app/work-orders"]},
+    {id:"stores",label:"Stores",href:"/app/stores",matchPrefixes:["/app/stores"]},
+    {id:"equipment",label:"Equipment",href:"/app/equipment",matchPrefixes:["/app/equipment"]},
+    {id:"history",label:"Work history",href:"/app/work-history",matchPrefixes:["/app/work-history"]},
+    {id:"search",label:"Search",href:"/app/search",matchPrefixes:["/app/search"]},
+  ] as NavigationItem[];
   return operatorNavigation
     .filter((item) => roleCanSeeNavigationItem(role, item) && (
       (edition === "accountability" && item.id === "work") || demoEditionAllowsPath(edition, item.href)
@@ -214,6 +229,10 @@ export function navigationForRole(role: OperatorRole, edition: DemoEdition = DEF
       const firstVisibleItem = visibleContextGroup(role, item.contextGroup, edition)?.items[0];
       return firstVisibleItem ? { ...item, href: firstVisibleItem.href } : item;
     });
+}
+
+export function navigationChildren(role:OperatorRole,item:NavigationItem,edition:DemoEdition) {
+  return item.contextGroup ? visibleContextGroup(role,item.contextGroup,edition)?.items ?? [] : [];
 }
 
 export function contextualNavigationForPath(

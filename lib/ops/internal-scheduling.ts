@@ -1,3 +1,4 @@
+import { cachedDateTimeFormat } from "./intl-format-cache";
 import { OpsDomainError } from "./errors";
 import { atomicWorkOrderMutation, persistedWorkOrderVersion } from "./concurrency";
 import {
@@ -133,7 +134,7 @@ export async function saveInternalSchedule(svc: OpsCommandServices, input: Sched
     r.listServiceAppointmentsForWorkOrder(input.organizationId, work.id),
   ]);
   if (!store || !org) throw new OpsDomainError("NOT_FOUND", "Store not found.");
-  if (inspection || detail?.visits.some(v => v.status === "active"))
+  if (inspection?.workOrderId === work.id || detail?.visits.some(v => v.status === "active"))
     throw new OpsDomainError("CONFLICT", "Finish the active visit or use the inspection record before planning another attempt.");
   if (
     !manager &&
@@ -155,10 +156,10 @@ export async function saveInternalSchedule(svc: OpsCommandServices, input: Sched
   if (input.precision !== "removed" && waiting && (!manager || !input.tentative || !input.reviewReason?.trim()))
     throw new OpsDomainError(
       "CONFLICT",
-      "Review the blocker first, or save a tentative plan with a review reason. Required actions remain open.",
+      "Review what is needed first, or save an unconfirmed date with a short reason.",
     );
   if (input.precision !== "removed" && !waiting && input.tentative && !manager)
-    throw new OpsDomainError("FORBIDDEN", "A manager records tentative plans.");
+    throw new OpsDomainError("FORBIDDEN", "Ask your manager to record a date while work is waiting.");
   const planningZone = assertPlanningZone(org.timeZone),
     entryZone = assertPlanningZone(store.timeZone ?? org.timeZone);
   let day: string | undefined,
@@ -184,14 +185,14 @@ export async function saveInternalSchedule(svc: OpsCommandServices, input: Sched
   if (work.targetCompletionAt && input.precision !== "removed") {
     const targetDay = civilDate(work.targetCompletionAt, planningZone);
     if (startsAt ? (endsAt ?? startsAt) > work.targetCompletionAt : (day ?? week) > targetDay)
-      warnings.push("This plan is after Target completion.");
+      warnings.push("After the finish-by date.");
     else if (input.precision === "week" && addCalendarDays(week, 6) > targetDay)
-      warnings.push("The week crosses Target completion; the actual day is uncertain.");
+      warnings.push("This week may pass the finish-by date. Pick a day to check.");
     else if (input.precision === "day" && day === targetDay)
-      warnings.push("The planned day matches Target completion; the completion time is uncertain.");
+      warnings.push("This is the finish-by day, but the time is not confirmed.");
   }
   if (input.precision !== "removed" && appointments.some(a => a.status === "confirmed"))
-    warnings.push("A separate confirmed provider appointment exists and will remain unchanged.");
+    warnings.push("Another visit is already booked for this job.");
   const target = input.target ?? internalTarget(assignment)!;
   const membershipId = target === "person" ? (input.membershipId ?? assignment.internalMembershipId) : undefined;
   if (startsAt && membershipId) {
@@ -207,15 +208,18 @@ export async function saveInternalSchedule(svc: OpsCommandServices, input: Sched
         statuses: ["approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_parts", "waiting_on_vendor"],
       },
     );
-    if (peers.totalCount! > 100) warnings.push("Only part of this day's commitments could be compared.");
+    if (peers.totalCount! > 100) warnings.push("Some jobs could not be checked for overlap. Review the day before keeping this date.");
     for (const peer of peers.items.filter(p => p.id !== work.id && p.schedule?.precision === "appointment")) {
       const p = peer.schedule!;
-      if (!endsAt || !p.endsAt) warnings.push("A repair duration is unknown; appointment availability cannot be confirmed.");
-      else if (startsAt < p.endsAt && endsAt > p.startsAt!) warnings.push("This appointment overlaps another exact internal commitment.");
+      if (!endsAt || !p.endsAt) warnings.push("A job has no time estimate. Check that there is enough time.");
+      else if (startsAt < p.endsAt && endsAt > p.startsAt!) {
+        const time = cachedDateTimeFormat("en-US", { timeZone: entryZone, hour: "numeric", minute: "2-digit" }).format(new Date(p.startsAt!)).replace(":00", "");
+        warnings.push(`Overlaps ${peer.internalAssigneeName ?? "the technician"}'s ${time} job.`);
+      }
     }
   }
   if (warnings.length && !input.keepConflicts)
-    throw new OpsDomainError("VALIDATION", warnings.join(" ") + " Choose Keep this plan after reviewing, or move it.");
+    throw new OpsDomainError("VALIDATION", warnings.join(" "), { kind: "schedule_warning", warnings: [...new Set(warnings)] });
   const change =
     target !== internalTarget(assignment) ||
     membershipId !== assignment.internalMembershipId ||

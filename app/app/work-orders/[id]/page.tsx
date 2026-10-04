@@ -1,3 +1,4 @@
+import { TechnicianWorkRecord } from "@/lib/server/technician-tools";
 import { InternalPlanningPanel } from "@/components/workspace/internal-planning-panel";
 import { InternalAssignmentPanel } from "@/components/workspace/internal-assignment-panel";
 import { formatOperationsDateTime } from "@/lib/ops/local-time";
@@ -43,6 +44,8 @@ function selectedServicePath(value: string | string[] | undefined): WorkOrderSer
 export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ returnDecision?: string | string[]; updated?: string | string[]; view?: string | string[]; path?: string | string[]; notice?: string | string[]; error?: string | string[]; reconcile?: string | string[]; next?: string | string[]; reviewQueue?: string | string[]; reviewItem?: string | string[]; reviewAfter?: string | string[]; reviewNext?: string | string[] }> }) {
   const { id } = await params;
   const query = await searchParams;
+  const session=await loadOperatorSession();
+  if(session.role==="technician")return <TechnicianWorkRecord id={id}/>;
   const returnDecision = safeDecisionReturn(Array.isArray(query.returnDecision) ? query.returnDecision[0] : query.returnDecision);
   const updated = Array.isArray(query.updated) ? query.updated[0] : query.updated;
   const requestedView = selectedView(query.view);
@@ -52,7 +55,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const reconcileId = Array.isArray(query.reconcile) ? query.reconcile[0] : query.reconcile;
   const errorRaw = query.error;
   const error = Array.isArray(errorRaw) ? errorRaw[0] : errorRaw;
-  const [model, control, recording, estimateComparison, issuance, replacement, verification, stageCase, responseActions, heldWork, session, connectedReview] = await Promise.all([
+  const [model, control, recording, estimateComparison, issuance, replacement, verification, stageCase, responseActions, heldWork, connectedReview] = await Promise.all([
     loadDetailModel("work-order", id),
     loadWorkOrderControlModel(id),
     loadWorkOrderRecordingModel(id),
@@ -63,7 +66,6 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     loadWorkOrderCaseModel(id),
     loadVendorResponseActionsModel(id),
     loadHeldWorkActionsModel(id),
-    loadOperatorSession(),
     ["overview", "equipment"].includes(requestedView) ? loadConnectedWorkReview(id) : null,
   ]);
   const accountabilityOnly = session.demoEdition === "accountability";

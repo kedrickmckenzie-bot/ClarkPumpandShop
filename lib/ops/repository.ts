@@ -111,6 +111,12 @@ export interface OrganizationScope {
 }
 
 export interface WorkOrderListQuery extends PageRequest {
+  dispatchQueue?: boolean;
+  dispatchUnassigned?: boolean;
+  activityOrder?: boolean;
+  dispatchBoardWeek?: string;
+  dispatchBucket?: "unassigned" | "parts" | "late" | "reported";
+  dispatchAt?: IsoDateTime;
   dispatchReadiness?: "ready" | "waiting";
   scheduleExcludeWeek?: string;
   scheduleView?: import("./internal-schedule-types").ScheduleView;
@@ -212,11 +218,13 @@ export interface OpsStatement {
   params: readonly unknown[];
   /** Fixture equivalent of the SQL access assertion executed inside the transaction. */
   visitSelection?: { org: string; visitId: string; count: number };
+  storeNotesFence?: {org:string;storeId:string;version:number};
   dispatchAccess?: { org: string; membershipId: string; storeId: string; roles: string[] };
 }
 
 export interface OpsRepository extends TaskRepository {
   getDispatchFilters(scope: OrganizationScope): Promise<{people:{id:string;name:string}[];regions:{id:string;name:string}[]}>;
+  getDispatchDayCounts(scope: OrganizationScope, query: WorkOrderListQuery): Promise<Array<{ membershipId?: string; name?: string; day?: string; count: number }>>;
   getInternalSchedule(org: string, id: string): Promise<import("./internal-schedule-types").InternalSchedule | null>;
   listInternalSchedules(org: string, workId: string): Promise<import("./internal-schedule-types").InternalSchedule[]>;
   listDispatchPeople(scope: OrganizationScope, storeId: string, search?: string, cursor?: string, kind?: "technician" | "manager"): Promise<{ items: { id: string; name: string; role: string }[]; nextCursor?: string }>;

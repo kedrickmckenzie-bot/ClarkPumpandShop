@@ -55,11 +55,11 @@ export function ValueLedgerWorkspace({
     return currencies.size ? [...currencies].map(([currency, total]) => money(category === "identified_exposure" ? uniqueExposureTotal(allEvents.filter(e=>e.category===category&&e.amount.currency===currency)) : total, currency)).join(" · ") : "No recorded amount";
   };
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${styles.savings}`}>
       <header className={styles.header}>
         <div>
           <p className={styles.eyebrow}>Financial review</p>
-          <h1>Financial benefits and opportunities</h1>
+          <h1>Savings</h1>
           <p>Review confirmed benefits, possible recoveries, and planning estimates separately. Open each amount’s source to check the evidence.</p>
         </div>
         <Link className={styles.secondaryButton} href="/app/reports">Reports</Link>
@@ -93,12 +93,12 @@ export function ValueLedgerWorkspace({
             <tbody>{events.map((event) => {
               const records = supportingRecords(fixture, event);
               return <tr key={event.id}>
-                <td><span className={event.category === "realized_verified" ? styles.goodPill : event.category === "identified_exposure" ? styles.riskPill : styles.pill}>{label(event.category)}</span></td>
-                <td>{label(event.eventType)}</td>
-                <td>{money(event.amount.amountMinor, event.amount.currency)}</td>
-                <td>{event.sourceDecision}</td>
-                <td>{records.map((record) => <div key={record.href}><Link href={record.href}>{record.label}</Link></div>)}</td>
-                <td>{formatOperationsDateTime(event.occurredAt, organizationTimeZone)}</td>
+                <td data-label="Classification"><span className={event.category === "realized_verified" ? styles.goodPill : event.category === "identified_exposure" ? styles.riskPill : styles.pill}>{label(event.category)}</span></td>
+                <td data-label="Event">{label(event.eventType)}</td>
+                <td data-label="Amount">{money(event.amount.amountMinor, event.amount.currency)}</td>
+                <td data-label="Source decision">{event.sourceDecision}</td>
+                <td data-label="Supporting records">{records.map((record) => <div key={record.href}><Link href={record.href}>{record.label}</Link></div>)}</td>
+                <td data-label="When">{formatOperationsDateTime(event.occurredAt, organizationTimeZone)}</td>
               </tr>;
             })}</tbody>
           </table> : <p className={styles.empty}>No financial entries match these filters.</p>}

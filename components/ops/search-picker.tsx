@@ -36,7 +36,8 @@ export function matchesQuery(option: PickOption, query: string) {
  * and a click selects. Pass `options` to filter in the browser, or `load` to
  * ask the server (results update as you type).
  */
-export function SearchPicker({ name, label, options, load, required = false, placeholder = "Type to search", defaultValue, defaultOption, onSelect, emptyText = "No matches. Try fewer letters.", disabled = false, disabledText, hidden, allowClear = false, clearLabel = "Any", submitOnSelect = false, compact = false }: {
+export function SearchPicker({ id: suppliedId, name, label, options, load, required = false, placeholder = "Type to search", defaultValue, defaultOption, onSelect, emptyText = "No matches. Try fewer letters.", disabled = false, disabledText, hidden, allowClear = false, clearLabel = "Any", submitOnSelect = false, compact = false }: {
+  id?: string;
   name?: string;
   label: string;
   options?: PickOption[];
@@ -59,7 +60,8 @@ export function SearchPicker({ name, label, options, load, required = false, pla
   /** Filters: the list opens while searching (focus or typing) instead of always showing. */
   compact?: boolean;
 }) {
-  const id = useId();
+  const generatedId = useId();
+  const id = suppliedId ?? generatedId;
   const [query, setQuery] = useState("");
   const [loaded, setLoaded] = useState<PickOption[] | null>(null);
   const [busy, setBusy] = useState(false);

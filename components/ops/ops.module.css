@@ -1147,3 +1147,7 @@ a.factCard { padding-right: 38px; }
 .requestChoices { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
 .requestChoices > span { flex: 1 0 100%; }
 .requestChoices > a { flex: 1 1 auto; justify-content: center; text-align: center; }
+.dateWarningActions{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+.dateWarningActions button{min-height:44px;padding:8px 16px;border:1px solid #2457d6;border-radius:5px;background:#2457d6;color:white;font:inherit;cursor:pointer}
+.dateWarningActions button+button{background:white;color:#2457d6}
+:global(form[data-has-date-warning="true"]) .formFields button[type="submit"]{display:none}

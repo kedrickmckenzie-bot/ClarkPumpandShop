@@ -236,7 +236,7 @@ function storeAllowed(scope: OrganizationScope, store: Store) {
 function assetFrom(row: Row): Asset { const replacement = maybeNumber(row, "replacement_estimate_minor"); return { id: text(row, "id"), organizationId: text(row, "organization_id"), storeId: text(row, "store_id"), categoryKey: text(row, "category_key"), taxonomyNodeId: maybeText(row, "taxonomy_node_id"), equipmentTemplateId: maybeText(row, "equipment_template_id"), groupPath: jsonArray(row, "group_path_json"), assetTag: text(row, "asset_tag"), name: text(row, "name"), manufacturer: maybeText(row, "manufacturer"), model: maybeText(row, "model"), serialNumber: maybeText(row, "serial_number"), supplier: maybeText(row, "supplier"), installedAt: maybeText(row, "installed_at"), expectedLifeYears: maybeNumber(row, "expected_life_years"), warrantyEndsAt: maybeText(row, "warranty_ends_at"), replacementProfileId: maybeText(row, "replacement_profile_id"), replacementAttributes: jsonObject(row, "replacement_attributes_json"), replacementAdjustmentBps: maybeNumber(row, "replacement_adjustment_bps"), replacementPlanningExcludedAt: maybeText(row, "replacement_planning_excluded_at"), replacementPlanningExclusionReason: maybeText(row, "replacement_planning_exclusion_reason"), replacementEstimate: replacement == null ? undefined : { amountMinor: replacement, currency: text(row, "replacement_currency") || "USD" }, status: text(row, "status") as Asset["status"], retiredAt: maybeText(row, "retired_at"), replacedByAssetId: maybeText(row, "replaced_by_asset_id"), createdAt: text(row, "created_at") }; }
 
 function storeFrom(row: Row): Store {
-  return { id: text(row, "id"), organizationId: text(row, "organization_id"), divisionId: maybeText(row, "division_id"), regionId: maybeText(row, "region_id"), storeNumber: text(row, "store_number"), name: text(row, "name"), address1: text(row, "address_1"), address2: maybeText(row, "address_2"), city: text(row, "city"), state: text(row, "state"), postalCode: text(row, "postal_code"), aliases: jsonArray(row, "aliases_json"), latitudeE6: maybeNumber(row, "latitude_e6"), longitudeE6: maybeNumber(row, "longitude_e6"), geofenceRadiusM: Number(row.geofence_radius_m ?? 200), locationPolicyEnabled: bool(row, "location_policy_enabled"), timeZone: maybeText(row, "time_zone"), status: text(row, "status") as Store["status"], createdAt: text(row, "created_at") };
+  return {phone: maybeText(row,"phone"), accessNotes: maybeText(row,"access_notes"), accessNotesVersion: Number(row.access_notes_version ?? 0), id: text(row, "id"), organizationId: text(row, "organization_id"), divisionId: maybeText(row, "division_id"), regionId: maybeText(row, "region_id"), storeNumber: text(row, "store_number"), name: text(row, "name"), address1: text(row, "address_1"), address2: maybeText(row, "address_2"), city: text(row, "city"), state: text(row, "state"), postalCode: text(row, "postal_code"), aliases: jsonArray(row, "aliases_json"), latitudeE6: maybeNumber(row, "latitude_e6"), longitudeE6: maybeNumber(row, "longitude_e6"), geofenceRadiusM: Number(row.geofence_radius_m ?? 200), locationPolicyEnabled: bool(row, "location_policy_enabled"), timeZone: maybeText(row, "time_zone"), status: text(row, "status") as Store["status"], createdAt: text(row, "created_at") };
 }
 
 function workOrderFrom(row: Row): WorkOrder {
@@ -517,7 +517,7 @@ class SqlOpsRepository implements OpsRepository {
   async getMembership(organizationId: OpsId, membershipId: OpsId) { const row = await this.first("SELECT * FROM ops_memberships WHERE organization_id = ? AND id = ?", [organizationId, membershipId]); return row ? { id: text(row, "id"), organizationId: text(row, "organization_id"), userId: text(row, "user_id"), role: text(row, "role") as Membership["role"], status: text(row, "status") as Membership["status"], createdAt: text(row, "created_at") } : null; }
   async getUserInOrganization(organizationId: OpsId, userId: OpsId) {
     const row = await this.first("SELECT u.* FROM ops_memberships m JOIN ops_users u ON u.id = m.user_id WHERE m.organization_id = ? AND m.user_id = ? LIMIT 1", [organizationId, userId]);
-    return row ? { id: text(row, "id"), email: text(row, "email"), displayName: text(row, "display_name"), status: text(row, "status") as import("./types").User["status"], createdAt: text(row, "created_at") } : null;
+    return row ? { id: text(row, "id"), email: text(row, "email"), displayName: text(row, "display_name"), phone: maybeText(row,"phone"), status: text(row, "status") as import("./types").User["status"], createdAt: text(row, "created_at") } : null;
   }
   async listMembershipsForUser(organizationId: OpsId, userId: OpsId) {
     return (await this.all("SELECT * FROM ops_memberships WHERE organization_id = ? AND user_id = ? ORDER BY id", [organizationId, userId])).map(row => ({ id: text(row, "id"), organizationId: text(row, "organization_id"), userId: text(row, "user_id"), role: text(row, "role") as Membership["role"], status: text(row, "status") as Membership["status"], createdAt: text(row, "created_at") }));
@@ -703,6 +703,7 @@ class SqlOpsRepository implements OpsRepository {
       clauses.push("s.search_text LIKE ?");
       params.push(`%${query}%`);
     }
+    const totals=await this.first(`SELECT COUNT(*) AS total_count FROM ops_stores s WHERE ${clauses.join(" AND ")}`, [...params]);
     addKeysetCursor(clauses, params, request.cursor, "s.store_number", "s.id", "asc");
     const max = limit(request.limit);
     params.push(max + 1, offset(request.offset));
@@ -715,7 +716,7 @@ class SqlOpsRepository implements OpsRepository {
     const visibleRows = rows.slice(0, max);
     const items = visibleRows.map((row): StoreSearchRow => ({ id: text(row, "id"), storeNumber: text(row, "store_number"), name: text(row, "name"), regionName: maybeText(row, "region_name"), formattedAddress: formatAddress(storeFrom(row)), openWorkCount: Number(row.open_work_count ?? 0), activeVisitCount: Number(row.active_visit_count ?? 0), recordedCostMinor: Number(row.recorded_cost_minor ?? 0), currency: "USD" }));
     const last = visibleRows.at(-1);
-    return { items, nextCursor: rows.length > max && last ? encodeCursor(text(last, "store_number"), text(last, "id")) : undefined };
+    return { items, totalCount:Number(totals?.total_count??0), nextCursor: rows.length > max && last ? encodeCursor(text(last, "store_number"), text(last, "id")) : undefined };
   }
 
   async searchAssets(scope: OrganizationScope, search: string, request: PageRequest = {}) {
@@ -723,6 +724,7 @@ class SqlOpsRepository implements OpsRepository {
     const clauses = [scopeWhere(scope, "s", params)];
     const assetTerms = searchTerms(search);
     if (assetTerms.length) clauses.push(likeAnySearchTerm("lower(a.asset_tag || ' ' || a.name || ' ' || a.category_key || ' ' || COALESCE(a.manufacturer,'') || ' ' || COALESCE(a.model,'') || ' ' || COALESCE(a.serial_number,'') || ' ' || s.search_text)", assetTerms, params));
+    const totals=await this.first(`SELECT COUNT(*) AS total_count FROM ops_assets a JOIN ops_stores s ON s.organization_id = a.organization_id AND s.id = a.store_id WHERE ${clauses.join(" AND ")}`, [...params]);
     addKeysetCursor(clauses, params, request.cursor, "a.asset_tag", "a.id", "asc");
     const max = limit(request.limit);
     params.push(max + 1, offset(request.offset));
@@ -745,7 +747,7 @@ class SqlOpsRepository implements OpsRepository {
       status: text(row, "status"),
     }));
     const last = visibleRows.at(-1);
-    return { items, nextCursor: rows.length > max && last ? encodeCursor(text(last, "asset_tag"), text(last, "id")) : undefined };
+    return { items, totalCount:Number(totals?.total_count??0), nextCursor: rows.length > max && last ? encodeCursor(text(last, "asset_tag"), text(last, "id")) : undefined };
   }
 
   /** Only zone metadata crosses into JS; matching records/counts/paging remain native SQL. */
@@ -773,11 +775,18 @@ class SqlOpsRepository implements OpsRepository {
     return JSON.stringify(dates);
   }
 
-  private async workOrderRows(scope: OrganizationScope, query: WorkOrderListQuery & { workOrderId?: OpsId; assetId?: OpsId; unbounded?: boolean; countOnly?: boolean; scheduleZoneDatesJson?: string } = {}) {
+  private async workOrderRows(scope: OrganizationScope, query: WorkOrderListQuery & { workOrderId?: OpsId; assetId?: OpsId; unbounded?: boolean; countOnly?: boolean; dayCounts?: boolean; scheduleZoneDatesJson?: string } = {}) {
     const params: unknown[] = []; const storeScope = scopeWhere(scope, "s", params); const clauses = [storeScope];
     if (query.storeId) { clauses.push("w.store_id = ?"); params.push(query.storeId); }
     if (query.regionId) { clauses.push("s.region_id = ?"); params.push(query.regionId); }
     if (query.vendorId) { clauses.push("a.vendor_id = ?"); params.push(query.vendorId); }
+    if (query.dispatchQueue) clauses.push("(p.id IS NULL OR p.precision='week' OR COALESCE(a.internal_target,'person') <> 'person' OR a.internal_membership_id IS NULL)");
+    if (query.dispatchUnassigned) clauses.push("(COALESCE(a.internal_target,'person') <> 'person' OR a.internal_membership_id IS NULL)");
+    if (query.dispatchBoardWeek) { clauses.push("(p.week=? OR p.id IS NULL OR p.precision='week' OR COALESCE(a.internal_target,'person') <> 'person' OR a.internal_membership_id IS NULL)"); params.push(query.dispatchBoardWeek); }
+    if (query.dispatchBucket === "unassigned") clauses.push("(COALESCE(a.internal_target,'person') <> 'person' OR a.internal_membership_id IS NULL)");
+    if (query.dispatchBucket === "parts") clauses.push("w.status='waiting_on_parts'");
+    if (query.dispatchBucket === "reported") clauses.push("w.status IN ('completed_pending_review','resolved')");
+    if (query.dispatchBucket === "late") { clauses.push("w.due_at < ? AND w.status NOT IN ('completed_pending_review','resolved','closed','cancelled')"); params.push(query.dispatchAt ?? new Date().toISOString()); }
     if(query.scheduleExcludeWeek){clauses.push("p.week <> ?");params.push(query.scheduleExcludeWeek);}
     if(query.dispatchReadiness) {
       const waiting="(w.status IN ('waiting_on_parts','waiting_on_vendor') OR COALESCE(p.tentative,0)=1 OR EXISTS (SELECT 1 FROM ops_follow_ups f WHERE f.organization_id=w.organization_id AND f.work_order_id=w.id AND f.status='open') OR EXISTS (SELECT 1 FROM ops_workflow_tasks t WHERE t.organization_id=w.organization_id AND t.work_order_id=w.id AND t.source_follow_up_id IS NOT NULL AND t.status IN ('open','in_progress')))";
@@ -867,7 +876,7 @@ class SqlOpsRepository implements OpsRepository {
     const workTerms = searchTerms(query.search);
     if (workTerms.length) clauses.push(containsAnySearchTerm("lower(w.number || ' ' || w.problem || ' ' || s.search_text || ' ' || COALESCE(v.name,'') || ' ' || COALESCE(iu.display_name,''))", workTerms, params, this.driver.dialect));
     if (query.workOrderId) { clauses.push("w.id = ?"); params.push(query.workOrderId); }
-    if(query.countOnly)return this.all(`SELECT COUNT(*) AS total_count
+    if(query.countOnly)return this.all(`SELECT ${query.dayCounts ? "a.internal_membership_id, MAX(iu.display_name) AS membership_name, p.day, COUNT(*) AS total_count" : "COUNT(*) AS total_count"}
       FROM ops_work_orders w JOIN ops_stores s ON s.organization_id = w.organization_id AND s.id = w.store_id
       LEFT JOIN ops_work_order_assignments a ON a.id = (SELECT aa.id FROM ops_work_order_assignments aa WHERE aa.organization_id = w.organization_id AND aa.work_order_id = w.id ORDER BY CASE WHEN aa.status IN ('pending','issued','opened','accepted') THEN 0 ELSE 1 END, aa.assigned_at DESC, aa.id DESC LIMIT 1)
       LEFT JOIN ops_internal_schedules p ON p.organization_id=w.organization_id AND p.id=w.internal_schedule_id AND p.work_order_id=w.id AND p.assignment_id=a.id AND a.kind='internal'
@@ -876,11 +885,12 @@ class SqlOpsRepository implements OpsRepository {
       LEFT JOIN ops_users iu ON iu.id = im.user_id
       LEFT JOIN ops_work_order_visit_holds h ON h.id = (SELECT hh.id FROM ops_work_order_visit_holds hh WHERE hh.organization_id = w.organization_id AND hh.work_order_id = w.id AND hh.status = 'active' ORDER BY hh.created_at DESC, hh.id DESC LIMIT 1)
       LEFT JOIN ops_assets ast ON ast.organization_id = w.organization_id AND ast.id = w.asset_id
-      WHERE ${clauses.join(" AND ")}`,params);
+      WHERE ${clauses.join(" AND ")}${query.dayCounts ? " GROUP BY a.internal_membership_id, p.day" : ""}`,params);
+    const activityRank="COALESCE((SELECT MAX(ae.occurred_at) FROM ops_audit_events ae WHERE ae.organization_id=w.organization_id AND ae.aggregate_type='work_order' AND ae.aggregate_id=w.id),w.created_at)";
     const priorityRank="CASE w.priority WHEN 'emergency' THEN 3 WHEN 'urgent' THEN 2 WHEN 'routine' THEN 1 ELSE 0 END";
-    if(query.internalOnly && query.cursor !== undefined){
+    if(query.internalOnly && !query.activityOrder && query.cursor !== undefined){
       try{const parts=query.cursor.split('|').map(decodeURIComponent);if(parts.length!==3||!parts.every(Boolean)||!/^[0-3]$/.test(parts[0]!))clauses.push("1=0");else{const [rank,created,id]=parts;clauses.push(`(${priorityRank} < ? OR (${priorityRank} = ? AND (w.created_at < ? OR (w.created_at = ? AND w.id < ?))))`);params.push(Number(rank),Number(rank),created,created,id);}}catch{clauses.push("1=0");}
-    }else if(!query.internalOnly)addKeysetCursor(clauses, params, query.cursor, "w.created_at", "w.id", "desc");
+    }else if(!query.internalOnly || query.activityOrder)addKeysetCursor(clauses, params, query.cursor, query.activityOrder ? "COALESCE((SELECT MAX(ae.occurred_at) FROM ops_audit_events ae WHERE ae.organization_id=w.organization_id AND ae.aggregate_type='work_order' AND ae.aggregate_id=w.id),w.created_at)" : "w.created_at", "w.id", "desc");
     if (!query.unbounded) params.push(limit(query.limit) + 1, offset(query.offset));
     const costSum = workCostSql("c", query);
     return await this.all(`SELECT w.*, p.id AS plan_id, p.precision AS plan_precision, p.planning_zone AS plan_zone, p.week AS plan_week, p.day AS plan_day, p.starts_at AS plan_start, p.ends_at AS plan_end, p.entry_zone AS plan_entry_zone, p.tentative AS plan_tentative, p.duration_minutes AS plan_duration, (SELECT di.id FROM ops_inspections di WHERE di.organization_id=w.organization_id AND di.work_order_id=w.id ORDER BY di.id LIMIT 1) AS dispatch_inspection_id, (EXISTS (SELECT 1 FROM ops_follow_ups df WHERE df.organization_id=w.organization_id AND df.work_order_id=w.id AND df.status='open') OR EXISTS (SELECT 1 FROM ops_workflow_tasks dt WHERE dt.organization_id=w.organization_id AND dt.work_order_id=w.id AND dt.source_follow_up_id IS NOT NULL AND dt.status IN ('open','in_progress'))) AS dispatch_follow_up_open, EXISTS (SELECT 1 FROM ops_workflow_tasks ct WHERE ct.organization_id = w.organization_id AND ct.work_order_id = w.id AND ct.task_type = 'verify_repair' AND ct.status IN ('open','in_progress')) AS needs_confirmation, (SELECT MAX(ae.occurred_at) FROM ops_audit_events ae WHERE ae.organization_id = w.organization_id AND ae.aggregate_type = 'work_order' AND ae.aggregate_id = w.id) AS updated_at, s.store_number, s.name AS store_name, a.kind AS assignment_kind, a.id AS assignment_id, a.internal_target AS internal_target, a.internal_membership_id AS internal_membership_id, a.status AS assignment_status, a.vendor_id, v.name AS vendor_name, iu.display_name AS internal_assignee_name,
@@ -896,7 +906,7 @@ class SqlOpsRepository implements OpsRepository {
       LEFT JOIN ops_users iu ON iu.id = im.user_id
       LEFT JOIN ops_work_order_visit_holds h ON h.id = (SELECT hh.id FROM ops_work_order_visit_holds hh WHERE hh.organization_id = w.organization_id AND hh.work_order_id = w.id AND hh.status = 'active' ORDER BY hh.created_at DESC, hh.id DESC LIMIT 1)
       LEFT JOIN ops_assets ast ON ast.organization_id = w.organization_id AND ast.id = w.asset_id
-      WHERE ${clauses.join(" AND ")} ORDER BY ${query.internalOnly?`${priorityRank} DESC,`:""} w.created_at DESC, w.id DESC ${query.unbounded ? "" : "LIMIT ? OFFSET ?"}`, [...costSum.params, ...costSum.params, ...params]);
+      WHERE ${clauses.join(" AND ")} ORDER BY ${query.internalOnly && !query.activityOrder?`${priorityRank} DESC,`:""} ${query.activityOrder ? activityRank : "w.created_at"} DESC, w.id DESC ${query.unbounded ? "" : "LIMIT ? OFFSET ?"}`, [...costSum.params, ...costSum.params, ...params]);
   }
 
   private workListRow(row: Row): WorkOrderListRow { return { targetCompletionAt: maybeText(row,"target_completion_at"), targetCompletionSource: maybeText(row,"target_completion_source"), schedule: row.plan_id ? {id:text(row,"plan_id"),precision:text(row,"plan_precision") as import("./internal-schedule-types").InternalSchedule["precision"],planningZone:text(row,"plan_zone"),week:text(row,"plan_week"),day:maybeText(row,"plan_day"),startsAt:maybeText(row,"plan_start"),endsAt:maybeText(row,"plan_end"),entryZone:maybeText(row,"plan_entry_zone"),tentative:Number(row.plan_tentative)===1,durationMinutes:row.plan_duration == null ? undefined : Number(row.plan_duration)} : undefined, needsConfirmation: Boolean(row.needs_confirmation), hasOpenFollowUp: Boolean(row.dispatch_follow_up_open), id: text(row, "id"), number: text(row, "number"), storeId: text(row, "store_id"), storeNumber: text(row, "store_number"), storeName: text(row, "store_name"), problem: text(row, "problem"), categoryKey: maybeText(row, "category_key"), priority: text(row, "priority") as WorkOrderListRow["priority"], status: text(row, "status") as WorkOrderListRow["status"], version: Number(row.version ?? 0), assignmentId: maybeText(row, "assignment_id"), inspectionId: maybeText(row,"dispatch_inspection_id"), internalMembershipId: maybeText(row, "internal_membership_id"), internalTarget: (maybeText(row, "internal_target") ?? (text(row, "assignment_kind") === "internal" && maybeText(row, "internal_membership_id") ? "person" : undefined)) as WorkOrderListRow["internalTarget"], assignmentKind: (maybeText(row, "assignment_kind") ?? "choose_later") as WorkOrderListRow["assignmentKind"], assignmentStatus: maybeText(row, "assignment_status") as WorkOrderListRow["assignmentStatus"], vendorId: maybeText(row, "vendor_id"), vendorName: maybeText(row, "vendor_name"), ...(maybeText(row, "internal_assignee_name") ? { internalAssigneeName: maybeText(row, "internal_assignee_name") } : {}), internalAccountableParty: maybeText(row, "internal_accountable_party") ?? "Facilities coordinator", internalAccountableId: maybeText(row,"internal_accountable_id"), accountableParty: text(row, "accountable_party"), nextAction: text(row, "next_action"), dueAt: maybeText(row, "due_at"), updatedAt: maybeText(row, "updated_at"), createdAt: text(row, "created_at"), visitCount: Number(row.visit_count ?? 0), recordedCostLineCount: Number(row.recorded_cost_line_count ?? 0), recordedCostMinor: Number(row.recorded_cost_minor ?? 0), currency: "USD", visitHoldPosture: maybeText(row, "visit_hold_posture") as WorkOrderListRow["visitHoldPosture"], visitHoldDeadlineAt: maybeText(row, "visit_hold_deadline_at"), ...(maybeText(row, "asset_name") ? { assetName: maybeText(row, "asset_name"), assetTag: maybeText(row, "asset_tag") } : {}) }; }
@@ -904,7 +914,12 @@ class SqlOpsRepository implements OpsRepository {
   async listWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery = {}) {
     const scheduleZoneDatesJson=query.scheduleAt && ["today","upcoming","replan"].includes(query.scheduleView??"") ? await this.scheduleZoneDates(scope,query.scheduleAt) : undefined;
     const nativeQuery={...query,scheduleZoneDatesJson};
-    const [rows,count] = await Promise.all([this.workOrderRows(scope, nativeQuery),query.internalOnly ? this.workOrderRows(scope,{...nativeQuery,countOnly:true}) : Promise.resolve(undefined)]); const max = limit(query.limit); const visibleRows = rows.slice(0, max); const items = visibleRows.map((row) => ({ ...this.workListRow(row), currency: query.currency ?? "USD" })); const last = visibleRows.at(-1); return { items, ...(count?{totalCount:Number(count[0]?.total_count??0)}:{}), nextCursor: rows.length > max && last ? query.internalOnly ? `${({emergency:3,urgent:2,routine:1,planned:0} as Record<string,number>)[text(last,"priority")]??0}|${encodeCursor(text(last, "created_at"), text(last, "id"))}` : encodeCursor(text(last, "created_at"), text(last, "id")) : undefined };
+    const [rows,count] = await Promise.all([this.workOrderRows(scope, nativeQuery),query.internalOnly || query.activityOrder ? this.workOrderRows(scope,{...nativeQuery,countOnly:true}) : Promise.resolve(undefined)]); const max = limit(query.limit); const visibleRows = rows.slice(0, max); const items = visibleRows.map((row) => ({ ...this.workListRow(row), currency: query.currency ?? "USD" })); const last = visibleRows.at(-1); return { items, ...(count?{totalCount:Number(count[0]?.total_count??0)}:{}), nextCursor: rows.length > max && last ? query.internalOnly && !query.activityOrder ? `${({emergency:3,urgent:2,routine:1,planned:0} as Record<string,number>)[text(last,"priority")]??0}|${encodeCursor(text(last, "created_at"), text(last, "id"))}` : encodeCursor(query.activityOrder ? maybeText(last,"updated_at") ?? text(last,"created_at") : text(last,"created_at"), text(last, "id")) : undefined };
+  }
+
+  async getDispatchDayCounts(scope: OrganizationScope, query: WorkOrderListQuery) {
+    const rows = await this.workOrderRows(scope, { ...query, cursor: undefined, offset: undefined, countOnly: true, dayCounts: true });
+    return rows.map(row => ({ membershipId: maybeText(row, "internal_membership_id"), name: maybeText(row, "membership_name"), day: maybeText(row, "day"), count: Number(row.total_count) }));
   }
 
   async getHeldWorkPortfolioSummary(scope: OrganizationScope) {

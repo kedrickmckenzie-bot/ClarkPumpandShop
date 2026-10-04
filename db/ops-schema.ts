@@ -53,6 +53,7 @@ export const opsComponentTemplates = sqliteTable("ops_component_templates", {
 }, (table) => [uniqueIndex("uidx_ops_component_templates_org_equipment_parent_name").on(table.organizationId, table.equipmentTemplateId, table.parentComponentTemplateId, table.name), index("idx_ops_component_templates_org_equipment_sort").on(table.organizationId, table.equipmentTemplateId, table.sortOrder)]);
 
 export const opsStores = sqliteTable("ops_stores", {
+  phone: text("phone"), accessNotes: text("access_notes"), accessNotesVersion: integer("access_notes_version").notNull().default(0),
   id: id(), organizationId: organizationId(), divisionId: text("division_id"), regionId: text("region_id"), storeNumber: text("store_number").notNull(), name: text("name").notNull(),
   address1: text("address_1").notNull(), address2: text("address_2"), city: text("city").notNull(), state: text("state").notNull(), postalCode: text("postal_code").notNull(),
   aliasesJson: text("aliases_json").notNull().default("[]"), searchText: text("search_text").notNull(), latitudeE6: integer("latitude_e6"), longitudeE6: integer("longitude_e6"),
@@ -65,6 +66,7 @@ export const opsStores = sqliteTable("ops_stores", {
 ]);
 
 export const opsUsers = sqliteTable("ops_users", {
+  phone: text("phone"),
   id: id(), email: text("email").notNull(), displayName: text("display_name").notNull(), status: text("status").notNull().default("active"), createdAt: createdAt(),
 }, (table) => [uniqueIndex("uidx_ops_users_email").on(table.email)]);
 

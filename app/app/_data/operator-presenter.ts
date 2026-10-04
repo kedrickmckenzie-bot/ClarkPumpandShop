@@ -1317,12 +1317,12 @@ const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
 
 const listMeta: Record<OperatorListRoute, { title: string; eyebrow: string; description: string; placeholder?: string }> = {
   "action-center": { title: "Needs attention", eyebrow: "Review queue", description: "This is your to-do list. Start at the top, open an item, and take the next step.", placeholder: "Search this list" },
-  requests: { title: "Service requests", eyebrow: "Reported issues", description: "Review what store teams reported, then create work, escalate it, or close it without changing the original report.", placeholder: "Search problem, reporter, request, or store" },
+  requests: { title: "Requests", eyebrow: "Reported issues", description: "Review what store teams reported, then create work, escalate it, or close it without changing the original report.", placeholder: "Search problem, reporter, request, or store" },
   "work-orders": { title: "Work orders", eyebrow: "Maintenance work", description: "Track internal and outside service from creation through visits, follow-up, and recorded cost.", placeholder: "Search number, problem, store, vendor, or category" },
-  estimates: { title: "Quote requests", eyebrow: "Request pricing", description: "Ask one or more vendors for pricing without creating duplicate work orders, visits, or costs.", placeholder: "Search work order, store, vendor, scope, or amount" },
+  estimates: { title: "Quotes", eyebrow: "Request pricing", description: "Ask one or more vendors for pricing without creating duplicate work orders, visits, or costs.", placeholder: "Search work order, store, vendor, scope, or amount" },
   visits: { title: "Service visits", eyebrow: "Observed service", description: "See who arrived, why, the evidence captured, and which visits need review—without treating presence as certified labor.", placeholder: "Search technician, vendor, store, or work order" },
   stores: { title: "Stores", eyebrow: "Operating network", description: "Find any location by store number, address, name, city, or alias and open its maintenance history.", placeholder: "Search store number, name, address, city, or alias" },
-  vendors: { title: "Approved vendors", eyebrow: "Vendor network", description: "Search by name, specialty, plain-language alias, equipment type, and coverage.", placeholder: "Search vendor, plumber, refrigeration, dispenser, or equipment" },
+  vendors: { title: "Vendors", eyebrow: "Vendor network", description: "Search by name, specialty, plain-language alias, equipment type, and coverage.", placeholder: "Search vendor, plumber, refrigeration, dispenser, or equipment" },
   invoices: { title: "Invoice review", eyebrow: "Optional invoice check", description: "Compare manually entered invoices with work orders and visits. Payment still happens in your accounting system.", placeholder: "Search invoice, work order, vendor, or store" },
   reports: { title: "Reports", eyebrow: "Share and archive", description: "Open live reports, see the records behind them, and export the view you need.", placeholder: "Search report name or definition" },
   admin: { title: "Setup", eyebrow: "Company setup", description: "Manage stores, approved vendors, service areas, and reusable equipment templates.", placeholder: "Search stores, vendors, service areas, or equipment templates" },
@@ -2353,7 +2353,7 @@ export function buildVendorPerformanceListModel(
   const recordedCostMinor = vendors.reduce((total, vendor) => total + vendor.recordedCostMinor, 0);
 
   return {
-    title: "Vendor network",
+    title: "Vendors",
     description: "Find an approved vendor, see where they work and what they handle, then open the jobs, visits, follow-ups, and costs behind each number.",
     scopeLabel: session.scopeLabel,
     updatedLabel: `Through ${date(fixture.asOf)}`,
@@ -3414,7 +3414,7 @@ export function buildProgramModel(
     ];
     return {
       state: { kind: "ready" },
-      page: { title: selectedComponent?.name ?? selectedAsset?.name ?? selectedPath.at(-1) ?? (selectedCategory ? sentence(selectedCategory) : "Maintenance spend"), eyebrow: "Actual spend visibility", description: "See where maintenance money goes. Open any total to see the work behind it.", scopeLabel: `${activeScopeLabel} · ${hierarchyLabel} · ${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"}`, periodLabel: period.label, updatedLabel: `Through ${date(fixture.asOf)}`, secondaryAction: upHref ? { label: "Up one level", href: upHref } : undefined },
+      page: { title: selectedComponent?.name ?? selectedAsset?.name ?? selectedPath.at(-1) ?? (selectedCategory ? sentence(selectedCategory) : "Spending"), eyebrow: "Actual spend visibility", description: "See where maintenance money goes. Open any total to see the work behind it.", scopeLabel: `${activeScopeLabel} · ${hierarchyLabel} · ${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"}`, periodLabel: period.label, updatedLabel: `Through ${date(fixture.asOf)}`, secondaryAction: upHref ? { label: "Up one level", href: upHref } : undefined },
       filters,
       metrics: [
         { id: "total", label: basis === "recorded" ? "Recorded work cost" : "Linked invoice amount", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} entered source lines` : `${invoiceAmountByWork.size} work orders with confirmed allocations`, link: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open exact source records" } },

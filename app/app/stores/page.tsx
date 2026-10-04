@@ -1,3 +1,5 @@
+import { TechnicianList } from "@/lib/server/technician-tools";
+import { loadOperatorSession } from "../_data/operator-loader";
 import type { Metadata } from "next";
 import { ListSurface } from "@/components/ops/views";
 import { loadListModel } from "../_data/operator-loader";
@@ -7,5 +9,6 @@ type Query = Record<string, string | string[] | undefined>;
 
 export default async function StoresPage({ searchParams }: { searchParams: Promise<Query> }) {
   const params = await searchParams;
+  if((await loadOperatorSession()).role==="technician")return <TechnicianList kind="stores" query={Object.fromEntries(Object.entries(params).map(([key,value])=>[key,Array.isArray(value)?value[0]:value]))}/>;
   return <ListSurface model={await loadListModel("stores", params)} surface="stores" searchParams={params} />;
 }

@@ -7,6 +7,7 @@ import { internalDispatchScope } from "./internal-dispatch-context";
 import type { WorkOrderListQuery } from "@/lib/ops/repository";
 import { calendarDate, civilDate, mondayOf } from "@/lib/ops/dispatch-calendar";
 import { addCalendarDays } from "@/lib/ops/internal-schedule-types";
+import { renderDispatchBoard } from "./dispatch-board-page";
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -14,6 +15,7 @@ const openStatuses: NonNullable<WorkOrderListQuery["statuses"]> = ["approved", "
 
 /** Manager Dispatch board (technician = false) and the technician's My work page. */
 export async function renderInternalDispatch(query: Query, technician: boolean) {
+  if (!technician) return renderDispatchBoard(query);
   let context;
   try {
     context = await getOpsRequestContext(technician ? ["technician"] : ["facilities", "regional", "executive"]);
@@ -89,8 +91,10 @@ export async function renderInternalDispatch(query: Query, technician: boolean) 
     technician ? { people: [], regions: [] } : context.repository.getDispatchFilters(scope),
   ]);
 
+  const visibleStores=[...new Set([page,heldPage,planned,replan,review,unscheduled].flatMap(list=>list?.items.map(row=>row.storeId)??[]))];
+  const storeZones=Object.fromEntries(await Promise.all(visibleStores.map(async id=>[id,(await context.repository.getStore(scope.organizationId,id))?.timeZone??zone])));
   const saved = first("saved") ? { number: first("saved")!.slice(0, 40), when: (first("savedWhen") ?? "").slice(0, 80) } : undefined;
-  return <InternalPlanningWorkspace session={context.session} technician={technician} view={view} search={search} week={week} today={today}
+  return <InternalPlanningWorkspace organizationZone={zone} storeZones={storeZones} session={context.session} technician={technician} view={view} search={search} week={week} today={today}
     readiness={readiness} person={person} region={region} storeId={filter.storeId} saved={saved}
     page={page} heldPage={heldPage} planned={planned} replan={replan} review={review} unscheduled={unscheduled} filters={filters}
     links={{

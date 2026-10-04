@@ -2,6 +2,7 @@ import { cachedDateTimeFormat } from "./intl-format-cache";
 import { OpsDomainError } from "./errors";
 import { addCalendarDays, type ScheduleProjection } from "./internal-schedule-types";
 import { formatOperationsDate, formatOperationsDateTime } from "./local-time";
+import { dispatchTime } from "./dispatch-board";
 
 export function calendarDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value + "T12:00:00Z")) || new Date(value + "T12:00:00Z").toISOString().slice(0, 10) !== value) throw new OpsDomainError("VALIDATION", "Choose a valid calendar date.");
@@ -51,12 +52,12 @@ export function scheduleLabel(plan?: ScheduleProjection) {
 }
 
 /** Plain wording for a job's plan, used on lists and in the "Saved" note. */
-export function plainScheduleLabel(plan?: Pick<ScheduleProjection, "precision" | "week" | "day" | "startsAt" | "entryZone" | "tentative">) {
+export function plainScheduleLabel(plan?: Pick<ScheduleProjection, "precision" | "week" | "day" | "startsAt" | "entryZone" | "tentative">, organizationZone = plan?.entryZone ?? "America/New_York") {
   if (!plan || plan.precision === "removed") return "Not scheduled";
   const label = plan.precision === "week"
     ? `Week of ${formatOperationsDate(plan.week)}`
     : plan.precision === "appointment" && plan.startsAt
-      ? formatOperationsDateTime(plan.startsAt, plan.entryZone)
+      ? dispatchTime(plan.startsAt, plan.entryZone ?? organizationZone, organizationZone)
       : `${formatOperationsDate(plan.day ?? plan.week)}, any time`;
   return plan.tentative ? `${label} (not confirmed)` : label;
 }
@@ -65,7 +66,7 @@ const plainActions: Record<string, string> = {
   "Begin internal work": "Ready to work",
   "Arrange team pickup": "Needs a technician",
   "Arrange internal work": "Manager to assign",
-  "Wait for a suitable internal visit": "Do on the next visit",
+  "Wait for a suitable internal visit": "Do on next visit",
   "Complete planned internal work": "Do the planned work",
   "Arrange remaining internal work": "Plan the rest of the work",
   "Confirm work was completed as expected": "Confirm the work is done",

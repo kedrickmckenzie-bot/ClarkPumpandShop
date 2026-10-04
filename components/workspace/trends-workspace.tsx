@@ -379,7 +379,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
   return (
     <div className={styles.workspace}>
       <header className={styles.pageHeader}>
-        <div><p>{model.activeView === "planning" ? "Spending & planning" : model.page.eyebrow}</p><h1>{model.activeView === "planning" ? "Plan upcoming work" : model.activeView === "overview" ? "Spending overview" : model.page.title}</h1><span>{model.activeView === "planning" ? "Price open jobs. Review maintenance and replacement decisions." : "Costs, work, and changes over time."}</span></div>
+        <div><p>{model.activeView === "planning" ? "Spending & planning" : model.page.eyebrow}</p><h1>{model.activeView === "planning" ? "Plan upcoming work" : model.activeView === "overview" ? "Trends" : model.page.title}</h1><span>{model.activeView === "planning" ? "Price open jobs. Review maintenance and replacement decisions." : "Costs, work, and changes over time."}</span></div>
         {model.page.secondaryAction ? <Link className={styles.secondaryButton} href={model.page.secondaryAction.href}>{model.page.secondaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </header>
 

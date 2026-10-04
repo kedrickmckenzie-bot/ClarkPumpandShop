@@ -1,3 +1,4 @@
+import {boardReadRegression,storeNotesRegression} from "./helpers/dispatch-redesign-regression";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { readdirSync,readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
@@ -39,7 +40,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
    if(adapter==="D1"){runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});const db=await runtime.getD1Database("DB");r=createOpsD1Repository(db as unknown as D1Database);execute=sql=>db.prepare(sql).run();}
    else{const url=new URL(postgresUrl!);if(!["localhost","127.0.0.1"].includes(url.hostname)||!/^\/dispatch_.*test$/.test(url.pathname))throw Error("Disposable localhost database required.");databaseName="dispatch_"+crypto.randomUUID().replaceAll("-","")+"_test";const admin=new Pool({connectionString:postgresUrl});try{await admin.query("CREATE DATABASE "+databaseName);}finally{await admin.end();}url.pathname="/"+databaseName;pool=new Pool({connectionString:url.toString(),max:8});r=createOpsPostgresRepository(pool);execute=sql=>pool!.query(sql);}
    for(const file of files.filter(f=>f<boundary))for(const sql of readFileSync(folder+"/"+file,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await execute(sql);
-   await seedOpsRepository(r,fixture);
+   await seedOpsRepository(r,fixture,[],{omitStoreContacts:true});
    for(const file of files.filter(f=>f>=boundary))for(const sql of readFileSync(folder+"/"+file,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await execute(sql);
   }
  },120000);
@@ -92,8 +93,8 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
  it("preserves optional target and next-action deadline through moves and explicit conflict acknowledgement",async()=>{
   const job=await dispatchJob(r,"person");
   await setInternalCompletionTarget(dispatchServices(r),{organizationId:dispatchOrg,workOrderId:job.id,actor:dispatchActor(),expectedVersion:0,key:crypto.randomUUID(),localTarget:"2026-10-07T17:00",reason:"Store reopening"});
-  await expect(save(job.id,{precision:"week",date:"2026-10-05"})).rejects.toThrow(/uncertain/);
-  await expect(save(job.id,{date:"2026-10-08"})).rejects.toThrow(/after Target/);
+  await expect(save(job.id,{precision:"week",date:"2026-10-05"})).rejects.toThrow(/finish-by date/);
+  await expect(save(job.id,{date:"2026-10-08"})).rejects.toThrow(/After the finish-by date/);
   await save(job.id,{date:"2026-10-08",keepConflicts:true});
   expect((await r.getWorkOrder(dispatchOrg,job.id))).toMatchObject({dueAt:job.dueAt,targetCompletionAt:"2026-10-07T21:00:00.000Z",targetCompletionSource:"manager:membership-northline-facilities"});
   await expect(setInternalCompletionTarget(dispatchServices(r),{organizationId:dispatchOrg,workOrderId:job.id,actor:dispatchActor(dispatchTech[0]),expectedVersion:2,key:crypto.randomUUID(),reason:"Forged"})).rejects.toMatchObject({code:"FORBIDDEN"});
@@ -178,7 +179,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
  it("retains required follow-ups when a manager reviews tentative waiting work",async()=>{
   const job=await dispatchJob(r,"person");await createFollowUp(dispatchServices(r),{organizationId:dispatchOrg,workOrderId:job.id,actor:dispatchActor(),accountableParty:"Chris Delgado",nextAction:"Confirm safe access",dueAt:"2026-10-06T18:00:00.000Z",escalationTo:"Facilities"});
   const tasks=await r.listWorkflowTasksForWorkOrder(dispatchOrg,job.id),before=await r.getWorkOrder(dispatchOrg,job.id);
-  await expect(save(job.id)).rejects.toThrow(/blocker/);
+  await expect(save(job.id)).rejects.toThrow(/Review what is needed/);
   await save(job.id,{tentative:true,reviewReason:"Tentative until safe access is confirmed"});
   expect(await r.listWorkflowTasksForWorkOrder(dispatchOrg,job.id)).toEqual(tasks);expect((await r.getWorkOrder(dispatchOrg,job.id))?.dueAt).toBe(before?.dueAt);
   expect((await r.listWorkOrders({organizationId:dispatchOrg},{internalOnly:true,search:job.problem,dispatchReadiness:"ready"})).items).toHaveLength(0);
@@ -248,8 +249,8 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
  it("warns for exact overlap or unknown duration without claiming free capacity",async()=>{
   const one=await dispatchJob(r,"person"),two=await dispatchJob(r,"person");
   await save(one.id,{precision:"appointment",localStart:"2026-10-09T10:00",durationMinutes:60,keepConflicts:true});
-  await expect(save(two.id,{precision:"appointment",localStart:"2026-10-09T10:30",durationMinutes:30})).rejects.toThrow(/overlaps/);
-  await expect(save(two.id,{precision:"appointment",localStart:"2026-10-09T11:30"})).rejects.toThrow(/unknown/);
+  await expect(save(two.id,{precision:"appointment",localStart:"2026-10-09T10:30",durationMinutes:30})).rejects.toThrow(/Overlaps/);
+  await expect(save(two.id,{precision:"appointment",localStart:"2026-10-09T11:30"})).rejects.toThrow(/no time estimate/);
   await save(two.id,{precision:"appointment",localStart:"2026-10-09T11:30",keepConflicts:true});
  });
  it("queues targeted updates and suppresses obsolete schedule notices before delivery",async()=>{
@@ -314,4 +315,6 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   expect((await r.getWorkOrder(dispatchOrg,job.id))?.version).toBe(1);
   expect((await r.listInternalSchedules(dispatchOrg,job.id)).length).toBeLessThanOrEqual(1);
  });
+ it("counts and pages the new board and operational history without crossing scope",async()=>boardReadRegression(r),30000);
+ it("saves store access notes with scoped permission, retries, races and rollback",async()=>storeNotesRegression(r),30000);
 });

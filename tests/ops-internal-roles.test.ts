@@ -38,7 +38,7 @@ describe("technician role", () => {
 
   it("has a short menu that opens on their own open jobs", () => {
     const nav = navigationForRole("technician");
-    expect(nav.map((item) => item.label)).toEqual(["My work", "Stores", "Equipment"]);
+    expect(nav.map((item) => item.label)).toEqual(["My work", "Stores", "Equipment", "Work history", "Search"]);
     expect(nav[0].href).toBe("/app/my-work");
     expect(sessionRoleLabel(technician)).toBe("Technician");
   });

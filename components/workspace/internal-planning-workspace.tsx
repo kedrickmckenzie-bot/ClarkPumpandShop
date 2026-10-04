@@ -10,12 +10,12 @@ import styles from "./internal-dispatch.module.css";
 type Filters = { people: { id: string; name: string }[]; regions: { id: string; name: string }[] };
 
 export function InternalPlanningWorkspace(props: {
-  session: OperatorSession; technician: boolean; view: string; search: string; week: string; today: string; readiness: string;
+  session: OperatorSession; organizationZone?:string; storeZones?:Record<string,string>; technician: boolean; view: string; search: string; week: string; today: string; readiness: string;
   person?: string; region?: string; storeId?: string; saved?: { number: string; when: string };
   page: WorkOrderListPage; heldPage?: WorkOrderListPage; planned?: WorkOrderListPage; replan?: WorkOrderListPage;
   review?: WorkOrderListPage; unscheduled?: WorkOrderListPage; links: Record<string, string | undefined>; filters: Filters;
 }) {
-  const { session, technician, view, search, week, today, readiness, person, region, storeId, saved, page, heldPage, planned, replan, review, unscheduled, links, filters } = props;
+  const { session, organizationZone, storeZones, technician, view, search, week, today, readiness, person, region, storeId, saved, page, heldPage, planned, replan, review, unscheduled, links, filters } = props;
   const base = technician ? "/app/my-work" : "/app/dispatch";
   const query = new URLSearchParams({ view, q: search, week, readiness, ...(person ? { person } : {}), ...(region ? { region } : {}), ...(storeId ? { store: storeId } : {}) });
   const href = (key: string, value: string) => {
@@ -30,15 +30,16 @@ export function InternalPlanningWorkspace(props: {
     : [["all", "All team work"], ["pool", "Needs a technician"], ["person", "Assigned"], ["awaiting_allocation", "Manager to assign"]];
   const filtering = Boolean(search || readiness !== "all" || person || region);
   const thisWeek = mondayOf(today);
+  const showUpcoming = technician && view==="today" && !(planned?.totalCount??planned?.items.length) && !(unscheduled?.totalCount??unscheduled?.items.length) && !(replan?.totalCount??replan?.items.length) && Boolean(page.totalCount??page.items.length);
   const section = (title: string, list: WorkOrderListPage, extra: { hint?: string; empty?: React.ReactNode; next?: string; groupByDay?: boolean } = {}) =>
     <InternalJobSection title={title} hint={extra.hint} page={list} session={session} technician={technician} returnTo={returnTo}
-      week={technician ? undefined : week} empty={extra.empty} nextHref={extra.next} groupByDay={extra.groupByDay}/>;
+      organizationZone={organizationZone} storeZones={storeZones} week={technician ? undefined : week} empty={extra.empty} nextHref={extra.next} groupByDay={extra.groupByDay}/>;
 
   return <div className={styles.workspace}>
     <header className={styles.header}>
       <div>
         <h1>{technician ? "My work" : "Dispatch"}</h1>
-        <p>{technician ? "Your jobs, and team jobs you can take." : "Plan and assign work for your maintenance team."}</p>
+        {!technician ? <p>Plan and assign work for your maintenance team.</p> : null}
       </div>
       {!technician ? <Link className={`${styles.btn} ${styles.btnSecondary}`} href="/app/work-orders?status=open">All open work orders</Link> : null}
     </header>
@@ -56,6 +57,32 @@ export function InternalPlanningWorkspace(props: {
       {week !== thisWeek ? <Link href={href("week", thisWeek)}>Back to this week</Link> : null}
     </div> : null}
 
+    {storeId ? <p className={styles.muted}>Showing one store. <Link href={`/app/stores/${encodeURIComponent(storeId)}`}>Open store</Link> · <Link href={base}>Show all stores</Link></p> : null}
+
+    {technician ? <>
+      {showUpcoming ? section("Coming up",page,{groupByDay:true,next:links.backlog}) : planned ? section(view === "today" ? "Today" : "Coming up", planned, {
+        groupByDay: view === "upcoming",
+        empty: view === "today" ? (unscheduled?.items.length ? "Nothing is scheduled for today. Your other jobs are below." : "Nothing is scheduled for today.") : "Nothing is scheduled yet.",
+        next: links.planned,
+      }) : null}
+      {replan?.totalCount ? section("Missed: pick a new date", replan, { hint: "The planned day passed and the work isn't done.", next: links.replan }) : null}
+      {unscheduled && !showUpcoming ? section("My jobs without a date", unscheduled, {
+        hint: "Most urgent first.",
+        empty: <>No other jobs assigned to you. <Link href={href("view", "pool")}>See jobs to take →</Link></>,
+        next: links.unscheduled,
+      }) : null}
+      {["mine", "pool"].includes(view) ? section(view === "pool" ? "Jobs you can take" : "My jobs", page, {
+        empty: view === "pool" ? "No team jobs to take right now." : <>No jobs assigned to you. <Link href={href("view", "pool")}>See jobs to take →</Link></>,
+        next: links.backlog,
+      }) : null}
+      {heldPage ? section("When you're nearby", heldPage, { hint: "Do these on a visit to that store. No special trip needed.", empty: "Nothing waiting for a nearby visit.", next: links.held }) : null}
+      <p><Link className={`${styles.btn} ${styles.btnSecondary}`} href="/app/my-work/check-in">At a store for a job that isn&apos;t listed? Check in</Link></p>
+    </> : <>
+      {planned ? section("Scheduled this week", planned, { groupByDay: true, empty: "Nothing is scheduled this week.", next: links.planned }) : null}
+      {replan?.totalCount ? section("Missed: pick a new date", replan, { hint: "The planned day passed and the work isn't done.", next: links.replan }) : null}
+      {review?.totalCount ? section("Reported done, needs a check", review, { hint: "A technician says these are finished.", next: links.review }) : null}
+      {section("Not scheduled yet", page, { hint: "Most urgent first.", empty: search ? "No jobs match this search." : "Every team job has a date.", next: links.backlog })}
+    </>}
     <details className={styles.filters} open={filtering}>
       <summary>{filtering ? "Search and filters (on)" : "Search and filters"}</summary>
       <form className={styles.search} method="get">
@@ -67,7 +94,7 @@ export function InternalPlanningWorkspace(props: {
           <option value="all">Everything</option>
           <option value="ready">Ready to work</option>
           <option value="waiting">Waiting on something</option>
-          <option value="next_visit">Next visit is fine</option>
+          <option value="next_visit">Do on next visit</option>
         </select></label>
         {!technician ? <>
           <label>Technician<select name="person" defaultValue={person ?? ""}>
@@ -83,31 +110,5 @@ export function InternalPlanningWorkspace(props: {
         {filtering ? <Link className={`${styles.btn} ${styles.btnSecondary}`} href={technician ? `${base}?view=${view}` : `${base}?week=${week}`}>Clear</Link> : null}
       </form>
     </details>
-    {storeId ? <p className={styles.muted}>Showing one store. <Link href={`/app/stores/${encodeURIComponent(storeId)}`}>Open store</Link> · <Link href={base}>Show all stores</Link></p> : null}
-
-    {technician ? <>
-      {planned ? section(view === "today" ? "Today" : "Coming up", planned, {
-        groupByDay: view === "upcoming",
-        empty: view === "today" ? (unscheduled?.items.length ? "Nothing is scheduled for today. Your other jobs are below." : "Nothing is scheduled for today.") : "Nothing is scheduled yet.",
-        next: links.planned,
-      }) : null}
-      {replan?.totalCount ? section("Missed: pick a new date", replan, { hint: "The planned day passed and the work isn't done.", next: links.replan }) : null}
-      {unscheduled ? section("My jobs without a date", unscheduled, {
-        hint: "Most urgent first.",
-        empty: <>No other jobs assigned to you. <Link href={href("view", "pool")}>See jobs to take →</Link></>,
-        next: links.unscheduled,
-      }) : null}
-      {["mine", "pool"].includes(view) ? section(view === "pool" ? "Jobs you can take" : "My jobs", page, {
-        empty: view === "pool" ? "No team jobs to take right now." : <>No jobs assigned to you. <Link href={href("view", "pool")}>See jobs to take →</Link></>,
-        next: links.backlog,
-      }) : null}
-      {heldPage ? section("When you're nearby", heldPage, { hint: "Do these on a visit to that store. No special trip needed.", empty: "Nothing waiting for a nearby visit.", next: links.held }) : null}
-      <p><Link className={`${styles.btn} ${styles.btnSecondary}`} href="/app/my-work/check-in">At a store for a job that isn&apos;t listed? Check in</Link></p>
-    </> : <>
-      {planned ? section("Scheduled this week", planned, { groupByDay: true, empty: "Nothing is scheduled this week.", next: links.planned }) : null}
-      {replan?.totalCount ? section("Missed: pick a new date", replan, { hint: "The planned day passed and the work isn't done.", next: links.replan }) : null}
-      {review?.totalCount ? section("Done: check the work", review, { hint: "A technician says these are finished.", next: links.review }) : null}
-      {section("Not scheduled yet", page, { hint: "Most urgent first.", empty: search ? "No jobs match this search." : "Every team job has a date.", next: links.backlog })}
-    </>}
   </div>;
 }

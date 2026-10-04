@@ -28,7 +28,7 @@ export default async function OwnerBriefPage({ searchParams }: { searchParams: P
   return (
     <div className={styles.page}>
       <header className={styles.head}>
-        <h1>Owner brief</h1>
+        <h1>Overview</h1>
         <p className="brief-page-sub">Costs, work and decisions across your stores.</p>
       </header>
       <OperatingProblems rows={risks}/>

@@ -1,10 +1,11 @@
+import { dispatchPlanLabel, dispatchTime } from "@/lib/ops/dispatch-board";
 import Link from "next/link";
 import { RecordForm } from "@/components/ops/record-form";
 import { roleCan } from "@/components/ops/role-policy";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import type { WorkOrderListPage, WorkOrderListRow } from "@/lib/ops/view-models";
-import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
-import { plainNextAction, plainScheduleLabel } from "@/lib/ops/dispatch-calendar";
+import { formatOperationsDate } from "@/lib/ops/local-time";
+import { plainNextAction } from "@/lib/ops/dispatch-calendar";
 import { DispatchVersionFields } from "./internal-dispatch-fields";
 import { InternalAssignmentFields } from "./internal-assignment-fields";
 import styles from "./internal-dispatch.module.css";
@@ -20,7 +21,7 @@ export function jobStatus(row: WorkOrderListRow) {
   if (row.status === "waiting_on_vendor") return { text: "Waiting on vendor", tone: "wait" as const };
   if (["completed_pending_review", "resolved"].includes(row.status)) return { text: row.nextAction ? plainNextAction(row.nextAction) : "Check the work", tone: "done" as const };
   if (row.hasOpenFollowUp) return { text: plainNextAction(row.nextAction), tone: "wait" as const };
-  if (row.visitHoldPosture) return { text: "Next visit is fine", tone: "calm" as const };
+  if (row.visitHoldPosture) return { text: "Do on next visit", tone: "calm" as const };
   if (row.inspectionId) return { text: plainNextAction(row.nextAction), tone: "calm" as const };
   // Started work is not "ready": a check-in moved it on. "Onsite" needs live visit evidence, which a list row doesn't carry.
   if (row.status === "in_progress") return { text: "Work started", tone: "active" as const };
@@ -39,9 +40,10 @@ function needsManagerReview(row: WorkOrderListRow) {
   return Boolean(row.internalMembershipId) && !row.inspectionId && (row.hasOpenFollowUp || row.status === "waiting_on_parts");
 }
 
-export function InternalJobRow({ row, session, technician, returnTo, week, showWho = true }: {
-  row: WorkOrderListRow; session: OperatorSession; technician: boolean; returnTo: string; week?: string; showWho?: boolean;
+export function InternalJobRow({ row, session, technician, returnTo, week, showWho = true, organizationZone="America/New_York", storeZones={} }: {
+  row: WorkOrderListRow; session: OperatorSession; technician: boolean; returnTo: string; week?: string; showWho?: boolean; organizationZone?:string; storeZones?:Record<string,string>;
 }) {
+  const storeZone=storeZones[row.storeId]??organizationZone;
   const mine = row.internalMembershipId === session.membershipId;
   const ready = !row.inspectionId && !row.hasOpenFollowUp && !notStartable.includes(row.status);
   const status = jobStatus(row);
@@ -50,7 +52,7 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
     ? `/app/compliance/${encodeURIComponent(row.inspectionId)}`
     : jobPage ? `/app/my-work/${encodeURIComponent(row.id)}` : `/app/work-orders/${encodeURIComponent(row.id)}?view=service`;
   const dispatchAction = `/api/ops/work-orders/${encodeURIComponent(row.id)}/internal-dispatch`;
-  const canSchedule = !row.inspectionId && (!technician || mine) && roleCan(session, "schedule_internal_work") && !finished.includes(row.status);
+  const canSchedule = !row.inspectionId && (!technician || mine) && roleCan(session, "schedule_internal_work") && !finished.includes(row.status) && row.status !== "in_progress" && !(technician && row.hasOpenFollowUp);
   const scheduleHref = `/app/dispatch/schedule/${encodeURIComponent(row.id)}?returnTo=${encodeURIComponent(returnTo)}${week ? `&day=${encodeURIComponent(week)}` : ""}`;
   const canTake = technician && !mine && row.internalTarget === "pool" && ready && roleCan(session, "claim_internal_work");
   const canReturn = technician && mine && ready && roleCan(session, "return_internal_work");
@@ -68,9 +70,9 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
       <div className={styles.jobFacts}>
         <span><span className={`${styles.badge} ${toneClass}`} style={{ marginLeft: 0 }}>{status.text}</span></span>
         {showWho && !(technician && mine) ? <span>Who: <strong>{whoLabel(row)}</strong></span> : null}
-        <span>When: <strong>{plainScheduleLabel(row.schedule)}</strong></span>
-        {row.dueAt ? <span>Due: <strong>{formatOperationsDateTime(row.dueAt)}</strong></span> : null}
-        {row.targetCompletionAt ? <span>Finish by: <strong>{formatOperationsDateTime(row.targetCompletionAt)}</strong></span> : null}
+        {row.schedule ? <span>When: <strong>{dispatchPlanLabel(row.schedule,organizationZone)}</strong></span> : null}
+        {row.dueAt && !(technician && row.hasOpenFollowUp) ? <span>Due: <strong>{dispatchTime(row.dueAt,storeZone,organizationZone)}</strong></span> : null}
+        {row.targetCompletionAt && !(technician && row.hasOpenFollowUp) ? <span>Finish by: <strong>{dispatchTime(row.targetCompletionAt,storeZone,organizationZone)}</strong></span> : null}
       </div>
       {!technician && row.internalAssigneeName ? <p className={styles.jobMeta}>Manager: {row.internalAccountableParty}</p> : null}
     </div>
@@ -90,6 +92,7 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
           <InternalAssignmentFields storeId={row.storeId} defaultTarget={row.internalTarget ?? "pool"}
             defaultManager={row.internalAccountableId && row.internalAccountableId !== "facilities-coordination" ? { id: row.internalAccountableId, name: row.internalAccountableParty } : undefined}
             defaultPerson={row.internalMembershipId && row.internalAssigneeName ? { id: row.internalMembershipId, name: row.internalAssigneeName } : undefined}/>
+          <label>Why change who handles this?<textarea name="reason" required rows={2} maxLength={1000}/></label>
           <button type="submit" name="action" value="assign">Save</button>
         </RecordForm>
       </details> : null}
@@ -98,7 +101,7 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
         <RecordForm action={dispatchAction} offerSavedWork={false} className={styles.form}>
           <DispatchVersionFields row={row} returnTo={returnTo}/>
           <p>Another technician can take it.{row.schedule ? " Its date is removed." : ""}</p>
-          <label>Why? (optional)<textarea name="reason" rows={2} maxLength={1000}/></label>
+          <label>Why?<textarea name="reason" required rows={2} maxLength={1000}/></label>
           <button type="submit" name="action" value="return">Give back to team</button>
         </RecordForm>
       </details> : null}
@@ -110,9 +113,9 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
 }
 
 /** A titled list of jobs with an empty message and a link to the next page. */
-export function InternalJobSection({ title, hint, page, session, technician, returnTo, week, empty, nextHref, groupByDay = false }: {
+export function InternalJobSection({ title, hint, page, session, technician, returnTo, week, empty, nextHref, groupByDay = false, organizationZone, storeZones }: {
   title: string; hint?: string; page: WorkOrderListPage; session: OperatorSession; technician: boolean; returnTo: string; week?: string;
-  empty?: React.ReactNode; nextHref?: string; groupByDay?: boolean;
+  empty?: React.ReactNode; nextHref?: string; groupByDay?: boolean; organizationZone?:string; storeZones?:Record<string,string>;
 }) {
   const count = page.totalCount ?? page.items.length;
   const groups = new Map<string, WorkOrderListRow[]>();
@@ -132,8 +135,8 @@ export function InternalJobSection({ title, hint, page, session, technician, ret
     {!page.items.length ? <p className={styles.emptyNote}>{empty ?? "Nothing here right now."}</p> : null}
     {[...groups].map(([day, rows]) => <div key={day || "all"}>
       {day ? <h3 className={styles.dayHeading}>{day}</h3> : null}
-      <ul className={styles.jobList}>{rows.map(row => <InternalJobRow key={row.id} row={row} session={session} technician={technician} returnTo={returnTo} week={week}/>)}</ul>
+      <ul className={styles.jobList}>{rows.map(row => <InternalJobRow key={row.id} row={row} session={session} technician={technician} returnTo={returnTo} week={week} organizationZone={organizationZone} storeZones={storeZones}/>)}</ul>
     </div>)}
-    {nextHref ? <Link className={styles.moreLink} href={nextHref}>Show more →</Link> : null}
+    {nextHref ? <p className={styles.muted}>Showing {page.items.length} of {count} · <Link className={styles.moreLink} href={nextHref}>Show more</Link></p> : null}
   </section>;
 }

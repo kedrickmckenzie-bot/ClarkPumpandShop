@@ -387,8 +387,8 @@ export interface ExecutiveSnapshotView {
   };
 }
 
-export type StoreSearchPage = Page<StoreSearchRow>;
-export type AssetSearchPage = Page<AssetSearchRow>;
+export type StoreSearchPage = Page<StoreSearchRow> & {totalCount?:number};
+export type AssetSearchPage = Page<AssetSearchRow> & {totalCount?:number};
 export type WorkOrderListPage = Page<WorkOrderListRow>;
 export type ExceptionQueuePage = Page<ExceptionQueueRow>;
 export type RequestListPage = Page<RequestListRow> & {totalCount?:number};

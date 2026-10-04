@@ -1,5 +1,7 @@
+import { TechnicianHistory } from "@/components/workspace/technician-history";
+import { dispatchPlanLabel, dispatchTime } from "@/lib/ops/dispatch-board";
 import Link from "next/link";
-import { plainNextAction, plainScheduleLabel } from "@/lib/ops/dispatch-calendar";
+import { plainNextAction } from "@/lib/ops/dispatch-calendar";
 import { randomUUID } from "node:crypto";
 import { RecordForm } from "@/components/ops/record-form";
 import { roleCan } from "@/components/ops/role-policy";
@@ -8,7 +10,6 @@ import { DispatchVersionFields } from "@/components/workspace/internal-dispatch-
 import { getOpsRequestContext } from "@/lib/server/ops-request-context";
 import { internalDispatchScope } from "@/lib/server/internal-dispatch-context";
 import { dispatchIdentity, internalTarget } from "@/lib/ops/internal-dispatch";
-import { formatOperationsDateTime } from "@/lib/ops/local-time";
 import { internalWorkResultLabel } from "@/lib/ops/work-order-outcome";
 import styles from "@/components/workspace/internal-dispatch.module.css";
 
@@ -21,8 +22,9 @@ const sourceLabels: Record<string, string> = {
 };
 const fileLimit = { files: 5, bytes: 8 * 1024 * 1024 };
 
-export default async function InternalJob({ params }: { params: Promise<{ id: string }> }) {
+export default async function InternalJob({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?:Promise<{saved?:string}> }) {
   const { id } = await params;
+  const saved=(await searchParams)?.saved;
   const context = await getOpsRequestContext(["technician", "facilities", "regional"]);
   const { repository: r, session: s } = context;
   const org = s.organizationId;
@@ -75,6 +77,8 @@ export default async function InternalJob({ params }: { params: Promise<{ id: st
     : resultBlocked && !manager && waitingFor ? `Waiting on manager ${waitingFor}`
     : plainNextAction(work.nextAction);
   const urgent = ["urgent", "emergency"].includes(work.priority);
+  const organization=await r.getOrganization(org), zone=store?.timeZone??organization!.timeZone;
+  const recent=await TechnicianHistory({repository:r,scope:await internalDispatchScope(r,s),storeId:work.storeId,assetId:work.asset?.id,excludeId:id,limit:5,title:work.asset?"Recent work on this equipment":"Recent work at this store",zone});
   const backHref = manager ? "/app/dispatch" : "/app/my-work";
 
   return <div className={styles.workspace}>
@@ -88,19 +92,20 @@ export default async function InternalJob({ params }: { params: Promise<{ id: st
       <p className={styles.muted}>Work order {work.number}</p>
     </header>
 
+    {saved?<p className={styles.notice} role="status">Saved. Job updated.</p>:null}
     <section className={styles.jobBody}>
       <dl className={styles.facts}>
         <div><dt>Status</dt><dd>{status}</dd></div>
         <div><dt>Who</dt><dd>{work.internalAssigneeName ?? "Any technician can take it"}</dd></div>
         <div><dt>Manager</dt><dd>{work.internalAccountableParty}</dd></div>
-        <div><dt>When</dt><dd>{plainScheduleLabel(work.schedule)}</dd></div>
-        {work.dueAt && !(resultBlocked && !manager) ? <div><dt>Due</dt><dd>{formatOperationsDateTime(work.dueAt, store?.timeZone)}</dd></div> : null}
-        {work.targetCompletionAt ? <div><dt>Finish by</dt><dd>{formatOperationsDateTime(work.targetCompletionAt, store?.timeZone)}</dd></div> : null}
+        {work.schedule ? <div><dt>When</dt><dd>{dispatchPlanLabel(work.schedule,organization!.timeZone)}</dd></div> : null}
+        {work.dueAt && !(resultBlocked && !manager) ? <div><dt>Due</dt><dd>{dispatchTime(work.dueAt,zone,organization!.timeZone)}</dd></div> : null}
+        {work.targetCompletionAt && !(resultBlocked && !manager) ? <div><dt>Finish by</dt><dd>{dispatchTime(work.targetCompletionAt,zone,organization!.timeZone)}</dd></div> : null}
       </dl>
       {work.asset ? <p><strong>Equipment:</strong> {work.asset.name} · {work.asset.assetTag}{work.component ? ` · ${work.component.name}` : ""}</p> : null}
       {work.authorizedScope ? <p><strong>What to do:</strong> {work.authorizedScope}</p> : null}
       {independentFollowUps.filter(f => plainNextAction(f.nextAction) !== status).map(f => <p key={f.id} className={styles.urgent}>
-        Also needed: {plainNextAction(f.nextAction)} · {f.accountableParty} · Due {formatOperationsDateTime(f.dueAt, store?.timeZone)}
+        Also needed: {plainNextAction(f.nextAction)} · {f.accountableParty} · Due {dispatchTime(f.dueAt,zone,organization!.timeZone)}
       </p>)}
       {lookAndReport ? <p><strong>Look and report only.</strong> Write down what you find. Repairs need a manager&apos;s OK first.</p> : null}
       {files.length ? <div>
@@ -165,7 +170,7 @@ export default async function InternalJob({ params }: { params: Promise<{ id: st
         {version()}
         <p><strong>{plainNextAction(work.nextAction)}.</strong> When it&apos;s sorted, send the job back to {work.internalAssigneeName ?? "the technician"}.</p>
         <label>What changed?<textarea name="notes" required maxLength={1000} placeholder="For example: parts arrived, or help is booked for Tuesday"/></label>
-        <button type="submit" name="action" value="ready">Mark ready to work</button>
+        <button type="submit" name="action" value="ready">Mark ready</button>
       </RecordForm> : null}
       {manager && !active && returnBlocked && vendorNeeded ? <RecordForm action={action} offerSavedWork={false} className={styles.form}>
         {version()}
@@ -182,13 +187,14 @@ export default async function InternalJob({ params }: { params: Promise<{ id: st
         <strong>{internalWorkResultLabel(result.outcome)}</strong> · {result.performerName}
         {result.outcomeNotes ? <p>{result.outcomeNotes}</p> : null}
         <small>
-          {formatOperationsDateTime(result.outcomeRecordedAt, store?.timeZone)} · {sourceLabels[result.source] ?? result.source.replaceAll("_", " ")}
+          {dispatchTime(result.outcomeRecordedAt,zone,organization!.timeZone)} · {sourceLabels[result.source] ?? result.source.replaceAll("_", " ")}
           {result.outcomeRecordedByActorName !== result.performerName ? ` · Entered by ${result.outcomeRecordedByActorName}` : ""}
-          {result.reportedPerformedAt ? ` · Work time given: ${formatOperationsDateTime(result.reportedPerformedAt, store?.timeZone)} (not verified)` : ""}
+          {result.reportedPerformedAt ? ` · Work time given: ${dispatchTime(result.reportedPerformedAt,zone,organization!.timeZone)} (not verified)` : ""}
         </small>
       </li>)}</ul>
     </section> : null}
 
     <p><Link href={`/app/work-orders/${encodeURIComponent(id)}`}>Full work order record →</Link></p>
+    {recent}
   </div>;
 }
