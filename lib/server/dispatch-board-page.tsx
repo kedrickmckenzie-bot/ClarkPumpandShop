@@ -33,12 +33,14 @@ export async function loadDispatchBoard(query: Record<string, string | string[] 
     storeId: filters.store || undefined, dispatchAt: at };
   const selected = { ...base, dispatchBucket: bucket };
   const plannedQuery: WorkOrderListQuery = { ...selected, scheduleView: "week", scheduleFrom: week, scheduleTo: addCalendarDays(week, 6) };
-  const [planned, queue, list, dayCounts, choices, stats] = await Promise.all([
+  const [planned, queue, list, dayCounts, held, choices, stats] = await Promise.all([
     repository.listWorkOrders(scope, { ...plannedQuery, limit: 100, cursor: first("planCursor") || undefined }),
     repository.listWorkOrders(scope, { ...selected, dispatchQueue:true, dispatchReadiness:"ready", excludeHeld:true, dispatchPlanOrder:true, limit: 25, cursor: first("queueCursor") || undefined }),
     view === "list" ? repository.listWorkOrders(scope, { ...selected, limit: 25, cursor: first("cursor") || undefined }) : undefined,
     // The Plan board (Day, Week, Map) never shows these counts; only the older list and week pages do.
     planBoard ? Promise.resolve([]) : repository.getDispatchDayCounts(scope, plannedQuery),
+    // Small jobs set aside for a future visit; the map shows them only when the manager asks.
+    planBoard ? repository.listWorkOrders(scope, { internalOnly: true, heldOnly: true, search: filters.q, regionId: filters.region || undefined, storeId: filters.store || undefined, limit: 100 }) : Promise.resolve({ items: [] as Awaited<ReturnType<typeof repository.listWorkOrders>>["items"] }),
     repository.getDispatchFilters(scope),
     Promise.all((["unassigned", "parts", "late", "reported"] as const).map(async name => {
       if (planBoard) return [name, 0] as const;
@@ -63,11 +65,11 @@ export async function loadDispatchBoard(query: Record<string, string | string[] 
     ]);
     return {person,page,current:current??undefined,next:next.items[0],statusUpdate:visibleStatus?{...visibleStatus,storeNumber:statusStore?.storeNumber}:undefined,lastVisit:visibleVisit?{status:visibleVisit.status,checkedInAt:visibleVisit.checkedInAt,checkedOutAt:visibleVisit.checkedOutAt,storeNumber:visitStore?.storeNumber}:undefined};
   }));
-  const allRows = [...planned.items, ...queue.items, ...(list?.items ?? []), ...commitments.flatMap(item=>[...item.page.items,...(item.current?[item.current]:[]),...(item.next?[item.next]:[])])];
+  const allRows = [...planned.items, ...queue.items, ...held.items, ...(list?.items ?? []), ...commitments.flatMap(item=>[...item.page.items,...(item.current?[item.current]:[]),...(item.next?[item.next]:[])])];
   const stores = await Promise.all([...new Set(allRows.map(row => row.storeId))].map(id => repository.getStore(scope.organizationId, id)));
   const zones = new Map(stores.filter(store => store !== null).map(store => [store.id, store.timeZone ?? organizationZone]));
   const cleanPage = (page: typeof planned) => ({ ...page, items: page.items.map(row => dispatchJob(row, zones.get(row.storeId), stores.find(store=>store?.id===row.storeId)?.regionId)) });
-  return { queueCursor:first("queueCursor"), asOf:at, commitments:commitments.map(item=>({...item.person,...cleanPage(item.page),current:item.current?cleanPage({items:[item.current]}).items[0]:undefined,next:item.next?cleanPage({items:[item.next]}).items[0]:undefined,statusUpdate:item.statusUpdate,lastVisit:item.lastVisit})),session,organizationZone,today,week,day,view,bucket,filters,people:choices.people,regions:choices.regions,dayCounts,stats:Object.fromEntries(stats),planned:cleanPage(planned),queue:cleanPage(queue),list:list?cleanPage(list):undefined };
+  return { queueCursor:first("queueCursor"), asOf:at, commitments:commitments.map(item=>({...item.person,...cleanPage(item.page),current:item.current?cleanPage({items:[item.current]}).items[0]:undefined,next:item.next?cleanPage({items:[item.next]}).items[0]:undefined,statusUpdate:item.statusUpdate,lastVisit:item.lastVisit})),session,organizationZone,today,week,day,view,bucket,filters,people:choices.people,regions:choices.regions,dayCounts,stats:Object.fromEntries(stats),planned:cleanPage(planned),queue:cleanPage(queue),held:cleanPage(held).items,list:list?cleanPage(list):undefined };
 }
 export async function renderDispatchBoard(query:Record<string,string|string[]|undefined>) {
   try {const props=await loadDispatchBoard(query);return props.view==="plan"||props.view==="day"||props.view==="map"?<DispatchPlan key={JSON.stringify([props.week,props.filters,query.queueCursor])} {...props}/>:<DispatchBoard {...props}/>;}

@@ -1,6 +1,6 @@
 "use client";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { DispatchJob } from "@/lib/ops/dispatch-board";
 import { jobShortName } from "@/lib/ops/short-name";
@@ -8,6 +8,12 @@ import styles from "./dispatch-map.module.css";
 
 /** Six tech colours, checked for colour-blind separation; pins also carry numbers and names. */
 export const TECH_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#4a3aa7", "#e87ba4", "#eda100"];
+const SHOW_HELD_KEY = "dispatch-map-show-held";
+const noSubscription = () => () => {};
+/** The saved map choice; private browsing or blocked storage falls back to off. */
+function readShowHeld() {
+  try { return localStorage.getItem(SHOW_HELD_KEY) === "1"; } catch { return false; }
+}
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
 export interface MapTech {
@@ -49,20 +55,34 @@ const minutes = (seconds: number) => {
 };
 const miles = (meters: number) => `${Math.round(meters / 160.934) / 10} mi`;
 
-export function DispatchMap({ techs, queue, onOpen, shortStore }: {
+export function DispatchMap({ techs, queue, held = [], onOpen, onPickHeld, shortStore }: {
   techs: MapTech[];
   queue: DispatchJob[];
+  /** Small jobs set aside for a future visit; shown only when the manager switches them on. */
+  held?: DispatchJob[];
   onOpen: (job: DispatchJob) => void;
+  /** Called with every next-visit job at the store whose dot was tapped. */
+  onPickHeld?: (jobs: DispatchJob[]) => void;
   shortStore: (job: DispatchJob) => string;
 }) {
   const box = useRef<HTMLDivElement>(null), map = useRef<MapLibreMap | null>(null), markers = useRef<Marker[]>([]), fitted = useRef("");
   const [routes, setRoutes] = useState<Routes>(), [error, setError] = useState(""), [only, setOnly] = useState<string>();
   const [ready, setReady] = useState(false);
+  // Remembered per browser; off by default so the map stays about today's real work.
+  const storedShowHeld = useSyncExternalStore(noSubscription, readShowHeld, () => false);
+  const [showHeldChoice, setShowHeldChoice] = useState<boolean>();
+  const showHeld = showHeldChoice ?? storedShowHeld;
+  const toggleHeld = () => {
+    const next = !showHeld;
+    setShowHeldChoice(next);
+    try { localStorage.setItem(SHOW_HELD_KEY, next ? "1" : "0"); } catch { /* Not saved; still works this visit. */ }
+  };
   const sequences = useMemo(() => [
     ...techs.map(t => t.stops.map(j => j.storeId)),
     ...queue.map(j => [j.storeId]),
     ...techs.flatMap(t => t.currentStoreId ? [[t.currentStoreId]] : []),
-  ], [techs, queue]);
+    ...(showHeld ? [...new Set(held.map(j => j.storeId))].map(id => [id]) : []),
+  ], [techs, queue, held, showHeld]);
   const sequenceKey = JSON.stringify(sequences);
 
   // Ask the server for store locations and road routes; it looks up a few missing pairs per call.
@@ -127,6 +147,17 @@ export function DispatchMap({ techs, queue, onOpen, shortStore }: {
         const [lng, lat] = lngLat(store);
         return [lng + n * 0.0016, lat - n * 0.0010] as [number, number];
       };
+      // One hollow dot per store with next-visit work; they never widen the view, so far-away ones don't pull the map out.
+      if (showHeld && !only) for (const [storeId, jobs] of held.reduce((byStore, job) => byStore.set(job.storeId, [...(byStore.get(job.storeId) ?? []), job]), new Map<string, DispatchJob[]>())) {
+        const store = located.get(storeId);
+        if (!store) continue;
+        const dot = clickablePin(() => onPickHeld?.(jobs));
+        dot.className = styles.held;
+        dot.textContent = jobs.length > 1 ? String(jobs.length) : "";
+        dot.title = `Next-visit ${jobs.length === 1 ? "job" : "jobs"} · ${shortStore(jobs[0])} · ${jobs.map(jobShortName).join(", ")}`;
+        dot.setAttribute("aria-label", dot.title);
+        markers.current.push(new maplibre.Marker({ element: dot }).setLngLat(lngLat(store)).setOffset([-15, -15]).addTo(current));
+      }
       if (!only) for (const job of queue) {
         const store = located.get(job.storeId);
         if (!store) continue;
@@ -180,7 +211,7 @@ export function DispatchMap({ techs, queue, onOpen, shortStore }: {
     });
     // legFor/located derive from routes; techs and queue identity come from the board.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, routes, techs, queue, only]);
+  }, [ready, routes, techs, queue, only, showHeld, held]);
 
   return (
     <div className={styles.wrap}>
@@ -212,6 +243,15 @@ export function DispatchMap({ techs, queue, onOpen, shortStore }: {
           })}
         </ul>
         {only ? <button className={styles.showAll} onClick={() => setOnly(undefined)}>Show everyone</button> : null}
+        {held.length ? (
+          <label className={styles.heldToggle}>
+            <input type="checkbox" checked={showHeld} onChange={toggleHeld} />
+            <span>
+              <span className={styles.held} aria-hidden="true" /> Show next-visit small jobs ({held.length})
+              <small>Look along a route and add one to a tech&apos;s day.</small>
+            </span>
+          </label>
+        ) : null}
         {queue.length ? <p className={styles.waitingKey}><span className={styles.waiting} aria-hidden="true" /> {queue.length} {queue.length === 1 ? "job needs" : "jobs need"} a tech</p> : null}
         <p className={styles.fine}>Drive times are for a typical day, not live traffic.</p>
       </aside>

@@ -4,6 +4,19 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Next-visit small jobs on the Dispatch map — October 5, 2026
+
+The owner wants managers to spot low-priority "do on next visit" work near a tech's route (for example a store a mile down the road) without flooding the map, and decided that a person, not a distance rule, judges what is close enough.
+
+- Map side list: **Show next-visit small jobs (N)**, off by default and remembered per browser. When on, each store with held internal work shows one small dashed dot (a number when a store has several). Dots never widen the map view, so far-away ones don't pull it out.
+- Tapping a dot opens **Add a next-visit job**: which job (when a store has several), which tech (with that day's jobs and hours), and where in the day (at the end, first, or before a given stop). Adding it takes the job off the next-visit list through the existing audited `releaseWorkOrderVisitHold` command, then places it with the board's normal plan save, so Undo, ordering and deadline checks behave as for any move. Due dates never change. If the job cannot be planned after release, it is left in Needs a tech and the manager is told.
+- Technicians are still offered same-store held work when they check in, as before. Undo returns the job to Needs a tech, not to the next-visit list; putting it back on hold stays a separate action on the job page.
+- Tests: held work loads apart from Needs a tech and only for the Plan board; release keeps the due date, removes it from the next-visit list, is audited and refused a second time; technicians cannot release.
+
+Browser check (1440 px, PostgreSQL, real routes): switch off showed no dots; on showed 5 dots for 6 jobs (two at Store 108); a manager added "Tighten the stockroom shelf" as Alex's first stop, it saved with Undo, stayed after reload, and the switch setting was remembered.
+
+Validation: `db:seed`, `typecheck`, `lint`, `test:e2e`, `build` and `build:render` passed. `npm test` (with PostgreSQL) passed 1508 of 1509 under full load; the one timeout (`ops-public-multi-work-order-visit`, unrelated to this change) passed when rerun alone.
+
 ### AI checkout ("Fill it in for me") — October 5, 2026
 
 Step 2 of the owner's AI plan. The owner chose the Anthropic API for now with a swappable connection for a future self-hosted model.

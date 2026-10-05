@@ -162,3 +162,47 @@
     height: 60vh;
   }
 }
+/* Next-visit work: hollow and dashed so it reads as optional, never as a planned stop. */
+.held {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border: 2px dashed #5b6b80;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 0.9);
+  color: #334155;
+  font: 700 11px/1 system-ui, sans-serif;
+  cursor: pointer;
+  vertical-align: -4px;
+  box-sizing: border-box;
+}
+.held:hover,
+.held:focus-visible {
+  transform: scale(1.15);
+  outline: 2px solid #1d2b3e;
+  outline-offset: 1px;
+}
+.heldToggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e6ebf1;
+  font-size: 14px;
+  cursor: pointer;
+}
+.heldToggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: #2457d6;
+}
+.heldToggle small {
+  display: block;
+  margin-top: 2px;
+  color: #5b6b80;
+  font-size: 13px;
+}

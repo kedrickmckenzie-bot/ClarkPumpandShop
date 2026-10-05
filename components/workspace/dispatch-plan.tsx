@@ -107,7 +107,8 @@ export function DispatchPlan(initial: Board) {
     [error, setError] = useState(false),
     [showQueue, setShowQueue] = useState(false),
     [railOpen, setRailOpen] = useState(true),
-    [dropTarget, setDropTarget] = useState<string>();
+    [dropTarget, setDropTarget] = useState<string>(),
+    [heldPick, setHeldPick] = useState<{ jobs: DispatchJob[]; jobId: string; techId: string; position: number }>();
   const busy = useRef(false),
     drag = useRef<DispatchJob | undefined>(undefined),
     generation = useRef(0);
@@ -686,6 +687,29 @@ export function DispatchPlan(initial: Board) {
       })),
     [data.commitments, focusDay],
   );
+  /** Takes the chosen job off "next visit", then places it on the tech's day like any other move. */
+  async function addHeld() {
+    if (!heldPick?.techId) return;
+    const pick = heldPick;
+    setHeldPick(undefined);
+    setError(false);
+    setMessage("Saving…");
+    try {
+      const response = await fetch(`/api/ops/internal-dispatch/held/${encodeURIComponent(pick.jobId)}`, { method: "POST" });
+      const result = (await response.json()) as { job?: DispatchJob; error?: string };
+      if (!response.ok || !result.job) throw Error(result.error ?? "Could not add this job. Nothing changed.");
+      if (!canPlanJob(result.job)) {
+        setMessage("Taken off the next-visit list. It's now in Needs a tech.");
+        await refreshSafely();
+        return;
+      }
+      const list = jobsFor(pick.techId, focusDay);
+      placeJob(result.job, pick.techId, focusDay, pick.position < 0 ? list.length : pick.position);
+    } catch (e) {
+      setError(true);
+      setMessage(e instanceof Error ? e.message : "Could not add this job. Nothing changed.");
+    }
+  }
   const quickMove = (moves: Move[]) => {
     setDetail(undefined);
     void move(moves);
@@ -806,7 +830,11 @@ export function DispatchPlan(initial: Board) {
         <DispatchMap
           techs={mapTechs}
           queue={data.queue.items}
+          held={data.held}
           onOpen={setDetail}
+          onPickHeld={(jobs) => {
+            setHeldPick({ jobs, jobId: jobs[0].id, techId: "", position: -1 });
+          }}
           shortStore={shortStore}
         />
       ) : (
@@ -951,6 +979,52 @@ export function DispatchPlan(initial: Board) {
           </div>
         </>
       )}
+      {heldPick ? (
+        <Sheet title="Add a next-visit job" onClose={() => setHeldPick(undefined)}>
+          <div className={styles.chooser}>
+            <p className={styles.hint}>
+              {shortStore(heldPick.jobs[0])} · set aside for the next visit. Adding it puts it on the tech&apos;s {dayLabel(focusDay, "long")} and takes it off the next-visit list. The due date stays the same.
+            </p>
+            {heldPick.jobs.length > 1 ? <h3>Which job?</h3> : null}
+            {heldPick.jobs.map((job) => (
+              <label className={styles.choice} key={job.id}>
+                {heldPick.jobs.length > 1 ? (
+                  <input type="radio" name="held-job" aria-label={jobShortName(job)} checked={heldPick.jobId === job.id} onChange={() => setHeldPick({ ...heldPick, jobId: job.id })} />
+                ) : null}
+                <span>
+                  <strong>{jobShortName(job)}</strong>
+                  <small>{job.problem}</small>
+                  <small>{duration(job)}{job.dueAt ? ` · ${dueLabel(job, data.today, data.organizationZone)}` : ""}</small>
+                </span>
+              </label>
+            ))}
+            <h3>Give it to</h3>
+            {data.commitments.map((tech) => (
+              <label className={styles.choice} key={tech.id}>
+                <input type="radio" name="held-tech" aria-label={tech.name} checked={heldPick.techId === tech.id} onChange={() => setHeldPick({ ...heldPick, techId: tech.id, position: -1 })} />
+                <span>
+                  <strong>{tech.name}</strong>
+                  <small>{totals(jobsFor(tech.id, focusDay))} on {dayLabel(focusDay)}</small>
+                </span>
+              </label>
+            ))}
+            {heldPick.techId ? (
+              <label>
+                Where in the day
+                <select value={heldPick.position} onChange={(e) => setHeldPick({ ...heldPick, position: Number(e.target.value) })}>
+                  <option value={-1}>At the end</option>
+                  {jobsFor(heldPick.techId, focusDay).map((job, i) => (
+                    <option key={job.id} value={i}>{i === 0 ? "First, before " : "Before "}stop {i + 1} · {jobShortName(job)}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <button className={styles.primary} disabled={!heldPick.techId || pending} onClick={() => void addHeld()}>
+              {heldPick.techId ? `Add to ${data.commitments.find((t) => t.id === heldPick.techId)?.name}'s day` : "Choose a tech"}
+            </button>
+          </div>
+        </Sheet>
+      ) : null}
       {confirmation ? (
         <Sheet
           title="Check this move"
