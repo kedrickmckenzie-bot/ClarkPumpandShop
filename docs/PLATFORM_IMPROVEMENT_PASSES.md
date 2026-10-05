@@ -4,6 +4,18 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### AI checkout ("Fill it in for me") — October 5, 2026
+
+Step 2 of the owner's AI plan. The owner chose the Anthropic API for now with a swappable connection for a future self-hosted model.
+
+- On **Record result**, **Flag a problem** and **Finish visit**, a technician can type or dictate (phone keyboard microphone) what happened and tap **Fill it in for me**. The AI fills the existing form: the result, the work note and "working when I left". The technician checks and submits the normal form; **the AI never saves anything** and all saves still go through the existing domain commands and audit.
+- Guardrails: the prompt forbids inventing parts, readings or work that was not said, keeps numbers exactly as said, asks one short question when something is missing or vague (shown as "One question: …"), and never advises skipping lockout/tagout. The server only accepts results the form can show (e.g. a job form has no "Need parts", a look-and-report visit cannot be "Fixed"). Errors and refusals show a plain message and the form stays usable by hand.
+- Provider-neutral `AiClient` interface (`lib/ops/ai.ts`); the Anthropic adapter (`lib/server/ai-provider.ts`, official SDK, structured JSON output, low effort, Anthropic's automatic fallback model on a decline) is enabled only by `OPS_AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`; `OPS_AI_MODEL` overrides the model (default `claude-opus-5-5`). Without the settings the button is hidden. Result choices now live in one shared module used by the form and the AI.
+- Measured: about 1,000 input and 100 output tokens per draft, roughly half a cent. Live tests: "replaced the condenser fan motor… 36" → Fixed / working / clean note; "gasket torn… need to order one, about 30 inches" → Need parts with the size kept; "looked at it" → no guess, asked what was found. When a test described the wrong equipment, it said so rather than claiming the job was done.
+- The owner's test API key was used only as a temporary setting in the test environment; it is not in the repository.
+
+Validation: seed, typecheck, lint, Test Files  215 passed (215) / Tests  1506 passed | 15 skipped (1521) (real PostgreSQL dispatch tests enabled), 68 end-to-end checks, Vinext build and Render build. Browser check as a technician at 390 px and 1440 px with the live API: "swapped the cartridge… no more drip" filled Fixed / working yes / note; "still drips… need to order it" filled Needs more work / working no.
+
 ### Equipment documents (knowledge base) — October 5, 2026
 
 First step of the owner's AI plan (documents → AI checkout → diagnostic assistant → invoice reading). The owner decided the knowledge base is manager-curated in the Equipment section, without AI, while anyone may later upload photos to the AI for one-off questions.

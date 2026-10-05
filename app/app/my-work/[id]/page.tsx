@@ -1,4 +1,5 @@
 import { JobPreparationFields } from "@/components/workspace/job-preparation-fields";
+import { getAiClient } from "@/lib/server/ai-provider";
 import { EquipmentDocuments } from "@/components/workspace/equipment-documents";
 import { TechnicianHistory } from "@/components/workspace/technician-history";
 import { dispatchPlanLabel, dispatchTime, dueLabel } from "@/lib/ops/dispatch-board";
@@ -82,6 +83,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
   const organization=await r.getOrganization(org), zone=store?.timeZone??organization!.timeZone;
   const recent=await TechnicianHistory({repository:r,scope:await internalDispatchScope(r,s),storeId:work.storeId,assetId:work.asset?.id,excludeId:id,limit:5,title:work.asset?"Recent work on this equipment":"Recent work at this store",zone});
   const backHref = manager ? "/app/dispatch" : "/app/my-work";
+  const aiHelp = Boolean(getAiClient());
 
   return <div className={styles.workspace}>
     <header className={styles.jobHeader}>
@@ -135,7 +137,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
         {!active && !resultBlocked && (!policy?.internalCheckInRequired || manager) ? <details id="record-result">
           <summary className={`${styles.btn} ${styles.btnPrimary}`}>{manager ? "Record a result" : "Record result"}</summary>
           <RecordForm action={action} offerSavedWork={false} attachmentLimit={fileLimit} className={styles.form}>
-            {version()}{managerSource()}<InternalResultFields lookAndReport={lookAndReport}/>
+            {version()}{managerSource()}<InternalResultFields lookAndReport={lookAndReport} ai={aiHelp ? { workOrderId: id } : undefined}/>
             <button name="action" value="result" type="submit">Save result</button>
           </RecordForm>
         </details> : null}
@@ -156,7 +158,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
         <details id="flag-problem">
           <summary className={`${styles.btn} ${styles.btnSecondary}`}>Flag a problem</summary>
           <RecordForm action={action} offerSavedWork={false} attachmentLimit={fileLimit} className={styles.form}>
-            {version()}{managerSource(true)}<InternalResultFields problem/>
+            {version()}{managerSource(true)}<InternalResultFields problem ai={aiHelp ? { workOrderId: id } : undefined}/>
             <button name="action" value="problem" type="submit">Send to manager</button>
           </RecordForm>
         </details>

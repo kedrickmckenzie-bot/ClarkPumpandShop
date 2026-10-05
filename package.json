@@ -31,6 +31,7 @@
     "render:predeploy": "npm run db:migrate:postgres && npm run db:seed:postgres"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.28.0",
     "maplibre-gl": "^5.24.0",

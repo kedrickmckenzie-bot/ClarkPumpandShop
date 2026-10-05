@@ -69,6 +69,13 @@ before heavier use. Without the setting, the map still shows every job as a pin
 and says that driving routes are not set up. Drive times are for a typical day,
 not live traffic.
 
+AI help is optional. Set `OPS_AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` (from
+console.anthropic.com) to show **Fill it in for me** on technician checkout forms.
+`OPS_AI_MODEL` overrides the default model (`claude-opus-5-5`). Keep the key only in
+Render's Environment settings, set a monthly spend limit in the Anthropic console,
+and rotate the key if it is ever exposed. Without these settings the checkout forms
+work exactly as before. The AI only fills the form; the technician reviews and submits.
+
 For uploaded evidence, create a separate private S3-compatible bucket and set
 the `S3_*` variables from `.env.render.example`. Do not use Render's ephemeral
 local disk and do not reuse DockSafe object-storage credentials. The core demo
