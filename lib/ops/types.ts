@@ -2039,6 +2039,7 @@ export interface TechnicianProfile {
 export interface OpsFixture {
   technicianStatuses?: import("./technician-status").TechnicianStatus[];
   routeLegs?: import("./route-legs").RouteLeg[];
+  equipmentDocuments?: import("./equipment-documents").EquipmentDocument[];
   technicianProfiles?: TechnicianProfile[];
   internalSchedules?: import("./internal-schedule-types").InternalSchedule[];
  storeTasks?: import("./store-task-types").StoreTask[];

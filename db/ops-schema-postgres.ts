@@ -2261,3 +2261,19 @@ export const opsRouteLegs = pgTable("ops_route_legs", {
   foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
   check("chk_ops_route_legs",sql`${t.distanceM} >= 0 AND ${t.durationS} >= 0`),
 ]);
+
+/** Manager-curated equipment knowledge: a manual or diagram for every unit of a model, or for one unit. Removal is recorded, never erased. */
+export const opsEquipmentDocuments = pgTable("ops_equipment_documents", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), fileId: text("file_id").notNull(),
+  title: text("title").notNull(), docType: text("doc_type").notNull(),
+  manufacturerKey: text("manufacturer_key"), modelKey: text("model_key"), assetId: text("asset_id"),
+  uploadedByMembershipId: text("uploaded_by_membership_id"), uploadedByName: text("uploaded_by_name").notNull(), createdAt: text("created_at").notNull(),
+  removedAt: text("removed_at"), removedByName: text("removed_by_name"),
+},t=>[
+  index("idx_ops_equipment_documents_model").on(t.organizationId,t.modelKey,t.manufacturerKey),
+  index("idx_ops_equipment_documents_asset").on(t.organizationId,t.assetId),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.organizationId,t.fileId],foreignColumns:[opsFiles.organizationId,opsFiles.id]}),
+  foreignKey({columns:[t.organizationId,t.assetId],foreignColumns:[opsAssets.organizationId,opsAssets.id]}),
+  check("chk_ops_equipment_documents",sql`${t.docType} IN ('manual','wiring_diagram','parts_list','spec_sheet','other') AND (${t.assetId} IS NOT NULL OR ${t.modelKey} IS NOT NULL)`),
+]);

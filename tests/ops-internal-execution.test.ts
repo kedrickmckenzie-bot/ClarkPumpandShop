@@ -36,7 +36,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     const fixture=buildShowcaseFixture(dispatchNow);fixture.outboxMessages=[];
     if(adapter==="fixture")r=createOpsFixtureRepository(fixture);
     const historical=structuredClone(fixture);
-    historical.technicianProfiles=[];historical.internalSchedules=[];historical.workResults=[];for(const job of historical.workOrders)delete job.shortName;
+    historical.technicianProfiles=[];historical.internalSchedules=[];historical.workResults=[];for(const job of historical.workOrders)delete job.shortName;historical.equipmentDocuments=[];
     for(const rows of [historical.workOrders,historical.assignments,historical.workflowTasks,historical.followUps,historical.workOrderVisitHolds??[],historical.auditEvents]){for(let i=rows.length-1;i>=0;i--)if(rows[i].id.startsWith("dispatch-study-"))rows.splice(i,1);}
     if(adapter==="D1"){
       runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});const db=await runtime.getD1Database("DB");

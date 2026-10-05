@@ -227,6 +227,9 @@ export interface OpsStatement {
 
 export interface OpsRepository extends TaskRepository {
   getLatestTechnicianVisit(organizationId:string,membershipId:string):Promise<VisitSession|null>;
+  /** Library documents for this unit: its own plus those for its make and model, newest first. */
+  listEquipmentDocuments(organizationId:string,asset:{id:string;manufacturer?:string;model?:string}): Promise<import("./equipment-documents").EquipmentDocument[]>;
+  getEquipmentDocument(organizationId:string,id:string): Promise<import("./equipment-documents").EquipmentDocument|null>;
   getTechnicianStatus(organizationId:string,membershipId:string): Promise<import("./technician-status").TechnicianStatus|null>;
   /** Cached driving legs for these exact point pairs (at most 100 per call). */
   getRouteLegs(organizationId:string,pairs:{fromLatE6:number;fromLngE6:number;toLatE6:number;toLngE6:number}[]): Promise<import("./route-legs").RouteLeg[]>;

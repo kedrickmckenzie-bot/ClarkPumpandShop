@@ -1,6 +1,9 @@
 import { TechnicianEquipment } from "@/lib/server/technician-tools";
 import {LinkedStoreTasks} from "@/components/workspace/linked-store-tasks";
 import { RecordFiles } from "@/components/workspace/record-files";
+import { EquipmentDocuments } from "@/components/workspace/equipment-documents";
+import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
+import docStyles from "@/components/workspace/equipment-documents.module.css";
 import { safeDecisionReturn } from "@/lib/ops/review-navigation";
 import type { Metadata } from "next";
 import { roleCan } from "@/components/ops/role-policy";
@@ -30,6 +33,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
   const review = buildEquipmentReview(fixture, session, id, query);
   if(asset?.status === "operational"){model.statusLabel="Recorded as operating";model.statusTone="neutral";model.page.description=`${asset.assetTag} · Operating status from the equipment register · Last confirmed: not recorded. See repair history below.`;}
   if (asset) model.facts.splice(4, 0, { label: "Supplier", value: asset.supplier ?? "Not entered" });
+  const documentCount = asset ? (await (await getServerOpsRepository()).listEquipmentDocuments(session.organizationId, asset)).length : 0;
   const componentSection = model.sections.find((section) => section.id === "components");
   if (componentSection?.table) {
     componentSection.table.rows = componentSection.table.rows.map((row) => ({
@@ -59,7 +63,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
       compactFacts
       model={model}
       initialSection="overview"
-      beforeSections={<>{review ? <EquipmentReview model={review} /> : null}<details><summary>Equipment documents</summary><RecordFiles kind="asset" id={id} /></details><LinkedStoreTasks kind="asset" id={id} />{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
+      beforeSections={<><p className={docStyles.jump}><a href="#documents">{documentCount ? `Manuals & diagrams (${documentCount})` : "Manuals & diagrams: none yet"} ↓</a></p>{review ? <EquipmentReview model={review} /> : null}<EquipmentDocuments assetId={id} saved={typeof query.saved === "string" ? query.saved : undefined} /><details><summary>Other files on this record</summary><RecordFiles kind="asset" id={id} /></details><LinkedStoreTasks kind="asset" id={id} />{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
       after={canSetupEquipment || canSetupPm ? <SetupActions
           title="Build out this equipment record"
           description="Add component depth or schedule preventive work. Both features stay optional and connect back to this equipment history."

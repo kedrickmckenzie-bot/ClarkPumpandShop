@@ -1,3 +1,4 @@
+import { equipmentKey } from "./equipment-documents";
 import { civilDate, mondayOf } from "./dispatch-calendar";
 import { normalizeWorkOutcomes } from "./work-order-outcome";
 import { queryUpcomingAppointments } from "./upcoming-appointments";
@@ -539,6 +540,13 @@ class SqlOpsRepository implements OpsRepository {
     const where=limited.map(p=>{params.push(p.fromLatE6,p.fromLngE6,p.toLatE6,p.toLngE6);return "(from_lat_e6=? AND from_lng_e6=? AND to_lat_e6=? AND to_lng_e6=?)";}).join(" OR ");
     return (await this.all(`SELECT * FROM ops_route_legs WHERE organization_id=? AND (${where})`,params)).map(r=>({id:text(r,"id"),organizationId:text(r,"organization_id"),fromLatE6:Number(r.from_lat_e6),fromLngE6:Number(r.from_lng_e6),toLatE6:Number(r.to_lat_e6),toLngE6:Number(r.to_lng_e6),distanceM:Number(r.distance_m),durationS:Number(r.duration_s),geometry:text(r,"geometry"),provider:text(r,"provider"),fetchedAt:text(r,"fetched_at")}));
   }
+  private equipmentDocument(r:Row): import("./equipment-documents").EquipmentDocument { return {id:text(r,"id"),organizationId:text(r,"organization_id"),fileId:text(r,"file_id"),title:text(r,"title"),docType:text(r,"doc_type") as import("./equipment-documents").EquipmentDocumentType,manufacturerKey:maybeText(r,"manufacturer_key"),modelKey:maybeText(r,"model_key"),assetId:maybeText(r,"asset_id"),uploadedByMembershipId:maybeText(r,"uploaded_by_membership_id"),uploadedByName:text(r,"uploaded_by_name"),createdAt:text(r,"created_at"),removedAt:maybeText(r,"removed_at"),removedByName:maybeText(r,"removed_by_name")}; }
+  async listEquipmentDocuments(org:string,asset:{id:string;manufacturer?:string;model?:string}) {
+    const model=equipmentKey(asset.model),maker=equipmentKey(asset.manufacturer);
+    const rows=await this.all(`SELECT * FROM ops_equipment_documents WHERE organization_id=? AND removed_at IS NULL AND (asset_id=?${model?" OR (asset_id IS NULL AND model_key=? AND (manufacturer_key IS NULL OR manufacturer_key=?))":""}) ORDER BY created_at DESC,id LIMIT 200`,model?[org,asset.id,model,maker??""]:[org,asset.id]);
+    return rows.map(r=>this.equipmentDocument(r));
+  }
+  async getEquipmentDocument(org:string,id:string) { const row=await this.first("SELECT * FROM ops_equipment_documents WHERE organization_id=? AND id=?",[org,id]); return row?this.equipmentDocument(row):null; }
   async getTechnicianStatus(org:string,member:string) { const row=await this.first("SELECT * FROM ops_technician_statuses WHERE organization_id=? AND membership_id=? ORDER BY revision DESC LIMIT 1",[org,member]); return row?complianceRow<import("./technician-status").TechnicianStatus>(row):null; }
   async getDispatchFilters(scope: OrganizationScope) {
     const params:unknown[]=[];const scoped=scopeWhere(scope,"s",params);

@@ -7,6 +7,7 @@ import { dispatchStatus, dispatchTime } from "@/lib/ops/dispatch-board";
 import { plainNextAction } from "@/lib/ops/dispatch-calendar";
 import { FileLinks } from "@/components/workspace/file-links";
 import { RecordFiles } from "@/components/workspace/record-files";
+import { EquipmentDocuments } from "@/components/workspace/equipment-documents";
 import styles from "@/components/workspace/internal-dispatch.module.css";
 const openStatuses=["approved","issued","accepted","scheduled","in_progress","waiting_on_vendor","waiting_on_parts"];
 async function context() {const value=await getOpsRequestContext(["technician"]);return {...value,scope:await internalDispatchScope(value.repository,value.session)};}
@@ -33,8 +34,11 @@ export async function TechnicianEquipment({id}:{id:string}) {
   const {repository,scope}=await context(),asset=await repository.getAssetDetail(scope,id);
   if(!asset)return unavailable("Equipment","/app/equipment");
   const store=(await repository.getStore(scope.organizationId,asset.storeId))!;
+  // Only show the per-unit files box when something is attached; the library below covers manuals.
+  const unitFiles=await repository.listFilesForEntity(scope.organizationId,"asset",id);
   return <div className={styles.workspace}><header className={styles.jobHeader}><Link href="/app/equipment">← Equipment</Link><h1>{asset.name}</h1><p>{asset.assetTag} · <Link href={`/app/stores/${encodeURIComponent(store.id)}`}>Store {store.storeNumber}</Link></p></header>
-    <section className={styles.jobBody}><dl className={styles.facts}>{[["Manufacturer",asset.manufacturer],["Model",asset.model],["Serial number",asset.serialNumber]].filter(([,value])=>value).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{asset.components.length?<details><summary>Equipment parts</summary><ul>{asset.components.map(component=><li key={component.id}>{component.name}{component.partNumber?` · ${component.partNumber}`:""}</li>)}</ul></details>:null}<RecordFiles kind="asset" id={id}/></section>
+    <section className={styles.jobBody}><dl className={styles.facts}>{[["Manufacturer",asset.manufacturer],["Model",asset.model],["Serial number",asset.serialNumber]].filter(([,value])=>value).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{asset.components.length?<details><summary>Equipment parts</summary><ul>{asset.components.map(component=><li key={component.id}>{component.name}{component.partNumber?` · ${component.partNumber}`:""}</li>)}</ul></details>:null}{unitFiles.length?<RecordFiles kind="asset" id={id}/>:null}</section>
+    <EquipmentDocuments assetId={id} />
     <TechnicianHistory repository={repository} scope={scope} assetId={id} limit={10} title="Work on this equipment" zone={store.timeZone}/><Link href={`/app/work-history?asset=${encodeURIComponent(id)}`}>All work history on this equipment</Link>
   </div>;
 }

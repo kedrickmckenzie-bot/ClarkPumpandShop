@@ -554,6 +554,13 @@
       "when": 1791226658705,
       "tag": "0078_clumsy_peter_quill",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1791229909702,
+      "tag": "0079_luxuriant_dragon_lord",
+      "breakpoints": true
     }
   ]
 }

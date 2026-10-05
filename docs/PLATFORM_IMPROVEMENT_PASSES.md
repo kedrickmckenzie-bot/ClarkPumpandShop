@@ -4,6 +4,21 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Equipment documents (knowledge base) — October 5, 2026
+
+First step of the owner's AI plan (documents → AI checkout → diagnostic assistant → invoice reading). The owner decided the knowledge base is manager-curated in the Equipment section, without AI, while anyone may later upload photos to the AI for one-off questions.
+
+- **Manuals & diagrams** section on every equipment page, on the technician's equipment page and on a technician's job when the job is on equipment. Types: Manual, Wiring diagram, Parts list, Spec sheet, Other.
+- A document applies to **every unit of a make and model** (upload once, it shows at every store; model numbers match loosely, so "M4FH-A050" and "m4fh a050" are the same) or to **one unit only**.
+- **Managers only** (facilities, regional and field managers who cover the store) add or remove documents. Anyone who can see the equipment, technicians included, can open them. Removal is recorded (who and when) and the document leaves the library; nothing is erased. Add and remove are audited.
+- Files: PDF, JPG, PNG or WebP up to 25 MB, stored through the existing private upload storage. New tenant-scoped `ops_equipment_documents` table (migration 0079, D1 and PostgreSQL).
+- Demo: three fictional per-model guides (rooftop unit service guide, beer cave troubleshooting guide, ice machine wiring sheet) and one unit-only install note for Store 104's beer cave. Each is plainly marked as a fictional demo document, not from any manufacturer, and written with page markers so the AI assistant can cite pages later.
+- The empty per-unit "Documents & photos" box no longer shows on the technician equipment page when nothing is attached.
+
+Validation: seed, typecheck, lint, 214 test files / 1,502 tests passed / 15 intentional adapter-specific skips (real PostgreSQL dispatch tests enabled; four test workers, 16-minute full run), 68 end-to-end checks, Vinext build and Render build.
+
+Browser check (development server with in-memory file storage): a manager uploaded a PDF for every unit of the Store 101 beer cave model, saw it on Store 103's beer cave, opened it, and removed it; a technician saw and opened the rooftop unit guide with no upload form. Production uploads still need the private S3-compatible bucket described in `docs/RENDER_DEPLOYMENT.md`; without it upload fails closed.
+
 ### Dispatch map with real driving routes — October 5, 2026
 
 The owner chose free OSRM road routing ("lets go with OSRM for now") and asked for real road lines rather than straight lines. Work is on `codex/internal-dispatch-p1`.

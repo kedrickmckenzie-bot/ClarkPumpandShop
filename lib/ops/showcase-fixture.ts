@@ -34,6 +34,17 @@ export function buildShowcaseFixture(anchorDate = new Date().toISOString()): Ops
     const source = showcaseDocuments[`org-northline-demo/showcase-v1/${fileName}`];
     Object.assign(existing, {storageKey:`org-northline-demo/showcase-v1/${fileName}`, originalName:source.name, contentType:"text/plain", byteLength:new TextEncoder().encode(source.text).length, sha256:source.sha256, status:"available"});
   }
+  // Equipment library: fictional guides for whole models plus one unit-only note.
+  f.equipmentDocuments ??= [];
+  for (const [fileName, title, docType, maker, model, assetId] of [
+    ["rtu-service-guide.txt", "Rooftop unit service guide (demo)", "manual", "trane", "precedentysc", undefined],
+    ["beer-cave-troubleshooting.txt", "Beer cave troubleshooting guide (demo)", "manual", "copeland", "m4fha050", undefined],
+    ["ice-machine-wiring-sheet.txt", "Ice machine wiring sheet (demo)", "wiring_diagram", "manitowoc", "iyt0750a", undefined],
+    ["104-beer-cave-install-notes.txt", "Store 104 beer cave install notes (demo)", "other", undefined, undefined, "asset-104-beer-cave"],
+  ] as const) {
+    const file = document(fileName);
+    f.equipmentDocuments.push({ id: `showcase-equipment-document-${fileName.replace(/\.txt$/, "")}`, organizationId: org, fileId: file.id, title, docType, manufacturerKey: maker, modelKey: model, assetId, uploadedByMembershipId: facility, uploadedByName: name(facility), createdAt: file.createdAt });
+  }
   const callbackFile = document("104-callback-invoice-summary.txt");
   f.invoices.find(i => i.id === "invoice-summit-104-warranty-callback")!.supportingFileId = callbackFile.id;
   f.entityFiles.push({id:"showcase-callback-invoice-file",organizationId:org,fileId:callbackFile.id,entityType:"invoice",entityId:"invoice-summit-104-warranty-callback",purpose:"invoice",visibility:"internal",createdAt:callbackFile.createdAt});

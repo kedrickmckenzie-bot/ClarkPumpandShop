@@ -1,4 +1,5 @@
 import { JobPreparationFields } from "@/components/workspace/job-preparation-fields";
+import { EquipmentDocuments } from "@/components/workspace/equipment-documents";
 import { TechnicianHistory } from "@/components/workspace/technician-history";
 import { dispatchPlanLabel, dispatchTime, dueLabel } from "@/lib/ops/dispatch-board";
 import Link from "next/link";
@@ -198,6 +199,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
     </section> : null}
 
     <p><Link href={`/app/work-orders/${encodeURIComponent(id)}`}>Full work order record →</Link></p>
+    {work.asset ? <EquipmentDocuments assetId={work.asset.id} compact /> : null}
     {recent}
   </div>;
 }
