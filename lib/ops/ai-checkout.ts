@@ -39,7 +39,7 @@ Rules:
 - Never tell anyone to skip lockout/tagout or bypass a safety control.`;
 
 /** One turn of the checkout chat. Stateless: the whole conversation is sent each time. */
-export async function checkoutChatTurn(ai: AiClient, input: CheckoutDraftInput & { messages: { from: "tech" | "ai"; text: string }[] }): Promise<CheckoutChatTurn> {
+export async function checkoutChatTurn(ai: AiClient, input: CheckoutDraftInput & { messages: { from: "tech" | "ai"; text: string }[]; earlier?: { from: "tech" | "ai"; text: string }[] }): Promise<CheckoutChatTurn> {
   if (!input.messages.some(message => message.from === "tech")) throw new AiUnavailableError("Tell me what you did first.");
   const choices = checkoutChoices(input.mode, input.lookAndReport);
   const prompt = [
@@ -49,6 +49,7 @@ export async function checkoutChatTurn(ai: AiClient, input: CheckoutDraftInput &
     `Form: ${input.mode === "problem" ? "Flag a problem (the job is not finished)" : "Record the result"}`,
     `Allowed results (id = label): ${choices.map(([id, label]) => `${id} = ${label}`).join("; ")}`,
     input.lookAndReport ? "This was a look-and-report visit: repairs may not have been allowed." : undefined,
+    ...(input.earlier?.length ? ["", "Earlier troubleshooting chat on this job (use it so you don't ask again; the technician still confirms the result):", ...input.earlier.slice(-30).map(message => `${message.from === "tech" ? "Technician" : "Assistant"}: ${message.text.slice(0, 2000)}`)] : []),
     "",
     "Conversation so far:",
     ...input.messages.slice(-30).map(message => `${message.from === "tech" ? "Technician" : "You"}: ${message.text.slice(0, 2000)}`),

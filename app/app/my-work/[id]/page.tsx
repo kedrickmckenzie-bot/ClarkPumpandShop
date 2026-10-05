@@ -1,3 +1,4 @@
+import { AiDiagnoseChat } from "@/components/workspace/ai-diagnose-chat";
 import { JobPreparationFields } from "@/components/workspace/job-preparation-fields";
 import { getAiClient } from "@/lib/server/ai-provider";
 import { EquipmentDocuments } from "@/components/workspace/equipment-documents";
@@ -126,6 +127,8 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
         </Link>
       </p> : null}
     </section>
+
+    {aiHelp && (mine || manager) && !terminal ? <AiDiagnoseChat workOrderId={id}/> : null}
 
     <section id="next-step" className={styles.jobBody}>
       <h2 className={styles.subHeading}>Next step</h2>

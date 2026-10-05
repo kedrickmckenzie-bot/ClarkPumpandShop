@@ -12,14 +12,14 @@ export async function POST(request: Request) {
     const { session, repository } = await getOpsRequestContext(["technician", "facilities", "regional"], undefined, request);
     const ai = getAiClient();
     if (!ai) return Response.json({ error: "AI help isn't turned on yet. Use the form below." }, { status: 503 });
-    const body = await request.json().catch(() => null) as { workOrderId?: unknown; mode?: unknown; lookAndReport?: unknown; messages?: unknown } | null;
+    const body = await request.json().catch(() => null) as { workOrderId?: unknown; mode?: unknown; lookAndReport?: unknown; messages?: unknown; earlier?: unknown } | null;
     const workOrderId = typeof body?.workOrderId === "string" ? body.workOrderId : "";
     if (!workOrderId) throw new OpsDomainError("VALIDATION", "Choose a job.");
     const mode = body?.mode === "visit" || body?.mode === "problem" ? body.mode : "job";
-    const messages = cleanChatMessages(body?.messages);
+    const messages = cleanChatMessages(body?.messages), earlier = Array.isArray(body?.earlier) ? cleanChatMessages(body.earlier.slice(-40), 40) : [];
     const job = await aiJobContext(repository, session, workOrderId);
     try {
-      const turn = await checkoutChatTurn(ai, { mode, lookAndReport: body?.lookAndReport === true, problem: job.problem, store: job.store, equipment: job.equipment, messages });
+      const turn = await checkoutChatTurn(ai, { mode, lookAndReport: body?.lookAndReport === true, problem: job.problem, store: job.store, equipment: job.equipment, messages, earlier });
       return Response.json({ turn, provider: ai.provider, model: ai.model }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       if (error instanceof AiUnavailableError) return Response.json({ error: error.message }, { status: 503 });

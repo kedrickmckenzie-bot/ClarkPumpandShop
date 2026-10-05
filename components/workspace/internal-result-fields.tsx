@@ -1,4 +1,5 @@
 "use client";
+import { clearDiagnoseChat, readDiagnoseChat } from "./ai-diagnose-chat";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SearchPicker } from "@/components/ops/search-picker";
 import { storeVendorPickPage } from "@/components/ops/work-routing-fields";
@@ -41,7 +42,7 @@ function AiCheckoutChat({ workOrderId, mode, lookAndReport, autoSubmit, onDraft 
     const next = [...messages, { from: "tech" as const, text: said }];
     setMessages(next); setText(""); setBusy(true); setError(""); setTurn(undefined);
     try {
-      const response = await fetch("/api/ops/ai/checkout-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workOrderId, mode, lookAndReport, messages: next }) });
+      const response = await fetch("/api/ops/ai/checkout-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workOrderId, mode, lookAndReport, messages: next, earlier: readDiagnoseChat(workOrderId) }) });
       const result = await response.json() as { turn?: ChatTurn; error?: string };
       if (!response.ok || !result.turn) throw new Error(result.error ?? "The AI couldn't answer. Use the form below.");
       setMessages([...next, { from: "ai", text: result.turn.reply }]);
@@ -60,7 +61,11 @@ function AiCheckoutChat({ workOrderId, mode, lookAndReport, autoSubmit, onDraft 
     setMessages(finalMessages); setBusy(true);
     onDraft(turn);
     // The conversation is kept with the job for history and later diagnostics; the job record is the form below.
-    await fetch("/api/ops/ai/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workOrderId, kind: "checkout", messages: finalMessages, summary: turn.notes }) }).catch(() => undefined);
+    // keepalive lets the save (and the detailed note written from it) finish after the page moves on.
+    const body = JSON.stringify({ workOrderId, kind: "checkout", messages: finalMessages, summary: turn.notes, diagnostic: readDiagnoseChat(workOrderId) });
+    const saving = fetch("/api/ops/ai/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: body.length < 60000 }).catch(() => undefined);
+    if (body.length >= 60000) await saving;
+    clearDiagnoseChat(workOrderId);
     setBusy(false);
     if (!autoSubmit) { setFinished("Filled in below. Finish the other jobs, then save."); return; }
     setFinished("Saving…");
@@ -94,6 +99,7 @@ function AiCheckoutChat({ workOrderId, mode, lookAndReport, autoSubmit, onDraft 
           </label>
           <button type="button" onClick={() => void send(text)} disabled={busy || !text.trim()} style={{minHeight:44,padding:"8px 16px",borderRadius:5,border:"1px solid #2457d6",background:"#2457d6",color:"white",fontWeight:600}}>Send</button>
         </div>}
+    <small style={{color:"#5b6b80"}}>This chat is saved to help with future repairs.</small>
   </div>;
 }
 

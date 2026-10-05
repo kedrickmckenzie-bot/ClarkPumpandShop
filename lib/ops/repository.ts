@@ -231,6 +231,8 @@ export interface OpsRepository extends TaskRepository {
   listEquipmentDocuments(organizationId:string,asset:{id:string;manufacturer?:string;model?:string}): Promise<import("./equipment-documents").EquipmentDocument[]>;
   /** Saved AI conversations for a job, newest first. */
   listAiConversations(organizationId:string,workOrderId:string): Promise<import("./ai-conversations").AiConversation[]>;
+  /** AI repair notes for jobs on this unit, newest first. Read by the AI; opened by people only through openEquipmentNotes. */
+  listEquipmentNotes(organizationId:string,assetId:string,limit:number): Promise<import("./equipment-notes").EquipmentNote[]>;
   getEquipmentDocument(organizationId:string,id:string): Promise<import("./equipment-documents").EquipmentDocument|null>;
   getTechnicianStatus(organizationId:string,membershipId:string): Promise<import("./technician-status").TechnicianStatus|null>;
   /** Cached driving legs for these exact point pairs (at most 100 per call). */

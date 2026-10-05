@@ -193,6 +193,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
   if (table === "ops_route_legs") fixture.routeLegs ??= [];
   if (table === "ops_equipment_documents") fixture.equipmentDocuments ??= [];
   if (table === "ops_ai_conversations") fixture.aiConversations ??= [];
+  if (table === "ops_equipment_notes") fixture.equipmentNotes ??= [];
   const mapping: Record<string, keyof OpsFixture> = {
     ops_store_tasks: "storeTasks", ops_store_task_messages: "storeTaskMessages", ops_store_task_people: "storeTaskPeople", ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
     ops_equipment_templates: "equipmentTemplates", ops_component_templates: "componentTemplates",
@@ -202,7 +203,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
-    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
+    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_equipment_notes: "equipmentNotes", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
     ops_approval_policies: "approvalPolicies", ops_approval_requests: "approvalRequests", ops_approval_decisions: "approvalDecisions",
     ops_work_order_visit_holds: "workOrderVisitHolds", ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
     ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
@@ -233,6 +234,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
 function hydrateInserted(table: string, raw: Record<string, unknown>) {
   const row: Record<string, unknown> = {};
   Object.entries(raw).forEach(([key, value]) => { row[snakeToCamel(key)] = value; });
+  if (table === "ops_equipment_notes") { Object.assign(row, JSON.parse(String(row.noteJson ?? "{}"))); delete row.noteJson; for (const key of ["provider", "model", "createdByMembershipId"]) if (row[key] === null) delete row[key]; }
   if (table === "ops_ai_conversations") { row.messages = JSON.parse(String(row.messagesJson ?? "[]")); delete row.messagesJson; for (const key of ["summary", "provider", "model", "createdByMembershipId"]) if (row[key] === null) delete row[key]; }
   if (table === "ops_taxonomy_nodes") { row.aliases = JSON.parse(String(row.aliasesJson ?? "[]")); row.active = Boolean(row.active); delete row.aliasesJson; }
   if (table === "ops_equipment_templates") row.active = Boolean(row.active);
@@ -708,6 +710,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async getLatestTechnicianVisit(org:string,member:string) { return clone(this.fixture.visits.filter(v=>v.organizationId===org&&v.internalMembershipId===member).sort((a,b)=>Number(b.status==="active")-Number(a.status==="active")||b.checkedInAt.localeCompare(a.checkedInAt)||b.id.localeCompare(a.id))[0]??null); }
   async getRouteLegs(org:string,pairs:{fromLatE6:number;fromLngE6:number;toLatE6:number;toLngE6:number}[]) { const wanted=pairs.slice(0,100); return clone((this.fixture.routeLegs??[]).filter(l=>l.organizationId===org&&wanted.some(p=>p.fromLatE6===l.fromLatE6&&p.fromLngE6===l.fromLngE6&&p.toLatE6===l.toLatE6&&p.toLngE6===l.toLngE6))); }
   async listEquipmentDocuments(org:string,asset:{id:string;manufacturer?:string;model?:string}) { return clone((this.fixture.equipmentDocuments??[]).filter(d=>d.organizationId===org&&documentAppliesTo(d,asset)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id)).slice(0,200)); }
+  async listEquipmentNotes(org:string,assetId:string,limit:number) { const jobs=new Set(this.fixture.workOrders.filter(w=>w.organizationId===org&&w.assetId===assetId).map(w=>w.id)); return clone((this.fixture.equipmentNotes??[]).filter(n=>n.organizationId===org&&jobs.has(n.workOrderId)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id)).slice(0,limit)); }
   async listAiConversations(org:string,workOrderId:string) { return clone((this.fixture.aiConversations??[]).filter(c=>c.organizationId===org&&c.workOrderId===workOrderId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id)).slice(0,20)); }
   async getEquipmentDocument(org:string,id:string) { return clone((this.fixture.equipmentDocuments??[]).find(d=>d.organizationId===org&&d.id===id)??null); }
   async getTechnicianStatus(org:string,member:string) { return clone((this.fixture.technicianStatuses??[]).filter(s=>s.organizationId===org&&s.membershipId===member).sort((a,b)=>b.revision-a.revision)[0]??null); }

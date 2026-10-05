@@ -1,3 +1,5 @@
+import { AiDiagnoseChat } from "@/components/workspace/ai-diagnose-chat";
+import { getAiClient } from "@/lib/server/ai-provider";
 import { TechnicianEquipment } from "@/lib/server/technician-tools";
 import {LinkedStoreTasks} from "@/components/workspace/linked-store-tasks";
 import { RecordFiles } from "@/components/workspace/record-files";
@@ -63,8 +65,8 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
       compactFacts
       model={model}
       initialSection="overview"
-      beforeSections={<><p className={docStyles.jump}><a href="#documents">{documentCount ? `Manuals & diagrams (${documentCount})` : "Manuals & diagrams: none yet"} ↓</a></p>{review ? <EquipmentReview model={review} /> : null}<EquipmentDocuments assetId={id} saved={typeof query.saved === "string" ? query.saved : undefined} /><details><summary>Other files on this record</summary><RecordFiles kind="asset" id={id} /></details><LinkedStoreTasks kind="asset" id={id} />{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
-      after={canSetupEquipment || canSetupPm ? <SetupActions
+      beforeSections={<><p className={docStyles.jump}><a href="#documents">{documentCount ? `Manuals & diagrams (${documentCount})` : "Manuals & diagrams: none yet"} ↓</a></p>{review ? <EquipmentReview model={review} /> : null}{asset && getAiClient() ? <AiDiagnoseChat assetId={id} title="Ask AI about this equipment"/> : null}<EquipmentDocuments assetId={id} saved={typeof query.saved === "string" ? query.saved : undefined} /><details><summary>Other files on this record</summary><RecordFiles kind="asset" id={id} /></details><LinkedStoreTasks kind="asset" id={id} />{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
+      after={<>{canSetupEquipment || canSetupPm ? <SetupActions
           title="Build out this equipment record"
           description="Add component depth or schedule preventive work. Both features stay optional and connect back to this equipment history."
           actions={[
@@ -76,6 +78,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
               : []),
           ]}
         /> : null}
+        {session.role === "facilities" && !session.persona ? <p style={{ margin: "32px 0 0", fontSize: 13 }}><a href={`/app/equipment/${encodeURIComponent(id)}/ai-notes`} style={{ color: "#5b6b80" }}>AI repair notes (admin)</a></p> : null}</>}
     />
   );
 }

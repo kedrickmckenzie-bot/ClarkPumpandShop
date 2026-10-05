@@ -1055,3 +1055,15 @@ export const opsAiConversations = sqliteTable("ops_ai_conversations", {
   foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
   check("chk_ops_ai_conversations",sql`${t.kind} IN ('checkout','diagnostic')`),
 ]);
+/** AI-written repair notes from a technician's chat, for future diagnostics. Insert-only; read by the AI, opened only by top admins. */
+export const opsEquipmentNotes = sqliteTable("ops_equipment_notes", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), workOrderId: text("work_order_id").notNull(),
+  conversationId: text("conversation_id").notNull(), noteJson: text("note_json").notNull(),
+  provider: text("provider"), model: text("model"),
+  createdByMembershipId: text("created_by_membership_id"), createdByName: text("created_by_name").notNull(), createdAt: text("created_at").notNull(),
+},t=>[
+  index("idx_ops_equipment_notes_work").on(t.organizationId,t.workOrderId,t.createdAt),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
+  foreignKey({columns:[t.conversationId],foreignColumns:[opsAiConversations.id]}),
+]);
