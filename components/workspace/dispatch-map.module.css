@@ -206,3 +206,107 @@
   color: #5b6b80;
   font-size: 13px;
 }
+/* Tech row with a "⋯" button that opens that tech's ordered jobs beside the map. */
+.techRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.techRow > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.legend .more {
+  flex-shrink: 0;
+  width: 36px;
+  min-height: 36px;
+  margin-top: 4px;
+  padding: 0;
+  border: 1px solid #d3dcea;
+  border-radius: 5px;
+  background: white;
+  color: #2457d6;
+  font: 700 18px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+.legend .more[aria-expanded="true"] {
+  border-color: #2457d6;
+  background: #eef3ff;
+}
+.stopList {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0 0 0 8px;
+}
+.legend .stopList li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid #eef1f5;
+}
+.stopNumber {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 3px solid;
+  border-radius: 50%;
+  font: 700 11px/1 system-ui, sans-serif;
+  box-sizing: border-box;
+}
+.legend .stopName {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.stopName strong {
+  display: block;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stopName small {
+  display: block;
+  font-size: 12px;
+  color: #5b6b80;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fixed { color: #5b6b80; font-size: 13px; white-space: nowrap; }
+
+.arrows {
+  display: flex;
+  gap: 4px;
+}
+.legend .arrows button {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid #d3dcea;
+  border-radius: 4px;
+  background: white;
+  color: #2457d6;
+  font-size: 15px;
+  cursor: pointer;
+}
+.legend .arrows button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+@media (hover: none) {
+  .legend .arrows button {
+    width: 44px;
+    min-height: 44px;
+  }
+}

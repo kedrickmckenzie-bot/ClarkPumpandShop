@@ -7,7 +7,8 @@ import { civilDate } from "@/lib/ops/dispatch-calendar";
 import { jobShortName } from "@/lib/ops/short-name";
 import styles from "@/components/workspace/internal-dispatch.module.css";
 
-export default async function NextStatus() {
+export default async function NextStatus({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
+  const saved = (await searchParams).saved === "1";
   const c = await getOpsRequestContext(["technician"]),
     r = c.repository,
     scope = await internalDispatchScope(r, c.session),
@@ -39,6 +40,7 @@ export default async function NextStatus() {
   );
   return (
     <section className={styles.workspace}>
+      {saved ? <p role="status" className={styles.savedNote}>✓ Result saved.</p> : null}
       <h1>What&apos;s next?</h1>
       <p>Let your team know. This is optional.</p>
       {storeId ? (

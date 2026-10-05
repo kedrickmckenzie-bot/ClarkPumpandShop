@@ -229,6 +229,8 @@ export interface OpsRepository extends TaskRepository {
   getLatestTechnicianVisit(organizationId:string,membershipId:string):Promise<VisitSession|null>;
   /** Library documents for this unit: its own plus those for its make and model, newest first. */
   listEquipmentDocuments(organizationId:string,asset:{id:string;manufacturer?:string;model?:string}): Promise<import("./equipment-documents").EquipmentDocument[]>;
+  /** Saved AI conversations for a job, newest first. */
+  listAiConversations(organizationId:string,workOrderId:string): Promise<import("./ai-conversations").AiConversation[]>;
   getEquipmentDocument(organizationId:string,id:string): Promise<import("./equipment-documents").EquipmentDocument|null>;
   getTechnicianStatus(organizationId:string,membershipId:string): Promise<import("./technician-status").TechnicianStatus|null>;
   /** Cached driving legs for these exact point pairs (at most 100 per call). */

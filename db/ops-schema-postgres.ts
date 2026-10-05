@@ -2277,3 +2277,16 @@ export const opsEquipmentDocuments = pgTable("ops_equipment_documents", {
   foreignKey({columns:[t.organizationId,t.assetId],foreignColumns:[opsAssets.organizationId,opsAssets.id]}),
   check("chk_ops_equipment_documents",sql`${t.docType} IN ('manual','wiring_diagram','parts_list','spec_sheet','other') AND (${t.assetId} IS NOT NULL OR ${t.modelKey} IS NOT NULL)`),
 ]);
+
+/** A saved AI conversation about a job (for example the checkout chat); kept as written, for history and later diagnostics. */
+export const opsAiConversations = pgTable("ops_ai_conversations", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), workOrderId: text("work_order_id").notNull(),
+  kind: text("kind").notNull(), messagesJson: text("messages_json").notNull(), summary: text("summary"),
+  provider: text("provider"), model: text("model"),
+  createdByMembershipId: text("created_by_membership_id"), createdByName: text("created_by_name").notNull(), createdAt: text("created_at").notNull(),
+},t=>[
+  index("idx_ops_ai_conversations_work").on(t.organizationId,t.workOrderId,t.createdAt),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
+  check("chk_ops_ai_conversations",sql`${t.kind} IN ('checkout','diagnostic')`),
+]);

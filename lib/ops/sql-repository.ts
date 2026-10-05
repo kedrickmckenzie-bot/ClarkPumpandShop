@@ -546,6 +546,9 @@ class SqlOpsRepository implements OpsRepository {
     const rows=await this.all(`SELECT * FROM ops_equipment_documents WHERE organization_id=? AND removed_at IS NULL AND (asset_id=?${model?" OR (asset_id IS NULL AND model_key=? AND (manufacturer_key IS NULL OR manufacturer_key=?))":""}) ORDER BY created_at DESC,id LIMIT 200`,model?[org,asset.id,model,maker??""]:[org,asset.id]);
     return rows.map(r=>this.equipmentDocument(r));
   }
+  async listAiConversations(org:string,workOrderId:string) {
+    return (await this.all("SELECT * FROM ops_ai_conversations WHERE organization_id=? AND work_order_id=? ORDER BY created_at DESC,id LIMIT 20",[org,workOrderId])).map(r=>({id:text(r,"id"),organizationId:text(r,"organization_id"),workOrderId:text(r,"work_order_id"),kind:text(r,"kind") as "checkout"|"diagnostic",messages:JSON.parse(text(r,"messages_json")) as import("./ai-conversations").AiChatMessage[],summary:maybeText(r,"summary"),provider:maybeText(r,"provider"),model:maybeText(r,"model"),createdByMembershipId:maybeText(r,"created_by_membership_id"),createdByName:text(r,"created_by_name"),createdAt:text(r,"created_at")}));
+  }
   async getEquipmentDocument(org:string,id:string) { const row=await this.first("SELECT * FROM ops_equipment_documents WHERE organization_id=? AND id=?",[org,id]); return row?this.equipmentDocument(row):null; }
   async getTechnicianStatus(org:string,member:string) { const row=await this.first("SELECT * FROM ops_technician_statuses WHERE organization_id=? AND membership_id=? ORDER BY revision DESC LIMIT 1",[org,member]); return row?complianceRow<import("./technician-status").TechnicianStatus>(row):null; }
   async getDispatchFilters(scope: OrganizationScope) {

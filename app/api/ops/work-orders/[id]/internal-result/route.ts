@@ -28,6 +28,6 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
       else await recordInternalWorkResult({repository:c.repository},{...resultInput,files:await storeCompletionFiles(form,c.session.organizationId,id,c.session.accessMode==="preview",input.key)});
     }
     if (request.headers.get("accept")?.includes("application/json")) return Response.json({ saved: true, number: work.number });
-    return relativeRedirect303(c.session.role==="technician"&&action==="result"?"/app/my-work/next":`/app/my-work/${encodeURIComponent(id)}?saved=1`);
+    return relativeRedirect303(c.session.role==="technician"&&action==="result"?"/app/my-work/next?saved=1":`/app/my-work/${encodeURIComponent(id)}?saved=1`);
   }catch(error){return opsApiError(error);}
 }

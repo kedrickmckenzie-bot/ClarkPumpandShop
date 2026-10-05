@@ -55,7 +55,7 @@ const minutes = (seconds: number) => {
 };
 const miles = (meters: number) => `${Math.round(meters / 160.934) / 10} mi`;
 
-export function DispatchMap({ techs, queue, held = [], onOpen, onPickHeld, shortStore }: {
+export function DispatchMap({ techs, queue, held = [], onOpen, onPickHeld, onMove, canMove, busy = false, shortStore }: {
   techs: MapTech[];
   queue: DispatchJob[];
   /** Small jobs set aside for a future visit; shown only when the manager switches them on. */
@@ -63,11 +63,16 @@ export function DispatchMap({ techs, queue, held = [], onOpen, onPickHeld, short
   onOpen: (job: DispatchJob) => void;
   /** Called with every next-visit job at the store whose dot was tapped. */
   onPickHeld?: (jobs: DispatchJob[]) => void;
+  /** Reorders a tech's day from the side list; the board saves it like any other move. */
+  onMove?: (job: DispatchJob, techId: string, toIndex: number) => void;
+  canMove?: (job: DispatchJob) => boolean;
+  /** True while a move is saving, so arrows can't be pressed twice. */
+  busy?: boolean;
   shortStore: (job: DispatchJob) => string;
 }) {
   const box = useRef<HTMLDivElement>(null), map = useRef<MapLibreMap | null>(null), markers = useRef<Marker[]>([]), fitted = useRef("");
   const [routes, setRoutes] = useState<Routes>(), [error, setError] = useState(""), [only, setOnly] = useState<string>();
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(false), [openTech, setOpenTech] = useState<string>();
   // Remembered per browser; off by default so the map stays about today's real work.
   const storedShowHeld = useSyncExternalStore(noSubscription, readShowHeld, () => false);
   const [showHeldChoice, setShowHeldChoice] = useState<boolean>();
@@ -228,16 +233,43 @@ export function DispatchMap({ techs, queue, held = [], onOpen, onPickHeld, short
             const s = summary(tech);
             return (
               <li key={tech.id}>
-                <button aria-pressed={only === tech.id} onClick={() => setOnly(only === tech.id ? undefined : tech.id)}>
-                  <span className={styles.swatch} style={{ background: tech.color }} />
-                  <span>
-                    <strong>{tech.name}</strong>
-                    <small>
-                      {tech.stops.length ? `${tech.stops.length} ${tech.stops.length === 1 ? "stop" : "stops"}` : "Nothing planned"}
-                      {s.duration ? ` · ${minutes(s.duration)} driving · ${miles(s.distance)}` : ""}
-                    </small>
-                  </span>
-                </button>
+                <div className={styles.techRow}>
+                  <button aria-pressed={only === tech.id} onClick={() => setOnly(only === tech.id ? undefined : tech.id)}>
+                    <span className={styles.swatch} style={{ background: tech.color }} />
+                    <span>
+                      <strong>{tech.name}</strong>
+                      <small>
+                        {tech.stops.length ? `${tech.stops.length} ${tech.stops.length === 1 ? "stop" : "stops"}` : "Nothing planned"}
+                        {s.duration ? ` · ${minutes(s.duration)} driving · ${miles(s.distance)}` : ""}
+                      </small>
+                    </span>
+                  </button>
+                  {tech.stops.length ? (
+                    <button className={styles.more} aria-expanded={openTech === tech.id} aria-label={`${openTech === tech.id ? "Hide" : "Show"} ${tech.name}'s jobs`} title="Jobs and order" onClick={() => { setOpenTech(openTech === tech.id ? undefined : tech.id); setOnly(tech.id); }}>⋯</button>
+                  ) : null}
+                </div>
+                {openTech === tech.id ? (
+                  <ol className={styles.stopList}>
+                    {tech.stops.map((job, i) => {
+                      const movable = Boolean(onMove && canMove?.(job));
+                      return (
+                        <li key={job.id}>
+                          <span className={styles.stopNumber} style={{ borderColor: tech.color }}>{i + 1}</span>
+                          <button className={styles.stopName} onClick={() => onOpen(job)} title={job.problem}>
+                            <strong>{jobShortName(job)}</strong>
+                            <small>{shortStore(job)}</small>
+                          </button>
+                          {movable ? (
+                            <span className={styles.arrows}>
+                              <button aria-label={`Move ${jobShortName(job)} earlier`} disabled={busy || i === 0} onClick={() => onMove?.(job, tech.id, i - 1)}>↑</button>
+                              <button aria-label={`Move ${jobShortName(job)} later`} disabled={busy || i === tech.stops.length - 1} onClick={() => onMove?.(job, tech.id, i + 1)}>↓</button>
+                            </span>
+                          ) : onMove ? <small className={styles.fixed}>{job.status === "in_progress" ? "Working now" : "Can't move"}</small> : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : null}
               </li>
             );
           })}

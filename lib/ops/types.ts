@@ -2040,6 +2040,7 @@ export interface OpsFixture {
   technicianStatuses?: import("./technician-status").TechnicianStatus[];
   routeLegs?: import("./route-legs").RouteLeg[];
   equipmentDocuments?: import("./equipment-documents").EquipmentDocument[];
+  aiConversations?: import("./ai-conversations").AiConversation[];
   technicianProfiles?: TechnicianProfile[];
   internalSchedules?: import("./internal-schedule-types").InternalSchedule[];
  storeTasks?: import("./store-task-types").StoreTask[];

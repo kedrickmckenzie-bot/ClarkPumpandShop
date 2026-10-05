@@ -832,6 +832,9 @@ export function DispatchPlan(initial: Board) {
           queue={data.queue.items}
           held={data.held}
           onOpen={setDetail}
+          onMove={(job, techId, toIndex) => placeJob(job, techId, focusDay, toIndex)}
+          canMove={(job) => manager && canPlanJob(job)}
+          busy={pending}
           onPickHeld={(jobs) => {
             setHeldPick({ jobs, jobId: jobs[0].id, techId: "", position: -1 });
           }}

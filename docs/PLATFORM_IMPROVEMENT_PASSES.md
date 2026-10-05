@@ -4,6 +4,21 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Checkout by chat and the map job list — October 5, 2026
+
+The owner asked for a full checkout conversation ("asks what they did… makes sure it has the info… a very brief summary to confirm… says job completed") saved for later diagnostics, and for a ⋯ button beside each tech on the map that opens their job list with ↑↓ to reorder.
+
+- **Finish by chat** replaces the one-shot "Fill it in for me" box when AI is configured. Opening Record result (or Flag a problem) starts with "What did you do?". The AI asks one short question at a time (about four at most), using common sense for the equipment (box temperature for refrigeration, heating/cooling for HVAC, leak stopped, lights work) and only for what is missing. When it has enough it shows a one- or two-sentence summary ending "Is that right?" with **Yes, that's right** and **Change something**.
+- Yes fills the normal form, saves the conversation, and presses the form's own save button, so the result goes through the same commands, checks and audit as a typed result. A single-job visit and a job page save at once; a visit with several jobs fills each job and waits for the one Save. After saving, What's next shows "✓ Result saved." **Use the form instead** is always available.
+- Guardrails in code, not just the prompt: the result is clamped to the form's allowed choices; "ready" is refused while "working when you left" is unknown or unfinished work has no note; the AI is told never to invent parts, readings or causes. Nothing is saved until the tech confirms.
+- Saved conversations: new insert-only table `ops_ai_conversations` (migration 0080, D1 and PostgreSQL) with organization, job, kind (`checkout` now, `diagnostic` next), messages, summary, provider/model and who. Read back with `listAiConversations`, scoped by organization; fixture and SQL return the same rows. They are evidence for the diagnostic assistant, not a change to the job.
+- **Map job list:** ⋯ beside each technician opens that tech's numbered stops for the day. ↑↓ use the board's normal plan save (Undo, fixed-time and in-progress jobs respected) and the route redraws. Jobs that cannot move say "Working now" or "Can't move".
+- Tests: chat turn passes job/equipment/allowed results/whole transcript; ready gating; outcome clamping; no AI call before the tech speaks; browser message checks; save/list in fixture and SQL with organization scoping; migration chain 81.
+
+Browser check (real AI): 390 px — "swapped the worn cartridge" → "Did the drip stop?" → "yeah no drip, it works" → summary → Yes → saved as Fixed with notes, conversation saved (200), What's next shown. 1440 px — "door gasket torn, need 30x76" → asked about the fan → summary → Needs more work, saved. Map ⋯ list reorder saved (200) at 1440 px and 390 px with no page errors.
+
+Validation: `db:seed`, `typecheck`, `lint`, `npm test` with PostgreSQL (1511 passed, 15 skipped), `test:e2e` (68 passed), `build` and `build:render` all passed.
+
 ### Next-visit small jobs on the Dispatch map — October 5, 2026
 
 The owner wants managers to spot low-priority "do on next visit" work near a tech's route (for example a store a mile down the road) without flooding the map, and decided that a person, not a distance rule, judges what is close enough.
