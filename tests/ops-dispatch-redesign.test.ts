@@ -5,7 +5,7 @@ import {GET as dayJobs} from "@/app/api/ops/internal-dispatch/jobs/route";
 import {POST as schedule} from "@/app/api/ops/work-orders/[id]/internal-schedule/route";
 import {createOpsFixtureRepository} from "@/lib/ops/fixture-repository";
 import {buildShowcaseFixture} from "@/lib/ops/showcase-fixture";
-import {renderDispatchBoard} from "@/lib/server/dispatch-board-page";
+import {loadDispatchBoard,renderDispatchBoard} from "@/lib/server/dispatch-board-page";
 import TechnicianPage from "@/app/app/dispatch/technicians/[id]/page";
 import {TechnicianHistory} from "@/components/workspace/technician-history";
 import {technicianSearch} from "@/lib/server/technician-search";
@@ -24,12 +24,32 @@ describe("Dispatch redesign boundaries and user choices",()=>{
   let r:ReturnType<typeof createOpsFixtureRepository>,session:OperatorSession;
   beforeEach(()=>{r=createOpsFixtureRepository(buildShowcaseFixture(dispatchNow));session={accessMode:"authenticated",demoEdition:"complete",role:"facilities",userId:"user-northline-facilities",membershipId:"membership-northline-facilities",organizationId:dispatchOrg,organizationName:"Fictional QA",displayName:"Jordan",email:"qa@example.test",companywide:true,scopeLabel:"Test",permissions:["ops:write"]};mocks.repository.mockResolvedValue(r);mocks.session.mockImplementation(async()=>session);});
   function asTechnician(){session={...session,role:"technician",membershipId:dispatchTech[0],userId:"user-northline-tech-1"};}
-  it("opens Assign with readable incoming work and six technicians",async()=>{
+  it("opens Plan with readable incoming work and six technicians",async()=>{
     const html=renderToStaticMarkup(await renderDispatchBoard({}));
-    for(const label of ["Dispatch views", "Needs a tech", "Today", "Compare", "Current job", "Next planned stop", "Duration unknown", "Alex Morgan", "Riley Chen"])expect(html).toContain(label);
+    for(const label of ["Plan by day", "Needs a tech", "Today", "This week", "Next week", "time unknown", "Alex Morgan", "Riley Chen"])expect(html).toContain(label);
     expect(html).toContain("The back-room floor drain is backing up and water is approaching stored cartons. The manager needs help today.");
     expect(html).not.toContain("Weekly store walk");expect(html).not.toContain("recordedCostMinor");
     expect(html).toContain('draggable="true"');expect(html).not.toContain('>0 jobs<');
+  });
+  it("renders a bounded 30-technician, 200-job synthetic week",async()=>{
+    const fixture=buildShowcaseFixture(dispatchNow);
+    const member=fixture.memberships.find(m=>m.id===dispatchTech[0])!,user=fixture.users.find(u=>u.id===member.userId)!;
+    const grant=fixture.scopeGrants.find(g=>g.membershipId===member.id)!;
+    for(let i=7;i<=30;i++){const id=`synthetic-tech-${i}`;fixture.users.push({...user,id:`synthetic-user-${i}`,displayName:`Synthetic technician ${String(i).padStart(2,"0")}`,email:`tech${i}@example.test`});fixture.memberships.push({...member,id,userId:`synthetic-user-${i}`});fixture.scopeGrants.push({...grant,id:`synthetic-grant-${i}`,membershipId:id,scopeKind:"organization",scopeId:dispatchOrg});}
+    const people=fixture.memberships.filter(m=>m.role==="internal_technician");expect(people).toHaveLength(30);
+    const assignment=fixture.assignments.find(a=>a.internalMembershipId===dispatchTech[0])!;
+    const work=fixture.workOrders.find(w=>w.id===assignment.workOrderId)!;
+    for(let i=0;i<200;i++){const id=`synthetic-work-${i}`,assignmentId=`synthetic-assignment-${i}`,planId=`synthetic-plan-${i}`,person=people[i%30];
+      fixture.workOrders.push({...work,id,number:`SYN-${i}`,problem:`Synthetic dispatch job ${i}`,status:"approved",version:0,internalScheduleId:planId,estimatedMinutes:i%3?60:undefined,createdAt:dispatchNow});
+      fixture.assignments.push({...assignment,id:assignmentId,workOrderId:id,status:"accepted",internalTarget:"person",internalMembershipId:person.id});
+      fixture.internalSchedules!.push({id:planId,organizationId:dispatchOrg,workOrderId:id,assignmentId,revision:1,attempt:1,precision:"day",planningZone:"America/New_York",week:"2026-10-05",day:`2026-10-${String(5+i%7).padStart(2,"0")}`,tentative:false,stopOrder:Math.floor(i/30),recordedBy:session.membershipId!,recordedByName:"Synthetic",recordedAt:dispatchNow});
+    }
+    r=createOpsFixtureRepository(fixture);mocks.repository.mockResolvedValue(r);
+    const started=performance.now(),board=await loadDispatchBoard({week:"2026-10-05",q:"Synthetic dispatch"});
+    expect(board.commitments).toHaveLength(30);expect(board.commitments.reduce((n,p)=>n+p.items.length,0)).toBe(200);
+    expect(board.planned.items.length).toBeLessThanOrEqual(100);expect(board.planned.nextCursor).toBeTruthy();
+    expect(board.queue.items.length).toBeLessThanOrEqual(25);
+    const html=renderToStaticMarkup(await renderDispatchBoard({week:"2026-10-05",q:"Synthetic dispatch"}));expect(html).toContain("Synthetic dispatch job 199");expect(html).toContain("time unknown");expect(performance.now()-started).toBeLessThan(5000);
   });
   it("keeps owner and read-only boards free of editing actions",async()=>{
     session={...session,role:"executive",membershipId:"membership-northline-executive",userId:"user-northline-executive",permissions:["ops:read"]};
@@ -75,7 +95,7 @@ describe("Dispatch redesign boundaries and user choices",()=>{
   it("keeps six manager sections and puts the same scoped children under Work",()=>{
     for(const role of ["facilities","regional","executive","store_manager","finance"] as const)expect(navigationForRole(role,"complete").length).toBeLessThanOrEqual(6);
     const work=navigationForRole("facilities","complete").find(item=>item.id==="work")!;
-    expect(navigationChildren("facilities",work,"complete").map(item=>item.label)).toEqual(["Review queue","Dispatch","Work orders","Requests","Quotes","Service visits","Tasks","Compliance"]);
+    expect(navigationChildren("facilities",work,"complete").map(item=>item.label)).toEqual(["Review","Dispatch","Work orders","Requests","Quotes","Service visits","Tasks","Compliance"]);
     expect(navigationForRole("technician","complete").map(item=>item.label)).toEqual(["My work","Stores","Equipment","Work history","Search"]);
   });
   it("keeps vendor visit states distinct from the internal team",()=>{

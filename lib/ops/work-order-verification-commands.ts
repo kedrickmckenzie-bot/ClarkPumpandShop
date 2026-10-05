@@ -241,6 +241,8 @@ export async function recordWorkOrderVerification(
     repository.listWorkOrderVerifications(input.organizationId, workOrder.id),
     repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id),
   ]);
+  const delayedTask=tasks.find(t=>t.taskType==="verify_repair"&&["open","in_progress"].includes(t.status)&&t.availableAt&&t.availableAt>clock.now());
+  if(delayedTask)throw new OpsDomainError("CONFLICT",`Confirmation opens at ${delayedTask.availableAt}. The job remains open until checked.`);
   const outcome = latestRecordedWorkOutcome(outcomes);
   if (
     !outcome
@@ -590,6 +592,8 @@ export async function requestWorkOrderConfirmation(svc: OpsCommandServices, inpu
     repository.listWorkOrderVerifications(input.organizationId, work.id),
     repository.listWorkflowTasksForWorkOrder(input.organizationId, work.id),
   ]);
+  const delayedTask=tasks.find(t=>t.taskType==="verify_repair"&&["open","in_progress"].includes(t.status)&&t.availableAt&&t.availableAt>clock.now());
+  if(delayedTask)throw new OpsDomainError("CONFLICT",`Confirmation opens at ${delayedTask.availableAt}. The job remains open until checked.`);
   const outcome = latestRecordedWorkOutcome(outcomes);
   if (!outcome?.outcome || !reviewableOutcomes.has(outcome.outcome)) throw new OpsDomainError("CONFLICT", "Record a completed service result before requesting confirmation");
   if (tasks.some(t => t.taskType === "verify_repair" && isOpenWorkflowTask(t))) throw new OpsDomainError("CONFLICT", "Confirmation has already been requested");

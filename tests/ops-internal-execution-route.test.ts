@@ -46,17 +46,18 @@ describe("P2 authenticated result, visit and file boundaries", () => {
     await recordInternalWorkResult(dispatchServices(r), { organizationId: dispatchOrg, workOrderId: job.id, actor: dispatchActor(dispatchTech[0]),
       expectedVersion: (await r.getWorkOrder(dispatchOrg, job.id))!.version!, expectedAssignmentId: (await r.getActiveAssignment(dispatchOrg, job.id))!.id,
       key: crypto.randomUUID(), outcome: "parts_required", blocker: "parts", notes: "Replacement latch needed" });
-    const checkScreen = async () => {
+    const checkScreen = async (assigned = true) => {
       const html = renderToStaticMarkup(await InternalJob({ params: Promise.resolve({ id: job.id }) }));
       expect(html).toContain(safety.nextAction);
       expect(html).not.toContain('>Save result<');
-      expect(html).toContain('>Flag a problem<');
+      if (assigned) expect(html).toContain('>Flag a problem<');
+      else expect(html).toContain("Any technician can take it");
     };
     await checkScreen();
     await markInternalWorkReady(dispatchServices(r), { organizationId: dispatchOrg, workOrderId: job.id, actor: dispatchActor(dispatchManager),
       expectedVersion: (await r.getWorkOrder(dispatchOrg, job.id))!.version!, expectedAssignmentId: (await r.getActiveAssignment(dispatchOrg, job.id))!.id,
       key: crypto.randomUUID(), notes: "Replacement arrived; safe access still needs checking" });
-    await checkScreen();
+    await checkScreen(false);
   });
 
   it("rejects a forged completed result for look-and-report work through the actual endpoint", async () => {

@@ -39,6 +39,7 @@ export interface ScheduleInput {
   localStart?: string;
   disambiguation?: "earlier" | "later";
   durationMinutes?: number;
+  stopOrder?: number;
   tentative?: boolean;
   reviewReason?: string;
   keepConflicts?: boolean;
@@ -77,6 +78,7 @@ export async function saveInternalSchedule(svc: OpsCommandServices, input: Sched
     (!Number.isInteger(input.durationMinutes) || input.durationMinutes < 1 || input.durationMinutes > 1440)
   )
     throw new OpsDomainError("VALIDATION", "Enter a repair estimate from 1 to 1,440 minutes, or leave it unknown.");
+  if (input.stopOrder !== undefined && (!Number.isSafeInteger(input.stopOrder) || Math.abs(input.stopOrder) > 1000000000)) throw new OpsDomainError("VALIDATION", "Choose a valid stop order.");
   if ((input.reviewReason?.length ?? 0) > 1000) throw new OpsDomainError("VALIDATION", "Keep the review reason under 1,000 characters.");
   const work = await r.getWorkOrder(input.organizationId, input.workOrderId);
   if (!work) throw new OpsDomainError("NOT_FOUND", "Job not found.");
@@ -254,7 +256,8 @@ export async function saveInternalSchedule(svc: OpsCommandServices, input: Sched
     entryZone: startsAt ? entryZone : undefined,
     localStart: startsAt ? input.localStart : undefined,
     disambiguation: input.disambiguation,
-    durationMinutes: input.precision === "removed" ? undefined : input.durationMinutes,
+    stopOrder: input.stopOrder ?? prior?.stopOrder,
+    durationMinutes: input.precision === "removed" ? undefined : input.durationMinutes ?? work.estimatedMinutes ?? prior?.durationMinutes,
     tentative: input.precision === "removed" ? false : Boolean(input.tentative),
     reviewReason: input.reviewReason?.trim() || undefined,
     supersedesId: prior?.id,
@@ -315,7 +318,7 @@ export async function saveInternalSchedule(svc: OpsCommandServices, input: Sched
         !t.sourceApprovalRequestId,
     );
     if (scheduling.length && input.precision !== "removed" && !plan.tentative) {
-      const due = new Date(Date.parse(now) + (["urgent", "emergency"].includes(work!.priority) ? 24 : 72) * 3600000).toISOString();
+      const due = work!.dueAt ?? new Date(Date.parse(now) + (["urgent", "emergency"].includes(work!.priority) ? 24 : 72) * 3600000).toISOString();
       const task = buildWorkflowTaskRecord({
         id: ids.next("workflow-task"),
         organizationId: input.organizationId,
@@ -415,7 +418,7 @@ export async function saveInternalSchedule(svc: OpsCommandServices, input: Sched
           warnings,
           nextActionPolicy:
             scheduling.length && !plan.tentative
-              ? "Internal execution: urgent 24h; routine 72h from scheduling"
+              ? work!.dueAt ? "Original execution deadline retained" : "Internal execution: urgent 24h; routine 72h from scheduling"
               : "Existing obligations and deadlines retained",
         }),
       }),
@@ -450,7 +453,7 @@ export async function saveInternalSchedule(svc: OpsCommandServices, input: Sched
                 !t.sourceFollowUpId &&
                 !t.sourceApprovalRequestId,
             )
-              ? new Date(Date.parse(now) + (["urgent", "emergency"].includes(work.priority) ? 24 : 72) * 3600000).toISOString()
+              ? work!.dueAt ?? new Date(Date.parse(now) + (["urgent", "emergency"].includes(work.priority) ? 24 : 72) * 3600000).toISOString()
               : undefined,
           prepare: (_, next, projected) => prepare(next, projected),
         },

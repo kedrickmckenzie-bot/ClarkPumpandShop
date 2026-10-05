@@ -7,7 +7,7 @@ import { formatOperationsDate } from "./local-time";
 /** Only operational fields cross the board's client boundary. */
 export type DispatchJob = Omit<WorkOrderListRow, "recordedCostMinor" | "recordedCostLineCount" | "currency"> & { storeZone?: string; storeRegionId?: string };
 export function dispatchJob(row: WorkOrderListRow, storeZone?: string, storeRegionId?: string): DispatchJob {
-  return { id: row.id, number: row.number, problem: row.problem, storeId: row.storeId, storeNumber: row.storeNumber, storeName: row.storeName,
+  return { technicianNotes: row.technicianNotes, estimatedMinutes: row.estimatedMinutes, confirmationDelay: row.confirmationDelay, id: row.id, number: row.number, problem: row.problem, storeId: row.storeId, storeNumber: row.storeNumber, storeName: row.storeName,
     storeZone, storeRegionId, priority: row.priority, status: row.status, schedule: row.schedule, targetCompletionAt: row.targetCompletionAt,
     categoryKey: row.categoryKey, assignmentKind: row.assignmentKind, assignmentStatus: row.assignmentStatus, assignmentId: row.assignmentId,
     internalMembershipId: row.internalMembershipId, internalAssigneeName: row.internalAssigneeName, internalTarget: row.internalTarget,
@@ -44,12 +44,12 @@ export function dispatchStatus(row: Pick<WorkOrderListRow, "status" | "hasOpenFo
   return { label: "Ready to work", tone: "normal" };
 }
 export function canPlanJob(row: DispatchJob) {
-  return Boolean(row.assignmentId && !row.inspectionId && !["draft", "awaiting_approval", "in_progress", "completed_pending_review", "resolved", "closed", "cancelled"].includes(row.status));
+  return Boolean(row.assignmentId && !row.inspectionId && !row.hasOpenFollowUp && !row.visitHoldPosture && !["draft", "awaiting_approval", "in_progress", "completed_pending_review", "resolved", "closed", "cancelled"].includes(row.status));
 }
 export function orderedStops(rows: DispatchJob[]) {
-  return [...rows].sort((a, b) => (a.schedule?.startsAt ?? "9999").localeCompare(b.schedule?.startsAt ?? "9999")
-    || ({ emergency: 0, urgent: 1, routine: 2, planned: 3 }[a.priority] - { emergency: 0, urgent: 1, routine: 2, planned: 3 }[b.priority])
-    || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  return [...rows].sort((a, b) => ((a.schedule?.stopOrder ?? 1000000) - (b.schedule?.stopOrder ?? 1000000)) || (a.schedule?.startsAt ?? "9999").localeCompare(b.schedule?.startsAt ?? "9999")
+
+    || a.id.localeCompare(b.id));
 }
 
 export function dueLabel(job:Pick<DispatchJob,"dueAt"|"storeZone">,today:string,zone:string,at=new Date().toISOString()) {

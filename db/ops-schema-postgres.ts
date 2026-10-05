@@ -289,6 +289,7 @@ export const opsRoleCapabilityOverrides = pgTable("ops_role_capability_overrides
 
 export const opsWorkflowPolicies = pgTable("ops_workflow_policies", {
   internalCheckInRequired: boolean("internal_check_in_required").notNull().default(false),
+  confirmationDelay: text("confirmation_delay"), confirmationEscalationHours: integer("confirmation_escalation_hours"),
   requireConfirmationDefault: integer("require_confirmation_default").notNull().default(1),
   id: id(), organizationId: organizationId(), version: integer("version").notNull(), status: text("status").notNull(), allowManagerCompletion: boolean("allow_manager_completion").notNull().default(false), autoCloseRoutineAfterVerification: boolean("auto_close_routine_after_verification").notNull().default(false), appliesToActiveWork: boolean("applies_to_active_work").notNull().default(false), createdByMembershipId: text("created_by_membership_id").notNull(), createdByName: text("created_by_name").notNull(), createdAt: createdAt(),
 }, (table) => [
@@ -683,6 +684,9 @@ export const opsAssetComponents = pgTable("ops_asset_components", {
 ]);
 
 export const opsWorkOrders = pgTable("ops_work_orders", {
+  technicianNotes: text("technician_notes"),
+  estimatedMinutes: integer("estimated_minutes"),
+  confirmationDelay: text("confirmation_delay"),
   internalScheduleId: text("internal_schedule_id"),
   targetCompletionAt: text("target_completion_at"),
   targetCompletionSource: text("target_completion_source"),
@@ -1424,6 +1428,7 @@ export const opsWorkOrderVerifications = pgTable("ops_work_order_verifications",
 ]);
 
 export const opsWorkflowTasks = pgTable("ops_workflow_tasks", {
+  availableAt: text("available_at"), remindedAt: text("reminded_at"),
   id: id(),
   organizationId: organizationId(),
   workOrderId: text("work_order_id"),
@@ -2215,7 +2220,7 @@ export const opsInternalSchedules = pgTable("ops_internal_schedules", {
   id: id(), organizationId: organizationId(), workOrderId: text("work_order_id").notNull(), assignmentId: text("assignment_id").notNull(),
   revision: integer("revision").notNull(), attempt: integer("attempt").notNull().default(1), precision: text("precision").notNull(), planningZone: text("planning_zone").notNull(),
   week: text("week").notNull(), day: text("day"), startsAt: text("starts_at"), endsAt: text("ends_at"), entryZone: text("entry_zone"), localStart: text("local_start"),
-  disambiguation: text("disambiguation"), durationMinutes: integer("duration_minutes"), tentative: integer("tentative").notNull().default(0),
+  stopOrder: integer("stop_order"), disambiguation: text("disambiguation"), durationMinutes: integer("duration_minutes"), tentative: integer("tentative").notNull().default(0),
   reviewReason: text("review_reason"), supersedesId: text("supersedes_id"), recordedBy: text("recorded_by").notNull(), recordedByName: text("recorded_by_name").notNull(), recordedAt: text("recorded_at").notNull(),
 }, table => [
   uniqueIndex("uidx_ops_internal_schedules_org_work_revision").on(table.organizationId, table.workOrderId, table.revision),
@@ -2232,4 +2237,15 @@ export const opsTechnicianProfiles = pgTable("ops_technician_profiles", {
   uniqueIndex("idx_ops_technician_profiles_member").on(table.organizationId, table.membershipId),
   foreignKey({columns:[table.organizationId,table.membershipId],foreignColumns:[opsMemberships.organizationId,opsMemberships.id]}),
   foreignKey({columns:[table.organizationId,table.homeRegionId],foreignColumns:[opsRegions.organizationId,opsRegions.id]}),
+]);
+
+export const opsTechnicianStatuses = pgTable("ops_technician_statuses", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), membershipId: text("membership_id").notNull(),
+  revision: integer("revision").notNull(), status: text("status").notNull(), workOrderId: text("work_order_id"), storeId: text("store_id").notNull(), recordedAt: text("recorded_at").notNull(),
+},t=>[
+  uniqueIndex("idx_ops_technician_status_revision").on(t.organizationId,t.membershipId,t.revision),
+  foreignKey({columns:[t.organizationId,t.membershipId],foreignColumns:[opsMemberships.organizationId,opsMemberships.id]}),
+  foreignKey({columns:[t.organizationId,t.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),
+  foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
+  check("chk_ops_technician_status",sql`${t.revision} > 0 AND ${t.status} IN ('heading','parts','break','done') AND (${t.status} != 'heading' OR ${t.workOrderId} IS NOT NULL)`),
 ]);

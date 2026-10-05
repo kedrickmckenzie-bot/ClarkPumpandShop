@@ -176,6 +176,9 @@ export interface AssetSearchRow {
 }
 
 export interface WorkOrderListRow {
+  technicianNotes?: string;
+  estimatedMinutes?: number;
+  confirmationDelay?: "next_morning" | "four_hours";
   schedule?: import("./internal-schedule-types").ScheduleProjection;
   targetCompletionAt?: IsoDateTime;
   targetCompletionSource?: string;

@@ -18,6 +18,7 @@ export interface InternalSchedule {
   localStart?: string;
   disambiguation?: "earlier" | "later";
   durationMinutes?: number;
+  stopOrder?: number;
   tentative: boolean;
   reviewReason?: string;
   supersedesId?: string;
@@ -38,6 +39,7 @@ export interface ScheduleProjection {
   entryZone?: string;
   tentative: boolean;
   durationMinutes?: number;
+  stopOrder?: number;
 }
 
 export type ScheduleView = "backlog" | "week" | "today" | "upcoming" | "replan";

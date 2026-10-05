@@ -12,6 +12,8 @@ export async function configureMaintenanceResponsibilities(input: {
   enabledCapabilities: readonly ConfigurableMaintenanceCapability[];
   allowManagerCompletion?: boolean;
   requireConfirmationDefault?: boolean;
+  confirmationDelay?: "next_morning" | "four_hours";
+  confirmationEscalationHours?: number;
   internalCheckInRequired?: boolean;
   autoCloseRoutineAfterVerification: boolean;
   appliesToActiveWork: boolean;
@@ -26,6 +28,8 @@ export async function configureMaintenanceResponsibilities(input: {
   if ([...enabled].some((capability) => !configurableMaintenanceCapabilities.includes(capability))) throw new OpsDomainError("VALIDATION", "Choose supported maintenance responsibilities");
   if (enabled.has("issue_work_order") && !enabled.has("create_work_order")) throw new OpsDomainError("VALIDATION", "Dispatch requires work-order creation for the same role");
 
+  if(input.confirmationDelay&&!["next_morning","four_hours"].includes(input.confirmationDelay))throw new OpsDomainError("VALIDATION","Choose a confirmation delay.");
+  if(input.confirmationEscalationHours!==undefined&&(!Number.isInteger(input.confirmationEscalationHours)||input.confirmationEscalationHours<1||input.confirmationEscalationHours>168))throw new OpsDomainError("VALIDATION","Choose an escalation window between 1 and 168 hours.");
   const occurredAt = input.occurredAt ?? new Date().toISOString();
   const [overrides, policies] = await Promise.all([
     input.repository.listRoleCapabilityOverrides(input.organizationId),
@@ -44,7 +48,8 @@ export async function configureMaintenanceResponsibilities(input: {
   if (currentPolicy) statements.push({ sql: "UPDATE ops_workflow_policies SET status = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["superseded", input.organizationId, currentPolicy.id, "active"] });
   const policyId = `workflow-policy-${crypto.randomUUID()}`;
   statements.push({ sql: "INSERT INTO ops_workflow_policies (id, organization_id, version, status, internal_check_in_required, require_confirmation_default, auto_close_routine_after_verification, allow_manager_completion, applies_to_active_work, created_by_membership_id, created_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", params: [policyId, input.organizationId, version, "active", (input.internalCheckInRequired ?? currentPolicy?.internalCheckInRequired ?? false) ? 1 : 0, (input.requireConfirmationDefault ?? currentPolicy?.requireConfirmationDefault ?? true) ? 1 : 0, input.autoCloseRoutineAfterVerification ? 1 : 0, input.allowManagerCompletion ? 1 : 0, input.appliesToActiveWork ? 1 : 0, membership.id, input.actor.actorName, occurredAt] });
-  statements.push({ sql: "INSERT INTO ops_audit_events (id, organization_id, aggregate_type, aggregate_id, event_type, actor_type, actor_id, actor_name, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", params: [`audit-${crypto.randomUUID()}`, input.organizationId, "organization", input.organizationId, "organization.maintenance_responsibilities_changed", input.actor.actorType, input.actor.actorId, input.actor.actorName, occurredAt, JSON.stringify({ role: input.role, enabledCapabilities: [...enabled], workflowPolicyId: policyId, workflowPolicyVersion: version, internalCheckInRequired: input.internalCheckInRequired ?? currentPolicy?.internalCheckInRequired ?? false, requireConfirmationDefault: input.requireConfirmationDefault ?? currentPolicy?.requireConfirmationDefault ?? true, allowManagerCompletion: Boolean(input.allowManagerCompletion), autoCloseRoutineAfterVerification: input.autoCloseRoutineAfterVerification, appliesToActiveWork: input.appliesToActiveWork })] });
+  statements.push({sql:"UPDATE ops_workflow_policies SET confirmation_delay = ?, confirmation_escalation_hours = ? WHERE organization_id = ? AND id = ?",params:[input.confirmationDelay??currentPolicy?.confirmationDelay??"next_morning",input.confirmationEscalationHours??currentPolicy?.confirmationEscalationHours??24,input.organizationId,policyId]});
+  statements.push({ sql: "INSERT INTO ops_audit_events (id, organization_id, aggregate_type, aggregate_id, event_type, actor_type, actor_id, actor_name, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", params: [`audit-${crypto.randomUUID()}`, input.organizationId, "organization", input.organizationId, "organization.maintenance_responsibilities_changed", input.actor.actorType, input.actor.actorId, input.actor.actorName, occurredAt, JSON.stringify({ confirmationDelay: input.confirmationDelay??currentPolicy?.confirmationDelay??"next_morning", confirmationEscalationHours: input.confirmationEscalationHours??currentPolicy?.confirmationEscalationHours??24, role: input.role, enabledCapabilities: [...enabled], workflowPolicyId: policyId, workflowPolicyVersion: version, internalCheckInRequired: input.internalCheckInRequired ?? currentPolicy?.internalCheckInRequired ?? false, requireConfirmationDefault: input.requireConfirmationDefault ?? currentPolicy?.requireConfirmationDefault ?? true, allowManagerCompletion: Boolean(input.allowManagerCompletion), autoCloseRoutineAfterVerification: input.autoCloseRoutineAfterVerification, appliesToActiveWork: input.appliesToActiveWork })] });
   await input.repository.atomicWrite(statements);
   return { policyId, version };
 }

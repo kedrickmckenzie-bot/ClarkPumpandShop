@@ -36,6 +36,8 @@ export interface RoleCapabilityOverride {
 
 /** Append-only, versioned policy for the operational close decision. */
 export interface OrganizationWorkflowPolicy {
+  confirmationDelay?: "next_morning" | "four_hours";
+  confirmationEscalationHours?: number;
   internalCheckInRequired?: boolean;
   requireConfirmationDefault?: boolean;
   id: OpsId;
@@ -627,6 +629,9 @@ export interface RequestImpactAssessment {
 }
 
 export interface WorkOrder {
+  technicianNotes?: string;
+  estimatedMinutes?: number;
+  confirmationDelay?: "next_morning" | "four_hours";
   internalScheduleId?: string;
   targetCompletionAt?: IsoDateTime;
   targetCompletionSource?: string;
@@ -1037,6 +1042,8 @@ export interface FollowUp {
  * until a work order is created. Exactly one subject id is present.
  */
 export interface WorkflowTask {
+  availableAt?: string;
+  remindedAt?: string;
   id: OpsId;
   organizationId: OpsId;
   workOrderId?: OpsId;
@@ -2028,6 +2035,7 @@ export interface TechnicianProfile {
 }
 
 export interface OpsFixture {
+  technicianStatuses?: import("./technician-status").TechnicianStatus[];
   technicianProfiles?: TechnicianProfile[];
   internalSchedules?: import("./internal-schedule-types").InternalSchedule[];
  storeTasks?: import("./store-task-types").StoreTask[];

@@ -1,5 +1,6 @@
+import { workflowRedesignRegression } from "./helpers/workflow-redesign-regression";
 import {boardReadRegression,storeNotesRegression} from "./helpers/dispatch-redesign-regression";
-import { afterAll,beforeAll,describe,expect,it } from "vitest";
+import { afterAll,beforeAll,beforeEach,describe,expect,it } from "vitest";
 import { readdirSync,readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
 import { Pool } from "pg";
@@ -47,8 +48,10 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   }
  },120000);
  afterAll(async()=>{await runtime?.dispose();await pool?.end();if(databaseName){const admin=new Pool({connectionString:postgresUrl});try{await admin.query("DROP DATABASE "+databaseName);}finally{await admin.end();}}});
+ beforeEach(async()=>{await r.atomicWrite([{sql:"UPDATE ops_outbox_messages SET status = ? WHERE organization_id = ?",params:["delivered",dispatchOrg]}]);});
  async function input(workId:string,extra:Partial<ScheduleInput>={}):Promise<ScheduleInput> {const w=(await r.getWorkOrder(dispatchOrg,workId))!,a=(await r.getActiveAssignment(dispatchOrg,workId))!;return {organizationId:dispatchOrg,workOrderId:workId,actor:dispatchActor(),expectedVersion:w.version??0,expectedAssignmentId:a.id,expectedScheduleId:w.internalScheduleId??null,key:crypto.randomUUID(),precision:"day",date:"2026-10-08",...extra};}
  const save=async(id:string,extra:Partial<ScheduleInput>={})=>saveInternalSchedule(dispatchServices(r),await input(id,extra));
+ it("preserves shared preparation, atomic bulk planning, status revisions and delayed confirmation",async()=>{await workflowRedesignRegression(r);});
  it("upgrades existing populated data without inferred plans or repair targets",async()=>{
   const w=await r.getWorkOrder(dispatchOrg,"showcase-work-walk-101");
   expect(w?.internalScheduleId).toBeUndefined();expect(w?.targetCompletionAt).toBeUndefined();
@@ -80,7 +83,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   expect((await r.listWorkOrders({organizationId:dispatchOrg},{internalOnly:true,search:job.problem,internalMembershipId:dispatchTech[0],scheduleView:"week",scheduleFrom:"2026-10-05",scheduleTo:"2026-10-11"})).totalCount).toBe(1);
   expect((await r.listWorkOrders({organizationId:dispatchOrg},{internalOnly:true,search:job.problem,internalTarget:"pool"})).items).toHaveLength(0);
  });
- it("fulfills only a real scheduling task and creates a policy deadline while preserving other obligations",async()=>{
+ it("fulfills only a real scheduling task and preserves the existing deadline while preserving other obligations",async()=>{
   const job=await dispatchJob(r,"person");
   const ids={next:(p:string)=>p+"-"+crypto.randomUUID()};
   const original=await r.listWorkflowTasksForWorkOrder(dispatchOrg,job.id);
@@ -90,7 +93,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   const after=await r.listWorkflowTasksForWorkOrder(dispatchOrg,job.id);
   expect(after.find(t=>t.id===scheduling.id)?.status).toBe("completed");
   expect(after.filter(t=>original.some(o=>o.id===t.id))).toEqual(original);
-  expect(after.find(t=>t.title==="Complete planned internal work")?.dueAt).toBe("2026-10-06T18:00:00.000Z");
+  expect(after.find(t=>t.title==="Complete planned internal work")?.dueAt).toBe("2026-10-04T18:00:00.000Z");
  });
  it("preserves optional target and next-action deadline through moves and explicit conflict acknowledgement",async()=>{
   const job=await dispatchJob(r,"person");
@@ -128,10 +131,11 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   const saved=await save(job.id,{target:"person",membershipId:dispatchTech[1]});
   const current=await r.listWorkflowTasksForWorkOrder(dispatchOrg,job.id),open=current.filter(t=>["open","in_progress"].includes(t.status));
   expect(current.find(t=>t.id===task.id)?.status).toBe("completed");
-  expect(open).toEqual([expect.objectContaining({taskType:"record_service_outcome",assigneeId:dispatchTech[1],dueAt:"2026-10-06T18:00:00.000Z"})]);
+  expect(open).toEqual([expect.objectContaining({taskType:"record_service_outcome",assigneeId:dispatchTech[1],dueAt:"2026-10-04T18:00:00.000Z"})]);
   expect((await r.getWorkOrder(dispatchOrg,job.id))?.internalScheduleId).toBe(saved.schedule.id);
  });
  it.each(["schedule_service","schedule_return_visit"] as const)("preserves %s through tentative reassignment until a ready plan satisfies it",async(taskType)=>{
+  await r.atomicWrite([{sql:"UPDATE ops_outbox_messages SET status = ? WHERE organization_id = ?",params:["delivered",dispatchOrg]}]);
   const job=await dispatchJob(r,"person"),ids={next:(p:string)=>p+"-"+crypto.randomUUID()};
   const original=await r.listWorkflowTasksForWorkOrder(dispatchOrg,job.id);
   const required=buildWorkflowTaskRecord({id:ids.next("schedule"),organizationId:dispatchOrg,workOrderId:job.id,actor:dispatchActor(),createdAt:dispatchNow,draft:{taskType,priority:"normal",title:taskType==="schedule_service"?"Schedule service":"Schedule return visit",reason:"Arrange actual service",assigneeType:"user",assigneeId:dispatchManager,assigneeName:"Chris Delgado",dueAt:"2026-10-04T18:00:00.000Z",completionCriteria:"Save a ready plan",escalationDestination:"Facilities"}});
@@ -153,7 +157,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   await save(job.id,{tentative:false});
   const ready=await r.listWorkflowTasksForWorkOrder(dispatchOrg,job.id);
   expect(ready.find(t=>t.id===required.id)?.status).toBe("completed");
-  expect(ready.filter(t=>["open","in_progress"].includes(t.status))).toEqual([expect.objectContaining({taskType:"record_service_outcome",assigneeId:dispatchTech[1],dueAt:"2026-10-06T18:00:00.000Z"})]);
+  expect(ready.filter(t=>["open","in_progress"].includes(t.status))).toEqual([expect.objectContaining({taskType:"record_service_outcome",assigneeId:dispatchTech[1],dueAt:"2026-10-04T18:00:00.000Z"})]);
  });
  it("deduplicates replay, rejects changed intent and stale saves without new facts",async()=>{
   const job=await dispatchJob(r,"person"),request=await input(job.id);
@@ -164,6 +168,8 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   expect(await r.listInternalSchedules(dispatchOrg,job.id)).toHaveLength(1);
  });
  it.each([false,true])("reassigns and schedules once, with complete rollback on an invalid transactional write (tentative=%s)",async(tentative)=>{
+  // Isolate this worker batch from the presentation seed; the worker is intentionally capped at 100.
+  await r.atomicWrite([{sql:"UPDATE ops_outbox_messages SET status = ? WHERE organization_id = ?",params:["delivered",dispatchOrg]}]);
   const job=await dispatchJob(r,"person"),ids={next:(p:string)=>p+"-"+crypto.randomUUID()},initial=await r.listWorkflowTasksForWorkOrder(dispatchOrg,job.id);
   const scheduling=buildWorkflowTaskRecord({id:ids.next("schedule"),organizationId:dispatchOrg,workOrderId:job.id,actor:dispatchActor(),createdAt:dispatchNow,draft:{taskType:"schedule_service",priority:"normal",title:"Schedule service",reason:"Arrange actual service",assigneeType:"user",assigneeId:dispatchManager,assigneeName:"Chris Delgado",dueAt:"2026-10-04T18:00:00.000Z",completionCriteria:"Save a ready plan",escalationDestination:"Facilities"}});
   await r.atomicWrite([...buildCreateTaskStatements({task:scheduling,actor:dispatchActor(),ids}),buildWorkflowTaskProjectionStatement(dispatchOrg,job.id,[...initial,scheduling])]);

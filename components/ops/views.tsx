@@ -1,3 +1,4 @@
+import { ReviewRouteButton } from "@/components/workspace/review-routing";
 import { LiveSearchForm } from "./live-search-form";
 import type { ReactNode } from "react";
 import Link from "next/link";
@@ -485,6 +486,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                       const type = queueCell(row, "type");
                       const action = queueCell(row, "action");
                       const problem = queueCell(row, "problem");
+                      const task = queueCell(row, "task");
                       return (
                         <li key={row.id}>
                           <Link
@@ -499,6 +501,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                               </div>
                               <h3>{item?.value ?? row.label}</h3>
                               {problem?.value ? <p className={styles.reviewQueueProblem}>{problem.value}</p> : null}
+                              {task?.value ? <p className={styles.reviewQueueProblem}>{task.value}</p> : null}
                               {item?.secondary && type?.value === "Record to check" ? <p>{item.secondary}</p> : null}
                               <div className={styles.reviewQueueContext}>
                                 <span><MapPin aria-hidden="true" size={15} />{store?.value ?? "Companywide"}</span>
@@ -507,7 +510,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                               {action?.value ? <span className={styles.reviewQueueVerb}>{action.value}</span> : null}
                             </div>
                             <div className={styles.reviewQueueOwner}>
-                              <span><UserRound aria-hidden="true" size={15} />Owner</span>
+                              <span><UserRound aria-hidden="true" size={15} />Action due from</span>
                               <strong>{owner?.value ?? "Unassigned"}</strong>
                             </div>
                             <div className={styles.reviewQueueDue}>
@@ -517,8 +520,10 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                             <ChevronRight className={styles.reviewQueueChevron} aria-hidden="true" size={19} />
                           </Link>
                           <div className={styles.reviewQueueExtras}>
+                            {queueCell(row,"review-route")?<ReviewRouteButton id={queueCell(row,"review-route")!.value} kind={queueCell(row,"review-route")!.secondary as "work"|"request"}/>:null}
                             <WorkReviewButton href={row.href} label={record?.value ?? row.label} context={[...new Set([model.page.scopeLabel, model.page.periodLabel, ...(model.appliedFilters ?? []).map((filter) => filter.label)])].filter(Boolean).join(" · ")} />
                             {row.sourceLink ? <Link className={styles.reviewSourcesLink} href={row.sourceLink.href}>{row.sourceLink.label}</Link> : null}
+                            {task?.link ? <Link className={styles.reviewSourcesLink} href={task.link.href}>{task.link.label}</Link> : null}
                           </div>
                           {row.sources?.length ? <details className={styles.controlDisclosure}>
                             <summary>Tasks and supporting records ({row.sources.length})</summary>

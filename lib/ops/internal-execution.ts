@@ -1,3 +1,4 @@
+import { confirmationWindow } from "./delayed-confirmation";
 import type { OpsCommandServices, OpsIdSource } from "./commands";
 import { assignWorkOrder } from "./commands";
 import type { OpsRepository, OpsStatement } from "./repository";
@@ -63,6 +64,7 @@ export function resultAudit(
   ids: OpsIdSource,
   event: string,
   payload: unknown,
+  availableAt = now,
 ): OpsStatement[] {
   const payloadJson = JSON.stringify(payload);
   return [
@@ -86,7 +88,7 @@ export function resultAudit(
       topic: `ops.${event}`,
       payload_json: payloadJson,
       status: "pending",
-      available_at: now,
+      available_at: availableAt,
       created_at: now,
       attempt_count: 0,
     }),
@@ -148,9 +150,8 @@ export async function buildInternalResultStatements(
   const inspection = await repository.inspectionForWork(work.organizationId, work.id);
   if (inspection?.workOrderId === work.id)
     throw new OpsDomainError("CONFLICT", "Use the inspection checklist to record this inspection's result.");
-  const [tasks, detail, assignment, results, hold] = await Promise.all([
+  const [tasks, assignment, results, hold] = await Promise.all([
     repository.listWorkflowTasksForWorkOrder(work.organizationId, work.id),
-    repository.getWorkOrderDetail({ organizationId: work.organizationId }, work.id),
     repository.getActiveAssignment(work.organizationId, work.id),
     repository.listWorkResults(work.organizationId, work.id),
     repository.getWorkOrderVisitHold(work.organizationId, work.id),
@@ -189,7 +190,8 @@ export async function buildInternalResultStatements(
       : executionTitles.has(task.title) || ["record_service_outcome", "verify_repair", "close_verified_work"].includes(task.taskType),
   );
   const previousFollowUps = new Set(superseded.flatMap(task => (task.sourceFollowUpId ? [task.sourceFollowUpId] : [])));
-  const due = await followUpDueAt(repository, work, now);
+  const confirmation=successful&&work.requireConfirmation!==false?await confirmationWindow(repository,work,now):undefined;
+  const due = confirmation?.dueAt ?? await followUpDueAt(repository, work, now);
   const title = successful
     ? "Confirm work was completed as expected"
     : input.blocker === "parts" || input.outcome === "parts_required"
@@ -226,16 +228,8 @@ export async function buildInternalResultStatements(
     correctionReason: input.correctionReason,
   };
   const remaining = pending.filter(task => !superseded.includes(task));
-  const canClose =
-    successful &&
-    work.requireConfirmation === false &&
-    !remaining.some(
-      task =>
-        (task.blocking || task.requiredForProgress) &&
-        !["resolve_invoice_exception", "respond_service_discrepancy"].includes(task.taskType),
-    ) &&
-    !detail?.visits.some(visit => visit.status === "active" && visit.id !== input.link?.visitId) &&
-    !detail?.followUps.some(follow => follow.status === "open" && !previousFollowUps.has(follow.id));
+  // A result never closes its own job; confirmation or an attributed manager closeout is required.
+  const canClose = false;
   const task = canClose
     ? undefined
     : buildWorkflowTaskRecord({
@@ -246,7 +240,7 @@ export async function buildInternalResultStatements(
         createdAt: now,
         draft: {
           taskType: successful ? (work.requireConfirmation === false ? "close_verified_work" : "verify_repair") : "schedule_return_visit",
-          title: successful && work.requireConfirmation === false ? "Complete remaining actions before closing" : title,
+          title: successful && work.requireConfirmation === false ? "Manager to review and close with a reason" : title,
           reason: input.notes?.trim() || work.problem,
           ...(successful && work.requireConfirmation !== false ? await confirmationAssignee(repository, work) : owner),
           priority: ["urgent", "emergency"].includes(work.priority) ? "high" : "normal",
@@ -259,6 +253,7 @@ export async function buildInternalResultStatements(
           escalationDestination: owner.escalationDestination,
         },
       });
+  if(task&&confirmation)task.availableAt=confirmation.availableAt;
   const statements: OpsStatement[] = [
     workResultStatement(result),
     ...superseded.flatMap(task =>
@@ -307,6 +302,9 @@ export async function buildInternalResultStatements(
       work.id,
     ],
   });
+  // A human-entered estimate survives removing the completed attempt from Plan.
+  const priorPlan = work.internalScheduleId ? await repository.getInternalSchedule(work.organizationId,work.internalScheduleId) : null;
+  if(work.estimatedMinutes === undefined && priorPlan?.durationMinutes !== undefined) statements.push({sql:"UPDATE ops_work_orders SET estimated_minutes = ? WHERE organization_id = ? AND id = ?",params:[priorPlan.durationMinutes,work.organizationId,work.id]});
   // A result finishes this execution attempt; any return needs an explicit new plan.
   statements.push({
     sql: "UPDATE ops_work_orders SET internal_schedule_id = ? WHERE organization_id = ? AND id = ?",
@@ -377,8 +375,9 @@ export async function buildInternalResultStatements(
       ...resultAudit(work, actor, now, ids, "work_order.confirmation_requested", {
         workOrderId: work.id,
         workResultId: result.id,
+        availableAt:confirmation?.availableAt,
         dueAt: due,
-      }),
+      },confirmation?.availableAt),
     );
   if (!successful)
     statements.push(
@@ -598,7 +597,8 @@ export async function markInternalWorkReady(
   const readinessHeadline = tasks.some(t => isOpenWorkflowTask(t) && t.sourceFollowUpId && !previous.includes(t))
     ? "Return work reviewed; required actions remain"
     : "Job ready for return work";
-  const performer = await dispatchIdentity(r, input.organizationId, assignment.internalMembershipId, work.storeId, ["internal_technician"]);
+  const owner = await resolveInternalAccountability(r, work);
+  const poolAssignmentId=ids.next("assignment");
   const repairDue = repairDeadlineBefore(tasks, blocked.outcomeRecordedAt, work.dueAt);
   const task = buildWorkflowTaskRecord({
     id: ids.next("workflow-task"),
@@ -610,11 +610,9 @@ export async function markInternalWorkReady(
     draft: {
       priority: "normal",
       taskType: "other",
-      title: "Begin internal work",
+      title: "Arrange team pickup",
       reason: input.notes,
-      assigneeType: "user",
-      assigneeId: performer.membershipId,
-      assigneeName: performer.name,
+      ...owner,
       dueAt: repairDue ?? new Date(Date.parse(now) + 24 * 3600000).toISOString(),
       applicableSlaClock: "completion",
       completionCriteria: "Record the return work result",
@@ -623,6 +621,9 @@ export async function markInternalWorkReady(
   });
   const statements: OpsStatement[] = [
     dispatchAccessAssertion(input.organizationId, input.actor.actorId, work.storeId, internalManagerRoles, now),
+    {sql:"UPDATE ops_work_order_assignments SET status = ? WHERE organization_id = ? AND id = ?",params:["superseded",input.organizationId,assignment.id]},
+    insert("ops_work_order_assignments",{id:poolAssignmentId,organization_id:input.organizationId,work_order_id:work.id,kind:"internal",internal_target:"pool",status:"pending",assigned_at:now,supersedes_assignment_id:assignment.id}),
+    {sql:"UPDATE ops_work_orders SET internal_schedule_id = NULL WHERE organization_id = ? AND id = ?",params:[input.organizationId,work.id]},
     insert("ops_idempotency_keys", {
       organization_id: input.organizationId,
       key,
@@ -641,14 +642,14 @@ export async function markInternalWorkReady(
       params: ["approved", input.organizationId, work.id],
     },
     buildWorkflowTaskProjectionStatement(input.organizationId, work.id, [...tasks.filter(t => !previous.includes(t)), task]),
-    ...resultAudit(work, input.actor, now, ids, "work_order.internal_work_ready", { resultId: blocked.id, reason: input.notes }),
+    ...resultAudit(work, input.actor, now, ids, "work_order.internal_work_ready", { resultId: blocked.id, reason: input.notes, previousAssignmentId:assignment.id, assignmentId:poolAssignmentId, internalTarget:"pool" }),
     buildDispatchNotification({
       id: ids.next("outbox"),
       work,
       now,
-      recipients: [performer.membershipId],
+      recipients: owner.assigneeId?[owner.assigneeId]:[],
       headline: readinessHeadline,
-      payload: { assignmentId: assignment.id },
+      payload: { assignmentId: poolAssignmentId, previousAssignmentId:assignment.id },
     }),
   ];
   if (blocked.followUpId)
@@ -660,7 +661,6 @@ export async function markInternalWorkReady(
     await atomicWorkOrderMutation({ repository: r, workOrder: work, now, statements });
   } catch (error) {
     await dispatchIdentity(r, input.organizationId, input.actor.actorId, work.storeId, internalManagerRoles);
-    await dispatchIdentity(r, input.organizationId, assignment.internalMembershipId, work.storeId, ["internal_technician"]);
     const receipt = await r.getIdempotencyKey(input.organizationId, key);
     if (receipt?.requestHash === hash) return;
     throw error;

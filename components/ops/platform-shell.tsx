@@ -109,6 +109,7 @@ const createActions: Array<{
 ];
 
 interface PlatformShellProps {
+  reviewCount?:number;
   session: OperatorSession;
   children: React.ReactNode;
 }
@@ -154,6 +155,7 @@ function NavigationLink({ item, pathname }: { item: NavigationItem; pathname: st
 }
 
 function PrimaryNavigation({
+  reviewCount,
   session,
   pathname,
   edition,
@@ -161,6 +163,7 @@ function PrimaryNavigation({
   session: OperatorSession;
   pathname: string;
   edition: DemoEdition;
+  reviewCount?:number;
 }) {
   const [expanded,setExpanded]=useState<string[]>([]);
   return <nav aria-label="Primary navigation" className={styles.navGroups}>
@@ -169,7 +172,7 @@ function PrimaryNavigation({
       if(!children.length)return <NavigationLink key={item.id} item={item} pathname={pathname}/>;
       return <div key={item.id} className={styles.navSection}>
         <button type="button" aria-expanded={open} className={`${styles.navLink} ${active?styles.navLinkActive:""}`} onClick={()=>{if(!active)setExpanded(values=>values.includes(item.id)?values.filter(id=>id!==item.id):[...values,item.id]);}}><Icon aria-hidden="true" size={19}/><span>{item.label}</span><ChevronDown aria-hidden="true" size={16} className={open?styles.navChevronOpen:""}/></button>
-        {open?<nav aria-label={`${item.label} sections`} className={styles.navChildren}>{children.map(child=><Link key={child.id} href={workspaceStartHref(child.href)} aria-current={pathMatches(pathname,child.href)?"page":undefined} className={pathMatches(pathname,child.href)?styles.navChildActive:""}>{child.label}</Link>)}</nav>:null}
+        {open?<nav aria-label={`${item.label} sections`} className={styles.navChildren}>{children.map(child=><Link key={child.id} href={workspaceStartHref(child.href)} aria-current={pathMatches(pathname,child.href)?"page":undefined} className={pathMatches(pathname,child.href)?styles.navChildActive:""}>{child.label}{child.id==="needs-attention"&&reviewCount!==undefined?<span aria-label={`${reviewCount} open review items`} style={{marginLeft:8,fontVariantNumeric:"tabular-nums"}}>{reviewCount}</span>:null}</Link>)}</nav>:null}
       </div>;
     })}
   </nav>;
@@ -256,7 +259,7 @@ function CreateMenu({ session, edition }: { session: OperatorSession; edition: D
   );
 }
 
-export function PlatformShell({ session, children }: PlatformShellProps) {
+export function PlatformShell({ session, children, reviewCount }: PlatformShellProps) {
   const sidebarCollapsed = useSyncExternalStore(subscribeSidebar, sidebarSnapshot, expandedSidebarOnServer);
   const pathname = usePathname();
   const edition = session.demoEdition ?? DEFAULT_DEMO_EDITION;
@@ -276,7 +279,7 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
 
         {session.accessMode !== "authenticated" ? <PreviewEditionSwitcher edition={edition} /> : null}
 
-        <PrimaryNavigation session={session} pathname={pathname} edition={edition} />
+        <PrimaryNavigation reviewCount={reviewCount} session={session} pathname={pathname} edition={edition} />
         <SidebarFooter session={session} edition={edition} />
       </aside>
 
@@ -300,7 +303,7 @@ export function PlatformShell({ session, children }: PlatformShellProps) {
                   </p>
                 </div>
                 {session.accessMode !== "authenticated" ? <PreviewEditionSwitcher edition={edition} /> : null}
-                <PrimaryNavigation session={session} pathname={pathname} edition={edition} />
+                <PrimaryNavigation reviewCount={reviewCount} session={session} pathname={pathname} edition={edition} />
                 <SidebarFooter session={session} edition={edition} />
               </div>
             </details>

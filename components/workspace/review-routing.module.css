@@ -1,0 +1,100 @@
+.open,
+.panel button,
+.panel input,
+.panel select,
+.panel textarea {
+  font: inherit;
+  min-height: 44px;
+  border: 1px solid #c8d2df;
+  border-radius: 5px;
+  padding: 10px;
+  background: white;
+  color: #26354a;
+}
+.open {
+  cursor: pointer;
+  color: #2457b8;
+}
+.panel {
+  font-size: 16px;
+  padding: 24px;
+  line-height: 1.5;
+}
+.panel h2 {
+  font-size: 21px;
+}
+.panel form {
+  display: grid;
+  gap: 20px;
+}
+.panel fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.panel legend {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.panel label {
+  display: grid;
+  gap: 8px;
+}
+.panel small {
+  font-size: 14px;
+  color: #5f6c7f;
+}
+.decisions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.decisions label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #cad4e1;
+  padding: 10px;
+  min-height: 48px;
+}
+.decisions input {
+  min-height: 20px;
+  width: 20px;
+  accent-color: #2559ce;
+}
+.panel footer {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  border-top: 1px solid #dbe2ec;
+  padding: 16px 0;
+}
+.panel .primary {
+  background: #2559ce;
+  color: white;
+  width: 100%;
+}
+.panel button[aria-pressed="true"] {
+  background: #edf3ff;
+  border-color: #2559ce;
+  color: #204b9f;
+}
+.panel [role="alert"] {
+  background: #fff0ee;
+  padding: 14px;
+  color: #8c3427;
+}
+.panel button:disabled {
+  opacity: 0.55;
+}
+.panel textarea {
+  width: 100%;
+}
+@media (max-width: 700px) {
+  .panel {
+    padding: 18px;
+  }
+  .decisions {
+    grid-template-columns: 1fr;
+  }
+}

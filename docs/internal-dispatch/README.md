@@ -6,6 +6,14 @@
 
 **Current layout and demo contract (October 4):** the owner approved Assign as the main Dispatch view, Today as second, a Compare window, six technicians and approximately 36 open internal jobs. [ASSIGN_RELEASE.md](ASSIGN_RELEASE.md) records this implementation and insert-only backfill. Earlier two-technician evidence remains historical; the current AT80 presentation rule is six. This layout approval does not implement or close P4–P7.
 
+## October 5 Review direction
+
+**Full workflow continuation:** [WORKFLOW_2026_10_05.md](WORKFLOW_2026_10_05.md) is the current execution checkpoint for the owner's replacement workflow. It records the revised shared Review, day-based Plan, event-derived Today, checkout/status and delayed confirmation. The owner subsequently authorized the entire implementation and reserved approval for the end. Plan, Today, Review routing, checkout/status and delayed confirmation are implemented; the linked checkpoint records current validation. Earlier hour-grid, default-duration, prioritization, map and trip proposals are not part of this pass.
+
+The owner superseded step 2 of the attached in-house workflow: facilities and field managers use the same Review list within their permitted store scope and can review and route accessible work. Review has no separate reviewer claim, handoff, or automatic regional reviewer setting. Delegate a specific job with the existing **Assign a task** action. Review shows the earliest-due active linked task, its responsible person/team and deadline, with a count/link when more tasks remain. Task assignment does not reserve the job or prevent another authorized manager from routing it. Required service accountability and technician assignment remain separate source facts.
+
+The shared Review correction is included in the full workflow implementation. Existing Tasks remain the only job-specific delegation feature.
+
 ## 1. Outcome
 
 Build internal dispatch for a convenience-store company's maintenance team. A manager can see incoming work, plan the week across a wide store footprint, assign technicians, and adjust when urgent jobs arrive. A technician gets a simple work list, useful job information, and one place to record a result or ask for help.

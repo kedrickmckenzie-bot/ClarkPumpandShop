@@ -17,8 +17,8 @@ export interface TaskPerson { id:string; name:string; role:string; local:boolean
 export interface TaskMessage { id:string; organizationId:string; taskId:string; actorId:string; actorName:string; kind:string; body:string; findingsJson:string; createdAt:string; }
 export interface TaskParticipant { id:string; organizationId:string; taskId:string; membershipId:string; seenAt:string; }
 export interface TaskAccess { membershipId:string; supervisor:boolean; local:boolean; }
-export interface TaskQuery extends TaskAccess { view:TaskView; storeId?:string; sourceId?:string; search?:string; offset?:number; limit?:number; now:string; }
-export interface TaskRow extends StoreTask { storeNumber:string; storeName:string; timeZone?:string; handlerName:string; requesterName:string; fallbackName:string; newReply:number; }
+export interface TaskQuery extends TaskAccess { /** One active task per job, with a count; at most 25 scoped job IDs. */ reviewWorkOrderIds?:string[]; view:TaskView; storeId?:string; sourceId?:string; search?:string; offset?:number; limit?:number; now:string; }
+export interface TaskRow extends StoreTask { openTaskCount?:number; storeNumber:string; storeName:string; timeZone?:string; handlerName:string; requesterName:string; fallbackName:string; newReply:number; }
 export interface TaskPage { items:TaskRow[]; totalCount:number; }
 export interface TaskRepository {
  getStoreTask(org:string,id:string):Promise<StoreTask|null>;

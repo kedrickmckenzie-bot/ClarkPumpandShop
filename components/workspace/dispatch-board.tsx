@@ -100,7 +100,7 @@ export function DispatchBoard(props: DispatchBoardProps) {
     <div className={styles.stickyControls}>
       <header className={styles.heading}><h1>Dispatch</h1><Link href="/app/work-orders?status=open">Open work orders</Link></header>
       <div className={styles.toolbar}>
-        <nav className={styles.switcher} aria-label="Dispatch view">{["assign", "day", "list"].map(item => <Link key={item} href={href({ view: item })} aria-current={view === item ? "page" : undefined}>{item === "day" ? "Today" : item[0].toUpperCase() + item.slice(1)}</Link>)}</nav>
+        <nav className={styles.switcher} aria-label="Dispatch view">{["plan", "day", "list"].map(item => <Link key={item} href={href({ view: item })} aria-current={view === item ? "page" : undefined}>{item === "day" ? "Today" : item[0].toUpperCase() + item.slice(1)}</Link>)}</nav>
         <nav className={styles.weekControls} aria-label="Planning week">
           <Link href={href({ week: addCalendarDays(week, -7), day: addCalendarDays(week, -7) })}>Previous</Link>
           <strong>Week of {dateLabel(week)}</strong>
@@ -202,6 +202,8 @@ export function JobSheet({ selection, manager, organizationZone, week, onClose, 
   const [detail, setDetail] = useState<Detail>();
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const [savedVersion,setSavedVersion]=useState<number>();
+  const [savedNote,setSavedNote]=useState("");
   const [mode, setMode] = useState(selection.mode);
   useEffect(() => {
     const controller = new AbortController();
@@ -211,7 +213,7 @@ export function JobSheet({ selection, manager, organizationZone, week, onClose, 
     return () => controller.abort();
   }, [selection.job.id, retry]);
   const job = detail?.job ?? selection.job, status = dispatchStatus(job);
-  const stale = Boolean(detail && job.version !== selection.job.version);
+  const stale = Boolean(detail && job.version !== (savedVersion??selection.job.version));
   const canPlan = manager && !stale && canPlanJob(job) && !detail?.activeVisit;
   return <Sheet title={`Store ${job.storeNumber} · ${job.number}`} onClose={onClose}>
     <div className={styles.sheetBody}><h2>{job.problem}</h2><p><Link href={`/app/stores/${encodeURIComponent(job.storeId)}`}>Store {job.storeNumber} · {job.storeName}</Link></p>
@@ -220,10 +222,12 @@ export function JobSheet({ selection, manager, organizationZone, week, onClose, 
         {job.dueAt ? <div><dt>Due</dt><dd>{dueLabel(job,new Date().toLocaleDateString("en-CA",{timeZone:job.storeZone??organizationZone}),organizationZone).replace(/^Due /,"")}</dd></div> : null}
         {job.targetCompletionAt ? <div><dt>Finish by</dt><dd>{dispatchTime(job.targetCompletionAt, job.storeZone ?? organizationZone, organizationZone)}</dd></div> : null}
         <div><dt>Manager</dt><dd>{job.internalAccountableParty}</dd></div></dl>
+      {job.technicianNotes?<p><strong>Notes for the tech</strong><br/>{job.technicianNotes}</p>:null}
+      {savedNote?<p role="status">{savedNote}</p>:null}
       {detail?.instructions ? <p>{detail.instructions}</p> : null}
       {error ? <div role="alert"><p>{error}</p><button type="button" onClick={() => { setError(""); setRetry(retry + 1); }}>Try again</button></div> : !detail ? <div className={styles.skeleton} role="status">Loading…</div> : <>
         {stale ? <p role="alert">This job changed since the board loaded. <button type="button" onClick={() => {onClose();router.refresh();}}>Refresh board</button></p> : null}
-        {mode && !stale ? <LiveJobForm key={mode} job={job} mode={mode} organizationZone={organizationZone} day={selection.day ?? job.schedule?.day ?? week} person={selection.person} onCancel={() => setMode(undefined)} onSaved={onSaved}/> : <div className={styles.actions}>
+        {mode && !stale ? <LiveJobForm key={mode} job={job} mode={mode} organizationZone={organizationZone} day={selection.day ?? job.schedule?.day ?? week} person={selection.person} onCancel={() => setMode(undefined)} onSaved={(note,nextWeek,receipt)=>{setSavedVersion(receipt?.version??(job.version??0)+1);setSavedNote(note);setMode(undefined);setRetry(n=>n+1);onSaved(note,nextWeek,receipt);}}/> : <div className={styles.actions}>
           {manager && !stale && detail.canReady ? <button className={styles.primary} type="button" onClick={() => setMode("ready")}>Mark ready</button> : null}
           {canPlan ? <button type="button" className={detail.canReady ? styles.outline : styles.primary} onClick={() => setMode("schedule")}>{job.schedule ? "Change date" : "Schedule"}</button> : null}
           {canPlan && !job.hasOpenFollowUp && !job.visitHoldPosture ? <button type="button" onClick={() => setMode("assign")}>{job.internalAssigneeName ? "Reassign" : "Assign"}</button> : null}

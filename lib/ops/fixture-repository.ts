@@ -160,6 +160,7 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
   const internalMember = assignment?.internalMembershipId ? fixture.memberships.find((row) => row.organizationId === workOrder.organizationId && row.id === assignment.internalMembershipId) : undefined;
   const internalName = internalMember ? fixture.users.find((row) => row.id === internalMember.userId)?.displayName : undefined;
   return {
+    technicianNotes: workOrder.technicianNotes, estimatedMinutes: workOrder.estimatedMinutes, confirmationDelay: workOrder.confirmationDelay,
     targetCompletionAt: workOrder.targetCompletionAt, targetCompletionSource: workOrder.targetCompletionSource,
     schedule: (fixture.internalSchedules ?? []).find(p => p.organizationId === workOrder.organizationId && p.id === workOrder.internalScheduleId && p.assignmentId === assignment?.id && assignment.kind === "internal"),
     needsConfirmation: (fixture.workflowTasks ?? []).some(t => t.organizationId === workOrder.organizationId && t.workOrderId === workOrder.id && t.taskType === "verify_repair" && ["open", "in_progress"].includes(t.status)),
@@ -197,7 +198,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
-    ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
+    ops_technician_statuses: "technicianStatuses", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
     ops_approval_policies: "approvalPolicies", ops_approval_requests: "approvalRequests", ops_approval_decisions: "approvalDecisions",
     ops_work_order_visit_holds: "workOrderVisitHolds", ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
     ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
@@ -458,6 +459,7 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
     if (table === "ops_site_visit_work_orders" && rows.some((item) => item.organizationId === row.organizationId && (item.visitId === row.visitId && item.workOrderId === row.workOrderId || item.visitId === row.visitId && item.ordinal === row.ordinal))) throw new Error("Visit work selection is duplicated");
     if (table === "ops_work_order_verifications" && rows.some((item) => item.organizationId === row.organizationId && (item.workOrderId === row.workOrderId && item.cycle === row.cycle))) throw new Error("Work-order verification decision is duplicated");
     if (table === "ops_visit_evidence" && ["check_in", "check_out"].includes(String(row.kind)) && rows.some((item) => item.organizationId === row.organizationId && item.visitId === row.visitId && item.kind === row.kind)) throw new Error(`Visit already has ${String(row.kind)} evidence`);
+    if(table==="ops_technician_statuses" && rows.some(s=>s.organizationId===row.organizationId&&s.membershipId===row.membershipId&&s.revision===row.revision)) throw new Error("Duplicate technician status revision");
     if(table==="ops_internal_schedules"){
       row.tentative=Boolean(row.tentative);
       const assignment=fixture.assignments.find(a=>a.organizationId===row.organizationId&&a.id===row.assignmentId&&a.workOrderId===row.workOrderId);
@@ -544,6 +546,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listTaskMessages(org:string,id:string,offset=0,kind?:string) {return clone((this.fixture.storeTaskMessages??[]).filter(t=>t.organizationId===org&&t.taskId===id&&(!kind||t.kind===kind)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id)).slice(offset,offset+50));}
   async listTaskParticipants(org:string,id:string) {return clone((this.fixture.storeTaskPeople??[]).filter(t=>t.organizationId===org&&t.taskId===id));}
   async queryStoreTasks(scope:OrganizationScope,q:import("./store-task-types").TaskQuery):Promise<import("./store-task-types").TaskPage> {
+    if(q.reviewWorkOrderIds && (q.reviewWorkOrderIds.length>25 || q.view!=='all'))throw new RangeError('Choose up to 25 jobs for review.');
     const rows:import("./store-task-types").TaskRow[]=[];
     for(const t of this.fixture.storeTasks??[]) {
       const s=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===t.storeId);if(t.organizationId!==scope.organizationId||!s||scope.storeIds&&!scope.storeIds.includes(s.id)||scope.regionIds&&!scope.regionIds.includes(s.regionId??''))continue;
@@ -556,6 +559,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       const shared=t.assignment==='responsible'||t.assignment==='local'&&local;
       if(!q.supervisor&&!participant&&!(t.status==='open'&&!t.claimantId&&shared))continue;
       if(q.storeId&&s.id!==q.storeId||q.sourceId&&![t.workOrderId,t.invoiceId,t.visitId,t.assetId].includes(q.sourceId))continue;
+      if(q.reviewWorkOrderIds&&(t.status==='closed'||!t.workOrderId||!q.reviewWorkOrderIds.includes(t.workOrderId)))continue;
       if(q.search&&!`${t.title} ${s.storeNumber} ${s.name} ${s.address1} ${s.city} ${s.state} ${s.postalCode}`.toLowerCase().includes(q.search.toLowerCase()))continue;
       const mine=t.status==='review'&&t.requesterId===q.membershipId||t.status==='open'&&(t.claimantId===q.membershipId||!t.claimantId&&t.assigneeId===q.membershipId )||t.status==='open'&&t.fallbackId===q.membershipId&&t.dueAt<q.now;
       if(q.view==='mine'&&!mine||q.view==='shared'&&!(t.status==='open'&&!t.claimantId&&t.assignment!=='person'&&shared)||q.view==='history'&&t.status!=='closed'||q.view==='waiting'&&!(participant&&t.status!=='closed'&&!(t.status==='review'&&t.requesterId===q.membershipId)&&(t.claimantId??t.assigneeId)!==q.membershipId))continue;
@@ -564,6 +568,12 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       rows.push({...t,storeNumber:s.storeNumber,storeName:s.name,timeZone:s.timeZone,handlerName:name(t.claimantId??t.assigneeId),requesterName:name(t.requesterId),fallbackName:name(t.fallbackId),newReply:seen&&(this.fixture.storeTaskMessages??[]).some(m=>m.organizationId===scope.organizationId&&m.taskId===t.id&&m.kind==='reply'&&m.actorId!==q.membershipId&&m.createdAt>seen)?1:0});
     }
     rows.sort((a,b)=>(a.priority==='urgent'?0:1)-(b.priority==='urgent'?0:1)||Number(b.status==='open'&&b.dueAt<q.now)-Number(a.status==='open'&&a.dueAt<q.now)||b.newReply-a.newReply||a.dueAt.localeCompare(b.dueAt)||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
+    if(q.reviewWorkOrderIds){
+      const sorted=[...rows].sort((a,b)=>a.dueAt.localeCompare(b.dueAt)||a.id.localeCompare(b.id));
+      const first=new Map<string,import("./store-task-types").TaskRow>();
+      for(const row of sorted){const previous=first.get(row.workOrderId!);if(previous)previous.openTaskCount!++;else first.set(row.workOrderId!,{...row,openTaskCount:1});}
+      return {items:clone([...first.values()].sort((a,b)=>a.workOrderId!.localeCompare(b.workOrderId!))),totalCount:rows.length};
+    }
     return {items:clone(rows.slice(q.offset??0,(q.offset??0)+Math.min(50,q.limit??25))),totalCount:rows.length};
   }
   async listComplianceOwners(org:string,search="",page:{limit?:number;offset?:number}={}) {const start=Math.max(0,Math.floor(page.offset??0)),size=Math.min(101,Math.max(1,Math.floor(page.limit??20)));return this.fixture.memberships.filter(m=>m.organizationId===org&&m.status==="active"&&!["vendor_user","support"].includes(m.role)&&this.fixture.users.some(u=>u.id===m.userId&&u.status==="active"&&u.displayName.toLowerCase().includes(search.toLowerCase()))).map(m=>({id:m.id,name:this.fixture.users.find(u=>u.id===m.userId)?.displayName??m.id})).sort((a,b)=>a.name.localeCompare(b.name)||a.id.localeCompare(b.id)).slice(start,start+size);}
@@ -688,7 +698,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async getActiveWorkflowPolicy(organizationId: OpsId): Promise<OrganizationWorkflowPolicy | null> { return clone((this.fixture.workflowPolicies ?? []).filter((row) => row.organizationId === organizationId && row.status === "active").sort((a, b) => b.version - a.version)[0] ?? null); }
   async listWorkflowPolicies(organizationId: OpsId): Promise<OrganizationWorkflowPolicy[]> { return clone((this.fixture.workflowPolicies ?? []).filter((row) => row.organizationId === organizationId).sort((a, b) => b.version - a.version)); }
   async getRequest(organizationId: OpsId, requestId: OpsId) { return clone(this.fixture.requests.find((row) => row.organizationId === organizationId && row.id === requestId) ?? null); }
-  async listRequestImpactAssessments(organizationId: OpsId, requestId: OpsId): Promise<RequestImpactAssessment[]> { return clone(this.fixture.requestImpactAssessments.filter((row) => row.organizationId === organizationId && row.requestId === requestId).sort((left, right) => left.assessedAt.localeCompare(right.assessedAt) || left.id.localeCompare(right.id))); }
+  async listRequestImpactAssessments(organizationId: OpsId, requestId: OpsId): Promise<RequestImpactAssessment[]> { return clone(this.fixture.requestImpactAssessments.filter((row) => row.organizationId === organizationId && row.requestId === requestId).sort((left, right) => left.assessedAt.localeCompare(right.assessedAt) || Number(left.assessmentKind !== "initial_report") - Number(right.assessmentKind !== "initial_report") || left.id.localeCompare(right.id))); }
+  async getLatestTechnicianVisit(org:string,member:string) { return clone(this.fixture.visits.filter(v=>v.organizationId===org&&v.internalMembershipId===member).sort((a,b)=>Number(b.status==="active")-Number(a.status==="active")||b.checkedInAt.localeCompare(a.checkedInAt)||b.id.localeCompare(a.id))[0]??null); }
+  async getTechnicianStatus(org:string,member:string) { return clone((this.fixture.technicianStatuses??[]).filter(s=>s.organizationId===org&&s.membershipId===member).sort((a,b)=>b.revision-a.revision)[0]??null); }
   async getDispatchFilters(scope: OrganizationScope) {
     const stores=this.fixture.stores.filter(s=>storeAllowed(this.fixture,scope,s.id));
     const people=this.fixture.memberships.filter(m=>m.organizationId===scope.organizationId&&m.role==="internal_technician"&&m.status==="active"&&this.fixture.scopeGrants.some(g=>g.organizationId===scope.organizationId&&g.membershipId===m.id&&["ops:*","ops:write","ops:read_write","ops:store_manage"].includes(g.permission)&&stores.some(s=>grantCoversStore(g,s)))).flatMap(m=>{const u=this.fixture.users.find(u=>u.id===m.userId&&u.status==="active");const profile=this.fixture.technicianProfiles?.find(p=>p.organizationId===scope.organizationId&&p.membershipId===m.id);return u?[{id:m.id,name:u.displayName,homeRegionId:profile?.homeRegionId,skills:profile?JSON.parse(profile.skillsJson) as string[]:[]}]:[];}).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,100);
@@ -972,7 +984,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         : Boolean(row.dueAt && row.dueAt < (query.dispatchAt ?? new Date().toISOString()) && !["completed_pending_review", "resolved", "closed", "cancelled"].includes(row.status))))
     ).filter((row) => matchesSearchTerms([row.number, row.problem, row.storeNumber, row.storeName, ...(() => { const store=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===row.storeId); return store ? [store.address1,store.city,store.postalCode,...store.aliases] : []; })(), row.vendorName, row.internalAssigneeName].filter(Boolean).join(" "), workTerms)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
     if (query.dispatchPlanOrder) {
-      const key=(row:WorkOrderListRow)=>`${row.schedule?.day??row.schedule?.week??"9999"}|${row.schedule?.startsAt??"9999"}|${({emergency:0,urgent:1,routine:2,planned:3} as Record<string,number>)[row.priority]??3}`;
+      const key=(row:WorkOrderListRow)=>`${row.schedule?.day??row.schedule?.week??"9999"}|${String((row.schedule?.stopOrder??1000000)+1000000000).padStart(10,"0")}|${row.schedule?.startsAt??"9999"}`;
       let visible=[...rows].sort((a,b)=>key(a).localeCompare(key(b))||a.id.localeCompare(b.id));
       if(query.cursor!==undefined){try{const parts=query.cursor.split("|").map(decodeURIComponent);if(parts.length!==2||!parts.every(Boolean))return {items:[],totalCount:rows.length};visible=visible.filter(row=>key(row)>parts[0]||key(row)===parts[0]&&row.id>parts[1]);}catch{return {items:[],totalCount:rows.length};}}
       const max=Math.max(1,Math.min(100,query.limit??25)),start=Math.max(0,query.offset??0),items=visible.slice(start,start+max),last=items.at(-1);
@@ -1203,7 +1215,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
 
   async recordOutboxDeliveryOutcome(input: OutboxDeliveryOutcome): Promise<void> { if (input.outcome === "delivered") { await this.atomicWrite([{ sql: "UPDATE ops_outbox_messages SET status = ?, delivered_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["delivered", input.deliveredAt, input.organizationId, input.id, "processing"] }]); return; } if (input.outcome === "retry") { await this.atomicWrite([{ sql: "UPDATE ops_outbox_messages SET status = ?, available_at = ?, last_error = ?, claimed_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["pending", input.retryAt, input.lastError.slice(0, 2000), null, input.organizationId, input.id, "processing"] }]); return; } await this.atomicWrite([{ sql: "UPDATE ops_outbox_messages SET status = ?, last_error = ?, claimed_at = ? WHERE organization_id = ? AND id = ? AND status = ?", params: ["failed", input.lastError.slice(0, 2000), null, input.organizationId, input.id, "processing"] }]); }
 
-  async listOverdueEscalationCandidates(now: string, limit: number): Promise<WorkflowTask[]> { return clone((this.fixture.workflowTasks ?? []).filter((row) => (row.status === "open" || row.status === "in_progress") && row.dueAt != null && row.dueAt <= now).sort((a, b) => (a.dueAt ?? "").localeCompare(b.dueAt ?? "") || a.id.localeCompare(b.id)).slice(0, Math.max(1, Math.min(100, limit)))); }
+  async listOverdueEscalationCandidates(now: string, limit: number): Promise<WorkflowTask[]> { return clone((this.fixture.workflowTasks ?? []).filter((row) => (row.status === "open" || row.status === "in_progress") && row.dueAt != null && row.dueAt <= now).sort((a, b) => a.escalationLevel-b.escalationLevel || Number(Boolean(a.remindedAt))-Number(Boolean(b.remindedAt)) || (a.dueAt ?? "").localeCompare(b.dueAt ?? "") || a.id.localeCompare(b.id)).slice(0, Math.max(1, Math.min(100, limit)))); }
 
   async tryBeginJobRun(input: { organizationId: OpsId; jobRunId: OpsId; jobType: string; slotKey: string; startedAt: string }): Promise<boolean> { const candidate = clone(this.fixture); const runs = candidate.jobRuns ?? []; if (runs.some((row) => row.organizationId === input.organizationId && row.jobType === input.jobType && row.slotKey === input.slotKey)) return false; runs.push({ id: input.jobRunId, organizationId: input.organizationId, jobType: input.jobType, slotKey: input.slotKey, status: "running", startedAt: input.startedAt, finishedAt: null, processedCount: 0, failedCount: 0, detailsJson: "{}", createdAt: input.startedAt }); candidate.jobRuns = runs; this.fixture = candidate; return true; }
 

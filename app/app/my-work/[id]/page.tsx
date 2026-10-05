@@ -1,3 +1,4 @@
+import { JobPreparationFields } from "@/components/workspace/job-preparation-fields";
 import { TechnicianHistory } from "@/components/workspace/technician-history";
 import { dispatchPlanLabel, dispatchTime, dueLabel } from "@/lib/ops/dispatch-board";
 import Link from "next/link";
@@ -103,6 +104,8 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
         {work.targetCompletionAt && !(resultBlocked && !manager) ? <div><dt>Finish by</dt><dd>{dispatchTime(work.targetCompletionAt,zone,organization!.timeZone)}</dd></div> : null}
       </dl>
       {work.asset ? <p><strong>Equipment:</strong> {work.asset.name} · {work.asset.assetTag}{work.component ? ` · ${work.component.name}` : ""}</p> : null}
+      {work.technicianNotes ? <p><strong>Notes for the tech:</strong> {work.technicianNotes}</p> : null}
+      {(mine||manager)&&!terminal?<details><summary>Notes and time estimate</summary><RecordForm action={`/api/ops/work-orders/${encodeURIComponent(id)}/preparation`} className={styles.form}><input type="hidden" name="expectedVersion" value={work.version??0}/><JobPreparationFields allowConfirmation={manager} notes={work.technicianNotes} minutes={work.estimatedMinutes} confirmationDelay={work.confirmationDelay}/>{active?<label>Taking longer: about how many more minutes?<input type="number" name="remainingMinutes" min="1" max="1440"/></label>:null}<button type="submit">Save job details</button></RecordForm></details>:null}
       {work.authorizedScope ? <p><strong>What to do:</strong> {work.authorizedScope}</p> : null}
       {independentFollowUps.filter(f => plainNextAction(f.nextAction) !== status).map(f => <p key={f.id} className={styles.urgent}>
         Also needed: {plainNextAction(f.nextAction)} · {f.accountableParty} · {dueLabel({dueAt:f.dueAt,storeZone:zone},civilDate(new Date().toISOString(),zone),organization!.timeZone)}

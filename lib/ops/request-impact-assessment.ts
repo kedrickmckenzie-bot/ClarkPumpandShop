@@ -169,6 +169,7 @@ function taskInsert(task: WorkflowTask): OpsStatement {
 }
 
 export function buildInitialRequestReviewTask(input: {
+  storeManagerFirst?:boolean;
   organizationId: OpsId;
   requestId: OpsId;
   reference: string;
@@ -181,7 +182,7 @@ export function buildInitialRequestReviewTask(input: {
   const task: WorkflowTask = {
     id: input.ids.next("workflow-task"), organizationId: input.organizationId, serviceRequestId: input.requestId,
     taskType: "review_issue", title: `Review ${input.reference} business impact`, reason: `Assess the reported operating impact before authorizing work: ${input.problem}`,
-    assigneeType: "role", assigneeRole: "facilities_admin", assigneeName: "Facilities review", priority: reviewTaskPriority(input.priority),
+    assigneeType: "role", assigneeRole: input.storeManagerFirst?"store_manager":"facilities_admin", assigneeName: input.storeManagerFirst?"Store manager":"Facilities review", priority: reviewTaskPriority(input.priority),
     status: "open", blocking: true, requiredForProgress: true, dueAt: reviewTaskDueAt(input.priority, input.createdAt), applicableSlaClock: "intake_review",
     completionCriteria: "Business impact is confirmed or revised and the issue is ready for an approval or work-order decision",
     escalationDestination: input.priority === "emergency" ? "Regional maintenance leader" : "Facilities director", escalationLevel: 0,
@@ -462,6 +463,7 @@ export async function reviewRequestImpactAssessment(
       ...eventStatements({ organizationId: input.organizationId, aggregateType: "workflow_task", aggregateId: activeTask.id, eventType: "workflow_task.started", actor: input.actor, occurredAt: assessment.assessedAt, payload: { serviceRequestId: request.id, impactAssessmentId: assessment.id }, ids }),
     );
   }
+  if(activeTask)statements.push({sql:"UPDATE ops_workflow_tasks SET assignee_type = ?, assignee_id = NULL, assignee_role = ?, assignee_name = ?, title = ? WHERE organization_id = ? AND id = ?",params:["role","facilities_admin","Facilities review",`Route ${request.reference}`,input.organizationId,activeTask.id]});
   await atomicRequestImpactReview({
     repository: services.repository,
     request,

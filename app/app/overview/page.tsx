@@ -1,3 +1,4 @@
+import {WorkflowSummary} from "@/components/workspace/workflow-summary";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import {OperatingProblems} from "@/components/workspace/operating-problems";
 import {roleCanAccessProgramRoute} from "@/components/ops/role-policy";
@@ -22,7 +23,7 @@ export default async function OverviewPage() {
   });
   const session=await loadOperatorSession(),repository=await getServerOpsRepository(),start=new Date().toISOString().slice(0,7);
   const risks=await repository.listOperatingRisks(session);
-  const operatingSummary=<OperatingProblems rows={risks}/>;
+  const operatingSummary=<><WorkflowSummary session={session} repository={repository}/><OperatingProblems rows={risks}/></>;
   const pendingInvoices=["executive","facilities","finance"].includes(session.role)&&session.storeIds===undefined&&session.regionIds===undefined?await repository.listInvoiceUploads(session.organizationId,{status:"pending"}):[];
   const invoiceAttention=pendingInvoices.length?<div className={`${styles.panel} ${styles.bar}`}><div><strong>Invoices need attention</strong><p>Review unmatched files or resume interrupted reading.</p></div><Link href="/app/invoices?view=review#uploaded-invoices">Review invoices →</Link></div>:null;
   if(!roleCanAccessProgramRoute(session.role,"lifecycle"))return <ControlTower model={model} operatingSummary={operatingSummary} capitalSummary={invoiceAttention}/>;

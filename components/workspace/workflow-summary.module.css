@@ -1,0 +1,30 @@
+.lines {
+  display: grid;
+  background: white;
+  border: 1px solid #d7dfe9;
+  border-radius: 6px;
+  font-size: 16px;
+}
+.lines a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  min-height: 48px;
+  color: #25364c;
+  text-decoration: none;
+  border-bottom: 1px solid #e3e8ef;
+}
+.lines a:last-child {
+  border: 0;
+}
+.lines a:hover {
+  background: #f4f7fc;
+}
+.lines strong {
+  font-variant-numeric: tabular-nums;
+}
+.lines span {
+  margin-left: auto;
+  color: #2559c5;
+}

@@ -519,6 +519,27 @@
       "when": 1791125675835,
       "tag": "0073_left_silhouette",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1791211486924,
+      "tag": "0074_glamorous_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1791211672170,
+      "tag": "0075_lonely_mordo",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1791212229086,
+      "tag": "0076_busy_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { JobPreparationFields } from "@/components/workspace/job-preparation-fields";
 import { InternalAssignmentFields } from "@/components/workspace/internal-assignment-fields";
 import { SavedWorkSuggestions } from "./saved-work-suggestions";
 import { useWorkOrderScope } from "./work-order-scope";
@@ -36,7 +37,7 @@ export function WorkRoutingFields({ model, accountabilityOnly }: { model: Create
   }, [storeId]);
   const vendorOptions: PickOption[] = model.vendors.map((v) => ({ value: v.value, label: v.label, detail: v.description }));
   const choices = [
-    ...(!accountabilityOnly ? [{ id: "internal", label: "Internal maintenance" }] : []),
+    ...(!accountabilityOnly ? [{ id: "internal", label: "Our team" }] : []),
     { id: "outside_vendor", label: "Outside vendor" },
     { id: "choose_later", label: "Choose later" },
     ...(!accountabilityOnly ? [{ id: "hold_for_visit", label: "Save for a later visit" }] : []),
@@ -63,6 +64,7 @@ export function WorkRoutingFields({ model, accountabilityOnly }: { model: Create
         emptyText="No vendor covering this store matches. Try fewer letters." onSelect={(vendor) => setVendorId(vendor?.value ?? "")} />
       {!accountabilityOnly ? <SavedWorkSuggestions storeId={storeId} vendorId={vendorId} preview /> : null}
     </div> : null}
+    {route === "internal" ? <JobPreparationFields/> : null}
     {route === "internal" ? <div className={styles.fieldGrid}>
       <InternalAssignmentFields storeId={storeId} defaultTarget={model.defaults?.internalMembershipId ? "person" : "pool"} defaultPerson={model.defaults?.internalMembershipId ? {id:model.defaults.internalMembershipId,name:model.internalAssignees.find(p=>p.value===model.defaults?.internalMembershipId)?.label??"Technician"} : undefined}/>
       <label className={styles.checkField}><input name="internalNextVisit" type="checkbox" onChange={e => setInternalNextVisit(e.target.checked)}/>Do on next visit</label>

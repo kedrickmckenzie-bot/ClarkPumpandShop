@@ -26,7 +26,7 @@ it("offers only authorized outcomes for look-and-report job and checkout forms",
   for (const visit of [false, true]) {
     const html = renderToStaticMarkup(createElement(InternalResultFields, { visit, lookAndReport: true }));
     expect(html).not.toContain('value="completed"');
-    expect(html).toContain('value="return_visit_required" selected');
+    expect(html).toMatch(/checked=""[^>]*value="return_visit_required"|value="return_visit_required"[^>]*checked=""/);
   }
 });
 for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adapter==="PostgreSQL"&&!postgresUrl)(`P2 internal execution on ${adapter}`,()=>{
@@ -137,7 +137,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     const notices = (await r.listDueOutboxMessages("9999-01-01T00:00:00.000Z", 10000)).filter(message => message.aggregateId === job.id && message.topic === "ops.internal_dispatch.notification").map(message => JSON.parse(message.payloadJson));
     expect(notices).toContainEqual(expect.objectContaining({ headline: "Return work reviewed; required actions remain" }));
     expect(notices.some(notice => notice.headline === "Job ready for return work")).toBe(false);
-    await expect(recordInternalWorkResult(svc(), { ...await current(job.id), outcome: "completed" })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(recordInternalWorkResult(svc(), { ...await current(job.id), outcome: "completed" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("resumes parts work with the original repair deadline, which stays overdue when it has passed", async () => {
@@ -151,11 +151,11 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     const input = { ...await current(job.id), actor: dispatchActor(dispatchManager), notes: "Replacement arrived after the review deadline" };
     await markInternalWorkReady(late, input);
     await markInternalWorkReady(late, input);
-    expect(await r.getWorkOrder(dispatchOrg, job.id)).toMatchObject({ status: "approved", nextAction: "Begin internal work", dueAt: original, version: blocked.version! + 1 });
+    expect(await r.getWorkOrder(dispatchOrg, job.id)).toMatchObject({ status: "approved", nextAction: "Arrange team pickup", dueAt: original, version: blocked.version! + 1 });
     const ready = (await r.listWorkflowTasksForWorkOrder(dispatchOrg, job.id)).filter(task => task.status === "open");
     expect(ready).toHaveLength(1);
     // The parts delay never makes the repair due sooner than it was before.
-    expect(ready[0]).toMatchObject({ title: "Begin internal work", dueAt: original, createdAt: late.clock.now() });
+    expect(ready[0]).toMatchObject({ title: "Arrange team pickup", dueAt: original, createdAt: late.clock.now() });
     expect(ready[0].dueAt! < ready[0].createdAt).toBe(true);
   });
 
@@ -219,12 +219,13 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     const outcome=latestRecordedWorkOutcome(await r.listWorkOutcomesForWorkOrder(dispatchOrg,job.id))!;expect(outcome.workResultId).toBe(result.id);
     const decision={organizationId:dispatchOrg,workOrderId:job.id,expectedWorkOrderVersion:1,expectedSiteVisitWorkOrderId:result.id,expectedOutcomeRecordedAt:dispatchNow,decision:"verified" as const,actor:dispatchActor("membership-northline-store-101")};
     await expect(recordWorkOrderVerification(svc(),{...decision,actor:dispatchActor(dispatchTech[0])})).rejects.toMatchObject({code:"FORBIDDEN"});
-    const verified=await recordWorkOrderVerification(svc(),decision);expect(verified.workResultId).toBe(result.id);expect(verified.siteVisitWorkOrderId).toBeUndefined();
+    const verified=await recordWorkOrderVerification({...svc(),clock:{now:()=>"2026-10-05T18:00:00.000Z"}},decision);expect(verified.workResultId).toBe(result.id);expect(verified.siteVisitWorkOrderId).toBeUndefined();
     expect(applicableOutcomeVerification(await r.listWorkOrderVerifications(dispatchOrg,job.id),outcome)?.id).toBe(verified.id);
     await correctWorkOrderOutcome(svc(),{organizationId:dispatchOrg,workOrderId:job.id,expectedVersion:2,expectedOutcomeId:result.id,outcome:"return_visit_required",reason:"Latch still sticks",actor:dispatchActor(dispatchManager)});
     const records=await r.listWorkResults(dispatchOrg,job.id);expect(records).toHaveLength(2);expect(records.find(item=>item.id===result.id)?.outcome).toBe("completed");expect(records[0].supersedesResultId).toBe(result.id);
     expect(applicableOutcomeVerification(await r.listWorkOrderVerifications(dispatchOrg,job.id),latestRecordedWorkOutcome(await r.listWorkOutcomesForWorkOrder(dispatchOrg,job.id)))).toBeUndefined();
     await markInternalWorkReady(svc(),{...await current(job.id),actor:dispatchActor(dispatchManager),notes:"Return work reviewed"});
+    await dispatchChange(r,job.id,"assign",undefined,{target:"person",membershipId:dispatchTech[0]});
     const visit=await checkInVisit(svc(),{organizationId:dispatchOrg,storeId:job.storeId,internalMembershipId:dispatchTech[0],technicianName:"Maria Santos",workOrderIds:[job.id],purpose:"Return repair",channel:"internal_web",location,actor:dispatchActor(dispatchTech[0])});
     // Same frozen clock: a newer pending service cycle must suppress the older confirmed result.
     expect(latestRecordedWorkOutcome(await r.listWorkOutcomesForWorkOrder(dispatchOrg,job.id))).toBeUndefined();
@@ -245,8 +246,9 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     expect((await r.getWorkOrder(dispatchOrg,job.id))?.internalAccountableId).toBe(dispatchManager);
     await expect(recordInternalWorkResult(svc(),{...await current(job.id),outcome:"completed"})).rejects.toMatchObject({code:"CONFLICT"});
     await markInternalWorkReady(svc(),{...await current(job.id),actor:dispatchActor(dispatchManager),notes:"Replacement latch arrived"});
+    await dispatchChange(r,job.id,"assign",undefined,{target:"person",membershipId:dispatchTech[0]});
     await recordInternalWorkResult(svc(),{...await current(job.id),outcome:"completed",notes:"Replacement fitted"});
-    expect((await r.getWorkOrder(dispatchOrg,job.id))?.status).toBe("closed");expect((await r.getActiveAssignment(dispatchOrg,job.id))?.internalMembershipId).toBe(dispatchTech[0]);expect(parts.followUpId).toBeTruthy();
+    expect((await r.getWorkOrder(dispatchOrg,job.id))?.status).toBe("resolved");expect((await r.getActiveAssignment(dispatchOrg,job.id))?.internalMembershipId).toBe(dispatchTech[0]);expect(parts.followUpId).toBeTruthy();
     const vendorJob=await dispatchJob(r,"person");await recordInternalWorkResult(svc(),{...await current(vendorJob.id),outcome:"quote_required",blocker:"vendor",notes:"Refrigeration specialist needed"});
     await assignWorkOrder(svc(),{organizationId:dispatchOrg,workOrderId:vendorJob.id,kind:"outside_vendor",vendorId:"vendor-northline-summit",actor:dispatchActor()});
     expect((await r.getWorkOrder(dispatchOrg,vendorJob.id))?.number).toBe(vendorJob.number);expect((await r.getActiveAssignment(dispatchOrg,vendorJob.id))?.kind).toBe("outside_vendor");expect(await r.listWorkResults(dispatchOrg,vendorJob.id)).toHaveLength(1);

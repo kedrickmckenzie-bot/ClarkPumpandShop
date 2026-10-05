@@ -1,5 +1,7 @@
+import {roleCan} from "@/components/ops/role-policy";
 import type { ListPageViewModel, OperatorSession, PaginationViewModel } from "@/components/ops/data-contract";
 import { oneLine } from "@/lib/product/one-line";
+import type { TaskRow } from "@/lib/ops/store-task-types";
 import type { OpsRepository } from "@/lib/ops/repository";
 import type { AttentionQuery } from "@/lib/ops/attention-query";
 import { attentionScope, validateAttentionQuery } from "@/lib/ops/attention-query";
@@ -14,14 +16,14 @@ const first = (value: string | string[] | undefined) => Array.isArray(value) ? v
 const PAGE_SIZE=25;
 export function reviewQuery(params: Query, asOf: string): AttentionQuery {
   const type=first(params.type),priority=first(params.priority),rawLane=first(params.lane),lane=rawLane==="all"?undefined:rawLane,q=first(params.q)?.trim();
-  const query: AttentionQuery={asOf,q,store:first(params.store),type:(type === "exception" ? "service-record" : type === "vendor-reminder" ? "vendor-task" : type) as AttentionQuery["type"],priority:priority as AttentionQuery["priority"],lane:lane as AttentionQuery["lane"]};
+  const query: AttentionQuery={asOf,q,stage:first(params.stage) as AttentionQuery["stage"],store:first(params.store),type:(type === "exception" ? "service-record" : type === "vendor-reminder" ? "vendor-task" : type) as AttentionQuery["type"],priority:priority as AttentionQuery["priority"],lane:lane as AttentionQuery["lane"]};
   validateAttentionQuery(query); return query;
 }
 function pageNumber(raw?: string) { const n=Number(raw ?? 1); if (!Number.isSafeInteger(n) || n<1) throw new RangeError("Choose a valid page."); return n; }
 export function reviewHref(query: AttentionQuery, page=1) {
   const params=new URLSearchParams();
-  for (const key of ["q","type","priority","lane","store"] as const) if(query[key]) params.set(key,query[key]);
-  // Opening the queue with no lane shows "Needs my action"; "All open" is therefore always explicit.
+  for (const key of ["q","type","priority","lane","store","stage"] as const) if(query[key]) params.set(key,query[key]);
+  // Keep the shared view explicit in drill-through links.
   if(!query.lane) params.set("lane","all");
   if(page>1) params.set("page",String(page));
   return `/app/action-center${params.size ? `?${params}` : ""}`;
@@ -31,12 +33,18 @@ function pagination(total: number,page: number,href:(page:number)=>string): Pagi
   if(pages===1 && page===1) return undefined;
   return {summary:`Page ${page} of ${pages}`,currentPage:page,totalPages:pages,pageLinks:[],previousHref:page>1 ? href(page-1) : undefined,nextHref:page<pages ? href(page+1) : undefined};
 }
+function reviewTaskCell(task?: TaskRow) {
+  if (!task) return {key:"task",value:""};
+  const who=task.status==="review" ? task.requesterName : task.handlerName || (task.assignment==="local" ? "Store team" : "Responsible team");
+  const additional=(task.openTaskCount??1)-1;
+  return {key:"task",value:`Task: ${who} · ${task.title} · due ${formatOperationsDateTime(task.dueAt,task.timeZone)}${task.status==="review"?" · awaiting review":""}${additional>0?` · +${additional} open ${additional===1?"task":"tasks"}`:""}`,
+    link:{href:additional>0?`/app/tasks?source=${encodeURIComponent(task.workOrderId!)}&view=all`:`/app/tasks/${encodeURIComponent(task.id)}`,label:additional>0?"View job tasks":"View task"}};
+}
 export async function buildReviewQueue(repository: OpsRepository,session: OperatorSession,requested: Query,asOf:string,itemIds?:string[]): Promise<ListPageViewModel> {
   let params=requested;
-  if(!first(requested.lane) && !itemIds) {
-    // First view: the person's own actions, unless they have none — then everything open.
+  if(!["facilities","regional"].includes(session.role) && !first(requested.lane) && !itemIds) {
     const mine=await repository.listAttention({organizationId:session.organizationId,storeIds:session.storeIds,regionIds:session.regionIds},attentionAccess(session),{asOf,store:first(requested.store),lane:"mine",limit:1});
-    params={...requested,lane:mine.totalCount ? "mine" : "all"};
+    params={...requested,lane:mine.totalCount?"mine":"all"};
   }
   const query=reviewQuery(params,asOf), page=itemIds ? 1 : pageNumber(first(params.page)),queue=reviewHref(query,pageNumber(first(params.page)));
   const scope={organizationId:session.organizationId,storeIds:session.storeIds,regionIds:session.regionIds},access=attentionAccess(session);
@@ -53,16 +61,20 @@ export async function buildReviewQueue(repository: OpsRepository,session: Operat
   // Each row names the actual problem, not only the task, so the reason for acting is clear.
   const problems=await Promise.all(result.items.slice(0,PAGE_SIZE).map(async row=>row.workOrderId?(await repository.getWorkOrder(session.organizationId,row.workOrderId))?.problem:row.serviceRequestId?(await repository.getRequest(session.organizationId,row.serviceRequestId))?.problem:undefined));
   actions.slice(0,PAGE_SIZE).forEach((action,index)=>{const problem=problems[index];if(problem&&!action.title.includes(problem))action.problemLabel=oneLine(problem);});
+  const workIds=[...new Set(result.items.slice(0,PAGE_SIZE).flatMap(row=>row.workOrderId?[row.workOrderId]:[]))];
+  const taskRows=session.membershipId && workIds.length && query.lane!=="history"
+    ? (await repository.queryStoreTasks(scope,{membershipId:session.membershipId,supervisor:["facilities","regional","executive"].includes(session.role),local:false,view:"all",now:asOf,reviewWorkOrderIds:workIds})).items : [];
+  const tasksByWork=new Map(taskRows.map(task=>[task.workOrderId,task]));
   const labels=["Needs your action","Waiting on others","All open items"];
-  const filter=(key:"lane"|"type"|"priority",label:string,options:Array<[string,string]>)=>({id:`attention-${key}`,label,options:options.map(([value,title])=>({value:value||"all",label:title,selected:(query[key]??"")===value,href:reviewHref({...query,[key]:value||undefined})}))});
-  return {state:{kind:"ready"},page:{title:"Review queue",description:query.lane === "history" ? "Completed and canceled tasks." : "Open an item and take the next step.",scopeLabel,updatedLabel:`Updated ${formatOperationsDate(asOf)}`},
+  const filter=(key:"lane"|"type"|"priority"|"stage",label:string,options:Array<[string,string]>)=>({id:`attention-${key}`,label,options:options.map(([value,title])=>({value:value||"all",label:title,selected:(query[key]??"")===value,href:reviewHref({...query,[key]:value||undefined})}))});
+  return {state:{kind:"ready"},page:{title:"Review queue",description:query.lane === "history" ? "Completed and canceled tasks." : "Review and route work in your store scope.",scopeLabel,updatedLabel:`Updated ${formatOperationsDate(asOf)}`},
     metrics:totals.map((total,index)=>({id:["attention-mine","attention-waiting","attention-open"][index],label:labels[index],value:String(total.totalCount),supportingText:["Decisions and follow-ups for you","Vendors or others need to act","Everything open in your store scope"][index],tone:index===0 && total.totalCount ? "warning" as const : "neutral" as const,link:{href:reviewHref(metricQueries[index]),label:`Show ${labels[index].toLowerCase()}`}})),
-    filters:[filter("lane","Responsibility",[["","All open"],["mine","Needs my action"],["team","Team is handling"],["waiting","Waiting on others"],["upcoming","Upcoming"],["history","Task history"]]),filter("type","Type",[["","All types"],["service-record","Records to check"],["follow-up","Follow-ups"],["vendor-task","Vendor tasks"]]),filter("priority","Priority",[["","All priorities"],["urgent","Do now"],["standard","Other items"]])],
-    clearFiltersHref:query.q || query.type || query.lane || query.priority ? `/app/action-center${query.store ? `?${new URLSearchParams({store:query.store})}` : ""}` : undefined,
-    appliedFilters:(["q","lane","type","priority","store"] as const).flatMap(key=>query[key]?[{id:key,label:key === "store" ? scopeLabel : key === "lane" ? ({mine:"Needs my action",team:"Team is handling",waiting:"Waiting on others",upcoming:"Upcoming",history:"Task history"} as Record<string,string>)[query.lane!] ?? query.lane! : `${key === "q"?"Search":key === "type"?"Type":"Priority"}: ${query[key]}`,removeHref:reviewHref({...query,[key]:undefined})}]:[]),
-    table:{id:"action-center",caption:"Review queue",columns:[],rows:actions.slice(0,PAGE_SIZE).map((action,index)=>({id:action.id,label:action.title,href:reviewItemHref(action.link.href,queue,action.id,actions.slice(index+1,index+26).map(row=>row.id)),sourceLink:(action.sourceCount??1)>1?{href:`/app/action-center/sources?${new URLSearchParams({item:action.id,queue})}`,label:`Related tasks and records (${action.sourceCount})`}:undefined,cells:[{key:"item",value:action.title,secondary:action.description},{key:"problem",value:action.problemLabel??""},{key:"store",value:action.storeLabel??"Companywide"},{key:"record",value:action.recordLabel??action.categoryLabel,secondary:action.reasonLabel},{key:"owner",value:action.ownerLabel},{key:"due",value:action.dueLabel},{key:"priority",value:action.priorityLabel??"Review",tone:action.tone},{key:"type",value:action.categoryLabel},{key:"action",value:action.link.label}]}))},
+    filters:[filter("stage","Status",[["","All open"],["stuck","Stuck"],["confirmation_overdue","Confirmations overdue"]]),filter("lane","Responsibility",[["","All open"],["mine","Needs my action"],["team","Team is handling"],["waiting","Waiting on others"],["upcoming","Upcoming"],["history","Task history"]]),filter("type","Type",[["","All types"],["service-record","Records to check"],["follow-up","Follow-ups"],["vendor-task","Vendor tasks"]]),filter("priority","Priority",[["","All priorities"],["urgent","Do now"],["standard","Other items"]])],
+    clearFiltersHref:query.q || query.type || query.lane || query.priority || query.stage ? `/app/action-center${query.store ? `?${new URLSearchParams({store:query.store})}` : ""}` : undefined,
+    appliedFilters:(["q","lane","type","priority","store","stage"] as const).flatMap(key=>query[key]?[{id:key,label:key === "store" ? scopeLabel : key === "lane" ? ({mine:"Needs my action",team:"Team is handling",waiting:"Waiting on others",upcoming:"Upcoming",history:"Task history"} as Record<string,string>)[query.lane!] ?? query.lane! : `${key === "q"?"Search":key === "type"?"Type":"Priority"}: ${query[key]}`,removeHref:reviewHref({...query,[key]:undefined})}]:[]),
+    table:{id:"action-center",caption:"Review queue",columns:[],rows:actions.slice(0,PAGE_SIZE).map((action,index)=>({id:action.id,label:action.title,href:reviewItemHref(action.link.href,queue,action.id,actions.slice(index+1,index+26).map(row=>row.id)),sourceLink:(action.sourceCount??1)>1?{href:`/app/action-center/sources?${new URLSearchParams({item:action.id,queue})}`,label:`Related tasks and records (${action.sourceCount})`}:undefined,cells:[...(roleCan(session,"assign_internal_work")&&(result.items[index].workOrderId||result.items[index].serviceRequestId)?[{key:"review-route",value:result.items[index].workOrderId??result.items[index].serviceRequestId!,secondary:result.items[index].workOrderId?"work":"request"}]:[]),reviewTaskCell(tasksByWork.get(result.items[index].workOrderId??"")),{key:"item",value:action.title,secondary:action.description},{key:"problem",value:action.problemLabel??""},{key:"store",value:action.storeLabel??"Companywide"},{key:"record",value:action.recordLabel??action.categoryLabel,secondary:action.reasonLabel},{key:"owner",value:action.ownerLabel},{key:"due",value:action.dueLabel},{key:"priority",value:action.priorityLabel??"Review",tone:action.tone},{key:"type",value:action.categoryLabel},{key:"action",value:action.link.label}]}))},
     resultSummary:query.lane === "history" ? `${result.totalCount} history items` : `Showing ${result.totalCount} of ${totals[2]?.totalCount ?? result.totalCount} open items`,
-    search:{label:"Search review queue",placeholder:"Store, work order, owner or keyword",value:query.q,action:"/app/action-center",preservedParameters:[...(["type","priority","store"] as const).flatMap(name=>query[name] ? [{name,value:query[name]}] : []),{name:"lane",value:query.lane ?? "all"}]},pagination:pagination(result.totalCount,page,n=>reviewHref(query,n))};
+    search:{label:"Search review queue",placeholder:"Store, work order, owner or keyword",value:query.q,action:"/app/action-center",preservedParameters:[...(["type","priority","store","stage"] as const).flatMap(name=>query[name] ? [{name,value:query[name]}] : []),{name:"lane",value:query.lane ?? "all"}]},pagination:pagination(result.totalCount,page,n=>reviewHref(query,n))};
 }
 export async function buildReviewSources(repository:OpsRepository,session:OperatorSession,params:Query,asOf:string) {
   const queue=safeReviewQueue(first(params.queue)),query=reviewQuery(Object.fromEntries(new URL(queue,"https://ops.invalid").searchParams),asOf),item=first(params.item),page=pageNumber(first(params.page));

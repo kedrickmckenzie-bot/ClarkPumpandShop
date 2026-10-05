@@ -15,6 +15,9 @@ import { membershipHasCapability } from "./capability-policy";
 import { resolveInternalAccountability } from "./internal-accountability";
 import {
   buildInitialRequestImpactAssessment,
+  buildRequestImpactAssessment,
+  buildRequestImpactAssessmentStatements,
+  unknownRequestImpactAssessment,
   buildInitialRequestReviewTask,
   type RequestImpactAssessmentDraft,
 } from "./request-impact-assessment";
@@ -622,19 +625,28 @@ export async function createServiceRequest(svc: OpsCommandServices, input: Creat
   const problem = required(input.problem, "Problem description"); const reporterName = required(input.reporterName, "Reporter name");
   const priority = input.priority ?? "routine";
   const impact = buildInitialRequestImpactAssessment({ organizationId: input.organizationId, requestId: id, storeId: input.storeId, draft: input.impact, actor: input.actor, assessedAt: now, ids });
-  const reviewTask = buildInitialRequestReviewTask({ organizationId: input.organizationId, requestId: id, reference, problem, priority, actor: input.actor, createdAt: now, ids });
+  const reporterMembership=input.actor.actorType==="user"&&input.actor.actorId?await repository.getMembership(input.organizationId,input.actor.actorId):null;
+  const managerReport=reporterMembership?.status==="active"&&reporterMembership.role==="store_manager";
+  const directReview=managerReport?buildRequestImpactAssessment({id:ids.next("request-impact"),organizationId:input.organizationId,requestId:id,storeId:input.storeId,assessmentKind:"review",reviewDisposition:"confirmed",draft:{...(input.impact??unknownRequestImpactAssessment()),source:"manager_review"},actor:input.actor,assessedAt:now}):undefined;
+  const requestStatus=managerReport?"under_review" as const:"submitted" as const;
+  const reviewTask = buildInitialRequestReviewTask({ storeManagerFirst:!reporterMembership || reporterMembership.role === "store_employee", organizationId: input.organizationId, requestId: id, reference, problem, priority, actor: input.actor, createdAt: now, ids });
   const statements: OpsStatement[] = [
-    insert("ops_requests", { id, organization_id: input.organizationId, reference, store_id: input.storeId, reporter_name: reporterName, reporter_employee_id: input.reporterEmployeeId, problem, priority, status: "submitted", version: 0, submitted_at: now }),
+    insert("ops_requests", { id, organization_id: input.organizationId, reference, store_id: input.storeId, reporter_name: reporterName, reporter_employee_id: input.reporterEmployeeId, problem, priority, status: requestStatus, version: 0, submitted_at: now }),
     ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "request", aggregateId: id, eventType: "request.submitted", actor: input.actor, occurredAt: now, payload: { reference, storeId: input.storeId, problem }, ids }),
     ...impact.statements,
+    ...(directReview?buildRequestImpactAssessmentStatements({assessment:directReview,actor:input.actor,ids}):[]),
     ...reviewTask.statements,
   ];
   if (input.idempotency) statements.unshift(idempotencyStatement(input.organizationId, id, now, input.idempotency));
   await repository.atomicWrite(statements);
-  return { id, organizationId: input.organizationId, reference, storeId: input.storeId, reporterName, reporterEmployeeId: input.reporterEmployeeId, problem, priority, status: "submitted" as const, version: 0, submittedAt: now, impactAssessment: impact.assessment, workflowTask: reviewTask.task };
+  return { id, organizationId: input.organizationId, reference, storeId: input.storeId, reporterName, reporterEmployeeId: input.reporterEmployeeId, problem, priority, status: requestStatus, version: 0, submittedAt: now, impactAssessment: directReview ?? impact.assessment, workflowTask: reviewTask.task };
 }
 
 export interface CreateWorkOrderInput {
+  expectedRequestVersion?: number;
+  technicianNotes?: string;
+  estimatedMinutes?: number;
+  confirmationDelay?: "next_morning" | "four_hours";
   requireConfirmation?: boolean;
   confirmationMembershipId?: string;
   organizationId: OpsId; number?: string; storeId: OpsId; requestId?: OpsId; pmOccurrenceId?: OpsId; problem: string;
@@ -664,6 +676,9 @@ export interface CreateWorkOrderInput {
 
 export async function createWorkOrder(svc: OpsCommandServices, input: CreateWorkOrderInput) {
   const { repository, clock, ids } = services(svc); assertActorOrganization(input.actor, input.organizationId);
+  if (input.estimatedMinutes !== undefined && (!Number.isSafeInteger(input.estimatedMinutes) || input.estimatedMinutes < 1 || input.estimatedMinutes > 1440)) throw new OpsDomainError("VALIDATION", "Enter an estimate from 1 to 1,440 minutes, or leave it unknown.");
+  if ((input.technicianNotes?.length ?? 0) > 3000) throw new OpsDomainError("VALIDATION", "Keep technician notes under 3,000 characters.");
+  if (input.confirmationDelay && !["next_morning", "four_hours"].includes(input.confirmationDelay)) throw new OpsDomainError("VALIDATION", "Choose a confirmation time.");
   const actorMembership = input.actor.actorType === "user" && input.actor.actorId
     ? await repository.getMembership(input.organizationId, input.actor.actorId)
     : null;
@@ -706,6 +721,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   if (input.requestId) {
     const request = await repository.getRequest(input.organizationId, input.requestId);
     if (!request || request.storeId !== input.storeId) throw new OpsDomainError("NOT_FOUND", "Request not found for this store and organization");
+    if (input.expectedRequestVersion !== undefined && (request.version??0)!==input.expectedRequestVersion) throw new OpsDomainError("CONFLICT", "This report changed. Refresh before routing it.");
     if (request.status === "converted" || request.convertedWorkOrderId) throw new OpsDomainError("CONFLICT", "Request already has a canonical work order");
     if (request.linkedWorkOrderId) throw new OpsDomainError("CONFLICT", "This report is already linked to existing work; correct or review that link before creating separate work");
     if (request.status !== "under_review") throw new OpsDomainError("CONFLICT", "Review and confirm the request impact before creating its work order");
@@ -841,7 +857,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   const sourceConfirmationPlan = sourcePmOccurrence ? await repository.getPmPlan(input.organizationId, sourcePmOccurrence.planId) : undefined;
   const requireConfirmation = input.requireConfirmation ?? sourceConfirmationPlan?.requireConfirmation ?? (await repository.getActiveWorkflowPolicy(input.organizationId))?.requireConfirmationDefault ?? true;
   if (input.confirmationMembershipId) await confirmationAssignee(repository, { organizationId: input.organizationId, storeId: input.storeId, confirmationMembershipId: input.confirmationMembershipId });
-  const statements: OpsStatement[] = [insert("ops_work_orders", { require_confirmation: requireConfirmation ? 1 : 0, confirmation_membership_id: input.confirmationMembershipId, id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, internal_review_threshold_minor: input.internalReviewThresholdMinor, internal_review_currency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
+  const statements: OpsStatement[] = [insert("ops_work_orders", { technician_notes: input.technicianNotes?.trim() || undefined, estimated_minutes: input.estimatedMinutes, confirmation_delay: input.confirmationDelay, require_confirmation: requireConfirmation ? 1 : 0, confirmation_membership_id: input.confirmationMembershipId, id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, internal_review_threshold_minor: input.internalReviewThresholdMinor, internal_review_currency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
   if (input.idempotency) statements.unshift(idempotencyStatement(input.organizationId, id, now, input.idempotency));
   if (sourcePmOccurrence) {
     const sourceProgram = sourcePmOccurrence.programId
@@ -888,7 +904,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   sourceReviewTasks.filter((task) => task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => {
     statements.push(...buildCompleteWorkflowTaskStatements({ task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Impact review completed; converted to ${number}` }));
   });
-  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.created", actor: input.actor, occurredAt: now, payload: { requireConfirmation, confirmationMembershipId: input.confirmationMembershipId, internalReviewThresholdMinor: input.internalReviewThresholdMinor, internalReviewCurrency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", number, storeId: input.storeId, requestId: input.requestId, pmOccurrenceId: input.pmOccurrenceId, classified: Boolean(input.categoryKey), assetLinked: Boolean(input.assetId), repairPlanning: input.repairEstimateAmountMinor === undefined && input.estimatedServiceExtensionMonths === undefined ? undefined : { repairEstimateAmountMinor: input.repairEstimateAmountMinor, repairEstimateCurrency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimatedServiceExtensionMonths: input.estimatedServiceExtensionMonths } }, ids }));
+  statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.created", actor: input.actor, occurredAt: now, payload: { technicianNotes: input.technicianNotes, estimatedMinutes: input.estimatedMinutes, confirmationDelay: input.confirmationDelay, requireConfirmation, confirmationMembershipId: input.confirmationMembershipId, internalReviewThresholdMinor: input.internalReviewThresholdMinor, internalReviewCurrency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", number, storeId: input.storeId, requestId: input.requestId, pmOccurrenceId: input.pmOccurrenceId, classified: Boolean(input.categoryKey), assetLinked: Boolean(input.assetId), repairPlanning: input.repairEstimateAmountMinor === undefined && input.estimatedServiceExtensionMonths === undefined ? undefined : { repairEstimateAmountMinor: input.repairEstimateAmountMinor, repairEstimateCurrency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimatedServiceExtensionMonths: input.estimatedServiceExtensionMonths } }, ids }));
   if (input.holdForVisit) statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.visit_hold_created", actor: input.actor, occurredAt: now, payload: { holdId: visitHoldId, posture: input.holdForVisit.posture, deadlineAt: input.holdForVisit.deadlineAt, internalReviewThresholdRecorded: input.holdForVisit.internalReviewThresholdAmountMinor !== undefined, thresholdMeaning: "internal_invoice_review_not_vendor_price_or_authorization" }, ids }));
   let initialAssignment: WorkOrderAssignment | undefined;
   if (input.initialAssignment) {
@@ -935,6 +951,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     };
   }
   const createdWorkOrder: WorkOrder = {
+    technicianNotes: input.technicianNotes, estimatedMinutes: input.estimatedMinutes, confirmationDelay: input.confirmationDelay,
     requireConfirmation, confirmationMembershipId: input.confirmationMembershipId,
     id, organizationId: input.organizationId, number, storeId: input.storeId, requestId: input.requestId,
     problem, authorizedScope: input.authorizedScope, categoryKey: input.categoryKey,
@@ -1001,7 +1018,7 @@ export interface PlaceWorkOrderOnVisitHoldInput {
 }
 
 /** Creates or updates the one manager-approved "while you're here" posture for a canonical work order. */
-export async function placeWorkOrderOnVisitHold(svc: OpsCommandServices, input: PlaceWorkOrderOnVisitHoldInput) {
+export async function placeWorkOrderOnVisitHold(svc: OpsCommandServices, input: PlaceWorkOrderOnVisitHoldInput, composition?: { append(statements: OpsStatement[]): void }) {
   const { repository, clock, ids } = services(svc);
   assertActorOrganization(input.actor, input.organizationId);
   const workOrder = await repository.getWorkOrder(input.organizationId, input.workOrderId);
@@ -1084,7 +1101,8 @@ export async function placeWorkOrderOnVisitHold(svc: OpsCommandServices, input: 
   });
   statements.push(...buildReplaceMatchingTaskStatements({ workOrder, tasks, targetTask: selectPrimaryWorkflowTask(tasks), replacementTask, actor: input.actor, occurredAt: now, ids, resolutionNote: existing ? "Held-work instructions updated" : "Work held for a matching vendor visit" }));
   statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: workOrder.id, eventType: existing ? "work_order.visit_hold_updated" : "work_order.visit_hold_created", actor: input.actor, occurredAt: now, payload: { holdId, posture: input.posture, deadlineAt: input.deadlineAt, internalReviewThresholdRecorded: input.internalReviewThresholdAmountMinor !== undefined, thresholdMeaning: "internal_invoice_review_not_vendor_price_or_authorization" }, ids }));
-  await atomicWorkOrderMutation({ repository, workOrder, now, statements, conflictMessage: "This work order changed. Refresh before updating its future-visit hold." });
+  if(composition)composition.append(statements);
+  else await atomicWorkOrderMutation({ repository, workOrder, now, statements, conflictMessage: "This work order changed. Refresh before updating its future-visit hold." });
   return { id: holdId, workOrderId: workOrder.id, posture: input.posture, status: "active" as const, deadlineAt: input.deadlineAt };
 }
 
@@ -2144,7 +2162,7 @@ async function prepareCheckInVisit(svc: OpsCommandServices, input: CheckInVisitI
     const replacementTask = buildWorkflowTaskRecord({
       id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: linkedWorkOrder.id,
       draft: taskDraft({ workOrder: linkedWorkOrder, taskType: "record_service_outcome", title: "Record service outcome",
-        assignee, dueAt: addHours(now, 8), applicableSlaClock: "completion", initialStatus: "in_progress",
+        assignee, dueAt: !vendorId ? linkedWorkOrder.dueAt ?? addHours(now, 8) : addHours(now, 8), applicableSlaClock: "completion", initialStatus: "in_progress",
         escalationDestination: linkedWorkOrder.escalationTo,
         completionCriteria: "Record checkout evidence and one outcome for the linked service work" }),
       actor: input.actor, createdAt: now,
@@ -2299,7 +2317,7 @@ export async function addHeldWorkToActiveVisit(svc: OpsCommandServices, input: A
       id: ids.next("workflow-task"), organizationId: input.organizationId, workOrderId: workOrder!.id,
       draft: taskDraft({ workOrder: workOrder!, taskType: "record_service_outcome", title: "Record service outcome",
         assignee: { assigneeType: visit.vendorId ? "vendor" : "user", assigneeId: visit.vendorId ?? visit.internalMembershipId!, assigneeName: providerName },
-        dueAt: addHours(now, 8), applicableSlaClock: "completion", initialStatus: "in_progress",
+        dueAt: !visit.vendorId ? workOrder!.dueAt ?? addHours(now, 8) : addHours(now, 8), applicableSlaClock: "completion", initialStatus: "in_progress",
         escalationDestination: workOrder!.escalationTo,
         completionCriteria: "Record checkout evidence and one outcome for this approved item" }),
       actor: input.actor, createdAt: now,

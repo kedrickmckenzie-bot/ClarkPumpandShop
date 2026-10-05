@@ -10,6 +10,7 @@ export async function taskPeopleSql(d:OpsSqlDriver,org:string,store:string,searc
  return rows.map(r=>({id:String(r.id),name:String(r.name),role:String(r.role),local:Boolean(r.local)}));
 }
 export async function taskQuerySql(d:OpsSqlDriver,scope:OrganizationScope,q:TaskQuery):Promise<TaskPage> {
+ if(q.reviewWorkOrderIds && (q.reviewWorkOrderIds.length>25 || q.view!=='all'))throw new RangeError('Choose up to 25 jobs for review.');
  const p:unknown[]=[]; const filters=[scopeWhere(scope,'s',p)];
  const me=q.membershipId;
  filters.push(`EXISTS (SELECT 1 FROM ops_scope_grants g JOIN ops_memberships m ON m.organization_id=g.organization_id AND m.id=g.membership_id JOIN ops_users u ON u.id=m.user_id WHERE g.organization_id=t.organization_id AND g.membership_id=? AND m.status='active' AND u.status='active' AND m.role IN ('executive','facilities_admin','regional_manager','field_manager','store_manager','finance_reviewer') AND ${write} AND ${grant})`);p.push(me);
@@ -20,6 +21,7 @@ export async function taskQuerySql(d:OpsSqlDriver,scope:OrganizationScope,q:Task
  if(!q.supervisor)p.push(me);p.push(me);
  if(q.storeId){filters.push('t.store_id=?');p.push(q.storeId);}
  if(q.sourceId){filters.push('(t.work_order_id=? OR t.invoice_id=? OR t.visit_id=? OR t.asset_id=?)');p.push(q.sourceId,q.sourceId,q.sourceId,q.sourceId);}
+ if(q.reviewWorkOrderIds){filters.push(q.reviewWorkOrderIds.length ? `t.status!='closed' AND t.work_order_id IN (${q.reviewWorkOrderIds.map(()=>'?').join(',')})` : '1=0');p.push(...q.reviewWorkOrderIds);}
  if(q.search){filters.push("LOWER(t.title || ' ' || s.store_number || ' ' || s.name || ' ' || s.address_1 || ' ' || s.city || ' ' || s.state || ' ' || s.postal_code) LIKE ?");p.push(`%${q.search.toLowerCase()}%`);}
  if(q.view==='mine'){filters.push("((t.status='review' AND t.requester_id=?) OR ((t.status='open' AND (t.claimant_id=? OR (t.claimant_id IS NULL AND t.assignee_id=?))) OR (t.status='open' AND t.fallback_id=? AND t.due_at<?)))");p.push(me,me,me,me,q.now);}
  if(q.view==='shared'){filters.push(`t.status='open' AND t.claimant_id IS NULL AND t.assignment!='person' AND ${shared}`);p.push(me);}
@@ -29,6 +31,10 @@ export async function taskQuerySql(d:OpsSqlDriver,scope:OrganizationScope,q:Task
  const where=' WHERE '+filters.join(' AND ');
  const total=Number((await d.query({sql:'SELECT COUNT(*) AS n'+from+where,params:p})).rows[0]?.n??0);
  const person=(col:string)=>`(SELECT u.display_name FROM ops_memberships m JOIN ops_users u ON u.id=m.user_id WHERE m.organization_id=t.organization_id AND m.id=${col})`;
+ if(q.reviewWorkOrderIds){
+  const result=await d.query({sql:`WITH ranked AS (SELECT t.*,s.store_number,s.name AS store_name,s.time_zone,${person('COALESCE(t.claimant_id,t.assignee_id)')} AS handler_name,${person('t.requester_id')} AS requester_name,${person('t.fallback_id')} AS fallback_name,0 AS new_reply,COUNT(*) OVER (PARTITION BY t.work_order_id) AS open_task_count,ROW_NUMBER() OVER (PARTITION BY t.work_order_id ORDER BY t.due_at,t.id) AS task_rank${from}${where}) SELECT * FROM ranked WHERE task_rank=1 ORDER BY work_order_id LIMIT 25`,params:p});
+  return {items:result.rows.map(r=>({...taskRow<TaskRow>(r),openTaskCount:Number(r.open_task_count)})),totalCount:total};
+ }
  const sql=`SELECT t.*,s.store_number,s.name AS store_name,s.time_zone,${person('COALESCE(t.claimant_id,t.assignee_id)')} AS handler_name,${person('t.requester_id')} AS requester_name,${person('t.fallback_id')} AS fallback_name,CASE WHEN EXISTS (SELECT 1 FROM ops_store_task_messages msg JOIN ops_store_task_people tp ON tp.organization_id=msg.organization_id AND tp.task_id=msg.task_id AND tp.membership_id=? WHERE msg.organization_id=t.organization_id AND msg.task_id=t.id AND msg.kind='reply' AND msg.actor_id!=? AND msg.created_at>tp.seen_at) THEN 1 ELSE 0 END AS new_reply${from}${where} ORDER BY CASE WHEN t.priority='urgent' THEN 0 ELSE 1 END,CASE WHEN t.status='open' AND t.due_at<? THEN 0 ELSE 1 END,new_reply DESC,t.due_at,t.updated_at DESC,t.id LIMIT ? OFFSET ?`;
  const rows=(await d.query({sql,params:[me,me,...p,q.now,Math.min(50,Math.max(1,q.limit??25)),Math.max(0,q.offset??0)]})).rows;
  return {items:rows.map(r=>taskRow<TaskRow>(r)),totalCount:total};

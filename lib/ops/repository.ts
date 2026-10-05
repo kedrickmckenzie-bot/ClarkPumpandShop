@@ -226,6 +226,8 @@ export interface OpsStatement {
 }
 
 export interface OpsRepository extends TaskRepository {
+  getLatestTechnicianVisit(organizationId:string,membershipId:string):Promise<VisitSession|null>;
+  getTechnicianStatus(organizationId:string,membershipId:string): Promise<import("./technician-status").TechnicianStatus|null>;
   getDispatchFilters(scope: OrganizationScope): Promise<{people:{id:string;name:string;homeRegionId?:string;skills:string[]}[];regions:{id:string;name:string}[]}>;
   getDispatchDayCounts(scope: OrganizationScope, query: WorkOrderListQuery): Promise<Array<{ membershipId?: string; name?: string; day?: string; count: number }>>;
   getInternalSchedule(org: string, id: string): Promise<import("./internal-schedule-types").InternalSchedule | null>;

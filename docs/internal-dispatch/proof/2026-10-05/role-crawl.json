@@ -1,0 +1,537 @@
+[
+  {
+    "role": "Maintenance / facilities",
+    "rows": [
+      {
+        "url": "/app/overview#main-content",
+        "title": "Overview",
+        "ok": true
+      },
+      {
+        "url": "/app/action-center#main-content",
+        "title": "Review queue",
+        "ok": true
+      },
+      {
+        "url": "/app/dispatch#main-content",
+        "title": "Dispatch",
+        "ok": true
+      },
+      {
+        "url": "/app/work-orders#main-content",
+        "title": "Work orders",
+        "ok": true
+      },
+      {
+        "url": "/app/requests#main-content",
+        "title": "Requests",
+        "ok": true
+      },
+      {
+        "url": "/app/estimates#main-content",
+        "title": "Quotes",
+        "ok": true
+      },
+      {
+        "url": "/app/visits#main-content",
+        "title": "Service visits",
+        "ok": true
+      },
+      {
+        "url": "/app/tasks#main-content",
+        "title": "Tasks",
+        "ok": true
+      },
+      {
+        "url": "/app/compliance#main-content",
+        "title": "Compliance",
+        "ok": true
+      },
+      {
+        "url": "/app/equipment#main-content",
+        "title": "Equipment",
+        "ok": true
+      },
+      {
+        "url": "/app/pm#main-content",
+        "title": "Preventive maintenance",
+        "ok": true
+      },
+      {
+        "url": "/app/vendors#main-content",
+        "title": "Vendors",
+        "ok": true
+      },
+      {
+        "url": "/app/trends#main-content",
+        "title": "Trends",
+        "ok": true
+      },
+      {
+        "url": "/app/spend#main-content",
+        "title": "Spending",
+        "ok": true
+      },
+      {
+        "url": "/app/lifecycle#main-content",
+        "title": "Repair or replace",
+        "ok": true
+      },
+      {
+        "url": "/app/warranties#main-content",
+        "title": "Warranties",
+        "ok": true
+      },
+      {
+        "url": "/app/invoices#main-content",
+        "title": "Invoices",
+        "ok": true
+      },
+      {
+        "url": "/app/reports/value#main-content",
+        "title": "Savings",
+        "ok": true
+      },
+      {
+        "url": "/app/reports#main-content",
+        "title": "Reports",
+        "ok": true
+      }
+    ]
+  },
+  {
+    "role": "Field manager",
+    "rows": [
+      {
+        "url": "/app/overview#main-content",
+        "title": "Overview",
+        "ok": true
+      },
+      {
+        "url": "/app/action-center#main-content",
+        "title": "Review queue",
+        "ok": true
+      },
+      {
+        "url": "/app/dispatch#main-content",
+        "title": "Dispatch",
+        "ok": true
+      },
+      {
+        "url": "/app/work-orders#main-content",
+        "title": "Work orders",
+        "ok": true
+      },
+      {
+        "url": "/app/requests#main-content",
+        "title": "Requests",
+        "ok": true
+      },
+      {
+        "url": "/app/estimates#main-content",
+        "title": "Quotes",
+        "ok": true
+      },
+      {
+        "url": "/app/visits#main-content",
+        "title": "Service visits",
+        "ok": true
+      },
+      {
+        "url": "/app/tasks#main-content",
+        "title": "Tasks",
+        "ok": true
+      },
+      {
+        "url": "/app/compliance#main-content",
+        "title": "Compliance",
+        "ok": true
+      },
+      {
+        "url": "/app/stores#main-content",
+        "title": "Stores",
+        "ok": true
+      },
+      {
+        "url": "/app/equipment#main-content",
+        "title": "Equipment",
+        "ok": true
+      },
+      {
+        "url": "/app/pm#main-content",
+        "title": "Preventive maintenance",
+        "ok": true
+      },
+      {
+        "url": "/app/vendors#main-content",
+        "title": "Vendors",
+        "ok": true
+      },
+      {
+        "url": "/app/trends#main-content",
+        "title": "Trends",
+        "ok": true
+      },
+      {
+        "url": "/app/spend#main-content",
+        "title": "Spending",
+        "ok": true
+      },
+      {
+        "url": "/app/lifecycle#main-content",
+        "title": "Repair or replace",
+        "ok": true
+      },
+      {
+        "url": "/app/warranties#main-content",
+        "title": "Warranties",
+        "ok": true
+      },
+      {
+        "url": "/app/invoices#main-content",
+        "title": "Invoices",
+        "ok": true
+      },
+      {
+        "url": "/app/reports/value#main-content",
+        "title": "Savings",
+        "ok": true
+      },
+      {
+        "url": "/app/reports#main-content",
+        "title": "Reports",
+        "ok": true
+      }
+    ]
+  },
+  {
+    "role": "Technician",
+    "rows": [
+      {
+        "url": "/app/my-work#main-content",
+        "title": "My work",
+        "ok": true
+      },
+      {
+        "url": "/app/stores#main-content",
+        "title": "Stores",
+        "ok": true
+      },
+      {
+        "url": "/app/equipment#main-content",
+        "title": "Equipment",
+        "ok": true
+      },
+      {
+        "url": "/app/work-history#main-content",
+        "title": "Work history",
+        "ok": true
+      },
+      {
+        "url": "/app/search#main-content",
+        "title": "Search",
+        "ok": true
+      }
+    ]
+  },
+  {
+    "role": "Owner / leadership",
+    "rows": [
+      {
+        "url": "/app/brief#main-content",
+        "title": "Overview",
+        "ok": true
+      },
+      {
+        "url": "/app/stores#main-content",
+        "title": "Stores",
+        "ok": true
+      },
+      {
+        "url": "/app/equipment#main-content",
+        "title": "Equipment",
+        "ok": true
+      },
+      {
+        "url": "/app/pm#main-content",
+        "title": "Preventive maintenance",
+        "ok": true
+      },
+      {
+        "url": "/app/vendors#main-content",
+        "title": "Vendors",
+        "ok": true
+      },
+      {
+        "url": "/app/trends#main-content",
+        "title": "Trends",
+        "ok": true
+      },
+      {
+        "url": "/app/spend#main-content",
+        "title": "Spending",
+        "ok": true
+      },
+      {
+        "url": "/app/lifecycle#main-content",
+        "title": "Repair or replace",
+        "ok": true
+      },
+      {
+        "url": "/app/warranties#main-content",
+        "title": "Warranties",
+        "ok": true
+      },
+      {
+        "url": "/app/invoices#main-content",
+        "title": "Invoices",
+        "ok": true
+      },
+      {
+        "url": "/app/reports/value#main-content",
+        "title": "Savings",
+        "ok": true
+      },
+      {
+        "url": "/app/reports#main-content",
+        "title": "Reports",
+        "ok": true
+      }
+    ]
+  },
+  {
+    "role": "Regional manager",
+    "rows": [
+      {
+        "url": "/app/overview#main-content",
+        "title": "Overview",
+        "ok": true
+      },
+      {
+        "url": "/app/action-center#main-content",
+        "title": "Review queue",
+        "ok": true
+      },
+      {
+        "url": "/app/dispatch#main-content",
+        "title": "Dispatch",
+        "ok": true
+      },
+      {
+        "url": "/app/work-orders#main-content",
+        "title": "Work orders",
+        "ok": true
+      },
+      {
+        "url": "/app/requests#main-content",
+        "title": "Requests",
+        "ok": true
+      },
+      {
+        "url": "/app/estimates#main-content",
+        "title": "Quotes",
+        "ok": true
+      },
+      {
+        "url": "/app/visits#main-content",
+        "title": "Service visits",
+        "ok": true
+      },
+      {
+        "url": "/app/tasks#main-content",
+        "title": "Tasks",
+        "ok": true
+      },
+      {
+        "url": "/app/compliance#main-content",
+        "title": "Compliance",
+        "ok": true
+      },
+      {
+        "url": "/app/stores#main-content",
+        "title": "Stores",
+        "ok": true
+      },
+      {
+        "url": "/app/equipment#main-content",
+        "title": "Equipment",
+        "ok": true
+      },
+      {
+        "url": "/app/pm#main-content",
+        "title": "Preventive maintenance",
+        "ok": true
+      },
+      {
+        "url": "/app/vendors#main-content",
+        "title": "Vendors",
+        "ok": true
+      },
+      {
+        "url": "/app/trends#main-content",
+        "title": "Trends",
+        "ok": true
+      },
+      {
+        "url": "/app/spend#main-content",
+        "title": "Spending",
+        "ok": true
+      },
+      {
+        "url": "/app/lifecycle#main-content",
+        "title": "Repair or replace",
+        "ok": true
+      },
+      {
+        "url": "/app/warranties#main-content",
+        "title": "Warranties",
+        "ok": true
+      },
+      {
+        "url": "/app/invoices#main-content",
+        "title": "Invoices",
+        "ok": true
+      },
+      {
+        "url": "/app/reports/value#main-content",
+        "title": "Savings",
+        "ok": true
+      },
+      {
+        "url": "/app/reports#main-content",
+        "title": "Reports",
+        "ok": true
+      }
+    ]
+  },
+  {
+    "role": "Store manager",
+    "rows": [
+      {
+        "url": "/app/overview#main-content",
+        "title": "Overview",
+        "ok": true
+      },
+      {
+        "url": "/app/work-orders#main-content",
+        "title": "Work orders",
+        "ok": true
+      },
+      {
+        "url": "/app/requests#main-content",
+        "title": "Requests",
+        "ok": true
+      },
+      {
+        "url": "/app/visits#main-content",
+        "title": "Service visits",
+        "ok": true
+      },
+      {
+        "url": "/app/tasks#main-content",
+        "title": "Tasks",
+        "ok": true
+      },
+      {
+        "url": "/app/stores#main-content",
+        "title": "Stores",
+        "ok": true
+      },
+      {
+        "url": "/app/equipment#main-content",
+        "title": "Equipment",
+        "ok": true
+      },
+      {
+        "url": "/app/pm#main-content",
+        "title": "Preventive maintenance",
+        "ok": true
+      }
+    ]
+  },
+  {
+    "role": "Invoice reviewer",
+    "rows": [
+      {
+        "url": "/app/overview#main-content",
+        "title": "Overview",
+        "ok": true
+      },
+      {
+        "url": "/app/action-center#main-content",
+        "title": "Review queue",
+        "ok": true
+      },
+      {
+        "url": "/app/work-orders#main-content",
+        "title": "Work orders",
+        "ok": true
+      },
+      {
+        "url": "/app/estimates#main-content",
+        "title": "Quotes",
+        "ok": true
+      },
+      {
+        "url": "/app/tasks#main-content",
+        "title": "Tasks",
+        "ok": true
+      },
+      {
+        "url": "/app/compliance#main-content",
+        "title": "Compliance",
+        "ok": true
+      },
+      {
+        "url": "/app/stores#main-content",
+        "title": "Stores",
+        "ok": true
+      },
+      {
+        "url": "/app/equipment#main-content",
+        "title": "Equipment",
+        "ok": true
+      },
+      {
+        "url": "/app/vendors#main-content",
+        "title": "Vendors",
+        "ok": true
+      },
+      {
+        "url": "/app/trends#main-content",
+        "title": "Trends",
+        "ok": true
+      },
+      {
+        "url": "/app/spend#main-content",
+        "title": "Spending",
+        "ok": true
+      },
+      {
+        "url": "/app/lifecycle#main-content",
+        "title": "Repair or replace",
+        "ok": true
+      },
+      {
+        "url": "/app/warranties#main-content",
+        "title": "Warranties",
+        "ok": true
+      },
+      {
+        "url": "/app/invoices#main-content",
+        "title": "Invoices",
+        "ok": true
+      },
+      {
+        "url": "/app/reports/value#main-content",
+        "title": "Savings",
+        "ok": true
+      },
+      {
+        "url": "/app/reports#main-content",
+        "title": "Reports",
+        "ok": true
+      }
+    ]
+  }
+]

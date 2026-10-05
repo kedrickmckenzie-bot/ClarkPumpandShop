@@ -1,3 +1,4 @@
+import { waitForConfirmationReminder } from "./delayed-confirmation";
 import type { OpsCommandServices } from "./commands";
 import { escalateWorkflowTask } from "./workflow-task-commands";
 import { productPresentation } from "../product/presentation";
@@ -86,6 +87,7 @@ export async function runSlaEscalationCycle(
         continue;
       }
       try {
+        if(await waitForConfirmationReminder({repository,clock,ids},task)){processed+=1;continue;}
         await escalateWorkflowTask({ repository, clock, ids }, {
           organizationId,
           workflowTaskId: task.id,

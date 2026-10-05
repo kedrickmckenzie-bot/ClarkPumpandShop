@@ -1,3 +1,5 @@
+import {getServerOpsRepository} from "@/lib/server/ops-repository-provider";
+import {attentionAccess} from "./_data/attention-presenter";
 import type { Metadata } from "next";
 import { PlatformShell } from "@/components/ops/platform-shell";
 import { WorkReviewProvider } from "@/components/workspace/work-review";
@@ -21,5 +23,6 @@ export default async function OperatorLayout({ children }: { children: React.Rea
     if (error instanceof OperatorAccessError) redirect(`/access?reason=${error.reason}`);
     throw error;
   });
-  return <WorkReviewProvider key={JSON.stringify([session.organizationId, session.membershipId, session.role, session.storeIds, session.regionIds, session.demoEdition])}><PlatformShell session={session}>{children}</PlatformShell></WorkReviewProvider>;
+  const reviewCount=["facilities","regional","executive"].includes(session.role)?(await (await getServerOpsRepository()).listAttention(session,attentionAccess(session),{asOf:new Date().toISOString(),limit:1})).totalCount:undefined;
+  return <WorkReviewProvider key={JSON.stringify([session.organizationId, session.membershipId, session.role, session.storeIds, session.regionIds, session.demoEdition])}><PlatformShell session={session} reviewCount={reviewCount}>{children}</PlatformShell></WorkReviewProvider>;
 }

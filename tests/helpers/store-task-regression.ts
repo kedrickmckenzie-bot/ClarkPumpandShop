@@ -49,4 +49,18 @@ export async function storeTaskRegression(r:OpsRepository) {
  const reassigned=await updateStoreTask(r,manager,overdue.id,{action:'reassign',expectedVersion:unable.version,assignment:'person',assigneeId:peer.actorId,body:'Please help.'});expect(reassigned.assigneeId).toBe(peer.actorId);
  await expect(createStoreTask(r,manager,{...input,workOrderId:'wo-northline-103'})).rejects.toMatchObject({code:'VALIDATION'});
  await expect(createStoreTask(r,local,{...input,storeId:'store-northline-105'})).rejects.toMatchObject({code:'FORBIDDEN'});
+ // Review uses existing tasks, selects the earliest active task per job, and keeps closed tasks out.
+ const linked=await createStoreTask(r,manager,{...input,kind:'general',windows:[],assignment:'person',assigneeId:peer.actorId,workOrderId:'wo-northline-104',title:'Look at this job'},[],now);
+ const second=await createStoreTask(r,manager,{...input,kind:'general',windows:[],assignment:'person',assigneeId:peer.actorId,workOrderId:'wo-northline-104',title:'Check access',dueAt:'2099-10-01T12:00:00Z'},[],now);
+ const reviewQuery={...await taskIdentity(r,org,manager.actorId),view:'all' as const,now,reviewWorkOrderIds:['wo-northline-104']};
+ let summary=await r.queryStoreTasks({organizationId:org},reviewQuery);
+ expect(summary.items).toHaveLength(1);expect(summary.items[0]).toMatchObject({id:linked.id,openTaskCount:2,title:'Look at this job'});expect(summary.items[0].handlerName).toBeTruthy();
+ expect((await r.queryStoreTasks({organizationId:org,storeIds:['store-northline-105']},reviewQuery)).items).toEqual([]);
+ expect((await r.queryStoreTasks({organizationId:'other'},reviewQuery)).items).toEqual([]);
+ expect((await r.queryStoreTasks({organizationId:org},{...reviewQuery,membershipId:local.actorId,supervisor:false})).items).toEqual([]);
+ await updateStoreTask(r,peer,linked.id,{action:'complete',expectedVersion:1,result:'done',body:'Checked.'},[],now);
+ summary=await r.queryStoreTasks({organizationId:org},reviewQuery);
+ expect(summary.items).toHaveLength(1);expect(summary.items[0]).toMatchObject({id:second.id,openTaskCount:1});
+ await expect(r.queryStoreTasks({organizationId:org},{...reviewQuery,reviewWorkOrderIds:Array(26).fill('wo-northline-104')})).rejects.toThrow('25 jobs');
+
 }

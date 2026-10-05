@@ -1,3 +1,4 @@
+import { taskRoles } from "@/lib/ops/store-task-types";
 import type { OperatorRole, OperatorSession } from "./data-contract";
 
 export type OperatorCapability =
@@ -216,6 +217,7 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
     if (record === "new") return roleCan(role, "create_request");
     return record ? roleCanAccessDetailRoute(role, "request") : roleCanAccessListRoute(role, "requests");
   }
+  if (area === "tasks") return (taskRoles as readonly string[]).includes(role);
   if (area === "dispatch") return ["facilities", "regional", "executive"].includes(role);
   if (area === "my-work") return role === "technician";
   if (area === "work-orders") {

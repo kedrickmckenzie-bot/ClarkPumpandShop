@@ -173,8 +173,10 @@ export function buildWorkOrderVerificationModel(
     fixture.routeStops.some((stop) => stop.organizationId === session.organizationId && stop.siteVisitId === currentOutcome.visitId)
     || visitWork.some((record) => record.selectionSource === "assigned_work" || record.selectionSource === "service_run")
   );
+  const delayedUntil = fixture.workflowTasks.find(task=>task.organizationId===session.organizationId && task.workOrderId===workOrder.id && task.taskType==="verify_repair" && ["open","in_progress"].includes(task.status) && task.availableAt && task.availableAt>new Date().toISOString())?.availableAt;
   const canRecord = Boolean(
     permitted
+    && !delayedUntil
     && ["completed_pending_review", "closed", "resolved", "in_progress"].includes(workOrder.status)
     && currentOutcome?.outcome
     && reviewableOutcomes.has(currentOutcome.outcome),
@@ -182,6 +184,8 @@ export function buildWorkOrderVerificationModel(
   const canDecide = canRecord && !currentDecision;
   const decisionBlockReason = !permitted
     ? "You can view the result, but your role cannot record confirmation."
+    : delayedUntil
+      ? `Confirmation opens ${dateTime(delayedUntil, storeTimeZone)}.`
     : currentDecision
       ? undefined
       : "The repair can be confirmed once the service result is recorded.";

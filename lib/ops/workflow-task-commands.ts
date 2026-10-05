@@ -97,6 +97,7 @@ function auditAndOutbox(input: {
   aggregateType?: "workflow_task" | "work_order";
   aggregateId: OpsId;
   eventType: string;
+  availableAt?:string;
   actor: ActorContext;
   occurredAt: IsoDateTime;
   payload: unknown;
@@ -114,7 +115,7 @@ function auditAndOutbox(input: {
     insert("ops_outbox_messages", {
       id: input.ids.next("outbox"), organization_id: input.organizationId, topic: `ops.${input.eventType}`,
       aggregate_type: aggregateType, aggregate_id: input.aggregateId, payload_json: payloadJson,
-      status: "pending", available_at: input.occurredAt, created_at: input.occurredAt, attempt_count: 0,
+      status: "pending", available_at: input.availableAt??input.occurredAt, created_at: input.occurredAt, attempt_count: 0,
     }),
   ];
 }
@@ -217,7 +218,7 @@ export function buildWorkflowTaskRecord(input: {
 
 function workflowTaskInsertStatement(task: WorkflowTask): OpsStatement {
   return insert("ops_workflow_tasks", {
-    id: task.id, organization_id: task.organizationId, work_order_id: task.workOrderId,
+    available_at:task.availableAt, reminded_at:task.remindedAt, id: task.id, organization_id: task.organizationId, work_order_id: task.workOrderId,
     task_type: task.taskType, title: task.title, reason: task.reason, assignee_type: task.assigneeType,
     assignee_id: task.assigneeId, assignee_role: task.assigneeRole, assignee_name: task.assigneeName,
     priority: task.priority, status: task.status, blocking: task.blocking, required_for_progress: task.requiredForProgress,
@@ -239,6 +240,7 @@ export function buildCreateTaskStatements(input: { task: WorkflowTask; actor: Ac
       organizationId: input.task.organizationId,
       aggregateId: input.task.id,
       eventType: "workflow_task.created",
+      availableAt:input.task.availableAt,
       actor: input.actor,
       occurredAt: input.task.createdAt,
       payload: {
